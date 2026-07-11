@@ -1,6 +1,6 @@
 # Basilisk Neovim Extension (`basilisk.nvim`) {#NVIM}
 
-Neovim plugin connecting to the same `basilisk lsp` binary as the VS Code and Zed extensions. All LSP features, DAP integration, custom commands, configuration, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** (single source of truth); this spec documents only **Neovim-specific details**. Targets the built-in Neovim 0.10+ LSP client (`vim.lsp.config` / `vim.lsp.enable`).
+Neovim plugin connecting to the same `basilisk lsp` binary as the VS Code and Zed extensions. All LSP features, DAP integration, custom commands, configuration, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** (single source of truth); this spec documents only **Neovim-specific details**. Targets the built-in Neovim 0.11+ LSP client (`vim.lsp.config` / `vim.lsp.enable` were added in 0.11 — see `:h news-0.11`).
 
 ---
 
@@ -9,7 +9,7 @@ Neovim plugin connecting to the same `basilisk lsp` binary as the VS Code and Ze
 ```mermaid
 flowchart LR
     subgraph Neovim["Neovim"]
-        VL["vim.lsp (built-in)<br/>All 21 LSP features<br/>native in Neovim 0.10+"]
+        VL["vim.lsp (built-in)<br/>All 21 LSP features<br/>native in Neovim 0.11+"]
         DAP["nvim-dap (optional)<br/>DAP via DapTcpProxy"]
         NV["basilisk.nvim (Lua)<br/>Config, keymaps, UI,<br/>commands, status line"]
     end
@@ -65,7 +65,7 @@ basilisk.nvim/
 
 ## LSP Client Configuration {#NVIM-LSP-CLIENT-CONFIGURATION}
 
-Uses the Neovim 0.10+ API (nvim-lspconfig is NOT a hard dependency):
+Uses the Neovim 0.11+ API (nvim-lspconfig is NOT a hard dependency):
 
 ```lua
 -- lua/basilisk/lsp.lua
@@ -94,7 +94,7 @@ vim.lsp.enable('basilisk')
 
 ### Neovim API Mappings for LSP Features {#NVIM-LSP-CLIENT-CONFIGURATION-API-MAPPINGS}
 
-All 21 LSP features (LSP-ARCHITECTURE-SPEC.md) are native in Neovim 0.10+ — zero custom implementation:
+All 21 LSP features (LSP-ARCHITECTURE-SPEC.md) are native in Neovim 0.11+ — zero custom implementation:
 
 | LSP Feature | Neovim API |
 |------------|------------|
@@ -356,7 +356,7 @@ No `x86_64-apple-darwin` build is published; on Intel macs `platform_asset_name(
 
 `:checkhealth basilisk` reports:
 
-- Neovim version >= 0.10 (required)
+- Neovim version >= 0.11 (required — `vim.lsp.config`/`vim.lsp.enable`)
 - `basilisk` binary found + version (when missing, the advice names `:BasiliskInstall` first — [NVIM-BINARY-UPGRADE-INSTALL])
 - Python interpreter found + version
 - `debugpy` installed (optional, for DAP)
@@ -396,7 +396,7 @@ require('lspconfig').basilisk.setup({})
 
 ### CI {#NVIM-DISTRIBUTION-CI}
 
-GitHub Actions: run plenary.nvim tests on Neovim 0.10, 0.11, nightly.
+GitHub Actions: the `test-nvim` job in `ci.yml` runs the plenary.nvim suite on a pinned Neovim 0.11.x (the minimum supported version).
 
 ### Release & Versioning {#NVIM-DISTRIBUTION-RELEASE}
 

@@ -31,7 +31,7 @@ This is the **Neovim editor integration**. It connects Neovim's built-in LSP cli
 
 ## Requirements
 
-- Neovim 0.10+
+- Neovim 0.11+ (the plugin uses the built-in `vim.lsp.config` / `vim.lsp.enable` API)
 - `curl` (used once, to download the `basilisk` binary — see below)
 
 ## Install
@@ -100,9 +100,15 @@ Open any Python file. If no `basilisk` binary is found, the plugin downloads the
 Prefer a package manager? The plugin picks up existing installs automatically:
 
 ```sh
-brew install basilisk           # macOS (Apple Silicon) / Linux
-scoop install basilisk          # Windows
-cargo install basilisk-cli      # anywhere with a Rust toolchain
+# macOS (Apple Silicon) / Linux
+brew tap Nimblesite/tap && brew install basilisk
+
+# Windows
+scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
+scoop install basilisk
+
+# anywhere with a Rust toolchain
+cargo install basilisk-cli
 ```
 
 That's it — diagnostics, hover, completions, formatting, debugging, tests, and profiling all run through this one plugin. Verify with `:checkhealth basilisk`.

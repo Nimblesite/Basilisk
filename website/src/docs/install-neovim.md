@@ -14,7 +14,7 @@ eleventyNavigation:
 
 # Basilisk for Neovim
 
-[`basilisk.nvim`](https://github.com/Nimblesite/basilisk.nvim) connects Neovim's built-in LSP client (0.10+) to the Basilisk language server. One plugin covers the whole workflow: diagnostics, hover, completions, go-to-definition, rename, code actions, formatting, inlay hints, debugging (via nvim-dap), a test explorer, and profiling.
+[`basilisk.nvim`](https://github.com/Nimblesite/basilisk.nvim) connects Neovim's built-in LSP client (0.11+, via `vim.lsp.config` / `vim.lsp.enable`) to the Basilisk language server. One plugin covers the whole workflow: diagnostics, hover, completions, go-to-definition, rename, code actions, formatting, inlay hints, debugging (via nvim-dap), a test explorer, and profiling.
 
 Two parts get installed — the **plugin** (via your plugin manager) and the **`basilisk` binary** (downloaded automatically; you normally never install it yourself).
 

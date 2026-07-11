@@ -33,7 +33,7 @@
 
 ## 要求
 
-- Neovim 0.10+
+- Neovim 0.11+（插件使用内置的 `vim.lsp.config` / `vim.lsp.enable` API）
 - `curl`（仅用于一次性下载 `basilisk` 二进制文件，见下文）
 
 ## 安装
@@ -102,9 +102,15 @@ require("basilisk").setup({})
 偏好包管理器？插件会自动识别已有安装：
 
 ```sh
-brew install basilisk           # macOS（Apple Silicon）/ Linux
-scoop install basilisk          # Windows
-cargo install basilisk-cli      # 任何有 Rust 工具链的环境
+# macOS（Apple Silicon）/ Linux
+brew tap Nimblesite/tap && brew install basilisk
+
+# Windows
+scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
+scoop install basilisk
+
+# 任何有 Rust 工具链的环境
+cargo install basilisk-cli
 ```
 
 就这样 —— 诊断、悬停、补全、格式化、调试、测试与性能分析全部通过这一个插件运行。用 `:checkhealth basilisk` 验证。

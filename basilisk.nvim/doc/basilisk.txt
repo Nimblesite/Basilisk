@@ -34,7 +34,7 @@ https://github.com/python/typing/blob/main/conformance/results/results.html
 
 Features:
 - Zero-config setup: works out of the box
-- All 21 LSP features native via Neovim 0.10+
+- All 21 LSP features native via Neovim 0.11+
 - Debug Adapter Protocol via nvim-dap
 - Test explorer with pytest integration
 - Python profiling with heat maps
@@ -45,7 +45,7 @@ Features:
 2. REQUIREMENTS                                         *basilisk-requirements*
 
 Required:
-- Neovim >= 0.10
+- Neovim >= 0.11 (the plugin uses |vim.lsp.config| / |vim.lsp.enable|)
 - curl (used once, to auto-download the `basilisk` binary)
 
 The `basilisk` binary itself is NOT a prerequisite: if none is found, the
