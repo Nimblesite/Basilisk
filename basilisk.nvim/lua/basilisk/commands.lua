@@ -102,6 +102,16 @@ function M.register(config)
     info_panel.show(config)
   end, { desc = "Show Basilisk LSP server info" })
 
+  -- Binary install/upgrade ([NVIM-BINARY-UPGRADE]).
+
+  vim.api.nvim_create_user_command("BasiliskUpdate", function()
+    require("basilisk.update").update(config)
+  end, { desc = "Update the basilisk binary to the latest release" })
+
+  vim.api.nvim_create_user_command("BasiliskInstall", function()
+    require("basilisk.update").install(config)
+  end, { desc = "Download and install the basilisk binary" })
+
   vim.api.nvim_create_user_command("BasiliskOrganizeImports", function()
     local uri = vim.uri_from_bufnr(vim.api.nvim_get_current_buf())
     execute_command("basilisk.organizeImports", { uri })

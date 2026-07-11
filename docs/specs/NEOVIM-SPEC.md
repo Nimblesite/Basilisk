@@ -36,6 +36,7 @@ basilisk.nvim/
 │       ├── init.lua              # setup() entry, config merge, module orchestration
 │       ├── config.lua            # Defaults + LuaCATS type annotations + validation
 │       ├── binary.lua            # Binary resolution (see LSP-ARCHITECTURE-SPEC.md for cascade)
+│       ├── update.lua            # :BasiliskUpdate / :BasiliskInstall flows [NVIM-BINARY-UPGRADE]
 │       ├── lsp.lua               # LSP client config, lifecycle, error recovery
 │       ├── dap.lua               # nvim-dap adapter, configs, DapTcpProxy
 │       ├── commands.lua          # :Basilisk* user commands
@@ -198,6 +199,8 @@ All profiling/memory/test LSP commands (LSP-ARCHITECTURE-SPEC.md) surface as Neo
 |---------------|-------------------------------|-----|
 | `:BasiliskRestart` | — (client-side) | Restart LSP server |
 | `:BasiliskInfo` | — (client-side) | Show server status |
+| `:BasiliskUpdate` | — (client-side) | Upgrade the binary to the latest release ([NVIM-BINARY-UPGRADE]) |
+| `:BasiliskInstall` | — (client-side) | First-use binary bootstrap ([NVIM-BINARY-UPGRADE-INSTALL]) |
 | `:BasiliskOrganizeImports` | `basilisk.organizeImports` | — |
 | `:BasiliskProfile [pid]` | `basilisk.profiler.start` | — |
 | `:BasiliskProfileStop` | `basilisk.profiler.stop` | Floating window + quickfix |
@@ -306,12 +309,55 @@ All shared settings are defined in LSP-ARCHITECTURE-SPEC.md and passed through t
 
 ---
 
+## Binary Install & Upgrade {#NVIM-BINARY-UPGRADE}
+
+The plugin owns the full lifecycle of the binary it downloads: detect → notify → confirm → install → restart. There is no dead end — every "update available" notice names the exact action that performs the upgrade.
+
+### Release Assets {#NVIM-BINARY-UPGRADE-ASSETS}
+
+`binary.platform_asset_name()` must byte-match the `archive:` entries published by `release.yml`:
+
+| Platform | Asset | Layout |
+|---|---|---|
+| Linux x86_64 / aarch64 | `basilisk-<arch>-unknown-linux-gnu.tar.gz` | `basilisk` at archive root |
+| macOS aarch64 (only) | `basilisk-aarch64-apple-darwin.zip` | `basilisk-darwin/{basilisk, basilisk-profiler-helper}` — extraction must flatten (`unzip -j`) and chmod both |
+| Windows x86_64 / aarch64 | `basilisk-<arch>-pc-windows-msvc.zip` | `basilisk.exe` at archive root |
+
+No `x86_64-apple-darwin` build is published; on Intel macs `platform_asset_name()` returns `nil` and the flows fall back to advising `cargo install basilisk-cli`. Any drift between this table and `release.yml` makes `download()` silently find no asset — the binary_spec contract test pins the exact names.
+
+### Install Sources & Refusal {#NVIM-BINARY-UPGRADE-SOURCES}
+
+`binary.install_source(path)` classifies where a resolved binary came from, and `:BasiliskUpdate` only replaces installs the plugin may own:
+
+| Source | Detection | `:BasiliskUpdate` behavior |
+|---|---|---|
+| `managed` | under `stdpath("data")/basilisk/` | upgrade in place (new versioned dir) |
+| `manual` | anything unclassified | upgrade — installs into the managed cache, original file untouched |
+| `homebrew` | `/opt/homebrew/`, `/Cellar/`, `/linuxbrew/` | refuse → `brew upgrade basilisk` |
+| `scoop` | path contains `/scoop/` | refuse → `scoop update basilisk` |
+| `cargo` | `~/.cargo/bin/` | refuse → `cargo install basilisk-cli` |
+| `dev` | `--version` reports `0.0.0` (placeholder) | refuse → rebuild the checkout; never nagged by the update notice |
+
+### Update Notice {#NVIM-BINARY-UPGRADE-NOTICE}
+
+`binary.check_for_updates()` (async, on setup) compares the resolved binary's version to the latest GitHub release and notifies with the **owning** upgrade action via `binary.upgrade_hint(source)`: `:BasiliskUpdate` for managed/manual installs, the package manager's own command otherwise, and silence for dev builds.
+
+### Confirmation {#NVIM-BINARY-UPGRADE-CONFIRM}
+
+`:BasiliskUpdate` / `:BasiliskInstall` never touch the network without an accept step: `vim.ui.select({"Update now", "Later"})` (respectively `Install now`), with the version — and for installs the asset name — in the prompt. On accept, `update.lua` reuses `binary.download()` (the `resolve()` step-7 engine — never a second downloader), rewires `config.binary_path`, and force-restarts the LSP client.
+
+### First-Use Install {#NVIM-BINARY-UPGRADE-INSTALL}
+
+`:BasiliskInstall` bootstraps when nothing is resolvable: `binary.locate()` (cascade steps 1–6, download-free) finds nothing → confirm → download → start. If a binary already exists it reports the path/version and points at `:BasiliskUpdate`. `:BasiliskUpdate` with no install falls through to this flow.
+
+---
+
 ## Health Check {#NVIM-HEALTH-CHECK}
 
 `:checkhealth basilisk` reports:
 
 - Neovim version >= 0.10 (required)
-- `basilisk` binary found + version
+- `basilisk` binary found + version (when missing, the advice names `:BasiliskInstall` first — [NVIM-BINARY-UPGRADE-INSTALL])
 - Python interpreter found + version
 - `debugpy` installed (optional, for DAP)
 - `nvim-dap` available (optional, for debugging)

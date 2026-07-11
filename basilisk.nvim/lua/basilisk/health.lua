@@ -32,7 +32,8 @@ function M.check()
     vim.health.ok("basilisk binary found: " .. bin .. " (" .. ver .. ")")
   else
     vim.health.error("basilisk binary not found", {
-      "Install with: cargo install basilisk-cli",
+      "Run :BasiliskInstall to download the latest release",
+      "Or install with: cargo install basilisk-cli",
       "Or set vim.env.BASILISK_PATH",
     })
   end

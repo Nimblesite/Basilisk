@@ -263,6 +263,7 @@ function M.open()
   vim.wo[modules_win].relativenumber = false
   vim.wo[modules_win].signcolumn = "no"
   vim.wo[modules_win].wrap = false
+  vim.wo[modules_win].winfixwidth = true
 
   setup_keybindings(modules_buf)
 

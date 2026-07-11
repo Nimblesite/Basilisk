@@ -251,10 +251,45 @@ describe("basilisk.binary", function()
       end
     end)
 
-    it("non-Windows asset ends with .tar.gz", function()
-      local name, is_windows = binary.platform_asset_name()
-      if name and not is_windows then
-        assert.is_truthy(name:match("%.tar%.gz$"), "non-Windows should end with .tar.gz")
+    -- The archives release.yml actually publishes ([NVIM-BINARY-UPGRADE-ASSETS]).
+    -- Anything else means download() silently finds no asset.
+    local PUBLISHED_ARCHIVES = {
+      ["basilisk-x86_64-unknown-linux-gnu.tar.gz"] = true,
+      ["basilisk-aarch64-unknown-linux-gnu.tar.gz"] = true,
+      ["basilisk-aarch64-apple-darwin.zip"] = true,
+      ["basilisk-x86_64-pc-windows-msvc.zip"] = true,
+      ["basilisk-aarch64-pc-windows-msvc.zip"] = true,
+    }
+
+    it("asset name is one of the published release archives", function()
+      local name = binary.platform_asset_name()
+      if name then
+        assert.is_true(
+          PUBLISHED_ARCHIVES[name] == true,
+          "asset name not published by release.yml: " .. name
+        )
+      end
+    end)
+
+    it("Linux asset ends with .tar.gz", function()
+      local name = binary.platform_asset_name()
+      if name and vim.uv.os_uname().sysname:lower() == "linux" then
+        assert.is_truthy(name:match("%.tar%.gz$"), "Linux should end with .tar.gz")
+      end
+    end)
+
+    it("macOS asset is the exact release archive (zip, aarch64-only)", function()
+      local uname = vim.uv.os_uname()
+      if uname.sysname:lower() ~= "darwin" then
+        return
+      end
+      local name = binary.platform_asset_name()
+      local machine = uname.machine:lower()
+      if machine == "arm64" or machine == "aarch64" then
+        assert.are.equal("basilisk-aarch64-apple-darwin.zip", name)
+      else
+        -- No x86_64-apple-darwin archive is published — must not fabricate one.
+        assert.is_nil(name)
       end
     end)
 
@@ -411,9 +446,138 @@ describe("basilisk.binary", function()
     end)
   end)
 
+  -- ── install_source ───────────────────────────────────────────────────────
+
+  describe("install_source", function()
+    it("classifies the plugin-managed cache dir as managed", function()
+      local managed = vim.fn.stdpath("data") .. "/basilisk/v0.33.0/basilisk"
+      assert.are.equal("managed", binary.install_source(managed))
+    end)
+
+    it("classifies Homebrew prefixes as homebrew", function()
+      assert.are.equal("homebrew", binary.install_source("/opt/homebrew/bin/basilisk"))
+      assert.are.equal("homebrew", binary.install_source("/usr/local/Cellar/basilisk/0.33.0/bin/basilisk"))
+      assert.are.equal("homebrew", binary.install_source("/home/linuxbrew/.linuxbrew/bin/basilisk"))
+    end)
+
+    it("classifies scoop shims as scoop", function()
+      assert.are.equal("scoop", binary.install_source("C:/Users/dev/scoop/shims/basilisk.exe"))
+    end)
+
+    it("classifies ~/.cargo/bin as cargo", function()
+      local cargo_bin = vim.fs.normalize("~/.cargo/bin/basilisk")
+      assert.are.equal("cargo", binary.install_source(cargo_bin))
+    end)
+
+    it("classifies a 0.0.0-PLACEHOLDER binary as dev", function()
+      local tmpfile = vim.fn.tempname()
+      local fh = io.open(tmpfile, "w")
+      fh:write("#!/bin/sh\necho 'basilisk 0.0.0-PLACEHOLDER'\n")
+      fh:close()
+      vim.fn.setfperm(tmpfile, "rwxr-xr-x")
+      assert.are.equal("dev", binary.install_source(tmpfile))
+      vim.fn.delete(tmpfile)
+    end)
+
+    it("classifies everything else as manual", function()
+      assert.are.equal("manual", binary.install_source("/some/random/place/basilisk"))
+    end)
+  end)
+
+  -- ── upgrade_hint ─────────────────────────────────────────────────────────
+
+  describe("upgrade_hint", function()
+    it("points managed and manual installs at :BasiliskUpdate", function()
+      assert.is_truthy(binary.upgrade_hint("managed"):find(":BasiliskUpdate", 1, true))
+      assert.is_truthy(binary.upgrade_hint("manual"):find(":BasiliskUpdate", 1, true))
+    end)
+
+    it("points package-manager installs at their own upgrade command", function()
+      assert.is_truthy(binary.upgrade_hint("homebrew"):find("brew upgrade basilisk", 1, true))
+      assert.is_truthy(binary.upgrade_hint("scoop"):find("scoop update basilisk", 1, true))
+      assert.is_truthy(binary.upgrade_hint("cargo"):find("cargo install basilisk-cli", 1, true))
+    end)
+
+    it("returns nil for dev builds (no upgrade nag)", function()
+      assert.is_nil(binary.upgrade_hint("dev"))
+    end)
+  end)
+
   -- ── check_for_updates ────────────────────────────────────────────────────
 
   describe("check_for_updates", function()
+    it("notice names an actionable command, not :checkhealth", function()
+      -- Fake binary reporting an ancient version from a "manual" location.
+      local tmpfile = vim.fn.tempname()
+      local fh = io.open(tmpfile, "w")
+      fh:write("#!/bin/sh\necho 'basilisk 0.0.1'\n")
+      fh:close()
+      vim.fn.setfperm(tmpfile, "rwxr-xr-x")
+
+      -- Stub vim.system so no network is hit and the callback runs promptly.
+      local orig_system = vim.system
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.system = function(_cmd, _opts, on_exit)
+        on_exit({ code = 0, stdout = '{"tag_name": "v99.99.99"}' })
+        return {}
+      end
+
+      local notifications = {}
+      local orig_notify = vim.notify
+      vim.notify = function(msg)
+        notifications[#notifications + 1] = msg
+      end
+
+      binary.check_for_updates(tmpfile)
+      vim.wait(1000, function()
+        return #notifications > 0
+      end)
+
+      vim.notify = orig_notify
+      vim.system = orig_system
+      vim.fn.delete(tmpfile)
+
+      assert.is_true(#notifications > 0, "should notify about the update")
+      local msg = notifications[1]
+      assert.is_truthy(msg:find(":BasiliskUpdate", 1, true), "notice must name :BasiliskUpdate, got: " .. msg)
+      assert.is_falsy(msg:find("checkhealth", 1, true), "notice must not dead-end into :checkhealth")
+    end)
+
+    it("stays silent for dev builds", function()
+      local tmpfile = vim.fn.tempname()
+      local fh = io.open(tmpfile, "w")
+      fh:write("#!/bin/sh\necho 'basilisk 0.0.0-PLACEHOLDER'\n")
+      fh:close()
+      vim.fn.setfperm(tmpfile, "rwxr-xr-x")
+
+      local orig_system = vim.system
+      local fetched = false
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.system = function(_cmd, _opts, on_exit)
+        fetched = true
+        on_exit({ code = 0, stdout = '{"tag_name": "v99.99.99"}' })
+        return {}
+      end
+
+      local notifications = {}
+      local orig_notify = vim.notify
+      vim.notify = function(msg)
+        notifications[#notifications + 1] = msg
+      end
+
+      binary.check_for_updates(tmpfile)
+      vim.wait(200, function()
+        return #notifications > 0
+      end)
+
+      vim.notify = orig_notify
+      vim.system = orig_system
+      vim.fn.delete(tmpfile)
+
+      assert.are.equal(0, #notifications, "dev builds must not be nagged about releases")
+      assert.is_false(fetched, "dev builds should not even hit the release API")
+    end)
+
     it("does not error for non-existent binary", function()
       assert.has_no.errors(function()
         binary.check_for_updates("/nonexistent/binary")
