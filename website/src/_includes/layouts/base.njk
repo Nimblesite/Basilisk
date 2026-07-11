@@ -6,6 +6,8 @@
     language cluster entirely (e.g. the English-only Releases page). -#}
 {%- set effLang = 'zh' if (page.url == '/zh/' or page.url.startsWith('/zh/')) else (lang | default('en')) -%}
 {%- set basePath = (page.url | replace('/zh/', '/')) if effLang == 'zh' else page.url -%}
+{%- set alternatePath = basePath if effLang == 'zh' else '/zh' + basePath -%}
+{%- set hasTranslation = (not noTranslation) and (collections.all | hasPageUrl(alternatePath)) -%}
 <html lang="{{ effLang }}">
 <head>
   <!-- Google tag (gtag.js) -->
@@ -26,13 +28,15 @@
   </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  {% set metaAuthor = author | default(site.author) %}
+  {% set metaKeywords = keywords | default(site.keywords) %}
 
   <!-- Primary Meta Tags -->
   <title>{{ title | default(site.title) }}</title>
   <meta name="title" content="{{ title | default(site.title) }}">
   <meta name="description" content="{{ description | default(site.description) }}">
-  {% if site.author %}<meta name="author" content="{{ site.author }}">{% endif %}
-  {% if site.keywords %}<meta name="keywords" content="{{ site.keywords }}">{% endif %}
+  {% if metaAuthor %}<meta name="author" content="{% if metaAuthor.name %}{{ metaAuthor.name }}{% else %}{{ metaAuthor }}{% endif %}">{% endif %}
+  {% if metaKeywords %}<meta name="keywords" content="{{ metaKeywords }}">{% endif %}
   <meta name="robots" content="index, follow">
   <meta name="generator" content="Eleventy + techdoc">
   <meta name="theme-color" content="{{ site.themeColor | default('#0066cc') }}">
@@ -49,7 +53,7 @@
   <link rel="alternate" type="application/atom+xml" title="{{ site.title }} Feed" href="{{ site.url }}/feed.xml">
 
   <!-- Hreflang for language alternates (locale-safe; see derivation at top of file) -->
-  {%- if noTranslation %}
+  {%- if not hasTranslation %}
   <link rel="alternate" hreflang="{{ effLang }}" href="{{ site.url }}{{ page.url }}">
   <link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ page.url }}">
   {%- else %}
@@ -63,13 +67,14 @@
   {% set metaImage = image | default(site.ogImage) %}
   {% set metaImageWidth = imageWidth | default(site.ogImageWidth) | default('1200') %}
   {% set metaImageHeight = imageHeight | default(site.ogImageHeight) | default('630') %}
-  <meta property="og:type" content="{% if basePath.startsWith('/blog/') and basePath != '/blog/' %}article{% else %}website{% endif %}">
+  {% set metaImageAlt = imageAlt | default(title) | default(site.name) %}
+  <meta property="og:type" content="{% if isBlogPost %}article{% else %}website{% endif %}">
   <meta property="og:url" content="{{ site.url }}{{ page.url }}">
   <meta property="og:title" content="{{ title | default(site.title) }}">
   <meta property="og:description" content="{{ description | default(site.description) }}">
-  <meta property="og:site_name" content="{{ site.title }}">
+  <meta property="og:site_name" content="{{ site.name | default(site.title) }}">
   <meta property="og:locale" content="{{ effLang | toOgLocale }}">
-  {%- if not noTranslation %}
+  {%- if hasTranslation %}
   {% for langCode in supportedLanguages %}{% if langCode != effLang %}
   <meta property="og:locale:alternate" content="{{ langCode | toOgLocale }}">
   {% endif %}{% endfor %}
@@ -78,6 +83,7 @@
   <meta property="og:image" content="{{ site.url }}{{ metaImage }}">
   <meta property="og:image:width" content="{{ metaImageWidth }}">
   <meta property="og:image:height" content="{{ metaImageHeight }}">
+  <meta property="og:image:alt" content="{{ metaImageAlt }}">
   {% endif %}
 
   <!-- Twitter -->
@@ -87,7 +93,8 @@
   <meta name="twitter:description" content="{{ description | default(site.description) }}">
   {% if site.twitterSite %}<meta name="twitter:site" content="{{ site.twitterSite }}">{% endif %}
   {% if site.twitterCreator %}<meta name="twitter:creator" content="{{ site.twitterCreator }}">{% endif %}
-  {% if metaImage %}<meta name="twitter:image" content="{{ site.url }}{{ metaImage }}">{% endif %}
+  {% if metaImage %}<meta name="twitter:image" content="{{ site.url }}{{ metaImage }}">
+  <meta name="twitter:image:alt" content="{{ metaImageAlt }}">{% endif %}
 
   <!-- JSON-LD Structured Data -->
   <script type="application/ld+json">
@@ -98,9 +105,8 @@
         "@type": "WebSite",
         "@id": "{{ site.url }}/#website",
         "url": "{{ site.url }}/",
-        "name": "{{ site.title }}",
-        "description": "{{ site.description }}",
-        "inLanguage": "{{ lang | default('en') }}"{% if site.searchUrl %},
+        "name": {{ site.name | default(site.title) | dump | safe }},
+        "description": {{ site.description | dump | safe }}{% if site.searchUrl %},
         "potentialAction": {
           "@type": "SearchAction",
           "target": "{{ site.searchUrl }}?q={search_term_string}",
@@ -108,18 +114,18 @@
         }{% endif %}
       },
       {
-        "@type": "{% if basePath.startsWith('/docs/') %}TechArticle{% elif basePath.startsWith('/blog/') and basePath != '/blog/' %}BlogPosting{% else %}WebPage{% endif %}",
+        "@type": "WebPage",
         "@id": "{{ site.url }}{{ page.url }}#webpage",
         "url": "{{ site.url }}{{ page.url }}",
-        "name": "{{ title | default(site.title) }}",
-        "description": "{{ description | default(site.description) }}",
+        "name": {{ title | default(site.title) | dump | safe }},
+        "description": {{ description | default(site.description) | dump | safe }},
         "isPartOf": { "@id": "{{ site.url }}/#website" },
-        "inLanguage": "{{ lang | default('en') }}"{% if page.date %},
-        "datePublished": "{{ page.date | isoDate }}",
-        "dateModified": "{% if dateModified %}{{ dateModified | isoDate }}{% else %}{{ page.date | isoDate }}{% endif %}"{% endif %}{% if author %},
+        "inLanguage": "{{ effLang }}"{% if date %},
+        "datePublished": "{{ date | isoDate }}",
+        "dateModified": "{% if dateModified %}{{ dateModified | isoDate }}{% else %}{{ date | isoDate }}{% endif %}"{% endif %}{% if author %},
         "author": {
-          "@type": "Person",
-          "name": "{{ author }}"
+          "@type": "{% if author.slug == 'basilisk-team' or author == 'The Basilisk Project' or author == 'Basilisk 项目' %}Organization{% else %}Person{% endif %}",
+          "name": {% if author.name %}{{ author.name | dump | safe }}{% else %}{{ author | dump | safe }}{% endif %}
         }{% endif %}{% if metaImage %},
         "image": "{{ site.url }}{{ metaImage }}"{% endif %}
       },
@@ -136,7 +142,7 @@
           {
             "@type": "ListItem",
             "position": 2,
-            "name": "{{ title | default('Page') }}",
+            "name": {{ title | default('Page') | dump | safe }},
             "item": "{{ site.url }}{{ page.url }}"
           }{% endif %}
         ]
@@ -144,7 +150,7 @@
       {
         "@type": "Organization",
         "@id": "{{ site.url }}/#organization",
-        "name": "{{ site.organization.name | default(site.title) }}",
+        "name": {{ site.organization.name | default(site.title) | dump | safe }},
         "url": "{{ site.url }}"{% if site.organization.logo %},
         "logo": {
           "@type": "ImageObject",
@@ -162,7 +168,7 @@
         "operatingSystem": "macOS, Linux, Windows",
         "programmingLanguage": "Python",
         "softwareRequirements": "Python 3.12",
-        "description": "{{ description | default(site.description) }}",
+        "description": {{ description | default(site.description) | dump | safe }},
         "license": "https://opensource.org/license/mit",
         "isAccessibleForFree": true,
         "offers": {
@@ -194,18 +200,32 @@
         {{ site.name | default(site.title) }}
       </a>
 
-      <ul class="nav-links">
+      <ul class="nav-links" id="site-navigation">
         {% set navData = navigation %}
-        {% set currentLang = lang | default('en') %}
+        {% set currentLang = effLang %}
         {% for item in navData.main %}
         <li>
           {% set navUrl = item.url %}
           {% if not item.external and currentLang != defaultLanguage %}
-            {% set navUrl = item.url | altLangUrl('en', currentLang) %}
+            {% set localizedNavUrl = item.url | altLangUrl('en', currentLang) %}
+            {% if collections.all | hasPageUrl(localizedNavUrl) %}
+              {% set navUrl = localizedNavUrl %}
+            {% endif %}
+          {% endif %}
+          {% set navActive = false %}
+          {% if item.url == '/docs/' %}
+            {% set rulesPrefix = '/zh/docs/rules/' if currentLang != defaultLanguage else '/docs/rules/' %}
+            {% set navActive = page.url.startsWith(navUrl) and not page.url.startsWith(rulesPrefix) %}
+          {% elif item.url == '/docs/rules/' %}
+            {% set navActive = page.url.startsWith(navUrl) or page.url.startsWith('/errors/') %}
+          {% elif item.url == '/' %}
+            {% set navActive = page.url == '/' or page.url == '/index.html' or page.url == ('/' + currentLang + '/') or page.url == ('/' + currentLang + '/index.html') %}
+          {% elif not item.external %}
+            {% set navActive = page.url.startsWith(navUrl) %}
           {% endif %}
           <a href="{{ navUrl }}" {% if item.external %}target="_blank" rel="noopener noreferrer"{% endif %}
-             class="nav-link {% if (item.url == '/' and (page.url == '/' or page.url == '/index.html' or page.url == ('/' + currentLang + '/') or page.url == ('/' + currentLang + '/index.html'))) or (item.url != '/' and item.url | length > 1 and (page.url.startsWith(item.url) or page.url.startsWith(navUrl))) %}active{% endif %}">
-            {{ item.text }}
+             class="nav-link{% if navActive %} active{% endif %}">
+            {{ ('nav.' + item.key) | t(effLang) | default(item.text) }}
           </a>
         </li>
         {% endfor %}
@@ -213,7 +233,7 @@
 
       <div class="nav-actions">
         <div class="language-switcher">
-          {%- if not noTranslation %}
+          {%- if hasTranslation %}
           {% if effLang == 'zh' %}
           <a href="{{ basePath }}" lang="en" class="lang-link" aria-label="Switch to English">English</a>
           {% else %}
@@ -229,7 +249,7 @@
         </button>
         {% endif %}
 
-        <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Toggle menu">
+        <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Toggle menu" aria-controls="site-navigation" aria-expanded="false">
           <span></span>
           <span></span>
           <span></span>
@@ -246,17 +266,20 @@
     <div class="footer-content">
       {% if navigation.footer %}
       <div class="footer-grid">
-        {% set currentLang = lang | default('en') %}
+        {% set currentLang = effLang %}
         {% for section in navigation.footer %}
         <div class="footer-section">
-          <h3>{{ section.title }}</h3>
+          <h3>{{ ('footer.' + section.key) | t(effLang) | default(section.title) }}</h3>
           <ul>
             {% for item in section.items %}
             {% set footerUrl = item.url %}
             {% if item.url.startsWith('/') and currentLang != defaultLanguage %}
-              {% set footerUrl = item.url | altLangUrl('en', currentLang) %}
+              {% set localizedFooterUrl = item.url | altLangUrl('en', currentLang) %}
+              {% if collections.all | hasPageUrl(localizedFooterUrl) %}
+                {% set footerUrl = localizedFooterUrl %}
+              {% endif %}
             {% endif %}
-            <li><a href="{{ footerUrl }}">{{ item.text }}</a></li>
+            <li><a href="{{ footerUrl }}">{{ ('footer.' + item.key) | t(effLang) | default(item.text) }}</a></li>
             {% endfor %}
           </ul>
         </div>

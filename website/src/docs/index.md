@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Basilisk: The Only 100% PEP-Conformant Python Language Server"
-description: "The only Python type checker scoring 100% on the official python/typing conformance suite — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default."
+description: "Install, configure, and use Basilisk: an open-source Python type checker and language server with refactoring, debugging, profiling, and editor integrations."
 keywords: basilisk, python, language server, lsp, type checker, vs code, cursor, zed, neovim, strict, rust
 date: 2026-02-28
 dateModified: 2026-03-31
@@ -17,7 +17,7 @@ Basilisk is a **complete, open-source Python language server**. Everything you r
 
 It is also the **only Python type checker with a perfect 100% score** on the [official `python/typing` conformance results]({{ conformanceOfficial.snapshot.source }}) — published on the Python typing repository's own leaderboard, ahead of Pyright, mypy, Pyrefly and ty. See [how we measure it](/docs/conformance/).
 
-It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Zed**, and **Neovim** — plus any other editor that speaks the Language Server Protocol. **Cursor** and **Windsurf** (via Open VSX) are coming very soon, and JetBrains is on the way. No proprietary extension, no Node.js — a single Rust binary, the same experience in every editor.
+It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Cursor**, **Windsurf**, **Zed**, and **Neovim** — plus any other editor that speaks the Language Server Protocol. JetBrains support is planned. No proprietary extension, no Node.js — a single Rust binary, the same experience in every editor.
 
 ## The problem Basilisk solves
 
@@ -30,8 +30,8 @@ Basilisk takes a different position. Its default *is* the typing spec — full P
 ## What Basilisk is
 
 - A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, a full [refactoring suite](/docs/refactoring/), code actions, inlay hints
-- **Editor extensions for every major IDE** — VS Code, Neovim (0.10+), and Zed today; Cursor and Windsurf (via Open VSX) coming very soon, and JetBrains (IntelliJ / PyCharm) on the way
-- **Enrichment fixes** — one-click code actions that add the missing type annotations *for* you
+- **Editor extensions across major editors** — VS Code, Cursor, Windsurf, Neovim (0.10+), and Zed today; JetBrains (IntelliJ / PyCharm) is planned
+- **Annotation quick-fixes** — one-click code actions that insert a placeholder annotation (`: Any`, `-> None`) on unannotated code, so you can fill in the real type
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
 - An **integrated profiler** — sampling CPU profiler with inline heatmap annotations, flame graphs, memory leak detection, and reference graph visualization, all inside your editor
 - A **PEP-conformant type checker by default** — the core spec rule set out of the box, with opt-in Basilisk rules for checking stricter than the spec
@@ -68,7 +68,7 @@ This keeps the default honest — pure spec conformance — while letting each t
 
 ## Project status
 
-Basilisk is currently in **alpha** — the core checker, LSP server, and editor extensions are all working. Autocomplete, go-to-definition, hover, diagnostics, inlay hints, refactoring, debugging, and profiling are shipping today.
+Basilisk is under **active development** — the core checker, LSP server, and editor extensions are all working, and it is the only checker with a perfect score on the official python/typing conformance suite. Autocomplete, go-to-definition, hover, diagnostics, inlay hints, refactoring, debugging, and profiling are shipping today.
 
 | Phase | Milestone | Status |
 |---|---|---|

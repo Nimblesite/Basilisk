@@ -1,0 +1,34 @@
+---json
+{
+  "permalink": "sitemap.xml",
+  "eleventyExcludeFromCollections": true
+}
+---
+<?xml version="1.0" encoding="utf-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  {%- for item in collections.all %}
+  {%- if not item.data.eleventyExcludeFromCollections %}
+  <url>
+    <loc>{{ site.url }}{{ item.url }}</loc>
+    {%- if item.data.dateModified %}
+    <lastmod>{{ item.data.dateModified | isoDate }}</lastmod>
+    {%- elif item.data.date %}
+    <lastmod>{{ item.data.date | isoDate }}</lastmod>
+    {%- endif %}
+    {%- if item.url == "/" or item.url == "/index.html" or item.url == "/zh/" %}
+    <priority>1.0</priority>
+    <changefreq>weekly</changefreq>
+    {%- elif "/docs/" in item.url or "/errors/" in item.url %}
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+    {%- elif "/blog/" in item.url %}
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+    {%- else %}
+    <priority>0.5</priority>
+    <changefreq>monthly</changefreq>
+    {%- endif %}
+  </url>
+  {%- endif %}
+  {%- endfor %}
+</urlset>
