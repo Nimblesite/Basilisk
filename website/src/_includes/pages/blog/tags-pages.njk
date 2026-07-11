@@ -9,7 +9,7 @@ eleventyComputed:
   title: "Posts tagged '{{ tag }}'"
   description: "All blog posts tagged with {{ tag }}."
 ---
-{% from "components/blog.njk" import masthead, navigation, postCard %}
+{% from "components/blog.njk" import masthead, navigation, postCard with context %}
 {% set taggedPosts = collections.postsByTag[tag] %}
 
 <div class="blog-container">

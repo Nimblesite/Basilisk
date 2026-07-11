@@ -9,9 +9,6 @@ imageAlt: "Parallel Python execution threads running side by side over a strict 
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - posts
-  - free-threading
-  - Python 3.14
   - concurrency
   - type checking
 category: deep-dives

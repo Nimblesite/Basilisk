@@ -3,7 +3,7 @@ layout: layouts/base.njk
 title: Categories
 permalink: /blog/categories/
 ---
-{% from "components/blog.njk" import masthead, navigation %}
+{% from "components/blog.njk" import masthead, navigation with context %}
 {% set categoryCollection = collections.categoryList %}
 {% set categoryGroups = collections.postsByCategory %}
 {% if lang and lang != defaultLanguage %}

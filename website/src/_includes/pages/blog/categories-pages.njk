@@ -9,7 +9,7 @@ eleventyComputed:
   title: "{{ category | capitalize }}"
   description: "All blog posts in the {{ category }} category."
 ---
-{% from "components/blog.njk" import masthead, navigation, postCard %}
+{% from "components/blog.njk" import masthead, navigation, postCard with context %}
 {% set categoryPosts = collections.postsByCategory[category] %}
 
 <div class="blog-container">

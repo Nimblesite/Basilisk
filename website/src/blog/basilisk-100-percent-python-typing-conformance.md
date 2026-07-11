@@ -9,7 +9,6 @@ imageAlt: "Python type checker conformance leaderboard showing Basilisk at a per
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - posts
   - Python typing
   - conformance
   - Basilisk

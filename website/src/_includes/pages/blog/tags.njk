@@ -3,7 +3,7 @@ layout: layouts/base.njk
 title: Tags
 permalink: /blog/tags/
 ---
-{% from "components/blog.njk" import masthead, navigation %}
+{% from "components/blog.njk" import masthead, navigation with context %}
 {% set tagCollection = collections.tagList %}
 {% set tagGroups = collections.postsByTag %}
 {% if lang and lang != defaultLanguage %}

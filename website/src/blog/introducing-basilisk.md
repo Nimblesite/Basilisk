@@ -10,11 +10,9 @@ imageAlt: "Abstract Basilisk type-checking pipeline with validation nodes and st
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - posts
   - Python typing
   - type checking
   - Basilisk
-  - Rust
 category: announcements
 excerpt: "The Python type annotation ecosystem has a dirty secret: nobody enforces it by default. We built Basilisk to fix that."
 keywords: basilisk, python type checker, strict typing, rust, announcement

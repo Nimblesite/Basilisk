@@ -9,8 +9,6 @@ imageAlt: "Abstract open-source toolchain constellations converging over a resil
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - posts
-  - open source
   - Ruff
   - Python tooling
   - Basilisk

@@ -1304,7 +1304,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .author-heading h1 { margin: 0; }
 .author-role { margin: var(--space-1) 0 0; color: var(--color-text-muted); font-size: 1rem; }
 
-.blog-post ul.author-links { display: flex; flex-wrap: wrap; gap: var(--space-3); list-style: none; padding: 0; margin: var(--space-5) 0 0; }
+.prose .author-links { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-5) 0 0; padding: 0; list-style: none; }
 .author-links li { margin: 0; }
 .author-links a {
   display: inline-block; padding: var(--space-2) var(--space-4);

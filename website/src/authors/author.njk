@@ -11,7 +11,7 @@ eleventyComputed:
   description: "{{ author.bio | truncate(155) }}"
 ---
 
-{% from "components/blog.njk" import postCard %}
+{% from "components/blog.njk" import postCard with context %}
 
 {% block head %}
 <script type="application/ld+json">
