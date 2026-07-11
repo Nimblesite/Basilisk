@@ -40,12 +40,12 @@ And it is the **fastest checker we&rsquo;ve measured** &mdash; median cold full-
 
 | Type checker | Median cold check |
 | --- | --- |
-| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
-| zuban | <!--g:benchZuban-->27<!--/g:benchZuban--> ms |
-| ty | <!--g:benchTy-->37<!--/g:benchTy--> ms |
-| Pyrefly | <!--g:benchPyrefly-->145<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->568<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->588<!--/g:benchMypy--> ms |
+| ⚡ **Basilisk** | **<!--g:benchBasilisk-->11<!--/g:benchBasilisk--> ms** |
+| zuban | <!--g:benchZuban-->28<!--/g:benchZuban--> ms |
+| ty | <!--g:benchTy-->39<!--/g:benchTy--> ms |
+| Pyrefly | <!--g:benchPyrefly-->147<!--/g:benchPyrefly--> ms |
+| Pyright | <!--g:benchPyright-->581<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->596<!--/g:benchMypy--> ms |
 
 Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> single-construct typing-spec stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better; inside the editor a warm re-check is faster again. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 

@@ -125,7 +125,11 @@ def print_console_table(rows, tools):
         fastest = min((means[t] for t in tools if t in means), default=None)
         for tool in tools:
             if tool in means:
-                mark = " *" if fastest is not None and abs(means[tool] - fastest) < 1e-9 else "  "
+                mark = (
+                    " *"
+                    if fastest is not None and abs(means[tool] - fastest) < 1e-9
+                    else "  "
+                )
                 cells.append(f"{means[tool]:7.1f}{mark}")
             else:
                 cells.append(f"{'n/a':>9}")
@@ -190,8 +194,11 @@ def read_committed_baseline(root, rel_path, ref):
 
 
 def find_regressions(rows, baseline, tolerance_pct):
-    """Fixtures where basilisk is slower than the committed baseline by more than
-    tolerance_pct% (the slight allowance for run-to-run noise)."""
+    """Fixtures slower than the committed baseline beyond ``tolerance_pct``.
+
+    Production runs hard-code that tolerance to zero; the parameter keeps this
+    pure comparison helper directly testable.
+    """
     regressions = []
     for stem, means in rows:
         if "basilisk" not in means or stem not in baseline:
@@ -235,7 +242,7 @@ def main():
 
     root = os.environ["BENCH_ROOT"]
     ref = os.environ.get("BENCH_BASELINE_REF", "HEAD")
-    tolerance_pct = float(os.environ.get("BENCH_TOLERANCE_PCT", "5"))
+    tolerance_pct = float(os.environ.get("BENCH_TOLERANCE_PCT", "0"))
     rel_path = os.path.relpath(status_path, root)
     baseline = read_committed_baseline(root, rel_path, ref)
     regressions = find_regressions(rows, baseline, tolerance_pct)
@@ -247,16 +254,22 @@ def main():
             f"\n  REGRESSION GATE — basilisk slower than the COMMITTED baseline "
             f"({ref}) by >{tolerance_pct:.0f}%"
         )
-        print("    The slower numbers are ALREADY written above — this fails CI so the slip is visible, not hidden.")
+        print(
+            "    The slower numbers are ALREADY written above — this fails CI so the slip is visible, not hidden."
+        )
         print(f"    {'fixture':<34} {'baseline':>11} {'now':>11} {'change':>9}")
         for stem, old, new, delta in regressions:
             print(f"    {stem:<34} {old:>8.1f} ms {new:>8.1f} ms {delta:>+7.1f}%")
         print("    Optimize the regression, then commit the file to move the baseline.")
         return 3
     if baseline:
-        print(f"\n  No regression vs committed baseline ({ref}) — within {tolerance_pct:.0f}% on every fixture.")
+        print(
+            f"\n  No regression vs committed baseline ({ref}) — within {tolerance_pct:.0f}% on every fixture."
+        )
     else:
-        print(f"\n  No committed baseline at {ref} for this machine yet — this run establishes it once committed.")
+        print(
+            f"\n  No committed baseline at {ref} for this machine yet — this run establishes it once committed."
+        )
     return 0
 
 

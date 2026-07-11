@@ -41,12 +41,12 @@ Basilisk 是**唯一**在官方
 
 | 类型检查器 | 冷启动检查中位数 |
 | --- | --- |
-| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
-| zuban | <!--g:benchZuban-->27<!--/g:benchZuban--> ms |
-| ty | <!--g:benchTy-->37<!--/g:benchTy--> ms |
-| Pyrefly | <!--g:benchPyrefly-->145<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->568<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->588<!--/g:benchMypy--> ms |
+| ⚡ **Basilisk** | **<!--g:benchBasilisk-->11<!--/g:benchBasilisk--> ms** |
+| zuban | <!--g:benchZuban-->28<!--/g:benchZuban--> ms |
+| ty | <!--g:benchTy-->39<!--/g:benchTy--> ms |
+| Pyrefly | <!--g:benchPyrefly-->147<!--/g:benchPyrefly--> ms |
+| Pyright | <!--g:benchPyright-->581<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->596<!--/g:benchMypy--> ms |
 
 在 <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> 上，跨 <!--g:benchCount-->26<!--/g:benchCount--> 个单一类型构造压力测试样本的冷启动全文件检查中位数 —— 数值越低越好；在编辑器内热重检查更快。每个数字均由 [`hyperfine`](https://github.com/sharkdp/hyperfine) 生成并按机器提交，没有一个是手写的。**克隆仓库，在你自己的硬件上运行 `make bench`，并把 CSV 发给我们 —— 欢迎社区独立复核。** [完整基准测试与方法论（英文）&rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 

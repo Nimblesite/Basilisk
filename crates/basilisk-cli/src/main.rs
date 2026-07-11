@@ -210,14 +210,21 @@ fn main() -> ExitCode {
     // runs as a subprocess (e.g. the LSP launched by the VS Code extension)
     // stderr is a pipe, and raw ANSI escapes would otherwise render as garbage
     // in the editor's output channel (issue #23).
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_env("BASILISK_LOG")
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
-        )
+    let tracing = tracing_subscriber::fmt()
         .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stderr()))
-        .with_writer(std::io::stderr)
-        .init();
+        .with_writer(std::io::stderr);
+    if std::env::var_os("BASILISK_LOG").is_some() {
+        tracing
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_env("BASILISK_LOG")
+                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+            )
+            .init();
+    } else {
+        // The default path needs only warnings/errors. Avoid constructing and
+        // parsing an EnvFilter on every short-lived CLI check.
+        tracing.with_max_level(tracing::Level::WARN).init();
+    }
 
     let cli = Cli::parse();
 
@@ -629,7 +636,7 @@ fn collect_and_check(
     }
 
     // Add include paths from WorkspaceConfig as search roots.
-    let lsp_config = basilisk_lsp::config::load_config(&project_root);
+    let lsp_config = basilisk_lsp::config::load_analysis_config(&project_root);
     let registry = build_uv_registry(&roots);
     let mut search_paths =
         basilisk_lsp::import_resolver::search_paths_from_config(&roots, &lsp_config, registry);

@@ -147,6 +147,20 @@ impl Default for WorkspaceConfig {
 /// the process's current working directory (issue #173).
 #[must_use]
 pub fn load_config(root: &Path) -> WorkspaceConfig {
+    let mut cfg = load_analysis_config(root);
+    // Formatter style always comes from `[tool.ruff]` in pyproject.toml,
+    // independent of which file supplied the checker config ([LSPFMT-ENGINE]).
+    cfg.format_style = load_format_style(root);
+    cfg
+}
+
+/// Load only configuration used by analysis and import resolution.
+///
+/// CLI checks do not format source, so reparsing `pyproject.toml` solely for
+/// Ruff style is wasted startup work. The LSP's full [`load_config`] adds that
+/// editor-only configuration while this path preserves every analysis field.
+#[must_use]
+pub fn load_analysis_config(root: &Path) -> WorkspaceConfig {
     let mut cfg = load_config_raw(root);
     cfg.stub_paths = cfg
         .stub_paths
@@ -156,9 +170,6 @@ pub fn load_config(root: &Path) -> WorkspaceConfig {
     cfg.typeshed_path = cfg
         .typeshed_path
         .map(|p| if p.is_absolute() { p } else { root.join(p) });
-    // Formatter style always comes from `[tool.ruff]` in pyproject.toml,
-    // independent of which file supplied the checker config ([LSPFMT-ENGINE]).
-    cfg.format_style = load_format_style(root);
     cfg
 }
 
@@ -428,6 +439,24 @@ mod tests {
         let cfg = load_config(&dir);
         assert_eq!(cfg.python_version.as_deref(), Some("3.12"));
         assert!(cfg.strict);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn analysis_config_skips_formatter_style_but_keeps_checker_paths() {
+        let dir = std::env::temp_dir().join("basilisk_cfg_analysis_only");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            "[tool.basilisk]\nstub-paths = [\"stubs\"]\n[tool.ruff]\nline-length = 120\n",
+        )
+        .unwrap();
+
+        let analysis = load_analysis_config(&dir);
+        assert_eq!(analysis.stub_paths, vec![dir.join("stubs")]);
+        assert_eq!(analysis.format_style, FormatStyle::default());
+        assert_eq!(load_config(&dir).format_style.line_length, Some(120));
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 

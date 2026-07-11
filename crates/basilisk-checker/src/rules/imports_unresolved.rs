@@ -88,9 +88,7 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
         span: import.span,
         path: path.to_owned(),
         help: Some(help.into()),
-        note: Some(
-            "Basilisk requires complete type information for all imported modules".into(),
-        ),
+        note: Some("Basilisk requires complete type information for all imported modules".into()),
         provenance: Some(TypeProvenance::Untyped),
     }
 }

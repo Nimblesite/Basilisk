@@ -1427,7 +1427,7 @@ a design target, not a claim of existing measurement.
 | Golden file tests | Expected diagnostic output | Diagnostic regression |
 | Fuzzing | `cargo-fuzz` | Crash resistance, soundness |
 | Property tests | `proptest` crate | Type system invariants |
-| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Performance tracking (results written to `benchmarks/status/<machine>.csv` immediately, every run) + regression gate that fails if basilisk gets slower than the **committed** baseline beyond a small noise tolerance ([CHKARCH-TESTING-BENCH-RATCHET]) |
+| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Performance tracking (results written to `benchmarks/status/<machine>.csv` immediately, every run) + zero-tolerance regression gate that fails if basilisk gets slower than the **committed** baseline on any fixture ([CHKARCH-TESTING-BENCH-RATCHET]) |
 
 ### PEP Conformance Scoring {#CHKARCH-CONFORMANCE}
 
@@ -1601,7 +1601,7 @@ never suppress the other (`benchmarks/summarize.py`):
    **COMMITTED** baseline — the status CSV read from git at `BENCH_BASELINE_REF`
    (default `HEAD`) via `git show`, **never the working copy the run just
    overwrote**, so a slower run can never launder its regression into the
-   baseline. A backwards step **beyond the tolerance** on any fixture exits 3 →
+   baseline. Any backwards step on any fixture exits 3 →
    CI FAILURE. The gate only READS; it never edits the file. The committed
    baseline advances only when a run is committed, so it still ratchets toward
    faster — while the live file never hides a slip.
@@ -1618,10 +1618,10 @@ never suppress the other (`benchmarks/summarize.py`):
   to its newest official release via `pip install --upgrade` (best-effort per
   tool, loud warning on failure). Competitor columns therefore always reflect
   current upstream, never a pinned build. The pull runs outside all timing.
-- **Noise tolerance, not a disable knob.** A small COMMITTED tolerance
-  (`BENCH_TOLERANCE_PCT`, default 5%) absorbs run-to-run wall-clock jitter so a
-  non-regression is not red-flagged. It lives in the tracked script, not an env
-  var; the gate itself cannot be disabled or widened at runtime (`BENCH_NO_GATE` /
+- **Zero-tolerance ratchet.** The committed tolerance is zero
+  (`BENCH_TOLERANCE_PCT=0`), so every fixture must be monotonically
+  non-increasing. It lives in the tracked script, not an env var; the gate itself
+  cannot be disabled or widened at runtime (`BENCH_NO_GATE` /
   `BENCH_REGRESS_PCT` / `BENCH_TOLERANCE_PCT` overrides are rejected).
 - Run it whenever checker hot paths change (resolver visitors, rule `check` loops,
   conformance-driven additions). Conformance logic that blows the gate must be

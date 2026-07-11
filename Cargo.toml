@@ -149,8 +149,11 @@ clone_on_ref_ptr     = "deny"
 # codegen unit lets LLVM optimize across crate boundaries and keeps benchmark
 # baselines moving down; development and CI test profiles remain fast below.
 [profile.release]
+opt-level = 3
 lto = "fat"
 codegen-units = 1
+panic = "abort"
+strip = "symbols"
 
 # ── CI profile: fast compilation for test/coverage runs ──────────────────────
 # Use via `cargo test --profile ci` or `cargo llvm-cov --profile ci`.

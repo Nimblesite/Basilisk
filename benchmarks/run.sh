@@ -56,7 +56,7 @@
 #
 # Knobs: RUNS=<n> WARMUP=<n>. The gate cannot be DISABLED or WIDENED at runtime
 # (BENCH_NO_GATE / BENCH_REGRESS_PCT / BENCH_TOLERANCE_PCT env overrides are
-# rejected); the small noise tolerance is a committed constant below.
+# rejected); the committed tolerance is zero.
 
 set -uo pipefail
 
@@ -74,17 +74,16 @@ WARMUP="${WARMUP:-2}"
 WARMCACHE="$OUT/.warmcache"
 MYPYCACHE="$OUT/.mypycache"
 # The gate cannot be disabled or widened at runtime. The write is unconditional
-# (never gated); the ONLY tunable is a small, COMMITTED noise tolerance so
-# run-to-run jitter does not red-flag a non-regression. It lives here in the
-# tracked script, not in an env var, so it can never be widened away for a run.
+# (never gated); the committed tolerance is zero so every fixture is
+# monotonically non-increasing. It lives in the tracked script and cannot be
+# widened away for a run.
 if [[ -n "${BENCH_NO_GATE:-}" || -n "${BENCH_REGRESS_PCT:-}" || -n "${BENCH_TOLERANCE_PCT:-}" ]]; then
   echo "ERROR: benchmark regression policy cannot be disabled or widened." >&2
   exit 2
 fi
 BENCH_GATE="1"
-# Slight tolerance for wall-clock fluctuations: a fixture must exceed the
-# committed baseline by MORE than this percentage to count as a regression.
-BENCH_TOLERANCE_PCT="5"
+# Zero-tolerance ratchet: any slower fixture is a regression.
+BENCH_TOLERANCE_PCT="0"
 mkdir -p "$OUT" "$STATUS_DIR"
 
 # Canonical tool column order for the status CSV / website (stable schema).

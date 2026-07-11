@@ -84,6 +84,16 @@ def run(cmd: list[str], *, cwd: Path | None = None, env: dict | None = None) -> 
     subprocess.run(cmd, cwd=cwd, env=env, check=True)
 
 
+def _is_current_venv(venv: Path, *, prefix: str | None = None) -> bool:
+    """Return whether this interpreter is running inside ``venv``.
+
+    Comparing resolved executable paths is incorrect: virtualenv launchers are
+    commonly symlinks to the system interpreter, so both paths resolve to the
+    same file even before the virtualenv has been entered.
+    """
+    return Path(prefix or sys.prefix).resolve() == venv.resolve()
+
+
 def ensure_harness_deps(root: Path) -> None:
     """Guarantee the real harness's runtime deps are importable.
 
@@ -102,14 +112,32 @@ def ensure_harness_deps(root: Path) -> None:
 
     venv = root / "target" / ".conformance-venv"
     py = venv / ("Scripts" if os.name == "nt" else "bin") / "python"
-    if py.resolve() == Path(sys.executable).resolve():
-        raise RuntimeError(
-            f"harness deps {HARNESS_DEPS} missing even inside {venv}; provisioning failed"
-        )
     if not py.exists():
         run([sys.executable, "-m", "venv", str(venv)])
         run([str(py), "-m", "pip", "install", "-q", "--upgrade", "pip"])
+
+    # A cached virtualenv may exist without all dependencies (for example, an
+    # interrupted install). Check it every time instead of assuming that the
+    # interpreter's existence proves the environment is complete.
+    dependency_probe = [
+        str(py),
+        "-c",
+        "; ".join(f"import {dep}" for dep in HARNESS_DEPS),
+    ]
+    if subprocess.run(dependency_probe, check=False).returncode != 0:
         run([str(py), "-m", "pip", "install", "-q", *HARNESS_DEPS])
+
+    if _is_current_venv(venv):
+        importlib.invalidate_caches()
+        try:
+            for dep in HARNESS_DEPS:
+                importlib.import_module(dep)
+            return
+        except ImportError as exc:
+            raise RuntimeError(
+                f"harness deps {HARNESS_DEPS} missing even inside {venv}; "
+                "provisioning failed"
+            ) from exc
     os.execv(str(py), [str(py), str(Path(__file__).resolve()), *sys.argv[1:]])
 
 

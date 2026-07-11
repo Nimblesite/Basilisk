@@ -84,6 +84,7 @@ fi
 # reuses this same fresh clone (--reuse-clone) to RUN the harness under this
 # instrumented env, so the binary's conformance run also feeds the coverage pool.
 header "Syncing PEP conformance fixtures from the real python/typing suite"
+python3 -m unittest discover -s "$REPO_ROOT/conformance" -p 'test_*.py'
 python3 "$REPO_ROOT/conformance/run_conformance.py" --sync-tests
 
 set +e
