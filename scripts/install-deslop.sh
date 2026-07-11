@@ -26,6 +26,18 @@ command -v brew >/dev/null || {
     exit 1
 }
 
+# Homebrew >= 6 gates formulae from non-official taps behind
+# HOMEBREW_REQUIRE_TAP_TRUST (set by default on GitHub's ubuntu runners). Under
+# that gate an untrusted-tap install prompts for confirmation; in CI stdin is
+# closed, so the prompt dies as a "Broken pipe" and the install aborts. Tap
+# explicitly, then trust the tap non-interactively so `brew install` proceeds.
+# The trust step is guarded: older Homebrew without the `brew trust` subcommand
+# (and machines where the gate isn't set) simply skip it and install as before.
+brew tap nimblesite/tap
+if brew trust --help >/dev/null 2>&1; then
+    brew trust --tap nimblesite/tap
+fi
+
 brew install nimblesite/tap/deslop || brew upgrade nimblesite/tap/deslop
 
 # Make the brew bin discoverable to later CI steps.

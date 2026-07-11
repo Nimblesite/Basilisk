@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import subprocess
+import sys
 from pathlib import Path
 
 from run_conformance import _is_current_venv
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class HarnessEnvironmentTests(unittest.TestCase):
@@ -27,6 +32,23 @@ class HarnessEnvironmentTests(unittest.TestCase):
             venv.mkdir()
 
             self.assertTrue(_is_current_venv(venv, prefix=str(venv)))
+
+
+class GeneratedReferenceTests(unittest.TestCase):
+    def test_checked_in_conformance_references_match_the_live_report(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "gen_conformance_reference.py"), "--check"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(
+            result.returncode,
+            0,
+            result.stdout + result.stderr,
+        )
 
 
 if __name__ == "__main__":
