@@ -16,7 +16,7 @@ permalink: /zh/
     <div class="hero__split">
 
       <div class="hero__text">
-        <span class="hero__kicker">// basilisk — alpha</span>
+        <span class="hero__kicker">// basilisk — 100% 符合 PEP 规范</span>
 
         <h1 class="hero__headline">
           开源的<br>
@@ -313,7 +313,7 @@ permalink: /zh/
         类型规范将未注解的代码视为<em>推断</em>类型而非错误。Basilisk 的 {{ ruleStats.strictness }} 条可选严格规则拒绝如此：
         要求每个参数、返回值、变量、<code>*args</code>/<code>**kwargs</code> 和类属性都有类型注解，
         要求重写方法带 <code>@override</code>，拒绝隐式与显式的 <code>Any</code>，并标记未注解的 lambda。
-        每一条都默认关闭——可从编辑器或 <code>pyproject.toml</code> 按文件或路径开启，一键"补全"修复还能自动为您添加缺失的类型。
+        每一条都默认关闭——可从编辑器或 <code>pyproject.toml</code> 按文件或路径开启，一键快速修复会插入占位注解（<code>: Any</code>、<code>-&gt; None</code>），方便您填入真实类型。
         它们在符合性评分中从不运行，因此无法虚增得分。<a href="/zh/docs/rules/">查看规则 &rarr;</a>
       </p>
     </div>
@@ -377,7 +377,7 @@ permalink: /zh/
       <h2>开源。<br>默认符合规范。</h2>
       <div>
         <p>
-          Basilisk 正处于 alpha 阶段。类型检查器、LSP 服务器和编辑器
+          类型检查器、LSP 服务器和编辑器
           扩展今天即可使用——自动补全、跳转到定义、
           悬停信息、诊断、重构、F5 调试和性能分析——
           支持 VS Code、Cursor、Windsurf、Zed 和 Neovim。JetBrains 即将推出。

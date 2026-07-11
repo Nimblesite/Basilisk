@@ -162,7 +162,7 @@
       }
     ],
     "group": "Warnings",
-    "docsUrl": "https://www.basilisk-python.dev/warnings/BSK-W0011"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0011"
   },
   {
     "code": "BSK-W0012",
@@ -184,7 +184,7 @@
       }
     ],
     "group": "Warnings",
-    "docsUrl": "https://www.basilisk-python.dev/warnings/BSK-W0012"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0012"
   },
   {
     "code": "BSK-W0013",
@@ -206,7 +206,7 @@
       }
     ],
     "group": "Warnings",
-    "docsUrl": "https://www.basilisk-python.dev/warnings/BSK-W0013"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0013"
   },
   {
     "code": "BSK-W0014",
@@ -257,7 +257,7 @@
       }
     ],
     "group": "Warnings",
-    "docsUrl": "https://www.basilisk-python.dev/warnings/BSK-W0040"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0040"
   },
   {
     "code": "BSK-W0050",

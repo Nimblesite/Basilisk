@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
-title: "Install Basilisk in VS Code, Cursor & Windsurf"
-description: "Install the Basilisk Python language server in VS Code, Cursor, Windsurf, and other VS Code-compatible editors from the VS Code Marketplace or Open VSX. The matching binary is bundled — no separate setup."
-keywords: basilisk, vs code, cursor, windsurf, open vsx, marketplace, python language server, install, vsix
+title: "Best Python VS Code Extension? Install Basilisk"
+description: "Looking for the best Python VS Code extension? See when Basilisk fits, then install its bundled type checker, LSP, debugger, profiler, and refactoring tools."
+keywords: best python vscode extension, python extension for vscode, basilisk, vs code, cursor, windsurf, open vsx, python language server, install, vsix
 date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project
@@ -21,13 +21,17 @@ Install the **Basilisk** extension from your editor's marketplace:
 3. Search for **Basilisk**
 4. Click **Install**
 
-The extension is published to the **[VS Code Marketplace](https://marketplace.visualstudio.com/)** and to **[Open VSX](https://open-vsx.org)**, so it installs in **VS Code**, **Cursor**, **Windsurf**, and other VS Code-compatible editors.
+The extension is published to the **[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Nimblesite.basilisk)** and to **[Open VSX](https://open-vsx.org/extension/Nimblesite/basilisk)**, so it installs in **VS Code**, **Cursor**, **Windsurf**, and other VS Code-compatible editors.
 
 Open a Python file and Basilisk activates automatically — diagnostics, completions, hover, go-to-definition, rename, refactoring, formatting, debugging (F5), and profiling.
 
 ![Basilisk in VS Code — PEP-conformant type errors shown inline with red squiggles and listed in the Problems panel](/assets/images/vscode-diagnostics.png)
 
 *PEP-conformant diagnostics the moment you open a file — no configuration.*
+
+## Is Basilisk the best Python VS Code extension for you?
+
+No Python extension is best for every project. Basilisk is designed for developers who want one open-source extension for typing-spec-conformant checking, completions, navigation, refactoring, formatting, debugging, and profiling — with the same language server available outside VS Code. If your project depends on mature mypy framework plugins or you prefer Pylance's established VS Code-only workflow, review the [Python type checker comparison](/docs/comparison/) before switching.
 
 ## The binary is bundled — no separate install
 

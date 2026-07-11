@@ -156,6 +156,13 @@ export default function (eleventyConfig) {
     return s.slice(0, s.lastIndexOf(" ", len)).trimEnd() + "…";
   });
 
+  // Base layout guard: only advertise a language alternate when Eleventy
+  // actually generated that URL. This prevents hreflang and switcher 404s on
+  // English-only docs, author profiles, benchmarks, and diagnostic pages.
+  eleventyConfig.addFilter("hasPageUrl", (pages, url) =>
+    (pages || []).some((page) => page.url === url)
+  );
+
   return {
     dir: {
       input: "src",

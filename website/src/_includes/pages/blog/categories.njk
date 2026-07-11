@@ -19,10 +19,11 @@ permalink: /blog/categories/
   {% if categoryCollection | length %}
   <div class="category-grid">
     {% for category in categoryCollection %}
+    {% set categoryCount = categoryGroups[category] | length | default(0) %}
     <a href="{{ langPrefix }}/blog/categories/{{ category | slugify }}/" class="category-card">
       <span>0{{ loop.index }}</span>
       <h2>{{ category | replace("-", " ") | capitalize }}</h2>
-      <p>{{ categoryGroups[category] | length | default(0) }} {{ "blog.articles" | t(lang) | default("articles") }}</p>
+      <p>{{ categoryCount }} {% if categoryCount == 1 %}{{ "blog.article" | t(lang) | default("article") }}{% else %}{{ "blog.articles" | t(lang) | default("articles") }}{% endif %}</p>
       <strong aria-hidden="true">→</strong>
     </a>
     {% endfor %}

@@ -15,7 +15,7 @@ permalink: /
     <div class="hero__split">
 
       <div class="hero__text">
-        <span class="hero__kicker">// basilisk — alpha</span>
+        <span class="hero__kicker">// basilisk — 100% PEP conformant</span>
 
         <h1 class="hero__headline">
           The open-source<br>
@@ -325,8 +325,8 @@ permalink: /
         return, variable, <code>*args</code>/<code>**kwargs</code>, and class attribute, demand
         <code>@override</code> on overrides, reject implicit and explicit <code>Any</code>, and flag
         unannotated lambdas. Every one is off by default &mdash; switch them on per-file or per-path
-        from your editor or <code>pyproject.toml</code>, and one-click enrichment fixes add the missing
-        types <em>for</em> you. They never run during conformance, so they can&rsquo;t pad that score.
+        from your editor or <code>pyproject.toml</code>, and one-click quick-fixes drop in a placeholder
+        annotation (<code>: Any</code>, <code>-&gt; None</code>) so you can fill in the real type. They never run during conformance, so they can&rsquo;t pad that score.
         <a href="/docs/rules/">See the rules &rarr;</a>
       </p>
     </div>
@@ -391,7 +391,7 @@ permalink: /
       <h2>Open source.<br>Conformant by default.</h2>
       <div>
         <p>
-          Basilisk is in alpha. The type checker, LSP server, and editor
+          The type checker, LSP server, and editor
           extensions are working today &mdash; autocomplete, go-to-definition,
           hover info, diagnostics, refactoring, F5 debugging, and profiling &mdash;
           in VS Code, Cursor, Windsurf, Zed, and Neovim. JetBrains is on the way.

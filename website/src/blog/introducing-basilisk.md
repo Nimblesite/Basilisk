@@ -67,7 +67,7 @@ The result: incremental type checking that doesn't require a persistent daemon a
 
 ## What exists today
 
-Basilisk (alpha) implements Phase 1 of a seven-phase roadmap.
+Basilisk implements Phase 1 of a seven-phase roadmap.
 
 **Working today:**
 - Core parser, name resolver, and type checker

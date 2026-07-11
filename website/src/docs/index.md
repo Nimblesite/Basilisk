@@ -31,7 +31,7 @@ Basilisk takes a different position. Its default *is* the typing spec — full P
 
 - A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, a full [refactoring suite](/docs/refactoring/), code actions, inlay hints
 - **Editor extensions for every major IDE** — VS Code, Neovim (0.10+), and Zed today; Cursor and Windsurf (via Open VSX) coming very soon, and JetBrains (IntelliJ / PyCharm) on the way
-- **Enrichment fixes** — one-click code actions that add the missing type annotations *for* you
+- **Annotation quick-fixes** — one-click code actions that insert a placeholder annotation (`: Any`, `-> None`) on unannotated code, so you can fill in the real type
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
 - An **integrated profiler** — sampling CPU profiler with inline heatmap annotations, flame graphs, memory leak detection, and reference graph visualization, all inside your editor
 - A **PEP-conformant type checker by default** — the core spec rule set out of the box, with opt-in Basilisk rules for checking stricter than the spec
@@ -68,7 +68,7 @@ This keeps the default honest — pure spec conformance — while letting each t
 
 ## Project status
 
-Basilisk is currently in **alpha** — the core checker, LSP server, and editor extensions are all working. Autocomplete, go-to-definition, hover, diagnostics, inlay hints, refactoring, debugging, and profiling are shipping today.
+Basilisk is under **active development** — the core checker, LSP server, and editor extensions are all working, and it is the only checker with a perfect score on the official python/typing conformance suite. Autocomplete, go-to-definition, hover, diagnostics, inlay hints, refactoring, debugging, and profiling are shipping today.
 
 | Phase | Milestone | Status |
 |---|---|---|

@@ -6,6 +6,8 @@
     language cluster entirely (e.g. the English-only Releases page). -#}
 {%- set effLang = 'zh' if (page.url == '/zh/' or page.url.startsWith('/zh/')) else (lang | default('en')) -%}
 {%- set basePath = (page.url | replace('/zh/', '/')) if effLang == 'zh' else page.url -%}
+{%- set alternatePath = basePath if effLang == 'zh' else '/zh' + basePath -%}
+{%- set hasTranslation = (not noTranslation) and (collections.all | hasPageUrl(alternatePath)) -%}
 <html lang="{{ effLang }}">
 <head>
   <!-- Google tag (gtag.js) -->
@@ -49,7 +51,7 @@
   <link rel="alternate" type="application/atom+xml" title="{{ site.title }} Feed" href="{{ site.url }}/feed.xml">
 
   <!-- Hreflang for language alternates (locale-safe; see derivation at top of file) -->
-  {%- if noTranslation %}
+  {%- if not hasTranslation %}
   <link rel="alternate" hreflang="{{ effLang }}" href="{{ site.url }}{{ page.url }}">
   <link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ page.url }}">
   {%- else %}
@@ -69,7 +71,7 @@
   <meta property="og:description" content="{{ description | default(site.description) }}">
   <meta property="og:site_name" content="{{ site.title }}">
   <meta property="og:locale" content="{{ effLang | toOgLocale }}">
-  {%- if not noTranslation %}
+  {%- if hasTranslation %}
   {% for langCode in supportedLanguages %}{% if langCode != effLang %}
   <meta property="og:locale:alternate" content="{{ langCode | toOgLocale }}">
   {% endif %}{% endfor %}
@@ -100,7 +102,7 @@
         "url": "{{ site.url }}/",
         "name": "{{ site.title }}",
         "description": "{{ site.description }}",
-        "inLanguage": "{{ lang | default('en') }}"{% if site.searchUrl %},
+        "inLanguage": "{{ effLang }}"{% if site.searchUrl %},
         "potentialAction": {
           "@type": "SearchAction",
           "target": "{{ site.searchUrl }}?q={search_term_string}",
@@ -114,7 +116,7 @@
         "name": "{{ title | default(site.title) }}",
         "description": "{{ description | default(site.description) }}",
         "isPartOf": { "@id": "{{ site.url }}/#website" },
-        "inLanguage": "{{ lang | default('en') }}"{% if page.date %},
+        "inLanguage": "{{ effLang }}"{% if page.date %},
         "datePublished": "{{ page.date | isoDate }}",
         "dateModified": "{% if dateModified %}{{ dateModified | isoDate }}{% else %}{{ page.date | isoDate }}{% endif %}"{% endif %}{% if author %},
         "author": {
@@ -201,7 +203,10 @@
         <li>
           {% set navUrl = item.url %}
           {% if not item.external and currentLang != defaultLanguage %}
-            {% set navUrl = item.url | altLangUrl('en', currentLang) %}
+            {% set localizedNavUrl = item.url | altLangUrl('en', currentLang) %}
+            {% if collections.all | hasPageUrl(localizedNavUrl) %}
+              {% set navUrl = localizedNavUrl %}
+            {% endif %}
           {% endif %}
           <a href="{{ navUrl }}" {% if item.external %}target="_blank" rel="noopener noreferrer"{% endif %}
              class="nav-link {% if (item.url == '/' and (page.url == '/' or page.url == '/index.html' or page.url == ('/' + currentLang + '/') or page.url == ('/' + currentLang + '/index.html'))) or (item.url != '/' and item.url | length > 1 and (page.url.startsWith(item.url) or page.url.startsWith(navUrl))) %}active{% endif %}">
@@ -213,7 +218,7 @@
 
       <div class="nav-actions">
         <div class="language-switcher">
-          {%- if not noTranslation %}
+          {%- if hasTranslation %}
           {% if effLang == 'zh' %}
           <a href="{{ basePath }}" lang="en" class="lang-link" aria-label="Switch to English">English</a>
           {% else %}
@@ -254,7 +259,10 @@
             {% for item in section.items %}
             {% set footerUrl = item.url %}
             {% if item.url.startsWith('/') and currentLang != defaultLanguage %}
-              {% set footerUrl = item.url | altLangUrl('en', currentLang) %}
+              {% set localizedFooterUrl = item.url | altLangUrl('en', currentLang) %}
+              {% if collections.all | hasPageUrl(localizedFooterUrl) %}
+                {% set footerUrl = localizedFooterUrl %}
+              {% endif %}
             {% endif %}
             <li><a href="{{ footerUrl }}">{{ item.text }}</a></li>
             {% endfor %}
