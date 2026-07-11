@@ -1,0 +1,72 @@
+---
+layout: layouts/base.njk
+---
+
+{% set currentLang = lang | default('en') %}
+
+{% block head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": {{ title | dump | safe }},
+  "description": {{ description | default(site.description) | dump | safe }},
+  "author": {
+    "@type": "Organization",
+    "name": {{ site.organization.name | default('The Basilisk Project') | dump | safe }}
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": {{ site.organization.name | default('Basilisk') | dump | safe }},
+    "logo": {
+      "@type": "ImageObject",
+      "url": "{{ site.url }}{{ site.organization.logo }}"
+    }
+  }{% if date %},
+  "datePublished": "{{ date | dateToRfc3339 }}",
+  "dateModified": "{% if dateModified %}{{ dateModified | dateToRfc3339 }}{% else %}{{ date | dateToRfc3339 }}{% endif %}"{% endif %},
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "{{ site.url }}{{ page.url }}"
+  },
+  "inLanguage": "{{ currentLang }}"
+}
+</script>
+{% endblock %}
+
+{% set navPages = collections.all | eleventyNavigation %}
+
+<div class="docs-layout">
+  <aside class="sidebar" id="docs-sidebar">
+    <nav class="docs-nav">
+      <ul>
+        {% for entry in navPages %}
+        {% set entryLang = entry.url | extractLangFromUrl(defaultLanguage) %}
+        {% if entryLang == currentLang %}
+        <li>
+          <a href="{{ entry.url }}" {% if page.url == entry.url %}class="active"{% endif %}>{{ entry.title }}</a>
+          {% if entry.children.length %}
+          <ul>
+            {% for child in entry.children %}
+            <li><a href="{{ child.url }}" {% if page.url == child.url %}class="active"{% endif %}>{{ child.title }}</a></li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </li>
+        {% endif %}
+        {% endfor %}
+      </ul>
+    </nav>
+  </aside>
+
+  <article class="docs-content prose">
+    {{ content | safe }}
+
+    {% if prevPage or nextPage %}
+    <nav class="docs-nav-footer">
+      {% if prevPage %}<a href="{{ prevPage.url }}" class="btn btn-prev">&larr; {{ prevPage.title }}</a>{% else %}<span></span>{% endif %}
+      {% if nextPage %}<a href="{{ nextPage.url }}" class="btn btn-next">{{ nextPage.title }} &rarr;</a>{% endif %}
+    </nav>
+    {% endif %}
+  </article>
+</div>

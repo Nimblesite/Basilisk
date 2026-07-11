@@ -23,31 +23,11 @@ test_package = [
     "basilisk-checker",
 ]
 
-# Equivalent mutants: these produce no observable behaviour change because
-# surrounding code handles the edge case gracefully. Excluding them avoids
-# false "missed" reports that can never be killed by a test. Patterns are
-# matched against `cargo mutants --list` output, so they reference the rule's
-# source path + the exact replacement. (Paths track the rule module names; keep
-# them in sync when a rule file/dir is renamed, or the exclusions silently lapse.)
-#
-#   assignment_compatibility/mod.rs extract_annotation `pos + 1` → `pos * 1`:
-#   line_start then points at the preceding '\n', but name_offset
-#   (= start - line_start) shifts by the same amount, so every slice taken from
-#   `line` is byte-identical to the unmutated extraction. Provably equivalent.
-#
-#   aliases_implicit.rs collect_type_alias_names `&& alias != "TypeAlias"` → `||`:
-#   the only inputs that differ (`TypeAlias as TypeAlias`, or an empty alias) push
-#   a duplicate "TypeAlias"/"" into `names`, which is consumed solely via
-#   `is_type_alias_annotation`'s `.any(|n| ann == n)` — so the extra entry can
-#   never change a diagnostic. Equivalent.
-#
-# (The former check_vars `&& rhs_span.is_some()` → `||` exclusion was dropped:
-# that mutant is now killed by the `mutant_bare_declaration_not_flagged` test, so
-# it stays in the pool as real, caught coverage rather than a hidden exclusion.)
-exclude_re = [
-    # Inference engine: slow, not covered by mutation-safe tests.
-    "src/inference",
-    # Equivalent mutants — produce no observable behaviour change:
-    "assignment_compatibility/mod\\.rs:\\d+:\\d+: replace \\+ with \\* in extract_annotation",
-    "aliases_implicit\\.rs:\\d+:\\d+: replace && with \\|\\| in collect_type_alias_names",
-]
+# NO `exclude_re`. Excluding *code* from the mutant generator is forbidden: it
+# hides mutants that would otherwise survive, inflating the kill rate against a
+# smaller-than-real pool. EVERY line of basilisk-checker is mutated. What we
+# scope instead is the *test suite* — the Makefile restricts `cargo mutants` to
+# the mutation-safe test binaries (`--test coverage_boost_33_tests --test
+# mutation_kill_tests`). A mutant no safe test kills is reported as MISSED, in
+# the open, never excluded. Widen coverage by adding #[mutation_safe] tests that
+# kill those survivors — never by hiding the code from the generator.

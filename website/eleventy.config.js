@@ -11,6 +11,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const templateOverrides = [
   ["src/_includes/layouts/base.njk", "templates/layouts/base.njk"],
   ["src/_includes/layouts/blog.njk", "templates/layouts/blog.njk"],
+  ["src/_includes/layouts/docs.njk", "templates/layouts/docs.njk"],
+  ["src/_includes/pages/feed.njk", "templates/pages/feed.njk"],
+  ["src/_includes/pages/robots.txt.njk", "templates/pages/robots.txt.njk"],
   ["src/_includes/pages/blog/index.njk", "templates/pages/blog/index.njk"],
   ["src/_includes/pages/blog/tags.njk", "templates/pages/blog/tags.njk"],
   ["src/_includes/pages/blog/tags-pages.njk", "templates/pages/blog/tags-pages.njk"],
@@ -84,8 +87,14 @@ function patchIndexFrontMatter(path, content) {
 }
 
 function addSharedProseClass(path, content) {
-  return path === "_includes/layouts/docs.njk" || path === "_includes/layouts/api.njk"
+  return path === "_includes/layouts/api.njk"
     ? content.replace('class="docs-content"', 'class="docs-content prose"')
+    : content;
+}
+
+function addLocalizedTemplateLang(path, content) {
+  return path.startsWith("zh/blog/") && !content.includes("\nlang: zh\n")
+    ? content.replace("layout: layouts/base.njk", "layout: layouts/base.njk\nlang: zh")
     : content;
 }
 
@@ -96,7 +105,10 @@ export default function (eleventyConfig) {
       virtualInputPath,
       patchIndexFrontMatter(
         virtualInputPath,
-        addSharedProseClass(virtualInputPath, content)
+        addSharedProseClass(
+          virtualInputPath,
+          addLocalizedTemplateLang(virtualInputPath, content)
+        )
       ),
       data
     );

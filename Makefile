@@ -85,10 +85,7 @@ mutation-test:
 			examine_re="."; \
 		else \
 			mutation_rustflags="$${mutation_rustflags:+$$mutation_rustflags }--cfg mutation_testing"; \
-			tests_file="$$(mktemp)"; \
-			RUSTFLAGS="$$mutation_rustflags" cargo test --package "$$package" "$$marker" -- --list > "$$tests_file"; \
-			examine_re="$$(python3 scripts/mutation_examine_re.py "$$tests_file")"; \
-			rm -f "$$tests_file"; \
+			examine_re="."; \
 		fi; \
 		if [ -n "$$shard" ]; then \
 			shard_label="$${shard//\//-of-}"; \

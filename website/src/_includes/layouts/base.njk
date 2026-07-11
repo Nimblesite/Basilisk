@@ -65,7 +65,7 @@
   {% set metaImage = image | default(site.ogImage) %}
   {% set metaImageWidth = imageWidth | default(site.ogImageWidth) | default('1200') %}
   {% set metaImageHeight = imageHeight | default(site.ogImageHeight) | default('630') %}
-  <meta property="og:type" content="{% if basePath.startsWith('/blog/') and basePath != '/blog/' %}article{% else %}website{% endif %}">
+  <meta property="og:type" content="{% if isBlogPost %}article{% else %}website{% endif %}">
   <meta property="og:url" content="{{ site.url }}{{ page.url }}">
   <meta property="og:title" content="{{ title | default(site.title) }}">
   <meta property="og:description" content="{{ description | default(site.description) }}">
@@ -100,8 +100,8 @@
         "@type": "WebSite",
         "@id": "{{ site.url }}/#website",
         "url": "{{ site.url }}/",
-        "name": "{{ site.title }}",
-        "description": "{{ site.description }}",
+        "name": {{ site.title | dump | safe }},
+        "description": {{ site.description | dump | safe }},
         "inLanguage": "{{ effLang }}"{% if site.searchUrl %},
         "potentialAction": {
           "@type": "SearchAction",
@@ -110,18 +110,18 @@
         }{% endif %}
       },
       {
-        "@type": "{% if basePath.startsWith('/docs/') %}TechArticle{% elif basePath.startsWith('/blog/') and basePath != '/blog/' %}BlogPosting{% else %}WebPage{% endif %}",
+        "@type": "WebPage",
         "@id": "{{ site.url }}{{ page.url }}#webpage",
         "url": "{{ site.url }}{{ page.url }}",
-        "name": "{{ title | default(site.title) }}",
-        "description": "{{ description | default(site.description) }}",
+        "name": {{ title | default(site.title) | dump | safe }},
+        "description": {{ description | default(site.description) | dump | safe }},
         "isPartOf": { "@id": "{{ site.url }}/#website" },
-        "inLanguage": "{{ effLang }}"{% if page.date %},
-        "datePublished": "{{ page.date | isoDate }}",
-        "dateModified": "{% if dateModified %}{{ dateModified | isoDate }}{% else %}{{ page.date | isoDate }}{% endif %}"{% endif %}{% if author %},
+        "inLanguage": "{{ effLang }}"{% if date %},
+        "datePublished": "{{ date | isoDate }}",
+        "dateModified": "{% if dateModified %}{{ dateModified | isoDate }}{% else %}{{ date | isoDate }}{% endif %}"{% endif %}{% if author %},
         "author": {
-          "@type": "Person",
-          "name": "{{ author }}"
+          "@type": "{% if author.slug == 'basilisk-team' or author == 'The Basilisk Project' or author == 'Basilisk 项目' %}Organization{% else %}Person{% endif %}",
+          "name": {% if author.name %}{{ author.name | dump | safe }}{% else %}{{ author | dump | safe }}{% endif %}
         }{% endif %}{% if metaImage %},
         "image": "{{ site.url }}{{ metaImage }}"{% endif %}
       },
@@ -138,7 +138,7 @@
           {
             "@type": "ListItem",
             "position": 2,
-            "name": "{{ title | default('Page') }}",
+            "name": {{ title | default('Page') | dump | safe }},
             "item": "{{ site.url }}{{ page.url }}"
           }{% endif %}
         ]
@@ -146,7 +146,7 @@
       {
         "@type": "Organization",
         "@id": "{{ site.url }}/#organization",
-        "name": "{{ site.organization.name | default(site.title) }}",
+        "name": {{ site.organization.name | default(site.title) | dump | safe }},
         "url": "{{ site.url }}"{% if site.organization.logo %},
         "logo": {
           "@type": "ImageObject",
@@ -164,7 +164,7 @@
         "operatingSystem": "macOS, Linux, Windows",
         "programmingLanguage": "Python",
         "softwareRequirements": "Python 3.12",
-        "description": "{{ description | default(site.description) }}",
+        "description": {{ description | default(site.description) | dump | safe }},
         "license": "https://opensource.org/license/mit",
         "isAccessibleForFree": true,
         "offers": {
