@@ -78,6 +78,7 @@ Git is off-limits unless you are explicitly asked. When git IS used:
 - **NEVER list the agent as a commit co-author** — no `Co-Authored-By` trailer, no agent attribution.
 - **Work on exactly ONE branch.** Reuse the existing feature branch; never open a second. If multiple feature branches exist, merge them into one immediately before any other work.
 - **Worktrees are forbidden** — never run `git worktree`.
+- **NEVER close anything you did not open** — no issue, PR, discussion, or review thread, however stale or fixed. This includes auto-close keywords: write `Refs #123`, never `Closes/Fixes #123`.
 
 ## Testing
 
