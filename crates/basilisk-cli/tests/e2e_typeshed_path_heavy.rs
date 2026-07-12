@@ -282,16 +282,18 @@ fn typeshed_path_leaves_third_party_imports_untouched() {
         "pyproject.toml",
         "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\ntypeshed-path = \"ts\"\n",
     );
-    // `os` resolves from the custom typeshed; `requests` is a genuinely missing
-    // third-party package and must still be flagged.
+    // `os` resolves from the custom typeshed; the third-party import must
+    // still be flagged. The package name is deliberately one that can never
+    // be installed — a real name (e.g. `requests`) resolves from the
+    // developer's global site-packages and makes the test machine-dependent.
     write(
         &dir,
         "app.py",
-        "import requests\nfrom os import uname\n\nname: str = uname()\n",
+        "import bsk_test_missing_thirdparty_pkg\nfrom os import uname\n\nname: str = uname()\n",
     );
 
     let out = check(&dir);
-    assert_flags_unresolved(&out, "requests", &["os", "uname"]);
+    assert_flags_unresolved(&out, "bsk_test_missing_thirdparty_pkg", &["os", "uname"]);
     // The stdlib resolution must not leak into the third-party diagnostic.
     assert!(
         !stdout_of(&out).contains("fractions"),

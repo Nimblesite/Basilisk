@@ -158,8 +158,13 @@ pub fn semantic_tokens(resolved: &ResolvedModule, source: &str) -> Vec<SemanticT
         raw.push(span_token(var.name_span, TT_VARIABLE, MOD_DEFINITION));
     }
 
+    // Paint only the identifier spans of an import — module path and bound
+    // names — so the `import`/`from`/`as` keywords keep their keyword color
+    // (GitHub #286).
     for imp in &resolved.imports {
-        raw.push(span_token(imp.span, TT_NAMESPACE, 0));
+        for name_span in &imp.name_spans {
+            raw.push(span_token(*name_span, TT_NAMESPACE, 0));
+        }
     }
 
     raw.sort_by_key(|t| t.byte_offset);
@@ -199,4 +204,86 @@ fn delta_encode(raw: &[RawToken], source: &str) -> Vec<SemanticToken> {
     }
 
     tokens
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "test-only code: expect acceptable in unit tests"
+)]
+mod tests {
+    use super::*;
+
+    fn parse_and_resolve(source: &str) -> ResolvedModule {
+        let parsed = basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned())
+            .expect("test source should parse");
+        basilisk_resolver::resolve(&parsed).expect("resolution should not fail")
+    }
+
+    /// Decode delta-encoded tokens back to `(line, start_char, length, type)`.
+    fn decode(tokens: &[SemanticToken]) -> Vec<(u32, u32, u32, u32)> {
+        let mut line = 0u32;
+        let mut start = 0u32;
+        tokens
+            .iter()
+            .map(|t| {
+                if t.delta_line > 0 {
+                    line += t.delta_line;
+                    start = t.delta_start;
+                } else {
+                    start += t.delta_start;
+                }
+                (line, start, t.length, t.token_type)
+            })
+            .collect()
+    }
+
+    /// The source text covered by each namespace token (single-line sources).
+    fn namespace_token_texts(source: &str) -> Vec<String> {
+        let resolved = parse_and_resolve(source);
+        let tokens = semantic_tokens(&resolved, source);
+        decode(&tokens)
+            .into_iter()
+            .filter(|&(_, _, _, tt)| tt == TT_NAMESPACE)
+            .map(|(_, start, len, _)| {
+                let start = usize::try_from(start).expect("start fits in usize");
+                let len = usize::try_from(len).expect("len fits in usize");
+                source
+                    .get(start..start + len)
+                    .expect("token span should be valid")
+                    .to_owned()
+            })
+            .collect()
+    }
+
+    // Regression for GitHub #286: import statements were painted with a single
+    // namespace token spanning the whole statement, so the `from` / `import` /
+    // `as` keywords lost their keyword color. Namespace tokens must cover only
+    // the module and bound-name identifiers.
+    #[test]
+    fn test_import_semantic_tokens_cover_names_not_keywords() {
+        assert_eq!(
+            namespace_token_texts("from datetime import UTC, datetime\n"),
+            vec!["datetime", "UTC", "datetime"],
+            "from-import should tokenize the module and each imported name"
+        );
+    }
+
+    #[test]
+    fn test_plain_import_semantic_token_covers_module_only() {
+        assert_eq!(
+            namespace_token_texts("import json\n"),
+            vec!["json"],
+            "plain import should tokenize only the module name"
+        );
+    }
+
+    #[test]
+    fn test_aliased_import_semantic_tokens_cover_module_and_alias() {
+        assert_eq!(
+            namespace_token_texts("import numpy as np\n"),
+            vec!["numpy", "np"],
+            "aliased import should tokenize the module and the alias, not `as`"
+        );
+    }
 }

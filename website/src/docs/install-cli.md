@@ -9,7 +9,7 @@ author: The Basilisk Project
 eleventyNavigation:
   key: CLI & Package Managers
   parent: Installation
-  order: 3
+  order: 4
 ---
 
 # CLI & package managers

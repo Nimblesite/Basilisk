@@ -51,6 +51,14 @@ describe("basilisk.commands", function()
     it("registers BasiliskShowOutput", function()
       assert_command_exists("BasiliskShowOutput")
     end)
+
+    it("registers BasiliskUpdate", function()
+      assert_command_exists("BasiliskUpdate")
+    end)
+
+    it("registers BasiliskInstall", function()
+      assert_command_exists("BasiliskInstall")
+    end)
   end)
 
   describe("refactoring commands", function()

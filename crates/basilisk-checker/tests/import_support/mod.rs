@@ -68,6 +68,7 @@ pub fn module_with_plain_imports(modules: &[&str]) -> basilisk_resolver::Resolve
                 module: (*module).to_owned(),
                 names: vec![],
                 span: basilisk_resolver::Span::new(0, 0),
+                name_spans: Vec::new(),
                 kind: ImportKind::Plain,
                 resolution: ImportResolution::Unresolved,
                 resolved_path: None,

@@ -79,6 +79,10 @@ pub struct ImportInfo {
     pub names: Vec<String>,
     /// The source span of the import statement.
     pub span: Span,
+    /// Spans of the identifier tokens in the statement — the module path and
+    /// each imported/alias name — excluding the `import`/`from`/`as` keywords.
+    /// Semantic highlighting paints exactly these spans (GitHub #286).
+    pub name_spans: Vec<Span>,
     /// The kind of import.
     pub kind: ImportKind,
     /// How the import was resolved (source file type).

@@ -163,6 +163,7 @@ mod tests {
             module: module.to_owned(),
             names: vec![],
             span: Span::new(0, 15),
+            name_spans: Vec::new(),
             kind: ImportKind::Plain,
             resolution: ImportResolution::Unresolved,
             resolved_path: None,
