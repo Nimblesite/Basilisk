@@ -18,7 +18,8 @@
       "id": "fig-00-reading-journey",
       "section": "front-matter",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/00-reading-journey.svg",
       "path": "assets/diagrams/00-reading-journey.png",
       "title": "The journey from first diagnostic to team workflow",
       "alt": "A four-stage reading journey from checking one Python call through understanding types, configuring a project, and shipping in CI."
