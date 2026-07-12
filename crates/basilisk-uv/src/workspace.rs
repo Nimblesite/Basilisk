@@ -314,7 +314,17 @@ pub fn discover_workspace_members(roots: &[PathBuf]) -> Vec<PathBuf> {
         };
         for entry in entries.flatten() {
             let path = entry.path();
-            if !path.is_dir() || !path.join("pyproject.toml").is_file() {
+            // `DirEntry::file_type` uses directory-enumeration metadata on
+            // normal filesystems, avoiding one `stat` syscall for every child
+            // of every workspace root. Preserve the old symlink-following
+            // behaviour explicitly; only real directories take the fast path.
+            let is_directory = entry.file_type().map_or_else(
+                |_| path.is_dir(),
+                |file_type| {
+                    file_type.is_dir() || (file_type.is_symlink() && path.is_dir())
+                },
+            );
+            if !is_directory || !path.join("pyproject.toml").is_file() {
                 continue;
             }
 
