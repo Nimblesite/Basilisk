@@ -13,7 +13,9 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // vscode-extension/scripts -> repo root is two levels up.
 const repoRoot = path.resolve(__dirname, "../../");
-const outputDir = path.resolve(repoRoot, "website/src/assets/images");
+const outputDir = process.env.BASILISK_SCREENSHOT_OUTPUT_DIR
+  ? path.resolve(process.env.BASILISK_SCREENSHOT_OUTPUT_DIR)
+  : path.resolve(repoRoot, "website/src/assets/images");
 const CDP_PORT = Number.parseInt(process.env.BASILISK_SCREENSHOT_CDP_PORT ?? "9229", 10);
 const POLL_MS = 200;
 const TIMEOUT_MS = 600_000;

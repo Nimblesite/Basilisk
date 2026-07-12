@@ -295,6 +295,8 @@ Persistent item showing server state and diagnostic count:
 - `$(error) Basilisk` — server failed/not running
 - `$(sync~spin) Basilisk` — analyzing
 
+Clicking the item runs `basilisk.statusMenu`, a quick-pick whose first entry is **Open Configuration Editor** (then Show Output, Restart Language Server) so configuration is reachable from anywhere — the item is always visible even when the sidebar is collapsed. The same settings-gear also appears in the title bar of every Basilisk sidebar view (Modules, Python Processes, Basilisk info), not just the info panel.
+
 Future indicators: type completeness (`"87% typed"`), migration dashboard ([EXTENSION-ACTIVITY-PANEL-SPEC.md](EXTENSION-ACTIVITY-PANEL-SPEC.md)), ownership gutter icons (borrowed/owned/inout).
 
 ---

@@ -114,7 +114,7 @@
       "number": 9,
       "title": "Configure the project, not a mood",
       "file": "manuscript/09-configure-the-project.md",
-      "status": "outline",
+      "status": "draft-complete",
       "targetWords": 2200,
       "targetPages": 8,
       "targetFigures": 3
@@ -164,4 +164,3 @@
     }
   ]
 }
-

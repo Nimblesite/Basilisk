@@ -54,6 +54,26 @@ class User:
         self.age = age
 `;
 
+async function captureBookConfigurationPreview(
+    controller: ConfigurationEditorController,
+    store: NonNullable<ReturnType<typeof getStore>>,
+): Promise<void> {
+    await controller.receive({
+        type: 'preview',
+        mutations: [{
+            selector: { kind: 'Codes', codes: ['BSK-E0002'] },
+            setting: { kind: 'Warning' },
+            scope: { kind: 'Path', pattern: 'tests/**' },
+        }],
+    });
+    if (store.configurationEditor.value.preview === undefined) {
+        throw new Error('configuration editor did not render the real LSP preview');
+    }
+    await prepareWindow();
+    await sleep(800);
+    await takeWindowScreenshot('09-configuration-preview.png');
+}
+
 suite('Editor screenshots', function () {
     let tmpDir: string;
 
@@ -164,7 +184,13 @@ suite('Editor screenshots', function () {
             }
             await prepareWindow();
             await sleep(1_200);
-            await takeWindowScreenshot('vscode-configuration-editor.png');
+            const bookCapture = process.env.BASILISK_BOOK_SCREENSHOTS !== undefined;
+            await takeWindowScreenshot(
+                bookCapture ? '09-configuration-editor.png' : 'vscode-configuration-editor.png',
+            );
+            if (bookCapture) {
+                await captureBookConfigurationPreview(controller, store);
+            }
         } finally {
             controller.dispose();
         }

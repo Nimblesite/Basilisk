@@ -213,16 +213,18 @@ respond appropriately when a package has no usable typing information.
 
 **Target:** 2,200 words · 8 pages · 3 visuals
 
-**Reader outcome:** Express the repository's actual Python target, file scope,
-and rule policy in `pyproject.toml`.
+**Reader outcome:** Express a reviewable rule policy in `pyproject.toml`, then
+use the real configuration editor to preview and apply a bounded change.
 
-- The project root and canonical configuration source
-- Python version
-- Include roots, stubs, and custom typeshed
-- Core spec rules versus opt-in Basilisk rules
-- Severity by rule and policy by path
-- Checkpoint: one explicit policy for Signal Box source, tests, and vendor code
-- Visuals: configuration resolution; configuration editor; per-path outcome
+- Python typing semantics versus opt-in project policy
+- The active root configuration source
+- Live rule catalog, tags, search, and rule details
+- Inherited and Native intentions versus four persisted severities
+- Exact preview/apply flow and stale-revision protection
+- Project severity and one bounded test-path override
+- Presets as explicit recipes rather than policy modes
+- Checkpoint: required annotations in Signal Box source and a warning in tests
+- Visuals: configuration editor; preview transaction; real path preview
 - Website destinations: configuration and rules
 
 ### Chapter 10 — Adopt a codebase without hiding it

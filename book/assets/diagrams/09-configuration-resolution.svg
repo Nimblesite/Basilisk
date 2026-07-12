@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">A Basilisk rule change is previewed before it is written</title>
+  <desc id="description">Four stages show a reader choosing one rule and path, the Basilisk language server calculating a preview, the reader reviewing the exact effect, and one approved edit being written to pyproject.toml before the project is rechecked.</desc>
+  <defs>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="2" fill="#252d3f"/>
+    </pattern>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#e8500a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#34d399" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="url(#dots)" stroke="#252d3f" stroke-width="3"/>
+
+  <text x="82" y="108" fill="#e8500a" font-family="'JetBrains Mono',monospace" font-size="25" font-weight="700" letter-spacing="5">ONE DELIBERATE CHANGE</text>
+  <text x="82" y="172" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="58" font-weight="800">Choose. Preview. Review. Apply.</text>
+  <text x="84" y="216" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="27">The configuration editor does not write while you are still deciding.</text>
+
+  <g transform="translate(78 298)">
+    <rect width="320" height="392" rx="26" fill="#141820" stroke="#6ec5e9" stroke-width="4"/>
+    <circle cx="48" cy="48" r="26" fill="#6ec5e9"/>
+    <text x="48" y="57" text-anchor="middle" fill="#0a0c12" font-family="'JetBrains Mono',monospace" font-size="25" font-weight="800">1</text>
+    <text x="88" y="58" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="30" font-weight="750">CHOOSE</text>
+    <text x="28" y="116" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="22">One rule. One scope.</text>
+    <rect x="28" y="148" width="264" height="66" rx="14" fill="#0f1218" stroke="#4a5468" stroke-width="2"/>
+    <text x="48" y="189" fill="#fed7aa" font-family="'JetBrains Mono',monospace" font-size="23">BSK-E0002</text>
+    <rect x="28" y="230" width="264" height="66" rx="14" fill="#0f1218" stroke="#4a5468" stroke-width="2"/>
+    <text x="48" y="271" fill="#bae6fd" font-family="'JetBrains Mono',monospace" font-size="23">tests/**</text>
+    <rect x="28" y="312" width="264" height="52" rx="26" fill="#35251c" stroke="#e8500a" stroke-width="3"/>
+    <text x="160" y="346" text-anchor="middle" fill="#fed7aa" font-family="'Space Grotesk',system-ui,sans-serif" font-size="23" font-weight="700">Warning</text>
+  </g>
+
+  <path d="M412 494H462" fill="none" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow)"/>
+
+  <g transform="translate(480 298)">
+    <rect width="300" height="392" rx="26" fill="#141820" stroke="#e8500a" stroke-width="4"/>
+    <circle cx="48" cy="48" r="26" fill="#e8500a"/>
+    <text x="48" y="57" text-anchor="middle" fill="#0a0c12" font-family="'JetBrains Mono',monospace" font-size="25" font-weight="800">2</text>
+    <text x="88" y="58" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="30" font-weight="750">PREVIEW</text>
+    <text x="28" y="116" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="22">Basilisk resolves:</text>
+    <g font-family="'JetBrains Mono',monospace" font-size="21">
+      <rect x="28" y="148" width="244" height="56" rx="12" fill="#0f1218"/>
+      <text x="48" y="183" fill="#f0f2f7">live rule catalog</text>
+      <rect x="28" y="220" width="244" height="56" rx="12" fill="#0f1218"/>
+      <text x="48" y="255" fill="#f0f2f7">active config</text>
+      <rect x="28" y="292" width="244" height="56" rx="12" fill="#0f1218"/>
+      <text x="48" y="327" fill="#f0f2f7">workspace impact</text>
+    </g>
+  </g>
+
+  <path d="M794 494H844" fill="none" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow)"/>
+
+  <g transform="translate(862 298)">
+    <rect width="300" height="392" rx="26" fill="#141820" stroke="#6ec5e9" stroke-width="4"/>
+    <circle cx="48" cy="48" r="26" fill="#6ec5e9"/>
+    <text x="48" y="57" text-anchor="middle" fill="#0a0c12" font-family="'JetBrains Mono',monospace" font-size="25" font-weight="800">3</text>
+    <text x="88" y="58" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="30" font-weight="750">REVIEW</text>
+    <text x="28" y="116" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="22">Nothing is written yet.</text>
+    <rect x="28" y="150" width="244" height="118" rx="16" fill="#0f1218" stroke="#4a5468" stroke-width="2"/>
+    <text x="48" y="190" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="18">Path · tests/**</text>
+    <text x="48" y="232" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="21">Inherited →</text>
+    <text x="196" y="232" fill="#fed7aa" font-family="'JetBrains Mono',monospace" font-size="21">Warning</text>
+    <rect x="28" y="292" width="112" height="54" rx="12" fill="#0f1218" stroke="#6ec5e9" stroke-width="2"/>
+    <text x="84" y="326" text-anchor="middle" fill="#bae6fd" font-family="'Space Grotesk',system-ui,sans-serif" font-size="20">Back</text>
+    <rect x="154" y="292" width="118" height="54" rx="12" fill="#e8500a"/>
+    <text x="213" y="326" text-anchor="middle" fill="#0a0c12" font-family="'Space Grotesk',system-ui,sans-serif" font-size="20" font-weight="750">Apply once</text>
+  </g>
+
+  <path d="M1176 494H1226" fill="none" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow)"/>
+
+  <g transform="translate(1244 298)">
+    <rect width="278" height="392" rx="26" fill="#141820" stroke="#34d399" stroke-width="4"/>
+    <circle cx="48" cy="48" r="26" fill="#34d399"/>
+    <text x="48" y="57" text-anchor="middle" fill="#0a0c12" font-family="'JetBrains Mono',monospace" font-size="25" font-weight="800">4</text>
+    <text x="88" y="58" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="30" font-weight="750">APPLY</text>
+    <text x="28" y="116" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="22">One approved edit.</text>
+    <rect x="28" y="148" width="222" height="82" rx="14" fill="#0f1218" stroke="#4a5468" stroke-width="2"/>
+    <text x="48" y="181" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="19">pyproject.toml</text>
+    <text x="48" y="210" fill="#a7f3d0" font-family="'JetBrains Mono',monospace" font-size="18">is updated</text>
+    <path d="M139 247V284" fill="none" stroke="#34d399" stroke-width="4" marker-end="url(#arrow-green)"/>
+    <rect x="28" y="300" width="222" height="58" rx="29" fill="#123128" stroke="#34d399" stroke-width="3"/>
+    <text x="139" y="337" text-anchor="middle" fill="#a7f3d0" font-family="'Space Grotesk',system-ui,sans-serif" font-size="22" font-weight="700">recheck project</text>
+  </g>
+
+  <g transform="translate(78 752)">
+    <rect width="1444" height="154" rx="24" fill="#0f1218" stroke="#4a5468" stroke-width="3"/>
+    <text x="28" y="42" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="19" letter-spacing="3">DURABLE PROJECT POLICY</text>
+    <text x="28" y="82" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="21">[tool.basilisk.per-path-overrides."tests/**".rules]</text>
+    <text x="28" y="118" fill="#fed7aa" font-family="'JetBrains Mono',monospace" font-size="22">"BSK-E0002" = "warning"</text>
+    <line x1="850" y1="26" x2="850" y2="128" stroke="#252d3f" stroke-width="3"/>
+    <text x="892" y="65" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="25" font-weight="700">The editor is a view of this policy—</text>
+    <text x="892" y="103" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="24">not a second settings store.</text>
+  </g>
+</svg>

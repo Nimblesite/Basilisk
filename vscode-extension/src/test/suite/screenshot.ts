@@ -26,6 +26,10 @@ import * as path from 'path';
  * is the repo root).
  */
 function websiteImageDir(): string {
+    const configured = process.env.BASILISK_SCREENSHOT_OUTPUT_DIR;
+    if (configured !== undefined && configured.trim() !== '') {
+        return path.resolve(configured);
+    }
     return path.resolve(__dirname, '..', '..', '..', '..', 'website', 'src', 'assets', 'images');
 }
 

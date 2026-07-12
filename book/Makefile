@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: check check-links render-assets epub release clean
+.PHONY: check check-links render-assets screenshots epub release clean
 
 check:
 	$(PYTHON) scripts/check_book.py
@@ -12,6 +12,9 @@ check-links:
 render-assets:
 	$(PYTHON) scripts/render_assets.py
 
+screenshots:
+	$(PYTHON) scripts/capture_editor_screenshots.py
+
 epub:
 	$(PYTHON) scripts/build.py
 
@@ -20,4 +23,3 @@ release:
 
 clean:
 	rm -rf dist/*
-

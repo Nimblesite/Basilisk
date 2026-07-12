@@ -58,3 +58,24 @@ Changelog = "https://github.com/Nimblesite/Basilisk/releases"
 bindings = "bin"
 manifest-path = "crates/basilisk-cli/Cargo.toml"
 strip = true
+
+[tool.basilisk]
+
+[tool.basilisk.rules]
+BSK-E0001 = "error"
+BSK-E0002 = "error"
+BSK-E0003 = "error"
+BSK-E0004 = "error"
+BSK-E0005 = "error"
+BSK-E0025 = "error"
+BSK-E0063 = "error"
+BSK-E0152 = "error"
+BSK-I0060 = "info"
+BSK-W0011 = "warning"
+BSK-W0012 = "warning"
+BSK-W0013 = "warning"
+BSK-W0014 = "warning"
+BSK-W0040 = "warning"
+BSK-W0050 = "warning"
+BSK-W0061 = "warning"
+BSK-W0062 = "warning"

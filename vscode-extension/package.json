@@ -122,6 +122,11 @@
         "category": "Basilisk"
       },
       {
+        "command": "basilisk.statusMenu",
+        "title": "Basilisk: Status Menu",
+        "category": "Basilisk"
+      },
+      {
         "command": "basilisk.openConfigurationEditor",
         "title": "Basilisk: Open Configuration Editor",
         "category": "Basilisk",
@@ -454,6 +459,16 @@
           "command": "basilisk.openConfigurationEditor",
           "when": "view == basilisk.info && basilisk.configurationEditorSupported",
           "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.openConfigurationEditor",
+          "when": "view == basilisk.moduleExplorer && basilisk.configurationEditorSupported",
+          "group": "z_config@1"
+        },
+        {
+          "command": "basilisk.openConfigurationEditor",
+          "when": "view == basilisk.pythonProcesses && basilisk.configurationEditorSupported",
+          "group": "z_config@1"
         },
         {
           "command": "basilisk.refreshModuleExplorer",

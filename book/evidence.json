@@ -10,10 +10,34 @@
     {"section": "06", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {"section": "07", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {"section": "08", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
-    {"section": "09", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {
+      "section": "09",
+      "decision": "withhold-until-versioned-release",
+      "governingSpecs": [
+        "docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR",
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIGURATION-ONLY",
+        "docs/specs/CHECKER-RULE-TAGGING-SPEC.md#CHKTAG",
+        "docs/specs/VSIX-SPEC.md#VSIX-CONFIGURATION-EDITOR"
+      ],
+      "releaseImplementation": [],
+      "workingTreeImplementation": [
+        "crates/basilisk-config/src/editor/",
+        "crates/basilisk-lsp/src/configuration_editor/",
+        "vscode-extension/src/configuration-editor.ts",
+        "vscode-extension/src/configuration-editor-script-render.ts"
+      ],
+      "executableEvidence": [
+        "cargo test -p basilisk-config: 32 passed on 2026-07-12",
+        "cargo test -p basilisk-checker --test config_override_tests: 13 passed on 2026-07-12",
+        "cargo test -p basilisk-lsp configuration_editor: 18 passed on 2026-07-12",
+        "npx vscode-test --grep 'Configuration editor': 17 passed on 2026-07-12",
+        "make -C book screenshots: real Signal Box/LSP captures passed on 2026-07-12",
+        "target/debug/basilisk check --color never . from examples/signal-box: 3 expected diagnostics on 2026-07-12"
+      ],
+      "blocker": "The current build identifies itself as 0.0.0-PLACEHOLDER. Pin a released Basilisk version, rerun the evidence, and recapture both screenshots before setting decision to publish."
+    },
     {"section": "10", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {"section": "11", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {"section": "12", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []}
   ]
 }
-

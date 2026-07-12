@@ -6,8 +6,9 @@
  * section header — a single shipped toggle doesn't justify one) plus a compact
  * read-only Server Info section. There is NO Quick Actions section: the high-value
  * actions are Modules-toolbar buttons gated on the server running (see
- * activity-panel.test.ts), Show Output is the status-bar click action, and
- * everything stays in the command palette.
+ * activity-panel.test.ts), the status-bar click opens the basilisk.statusMenu
+ * quick-pick (Open Configuration / Show Output / Restart), and everything stays
+ * in the command palette.
  *
  * This structure is itself the regression guard for issue #103 defect 1
  * ("command not found" quick actions): with no action rows in the panel at

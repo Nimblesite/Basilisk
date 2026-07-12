@@ -3,6 +3,12 @@
 Signal Box will be the book-owned, executable through-line. It will remain
 dependency-light and target Python 3.12.
 
+The first executable checkpoint now lives in [`signal-box/`](signal-box/).
+Chapter 9 uses its explicit annotation policy and deliberately incomplete
+functions to capture the real configuration editor and its path preview. Run
+the capture reproducibly with `make -C book screenshots` from the repository
+root.
+
 Planned checkpoints:
 
 1. one default argument-compatibility diagnostic;
@@ -19,4 +25,3 @@ Planned checkpoints:
 Every published checkpoint must agree with the governing Basilisk spec, pinned
 release implementation, and executable tests. If those sources disagree, the
 affected lesson is omitted until the repository resolves the discrepancy.
-
