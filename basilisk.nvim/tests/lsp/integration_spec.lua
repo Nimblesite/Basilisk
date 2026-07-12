@@ -253,7 +253,13 @@ describe("basilisk LSP integration", function()
         ["end"] = { line = 0, character = 20 },
       },
       context = {
-        diagnostics = vim.lsp.diagnostic.get_line_diagnostics(buf, 0) or {},
+        -- vim.lsp.diagnostic.get_line_diagnostics was removed in Neovim nightly
+        -- (deprecated in 0.11/0.12). Use the stable vim.diagnostic.get API and
+        -- recover each diagnostic's original LSP shape from user_data.lsp, which
+        -- is what a codeAction context expects. Works on 0.11 and nightly alike.
+        diagnostics = vim.tbl_map(function(diagnostic)
+          return (diagnostic.user_data and diagnostic.user_data.lsp) or diagnostic
+        end, vim.diagnostic.get(buf, { lnum = 0 })),
       },
     }, buf)
 

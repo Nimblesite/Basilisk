@@ -1364,6 +1364,11 @@ mod tests {
     ) -> Result<(std::path::PathBuf, String), Box<dyn std::error::Error>> {
         let dir = unique_project_dir(prefix);
         std::fs::create_dir_all(&dir)?;
+        // Anchor the project root at `dir` with a config marker. Without one,
+        // `find_project_root` walks past the temp dir and falls back to the
+        // process cwd, so config-root-relative operations (e.g. `unadopt`'s
+        // `relative_pattern`) see the module as outside the root and error.
+        std::fs::write(dir.join("basilisk.json"), b"{}\n")?;
         let py = dir.join("m.py");
         std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
         let path = py.to_string_lossy().into_owned();
