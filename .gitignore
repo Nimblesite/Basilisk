@@ -161,5 +161,4 @@ website/_verify/
 
 /*.png
 
-
-/book/dist/
+book/dist/
