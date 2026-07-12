@@ -279,9 +279,26 @@ impl LspStdioFixture {
     /// Wait for a `publishDiagnostics` notification, skipping unrelated messages.
     #[must_use]
     pub fn wait_for_diagnostics(&self) -> Option<String> {
-        for _ in 0..10 {
+        self.wait_for_diagnostics_matching(|_| true)
+    }
+
+    /// Wait for a `publishDiagnostics` notification whose text satisfies
+    /// `predicate`, draining earlier publishes and unrelated messages.
+    ///
+    /// The server may emit several `publishDiagnostics` for one document (an
+    /// initial publish followed by the settled one, or a stale populated
+    /// publish still in flight when a clearing publish is expected after
+    /// `didClose`). Reading a single notification and asserting on it therefore
+    /// races under parallel load. This drains publishes until one matches,
+    /// keeping the assertion intact while removing the ordering assumption.
+    #[must_use]
+    pub fn wait_for_diagnostics_matching(
+        &self,
+        predicate: impl Fn(&str) -> bool,
+    ) -> Option<String> {
+        for _ in 0..12 {
             let msg = self.recv()?;
-            if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") {
+            if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") && predicate(&msg) {
                 return Some(msg);
             }
         }

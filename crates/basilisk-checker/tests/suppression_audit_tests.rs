@@ -197,10 +197,11 @@ fn malformed_line_directives_are_reported_but_never_applied() {
         "x: int = \"bad\"  # type: warnin[assignment_compatibility]\n",
         "x: int = \"bad\"  # type: infoo\n",
         "x: int = \"bad\"  # type: disable[assignment_compatibility]\n",
+        // Only a structurally broken *bracket* selector stays malformed: an
+        // unclosed `[` or an empty `[]`. Trailing text after a closed `]` is a
+        // comment (see the ignore-with-trailing-text test), not junk.
         "x: int = \"bad\"  # type: ignore[assignment_compatibility\n",
         "x: int = \"bad\"  # type: ignore[]\n",
-        "x: int = \"bad\"  # type: ignore assignment_compatibility\n",
-        "x: int = \"bad\"  # type: ignore[assignment_compatibility] trailing junk\n",
     ] {
         let diagnostics = check(source, [("BSK-E0063", RuleSeverity::Error)]);
         assert_eq!(
@@ -218,6 +219,25 @@ fn malformed_line_directives_are_reported_but_never_applied() {
             assignment[0].severity,
             Severity::Error,
             "malformed syntax must not demote an otherwise live diagnostic"
+        );
+    }
+}
+
+/// A `# type: ignore` followed by free-form trailing text (`- reason`,
+/// `# comment`, a bare word) is a spec-valid blanket suppression, so it silences
+/// the otherwise-live diagnostic on its line while remaining auditable. See
+/// `directives_type_ignore.py` in the conformance suite.
+#[test]
+fn ignore_with_trailing_text_blanket_suppresses_and_is_auditable() {
+    for source in [
+        "x: int = \"bad\"  # type: ignore - additional stuff\n",
+        "x: int = \"bad\"  # type: ignore # other comment\n",
+        "x: int = \"bad\"  # type: ignore assignment_compatibility\n",
+    ] {
+        let diagnostics = check(source, [("BSK-E0063", RuleSeverity::Error)]);
+        assert!(
+            diagnostics_for(&diagnostics, "assignment_compatibility").is_empty(),
+            "blanket ignore with trailing text must suppress the diagnostic: {source}"
         );
     }
 }

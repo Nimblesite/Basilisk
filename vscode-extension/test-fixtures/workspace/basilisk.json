@@ -1,7 +1,0 @@
-{
-  "rules": {
-    "BSK-E0001": "error",
-    "BSK-E0002": "error",
-    "BSK-W0050": "warning"
-  }
-}

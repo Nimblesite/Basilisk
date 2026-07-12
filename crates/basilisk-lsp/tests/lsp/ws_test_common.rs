@@ -79,9 +79,21 @@ impl WsTestFixture {
         // documents (which fall back to the root's checker config) see them.
         let workspace_root = unique_temp_dir("bsk_ws_fixture");
         std::fs::create_dir_all(&workspace_root)?;
+        // Opt into the full annotation house-rule bundle that the removed
+        // `strictAnnotations` flag used to enable (BSK-E0001..E0005, E0025,
+        // W0014, W0050), so every ws diagnostics test that relies on one of
+        // them keeps firing. See [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
             workspace_root.join("basilisk.json"),
-            "{\"rules\":{\"BSK-E0001\":\"error\",\"BSK-E0002\":\"error\"}}\n",
+            "{\"rules\":{\
+\"BSK-E0001\":\"error\",\
+\"BSK-E0002\":\"error\",\
+\"BSK-E0003\":\"error\",\
+\"BSK-E0004\":\"error\",\
+\"BSK-E0005\":\"error\",\
+\"BSK-E0025\":\"error\",\
+\"BSK-W0014\":\"warning\",\
+\"BSK-W0050\":\"warning\"}}\n",
         )?;
 
         Ok(Self {

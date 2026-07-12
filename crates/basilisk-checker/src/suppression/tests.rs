@@ -193,10 +193,11 @@ fn malformed_suppression_syntax_never_creates_an_override() {
         "x: int = \"bad\"  # type: warnin[assignment_compatibility]\n",
         "x: int = \"bad\"  # type: infoo\n",
         "x: int = \"bad\"  # type: disable[assignment_compatibility]\n",
+        // A structurally malformed *bracket* selector is still an error: an
+        // unclosed `[` or an empty `[]` cannot select any codes. (Trailing text
+        // after a *closed* `]` is a comment, not junk — see the ignore tests.)
         "x: int = \"bad\"  # type: ignore[assignment_compatibility\n",
         "x: int = \"bad\"  # type: ignore[]\n",
-        "x: int = \"bad\"  # type: ignore assignment_compatibility\n",
-        "x: int = \"bad\"  # type: ignore[assignment_compatibility] trailing junk\n",
     ] {
         let overrides = parse_source_overrides(source);
         assert!(
@@ -204,6 +205,58 @@ fn malformed_suppression_syntax_never_creates_an_override() {
             "malformed directive was applied: {source}"
         );
     }
+}
+
+/// PEP 484 `# type: ignore` keeps its blanket line-suppression semantics when
+/// followed by free-form trailing text — `- reason`, `# comment`, or a bare
+/// word (see the typing directives spec). Such text must silence every error on
+/// the line, never be demoted to a false positive. See
+/// `directives_type_ignore.py` in the conformance suite.
+#[test]
+fn ignore_with_trailing_text_is_a_blanket_suppression() {
+    for source in [
+        "x: int = \"bad\"  # type: ignore - additional stuff\n",
+        "x: int = \"bad\"  # type: ignore # other comment\n",
+        "x: int = \"bad\"  # type: ignore assignment_compatibility\n",
+        // Foreign bracket → blanket; trailing text after the closed `]` (here a
+        // `# E?` marker) is a comment, not junk.
+        "x: int = \"bad\"  # type: ignore[an-empty-str-is-not-an-int]  # E?\n",
+    ] {
+        let overrides = parse_source_overrides(source);
+        assert_eq!(
+            overrides.line_overrides.len(),
+            1,
+            "ignore directive did not create an override: {source}"
+        );
+        let line_override = &overrides.line_overrides[0].1;
+        assert_eq!(line_override.mode, RuleMode::Ignore, "{source}");
+        assert!(
+            line_override.codes.is_empty(),
+            "trailing text must be a blanket ignore (empty codes): {source}"
+        );
+        assert!(
+            override_matches("assignment_compatibility", &line_override.codes),
+            "blanket ignore must silence every code: {source}"
+        );
+    }
+}
+
+/// A closed all-Basilisk `[codes]` selector narrows the ignore to those codes,
+/// and trailing text after the `]` (a comment) neither invalidates it nor
+/// broadens it to a blanket ignore.
+#[test]
+fn ignore_bracket_selector_with_trailing_comment_stays_specific() {
+    let overrides = parse_source_overrides(
+        "x = foo()  # type: ignore[imports_unresolved]  # explanatory comment\n",
+    );
+    assert_eq!(overrides.line_overrides.len(), 1);
+    let line_override = &overrides.line_overrides[0].1;
+    assert_eq!(line_override.mode, RuleMode::Ignore);
+    assert_eq!(line_override.codes, vec!["imports_unresolved"]);
+    assert!(!override_matches(
+        "assignment_compatibility",
+        &line_override.codes
+    ));
 }
 
 #[test]

@@ -77,21 +77,37 @@ if command -v nvim &>/dev/null; then
     # [LSPTEST-EDITOR-SPECIFIC-INTEGRATION-NEOVIM-E2E-GATE].
     expected_specs="$(find tests/lsp -name '*_spec.lua' | wc -l | tr -d ' ')"
     lsp_out="$(mktemp)"
-    set +e
+
     # Per-file timeout: plenary's default is 50s, and the heaviest spec
     # (coverage_boost_spec.lua) legitimately needs ~51s against the
     # coverage-instrumented LSP binary — the child gets SIGTERMed mid-summary
     # and the run fails on "15/16 spec files produced a summary" with zero
     # actual test failures. 120s keeps the gate strict (every spec must still
     # summarise clean) without truncating slow-but-passing files.
-    LUACOV=1 nvim --headless -u tests/minimal_init.lua \
-        -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua', sequential = true, timeout = 120000}" 2>&1 \
-        | tee "$lsp_out"
-    nvim_rc=${PIPESTATUS[0]}
-    set -e
-    if [[ "$nvim_rc" -ne 0 ]]; then
-        warn "nvim exited ${nvim_rc} after the LSP suite — validating against parsed results (teardown exit is not authoritative)"
-    fi
+    #
+    # Bounded retry (2 attempts): re-run ONLY when plenary_outcome reports a
+    # `flake` — every test passed but a spec dropped its per-file `Success:`
+    # footer under `-j3` load (a batch-mode flush race, not a test failure). A
+    # real failure (`fail`) breaks out immediately with no retry, so the gate is
+    # never weakened; assert_plenary_pass below is still the authoritative check.
+    max_attempts=2
+    for attempt in $(seq 1 "$max_attempts"); do
+        [[ "$attempt" -gt 1 ]] && warn "Neovim LSP e2e: footer flush race on attempt $((attempt - 1)) (all tests passed) — retrying (${attempt}/${max_attempts})"
+        set +e
+        LUACOV=1 nvim --headless -u tests/minimal_init.lua \
+            -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua', sequential = true, timeout = 120000}" 2>&1 \
+            | tee "$lsp_out"
+        nvim_rc=${PIPESTATUS[0]}
+        set -e
+        if [[ "$nvim_rc" -ne 0 ]]; then
+            warn "nvim exited ${nvim_rc} after the LSP suite — validating against parsed results (teardown exit is not authoritative)"
+        fi
+        outcome="$(plenary_outcome "$lsp_out" "$expected_specs")"
+        # Retry only a pure flush-race flake, and only while attempts remain.
+        [[ "$outcome" == "flake" && "$attempt" -lt "$max_attempts" ]] || break
+        rm -f luacov.stats.out luacov.report.out
+    done
+
     if ! assert_plenary_pass "$lsp_out" "$expected_specs" "Neovim LSP e2e tests"; then
         rm -f "$lsp_out"
         exit 1

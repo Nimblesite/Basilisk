@@ -99,3 +99,38 @@ assert_plenary_pass() {
     done
     return 1
 }
+
+# Classify a `PlenaryBustedDirectory` run for retry purposes, WITHOUT relaxing
+# the gate. Echoes exactly one token:
+#   pass  — every spec started and summarised, zero failed/errored/tracebacks.
+#   flake — the ONLY discrepancy is a short started/summary count while zero
+#           tests failed, zero errored and no traceback surfaced. This is the
+#           plenary batch-mode flush race: under `make ci`'s `-j3` load a child
+#           nvim can exit a beat before flushing its per-file `Success:` footer
+#           even though every test in that file passed (observed on the heavy
+#           profiler_spec). Safe to re-run.
+#   fail  — any real failure: a test failed, a test errored, or a Lua traceback
+#           fired. NEVER retried — a genuine regression must fail fast.
+#
+#   plenary_outcome <output_file> <expected_spec_count>
+plenary_outcome() {
+    local out="$1" expected="$2" plain started summaries failed errors traces
+    plain="$(sed $'s/\x1b\\[[0-9;]*m//g' "$out")"
+    started="$(grep -c '^Testing:' <<<"$plain" || true)"
+    summaries="$(grep -c '^Success: ' <<<"$plain" || true)"
+    failed="$(awk -F'\t' '/^Failed :/ {s+=$2} END {print s+0}' <<<"$plain")"
+    errors="$(awk -F'\t' '/^Errors :/ {s+=$2} END {print s+0}' <<<"$plain")"
+    traces="$(grep -cE 'stack traceback:|E5108|Error executing' <<<"$plain" || true)"
+
+    # Any real failure is terminal — never a flake.
+    if [[ "$failed" -ne 0 || "$errors" -ne 0 || "$traces" -ne 0 ]]; then
+        echo "fail"
+        return
+    fi
+    if [[ "$started" -eq "$expected" && "$summaries" -eq "$expected" ]]; then
+        echo "pass"
+        return
+    fi
+    # Clean tests, but a spec dropped its footer under load: retryable flush race.
+    echo "flake"
+}

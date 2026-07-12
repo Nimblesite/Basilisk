@@ -176,7 +176,10 @@ pub(super) fn directive_problem(
         if contents.split(',').all(|code| code.trim().is_empty()) {
             return Some("rule selector cannot be empty".to_owned());
         }
-    } else if !rest.is_empty() && !rest.starts_with("--") {
+    } else if parsed.mode != RuleMode::Ignore && !rest.is_empty() && !rest.starts_with("--") {
+        // `# type: ignore` permits free-form trailing text (`- reason`,
+        // `# comment`) and stays a blanket suppression; only the mode verbs
+        // reject unexpected trailing content. See directives_type_ignore.py.
         return Some("unexpected content after directive verb".to_owned());
     }
 
@@ -198,8 +201,31 @@ pub(super) fn parse_line_directive(directive: &str) -> LineDirectiveParse {
 }
 
 fn parse_ignore_codes(rest: &str) -> Result<Vec<String>, &'static str> {
-    let codes = parse_bracketed_codes(rest)?;
-    if !codes.is_empty() && codes.iter().all(|code| is_basilisk_code(code)) {
+    // PEP 484 `# type: ignore` allows free-form trailing text — `- reason` or
+    // `# other comment` (see the typing directives spec) — and it stays a
+    // *blanket* line suppression. Only a `[...]` selector narrows it, so only a
+    // bracket form is validated; non-bracket trailing text never errors.
+    let rest = rest.trim_start();
+    if !rest.starts_with('[') {
+        return Ok(Vec::new());
+    }
+    // A bracket selector whose tokens are all Basilisk codes narrows the
+    // suppression to those codes; a foreign selector (mypy's `[arg-type]`, an
+    // unknown tag) becomes a blanket ignore, as the spec permits. Unlike the
+    // mode verbs, trailing text *after* the `]` (e.g. a `# E?` comment) does not
+    // invalidate the ignore — it is just a comment. An unclosed `[` or an empty
+    // `[]` selector is still a genuine error.
+    let Some((contents, _after)) = rest.strip_prefix('[').and_then(|s| s.split_once(']')) else {
+        return Err("missing closing `]`");
+    };
+    let codes = contents
+        .split(',')
+        .map(|value| value.trim().to_owned())
+        .collect::<Vec<_>>();
+    if codes.iter().any(String::is_empty) {
+        return Err("rule selector cannot be empty");
+    }
+    if codes.iter().all(|code| is_basilisk_code(code)) {
         Ok(codes)
     } else {
         Ok(Vec::new())
@@ -273,6 +299,18 @@ pub(super) fn parse_mode_directive(text: &str) -> Result<LineOverride, &'static 
     parse_directive(text)?.ok_or("unknown directive verb")
 }
 
+/// Strip `verb` from the front of `text` only when it stands as a whole token —
+/// followed by end-of-string or a non-identifier char. This rejects typos like
+/// `ignoree` (which would otherwise strip to `e`) while still accepting the
+/// spec-valid `ignore[...]`, `ignore - reason`, and `ignore # comment` forms.
+fn strip_verb<'a>(text: &'a str, verb: &str) -> Option<&'a str> {
+    let rest = text.strip_prefix(verb)?;
+    match rest.chars().next() {
+        Some(next) if next.is_alphanumeric() || next == '_' => None,
+        _ => Some(rest),
+    }
+}
+
 fn parse_directive(text: &str) -> Result<Option<LineOverride>, &'static str> {
     let text = text.trim();
     let (mode, rest) = if let Some(rest) = text.strip_prefix("disabled") {
@@ -281,7 +319,7 @@ fn parse_directive(text: &str) -> Result<Option<LineOverride>, &'static str> {
         (RuleMode::Warning, rest)
     } else if let Some(rest) = text.strip_prefix("info") {
         (RuleMode::Info, rest)
-    } else if let Some(rest) = text.strip_prefix("ignore") {
+    } else if let Some(rest) = strip_verb(text, "ignore") {
         return parse_ignore_codes(rest).map(|codes| {
             Some(LineOverride {
                 mode: RuleMode::Ignore,
