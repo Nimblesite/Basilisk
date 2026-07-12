@@ -100,8 +100,12 @@ def main() -> None:
     captured[0].replace(editor_master)
     captured[1].replace(preview_master)
     crops = [
-        (editor_master, "2130x1331+90+130", OUTPUT_DIR / "09-configuration-editor.png"),
-        (preview_master, "1600x1000+680+370", OUTPUT_DIR / "09-configuration-preview.png"),
+        (editor_master, "2100x1313+90+130", OUTPUT_DIR / "09-configuration-editor.png"),
+        (
+            preview_master,
+            "1600x1000+680+370",
+            OUTPUT_DIR / "09-configuration-preview.png",
+        ),
     ]
     for master, geometry, target in crops:
         run(
