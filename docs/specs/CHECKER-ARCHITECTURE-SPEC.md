@@ -1,10 +1,4 @@
-# Basilisk: Complete Type Safety for Python {#CHKARCH}
-
-**Version**: 0.1.0-draft
-**Status**: Specification Draft
-**License**: MIT
-
----
+# Basilisk checker architecture {#CHKARCH}
 
 ## No "strict mode" — behaviour is configuration only {#CHKARCH-CONFIGURATION-ONLY}
 
@@ -33,7 +27,7 @@ Depend on established open-source tools rather than reimplementing them.
 |---|---|---|---|
 | **`ruff_python_formatter`** | Code formatting | MIT | Embedded in-process — the formatter is Ruff's, no `ruff` CLI. Pinned to the same rev as the parser ([LSPFMT-ENGINE](LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE)). |
 | **`ruff_python_parser`** | Python AST parsing | MIT | Battle-tested Rust crate. Powers Ruff. Our parser. |
-| **typeshed** | Standard library type stubs | Apache-2.0 | Community standard. We bundle it and extend it. |
+| **typeshed data** | Standard-library and stub-distribution indexes | Apache-2.0 | Build-time source for the compact indexes in `basilisk-stubs`; full `.pyi` trees are not embedded. |
 | **Salsa** | Incremental computation framework | Apache-2.0/MIT | Powers rust-analyzer. Proven at scale. |
 | **`lsp-server`** / **`tower-lsp`** | LSP implementation | MIT | Standard Rust LSP crates. |
 
@@ -42,7 +36,7 @@ Depend on established open-source tools rather than reimplementing them.
 | Tool | Interop Strategy |
 |---|---|
 | **Ruff** | Basilisk **embeds** the `ruff_python_formatter` crate in-process for formatting and reimplements import hygiene natively — the `ruff` CLI is never spawned ([LSPFMT-DECISION](LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)). Configuration unified in `pyproject.toml` (`[tool.ruff.format]`). |
-| **typeshed** | Bundled copy of typeshed stubs, updated with each Basilisk release. Users MAY prepend extra stubs via `stub-paths` (resolution step 1) or replace the bundled stdlib typeshed wholesale via `typeshed-path` (resolution step 3), per the typing-spec import-resolution ordering — see [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561). |
+| **typeshed** | Compile-time stdlib-name and stub-distribution indexes. Users provide real `.pyi` files through `stub-paths`, installed packages, or `typeshed-path`; see [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561). |
 | **PEP 561** | Full support for `py.typed` packages, inline type annotations, and stub-only packages. |
 
 ---
@@ -439,6 +433,9 @@ error pages. Do not maintain a second code/description table here.
 
 Compatibility anchors used by existing implementation and test comments:
 
+- Live rule modules and conformance categories {#CHKARCH-DIAG-CATEGORIES}
+- Historical test shard: quality {#CHKARCH-DIAG-QUALITY}
+- Historical test shard: unused {#CHKARCH-DIAG-UNUSED}
 - Missing-annotation rules {#CHKARCH-DIAG-MISSING}
 - Core type-safety rules {#CHKARCH-DIAG-TYPESAFETY}
 - Historical group: ownership {#CHKARCH-DIAG-OWNERSHIP}
@@ -735,8 +732,7 @@ checking.
   (`crates/basilisk-checker/src/exports.rs`) over `resolved_module`, resolving
   workspace-tracked imports through `module_exports` and external `.pyi` /
   PEP 561 `py.typed` sources from disk. Granularity is **module-level**: each
-  pipeline is fused into one tracked query per file, matching the
-  `Module-level` granularity row in [CHKARCH-MATRIX]. Editing one file — or the
+  pipeline is fused into one tracked query per file. Editing one file — or the
   configuration, or the search paths — re-executes only the affected queries;
   unrelated files are served from their memos.
 
@@ -917,62 +913,44 @@ JSON and branch on the documented exit code; no CI-only analysis mode exists.
 
 ## Stub System {#CHKARCH-STUBS}
 
-### Auto-Stub Generation {#CHKARCH-STUBS-AUTOGEN}
+### Auto-stub generation {#CHKARCH-STUBS-AUTOGEN}
 
-Stub generation engine with three modes:
+`basilisk stubs generate` supports runtime, AST, and hybrid discovery. Runtime mode imports
+the target package; AST mode does not execute it; hybrid mode combines both. Generated files
+are written under `.basilisk/stubs/`, at the head of the stub search path. The command and
+provenance contracts live in [CHECKER-STUB-RESOLUTION-SPEC.md](CHECKER-STUB-RESOLUTION-SPEC.md).
 
-1. **Runtime introspection**: import the package, inspect objects, generate `.pyi`
-2. **AST-based inference**: parse package source, infer signatures without importing
-3. **Hybrid**: both, preferring runtime data with AST fallback
+### Stub quality tiers {#CHKARCH-STUBS-TIERS}
 
-### Stub Quality Tiers {#CHKARCH-STUBS-TIERS}
+`StubTier` distinguishes trusted hand-written stubs, reviewed/generated stubs, and
+best-effort inference. The generated model and diagnostic behavior are canonical in the
+stub-resolution spec and `basilisk-stubs`.
 
-| Tier | Source | Trust Level | Diagnostic Behavior |
-|---|---|---|---|
-| Tier 1 | Hand-written, verified, typeshed | High | No warnings |
-| Tier 2 | Auto-generated, community reviewed | Medium | Info notes on potential inaccuracies |
-| Tier 3 | Best-effort inference | Low | Warnings that types may be incomplete |
+### typeshed compatibility {#CHKARCH-STUBS-TYPESHED}
 
-### typeshed Compatibility {#CHKARCH-STUBS-TYPESHED}
-
-Basilisk bundles typeshed as the Tier 1 baseline for standard-library stubs
-(import-resolution step 3 — [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561)).
-Per the typing spec, "type checkers SHOULD provide an option for users to
-provide a path to a directory containing a custom or modified version of
-typeshed; if this option is provided, type checkers SHOULD use this as the
-canonical source for standard-library types in this step"
-([import resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)).
-Basilisk therefore honours `typeshed-path` to replace the bundled stdlib
-typeshed wholesale as the canonical stdlib source, distinct from `stub-paths`
-(resolution step 1), which *prepends* additional `.pyi` stub directories. The
-canonical resolution order and override semantics live in
+`basilisk-stubs` embeds compact indexes derived from typeshed, not the full stub tree.
+`typeshed-path` supplies the canonical standard-library `.pyi` tree for resolution step 3;
+`stub-paths` prepends project stubs at step 1. The exact order is
 [STUBRES-CUSTOM-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED).
 
 ---
 
-## Plugin and Extension System {#CHKARCH-PLUGINS}
+## Plugin host (planned) {#CHKARCH-PLUGINS}
 
-### Architecture {#CHKARCH-PLUGINS-ARCH}
+`basilisk-plugin` is currently a placeholder path validator, not a WASM runtime.
 
-**WASM-based** for security and portability: plugins compile to WebAssembly, run sandboxed (no filesystem, no network), receive AST nodes and type information, and return diagnostics and code actions.
+### Sandbox target {#CHKARCH-PLUGINS-ARCH}
 
-### Extension Points {#CHKARCH-PLUGINS-EXTENSIONS}
+The planned host runs WASM without ambient filesystem or network access.
 
-| Extension Point | Example |
-|---|---|
-| Custom diagnostic rules | Flag Django `QuerySet` misuse |
-| Custom type providers | Infer SQLAlchemy model field types |
-| Custom code actions | Generate Pydantic validator stubs |
-| Custom type narrowing | Django `get_object_or_404` narrows to model type |
+### Extension target {#CHKARCH-PLUGINS-EXTENSIONS}
 
-### Distribution {#CHKARCH-PLUGINS-DIST}
+The first planned extension point is third-party diagnostics over explicit AST/type inputs.
 
-Plugins declared in `pyproject.toml`:
-```toml
-[tool.basilisk.plugins]
-django = "basilisk-plugin-django >= 0.1"
-pydantic = "basilisk-plugin-pydantic >= 0.1"
-```
+### Distribution target {#CHKARCH-PLUGINS-DIST}
+
+Configuration, package format, and compatibility policy are unresolved and remain tracked in
+the advanced-features plan.
 
 ---
 
@@ -996,7 +974,7 @@ Canonical TOML example:
 python-version = "3.12"
 python-platform = "All"          # Default: check for all platforms
 stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
-# typeshed-path = "typeshed-x"   # resolution step 3: replace the bundled stdlib typeshed
+# typeshed-path = "typeshed-x"   # resolution step 3: provide canonical stdlib stubs
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]
 
@@ -1049,16 +1027,11 @@ exclude identically:
   `analyse_and_resolve`) — a vendored file *opened* or *edited* is parsed for
   navigation but publishes **no** diagnostics, matching the bulk scan.
 
-### Migration from Existing Tools {#CHKARCH-CONFIG-MIGRATION}
+### Migration from existing tools (planned) {#CHKARCH-CONFIG-MIGRATION}
 
-```bash
-basilisk migrate --from pyright   # Reads pyrightconfig.json -> pyproject.toml
-basilisk migrate --from mypy      # Reads mypy.ini / setup.cfg -> pyproject.toml
-```
-
-Semantic mapping:
-- Pyright `strict` / mypy `--strict` -> Basilisk with house-style rules enabled in configuration (require-annotation, explicit-`Any`, …), Mojo safety disabled
-- Pyright `standard` -> Basilisk's PEP-only default plus selected house rules, softened in `per-path-overrides` where needed
+No `basilisk migrate` command ships. A future importer must report every mapped and unmapped
+setting and must not claim semantic equivalence between another checker's modes and Basilisk
+rule configuration.
 
 ---
 
@@ -1370,15 +1343,20 @@ separate, free, and unaffected.
 
 ---
 
-## Planned migration tooling {#CHKARCH-MIGRATION}
+## Migration tooling target {#CHKARCH-MIGRATION}
 
-Configuration import from other checkers is not implemented. The target is a
-best-effort report that maps supported settings and lists every unmapped option;
-it must never silently claim semantic parity.
+### mypy import target {#CHKARCH-MIGRATION-MYPY}
 
-- mypy import target {#CHKARCH-MIGRATION-MYPY}
-- Pyright import target {#CHKARCH-MIGRATION-PYRIGHT}
-- Gradual adoption uses ordinary per-rule/path configuration {#CHKARCH-MIGRATION-GRADUAL}
+Map supported mypy settings and emit an explicit unmapped-options report.
 
-Implementation work is tracked in
-[CHECKER-ADVANCED-FEATURES-PLAN.md](../plans/CHECKER-ADVANCED-FEATURES-PLAN.md).
+### Pyright import target {#CHKARCH-MIGRATION-PYRIGHT}
+
+Map supported Pyright settings and emit an explicit unmapped-options report.
+
+### Gradual-adoption mapping {#CHKARCH-MIGRATION-GRADUAL}
+
+The CLI and LSP record current error debt as exact-file warning severities in
+ordinary `per-path-overrides`, marked `adoption = true` in the one active config
+file. There is no hidden compatibility mode or sidecar. On save, the LSP removes
+adoption-owned rule entries whose diagnostics have been fixed, while unrelated
+user-authored overrides remain untouched.

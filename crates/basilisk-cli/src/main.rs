@@ -536,6 +536,19 @@ fn process_file(
     search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
     config: &basilisk_config::BasiliskConfig,
 ) -> Result<(Vec<basilisk_checker::Diagnostic>, String), String> {
+    let (resolved, source) = resolve_file_imports(path, search_paths)?;
+    // Apply the project's `[tool.basilisk.rules]` / per-path overrides so the
+    // CLI and editor agree on severity (e.g. a project can promote "no type
+    // stubs" to a hard error). Using `check` here would silently drop config.
+    let diagnostics = basilisk_checker::check_with_config(&resolved, config);
+    Ok((diagnostics, source))
+}
+
+/// Parse a source file and resolve its imports through the shared CLI/LSP paths.
+pub(crate) fn resolve_file_imports(
+    path: &str,
+    search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
+) -> Result<(basilisk_resolver::ResolvedModule, String), String> {
     let parsed = basilisk_parser::parse_file(path).map_err(|e| e.to_string())?;
     let source = parsed.source.clone();
     let mut resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
@@ -544,12 +557,7 @@ fn process_file(
     // routine the LSP uses, so the CLI and editor agree on what resolves and on
     // package-dependency metadata (BSK-W0011 transitive-import warnings, etc.).
     basilisk_lsp::import_resolver::resolve_module_imports(&mut resolved, search_paths);
-
-    // Apply the project's `[tool.basilisk.rules]` / per-path overrides so the
-    // CLI and editor agree on severity (e.g. a project can promote "no type
-    // stubs" to a hard error). Using `check` here would silently drop config.
-    let diags = basilisk_checker::check_with_config(&resolved, config);
-    Ok((diags, source))
+    Ok((resolved, source))
 }
 
 /// Walk up from `start` to find the project root (directory containing
@@ -1195,74 +1203,11 @@ mod tests {
 
     // ── stubs subcommand ─────────────────────────────────────────────────────
     //
-    // The `basilisk stubs` subsystem (run_stubs → run_stubs_generate /
-    // run_stubs_status, cache_stub, find_package_source) is exercised in-process
+    // The `basilisk stubs` subsystem (run_stubs, cache_stub,
+    // find_package_source) is exercised in-process
     // here. Driving it directly — rather than through a spawned binary — keeps
     // its coverage independent of subprocess profile merging, which is unreliable
     // across platforms. Implements [STUBRES-AUTOGEN] on the CLI surface.
-
-    /// `run_stubs_generate` with no packages and `--all` off must error (exit 1)
-    /// after running the mode/cache prologue. Exercises the empty-packages guard
-    /// and the hybrid mode arm.
-    #[test]
-    fn run_stubs_generate_no_packages_returns_one() {
-        assert_eq!(
-            run_stubs_generate(&[], false, StubGenModeArg::Hybrid, "python3"),
-            1,
-            "no packages must return 1"
-        );
-    }
-
-    /// `run_stubs_generate` with `--all` is not yet implemented and must return 1
-    /// before touching any package. Exercises the `all` guard and the runtime
-    /// mode arm.
-    #[test]
-    fn run_stubs_generate_all_flag_returns_one() {
-        assert_eq!(
-            run_stubs_generate(
-                &["requests".to_owned()],
-                true,
-                StubGenModeArg::Runtime,
-                "python3"
-            ),
-            1,
-            "--all is unimplemented and must return 1"
-        );
-    }
-
-    /// `run_stubs_generate` in AST mode for a package with no discoverable source
-    /// must report the missing-source error and return 1. Exercises the
-    /// `None if Ast` branch, the AST mode arm, and the per-package error tally.
-    #[test]
-    fn run_stubs_generate_ast_missing_source_returns_one() {
-        assert_eq!(
-            run_stubs_generate(
-                &["basilisk_no_such_pkg_ast".to_owned()],
-                false,
-                StubGenModeArg::Ast,
-                "python3"
-            ),
-            1,
-            "AST mode with no source must return 1"
-        );
-    }
-
-    /// `run_stubs_generate` in hybrid mode for an uninstalled package falls back
-    /// to runtime generation, which fails, returning 1. Exercises the non-AST
-    /// `None` fallback branch and the runtime-generation error path.
-    #[test]
-    fn run_stubs_generate_hybrid_uninstalled_returns_one() {
-        assert_eq!(
-            run_stubs_generate(
-                &["basilisk_no_such_pkg_hybrid".to_owned()],
-                false,
-                StubGenModeArg::Hybrid,
-                "python3"
-            ),
-            1,
-            "hybrid mode for an uninstalled package must return 1"
-        );
-    }
 
     /// `find_package_source` returns `None` for a package that cannot be imported
     /// (the querying subprocess exits non-zero).

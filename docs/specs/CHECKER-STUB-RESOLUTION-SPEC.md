@@ -87,31 +87,31 @@ supplies standard-library stubs:
 
 ```toml
 [tool.basilisk]
-typeshed-path = "typeshed-micropython"   # stdlib/*.pyi replacing the bundled typeshed
+typeshed-path = "typeshed-micropython"   # stdlib/*.pyi replacing built-in stdlib recognition
 ```
 
 Normative behaviour:
 
 - When `typeshed-path` is set, that directory is the **canonical source for
   standard-library types** (spec step 3): Basilisk MUST resolve stdlib modules
-  against it and MUST NOT consult the bundled typeshed for any stdlib module the
+  against it and MUST NOT consult the built-in stdlib index for any module the
   custom directory supplies.
 - A stdlib module absent from the custom directory falls through to the later
-  resolution steps exactly as an absent bundled stub would — the override
-  *replaces* the bundled stdlib typeshed, it does not truncate resolution.
+  resolution steps exactly as an unrecognized built-in module would — the override
+  replaces built-in stdlib recognition, it does not truncate resolution.
 - A relative `typeshed-path` is resolved against the workspace root, mirroring
   `stub-paths`.
 - `typeshed-path` is distinct from `stub-paths`: `stub-paths` (step 1)
   *prepends* extra stub directories at the head of the path and can shadow
-  individual modules; `typeshed-path` (step 3) *replaces the vendored stdlib
-  typeshed wholesale* as the canonical standard-library source.
+  individual modules; `typeshed-path` (step 3) replaces the built-in stdlib-name
+  index with a real canonical standard-library stub tree.
 - The directory uses typeshed layout: stdlib stubs live under `stdlib/`, and
   Basilisk resolves `<typeshed-path>/stdlib/<module>.pyi`.
 
 ### Resolution flow {#STUBRES-RESOLUTION-FLOW}
 
 The full order, including the canonicality rule: when `typeshed-path` is set, a
-stdlib module absent from it MUST NOT be rescued by the bundled
+stdlib module absent from it MUST NOT be rescued by the built-in
 `is_stdlib_module` name-set — the custom directory is canonical for step 3, so an
 absent module falls through to steps 4–5 and, failing those, to
 `imports_unresolved`.
@@ -125,8 +125,8 @@ flowchart TB
     C -- miss --> D{"typeshed-path set?"}
     D -- yes --> E{"&lt;typeshed-path&gt;/stdlib/X.pyi?"}
     E -- hit --> Z3["Resolved (CustomTypeshed)"]
-    E -- miss --> G["skip bundled name-set<br/>(custom typeshed is canonical)"]
-    D -- no --> F{"bundled stdlib name?"}
+    E -- miss --> G["skip built-in name-set<br/>(custom typeshed is canonical)"]
+    D -- no --> F{"built-in stdlib name?"}
     F -- yes --> Z4["Recognised (Typeshed)"]
     F -- miss --> G2["steps 4–5"]
     G --> G2
@@ -182,13 +182,13 @@ union StubTier {
 |---|---|---|
 | `UserStub` | 1 | `.pyi` from a `stub-paths` directory (head of path) |
 | `CustomTypeshed` | 3 | stdlib stub from a `typeshed-path` override ([§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)) |
-| `Typeshed` | 3 | standard-library module recognized by the bundled index |
+| `Typeshed` | 3 | standard-library module recognized by the built-in index |
 | `StubPackage` | 4 | installed `foopkg-stubs` package |
 | `InlineTyped` | 5 | installed package with a `py.typed` marker |
 
 A `CustomTypeshed` stub is `Tier1` (hand-written, trusted) and hovers as
 `… (custom typeshed)`, so a MicroPython signature is never misreported as the
-bundled CPython one.
+built-in CPython classification.
 
 ### Bundled typeshed indexes {#STUBRES-TYPESHED}
 
@@ -217,7 +217,7 @@ alternate or richer signatures.
 
 Types carry a `TypeProvenance` value from
 `crates/basilisk-stubs/src/types.rs`. It records source annotations,
-bundled/custom typeshed recognition, community or generated stubs, and untyped
+built-in/custom typeshed recognition, community or generated stubs, and untyped
 imports. There is no separate `TrackedType` wrapper.
 
 ### Diagnostic Behaviour by Provenance {#STUBRES-PROVENANCE-DIAG}
@@ -318,10 +318,16 @@ strict create-local skeleton.
 
 ## Configuration {#STUBRES-CONFIG}
 
+### Suppression ownership {#STUBRES-SUPPRESSION}
+
+Stub/import diagnostics use the checker's ordinary severity and inline-suppression system;
+there is no stub-specific suppression grammar. See
+[CHKARCH-STRICTNESS-SUPPRESSION](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS-SUPPRESSION).
+
 | Setting Key | Type | Default | Description |
 |------------|------|---------|-------------|
 | `basilisk.stubPaths` | `string[]` | `[]` | Additional directories to search for `.pyi` stubs (resolution step 1 — [§STUBRES-PEP561](#STUBRES-PEP561)) |
-| `basilisk.typeshedPath` | `string` | _(bundled)_ | Path to a custom/modified typeshed directory that becomes the canonical source for standard-library types (resolution step 3 — [§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)) |
+| `basilisk.typeshedPath` | `string` | _(built-in index)_ | Path to a custom/modified typeshed directory that becomes the canonical source for standard-library types (resolution step 3 — [§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)) |
 
 Both keys accept the `pyproject.toml` kebab-case (`stub-paths`, `typeshed-path`)
 and the LSP JSON camelCase (`stubPaths`, `typeshedPath`) spellings.
@@ -331,7 +337,7 @@ and the LSP JSON camelCase (`stubPaths`, `typeshedPath`) spellings.
 ```toml
 [tool.basilisk]
 stub-paths = ["stubs/"]
-typeshed-path = "typeshed-micropython"   # optional: override the bundled stdlib typeshed
+typeshed-path = "typeshed-micropython"   # optional: provide canonical stdlib stubs
 
 [tool.basilisk.rules]
 "imports_unresolved" = "warning"

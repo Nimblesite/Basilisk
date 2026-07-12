@@ -167,9 +167,7 @@ fn collect_file_targets(
     site_packages: &Path,
     targets: &mut BTreeMap<String, PathBuf>,
 ) -> Result<(), String> {
-    let parsed = basilisk_parser::parse_file(file).map_err(|error| error.to_string())?;
-    let mut resolved = basilisk_resolver::resolve(&parsed).map_err(|error| error.to_string())?;
-    basilisk_lsp::import_resolver::resolve_module_imports(&mut resolved, search_paths);
+    let (resolved, _) = crate::resolve_file_imports(file, search_paths)?;
     resolved
         .imports
         .iter()
@@ -202,7 +200,7 @@ fn generate_target(
 ) -> bool {
     let result = match target.source_path.as_deref() {
         Some(source) => {
-            info!(module = target.module, source = %source.display(), "generating stubs");
+            info!(module = %target.module, source = %source.display(), "generating stubs");
             generate::generate_stubs(&target.module, source, python_path, mode)
         }
         None if mode == StubGenMode::Ast => {

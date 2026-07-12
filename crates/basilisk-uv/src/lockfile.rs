@@ -38,9 +38,8 @@ pub struct LockFile {
 /// present in real `uv.lock` files but not needed for type checking.
 //
 // Implements [LSPUV-LOCK-EXTRACT] — extracts name, version, source, and
-// dependencies (the rows of the spec's extraction table). Note: the spec also
-// lists `resolution-markers` (Platform markers); those are not deserialised
-// here — they fall into `extra`. See conformance audit (DEVIATION).
+// dependencies. Top-level `resolution-markers` are retained in `extra` rather
+// than interpreted.
 #[derive(Debug, Clone, Deserialize)]
 pub struct LockPackage {
     /// Normalised package name.

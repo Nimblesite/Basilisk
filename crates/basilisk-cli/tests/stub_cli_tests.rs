@@ -6,7 +6,7 @@
     clippy::unwrap_used
 )]
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -46,6 +46,12 @@ impl TestProject {
         let _ = command.current_dir(&self.root);
         command
     }
+
+    fn generate_all(&self) -> Result<Output, std::io::Error> {
+        self.command()
+            .args(["stubs", "generate", "--all", "--mode", "ast"])
+            .output()
+    }
 }
 
 impl Drop for TestProject {
@@ -72,31 +78,28 @@ fn site_packages(project: &TestProject) -> PathBuf {
 fn generate_all_discovers_only_untyped_project_imports() -> Result<(), Box<dyn std::error::Error>> {
     let project = TestProject::new("all")?;
     let packages = site_packages(&project);
-    project.write(
+    let _ = project.write(
         ".venv/lib/python3.12/site-packages/alpha.py",
         "def alpha_value(value: int) -> str:\n    return str(value)\n",
     )?;
-    project.write(
+    let _ = project.write(
         ".venv/lib/python3.12/site-packages/beta/__init__.py",
         "def beta_value() -> int:\n    return 2\n",
     )?;
-    project.write(
+    let _ = project.write(
         ".venv/lib/python3.12/site-packages/typedpkg/__init__.py",
         "def typed_value() -> int:\n    return 3\n",
     )?;
-    project.write(".venv/lib/python3.12/site-packages/typedpkg/py.typed", "")?;
-    project.write("localmod.py", "def local_value() -> int:\n    return 4\n")?;
-    project.write(
+    let _ = project.write(".venv/lib/python3.12/site-packages/typedpkg/py.typed", "")?;
+    let _ = project.write("localmod.py", "def local_value() -> int:\n    return 4\n")?;
+    let _ = project.write(
         "app.py",
         "import alpha\nfrom beta import beta_value\nimport typedpkg\nimport localmod\n",
     )?;
-    project.write("worker.py", "import alpha\n")?;
+    let _ = project.write("worker.py", "import alpha\n")?;
 
     assert!(packages.is_dir(), "test venv must expose site-packages");
-    let output = project
-        .command()
-        .args(["stubs", "generate", "--all", "--mode", "ast"])
-        .output()?;
+    let output = project.generate_all()?;
     let details = output_text(&output);
 
     assert!(output.status.success(), "{details}");
@@ -136,7 +139,7 @@ fn generate_all_discovers_only_untyped_project_imports() -> Result<(), Box<dyn s
 fn createstub_alias_generates_the_named_package() -> Result<(), Box<dyn std::error::Error>> {
     let project = TestProject::new("createstub")?;
     let modules = project.root.join("python-modules");
-    project.write(
+    let _ = project.write(
         "python-modules/aliaspkg.py",
         "def aliased(value: str) -> int:\n    return len(value)\n",
     )?;
@@ -164,17 +167,14 @@ fn createstub_alias_generates_the_named_package() -> Result<(), Box<dyn std::err
 #[test]
 fn generate_all_with_no_untyped_imports_succeeds() -> Result<(), Box<dyn std::error::Error>> {
     let project = TestProject::new("all_empty")?;
-    project.write("app.py", "import pathlib\n")?;
+    let _ = project.write("app.py", "import pathlib\n")?;
 
-    let output = project
-        .command()
-        .args(["stubs", "generate", "--all", "--mode", "ast"])
-        .output()?;
+    let output = project.generate_all()?;
     let details = output_text(&output);
 
     assert!(output.status.success(), "{details}");
     assert!(
-        !Path::new(&project.root.join(".basilisk/stubs")).exists(),
+        !project.root.join(".basilisk/stubs").exists(),
         "an empty discovery should not create a cache directory"
     );
     Ok(())
