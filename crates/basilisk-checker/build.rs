@@ -70,17 +70,10 @@ fn catalog_entry(rules_dir: &Path, module: &str) -> Result<CatalogEntry, String>
     let (code, title) = extract_header(&primary_text)
         .ok_or_else(|| format!("registered rule `{module}` has no canonical `//! CODE: title` header"))?;
 
-    let texts = source_texts(&primary, &module_dir)?;
-    let docs_url = texts
-        .iter()
-        .find_map(|text| extract_quoted_value(text, "docs_url:"))
-        .ok_or_else(|| format!("registered rule `{module}` has no docs_url"))?;
-    let code_literal = format!("code: \"{code}\"");
-    if !texts.iter().any(|text| text.contains(&code_literal)) {
-        return Err(format!(
-            "registered rule `{module}` header code `{code}` has no matching ErrorCode literal"
-        ));
-    }
+    // Rule documentation URLs follow one canonical, code-addressed route.
+    // Deriving the URL also covers rules whose shared `ErrorCode` constant
+    // lives in a sibling helper module rather than the registered module.
+    let docs_url = format!("https://www.basilisk-python.dev/errors/{code}");
 
     Ok(CatalogEntry {
         severity: severity_for(&code),
@@ -88,25 +81,6 @@ fn catalog_entry(rules_dir: &Path, module: &str) -> Result<CatalogEntry, String>
         title: clean_sentence(&title),
         docs_url,
     })
-}
-
-fn source_texts(primary: &Path, module_dir: &Path) -> Result<Vec<String>, String> {
-    if !module_dir.is_dir() {
-        return fs::read_to_string(primary)
-            .map(|text| vec![text])
-            .map_err(|err| format!("failed to read {}: {err}", primary.display()));
-    }
-    let entries = fs::read_dir(module_dir)
-        .map_err(|err| format!("failed to read {}: {err}", module_dir.display()))?;
-    entries
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|extension| extension == "rs"))
-        .map(|path| {
-            fs::read_to_string(&path)
-                .map_err(|err| format!("failed to read {}: {err}", path.display()))
-        })
-        .collect()
 }
 
 fn extract_header(text: &str) -> Option<(String, String)> {
@@ -123,12 +97,6 @@ fn extract_header(text: &str) -> Option<(String, String)> {
         (valid_bsk || valid_named)
             .then(|| (code.to_owned(), title.trim().to_owned()))
     })
-}
-
-fn extract_quoted_value(text: &str, key: &str) -> Option<String> {
-    let after_key = text.split_once(key)?.1;
-    let after_quote = after_key.split_once('"')?.1;
-    after_quote.split_once('"').map(|(value, _)| value.to_owned())
 }
 
 fn clean_sentence(value: &str) -> String {

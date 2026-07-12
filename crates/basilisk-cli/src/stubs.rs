@@ -104,9 +104,10 @@ fn run_generate(packages: &[String], all: bool, mode: StubGenModeArg, python: &s
         return 0;
     }
     let cache_dir = project_root.join(generate::cache::DEFAULT_CACHE_DIR);
-    let failed = targets.iter().fold(false, |had_failure, target| {
-        !generate_target(target, mode.into(), python_path, &cache_dir) || had_failure
-    });
+    let mut failed = false;
+    for target in &targets {
+        failed |= !generate_target(target, mode.into(), python_path, &cache_dir);
+    }
     u8::from(failed)
 }
 
@@ -116,6 +117,9 @@ fn generation_targets(
     python_path: &Path,
     project_root: &Path,
 ) -> Result<Vec<GenerationTarget>, String> {
+    if all && !packages.is_empty() {
+        return Err("--all cannot be combined with package names".to_owned());
+    }
     if all {
         return discover_untyped_imports(project_root);
     }

@@ -39,6 +39,7 @@ pub mod rule_tags;
 pub mod rules;
 pub mod span_util;
 pub mod suppression;
+mod suppression_audit;
 pub mod types;
 pub mod types_parsing;
 
@@ -132,8 +133,13 @@ pub fn check_with_config(
     let has_path_overrides = !config.per_path_overrides.is_empty();
     let has_rule_overrides = !config.rules.is_empty();
 
-    let mut filtered = Vec::with_capacity(raw.len());
-    filtered.extend(raw.into_iter().filter_map(|mut diag| {
+    // Apply every project-level decision first, retaining this pre-inline view
+    // for suppression auditing. Audit diagnostics are appended only after the
+    // ordinary diagnostics pass through inline suppression, so a directive can
+    // never hide the audit finding about itself.
+    let prepared = raw
+        .into_iter()
+        .filter_map(|mut diag| {
         let code = diag.code.code;
 
         // 0. Opt-in gating. Basilisk-original rules (provenance `basilisk`)
@@ -141,10 +147,8 @@ pub fn check_with_config(
         //    opts into one of its tags. PEP rules always run. Provenance and
         //    tags come from the rule itself via the tagging layer — there is
         //    no hand-maintained code list here. [CHKTAG-PROVENANCE]
-        if let Some(spec) = rule_tags::opt_in_spec_for_code(code) {
-            if !spec.tags.iter().any(|tag| opt_in_tag_enabled(tag, config)) {
-                return None;
-            }
+        if !rule_selected(code, file_path, config) {
+            return None;
         }
 
         // 1. Per-path: check if rule is completely disabled for this file path.
@@ -200,13 +204,104 @@ pub fn check_with_config(
             }
         }
 
-        // 7. Inline source overrides (highest priority). The 0-based line is
-        //    the count of newlines before the span start — the shared line
-        //    index answers that in O(log n) instead of rescanning the prefix
-        //    for every diagnostic.
-        finish_inline_override(diag, has_inline_overrides, &inline_overrides, &ctx)
-    }));
+            Some(diag)
+        })
+        .collect::<Vec<_>>();
+
+    // 7. Inline source overrides (highest priority). The 0-based line is the
+    //    count of newlines before the span start — the shared line index answers
+    //    that in O(log n) instead of rescanning the prefix for every diagnostic.
+    let mut filtered = prepared
+        .iter()
+        .cloned()
+        .filter_map(|diag| {
+            finish_inline_override(diag, has_inline_overrides, &inline_overrides, &ctx)
+        })
+        .collect::<Vec<_>>();
+
+    if suppression_audit_selected(file_path, config) {
+        filtered.extend(
+            suppression_audit::diagnostics(
+                source,
+                &module.comment_ranges,
+                &prepared,
+                &module.path,
+            )
+            .into_iter()
+            .filter_map(|diagnostic| configure_suppression_audit(diagnostic, file_path, config)),
+        );
+    }
     filtered
+}
+
+const SUPPRESSION_AUDIT_CODES: [&str; 4] = ["BSK-I0060", "BSK-W0061", "BSK-W0062", "BSK-E0063"];
+
+/// Whether a rule is selected before it runs.
+///
+/// An explicit severity is itself a selection decision: this lets a strict
+/// preset enumerate every catalog rule at native severity without also
+/// toggling legacy tag switches. Per-path selection has the same precedence as
+/// per-path severity. Inherited opt-in rules remain off, and either disabled
+/// form remains authoritative.
+fn rule_selected(
+    code: &str,
+    file_path: &std::path::Path,
+    config: &basilisk_config::BasiliskConfig,
+) -> bool {
+    if config.is_rule_disabled_for_path(code, file_path) {
+        return false;
+    }
+    if let Some(severity) = find_path_rule_severity(code, file_path, &config.per_path_overrides) {
+        return severity != basilisk_config::RuleSeverity::Disabled;
+    }
+    if let Some(severity) = config.rule_severity(code) {
+        return severity != basilisk_config::RuleSeverity::Disabled;
+    }
+    rule_tags::opt_in_spec_for_code(code).is_none_or(|spec| {
+        spec.tags
+            .iter()
+            .any(|tag| opt_in_tag_enabled(tag, config))
+    })
+}
+
+fn suppression_audit_selected(
+    file_path: &std::path::Path,
+    config: &basilisk_config::BasiliskConfig,
+) -> bool {
+    SUPPRESSION_AUDIT_CODES
+        .iter()
+        .any(|code| rule_selected(code, file_path, config))
+}
+
+fn configure_suppression_audit(
+    mut diagnostic: Diagnostic,
+    file_path: &std::path::Path,
+    config: &basilisk_config::BasiliskConfig,
+) -> Option<Diagnostic> {
+    let code = diagnostic.code.code;
+    if !rule_selected(code, file_path, config) {
+        return None;
+    }
+    if let Some(severity) = config.rule_severity(code) {
+        apply_configured_severity(&mut diagnostic, severity)?;
+    }
+    if let Some(severity) = find_path_rule_severity(code, file_path, &config.per_path_overrides) {
+        apply_configured_severity(&mut diagnostic, severity)?;
+    }
+    Some(diagnostic)
+}
+
+fn apply_configured_severity(
+    diagnostic: &mut Diagnostic,
+    severity: basilisk_config::RuleSeverity,
+) -> Option<()> {
+    diagnostic.severity = match severity {
+        basilisk_config::RuleSeverity::Disabled => return None,
+        basilisk_config::RuleSeverity::Warning => Severity::Warning,
+        basilisk_config::RuleSeverity::Info => Severity::Info,
+        basilisk_config::RuleSeverity::Error => Severity::Error,
+    };
+    Some(())
 }
 
 fn finish_inline_override(

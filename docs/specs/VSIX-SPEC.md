@@ -106,13 +106,15 @@ methods in
 
 ### Thin-shell boundary {#VSIX-CONFIGURATION-EDITOR-THIN-SHELL}
 
-The webview posts user intent only: select tag/rule, stage setting, request
-preview, apply preview, open docs/location. The extension host runtime-decodes
-the message and forwards configuration intent to the LSP. It MUST NOT:
+The webview posts user intent only: choose an LSP-advertised preset, select
+tag/rule, stage setting, request preview, apply preview, open docs/location. The
+extension host runtime-decodes the message and forwards configuration intent to
+the LSP. It MUST NOT:
 
 - ship a rule or tag list;
 - parse TOML/JSON or calculate effective severity/precedence;
 - expand a bulk selector;
+- define or expand preset recipes;
 - write configuration or adoption files;
 - infer that an opt-in rule is enabled from VS Code settings.
 

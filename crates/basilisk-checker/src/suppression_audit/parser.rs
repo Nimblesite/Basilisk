@@ -254,9 +254,10 @@ fn parse_selector(
     if mode == RuleMode::Ignore && unknown.iter().all(|code| !looks_like_basilisk_code(code)) {
         return (Selector::Blanket, None);
     }
+    let unknown_code = unknown.first().map_or("<unknown>", |code| code.as_str());
     (
         Selector::Specific(codes),
-        Some(format!("unknown Basilisk rule code `{}`", unknown[0])),
+        Some(format!("unknown Basilisk rule code `{unknown_code}`")),
     )
 }
 

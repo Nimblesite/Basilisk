@@ -24,9 +24,10 @@ remain:
 1. **Tags are the information architecture.** Rules are browsed, filtered,
    summarised, and bulk-edited through their authoritative tags. The UI never
    invents a parallel category list or guesses provenance from a code prefix.
-2. **No modes.** “Maximum policy”, “enable all”, and “disable all” are named
-   transactions that expand to explicit rule operations. They do not create a
-   hidden `strict`/`standard` mode ([CHKARCH-CONFIGURATION-ONLY]).
+2. **Presets, not modes.** “Strict”, “maximum policy”, and other named presets
+   are LSP-owned, one-shot configuration recipes. They expand to explicit rule
+   operations and never create a hidden runtime `strict`/`standard` mode
+   ([CHKARCH-CONFIGURATION-ONLY]).
 3. **Severity and enablement are one understandable control.** Every rule can be
    `error`, `warning`, `info`, or `disabled`. “Inherited” removes an explicit
    override; it is not a fifth severity.
@@ -80,6 +81,23 @@ reviewable and stable.
 The canonical catalog comes from the live rule registry and supplies code,
 title, summary, documentation URL, default severity, default-enabled state,
 tags, and fix metadata. The VSIX and website MUST NOT maintain another list.
+
+## Presets are explicit recipes {#CONFIGEDITOR-PRESETS}
+
+The snapshot advertises named `ConfigurationPreset` recipes so every editor
+offers the same supported starting points without copying selector logic. A
+preset carries its stable ID, user-facing name and explanation, ordered
+mutations, and whether it requests safe fixes. The first required recipe is:
+
+- **Strict:** select every live rule and write its native severity at project
+  scope. This turns the complete catalog on while preserving the distinction
+  between native errors, warnings, and information diagnostics.
+
+Choosing a preset enters the ordinary preview/apply flow. The preview expands
+the live catalog and shows the exact codes and impact; apply persists those
+explicit per-rule severities in the active config file. The preset ID itself is
+not persisted and has no continuing runtime semantics. Users can subsequently
+change or inherit any individual rule without “leaving” a preset.
 
 ## Severity semantics {#CONFIGEDITOR-SEVERITY}
 
@@ -160,6 +178,7 @@ Together they provide:
 
 - resolved snapshot and configuration provenance;
 - tag-aware rule catalog, effective severity, counts, and fixability;
+- LSP-advertised preset recipes, including Strict (all rules at native severity);
 - selectors for all rules, exact codes, tags, current violations, safe-fixable
   occurrences, and occurrences without a safe fix;
 - batch set/reset/enable/disable at project or path scope;
@@ -188,6 +207,8 @@ The important distinction is:
   `Native` (expand to each selected rule's default);
 - `RuleState.configuredSeverity`: optional explicit value;
 - `RuleState.effectiveSeverity`: result after the complete precedence ladder.
+- `ConfigurationPreset`: an advertised one-shot list of ordinary mutations,
+  never a persisted policy value.
 
 ## Configuration sources and writes {#CONFIGEDITOR-SOURCES}
 
@@ -268,8 +289,9 @@ The feature is complete only when:
 2. each rule supports Error/Warning/Info/Disabled plus reset to Inherited;
 3. an explicit severity enables an opt-in rule;
 4. all/code/tag/fixability selectors preview and apply the exact same code set;
-5. enable-all, maximum, and disable-all work in multi-root workspaces without
-   first-root fallbacks;
+5. the Strict preset, enable-all, maximum, and disable-all work in multi-root
+   workspaces without first-root fallbacks, and preset application persists
+   explicit severities rather than a mode flag;
 6. stale, malformed, shadowed, and read-only configs cannot be overwritten;
 7. apply triggers reload, Salsa invalidation, recheck, publish, and notification
    in every analysis scope;

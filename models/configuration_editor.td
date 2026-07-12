@@ -108,12 +108,24 @@ type DebtSummary {
   disabledRules: Int
 }
 
+# Presets are LSP-owned, one-shot mutation recipes. They are never persisted as
+# an ambient policy mode: applying one expands its mutations to explicit rule
+# severities in the active configuration file.
+type ConfigurationPreset {
+  id: String
+  name: String
+  summary: String
+  mutations: List<ConfigurationMutation>
+  runSafeFixes: Bool
+}
+
 type ConfigurationSnapshot {
   rootUri: Uri
   revision: Revision
   source: ConfigurationSource
   rules: List<RuleState>
   tags: List<TagState>
+  presets: List<ConfigurationPreset>
   debt: DebtSummary
   problems: List<ConfigurationProblem>
 }

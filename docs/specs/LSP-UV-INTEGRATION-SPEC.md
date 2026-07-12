@@ -1,6 +1,5 @@
 # Basilisk + uv Integration — Specification {#LSPUV}
 
-> **Plan**: [LSP-PLAN.md](../plans/LSP-PLAN.md)
 > **LSP Spec**: [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) — configuration, commands, binary resolution
 
 ---

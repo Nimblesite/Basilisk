@@ -168,6 +168,12 @@ rule registry and return a de-duplicated, stable code list in preview. Apply
 consumes that preview ID and the same base revision; it never reinterprets a
 possibly changed tag/query silently.
 
+`ConfigurationSnapshot.presets` advertises LSP-owned one-shot recipes. The
+required `strict` recipe is `All` + `Native` at project scope. A client relays
+the advertised mutations through preview/apply; the resulting explicit rule
+severities are stored in the active config. Neither a preset ID nor a policy
+mode is persisted.
+
 ### Transaction and refresh {#LSPARCH-CONFIG-EDITOR-TRANSACTION}
 
 Preview performs, in order:

@@ -96,12 +96,21 @@ export interface DebtSummary {
   disabledRules: number;
 }
 
+export interface ConfigurationPreset {
+  id: string;
+  name: string;
+  summary: string;
+  mutations: Array<ConfigurationMutation>;
+  runSafeFixes: boolean;
+}
+
 export interface ConfigurationSnapshot {
   rootUri: Uri;
   revision: Revision;
   source: ConfigurationSource;
   rules: Array<RuleState>;
   tags: Array<TagState>;
+  presets: Array<ConfigurationPreset>;
   debt: DebtSummary;
   problems: Array<ConfigurationProblem>;
 }

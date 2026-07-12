@@ -100,6 +100,9 @@ These are prerequisites, not details the UI may work around.
 - [ ] Implement `basilisk/configurationSnapshot` with explicit `rootUri`, rule
   catalog, tags, configured/effective state, provenance, counts, debt, and
   config problems.
+- [ ] Advertise LSP-owned preset recipes in every snapshot. Ship `strict` as
+  `All` + `Native` at project scope; preview/apply expands and persists every
+  rule explicitly, never a mode or preset flag.
 - [ ] Implement selectors: all, exact codes, any/all tags, current violations,
   safe-fixable, and without-safe-fix.
 - [ ] Implement `basilisk/previewConfigurationChange`: expand selectors to a
@@ -177,8 +180,9 @@ These are prerequisites, not details the UI may work around.
 - [ ] Build Overview, tag rail, virtualised Rules table, rule detail/occurrences,
   Adoption, Path Overrides, and Project source/provenance views.
 - [ ] Add labelled severity controls, inherited reset, bulk tray, native/maximum/
-  disable-all actions, impact review, conflict refresh, raw-config navigation,
-  and clear global-versus-per-file consequences.
+  disable-all actions, LSP-advertised preset cards (starting with Strict),
+  impact review, conflict refresh, raw-config navigation, and clear
+  global-versus-per-file consequences.
 - [ ] Use VS Code theme tokens/native fonts with restrained Basilisk orange/sky
   accents. Support high contrast, 200% zoom, responsive narrow layout, reduced
   motion, full keyboard navigation, focus restoration, and `aria-live` status.

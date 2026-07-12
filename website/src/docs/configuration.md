@@ -219,7 +219,10 @@ They solve different problems and can be combined:
 
 The unconfigured default enables the complete core PEP rule set. Basilisk-
 specific house rules are tagged `basilisk` and stay off until a project opts in.
-There is no basic/standard/strict mode.
+There is no ambient basic/standard/strict mode. The planned editor's **Strict
+preset** is a one-shot recipe that writes every live rule's native severity
+explicitly into the active config file; after applying it, each rule remains
+independently configurable.
 
 Current opt-in switches are:
 
@@ -346,6 +349,8 @@ A tag-first VS Code editor is specified but **not shipped yet**. It will read th
 live rule catalog from the LSP, preview all/tag/rule bulk changes, expose every
 rule's effective and explicit severity, run safe fixes before recording adoption
 debt, and make opt-in suppression diagnostics searchable across the workspace.
+Its LSP-advertised Strict preset will turn the complete catalog on at each
+rule's native severity and persist the expanded rule entries—not a mode flag.
 Generated adoption debt will be ordinary exact-file `per-path-overrides` entries
 in this same active config file—no `.basilisk/adoptions.toml`, hidden state, or
 adoption mode. The VSIX will not parse or write configuration itself.
