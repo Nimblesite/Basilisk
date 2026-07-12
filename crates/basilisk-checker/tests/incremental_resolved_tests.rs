@@ -33,6 +33,13 @@ use import_support::{make_search_paths, make_tmp_dir};
 /// against the test process's working directory.
 const PROBE: &str = "zzz_unique_import_probe";
 
+fn e0001_config() -> BasiliskConfig {
+    BasiliskConfig {
+        rules: HashMap::from([("BSK-E0001".to_owned(), basilisk_config::RuleSeverity::Error)]),
+        ..BasiliskConfig::default()
+    }
+}
+
 fn default_config(db: &EventDb) -> ConfigInput {
     ConfigInput::new(db, ConfigValue(BasiliskConfig::default()))
 }
@@ -176,10 +183,7 @@ fn editing_config_invalidates_resolved_query() {
     let _first = checked_file_resolved(&db, file, config, search_paths, workspace);
     let _ = db.executions_of("checked_file_resolved"); // drain priming
 
-    let _previous = config.set_value(&mut db).to(ConfigValue(BasiliskConfig {
-        strict_annotations: true,
-        ..BasiliskConfig::default()
-    }));
+    let _previous = config.set_value(&mut db).to(ConfigValue(e0001_config()));
     let after = file_diagnostics_resolved(&db, file, config, search_paths, workspace);
     assert_eq!(
         db.executions_of("checked_file_resolved"),
@@ -188,7 +192,7 @@ fn editing_config_invalidates_resolved_query() {
     );
     assert!(
         after.iter().any(|d| d.code.code == "BSK-E0001"),
-        "with strict_annotations the resolved query must surface BSK-E0001"
+        "an explicit severity must surface BSK-E0001 in the resolved query"
     );
 }
 
@@ -306,10 +310,7 @@ fn config_edit_does_not_reresolve_module() {
     let _ = db.executions_of("resolved_module"); // drain priming
     let _ = db.executions_of("checked_file_resolved");
 
-    let _previous = config.set_value(&mut db).to(ConfigValue(BasiliskConfig {
-        strict_annotations: true,
-        ..BasiliskConfig::default()
-    }));
+    let _previous = config.set_value(&mut db).to(ConfigValue(e0001_config()));
     let _after = checked_file_resolved(&db, file, config, search_paths, workspace);
     assert_eq!(
         db.executions_of("checked_file_resolved"),

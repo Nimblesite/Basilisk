@@ -120,6 +120,25 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0025"
   },
   {
+    "code": "BSK-E0063",
+    "severity": "error",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "suppressions"
+    ],
+    "summary": "Malformed suppression directive",
+    "summaryHtml": "Malformed suppression directive",
+    "body": [
+      {
+        "type": "text",
+        "html": "Reports malformed directives, unknown Basilisk rule codes, conflicting directives, and unmatched block boundaries."
+      }
+    ],
+    "group": "Type System",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0063"
+  },
+  {
     "code": "BSK-E0152",
     "severity": "error",
     "provenance": "basilisk",
@@ -132,7 +151,7 @@
     "body": [
       {
         "type": "text",
-        "html": "Fires when a package is imported and resolves to a <code>.py</code> source file (not <code>.pyi</code>) without a <code>py.typed</code> marker. This means the package is installed but lacks type information, reducing type safety. This rule is off by default \u2014 the default configuration is pure PEP conformance \u2014 and a project opts in via configuration (<code>uv.stubSuggestions</code>). Once enabled, an untyped third-party import is a hard error; a project can soften it per import (<code># type: warningBSK-E0152</code>) or globally (<code>&quot;BSK-E0152&quot; = &quot;warning&quot;</code>) to use non-type-safe libraries at its own risk."
+        "html": "Fires when a package is imported and resolves to a <code>.py</code> source file (not <code>.pyi</code>) without a <code>py.typed</code> marker. This means the package is installed but lacks type information, reducing type safety. This rule is off by default \u2014 the default configuration is pure PEP conformance \u2014 and a project opts in with an explicit <code>BSK-E0152</code> severity. Once enabled, an untyped third-party import is a hard error; a project can soften it per import (<code># type: warningBSK-E0152</code>) or globally (<code>&quot;BSK-E0152&quot; = &quot;warning&quot;</code>) to use non-type-safe libraries at its own risk."
       },
       {
         "type": "code",
@@ -295,6 +314,63 @@
     ],
     "group": "Warnings",
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0050"
+  },
+  {
+    "code": "BSK-W0061",
+    "severity": "warning",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "suppressions"
+    ],
+    "summary": "Active blanket suppression",
+    "summaryHtml": "Active blanket suppression",
+    "body": [
+      {
+        "type": "text",
+        "html": "Reports a valid source directive that actively changes diagnostics without selecting individual Basilisk rule codes."
+      }
+    ],
+    "group": "Warnings",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0061"
+  },
+  {
+    "code": "BSK-W0062",
+    "severity": "warning",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "suppressions"
+    ],
+    "summary": "Unused suppression directive",
+    "summaryHtml": "Unused suppression directive",
+    "body": [
+      {
+        "type": "text",
+        "html": "Reports a syntactically valid directive that matches no diagnostic or does not change the effective severity of anything it matches."
+      }
+    ],
+    "group": "Warnings",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0062"
+  },
+  {
+    "code": "BSK-I0060",
+    "severity": "info",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "suppressions"
+    ],
+    "summary": "Active code-specific suppression",
+    "summaryHtml": "Active code-specific suppression",
+    "body": [
+      {
+        "type": "text",
+        "html": "Reports a valid source directive that names one or more Basilisk rules and actively suppresses a diagnostic or changes its effective severity."
+      }
+    ],
+    "group": "Information",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-I0060"
   },
   {
     "code": "aliases_implicit",

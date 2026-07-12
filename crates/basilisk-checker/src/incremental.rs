@@ -33,7 +33,7 @@ pub struct ConfigValue(pub BasiliskConfig);
 /// The effective checker configuration as a Salsa **input**.
 ///
 /// Configuration is a genuine input of a check, exactly like the source text:
-/// toggling `strict_annotations` or changing a rule's severity must invalidate
+/// changing a rule's explicit severity must invalidate
 /// and recompute the affected files' diagnostics. Mutating it via `set_value`
 /// is what makes salsa re-execute the queries that read it — and only those.
 /// [CHKARCH-INCREMENTAL-SALSA]

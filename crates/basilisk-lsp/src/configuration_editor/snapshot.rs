@@ -3,16 +3,17 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
-use basilisk_config::{BasiliskConfig, ConfigDocument, ConfigFormat, RuleSeverity as ConfigSeverity};
+use basilisk_config::{adoption_rule_overrides, BasiliskConfig, ConfigDocument, ConfigFormat};
 use tower_lsp::lsp_types::Url;
 
 use super::catalog::{
     config_to_wire, descriptors, is_fixable, is_safe_fixable, severities, tag_kind, wire_severity,
 };
 use super::model::{
-    ConfigurationFormat, ConfigurationSnapshot, ConfigurationSource, DebtSummary, FixSafety,
-    RuleOccurrence, RuleOccurrencesResponse, RuleSeverity, RuleState, SourcePosition, SourceRange,
-    TagState,
+    ConfigurationFormat, ConfigurationMutation, ConfigurationPreset, ConfigurationSnapshot,
+    ConfigurationSource, DebtSummary, FixSafety, MutationScope, PathOverrideState, PathRuleSetting,
+    RuleDescriptor, RuleOccurrence, RuleOccurrencesResponse, RuleSelector, RuleSetting,
+    RuleSeverity, RuleState, SourcePosition, SourceRange, TagState,
 };
 use crate::workspace::WorkspaceIndex;
 
@@ -36,11 +37,16 @@ pub(super) fn inventory(index: &WorkspaceIndex, root: &Path) -> Inventory {
     let mut files_by_code: HashMap<String, HashSet<std::path::PathBuf>> = HashMap::new();
     let mut errors = 0;
     let mut warnings = 0;
-    for entry in index.files.iter().filter(|entry| entry.key().starts_with(root)) {
+    for entry in index.files.iter().filter(|entry| {
+        entry.key().starts_with(root) && index.configuration_path_is_in_scope(entry.key())
+    }) {
         for diagnostic in &entry.diagnostics {
             let code = diagnostic.code.code.to_owned();
             *counts.entry(code.clone()).or_insert(0) += 1;
-            let _ = files_by_code.entry(code).or_default().insert(entry.key().clone());
+            let _ = files_by_code
+                .entry(code)
+                .or_default()
+                .insert(entry.key().clone());
             match diagnostic.severity {
                 basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation => {
                     errors += 1;
@@ -55,7 +61,13 @@ pub(super) fn inventory(index: &WorkspaceIndex, root: &Path) -> Inventory {
         .into_iter()
         .map(|(code, paths)| (code, paths.len()))
         .collect();
-    Inventory { counts, files, total, errors, warnings }
+    Inventory {
+        counts,
+        files,
+        total,
+        errors,
+        warnings,
+    }
 }
 
 /// Analyse current indexed modules using a hypothetical root config.
@@ -68,13 +80,20 @@ pub(super) fn hypothetical_inventory(
     let mut files_by_code: HashMap<String, HashSet<std::path::PathBuf>> = HashMap::new();
     let mut errors = 0;
     let mut warnings = 0;
-    for entry in index.files.iter().filter(|entry| entry.key().starts_with(root)) {
-        let Some(resolved) = &entry.resolved else { continue };
+    for entry in index.files.iter().filter(|entry| {
+        entry.key().starts_with(root) && index.configuration_path_is_in_scope(entry.key())
+    }) {
+        let Some(resolved) = &entry.resolved else {
+            continue;
+        };
         let diagnostics = basilisk_checker::check_with_config(resolved, config);
         for diagnostic in diagnostics {
             let code = diagnostic.code.code.to_owned();
             *counts.entry(code.clone()).or_insert(0) += 1;
-            let _ = files_by_code.entry(code).or_default().insert(entry.key().clone());
+            let _ = files_by_code
+                .entry(code)
+                .or_default()
+                .insert(entry.key().clone());
             match diagnostic.severity {
                 basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation => {
                     errors += 1;
@@ -89,7 +108,13 @@ pub(super) fn hypothetical_inventory(
         .into_iter()
         .map(|(code, paths)| (code, paths.len()))
         .collect();
-    Inventory { counts, files, total, errors, warnings }
+    Inventory {
+        counts,
+        files,
+        total,
+        errors,
+        warnings,
+    }
 }
 
 /// Build a complete wire snapshot from a validated active document.
@@ -100,11 +125,17 @@ pub(super) fn build_snapshot(
 ) -> ConfigurationSnapshot {
     let catalog = descriptors();
     let inventory = inventory(index, root);
-    let adoption = adoption_rules(document);
+    let adoption_entries = adoption_rule_overrides(document);
+    let adoption: Vec<(String, String)> = adoption_entries
+        .clone()
+        .into_iter()
+        .flat_map(|(pattern, rules)| rules.into_keys().map(move |code| (pattern.clone(), code)))
+        .collect();
     let rules: Vec<RuleState> = catalog
         .iter()
         .map(|descriptor| {
-            let (configured_severity, effective_severity) = severities(descriptor, &document.config);
+            let (configured_severity, effective_severity) =
+                severities(descriptor, &document.config);
             let diagnostic_count = count_i64(*inventory.counts.get(&descriptor.code).unwrap_or(&0));
             RuleState {
                 descriptor: descriptor.clone(),
@@ -112,22 +143,37 @@ pub(super) fn build_snapshot(
                 effective_severity,
                 inherited: configured_severity.is_none(),
                 diagnostic_count,
-                affected_file_count: count_i64(*inventory.files.get(&descriptor.code).unwrap_or(&0)),
-                safe_fix_count: if is_safe_fixable(&descriptor.code) { diagnostic_count } else { 0 },
-                unsafe_fix_count: if is_fixable(&descriptor.code) && !is_safe_fixable(&descriptor.code) {
+                affected_file_count: count_i64(
+                    *inventory.files.get(&descriptor.code).unwrap_or(&0),
+                ),
+                safe_fix_count: if is_safe_fixable(&descriptor.code) {
+                    diagnostic_count
+                } else {
+                    0
+                },
+                unsafe_fix_count: if is_fixable(&descriptor.code)
+                    && !is_safe_fixable(&descriptor.code)
+                {
                     diagnostic_count
                 } else {
                     0
                 },
                 adoption_exception_count: count_i64(
-                    adoption.iter().filter(|(_, code)| code == &&descriptor.code).count(),
+                    adoption
+                        .iter()
+                        .filter(|(_, code)| code == &descriptor.code)
+                        .count(),
                 ),
             }
         })
         .collect();
     let tags = tag_states(&rules);
     let source_uri = path_uri(&document.path);
-    let shadowed_sources = document.shadowed_sources.iter().map(|path| path_uri(path)).collect();
+    let shadowed_sources = document
+        .shadowed_sources
+        .iter()
+        .map(|path| path_uri(path))
+        .collect();
     ConfigurationSnapshot {
         root_uri: path_uri(root),
         revision: document.revision.clone(),
@@ -143,17 +189,98 @@ pub(super) fn build_snapshot(
         },
         debt: DebtSummary {
             remaining_diagnostics: count_i64(inventory.total),
-            adopted_files: count_i64(adoption.iter().map(|(path, _)| path).collect::<HashSet<_>>().len()),
+            adopted_files: count_i64(
+                adoption
+                    .iter()
+                    .map(|(path, _)| path)
+                    .collect::<HashSet<_>>()
+                    .len(),
+            ),
             adoption_exceptions: count_i64(adoption.len()),
-            suppression_diagnostics: suppression_count(&inventory.counts),
+            suppression_diagnostics: suppression_count(&inventory.counts, &catalog),
             disabled_rules: count_i64(
-                rules.iter().filter(|state| state.effective_severity == RuleSeverity::Disabled).count(),
+                rules
+                    .iter()
+                    .filter(|state| state.effective_severity == RuleSeverity::Disabled)
+                    .count(),
             ),
         },
         rules,
         tags,
+        presets: presets(),
+        path_overrides: path_override_states(document, &adoption_entries),
         problems: Vec::new(),
     }
+}
+
+fn presets() -> Vec<ConfigurationPreset> {
+    vec![
+        ConfigurationPreset {
+            id: "strict".to_owned(),
+            name: "Strict".to_owned(),
+            summary: "Enable every live rule at its native severity.".to_owned(),
+            mutations: vec![ConfigurationMutation {
+                selector: RuleSelector::All,
+                setting: RuleSetting::Native,
+                scope: MutationScope::Project,
+            }],
+        },
+        ConfigurationPreset {
+            id: "maximum".to_owned(),
+            name: "Maximum".to_owned(),
+            summary: "Enable every live rule and promote every diagnostic to an error.".to_owned(),
+            mutations: vec![ConfigurationMutation {
+                selector: RuleSelector::All,
+                setting: RuleSetting::Error,
+                scope: MutationScope::Project,
+            }],
+        },
+        ConfigurationPreset {
+            id: "suppression-audit".to_owned(),
+            name: "Suppression audit".to_owned(),
+            summary: "Surface unused, broad, conflicting, and malformed suppressions.".to_owned(),
+            mutations: vec![ConfigurationMutation {
+                selector: RuleSelector::Tags {
+                    tags: vec!["suppressions".to_owned()],
+                    match_all: false,
+                },
+                setting: RuleSetting::Native,
+                scope: MutationScope::Project,
+            }],
+        },
+    ]
+}
+
+fn path_override_states(
+    document: &ConfigDocument,
+    adoption: &BTreeMap<String, BTreeMap<String, basilisk_config::RuleSeverity>>,
+) -> Vec<PathOverrideState> {
+    let mut entries: Vec<_> = document.config.per_path_overrides.iter().collect();
+    entries.sort_by_key(|(pattern, _)| (*pattern).clone());
+    entries
+        .into_iter()
+        .map(|(pattern, entry)| {
+            let mut rules: BTreeMap<String, RuleSeverity> = entry
+                .rule_overrides
+                .iter()
+                .map(|(code, severity)| (code.clone(), config_to_wire(*severity)))
+                .collect();
+            for code in &entry.disabled_rules {
+                let _ = rules.insert(code.clone(), RuleSeverity::Disabled);
+            }
+            PathOverrideState {
+                pattern: pattern.clone(),
+                adoption: adoption.contains_key(pattern),
+                rules: rules
+                    .into_iter()
+                    .map(|(rule_code, severity)| PathRuleSetting {
+                        rule_code,
+                        severity,
+                    })
+                    .collect(),
+            }
+        })
+        .collect()
 }
 
 fn tag_states(rules: &[RuleState]) -> Vec<TagState> {
@@ -186,17 +313,35 @@ pub(super) fn occurrences(
     limit: usize,
 ) -> RuleOccurrencesResponse {
     let mut items = Vec::new();
-    for entry in index.files.iter().filter(|entry| entry.key().starts_with(root)) {
-        let Some(uri) = Url::from_file_path(entry.key()).ok() else { continue };
-        for diagnostic in entry.diagnostics.iter().filter(|diag| selected.contains(diag.code.code)) {
-            let start = crate::util::byte_offset_to_position(&entry.text, diagnostic.span.start_usize());
-            let end = crate::util::byte_offset_to_position(&entry.text, diagnostic.span.end_usize());
+    for entry in index
+        .files
+        .iter()
+        .filter(|entry| entry.key().starts_with(root))
+    {
+        let Some(uri) = Url::from_file_path(entry.key()).ok() else {
+            continue;
+        };
+        for diagnostic in entry
+            .diagnostics
+            .iter()
+            .filter(|diag| selected.contains(diag.code.code))
+        {
+            let start =
+                crate::util::byte_offset_to_position(&entry.text, diagnostic.span.start_usize());
+            let end =
+                crate::util::byte_offset_to_position(&entry.text, diagnostic.span.end_usize());
             items.push(RuleOccurrence {
                 rule_code: diagnostic.code.code.to_owned(),
                 uri: uri.to_string(),
                 range: SourceRange {
-                    start: SourcePosition { line: i64::from(start.line), character: i64::from(start.character) },
-                    end: SourcePosition { line: i64::from(end.line), character: i64::from(end.character) },
+                    start: SourcePosition {
+                        line: i64::from(start.line),
+                        character: i64::from(start.character),
+                    },
+                    end: SourcePosition {
+                        line: i64::from(end.line),
+                        character: i64::from(end.character),
+                    },
                 },
                 effective_severity: wire_severity(diagnostic.severity),
                 fix_safety: if is_safe_fixable(diagnostic.code.code) {
@@ -211,72 +356,60 @@ pub(super) fn occurrences(
         }
     }
     items.sort_by(|left, right| {
-        (&left.uri, left.range.start.line, left.range.start.character, &left.rule_code)
-            .cmp(&(&right.uri, right.range.start.line, right.range.start.character, &right.rule_code))
+        (
+            &left.uri,
+            left.range.start.line,
+            left.range.start.character,
+            &left.rule_code,
+        )
+            .cmp(&(
+                &right.uri,
+                right.range.start.line,
+                right.range.start.character,
+                &right.rule_code,
+            ))
     });
-    let offset = cursor.and_then(|value| value.parse::<usize>().ok()).unwrap_or(0).min(items.len());
-    let end = offset.saturating_add(limit).min(items.len());
-    let next_cursor = (end < items.len()).then(|| end.to_string());
-    RuleOccurrencesResponse { items: items[offset..end].to_vec(), next_cursor }
+    page_occurrences(&items, cursor, limit)
 }
 
-fn adoption_rules(document: &ConfigDocument) -> Vec<(String, String)> {
-    match document.format {
-        ConfigFormat::PyprojectToml => adoption_rules_toml(&document.content),
-        ConfigFormat::BasiliskJson => adoption_rules_json(&document.content),
+fn page_occurrences(
+    items: &[RuleOccurrence],
+    cursor: Option<&str>,
+    limit: usize,
+) -> RuleOccurrencesResponse {
+    let offset = cursor
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0)
+        .min(items.len());
+    let end = offset.saturating_add(limit).min(items.len());
+    let next_cursor = (end < items.len()).then(|| end.to_string());
+    RuleOccurrencesResponse {
+        items: items.get(offset..end).unwrap_or_default().to_vec(),
+        next_cursor,
     }
 }
 
-fn adoption_rules_toml(content: &str) -> Vec<(String, String)> {
-    let Ok(table) = content.parse::<toml::Table>() else { return Vec::new() };
-    let Some(paths) = table
-        .get("tool").and_then(|value| value.get("basilisk"))
-        .and_then(|value| value.get("per-path-overrides"))
-        .and_then(toml::Value::as_table)
-    else { return Vec::new() };
-    paths.iter().flat_map(|(pattern, entry)| {
-        let adopted = entry.get("adoption").and_then(toml::Value::as_bool) == Some(true);
-        entry.get("rules").and_then(toml::Value::as_table).into_iter().flatten()
-            .filter(move |_| adopted)
-            .map(move |(code, _)| (pattern.clone(), code.clone()))
-    }).collect()
-}
-
-fn adoption_rules_json(content: &str) -> Vec<(String, String)> {
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(content) else { return Vec::new() };
-    let Some(paths) = value.get("perPathOverrides").or_else(|| value.get("per-path-overrides"))
-        .and_then(serde_json::Value::as_object) else { return Vec::new() };
-    paths.iter().flat_map(|(pattern, entry)| {
-        let adopted = entry.get("adoption").and_then(serde_json::Value::as_bool) == Some(true);
-        entry.get("rules").and_then(serde_json::Value::as_object).into_iter().flatten()
-            .filter(move |_| adopted)
-            .map(move |(code, _)| (pattern.clone(), code.clone()))
-    }).collect()
-}
-
-fn suppression_count(counts: &HashMap<String, usize>) -> i64 {
-    ["BSK-I0060", "BSK-W0061", "BSK-W0062", "BSK-E0063"]
+fn suppression_count(counts: &HashMap<String, usize>, catalog: &[RuleDescriptor]) -> i64 {
+    catalog
         .iter()
-        .map(|code| counts.get(*code).copied().unwrap_or(0))
+        .filter(|rule| rule.tags.iter().any(|tag| tag == "suppressions"))
+        .map(|rule| counts.get(&rule.code).copied().unwrap_or(0))
         .sum::<usize>()
         .try_into()
         .unwrap_or(i64::MAX)
 }
 
 fn path_uri(path: &Path) -> String {
-    Url::from_file_path(path).map_or_else(|()| path.to_string_lossy().into_owned(), |uri| uri.to_string())
+    Url::from_file_path(path).map_or_else(
+        |()| path.to_string_lossy().into_owned(),
+        |uri| uri.to_string(),
+    )
 }
 
 fn count_i64(value: usize) -> i64 {
     i64::try_from(value).unwrap_or(i64::MAX)
 }
 
-/// Convert a wire severity into the persisted config type.
-pub(super) const fn persisted_severity(value: RuleSeverity) -> ConfigSeverity {
-    match value {
-        RuleSeverity::Error => ConfigSeverity::Error,
-        RuleSeverity::Warning => ConfigSeverity::Warning,
-        RuleSeverity::Info => ConfigSeverity::Info,
-        RuleSeverity::Disabled => ConfigSeverity::Disabled,
-    }
-}
+#[cfg(test)]
+#[path = "snapshot_tests.rs"]
+mod tests;

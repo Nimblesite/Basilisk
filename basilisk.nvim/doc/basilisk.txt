@@ -123,8 +123,6 @@ All options with defaults: >lua
       enabled = true,                -- enable uv integration
       executable_path = nil,         -- auto-detect
       auto_sync = false,             -- auto-run uv sync
-      stub_suggestions = true,       -- suggest type stub packages
-      dependency_diagnostics = false, -- dependency hygiene warnings
     },
     keymaps = {
       enabled = true,                -- set default keymaps

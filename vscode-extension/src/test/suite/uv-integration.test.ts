@@ -144,25 +144,17 @@ suite('Basilisk uv Integration Tests', () => {
         );
     });
 
-    test('Extension contributes basilisk.uv.stubSuggestions setting', () => {
+    test('Rule-family policy is not exposed as VS Code settings', () => {
         const cfg = vscode.workspace.getConfiguration('basilisk');
-        const inspected = cfg.inspect<boolean>('uv.stubSuggestions');
-        assert.ok(inspected, 'basilisk.uv.stubSuggestions should be a contributed setting');
         assert.strictEqual(
-            inspected.defaultValue,
-            true,
-            'Default uv.stubSuggestions should be true'
+            cfg.inspect<boolean>('uv.stubSuggestions'),
+            undefined,
+            'stub suggestions must be configured through BSK-E0152 severity'
         );
-    });
-
-    test('Extension contributes basilisk.uv.dependencyDiagnostics setting', () => {
-        const cfg = vscode.workspace.getConfiguration('basilisk');
-        const inspected = cfg.inspect<boolean>('uv.dependencyDiagnostics');
-        assert.ok(inspected, 'basilisk.uv.dependencyDiagnostics should be a contributed setting');
         assert.strictEqual(
-            inspected.defaultValue,
-            true,
-            'Default uv.dependencyDiagnostics should be true'
+            cfg.inspect<boolean>('uv.dependencyDiagnostics'),
+            undefined,
+            'dependency diagnostics must be configured through explicit rule severities'
         );
     });
 
@@ -208,5 +200,4 @@ suite('Basilisk uv Integration Tests', () => {
     });
 
 });
-
 

@@ -54,7 +54,11 @@ const serverOptions: ServerOptions = {
 };
 
 const clientOptions: LanguageClientOptions = {
-  documentSelector: [{ scheme: "file", language: "python" }],
+  documentSelector: [
+    { scheme: "file", language: "python" },
+    { scheme: "file", pattern: "**/pyproject.toml" },
+    { scheme: "file", pattern: "**/basilisk.json" },
+  ],
   synchronize: { configurationSection: "basilisk" },
   initializationOptions: readBasiliskSettings(),
 };
@@ -100,16 +104,19 @@ catalog into the narrow sidebar.
 The command is exposed only when the server advertises
 `capabilities.experimental.basilisk.configurationEditor.version == 1`. Opening
 the tab, revealing raw config, and navigating to an occurrence are VS Code UI
-actions. Everything else uses the shared snapshot/preview/apply/occurrence
-methods in
+actions. Configuration changes use the shared
+snapshot/preview/apply/occurrence methods in
 [LSPARCH-CONFIG-EDITOR-PROTOCOL](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR-PROTOCOL).
+The Adoption view's **Apply all safe fixes** action invokes the existing
+`basilisk.fixWorkspace` LSP command with the selected `rootUri`, then reloads
+the authoritative snapshot before any remaining-debt selector is expanded.
 
 ### Thin-shell boundary {#VSIX-CONFIGURATION-EDITOR-THIN-SHELL}
 
-The webview posts user intent only: choose an LSP-advertised preset, select
-tag/rule, stage setting, request preview, apply preview, open docs/location. The
-extension host runtime-decodes the message and forwards configuration intent to
-the LSP. It MUST NOT:
+The webview posts user intent only: choose an LSP-advertised preset, select a
+tag/rule, stage a setting, request/apply a preview, run root-scoped safe fixes,
+or open docs/location. The extension host runtime-decodes the message and
+forwards server-owned intent. It MUST NOT:
 
 - ship a rule or tag list;
 - parse TOML/JSON or calculate effective severity/precedence;
@@ -144,20 +151,42 @@ accents. All controls are semantic, text-labelled, keyboard-operable, high-
 contrast safe, usable at 200% zoom, and reduced-motion aware. Apply/conflict
 status uses an `aria-live` region and refreshes preserve focus.
 
-### Planned files and tests {#VSIX-CONFIGURATION-EDITOR-FILES}
+Rules are virtualized and organized by the server's Sources, PEP categories,
+and Policy tags. Every row exposes Error, Warning, Info, Disabled, Native, and
+Inherited/reset intent. The Path view renders the exact normalized inventory
+from the snapshot. Occurrences load in cursor pages and navigation is restricted
+to the selected workspace root.
+
+The Adoption view renders LSP-owned preset summaries, delegates safe edits to
+the root-scoped command, and delegates the remaining-debt query to the reusable
+`WithoutSafeFix` selector. Its project-wide Disabled action is always previewed
+and states that future diagnostics for those rules will be hidden; path and
+non-disabled alternatives remain available.
+
+### Implementation files and tests {#VSIX-CONFIGURATION-EDITOR-FILES}
 
 Implementation is split into focused files under 500 LOC:
 
 - `configuration-editor.ts` — panel lifecycle and intent routing;
 - `configuration-editor-document.ts` — CSP HTML document;
 - `configuration-editor-model.ts` — generated wire DTOs/projections;
-- `configuration-editor-state.ts` — store actions and immutable state.
+- `configuration-editor-state.ts` — store actions and immutable state;
+- `configuration-editor-intents.ts` — runtime decoder for untrusted messages;
+- `configuration-editor-styles.ts` and `configuration-editor-script-*.ts` —
+  dependency-free visual/runtime fragments.
 
-VSIX tests exercise the real open/render/message path, all four severities plus
-Inherited reset, tag/all bulk preview, multi-root selection, stale/malformed
-config handling, no extension-side filesystem writes, once-bound handlers,
-CSP/injection hardening, keyboard/focus/ARIA behavior, theme classes, zoom, and
-reduced motion. Per repository policy they do not use `getCommands(true)` or
+Focused VSIX tests exercise all four persisted severities plus Native and
+Inherited reset, server-owned preset relay, tag/all/debt selectors, exact
+preview/apply identity, root-scoped safe-fix delegation and refresh, paged
+occurrences, revision conflicts, capability gating, once-bound handlers,
+CSP/data isolation, semantic labels, theme/responsive/reduced-motion styles,
+and stale async result rejection. A headed screenshot scenario opens the real
+webview against the real LSP and waits for a snapshot. Manual screen-reader,
+200% zoom, cross-theme, and injection evidence plus the committed screenshot
+remain release gates; see
+[CONFIGEDITOR-PLAN-VSIX](../plans/LSP-CONFIGURATION-EDITOR-PLAN.md#CONFIGEDITOR-PLAN-VSIX).
+
+Per repository policy tests do not use `getCommands(true)` or
 `whenCommandReady` as command-existence tests.
 
 ---

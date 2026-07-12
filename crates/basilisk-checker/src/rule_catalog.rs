@@ -66,7 +66,10 @@ mod tests {
     fn generated_catalog_has_one_entry_per_registered_rule() {
         let catalog = rule_catalog();
         assert_eq!(catalog.len(), crate::rules::registered_rule_count());
-        let codes = catalog.iter().map(|rule| rule.code).collect::<BTreeSet<_>>();
+        let codes = catalog
+            .iter()
+            .map(|rule| rule.code)
+            .collect::<BTreeSet<_>>();
         assert_eq!(codes.len(), catalog.len(), "catalog codes must be unique");
     }
 }

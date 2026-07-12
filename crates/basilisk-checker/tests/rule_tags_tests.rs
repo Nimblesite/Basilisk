@@ -13,6 +13,7 @@ use basilisk_checker::rule_tags::{
     basilisk_rule_codes, is_pep_category, is_provenance, is_valid_free_form, tags_for_code,
     BASILISK, FREE_FORM_TAGS, PEP, PEP_CATEGORIES,
 };
+use basilisk_checker::{rule_catalog, Severity};
 
 fn rules_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -71,6 +72,82 @@ fn finds_the_whole_rule_set() {
         all_rule_codes().len() >= 150,
         "expected to scan the full rule registry"
     );
+}
+
+#[test]
+fn public_catalog_matches_every_live_rule_code_exactly_once() {
+    let catalog = rule_catalog();
+    let catalog_codes = catalog
+        .iter()
+        .map(|descriptor| descriptor.code.to_owned())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        catalog_codes.len(),
+        catalog.len(),
+        "catalog codes must be unique"
+    );
+    assert_eq!(catalog_codes, all_rule_codes());
+    for descriptor in &catalog {
+        assert!(!descriptor.title.is_empty());
+        assert!(!descriptor.summary.is_empty());
+        assert_eq!(
+            descriptor.docs_url,
+            format!("https://www.basilisk-python.dev/errors/{}", descriptor.code)
+        );
+        assert!(!descriptor.tags.is_empty());
+        assert_eq!(
+            descriptor.default_enabled,
+            !descriptor.tags.contains(&BASILISK)
+        );
+    }
+}
+
+#[test]
+fn suppression_audit_catalog_metadata_is_complete_and_default_off() {
+    let expected = [
+        ("BSK-I0060", Severity::Info),
+        ("BSK-W0061", Severity::Warning),
+        ("BSK-W0062", Severity::Warning),
+        ("BSK-E0063", Severity::Error),
+    ];
+    let catalog = rule_catalog();
+    for (code, severity) in expected {
+        let descriptor = catalog.iter().find(|descriptor| descriptor.code == code);
+        assert!(descriptor.is_some(), "{code} must be catalogued");
+        if let Some(descriptor) = descriptor {
+            assert_eq!(descriptor.default_severity, severity);
+            assert!(!descriptor.default_enabled);
+            assert!(descriptor.tags.contains(&BASILISK));
+            assert!(descriptor.tags.contains(&"suppressions"));
+        }
+    }
+}
+
+#[test]
+fn catalog_serializes_for_configuration_clients_in_camel_case() {
+    let descriptor = rule_catalog()
+        .into_iter()
+        .find(|descriptor| descriptor.code == "BSK-I0060");
+    assert!(descriptor.is_some());
+    if let Some(descriptor) = descriptor {
+        let value = serde_json::to_value(descriptor);
+        assert!(value.is_ok());
+        if let Ok(value) = value {
+            assert_eq!(
+                value
+                    .get("defaultSeverity")
+                    .and_then(serde_json::Value::as_str),
+                Some("Info")
+            );
+            assert_eq!(
+                value
+                    .get("defaultEnabled")
+                    .and_then(serde_json::Value::as_bool),
+                Some(false)
+            );
+            assert!(value.get("docsUrl").is_some());
+        }
+    }
 }
 
 /// [CHKTAG-INVARIANTS] #1 / [CHKTAG-PROVENANCE]: exactly one provenance tag.

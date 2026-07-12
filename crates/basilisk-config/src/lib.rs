@@ -7,15 +7,14 @@
 //! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled = [...]`)
 //! - Stub path directories (`stub-paths = ["stubs/"]`)
 
-pub mod adoption;
 pub mod editor;
 pub mod overrides;
 mod parse;
 
-pub use adoption::AdoptionStore;
 pub use editor::{
-    discover_config_document, ConfigDocument, ConfigDocumentError, ConfigFormat, ConfigPatch,
-    RuleConfigScope, RuleConfigUpdate,
+    active_config_path, adoption_rule_overrides, apply_config_patch, build_rule_patch,
+    discover_config_document, discover_config_document_with_content, ConfigDocument,
+    ConfigDocumentError, ConfigFormat, ConfigPatch, RuleConfigScope, RuleConfigUpdate,
 };
 pub use overrides::{path_matches_pattern, ModuleOverride, PathOverride, RuleSeverity};
 pub use parse::BasiliskConfig;
@@ -64,20 +63,24 @@ pub fn load_basilisk_config(root: &Path) -> BasiliskConfig {
     // 1. basilisk.json
     let basilisk_json = root.join("basilisk.json");
     if basilisk_json.is_file() {
-        if let Some(cfg) = parse::load_from_json(&basilisk_json) {
-            return cfg;
-        }
+        let mut config = parse::load_from_json(&basilisk_json).unwrap_or_default();
+        config.project_root = Some(root.to_path_buf());
+        return config;
     }
 
     // 2. pyproject.toml [tool.basilisk]
     let pyproject = root.join("pyproject.toml");
     if pyproject.is_file() {
-        if let Some(cfg) = parse::load_from_pyproject(&pyproject) {
+        if let Some(mut cfg) = parse::load_from_pyproject(&pyproject) {
+            cfg.project_root = Some(root.to_path_buf());
             return cfg;
         }
     }
 
-    BasiliskConfig::default()
+    BasiliskConfig {
+        project_root: Some(root.to_path_buf()),
+        ..BasiliskConfig::default()
+    }
 }
 
 #[cfg(test)]
@@ -279,83 +282,6 @@ exclude = ["legacy", "third_party"]
     }
 
     #[test]
-    fn json_uv_stub_suggestions_and_dependency_diagnostics() {
-        with_temp_cfg_dir(
-            "bsk_cfg_json_uv_xm",
-            &[(
-                "basilisk.json",
-                r#"{
-                "uv": {
-                    "stubSuggestions": false,
-                    "dependencyDiagnostics": true
-                }
-            }"#,
-            )],
-            |cfg| {
-                assert!(
-                    !cfg.uv_stub_suggestions,
-                    "stubSuggestions should be parsed as false"
-                );
-                assert!(
-                    cfg.uv_dependency_diagnostics,
-                    "dependencyDiagnostics should be parsed as true"
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn json_uv_kebab_case_alternatives() {
-        with_temp_cfg_dir(
-            "bsk_cfg_json_uv_kebab_xm",
-            &[(
-                "basilisk.json",
-                r#"{
-                "uv": {
-                    "stub-suggestions": false,
-                    "dependency-diagnostics": true
-                }
-            }"#,
-            )],
-            |cfg| {
-                assert!(
-                    !cfg.uv_stub_suggestions,
-                    "stub-suggestions kebab key should be accepted"
-                );
-                assert!(
-                    cfg.uv_dependency_diagnostics,
-                    "dependency-diagnostics kebab key should be accepted"
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn toml_uv_stub_suggestions_and_dependency_diagnostics() {
-        with_temp_cfg_dir(
-            "bsk_cfg_toml_uv_xm",
-            &[(
-                "pyproject.toml",
-                r"
-[tool.basilisk.uv]
-stub-suggestions = false
-dependency-diagnostics = true
-",
-            )],
-            |cfg| {
-                assert!(
-                    !cfg.uv_stub_suggestions,
-                    "stub-suggestions should be parsed as false"
-                );
-                assert!(
-                    cfg.uv_dependency_diagnostics,
-                    "dependency-diagnostics should be parsed as true"
-                );
-            },
-        );
-    }
-
-    #[test]
     fn toml_per_path_overrides_with_rules() {
         with_temp_cfg_dir(
             "bsk_cfg_toml_path_rules_xm",
@@ -518,11 +444,10 @@ disabled = ["BSK-E0001"]
     }
 
     #[test]
-    fn fallback_to_pyproject_when_json_is_invalid() {
+    fn malformed_active_json_never_falls_through_to_shadowed_pyproject() {
         with_temp_cfg_dir(
             "bsk_cfg_invalid_json_xm",
             &[
-                // Write invalid JSON so load_from_json returns None.
                 ("basilisk.json", "{ not valid json !!!"),
                 (
                     "pyproject.toml",
@@ -533,32 +458,9 @@ stub-paths = ["fallback-stubs/"]
                 ),
             ],
             |cfg| {
-                assert_eq!(
-                    cfg.stub_paths.len(),
-                    1,
-                    "should fall back to pyproject.toml when JSON is invalid"
-                );
-                assert_eq!(
-                    cfg.stub_paths.first().unwrap().to_str(),
-                    Some("fallback-stubs/")
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn uv_defaults_when_not_configured() {
-        with_temp_cfg_dir(
-            "bsk_cfg_uv_defaults_xm",
-            &[("basilisk.json", r#"{ "stubPaths": [] }"#)],
-            |cfg| {
                 assert!(
-                    !cfg.uv_stub_suggestions,
-                    "uv_stub_suggestions defaults to false so BSK-E0152 stays off by default (default config = the PEP set only)"
-                );
-                assert!(
-                    !cfg.uv_dependency_diagnostics,
-                    "uv_dependency_diagnostics should default to false"
+                    cfg.stub_paths.is_empty(),
+                    "a malformed active basilisk.json must not activate shadowed TOML"
                 );
             },
         );

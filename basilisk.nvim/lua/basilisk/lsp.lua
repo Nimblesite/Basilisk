@@ -47,8 +47,6 @@ local function build_settings(config)
         enabled = config.uv.enabled,
         executablePath = config.uv.executable_path,
         autoSync = config.uv.auto_sync,
-        stubSuggestions = config.uv.stub_suggestions,
-        dependencyDiagnostics = config.uv.dependency_diagnostics,
       },
     },
   }

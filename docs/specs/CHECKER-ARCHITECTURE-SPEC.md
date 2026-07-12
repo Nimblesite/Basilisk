@@ -12,9 +12,14 @@ Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` d
 
 1. **The default configuration is pure PEP conformance.** With no config file, Basilisk enables **every rule that implements the Python typing specification, and nothing else**. This unconfigured default is exactly what the conformance scorer runs — no `basilisk.json`, no "conformance mode" ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
-2. **Everything beyond the spec is opt-in configuration.** House-style rules — require-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), explicit-`Any` nudge (`BSK-W0014`), uv dependency hygiene, stub suggestions — are **off by default**, enabled only in configuration (`strict-annotations = true`, `[tool.basilisk.uv] dependency-diagnostics = true`, …), never implicitly.
+2. **Everything beyond the spec is opt-in configuration.** House-style rules — require-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), explicit-`Any` nudge (`BSK-W0014`), uv dependency hygiene, stub suggestions — are **off by default**. A non-disabled severity for that rule is the only way to enable it; there are no rule-family booleans.
 
 "Strict" is a property of a chosen configuration, never a precondition of the conformance score. No PEP rule may be disabled, deleted, or unregistered to move that number ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
+
+Editors may advertise named **presets** as one-shot configuration recipes. The
+configuration editor's Strict preset expands the live catalog to explicit native
+severities in the active config file; it does not add a runtime mode or persist
+a preset flag ([CONFIGEDITOR-PRESETS](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-PRESETS)).
 
 ---
 
@@ -176,9 +181,11 @@ Block directives work with all severity values: `# type: warning[CODE]` / `# typ
 
 **Per-directory configuration** in `pyproject.toml`:
 ```toml
-[tool.basilisk]
-# No "strict"/"mode" switch; opt into house-style rules by name:
-strict-annotations = true   # enable the require-annotation rules (BSK-E0001/E0002/E0004)
+[tool.basilisk.rules]
+# No "strict"/"mode" switch; opt into house-style rules explicitly:
+"BSK-E0001" = "error"
+"BSK-E0002" = "error"
+"BSK-E0004" = "error"
 
 [tool.basilisk.per-path-overrides."legacy/**"]
 disabled = ["returns_compatibility"]              # disable rules entirely for legacy code
@@ -751,7 +758,7 @@ edited-but-unsaved stub (correct editor behaviour, but no longer byte-identical
 to disk). Both equalities are asserted directly with an empty registry
 (`crates/basilisk-checker/tests/incremental_tests.rs`
 `checked_file_is_equivalent_to_direct_check` +
-`checked_file_honours_strict_annotations`;
+`checked_file_honours_explicit_rule_severity`;
 `incremental_resolved_tests.rs`
 `resolved_query_equivalent_to_direct_import_pipeline` +
 `resolved_query_applies_import_resolution`), so salsa memoization can never

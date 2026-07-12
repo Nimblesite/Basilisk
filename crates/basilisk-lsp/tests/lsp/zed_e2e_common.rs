@@ -115,7 +115,7 @@ impl ZedLspFixture {
         std::fs::create_dir_all(&workspace_root)?;
         std::fs::write(
             workspace_root.join("basilisk.json"),
-            "{\"strictAnnotations\": true}\n",
+            "{\"rules\":{\"BSK-E0001\":\"error\",\"BSK-E0002\":\"error\"}}\n",
         )?;
 
         Ok(Self {

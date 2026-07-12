@@ -41,7 +41,13 @@ pub(crate) fn make_diagnostic(path: &str, span: Span, problem: &str) -> Diagnost
         format!("Malformed suppression directive: {problem}"),
         span,
         path,
-        Some("Use a supported directive with balanced brackets and live Basilisk rule codes".to_owned()),
-        Some("Malformed directives may fail to suppress the diagnostic they were intended to handle".to_owned()),
+        Some(
+            "Use a supported directive with balanced brackets and live Basilisk rule codes"
+                .to_owned(),
+        ),
+        Some(
+            "Malformed directives may fail to suppress the diagnostic they were intended to handle"
+                .to_owned(),
+        ),
     )
 }

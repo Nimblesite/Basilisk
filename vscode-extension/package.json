@@ -122,6 +122,13 @@
         "category": "Basilisk"
       },
       {
+        "command": "basilisk.openConfigurationEditor",
+        "title": "Basilisk: Open Configuration Editor",
+        "category": "Basilisk",
+        "icon": "$(settings-gear)",
+        "enablement": "basilisk.configurationEditorSupported"
+      },
+      {
         "command": "basilisk.organizeImports",
         "title": "Basilisk: Organize Imports",
         "category": "Basilisk",
@@ -373,6 +380,10 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "basilisk.openConfigurationEditor",
+          "when": "basilisk.configurationEditorSupported"
+        },
+        {
           "command": "basilisk.info.runAction",
           "when": "false"
         },
@@ -439,6 +450,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "basilisk.openConfigurationEditor",
+          "when": "view == basilisk.info && basilisk.configurationEditorSupported",
+          "group": "navigation@1"
+        },
         {
           "command": "basilisk.refreshModuleExplorer",
           "when": "view == basilisk.moduleExplorer",
@@ -779,16 +795,6 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically run 'uv sync' when pyproject.toml changes"
-        },
-        "basilisk.uv.stubSuggestions": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show suggestions to install type stubs for untyped packages"
-        },
-        "basilisk.uv.dependencyDiagnostics": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show diagnostics for dependency hygiene (undeclared imports, unused deps)"
         },
         "basilisk.testExplorer.enabled": {
           "type": "boolean",

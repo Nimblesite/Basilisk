@@ -21,7 +21,7 @@ and recording narrow exceptions for the debt you cannot resolve yet.
 
 > **Current tooling:** `basilisk migrate`, `basilisk stats`, and
 > `basilisk check --only` are planned but are not implemented. The steps below
-> use configuration and commands that exist today. The planned visual editor is
+> use configuration and commands that exist today. The visual editor is
 > described at the end of this page.
 
 ## 1. Add canonical project configuration
@@ -47,21 +47,21 @@ expecting TOML edits to take effect.
 
 ## 2. Choose the target policy
 
-The PEP rule set needs no switch. To opt into the current Basilisk rule families:
+The PEP rule set needs no switch. Opt into Basilisk rules with explicit
+severities (or apply a configuration-editor preset, which writes these entries):
 
 ```toml
-[tool.basilisk]
-strict-annotations = true
-
-[tool.basilisk.uv]
-dependency-diagnostics = true
-stub-suggestions = true
+[tool.basilisk.rules]
+"BSK-E0001" = "error"
+"BSK-E0025" = "error"
+"BSK-W0011" = "warning"
+"BSK-E0152" = "error"
 ```
 
 Rules are organised by their live
 [provenance, PEP-category, and descriptive tags](/docs/rules/). Basilisk has no
-basic/standard/strict mode; these settings and per-rule severities form the
-policy.
+basic/standard/strict mode or rule-family switches; the persisted per-rule
+severities are the policy.
 
 ## 3. Run the checker and fix safe debt first
 
@@ -83,9 +83,9 @@ Prefer a visible warning/info over hiding a rule completely:
 "imports_unresolved" = "info"
 ```
 
-Accepted severities are `error`, `warning`, `info`, and `disabled`. In current
-releases, a global severity only re-grades an opt-in rule after its family switch
-has enabled it.
+Accepted severities are `error`, `warning`, `info`, and `disabled`. An explicit
+non-disabled severity also enables an opt-in rule; removing the entry returns it
+to inherited tag/default selection.
 
 For legacy areas, keep the exception local:
 
@@ -127,10 +127,10 @@ You can demote without hiding:
 value = legacy_api()  # type: warning[calls_argument_type]
 ```
 
-The planned `suppressions` rule family will turn active specific, blanket,
-unused, and malformed directives into **opt-in** diagnostics. It will emit
-nothing by default; a project that enables it can dial each audit rule to error,
-warning, info, or disabled and navigate all ignores workspace-wide.
+The `suppressions` tag contains opt-in diagnostics for active specific
+(`BSK-I0060`), active blanket (`BSK-W0061`), unused (`BSK-W0062`), and malformed
+(`BSK-E0063`) directives. They emit nothing by default; configure each rule at
+error, warning, info, or disabled to navigate ignores workspace-wide.
 
 ## From Pyright
 
@@ -170,14 +170,14 @@ for the exact meaning of each source option. Mypy plugins do not load into
 Basilisk; use targeted path/rule exceptions for framework-specific debt rather
 than disabling unrelated checks globally.
 
-## Visual strict-first migration (planned)
+## Visual strict-first migration
 
-The planned VS Code configuration editor will make this workflow one
-transactional surface:
+The VS Code configuration editor provides this workflow as one review surface:
 
 1. browse the canonical rule catalog by tags;
-2. preview “enable all at native severity” or “maximum policy”;
-3. run Safe fixes;
+2. preview the LSP-advertised **Strict preset** (all rules at native severity)
+   or “maximum policy”;
+3. run Safe fixes through the separate root-scoped LSP action;
 4. group remaining debt by tag, rule, file, and fixability;
 5. demote/disable selected rules globally or adopt only affected files;
 6. preview the exact diff and apply it against a revision token;
@@ -187,6 +187,6 @@ Per-file adoption is stored as exact-file rule severities in the same active
 project config. It does not create a second config file or a persistent mode.
 
 It is [specified](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md)
-and [planned](https://github.com/Nimblesite/Basilisk/blob/main/docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md),
-but not yet shipped. The VSIX will be a rendering shell; the reusable LSP will
-own catalog, preview, config writing, analysis, and adoption.
+and tracked in the [implementation plan](https://github.com/Nimblesite/Basilisk/blob/main/docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md).
+The VSIX is a rendering shell; the reusable LSP owns catalog, preview, config
+writing, analysis, safe-fix execution, and adoption.

@@ -34,18 +34,24 @@ The suite is a **no-op unless `BASILISK_SCREENSHOTS=1`** (it `skip()`s in suiteS
 | `vscode-hover.png` | Hover type popup | `/docs/quick-start/` |
 | `vscode-quickfix.png` | Quick Fix / code-action menu | `/docs/refactoring/` |
 | `vscode-module-explorer.png` | Basilisk activity panel | `/docs/` |
+| `vscode-configuration-editor.png` | Tag-first rule severities | `/docs/configuration/` |
 
 Add a capture by adding a `test(...)` that makes the feature visible and calls `takeWindowScreenshot('vscode-<name>.png')`.
 
-### Planned configuration-editor capture {#VSIX-EDITOR-SCREENSHOTS-CONFIGURATION}
+### Configuration-editor capture {#VSIX-EDITOR-SCREENSHOTS-CONFIGURATION}
 
-After [CONFIGEDITOR-ACCEPTANCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-ACCEPTANCE)
-is implemented, add `vscode-configuration-editor.png` showing the real tag rail,
-rule severity controls, and an LSP-generated impact preview. It is deliberately
-absent from the captured-set table until the capability ships; a static mockup
-must never be presented as the product. The capture uses a deterministic fixture
-with at least one inherited/error/warning/info/disabled rule and the opt-in
-`suppressions` tag visible.
+The headed suite now includes **configuration editor tag-first rules**. It
+constructs the real `ConfigurationEditorController`, opens it for the real test
+workspace, waits until the shared store receives a snapshot from the bundled
+LSP, and requests `vscode-configuration-editor.png`. It never substitutes a
+static HTML mock or a copied rule list.
+
+The real-LSP capture is committed at 2880×1800 and has been visually verified:
+the tag facets, rule inventory, per-rule severity controls, active configuration
+source, and synchronization status are all visible. The capture evidence is
+complete: the configuration guide embeds it and the website E2E suite requires
+the image to decode to non-zero pixels. That gate is tracked by
+[CONFIGEDITOR-PLAN-VSIX](../plans/LSP-CONFIGURATION-EDITOR-PLAN.md#CONFIGEDITOR-PLAN-VSIX).
 
 ## Verification {#VSIX-EDITOR-SCREENSHOTS-VERIFY}
 

@@ -19,14 +19,30 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
     function renderTags() {
       const list = byId('tag-list');
       clear(list);
-      snapshot.tags.forEach((tag) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'tag-button';
-        button.dataset.tag = tag.name;
-        button.setAttribute('aria-pressed', String(activeTag === tag.name));
-        button.append(textNode('span', tag.name), textNode('small', formatNumber(tag.ruleCount) + ' · ' + formatNumber(tag.diagnosticCount)));
-        list.append(button);
+      const groups = [
+        { kind: 'Provenance', label: 'Sources' },
+        { kind: 'PepCategory', label: 'PEP categories' },
+        { kind: 'Descriptive', label: 'Policy tags' },
+      ];
+      groups.forEach((group) => {
+        const tags = snapshot.tags
+          .filter((tag) => kind(tag.kind, 'Descriptive') === group.kind)
+          .slice()
+          .sort((left, right) => left.name.localeCompare(right.name));
+        if (tags.length === 0) return;
+        const section = document.createElement('section');
+        section.className = 'tag-group';
+        section.append(textNode('h3', group.label));
+        tags.forEach((tag) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'tag-button';
+          button.dataset.tag = tag.name;
+          button.setAttribute('aria-pressed', String(activeTag === tag.name));
+          button.append(textNode('span', tag.name), textNode('small', formatNumber(tag.ruleCount) + ' · ' + formatNumber(tag.diagnosticCount)));
+          section.append(button);
+        });
+        list.append(section);
       });
     }
     function makeSeveritySelect(rule) {
@@ -39,7 +55,8 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       SEVERITY_OPTIONS.forEach((optionValue) => {
         const option = document.createElement('option');
         option.value = optionValue;
-        option.textContent = optionValue === 'Inherit' ? 'Inherited' : optionValue;
+        option.textContent = optionValue === 'Inherit' ? 'Inherited · reset'
+          : optionValue === 'Native' ? 'Native severity' : optionValue;
         select.append(option);
       });
       select.value = configuredValue(rule);
@@ -51,8 +68,11 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       const descriptor = rule.descriptor;
       const row = document.createElement('article');
       row.className = 'rule-row';
+      row.setAttribute('role', 'listitem');
       row.dataset.ruleCode = descriptor.code;
       row.dataset.selected = String(selectedCodes.has(descriptor.code));
+      row.setAttribute('aria-posinset', String(index + 1));
+      row.setAttribute('aria-setsize', String(filteredRules.length));
       row.style.top = String(index * ROW_HEIGHT) + 'px';
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -128,8 +148,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       actions.append(find, docs);
       const occurrenceList = document.createElement('div');
       occurrenceList.id = 'occurrence-list';
-      if (editorState.occurrencesLoading) occurrenceList.append(textNode('p', 'Loading occurrences…', 'empty-state'));
-      else if (occurrences && occurrences.items.length > 0) {
+      if (occurrences && occurrences.items.length > 0) {
         occurrences.items.filter((item) => item.ruleCode === descriptor.code).forEach((item) => {
           const button = textNode('button', compactUri(item.uri) + ':' + String(item.range.start.line + 1), 'occurrence');
           button.type = 'button';
@@ -139,7 +158,17 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
           button.append(textNode('small', kind(item.effectiveSeverity, 'Error') + (item.fixSafety ? ' · ' + kind(item.fixSafety, '') + ' fix' : ' · no fix')));
           occurrenceList.append(button);
         });
-      } else occurrenceList.append(textNode('p', 'No loaded occurrences.', 'empty-state'));
+      }
+      if (editorState.occurrencesLoading) {
+        occurrenceList.append(textNode('p', 'Loading occurrences…', 'empty-state'));
+      } else if (occurrences && occurrences.nextCursor) {
+        const more = textNode('button', 'Load more occurrences', 'secondary');
+        more.type = 'button';
+        more.dataset.action = 'load-more-occurrences';
+        occurrenceList.append(more);
+      } else if (!occurrences || occurrences.items.length === 0) {
+        occurrenceList.append(textNode('p', 'No loaded occurrences.', 'empty-state'));
+      }
       content.append(heading, summary, dl, actions, occurrenceList);
     }
     function renderProblems() {
@@ -179,18 +208,60 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       byId('debt-adoptions').textContent = formatNumber(snapshot.debt.adoptionExceptions);
       byId('debt-suppressions').textContent = formatNumber(snapshot.debt.suppressionDiagnostics);
     }
+    function renderSafeFixAction() {
+      const button = byId('fix-safe-button');
+      const count = snapshot.rules.reduce((total, rule) => total + rule.safeFixCount, 0);
+      button.textContent = count === 1 ? 'Apply 1 safe fix' : 'Apply ' + formatNumber(count) + ' safe fixes';
+      const busy = ['previewing', 'applying'].includes(editorState.phase);
+      button.disabled = count === 0 || snapshot.source.readOnly === true
+        || snapshot.problems.length > 0 || busy;
+      button.title = count === 0 ? 'No safe fixes are currently available.'
+        : snapshot.source.readOnly ? 'The active configuration source is read-only.'
+          : busy ? 'Wait for the current operation to finish.' : '';
+    }
     function renderPresets() {
       const targets = [byId('preset-list'), byId('adoption-presets')];
       targets.forEach((target) => {
         clear(target);
-        snapshot.presets.forEach((preset, index) => {
-          const button = textNode('button', preset.name, index === 0 ? 'primary' : 'secondary');
+        snapshot.presets.forEach((preset) => {
+          const button = document.createElement('button');
           button.type = 'button';
+          button.className = 'preset-card';
           button.dataset.presetId = preset.id;
-          button.title = preset.summary;
+          button.append(
+            textNode('strong', preset.name),
+            textNode('span', preset.summary),
+            textNode('small', 'Preview explicit config changes'),
+          );
           target.append(button);
         });
         if (snapshot.presets.length === 0) target.append(textNode('p', 'No policy presets advertised by this server.', 'empty-state'));
+      });
+    }
+    function renderPathOverrides() {
+      const list = byId('path-override-list');
+      clear(list);
+      if (snapshot.pathOverrides.length === 0) {
+        list.append(textNode('p', 'No path overrides. Project policy applies everywhere.', 'empty-state'));
+        return;
+      }
+      snapshot.pathOverrides.forEach((entry) => {
+        const card = document.createElement('article');
+        card.className = 'path-override-card';
+        const heading = textNode('h3', entry.pattern);
+        const badge = textNode('span', entry.adoption ? 'Adoption debt' : 'Path policy', 'chip');
+        const rules = document.createElement('ul');
+        entry.rules.forEach((rule) => {
+          const item = document.createElement('li');
+          item.append(textNode('code', rule.ruleCode), textNode('span', kind(rule.severity, 'Error')));
+          rules.append(item);
+        });
+        const remove = textNode('button', 'Preview removing override…', 'secondary');
+        remove.type = 'button';
+        remove.dataset.removePath = entry.pattern;
+        remove.disabled = snapshot.source.readOnly === true || snapshot.problems.length > 0;
+        card.append(heading, badge, rules, remove);
+        list.append(card);
       });
     }
     function renderSnapshot() {
@@ -199,10 +270,12 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       byId('root-label').textContent = compactUri(snapshot.rootUri);
       renderSeverityStrip();
       renderDebt();
+      renderSafeFixAction();
       renderPresets();
       renderSource();
       renderProblems();
       renderTags();
+      renderPathOverrides();
       applyFilter();
       renderBulkTray();
       renderRuleDetail();
@@ -216,29 +289,76 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
     function renderPreview() {
       if (!preview) return;
       const impact = preview.impact;
+      const diagnosticDelta = impact.diagnosticsBefore - impact.diagnosticsAfter;
       const grid = byId('impact-grid');
       clear(grid);
       grid.append(
         impactCell(impact.changedRules, 'rules changed'),
         impactCell(impact.errorsAfter, 'errors after'),
         impactCell(impact.warningsAfter, 'warnings after'),
-        impactCell(impact.diagnosticsBefore - impact.diagnosticsAfter, 'diagnostics removed'),
-        impactCell(impact.filesChangedBySafeFixes, 'files safely fixed'),
+        impactCell(Math.abs(diagnosticDelta), diagnosticDelta >= 0 ? 'diagnostics removed' : 'diagnostics added'),
+        impactCell(impact.enabledRules, 'rules enabled'),
         impactCell(impact.disabledRules, 'rules disabled'),
       );
-      byId('expanded-rules').textContent = 'Exact selector expansion · ' + preview.expandedRuleCodes.join(', ');
+      byId('expanded-rules').textContent = 'Selector expanded to ' + formatNumber(preview.expandedRuleCodes.length)
+        + ' rules; ' + formatNumber(preview.changes.length) + ' persisted entries will change.';
+      const changes = byId('preview-changes');
+      clear(changes);
+      preview.changes.forEach((change) => {
+        const row = document.createElement('div');
+        row.className = 'preview-change';
+        const scope = kind(change.scope, 'Project') === 'Path'
+          ? 'Path · ' + change.scope.pattern
+          : 'Project';
+        const previous = kind(change.previousSetting, 'Inherit') === 'Inherit'
+          ? 'Inherited'
+          : kind(change.previousSetting, 'Error');
+        const result = kind(change.resultingSetting, 'Inherit') === 'Inherit'
+          ? 'Inherited (reset)'
+          : kind(change.resultingSetting, 'Error');
+        row.append(
+          textNode('code', change.ruleCode),
+          textNode('span', scope),
+          textNode('strong', previous + ' → ' + result),
+        );
+        changes.append(row);
+      });
+      if (preview.changes.length === 0) {
+        changes.append(textNode('p', 'No persisted entries would change.', 'empty-state'));
+      }
       const problems = byId('preview-problems');
       clear(problems);
       preview.problems.forEach((problem) => problems.append(textNode('p', problem.code + ' · ' + problem.message)));
+      const applyButton = document.querySelector('[data-action="apply-preview"]');
+      const blocked = preview.problems.length > 0 || snapshot.source.readOnly === true;
+      applyButton.disabled = blocked;
+      applyButton.title = snapshot.source.readOnly
+        ? 'The active configuration source is read-only.'
+        : preview.problems.length > 0 ? 'Resolve preview problems before applying.' : '';
       const dialog = byId('preview-dialog');
       if (!dialog.open) dialog.showModal();
       announce('Preview ready for ' + formatNumber(preview.expandedRuleCodes.length) + ' rules');
     }
     function renderOverlay() {
       const overlay = byId('state-overlay');
-      const blocking = !snapshot || ['applying', 'error', 'conflict', 'unsupported'].includes(editorState.phase);
+      const blocking = !snapshot || ['loading', 'applying', 'error', 'conflict', 'unsupported'].includes(editorState.phase);
       overlay.hidden = !blocking;
-      if (!blocking) return;
+      byId('shell').inert = blocking;
+      document.querySelector('body > header').inert = blocking;
+      byId('bulk-tray').inert = blocking;
+      document.querySelector('main').setAttribute('aria-busy', String(blocking));
+      if (!blocking) {
+        if (overlayWasBlocking) {
+          const recovery = activeSection === 'rules'
+            ? byId('rule-search')
+            : document.querySelector('[data-section="' + activeSection + '"] h2');
+          if (recovery) window.requestAnimationFrame(() => recovery.focus());
+        }
+        overlayWasBlocking = false;
+        return;
+      }
+      const previewDialog = byId('preview-dialog');
+      if (previewDialog.open) previewDialog.close();
       const titles = {
         loading: 'Reading project policy', applying: 'Applying configuration', error: 'Configuration unavailable',
         conflict: 'The project changed', unsupported: 'Update Basilisk to continue', idle: 'Connecting to Basilisk',
@@ -247,6 +367,9 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       byId('state-message').textContent = editorState.message || 'Waiting for the language server.';
       byId('state-symbol').textContent = editorState.phase === 'conflict' ? '↻' : editorState.phase === 'error' ? '!' : 'B';
       byId('state-action').hidden = !['error', 'conflict'].includes(editorState.phase);
+      byId('state-open-raw').hidden = !editorState.repairUri;
+      if (!overlayWasBlocking) window.requestAnimationFrame(() => overlay.focus());
+      overlayWasBlocking = true;
     }
     function renderState(nextState) {
       editorState = nextState || { phase: 'error', message: 'Invalid editor state' };
@@ -259,10 +382,8 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       if (snapshot) renderSnapshot();
       renderOverlay();
       if (preview && editorState.phase === 'preview') renderPreview();
-      if (editorState.phase === 'ready') {
-        const dialog = byId('preview-dialog');
-        if (dialog.open) dialog.close();
-      }
+      const dialog = byId('preview-dialog');
+      if (editorState.phase !== 'preview' && dialog.open) dialog.close();
       announce(editorState.message || editorState.phase);
     }
 `;

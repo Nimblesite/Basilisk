@@ -218,6 +218,13 @@ fn build_capabilities(formatting_enabled: bool) -> ServerCapabilities {
                 ..Default::default()
             }),
         }),
+        experimental: Some(serde_json::json!({
+            "basilisk": {
+                "configurationEditor": {
+                    "version": basilisk_common::configuration_editor::VERSION
+                }
+            }
+        })),
         ..Default::default()
     }
 }
@@ -507,7 +514,7 @@ pub(super) async fn did_change_workspace_folders(
 }
 
 // Implements [LSPUV-WATCHERS] (uv.lock, .python-version, pyproject.toml,
-// basilisk.json; the spec's `.venv/pyvenv.cfg` row is not watched).
+// basilisk.json; `.venv/pyvenv.cfg` is startup-only detection).
 /// Register file watchers for uv-related configuration files.
 ///
 /// Watches `**/uv.lock`, `**/.python-version`, and `**/pyproject.toml` so
@@ -747,7 +754,9 @@ async fn clear_non_open_diagnostics(server: &LspServer) {
 /// Returns `None` if this is not a uv project, if there is no lock file, or
 /// if the lock file fails to parse. Errors are logged but never fatal — the
 /// LSP falls back to registry-free resolution.
-fn build_uv_registry(roots: &[std::path::PathBuf]) -> Option<Arc<basilisk_uv::PackageRegistry>> {
+pub(crate) fn build_uv_registry(
+    roots: &[std::path::PathBuf],
+) -> Option<Arc<basilisk_uv::PackageRegistry>> {
     let uv_info = basilisk_uv::detect_uv_project(roots)?;
 
     if !uv_info.has_lockfile {

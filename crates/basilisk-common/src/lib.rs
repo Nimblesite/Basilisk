@@ -250,11 +250,6 @@ pub mod config_keys {
     pub const UV_EXECUTABLE_PATH: &str = "executablePath";
     /// Auto-sync when pyproject.toml changes.
     pub const UV_AUTO_SYNC: &str = "autoSync";
-    /// Show type stub installation suggestions.
-    pub const UV_STUB_SUGGESTIONS: &str = "stubSuggestions";
-    /// Show dependency hygiene diagnostics.
-    pub const UV_DEPENDENCY_DIAGNOSTICS: &str = "dependencyDiagnostics";
-
     /// Test explorer configuration section.
     pub const TEST_EXPLORER: &str = "testExplorer";
     /// Enable/disable test discovery and execution.

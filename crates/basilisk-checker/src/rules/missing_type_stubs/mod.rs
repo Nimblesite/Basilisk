@@ -5,7 +5,7 @@
 //! `.pyi`) without a `py.typed` marker. This means the package is installed
 //! but lacks type information, reducing type safety. This rule is off by
 //! default — the default configuration is pure PEP conformance — and a project
-//! opts in via configuration (`uv.stubSuggestions`). Once enabled, an untyped
+//! opts in with an explicit `BSK-E0152` severity. Once enabled, an untyped
 //! third-party import is a hard error; a project can soften it per import
 //! (`# type: warning[BSK-E0152]`) or globally (`"BSK-E0152" = "warning"`) to
 //! use non-type-safe libraries at its own risk.

@@ -79,6 +79,7 @@ export interface SingletonWebviewPanelOptions {
   readonly retainContextWhenHidden?: boolean;
   readonly enableFindWidget?: boolean;
   readonly onDidReveal?: () => void;
+  readonly onDidDispose?: () => void;
 }
 
 /**
@@ -105,6 +106,7 @@ export function handleSourceNavigation(msg: WebviewMessage): boolean {
  */
 export class SingletonWebviewPanel {
   private panel: vscode.WebviewPanel | undefined;
+  private visible = false;
 
   constructor(
     private readonly viewType: string,
@@ -131,11 +133,16 @@ export class SingletonWebviewPanel {
       );
       this.panel.onDidDispose(() => {
         this.panel = undefined;
+        this.visible = false;
+        this.options.onDidDispose?.();
       });
+      this.visible = this.panel.visible;
       // Bound once per panel instance — the whole reason this class exists.
       this.panel.webview.onDidReceiveMessage(this.onMessage);
       this.panel.onDidChangeViewState((event) => {
-        if (event.webviewPanel.visible) {
+        const becameVisible = event.webviewPanel.visible && !this.visible;
+        this.visible = event.webviewPanel.visible;
+        if (becameVisible) {
           this.options.onDidReveal?.();
         }
       });
@@ -144,8 +151,8 @@ export class SingletonWebviewPanel {
   }
 
   /** Post data to the open panel; false when no panel exists. */
-  public async postMessage(message: unknown): Promise<boolean> {
-    return this.panel?.webview.postMessage(message) ?? false;
+  public postMessage(message: unknown): Thenable<boolean> {
+    return this.panel?.webview.postMessage(message) ?? Promise.resolve(false);
   }
 
   /** Whether the panel is currently open (e2e seam). */
@@ -153,9 +160,15 @@ export class SingletonWebviewPanel {
     return this.panel !== undefined;
   }
 
+  /** Whether the live panel is already frontmost in an editor group. */
+  public isVisible(): boolean {
+    return this.visible;
+  }
+
   /** Close and forget the panel (extension teardown). */
   public dispose(): void {
     this.panel?.dispose();
     this.panel = undefined;
+    this.visible = false;
   }
 }

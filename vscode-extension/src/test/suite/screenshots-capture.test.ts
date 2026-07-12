@@ -1,5 +1,6 @@
 // Implements [VSIX-EDITOR-SCREENSHOTS-SET]: the captured set — one test per
-// committed vscode-*.png (diagnostics, hover, quick fix, module explorer). Each
+// committed vscode-*.png (diagnostics, hover, quick fix, module explorer,
+// configuration editor). Each
 // drives a Basilisk feature until it is visible, then asks the CDP sidecar
 // (scripts/screenshot-watcher.mjs, [VSIX-EDITOR-SCREENSHOTS-PIPELINE]) to grab
 // the window.
@@ -24,6 +25,8 @@ import {
     waitForLspReady,
 } from './test-helpers';
 import { takeWindowScreenshot } from './screenshot';
+import { ConfigurationEditorController } from '../../configuration-editor';
+import { getStore } from '../../extension';
 
 async function sleep(ms: number): Promise<void> {
     await new Promise<void>((resolve) => {
@@ -138,5 +141,32 @@ suite('Editor screenshots', function () {
         await sleep(1800);
         await prepareWindow();
         await takeWindowScreenshot('vscode-module-explorer.png');
+    });
+
+    test('configuration editor tag-first rules', async function () {
+        this.timeout(60_000);
+        await closeAllEditors();
+        await vscode.commands.executeCommand('workbench.action.closeSidebar');
+        const root = vscode.workspace.workspaceFolders?.[0];
+        const store = getStore();
+        if (root === undefined || store === undefined) {
+            throw new Error('real workspace and extension store are required for configuration capture');
+        }
+        const controller = new ConfigurationEditorController(store);
+        try {
+            controller.open(root.uri.toString());
+            const deadline = Date.now() + 10_000;
+            while (store.configurationEditor.value.phase !== 'ready' && Date.now() < deadline) {
+                await sleep(50);
+            }
+            if (store.configurationEditor.value.phase !== 'ready') {
+                throw new Error('configuration editor did not receive a snapshot from the real LSP');
+            }
+            await prepareWindow();
+            await sleep(1_200);
+            await takeWindowScreenshot('vscode-configuration-editor.png');
+        } finally {
+            controller.dispose();
+        }
     });
 });

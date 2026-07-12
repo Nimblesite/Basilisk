@@ -33,8 +33,8 @@ export type ConfigurationFormat =
 
 export type RuleSelector =
   | { kind: "All" }
-  | { kind: "Codes"; codes: Array<string> }
-  | { kind: "Tags"; tags: Array<string>; matchAll: boolean }
+  | { kind: "Codes"; codes: string[] }
+  | { kind: "Tags"; tags: string[]; matchAll: boolean }
   | { kind: "CurrentViolations" }
   | { kind: "SafeFixable" }
   | { kind: "WithoutSafeFix" };
@@ -48,7 +48,7 @@ export interface RuleDescriptor {
   title: string;
   summary: string;
   docsUrl: Uri;
-  tags: Array<string>;
+  tags: string[];
   defaultSeverity: RuleSeverity;
   defaultEnabled: boolean;
 }
@@ -77,7 +77,7 @@ export interface ConfigurationSource {
   format: ConfigurationFormat;
   exists: boolean;
   readOnly: boolean;
-  shadowedSources: Array<Uri>;
+  shadowedSources: Uri[];
 }
 
 export interface ConfigurationProblem {
@@ -100,19 +100,30 @@ export interface ConfigurationPreset {
   id: string;
   name: string;
   summary: string;
-  mutations: Array<ConfigurationMutation>;
-  runSafeFixes: boolean;
+  mutations: ConfigurationMutation[];
+}
+
+export interface PathRuleSetting {
+  ruleCode: string;
+  severity: RuleSeverity;
+}
+
+export interface PathOverrideState {
+  pattern: string;
+  adoption: boolean;
+  rules: PathRuleSetting[];
 }
 
 export interface ConfigurationSnapshot {
   rootUri: Uri;
   revision: Revision;
   source: ConfigurationSource;
-  rules: Array<RuleState>;
-  tags: Array<TagState>;
-  presets: Array<ConfigurationPreset>;
+  rules: RuleState[];
+  tags: TagState[];
+  presets: ConfigurationPreset[];
+  pathOverrides: PathOverrideState[];
   debt: DebtSummary;
-  problems: Array<ConfigurationProblem>;
+  problems: ConfigurationProblem[];
 }
 
 export interface ConfigurationMutation {
@@ -124,8 +135,7 @@ export interface ConfigurationMutation {
 export interface PreviewConfigurationRequest {
   rootUri: Uri;
   baseRevision: Revision;
-  mutations: Array<ConfigurationMutation>;
-  runSafeFixes: boolean;
+  mutations: ConfigurationMutation[];
 }
 
 export interface ConfigurationImpact {
@@ -138,15 +148,22 @@ export interface ConfigurationImpact {
   errorsAfter: number;
   warningsBefore: number;
   warningsAfter: number;
-  filesChangedBySafeFixes: number;
+}
+
+export interface ResolvedConfigurationChange {
+  ruleCode: string;
+  scope: MutationScope;
+  previousSetting: RuleSetting;
+  resultingSetting: RuleSetting;
 }
 
 export interface ConfigurationPreview {
   previewId: PreviewId;
   baseRevision: Revision;
-  expandedRuleCodes: Array<string>;
+  expandedRuleCodes: string[];
+  changes: ResolvedConfigurationChange[];
   impact: ConfigurationImpact;
-  problems: Array<ConfigurationProblem>;
+  problems: ConfigurationProblem[];
 }
 
 export type FixSafety =
@@ -180,7 +197,7 @@ export interface RuleOccurrencesRequest {
 }
 
 export interface RuleOccurrencesResponse {
-  items: Array<RuleOccurrence>;
+  items: RuleOccurrence[];
   nextCursor: string | undefined;
 }
 

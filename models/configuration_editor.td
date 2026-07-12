@@ -1,7 +1,7 @@
 # typeDiagram model - https://typediagram.dev
 # Source-of-truth wire model for the configuration editor
 # ([CONFIGEDITOR-MODEL] / [LSPARCH-CONFIG-EDITOR-PROTOCOL]).
-# Generate language DTOs during implementation:
+# Regenerate the committed language DTO shapes:
 #   typediagram --to rust models/configuration_editor.td
 #   typediagram --to typescript models/configuration_editor.td
 # Render the documentation diagram:
@@ -108,15 +108,27 @@ type DebtSummary {
   disabledRules: Int
 }
 
-# Presets are LSP-owned, one-shot mutation recipes. They are never persisted as
-# an ambient policy mode: applying one expands its mutations to explicit rule
-# severities in the active configuration file.
+# Presets are LSP-owned, one-shot mutation recipes. There is no policy mode:
+# applying a preset expands its mutations to explicit rule severities in the
+# active configuration file, and only those ordinary entries are persisted.
 type ConfigurationPreset {
   id: String
   name: String
   summary: String
   mutations: List<ConfigurationMutation>
-  runSafeFixes: Bool
+}
+
+# Exact persisted entries for one existing path scope. Disabled-list aliases are
+# normalized to Disabled so clients never need to understand config syntax.
+type PathRuleSetting {
+  ruleCode: String
+  severity: RuleSeverity
+}
+
+type PathOverrideState {
+  pattern: String
+  adoption: Bool
+  rules: List<PathRuleSetting>
 }
 
 type ConfigurationSnapshot {
@@ -126,6 +138,7 @@ type ConfigurationSnapshot {
   rules: List<RuleState>
   tags: List<TagState>
   presets: List<ConfigurationPreset>
+  pathOverrides: List<PathOverrideState>
   debt: DebtSummary
   problems: List<ConfigurationProblem>
 }
@@ -140,7 +153,6 @@ type PreviewConfigurationRequest {
   rootUri: Uri
   baseRevision: Revision
   mutations: List<ConfigurationMutation>
-  runSafeFixes: Bool
 }
 
 type ConfigurationImpact {
@@ -153,13 +165,22 @@ type ConfigurationImpact {
   errorsAfter: Int
   warningsBefore: Int
   warningsAfter: Int
-  filesChangedBySafeFixes: Int
+}
+
+# Fully expanded, normalized result of one real config entry change. Native is
+# resolved to the rule's concrete severity; Inherit means the entry is removed.
+type ResolvedConfigurationChange {
+  ruleCode: String
+  scope: MutationScope
+  previousSetting: RuleSetting
+  resultingSetting: RuleSetting
 }
 
 type ConfigurationPreview {
   previewId: PreviewId
   baseRevision: Revision
   expandedRuleCodes: List<String>
+  changes: List<ResolvedConfigurationChange>
   impact: ConfigurationImpact
   problems: List<ConfigurationProblem>
 }

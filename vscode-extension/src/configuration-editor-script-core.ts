@@ -8,7 +8,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     const ROW_HEIGHT = 112;
     const OVERSCAN = 5;
     const OCCURRENCE_LIMIT = 100;
-    const SEVERITY_OPTIONS = ['Inherit', 'Error', 'Warning', 'Info', 'Disabled'];
+    const SEVERITY_OPTIONS = ['Inherit', 'Native', 'Error', 'Warning', 'Info', 'Disabled'];
     const SECTION_NAMES = ['overview', 'rules', 'adoption', 'paths', 'project'];
     let editorState = { phase: 'idle', message: '' };
     let snapshot;
@@ -17,8 +17,9 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     let filteredRules = [];
     let activeTag;
     let selectedRuleCode;
-    let activeSection = 'overview';
+    let activeSection = 'rules';
     let lastFocusedRule;
+    let overlayWasBlocking = false;
     const selectedCodes = new Set();
 
     function byId(id) { return document.getElementById(id); }
@@ -60,6 +61,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
       if (lower === 'status:changed') return rule.inherited !== true;
       if (lower === 'has:diagnostics') return rule.diagnosticCount > 0;
       if (lower === 'fix:none') return rule.safeFixCount === 0 && rule.unsafeFixCount === 0;
+      if (lower === 'fix:without-safe') return rule.diagnosticCount > 0 && rule.safeFixCount === 0;
       if (lower === 'fix:safe') return rule.safeFixCount > 0;
       if (lower === 'fix:unsafe') return rule.unsafeFixCount > 0;
       return ruleSearchText(rule).includes(lower);
@@ -87,17 +89,16 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
       byId('announcer').textContent = '';
       window.setTimeout(() => { byId('announcer').textContent = message; }, 20);
     }
-    function postPreview(selector, settingValue, scope, runSafeFixes) {
+    function postPreview(selector, settingValue, scope) {
       vscode.postMessage({
         type: 'preview',
         mutations: [{ selector, setting: setting(settingValue), scope }],
-        runSafeFixes,
       });
     }
     function postPreset(presetId) {
       const preset = snapshot && snapshot.presets.find((candidate) => candidate.id === presetId);
       if (!preset) { announce('That preset is no longer available. Refresh configuration.'); return; }
-      vscode.postMessage({ type: 'preview', mutations: preset.mutations, runSafeFixes: preset.runSafeFixes });
+      vscode.postMessage({ type: 'preview', mutations: preset.mutations });
     }
     function showSection(name) {
       if (!SECTION_NAMES.includes(name)) return;

@@ -139,12 +139,38 @@ pub struct DebtSummary {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ConfigurationPreset {
+    pub id: String,
+    pub name: String,
+    pub summary: String,
+    pub mutations: Vec<ConfigurationMutation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PathRuleSetting {
+    pub rule_code: String,
+    pub severity: RuleSeverity,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PathOverrideState {
+    pub pattern: String,
+    pub adoption: bool,
+    pub rules: Vec<PathRuleSetting>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConfigurationSnapshot {
     pub root_uri: Uri,
     pub revision: Revision,
     pub source: ConfigurationSource,
     pub rules: Vec<RuleState>,
     pub tags: Vec<TagState>,
+    pub presets: Vec<ConfigurationPreset>,
+    pub path_overrides: Vec<PathOverrideState>,
     pub debt: DebtSummary,
     pub problems: Vec<ConfigurationProblem>,
 }
@@ -163,7 +189,6 @@ pub struct PreviewConfigurationRequest {
     pub root_uri: Uri,
     pub base_revision: Revision,
     pub mutations: Vec<ConfigurationMutation>,
-    pub run_safe_fixes: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -178,7 +203,15 @@ pub struct ConfigurationImpact {
     pub errors_after: i64,
     pub warnings_before: i64,
     pub warnings_after: i64,
-    pub files_changed_by_safe_fixes: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedConfigurationChange {
+    pub rule_code: String,
+    pub scope: MutationScope,
+    pub previous_setting: RuleSetting,
+    pub resulting_setting: RuleSetting,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -187,6 +220,7 @@ pub struct ConfigurationPreview {
     pub preview_id: PreviewId,
     pub base_revision: Revision,
     pub expanded_rule_codes: Vec<String>,
+    pub changes: Vec<ResolvedConfigurationChange>,
     pub impact: ConfigurationImpact,
     pub problems: Vec<ConfigurationProblem>,
 }

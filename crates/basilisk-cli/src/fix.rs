@@ -213,8 +213,11 @@ mod tests {
     fn write_temp(name: &str, source: &str) -> (std::path::PathBuf, String) {
         let dir = std::env::temp_dir().join(format!("{name}.proj"));
         std::fs::create_dir_all(&dir).expect("create temp project dir");
-        std::fs::write(dir.join("basilisk.json"), "{\"strictAnnotations\": true}\n")
-            .expect("write basilisk.json");
+        std::fs::write(
+            dir.join("basilisk.json"),
+            "{\"rules\":{\"BSK-E0001\":\"error\",\"BSK-E0002\":\"error\",\"BSK-E0005\":\"error\",\"BSK-W0050\":\"warning\"}}\n",
+        )
+        .expect("write basilisk.json");
         let py = dir.join(name);
         std::fs::write(&py, source).expect("write temp file");
         let path = py.to_string_lossy().into_owned();
@@ -446,8 +449,11 @@ mod tests {
     fn run_fix_directory_traversal() {
         let dir = std::env::temp_dir().join("basilisk_test_fix_dir_traversal");
         let _ = std::fs::create_dir_all(&dir);
-        std::fs::write(dir.join("basilisk.json"), "{\"strictAnnotations\": true}\n")
-            .expect("write basilisk.json");
+        std::fs::write(
+            dir.join("basilisk.json"),
+            "{\"rules\":{\"BSK-W0050\":\"warning\"}}\n",
+        )
+        .expect("write basilisk.json");
         let file_a = dir.join("a_fix.py");
         let file_b = dir.join("b_fix.py");
         std::fs::write(&file_a, "x: int = 42\n").expect("write a");

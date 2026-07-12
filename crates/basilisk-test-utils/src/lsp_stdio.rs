@@ -124,7 +124,15 @@ impl LspStdioFixture {
         std::fs::create_dir_all(&workspace_root)?;
         std::fs::write(
             workspace_root.join("basilisk.json"),
-            "{\"strictAnnotations\": true}\n",
+            concat!(
+                "{\"rules\":{",
+                "\"BSK-E0001\":\"error\",",
+                "\"BSK-E0002\":\"error\",",
+                "\"BSK-E0003\":\"error\",",
+                "\"BSK-E0005\":\"error\",",
+                "\"BSK-W0050\":\"warning\"",
+                "}}\n"
+            ),
         )?;
 
         Ok(Self {

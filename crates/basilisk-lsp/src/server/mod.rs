@@ -10,6 +10,8 @@ use tokio::task::AbortHandle;
 
 pub(super) mod activity_panel;
 pub(super) mod adoption;
+mod command_configuration;
+mod command_fixes;
 pub(super) mod commands;
 pub(super) mod document;
 pub(super) mod handlers;
@@ -17,7 +19,6 @@ pub(super) mod init;
 pub(super) mod memory_handlers;
 pub(super) mod profiler_handlers;
 pub(super) mod refactor_commands;
-pub(super) mod rule_override;
 pub(super) mod stub_handlers;
 pub(super) mod test_handlers;
 pub(super) mod uv_handlers;
@@ -159,6 +160,8 @@ pub struct LspServer {
     // spawned scan task can flip it after the handler returns.
     /// Whether the initial workspace scan has completed.
     pub(super) initial_scan_complete: Arc<std::sync::atomic::AtomicBool>,
+    /// Revision-checked configuration previews awaiting an explicit apply.
+    pub(crate) configuration_editor: crate::configuration_editor::ConfigurationEditorState,
 }
 
 impl std::fmt::Debug for LspServer {
@@ -190,6 +193,7 @@ impl LspServer {
             // No scan has run yet: zero-file rollups are NOT trustworthy until
             // the first scan completes. [EXTACT-MODULES-HEADER-LOADING], #144.
             initial_scan_complete: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            configuration_editor: crate::configuration_editor::ConfigurationEditorState::default(),
         }
     }
 
@@ -558,7 +562,24 @@ pub fn run_server() -> std::io::Result<()> {
     crate::runtime::block_on_with_analysis_stack("basilisk-lsp-stdio", || async {
         let stdin = tokio::io::stdin();
         let stdout = tokio::io::stdout();
-        let (service, socket) = LspService::new(LspServer::new);
+        let (service, socket) = LspService::build(LspServer::new)
+            .custom_method(
+                basilisk_common::configuration_editor::SNAPSHOT,
+                LspServer::configuration_snapshot,
+            )
+            .custom_method(
+                basilisk_common::configuration_editor::PREVIEW,
+                LspServer::preview_configuration_change,
+            )
+            .custom_method(
+                basilisk_common::configuration_editor::APPLY,
+                LspServer::apply_configuration_change,
+            )
+            .custom_method(
+                basilisk_common::configuration_editor::OCCURRENCES,
+                LspServer::rule_occurrences,
+            )
+            .finish();
         Server::new(stdin, stdout, socket).serve(service).await;
         Ok(())
     })

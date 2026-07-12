@@ -19,8 +19,7 @@ sources are not merged. LSP/editor settings such as analysis mode live in
 - **Import-resolution overrides** — `stub-paths` prepends user stub directories (resolution step 1); `typeshed-path` replaces the vendored standard-library typeshed wholesale as the canonical step-3 source ([STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
 - **Adoption target** — exact-file `per-path-overrides` entries in the active
   config carry generated demotions. All rule configuration stays in that one
-  file; the existing sidecar implementation is scheduled for removal in
-  configuration-editor Phase 4.
+  file; there is no separate adoption sidecar.
 
 The crate does **not** currently migrate mypy/Pyright configuration or own LSP
 analysis modes. Those are separate planned/consumer concerns.
@@ -36,6 +35,7 @@ analysis modes. Those are separate planned/consumer concerns.
 ## Status
 
 Parsing is consumed by `basilisk-checker`, `basilisk-cli`, and `basilisk-lsp`.
-Validated lossless mutation, source provenance, revision safety, and the editor
-API are planned in
+Validated mutation, active-source discovery, content revisions, and the editor
+API are implemented. Remaining provenance, document-version safety, and domain
+consolidation work is tracked in
 [`LSP-CONFIGURATION-EDITOR-PLAN.md`](../../docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md).

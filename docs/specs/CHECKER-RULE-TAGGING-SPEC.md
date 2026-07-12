@@ -49,18 +49,17 @@ default) makes it `pep`. `rule_tags` reads these from the live rule registry —
 selects exactly the core PEP set. Selection and classification read the **same**
 self-declared source, so they cannot drift:
 
-- `check_with_config` gates a rule off when its `opt_in_spec()` tags are not
-  enabled in config (the `opt_in_tag_enabled` bridge maps config opt-in switches
-  to tags). A rule with no `opt_in_spec()` is `pep` and always runs.
+- `check_with_config` gates a rule off when it has an `opt_in_spec()` and no
+  explicit non-disabled severity. A rule with no `opt_in_spec()` is `pep` and
+  runs unless explicitly disabled.
 - A default-on check is `pep` **even if Basilisk-authored** (e.g.
   `imports_unresolved`, `version_target_syntax` declare no `opt_in_spec()`, so run
   by default and are `pep`). There is no "strict mode".
 
 ## PEP Category Tags {#CHKTAG-PEP-CATEGORIES}
 
-The **only** category axis Basilisk keeps. The vocabulary is verbatim from the
-`python/typing` conformance suite — the file-name prefixes under
-[`conformance/tests/`](../../conformance/tests) and the `category` column of
+The **only** category axis Basilisk keeps. The vocabulary is derived from the
+`python/typing` conformance suite's file-name prefixes and the `category` column of
 [`conformance/conformance_status.csv`](../../conformance/conformance_status.csv) —
 mirrored as `rule_tags::PEP_CATEGORIES`:
 
@@ -173,11 +172,11 @@ exposes the queryable API:
   predicates.
 
 This is a **runtime** source of truth: `check_with_config` calls
-`opt_in_spec_for_code` to gate opt-in rules, with `opt_in_tag_enabled`
-([`lib.rs`](../../crates/basilisk-checker/src/lib.rs)) the single bridge from
-config opt-in switches to tags. Selection and classification read the same
-declarations, so cannot drift. The configuration editor consumes this registry
-through the LSP contract below; the VSIX never copies it.
+`opt_in_spec_for_code` to distinguish default-on rules from opt-in rules. An
+explicit non-disabled severity selects an opt-in rule; tag-oriented editor
+actions expand against this live registry and persist explicit rule entries.
+Selection and classification therefore cannot drift. The configuration editor
+consumes this registry through the LSP contract below; the VSIX never copies it.
 
 A rule's `opt_in_spec().code` moves with its emitted code in the same file as the
 rule-rename work

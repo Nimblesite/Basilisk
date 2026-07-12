@@ -26,11 +26,10 @@ requires a failing behavior test before the implementation change.
 | `REFACTOR-FORMATTER` | Generated text trims trailing whitespace but does not run the configured formatter. | `code_actions/refactor/helpers.rs` |
 | `REFACTOR-ABSTRACT-ALGO` | Base lookup is direct and same-module; MRO and configured body style are not applied. | `code_actions/refactor/abstract_methods.rs` |
 
-## Adoption and CLI {#CONFAUDIT-ADOPTION-CLI}
+## CLI {#CONFAUDIT-ADOPTION-CLI}
 
 | Spec ID | Current deviation | Location |
 |---|---|---|
-| `AUTOFIX-ADOPTION-FLOW`, `AUTOFIX-ADOPTION-RULES` | Adoption demotions are applied only by command handlers, are lost on ordinary rechecks, and auto-graduation never runs in production. | `basilisk-lsp/src/server/adoption.rs` |
 | `CHKARCH-CLI-EXITCODES` | Malformed configuration falls back to defaults, so configuration exit code `2` is never produced. | `basilisk-cli/src/main.rs`, `basilisk-config/src/lib.rs` |
 
 ## Verification {#CONFAUDIT-VERIFICATION}

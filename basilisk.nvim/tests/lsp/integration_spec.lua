@@ -32,7 +32,7 @@ describe("basilisk LSP integration", function()
     -- Opt into the annotation house rules (off by default) so untyped-parameter
     -- diagnostics fire — mirrors the Rust LSP harness fixture (ws_test_common.rs).
     local cfg = io.open(tmpdir .. "/basilisk.json", "w")
-    cfg:write('{"strictAnnotations": true}\n')
+    cfg:write('{"rules":{"BSK-E0001":"error","BSK-E0002":"error"}}\n')
     cfg:close()
 
     -- Configure and start the LSP client directly (not via setup()).

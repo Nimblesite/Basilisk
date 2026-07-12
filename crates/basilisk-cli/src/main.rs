@@ -23,6 +23,7 @@ use crate::output::{
 mod adopt;
 mod cache_check;
 mod fix;
+mod import_search;
 mod output;
 mod stubs;
 
@@ -416,7 +417,11 @@ fn collect_and_check(
     // live at the project root, not necessarily in the checked path.
     let project_root = find_project_root(&config_root);
     let roots = analysis_roots(paths, &project_root);
-    let search_paths = build_import_search_paths(roots, &project_root);
+    let search_paths = if import_search::files_might_import(&python_files) {
+        build_import_search_paths(roots, &project_root)
+    } else {
+        import_search::roots_only(roots)
+    };
 
     let cache_context = cache_check::build_context(cache, &config, &search_paths, &project_root);
 
@@ -548,12 +553,16 @@ fn process_file(
 }
 
 /// Walk up from `start` to find the project root (directory containing
-/// `pyproject.toml` or `uv.lock`). Falls back to cwd, then `start`.
+/// `basilisk.json`, `pyproject.toml`, or `uv.lock`). Falls back to cwd, then
+/// `start`.
 pub(crate) fn find_project_root(start: &std::path::Path) -> std::path::PathBuf {
     let abs = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
     let mut current = abs.as_path();
     loop {
-        if current.join("pyproject.toml").is_file() || current.join("uv.lock").is_file() {
+        if current.join("basilisk.json").is_file()
+            || current.join("pyproject.toml").is_file()
+            || current.join("uv.lock").is_file()
+        {
             return current.to_path_buf();
         }
         match current.parent() {
@@ -800,7 +809,7 @@ mod tests {
         std::fs::create_dir_all(&dir)?;
         std::fs::write(
             dir.join("basilisk.json"),
-            b"{\"strictAnnotations\": true}\n",
+            b"{\"rules\":{\"BSK-E0001\":\"error\",\"BSK-E0002\":\"error\"}}\n",
         )?;
         let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x):\n    pass\n")?;
@@ -835,14 +844,11 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let dir = unique_project_dir("basilisk_cli_cfg_promote");
         std::fs::create_dir_all(&dir)?;
-        // A severity override only re-grades a rule that is ALREADY enabled;
-        // BSK-W0050 is an off-by-default house rule, so the project must opt in
-        // (`strict-annotations = true`) AND escalate it. See
-        // [CHKARCH-CONFIGURATION-ONLY].
+        // An explicit non-disabled severity both selects and re-grades an
+        // off-by-default rule. See [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
             dir.join("pyproject.toml"),
             b"[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n\
-              [tool.basilisk]\nstrict-annotations = true\n\n\
               [tool.basilisk.rules]\n\"BSK-W0050\" = \"error\"\n",
         )?;
         let py = dir.join("m.py");
@@ -909,7 +915,7 @@ mod tests {
         std::fs::create_dir_all(&dir)?;
         std::fs::write(
             dir.join("basilisk.json"),
-            b"{\"strictAnnotations\": true}\n",
+            b"{\"rules\":{\"BSK-E0001\":\"error\"}}\n",
         )?;
         let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
@@ -943,7 +949,7 @@ mod tests {
         std::fs::create_dir_all(&dir)?;
         std::fs::write(
             dir.join("basilisk.json"),
-            b"{\"strictAnnotations\": true}\n",
+            b"{\"rules\":{\"BSK-E0001\":\"error\"}}\n",
         )?;
         let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;

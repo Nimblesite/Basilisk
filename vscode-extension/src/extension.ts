@@ -18,6 +18,7 @@ import { registerTestExplorer } from "./test-explorer";
 import { registerModuleExplorer } from "./module-explorer";
 import { registerInfoPanel } from "./info-panel";
 import { registerPythonProcesses } from "./process-explorer";
+import { registerConfigurationEditor } from "./configuration-editor";
 import { createStore, type Store } from "./store";
 import { registerProfiler, disposeProfiler } from "./profiler";
 import { registerMemoryProfiler, disposeMemoryProfiler } from "./memory-profiler";
@@ -172,6 +173,11 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
 
   const infoPanelResult = registerInfoPanel(context, s);
   singletonDisposables.push(...infoPanelResult.disposables);
+
+  // Editor-area configuration shell. Capability gating and all mutations are
+  // delegated to the LSP; this registration owns only VS Code lifecycle/UI.
+  const configurationEditor = registerConfigurationEditor(s);
+  singletonDisposables.push(...configurationEditor.disposables);
 
   // Python Processes panel — LSP-driven process picker for one-click profiling (#62).
   const processesResult = registerPythonProcesses(context, s);
@@ -460,4 +466,3 @@ async function startRuntime(context: vscode.ExtensionContext, s: Store): Promise
     updateStatusBar("error");
   }
 }
-

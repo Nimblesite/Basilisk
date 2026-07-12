@@ -8,7 +8,10 @@ fn lsp_returns_diagnostics_for_unannotated_function() {
     // as a project would. See [CHKARCH-CONFIGURATION-ONLY].
     let source = "def foo(x):\n    pass\n";
     let config = basilisk_config::BasiliskConfig {
-        strict_annotations: true,
+        rules: ["BSK-E0001", "BSK-E0002"]
+            .into_iter()
+            .map(|code| (code.to_owned(), basilisk_config::RuleSeverity::Error))
+            .collect(),
         ..Default::default()
     };
     let diags = basilisk_lsp::check_source_with_config(source, &config);

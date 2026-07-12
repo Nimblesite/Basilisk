@@ -1,12 +1,13 @@
 //! Implements [CHKARCH-CLI]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI
 //! `basilisk adopt` and `basilisk unadopt` subcommands.
 //!
-//! `adopt`  — check files, record remaining error codes in the adoption store,
-//!            and demote them from errors to warnings.
-//! `unadopt` — remove adoption overrides, restoring full strictness.
+//! `adopt` records remaining errors as exact-file warning overrides in the
+//! active project configuration; `unadopt` removes those editor-owned entries.
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::path::Path;
+
+use basilisk_config::{RuleConfigScope, RuleConfigUpdate, RuleSeverity};
 
 use tracing::{error, info, warn};
 
@@ -61,34 +62,26 @@ pub(crate) fn run_unadopt(paths: &[String]) -> u8 {
 /// - `3` — internal error
 pub(crate) fn run_adopt_status(paths: &[String]) -> u8 {
     let config_root = resolve_config_root(paths);
-
-    let store = match basilisk_config::AdoptionStore::load(&config_root) {
-        Ok(s) => s,
+    let document = match basilisk_config::discover_config_document(&config_root) {
+        Ok(document) => document,
         Err(err) => {
-            error!(%err, "failed to load adoption store");
+            error!(%err, "failed to load active configuration");
             return 3;
         }
     };
-
-    if store.is_empty() {
+    let adoption = basilisk_config::adoption_rule_overrides(&document);
+    if adoption.is_empty() {
         println!("No files are currently adopted.");
         return 0;
     }
-
-    let adopted = store.adopted_files();
     println!(
         "{} adopted file{}:",
-        adopted.len(),
-        pluralise(adopted.len()),
+        adoption.len(),
+        pluralise(adoption.len()),
     );
-    for file in adopted {
-        let count = store.demoted_count(file);
-        println!(
-            "  {} ({} demoted code{})",
-            file.display(),
-            count,
-            pluralise(count),
-        );
+    for (file, rules) in adoption {
+        let count = rules.len();
+        println!("  {} ({} demoted code{})", file, count, pluralise(count));
     }
 
     0
@@ -102,19 +95,17 @@ struct AdoptSummary {
     demoted_count: usize,
 }
 
-/// Adopt files: check each file, collect error codes, record in store.
+/// Adopt files: check each file and persist exact-path warning overrides.
 fn adopt_files(paths: &[String]) -> Result<AdoptSummary, String> {
     let config_root = resolve_config_root(paths);
-    let config = basilisk_config::load_basilisk_config(&config_root);
+    let document = basilisk_config::discover_config_document(&config_root)
+        .map_err(|error| error.to_string())?;
+    let config = document.config.clone();
     let excluded = crate::excluded_dirs_and_log(&config, &config_root);
-
     let python_files = crate::collect_python_files(paths, &excluded)?;
-
-    let mut store =
-        basilisk_config::AdoptionStore::load(&config_root).map_err(|e| e.to_string())?;
-
     let mut files_adopted: usize = 0;
     let mut demoted_count: usize = 0;
+    let mut updates = Vec::new();
 
     for path_str in python_files {
         match check_file_errors(&path_str, &config) {
@@ -123,9 +114,17 @@ fn adopt_files(paths: &[String]) -> Result<AdoptSummary, String> {
                     continue;
                 }
                 let path = Path::new(&path_str);
-                let relative = path.strip_prefix(&config_root).unwrap_or(path);
                 let count = error_codes.len();
-                store.adopt_file(relative, error_codes);
+                updates.push(RuleConfigUpdate {
+                    scope: RuleConfigScope::Path {
+                        pattern: relative_pattern(&config_root, path)?,
+                        adoption: true,
+                    },
+                    rules: error_codes
+                        .into_iter()
+                        .map(|code| (code, Some(RuleSeverity::Warning)))
+                        .collect(),
+                });
                 files_adopted += 1;
                 demoted_count += count;
                 info!(path = path_str, count, "adopted file");
@@ -135,8 +134,11 @@ fn adopt_files(paths: &[String]) -> Result<AdoptSummary, String> {
             }
         }
     }
-
-    store.save().map_err(|e| e.to_string())?;
+    if !updates.is_empty() {
+        let patch = basilisk_config::build_rule_patch(&document, &updates)
+            .map_err(|error| error.to_string())?;
+        basilisk_config::apply_config_patch(&patch).map_err(|error| error.to_string())?;
+    }
 
     Ok(AdoptSummary {
         files_adopted,
@@ -147,26 +149,34 @@ fn adopt_files(paths: &[String]) -> Result<AdoptSummary, String> {
 /// Un-adopt files: remove adoption overrides for each path.
 fn unadopt_files(paths: &[String]) -> Result<usize, String> {
     let config_root = resolve_config_root(paths);
-    let config = basilisk_config::load_basilisk_config(&config_root);
+    let document = basilisk_config::discover_config_document(&config_root)
+        .map_err(|error| error.to_string())?;
+    let config = document.config.clone();
     let excluded: HashSet<&str> = config.exclude.iter().map(String::as_str).collect();
-
     let python_files = crate::collect_python_files(paths, &excluded)?;
-
-    let mut store =
-        basilisk_config::AdoptionStore::load(&config_root).map_err(|e| e.to_string())?;
-
+    let adoption = basilisk_config::adoption_rule_overrides(&document);
     let mut count: usize = 0;
+    let mut updates = Vec::new();
     for path_str in python_files {
         let path = Path::new(&path_str);
-        let relative = path.strip_prefix(&config_root).unwrap_or(path);
-        if store.demoted_count(relative) > 0 {
-            store.unadopt_file(relative);
+        let pattern = relative_pattern(&config_root, path)?;
+        if let Some(rules) = adoption.get(&pattern) {
+            updates.push(RuleConfigUpdate {
+                scope: RuleConfigScope::Path {
+                    pattern,
+                    adoption: false,
+                },
+                rules: rules.keys().map(|code| (code.clone(), None)).collect(),
+            });
             count += 1;
             info!(path = path_str, "un-adopted file");
         }
     }
-
-    store.save().map_err(|e| e.to_string())?;
+    if !updates.is_empty() {
+        let patch = basilisk_config::build_rule_patch(&document, &updates)
+            .map_err(|error| error.to_string())?;
+        basilisk_config::apply_config_patch(&patch).map_err(|error| error.to_string())?;
+    }
 
     Ok(count)
 }
@@ -183,18 +193,38 @@ fn check_file_errors(
     let resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
     let diags = basilisk_checker::check_with_config(&resolved, config);
 
-    let codes: Vec<String> = diags
+    let codes: BTreeSet<String> = diags
         .iter()
-        .filter(|d| d.severity == basilisk_checker::Severity::Error)
+        .filter(|diagnostic| {
+            matches!(
+                diagnostic.severity,
+                basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation
+            )
+        })
         .map(|d| d.code.code.to_owned())
         .collect();
 
-    Ok(codes)
+    Ok(codes.into_iter().collect())
+}
+
+fn relative_pattern(root: &Path, path: &Path) -> Result<String, String> {
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    canonical_path
+        .strip_prefix(&canonical_root)
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        .map_err(|error| {
+            format!(
+                "{} is outside the selected project root {}: {error}",
+                canonical_path.display(),
+                canonical_root.display()
+            )
+        })
 }
 
 /// Resolve the config root directory from the provided paths.
 fn resolve_config_root(paths: &[String]) -> std::path::PathBuf {
-    paths
+    let candidate = paths
         .first()
         .map(Path::new)
         .and_then(|p| {
@@ -204,7 +234,8 @@ fn resolve_config_root(paths: &[String]) -> std::path::PathBuf {
                 p.parent().map(Path::to_path_buf)
             }
         })
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    crate::find_project_root(&candidate)
 }
 
 #[cfg(test)]
@@ -234,7 +265,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("bsk_adopt_test_{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("basilisk.json"), "{\"strictAnnotations\": true}\n").unwrap();
+        fs::write(
+            dir.join("basilisk.json"),
+            "{\"rules\":{\"BSK-E0001\":\"error\",\"BSK-E0002\":\"error\"}}\n",
+        )
+        .unwrap();
         dir
     }
 
@@ -243,7 +278,10 @@ mod tests {
     /// `check_file_errors` directly. See [CHKARCH-CONFIGURATION-ONLY].
     fn annotations_on() -> basilisk_config::BasiliskConfig {
         basilisk_config::BasiliskConfig {
-            strict_annotations: true,
+            rules: ["BSK-E0001", "BSK-E0002"]
+                .into_iter()
+                .map(|code| (code.to_owned(), basilisk_config::RuleSeverity::Error))
+                .collect(),
             ..Default::default()
         }
     }
@@ -253,6 +291,13 @@ mod tests {
         let path = dir.join(filename);
         fs::write(&path, content).unwrap();
         path.to_string_lossy().into_owned()
+    }
+
+    fn adoption(
+        dir: &Path,
+    ) -> std::collections::BTreeMap<String, std::collections::BTreeMap<String, RuleSeverity>> {
+        let document = basilisk_config::discover_config_document(dir).unwrap();
+        basilisk_config::adoption_rule_overrides(&document)
     }
 
     // ── run_adopt ────────────────────────────────────────────────────────────
@@ -265,14 +310,12 @@ mod tests {
         let exit = run_adopt(&[path]);
         assert_eq!(exit, 0, "adopt should succeed with exit code 0");
 
-        let store = basilisk_config::AdoptionStore::load(&dir).unwrap();
-        assert!(!store.is_empty(), "store must have adoptions");
-
-        let adopted = store.adopted_files();
+        let adopted = adoption(&dir);
         assert_eq!(adopted.len(), 1);
-
         assert!(
-            store.is_demoted(Path::new("bad.py"), "BSK-E0001"),
+            adopted
+                .get("bad.py")
+                .is_some_and(|rules| rules.contains_key("BSK-E0001")),
             "bad.py should have BSK-E0001 demoted"
         );
     }
@@ -285,8 +328,10 @@ mod tests {
         let exit = run_adopt(&[path]);
         assert_eq!(exit, 0);
 
-        let store = basilisk_config::AdoptionStore::load(&dir).unwrap();
-        assert!(store.is_empty(), "clean code should produce no adoptions");
+        assert!(
+            adoption(&dir).is_empty(),
+            "clean code should produce no adoptions"
+        );
     }
 
     #[test]
@@ -304,13 +349,24 @@ mod tests {
         let exit = run_adopt(&[dir.to_string_lossy().into_owned()]);
         assert_eq!(exit, 0);
 
-        let store = basilisk_config::AdoptionStore::load(&dir).unwrap();
-        let adopted = store.adopted_files();
+        let adopted = adoption(&dir);
         assert_eq!(
             adopted.len(),
             2,
             "both bad files should be adopted, got: {adopted:?}"
         );
+    }
+
+    #[test]
+    fn run_adopt_rejects_files_from_different_project_roots() {
+        let first = temp_dir("adopt_cross_root_first");
+        let second = temp_dir("adopt_cross_root_second");
+        let first_path = write_py(&first, "first.py", BAD_PYTHON);
+        let second_path = write_py(&second, "second.py", BAD_PYTHON);
+
+        assert_eq!(run_adopt(&[first_path, second_path]), 3);
+        assert!(adoption(&first).is_empty());
+        assert!(adoption(&second).is_empty());
     }
 
     // ── run_unadopt ──────────────────────────────────────────────────────────
@@ -323,15 +379,19 @@ mod tests {
         // First adopt.
         let exit = run_adopt(std::slice::from_ref(&path));
         assert_eq!(exit, 0);
-        let store = basilisk_config::AdoptionStore::load(&dir).unwrap();
-        assert!(!store.is_empty(), "precondition: adoption must exist");
+        assert!(
+            !adoption(&dir).is_empty(),
+            "precondition: adoption must exist"
+        );
 
         // Then unadopt.
         let exit = run_unadopt(&[path]);
         assert_eq!(exit, 0);
 
-        let store = basilisk_config::AdoptionStore::load(&dir).unwrap();
-        assert!(store.is_empty(), "store must be empty after unadopt");
+        assert!(
+            adoption(&dir).is_empty(),
+            "active config must have no adoption entries after unadopt"
+        );
     }
 
     #[test]
@@ -415,20 +475,29 @@ mod tests {
         let path = write_py(&dir, "foo.py", CLEAN_PYTHON);
 
         let root = resolve_config_root(&[path]);
-        assert_eq!(root, dir);
+        assert_eq!(root, dir.canonicalize().unwrap());
     }
 
     #[test]
     fn resolve_config_root_directory_returns_itself() {
         let dir = temp_dir("resolve_dir");
         let root = resolve_config_root(&[dir.to_string_lossy().into_owned()]);
-        assert_eq!(root, dir);
+        assert_eq!(root, dir.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn resolve_config_root_nested_file_finds_project_config() {
+        let dir = temp_dir("resolve_nested");
+        let src = dir.join("src");
+        fs::create_dir_all(&src).unwrap();
+        let path = write_py(&src, "nested.py", CLEAN_PYTHON);
+        assert_eq!(resolve_config_root(&[path]), dir.canonicalize().unwrap());
     }
 
     #[test]
     fn resolve_config_root_empty_returns_cwd() {
         let root = resolve_config_root(&[]);
-        assert_eq!(root, PathBuf::from("."));
+        assert_eq!(root, crate::find_project_root(Path::new(".")));
     }
 
     // ── pluralise ────────────────────────────────────────────────────────────

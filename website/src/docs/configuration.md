@@ -36,10 +36,9 @@ stub-paths = ["stubs/"]
 typeshed-path = "typeshed-micropython"   # optional: replace the bundled stdlib typeshed
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
-strict-annotations = true            # opt into annotation/style house rules
 
 [tool.basilisk.rules]
-"BSK-E0001" = "warning"             # enabled rule, demoted globally
+"BSK-E0001" = "warning"             # selects this opt-in rule at warning
 "imports_unresolved" = "info"
 "dataclasses_order" = "disabled"
 
@@ -80,7 +79,7 @@ Additional directories to search for `.pyi` stub files. These sit at the **head*
 **Type:** `string`
 **Default:** _(unset — the bundled typeshed is used)_
 **Example:** `"typeshed-micropython"`
-**LSP JSON key:** `typeshedPath` (VS Code `settings.json`: `basilisk.typeshedPath`)
+**`basilisk.json` key:** `typeshedPath`
 **Spec:** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
 
 Path to a directory containing a custom or modified version of typeshed's standard-library stubs. When set, this directory becomes the **canonical source for standard-library types** — step 3 of the [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering), which states that type checkers "SHOULD use this as the canonical source for standard-library types in this step." Basilisk resolves stdlib modules against it in preference to the bundled typeshed; a stdlib module absent from the directory falls through to the remaining resolution steps.
@@ -178,7 +177,7 @@ typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 
 Because `micropython-stdlib-stubs` is a **partial** stdlib, a module it does not ship (e.g. `tkinter`, which does not exist on a board) is **not** rescued by the bundled CPython stub — the custom typeshed is the canonical source for step 3, so the import is reported as unresolved. That is the honest answer for an embedded target.
 
-### 3. Configure it in your editor (LSP)
+### 3. Configure it in the active project file
 
 The same setting is `typeshedPath` (camelCase) in JSON config. In a standalone **`basilisk.json`** at the project root, the key is bare:
 
@@ -188,15 +187,9 @@ The same setting is `typeshedPath` (camelCase) in JSON config. In a standalone *
 }
 ```
 
-In VS Code's `settings.json` it is namespaced under `basilisk.`:
-
-```json
-{
-  "basilisk.typeshedPath": "vendor/typeshed"
-}
-```
-
-`typeshed-path` (in `pyproject.toml`), `typeshedPath` (in `basilisk.json` / an editor's LSP config), and `basilisk.typeshedPath` (in VS Code `settings.json`) are all the **same** setting.
+`typeshed-path` in `pyproject.toml` and `typeshedPath` in the root-level
+`basilisk.json` are the two spellings for the same project setting. Editors do
+not carry a second copy; the active project config file is authoritative.
 
 ### 4. Confirm it took effect — hover provenance
 
@@ -219,31 +212,29 @@ They solve different problems and can be combined:
 
 The unconfigured default enables the complete core PEP rule set. Basilisk-
 specific house rules are tagged `basilisk` and stay off until a project opts in.
-There is no ambient basic/standard/strict mode. The planned editor's **Strict
+There is no ambient basic/standard/strict mode. The editor's **Strict
 preset** is a one-shot recipe that writes every live rule's native severity
 explicitly into the active config file; after applying it, each rule remains
 independently configurable.
 
-Current opt-in switches are:
+Every opt-in rule is selected by assigning that rule a non-disabled severity:
 
 ```toml
-[tool.basilisk]
-strict-annotations = true
-
-[tool.basilisk.uv]
-dependency-diagnostics = true
-stub-suggestions = true
+[tool.basilisk.rules]
+"BSK-E0001" = "error"   # required parameter annotations
+"BSK-E0025" = "error"   # required @override
+"BSK-W0011" = "warning" # undeclared dependency imports
+"BSK-E0152" = "error"   # missing type stubs
 ```
 
-`strict-annotations` enables the rule tags used for required annotations,
-explicit-`Any`, `@override`, style, and redundancy. The uv switches enable their
-dependency/import and stub-hygiene rule families. Use the generated
-[rule reference](/docs/rules/) to browse the canonical tags attached to each
-rule.
+There are no family switches in the project or editor settings. Use the
+generated [rule reference](/docs/rules/) or configuration editor to browse the
+canonical tags; tag actions expand to explicit rule entries in this file.
 
 ### `[tool.basilisk.rules]`
 
-Set the severity of an enabled rule globally:
+Set a rule's global severity. For an opt-in rule, any non-disabled value also
+selects it:
 
 ```toml
 [tool.basilisk.rules]
@@ -253,10 +244,8 @@ Set the severity of an enabled rule globally:
 ```
 
 Accepted values are `"error"`, `"warning"`, `"info"`, and `"disabled"`.
-In current releases, a severity entry re-grades an already selected opt-in rule;
-enable its owning switch as well. The planned configuration-editor API will make
-an explicit non-disabled per-rule severity enable that individual rule, removing
-this two-step limitation.
+For an opt-in rule, `"error"`, `"warning"`, or `"info"` selects that individual
+rule; `"disabled"` keeps it off. No second switch is required.
 
 ---
 
@@ -323,10 +312,10 @@ File-level directives are standalone comments:
 # basilisk: file-disabled[imports_unresolved]
 ```
 
-Suppression-audit diagnostics are planned as an **opt-in** rule family. They
-will emit nothing by default; once enabled, teams can independently set active
-specific, blanket, unused, and malformed ignores to error, warning, info, or
-disabled. See the
+Suppression auditing is an **opt-in** tagged rule family. It emits nothing by
+default. Configure `BSK-I0060` (active specific), `BSK-W0061` (active blanket),
+`BSK-W0062` (unused), and `BSK-E0063` (malformed) independently at error,
+warning, info, or disabled. See the
 [configuration-editor specification](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SUPPRESSIONS).
 
 ---
@@ -343,19 +332,22 @@ If no configuration file is found, Basilisk uses defaults: the **core PEP confor
 
 ---
 
-## Visual configuration editor (planned)
+## Visual configuration editor
 
-A tag-first VS Code editor is specified but **not shipped yet**. It will read the
-live rule catalog from the LSP, preview all/tag/rule bulk changes, expose every
-rule's effective and explicit severity, run safe fixes before recording adoption
-debt, and make opt-in suppression diagnostics searchable across the workspace.
-Its LSP-advertised Strict preset will turn the complete catalog on at each
-rule's native severity and persist the expanded rule entries—not a mode flag.
-Generated adoption debt will be ordinary exact-file `per-path-overrides` entries
-in this same active config file—no `.basilisk/adoptions.toml`, hidden state, or
-adoption mode. The VSIX will not parse or write configuration itself.
+The tag-first VS Code editor reads the live rule catalog from the LSP, previews
+all/tag/rule bulk changes, exposes every rule's effective and explicit severity,
+and makes opt-in suppression diagnostics searchable across the workspace. Its
+LSP-advertised Strict preset turns the complete catalog on at each rule's native
+severity and persists the expanded rule entries—not a mode flag. Safe fixes are
+a separate root-scoped LSP action, so applying a preset never hides source edits
+inside a config transaction.
+
+Generated adoption debt is stored as ordinary exact-file `per-path-overrides`
+entries in this same active config file—no `.basilisk/adoptions.toml`, hidden
+state, or adoption mode. The VSIX does not parse or write configuration itself.
+
+![Basilisk's tag-first VS Code configuration editor, showing live rule facets and per-rule severity controls](/assets/images/vscode-configuration-editor.png)
 
 Track the authoritative
 [specification](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md)
-and
-[implementation plan](https://github.com/Nimblesite/Basilisk/blob/main/docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md).
+and [implementation plan](https://github.com/Nimblesite/Basilisk/blob/main/docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md).

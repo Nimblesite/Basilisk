@@ -13,6 +13,11 @@ use crate::overrides::{ModuleOverride, PathOverride, RuleSeverity};
 /// analysis mode, python version, and other LSP-level settings.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct BasiliskConfig {
+    /// Runtime owning root used to interpret path overrides root-relatively.
+    /// This is discovered by loaders and is never a persisted config key.
+    #[serde(skip)]
+    pub project_root: Option<PathBuf>,
+
     /// Directory names to exclude from file discovery.
     ///
     /// Defaults to [`DEFAULT_EXCLUDES`]. Setting this in config replaces
@@ -55,31 +60,6 @@ pub struct BasiliskConfig {
     /// (e.g. `"vendor/**"` matches `vendor/lib/foo.py`).
     pub per_path_overrides: HashMap<String, PathOverride>,
 
-    /// Whether to emit BSK-E0152 (missing type stubs) diagnostics.
-    ///
-    /// `BSK-`prefixed rules are Basilisk-only extras that are **off by default**
-    /// — the default configuration targets PEP conformance first. Enable this to
-    /// flag installed packages lacking type stubs.
-    /// Maps to `basilisk.uv.stubSuggestions` in the LSP config.
-    pub uv_stub_suggestions: bool,
-
-    /// Whether to emit dependency hygiene diagnostics (BSK-W0011, BSK-W0012, BSK-W0013).
-    ///
-    /// When `true`, warns about undeclared transitive dependencies, unused
-    /// declared dependencies, and stale lock files. Disabled by default.
-    /// Maps to `basilisk.uv.dependencyDiagnostics` in the LSP config.
-    pub uv_dependency_diagnostics: bool,
-
-    /// Whether to emit Basilisk's opinionated strict-annotation diagnostics
-    /// (BSK-E0001..BSK-E0005, BSK-E0025, BSK-W0014, BSK-W0040, BSK-W0050).
-    ///
-    /// These `BSK-`prefixed rules enforce stricter-than-PEP discipline (mandatory
-    /// parameter/return/variable/attribute annotations, mandatory `@override`,
-    /// no bare `Any`, no redundant annotations). They are **off by default** so
-    /// the out-of-the-box experience is pure PEP conformance; opt in for stricter
-    /// projects. Maps to `basilisk.strictAnnotations` in the LSP config.
-    pub strict_annotations: bool,
-
     /// Auto-stub generation mode: `"runtime"`, `"ast"`, `"hybrid"`, or `"disabled"`.
     ///
     /// Controls how `basilisk stubs generate` creates `.pyi` files for
@@ -109,6 +89,7 @@ pub struct BasiliskConfig {
 impl Default for BasiliskConfig {
     fn default() -> Self {
         Self {
+            project_root: None,
             exclude: crate::DEFAULT_EXCLUDES
                 .iter()
                 .map(|s| (*s).to_owned())
@@ -119,9 +100,6 @@ impl Default for BasiliskConfig {
             rules: HashMap::new(),
             per_module_overrides: HashMap::new(),
             per_path_overrides: HashMap::new(),
-            uv_stub_suggestions: false,
-            uv_dependency_diagnostics: false,
-            strict_annotations: false,
             auto_stub_mode: "hybrid".to_owned(),
             auto_stub_path: PathBuf::from(".basilisk/stubs"),
             python_version: None,
@@ -192,7 +170,7 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
 
 /// Parse a `basilisk.json` document already held in memory.
 pub(crate) fn parse_json_content(content: &str) -> Option<BasiliskConfig> {
-    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let json: serde_json::Value = serde_json::from_str(content).ok()?;
     let obj = json.as_object()?;
 
     let mut cfg = BasiliskConfig::default();
@@ -229,27 +207,6 @@ pub(crate) fn parse_json_content(content: &str) -> Option<BasiliskConfig> {
         }
     }
 
-    // uv section
-    if let Some(uv_obj) = obj.get("uv").and_then(|v| v.as_object()) {
-        if let Some(val) = alias_get(uv_obj, "stubSuggestions", "stub-suggestions")
-            .and_then(serde_json::Value::as_bool)
-        {
-            cfg.uv_stub_suggestions = val;
-        }
-        if let Some(val) = alias_get(uv_obj, "dependencyDiagnostics", "dependency-diagnostics")
-            .and_then(serde_json::Value::as_bool)
-        {
-            cfg.uv_dependency_diagnostics = val;
-        }
-    }
-
-    // Basilisk-only strict-annotation rules (off by default).
-    if let Some(val) = alias_get(obj, "strictAnnotations", "strict-annotations")
-        .and_then(serde_json::Value::as_bool)
-    {
-        cfg.strict_annotations = val;
-    }
-
     // perModuleOverrides
     if let Some(overrides_obj) =
         alias_get(obj, "perModuleOverrides", "per-module-overrides").and_then(|v| v.as_object())
@@ -269,49 +226,7 @@ pub(crate) fn parse_json_content(content: &str) -> Option<BasiliskConfig> {
         }
     }
 
-    // perPathOverrides / per-path-overrides [CONFIGEDITOR-SOURCES]
-    if let Some(overrides_obj) =
-        alias_get(obj, "perPathOverrides", "per-path-overrides").and_then(|v| v.as_object())
-    {
-        for (pattern, override_value) in overrides_obj {
-            let Some(override_obj) = override_value.as_object() else {
-                continue;
-            };
-            let disabled_rules = override_obj
-                .get("disabled")
-                .and_then(serde_json::Value::as_array)
-                .map(|values| {
-                    values
-                        .iter()
-                        .filter_map(serde_json::Value::as_str)
-                        .map(str::to_owned)
-                        .collect()
-                })
-                .unwrap_or_default();
-            let rule_overrides = override_obj
-                .get("rules")
-                .and_then(serde_json::Value::as_object)
-                .map(|rules| {
-                    rules
-                        .iter()
-                        .filter_map(|(code, value)| {
-                            value
-                                .as_str()
-                                .and_then(RuleSeverity::parse)
-                                .map(|severity| (code.clone(), severity))
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            let _ = cfg.per_path_overrides.insert(
-                pattern.clone(),
-                PathOverride {
-                    disabled_rules,
-                    rule_overrides,
-                },
-            );
-        }
-    }
+    parse_json_path_overrides(obj, &mut cfg.per_path_overrides);
 
     // auto-stub-mode / autoStubMode
     if let Some(val) = alias_get(obj, "autoStubMode", "auto-stub-mode").and_then(|v| v.as_str()) {
@@ -335,6 +250,55 @@ pub(crate) fn parse_json_content(content: &str) -> Option<BasiliskConfig> {
     }
 
     Some(cfg)
+}
+
+fn parse_json_path_overrides(
+    root: &serde_json::Map<String, serde_json::Value>,
+    overrides: &mut HashMap<String, PathOverride>,
+) {
+    let Some(entries) = alias_get(root, "perPathOverrides", "per-path-overrides")
+        .and_then(serde_json::Value::as_object)
+    else {
+        return;
+    };
+    for (pattern, value) in entries {
+        let Some(entry) = value.as_object() else {
+            continue;
+        };
+        let disabled_rules = entry
+            .get("disabled")
+            .and_then(serde_json::Value::as_array)
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let rule_overrides = entry
+            .get("rules")
+            .and_then(serde_json::Value::as_object)
+            .map(|rules| {
+                rules
+                    .iter()
+                    .filter_map(|(code, value)| {
+                        value
+                            .as_str()
+                            .and_then(RuleSeverity::parse)
+                            .map(|severity| (code.clone(), severity))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let _ = overrides.insert(
+            pattern.clone(),
+            PathOverride {
+                disabled_rules,
+                rule_overrides,
+            },
+        );
+    }
 }
 
 /// Load configuration from `pyproject.toml` `[tool.basilisk]` section.
@@ -388,30 +352,6 @@ pub(crate) fn parse_pyproject_content(content: &str) -> Option<BasiliskConfig> {
                 }
             }
         }
-    }
-
-    // uv section
-    if let Some(uv_table) = basilisk.get("uv").and_then(|v| v.as_table()) {
-        if let Some(val) = uv_table
-            .get("stub-suggestions")
-            .and_then(toml::Value::as_bool)
-        {
-            cfg.uv_stub_suggestions = val;
-        }
-        if let Some(val) = uv_table
-            .get("dependency-diagnostics")
-            .and_then(toml::Value::as_bool)
-        {
-            cfg.uv_dependency_diagnostics = val;
-        }
-    }
-
-    // Basilisk-only strict-annotation rules (off by default).
-    if let Some(val) = basilisk
-        .get("strict-annotations")
-        .and_then(toml::Value::as_bool)
-    {
-        cfg.strict_annotations = val;
     }
 
     // per-module-overrides

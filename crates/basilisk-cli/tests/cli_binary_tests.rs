@@ -74,7 +74,10 @@ fn stage_project(
     let n = CTR.fetch_add(1, Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!("bsk_cli_bin_{}_{n}", std::process::id()));
     std::fs::create_dir_all(&dir)?;
-    std::fs::write(dir.join("basilisk.json"), "{\"strictAnnotations\": true}\n")?;
+    std::fs::write(
+        dir.join("basilisk.json"),
+        "{\"rules\":{\"BSK-E0001\":\"error\",\"BSK-E0002\":\"error\"}}\n",
+    )?;
     let mut staged = Vec::with_capacity(rels.len());
     for rel in rels {
         let name = Path::new(rel)

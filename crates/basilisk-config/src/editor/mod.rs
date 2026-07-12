@@ -3,13 +3,25 @@
 //! Implements [CONFIGEDITOR-SOURCES]. This is the reusable persistence domain;
 //! LSP and CLI callers provide rule intent but never parse or edit config text.
 
+mod adoption;
 mod patch;
+mod write;
+
+#[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    reason = "test fixtures use direct assertions for compact failure output"
+)]
+mod tests;
 
 use std::path::{Path, PathBuf};
 
 use crate::BasiliskConfig;
 
+pub use adoption::adoption_rule_overrides;
 pub use patch::{build_rule_patch, RuleConfigScope, RuleConfigUpdate};
+pub use write::apply_config_patch;
 
 /// The active on-disk representation for one workspace root.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,7 +104,9 @@ pub enum ConfigDocumentError {
 impl std::fmt::Display for ConfigDocumentError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Read { path, message } => write!(f, "failed to read {}: {message}", path.display()),
+            Self::Read { path, message } => {
+                write!(f, "failed to read {}: {message}", path.display())
+            }
             Self::Invalid { path, message } => {
                 write!(f, "invalid configuration {}: {message}", path.display())
             }
@@ -112,29 +126,88 @@ impl std::error::Error for ConfigDocumentError {}
 /// `pyproject.toml` is active, or becomes the creation target when absent.
 /// Malformed active sources are errors and never fall through to a shadowed
 /// source or defaults.
+///
+/// # Errors
+///
+/// Returns [`ConfigDocumentError`] when the active source cannot be read or
+/// parsed, or when its configuration structure is invalid.
 pub fn discover_config_document(root: &Path) -> Result<ConfigDocument, ConfigDocumentError> {
-    let json_path = root.join("basilisk.json");
-    let toml_path = root.join("pyproject.toml");
-    let (path, format, shadowed_sources) = if json_path.is_file() {
-        let shadowed = toml_path.is_file().then_some(toml_path);
-        (json_path, ConfigFormat::BasiliskJson, shadowed.into_iter().collect())
-    } else {
-        (toml_path, ConfigFormat::PyprojectToml, Vec::new())
-    };
-    let exists = path.is_file();
-    let content = if exists {
-        std::fs::read_to_string(&path).map_err(|error| ConfigDocumentError::Read {
-            path: path.clone(),
+    let source = active_config_source(root);
+    let content = if source.path.is_file() {
+        std::fs::read_to_string(&source.path).map_err(|error| ConfigDocumentError::Read {
+            path: source.path.clone(),
             message: error.to_string(),
         })?
     } else {
         String::new()
     };
-    let config = validate_content(&path, format, &content)?;
+    build_config_document(root, source, content)
+}
+
+/// Discover and validate the active configuration using editor-held content.
+///
+/// Source selection still follows the normal one-file precedence rules; only
+/// the bytes are supplied by the caller. This lets an LSP treat an open dirty
+/// buffer as authoritative, including when the on-disk source is malformed.
+///
+/// # Errors
+///
+/// Returns [`ConfigDocumentError`] when `content` is not a valid document for
+/// the active source format.
+pub fn discover_config_document_with_content(
+    root: &Path,
+    content: String,
+) -> Result<ConfigDocument, ConfigDocumentError> {
+    build_config_document(root, active_config_source(root), content)
+}
+
+/// Return the path selected by the one-active-configuration precedence rules.
+#[must_use]
+pub fn active_config_path(root: &Path) -> PathBuf {
+    active_config_source(root).path
+}
+
+struct ActiveConfigSource {
+    path: PathBuf,
+    format: ConfigFormat,
+    shadowed_sources: Vec<PathBuf>,
+}
+
+fn active_config_source(root: &Path) -> ActiveConfigSource {
+    let json_path = root.join("basilisk.json");
+    let toml_path = root.join("pyproject.toml");
+    let (path, format, shadowed_sources) = if json_path.is_file() {
+        let shadowed = toml_path.is_file().then_some(toml_path);
+        (
+            json_path,
+            ConfigFormat::BasiliskJson,
+            shadowed.into_iter().collect(),
+        )
+    } else {
+        (toml_path, ConfigFormat::PyprojectToml, Vec::new())
+    };
+    ActiveConfigSource {
+        path,
+        format,
+        shadowed_sources,
+    }
+}
+
+fn build_config_document(
+    root: &Path,
+    source: ActiveConfigSource,
+    content: String,
+) -> Result<ConfigDocument, ConfigDocumentError> {
+    let ActiveConfigSource {
+        path,
+        format,
+        shadowed_sources,
+    } = source;
+    let exists = path.is_file();
+    let mut config = validate_content(&path, format, &content)?;
+    config.project_root = Some(root.to_path_buf());
     let read_only = exists
-        && std::fs::metadata(&path)
-            .map(|metadata| metadata.permissions().readonly())
-            .unwrap_or(true);
+        && std::fs::metadata(&path).map_or(true, |metadata| metadata.permissions().readonly());
     Ok(ConfigDocument {
         root: root.to_path_buf(),
         path,
@@ -158,19 +231,28 @@ pub(super) fn validate_content(
     }
     let config = match format {
         ConfigFormat::BasiliskJson => {
-            let value: serde_json::Value = serde_json::from_str(content).map_err(|error| {
-                ConfigDocumentError::Invalid { path: path.to_path_buf(), message: error.to_string() }
-            })?;
-            validate_json_severities(path, &value)?;
+            let value: serde_json::Value =
+                serde_json::from_str(content).map_err(|error| ConfigDocumentError::Invalid {
+                    path: path.to_path_buf(),
+                    message: error.to_string(),
+                })?;
+            validate_json_structure(path, &value)?;
             crate::parse::parse_json_content(content)
         }
         ConfigFormat::PyprojectToml => {
-            let table: toml::Table = content.parse().map_err(|error: toml::de::Error| {
-                ConfigDocumentError::Invalid { path: path.to_path_buf(), message: error.to_string() }
-            })?;
-            validate_toml_severities(path, &table)?;
-            crate::parse::parse_pyproject_content(content)
-                .or_else(|| Some(BasiliskConfig::default()))
+            let table: toml::Table =
+                content
+                    .parse()
+                    .map_err(|error: toml::de::Error| ConfigDocumentError::Invalid {
+                        path: path.to_path_buf(),
+                        message: error.to_string(),
+                    })?;
+            let has_basilisk = validate_toml_structure(path, &table)?;
+            if has_basilisk {
+                crate::parse::parse_pyproject_content(content)
+            } else {
+                Some(BasiliskConfig::default())
+            }
         }
     };
     config.ok_or_else(|| ConfigDocumentError::Invalid {
@@ -179,21 +261,73 @@ pub(super) fn validate_content(
     })
 }
 
-fn validate_json_severities(path: &Path, value: &serde_json::Value) -> Result<(), ConfigDocumentError> {
-    validate_rule_object(path, value.get("rules"))?;
-    let paths = value.get("perPathOverrides").or_else(|| value.get("per-path-overrides"));
-    if let Some(entries) = paths.and_then(serde_json::Value::as_object) {
-        for entry in entries.values() {
+fn validate_json_structure(
+    path: &Path,
+    value: &serde_json::Value,
+) -> Result<(), ConfigDocumentError> {
+    let root = require_json_object(path, value, "configuration root")?;
+    validate_rule_object(path, root.get("rules"))?;
+    if root.contains_key("perPathOverrides") && root.contains_key("per-path-overrides") {
+        return invalid(
+            path,
+            "cannot define both `perPathOverrides` and `per-path-overrides`",
+        );
+    }
+    let paths = root
+        .get("perPathOverrides")
+        .or_else(|| root.get("per-path-overrides"));
+    if let Some(paths) = paths {
+        let entries = require_json_object(path, paths, "per-path overrides")?;
+        for (pattern, entry) in entries {
+            let entry = require_json_object(path, entry, &format!("path override `{pattern}`"))?;
             validate_rule_object(path, entry.get("rules"))?;
+            validate_json_disabled(path, entry.get("disabled"), pattern)?;
+            if entry
+                .get("adoption")
+                .is_some_and(|value| !value.is_boolean())
+            {
+                return invalid(
+                    path,
+                    &format!("path override `{pattern}` adoption must be a boolean"),
+                );
+            }
         }
     }
     Ok(())
 }
 
-fn validate_rule_object(path: &Path, value: Option<&serde_json::Value>) -> Result<(), ConfigDocumentError> {
-    let Some(rules) = value.and_then(serde_json::Value::as_object) else { return Ok(()) };
+fn validate_json_disabled(
+    path: &Path,
+    value: Option<&serde_json::Value>,
+    pattern: &str,
+) -> Result<(), ConfigDocumentError> {
+    let Some(value) = value else { return Ok(()) };
+    let Some(codes) = value.as_array() else {
+        return invalid(
+            path,
+            &format!("path override `{pattern}` disabled must be an array"),
+        );
+    };
+    if codes.iter().any(|code| !code.is_string()) {
+        return invalid(
+            path,
+            &format!("path override `{pattern}` disabled entries must be strings"),
+        );
+    }
+    Ok(())
+}
+
+fn validate_rule_object(
+    path: &Path,
+    value: Option<&serde_json::Value>,
+) -> Result<(), ConfigDocumentError> {
+    let Some(value) = value else { return Ok(()) };
+    let rules = require_json_object(path, value, "rules")?;
     for (code, severity) in rules {
-        let valid = severity.as_str().and_then(crate::RuleSeverity::parse).is_some();
+        let valid = severity
+            .as_str()
+            .and_then(crate::RuleSeverity::parse)
+            .is_some();
         if !valid {
             return Err(ConfigDocumentError::Invalid {
                 path: path.to_path_buf(),
@@ -204,21 +338,88 @@ fn validate_rule_object(path: &Path, value: Option<&serde_json::Value>) -> Resul
     Ok(())
 }
 
-fn validate_toml_severities(path: &Path, table: &toml::Table) -> Result<(), ConfigDocumentError> {
-    let Some(basilisk) = table.get("tool").and_then(|v| v.get("basilisk")) else { return Ok(()) };
+fn require_json_object<'a>(
+    path: &Path,
+    value: &'a serde_json::Value,
+    name: &str,
+) -> Result<&'a serde_json::Map<String, serde_json::Value>, ConfigDocumentError> {
+    value
+        .as_object()
+        .ok_or_else(|| ConfigDocumentError::Invalid {
+            path: path.to_path_buf(),
+            message: format!("{name} must be an object"),
+        })
+}
+
+fn validate_toml_structure(path: &Path, table: &toml::Table) -> Result<bool, ConfigDocumentError> {
+    let Some(tool_value) = table.get("tool") else {
+        return Ok(false);
+    };
+    let Some(tool) = tool_value.as_table() else {
+        return invalid(path, "`tool` must be a table");
+    };
+    let Some(basilisk_value) = tool.get("basilisk") else {
+        return Ok(false);
+    };
+    let Some(basilisk) = basilisk_value.as_table() else {
+        return invalid(path, "`tool.basilisk` must be a table");
+    };
     validate_toml_rule_table(path, basilisk.get("rules"))?;
-    if let Some(paths) = basilisk.get("per-path-overrides").and_then(toml::Value::as_table) {
-        for entry in paths.values() {
+    if let Some(paths_value) = basilisk.get("per-path-overrides") {
+        let Some(paths) = paths_value.as_table() else {
+            return invalid(path, "`tool.basilisk.per-path-overrides` must be a table");
+        };
+        for (pattern, entry_value) in paths {
+            let Some(entry) = entry_value.as_table() else {
+                return invalid(path, &format!("path override `{pattern}` must be a table"));
+            };
             validate_toml_rule_table(path, entry.get("rules"))?;
+            validate_toml_disabled(path, entry.get("disabled"), pattern)?;
+            if entry.get("adoption").is_some_and(|value| !value.is_bool()) {
+                return invalid(
+                    path,
+                    &format!("path override `{pattern}` adoption must be a boolean"),
+                );
+            }
         }
+    }
+    Ok(true)
+}
+
+fn validate_toml_disabled(
+    path: &Path,
+    value: Option<&toml::Value>,
+    pattern: &str,
+) -> Result<(), ConfigDocumentError> {
+    let Some(value) = value else { return Ok(()) };
+    let Some(codes) = value.as_array() else {
+        return invalid(
+            path,
+            &format!("path override `{pattern}` disabled must be an array"),
+        );
+    };
+    if codes.iter().any(|code| !code.is_str()) {
+        return invalid(
+            path,
+            &format!("path override `{pattern}` disabled entries must be strings"),
+        );
     }
     Ok(())
 }
 
-fn validate_toml_rule_table(path: &Path, value: Option<&toml::Value>) -> Result<(), ConfigDocumentError> {
-    let Some(rules) = value.and_then(toml::Value::as_table) else { return Ok(()) };
+fn validate_toml_rule_table(
+    path: &Path,
+    value: Option<&toml::Value>,
+) -> Result<(), ConfigDocumentError> {
+    let Some(value) = value else { return Ok(()) };
+    let Some(rules) = value.as_table() else {
+        return invalid(path, "rules must be a table");
+    };
     for (code, severity) in rules {
-        let valid = severity.as_str().and_then(crate::RuleSeverity::parse).is_some();
+        let valid = severity
+            .as_str()
+            .and_then(crate::RuleSeverity::parse)
+            .is_some();
         if !valid {
             return Err(ConfigDocumentError::Invalid {
                 path: path.to_path_buf(),
@@ -227,11 +428,20 @@ fn validate_toml_rule_table(path: &Path, value: Option<&toml::Value>) -> Result<
         }
     }
     Ok(())
+}
+
+fn invalid<T>(path: &Path, message: &str) -> Result<T, ConfigDocumentError> {
+    Err(ConfigDocumentError::Invalid {
+        path: path.to_path_buf(),
+        message: message.to_owned(),
+    })
 }
 
 pub(super) fn content_revision(content: &str) -> String {
-    let hash = content.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |value, byte| {
-        (value ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
-    });
+    let hash = content
+        .bytes()
+        .fold(0xcbf2_9ce4_8422_2325_u64, |value, byte| {
+            (value ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+        });
     format!("fnv1a64:{hash:016x}")
 }

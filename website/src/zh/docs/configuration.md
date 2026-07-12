@@ -67,7 +67,7 @@ rules."imports_unresolved" = "warning"
 **类型：** `string`
 **默认值：** _（未设置——使用捆绑的 typeshed）_
 **示例：** `"typeshed-micropython"`
-**LSP JSON 键：** `typeshedPath`（VS Code `settings.json`：`basilisk.typeshedPath`）
+**`basilisk.json` 键：** `typeshedPath`
 **规范：** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
 
 指向包含 typeshed 标准库存根的自定义或修改版本的目录路径。设置后，该目录将成为**标准库类型的规范来源**——[typing 规范的导入解析顺序](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)中的第 3 步，该规范指出类型检查器"SHOULD use this as the canonical source for standard-library types in this step"（应将其用作此步骤中标准库类型的规范来源）。Basilisk 优先针对它解析标准库模块，而不是捆绑的 typeshed；目录中缺失的标准库模块将继续进入后续的解析步骤。
@@ -165,7 +165,7 @@ typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 
 由于 `micropython-stdlib-stubs` 是**部分**标准库，它未包含的模块（例如开发板上并不存在的 `tkinter`）**不会**由捆绑的 CPython 存根来兜底——自定义 typeshed 是第 3 步的规范来源，因此该导入会被报告为无法解析。对于嵌入式目标而言，这才是诚实的结果。
 
-### 3. 在编辑器中配置（LSP）
+### 3. 在活动项目文件中配置
 
 在 JSON 配置中，同一设置为 `typeshedPath`（驼峰式）。在项目根目录的独立 **`basilisk.json`** 中，键名不带前缀：
 
@@ -175,15 +175,9 @@ typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 }
 ```
 
-在 VS Code 的 `settings.json` 中，则以 `basilisk.` 命名空间为前缀：
-
-```json
-{
-  "basilisk.typeshedPath": "vendor/typeshed"
-}
-```
-
-`typeshed-path`（在 `pyproject.toml` 中）、`typeshedPath`（在 `basilisk.json` 或编辑器 LSP 配置中）与 `basilisk.typeshedPath`（在 VS Code 的 `settings.json` 中）都是同一设置。
+`pyproject.toml` 中的 `typeshed-path` 与项目根目录 `basilisk.json` 中的
+`typeshedPath` 是同一个项目设置的两种拼写。编辑器不会保存第二份副本；
+活动项目配置文件始终是唯一来源。
 
 ### 4. 确认已生效——悬停溯源
 
@@ -199,6 +193,29 @@ typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 | 范围 | 可遮蔽任意单个模块，无论标准库还是第三方 | 整个标准库的规范来源 |
 | 典型用途 | 修补某个损坏的存根；为内部库提供存根 | 面向替代或分叉的标准库（MicroPython、更新的 typeshed） |
 | 优先级 | 更高——`stub-paths` 中的模块仍会遮蔽自定义 typeshed | 位于 `stub-paths` 之下、已安装包之上 |
+
+---
+
+## 规则选择与全局严重性
+
+未配置时，Basilisk 启用完整的核心 PEP 规则集；带 `basilisk` 标签的扩展
+规则默认关闭。不存在 basic/standard/strict 模式，也不存在规则族开关。
+配置编辑器中的 **Strict 预设**只是一次性配方：它把每条实时规则的原生
+严重性显式写入活动配置文件，之后每条规则仍可独立调整。
+
+任何非 `disabled` 的显式严重性都会启用相应的可选规则：
+
+```toml
+[tool.basilisk.rules]
+"BSK-E0001" = "error"
+"BSK-W0011" = "warning"
+"BSK-E0152" = "error"
+"BSK-I0060" = "info"
+```
+
+可用值为 `"error"`、`"warning"`、`"info"` 与 `"disabled"`。标签只用于
+浏览和批量选择，不会充当隐藏开关。所有项目策略都保存在这一个活动配置
+文件中。
 
 ---
 
@@ -235,30 +252,65 @@ rules."returns_compatibility" = "warning"
 
 ## 内联抑制
 
-要在特定行上抑制诊断，请添加带有规则代码和强制原因的注释：
+使用标准的 `# type: ignore` 拼写。指定 Basilisk 规则代码可让抑制保持精确：
 
 ```python
-result: Any = get_legacy_value()  # basilisk: ignore[returns_compatibility] -- no stub available, tracked in #123
+result: Any = get_legacy_value()  # type: ignore[returns_compatibility]
 ```
 
-要抑制一行上的所有诊断：
+裸 ignore（以及其他检查器的代码）按 PEP 484 兼容语义抑制整行：
 
 ```python
-data = unsafe_cast(value)  # basilisk: ignore -- third-party code, cannot type
+data = unsafe_cast(value)  # type: ignore
 ```
 
-要抑制文件中的所有诊断，请在顶部添加：
+同一语法也可以降低严重性而不隐藏诊断：
+
+```python
+value = legacy_call()  # type: warning[returns_compatibility]
+value = legacy_call()  # type: info[returns_compatibility]
+value = legacy_call()  # type: disabled[returns_compatibility]
+```
+
+文件级指令必须位于文件顶部并单独成行：
 
 ```python
 # basilisk: relaxed
+# basilisk: file-warning[returns_compatibility]
+# basilisk: file-disabled[imports_unresolved]
 ```
 
-> **注意：** 没有原因注释的内联抑制本身会被标记为警告。原因不检查内容——它只需要存在。
+`suppressions` 标签下的四条审计规则默认全部关闭：`BSK-I0060`（有效且
+精确）、`BSK-W0061`（有效但宽泛）、`BSK-W0062`（未使用）与
+`BSK-E0063`（格式错误）。它们和其他规则一样可分别配置为 error、warning、
+info 或 disabled。格式错误的指令可以被审计，但绝不会真正抑制诊断。
 
 ---
 
 ## 配置发现
 
-Basilisk 从被检查文件的目录开始搜索 `pyproject.toml`，向上遍历到文件系统根目录。使用第一个包含 `[tool.basilisk]` 部分的 `pyproject.toml`。
+Basilisk 从所选工作区或检查根目录读取配置。根目录的 `basilisk.json` 优先；
+否则使用该根目录 `pyproject.toml` 中的 `[tool.basilisk]`。两个来源不会合并。
+若两者同时存在，`pyproject.toml` 会作为被遮蔽来源显示，但修改它不会改变
+当前策略。
 
 如果未找到配置文件，Basilisk 使用默认值：启用**核心 PEP 符合性规则集**（额外的 Basilisk 规则保持可选），`python-version = "3.12"`，检查当前目录。
+
+---
+
+## 可视化配置编辑器
+
+VS Code 中的标签优先配置编辑器直接读取 LSP 的实时规则目录。它按来源、
+PEP 分类与策略标签浏览规则，支持逐规则及批量严重性、路径覆盖、精确的
+前后变更预览和分页出现位置。
+
+严格优先采用流程由三个显式操作组成：应用 Strict 或 Maximum 预设；运行
+限定到当前根目录的安全修复；刷新后用 `WithoutSafeFix` 检查剩余债务，再
+显式选择 disabled、较低严重性或更窄的路径覆盖。抑制审计预设只会把
+`suppressions` 标签展开为普通规则条目，不会写入模式标志。
+
+采用债务也保存在同一个配置文件的精确文件 `per-path-overrides` 中，并带
+`adoption = true` 来源标记；不会创建 `.basilisk/adoptions.toml` 或任何隐藏
+状态。VSIX 本身不解析或写入 TOML/JSON，所有操作均由可复用的 LSP API 完成。
+
+![Basilisk 的标签优先 VS Code 配置编辑器，展示实时规则分类和逐规则严重性控制](/assets/images/vscode-configuration-editor.png)

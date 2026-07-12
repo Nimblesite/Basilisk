@@ -35,18 +35,104 @@ fn check_default(source: &str, path: &str) -> Vec<basilisk_checker::Diagnostic> 
     check_with(source, path, &BasiliskConfig::default())
 }
 
-/// Config that opts into the annotation house rules (`strict_annotations = true`).
-///
-/// `BSK-E0001`/`BSK-W0050` and friends are off by default — the default config is
-/// pure PEP conformance. They fire only once a project enables them, which is the
-/// precondition for any severity/path override to have something to act on. These
-/// tests use `..annotations_on()` to layer overrides on top. Basilisk has no
-/// modes; this is just configuration. See [CHKARCH-CONFIGURATION-ONLY].
+/// Config with explicit native severities for the opt-in rules used here.
 fn annotations_on() -> BasiliskConfig {
     BasiliskConfig {
-        strict_annotations: true,
+        rules: HashMap::from([
+            ("BSK-E0001".to_owned(), RuleSeverity::Error),
+            ("BSK-W0050".to_owned(), RuleSeverity::Warning),
+        ]),
         ..Default::default()
     }
+}
+
+#[test]
+fn explicit_global_severity_selects_an_opt_in_rule_without_a_tag_switch() {
+    let source = "def foo(x):\n    return x\n";
+    for (configured, expected) in [
+        (RuleSeverity::Error, basilisk_checker::Severity::Error),
+        (RuleSeverity::Warning, basilisk_checker::Severity::Warning),
+        (RuleSeverity::Info, basilisk_checker::Severity::Info),
+    ] {
+        let config = BasiliskConfig {
+            rules: HashMap::from([("BSK-E0001".to_owned(), configured)]),
+            ..Default::default()
+        };
+        let diagnostics = check_with(source, "test.py", &config);
+        let selected = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code.code == "BSK-E0001")
+            .collect::<Vec<_>>();
+        assert!(
+            !selected.is_empty(),
+            "an explicit {configured:?} severity must select the opt-in rule"
+        );
+        assert!(selected
+            .iter()
+            .all(|diagnostic| diagnostic.severity == expected));
+    }
+}
+
+#[test]
+fn inherited_and_explicitly_disabled_opt_in_rules_remain_off() {
+    let source = "def foo(x):\n    return x\n";
+    let inherited = check_with(source, "test.py", &BasiliskConfig::default());
+    assert!(!inherited
+        .iter()
+        .any(|diagnostic| diagnostic.code.code == "BSK-E0001"));
+
+    let disabled = BasiliskConfig {
+        rules: HashMap::from([("BSK-E0001".to_owned(), RuleSeverity::Disabled)]),
+        ..Default::default()
+    };
+    assert!(!check_with(source, "test.py", &disabled)
+        .iter()
+        .any(|diagnostic| diagnostic.code.code == "BSK-E0001"));
+}
+
+#[test]
+fn explicit_per_path_severity_selects_an_opt_in_rule() {
+    let source = "def foo(x):\n    return x\n";
+    let config = BasiliskConfig {
+        per_path_overrides: HashMap::from([(
+            "src/**".to_owned(),
+            PathOverride {
+                disabled_rules: Vec::new(),
+                rule_overrides: HashMap::from([("BSK-E0001".to_owned(), RuleSeverity::Warning)]),
+            },
+        )]),
+        ..Default::default()
+    };
+    let diagnostics = check_with(source, "src/test.py", &config);
+    let selected = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == "BSK-E0001")
+        .collect::<Vec<_>>();
+    assert!(!selected.is_empty());
+    assert!(selected
+        .iter()
+        .all(|diagnostic| diagnostic.severity == basilisk_checker::Severity::Warning));
+}
+
+#[test]
+fn per_path_severity_can_reenable_a_globally_disabled_opt_in_rule() {
+    let source = "def foo(x):\n    return x\n";
+    let config = BasiliskConfig {
+        rules: HashMap::from([("BSK-E0001".to_owned(), RuleSeverity::Disabled)]),
+        per_path_overrides: HashMap::from([(
+            "src/**".to_owned(),
+            PathOverride {
+                disabled_rules: Vec::new(),
+                rule_overrides: HashMap::from([("BSK-E0001".to_owned(), RuleSeverity::Warning)]),
+            },
+        )]),
+        ..Default::default()
+    };
+    let diagnostics = check_with(source, "src/test.py", &config);
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.code == "BSK-E0001"
+            && diagnostic.severity == basilisk_checker::Severity::Warning
+    }));
 }
 
 #[test]

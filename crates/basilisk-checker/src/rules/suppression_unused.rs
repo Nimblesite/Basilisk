@@ -41,7 +41,9 @@ pub(crate) fn make_diagnostic(path: &str, span: Span) -> Diagnostic {
         "Suppression directive is unused".to_owned(),
         span,
         path,
-        Some("Remove the directive or update it to select a diagnostic that still exists".to_owned()),
+        Some(
+            "Remove the directive or update it to select a diagnostic that still exists".to_owned(),
+        ),
         Some("Unused suppressions conceal whether an exception is still necessary".to_owned()),
     )
 }

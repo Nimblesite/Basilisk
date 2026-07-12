@@ -121,8 +121,11 @@ count: int = "hello"
 label: str = 42
 "#;
     let diagnostics = run(source)?;
-    // Unclosed block should suppress to EOF
-    let _ = diagnostics;
+    let assignment_count = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == "assignment_compatibility")
+        .count();
+    assert_eq!(assignment_count, 2, "an unclosed block must be inert");
     Ok(())
 }
 

@@ -3,8 +3,8 @@
 //! Workspace configuration reader.
 //!
 //! Parses `pyrightconfig.json` and `pyproject.toml` `[tool.basilisk]` /
-//! `[tool.pyright]` sections to configure strictness, include/exclude paths,
-//! and Python version.
+//! `[tool.pyright]` sections to configure include/exclude paths, import
+//! resolution, and Python version. Rule strictness lives in rule configuration.
 
 use std::path::{Path, PathBuf};
 
@@ -90,8 +90,6 @@ pub struct WorkspaceConfig {
     pub exclude: Vec<PathBuf>,
     /// Extra paths for module resolution (e.g. `src/`).
     pub extra_paths: Vec<PathBuf>,
-    /// Strictness level.
-    pub strict: bool,
     /// Venv path for resolving third-party packages.
     pub venv_path: Option<PathBuf>,
     /// The venv name within `venv_path`.
@@ -121,7 +119,6 @@ impl Default for WorkspaceConfig {
             include: Vec::new(),
             exclude: Vec::new(),
             extra_paths: Vec::new(),
-            strict: true, // Basilisk is strict-by-default
             venv_path: None,
             venv: None,
             analysis_mode: AnalysisMode::WholeModule,
@@ -279,9 +276,6 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
     if let Some(arr) = obj.get("extraPaths").and_then(|v| v.as_array()) {
         cfg.extra_paths = json_path_list(arr);
     }
-    if let Some(v) = obj.get("typeCheckingMode").and_then(|v| v.as_str()) {
-        cfg.strict = v == "strict" || v == "all";
-    }
     if let Some(v) = obj.get("venvPath").and_then(|v| v.as_str()) {
         cfg.venv_path = Some(PathBuf::from(v));
     }
@@ -354,9 +348,6 @@ fn load_pyproject_config(path: &Path) -> Option<WorkspaceConfig> {
                 "pythonPlatform" | "python_platform" => {
                     cfg.python_platform = Some(value.to_owned());
                 }
-                "typeCheckingMode" | "type_checking_mode" => {
-                    cfg.strict = value == "strict" || value == "all";
-                }
                 "venvPath" | "venv_path" => {
                     cfg.venv_path = Some(PathBuf::from(value));
                 }
@@ -396,7 +387,6 @@ mod tests {
     fn test_default_config() {
         let cfg = WorkspaceConfig::default();
         assert_eq!(cfg.python_version.as_deref(), Some("3.12"));
-        assert!(cfg.strict);
         assert!(cfg.include.is_empty());
         assert!(cfg.exclude.is_empty());
         assert!(cfg.typeshed_path.is_none());
@@ -411,7 +401,6 @@ mod tests {
             &config_path,
             r#"{
                 "pythonVersion": "3.11",
-                "typeCheckingMode": "basic",
                 "include": ["src"],
                 "exclude": ["tests", "build"],
                 "extraPaths": ["vendor"]
@@ -421,7 +410,6 @@ mod tests {
 
         let cfg = load_json_config(&config_path).unwrap();
         assert_eq!(cfg.python_version.as_deref(), Some("3.11"));
-        assert!(!cfg.strict);
         assert_eq!(cfg.include, vec![PathBuf::from("src")]);
         assert_eq!(
             cfg.exclude,
@@ -438,7 +426,6 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let cfg = load_config(&dir);
         assert_eq!(cfg.python_version.as_deref(), Some("3.12"));
-        assert!(cfg.strict);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

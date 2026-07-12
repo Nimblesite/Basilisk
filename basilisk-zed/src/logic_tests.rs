@@ -478,8 +478,8 @@ fn default_config_has_uv_settings() {
     assert_eq!(config["uv"]["enabled"], true);
     assert_eq!(config["uv"]["executablePath"], "");
     assert_eq!(config["uv"]["autoSync"], false);
-    assert_eq!(config["uv"]["stubSuggestions"], true);
-    assert_eq!(config["uv"]["dependencyDiagnostics"], true);
+    assert!(config["uv"].get("stubSuggestions").is_none());
+    assert!(config["uv"].get("dependencyDiagnostics").is_none());
 }
 
 #[test]
@@ -488,9 +488,7 @@ fn wrap_config_preserves_uv_settings() {
         "uv": {
             "enabled": false,
             "executablePath": "/usr/local/bin/uv",
-            "autoSync": true,
-            "stubSuggestions": false,
-            "dependencyDiagnostics": false
+            "autoSync": true
         }
     });
     let wrapped = wrap_config(&inner);
@@ -500,8 +498,6 @@ fn wrap_config_preserves_uv_settings() {
         "/usr/local/bin/uv"
     );
     assert_eq!(wrapped["basilisk"]["uv"]["autoSync"], true);
-    assert_eq!(wrapped["basilisk"]["uv"]["stubSuggestions"], false);
-    assert_eq!(wrapped["basilisk"]["uv"]["dependencyDiagnostics"], false);
 }
 
 #[test]

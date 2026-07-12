@@ -1,304 +1,289 @@
-# Configuration Editor {#CONFIGEDITOR}
+# Configuration editor {#CONFIGEDITOR}
 
-**Status:** target specification; the foundations exist, but the editor and its
-transactional LSP API are not shipped yet. The implementation sequence is in
+**Status:** the v1 LSP API and the VS Code configuration editor are implemented,
+documented, and covered by focused Rust, TypeScript, screenshot, and website
+tests. The release gate and non-blocking follow-up work are tracked in
 [LSP-CONFIGURATION-EDITOR-PLAN.md](../plans/LSP-CONFIGURATION-EDITOR-PLAN.md).
 
-Basilisk needs a configuration experience that makes the strongest useful
-policy easy to adopt without pretending an established codebase can fix every
-diagnostic today. The first client is the VSIX, but configuration knowledge,
-rule selection, impact analysis, persistence, and adoption all live behind a
-reusable LSP API. The VSIX is a small, beautiful rendering shell over that API.
+This contract composes:
 
-This document owns the end-to-end experience. The sources of truth it composes
-remain:
+- severity and precedence from
+  [CHKARCH-STRICTNESS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS);
+- canonical rule tags from [CHKTAG](CHECKER-RULE-TAGGING-SPEC.md#CHKTAG);
+- shared methods from
+  [LSPARCH-CONFIG-EDITOR](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR);
+- fixes and adoption from [AUTOFIX](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX); and
+- VS Code hosting from
+  [VSIX-CONFIGURATION-EDITOR](VSIX-SPEC.md#VSIX-CONFIGURATION-EDITOR).
 
-- severity, scope, and precedence: [CHKARCH-STRICTNESS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS);
-- the flat tag model: [CHKTAG](CHECKER-RULE-TAGGING-SPEC.md#CHKTAG);
-- shared LSP wire methods: [LSPARCH-CONFIG-EDITOR](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR);
-- safe fixes and per-file adoption: [AUTOFIX](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX);
-- VS Code-only hosting: [VSIX-CONFIGURATION-EDITOR](VSIX-SPEC.md#VSIX-CONFIGURATION-EDITOR).
+The LSP owns rule selection, configuration parsing, impact analysis, and
+mutation. Clients render server data, request server operations, and apply the
+returned edit. They do not maintain another rule catalog or write project
+configuration directly.
 
-## Product principles {#CONFIGEDITOR-PRINCIPLES}
+## Rule catalog and tags {#CONFIGEDITOR-TAGS}
 
-1. **Tags are the information architecture.** Rules are browsed, filtered,
-   summarised, and bulk-edited through their authoritative tags. The UI never
-   invents a parallel category list or guesses provenance from a code prefix.
-2. **Presets, not modes.** “Strict”, “maximum policy”, and other named presets
-   are LSP-owned, one-shot configuration recipes. They expand to explicit rule
-   operations and never create a hidden runtime `strict`/`standard` mode
-   ([CHKARCH-CONFIGURATION-ONLY]).
-3. **Severity and enablement are one understandable control.** Every rule can be
-   `error`, `warning`, `info`, or `disabled`. “Inherited” removes an explicit
-   override; it is not a fifth severity.
-4. **Strict target, explicit debt.** Users can enable the complete rule catalog,
-   run safe fixes, and then deliberately demote or disable only the debt they
-   cannot address now. Existing exceptions stay visible and measurable.
-5. **Preview before mutation.** The server expands selectors, validates the
-   active config, runs hypothetical analysis, and returns the exact affected
-   rules/files/counts before any write.
-6. **The LSP owns policy.** Clients send intent and render results. They never
-   enumerate rules, parse configuration, calculate precedence, or write files.
-7. **One project config.** Rule severities, tag opt-ins, path/file exceptions,
-   and generated adoption debt are persisted only in the root's active config
-   file—not VS Code settings, extension state, a sidecar, or a named mode.
+The checker registry supplies each rule's code, title, summary, documentation
+URL, native severity, default-enabled state, and canonical tags. The LSP exposes
+the same catalog with tag kinds, rule counts, current diagnostic counts, and
+any/all tag selectors.
 
-## Current foundation and missing pieces {#CONFIGEDITOR-STATUS}
+Tags are the primary information architecture. Provenance, reserved PEP
+category, and descriptive policy tags are flat facets, and one rule may belong
+to several facets. The client groups those facets for navigation without
+inventing a hierarchy or copying tag membership.
 
-| Capability | Today | Required target |
-|---|---|---|
-| Four severities | Shipped in `basilisk-config::RuleSeverity` | Keep one canonical wire/disk representation |
-| Global/path overrides | Parsed and applied | Lossless validated read/write/reset with provenance |
-| Rule tags | Live checker source of truth | Expose full tagged rule catalog through the LSP |
-| Single-rule project edit | `basilisk.disableRule` performs an unsafe first-root string edit | Revision-checked preview/apply transaction against the active source |
-| Bulk rules | None | All/code/tag/diagnostic/fixability selectors |
-| Adoption persistence | A separate sidecar exists, but normal republish and production graduation are incomplete | Exact-file severities in the active config file; no sidecar or adoption mode |
-| Ignore visibility | Directives only hide or demote diagnostics | First-class, workspace-indexed suppression diagnostics |
-| VSIX editor | None | Full-width accessible editor-tab webview |
-
-An explicit non-disabled per-rule severity MUST enable an opt-in `basilisk`
-rule even when its broader tag gate is off. `disabled` explicitly deselects it;
-removing the override returns it to inherited tag/default selection. Without
-this rule, a per-rule severity editor would display a value that has no effect.
-
-## Tag-first rule model {#CONFIGEDITOR-TAGS}
-
-The landing view is a tag dashboard. It exposes the three tag kinds without
-flattening them into a fake hierarchy:
-
-- **provenance:** `pep`, `basilisk`;
-- **PEP category:** the reserved `python/typing` category tags;
-- **descriptive:** `strictness`, `style`, `redundancy`, `dependencies`,
-  `imports`, `stubs`, `suppressions`, and future checker-declared tags.
-
-A rule may appear in more than one descriptive view. Tag totals therefore are
-facets, not numbers to add together. Every tag tile shows its rule count,
-current diagnostic count, and severity distribution. Selecting a tile filters
-the rule table; applying a bulk action sends the tag selector to the server.
-The preview response includes `expandedRuleCodes`, making the exact transaction
-reviewable and stable.
-
-The canonical catalog comes from the live rule registry and supplies code,
-title, summary, documentation URL, default severity, default-enabled state,
-tags, and fix metadata. The VSIX and website MUST NOT maintain another list.
-
-## Presets are explicit recipes {#CONFIGEDITOR-PRESETS}
-
-The snapshot advertises named `ConfigurationPreset` recipes so every editor
-offers the same supported starting points without copying selector logic. A
-preset carries its stable ID, user-facing name and explanation, ordered
-mutations, and whether it requests safe fixes. The first required recipe is:
-
-- **Strict:** select every live rule and write its native severity at project
-  scope. This turns the complete catalog on while preserving the distinction
-  between native errors, warnings, and information diagnostics.
-
-Choosing a preset enters the ordinary preview/apply flow. The preview expands
-the live catalog and shows the exact codes and impact; apply persists those
-explicit per-rule severities in the active config file. The preset ID itself is
-not persisted and has no continuing runtime semantics. Users can subsequently
-change or inherit any individual rule without “leaving” a preset.
+Fixability is currently projected by the LSP from the mass-fix safe/all rule
+lists rather than stored in the canonical checker catalog. Consolidating that
+metadata remains tracked in
+[CONFIGEDITOR-PLAN-DOMAIN](../plans/LSP-CONFIGURATION-EDITOR-PLAN.md#CONFIGEDITOR-PLAN-DOMAIN).
 
 ## Severity semantics {#CONFIGEDITOR-SEVERITY}
 
-Each rule row presents:
+Every rule is independently configurable at project or path scope:
 
-| UI state | Persisted meaning |
+| Editor intent | Persisted result |
 |---|---|
-| Inherited | No override; follow the next-lower precedence source |
-| Error | Enable and report as an error |
-| Warning | Enable and report as a warning |
-| Info | Enable and report as information |
-| Disabled | Do not report the rule |
+| Inherited | Remove the explicit override |
+| Native | Write the selected rule's concrete native severity |
+| Error / Warning / Info | Enable the rule at that severity |
+| Disabled | Persist an explicit disabled severity |
 
-“Native severity” is a bulk-operation intent: the LSP expands it to each rule's
-own default severity. “Maximum policy” instead promotes every selected rule to
-`error`. Neither value is stored as a fifth severity.
+An explicit non-disabled severity enables an otherwise opt-in Basilisk rule.
+Removing it returns selection to the rule's `defaultEnabled` state; tags are
+navigation and bulk-selection metadata, never ambient switches. `Inherited`
+and `Native` are mutation intents, not values stored in the config file.
 
-The rule detail view explains both `configuredSeverity` and
-`effectiveSeverity`, including the winning global/path/file/adoption source.
-An inherited control must never look identical to an explicit override.
+When several path patterns match, the checker selects one winner
+deterministically: a non-wildcard pattern outranks a wildcard pattern, then more
+path segments outrank fewer, then more literal characters outrank fewer, with a
+stable lexical tie-break. That winning path entry takes precedence over the
+project entry as specified by [CHKARCH-STRICTNESS-PRECEDENCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS-PRECEDENCE).
 
-## Strict-first adoption {#CONFIGEDITOR-ADOPTION}
+## Presets {#CONFIGEDITOR-PRESETS}
 
-The primary adoption workflow is one continuous workspace view, not a wizard:
+Snapshots advertise reusable, one-shot mutation recipes:
 
-1. **Set the target.** Preview “Enable every rule at native severity” or
-   “Maximum policy”. The server analyses the proposed configuration, including
-   rules that are currently disabled.
-2. **Take the free wins.** Preview and run `SafeFix` changes as one undoable
-   workspace edit ([AUTOFIX-CLASSIFY]).
-3. **Review remaining debt.** Group remaining occurrences by tag, rule, file,
-   severity, and fixability. “Without safe fix” is a filter, never an automatic
-   decision to disable.
-4. **Choose the exception.** Set selected rules to warning/info/disabled at the
-   project or path scope, or adopt only the current per-file debt. Per-file
-   adoption writes ordinary exact-file severity entries into the active config.
-   The preview states plainly that a global disable also hides future violations.
-5. **Apply once.** The LSP writes one revision-checked configuration edit,
-   reloads analysis, republishes diagnostics, and returns the fresh snapshot.
-6. **Pay debt down.** The Adoption view shows every exception. Per-file entries
-   auto-graduate when the last matching violation is fixed.
+- **Strict:** every live rule at its native severity;
+- **Maximum:** every live rule at error severity; and
+- **Suppression audit:** the `suppressions` tag at native severity.
 
-No operation silently disables every rule that happens to fire. The user sees
-and confirms the exact rule set. New files remain fully checked when the user
-chooses per-file adoption instead of a global downgrade.
+The client previews and applies the advertised ordinary mutations. `All` and
+`Native` expand against the live catalog, so Strict writes an explicit severity
+for every rule, including opt-in rules. Preset IDs are never written to project
+configuration; the resulting explicit rule entries are the complete durable
+state.
 
-## Suppressions are diagnostics {#CONFIGEDITOR-SUPPRESSIONS}
+## LSP operations {#CONFIGEDITOR-OPERATIONS}
 
-Every source suppression or severity directive is auditable at its comment
-location through the rule family in
-[CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS).
-This makes ignores searchable in Problems and in the configuration editor's
-workspace occurrence list.
+All configuration-editor requests require an explicit active-workspace
+`rootUri`:
 
-The family uses the descriptive `suppressions` tag and separates four policies.
-All four are `basilisk` opt-in rules: the unconfigured default emits **no
-suppression-audit diagnostics**. The severities below are their native values
-only after the family or an individual rule is enabled:
+- `basilisk/configurationSnapshot` returns the active source and revision,
+  shadowed sources, live catalog, tag facets, current debt, presets, and a
+  normalized inventory of every persisted path override.
+- `basilisk/previewConfigurationChange` validates the base revision, expands
+  all/code/tag/current-violation/safe-fixability selectors, builds a validated
+  in-memory patch, and reruns checking against that hypothetical config.
+- `basilisk/applyConfigurationChange` consumes a cached preview with the same
+  root and revision, asks the client to apply one configuration edit, reloads
+  and rechecks the root, republishes diagnostics, emits
+  `basilisk/configurationChanged`, and returns a fresh snapshot.
+- `basilisk/ruleOccurrences` returns URI/range/code-ordered pages. The opaque
+  cursor resumes the stable result and the server accepts limits from 1 to
+  1000.
 
-| Rule | Native severity when enabled | Meaning |
-|---|---|---|
-| `BSK-I0060` | Info | Valid code-specific directive that actively suppresses or changes severity |
-| `BSK-W0061` | Warning | Active blanket directive with no Basilisk rule selector |
-| `BSK-W0062` | Warning | Directive that matches no diagnostic or changes nothing |
-| `BSK-E0063` | Error | Malformed, unknown, conflicting, or unpaired directive |
+Snapshot, preview, and occurrence inventory covers the complete selected root,
+even when analysis is configured to publish only open files. Open buffers stay
+authoritative; eligible closed files are loaded from disk into the server index
+without publishing additional diagnostics. Preview impact therefore describes
+the root inventory, not only the currently visible editor tabs.
 
-Each is configurable to any severity. A team can opt into the family, keep
-active specific ignores at `info`, promote blanket/unused ignores to `error`,
-or turn the family back off. Audit diagnostics are appended after ordinary inline suppression and
-cannot be hidden by the directive they describe; project/path configuration is
-the deliberate way to change their severity.
+Safe source edits remain a standalone reusable LSP command:
+`basilisk.fixWorkspace` accepts an optional `{ "rootUri": "file:///..." }`
+argument. The configuration editor always supplies it, and the server validates
+and restricts edits to that exact active root. The no-argument command retains
+its existing all-indexed-roots behavior for older clients.
 
-## LSP-owned operations {#CONFIGEDITOR-OPERATIONS}
+The legacy `basilisk.disableRule` command uses the same validated, root-aware
+configuration mutation service. Active configuration watchers also run the
+shared refresh tail and emit the changed notification.
 
-The shared methods are specified in
-[LSPARCH-CONFIG-EDITOR-PROTOCOL](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR-PROTOCOL).
-Together they provide:
+Unknown roots, rule codes, tags, invalid selectors, severities, and path
+patterns, stale revisions, malformed configuration, expired previews, and
+client-rejected edits are request errors. Unrelated unknown configuration
+fields are currently accepted. `ConfigurationProblem` exists in the wire model,
+but v1 returns malformed configuration as a structured request error rather
+than populating snapshot or preview `problems`.
 
-- resolved snapshot and configuration provenance;
-- tag-aware rule catalog, effective severity, counts, and fixability;
-- LSP-advertised preset recipes, including Strict (all rules at native severity);
-- selectors for all rules, exact codes, tags, current violations, safe-fixable
-  occurrences, and occurrences without a safe fix;
-- batch set/reset/enable/disable at project or path scope;
-- hypothetical analysis and safe-fix impact preview;
-- revision-checked apply, deterministic reload/recheck/republish;
-- workspace occurrences for navigation;
-- a configuration-changed notification for every editor.
+## Wire model {#CONFIGEDITOR-MODEL}
 
-Every request includes `rootUri`; silently choosing the first workspace root is
-forbidden. Unknown rules/tags/severities, invalid config, shadowed sources,
-read-only files, and stale revisions are structured errors rather than ignored
-input.
+The design source is
+[`models/configuration_editor.td`](../../models/configuration_editor.td), with
+its rendered [SVG](../models/configuration_editor.svg). The committed Rust and
+TypeScript DTOs carry generated provenance and preserve those shapes plus their
+transport derives. An automated regeneration/drift check remains open.
 
-## Data model {#CONFIGEDITOR-MODEL}
+A snapshot contains:
 
-The language-neutral source is
-[`models/configuration_editor.td`](../../models/configuration_editor.td), rendered
-as [`docs/models/configuration_editor.svg`](../models/configuration_editor.svg).
-Rust and TypeScript DTOs are generated from the same typeDiagram model during
-implementation; handwritten wire-shape copies are forbidden.
+- root, content revision, active source, format, existence/read-only state, and
+  shadowed sources;
+- rule descriptors with project-configured and effective severity plus
+  diagnostic, file, fix, and adoption counts;
+- typed tag facets, debt totals, and server-owned preset mutations; and
+- sorted path entries with legacy disabled-list values normalized to
+  `Disabled`, exact rule severities, and adoption provenance.
 
-The important distinction is:
-
-- `RuleSeverity`: the four persisted severities;
-- `RuleSetting`: a mutation intent, adding `Inherit` (remove override) and
-  `Native` (expand to each selected rule's default);
-- `RuleState.configuredSeverity`: optional explicit value;
-- `RuleState.effectiveSeverity`: result after the complete precedence ladder.
-- `ConfigurationPreset`: an advertised one-shot list of ordinary mutations,
-  never a persisted policy value.
+Configured severity on a rule row is currently the project-level projection.
+The path inventory is exact, but the snapshot does not yet expose the winning
+path or field-level provenance for an arbitrary source file.
 
 ## Configuration sources and writes {#CONFIGEDITOR-SOURCES}
 
-The snapshot names the active source and all shadowed sources. Existing
-`basilisk.json` remains readable and has current loader priority; new editor-
-created configuration uses `[tool.basilisk]` in `pyproject.toml`. The editor
-must mutate the active source or offer an explicit migration—it must never
-write an ignored `pyproject.toml` while `basilisk.json` is active.
+For one root, discovery chooses an existing root-level `basilisk.json` first,
+otherwise an existing `pyproject.toml`; if neither exists, `pyproject.toml` is
+the creation target. The files are never merged. Lower-priority existing
+sources are exposed as shadowed, and every mutation targets the one active
+document.
 
-All project policy—including editor-generated per-file adoption entries—lives
-in that one active config file. The target design has no
-`.basilisk/adoptions.toml`, no hidden workspace state, and no adoption/strictness
-mode. `adoption = true` on an exact-file path entry records provenance while its
-`rules` table remains ordinary severity configuration ([AUTOFIX-ADOPTION-FILE]).
+The writer validates the original structure, validates every requested
+severity, renders the complete replacement, and validates it again before
+returning a patch. TOML edits preserve unrelated content, comments, ordering,
+and newline style. JSON edits preserve unrelated values and the existing
+`perPathOverrides`/`per-path-overrides` spelling while emitting normalized
+pretty JSON. Reset removes empty generated rule/path/adoption tables.
 
-The writer is structure-aware and preserves unrelated keys, comments, ordering,
-and newline style. It validates the complete result before returning a single
-versioned `WorkspaceEdit`; the LSP does not write behind an unsaved editor
-buffer. The apply request rejects a stale `baseRevision` and asks the user to
-refresh or re-preview. Malformed configuration is read-only until fixed; it is
-never replaced with defaults.
+Closed-source apply sends a whole-document `WorkspaceEdit`, then keeps a
+root-scoped in-memory overlay until the client write is visible on disk. Disk
+revision checks prevent a stale preview from overwriting an external edit.
 
-## VSIX experience {#CONFIGEDITOR-VSIX-EXPERIENCE}
+### Open buffers and optimistic locks {#CONFIGEDITOR-SOURCES-OPEN-BUFFER}
 
-The VSIX opens one full-width editor tab from **Basilisk: Open Configuration
-Editor** and a settings action in the Basilisk activity view. A narrow tree view
-is not suitable for the rule catalog, and the extension must not take over all
-`pyproject.toml` files as a custom editor.
+Clients synchronize candidate `pyproject.toml` and `basilisk.json` documents in
+addition to Python. The LSP accepts only exact root-level candidates into its
+configuration state; nested candidates are ignored and are never analysed as
+Python. `didOpen`, incremental `didChange`, `didSave`, and `didClose` keep that
+state aligned with the editor.
 
-```text
-┌ Configuration · workspace ─ active: pyproject.toml ─ Saved ─ Open raw ┐
-│ Overview  Rules  Adoption  Path overrides  Project                    │
-├ Tags ───────────────┬ Rules ────────────────────────────────┬ Detail ─┤
-│ pep          148    │ Search: tag:suppressions fix:none     │ BSK-…   │
-│ basilisk      13    │ [✓] Code · summary · tag chips  [▼]  │ source  │
-│ strictness     9    │ [ ] …                                 │ impact  │
-│ suppressions   4    │                                       │ files   │
-├─────────────────────┴───────────────────────────────────────┴──────────┤
-│ 12 selected · Set severity · Reset · Preview changes                 │
-└───────────────────────────────────────────────────────────────────────┘
-```
+When the active source is open, its in-memory text is authoritative for
+snapshot, preview, validation, and apply, even if the disk source is malformed.
+Apply rechecks the content revision and emits a `TextDocumentEdit` carrying the
+current LSP document version. A processed content change fails the revision
+check; a change racing the client edit fails the versioned workspace edit. A
+short-lived pending projection bridges successful `workspace/applyEdit` and its
+following `didChange` without changing the base text used for incremental
+edits. Closing the buffer removes the projection and restores disk authority.
 
-The overview shows exact counts for Error, Warning, Info, Disabled, and
-Inherited plus workspace occurrences. It does not invent a “strictness score”.
-Rows are virtualised, searchable, and keyboard navigable. Search supports text
-and facets such as `tag:strictness`, `severity:error`, `status:disabled`,
-`has:diagnostics`, and `fix:none`; selector evaluation remains server-owned for
-bulk mutations.
+Rule policy, path exceptions, and adoption provenance all live in this active
+project config file. Presets introduce no second persisted state.
 
-Visual polish uses VS Code theme variables and the Basilisk orange/sky accents,
-never a fixed light/dark canvas. Controls remain legible in high-contrast themes,
-at 200% zoom, and with reduced motion. The shell follows the official
-[webview UX guidance](https://code.visualstudio.com/api/ux-guidelines/webviews),
-[theme tokens](https://code.visualstudio.com/api/references/theme-color), and
-[webview security guidance](https://code.visualstudio.com/api/extension-guides/webview#security).
+## Path overrides {#CONFIGEDITOR-PATHS}
+
+The snapshot's `pathOverrides` inventory is sorted by pattern and contains every
+persisted rule severity for each path scope. A client can preview a new bounded
+exception or reset every listed rule in an existing entry without parsing the
+underlying TOML/JSON. Preview returns the exact normalized code/scope/resulting
+setting changes and reruns the full root before anything is written.
+
+Path mutations use project-relative glob syntax. Adoption uses the same domain
+with exact project-relative file paths, so ordinary checker precedence and the
+configuration editor cannot disagree about what a path entry means.
+
+## Strict-first workflow and adoption {#CONFIGEDITOR-ADOPTION}
+
+The VS Code editor exposes the strict-first workflow as three explicit,
+server-owned operations:
+
+1. Preview and apply Strict or Maximum, materializing the target as ordinary
+   project rule severities.
+2. Run root-scoped `basilisk.fixWorkspace`, which applies only the currently
+   supported safe fixes, then refresh the snapshot.
+3. Review paged `WithoutSafeFix` occurrences and preview an explicit severity
+   change. The supplied project action uses `Disabled` and warns that it hides
+   current and future diagnostics; users can instead choose a narrower path or
+   a non-disabled severity.
+
+The safe-fix edit and config preview are deliberately sequential operations,
+not one atomic request: current counts are reloaded after fixes before the debt
+selector is expanded.
+
+`basilisk.adoptFile` and `basilisk.adoptWorkspace` provide the durable
+per-file alternative. They collect current error and safety-violation codes and
+persist warning-severity exact-file entries with `adoption = true` through the
+same active-config transaction. New files do not inherit those exceptions.
+`basilisk.unadoptFile` removes the generated rules for one file.
+
+After an adopted file is saved, the LSP rechecks it and removes each adopted
+rule whose last matching diagnostic is gone. The structure-aware writer removes
+the empty exact-file entry, the normal refresh path republishes diagnostics,
+and `basilisk/configurationChanged` refreshes clients. The CLI and direct
+adoption commands do not run safe fixes themselves; the configuration editor's
+root-scoped fix action is the explicit first step when that workflow is wanted.
+
+## Suppression diagnostics {#CONFIGEDITOR-SUPPRESSIONS}
+
+The opt-in `suppressions` family emits audit diagnostics after ordinary inline
+suppression, so a directive cannot hide its own audit:
+
+| Rule | Native severity | Meaning |
+|---|---|---|
+| `BSK-I0060` | Info | Active code-specific directive |
+| `BSK-W0061` | Warning | Active blanket directive |
+| `BSK-W0062` | Warning | Unused directive |
+| `BSK-E0063` | Error | Malformed, unknown, conflicting, or unpaired directive |
+
+All four rules are disabled by default, carry `basilisk` and `suppressions`, and
+use the same project/path severity configuration as every other rule. The
+Suppression audit preset enables them at native severity; users can promote any
+of them to error or demote them independently. They participate in root debt,
+tag selection, occurrence pagination, and preview/apply.
+
+Malformed or misplaced directives are audited but never applied to ordinary
+diagnostics. Focused tests cover the off-by-default gate, all four configured
+severities, self-suppression, line/block/file spans, malformed boundaries and
+spellings, and standard PEP 484 type-comment exclusion. Stable directive IDs,
+raw spelling, and diagnostic-origin metadata are not yet exposed on the LSP
+wire.
+
+## VS Code experience {#CONFIGEDITOR-VSIX-EXPERIENCE}
+
+The capability-gated **Basilisk: Open Configuration Editor** command opens one
+full-width singleton webview. It uses the shared Signals store and typed LSP
+transport, with Overview, Rules, Adoption, Path Overrides, and Project views.
+
+The Rules view is tag-first, grouping source, PEP-category, and policy facets.
+It supports search, virtualized rows, individual and bulk severity/reset
+controls, server-advertised presets, exact impact preview/apply, paged
+occurrence navigation, and conflict refresh. The Adoption view delegates safe
+fixes to the root-scoped LSP command and delegates remaining-debt selection to
+`WithoutSafeFix`. The Path view renders the server inventory and previews all
+changes through the same transaction API.
+
+Multi-root selection is explicit: the active editor's root wins, otherwise the
+user chooses a workspace. Responses and navigation are checked against that
+root. The extension does not read or write configuration files itself.
 
 ## Accessibility and security {#CONFIGEDITOR-ACCESSIBILITY-SECURITY}
 
-- Semantic headings, landmarks, tables/lists, labels, and real buttons/selects;
-  no click-only `div` or table row.
-- Complete keyboard operation, visible focus, focus preservation after refresh,
-  and an `aria-live` region for preview/apply/conflict status.
-- Severity is always text-labelled; colour is redundant.
-- `prefers-reduced-motion` disables non-essential transitions.
-- Default-deny CSP, nonce-gated local scripts, no remote resources,
-  `localResourceRoots: []`, and no retained hidden state.
-- The host sends data only after a ready handshake. Every inbound message is
-  runtime-decoded and revalidated by the LSP; workspace text is never injected
-  into executable HTML.
-- The extension host may open/navigate files and apply the server's
-  `WorkspaceEdit`; it never parses or writes TOML/JSON itself.
+The webview uses theme tokens, text-labelled severities, keyboard controls,
+high-contrast/responsive styles, reduced-motion handling, a default-deny CSP,
+nonce-gated local scripts, no remote resources, and runtime-decoded intents.
+Workspace data arrives only after the ready handshake and is never interpolated
+into executable HTML.
 
-## Acceptance criteria {#CONFIGEDITOR-ACCEPTANCE}
+Automated tests cover the CSP/data boundary, intent decoding, semantic labels,
+responsive/reduced-motion styles, stale async result rejection, singleton
+message binding, capability gating, and typed routing. The committed headed
+capture exercises the tag-first rules view against the real LSP. Recorded
+cross-platform keyboard, screen-reader, zoom, CSP, and injection audits remain
+release gates.
 
-The feature is complete only when:
+## Acceptance and follow-up {#CONFIGEDITOR-ACCEPTANCE}
 
-1. catalog parity proves every live rule appears once with its canonical tags;
-2. each rule supports Error/Warning/Info/Disabled plus reset to Inherited;
-3. an explicit severity enables an opt-in rule;
-4. all/code/tag/fixability selectors preview and apply the exact same code set;
-5. the Strict preset, enable-all, maximum, and disable-all work in multi-root
-   workspaces without first-root fallbacks, and preset application persists
-   explicit severities rather than a mode flag;
-6. stale, malformed, shadowed, and read-only configs cannot be overwritten;
-7. apply triggers reload, Salsa invalidation, recheck, publish, and notification
-   in every analysis scope;
-8. strict-first adoption runs safe fixes, persists demotions on later edits, and
-   auto-graduates;
-9. all four suppression-audit rules are workspace-findable and severity-tunable;
-10. the VSIX performs no configuration filesystem writes and passes keyboard,
-    screen-reader, light/dark/high-contrast, zoom, CSP, and injection tests;
-11. the real editor screenshot is captured and verified only after the feature
-    ships—never mocked from static HTML.
+The v1 acceptance surface is the config-only domain and LSP operations above,
+the thin tag-first VS Code client, unsaved-buffer/apply-race safety, the real-LSP
+screenshot, and a clean repository CI run. Neovim/Zed clients, generated DTO
+drift checks, canonical fixability metadata, richer provenance/problem records,
+rich suppression metadata, and broader transaction/accessibility matrices are
+tracked as non-blocking follow-up work. They extend the v1 contract; they do not
+introduce policy modes or client-owned configuration state.

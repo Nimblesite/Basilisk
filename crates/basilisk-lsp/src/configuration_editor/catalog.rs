@@ -48,25 +48,17 @@ pub(super) fn severities(
     descriptor: &RuleDescriptor,
     config: &BasiliskConfig,
 ) -> (Option<RuleSeverity>, RuleSeverity) {
-    let configured = config.rules.get(&descriptor.code).copied().map(config_to_wire);
-    let effective = configured.unwrap_or_else(|| {
-        if descriptor.default_enabled || descriptor.tags.iter().any(|tag| tag_gate_enabled(tag, config))
-        {
-            descriptor.default_severity
-        } else {
-            RuleSeverity::Disabled
-        }
-    });
+    let configured = config
+        .rules
+        .get(&descriptor.code)
+        .copied()
+        .map(config_to_wire);
+    let effective = match (configured, descriptor.default_enabled) {
+        (Some(severity), _) => severity,
+        (None, true) => descriptor.default_severity,
+        (None, false) => RuleSeverity::Disabled,
+    };
     (configured, effective)
-}
-
-fn tag_gate_enabled(tag: &str, config: &BasiliskConfig) -> bool {
-    match tag {
-        "strictness" | "style" | "redundancy" => config.strict_annotations,
-        "dependencies" | "imports" => config.uv_dependency_diagnostics,
-        "stubs" => config.uv_stub_suggestions,
-        _ => false,
-    }
 }
 
 /// Classify a canonical catalog tag for the tag dashboard.
@@ -92,9 +84,12 @@ pub(super) fn expand_selector(
         .flat_map(|rule| rule.tags.iter().map(String::as_str))
         .collect();
     let selected: BTreeSet<&str> = match selector {
-        RuleSelector::All => catalog_codes,
+        RuleSelector::All => catalog_codes.into_iter().collect(),
         RuleSelector::Codes { codes } => {
-            if let Some(unknown) = codes.iter().find(|code| !catalog_codes.contains(code.as_str())) {
+            if let Some(unknown) = codes
+                .iter()
+                .find(|code| !catalog_codes.contains(code.as_str()))
+            {
                 return Err(SelectionError::UnknownRule(unknown.clone()));
             }
             codes.iter().map(String::as_str).collect()
@@ -107,7 +102,11 @@ pub(super) fn expand_selector(
                 .iter()
                 .filter(|rule| {
                     let matches = tags.iter().filter(|tag| rule.tags.contains(tag)).count();
-                    if *match_all { matches == tags.len() } else { matches > 0 }
+                    if *match_all {
+                        matches == tags.len()
+                    } else {
+                        matches > 0
+                    }
                 })
                 .map(|rule| rule.code.as_str())
                 .collect()

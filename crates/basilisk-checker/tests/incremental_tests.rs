@@ -53,15 +53,16 @@ fn default_config(db: &EventDb) -> ConfigInput {
     ConfigInput::new(db, ConfigValue(BasiliskConfig::default()))
 }
 
-/// A `ConfigInput` with the opt-in strict-annotation rules enabled.
+fn e0001_config() -> BasiliskConfig {
+    BasiliskConfig {
+        rules: HashMap::from([("BSK-E0001".to_owned(), basilisk_config::RuleSeverity::Error)]),
+        ..BasiliskConfig::default()
+    }
+}
+
+/// A `ConfigInput` with BSK-E0001 explicitly enabled.
 fn strict_config(db: &EventDb) -> ConfigInput {
-    ConfigInput::new(
-        db,
-        ConfigValue(BasiliskConfig {
-            strict_annotations: true,
-            ..BasiliskConfig::default()
-        }),
-    )
+    ConfigInput::new(db, ConfigValue(e0001_config()))
 }
 
 /// The reference pipeline the query must match exactly.
@@ -180,10 +181,10 @@ fn editing_one_file_does_not_recheck_another() {
 
 /// The query must honour the configuration, not a hard-wired default: the same
 /// source yields BSK-E0001 (an opt-in strict-annotation rule) only when the
-/// `ConfigInput` enables `strict_annotations`. Kills the `check_with_config` →
+/// `ConfigInput` assigns BSK-E0001 an explicit severity. Kills the `check_with_config` →
 /// `check` mutant. [CHKARCH-CONFIGURATION-ONLY]
 #[test]
-fn checked_file_honours_strict_annotations() {
+fn checked_file_honours_explicit_rule_severity() {
     let db = EventDb::default();
     // An unannotated parameter: spec-valid under default config, BSK-E0001 under
     // the opt-in strict-annotation rules.
@@ -202,7 +203,7 @@ fn checked_file_honours_strict_annotations() {
     let strict_diags = file_diagnostics(&db, file, strict_config(&db));
     assert!(
         strict_diags.iter().any(|d| d.code.code == "BSK-E0001"),
-        "with strict_annotations the engine must surface BSK-E0001 for the unannotated parameter"
+        "an explicit severity must surface BSK-E0001 for the unannotated parameter"
     );
 }
 
@@ -222,10 +223,7 @@ fn editing_config_input_invalidates_checked_file() {
     let _first = checked_file(&db, file, config);
     let _ = db.executions_of("checked_file"); // drain priming
 
-    let _previous = config.set_value(&mut db).to(ConfigValue(BasiliskConfig {
-        strict_annotations: true,
-        ..BasiliskConfig::default()
-    }));
+    let _previous = config.set_value(&mut db).to(ConfigValue(e0001_config()));
 
     let after = file_diagnostics(&db, file, config);
     assert_eq!(
@@ -235,7 +233,7 @@ fn editing_config_input_invalidates_checked_file() {
     );
     assert!(
         after.iter().any(|d| d.code.code == "BSK-E0001"),
-        "after enabling strict_annotations the re-checked file must surface BSK-E0001"
+        "after configuring BSK-E0001 the re-checked file must surface it"
     );
 }
 
@@ -368,7 +366,7 @@ fn config_value_equality_distinguishes_overrides() {
     );
 
     let scalar_diff = BasiliskConfig {
-        strict_annotations: true,
+        python_platform: Some("linux".to_owned()),
         ..base.clone()
     };
     assert_ne!(

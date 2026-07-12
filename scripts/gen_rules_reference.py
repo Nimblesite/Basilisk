@@ -3,7 +3,7 @@
 
 Single source of truth: the diagnostic-code header — and the doc-comment body
 beneath it — on each rule module under crates/basilisk-checker/src/rules/. A
-header is either an opt-in `//! BSK-E####: <description>` (or `BSK-W####`) code
+header is either an opt-in `//! BSK-E####: <description>` (`E`, `W`, or `I`) code
 or a PEP-conformance `//! `code_name`: <description>` code (the conformance
 rules are named after their python/typing conformance test, e.g.
 ``//! `protocols_explicit`: ...``). Both styles are extracted so every code the
@@ -45,7 +45,7 @@ DEFAULT_DATA_OUT = ROOT / "website" / "src" / "_data" / "rules.json"
 CONFORMANCE_STATUS = ROOT / "conformance" / "conformance_status.csv"
 ERRORS_BASE_URL = "https://www.basilisk-python.dev/errors"
 
-HEADER = re.compile(r"//!\s*(BSK-[EW]\d{4}|`[a-z0-9_]+`):\s*(.*)")
+HEADER = re.compile(r"//!\s*(BSK-[EWI]\d{4}|`[a-z0-9_]+`):\s*(.*)")
 DOC = re.compile(r"//!\s?(.*)")
 DOCS_URL = re.compile(r'docs_url:\s*"([^"]+)"')
 SPEC_REF = re.compile(r"^Implements ")
@@ -72,6 +72,7 @@ GROUPS = (
     ("E", 10, 29, "Type Safety"),
     ("E", 30, 9999, "Type System"),
     ("W", 0, 9999, "Warnings"),
+    ("I", 0, 9999, "Information"),
 )
 
 
@@ -103,15 +104,16 @@ def severity_for(code: str) -> str:
     # BSK opt-in codes carry severity in the letter; named PEP-conformance
     # codes are all type errors (spec violations).
     if is_bsk(code):
-        return "error" if code[4] == "E" else "warning"
+        return {"E": "error", "W": "warning", "I": "info"}[code[4]]
     return "error"
 
 
 def sort_key(code: str) -> tuple[int, int, int, str]:
-    # BSK opt-in codes first (E before W, then numeric), then named
+    # BSK opt-in codes first (E before W before I, then numeric), then named
     # conformance codes alphabetically.
     if is_bsk(code):
-        return (0, 0 if code[4] == "E" else 1, int(code[5:]), "")
+        severity_order = {"E": 0, "W": 1, "I": 2}
+        return (0, severity_order[code[4]], int(code[5:]), "")
     return (1, 0, 0, code)
 
 
@@ -264,11 +266,13 @@ def main() -> int:
         out = Path(sys.argv[idx + 1]) if idx + 1 < len(sys.argv) else DEFAULT_DATA_OUT
         out.write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")
         errors = sum(r["severity"] == "error" for r in records)
-        warnings = len(records) - errors
+        warnings = sum(r["severity"] == "warning" for r in records)
+        information = sum(r["severity"] == "info" for r in records)
         opt_in = sum(r["provenance"] == "basilisk" for r in records)
         pep = len(records) - opt_in
         print(
-            f"Wrote {len(records)} codes ({errors} errors, {warnings} warnings; "
+            f"Wrote {len(records)} codes ({errors} errors, {warnings} warnings, "
+            f"{information} information; "
             f"{pep} PEP-conformance, {opt_in} opt-in) -> {out}"
         )
         return 0
