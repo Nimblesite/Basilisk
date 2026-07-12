@@ -93,9 +93,10 @@ async function main() {
       const requested = fs.readFileSync(signalPath, "utf8").trim();
       const tempPath = path.join(outputDir, signal.replace(/\.signal$/, ""));
       const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
-      fs.writeFileSync(tempPath, Buffer.from(data, "base64"));
+      const screenshot = Buffer.from(data, "base64");
+      fs.writeFileSync(tempPath, screenshot);
       fs.unlinkSync(signalPath);
-      console.log(`[screenshots] ${requested} (${Math.round(fs.statSync(tempPath).size / 1024)}KB)`);
+      console.log(`[screenshots] ${requested} (${Math.round(screenshot.length / 1024)}KB)`);
     }
     await sleep(POLL_MS);
   }

@@ -13,6 +13,7 @@ BOOK_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BOOK_ROOT.parent
 EXTENSION_ROOT = REPO_ROOT / "vscode-extension"
 OUTPUT_DIR = BOOK_ROOT / "assets" / "screenshots"
+MASTER_DIR = OUTPUT_DIR / "masters"
 WORKSPACE = BOOK_ROOT / "examples" / "signal-box"
 
 
@@ -35,6 +36,7 @@ def main() -> None:
     node = require_tool("node")
     npm = require_tool("npm")
     npx = require_tool("npx")
+    magick = require_tool("magick")
     if not (WORKSPACE / "pyproject.toml").is_file():
         raise SystemExit("Signal Box screenshot workspace is incomplete")
 
@@ -50,6 +52,8 @@ def main() -> None:
     run([npm, "run", "compile"], EXTENSION_ROOT)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    for stale in [*OUTPUT_DIR.glob("*.signal"), *OUTPUT_DIR.glob("*.tmp-*.png")]:
+        stale.unlink(missing_ok=True)
     env = os.environ.copy()
     env.update(
         {
@@ -82,13 +86,38 @@ def main() -> None:
             watcher.kill()
             watcher.wait()
 
-    expected = [
-        OUTPUT_DIR / "09-configuration-editor.png",
-        OUTPUT_DIR / "09-configuration-preview.png",
+    captured = [
+        OUTPUT_DIR / "09-configuration-editor-full.png",
+        OUTPUT_DIR / "09-configuration-preview-full.png",
     ]
-    missing = [path.name for path in expected if not path.is_file()]
+    missing = [path.name for path in captured if not path.is_file()]
     if missing:
         raise SystemExit(f"Screenshot capture did not produce: {', '.join(missing)}")
+
+    MASTER_DIR.mkdir(parents=True, exist_ok=True)
+    editor_master = MASTER_DIR / captured[0].name
+    preview_master = MASTER_DIR / captured[1].name
+    captured[0].replace(editor_master)
+    captured[1].replace(preview_master)
+    crops = [
+        (editor_master, "2130x1331+90+130", OUTPUT_DIR / "09-configuration-editor.png"),
+        (preview_master, "1600x1000+680+370", OUTPUT_DIR / "09-configuration-preview.png"),
+    ]
+    for master, geometry, target in crops:
+        run(
+            [
+                magick,
+                str(master),
+                "-crop",
+                geometry,
+                "+repage",
+                "-resize",
+                "1600x1000!",
+                "-strip",
+                str(target),
+            ],
+            REPO_ROOT,
+        )
     print("Captured real Chapter 9 VS Code screenshots.")
 
 

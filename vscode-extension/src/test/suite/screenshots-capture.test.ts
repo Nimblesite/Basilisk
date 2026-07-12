@@ -71,7 +71,7 @@ async function captureBookConfigurationPreview(
     }
     await prepareWindow();
     await sleep(800);
-    await takeWindowScreenshot('09-configuration-preview.png');
+    await takeWindowScreenshot('09-configuration-preview-full.png');
 }
 
 suite('Editor screenshots', function () {
@@ -186,7 +186,7 @@ suite('Editor screenshots', function () {
             await sleep(1_200);
             const bookCapture = process.env.BASILISK_BOOK_SCREENSHOTS !== undefined;
             await takeWindowScreenshot(
-                bookCapture ? '09-configuration-editor.png' : 'vscode-configuration-editor.png',
+                bookCapture ? '09-configuration-editor-full.png' : 'vscode-configuration-editor.png',
             );
             if (bookCapture) {
                 await captureBookConfigurationPreview(controller, store);

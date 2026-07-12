@@ -255,7 +255,7 @@
       "section": "09",
       "kind": "screenshot",
       "status": "draft-capture",
-      "master": "assets/screenshots/09-configuration-editor.png",
+      "master": "assets/screenshots/masters/09-configuration-editor-full.png",
       "path": "assets/screenshots/09-configuration-editor.png",
       "title": "Browse and preview rules in the configuration editor",
       "alt": "The real VS Code configuration editor for Signal Box shows tag facets, searchable rule rows, diagnostic counts, and explicit severity controls.",
@@ -270,7 +270,7 @@
         "fixture": "examples/signal-box",
         "command": "make -C book screenshots",
         "method": "headed VS Code test with real bundled Basilisk LSP, captured over Chrome DevTools Protocol",
-        "nativeSize": "2880x1800",
+        "nativeSize": "2880x1800 master; deterministic 1600x1000 publication crop",
         "sha256": "b64b1d6baecd26a9afaf2cd2234b282939066f0823bf45a719b78b9afa438600"
       },
       "publicationGate": "Recapture from the pinned Basilisk release before publication."
@@ -280,7 +280,7 @@
       "section": "09",
       "kind": "screenshot",
       "status": "draft-capture",
-      "master": "assets/screenshots/09-configuration-preview.png",
+      "master": "assets/screenshots/masters/09-configuration-preview-full.png",
       "path": "assets/screenshots/09-configuration-preview.png",
       "title": "Review a path-scoped rule change before writing it",
       "alt": "The real Basilisk preview shows BSK-E0002 changing from inherited to warning for tests, recalculated workspace impact, and separate editing and apply actions.",
@@ -295,7 +295,7 @@
         "fixture": "examples/signal-box",
         "command": "make -C book screenshots",
         "method": "real LSP preview in headed VS Code, left unapplied and captured over Chrome DevTools Protocol",
-        "nativeSize": "2880x1800",
+        "nativeSize": "2880x1800 master; deterministic 1600x1000 publication crop",
         "sha256": "a2cc70949606296e5f796d46d5a41c066e8fade5d3a5375d6aeda0af1e9ecc99"
       },
       "publicationGate": "Recapture from the pinned Basilisk release before publication."

@@ -15,6 +15,8 @@ make -C book screenshots
 ```
 
 The command builds and stages the current Basilisk binaries, launches a headed
-VS Code Extension Development Host, waits for the real LSP snapshot and
-preview, and writes both 2880 × 1800 PNGs here. The figure ledger records the
-environment and keeps the captures behind a versioned-release publication gate.
+VS Code Extension Development Host, and waits for the real LSP snapshot and
+preview. It preserves both 2880 × 1800 full-window captures under `masters/`,
+then makes deterministic 1600 × 1000 publication crops here so interface text
+remains readable in the EPUB. The figure ledger records the environment and
+keeps the captures behind a versioned-release publication gate.

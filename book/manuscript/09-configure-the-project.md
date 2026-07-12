@@ -42,10 +42,10 @@ forgot to mention.
 
 There are consequently two useful rule sources in the editor:
 
-- Core rules are selected by Basilisk's unconfigured default and implement the
-  Python typing baseline used by the checker.
-- Basilisk rules add project policy beyond that baseline and remain off until
-  the project selects them.
+- Python typing-spec rules, labelled `pep` in the Source facet, are selected by
+  Basilisk's unconfigured default and implement the checker's typing baseline.
+- Basilisk rules, labelled `basilisk`, add project policy beyond that baseline
+  and remain off until the project selects them.
 
 This distinction is more precise than a “strictness level.” A project may want
 required annotations but not another house rule, or may want an opt-in rule at
@@ -82,8 +82,8 @@ particularly quiet way to waste an afternoon.
 
 The editor itself is not a second policy store. It asks the Basilisk language
 server for the live catalog and active configuration, then asks the server to
-prepare and apply changes to that file. **Open raw** takes you back to the
-durable source of truth.
+prepare and apply changes to that file. Once the source exists, **Open raw**
+takes you back to the durable source of truth.
 
 ## Read the Rules view
 
@@ -127,7 +127,7 @@ values that can be stored.
 | Editor choice | What it means | Stored result |
 |---|---|---|
 | **Inherited · reset** | Remove this explicit entry and return to the rule's default selection | No entry |
-| **Native severity** | Use the concrete severity declared by this rule | `error`, `warning`, `info`, or `disabled` |
+| **Native severity** | Use the concrete severity declared by this rule | `error`, `warning`, or `info` |
 | **Error** | Select the rule and report its diagnostics as errors | `error` |
 | **Warning** | Select the rule and report its diagnostics as warnings | `warning` |
 | **Info** | Select the rule and report its diagnostics as information | `info` |
@@ -180,9 +180,9 @@ rule. Source files elsewhere still receive the project-level error.
 
 ![The real Basilisk preview dialog shows BSK-E0002 changing from inherited to warning only for tests, along with recalculated workspace impact and separate Keep editing and Apply once actions.](../assets/screenshots/09-configuration-preview.png)
 
-*Figure 9.3 — The captured preview is deliberately left unapplied. It proves
-what would be written and how the current Signal Box diagnostics would be
-reclassified without mutating the fixture used to reproduce the image.*
+*Figure 9.3 — The captured preview is deliberately left unapplied. It shows
+which persisted entry would change and how the current Signal Box diagnostics
+would be reclassified without mutating the fixture used to reproduce the image.*
 
 Read the lower line first: it names `BSK-E0002`, the `tests/**` path, and the
 change from inherited path behaviour to Warning. Then read the impact cards.
@@ -198,8 +198,8 @@ on which you based the decision have changed.
 
 Path entries are best when they express a real boundary—tests, generated code,
 or a deliberately isolated compatibility area. Keep patterns simple and avoid
-overlap where possible. If patterns overlap, an exact non-wildcard path wins
-over a wildcard; deeper and more literal patterns then outrank broader ones.
+overlap where possible. If patterns overlap, a non-wildcard pattern outranks a
+wildcard; deeper and more literal patterns then outrank broader ones.
 You should not need that rule to understand an ordinary configuration.
 
 ## Presets are recipes, not modes
@@ -209,7 +209,7 @@ The editor can advertise presets such as **Strict**, **Maximum**, and
 
 - Strict previews every live rule at its own native severity.
 - Maximum previews every live rule at error severity.
-- Suppression audit previews the suppression-policy tag at native severity.
+- Suppression audit previews the `suppressions` tag at native severity.
 
 Applying one expands it into ordinary per-rule entries. Basilisk does not store
 `mode = "strict"`, and the preset does not hover in the background changing
@@ -227,8 +227,8 @@ complete decision:
    `BSK-E0001` and `BSK-E0002` at error.
 2. Open **Basilisk: Open Configuration Editor**. Confirm that the source badge
    names `signal-box/pyproject.toml`.
-3. In Rules, select `BSK-E0002`. Open Path Overrides, enter `tests/**`, choose
-   Warning, and request a preview.
+3. In Rules, tick the checkbox beside `BSK-E0002`. Open Path Overrides, enter
+   `tests/**`, choose Warning, and request a preview.
 4. Before applying, predict the result: the helper in
    `tests/test_readings.py` becomes a warning; the missing return in
    `src/signal_box/readings.py` remains an error; the missing parameter remains
