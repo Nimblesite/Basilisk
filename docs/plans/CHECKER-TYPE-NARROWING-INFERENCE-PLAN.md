@@ -416,5 +416,11 @@ Phases 1 and 2 are independent (parallelizable). Phase 3 depends on Phase 2 (con
   - [ ] 5a. E0014 — `VarCheckContext` with `SubtypeContext`, uses `is_subtype_with_context()` for assignability
   - [ ] 5b. E0013 — `SubtypeContext` passed to `check_function()`, removed `contains_named` early exit for Named types
   - [ ] 5c. E0053 — `is_likely_narrowed()` heuristic suppresses narrowing-dependent FPs; Union normalization in `types_match()`
-  - [x] 5d. Full conformance suite verification — the unmodified `python/typing` scorer (pinned `268d0c4e`) reports **68 of 146 fixtures passing (46.6%)** with the `basilisk` binary, **EVERY rule enabled** — no config, no `basilisk.json`, no "spec-conformance mode". That score reflects **265 false positives and 0 missed required errors**: every required error is caught; every failing fixture is FPs from strict-by-default house rules (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code the spec treats as inferred. HISTORY: last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#185/#191 inflated it to a fake 100% via a `basilisk.json` that DISABLED those 6 house rules at score time — FPs hidden, checker never improved. That disabling is removed; disabling any conformance rule for scoring is now forbidden. Real progress over that span: 40.4% → 46.6%. The only legitimate path to 100% is making strict defaults stop firing on spec-valid code with every rule enabled — never by disabling a rule. Driving FPs down remains active work.
+  - [x] 5d. Full conformance verification landed. The 68/146 figures formerly
+    recorded here were an historical checkpoint and are superseded; the live
+    generated 100% / 0-FP result and graded commit live in
+    [CHKARCH-CONFORMANCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE).
+    The gate runs every core PEP/conformance rule under the ordinary default,
+    with no config or scoring mode; disabling a conformance rule remains
+    forbidden.
   - [ ] Checker-side modules: `narrowing.rs` (NarrowingContext), `expr_inference.rs` (ExpressionInferrer), `constraint_solver.rs` (ConstraintSolver)

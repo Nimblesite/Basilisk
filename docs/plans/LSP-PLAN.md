@@ -6,11 +6,18 @@
 
 ## Status {#LSPPLAN-STATUS}
 
-Phases 0–6 COMPLETE. Phase 7 (cross-module foundation) MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols operational. Phase 7.5 (PEP conformance push) ACTIVE.
+Phases 0–6 COMPLETE. Phase 7 (cross-module foundation) MOSTLY COMPLETE — stub
+infrastructure, import graph, and cross-file symbols are operational. The PEP
+conformance push reached the repository's 100% / 0-FP gate; the live, generated
+score and exact upstream commit live only in
+[CHKARCH-CONFORMANCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE),
+not as another frozen number in this plan.
 
-Score: the official `python/typing` scorer (unmodified, pinned commit 268d0c4e) reports **68/146 files passing (46.6%, errors+warnings strictest)**, binary run with EVERY rule enabled — no config, no `basilisk.json`, no "spec-conformance mode" (no such mode exists — see CHKARCH-CONFORMANCE-MODE). 0 missed required errors; the 265 false positives all come from strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code where the spec treats unannotated as inferred. The only legitimate path to 100% is fixing the checker so its strict defaults stop firing — never disabling a rule.
-
-History: last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#185/#191 inflated it to a fake 100% via a `basilisk.json` that disabled those 6 house rules at score time. That disabling is REMOVED and FORBIDDEN; genuine progress over that span was 40.4% → 46.6%.
+The scorer runs the ordinary unconfigured default: every core PEP/conformance
+rule enabled, Basilisk-specific house rules opt-in and therefore off. There is
+no conformance mode and no scoring config. Historical attempts to alter the
+score by configuration are documented and forbidden in
+[CHKARCH-CONFORMANCE-MODE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE-MODE).
 
 ---
 

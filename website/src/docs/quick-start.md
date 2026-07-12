@@ -158,7 +158,7 @@ When you genuinely need to use `Any` or suppress a diagnostic, you can — but y
 
 ```python
 # This suppression requires a reason comment
-result: Any = legacy_sdk_call()  # basilisk: ignore[returns_compatibility] -- tracked in #847
+result: Any = legacy_sdk_call()  # type: ignore[returns_compatibility]
 ```
 
 Suppressions without reasons are themselves flagged. This is intentional: if you need to suppress a diagnostic, you should be able to explain why.

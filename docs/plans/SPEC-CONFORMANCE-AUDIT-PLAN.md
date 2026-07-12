@@ -93,6 +93,12 @@ deviation is tracked, not hidden.
 | `CHKARCH-CLI-EXITCODES` | exit code `2` (configuration error) never produced; malformed config silently falls back to defaults | `basilisk-cli/src/main.rs`, `basilisk-config/src/lib.rs` |
 | `LSPDEBUG-ERRORS` | all `start_session` failures map to `-32002` (spec reserves it for "no Python interpreter") | `basilisk-lsp/src/server/commands.rs` |
 
+The configuration-error and adoption rows above are now owned by the phased
+[configuration-editor plan](LSP-CONFIGURATION-EDITOR-PLAN.md): validated config
+and revisions in Phase 2, deterministic LSP refresh in Phase 3, and production-
+correct adoption/graduation in Phase 4. Keep this audit as evidence; do not open
+a second implementation track here.
+
 ---
 
 ## `CONFAUDIT-NOTEST` — implemented but no spec-ID-linked test {#CONFAUDIT-NOTEST}

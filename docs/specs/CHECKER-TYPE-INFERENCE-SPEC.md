@@ -914,7 +914,7 @@ query("SELECT * FROM " + table)    # callables_annotation — not LiteralString
 
 ## Conformance Test Coverage {#TYPEINF-CONFORMANCE}
 
-The [Python typing conformance suite](https://github.com/python/typing/tree/main/conformance) is the canonical benchmark. Basilisk targets 100% conformance with every rule enabled (no config, no `basilisk.json`); the reproducible score is measured by RUNNING the real, unmodified `python/typing` harness in CI (`python3 conformance/run_conformance.py`). The remaining gap is false positives from strict house-style rules firing on spec-valid code, not missed required errors; the only legitimate fix is teaching the checker to stop firing — never disabling a rule. See [CHKARCH-CONFORMANCE].
+The [Python typing conformance suite](https://github.com/python/typing/tree/main/conformance) is the canonical benchmark. Basilisk gates at 100% with every core PEP/conformance rule enabled (no config, no `basilisk.json`); the reproducible score is measured by RUNNING the real, unmodified `python/typing` harness in CI (`python3 conformance/run_conformance.py`). Opt-in Basilisk-specific rules are absent by the ordinary default, not by a special scoring mode. Any future gap must be fixed in the checker—never by disabling a conformance rule. See [CHKARCH-CONFORMANCE].
 
 Inference-relevant conformance tests:
 

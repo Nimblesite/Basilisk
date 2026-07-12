@@ -1,0 +1,468 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1497 1583" width="1497" height="1583" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+<defs>
+  <marker id="td-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#5b6068"/>
+  </marker>
+</defs>
+<rect x="0" y="0" width="1497" height="1583" fill="none"/>
+<g data-decl="Uri" data-kind="alias">
+  <rect x="1108" y="1299" width="95" height="56" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="1108" y="1299" width="95" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="1108" y="1327.2" width="95" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="1108" y1="1333.2" x2="1203" y2="1333.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="1108" y="1299" width="4" height="56" rx="2" ry="2" fill="#0a7a5e"/>
+  <text x="1118" y="1320.6499999999999" fill="#1a1d22" font-weight="600">alias Uri</text>
+  
+  <line x1="1108" y1="1333.2" x2="1203" y2="1333.2" stroke="#dadde2" stroke-width="1"/>
+<text x="1118" y="1348.35" fill="#1a1d22">= String</text>
+</g>
+<g data-decl="Revision" data-kind="alias">
+  <rect x="795" y="1112" width="134" height="56" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="795" y="1112" width="134" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="795" y="1140.2" width="134" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="795" y1="1146.2" x2="929" y2="1146.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="795" y="1112" width="4" height="56" rx="2" ry="2" fill="#0a7a5e"/>
+  <text x="805" y="1133.6499999999999" fill="#1a1d22" font-weight="600">alias Revision</text>
+  
+  <line x1="795" y1="1146.2" x2="929" y2="1146.2" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="1161.35" fill="#1a1d22">= String</text>
+</g>
+<g data-decl="PreviewId" data-kind="alias">
+  <rect x="795" y="1016" width="141" height="56" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="795" y="1016" width="141" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="795" y="1044.2" width="141" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="795" y1="1050.2" x2="936" y2="1050.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="795" y="1016" width="4" height="56" rx="2" ry="2" fill="#0a7a5e"/>
+  <text x="805" y="1037.6499999999999" fill="#1a1d22" font-weight="600">alias PreviewId</text>
+  
+  <line x1="795" y1="1050.2" x2="936" y2="1050.2" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="1065.35" fill="#1a1d22">= String</text>
+</g>
+<g data-decl="RuleSeverity" data-kind="union">
+  <rect x="1108" y="278" width="165" height="135" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="1108" y="278" width="165" height="50.2" rx="6" ry="6" fill="#f3eefa" stroke="none"/>
+  <rect x="1108" y="322.2" width="165" height="6" fill="#f3eefa" stroke="none"/>
+  <line x1="1108" y1="328.2" x2="1273" y2="328.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="1108" y="278" width="4" height="135" rx="2" ry="2" fill="#7a4cc7"/>
+  <text x="1118" y="299.65000000000003" fill="#1a1d22" font-weight="600">union RuleSeverity</text>
+  <text x="1190.5" y="322.8" fill="#7a4cc7" font-size="9" font-weight="700" text-anchor="middle" font-style="italic" letter-spacing="0.08em">ONE OF</text>
+  <line x1="1108" y1="328.2" x2="1273" y2="328.2" stroke="#dadde2" stroke-width="1"/>
+  <line x1="1108" y1="328.2" x2="1273" y2="328.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="343.35" fill="#1a1d22">◇ Error</text>
+<line x1="1108" y1="349.4" x2="1273" y2="349.4" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="364.55" fill="#1a1d22">◇ Warning</text>
+<line x1="1108" y1="370.6" x2="1273" y2="370.6" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="385.75000000000006" fill="#1a1d22">◇ Info</text>
+<line x1="1108" y1="391.8" x2="1273" y2="391.8" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="406.95000000000005" fill="#1a1d22">◇ Disabled</text>
+</g>
+<g data-decl="RuleSetting" data-kind="union">
+  <rect x="1108" y="453" width="157" height="178" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="1108" y="453" width="157" height="50.2" rx="6" ry="6" fill="#f3eefa" stroke="none"/>
+  <rect x="1108" y="497.2" width="157" height="6" fill="#f3eefa" stroke="none"/>
+  <line x1="1108" y1="503.2" x2="1265" y2="503.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="1108" y="453" width="4" height="178" rx="2" ry="2" fill="#7a4cc7"/>
+  <text x="1118" y="474.65000000000003" fill="#1a1d22" font-weight="600">union RuleSetting</text>
+  <text x="1186.5" y="497.8" fill="#7a4cc7" font-size="9" font-weight="700" text-anchor="middle" font-style="italic" letter-spacing="0.08em">ONE OF</text>
+  <line x1="1108" y1="503.2" x2="1265" y2="503.2" stroke="#dadde2" stroke-width="1"/>
+  <line x1="1108" y1="503.2" x2="1265" y2="503.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="518.3499999999999" fill="#1a1d22">◇ Inherit</text>
+<line x1="1108" y1="524.4" x2="1265" y2="524.4" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="539.55" fill="#1a1d22">◇ Native</text>
+<line x1="1108" y1="545.6" x2="1265" y2="545.6" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="560.75" fill="#1a1d22">◇ Error</text>
+<line x1="1108" y1="566.8" x2="1265" y2="566.8" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="581.9499999999999" fill="#1a1d22">◇ Warning</text>
+<line x1="1108" y1="588" x2="1265" y2="588" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="603.15" fill="#1a1d22">◇ Info</text>
+<line x1="1108" y1="609.2" x2="1265" y2="609.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="624.35" fill="#1a1d22">◇ Disabled</text>
+</g>
+<g data-decl="TagKind" data-kind="union">
+  <rect x="795" y="67" width="126" height="114" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="795" y="67" width="126" height="50.2" rx="6" ry="6" fill="#f3eefa" stroke="none"/>
+  <rect x="795" y="111.2" width="126" height="6" fill="#f3eefa" stroke="none"/>
+  <line x1="795" y1="117.2" x2="921" y2="117.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="795" y="67" width="4" height="114" rx="2" ry="2" fill="#7a4cc7"/>
+  <text x="805" y="88.64999999999999" fill="#1a1d22" font-weight="600">union TagKind</text>
+  <text x="858" y="111.8" fill="#7a4cc7" font-size="9" font-weight="700" text-anchor="middle" font-style="italic" letter-spacing="0.08em">ONE OF</text>
+  <line x1="795" y1="117.2" x2="921" y2="117.2" stroke="#dadde2" stroke-width="1"/>
+  <line x1="795" y1="117.2" x2="921" y2="117.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="805" y="132.35" fill="#1a1d22">◇ Provenance</text>
+<line x1="795" y1="138.4" x2="921" y2="138.4" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="805" y="153.55" fill="#1a1d22">◇ PepCategory</text>
+<line x1="795" y1="159.60000000000002" x2="921" y2="159.60000000000002" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="805" y="174.75000000000003" fill="#1a1d22">◇ Descriptive</text>
+</g>
+<g data-decl="ConfigurationFormat" data-kind="union">
+  <rect x="1108" y="1462" width="219" height="93" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="1108" y="1462" width="219" height="50.2" rx="6" ry="6" fill="#f3eefa" stroke="none"/>
+  <rect x="1108" y="1506.2" width="219" height="6" fill="#f3eefa" stroke="none"/>
+  <line x1="1108" y1="1512.2" x2="1327" y2="1512.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="1108" y="1462" width="4" height="93" rx="2" ry="2" fill="#7a4cc7"/>
+  <text x="1118" y="1483.6499999999999" fill="#1a1d22" font-weight="600">union ConfigurationFormat</text>
+  <text x="1217.5" y="1506.8" fill="#7a4cc7" font-size="9" font-weight="700" text-anchor="middle" font-style="italic" letter-spacing="0.08em">ONE OF</text>
+  <line x1="1108" y1="1512.2" x2="1327" y2="1512.2" stroke="#dadde2" stroke-width="1"/>
+  <line x1="1108" y1="1512.2" x2="1327" y2="1512.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="1527.35" fill="#1a1d22">◇ PyprojectToml</text>
+<line x1="1108" y1="1533.4" x2="1327" y2="1533.4" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="1548.55" fill="#1a1d22">◇ BasiliskJson</text>
+</g>
+<g data-decl="RuleSelector" data-kind="union">
+  <rect x="1108" y="804" width="360" height="178" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="1108" y="804" width="360" height="50.2" rx="6" ry="6" fill="#f3eefa" stroke="none"/>
+  <rect x="1108" y="848.2" width="360" height="6" fill="#f3eefa" stroke="none"/>
+  <line x1="1108" y1="854.2" x2="1468" y2="854.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="1108" y="804" width="4" height="178" rx="2" ry="2" fill="#7a4cc7"/>
+  <text x="1118" y="825.65" fill="#1a1d22" font-weight="600">union RuleSelector</text>
+  <text x="1288" y="848.8000000000001" fill="#7a4cc7" font-size="9" font-weight="700" text-anchor="middle" font-style="italic" letter-spacing="0.08em">ONE OF</text>
+  <line x1="1108" y1="854.2" x2="1468" y2="854.2" stroke="#dadde2" stroke-width="1"/>
+  <line x1="1108" y1="854.2" x2="1468" y2="854.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="869.35" fill="#1a1d22">◇ All</text>
+<line x1="1108" y1="875.4" x2="1468" y2="875.4" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="890.55" fill="#1a1d22">◇ Codes { codes: List&lt;String&gt; }</text>
+<line x1="1108" y1="896.6" x2="1468" y2="896.6" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="911.75" fill="#1a1d22">◇ Tags { tags: List&lt;String&gt;, matchAll: Bool }</text>
+<line x1="1108" y1="917.8" x2="1468" y2="917.8" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="932.9499999999999" fill="#1a1d22">◇ CurrentViolations</text>
+<line x1="1108" y1="939" x2="1468" y2="939" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="954.15" fill="#1a1d22">◇ SafeFixable</text>
+<line x1="1108" y1="960.2" x2="1468" y2="960.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="975.35" fill="#1a1d22">◇ WithoutSafeFix</text>
+</g>
+<g data-decl="MutationScope" data-kind="union">
+  <rect x="1108" y="671" width="212" height="93" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="1108" y="671" width="212" height="50.2" rx="6" ry="6" fill="#f3eefa" stroke="none"/>
+  <rect x="1108" y="715.2" width="212" height="6" fill="#f3eefa" stroke="none"/>
+  <line x1="1108" y1="721.2" x2="1320" y2="721.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="1108" y="671" width="4" height="93" rx="2" ry="2" fill="#7a4cc7"/>
+  <text x="1118" y="692.65" fill="#1a1d22" font-weight="600">union MutationScope</text>
+  <text x="1214" y="715.8000000000001" fill="#7a4cc7" font-size="9" font-weight="700" text-anchor="middle" font-style="italic" letter-spacing="0.08em">ONE OF</text>
+  <line x1="1108" y1="721.2" x2="1320" y2="721.2" stroke="#dadde2" stroke-width="1"/>
+  <line x1="1108" y1="721.2" x2="1320" y2="721.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="736.35" fill="#1a1d22">◇ Project</text>
+<line x1="1108" y1="742.4" x2="1320" y2="742.4" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1118" y="757.55" fill="#1a1d22">◇ Path { pattern: String }</text>
+</g>
+<g data-decl="RuleDescriptor" data-kind="record">
+  <rect x="795" y="367" width="251" height="183" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="795" y="367" width="251" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="795" y="395.2" width="251" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="795" y1="401.2" x2="1046" y2="401.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="795" y="367" width="4" height="183" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="805" y="388.65000000000003" fill="#1a1d22" font-weight="600">RuleDescriptor</text>
+  
+  <line x1="795" y1="401.2" x2="1046" y2="401.2" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="416.35" fill="#1a1d22">code: String</text>
+<line x1="795" y1="422.4" x2="1046" y2="422.4" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="437.55" fill="#1a1d22">title: String</text>
+<line x1="795" y1="443.6" x2="1046" y2="443.6" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="458.75000000000006" fill="#1a1d22">summary: String</text>
+<line x1="795" y1="464.8" x2="1046" y2="464.8" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="479.95000000000005" fill="#1a1d22">docsUrl: Uri</text>
+<line x1="795" y1="486" x2="1046" y2="486" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="501.15000000000003" fill="#1a1d22">tags: List&lt;String&gt;</text>
+<line x1="795" y1="507.20000000000005" x2="1046" y2="507.20000000000005" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="522.35" fill="#1a1d22">defaultSeverity: RuleSeverity</text>
+<line x1="795" y1="528.4" x2="1046" y2="528.4" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="543.55" fill="#1a1d22">defaultEnabled: Bool</text>
+</g>
+<g data-decl="RuleState" data-kind="record">
+  <rect x="396" y="188" width="337" height="225" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="396" y="188" width="337" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="396" y="216.2" width="337" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="396" y1="222.2" x2="733" y2="222.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="396" y="188" width="4" height="225" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="406" y="209.65" fill="#1a1d22" font-weight="600">RuleState</text>
+  
+  <line x1="396" y1="222.2" x2="733" y2="222.2" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="237.35" fill="#1a1d22">descriptor: RuleDescriptor</text>
+<line x1="396" y1="243.4" x2="733" y2="243.4" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="258.55" fill="#1a1d22">configuredSeverity: Option&lt;RuleSeverity&gt;</text>
+<line x1="396" y1="264.6" x2="733" y2="264.6" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="279.75000000000006" fill="#1a1d22">effectiveSeverity: RuleSeverity</text>
+<line x1="396" y1="285.8" x2="733" y2="285.8" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="300.95000000000005" fill="#1a1d22">inherited: Bool</text>
+<line x1="396" y1="307" x2="733" y2="307" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="322.15000000000003" fill="#1a1d22">diagnosticCount: Int</text>
+<line x1="396" y1="328.20000000000005" x2="733" y2="328.20000000000005" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="343.3500000000001" fill="#1a1d22">affectedFileCount: Int</text>
+<line x1="396" y1="349.4" x2="733" y2="349.4" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="364.55" fill="#1a1d22">safeFixCount: Int</text>
+<line x1="396" y1="370.6" x2="733" y2="370.6" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="385.75000000000006" fill="#1a1d22">unsafeFixCount: Int</text>
+<line x1="396" y1="391.79999999999995" x2="733" y2="391.79999999999995" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="406.95" fill="#1a1d22">adoptionExceptionCount: Int</text>
+</g>
+<g data-decl="TagState" data-kind="record">
+  <rect x="474.5" y="28" width="180" height="120" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="474.5" y="28" width="180" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="474.5" y="56.2" width="180" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="474.5" y1="62.2" x2="654.5" y2="62.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="474.5" y="28" width="4" height="120" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="484.5" y="49.65" fill="#1a1d22" font-weight="600">TagState</text>
+  
+  <line x1="474.5" y1="62.2" x2="654.5" y2="62.2" stroke="#dadde2" stroke-width="1"/>
+<text x="484.5" y="77.35" fill="#1a1d22">name: String</text>
+<line x1="474.5" y1="83.4" x2="654.5" y2="83.4" stroke="#dadde2" stroke-width="1"/>
+<text x="484.5" y="98.55" fill="#1a1d22">kind: TagKind</text>
+<line x1="474.5" y1="104.60000000000001" x2="654.5" y2="104.60000000000001" stroke="#dadde2" stroke-width="1"/>
+<text x="484.5" y="119.75" fill="#1a1d22">ruleCount: Int</text>
+<line x1="474.5" y1="125.80000000000001" x2="654.5" y2="125.80000000000001" stroke="#dadde2" stroke-width="1"/>
+<text x="484.5" y="140.95000000000002" fill="#1a1d22">diagnosticCount: Int</text>
+</g>
+<g data-decl="ConfigurationSource" data-kind="record">
+  <rect x="807" y="1391" width="235" height="141" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="807" y="1391" width="235" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="807" y="1419.2" width="235" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="807" y1="1425.2" x2="1042" y2="1425.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="807" y="1391" width="4" height="141" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="817" y="1412.6499999999999" fill="#1a1d22" font-weight="600">ConfigurationSource</text>
+  
+  <line x1="807" y1="1425.2" x2="1042" y2="1425.2" stroke="#dadde2" stroke-width="1"/>
+<text x="817" y="1440.35" fill="#1a1d22">uri: Uri</text>
+<line x1="807" y1="1446.4" x2="1042" y2="1446.4" stroke="#dadde2" stroke-width="1"/>
+<text x="817" y="1461.55" fill="#1a1d22">format: ConfigurationFormat</text>
+<line x1="807" y1="1467.6" x2="1042" y2="1467.6" stroke="#dadde2" stroke-width="1"/>
+<text x="817" y="1482.7499999999998" fill="#1a1d22">exists: Bool</text>
+<line x1="807" y1="1488.8" x2="1042" y2="1488.8" stroke="#dadde2" stroke-width="1"/>
+<text x="817" y="1503.9499999999998" fill="#1a1d22">readOnly: Bool</text>
+<line x1="807" y1="1510" x2="1042" y2="1510" stroke="#dadde2" stroke-width="1"/>
+<text x="817" y="1525.1499999999999" fill="#1a1d22">shadowedSources: List&lt;Uri&gt;</text>
+</g>
+<g data-decl="ConfigurationProblem" data-kind="record">
+  <rect x="830.5" y="1209" width="180" height="141" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="830.5" y="1209" width="180" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="830.5" y="1237.2" width="180" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="830.5" y1="1243.2" x2="1010.5" y2="1243.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="830.5" y="1209" width="4" height="141" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="840.5" y="1230.6499999999999" fill="#1a1d22" font-weight="600">ConfigurationProblem</text>
+  
+  <line x1="830.5" y1="1243.2" x2="1010.5" y2="1243.2" stroke="#dadde2" stroke-width="1"/>
+<text x="840.5" y="1258.35" fill="#1a1d22">code: String</text>
+<line x1="830.5" y1="1264.4" x2="1010.5" y2="1264.4" stroke="#dadde2" stroke-width="1"/>
+<text x="840.5" y="1279.55" fill="#1a1d22">message: String</text>
+<line x1="830.5" y1="1285.6" x2="1010.5" y2="1285.6" stroke="#dadde2" stroke-width="1"/>
+<text x="840.5" y="1300.7499999999998" fill="#1a1d22">uri: Uri</text>
+<line x1="830.5" y1="1306.8" x2="1010.5" y2="1306.8" stroke="#dadde2" stroke-width="1"/>
+<text x="840.5" y="1321.9499999999998" fill="#1a1d22">line: Int</text>
+<line x1="830.5" y1="1328" x2="1010.5" y2="1328" stroke="#dadde2" stroke-width="1"/>
+<text x="840.5" y="1343.1499999999999" fill="#1a1d22">character: Int</text>
+</g>
+<g data-decl="DebtSummary" data-kind="record">
+  <rect x="396" y="921" width="235" height="141" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="396" y="921" width="235" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="396" y="949.2" width="235" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="396" y1="955.2" x2="631" y2="955.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="396" y="921" width="4" height="141" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="406" y="942.65" fill="#1a1d22" font-weight="600">DebtSummary</text>
+  
+  <line x1="396" y1="955.2" x2="631" y2="955.2" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="970.35" fill="#1a1d22">remainingDiagnostics: Int</text>
+<line x1="396" y1="976.4" x2="631" y2="976.4" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="991.55" fill="#1a1d22">adoptedFiles: Int</text>
+<line x1="396" y1="997.6" x2="631" y2="997.6" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="1012.75" fill="#1a1d22">adoptionExceptions: Int</text>
+<line x1="396" y1="1018.8" x2="631" y2="1018.8" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="1033.9499999999998" fill="#1a1d22">suppressionDiagnostics: Int</text>
+<line x1="396" y1="1040" x2="631" y2="1040" stroke="#dadde2" stroke-width="1"/>
+<text x="406" y="1055.1499999999999" fill="#1a1d22">disabledRules: Int</text>
+</g>
+<g data-decl="ConfigurationSnapshot" data-kind="record">
+  <rect x="29" y="1232" width="305" height="183" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="29" y="1232" width="305" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="29" y="1260.2" width="305" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="29" y1="1266.2" x2="334" y2="1266.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="29" y="1232" width="4" height="183" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="39" y="1253.6499999999999" fill="#1a1d22" font-weight="600">ConfigurationSnapshot</text>
+  
+  <line x1="29" y1="1266.2" x2="334" y2="1266.2" stroke="#dadde2" stroke-width="1"/>
+<text x="39" y="1281.35" fill="#1a1d22">rootUri: Uri</text>
+<line x1="29" y1="1287.4" x2="334" y2="1287.4" stroke="#dadde2" stroke-width="1"/>
+<text x="39" y="1302.55" fill="#1a1d22">revision: Revision</text>
+<line x1="29" y1="1308.6" x2="334" y2="1308.6" stroke="#dadde2" stroke-width="1"/>
+<text x="39" y="1323.7499999999998" fill="#1a1d22">source: ConfigurationSource</text>
+<line x1="29" y1="1329.8" x2="334" y2="1329.8" stroke="#dadde2" stroke-width="1"/>
+<text x="39" y="1344.9499999999998" fill="#1a1d22">rules: List&lt;RuleState&gt;</text>
+<line x1="29" y1="1351" x2="334" y2="1351" stroke="#dadde2" stroke-width="1"/>
+<text x="39" y="1366.1499999999999" fill="#1a1d22">tags: List&lt;TagState&gt;</text>
+<line x1="29" y1="1372.2" x2="334" y2="1372.2" stroke="#dadde2" stroke-width="1"/>
+<text x="39" y="1387.35" fill="#1a1d22">debt: DebtSummary</text>
+<line x1="29" y1="1393.4" x2="334" y2="1393.4" stroke="#dadde2" stroke-width="1"/>
+<text x="39" y="1408.55" fill="#1a1d22">problems: List&lt;ConfigurationProblem&gt;</text>
+</g>
+<g data-decl="ConfigurationMutation" data-kind="record">
+  <rect x="836.25" y="590" width="196" height="98" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="836.25" y="590" width="196" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="836.25" y="618.2" width="196" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="836.25" y1="624.2" x2="1032.25" y2="624.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="836.25" y="590" width="4" height="98" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="846.25" y="611.65" fill="#1a1d22" font-weight="600">ConfigurationMutation</text>
+  
+  <line x1="836.25" y1="624.2" x2="1032.25" y2="624.2" stroke="#dadde2" stroke-width="1"/>
+<text x="846.25" y="639.35" fill="#1a1d22">selector: RuleSelector</text>
+<line x1="836.25" y1="645.4" x2="1032.25" y2="645.4" stroke="#dadde2" stroke-width="1"/>
+<text x="846.25" y="660.55" fill="#1a1d22">setting: RuleSetting</text>
+<line x1="836.25" y1="666.6" x2="1032.25" y2="666.6" stroke="#dadde2" stroke-width="1"/>
+<text x="846.25" y="681.75" fill="#1a1d22">scope: MutationScope</text>
+</g>
+<g data-decl="PreviewConfigurationRequest" data-kind="record">
+  <rect x="412" y="580" width="321" height="120" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="412" y="580" width="321" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="412" y="608.2" width="321" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="412" y1="614.2" x2="733" y2="614.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="412" y="580" width="4" height="120" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="422" y="601.65" fill="#1a1d22" font-weight="600">PreviewConfigurationRequest</text>
+  
+  <line x1="412" y1="614.2" x2="733" y2="614.2" stroke="#dadde2" stroke-width="1"/>
+<text x="422" y="629.35" fill="#1a1d22">rootUri: Uri</text>
+<line x1="412" y1="635.4" x2="733" y2="635.4" stroke="#dadde2" stroke-width="1"/>
+<text x="422" y="650.55" fill="#1a1d22">baseRevision: Revision</text>
+<line x1="412" y1="656.6" x2="733" y2="656.6" stroke="#dadde2" stroke-width="1"/>
+<text x="422" y="671.75" fill="#1a1d22">mutations: List&lt;ConfigurationMutation&gt;</text>
+<line x1="412" y1="677.8" x2="733" y2="677.8" stroke="#dadde2" stroke-width="1"/>
+<text x="422" y="692.9499999999999" fill="#1a1d22">runSafeFixes: Bool</text>
+</g>
+<g data-decl="ConfigurationImpact" data-kind="record">
+  <rect x="795" y="729" width="243" height="247" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="795" y="729" width="243" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="795" y="757.2" width="243" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="795" y1="763.2" x2="1038" y2="763.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="795" y="729" width="4" height="247" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="805" y="750.65" fill="#1a1d22" font-weight="600">ConfigurationImpact</text>
+  
+  <line x1="795" y1="763.2" x2="1038" y2="763.2" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="778.35" fill="#1a1d22">changedRules: Int</text>
+<line x1="795" y1="784.4" x2="1038" y2="784.4" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="799.55" fill="#1a1d22">enabledRules: Int</text>
+<line x1="795" y1="805.6" x2="1038" y2="805.6" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="820.75" fill="#1a1d22">disabledRules: Int</text>
+<line x1="795" y1="826.8" x2="1038" y2="826.8" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="841.9499999999999" fill="#1a1d22">diagnosticsBefore: Int</text>
+<line x1="795" y1="848" x2="1038" y2="848" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="863.15" fill="#1a1d22">diagnosticsAfter: Int</text>
+<line x1="795" y1="869.2" x2="1038" y2="869.2" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="884.35" fill="#1a1d22">errorsBefore: Int</text>
+<line x1="795" y1="890.4" x2="1038" y2="890.4" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="905.55" fill="#1a1d22">errorsAfter: Int</text>
+<line x1="795" y1="911.6" x2="1038" y2="911.6" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="926.75" fill="#1a1d22">warningsBefore: Int</text>
+<line x1="795" y1="932.8" x2="1038" y2="932.8" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="947.9499999999999" fill="#1a1d22">warningsAfter: Int</text>
+<line x1="795" y1="954" x2="1038" y2="954" stroke="#dadde2" stroke-width="1"/>
+<text x="805" y="969.15" fill="#1a1d22">filesChangedBySafeFixes: Int</text>
+</g>
+<g data-decl="ConfigurationPreview" data-kind="record">
+  <rect x="428" y="740" width="305" height="141" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="428" y="740" width="305" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="428" y="768.2" width="305" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="428" y1="774.2" x2="733" y2="774.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="428" y="740" width="4" height="141" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="438" y="761.65" fill="#1a1d22" font-weight="600">ConfigurationPreview</text>
+  
+  <line x1="428" y1="774.2" x2="733" y2="774.2" stroke="#dadde2" stroke-width="1"/>
+<text x="438" y="789.35" fill="#1a1d22">previewId: PreviewId</text>
+<line x1="428" y1="795.4" x2="733" y2="795.4" stroke="#dadde2" stroke-width="1"/>
+<text x="438" y="810.55" fill="#1a1d22">baseRevision: Revision</text>
+<line x1="428" y1="816.6" x2="733" y2="816.6" stroke="#dadde2" stroke-width="1"/>
+<text x="438" y="831.75" fill="#1a1d22">expandedRuleCodes: List&lt;String&gt;</text>
+<line x1="428" y1="837.8" x2="733" y2="837.8" stroke="#dadde2" stroke-width="1"/>
+<text x="438" y="852.9499999999999" fill="#1a1d22">impact: ConfigurationImpact</text>
+<line x1="428" y1="859" x2="733" y2="859" stroke="#dadde2" stroke-width="1"/>
+<text x="438" y="874.15" fill="#1a1d22">problems: List&lt;ConfigurationProblem&gt;</text>
+</g>
+<g data-decl="ApplyConfigurationRequest" data-kind="record">
+  <rect x="514" y="1102" width="219" height="98" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="514" y="1102" width="219" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="514" y="1130.2" width="219" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="514" y1="1136.2" x2="733" y2="1136.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="514" y="1102" width="4" height="98" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="524" y="1123.6499999999999" fill="#1a1d22" font-weight="600">ApplyConfigurationRequest</text>
+  
+  <line x1="514" y1="1136.2" x2="733" y2="1136.2" stroke="#dadde2" stroke-width="1"/>
+<text x="524" y="1151.35" fill="#1a1d22">rootUri: Uri</text>
+<line x1="514" y1="1157.4" x2="733" y2="1157.4" stroke="#dadde2" stroke-width="1"/>
+<text x="524" y="1172.55" fill="#1a1d22">previewId: PreviewId</text>
+<line x1="514" y1="1178.6" x2="733" y2="1178.6" stroke="#dadde2" stroke-width="1"/>
+<text x="524" y="1193.7499999999998" fill="#1a1d22">baseRevision: Revision</text>
+</g>
+<g data-decl="ConfigurationChanged" data-kind="record">
+  <rect x="553" y="1241" width="180" height="98" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="553" y="1241" width="180" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="553" y="1269.2" width="180" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="553" y1="1275.2" x2="733" y2="1275.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="553" y="1241" width="4" height="98" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="563" y="1262.6499999999999" fill="#1a1d22" font-weight="600">ConfigurationChanged</text>
+  
+  <line x1="553" y1="1275.2" x2="733" y2="1275.2" stroke="#dadde2" stroke-width="1"/>
+<text x="563" y="1290.35" fill="#1a1d22">rootUri: Uri</text>
+<line x1="553" y1="1296.4" x2="733" y2="1296.4" stroke="#dadde2" stroke-width="1"/>
+<text x="563" y="1311.55" fill="#1a1d22">revision: Revision</text>
+<line x1="553" y1="1317.6" x2="733" y2="1317.6" stroke="#dadde2" stroke-width="1"/>
+<text x="563" y="1332.7499999999998" fill="#1a1d22">reason: String</text>
+</g>
+<polyline points="1047,528 1057,528 1057,1327 1107,1327" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="1057" y="923.5" fill="#3b3f46" font-size="11" text-anchor="middle">docsUrl</text>
+<polyline points="1047,505 1057,505 1057,346 1107,346" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="1057" y="421.5" fill="#3b3f46" font-size="11" text-anchor="middle">defaultSeverity</text>
+<polyline points="734,391 744,391 744,459 794,459" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="744" y="421" fill="#3b3f46" font-size="11" text-anchor="middle">descriptor</text>
+<polyline points="734,368 744,368 744,346 1107,346" fill="none" stroke="#5b6068" stroke-width="1" marker-end="url(#td-arrow)" stroke-dasharray="3 3"/>
+<text x="744" y="353" fill="#3b3f46" font-size="11" text-anchor="middle">configuredSeverity</text>
+<polyline points="734,346 1107,346" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="920.5" y="342" fill="#3b3f46" font-size="11" text-anchor="middle">effectiveSeverity</text>
+<polyline points="655.5,124 794,124" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="724.75" y="120" fill="#3b3f46" font-size="11" text-anchor="middle">kind</text>
+<polyline points="1043,1462 1057,1462 1057,1327 1107,1327" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="1057" y="1390.5" fill="#3b3f46" font-size="11" text-anchor="middle">uri</text>
+<polyline points="1043,1509 1107,1509" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="1075" y="1505" fill="#3b3f46" font-size="11" text-anchor="middle">format</text>
+<polyline points="1043,1485 1057,1485 1057,1327 1107,1327" fill="none" stroke="#5b6068" stroke-width="1" marker-end="url(#td-arrow)" stroke-dasharray="3 3"/>
+<text x="1057" y="1402" fill="#3b3f46" font-size="11" text-anchor="middle">shadowedSources</text>
+<polyline points="1011.5,1327 1107,1327" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="1059.25" y="1323" fill="#3b3f46" font-size="11" text-anchor="middle">uri</text>
+<polyline points="335,1370 1057,1370 1057,1327 1107,1327" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="1057" y="1344.5" fill="#3b3f46" font-size="11" text-anchor="middle">rootUri</text>
+<polyline points="335,1324 375,1324 375,1220 744,1220 744,1140 794,1140" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="559.5" y="1216" fill="#3b3f46" font-size="11" text-anchor="middle">revision</text>
+<polyline points="335,1393 744,1393 744,1462 806,1462" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="744" y="1423.5" fill="#3b3f46" font-size="11" text-anchor="middle">source</text>
+<polyline points="335,1278 355,1278 355,301 395,301" fill="none" stroke="#5b6068" stroke-width="1" marker-end="url(#td-arrow)" stroke-dasharray="3 3"/>
+<text x="355" y="785.5" fill="#3b3f46" font-size="11" text-anchor="middle">rules</text>
+<polyline points="335,1255 345,1255 345,88 473.5,88" fill="none" stroke="#5b6068" stroke-width="1" marker-end="url(#td-arrow)" stroke-dasharray="3 3"/>
+<text x="345" y="667.5" fill="#3b3f46" font-size="11" text-anchor="middle">tags</text>
+<polyline points="335,1301 365,1301 365,992 395,992" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="365" y="1142.5" fill="#3b3f46" font-size="11" text-anchor="middle">debt</text>
+<polyline points="335,1347 345,1347 345,1359 754,1359 754,1280 829.5,1280" fill="none" stroke="#5b6068" stroke-width="1" marker-end="url(#td-arrow)" stroke-dasharray="3 3"/>
+<text x="549.5" y="1355" fill="#3b3f46" font-size="11" text-anchor="middle">problems</text>
+<polyline points="1033.25,664 1067,664 1067,893 1107,893" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="1067" y="774.5" fill="#3b3f46" font-size="11" text-anchor="middle">selector</text>
+<polyline points="1033.25,614 1067,614 1067,542 1107,542" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="1067" y="574" fill="#3b3f46" font-size="11" text-anchor="middle">setting</text>
+<polyline points="1033.25,639 1077,639 1077,718 1107,718" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="1077" y="674.5" fill="#3b3f46" font-size="11" text-anchor="middle">scope</text>
+<polyline points="734,652 754,652 754,708 1057,708 1057,1327 1107,1327" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="905.5" y="704" fill="#3b3f46" font-size="11" text-anchor="middle">rootUri</text>
+<polyline points="734,676 744,676 744,1140 794,1140" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="744" y="904" fill="#3b3f46" font-size="11" text-anchor="middle">baseRevision</text>
+<polyline points="734,628 744,628 744,639 835.25,639" fill="none" stroke="#5b6068" stroke-width="1" marker-end="url(#td-arrow)" stroke-dasharray="3 3"/>
+<text x="744" y="629.5" fill="#3b3f46" font-size="11" text-anchor="middle">mutations</text>
+<polyline points="734,811 764,811 764,1044 794,1044" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="764" y="923.5" fill="#3b3f46" font-size="11" text-anchor="middle">previewId</text>
+<polyline points="734,834 744,834 744,1140 794,1140" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="744" y="983" fill="#3b3f46" font-size="11" text-anchor="middle">baseRevision</text>
+<polyline points="734,787 774,787 774,853 794,853" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="774" y="816" fill="#3b3f46" font-size="11" text-anchor="middle">impact</text>
+<polyline points="734,858 754,858 754,1280 829.5,1280" fill="none" stroke="#5b6068" stroke-width="1" marker-end="url(#td-arrow)" stroke-dasharray="3 3"/>
+<text x="754" y="1065" fill="#3b3f46" font-size="11" text-anchor="middle">problems</text>
+<polyline points="734,1176 764,1176 764,1188 1057,1188 1057,1327 1107,1327" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="910.5" y="1184" fill="#3b3f46" font-size="11" text-anchor="middle">rootUri</text>
+<polyline points="734,1126 764,1126 764,1044 794,1044" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="764" y="1081" fill="#3b3f46" font-size="11" text-anchor="middle">previewId</text>
+<polyline points="734,1151 744,1151 744,1140 794,1140" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="744" y="1141.5" fill="#3b3f46" font-size="11" text-anchor="middle">baseRevision</text>
+<polyline points="734,1315 764,1315 764,1370 1057,1370 1057,1327 1107,1327" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="910.5" y="1366" fill="#3b3f46" font-size="11" text-anchor="middle">rootUri</text>
+<polyline points="734,1290 744,1290 744,1140 794,1140" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="744" y="1211" fill="#3b3f46" font-size="11" text-anchor="middle">revision</text>
+</svg>
