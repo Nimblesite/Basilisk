@@ -21,6 +21,7 @@ Pick your setup:
 |---|---|---|
 | **VS Code, Cursor, Windsurf** | [VS Code & Cursor](/docs/install-vscode/) | bundled inside the extension |
 | **Zed** | [Zed](/docs/install-zed/) | downloaded with the extension on first run |
+| **Neovim** | [Neovim](/docs/install-neovim/) | downloaded by the plugin on first use |
 | **The command line / CI** | [CLI & Package Managers](/docs/install-cli/) | installed via Homebrew, Scoop, or a release binary |
 
 ## Editor support (LSP)
@@ -30,7 +31,7 @@ Basilisk implements the Language Server Protocol, so any LSP-capable editor can 
 - **VS Code** — official extension, binary bundled → [guide](/docs/install-vscode/)
 - **Cursor, Windsurf & other VS Code forks** — via [Open VSX](https://open-vsx.org) → [guide](/docs/install-vscode/)
 - **Zed** — native extension, binary auto-downloaded → [guide](/docs/install-zed/)
-- **Neovim** — via the `basilisk.nvim` plugin (auto-downloads the binary)
+- **Neovim** — official `basilisk.nvim` plugin, binary auto-downloaded → [guide](/docs/install-neovim/)
 - **Helix** — native LSP support (point it at a [CLI install](/docs/install-cli/))
 - **Emacs** — via eglot or lsp-mode (point it at a [CLI install](/docs/install-cli/))
 - **JetBrains (IntelliJ / PyCharm)** — coming soon

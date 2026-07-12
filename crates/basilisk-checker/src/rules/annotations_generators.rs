@@ -175,7 +175,8 @@ fn check_yield_types(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec
             continue;
         }
 
-        let inferred = infer_yield_type(&yield_expr.rhs_kind, yield_expr.call_name.as_ref());
+        let inferred =
+            infer_yield_type(&yield_expr.rhs_kind, yield_expr.call_name.as_ref(), module);
 
         // Skip Unknown types - we can't prove incompatibility.
         if matches!(inferred, InferredType::Unknown) {

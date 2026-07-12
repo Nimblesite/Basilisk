@@ -59,5 +59,6 @@ Implementation roadmaps tracking phasing, priorities, and progress.
 | [LSP-PROFILER-PROCESS-PANEL-PLAN.md](plans/LSP-PROFILER-PROCESS-PANEL-PLAN.md) | Python Processes activity-bar panel — LSP-driven process enumeration, sort/group, one-click CPU/memory profiling. |
 | [EXTENSION-ACTIVITY-PANEL-PLAN.md](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Activity panel rollout — LSP backend, VS Code panels, Zed slash commands, Neovim buffers. |
 | [NEOVIM-PLAN.md](plans/NEOVIM-PLAN.md) | basilisk.nvim plugin — LSP client, DAP proxy, command mappings, health checks, test explorer; remaining work to ship (lspconfig PR, CI matrix, mirror release). |
+| [NVIM-UPGRADE-PLAN.md](plans/NVIM-UPGRADE-PLAN.md) | basilisk.nvim binary upgrade story — :BasiliskUpdate / :BasiliskInstall, actionable update notice, release-asset contract, install docs (shipped); Mason registry follow-up. |
 | [COMPILER-ARCHITECTURE-PLAN.md](plans/COMPILER-ARCHITECTURE-PLAN.md) | Native AOT compiler for the typed-Python subset — type layout, memory model, runtime, interop, stdlib, CLI (experimental, ordered backlog). |
 | [CHECKER-ADVANCED-FEATURES-PLAN.md](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Opt-in checker surface — Mojo-style safety checks, auto-stub generation, WASM plugin host, mypy/pyright migration, CI helpers. |

@@ -527,6 +527,7 @@ Register `codeActionKinds`: `[QUICKFIX, SOURCE_ORGANIZE_IMPORTS, REFACTOR]`
 | `parameter` | Parameter names in function signatures |
 | `variable` | Module-level and local variable names |
 | `property` | Class attribute names |
+| `namespace` | Import identifiers only — the module path and each imported/alias name (`ImportInfo::name_spans`); never the `import`/`from`/`as` keywords (GitHub #286) |
 | `decorator` | Decorator names (`@staticmethod`, `@override`, etc.) |
 | `type` | Type annotation identifiers |
 | `typeParameter` | TypeVar names, PEP 695 type params |

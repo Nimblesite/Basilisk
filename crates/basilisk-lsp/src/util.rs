@@ -385,22 +385,28 @@ pub(crate) fn annotation_text(span: Option<Span>, source: &str) -> Option<String
     Some(text.trim().to_owned())
 }
 
-/// Simple type-name display for an inferred `RhsKind` (shared by inlay hints).
-pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> &'static str {
+/// Type-name display for an inferred `RhsKind` (shared by inlay hints).
+///
+/// Container literals render with their inferred generic arguments — e.g. a
+/// dict literal with str keys and values displays as `dict[str, str]`, not
+/// bare `dict` (GitHub #290) — by reusing the checker's collection inference.
+/// Returns an empty string when the type cannot be determined.
+pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> String {
+    use basilisk_checker::types::InferredType;
     use basilisk_resolver::RhsKind;
     match rhs {
-        RhsKind::IntLiteral => "int",
-        RhsKind::FloatLiteral => "float",
-        RhsKind::StrLiteral => "str",
-        RhsKind::BoolLiteral => "bool",
-        RhsKind::BytesLiteral => "bytes",
-        RhsKind::NoneValue => "None",
-        RhsKind::EmptyList | RhsKind::List(_) => "list",
-        RhsKind::EmptyDict | RhsKind::Dict(_) => "dict",
-        RhsKind::Set(_) => "set",
-        RhsKind::Tuple(_) => "tuple",
+        // Empty literals carry no element info — show the bare container name
+        // rather than the checker-internal `list[Never]` / `dict[Never, Never]`.
+        RhsKind::EmptyList => "list".to_owned(),
+        RhsKind::EmptyDict => "dict".to_owned(),
         RhsKind::KnownCall(result) => rhs_type_display(result),
-        _ => "",
+        // Lambdas display nothing: the checker types them `Callable[[], Unknown]`
+        // because parameter/return inference doesn't exist yet.
+        RhsKind::Lambda => String::new(),
+        _ => match basilisk_checker::inference::infer_rhs(rhs) {
+            InferredType::Unknown => String::new(),
+            ty => ty.to_string(),
+        },
     }
 }
 
@@ -408,27 +414,27 @@ pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> &'static str
 ///
 /// Shared by hover (#253) and inlay hints. Returns an empty string when the
 /// type cannot be determined.
-pub(crate) fn infer_return_type_display(func: &basilisk_resolver::FunctionInfo) -> &'static str {
+pub(crate) fn infer_return_type_display(func: &basilisk_resolver::FunctionInfo) -> String {
     if func.return_stmts.is_empty() {
-        return "None";
+        return "None".to_owned();
     }
 
     // Collect the display names for every return statement.
-    let mut common_type: Option<&'static str> = None;
+    let mut common_type: Option<String> = None;
     for ret in &func.return_stmts {
         let display = rhs_type_display(&ret.rhs_kind);
         // If any return has an uninferrable type, bail out.
         if display.is_empty() {
-            return "";
+            return String::new();
         }
         match common_type {
             None => common_type = Some(display),
-            Some(prev) if prev == display => {}
-            Some(_) => return "", // mixed return types — cannot infer
+            Some(ref prev) if *prev == display => {}
+            Some(_) => return String::new(), // mixed return types — cannot infer
         }
     }
 
-    common_type.unwrap_or("None")
+    common_type.unwrap_or_else(|| "None".to_owned())
 }
 
 // ── Position conversion ──────────────────────────────────────────────────────

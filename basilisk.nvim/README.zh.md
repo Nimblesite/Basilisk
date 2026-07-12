@@ -33,16 +33,102 @@
 
 ## 要求
 
-- Neovim 0.10+
-- PATH 中包含 `basilisk` 二进制文件（或显式配置）
+- Neovim 0.11+（插件使用内置的 `vim.lsp.config` / `vim.lsp.enable` API）
+- `curl`（仅用于一次性下载 `basilisk` 二进制文件，见下文）
 
-## 快速开始
+## 安装
+
+需要安装两部分：**插件**（本仓库，通过你的插件管理器安装）和 **`basilisk` 二进制文件**（自动下载 —— 通常无需手动安装）。
+
+### 1. 安装插件
+
+<details open>
+<summary><strong>lazy.nvim</strong></summary>
+
+```lua
+{
+  "Nimblesite/basilisk.nvim",
+  ft = "python",
+  dependencies = { "mfussenegger/nvim-dap" }, -- 可选，用于调试
+  opts = {},
+}
+```
+</details>
+
+<details>
+<summary><strong>packer.nvim</strong></summary>
+
+```lua
+use {
+  "Nimblesite/basilisk.nvim",
+  ft = "python",
+  config = function()
+    require("basilisk").setup({})
+  end,
+}
+```
+</details>
+
+<details>
+<summary><strong>vim-plug</strong></summary>
+
+```vim
+Plug 'Nimblesite/basilisk.nvim'
+```
+
+然后在 `plug#end()` 之后：
+
+```lua
+lua require("basilisk").setup({})
+```
+</details>
+
+<details>
+<summary><strong>vim.pack（内置，Neovim 0.12+）</strong></summary>
+
+```lua
+vim.pack.add({
+  { src = "https://github.com/Nimblesite/basilisk.nvim",
+    version = vim.version.range("*") }, -- 最新稳定标签；或固定 "v0.33.0"
+})
+require("basilisk").setup({})
+```
+</details>
+
+### 2. 二进制文件自动安装
+
+打开任意 Python 文件。若未找到 `basilisk` 二进制文件，插件会自动从 [GitHub Release](https://github.com/Nimblesite/Basilisk/releases) 下载适合你平台的最新版本到 Neovim 数据目录并启动 LSP —— 无需配置 PATH，无需手动操作。也可以用 `:BasiliskInstall` 显式触发。
+
+偏好包管理器？插件会自动识别已有安装：
+
+```sh
+# macOS（Apple Silicon）/ Linux
+brew tap Nimblesite/tap && brew install basilisk
+
+# Windows
+scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
+scoop install basilisk
+
+# 任何有 Rust 工具链的环境
+cargo install basilisk-cli
+```
+
+就这样 —— 诊断、悬停、补全、格式化、调试、测试与性能分析全部通过这一个插件运行。用 `:checkhealth basilisk` 验证。
+
+## 更新
+
+- **插件**：像其他插件一样更新 —— `:Lazy update`（lazy.nvim）、`:PackerSync`（packer）、`:PlugUpdate`（vim-plug）。
+- **二进制文件**：有新版本时插件会在启动时通知你。运行 **`:BasiliskUpdate`** —— 确认后下载新版本并就地重启 LSP。由包管理器管理的安装不会被覆盖；通知会提示你改用 `brew upgrade basilisk` / `scoop update basilisk` / `cargo install basilisk-cli`。
+
+## 配置
+
+零配置即可开箱即用：
 
 ```lua
 require("basilisk").setup()
 ```
 
-完整文档请参阅 [doc/basilisk.txt](doc/basilisk.txt)。
+所有选项（分析模式、内嵌提示、格式化器、调试器、测试浏览器、uv、快捷键等）见 [doc/basilisk.txt](doc/basilisk.txt) —— `:h basilisk-configuration`。
 
 ## 许可证
 

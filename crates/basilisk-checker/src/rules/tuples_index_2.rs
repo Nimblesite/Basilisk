@@ -65,10 +65,17 @@ impl Rule for TupleIndexOutOfRange {
 
             // Scan lines in the function body for subscript expressions.
             // We look for patterns like `name[index]` on each source line.
+            // The scan is bounded to the function's own span (GitHub #284):
+            // an open-ended scan bled into every later method of a class,
+            // checking their identically-named bindings against this
+            // function's tuple annotation.
             let Some(func_start) = usize::try_from(func.def_span.start).ok() else {
                 continue;
             };
-            let Some(body_source) = source.get(func_start..) else {
+            let Some(func_end) = usize::try_from(func.def_span.end).ok() else {
+                continue;
+            };
+            let Some(body_source) = source.get(func_start..func_end) else {
                 continue;
             };
 
