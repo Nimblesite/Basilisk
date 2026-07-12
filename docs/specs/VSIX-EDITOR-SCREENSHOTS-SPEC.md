@@ -37,6 +37,16 @@ The suite is a **no-op unless `BASILISK_SCREENSHOTS=1`** (it `skip()`s in suiteS
 
 Add a capture by adding a `test(...)` that makes the feature visible and calls `takeWindowScreenshot('vscode-<name>.png')`.
 
+### Planned configuration-editor capture {#VSIX-EDITOR-SCREENSHOTS-CONFIGURATION}
+
+After [CONFIGEDITOR-ACCEPTANCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-ACCEPTANCE)
+is implemented, add `vscode-configuration-editor.png` showing the real tag rail,
+rule severity controls, and an LSP-generated impact preview. It is deliberately
+absent from the captured-set table until the capability ships; a static mockup
+must never be presented as the product. The capture uses a deterministic fixture
+with at least one inherited/error/warning/info/disabled rule and the opt-in
+`suppressions` tag visible.
+
 ## Verification {#VSIX-EDITOR-SCREENSHOTS-VERIFY}
 
 The committed PNGs are regenerated locally (capture needs a headed VS Code and the built binary — not in CI). CI only verifies they render: `website/tests/e2e/screenshots.spec.ts` visits each embedding page and asserts the `vscode-*.png` is present and decodes to non-zero pixels, so a missing or zero-byte capture fails the build. No screenshot is ever produced or uploaded by CI ([GITHUB-NO-ARTIFACTS]); the gitignored full-screen capture in `screenshot.ts` (`captureScreenshot`) remains for local debugging only.

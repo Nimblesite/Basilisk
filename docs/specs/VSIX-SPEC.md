@@ -75,6 +75,7 @@ client.start();
 "commands": [
     { "command": "basilisk.restartServer", "title": "Basilisk: Restart Language Server" },
     { "command": "basilisk.showOutput", "title": "Basilisk: Show Output" },
+    { "command": "basilisk.openConfigurationEditor", "title": "Basilisk: Open Configuration Editor" },
     { "command": "basilisk.organizeImports", "title": "Basilisk: Organize Imports" },
     { "command": "basilisk.runTests", "title": "Basilisk: Run Tests" },
     { "command": "basilisk.runTestFile", "title": "Basilisk: Run Tests in Current File" },
@@ -83,6 +84,75 @@ client.start();
     { "command": "basilisk.toggleTypeBreakpoints", "title": "Basilisk: Toggle Type Mismatch Breakpoints" }
 ]
 ```
+
+---
+
+## Configuration Editor {#VSIX-CONFIGURATION-EDITOR}
+
+The VSIX is the first visual client for
+[CONFIGEDITOR](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR). It contributes
+the client-only command **Basilisk: Open Configuration Editor**
+(`basilisk.openConfigurationEditor`) and a settings-gear action in the Basilisk
+activity view. The command opens one full-width editor-tab webview; it does not
+take over `pyproject.toml` as a custom editor and does not put the full rule
+catalog into the narrow sidebar.
+
+The command is exposed only when the server advertises
+`capabilities.experimental.basilisk.configurationEditor.version == 1`. Opening
+the tab, revealing raw config, and navigating to an occurrence are VS Code UI
+actions. Everything else uses the shared snapshot/preview/apply/occurrence
+methods in
+[LSPARCH-CONFIG-EDITOR-PROTOCOL](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR-PROTOCOL).
+
+### Thin-shell boundary {#VSIX-CONFIGURATION-EDITOR-THIN-SHELL}
+
+The webview posts user intent only: select tag/rule, stage setting, request
+preview, apply preview, open docs/location. The extension host runtime-decodes
+the message and forwards configuration intent to the LSP. It MUST NOT:
+
+- ship a rule or tag list;
+- parse TOML/JSON or calculate effective severity/precedence;
+- expand a bulk selector;
+- write configuration or adoption files;
+- infer that an opt-in rule is enabled from VS Code settings.
+
+Snapshot/loading/error/revision state lives in the extension's single Signals
+store (`src/store.ts`), with explicit actions; no mutable state lives in the
+panel host or hidden DOM. On reveal, the panel refetches authoritative LSP state
+instead of retaining a stale background document.
+
+### Hosting and visual contract {#VSIX-CONFIGURATION-EDITOR-HOST}
+
+Reuse the lifecycle and security primitives in `src/profiler-webview.ts`
+(singleton host, once-bound message handler, nonce, safe JSON embedding), but
+use a stricter document policy: default-deny CSP, local nonce-gated scripts,
+no remote resources, `localResourceRoots: []`, and no
+`retainContextWhenHidden`. Data is sent with `webview.postMessage` only after a
+ready handshake, never interpolated into executable HTML.
+
+The editor renders Overview, tag-first Rules, Adoption, Path Overrides, and
+Project/source views defined by
+[CONFIGEDITOR-VSIX-EXPERIENCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-VSIX-EXPERIENCE).
+It uses native VS Code fonts/theme tokens plus restrained Basilisk orange/sky
+accents. All controls are semantic, text-labelled, keyboard-operable, high-
+contrast safe, usable at 200% zoom, and reduced-motion aware. Apply/conflict
+status uses an `aria-live` region and refreshes preserve focus.
+
+### Planned files and tests {#VSIX-CONFIGURATION-EDITOR-FILES}
+
+Implementation is split into focused files under 500 LOC:
+
+- `configuration-editor.ts` — panel lifecycle and intent routing;
+- `configuration-editor-document.ts` — CSP HTML document;
+- `configuration-editor-model.ts` — generated wire DTOs/projections;
+- `configuration-editor-state.ts` — store actions and immutable state.
+
+VSIX tests exercise the real open/render/message path, all four severities plus
+Inherited reset, tag/all bulk preview, multi-root selection, stale/malformed
+config handling, no extension-side filesystem writes, once-bound handlers,
+CSP/injection hardening, keyboard/focus/ARIA behavior, theme classes, zoom, and
+reduced motion. Per repository policy they do not use `getCommands(true)` or
+`whenCommandReady` as command-existence tests.
 
 ---
 

@@ -619,6 +619,13 @@ action now lives on a surface that can gate it properly:
 | Restart Server (`basilisk.restartServer`) | Modules panel toolbar button | same |
 | Show Output (`basilisk.showOutput`) | Status bar item click action | always (client-registered) |
 | uv actions (`basilisk.uv.*`) | Command palette (+ code actions) | server-advertised handlers |
+| Open Configuration Editor (`basilisk.openConfigurationEditor`) | Basilisk view-title settings gear + Command Palette | client-owned; visible only when the running server advertises [LSPARCH-CONFIG-EDITOR] version 1 |
+
+The configuration-editor action opens the full-width surface specified by
+[VSIX-CONFIGURATION-EDITOR](VSIX-SPEC.md#VSIX-CONFIGURATION-EDITOR). Adoption
+rows and file context actions remain useful shortcuts, but tag/rule severity,
+bulk preview, debt review, path overrides, and suppression auditing belong in
+that editor rather than new dashboard toggles.
 
 The `basilisk.serverState` context key is set from the `lspState` signal
 effect in `lsp-client.ts` (values: `idle | starting | running | stopped`).

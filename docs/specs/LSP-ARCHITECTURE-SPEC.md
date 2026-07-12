@@ -6,6 +6,7 @@
 - **Zed**: `ZED-SPEC.md`
 - **Neovim**: `NEOVIM-SPEC.md`
 - **uv Integration**: `LSP-UV-INTEGRATION-SPEC.md` — environment detection, lock file intelligence, package commands
+- **Configuration Editor**: `LSP-CONFIGURATION-EDITOR-SPEC.md` — tag-first policy, strict adoption, and the VSIX shell
 
 Design principle: the LSP drives functionality. IDE extensions react to LSP signals (e.g. commands) and never register a command the LSP does not advertise.
 
@@ -120,6 +121,93 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 | `basilisk.uv.stubSuggestions` | `boolean` | `true` | Suggest installing type stub packages |
 | `basilisk.uv.dependencyDiagnostics` | `boolean` | `false` | Enable BSK-W0011/W0012/W0013 dependency hygiene warnings |
 
+## Configuration Editor API {#LSPARCH-CONFIG-EDITOR}
+
+The LSP is the only configuration authority for every editor. The product
+behavior and UX are specified in
+[CONFIGEDITOR](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR); this section is
+the single source of truth for its shared wire methods.
+
+The server advertises support under:
+
+```json
+{
+  "capabilities": {
+    "experimental": {
+      "basilisk": {
+        "configurationEditor": { "version": 1 }
+      }
+    }
+  }
+}
+```
+
+Clients must capability-check the version before exposing a configuration UI.
+The VSIX-only command that opens its editor tab is client-owned; all reads,
+selectors, previews, writes, and analysis effects below are server-owned.
+
+### Protocol {#LSPARCH-CONFIG-EDITOR-PROTOCOL}
+
+| Method | Direction | Params | Result | Side effects |
+|---|---|---|---|---|
+| `basilisk/configurationSnapshot` | Client → Server request | `{rootUri}` | `ConfigurationSnapshot` | None |
+| `basilisk/previewConfigurationChange` | Client → Server request | `PreviewConfigurationRequest` | `ConfigurationPreview` | Cancellable hypothetical analysis; no writes |
+| `basilisk/applyConfigurationChange` | Client → Server request | `ApplyConfigurationRequest` | fresh `ConfigurationSnapshot` | One versioned workspace edit, reload, recheck, republish |
+| `basilisk/ruleOccurrences` | Client → Server request | `{rootUri, selector, cursor?, limit?}` | `{items: RuleOccurrence[], nextCursor?}` | None |
+| `basilisk/configurationChanged` | Server → Client notification | `ConfigurationChanged` | — | Tells every open client to refetch |
+
+All request/response DTOs are generated from
+[`models/configuration_editor.td`](../../models/configuration_editor.td)
+([CONFIGEDITOR-MODEL](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-MODEL)).
+`RuleOccurrence` reuses LSP `Location`/`Range` shapes and adds rule code,
+effective severity, fix safety, and the winning configuration source.
+
+Every request carries `rootUri`. A server must reject an unknown root; choosing
+the first workspace folder is forbidden. Selectors resolve only against the live
+rule registry and return a de-duplicated, stable code list in preview. Apply
+consumes that preview ID and the same base revision; it never reinterprets a
+possibly changed tag/query silently.
+
+### Transaction and refresh {#LSPARCH-CONFIG-EDITOR-TRANSACTION}
+
+Preview performs, in order:
+
+1. resolve the active source and revision;
+2. validate configuration, selector, codes, tags, setting, and scope;
+3. expand the selector and build a structure-preserving in-memory patch;
+4. analyse the workspace with the hypothetical effective config;
+5. optionally calculate (but do not apply) SafeFix edits;
+6. return exact rule codes and before/after impact.
+
+Apply requires the unchanged revision and a valid, unexpired preview. It asks
+the client to apply one versioned `WorkspaceEdit`, waits for success, reloads the
+selected root, updates the Salsa config input, rechecks affected files,
+publishes diagnostics, sends `basilisk/configurationChanged`, and only then
+returns the new snapshot. The server never writes behind an unsaved config
+buffer or relies on a later watcher race to make its response true.
+
+External changes to `pyproject.toml`, `basilisk.json`, or
+`.basilisk/adoptions.toml` run the same reload/recheck/publish/notify tail in all
+analysis modes. The watcher remains a fallback for external writers, not the
+apply API's completion mechanism.
+
+### Errors {#LSPARCH-CONFIG-EDITOR-ERRORS}
+
+Failures use JSON-RPC errors with a stable `data.kind` and structured context:
+
+| `data.kind` | Meaning |
+|---|---|
+| `invalidConfiguration` | Active source cannot be parsed or validated; no mutation allowed |
+| `unknownRule` / `unknownTag` | Selector contains a value absent from the live registry |
+| `invalidMutation` | Severity/setting/scope/selector combination is invalid |
+| `revisionConflict` | Source or effective inputs changed after snapshot/preview |
+| `readOnlySource` | Active configuration cannot be edited |
+| `shadowedSource` | Requested write target is not the effective source |
+| `clientRejectedEdit` | `workspace/applyEdit` failed or was declined |
+| `previewExpired` | Preview ID is unknown, superseded, or expired |
+
+Malformed or unknown input is never ignored and never falls back to defaults.
+
 ## Command Registration Rule {#LSPARCH-CMDREG}
 
 Reference: https://code.visualstudio.com/api/references/vscode-api#commands
@@ -154,6 +242,14 @@ Enforced by the toolbar contract tests in `vscode-extension/src/test/suite/activ
 | `basilisk.organizeImports` | `{uri}` | `TextEdit[]` | Native import organization ([LSPFMT-IMPORTS](LSP-FORMATTING-SPEC.md#LSPFMT-IMPORTS)) |
 | `basilisk.startDebugSession` | `{uri, pythonPath?}` | `{host, port, sessionId}` | Spawn debugpy, return connection info |
 | `basilisk.stopDebugSession` | `{sessionId}` | `{}` | Terminate debug session |
+| `basilisk.disableRule` | `{rule, severity?}` | `{rule, severity, path}` | Compatibility command for the existing quick fix. Must route through the validated configuration transaction; prefer the typed API for new clients. |
+| `basilisk.fixFile` | `uri` string | `{fixed}` | Apply all Safe fixes in the file ([AUTOFIX-MASS-VSCODE](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-MASS-VSCODE)) |
+| `basilisk.fixFileAll` | `uri` string | `{fixed}` | Apply Safe and Unsafe fixes in the file after explicit selection |
+| `basilisk.fixWorkspace` | none | `{fixed, files}` | Apply all Safe fixes in the current workspace |
+| `basilisk.fixWorkspaceAll` | none | `{fixed, files}` | Apply Safe and Unsafe fixes in the current workspace after explicit selection |
+| `basilisk.adoptFile` | `uri` string | `{adopted, demoted}` | Target behavior is Safe-fix then demote confirmed remaining file errors ([AUTOFIX-ADOPTION]); current implementation gap is tracked in the configuration-editor plan |
+| `basilisk.adoptWorkspace` | none | `{adopted, files, demoted}` | Target behavior is Safe-fix then adopt remaining workspace debt |
+| `basilisk.unadoptFile` | `uri` string | `{adopted: false}` | Remove the file's adoption exceptions |
 | `basilisk.profiler.start` | `{pid?}` | `{sessionId}` | Start profiling (active process or PID) |
 | `basilisk.profiler.stop` | `{sessionId}` | `{results}` | Stop profiling, return results |
 | `basilisk.profiler.snapshot` | `{sessionId}` | `{results}` | Snapshot without stopping |

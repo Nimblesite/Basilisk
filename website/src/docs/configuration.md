@@ -4,7 +4,7 @@ title: "Configuration Reference — pyproject.toml Settings"
 description: "Complete reference for all Basilisk configuration options in pyproject.toml. Severity overrides, per-path rules, inline suppressions, and Ruff integration."
 keywords: basilisk, configuration, pyproject.toml, settings
 date: 2026-02-28
-dateModified: 2026-07-06
+dateModified: 2026-07-12
 author: The Basilisk Project
 eleventyNavigation:
   key: Configuration
@@ -13,7 +13,9 @@ eleventyNavigation:
 
 # Configuration Reference
 
-Basilisk is configured through `pyproject.toml`. All settings live under `[tool.basilisk]`.
+`[tool.basilisk]` in `pyproject.toml` is the canonical configuration. Basilisk
+also reads a root-level `basilisk.json` compatibility file; when both exist,
+`basilisk.json` currently wins and the two sources are not merged.
 
 ## Minimal configuration
 
@@ -34,6 +36,12 @@ stub-paths = ["stubs/"]
 typeshed-path = "typeshed-micropython"   # optional: replace the bundled stdlib typeshed
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
+strict-annotations = true            # opt into annotation/style house rules
+
+[tool.basilisk.rules]
+"BSK-E0001" = "warning"             # enabled rule, demoted globally
+"imports_unresolved" = "info"
+"dataclasses_order" = "disabled"
 
 [tool.basilisk.per-path-overrides."legacy/**"]
 disabled = ["returns_compatibility"]
@@ -207,6 +215,48 @@ They solve different problems and can be combined:
 
 ---
 
+## Rule selection and global severity
+
+The unconfigured default enables the complete core PEP rule set. Basilisk-
+specific house rules are tagged `basilisk` and stay off until a project opts in.
+There is no basic/standard/strict mode.
+
+Current opt-in switches are:
+
+```toml
+[tool.basilisk]
+strict-annotations = true
+
+[tool.basilisk.uv]
+dependency-diagnostics = true
+stub-suggestions = true
+```
+
+`strict-annotations` enables the rule tags used for required annotations,
+explicit-`Any`, `@override`, style, and redundancy. The uv switches enable their
+dependency/import and stub-hygiene rule families. Use the generated
+[rule reference](/docs/rules/) to browse the canonical tags attached to each
+rule.
+
+### `[tool.basilisk.rules]`
+
+Set the severity of an enabled rule globally:
+
+```toml
+[tool.basilisk.rules]
+"imports_unresolved" = "warning"
+"BSK-W0050" = "error"
+"dataclasses_order" = "disabled"
+```
+
+Accepted values are `"error"`, `"warning"`, `"info"`, and `"disabled"`.
+In current releases, a severity entry re-grades an already selected opt-in rule;
+enable its owning switch as well. The planned configuration-editor API will make
+an explicit non-disabled per-rule severity enable that individual rule, removing
+this two-step limitation.
+
+---
+
 ## `[tool.basilisk.per-path-overrides."<glob>"]`
 
 Apply different settings to specific paths. The glob is matched against file paths relative to the project root.
@@ -240,30 +290,65 @@ Override the severity of specific rules for matching files. Prefer softening or 
 
 ## Inline suppressions
 
-To suppress a diagnostic on a specific line, add a comment with the rule code and a mandatory reason:
+Use the standard `# type: ignore` spelling. A Basilisk rule code makes the
+suppression specific:
 
 ```python
-result: Any = get_legacy_value()  # basilisk: ignore[returns_compatibility] -- no stub available, tracked in #123
+result: Any = get_legacy_value()  # type: ignore[returns_compatibility]
 ```
 
-To suppress all diagnostics on a line:
+Bare or foreign-checker ignore codes follow PEP 484 compatibility behavior and
+suppress all diagnostics on the line:
 
 ```python
-data = unsafe_cast(value)  # basilisk: ignore -- third-party code, cannot type
+data = unsafe_cast(value)  # type: ignore
 ```
 
-To suppress all diagnostics in a file, add at the top:
+The same syntax can change severity instead of hiding a diagnostic:
+
+```python
+value = legacy_call()  # type: warning[returns_compatibility]
+value = legacy_call()  # type: info[returns_compatibility]
+value = legacy_call()  # type: disabled[returns_compatibility]
+```
+
+File-level directives are standalone comments:
 
 ```python
 # basilisk: relaxed
+# basilisk: file-warning[returns_compatibility]
+# basilisk: file-disabled[imports_unresolved]
 ```
 
-> **Note:** Inline suppressions without a reason comment are themselves flagged as a warning. The reason is not checked for content — it just needs to be present.
+Suppression-audit diagnostics are planned as an **opt-in** rule family. They
+will emit nothing by default; once enabled, teams can independently set active
+specific, blanket, unused, and malformed ignores to error, warning, info, or
+disabled. See the
+[configuration-editor specification](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SUPPRESSIONS).
 
 ---
 
 ## Configuration discovery
 
-Basilisk searches for `pyproject.toml` starting from the directory of the file being checked, traversing up to the filesystem root. The first `pyproject.toml` containing a `[tool.basilisk]` section is used.
+Basilisk loads configuration from the selected workspace/check root. A root-level
+`basilisk.json` has priority; otherwise `[tool.basilisk]` in that root's
+`pyproject.toml` is used. The sources are not merged. If both exist, edit
+`basilisk.json` or remove/migrate it—changing the shadowed TOML table has no
+effect.
 
 If no configuration file is found, Basilisk uses defaults: the **core PEP conformance rule set** enabled (extra Basilisk rules stay opt-in), `python-version = "3.12"`, check the current directory.
+
+---
+
+## Visual configuration editor (planned)
+
+A tag-first VS Code editor is specified but **not shipped yet**. It will read the
+live rule catalog from the LSP, preview all/tag/rule bulk changes, expose every
+rule's effective and explicit severity, run safe fixes before recording adoption
+debt, and make opt-in suppression diagnostics searchable across the workspace.
+The VSIX will not parse or write configuration itself.
+
+Track the authoritative
+[specification](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md)
+and
+[implementation plan](https://github.com/Nimblesite/Basilisk/blob/main/docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md).

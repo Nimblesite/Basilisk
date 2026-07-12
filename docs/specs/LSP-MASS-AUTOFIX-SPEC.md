@@ -1,9 +1,17 @@
 # Mass Autofix & Gradual Adoption — Specification {#AUTOFIX}
 
-Two features for adopting strict-by-default checking on existing code:
+Two features for adopting a deliberately strict configured policy on existing
+code (the unconfigured default remains the core PEP rule set):
 
 1. **Mass Autofix** — apply every safe autofix in one action (single diagnostic, file, or module).
 2. **Gradual Adoption Mode** — after autofixing, demote remaining errors to warnings *per-file* for incremental fixing without being blocked.
+
+This spec owns fix safety and per-file adoption semantics. The tag/rule
+selection, hypothetical impact preview, and strict-first workspace experience
+live in
+[CONFIGEDITOR-ADOPTION](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-ADOPTION);
+the LSP API there orchestrates these operations without duplicating them in the
+VSIX.
 
 ## Mass Autofix {#AUTOFIX-MASS}
 
@@ -132,6 +140,10 @@ demoted = ["BSK-E0001", "BSK-E0002"]
 - **Manual un-adoption.** Remove entries from `adoptions.toml` manually or via `Basilisk: Un-adopt File`.
 
 ### VS Code Integration {#AUTOFIX-ADOPTION-VSCODE}
+
+The configuration editor's **Adoption** view is the primary workspace surface:
+it previews the all-rules target, runs Safe fixes, and exposes confirmed
+remaining per-file debt. Contextual commands remain shortcuts:
 
 1. **Command Palette**:
    - `Basilisk: Adopt File` — autofix + demote remaining errors for current file

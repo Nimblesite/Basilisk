@@ -12,7 +12,7 @@ Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` d
 
 1. **The default configuration is pure PEP conformance.** With no config file, Basilisk enables **every rule that implements the Python typing specification, and nothing else**. This unconfigured default is exactly what the conformance scorer runs — no `basilisk.json`, no "conformance mode" ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
-2. **Everything beyond the spec is opt-in configuration.** House-style rules — require-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), explicit-`Any` nudge (`BSK-W0014`), uv dependency hygiene, stub suggestions — are **off by default**, enabled only in configuration (`strict_annotations = true`, `uv_dependency_diagnostics = true`, …), never implicitly.
+2. **Everything beyond the spec is opt-in configuration.** House-style rules — require-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), explicit-`Any` nudge (`BSK-W0014`), uv dependency hygiene, stub suggestions — are **off by default**, enabled only in configuration (`strict-annotations = true`, `[tool.basilisk.uv] dependency-diagnostics = true`, …), never implicitly.
 
 "Strict" is a property of a chosen configuration, never a precondition of the conformance score. No PEP rule may be disabled, deleted, or unregistered to move that number ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
@@ -1507,8 +1507,8 @@ that official check did not run against a freshly cloned suite is a BUILD FAILUR
    always a product of the live run, never hand-authored.
 
 > ⛔️ **DISABLING, DELETING, OR UNREGISTERING ANY CONFORMANCE RULE IS FORBIDDEN.**
-> The binary is scored in its **full, default configuration with EVERY rule
-> enabled** — no `basilisk.json`, no per-rule override, no "spec-conformance mode",
+> The binary is scored in its **full default configuration with EVERY core
+> PEP/conformance rule enabled** — no `basilisk.json`, no per-rule override, no "spec-conformance mode",
 > no skipped fixtures, no deleting rule source (`src/rules/*.rs`), no removing rules
 > from `all_rules()`. The binary is scored over a **fresh `python/typing` clone**
 > whose tree holds no `basilisk.json`, so nothing of ours can silence a rule;
@@ -1546,9 +1546,11 @@ that official check did not run against a freshly cloned suite is a BUILD FAILUR
   `conformance_automated = "Fail" if errors_diff.strip() else "Pass"`.
 - **Nothing excluded.** The harness counts **every** diagnostic — errors **and**
   warnings (strictest grading, as pyright is graded); no looser mode, no opt-out.
-  The binary runs with **every rule enabled** in its default mode over a fresh
-  `python/typing` clone whose tree holds no `basilisk.json`, so nothing of ours can
-  silence a rule ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
+  The binary runs with **every core PEP/conformance rule enabled** in its default
+  configuration over a fresh `python/typing` clone whose tree holds no
+  `basilisk.json`, so nothing of ours can silence a conformance rule. Opt-in
+  Basilisk-specific rules remain off by the same ordinary default
+  ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 - **Gate**: `make test` (via [`scripts/test-rust.sh`](../../scripts/test-rust.sh))
   builds the `basilisk` binary, then runs
   `python3 conformance/run_conformance.py --gate` on it — which runs the REAL

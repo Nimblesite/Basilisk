@@ -22,6 +22,7 @@ Specifications define the target behavior and architecture. They are the source 
 | [CHECKER-RULE-TAGGING-SPEC.md](specs/CHECKER-RULE-TAGGING-SPEC.md) | Rule tagging: provenance (pep/basilisk) + PEP-category + free-form tags; conflict rules. |
 | [COMPILER-ARCHITECTURE-SPEC.md](specs/COMPILER-ARCHITECTURE-SPEC.md) | Python-to-native compiler via LLVM — ownership model, memory backends, GPU support. |
 | [LSP-ARCHITECTURE-SPEC.md](specs/LSP-ARCHITECTURE-SPEC.md) | Single source of truth for LSP features, DAP integration, custom commands, configuration, and binary resolution. |
+| [LSP-CONFIGURATION-EDITOR-SPEC.md](specs/LSP-CONFIGURATION-EDITOR-SPEC.md) | Tag-first configuration editor — per-rule severity, bulk all/tag operations, strict-first adoption, suppression diagnostics, transactional LSP API, and thin VSIX shell. |
 | [LSP-ANALYSIS-MODES-SPEC.md](specs/LSP-ANALYSIS-MODES-SPEC.md) | Analysis modes (openFilesOnly, wholeModule, crossModule), workspace index, import graph, cross-file LSP features. |
 | [LSP-FORMATTING-SPEC.md](specs/LSP-FORMATTING-SPEC.md) | Formatting & import hygiene — embedded Ruff formatter crate (in-process, no `ruff` CLI), native import fixers, `basilisk.formatter` flag, version/provenance disclosure, range formatting. |
 | [LSP-AI-SPEC.md](specs/LSP-AI-SPEC.md) | Model-agnostic AI layer — AI-powered fixes, completions, refactoring. Optional; deterministic features work without it. |
@@ -48,6 +49,7 @@ Implementation roadmaps tracking phasing, priorities, and progress.
 |---|---|
 | [ROADMAP-NEXT-STEPS-PLAN.md](plans/ROADMAP-NEXT-STEPS-PLAN.md) | Post-launch roadmap — editor releases, scale testing, i18n, MCP server, AI integration, marketing. Agent/human task split. |
 | [LSP-PLAN.md](plans/LSP-PLAN.md) | Overall LSP roadmap — phases from core features through cross-module analysis and PEP conformance. |
+| [LSP-CONFIGURATION-EDITOR-PLAN.md](plans/LSP-CONFIGURATION-EDITOR-PLAN.md) | Phased delivery of the canonical rule catalog, safe config writer, typed preview/apply API, production-correct adoption, opt-in suppression diagnostics, and VSIX editor. |
 | [LSP-FORMATTING-PLAN.md](plans/LSP-FORMATTING-PLAN.md) | Jettison the `ruff` CLI — embed the Ruff formatter crate, reimplement import hygiene natively, expose the embedded Ruff version, add range formatting and `basilisk format`. |
 | [CHECKER-PEP-CONFORMANCE-PLAN.md](plans/CHECKER-PEP-CONFORMANCE-PLAN.md) | PEP conformance push toward 100% — tiered task list by complexity and impact. |
 | [CHECKER-STUB-RESOLUTION-PLAN.md](plans/CHECKER-STUB-RESOLUTION-PLAN.md) | Stub resolution & custom typeshed — the six-step import-resolution order. The step-3 `typeshed-path` override (matching Pyright's `typeshedPath` / mypy's `custom_typeshed_dir`) is **implemented** and its verification gate is green, including a real-tree MicroPython smoke test (`make smoke-micropython`); the only remaining sub-item is the reporter's own validation (a human action). Auto-stub generation TODO at the bottom. |

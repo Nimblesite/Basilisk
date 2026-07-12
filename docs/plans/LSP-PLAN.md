@@ -135,8 +135,14 @@ History: last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#18
 > Pylance PEP support: 484, 487, 526, 544, 561, 563, 570, 585, 586, 589, 591, 593, 604, 612, 613, 635, 646, 647, 655, 673, 675, 681, 692, 695, 696, 698, 702, 705, 728, 742.
 > See [CHECKER-PEP-CONFORMANCE-PLAN.md](CHECKER-PEP-CONFORMANCE-PLAN.md) for the detailed conformance push plan.
 
-- [ ] Configurable strictness modes — off / basic / standard / strict (Pylance has 4 tiers)
-- [ ] Per-rule diagnostic severity overrides — `diagnosticSeverityOverrides` map (each of 70+ rules individually overridable to none/information/warning/error)
+- [x] Per-rule diagnostic severity engine — every enabled rule accepts
+  error/warning/info/disabled globally and per path. The remaining opt-in
+  enablement, reset/provenance, safe writer, bulk/tag API, adoption, and visual
+  work is tracked in
+  [LSP-CONFIGURATION-EDITOR-PLAN.md](LSP-CONFIGURATION-EDITOR-PLAN.md).
+- [ ] Tag-first configuration editor — explicit all/tag/rule operations and a
+  “maximum policy” transaction, **not** off/basic/standard/strict modes
+  ([CHKARCH-CONFIGURATION-ONLY](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIGURATION-ONLY)).
 - [ ] Diagnostic scope setting — workspace vs open files only (`diagnosticMode`)
 - [ ] Reachability analysis — detect and grey out unreachable code
 - [ ] Pattern match exhaustiveness checking — `reportMatchNotExhaustive`
