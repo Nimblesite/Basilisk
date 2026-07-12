@@ -9,7 +9,7 @@
 //! a single implementation of "what does a module export" and "which of those
 //! exports does an import bind".
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use basilisk_resolver::scope::{ExternalMethod, ExternalSymbol, ExternalSymbolKind, ImportKind};
@@ -214,6 +214,76 @@ pub fn extract_py_typed_exports(py_path: &Path) -> Vec<(String, ExternalSymbol)>
     extract_exports(&resolved, py_path)
 }
 
+/// Resolve `name` through the re-export chain of a `py.typed` module.
+///
+/// A package `__init__.py` often defines nothing itself and re-exports its
+/// public names from submodules — pydantic v2 exposes `BaseModel` only via
+/// `if TYPE_CHECKING: from .main import *` (runtime uses a lazy module
+/// `__getattr__`). When the resolved file's own definitions miss `name`,
+/// follow its module-level `from … import name` and `from … import *`
+/// statements into the sibling module file and take the symbol — with its
+/// methods — from there (GitHub #287). `visited` breaks import cycles.
+fn chase_py_typed_reexport(
+    py_path: &Path,
+    name: &str,
+    external_cache: &mut HashMap<PathBuf, Vec<(String, ExternalSymbol)>>,
+    visited: &mut HashSet<PathBuf>,
+) -> Option<ExternalSymbol> {
+    if !visited.insert(py_path.to_path_buf()) {
+        return None;
+    }
+    let text = std::fs::read_to_string(py_path).ok()?;
+    let parsed =
+        basilisk_parser::parse_source(text, py_path.to_string_lossy().into_owned()).ok()?;
+    let resolved = basilisk_resolver::resolve(&parsed).ok()?;
+    let dir = py_path.parent()?;
+    resolved
+        .imports
+        .iter()
+        .filter(|import| match import.kind {
+            ImportKind::From => import.names.iter().any(|n| n == name),
+            ImportKind::Star => true,
+            ImportKind::Plain => false,
+        })
+        .filter_map(|import| sibling_module_file(dir, &import.module))
+        .find_map(|target| {
+            let direct = external_cache
+                .entry(target.clone())
+                .or_insert_with(|| extract_py_typed_exports(&target))
+                .iter()
+                .find(|(export_name, _)| export_name == name)
+                .map(|(_, symbol)| symbol.clone());
+            direct.or_else(|| chase_py_typed_reexport(&target, name, external_cache, visited))
+        })
+}
+
+/// Map a `from X import …` module inside a package to a sibling file.
+///
+/// Relative dots are dropped during import collection, so `.main` arrives as
+/// `main` and resolves against the importing file's directory; an absolute
+/// self-import (`pydantic.main`) resolves by stripping the package's own name.
+fn sibling_module_file(dir: &Path, module: &str) -> Option<PathBuf> {
+    let package_prefix = dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| format!("{n}."));
+    let in_package = package_prefix
+        .as_deref()
+        .and_then(|prefix| module.strip_prefix(prefix));
+    [Some(module), in_package]
+        .into_iter()
+        .flatten()
+        .find_map(|candidate| {
+            let base = dir.join(candidate.split('.').collect::<PathBuf>());
+            let file = base.with_extension("py");
+            if file.is_file() {
+                return Some(file);
+            }
+            let init = base.join("__init__.py");
+            init.is_file().then_some(init)
+        })
+}
+
 /// Build a function signature string from a parsed stub function.
 fn build_stub_signature(func: &StubFunction) -> String {
     let mut sig = format!("def {}(", func.name);
@@ -316,6 +386,7 @@ pub fn populate_imported_symbols<'a, F>(
 
         // Prefer workspace exports; otherwise parse an external `.pyi` stub
         // or an inline-typed `py.typed` package (PEP 561 opt-in only).
+        let mut py_typed_source = false;
         let target_exports: &[(String, ExternalSymbol)] = if let Some(exports) =
             workspace_exports(resolved_path)
         {
@@ -331,6 +402,7 @@ pub fn populate_imported_symbols<'a, F>(
         } else if resolved_path.extension().is_some_and(|ext| ext == "py")
             && basilisk_stubs::has_py_typed_marker(resolved_path)
         {
+            py_typed_source = true;
             external_cache
                 .entry(resolved_path.clone())
                 .or_insert_with(|| extract_py_typed_exports(resolved_path))
@@ -343,11 +415,34 @@ pub fn populate_imported_symbols<'a, F>(
         // object — it is not a member to look up in `foo`'s exports.
         if import.kind == ImportKind::From {
             // `from foo import bar, baz` — only import the named symbols.
-            for import_name in &import.names {
-                if let Some((_, symbol)) =
-                    target_exports.iter().find(|(name, _)| name == import_name)
-                {
-                    let _ = imported_symbols.insert(import_name.clone(), symbol.clone());
+            let direct: Vec<(String, Option<ExternalSymbol>)> = import
+                .names
+                .iter()
+                .map(|import_name| {
+                    let symbol = target_exports
+                        .iter()
+                        .find(|(name, _)| name == import_name)
+                        .map(|(_, symbol)| symbol.clone());
+                    (import_name.clone(), symbol)
+                })
+                .collect();
+            for (import_name, symbol) in direct {
+                // A `py.typed` package `__init__.py` may only *re-export* the
+                // name from a submodule (pydantic v2) — chase it (GitHub #287).
+                let symbol = symbol.or_else(|| {
+                    py_typed_source
+                        .then(|| {
+                            chase_py_typed_reexport(
+                                resolved_path,
+                                &import_name,
+                                &mut external_cache,
+                                &mut HashSet::new(),
+                            )
+                        })
+                        .flatten()
+                });
+                if let Some(symbol) = symbol {
+                    let _ = imported_symbols.insert(import_name, symbol);
                 }
             }
         } else {

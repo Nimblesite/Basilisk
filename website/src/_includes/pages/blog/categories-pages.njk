@@ -1,0 +1,27 @@
+---
+pagination:
+  data: collections.categoryList
+  size: 1
+  alias: category
+  addAllPagesToCollections: true
+permalink: /blog/categories/{{ category | slugify }}/
+layout: layouts/base.njk
+isBlogPost: false
+eleventyComputed:
+  title: "{{ category | blogCategoryLabel(lang) }}{% if lang == 'zh' %}文章{% else %} articles{% endif %}"
+  description: "{% if lang == 'zh' %}浏览 Basilisk 博客“{{ category | blogCategoryLabel(lang) }}”分类下的所有文章。{% else %}Browse every Basilisk blog post in the {{ category | blogCategoryLabel(lang) }} category.{% endif %}"
+---
+{% from "components/blog.njk" import masthead, navigation, postCard with context %}
+{% set categoryPosts = collections.postsByCategory[category] %}
+{% set categoryLabel = category | blogCategoryLabel(lang) %}
+
+<div class="blog-container">
+  {{ masthead(categoryLabel, "blog.categoryResultsDescription" | t(lang) | default("Writing collected under this category."), lang) }}
+  {{ navigation(lang, defaultLanguage, "categories") }}
+
+  <div class="post-list">
+    {% for post in categoryPosts %}
+      {{ postCard(post, lang, defaultLanguage, loop.first) }}
+    {% endfor %}
+  </div>
+</div>

@@ -7,10 +7,8 @@
 <p align="center"><strong>English</strong> · <a href="README.zh.md">简体中文</a></p>
 
 <p align="center">
-  <strong>The open-source Python language server.</strong><br>
-  The only Python type checker with a perfect 100% score on the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> conformance results</a>.<br>
-  Complete language server, type checker, debugger, and profiler — strict by default.<br>
-  VS Code, Cursor &amp; Windsurf (Open VSX) &bull; Zed &bull; Neovim. Built in <strong>Rust</strong> — single binary, no runtime.
+  <strong>The only Python type checker scoring 100% on the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> conformance suite</a> — and the fastest we&rsquo;ve measured.</strong><br>
+  Complete open-source Python dev environment in <strong>Rust</strong>: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed &amp; Neovim extensions. Strict by default.
 </p>
 
 <p align="center">
@@ -24,8 +22,8 @@
 
 <p align="center">
   <a href="https://www.basilisk-python.dev/docs/conformance/"><strong><!--g:score-->100.0%<!--/g:score--> PEP conformance</strong></a> &mdash; <!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> tests in the official
-  <a href="https://github.com/python/typing/tree/f4f2952f3ac94d7af819c5c71b60a50a100370e0/conformance"><code>python/typing</code></a>
-  conformance suite (commit <code><!--g:short-->f4f2952<!--/g:short--></code>), scored on the wheel-installed CLI in its default config by the real upstream harness.
+  <a href="https://github.com/python/typing/tree/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/conformance"><code>python/typing</code></a>
+  conformance suite (commit <code><!--g:short-->6ef9f77<!--/g:short--></code>), scored on the wheel-installed CLI in its default config by the real upstream harness.
   We target <code>python/typing@main</code> and ratchet the score up only.
 </p>
 
@@ -44,14 +42,14 @@ And it is the **fastest checker we&rsquo;ve measured** &mdash; median cold full-
 
 | Type checker | Median cold check |
 | --- | --- |
-| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
+| ⚡ **Basilisk** | **<!--g:benchBasilisk-->11<!--/g:benchBasilisk--> ms** |
 | zuban | <!--g:benchZuban-->27<!--/g:benchZuban--> ms |
-| ty | <!--g:benchTy-->37<!--/g:benchTy--> ms |
-| Pyrefly | <!--g:benchPyrefly-->145<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->568<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->588<!--/g:benchMypy--> ms |
+| ty | <!--g:benchTy-->39<!--/g:benchTy--> ms |
+| Pyrefly | <!--g:benchPyrefly-->148<!--/g:benchPyrefly--> ms |
+| Pyright | <!--g:benchPyright-->582<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->610<!--/g:benchMypy--> ms |
 
-Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> single-construct typing-spec stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better. Basilisk&rsquo;s warm re-check drops to ~<!--g:benchWarm-->5<!--/g:benchWarm--> ms. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
+Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> single-construct typing-spec stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better. Basilisk&rsquo;s warm re-check drops to ~<!--g:benchWarm-->4<!--/g:benchWarm--> ms. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 
 
 

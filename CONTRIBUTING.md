@@ -8,8 +8,8 @@ that need taste, judgment, accountability, and trust — the things AI can't (ye
 
 This guide has two sections. Pick the one that's you.
 
-- [**For Humans**](#for-humans) — judgment, taste, trust, and everything an agent can't be held accountable for.
-- [**For AI**](#for-ai) — the technical execution, under a strict set of standing rules.
+- [**For Humans**](#for-humans) — judgment, taste, trust, and everything an agent can't be held accountable for. Express in the specs first and foremost.
+- [**For AI**](#for-ai) — the technical execution, under a strict set of rules that conform to the Basilisk specs.
 
 > The same split runs through the roadmap. Every TODO in
 > [`docs/plans/ROADMAP-NEXT-STEPS-PLAN.md`](docs/plans/ROADMAP-NEXT-STEPS-PLAN.md) is tagged:
@@ -26,7 +26,7 @@ This guide has two sections. Pick the one that's you.
 
 You don't need to write Rust to make Basilisk better. The **single highest-leverage thing a human can
 do on this project is keep the agents honest** — above all about **PEP conformance**, the number most
-worth faking and the one an agent is most likely to fake. Agents do the bulk of the engineering;
+worth faking and the one an agent is most likely to fake. Agents do the bulk of the mechanical part of the engineering;
 humans own the judgment, accountability, and trust an agent can't be held to — and the first of those
 duties is *surveillance*. Basilisk's north stars are public and non-negotiable: be the **most
 conformant** *and* the **fastest** Python type checker, never trading one for the other
@@ -99,10 +99,9 @@ never down.
 
 "Fastest" is the other half of the promise, and it's just as easy to fool yourself on. Re-run the
 benchmarks on real hardware against the committed baseline (`benchmarks/status/<machine>.csv`),
-confirm no fixture regressed past the gate, and make sure a `BENCH_NO_GATE=1` baseline reset was
-genuinely a fixture-set change and not a quiet slowdown waved through. A conformance fix that blows
-the benchmark gate isn't done — and a benchmark "win" that cost conformance isn't either. Both
-ratchets hold at once.
+confirm no fixture got slower, and optimize every regression before updating the recorded results.
+The gate cannot be disabled or widened. A conformance fix that blows the benchmark gate isn't done
+— and a benchmark "win" that cost conformance isn't either. Both ratchets hold at once.
 
 ### 6. Report GitHub issues
 
@@ -156,7 +155,7 @@ secrets, tokens, or money. If it can't be checked by a test, it's probably your 
 
 ## For AI
 
-You do most of the technical work. The standing rules that govern it live in
+You convert the specs to code and tests, and keep all three in sync. The standing rules that govern it live in
 [**`CLAUDE.md`**](CLAUDE.md), and they **override default behavior** — read that file first and
 follow it exactly. This section is a map, not a restatement (we don't duplicate).
 

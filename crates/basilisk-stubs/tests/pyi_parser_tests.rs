@@ -38,6 +38,22 @@ fn simple_function() {
 }
 
 #[test]
+fn rejects_pyi_past_the_shared_parser_depth_limit() {
+    let source = format!("value = {}0{}\n", "(".repeat(201), ")".repeat(201));
+    let result = parse_pyi_source(
+        &source,
+        Path::new("deep.pyi"),
+        "deep",
+        StubSource::UserStub,
+        StubTier::Tier1,
+    );
+    assert!(
+        result.is_err(),
+        "stub parsing must use Basilisk's crash-safe parser boundary"
+    );
+}
+
+#[test]
 fn overloaded_function() {
     let source = "\
 from typing import overload

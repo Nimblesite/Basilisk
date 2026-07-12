@@ -137,6 +137,61 @@ fn test_hover_on_method_inherited_from_external_stub_base_shows_signature() {
     );
 }
 
+/// Regression for #287, real-package shape: `pydantic/__init__.py` defines no
+/// classes — it re-exports everything from `.main` via a **star import**
+/// inside an `if TYPE_CHECKING:` block (`from .main import *`; runtime uses a
+/// lazy module `__getattr__`). Export extraction must follow that re-export
+/// into `main.py`, so hovering an inherited `model_validate` shows its
+/// signature. Before this, extraction only kept symbols *defined* in the
+/// resolved `__init__.py`, and the hover returned nothing against the real
+/// pydantic package.
+#[test]
+fn test_hover_on_method_reexported_through_py_typed_package_init() {
+    let source = "from pydantic import BaseModel\n\nclass ComposerSavePayload(BaseModel):\n    name: str\n\np = ComposerSavePayload.model_validate({})\n";
+    let mut resolved = parse_and_resolve(source);
+
+    // A real py.typed package on disk, shaped like pydantic v2.
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let pkg = dir.path().join("pydantic");
+    std::fs::create_dir(&pkg).expect("create package dir");
+    std::fs::write(pkg.join("py.typed"), "").expect("write py.typed marker");
+    std::fs::write(
+        pkg.join("__init__.py"),
+        "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from .main import *\n\n__all__ = ['BaseModel']\n",
+    )
+    .expect("write __init__.py");
+    std::fs::write(
+        pkg.join("main.py"),
+        "class BaseModel:\n    @classmethod\n    def model_validate(cls, obj: object) -> 'BaseModel': ...\n",
+    )
+    .expect("write main.py");
+    if let Some(import) = resolved.imports.first_mut() {
+        import.resolution = ImportResolution::SourcePy;
+        import.resolved_path = Some(pkg.join("__init__.py"));
+    }
+    basilisk_checker::exports::populate_imported_symbols(&mut resolved, |_| None, None);
+    assert!(
+        resolved.imported_symbols.contains_key("BaseModel"),
+        "the TYPE_CHECKING re-export in the package __init__ must surface \
+         `BaseModel` as an imported symbol"
+    );
+
+    // Hover on the `model_validate` call site.
+    let offset = source.rfind("model_validate").expect("usage present") + 1;
+    let hover = hover_at(&resolved, source, offset, &[]);
+    let hover =
+        hover.expect("hover should be Some for a method inherited through a re-exported base");
+    let HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected Markup hover contents");
+    };
+
+    assert!(
+        markup.value.contains("BaseModel.model_validate"),
+        "hover should show the re-exported method's signature: {}",
+        markup.value
+    );
+}
+
 /// Regression for #289: hovering a class name must include the
 /// constructor's signature (the `__init__` hint) — `(class) Point` alone
 /// doesn't tell the user how to instantiate it.

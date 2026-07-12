@@ -210,14 +210,21 @@ fn main() -> ExitCode {
     // runs as a subprocess (e.g. the LSP launched by the VS Code extension)
     // stderr is a pipe, and raw ANSI escapes would otherwise render as garbage
     // in the editor's output channel (issue #23).
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_env("BASILISK_LOG")
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
-        )
+    let tracing = tracing_subscriber::fmt()
         .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stderr()))
-        .with_writer(std::io::stderr)
-        .init();
+        .with_writer(std::io::stderr);
+    if std::env::var_os("BASILISK_LOG").is_some() {
+        tracing
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_env("BASILISK_LOG")
+                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+            )
+            .init();
+    } else {
+        // The default path needs only warnings/errors. Avoid constructing and
+        // parsing an EnvFilter on every short-lived CLI check.
+        tracing.with_max_level(tracing::Level::WARN).init();
+    }
 
     let cli = Cli::parse();
 
@@ -396,13 +403,37 @@ fn run_stubs_generate(packages: &[String], all: bool, mode: StubGenModeArg, pyth
     errors.min(1)
 }
 
+/// Import a module named by `sys.argv[1]` and print its source path.
+const FIND_PACKAGE_SOURCE_SCRIPT: &str = r#"
+import importlib
+import sys
+
+module = importlib.import_module(sys.argv[1])
+source = getattr(module, "__file__", None)
+if source is None:
+    raise SystemExit(1)
+print(source)
+"#;
+
+/// Whether `name` is a dotted sequence of Python identifier components.
+fn is_valid_module_name(name: &str) -> bool {
+    name.split('.').all(|component| {
+        let mut chars = component.chars();
+        chars
+            .next()
+            .is_some_and(|first| first == '_' || first.is_ascii_alphabetic())
+            && chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+    })
+}
+
 /// Find the source path for an installed package by querying Python.
 fn find_package_source(package: &str, python_path: &std::path::Path) -> Option<std::path::PathBuf> {
+    if !is_valid_module_name(package) {
+        return None;
+    }
+
     let output = std::process::Command::new(python_path)
-        .args([
-            "-c",
-            &format!("import {package}; import os; print(os.path.dirname({package}.__file__))"),
-        ])
+        .args(["-c", FIND_PACKAGE_SOURCE_SCRIPT, package])
         .output()
         .ok()?;
 
@@ -410,19 +441,11 @@ fn find_package_source(package: &str, python_path: &std::path::Path) -> Option<s
         return None;
     }
 
-    let dir = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-    let init = std::path::PathBuf::from(&dir).join("__init__.py");
-    if init.exists() {
-        Some(init)
-    } else {
-        // Single-file module.
-        let single = std::path::PathBuf::from(format!("{dir}.py"));
-        if single.exists() {
-            Some(single)
-        } else {
-            None
-        }
-    }
+    let source = std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+    source.is_file().then_some(source).filter(|path| {
+        path.extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
+    })
 }
 
 /// Show stub coverage status.
@@ -475,38 +498,51 @@ fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheO
         // Implements [CHKARCH-CLI-OUTPUT]: the human-readable text default and
         // machine-readable JSON. The spec's `sarif`/`junit` formats are not
         // implemented (see report).
-        Ok((diagnostics, sources)) => match format {
-            OutputFormat::Json => {
-                render_diagnostics_json(&diagnostics, &sources);
-                let error_count = diagnostics
-                    .iter()
-                    .filter(|d| d.severity == basilisk_checker::Severity::Error)
-                    .count();
-                u8::from(error_count > 0)
-            }
-            OutputFormat::Text => {
-                let error_count = render_diagnostics(&diagnostics, &sources);
-                let total = diagnostics.len();
-                if total == 0 {
-                    println!("{}", "All checked. No issues found.".green().bold());
-                    0
-                } else {
-                    let summary = format!(
-                        "Found {} diagnostic{} ({} error{}).",
-                        total,
-                        pluralise(total),
-                        error_count,
-                        pluralise(error_count),
-                    );
-                    if error_count > 0 {
-                        println!("{}", summary.red().bold());
-                    } else {
-                        println!("{}", summary.yellow().bold());
-                    }
+        Ok(outcome) => {
+            let diagnostic_exit = match format {
+                OutputFormat::Json => {
+                    render_diagnostics_json(&outcome.diagnostics, &outcome.sources);
+                    let error_count = outcome
+                        .diagnostics
+                        .iter()
+                        .filter(|d| d.severity == basilisk_checker::Severity::Error)
+                        .count();
                     u8::from(error_count > 0)
                 }
+                OutputFormat::Text => {
+                    let error_count = render_diagnostics(&outcome.diagnostics, &outcome.sources);
+                    let total = outcome.diagnostics.len();
+                    if total == 0 && outcome.failures.is_empty() {
+                        println!("{}", "All checked. No issues found.".green().bold());
+                        0
+                    } else if total == 0 {
+                        0
+                    } else {
+                        let summary = format!(
+                            "Found {} diagnostic{} ({} error{}).",
+                            total,
+                            pluralise(total),
+                            error_count,
+                            pluralise(error_count),
+                        );
+                        if error_count > 0 {
+                            println!("{}", summary.red().bold());
+                        } else {
+                            println!("{}", summary.yellow().bold());
+                        }
+                        u8::from(error_count > 0)
+                    }
+                }
+            };
+            for failure in &outcome.failures {
+                error!(path = %failure.path, error = %failure.message, "error processing file");
             }
-        },
+            if outcome.failures.is_empty() {
+                diagnostic_exit
+            } else {
+                3
+            }
+        }
         Err(err) => {
             error!(%err, "internal error");
             3
@@ -534,11 +570,22 @@ fn effective_check_paths(
         .collect()
 }
 
+struct FileAnalysisFailure {
+    path: String,
+    message: String,
+}
+
+struct CheckOutcome {
+    diagnostics: Vec<basilisk_checker::Diagnostic>,
+    sources: Vec<FileSource>,
+    failures: Vec<FileAnalysisFailure>,
+}
+
 fn collect_and_check(
     paths: &[String],
     cache: &cache_check::CacheOptions,
     stats: &mut cache_check::CacheStats,
-) -> Result<(Vec<basilisk_checker::Diagnostic>, Vec<FileSource>), String> {
+) -> Result<CheckOutcome, String> {
     // Load config from the first path's directory (or cwd).
     let config_root = paths
         .first()
@@ -589,7 +636,7 @@ fn collect_and_check(
     }
 
     // Add include paths from WorkspaceConfig as search roots.
-    let lsp_config = basilisk_lsp::config::load_config(&project_root);
+    let lsp_config = basilisk_lsp::config::load_analysis_config(&project_root);
     let registry = build_uv_registry(&roots);
     let mut search_paths =
         basilisk_lsp::import_resolver::search_paths_from_config(&roots, &lsp_config, registry);
@@ -605,6 +652,7 @@ fn collect_and_check(
 
     let mut all_diagnostics = Vec::new();
     let mut sources = Vec::new();
+    let mut failures = Vec::new();
 
     for path in python_files {
         let outcome = cache_check::check_file(cache_context.as_ref(), stats, &path, || {
@@ -616,12 +664,16 @@ fn collect_and_check(
                 sources.push(FileSource { path, text: source });
             }
             Err(err) => {
-                warn!(path, %err, "error processing file");
+                failures.push(FileAnalysisFailure { path, message: err });
             }
         }
     }
 
-    Ok((all_diagnostics, sources))
+    Ok(CheckOutcome {
+        diagnostics: all_diagnostics,
+        sources,
+        failures,
+    })
 }
 
 /// Build a uv package registry from workspace roots, if this is a uv project.
@@ -837,9 +889,7 @@ mod tests {
     }
 
     /// Run `collect_and_check` with the cache disabled and a throwaway tally.
-    fn collect_and_check_uncached(
-        paths: &[String],
-    ) -> Result<(Vec<basilisk_checker::Diagnostic>, Vec<FileSource>), String> {
+    fn collect_and_check_uncached(paths: &[String]) -> Result<CheckOutcome, String> {
         collect_and_check(paths, &no_cache(), &mut cache_check::CacheStats::default())
     }
 
@@ -880,10 +930,16 @@ mod tests {
         std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o644))?;
         let _ = std::fs::remove_file(&py);
 
-        let (diags, _) = result?;
+        let outcome = result?;
         assert!(
-            diags.is_empty(),
-            "unreadable file produces no diagnostics, got: {diags:#?}"
+            outcome.diagnostics.is_empty(),
+            "unreadable file produces no diagnostics, got: {:#?}",
+            outcome.diagnostics
+        );
+        assert_eq!(
+            outcome.failures.len(),
+            1,
+            "unreadable file must be a failure"
         );
         Ok(())
     }
@@ -940,10 +996,10 @@ mod tests {
         let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x):\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
-        let (diags, _) = collect_and_check_uncached(&[path])?;
+        let outcome = collect_and_check_uncached(&[path])?;
         let _ = std::fs::remove_dir_all(&dir);
         assert!(
-            !diags.is_empty(),
+            !outcome.diagnostics.is_empty(),
             "unannotated function must produce diagnostics"
         );
         Ok(())
@@ -984,10 +1040,11 @@ mod tests {
         std::fs::write(&py, b"x: int = 42\n")?;
 
         let path = py.to_string_lossy().into_owned();
-        let (diags, _) = collect_and_check_uncached(&[path])?;
+        let outcome = collect_and_check_uncached(&[path])?;
         let _ = std::fs::remove_dir_all(&dir);
 
-        let w0050: Vec<_> = diags
+        let w0050: Vec<_> = outcome
+            .diagnostics
             .iter()
             .filter(|d| d.code.code == "BSK-W0050")
             .collect();
@@ -1012,10 +1069,10 @@ mod tests {
         let py = dir.join("basilisk_test_clean_code.py");
         std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
         let path = py.to_string_lossy().into_owned();
-        let (diags, _) = collect_and_check_uncached(&[path])?;
+        let outcome = collect_and_check_uncached(&[path])?;
         let _ = std::fs::remove_file(&py);
         assert!(
-            diags.is_empty(),
+            outcome.diagnostics.is_empty(),
             "fully annotated code must produce no diagnostics"
         );
         Ok(())
@@ -1421,6 +1478,45 @@ mod tests {
                 "the `json` stdlib package must resolve to its __init__.py"
             );
         }
+    }
+
+    /// Package names are data, never Python source: a crafted name must not run
+    /// code, while a valid dotted module must resolve to that module's own file.
+    #[test]
+    fn find_package_source_rejects_injection_and_resolves_dotted_module(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if !std::process::Command::new("python3")
+            .arg("--version")
+            .output()
+            .is_ok_and(|output| output.status.success())
+        {
+            return Ok(());
+        }
+
+        let sentinel = unique_project_dir("basilisk_stub_source_injection").with_extension("txt");
+        let _ = std::fs::remove_file(&sentinel);
+        let sentinel_literal = format!("{:?}", sentinel.to_string_lossy());
+        let malicious = format!("os; open({sentinel_literal}, 'w').write('executed') #");
+
+        assert!(
+            find_package_source(&malicious, std::path::Path::new("python3")).is_none(),
+            "an invalid module name must be rejected"
+        );
+        let injection_ran = sentinel.exists();
+        let _ = std::fs::remove_file(&sentinel);
+        assert!(
+            !injection_ran,
+            "the package name must never execute as Python code"
+        );
+
+        let source = find_package_source("xml.etree.ElementTree", std::path::Path::new("python3"))
+            .ok_or("dotted stdlib module did not resolve")?;
+        assert_eq!(
+            source.file_name(),
+            Some(std::ffi::OsStr::new("ElementTree.py")),
+            "a dotted module must resolve to its own source, not the top-level package"
+        );
+        Ok(())
     }
 
     /// `cache_stub` writes the stub and returns `true` on success.

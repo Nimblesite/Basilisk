@@ -29,6 +29,11 @@ use tokio::io::BufReader;
 use tokio::net::UnixStream;
 use tracing::{error, info};
 
+/// Default profiler sampling frequency in hertz.
+const DEFAULT_SAMPLE_RATE: u64 = 100;
+/// Highest accepted frequency; keeps the timer interval nonzero and CPU bounded.
+const MAX_SAMPLE_RATE: u64 = 10_000;
+
 /// Handle `--version` / `--version --json` via the Shipwright contract emitter.
 ///
 /// Returns `true` when a version flag was handled and `main` should exit 0.
@@ -115,7 +120,13 @@ async fn read_attach_command(
 
     match cmd {
         Some(Command::Attach { pid, rate, native }) => {
-            Ok((pid, rate.unwrap_or(100), native.unwrap_or(false)))
+            let sample_rate = rate.unwrap_or(DEFAULT_SAMPLE_RATE);
+            if !(1..=MAX_SAMPLE_RATE).contains(&sample_rate) {
+                return Err(format!(
+                    "sample rate must be between 1 and {MAX_SAMPLE_RATE} Hz"
+                ));
+            }
+            Ok((pid, sample_rate, native.unwrap_or(false)))
         }
         Some(Command::Stop) => Err("expected 'attach' command first".to_owned()),
         None => Err("EOF before attach command".to_owned()),
@@ -158,7 +169,7 @@ fn attach_pyspy(
 /// `ps -o stat=` distinguishes the two — no output means gone, a `Z…` state
 /// means exited.
 fn target_alive(pid: u32) -> bool {
-    std::process::Command::new("ps")
+    std::process::Command::new("/bin/ps")
         .args(["-o", "stat=", "-p", &pid.to_string()])
         .output()
         .ok()
@@ -314,9 +325,76 @@ async fn send_message(
 mod tests {
     use super::*;
 
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct PathRestore(Option<std::ffi::OsString>);
+
+    impl Drop for PathRestore {
+        fn drop(&mut self) {
+            match self.0.take() {
+                Some(path) => std::env::set_var("PATH", path),
+                None => std::env::remove_var("PATH"),
+            }
+        }
+    }
+
     /// py-spy's ambiguous "cannot open" attach failure.
     const CANNOT_OPEN: &str =
         "py-spy attach failed: Failed to open process - check if it is running.";
+
+    #[tokio::test]
+    async fn attach_rejects_sample_rates_that_can_spin_or_divide_by_zero() -> Result<(), String> {
+        for rate in [0, u64::MAX] {
+            let (client, server) = UnixStream::pair().map_err(|err| err.to_string())?;
+            let (_client_reader, mut client_writer) = client.into_split();
+            let (server_reader, _server_writer) = server.into_split();
+            write_message(
+                &mut client_writer,
+                &Command::Attach {
+                    pid: 1,
+                    rate: Some(rate),
+                    native: Some(false),
+                },
+            )
+            .await
+            .map_err(|err| err.to_string())?;
+            let result = read_attach_command(&mut BufReader::new(server_reader)).await;
+            assert!(
+                result.is_err(),
+                "unsafe sample rate {rate} must be rejected before attach"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn liveness_probe_ignores_path_shadowed_ps() -> Result<(), String> {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let _lock = ENV_LOCK.lock().map_err(|err| err.to_string())?;
+        let fake_bin = std::env::temp_dir().join(format!(
+            "basilisk-profiler-helper-path-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&fake_bin);
+        std::fs::create_dir(&fake_bin).map_err(|err| err.to_string())?;
+        let fake_ps = fake_bin.join("ps");
+        std::fs::write(&fake_ps, "#!/bin/sh\nexit 1\n").map_err(|err| err.to_string())?;
+        let mut permissions = std::fs::metadata(&fake_ps)
+            .map_err(|err| err.to_string())?
+            .permissions();
+        permissions.set_mode(0o700);
+        std::fs::set_permissions(&fake_ps, permissions).map_err(|err| err.to_string())?;
+
+        let restore = PathRestore(std::env::var_os("PATH"));
+        std::env::set_var("PATH", &fake_bin);
+        let alive = target_alive(std::process::id());
+        drop(restore);
+        let _ = std::fs::remove_dir_all(fake_bin);
+
+        assert!(alive, "the elevated helper must use the trusted system ps");
+        Ok(())
+    }
 
     /// Poll `ps` until `pid` reports the zombie state (`Z…`), or time out.
     fn wait_until_zombie(pid: u32) -> Result<(), String> {
@@ -344,6 +422,7 @@ mod tests {
     /// [PROFILE-HELPER-PROTOCOL-ERRORS]
     #[test]
     fn zombie_target_classifies_as_process_not_found() -> Result<(), String> {
+        let _lock = ENV_LOCK.lock().map_err(|err| err.to_string())?;
         // Spawn a process that exits immediately and deliberately do NOT reap
         // it yet — as its parent, we keep it a zombie until `wait` below.
         let mut child = std::process::Command::new("true")
@@ -367,6 +446,7 @@ mod tests {
     /// target that py-spy cannot open is still a permissions problem (#81).
     #[test]
     fn live_target_still_refines_to_permission_denied() -> Result<(), String> {
+        let _lock = ENV_LOCK.lock().map_err(|err| err.to_string())?;
         let mut child = std::process::Command::new("sleep")
             .arg("30")
             .spawn()

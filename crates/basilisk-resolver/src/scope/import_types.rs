@@ -15,13 +15,20 @@ pub enum ImportKind {
 }
 
 /// How an import was resolved (source file type).
+///
+/// Resolution is a purely static filesystem search ([STUBRES-STATIC-MODEL]): the
+/// interpreter is never executed, so a computed/dynamic import or a module only a
+/// runtime `sys.meta_path` hook could supply cannot be followed and ends in
+/// [`ImportResolution::Unresolved`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImportResolution {
     /// Import resolved from a .py source file.
     SourcePy,
     /// Import resolved from a .pyi stub file.
     StubPyi,
-    /// Import resolution failed or not yet resolved.
+    /// Import resolution failed or not yet resolved. Terminal state of the static
+    /// search ([STUBRES-STATIC-MODEL]); the bound names carry an implicit `Any`
+    /// that `imports_unresolved` surfaces rather than silently accepting.
     Unresolved,
 }
 

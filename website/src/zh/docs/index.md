@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 简介
-description: Basilisk 是完整的开源 Python 语言服务器——默认符合 PEP 规范的类型检查、自动补全、重构、调试和性能分析，支持 VS Code、Cursor、Windsurf、Zed 和 Neovim。
+description: 安装、配置并使用 Basilisk：集类型检查、语言服务、重构、调试、性能分析和编辑器集成于一体的开源工具。
 keywords: basilisk, python, 语言服务器, lsp, 类型检查器, vs code, cursor, zed, neovim, 严格, rust
 lang: zh
 ---
@@ -12,7 +12,7 @@ Basilisk 是一个**完整的开源 Python 语言服务器**。您依赖现代 P
 
 它也是**唯一在[官方 `python/typing` 一致性测试结果]({{ conformanceOfficial.snapshot.source }})中取得满分 100%** 的 Python 类型检查器——就发布在 Python typing 仓库自己的排行榜上，领先于 Pyright、mypy、Pyrefly 和 ty。参见[我们如何衡量](/zh/docs/conformance/)。
 
-它不仅仅是一个类型检查器。它是一个功能完整的 LSP，为 **VS Code**、**Zed** 和 **Neovim** 提供一流扩展——以及任何支持语言服务器协议的其他编辑器。**Cursor** 和 **Windsurf**（通过 Open VSX）即将推出，JetBrains（IntelliJ / PyCharm）也在路上。无专有扩展。无 Node.js。单个 Rust 二进制文件，在每款编辑器中提供相同的体验。
+它不仅仅是一个类型检查器。它是一个功能完整的 LSP，已为 **VS Code**、**Cursor**、**Windsurf**、**Zed** 和 **Neovim** 提供扩展——以及支持语言服务器协议的其他编辑器。JetBrains（IntelliJ / PyCharm）支持已纳入计划。无专有扩展。无 Node.js。单个 Rust 二进制文件，在每款编辑器中提供相同的体验。
 
 ## Basilisk 解决的问题
 
@@ -25,8 +25,8 @@ Basilisk 采取不同的立场。它的默认*就是*类型规范——开箱即
 ## Basilisk 是什么
 
 - **功能完整的语言服务器** (LSP)——自动补全、跳转到定义、悬停、查找引用、重命名、[完整的重构套件](/zh/docs/refactoring/)、代码操作、内联提示
-- **适配每款主流编辑器的扩展**——VS Code、Neovim (0.10+) 和 Zed 现已支持；Cursor 和 Windsurf（通过 Open VSX）即将推出，JetBrains（IntelliJ / PyCharm）也在路上
-- **补全修复**——一键代码操作，自动为您添加缺失的类型注解
+- **覆盖主流编辑器的扩展**——VS Code、Cursor、Windsurf、Neovim (0.10+) 和 Zed 现已支持；JetBrains（IntelliJ / PyCharm）已纳入计划
+- **注解快速修复**——一键代码操作，为未注解的代码插入占位注解（`: Any`、`-> None`），方便您填入真实类型
 - **集成调试器**——按 F5 调试 Python，支持断点、单步执行、变量检查和监视表达式，全部通过 Basilisk LSP 代理
 - **集成性能分析器**——采样式 CPU 分析器，具有内联热图注解、火焰图、内存泄漏检测和引用图可视化，全部在您的编辑器内
 - **默认符合 PEP 规范的类型检查器**——开箱即用核心规范规则集，并提供可选的 Basilisk 规则以实现比规范更严格的检查
@@ -59,7 +59,7 @@ rules."imports_unresolved" = "warning"   # 或仅降低其严重性
 
 ## 项目状态
 
-Basilisk 目前处于 **alpha**——核心检查器、LSP 服务器和编辑器扩展都在工作。自动补全、跳转到定义、悬停、诊断、内联提示、重构、调试和性能分析今天就在发布。
+Basilisk 正在**积极开发中**——核心检查器、LSP 服务器和编辑器扩展都在工作，且它是官方 python/typing 符合性套件上唯一取得满分的检查器。自动补全、跳转到定义、悬停、诊断、内联提示、重构、调试和性能分析今天就在发布。
 
 | 阶段 | 里程碑 | 状态 |
 |---|---|---|

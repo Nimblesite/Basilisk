@@ -513,7 +513,8 @@ pub fn walk_references(
     max_depth: u32,
     max_nodes: u32,
 ) -> String {
-    let repr_filter = target_repr_contains.map_or_else(|| "None".to_owned(), |r| format!("'{r}'"));
+    let target_type = python_string_literal(target_type);
+    let repr_filter = target_repr_contains.map_or_else(|| "None".to_owned(), python_string_literal);
     let label_helper = ref_label_helper();
     let emit = emit_via_file_helper();
 
@@ -523,7 +524,7 @@ import gc, sys, json
 {emit}{label_helper}
 def _basilisk_walk_refs():
     gc.collect()
-    target_type = '{target_type}'
+    target_type = {target_type}
     repr_filter = {repr_filter}
     max_depth = {max_depth}
     max_nodes = {max_nodes}
@@ -618,13 +619,14 @@ _basilisk_emit('__BASILISK_MEM_REFS__' + json.dumps(result))
 /// Returns JSON prefixed with `__BASILISK_MEM_OBJECTS__`.
 #[must_use]
 pub fn objects_by_type(type_name: &str, limit: u32) -> String {
+    let type_name = python_string_literal(type_name);
     let emit = emit_via_file_helper();
     format!(
         r"
 import gc, sys, json
 {emit}
 gc.collect()
-type_name = '{type_name}'
+type_name = {type_name}
 limit = {limit}
 objects = []
 type_summary = {{}}
@@ -657,6 +659,14 @@ _basilisk_emit('__BASILISK_MEM_OBJECTS__' + json.dumps(result))
     )
 }
 
+/// Encode client-provided text as a string literal accepted by Python.
+///
+/// JSON and Python share double-quoted string escaping, so this keeps quotes,
+/// backslashes, and newlines inside the literal instead of executable source.
+fn python_string_literal(value: &str) -> String {
+    serde_json::Value::String(value.to_owned()).to_string()
+}
+
 /// Script to force garbage collection and report results.
 ///
 /// Returns JSON prefixed with `__BASILISK_MEM_GC__`, handed back via a temp
@@ -674,13 +684,18 @@ collected = gc.collect()
 after = tracemalloc.get_traced_memory()[0] if tracemalloc.is_tracing() else 0
 
 uncollectable = []
-for obj in gc.garbage[:20]:
+garbage = sorted(
+    gc.garbage,
+    key=lambda obj: '__del__' not in type(obj).__dict__,
+)
+for obj in garbage[:20]:
+    has_finalizer = '__del__' in type(obj).__dict__
     uncollectable.append({{
         'id': id(obj),
         'type': type(obj).__name__,
         'size': sys.getsizeof(obj),
-        'repr': repr(obj)[:100],
-        'reason': 'Instance has __del__ method and is in a reference cycle' if hasattr(obj, '__del__') else 'Uncollectable cycle',
+        'repr': object.__repr__(obj)[:100],
+        'reason': 'Instance has __del__ method and is in a reference cycle' if has_finalizer else 'Uncollectable cycle',
     }})
 
 result = {{
@@ -697,6 +712,32 @@ _basilisk_emit('__BASILISK_MEM_GC__' + json.dumps(result))
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // [PROFILE-MEMORY-COMMANDS] Client-provided selectors must remain data in
+    // the generated Python program, even when they contain Python syntax.
+    #[test]
+    fn client_strings_are_json_encoded_in_generated_scripts() {
+        let hostile_type = "Widget';\n__import__('os').system('echo injected')\n#";
+        let hostile_repr = "needle\\\"';\nraise RuntimeError('injected')\n#";
+        let encoded_type = serde_json::Value::String(hostile_type.to_owned()).to_string();
+        let encoded_repr = serde_json::Value::String(hostile_repr.to_owned()).to_string();
+
+        let references = walk_references(hostile_type, Some(hostile_repr), 5, 200);
+        assert!(
+            references.contains(&format!("target_type = {encoded_type}")),
+            "target type must be emitted as a JSON/Python string literal: {references}"
+        );
+        assert!(
+            references.contains(&format!("repr_filter = {encoded_repr}")),
+            "repr filter must be emitted as a JSON/Python string literal: {references}"
+        );
+
+        let objects = objects_by_type(hostile_type, 20);
+        assert!(
+            objects.contains(&format!("type_name = {encoded_type}")),
+            "object type must be emitted as a JSON/Python string literal: {objects}"
+        );
+    }
 
     #[test]
     fn start_script_contains_tracemalloc() {
@@ -972,7 +1013,7 @@ mod tests {
     fn walk_refs_script_with_filter() {
         let script = walk_references("DataFrame", Some("huge"), 5, 200);
         assert!(script.contains("DataFrame"));
-        assert!(script.contains("'huge'"));
+        assert!(script.contains("repr_filter = \"huge\""));
         assert!(script.contains("__BASILISK_MEM_REFS__"));
     }
 
@@ -994,5 +1035,17 @@ mod tests {
         let script = gc_collect();
         assert!(script.contains("__BASILISK_MEM_GC__"));
         assert!(script.contains("gc.collect()"));
+        assert!(
+            script.contains("'__del__' not in type(obj).__dict__"),
+            "finalizer cycles must be selected ahead of incidental garbage"
+        );
+        assert!(
+            script.contains("object.__repr__(obj)"),
+            "reporting garbage must not execute an object's custom __repr__"
+        );
+        assert!(
+            !script.contains("'repr': repr(obj)"),
+            "a hostile __repr__ must remain inert during collection"
+        );
     }
 }

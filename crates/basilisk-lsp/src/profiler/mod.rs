@@ -48,6 +48,11 @@ use tracing::{debug, info};
 use aggregator::{HotspotConfig, ProfileData};
 use sampler::{SamplerConfig, SamplerError, SamplerHandle};
 
+/// Default profiler sampling frequency in hertz.
+const DEFAULT_SAMPLE_RATE: u64 = 100;
+/// Highest supported frequency; prevents zero-duration timer hot loops.
+const MAX_SAMPLE_RATE: u64 = 10_000;
+
 /// Errors that can occur during profiling.
 #[derive(Debug)]
 pub enum ProfileError {
@@ -237,6 +242,7 @@ impl ProfileSessionManager {
         include_native: Option<bool>,
         duration: Option<std::time::Duration>,
     ) -> Result<StartResult, ProfileError> {
+        let rate = validated_sample_rate(sample_rate)?;
         if pid == 0 {
             return Err(ProfileError::Sampler(SamplerError::ProcessNotFound(pid)));
         }
@@ -253,7 +259,6 @@ impl ProfileSessionManager {
             }
         }
 
-        let rate = sample_rate.unwrap_or(100);
         let config = SamplerConfig {
             pid,
             sample_rate: rate,
@@ -282,7 +287,7 @@ impl ProfileSessionManager {
         sample_file: std::path::PathBuf,
         sample_rate: Option<u64>,
     ) -> Result<StartResult, ProfileError> {
-        let rate = sample_rate.unwrap_or(100);
+        let rate = validated_sample_rate(sample_rate)?;
         let sampler = cooperative::start_cooperative_sampler(sample_file)
             .await
             .map_err(ProfileError::Sampler)?;
@@ -430,6 +435,19 @@ impl ProfileSessionManager {
             session.sampler.stop();
         }
     }
+}
+
+/// Resolve and validate a requested sampling rate before starting any backend.
+fn validated_sample_rate(requested: Option<u64>) -> Result<u64, ProfileError> {
+    let rate = requested.unwrap_or(DEFAULT_SAMPLE_RATE);
+    (1..=MAX_SAMPLE_RATE)
+        .contains(&rate)
+        .then_some(rate)
+        .ok_or_else(|| {
+            ProfileError::Sampler(SamplerError::AttachFailed(format!(
+                "sample rate must be between 1 and {MAX_SAMPLE_RATE} Hz"
+            )))
+        })
 }
 
 /// Register a freshly attached sampler as a session, whatever its backend

@@ -53,7 +53,14 @@ pub fn parse_static_condition(test: &Expr) -> StaticCondition {
     match test {
         Expr::BooleanLiteral(lit) => StaticCondition::Bool(lit.value),
         Expr::Name(name) if name.id.as_str() == "TYPE_CHECKING" => StaticCondition::TypeChecking,
-        Expr::Attribute(attr) if attr.attr.as_str() == "TYPE_CHECKING" => {
+        Expr::Attribute(attr)
+            if attr.attr.as_str() == "TYPE_CHECKING"
+                && matches!(
+                    attr.value.as_ref(),
+                    Expr::Name(base)
+                        if matches!(base.id.as_str(), "typing" | "typing_extensions")
+                ) =>
+        {
             StaticCondition::TypeChecking
         }
         Expr::UnaryOp(unary) if matches!(unary.op, UnaryOp::Not) => {
@@ -264,6 +271,23 @@ if typing.TYPE_CHECKING and (not False or feature_flag):
             ]),
         );
         assert_eq!(evaluate(&cond, (3, 12)), BranchTruth::AlwaysTrue);
+        Ok(())
+    }
+
+    #[test]
+    fn only_typing_modules_make_qualified_type_checking_static() -> Result<(), String> {
+        assert_eq!(
+            parse_if_test("if typing.TYPE_CHECKING:\n    pass\n")?,
+            StaticCondition::TypeChecking
+        );
+        assert_eq!(
+            parse_if_test("if typing_extensions.TYPE_CHECKING:\n    pass\n")?,
+            StaticCondition::TypeChecking
+        );
+        assert_eq!(
+            parse_if_test("if settings.TYPE_CHECKING:\n    pass\n")?,
+            StaticCondition::Unknown
+        );
         Ok(())
     }
 

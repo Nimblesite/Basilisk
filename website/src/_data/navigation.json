@@ -1,74 +1,95 @@
 {
   "main": [
-    { "text": "Docs", "url": "/docs/" },
-    { "text": "Rules", "url": "/docs/rules/" },
-    { "text": "Blog", "url": "/blog/" },
-    { "text": "Discord", "url": "https://discord.gg/4wBDSGEZQd", "external": true },
-    { "text": "GitHub", "url": "https://github.com/Nimblesite/Basilisk", "external": true }
+    { "key": "docs", "text": "Docs", "url": "/docs/" },
+    { "key": "rules", "text": "Rules", "url": "/docs/rules/" },
+    { "key": "blog", "text": "Blog", "url": "/blog/" },
+    { "key": "discord", "text": "Discord", "url": "https://discord.gg/4wBDSGEZQd", "external": true },
+    { "key": "github", "text": "GitHub", "url": "https://github.com/Nimblesite/Basilisk", "external": true }
   ],
   "docs": [
     {
-      "title": "Getting Started",
+      "title": "Introduction",
+      "titleZh": "简介",
+      "url": "/docs/"
+    },
+    {
+      "title": "Getting started",
+      "titleZh": "开始使用",
       "items": [
-        { "title": "Introduction", "url": "/docs/" },
-        { "title": "Installation", "url": "/docs/installation/" },
-        { "title": "Quick Start", "url": "/docs/quick-start/" }
+        {
+          "title": "Installation",
+          "titleZh": "安装",
+          "children": [
+            { "title": "Overview", "titleZh": "概览", "url": "/docs/installation/" },
+            { "title": "VS Code & Cursor", "titleZh": "VS Code 与 Cursor", "url": "/docs/install-vscode/" },
+            { "title": "Zed", "titleZh": "Zed", "url": "/docs/install-zed/" },
+            { "title": "CLI & package managers", "titleZh": "CLI 与包管理器", "url": "/docs/install-cli/" }
+          ]
+        },
+        { "title": "Quick start", "titleZh": "快速开始", "url": "/docs/quick-start/" }
       ]
     },
     {
-      "title": "Configuration",
+      "title": "Set up & adopt",
+      "titleZh": "配置与采用",
       "items": [
-        { "title": "pyproject.toml Reference", "url": "/docs/configuration/" },
-        { "title": "Migration from Pyright", "url": "/docs/migration/#from-pyright" },
-        { "title": "Migration from mypy", "url": "/docs/migration/#from-mypy" }
+        { "title": "Configuration", "titleZh": "配置", "url": "/docs/configuration/" },
+        { "title": "Migration guide", "titleZh": "迁移指南", "url": "/docs/migration/" }
       ]
     },
     {
-      "title": "Features",
+      "title": "Type checking",
+      "titleZh": "类型检查",
       "items": [
-        { "title": "Debugging", "url": "/docs/debugging/" },
-        { "title": "Profiler", "url": "/docs/profiler/" },
-        { "title": "Refactoring", "url": "/docs/refactoring/" }
+        { "title": "Rules", "titleZh": "规则", "url": "/docs/rules/", "kind": "rules" },
+        { "title": "Conformance", "titleZh": "规范符合性", "url": "/docs/conformance/" },
+        { "title": "Type checker comparison", "titleZh": "类型检查器对比", "url": "/docs/comparison/" }
       ]
     },
     {
-      "title": "Diagnostics",
+      "title": "Developer tools",
+      "titleZh": "开发者工具",
       "items": [
-        { "title": "Rules Overview", "url": "/docs/rules/" },
-        { "title": "Missing Annotations (E0001–E0009)", "url": "/docs/rules/missing-annotations/" },
-        { "title": "Type Safety (E0010–E0029)", "url": "/docs/rules/type-safety/" }
+        { "title": "Refactoring", "titleZh": "重构", "url": "/docs/refactoring/" },
+        { "title": "Debugging", "titleZh": "调试", "url": "/docs/debugging/" },
+        { "title": "Profiler", "titleZh": "性能分析", "url": "/docs/profiler/" }
       ]
     },
     {
-      "title": "Reference",
+      "title": "Project",
+      "titleZh": "项目",
       "items": [
-        { "title": "Comparison: Basilisk vs Others", "url": "/docs/comparison/" },
-        { "title": "Migration Guide", "url": "/docs/migration/" }
+        { "title": "Benchmarks", "titleZh": "性能基准", "url": "/docs/benchmarks/" },
+        { "title": "Releases", "titleZh": "版本发布", "url": "/docs/releases/" }
       ]
     }
   ],
   "footer": [
     {
+      "key": "product",
       "title": "Product",
       "items": [
-        { "text": "Documentation", "url": "/docs/" },
-        { "text": "Rules Reference", "url": "/docs/rules/" },
-        { "text": "Blog", "url": "/blog/" }
+        { "key": "documentation", "text": "Documentation", "url": "/docs/" },
+        { "key": "rulesReference", "text": "Rules Reference", "url": "/docs/rules/" },
+        { "key": "blog", "text": "Blog", "url": "/blog/" },
+        { "key": "authors", "text": "Authors", "url": "/authors/" }
       ]
     },
     {
+      "key": "community",
       "title": "Community",
       "items": [
-        { "text": "GitHub", "url": "https://github.com/Nimblesite/Basilisk" },
-        { "text": "Issues", "url": "https://github.com/Nimblesite/Basilisk/issues" },
-        { "text": "Discord", "url": "https://discord.gg/4wBDSGEZQd" },
-        { "text": "Discussions", "url": "https://github.com/Nimblesite/Basilisk/discussions" }
+        { "key": "github", "text": "GitHub", "url": "https://github.com/Nimblesite/Basilisk" },
+        { "key": "issues", "text": "Issues", "url": "https://github.com/Nimblesite/Basilisk/issues" },
+        { "key": "discord", "text": "Discord", "url": "https://discord.gg/4wBDSGEZQd" },
+        { "key": "discussions", "text": "Discussions", "url": "https://github.com/Nimblesite/Basilisk/discussions" }
       ]
     },
     {
+      "key": "legal",
       "title": "Legal",
       "items": [
-        { "text": "MIT", "url": "https://github.com/Nimblesite/Basilisk/blob/main/LICENSE" }
+        { "key": "mit", "text": "MIT", "url": "https://github.com/Nimblesite/Basilisk/blob/main/LICENSE" }
       ]
     }
   ]

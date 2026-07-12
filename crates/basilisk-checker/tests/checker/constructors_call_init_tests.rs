@@ -162,3 +162,34 @@ BundleUploadResponse(bundle_id=1, sha256="abc")
     );
     Ok(())
 }
+
+// Issue #278: `class Client(httpx.Client)` records the base under its
+// attribute name `Client`, which collides with the class's own name — the
+// class map then resolves the "base" back to the class itself. Constructing
+// the class walks the `__init__` hierarchy; that walk must not recurse
+// forever on the self-referential chain (stack overflow, SIGABRT crash loop
+// in the LSP), and the call must not fire a false positive.
+#[test]
+fn self_named_external_base_constructor_call_does_not_overflow(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+import httpx
+
+
+class Client(httpx.Client):
+    def wrapped(self) -> str:
+        return "ok"
+
+
+c = Client()
+value = c.wrapped()
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"constructors_call_init"),
+        "constructing a class whose name collides with its unresolved external \
+         base must not fire E0111; got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

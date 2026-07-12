@@ -292,6 +292,8 @@ pub struct ResolvedModule {
     pub path: String,
     /// The original source text (forwarded from parser for span restoration).
     pub source: String,
+    /// Exact ranges of Python comment tokens used for safe inline suppression.
+    pub comment_ranges: Vec<Span>,
     /// Lazily-parsed AST shared by every rule that needs it (parsed at most once
     /// per module rather than once per rule). Excluded from equality — see
     /// [`LazyAst`].

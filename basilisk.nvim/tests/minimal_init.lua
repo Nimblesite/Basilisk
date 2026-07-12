@@ -7,8 +7,15 @@
 local plugin_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h:h")
 vim.opt.rtp:prepend(plugin_dir)
 
--- Start code coverage if LUACOV env var is set.
-if os.getenv("LUACOV") then
+-- Start code coverage if LUACOV is set, except in Plenary's orchestration
+-- parent. The parent sets PLENARY_TEST_TIMEOUT before spawning each child, so
+-- children are unambiguous; the parent command itself is visible in v:argv.
+-- Attaching the parent makes it race with periodic child saves or overwrite the
+-- accumulated child data on exit. The standalone coverage exerciser has no
+-- Plenary command and remains covered.
+local argv = table.concat(vim.v.argv or {}, " ")
+local plenary_parent = argv:find("PlenaryBustedDirectory", 1, true) ~= nil
+if os.getenv("LUACOV") and not plenary_parent then
   -- Disable JIT so debug hooks work for coverage tracking.
   if jit then
     jit.off()
@@ -47,6 +54,9 @@ if os.getenv("LUACOV") then
   if ok then
     runner.init({
       configfile = plugin_dir .. "/.luacov",
+      -- Plenary terminates children with `:cq`, which can bypass a complete
+      -- exit-only flush. Periodic saves are safe now that the orchestration
+      -- parent is excluded and children run sequentially.
       tick = true,
     })
     -- Flush coverage data on VimLeave so headless runs don't lose data.

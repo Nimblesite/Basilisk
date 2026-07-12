@@ -36,7 +36,7 @@ impl UnusedDependency {
     /// Diagnostic code for BSK-W0012.
     pub(crate) const CODE: ErrorCode = ErrorCode {
         code: "BSK-W0012",
-        docs_url: "https://www.basilisk-python.dev/warnings/BSK-W0012",
+        docs_url: "https://www.basilisk-python.dev/errors/BSK-W0012",
     };
 
     /// Build the diagnostic for an unused dependency.

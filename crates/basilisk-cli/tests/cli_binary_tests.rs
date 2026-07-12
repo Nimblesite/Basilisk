@@ -174,6 +174,38 @@ fn exit_3_for_nonexistent_path() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn analysis_failure_exits_three_without_dropping_valid_diagnostics(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (dir, staged) = stage_project(&["errors/e0001_single_param.py"])?;
+    let malformed = dir.join("malformed.py");
+    std::fs::write(&malformed, b"def broken(:\n")?;
+    let valid = staged.first().ok_or("staged diagnostic fixture missing")?;
+    let malformed = malformed.to_string_lossy().into_owned();
+
+    let mixed = run_check(&[valid, &malformed])?;
+    let malformed_only = run_check(&[&malformed])?;
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert_eq!(mixed.status.code(), Some(3), "analysis failure must exit 3");
+    assert!(
+        stdout(&mixed).contains("BSK-E0001"),
+        "a valid peer's diagnostics must still be rendered: {}",
+        stdout(&mixed)
+    );
+    assert_eq!(
+        malformed_only.status.code(),
+        Some(3),
+        "a malformed requested file must exit 3"
+    );
+    assert!(
+        !stdout(&malformed_only).contains("No issues found"),
+        "analysis failure must never print a clean-success message: {}",
+        stdout(&malformed_only)
+    );
+    Ok(())
+}
+
 // ── Clean file output ────────────────────────────────────────────────────────
 
 #[test]
