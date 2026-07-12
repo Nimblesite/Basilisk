@@ -373,12 +373,36 @@ mod tests {
     #[test]
     fn contains_identifier_exact_match() {
         assert!(contains_identifier("Foo", "Foo"));
+        // Whole-string match at both bounds (start == 0 AND end == len): kills
+        // the boundary mutants on `start == 0` and `start + ident_len == len`.
+        assert!(contains_identifier("x", "x"));
+        assert!(contains_identifier("__init__", "__init__"));
+        // ident longer than text can never match — kills `ident_len > bytes.len()`
+        // becoming `<`/`==`/`>=` (the `-> false` early return must fire here).
+        assert!(!contains_identifier("Fo", "Foo"));
+        assert!(!contains_identifier("", "Foo"));
+        // A single-char text vs a 2-char ident (len boundary at exactly len-1).
+        assert!(!contains_identifier("F", "Fo"));
     }
 
     #[test]
     fn contains_identifier_within_text() {
         assert!(contains_identifier("x = Foo()", "Foo"));
         assert!(contains_identifier("bar.Foo.baz", "Foo"));
+        // Delimited by non-identifier chars on each side — proves before_ok AND
+        // after_ok must BOTH hold (kills `&& -> ||` in the boundary check, and
+        // the `!is_identifier_char` negation deletes).
+        assert!(contains_identifier("(Foo)", "Foo"));
+        assert!(contains_identifier(".Foo ", "Foo"));
+        assert!(contains_identifier("Foo=1", "Foo"));
+        // Match at the very end of the string (after_ok via end == len branch).
+        assert!(contains_identifier("call Foo", "Foo"));
+        // Match at the very start (before_ok via start == 0 branch).
+        assert!(contains_identifier("Foo bar", "Foo"));
+        // Second occurrence is the valid one — the loop must scan past the first
+        // (substring) hit; kills `start` arithmetic (`+`/`-`) and the `0..=len`
+        // range boundary.
+        assert!(contains_identifier("Foobar Foo", "Foo"));
     }
 
     #[test]
@@ -386,11 +410,28 @@ mod tests {
         assert!(!contains_identifier("FooBar", "Foo"));
         assert!(!contains_identifier("aFoo", "Foo"));
         assert!(!contains_identifier("Foo_bar", "Foo"));
+        // Trailing digit / underscore make it part of a longer identifier:
+        // is_identifier_char must return true for alphanumeric AND '_' — kills
+        // `is_identifier_char -> false`, the `||`->`&&`, and the `== '_'` flip.
+        assert!(!contains_identifier("Foo1", "Foo"));
+        assert!(!contains_identifier("_Foo", "Foo"));
+        assert!(!contains_identifier("1Foo", "Foo"));
+        // Surrounded on BOTH sides — neither before_ok nor after_ok holds.
+        assert!(!contains_identifier("xFooy", "Foo"));
+        // A separator that IS whitespace/punct passes, but a digit does not:
+        // pins is_identifier_char's alphanumeric branch precisely.
+        assert!(contains_identifier("a Foo b", "Foo"));
+        assert!(!contains_identifier("a9Foo9b", "Foo"));
     }
 
     #[test]
     fn contains_identifier_empty_ident() {
+        // Empty ident => `ident_len == 0` early-returns false: kills the
+        // `-> true` body-replacement and `ident_len == 0` -> `!=` flip.
         assert!(!contains_identifier("abc", ""));
+        assert!(!contains_identifier("", ""));
+        // Non-empty ident in empty text also false (len guard), for contrast.
+        assert!(!contains_identifier("", "x"));
     }
 
     #[test]
@@ -424,6 +465,96 @@ mod tests {
             downstream, 0,
             "downstream errors referencing 'get' should be suppressed"
         );
+
+        // Direct assertions on `should_suppress_cascade` pin its span/boundary
+        // logic (line 279 `>=`/`>`/`||` mutants) that the pipeline test above is
+        // too coarse to reach. `source` is the fixture text; craft spans that hit
+        // each guard branch precisely.
+        let mut names = std::collections::HashSet::new();
+        let _ = names.insert("get".to_owned());
+
+        // Safe usize -> u32 for span offsets into the small fixture text (no
+        // silent `as`, matching the crate's `u32::try_from(..).unwrap_or(0)` idiom).
+        let to_u32 = |value: usize| u32::try_from(value).unwrap_or(0);
+        let source_len = to_u32(source.len());
+
+        // Helper: a diagnostic whose span covers [start, end) of `source`.
+        let diag_over = |start: u32, end: u32, msg: &str| Diagnostic {
+            code: ErrorCode {
+                code: "assignment_compatibility",
+                docs_url: "https://www.basilisk-python.dev/errors/X",
+            },
+            severity: Severity::Error,
+            message: msg.to_owned(),
+            span: basilisk_resolver::Span::new(start, end),
+            path: "test.py".to_owned(),
+            help: None,
+            note: None,
+            provenance: None,
+        };
+
+        // `x = get('url')` — locate the `get` occurrence in the fixture.
+        // `.unwrap()` is allowed in this test module (see the module-level
+        // `#[expect(clippy::unwrap_used)]`); the fixture always contains `get(`.
+        let get_pos = to_u32(source.find("get(").unwrap());
+        let get_end = get_pos + 3;
+
+        // Span exactly over the whole-identifier `get` => suppressed. Kills the
+        // `>= -> <`, `> -> <`, and `start >= end` boundary flips: with a valid
+        // in-bounds span the guard must NOT early-return false.
+        assert!(
+            should_suppress_cascade(&diag_over(get_pos, get_end, "irrelevant"), &names, source),
+            "span over whole-identifier `get` must suppress"
+        );
+
+        // Empty untyped set => never suppress (kills the empty-check inversion).
+        let empty: std::collections::HashSet<String> = std::collections::HashSet::new();
+        assert!(!should_suppress_cascade(
+            &diag_over(get_pos, get_end, "get"),
+            &empty,
+            source
+        ));
+
+        // start == end (zero-width span) => guard returns false. Kills
+        // `start >= end` -> `start < end`/`==`.
+        assert!(!should_suppress_cascade(
+            &diag_over(get_pos, get_pos, "unrelated message"),
+            &names,
+            source
+        ));
+
+        // end > source.len() (out of bounds) => guard returns false, no panic.
+        // Kills `end > source.len()` -> `<`/`==` and the `||` -> `&&`.
+        let over_len = source_len + 10;
+        assert!(!should_suppress_cascade(
+            &diag_over(0, over_len, "unrelated"),
+            &names,
+            source
+        ));
+
+        // start >= source.len() => false. Kills `start >= source.len()` flip.
+        assert!(!should_suppress_cascade(
+            &diag_over(source_len, source_len + 1, "unrelated"),
+            &names,
+            source
+        ));
+
+        // Match via the MESSAGE (span text unrelated) => suppressed. Kills the
+        // `||` -> `&&` between the span-text and message checks (line 286).
+        assert!(should_suppress_cascade(
+            &diag_over(0, 4, "cannot resolve get here"),
+            &names,
+            source
+        ));
+
+        // Message contains `get` only as a substring (`getter`) => NOT a whole
+        // identifier => not suppressed. Proves whole-identifier matching holds
+        // through the message path too.
+        assert!(!should_suppress_cascade(
+            &diag_over(0, 4, "getter not found"),
+            &names,
+            source
+        ));
     }
 
     #[test]

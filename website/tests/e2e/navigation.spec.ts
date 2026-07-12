@@ -61,8 +61,8 @@ test.describe("docs sidebar (mobile)", () => {
   );
 
   // Guards issue #186 — [WEBSITE-MOBILE-DOCS-NAV]. On a phone the docs section
-  // submenu must be reachable: it starts collapsed, and the hamburger reveals it.
-  test("docs section submenu is reachable via the hamburger", async ({ page }) => {
+  // submenu has its own disclosure so opening it never also opens the site nav.
+  test("docs section submenu is reachable via its disclosure", async ({ page }) => {
     await page.goto("/docs/installation/");
 
     const submenuLink = page
@@ -72,8 +72,7 @@ test.describe("docs sidebar (mobile)", () => {
     // Collapsed by default so the doc body is readable without a wall of links.
     await expect(submenuLink).toBeHidden();
 
-    // The hamburger must reveal the docs submenu (not just the top nav).
-    await page.locator("#mobile-menu-toggle").click();
+    await page.locator("#docs-menu-toggle").click();
     await expect(submenuLink).toBeVisible();
 
     // …and it actually navigates to the chosen section.
@@ -82,7 +81,7 @@ test.describe("docs sidebar (mobile)", () => {
     await expect(page).toHaveURL(/\/docs\/quick-start\/$/);
   });
 
-  test("hamburger also opens the top nav", async ({ page }) => {
+  test("hamburger opens only the top nav", async ({ page }) => {
     await page.goto("/docs/installation/");
     const docsLink = page
       .locator(".nav-links")
@@ -91,5 +90,6 @@ test.describe("docs sidebar (mobile)", () => {
     await expect(docsLink).toBeHidden();
     await page.locator("#mobile-menu-toggle").click();
     await expect(docsLink).toBeVisible();
+    await expect(page.locator("#docs-sidebar")).toBeHidden();
   });
 });

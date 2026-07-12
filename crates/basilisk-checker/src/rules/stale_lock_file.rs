@@ -33,7 +33,7 @@ impl StaleLockFile {
     /// Diagnostic code for BSK-W0013.
     pub(crate) const CODE: ErrorCode = ErrorCode {
         code: "BSK-W0013",
-        docs_url: "https://www.basilisk-python.dev/warnings/BSK-W0013",
+        docs_url: "https://www.basilisk-python.dev/errors/BSK-W0013",
     };
 
     /// Build the diagnostic for a stale lock file warning.

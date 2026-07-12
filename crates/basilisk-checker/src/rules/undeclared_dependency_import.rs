@@ -20,7 +20,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-W0011",
-    docs_url: "https://www.basilisk-python.dev/warnings/BSK-W0011",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-W0011",
 };
 
 /// Emits BSK-W0011 when an import uses a transitive dependency that is not

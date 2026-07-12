@@ -15,7 +15,7 @@ Basilisk 包含一个完全集成的 Python 性能分析器。CPU 热点热图�
 
 Basilisk 性能分析器结合了两个互补的引擎：
 
-- **CPU 分析** — 基于采样，无需任何代码更改。外部进程由 [py-spy](https://github.com/benfred/py-spy)（以 Rust 库形式嵌入 Basilisk）采样；通过 Basilisk 调试器启动的程序在 macOS 上改用协作式进程内采样器，因为现代 macOS 即使对 root 也会阻止外部内存读取（见[平台要求](#平台要求)）。默认采样率：100 Hz。
+- **CPU 分析** — 基于采样，无需任何代码更改。外部进程由 [py-spy](https://github.com/benfred/py-spy)（以 Rust 库形式嵌入 Basilisk）采样；通过 Basilisk 调试器启动的程序在 macOS 上改用协作式进程内采样器，因为现代 macOS 即使对 root 也会阻止外部内存读取（见[平台要求](#platform-requirements)）。默认采样率：100 Hz。
 - **内存分析** — 由 Python 的 `tracemalloc` 和 `gc` 模块驱动，**通过活动的 Basilisk 调试会话**运行：编辑器经由调试适配器注入检测代码，因此内存跟踪适用于正在调试（或通过"运行并跟踪内存"启动）的程序，而不是任意外部进程。
 
 两个引擎都位于 Basilisk LSP 服务器（Rust）中。编辑器调用 LSP 命令（通过 `workspace/executeCommand` 调用 `basilisk.profiler.*`、`basilisk.memory.*`）并渲染服务器返回的结果——没有独立 CLI，无需 `pip install`。
@@ -68,6 +68,7 @@ Basilisk 性能分析器结合了两个互补的引擎：
 
 停止时，Basilisk 会向系统临时目录写出三个产物：`basilisk-<session>.speedscope.json`、`basilisk-<session>.flamegraph.svg` 和 `basilisk-<session>.cpuprofile`。
 
+<span id="short-programs"></span>
 ### 太短而无法采样的程序
 
 采样分析器每 10 毫秒（100 Hz 时）拍一次快照。如果脚本比这更快完成工作，就没有样本落在您的代码中——Basilisk 会如实说明，而不是展示空火焰图。请分析更长的运行，或让热点路径重复执行的循环。
@@ -111,6 +112,7 @@ Basilisk 性能分析器结合了两个互补的引擎：
 | **Medium** | 连续 2 次对比增长，或单次对比超过 10 MB |
 | **Low** | 观察到一次增长——值得关注 |
 
+<span id="memory-diagnostics"></span>
 ### 内存诊断
 
 | 代码 | 严重性 | 含义 |
@@ -130,6 +132,7 @@ Basilisk 性能分析器结合了两个互补的引擎：
 
 ---
 
+<span id="profiler-configuration"></span>
 ## 配置
 
 性能分析器通过**编辑器设置**（VS Code 中的 `basilisk.profiler.*`）配置——它没有 `pyproject.toml` 配置段：
@@ -151,6 +154,7 @@ Basilisk 性能分析器结合了两个互补的引擎：
 
 ---
 
+<span id="platform-requirements"></span>
 ## 平台要求
 
 ### macOS
@@ -186,7 +190,7 @@ Basilisk 性能分析器结合了两个互补的引擎：
 | `BSK-PROF-LINE` | Hint | 行占用 ≥ `lineThreshold`% 的 CPU 时间 |
 | `BSK-PROF-FUNC` | Hint | 函数占用 ≥ `functionThreshold`% 的 CPU 时间 |
 
-分析器诊断仅在会话产生数据后出现，并随会话清除。内存代码见[上文](#内存诊断)。
+分析器诊断仅在会话产生数据后出现，并随会话清除。内存代码见[上文](#memory-diagnostics)。
 
 ---
 
@@ -277,7 +281,7 @@ LSP 服务器拥有所有分析状态。编辑器调用 `basilisk.profiler.*` / 
 
 ### "Captured N samples, but none landed in your code"
 
-程序完成工作的速度快于采样间隔——见[太短而无法采样的程序](#太短而无法采样的程序)。
+程序完成工作的速度快于采样间隔——见[太短而无法采样的程序](#short-programs)。
 
 ---
 
@@ -299,4 +303,4 @@ Basilisk 嵌入 py-spy，因为它是唯一能作为 Rust 库 crate 使用的 Py
 
 - [调试](/zh/docs/debugging/) — 内存跟踪（以及 macOS 启动分析）所依托的集成调试器
 - [安装](/zh/docs/installation/) — 编辑器设置
-- [配置参考](/zh/docs/configuration/) — 检查器与 LSP 配置（分析器设置是编辑器设置，见[上文](#配置)）
+- [配置参考](/zh/docs/configuration/) — 检查器与 LSP 配置（分析器设置是编辑器设置，见[上文](#profiler-configuration)）
