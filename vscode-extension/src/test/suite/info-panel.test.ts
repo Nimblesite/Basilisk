@@ -152,7 +152,10 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     assert.ok(uvRow, "the compact uv row should exist");
     const tip = tooltipOf(uvRow);
     assert.ok(tip.includes("Auto-Sync"), `uv tooltip must carry Auto-Sync, got: "${tip}"`);
-    assert.ok(tip.includes("Stub Suggestions"), `uv tooltip must carry Stub Suggestions, got: "${tip}"`);
+    assert.ok(tip.includes("Executable"), `uv tooltip must carry Executable, got: "${tip}"`);
+    // Stub suggestions are governed by rule severity (BSK-E0152), not a uv
+    // setting, so they are neither a row nor a tooltip line.
+    assert.ok(!tip.includes("Stub Suggestions"), `uv tooltip must not carry the removed Stub Suggestions setting, got: "${tip}"`);
   });
 
   // Defect 2 of issue #103: basilisk.toggleFeature wrote to

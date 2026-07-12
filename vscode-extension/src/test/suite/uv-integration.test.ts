@@ -146,15 +146,20 @@ suite('Basilisk uv Integration Tests', () => {
 
     test('Rule-family policy is not exposed as VS Code settings', () => {
         const cfg = vscode.workspace.getConfiguration('basilisk');
+        // A key that is NOT contributed as a setting has no declared default.
+        // (Recent VS Code returns a shaped inspect() object with every value
+        // `undefined` for an unknown key under a known section rather than a
+        // literal `undefined`, so assert on the absence of a `defaultValue` —
+        // a contributed boolean setting would report its declared default.)
         assert.strictEqual(
-            cfg.inspect<boolean>('uv.stubSuggestions'),
+            cfg.inspect<boolean>('uv.stubSuggestions')?.defaultValue,
             undefined,
-            'stub suggestions must be configured through BSK-E0152 severity'
+            'stub suggestions must be configured through BSK-E0152 severity, not a VS Code setting'
         );
         assert.strictEqual(
-            cfg.inspect<boolean>('uv.dependencyDiagnostics'),
+            cfg.inspect<boolean>('uv.dependencyDiagnostics')?.defaultValue,
             undefined,
-            'dependency diagnostics must be configured through explicit rule severities'
+            'dependency diagnostics must be configured through explicit rule severities, not a VS Code setting'
         );
     });
 
