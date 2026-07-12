@@ -143,9 +143,23 @@ Every rule has four severity modes:
 | `error` | Full diagnostic with fix suggestions | Yes | Red squiggly |
 | `warning` | Diagnostic shown but does not block | No | Yellow squiggly |
 | `info` | Informational hint only | No | Blue hint |
-| `disabled` | Rule is not checked at all (zero cost) | No | Nothing |
+| `disabled` | Rule emits no diagnostic | No | Nothing |
 
 The default mode for each rule comes from its code prefix (`E` = error, `W` = warning). All modes can be overridden per-line, per-block, per-file, and per-project.
+
+At project/path scope, a non-disabled explicit severity both **enables** and
+grades an opt-in rule. `disabled` explicitly deselects it. Removing the entry
+means “inherit” and returns selection to the rule's tag/default gate. This makes
+every rule independently controllable; a user does not need to enable a broad
+tag gate merely to promote one rule. “Inherited” and the bulk “native severity”
+operation are editor intents, not additional persisted severity values. See
+[CONFIGEDITOR-SEVERITY](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEVERITY).
+
+`disabled` currently guarantees no output, not zero execution cost: the checker
+runs the shared rule registry before filtering configured diagnostics. Moving
+selection ahead of rule execution is an optimisation tracked by
+[CONFIGEDITOR-PLAN-PHASE-2](../plans/LSP-CONFIGURATION-EDITOR-PLAN.md#CONFIGEDITOR-PLAN-PHASE-2),
+not part of severity correctness.
 
 #### Inline Suppression and Mode Override {#CHKARCH-STRICTNESS-SUPPRESSION}
 
@@ -206,7 +220,7 @@ Block directives work with all modes: `# type: warning[CODE]` / `# type: end-war
 ```toml
 [tool.basilisk]
 # No "strict"/"mode" switch; opt into house-style rules by name:
-strict_annotations = true   # enable the require-annotation rules (BSK-E0001/E0002/E0004)
+strict-annotations = true   # enable the require-annotation rules (BSK-E0001/E0002/E0004)
 
 [tool.basilisk.per-path-overrides."legacy/**"]
 disabled = ["returns_compatibility"]              # disable rules entirely for legacy code
@@ -265,6 +279,33 @@ Recognized comment formats:
 | `# basilisk: file-warning[CODE]` | Per-file: demote specific rules to warnings |
 
 The `# type:` prefix keeps compatibility with tools that recognize `# type: ignore`; others treat `# type: warning` as unknown and ignore it.
+
+#### Suppression Directives as Opt-In Diagnostics {#CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS}
+
+Suppression auditing is a Basilisk-specific, **off-by-default** rule family. The
+unconfigured PEP-default experience emits none of these diagnostics. Once the
+project enables the `suppressions` tag or an individual rule, every parsed
+source directive produces at most one audit diagnostic at the directive's
+comment span:
+
+| Rule | Native severity when enabled | Classification |
+|---|---|---|
+| `BSK-I0060` | Info | A valid code-specific directive actively suppresses a diagnostic or changes its severity |
+| `BSK-W0061` | Warning | An active blanket directive applies without a Basilisk rule selector |
+| `BSK-W0062` | Warning | A syntactically valid directive matches nothing or changes no effective severity |
+| `BSK-E0063` | Error | The directive is malformed, names an unknown rule, conflicts with another directive, or has an unmatched block boundary |
+
+Classification precedence is malformed → unused → active blanket → active
+specific, so a directive never produces duplicate audit noise. The audit data
+records its kind, scope, selected codes, and matched-diagnostic count for LSP
+navigation. These diagnostics are appended **after** ordinary inline suppression
+and are not passed through that same directive set; an ignore cannot hide the
+audit diagnostic describing itself. Project/path configuration can still set
+each audit rule to `error`, `warning`, `info`, or `disabled` normally.
+
+All four rules carry the tags `basilisk` and `suppressions`. Their workspace
+configuration/editor behavior is specified by
+[CONFIGEDITOR-SUPPRESSIONS](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SUPPRESSIONS).
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
@@ -1280,7 +1321,16 @@ pydantic = "basilisk-plugin-pydantic >= 0.1"
 
 ### Configuration File {#CHKARCH-CONFIG-FILE}
 
-All configuration lives in `pyproject.toml`:
+`pyproject.toml` under `[tool.basilisk]` is the canonical configuration and the
+default write target for new projects. For compatibility, the current loader
+also reads a root-level `basilisk.json` at higher priority. The two files are not
+merged: when both exist, `basilisk.json` is active and the TOML section is
+shadowed. Configuration tooling must expose that provenance and mutate the
+active source or perform an explicit migration—never write an ineffective
+shadowed file. See
+[CONFIGEDITOR-SOURCES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES).
+
+Canonical TOML example:
 
 ```toml
 [tool.basilisk]
@@ -1679,6 +1729,12 @@ separate, free, and unaffected.
 2. **Relax per-file**: `# basilisk: relaxed` at the top demotes a file's errors to warnings
 3. **Track progress**: `basilisk stats` shows type completeness percentage
 4. **Tighten over time**: remove per-path overrides directory by directory as code is typed
+
+The target strict-first editor workflow—enable the desired complete policy, run
+safe fixes, then record only the confirmed remaining debt—is specified in
+[CONFIGEDITOR-ADOPTION](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-ADOPTION).
+Until the CLI `stats` command ships, type-health/adoption progress comes from
+the LSP activity data rather than the unimplemented command.
 
 ---
 
