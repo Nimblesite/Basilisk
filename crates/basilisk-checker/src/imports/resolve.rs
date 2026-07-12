@@ -121,6 +121,18 @@ pub(crate) fn resolve_module_cached(
         }
     }
 
+    // A standard-library name that was not shadowed by an earlier, explicitly
+    // configured source is terminal at typing-spec step 3. Do not continue into
+    // site-packages: besides reversing the documented PEP 561 order, doing so
+    // reads what is often the largest directory on the search path for every
+    // ordinary `typing`, `dataclasses`, or `collections` import. The caller
+    // applies bundled name recognition when no custom typeshed is configured;
+    // with a custom typeshed, a missing module deliberately remains unresolved
+    // because that tree is canonical.
+    if basilisk_stubs::is_stdlib_module(module_name) {
+        return None;
+    }
+
     // 4+5. Site-packages: stub-only packages (-stubs), then inline-typed (py.typed), then plain
     if let Some(sp) = &search_paths.site_packages {
         // 4. Check for `<module>-stubs` package first
