@@ -33,6 +33,7 @@ pub mod code_actions;
 pub mod code_lens;
 pub mod color;
 pub mod completion;
+pub mod configuration_editor;
 pub mod config;
 pub mod coverage;
 pub mod debug;

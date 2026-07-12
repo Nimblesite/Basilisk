@@ -1,179 +1,73 @@
-# Plan: Eliminate Line-Based String Scanning ("Regex-Equivalent") in Checker Rules {#LINESCANPLAN}
+# Eliminate Checker Line Scanning {#LINESCANPLAN-ELIMINATION}
 
-## Context {#LINESCANPLAN-CONTEXT}
+Checker rules must consume Ruff AST or `ResolvedModule` data. Reconstructing
+Python structure with `source.lines()` plus `starts_with`, `find`, or `contains`
+is parser duplication and can classify strings or comments as code.
 
-`CLAUDE.md`: **"Regex = ⛔️ ILLEGAL. Use the proper parsing mechanism — usually ruff"**.
+The original docstring failure in `generics_syntax_scoping` is fixed and covered
+by a regression test. This plan tracks the remaining rule-level scanners; line
+geometry and suppression-comment parsing are the only permitted exceptions.
 
-There is **zero `regex` / `fancy_regex` crate usage** in `crates/basilisk-checker/`; no `Cargo.toml` depends on a regex engine. But 13 rules implement the moral equivalent — they iterate `source.lines()` and `String::starts_with` / `find` / `contains` on Python keywords to reconstruct structure already in `basilisk_resolver::ResolvedModule`. This is the anti-pattern behind the generics_syntax_scoping showstopper FP (issue [#43](https://github.com/Nimblesite/Basilisk/issues/43)): a line *inside a module docstring* whose trimmed prefix starts with `class ` was parsed as a real class definition, polluting the type-param table and triggering a hard error on prose.
+## Current inventory {#LINESCANPLAN-INVENTORY}
 
-This plan eliminates line-based scanning across all 13 rules and re-grounds them on the AST.
+The live inventory is the output of:
 
----
-
-## Scope: 13 rules, 31 `.lines()` call sites {#LINESCANPLAN-SCOPE}
-
-Inventory produced by repo-wide grep audit (2026-05-23). Severity reflects false-positive blast radius — HIGH means the rule shares generics_syntax_scoping's exact bug class (string-matching `class `/`def `/`type ` prefixes that fire inside docstrings).
-
-| Rule | Files | Scans for | Severity | AST already has it? |
-|------|-------|-----------|----------|---------------------|
-| **E0149** | `e0149/violations.rs`, `e0149/mod.rs` | `class`/`def`/`async def`/`type ` prefixes; PEP 695 type params | **HIGH** *(filed: #43)* | Yes — `type_statements`, `classes`, `functions` |
-| **E0130** | `e0130/check.rs`, `e0130/collect.rs`, `e0130/mod.rs`, `e0130/variance.rs`, `e0130/variance_check.rs`, `e0130/utils.rs` | `class`/`def ` prefixes; `Generic[...]` patterns; TypeVar scoping | **HIGH** | Yes — `classes`, `functions`, `typevar_calls` |
-| **E0126** | `e0126_helpers.rs` | `def`/`class`/`@` prefixes; `return`/`assert_type`/`if`/`else`/`for ` | **HIGH** | Yes — `functions`, `classes` |
-| **E0060** | `e0060.rs` | `class`/`def`/`@` prefixes + operator lines | MEDIUM | Yes — `classes`, `functions` |
-| **E0070** | `e0070.rs` | Annotated assignments (`: ` and ` = `) | MEDIUM | Yes — `module_vars` |
-| **E0108** | `e0108.rs` | `ClassName(...).__slots__` patterns | MEDIUM | Yes — `classes` |
-| **E0124** | `e0124.rs` | `self.X = expr` attribute assignments | MEDIUM | Yes — `functions` |
-| **E0128** | `e0128.rs`, `e0128_helpers.rs` | `TypeVar()` calls with `=` parse; class filtering | MEDIUM | Yes — `typevar_calls`, `classes` |
-| **E0142** | `e0142/helpers.rs` | Comparison operators (`<`, `>`, `<=`, `>=`) | MEDIUM | Partial — needs new AST accessor |
-| **E0127** | `e0127.rs` | Indentation / body boundary | LOW | Yes — `functions` |
-| **E0129** | `e0129.rs` | Leading indentation (comments, blanks) | LOW | Yes — `functions` |
-| **E0131** | `e0131/mod.rs` | Comment / empty line filtering | LOW | Yes — `functions` |
-| **E0125** | `e0125.rs` | Comment / empty line detection | LOW | Safe — line offset only |
-
-**Aggregate**: 13 rules, **3 HIGH** (latent showstoppers, same bug class as #43), **6 MEDIUM**, **4 LOW**. Total ~31 `.lines()` call sites.
-
-**Also in scope (non-rule)**: `crates/basilisk-checker/src/rules/shared.rs` and `crates/basilisk-checker/src/suppression.rs` use `.lines()` — these are LOW (line geometry / `# type: ignore` detection) and stay.
-
----
-
-## Principle {#LINESCANPLAN-PRINCIPLE}
-
-**Every rule consumes `ResolvedModule` AST nodes. No rule iterates `source.lines()` to reconstruct Python structure.**
-
-`ResolvedModule` already exposes (see `crates/basilisk-resolver/src/lib.rs`):
-- `classes: Vec<ClassDef>` with `name_span`, `bases`, methods, type params
-- `functions: Vec<FunctionDef>` with `name_span`, params, return type, local vars, decorators
-- `type_statements: Vec<TypeStmt>` (PEP 695 `type` aliases)
-- `module_vars: Vec<ModuleVar>` (annotated module-level assignments)
-- `typevar_calls: Vec<TypeVarCall>` (old-style `TypeVar(...)` calls)
-- `calls: Vec<Call>` with callee + args + spans
-- `imports: Vec<Import>`
-
-If a rule needs something not on `ResolvedModule`, **add it to the resolver**, don't re-parse the text in the rule.
-
-Permitted line-level access:
-- `span_for_line` for diagnostic geometry only.
-- `suppression.rs` `# type: ignore` parsing (lexically simple, no Python-keyword matching).
-- `format!()` / display of source slices for error messages.
-
----
-
-## Phase 1 — Stop the bleeding (HIGH severity, blocks #43 and prevents next showstopper) {#LINESCANPLAN-PHASE-BLEEDING}
-
-### Step 1.1: E0149 — full AST rewrite *(closes #43)* {#LINESCANPLAN-PHASE-BLEEDING-E0149}
-
-**Files**: `crates/basilisk-checker/src/rules/e0149/violations.rs`, `crates/basilisk-checker/src/rules/e0149/mod.rs`, `crates/basilisk-checker/src/rules/e0149/helpers.rs`
-
-Delete `collect_pep695_type_params` (lines 19–38 of `violations.rs`) and the line-iteration driver in `mod.rs:78-117`. Replace with:
-
-- `module.type_statements` for PEP 695 `type Foo[T] = ...` aliases (has name, params with bounds, RHS spans).
-- `module.classes` + `module.functions` filtered to those with `type_params: Vec<TypeParam>` populated by the resolver.
-- For each violation check (bound cross-reference, module-level use, decorator use, method shadowing, `type` stmt circular / in-function / old-TypeVar), walk the AST node — not the line.
-
-If `ResolvedModule` doesn't already carry PEP 695 type params on `ClassDef` / `FunctionDef` / `TypeStmt`, **add them in the resolver** here — a one-time cost paid by every rule below.
-
-**Verification**:
-1. Minimal repro from #43 produces zero diagnostics.
-2. Fixture with `[SPEC-ID]` cross-references in docstring produces zero diagnostics.
-3. All existing `e0149_tests.rs` and `e0126_e0149_tests.rs` pass.
-4. Conformance suite FP count for E0149 stays at 0.
-
-### Step 1.2: E0130 — TypeVar scoping AST rewrite {#LINESCANPLAN-PHASE-BLEEDING-E0130}
-
-**Files**: all 6 files under `crates/basilisk-checker/src/rules/e0130/`
-
-`e0130/collect.rs` and `e0130/check.rs` line-iterate for `class ` / `def ` prefixes and `Generic[...]` usage. Drive off `module.classes` (incl. bases for `Generic[T]`) and `module.functions`; `module.typevar_calls` is already structured.
-
-**Verification**: existing E0130 tests pass; add a docstring-prose fixture that previously would have falsely fired.
-
-### Step 1.3: E0126 — return statement / body-boundary AST rewrite {#LINESCANPLAN-PHASE-BLEEDING-E0126}
-
-**File**: `crates/basilisk-checker/src/rules/e0126_helpers.rs`
-
-Scans for `def `/`class `/`@` to find function body boundaries, and for `return ` / `assert_type` inside the function. Use `FunctionDef.body` spans instead; `assert_type` calls are in `module.calls`.
-
-**Verification**: existing E0126 tests pass; add a docstring fixture containing the strings `def foo():` and `return None` and assert no false positive.
-
----
-
-## Phase 2 — MEDIUM severity (false positives possible but narrower) {#LINESCANPLAN-PHASE-MEDIUM}
-
-Same shape for each: replace `.lines()` walks with iteration over the relevant `ResolvedModule` collection. One sub-step per rule.
-
-- **2.1 E0060** — `module.classes`/`functions` for decorator/header iteration.
-- **2.2 E0070** — `module.module_vars` for annotated module-level assignments.
-- **2.3 E0108** — `module.classes` for `__slots__` introspection.
-- **2.4 E0124** — `module.functions[*].local_vars` for `self.X = ...` patterns inside methods.
-- **2.5 E0128** — `module.typevar_calls` for `TypeVar(...)` and class-context filtering via `module.classes`.
-- **2.6 E0142** — add `module.comparisons: Vec<Comparison>` to the resolver (operator + operand spans), then iterate it. Don't pattern-match `<`/`>` from raw text.
-
-Each sub-step ships with:
-1. A docstring-prose fixture that exercises the bug class.
-2. Updated rule that emits **identical diagnostics** on real code (regression-locked by existing tests).
-3. Zero new conformance FPs.
-
----
-
-## Phase 3 — LOW severity cleanup (defensible, but should still go) {#LINESCANPLAN-PHASE-LOW}
-
-- **3.1 E0127**, **3.2 E0129**, **3.3 E0131**: indent / comment / blank-line filtering. Replace with `FunctionDef.body_span` lookups. Lexically simple but inconsistent — kill it for uniformity.
-- **3.4 E0125**: line-offset usage is safe; leave it but add a comment justifying why this one is OK (it doesn't look at line *contents*).
-- **3.5 `shared.rs` / `suppression.rs`**: keep `.lines()` usage. Add a doc comment to `span_for_line` and the `# type: ignore` parser explaining why these are the *only* permitted exceptions, so future rules don't copy the pattern.
-
----
-
-## Phase 4 — Enforcement (prevent regression) {#LINESCANPLAN-ENFORCEMENT}
-
-### Step 4.1: Lint script {#LINESCANPLAN-ENFORCEMENT-LINT-SCRIPT}
-
-Add `scripts/check-no-line-scanning.sh` (or a make target) that runs:
-
-```
-! grep -rn '\.lines()' crates/basilisk-checker/src/rules/ \
-    | grep -v 'span_for_line\|//\|tests/'
+```bash
+rg -n '\.lines\(\)' crates/basilisk-checker/src/rules
+rg -n 'starts_with\("(class |def |async def |type |@|import |from )' \
+  crates/basilisk-checker/src/rules
 ```
 
-Wire into `make lint` and CI (`.github/workflows/ci.yml`). Any new `.lines()` call site in `rules/` fails the build.
+Structural keyword scanners remain in:
 
-### Step 4.2: Forbidden-pattern lint for keyword string matching {#LINESCANPLAN-ENFORCEMENT-KEYWORD-LINT}
+- `generics_variance_inference/`
+- `annotations_generators_2/mod.rs`
+- `literals_literalstring_helpers.rs`
+- `dataclasses_order.rs`
+- `generics_defaults_referential_2.rs`
 
-```
-! grep -rn 'starts_with("class \|starts_with("def \|starts_with("async def \|starts_with("type \|starts_with("@\|starts_with("import \|starts_with("from ' crates/basilisk-checker/src/ \
-    | grep -v 'tests/'
-```
+Other statement/body reconstruction remains in:
 
-Same wiring. Currently 64 hits across the rule tree — Phase 1+2 should drive this to 0.
+- `dataclasses_slots.rs` and `dataclasses_transform_class/helpers.rs`
+- `protocols_subtyping.rs`
+- `tuples_index_2.rs`
+- `literals_semantics_2.rs`
+- `specialtypes_never_2.rs`
+- `generics_type_erasure.rs`
 
-### Step 4.3: CLAUDE.md amendment {#LINESCANPLAN-ENFORCEMENT-CLAUDEMD}
+`rules/shared.rs::span_for_line` may read a line for diagnostic geometry. It must
+not infer Python structure.
 
-Add to the **Rules** section of `CLAUDE.md`:
+## AST migration {#LINESCANPLAN-AST-MIGRATION}
 
-> **Line-based string scanning is regex.** `source.lines()` + `line.starts_with("class "|"def "|"type "|"@"|"import "|"from ")` is the moral equivalent of regex and is equally **⛔️ ILLEGAL**. Drive every rule off `ResolvedModule` AST nodes. If the AST is missing what you need, extend the resolver — don't re-parse the text in the rule. Permitted exceptions: `span_for_line` (diagnostic geometry), `suppression.rs` `# type: ignore` parsing. Nothing else.
+- [ ] Replace class/function/type-alias discovery with the corresponding
+  `ResolvedModule` collections and Ruff AST spans.
+- [ ] Replace indentation-based body boundaries with AST statement/body ranges.
+- [ ] Replace operator, mutation, and call parsing with structured expression or
+  call records; extend the resolver when the required node is not exposed.
+- [ ] Add a string/comment regression fixture for each migrated rule before
+  deleting its scanner.
+- [ ] Preserve the exact diagnostics for real code and keep conformance at
+  141/141 with zero missed errors and zero false positives.
 
-### Step 4.4: GitHub issues for each HIGH rule {#LINESCANPLAN-ENFORCEMENT-GITHUB-ISSUES}
+Migrate `generics_variance_inference` first: it owns the largest cluster of raw
+line and keyword scans. Then remove the smaller body scanners in the inventory
+above.
 
-File one issue per HIGH rule (E0149 = #43 already filed, plus E0130 and E0126) with label `showstopper`, linking back to this plan and #43. MEDIUM/LOW rules get one umbrella tracking issue.
+## Enforcement {#LINESCANPLAN-ENFORCEMENT}
 
----
+- [ ] Add a lint script that rejects new `.lines()` calls beneath
+  `crates/basilisk-checker/src/rules/`, with a narrow allowlist for documented
+  geometry helpers.
+- [ ] Reject keyword-prefix parsing of Python structure in checker production
+  code.
+- [ ] Wire the lint into the existing lint/CI path; do not add a Make target.
+- [ ] Keep the allowlist explicit and reviewed so it cannot grow silently.
 
-## Verification (whole plan) {#LINESCANPLAN-VERIFICATION}
+## Acceptance {#LINESCANPLAN-ACCEPTANCE}
 
-- `make ci` passes.
-- Conformance suite FP count strictly decreases (ratchet).
-- `make test` passes — no test mutations to make a rule pass; only AST migration.
-- The lint scripts in Step 4.1 / 4.2 return zero hits inside `crates/basilisk-checker/src/rules/`.
-- A fresh fixture file containing ONLY docstring prose with `class `/`def `/`type ` prefixes and `[SPEC-ID]` brackets produces **zero diagnostics** from the checker.
-
----
-
-## Out of scope {#LINESCANPLAN-OUT-OF-SCOPE}
-
-- `lspkit-*` migration (tracked separately in `CLAUDE.md`).
-- IDE extension code (line-based parsing in TS/Rust LSP server is mostly LSP-position arithmetic, not Python-keyword matching).
-- `basilisk-test-macros` / profiler scenario tests (test infrastructure, not checker rules).
-
----
-
-## Risk {#LINESCANPLAN-RISK}
-
-The resolver may not carry all structured info HIGH rules need today (e.g. PEP 695 type params on `ClassDef`), so Phase 1.1 may grow the resolver. That one-time cost benefits every subsequent rule and aligns with the architecture — better than 13 rules each re-parsing the same text wrong.
+- No checker rule infers Python structure from raw lines.
+- Docstrings, comments, and string literals containing `class`, `def`, `type`,
+  decorators, or imports produce no structural diagnostics.
+- Focused rule tests, `make lint`, `make test`, and the live conformance harness
+  pass without weakening any ratchet.

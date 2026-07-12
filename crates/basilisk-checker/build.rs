@@ -1,0 +1,168 @@
+//! Generates the checker-owned rule catalog from the live `all_rules` registry.
+
+use std::error::Error;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+#[derive(Debug)]
+struct CatalogEntry {
+    code: String,
+    title: String,
+    docs_url: String,
+    severity: &'static str,
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    println!("cargo:rerun-if-changed=src/rules");
+
+    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
+    let rules_dir = manifest_dir.join("src/rules");
+    let registry = fs::read_to_string(rules_dir.join("mod.rs"))?;
+    let modules = registered_modules(&registry)?;
+    let entries = modules
+        .iter()
+        .map(|module| catalog_entry(&rules_dir, module))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
+    fs::write(out_dir.join("rule_catalog_generated.rs"), render(&entries))?;
+    Ok(())
+}
+
+fn registered_modules(registry: &str) -> Result<Vec<String>, String> {
+    let function = registry
+        .split_once("fn all_rules()")
+        .map(|(_, rest)| rest)
+        .ok_or_else(|| "rules/mod.rs has no all_rules registry".to_owned())?;
+    let list = function
+        .split_once("&[")
+        .map(|(_, rest)| rest)
+        .and_then(|rest| rest.split_once("\n    ]").map(|(body, _)| body))
+        .ok_or_else(|| "could not locate all_rules registry body".to_owned())?;
+
+    let modules = list
+        .lines()
+        .filter_map(|line| {
+            line.trim()
+                .strip_prefix('&')
+                .and_then(|entry| entry.strip_suffix(','))
+                .and_then(|entry| entry.split_once("::"))
+                .map(|(module, _)| module.to_owned())
+        })
+        .collect::<Vec<_>>();
+    if modules.is_empty() {
+        Err("all_rules registry contains no rule entries".to_owned())
+    } else {
+        Ok(modules)
+    }
+}
+
+fn catalog_entry(rules_dir: &Path, module: &str) -> Result<CatalogEntry, String> {
+    let flat = rules_dir.join(format!("{module}.rs"));
+    let module_dir = rules_dir.join(module);
+    let primary = if flat.is_file() {
+        flat
+    } else {
+        module_dir.join("mod.rs")
+    };
+    let primary_text = fs::read_to_string(&primary)
+        .map_err(|err| format!("failed to read registered rule `{module}`: {err}"))?;
+    let (code, title) = extract_header(&primary_text)
+        .ok_or_else(|| format!("registered rule `{module}` has no canonical `//! CODE: title` header"))?;
+
+    let texts = source_texts(&primary, &module_dir)?;
+    let docs_url = texts
+        .iter()
+        .find_map(|text| extract_quoted_value(text, "docs_url:"))
+        .ok_or_else(|| format!("registered rule `{module}` has no docs_url"))?;
+    let code_literal = format!("code: \"{code}\"");
+    if !texts.iter().any(|text| text.contains(&code_literal)) {
+        return Err(format!(
+            "registered rule `{module}` header code `{code}` has no matching ErrorCode literal"
+        ));
+    }
+
+    Ok(CatalogEntry {
+        severity: severity_for(&code),
+        code,
+        title: clean_sentence(&title),
+        docs_url,
+    })
+}
+
+fn source_texts(primary: &Path, module_dir: &Path) -> Result<Vec<String>, String> {
+    if !module_dir.is_dir() {
+        return fs::read_to_string(primary)
+            .map(|text| vec![text])
+            .map_err(|err| format!("failed to read {}: {err}", primary.display()));
+    }
+    let entries = fs::read_dir(module_dir)
+        .map_err(|err| format!("failed to read {}: {err}", module_dir.display()))?;
+    entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "rs"))
+        .map(|path| {
+            fs::read_to_string(&path)
+                .map_err(|err| format!("failed to read {}: {err}", path.display()))
+        })
+        .collect()
+}
+
+fn extract_header(text: &str) -> Option<(String, String)> {
+    text.lines().find_map(|line| {
+        let doc = line.trim().strip_prefix("//! ")?;
+        let (raw_code, title) = doc.split_once(':')?;
+        let code = raw_code.trim().trim_matches('`');
+        let valid_bsk = code
+            .strip_prefix("BSK-")
+            .is_some_and(|rest| matches!(rest.as_bytes().first(), Some(b'E' | b'W' | b'I')));
+        let valid_named = code
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_');
+        (valid_bsk || valid_named)
+            .then(|| (code.to_owned(), title.trim().to_owned()))
+    })
+}
+
+fn extract_quoted_value(text: &str, key: &str) -> Option<String> {
+    let after_key = text.split_once(key)?.1;
+    let after_quote = after_key.split_once('"')?.1;
+    after_quote.split_once('"').map(|(value, _)| value.to_owned())
+}
+
+fn clean_sentence(value: &str) -> String {
+    value.trim().trim_end_matches('.').trim().to_owned()
+}
+
+fn severity_for(code: &str) -> &'static str {
+    if code.starts_with("BSK-I") {
+        "Info"
+    } else if code.starts_with("BSK-W") {
+        "Warning"
+    } else {
+        "Error"
+    }
+}
+
+fn render(entries: &[CatalogEntry]) -> String {
+    let mut output = String::from(
+        "// @generated by crates/basilisk-checker/build.rs from the live rule registry.\n\
+         // Do not edit by hand.\n\n\
+         pub(super) const GENERATED_RULES: &[GeneratedRuleDescriptor] = &[\n",
+    );
+    for entry in entries {
+        output.push_str("    GeneratedRuleDescriptor {\n");
+        output.push_str(&format!("        code: {:?},\n", entry.code));
+        output.push_str(&format!("        title: {:?},\n", entry.title));
+        output.push_str(&format!("        summary: {:?},\n", entry.title));
+        output.push_str(&format!("        docs_url: {:?},\n", entry.docs_url));
+        output.push_str(&format!(
+            "        default_severity: Severity::{},\n",
+            entry.severity
+        ));
+        output.push_str("    },\n");
+    }
+    output.push_str("];\n");
+    output
+}

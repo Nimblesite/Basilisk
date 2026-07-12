@@ -38,6 +38,9 @@ remain:
    rules/files/counts before any write.
 6. **The LSP owns policy.** Clients send intent and render results. They never
    enumerate rules, parse configuration, calculate precedence, or write files.
+7. **One project config.** Rule severities, tag opt-ins, path/file exceptions,
+   and generated adoption debt are persisted only in the root's active config
+   file—not VS Code settings, extension state, a sidecar, or a named mode.
 
 ## Current foundation and missing pieces {#CONFIGEDITOR-STATUS}
 
@@ -48,7 +51,7 @@ remain:
 | Rule tags | Live checker source of truth | Expose full tagged rule catalog through the LSP |
 | Single-rule project edit | `basilisk.disableRule` performs an unsafe first-root string edit | Revision-checked preview/apply transaction against the active source |
 | Bulk rules | None | All/code/tag/diagnostic/fixability selectors |
-| Adoption store | Exists, but normal republish and production graduation are incomplete | One persistent analysis path plus strict-first baseline workflow |
+| Adoption persistence | A separate sidecar exists, but normal republish and production graduation are incomplete | Exact-file severities in the active config file; no sidecar or adoption mode |
 | Ignore visibility | Directives only hide or demote diagnostics | First-class, workspace-indexed suppression diagnostics |
 | VSIX editor | None | Full-width accessible editor-tab webview |
 
@@ -111,8 +114,9 @@ The primary adoption workflow is one continuous workspace view, not a wizard:
    severity, and fixability. “Without safe fix” is a filter, never an automatic
    decision to disable.
 4. **Choose the exception.** Set selected rules to warning/info/disabled at the
-   project or path scope, or adopt only the current per-file debt. The preview
-   states plainly that a global disable also hides future violations.
+   project or path scope, or adopt only the current per-file debt. Per-file
+   adoption writes ordinary exact-file severity entries into the active config.
+   The preview states plainly that a global disable also hides future violations.
 5. **Apply once.** The LSP writes one revision-checked configuration edit,
    reloads analysis, republishes diagnostics, and returns the fresh snapshot.
 6. **Pay debt down.** The Adoption view shows every exception. Per-file entries
@@ -193,6 +197,12 @@ created configuration uses `[tool.basilisk]` in `pyproject.toml`. The editor
 must mutate the active source or offer an explicit migration—it must never
 write an ignored `pyproject.toml` while `basilisk.json` is active.
 
+All project policy—including editor-generated per-file adoption entries—lives
+in that one active config file. The target design has no
+`.basilisk/adoptions.toml`, no hidden workspace state, and no adoption/strictness
+mode. `adoption = true` on an exact-file path entry records provenance while its
+`rules` table remains ordinary severity configuration ([AUTOFIX-ADOPTION-FILE]).
+
 The writer is structure-aware and preserves unrelated keys, comments, ordering,
 and newline style. It validates the complete result before returning a single
 versioned `WorkspaceEdit`; the LSP does not write behind an unsaved editor
@@ -262,7 +272,7 @@ The feature is complete only when:
    first-root fallbacks;
 6. stale, malformed, shadowed, and read-only configs cannot be overwritten;
 7. apply triggers reload, Salsa invalidation, recheck, publish, and notification
-   in every analysis mode;
+   in every analysis scope;
 8. strict-first adoption runs safe fixes, persists demotions on later edits, and
    auto-graduates;
 9. all four suppression-audit rules are workspace-findable and severity-tunable;

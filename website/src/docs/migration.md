@@ -183,6 +183,9 @@ transactional surface:
 6. preview the exact diff and apply it against a revision token;
 7. track exceptions and opt-in suppression diagnostics until they graduate.
 
+Per-file adoption is stored as exact-file rule severities in the same active
+project config. It does not create a second config file or a persistent mode.
+
 It is [specified](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md)
 and [planned](https://github.com/Nimblesite/Basilisk/blob/main/docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md),
 but not yet shipped. The VSIX will be a rendering shell; the reusable LSP will

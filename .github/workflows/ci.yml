@@ -477,13 +477,23 @@ jobs:
 
   # ── Neovim extension (runs in parallel) ────────────────────────────────────
   test-nvim:
-    name: Neovim Extension
+    name: Neovim Extension (${{ matrix.neovim.label }})
     needs: changes
     # Its own tree, or any core change — the e2e harness drives the real binary
     # over LSP/DAP, so a checker/LSP change alters what this suite exercises.
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.nvim == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        neovim:
+          - label: "0.10"
+            version: v0.10.4
+          - label: "0.11"
+            version: v0.11.6
+          - label: nightly
+            version: nightly
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -510,7 +520,7 @@ jobs:
         uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1
         with:
           neovim: true
-          version: v0.11.6
+          version: ${{ matrix.neovim.version }}
 
       # The nvim e2e harness git-clones plenary/dap/mini into /tmp on every run.
       # Cache them so the clones become no-ops — test-nvim.sh skips any dir that
@@ -522,7 +532,7 @@ jobs:
             /tmp/plenary.nvim
             /tmp/nvim-dap
             /tmp/mini.nvim
-          key: nvim-test-plugins-${{ runner.os }}-v1
+          key: nvim-test-plugins-${{ runner.os }}-${{ matrix.neovim.label }}-v1
 
       - name: Run Neovim extension tests
         run: |

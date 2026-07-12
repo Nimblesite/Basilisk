@@ -346,7 +346,9 @@ A tag-first VS Code editor is specified but **not shipped yet**. It will read th
 live rule catalog from the LSP, preview all/tag/rule bulk changes, expose every
 rule's effective and explicit severity, run safe fixes before recording adoption
 debt, and make opt-in suppression diagnostics searchable across the workspace.
-The VSIX will not parse or write configuration itself.
+Generated adoption debt will be ordinary exact-file `per-path-overrides` entries
+in this same active config file—no `.basilisk/adoptions.toml`, hidden state, or
+adoption mode. The VSIX will not parse or write configuration itself.
 
 Track the authoritative
 [specification](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md)

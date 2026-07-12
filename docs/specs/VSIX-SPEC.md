@@ -116,6 +116,10 @@ the message and forwards configuration intent to the LSP. It MUST NOT:
 - write configuration or adoption files;
 - infer that an opt-in rule is enabled from VS Code settings.
 
+The VSIX contributes no `basilisk.rules.*`, strictness, adoption, or suppression
+policy settings. Those values live only in the active project config file and
+are accessed through the LSP snapshot/transaction API.
+
 Snapshot/loading/error/revision state lives in the extension's single Signals
 store (`src/store.ts`), with explicit actions; no mutable state lives in the
 panel host or hidden DOM. On reveal, the panel refetches authoritative LSP state

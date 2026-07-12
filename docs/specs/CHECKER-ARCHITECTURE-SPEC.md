@@ -18,36 +18,6 @@ Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` d
 
 ---
 
-## Capability Matrix {#CHKARCH-MATRIX}
-
-| Capability | Pyright | mypy | ty | Pyrefly | Zuban | Ruff | **Basilisk** |
-|---|---|---|---|---|---|---|---|
-| Implementation | TypeScript | Python/C | Rust | Rust | Rust | Rust | **Rust** |
-| License | MIT | MIT | MIT | MIT | AGPL | MIT | **MIT** |
-| Default strictness | Gradual | Gradual | Gradual | Gradual | Gradual | N/A | **PEP by default; strict opt-in** |
-| PEP conformance (current) | [live results][cf] | [cf] | [cf] | [cf] | [cf] | N/A | **<!--g:score-->100.0%<!--/g:score-->** (self-measured) |
-| PEP conformance target | — | — | — | — | — | N/A | **100%** |
-| LSP server | Yes | No | Yes | Yes | Yes | No | **Yes** |
-| Incremental computation | Lazy eval | Daemon | Salsa | Module-level | No | N/A | **Salsa** |
-| Ownership analysis | No | No | No | No | No | No | **Yes** |
-| Immutability enforcement | No | No | No | No | No | No | **Yes** |
-| Implicit coercion detection | No | No | No | No | No | No | **Yes** |
-| Linting | No | No | No | No | No | **Yes** | Native import hygiene ([LSPFMT-IMPORTS](LSP-FORMATTING-SPEC.md#LSPFMT-IMPORTS)) |
-| Formatting | No | No | No | No | No | **Yes** | Embeds Ruff formatter ([LSPFMT-ENGINE](LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE)) |
-| Plugin system | No | Python hooks | Planned | No | No | No | **WASM plugins** |
-| Auto-stub generation | No | stubgen (basic) | No | Inference | No | No | **Tiered stubs** |
-| CI output (SARIF/JUnit) | Limited | No | No | No | No | No | **SARIF + JUnit** |
-| Multi-threaded | No | No | Yes | Yes | No | Yes | **Yes** |
-| Migration tooling | N/A | N/A | No | No | No | N/A | **mypy + Pyright import** |
-| VS Code extension | Pylance (proprietary) | No | Yes | Yes | Yes | Yes | **Yes (open source)** |
-| No Microsoft dependency | No (Node.js) | Yes | Yes | Yes | Yes | Yes | **Yes** |
-
-> Rival conformance figures move as those tools evolve, so rather than freeze (and inevitably misstate) them here, the rival cells link to the official, continuously-updated scoreboard. Basilisk's **<!--g:score-->100.0%<!--/g:score-->** is self-measured by that same suite's calculator run over the unmodified binary in its default config, against `python/typing@main` at the exact commit recorded in `conformance_report.json` ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)); it is not directly comparable to numbers produced under a different methodology or grading.
-
-[cf]: https://github.com/python/typing/blob/main/conformance/results/results.html
-
----
-
 ## Dependency Strategy {#CHKARCH-DEPS}
 
 Depend on established open-source tools rather than reimplementing them.
@@ -62,24 +32,12 @@ Depend on established open-source tools rather than reimplementing them.
 | **Salsa** | Incremental computation framework | Apache-2.0/MIT | Powers rust-analyzer. Proven at scale. |
 | **`lsp-server`** / **`tower-lsp`** | LSP implementation | MIT | Standard Rust LSP crates. |
 
-### Tools We Do NOT Depend On {#CHKARCH-DEPS-EXCLUDED}
-
-| Tool | Why Not |
-|---|---|
-| Pyright/Pylance | TypeScript, Microsoft ecosystem. Cannot link. Cannot extend. |
-| mypy | Python, too slow for our architecture. Reference only. |
-| ty | MIT Rust, but we build our own checker with different philosophy (configuration-driven, PEP-conformant by default). We may contribute upstream or share crates where sensible. |
-| Pyrefly | MIT Rust, same reasoning as ty. Different design goals. |
-| Node.js | No JavaScript runtime dependency anywhere in the stack. |
-
 ### Interoperability {#CHKARCH-DEPS-INTEROP}
 
 | Tool | Interop Strategy |
 |---|---|
 | **Ruff** | Basilisk **embeds** the `ruff_python_formatter` crate in-process for formatting and reimplements import hygiene natively — the `ruff` CLI is never spawned ([LSPFMT-DECISION](LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)). Configuration unified in `pyproject.toml` (`[tool.ruff.format]`). |
 | **typeshed** | Bundled copy of typeshed stubs, updated with each Basilisk release. Users MAY prepend extra stubs via `stub-paths` (resolution step 1) or replace the bundled stdlib typeshed wholesale via `typeshed-path` (resolution step 3), per the typing-spec import-resolution ordering — see [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561). |
-| **mypy config** | `basilisk migrate --from mypy` reads `mypy.ini` / `setup.cfg` and produces `[tool.basilisk]` config. |
-| **Pyright config** | `basilisk migrate --from pyright` reads `pyrightconfig.json` and produces `[tool.basilisk]` config. |
 | **PEP 561** | Full support for `py.typed` packages, inline type annotations, and stub-only packages. |
 
 ---
@@ -134,18 +92,18 @@ hook could supply — lands in a terminal unresolved state and is surfaced by
 executed to follow an import. See the normative
 [§STUBRES-STATIC-MODEL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-STATIC-MODEL).
 
-#### Diagnostic Severity Modes {#CHKARCH-STRICTNESS-SEVERITY}
+#### Diagnostic Severity Values {#CHKARCH-STRICTNESS-SEVERITY}
 
-Every rule has four severity modes:
+Every rule has four configurable severity values:
 
-| Mode | Behavior | Blocks CI | LSP Indicator |
+| Severity | Behavior | Blocks CI | LSP Indicator |
 |---|---|---|---|
 | `error` | Full diagnostic with fix suggestions | Yes | Red squiggly |
 | `warning` | Diagnostic shown but does not block | No | Yellow squiggly |
 | `info` | Informational hint only | No | Blue hint |
 | `disabled` | Rule emits no diagnostic | No | Nothing |
 
-The default mode for each rule comes from its code prefix (`E` = error, `W` = warning). All modes can be overridden per-line, per-block, per-file, and per-project.
+The default severity for each rule comes from its code prefix (`E` = error, `W` = warning). Every value can be overridden per-line, per-block, per-file, and per-project.
 
 At project/path scope, a non-disabled explicit severity both **enables** and
 grades an opt-in rule. `disabled` explicitly deselects it. Removing the entry
@@ -158,10 +116,10 @@ operation are editor intents, not additional persisted severity values. See
 `disabled` currently guarantees no output, not zero execution cost: the checker
 runs the shared rule registry before filtering configured diagnostics. Moving
 selection ahead of rule execution is an optimisation tracked by
-[CONFIGEDITOR-PLAN-PHASE-2](../plans/LSP-CONFIGURATION-EDITOR-PLAN.md#CONFIGEDITOR-PLAN-PHASE-2),
+[CONFIGEDITOR-PLAN-DOMAIN](../plans/LSP-CONFIGURATION-EDITOR-PLAN.md#CONFIGEDITOR-PLAN-DOMAIN),
 not part of severity correctness.
 
-#### Inline Suppression and Mode Override {#CHKARCH-STRICTNESS-SUPPRESSION}
+#### Inline Suppression and Severity Override {#CHKARCH-STRICTNESS-SUPPRESSION}
 
 Basilisk supports standard `# type: ignore` (mypy/Pyright compatible) plus its own comment directives.
 
@@ -198,9 +156,9 @@ from models import Platform, Credentials
 # type: end-disabled[imports_unresolved]
 ```
 
-Block directives work with all modes: `# type: warning[CODE]` / `# type: end-warning[CODE]`, `# type: info[CODE]` / `# type: end-info[CODE]`, `# type: disabled[CODE]` / `# type: end-disabled[CODE]`. Omitting the code applies to all rules.
+Block directives work with all severity values: `# type: warning[CODE]` / `# type: end-warning[CODE]`, `# type: info[CODE]` / `# type: end-info[CODE]`, `# type: disabled[CODE]` / `# type: end-disabled[CODE]`. Omitting the code applies to all rules.
 
-**Per-file: file-level mode at the top of the file**
+**Per-file: file-level directive at the top of the file**
 ```python
 # basilisk: relaxed
 # All errors become warnings in this file
@@ -413,96 +371,37 @@ Tests: `crates/basilisk-checker/tests/checker/version_target_tests.rs`.
 
 ---
 
-## Mojo-Inspired Safety Analysis {#CHKARCH-MOJO-SAFETY}
+## Mojo-inspired safety analysis {#CHKARCH-MOJO-SAFETY}
 
-> **Status: PLANNED (Phase 4 — see [CHKARCH-ROADMAP-P4](#CHKARCH-ROADMAP-P4)). Not yet implemented.**
-> Forward-looking design for the `basilisk-mojo` crate, which is a stub **not wired into the pipeline**. The `generics_defaults`–`specialtypes_never` codes below are **illustrative only** — those numeric codes are currently used by shipping PEP-typing rules (see the [complete diagnostic reference](#CHKARCH-DIAG-REFERENCE) for what each does today).
+Status: planned, opt-in, and not wired into the checker pipeline. The
+`basilisk-mojo` crate is scaffolding; shipping PEP rules must not reuse these
+anchors or diagnostic descriptions.
 
-When implemented, these are **opt-in** rules in the `basilisk-mojo` crate — off by default, enabled only via configuration ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)). They adapt Mojo's ownership, immutability, and coercion concepts as static analysis over standard Python using `typing.Annotated`, decorators, and `dataclass(frozen=True)`; no Mojo runtime required.
+### Ownership tracking {#CHKARCH-MOJO-OWNERSHIP}
 
-### Ownership and Lifetime Tracking {#CHKARCH-MOJO-OWNERSHIP}
+The target is explicit `Annotated[T, Borrowed|InOut|Owned]` analysis for
+mutation-of-borrowed and use-after-transfer diagnostics.
 
-Optional ownership annotations via `typing.Annotated`:
+### Parameter immutability {#CHKARCH-MOJO-IMMUTABLE}
 
-```python
-from typing import Annotated
-from basilisk.safety import Borrowed, Owned, InOut
+The target is an opt-in rule that treats mutable parameters as read-only unless
+marked `InOut`; it does not change Python runtime semantics.
 
-def process(
-    data: Annotated[list[int], Borrowed],     # read-only reference
-    buffer: Annotated[list[int], InOut],       # mutable reference
-    consumed: Annotated[list[int], Owned],     # ownership transferred
-) -> list[int]:
-    buffer.append(sum(data))  # OK: buffer is InOut
-    data.append(1)            # ERROR: mutation of Borrowed parameter [generics_defaults]
-    return consumed
+### Structural discipline {#CHKARCH-MOJO-STRUCTURAL}
 
-result = process(data=items, buffer=buf, consumed=temp)
-print(temp)  # ERROR: use after ownership transfer [directives_cast]
-```
+The target is opt-in checks for dynamic attributes and related typed-class
+structure. Existing PEP/dataclass rules remain separate.
 
-**Static analysis rules**:
-- `generics_defaults`: Mutation of `Borrowed` parameter
-- `directives_cast`: Use-after-move (value used after `Owned` transfer)
-- `typeddicts_class_syntax_2`: Implicit copy of large structure (suggest explicit `.copy()`)
-- `BSK-W0033`: Missing ownership annotation on mutable parameter (suggestion)
+### Explicit coercion {#CHKARCH-MOJO-COERCION}
 
-### Immutability by Default {#CHKARCH-MOJO-IMMUTABLE}
+The target is opt-in diagnostics for selected implicit conversions. It must not
+contradict the typing-spec numeric tower used by default PEP rules.
 
-Parameters are immutable by default; mutation produces a diagnostic unless annotated `InOut`:
+### Compatibility contract {#CHKARCH-MOJO-COMPAT}
 
-```python
-def bad(items: list[int]) -> None:
-    items.append(1)  # ERROR: mutation of parameter [enums_behaviors]
-    items = [1, 2]   # ERROR: reassignment of parameter [calls_argument_count]
-
-def good(items: Annotated[list[int], InOut]) -> None:
-    items.append(1)  # OK
-```
-
-A plain `@dataclass` warns `prefer frozen=True [BSK-W0042]`; `@dataclass(frozen=True)` is OK.
-
-### Structural Discipline {#CHKARCH-MOJO-STRUCTURAL}
-
-```python
-c = Config(host="localhost", port=8080)
-c.timeout = 30  # ERROR: dynamic attribute on typed structure [aliases_newtype]
-```
-
-**Rules**:
-- `aliases_newtype`: Dynamic attribute assignment on typed class
-- `literals_parameterizations`: Missing `__init__` on class with type annotations
-- `dataclasses_frozen`: Missing `__del__` on class managing resources (when detectable)
-- `BSK-W0053`: Class should use `__slots__` for performance (suggestion)
-
-### No Implicit Type Coercion {#CHKARCH-MOJO-COERCION}
-
-```python
-x: float = 1        # ERROR: implicit int-to-float coercion [dataclasses_order]
-y: int = True        # ERROR: implicit bool-to-int coercion [enums_expansion]
-z: str = b"hello"    # ERROR: implicit bytes-to-str [specialtypes_never]
-```
-
-Explicit conversions (`float(1)`, `int(True)`) are OK.
-
-### Mojo-Inspired Rule Mapping {#CHKARCH-MOJO-COMPAT}
-
-| Mojo Concept | Basilisk Equivalent | Syntax | Enforceable via Static Analysis? |
-|---|---|---|---|
-| `fn` (strict function) | All `def` is strict | `def f(x: int) -> int` | Yes |
-| `borrowed` (immutable ref) | Default parameter behavior | No annotation needed | Yes |
-| `inout` (mutable ref) | `Annotated[T, InOut]` | `from basilisk.safety import InOut` | Yes |
-| `owned` (ownership transfer) | `Annotated[T, Owned]` | `from basilisk.safety import Owned` | Yes |
-| `var` / `let` | Immutable by default | Mutation requires `InOut` | Yes |
-| `struct` (static type) | Class with annotations | `class Foo:` + typed fields | Yes |
-| `^` (transfer operator) | Use-after-move detection | Tracked via `Owned` annotation | Yes |
-| `Copyable` / `Movable` traits | Protocol-based | `class Foo(Copyable):` | Yes |
-| No implicit coercion | Explicit conversion required | `float(1)` not `1` | Yes |
-| SIMD types | Not applicable | N/A (runtime feature) | No |
-| Register-passable | Not applicable | N/A (compiler feature) | No |
-| Compile-time parameters | Not applicable | N/A (compiler feature) | No |
-
----
+All metadata uses standard Python typing constructs, all rules are off by
+default, and the implementation plan is
+[CHECKER-ADVANCED-FEATURES-PLAN.md](../plans/CHECKER-ADVANCED-FEATURES-PLAN.md).
 
 ## Diagnostic Rules {#CHKARCH-DIAG}
 
@@ -521,184 +420,29 @@ Format: `BSK-Xnnnn` where X = default severity class:
 - `W` = Warning (does not block by default)
 - `I` = Info (suggestion by default)
 
-The prefix sets the **default** severity. Every rule can be overridden to any of the four modes (`error`, `warning`, `info`, `disabled`) at every scope level (line, block, file, path, global) — see [CHKARCH-STRICTNESS-SEVERITY](#CHKARCH-STRICTNESS-SEVERITY) and [CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION).
+The prefix sets the **default** severity. Every rule can be overridden to any of the four values (`error`, `warning`, `info`, `disabled`) at every scope level (line, block, file, path, global) — see [CHKARCH-STRICTNESS-SEVERITY](#CHKARCH-STRICTNESS-SEVERITY) and [CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION).
 
-### Rule Categories {#CHKARCH-DIAG-CATEGORIES}
+### Generated rule index {#CHKARCH-DIAG-REFERENCE}
 
-> **Classification is by tags, not categories.** The authoritative classification is the tagging system — provenance tags (`pep`/`basilisk`), PEP-category tags, free-form tags. The code-range groupings below are a coarse legacy convenience; source of truth is [Rule Tagging](CHECKER-RULE-TAGGING-SPEC.md#CHKTAG) ([CHKTAG]).
+The checker rule source is authoritative. Run
+`python3 scripts/gen_rules_reference.py --data` to generate
+`website/src/_data/rules.json`, which drives the public
+[rule reference](https://www.basilisk-python.dev/docs/rules/) and per-code
+error pages. Do not maintain a second code/description table here.
 
-#### Missing Annotations (BSK-E0001 -- BSK-E0009) {#CHKARCH-DIAG-MISSING}
-#### Type Safety (imports_unresolved -- typeddicts_class_syntax) {#CHKARCH-DIAG-TYPESAFETY}
+Compatibility anchors used by existing implementation and test comments:
 
-These legacy code-range groupings are superseded by tagging and the complete reference below ([CHKARCH-DIAG-REFERENCE](#CHKARCH-DIAG-REFERENCE)); anchors retained for cross-reference continuity.
+- Missing-annotation rules {#CHKARCH-DIAG-MISSING}
+- Core type-safety rules {#CHKARCH-DIAG-TYPESAFETY}
+- Historical group: ownership {#CHKARCH-DIAG-OWNERSHIP}
+- Historical group: immutability {#CHKARCH-DIAG-IMMUTABILITY}
+- Historical group: structural typing {#CHKARCH-DIAG-STRUCTURAL}
+- Historical group: coercion {#CHKARCH-DIAG-COERCION}
+- Historical group: optional/special types {#CHKARCH-DIAG-OPTIONAL}
 
-#### Complete diagnostic reference {#CHKARCH-DIAG-REFERENCE}
-
-The full set of codes the checker emits — generated from rule source by `scripts/gen_rules_reference.py`, the authoritative list. Keep in sync after adding or renaming a rule.
-
-| Code | Description |
-|---|---|
-| `BSK-E0001` | Missing parameter type annotation |
-| `BSK-E0002` | Missing return type annotation |
-| `BSK-E0003` | Missing variable type annotation |
-| `BSK-E0004` | Missing `*args` / `**kwargs` type annotation |
-| `BSK-E0005` | Missing class attribute type annotation |
-| `imports_unresolved` | Unresolved import |
-| `returns_compatibility` | Return type mismatch (literal return value incompatible with the declared return type) |
-| `calls_argument_type` | Argument type mismatch at a call site |
-| `returns_compatibility_2` | Return type mismatch — inferred return type incompatible with annotation |
-| `assignment_compatibility` | Assignment type incompatibility (literal mismatches) |
-| `callables_annotation` | Invalid type argument count or form |
-| `classes_override` | Incompatible method override |
-| `classes_override_2` | Incompatible class attribute override |
-| `names_undefined` | Undefined variable used in a return statement |
-| `names_unbound` | Unbound variable on some code paths |
-| `overloads_definitions` | Missing `@overload` implementation |
-| `overloads_consistency` | Overlapping `@overload` signatures |
-| `dict_key_hashable` | Unhashable type used as a dict key |
-| `match_exhaustiveness` | Non-exhaustive `match` statement |
-| `annotations_typeexpr` | Invalid type form — numeric literal used as type annotation |
-| `BSK-E0025` | Missing `@override` decorator |
-| `generics_basic` | `TypeVar` declared with exactly one constraint |
-| `generics_base_class` | Duplicate `TypeVar` in a `Generic[...]` base |
-| `typeddicts_class_syntax` | Method defined inside a `TypedDict` class |
-| `generics_defaults` | Non-default `TypeVar` follows a default `TypeVar` in `Generic[...]` |
-| `directives_cast` | Invalid `cast()` call |
-| `typeddicts_class_syntax_2` | Invalid keyword argument in `TypedDict` class definition |
-| `directives_reveal_type` | Invalid `reveal_type()` call |
-| `qualifiers_final_decorator` | `@final` decorator violations |
-| `typeddicts_required` | `Required` / `NotRequired` used in an invalid context |
-| `classes_classvar` | `ClassVar` used in an invalid context |
-| `typeddicts_alt_syntax` | Invalid `TypedDict(...)` functional-syntax call |
-| `typeddicts_inheritance` | Invalid `TypedDict` inheritance |
-| `directives_assert_type` | Invalid `assert_type()` call |
-| `enums_behaviors` | Invalid Enum subclassing |
-| `calls_argument_count` | Too few arguments in a function call |
-| `generics_syntax_compatibility` | PEP 695 type parameter syntax mixed with traditional `TypeVars` |
-| `generics_basic_2` | Non-TypeVar argument in `Generic[...]` or `Protocol[...]` |
-| `qualifiers_final_annotation` | `Final` used in an invalid position |
-| `qualifiers_annotated` | Invalid first argument to `Annotated[...]` |
-| `enums_members` | Enum member annotated with an explicit type |
-| `annotations_forward_refs` | Invalid type expression in annotation |
-| `aliases_implicit` | Invalid right-hand side for a `TypeAlias` annotation |
-| `tuples_type_form` | Multiple unbounded tuple components in a single tuple type |
-| `aliases_newtype` | Invalid `NewType(...)` call |
-| `literals_parameterizations` | Invalid `Literal` parameterization |
-| `dataclasses_frozen` | Assignment to attribute of a frozen dataclass instance, or invalid frozen/non-frozen dataclass inheritance |
-| `directives_assert_type_2` | `assert_type()` type mismatch |
-| `qualifiers_final_annotation_2` | `Final` type qualifier annotation violations |
-| `generics_typevartuple_basic` | Invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword argument combination |
-| `typeddicts_readonly` | Mutation of `ReadOnly` `TypedDict` fields |
-| `aliases_type_statement` | Invalid RHS in a PEP 695 `type X = rhs` statement |
-| `qualifiers_annotated_2` | `Annotated[...]` requires at least two arguments |
-| `dataclasses_match_args` | Access to `__match_args__` on a dataclass with `match_args=False` |
-| `dataclasses_order` | Invalid ordering comparison of dataclass instances |
-| `enums_expansion` | `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param |
-| `specialtypes_never` | `-> NoReturn` / `-> Never` function can fall through |
-| `dataclasses_hash` | Non-hashable dataclass assigned to a `Hashable`-annotated variable |
-| `namedtuples_define_functional` | Invalid argument in a `NamedTuple` constructor call |
-| `specialtypes_promotions` | Access to an `int`-only attribute on a `float`-typed parameter |
-| `enums_member_values` | Enum member value incompatible with `_value_` type annotation |
-| `enums_members_2` | Non-member referenced in `Literal[EnumClass.X]` annotation |
-| `literals_parameterizations_2` | `Literal["EnumClass.MEMBER"]` (string) used where `Literal[EnumClass.MEMBER]` (enum member reference) is required |
-| `dataclasses_kwonly` | Dataclass constructor argument violations |
-| `specialtypes_never_2` | `Never` type compatibility violations |
-| `historical_positional` | Historical positional-only parameter violations |
-| `overloads_basic` | No matching overload for subscript indexing |
-| `namedtuples_type_compat` | `NamedTuple`-to-tuple type incompatibility |
-| `constructors_call_new` | Constructor call type mismatch with specialized generic class |
-| `generics_self_attributes` | Incompatible type for `Self`-typed attribute |
-| `overloads_evaluation` | Overload union expansion failure |
-| `generics_self_protocols` | Protocol `Self`-return conformance violation |
-| `generics_self_basic` | `Self` type violations in generics |
-| `protocols_modules` | Module assigned to incompatible protocol type |
-| `generics_upper_bound` | `TypeVar` upper bound violation at call site |
-| `generics_typevartuple_unpack` | `TypeVarTuple` unpack minimum type argument violation |
-| `generics_typevartuple_callable` | `TypeVarTuple` callable/tuple argument mismatch |
-| `generics_typevartuple_basic_2` | `TypeVarTuple` must be unpacked with `*` operator |
-| `generics_typevartuple_basic_3` | `TypeVarTuple` variance/bounds/constraints violation |
-| `generics_typevartuple_args` | `TypeVarTuple` argument count mismatch |
-| `generics_typevartuple_specialization` | Multiple `TypeVarTuple` unpacks in generic or tuple type |
-| `BSK-E0087` | Reserved for future PEP 695 type parameter checks |
-| `typeddicts_usage` | `TypedDict` runtime violation |
-| `generics_syntax_declarations` | Invalid PEP 695 type parameter bound or constraint |
-| `tuples_type_form_2` | Invalid tuple type syntax |
-| `generics_defaults_2` | Incompatible `TypeVar` bound or constraint with its default |
-| `generics_defaults_specialization` | Wrong number of type arguments to a generic class or type alias |
-| `typeddicts_operations` | Invalid key or value type in `TypedDict` assignment |
-| `generics_self_usage` | `Self` type used in an invalid location |
-| `dataclasses_postinit` | `InitVar` field validation in dataclasses |
-| `dataclasses_usage` | Type mismatch between a dataclass `field(default_factory=…)` and the field's declared type annotation |
-| `protocols_definition` | Protocol method body sets self-attributes not declared in Protocol |
-| `protocols_merging` | Non-Protocol base class in a Protocol definition |
-| `protocols_explicit` | Direct instantiation of a Protocol class |
-| `literals_semantics` | Augmented assignment widens `Literal` type |
-| `narrowing_typeguard` | `TypeGuard` or `TypeIs` on method with no narrowing parameter |
-| `generics_defaults_referential` | Invalid `TypeVar` default referencing another `TypeVar` |
-| `tuples_index` | Tuple index out of bounds |
-| `aliases_recursive` | Cyclical type alias reference |
-| `generics_syntax_declarations_2` | Invalid attribute access on bounded type variable |
-| `protocols_class_objects` | Protocol class used where `type[Proto]` is expected |
-| `generics_variance` | Variance incompatibility in base class parameterisation |
-| `dataclasses_slots` | Dataclass slots violations |
-| `generics_upper_bound_2` | `TypeVar` bound violation at call site |
-| `protocols_variance` | Protocol variance violation |
-| `constructors_call_init` | Constructor call errors via `__init__` method |
-| `narrowing_typeis` | TypeGuard/TypeIs return type incompatibility in callable arguments |
-| `narrowing_typeis_2` | `TypeIs` narrows to a type inconsistent with the input type |
-| `protocols_runtime_checkable` | Protocol `isinstance`/`issubclass` violations |
-| `directives_deprecated` | Use of deprecated class, function, or method |
-| `namedtuples_define_class` | `NamedTuple` class definition errors |
-| `generics_scoping` | Unbound type variable in scope |
-| `protocols_explicit_2` | Calling `super().method()` on an abstract method with no default implementation |
-| `protocols_runtime_checkable_2` | Protocol `isinstance`/`issubclass` violations |
-| `annotations_generators` | Generator return type and yield type violations |
-| `protocols_definition_2` | Protocol conformance violation in an annotated assignment or call argument |
-| `callables_protocol` | Callable call-site arity and argument validation |
-| `protocols_explicit_3` | `super()` call on abstract protocol method with no default implementation |
-| `protocols_subtyping` | Protocol attribute tuple element type mismatch |
-| `generics_type_erasure` | Access to instance attribute on a class object |
-| `literals_literalstring` | `LiteralString` and `Literal` assignment incompatibilities |
-| `tuples_index_2` | Tuple index out of range |
-| `generics_defaults_referential_2` | ```TypeVar``` default referential violations |
-| `literals_semantics_2` | Literal value assignment incompatibility |
-| `generics_variance_inference` | `TypeVar` scoping violation |
-| `annotations_generators_2` | Generator yield/send/return type mismatch |
-| `generics_base_class_2` | Inconsistent `TypeVar` ordering across base classes |
-| `protocols_variance_2` | Protocol `TypeVar` variance mismatch |
-| `generics_base_class_3` | Invariant generic type mismatch at call site |
-| `callables_subtyping` | Callable subtyping violations (covariance / contravariance) |
-| `protocols_generic` | Generic protocol violations |
-| `dataclasses_transform_meta` | `dataclass_transform` metaclass violations |
-| `generics_typevartuple_specialization_2` | Invalid `TypeVarTuple` specialization of generic alias |
-| `callables_protocol_2` | Callable and Protocol assignment compatibility |
-| `callables_kwargs` | Unpack[`TypedDict`] kwargs violations |
-| `dataclasses_transform_class` | `dataclass_transform` violations when the transform is applied via a base class |
-| `namedtuples_usage` | `NamedTuple` usage violations |
-| `constructors_call_type` | Invalid constructor call via `type[T]` parameter |
-| `specialtypes_type` | Invalid `type[X]` usage violations |
-| `protocols_class_objects_2` | Protocol class object violations |
-| `tuples_type_compat` | Tuple starred-unpack type compatibility violation |
-| `generics_basic_3` | Generic type argument violations |
-| `generics_syntax_scoping` | PEP 695 generic type parameter scoping violations |
-| `directives_version_platform` | Variable defined only in dead version/platform branch |
-| `aliases_typealiastype` | Invalid `TypeAliasType(...)` call |
-| `BSK-E0152` | Missing type stubs for installed package |
-| `constructors_callable` | Invalid call to a constructor-derived callable ([CHKARCH-DIAG-CTOR-CALLABLE](#CHKARCH-DIAG-CTOR-CALLABLE)) |
-| `imports_module_attribute` | Access to a module attribute a local stub does not declare ([CHKARCH-DIAG-STUB-MEMBER](#CHKARCH-DIAG-STUB-MEMBER)) |
-| `version_target_syntax` | PEP 695 syntax used below the configured target version ([CHKARCH-VERSION-TARGET](#CHKARCH-VERSION-TARGET)) |
-| `typeddicts_extra_items` | TypedDict `extra_items` / `closed` (PEP 728) violations ([CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS](#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS)) |
-| `dataclasses_inheritance` | Dataclass field without a default after one with a default ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
-| `overloads_consistency_2` | Inconsistent decorators across an `@overload` group — `@staticmethod`/`@classmethod` not uniform, or `@final`/`@override` on an overload signature ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
-| `classes_override_3` | `@override` on a method with no matching ancestor method (PEP 698) ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
-| `overloads_consistency_3` | Overload implementation inconsistent with its signatures (overload return not assignable to impl return, or impl parameter cannot accept an overload's) ([CHKARCH-DIAG-TYPESAFETY](#chkarch-diag-typesafety)) |
-| `BSK-W0011` | Undeclared dependency import |
-| `BSK-W0012` | Unused dependency |
-| `BSK-W0013` | Stale uv lock file |
-| `BSK-W0014` | Explicit `Any` annotation — prefer a concrete type (style nudge; split from `returns_compatibility`, see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)) |
-| `BSK-W0015` | Test runner `pytest` not installed in the uv project ([LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION](LSP-TEST-INTEGRATION-SPEC.md#LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION)) |
-| `BSK-W0040` | Lambda function missing type annotations |
-| `BSK-W0050` | Redundant type annotation warning |
+These group names are navigation anchors, not current rule classifications.
+Tags from [CHKTAG](CHECKER-RULE-TAGGING-SPEC.md#CHKTAG) are the only
+classification authority.
 
 #### Constructor-to-callable conversion {#CHKARCH-DIAG-CTOR-CALLABLE}
 
@@ -809,23 +553,6 @@ The qualifier rules are enforced across four codes:
 
 Conformance: flips `typeddicts_readonly_inheritance.py`. Benchmark fixture:
 `benchmarks/fixtures/typeddict_readonly_inheritance.py`.
-
-#### Planned analyses {#CHKARCH-DIAG-PLANNED}
-
-The following anchors are retained for historical/spec-ID continuity. The
-"ownership", "immutability", and "coercion" categories below describe a
-**planned** Mojo-inspired analysis layer (the `basilisk-mojo` crate, targeted
-for a future phase). They are **not yet shipping** — the codes that currently
-occupy these numeric ranges implement standard PEP-typing rules, listed in the
-[complete reference](#CHKARCH-DIAG-REFERENCE) above.
-
-- Ownership safety {#CHKARCH-DIAG-OWNERSHIP} — planned: `Borrowed` / `InOut` / `Owned` reference tracking, use-after-move.
-- Immutability {#CHKARCH-DIAG-IMMUTABILITY} — planned: mutation-of-immutable and `Final` enforcement beyond the shipping `Final` checks (qualifiers_final_annotation, qualifiers_final_annotation_2).
-- Structural discipline {#CHKARCH-DIAG-STRUCTURAL} — shipping codes in this range cover NewType, `Literal`, frozen-dataclass and related structural rules.
-- Coercion safety {#CHKARCH-DIAG-COERCION} — planned: implicit numeric / `bytes`↔`str` coercion detection.
-- Optional safety {#CHKARCH-DIAG-OPTIONAL} — narrowing and `Never`/`Optional` rules ship today (e.g. specialtypes_never_2); a dedicated optional-access pass is planned.
-
----
 
 ## Architecture {#CHKARCH-ARCH}
 
@@ -1142,119 +869,44 @@ makes *repeat invocations* incremental — and a hit in either is sound by
 construction (salsa via tracked dependencies, the result cache by re-verifying
 every recorded file).
 
-### Performance Targets {#CHKARCH-INCREMENTAL-PERF}
+## Language server and editors {#CHKARCH-LSP}
 
-These are design targets, not yet measured against the salsa path (the benchmark
-harness in [ROADMAP-NEXT-STEPS-PLAN](../plans/ROADMAP-NEXT-STEPS-PLAN.md) is the
-vehicle for validating them); they are not a claim of achieved numbers.
+The shared protocol, commands, configuration, binary resolution, and editor
+boundaries live in [LSPARCH](LSP-ARCHITECTURE-SPEC.md#LSPARCH). Editor-specific
+contracts live in [VSIX](VSIX-SPEC.md#VSIX), [NVIM](NEOVIM-SPEC.md#NVIM), and
+[ZED](ZED-SPEC.md#ZED). This checker spec does not duplicate those inventories.
 
-| Scenario | Target |
-|---|---|
-| Cold start, 100K LOC | < 5 seconds |
-| Cold start, 1M LOC | < 30 seconds |
-| Incremental (single file edit) | < 10ms |
-| Memory, 1M LOC | < 2 GB |
+Compatibility anchors: supported methods {#CHKARCH-LSP-METHODS}; custom commands
+{#CHKARCH-LSP-COMMANDS}; editor integrations {#CHKARCH-EDITORS}.
 
----
+## Command-line interface {#CHKARCH-CLI}
 
-## Language Server Protocol {#CHKARCH-LSP}
+### Commands {#CHKARCH-CLI-COMMANDS}
 
-The LSP server and the CLI are two front-ends over the same engine, so interactive and CI results are always consistent. For the complete LSP specification — features, custom commands, configuration settings, binary resolution, and DAP integration — see **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)**.
+- `basilisk check [paths]`
+- `basilisk fix [paths]` and `--unsafe`
+- `basilisk adopt|unadopt [paths]`
+- `basilisk lsp [--transport stdio|ws]`
+- `basilisk stubs generate|status`
 
-### Supported LSP Methods {#CHKARCH-LSP-METHODS}
+### Output {#CHKARCH-CLI-OUTPUT}
 
-See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES) for the complete specification. Summary:
+`check` supports human-readable text and structured JSON. Other formats are
+not part of the current contract.
 
-| Method | Description |
-|---|---|
-| `textDocument/diagnostic` | Push diagnostics (all BSK rules) |
-| `textDocument/hover` | Type information, docstrings, ownership annotations |
-| `textDocument/completion` | Type-aware completions with auto-import |
-| `textDocument/definition` | Go to definition |
-| `textDocument/references` | Find all references |
-| `textDocument/rename` | Symbol rename across workspace |
-| `textDocument/codeAction` | Quick fixes for every diagnostic |
-| `textDocument/signatureHelp` | Parameter hints |
-| `textDocument/inlayHint` | Inferred types, parameter names, ownership |
-| `textDocument/semanticTokens` | Semantic highlighting |
-| `callHierarchy/incomingCalls` | Incoming call hierarchy |
-| `callHierarchy/outgoingCalls` | Outgoing call hierarchy |
-| `typeHierarchy` | Type inheritance navigation |
-
-### Custom LSP Commands {#CHKARCH-LSP-COMMANDS}
-
-See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for the complete specification.
-
----
-
-## Editor Integrations {#CHKARCH-EDITORS}
-
-Each editor has a dedicated specification document:
-
-| Editor | Spec | Status |
-|---|---|---|
-| **VS Code** | [`VSIX-SPEC.md`](VSIX-SPEC.md) | Primary integration |
-| **Zed** | [`ZED-SPEC.md`](ZED-SPEC.md) | First-class Zed extension |
-| **Neovim** | [`NEOVIM-SPEC.md`](NEOVIM-SPEC.md) | basilisk.nvim plugin |
-| **Helix** | Built-in LSP support. Language configuration provided. | Config only |
-| **Emacs** | `eglot` / `lsp-mode` configuration. | Config only |
-
-All editors connect to the same `basilisk lsp` binary via stdio; extensions are thin integration layers over the single LSP backend.
-
----
-
-## Command-Line Interface {#CHKARCH-CLI}
-
-### Core Commands {#CHKARCH-CLI-COMMANDS}
-
-```bash
-basilisk check [paths...]         # Type check files/directories
-basilisk check --watch            # Watch mode with incremental rechecks
-basilisk stats [paths...]         # Type coverage report
-basilisk stubs generate <package> # Generate stubs for installed package
-basilisk migrate --from mypy      # Import mypy configuration
-basilisk migrate --from pyright   # Import pyright configuration
-basilisk init                     # Generate starter pyproject.toml config
-```
-
-### Output Formats {#CHKARCH-CLI-OUTPUT}
-
-| Format | Flag | Use Case |
-|---|---|---|
-| Human-readable | Default | Terminal (color, source context, fix suggestions) |
-| JSON | `--output-format json` | Programmatic consumption |
-| SARIF | `--output-format sarif` | GitHub Code Scanning, Azure DevOps |
-| JUnit XML | `--output-format junit` | CI test result dashboards |
-
-### Exit Codes {#CHKARCH-CLI-EXITCODES}
+### Exit codes {#CHKARCH-CLI-EXITCODES}
 
 | Code | Meaning |
 |---|---|
-| 0 | Clean -- no errors |
-| 1 | Type errors found |
-| 2 | Configuration error |
-| 3 | Internal error |
+| 0 | Check completed without error diagnostics |
+| 1 | Error diagnostics were found |
+| 2 | Invalid configuration (required target; tracked in the remediation backlog) |
+| 3 | Internal failure |
 
-### CI Integration {#CHKARCH-CLI-CI}
+### CI use {#CHKARCH-CLI-CI}
 
-**GitHub Actions**:
-```yaml
-- uses: MelbourneDeveloper/setup-basilisk@v1
-- run: basilisk check --output-format sarif > results.sarif
-- uses: github/codeql-action/upload-sarif@v3
-  with:
-    sarif_file: results.sarif
-```
-
-**pre-commit**:
-```yaml
-- repo: https://github.com/Nimblesite/Basilisk
-  rev: v0.1.0
-  hooks:
-    - id: basilisk-check
-```
-
----
+CI invokes the same `check` path as local use. Machine consumers should select
+JSON and branch on the documented exit code; no CI-only analysis mode exists.
 
 ## Stub System {#CHKARCH-STUBS}
 
@@ -1711,135 +1363,15 @@ separate, free, and unaffected.
 
 ---
 
-## Migration and Adoption {#CHKARCH-MIGRATION}
+## Planned migration tooling {#CHKARCH-MIGRATION}
 
-### From mypy {#CHKARCH-MIGRATION-MYPY}
+Configuration import from other checkers is not implemented. The target is a
+best-effort report that maps supported settings and lists every unmapped option;
+it must never silently claim semantic parity.
 
-1. Run `basilisk migrate --from mypy`
-2. Fix BSK-E0001/E0002 errors (missing annotations) -- these are the primary diff
-3. Address enums_behaviors+ (Mojo safety) or disable with `mojo-safety = false`
+- mypy import target {#CHKARCH-MIGRATION-MYPY}
+- Pyright import target {#CHKARCH-MIGRATION-PYRIGHT}
+- Gradual adoption uses ordinary per-rule/path configuration {#CHKARCH-MIGRATION-GRADUAL}
 
-### From Pyright {#CHKARCH-MIGRATION-PYRIGHT}
-
-1. Run `basilisk migrate --from pyright`
-2. If you were using Pyright's strict mode: minimal changes needed for core type checking
-3. Enable Mojo safety incrementally
-
-### Gradual Adoption {#CHKARCH-MIGRATION-GRADUAL}
-
-1. **Relax per-directory**: soften/disable high-volume rules in `legacy/**` via per-path overrides, keep `src/**` strict
-2. **Relax per-file**: `# basilisk: relaxed` at the top demotes a file's errors to warnings
-3. **Track progress**: `basilisk stats` shows type completeness percentage
-4. **Tighten over time**: remove per-path overrides directory by directory as code is typed
-
-The target strict-first editor workflow—enable the desired complete policy, run
-safe fixes, then record only the confirmed remaining debt—is specified in
-[CONFIGEDITOR-ADOPTION](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-ADOPTION).
-Until the CLI `stats` command ships, type-health/adoption progress comes from
-the LSP activity data rather than the unimplemented command.
-
----
-
-## Governance {#CHKARCH-GOVERNANCE}
-
-### License {#CHKARCH-GOVERNANCE-LICENSE}
-
-MIT License. Copyright (c) 2026 NIMBLESITE PTY LTD. No CLA required. No proprietary layers.
-
-### Contribution Model {#CHKARCH-GOVERNANCE-CONTRIB}
-
-- Issues and PRs on GitHub
-- RFC process for significant type system changes
-- Monthly minor releases, quarterly major releases (semver)
-
-### Relationship to Python Typing Council {#CHKARCH-GOVERNANCE-TYPING}
-
-Basilisk follows the Python Typing Council's governance (PEP 729): implements the typing spec as defined by the council, participates in conformance testing, and never extends the type system in ways that contradict the spec.
-
----
-
-## Roadmap {#CHKARCH-ROADMAP}
-
-### Phase 1: Foundation {#CHKARCH-ROADMAP-P1}
-- Parser (evaluate `ruff_python_parser` vs custom)
-- Name resolver
-- Basic type checker (50% PEP conformance)
-- CLI with human-readable output
-- CI pipeline
-
-### Phase 2: LSP and Editors {#CHKARCH-ROADMAP-P2}
-- Language server (diagnostics, hover, completions)
-- VS Code extension (VSIX)
-- Integrated Python debugging via DAP proxy over debugpy (§10.1.1)
-- Neovim / Helix configuration
-
-### Phase 3: House Rules and Gradual Adoption {#CHKARCH-ROADMAP-P3}
-- All BSK-E0001 through BSK-E0025 rules
-- Gradual adoption (per-path / per-file relaxation)
-- `basilisk migrate` from mypy/Pyright
-- 80% PEP conformance
-
-### Phase 4: Mojo Safety {#CHKARCH-ROADMAP-P4}
-- Ownership tracking (BSK-E003x)
-- Immutability enforcement (BSK-E004x)
-- Structural discipline (BSK-E005x)
-- Coercion detection (BSK-E006x)
-
-### Phase 5: Plugin System and Stubs {#CHKARCH-ROADMAP-P5}
-- WASM plugin host
-- Django, Pydantic, SQLAlchemy plugins
-- Auto-stub generation engine
-- Stub registry
-
-### Phase 6: Production Hardening {#CHKARCH-ROADMAP-P6}
-- 95%+ PEP conformance
-- Performance optimization (meet all targets in Section 8.4)
-- SARIF/JUnit output
-- Enterprise migration playbook
-
-### Phase 7: Ecosystem Growth {#CHKARCH-ROADMAP-P7}
-- Plugin marketplace
-- Community stub registry
-- Conference talks, documentation, tutorials
-- PyCharm / IntelliJ plugin maturity
-
----
-
-## Appendix A: Full PEP Coverage Matrix {#CHKARCH-APPENDIX-PEPS}
-
-| PEP | Title | Priority | Phase |
-|---|---|---|---|
-| 484 | Type Hints | P0 | 1 |
-| 526 | Variable Annotations | P0 | 1 |
-| 544 | Protocols | P0 | 1 |
-| 585 | Generics in Standard Collections | P0 | 1 |
-| 586 | Literal Types | P0 | 3 |
-| 589 | TypedDict | P0 | 3 |
-| 591 | Final Qualifier | P0 | 3 |
-| 604 | Union X \| Y | P0 | 1 |
-| 612 | ParamSpec | P1 | 3 |
-| 613 | TypeAlias | P0 | 1 |
-| 634 | Structural Pattern Matching | P1 | 3 |
-| 646 | TypeVarTuple | P1 | 3 |
-| 647 | TypeGuard | P0 | 3 |
-| 673 | Self Type | P0 | 3 |
-| 675 | LiteralString | P1 | 5 |
-| 681 | Data Class Transforms | P1 | 5 |
-| 692 | TypedDict **kwargs | P1 | 5 |
-| 695 | Type Parameter Syntax | P0 | 3 |
-| 696 | TypeVar Defaults | P1 | 5 |
-| 698 | Override Decorator | P0 | 3 |
-| 702 | Deprecated Decorator | P1 | 5 |
-| 742 | TypeIs | P0 | 3 |
-
-## Appendix B: Glossary {#CHKARCH-APPENDIX-GLOSSARY}
-
-| Term | Definition |
-|---|---|
-| **Basilisk** | This project — a configuration-driven Python type checker in Rust; default config is pure PEP conformance, house-style rules opt-in. |
-| **Borrowed** | Parameter convention: function reads but does not mutate or transfer the value (default) |
-| **Owned** | Parameter convention: function takes exclusive ownership; caller must not use value afterward |
-| **InOut** | Parameter convention: function may mutate the value in place |
-| **Default configuration** | Basilisk has no modes (no basic/standard/strict). The default config enables every PEP typing-spec rule and nothing else; house-style rules are opt-in via configuration ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)) |
-| **Mojo safety** | The set of ownership, immutability, and coercion rules inspired by the Mojo language |
-| **Type completeness** | Percentage of symbols in a module/project with resolved (non-Any) types |
+Implementation work is tracked in
+[CHECKER-ADVANCED-FEATURES-PLAN.md](../plans/CHECKER-ADVANCED-FEATURES-PLAN.md).

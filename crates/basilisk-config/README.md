@@ -6,7 +6,7 @@ Configuration parsing for Basilisk — reads `[tool.basilisk]` from
 ## Role in Basilisk
 
 This crate owns the checker-facing `BasiliskConfig`, severity/path/module
-override parsing, shared path matching, and the gradual-adoption store. Current
+override parsing and shared path matching. Current
 root-level discovery gives `basilisk.json` priority over `[tool.basilisk]`; the
 sources are not merged. LSP/editor settings such as analysis mode live in
 `basilisk-lsp` today and are not parsed by this crate.
@@ -17,8 +17,10 @@ sources are not merged. LSP/editor settings such as analysis mode live in
 - **Global severity overrides** — set an enabled rule to `error`, `warning`,
   `info`, or `disabled`.
 - **Import-resolution overrides** — `stub-paths` prepends user stub directories (resolution step 1); `typeshed-path` replaces the vendored standard-library typeshed wholesale as the canonical step-3 source ([STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
-- **Adoption persistence** — records per-file demotions in
-  `.basilisk/adoptions.toml` for the LSP/CLI adoption flow.
+- **Adoption target** — exact-file `per-path-overrides` entries in the active
+  config carry generated demotions. All rule configuration stays in that one
+  file; the existing sidecar implementation is scheduled for removal in
+  configuration-editor Phase 4.
 
 The crate does **not** currently migrate mypy/Pyright configuration or own LSP
 analysis modes. Those are separate planned/consumer concerns.

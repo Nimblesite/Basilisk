@@ -29,8 +29,9 @@ The July 2026 audit found useful foundations but no editor or plan:
   `basilisk.json` shadows it.
 - configuration is split across `BasiliskConfig` and `WorkspaceConfig`, parse
   errors and unknown values silently fall back, and JSON lacks path overrides.
-- adoption does not yet run safe fixes, persist through normal republish, watch
-  `adoptions.toml`, or auto-graduate in production.
+- adoption currently uses a separate sidecar and does not yet run safe fixes,
+  persist through normal republish, or auto-graduate in production. The target
+  deletes the sidecar and stores exact-file severities in the active config.
 - suppression parsing discards spans/validity/usage, so active and unused ignores
   cannot be surfaced as diagnostics.
 - the VSIX has reusable Signals and hardened webview primitives, but no
@@ -38,7 +39,7 @@ The July 2026 audit found useful foundations but no editor or plan:
 
 These are prerequisites, not details the UI may work around.
 
-## Phase 0 — Contract and generated model {#CONFIGEDITOR-PLAN-PHASE-0}
+## Contract and generated model {#CONFIGEDITOR-PLAN-CONTRACT}
 
 - [x] Add the cohesive product spec and this plan.
 - [x] Add `models/configuration_editor.td` and render its SVG.
@@ -49,7 +50,7 @@ These are prerequisites, not details the UI may work around.
 - [ ] Add every implementation/test reference to the relevant `CONFIGEDITOR-*`
   and `LSPARCH-CONFIG-EDITOR-*` IDs.
 
-## Phase 1 — Canonical rule catalog {#CONFIGEDITOR-PLAN-PHASE-1}
+## Canonical rule catalog {#CONFIGEDITOR-PLAN-CATALOG}
 
 - [ ] Introduce one public `RuleDescriptor` registry in `basilisk-checker` with
   code, title, summary, docs URL, default severity, default-enabled state, tags,
@@ -65,7 +66,7 @@ These are prerequisites, not details the UI may work around.
 - [ ] Coarse parity test: every live emitted code has exactly one descriptor,
   canonical tags, valid docs URL, and default severity.
 
-## Phase 2 — One validated configuration domain {#CONFIGEDITOR-PLAN-PHASE-2}
+## One validated configuration domain {#CONFIGEDITOR-PLAN-DOMAIN}
 
 - [ ] Consolidate the analysis projection now split between `BasiliskConfig`
   and LSP `WorkspaceConfig`; remove the dead `strict` mode field and preserve
@@ -82,6 +83,9 @@ These are prerequisites, not details the UI may work around.
 - [ ] Implement structure-aware, comment/order/newline-preserving TOML/JSON
   patches. Target the active source; offer explicit migration when a
   `basilisk.json` shadows `pyproject.toml`.
+- [ ] Represent editor-generated per-file adoption as exact-file
+  `per-path-overrides` entries with `adoption = true` and ordinary `rules`
+  severities in the same active config file. No second persistence file.
 - [ ] Validate the complete patched document before emitting it. The reusable
   service returns a patch; CLI writes use temp+atomic rename, LSP writes use one
   versioned `WorkspaceEdit` so unsaved buffers and undo remain correct.
@@ -91,7 +95,7 @@ These are prerequisites, not details the UI may work around.
 - [ ] Keep the implementation compatible with the planned `lspkit-config`
   migration; do not duplicate generic ancestor-loading infrastructure.
 
-## Phase 3 — Typed LSP read/preview/apply API {#CONFIGEDITOR-PLAN-PHASE-3}
+## Typed LSP read/preview/apply API {#CONFIGEDITOR-PLAN-PROTOCOL}
 
 - [ ] Implement `basilisk/configurationSnapshot` with explicit `rootUri`, rule
   catalog, tags, configured/effective state, provenance, counts, debt, and
@@ -108,36 +112,37 @@ These are prerequisites, not details the UI may work around.
 - [ ] Implement `basilisk/ruleOccurrences` for tag/rule/debt navigation with
   paging or streaming so large workspaces do not flood one response.
 - [ ] Send `basilisk/configurationChanged` after API applies and external config
-  changes. Watch `pyproject.toml`, `basilisk.json`, and
-  `.basilisk/adoptions.toml` in every analysis mode, including
-  `openFilesOnly`.
+  changes. Watch the active `pyproject.toml` or `basilisk.json` in every analysis
+  scope, including `openFilesOnly`.
 - [ ] Route the legacy `basilisk.disableRule` command through the same validated
   service, then deprecate its misleading name after all code actions migrate.
 - [ ] E2E: multi-root targeting, all-on/all-off/tag bulk, native versus maximum,
   reset, preview/apply selector parity, stale conflict, invalid/read-only source,
   client edit rejection, watcher refresh, and exactly one republish/notification.
 
-## Phase 4 — Make adoption production-correct {#CONFIGEDITOR-PLAN-PHASE-4}
+## Make adoption production-correct {#CONFIGEDITOR-PLAN-ADOPTION}
 
 - [ ] Apply adoption overrides on every open/change/save/scan/recheck path, not
   only the adopt command's one-off publish.
-- [ ] Make `AdoptionStore` root-aware, escaped, revision-checked, and atomic;
-  workspace adoption must never store other roots relative to the first root.
+- [ ] Remove `AdoptionStore` and `.basilisk/adoptions.toml`. Read/write adoption
+  through the same root-aware, revision-checked configuration service as every
+  other rule severity; never store another root's file under the selected root.
 - [ ] Implement the strict-first transaction: hypothetical all-rules config →
   SafeFix workspace edit → reanalysis → remaining error ledger → explicit
   per-file demotion preview/apply.
-- [ ] Call auto-graduation in production after reanalysis; remove a code only
-  when no matching violation remains, then notify/refresh the editor.
+- [ ] Call auto-graduation in production after reanalysis; remove a rule from
+  the exact-file config entry only when no matching violation remains, remove
+  the empty adopted entry, then notify/refresh the editor.
 - [ ] Preserve the separate choices: per-file adoption keeps new files strict;
   project/path demotion affects future code and must say so in preview.
 - [ ] E2E: safe fix occurs first, remaining errors demote, normal edits retain
   demotion, new files stay strict, fixed debt graduates, restart reloads debt,
   and multi-root stores remain isolated.
 
-## Phase 5 — Suppression diagnostics {#CONFIGEDITOR-PLAN-PHASE-5}
+## Suppression diagnostics {#CONFIGEDITOR-PLAN-SUPPRESSIONS}
 
 - [ ] Replace the lossy suppression model with rich directives carrying stable
-  ID, exact span/raw spelling, scope, mode, explicit/blanket selector, validity,
+  ID, exact span/raw spelling, scope, severity action, explicit/blanket selector, validity,
   and paired block delimiters.
 - [ ] Apply directives in a batch and return a usage ledger: matched codes,
   diagnostic count, and whether severity/output actually changed.
@@ -157,7 +162,7 @@ These are prerequisites, not details the UI may work around.
   self-suppression, all four configured severities, cache parity, and workspace
   occurrence navigation.
 
-## Phase 6 — VSIX shell {#CONFIGEDITOR-PLAN-PHASE-6}
+## VSIX shell {#CONFIGEDITOR-PLAN-VSIX}
 
 - [ ] Add client-only `basilisk.openConfigurationEditor` and a settings-gear
   action in the Basilisk activity view; gate on server capability/version.
@@ -184,7 +189,7 @@ These are prerequisites, not details the UI may work around.
   `getCommands(true)` or `whenCommandReady` existence checks—and prove the
   extension performs no configuration filesystem writes.
 
-## Phase 7 — Visual verification and cross-editor reuse {#CONFIGEDITOR-PLAN-PHASE-7}
+## Visual verification and cross-editor reuse {#CONFIGEDITOR-PLAN-CROSS-EDITOR}
 
 - [ ] Capture `vscode-configuration-editor.png` from the real headed VSIX after
   the feature ships; embed it on the configuration documentation page and add

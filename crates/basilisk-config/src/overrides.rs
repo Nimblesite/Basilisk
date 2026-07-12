@@ -36,6 +36,17 @@ impl RuleSeverity {
             _ => None,
         }
     }
+
+    /// Canonical lowercase spelling used by both supported config formats.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+            Self::Info => "info",
+            Self::Disabled => "disabled",
+        }
+    }
 }
 
 /// Per-module override configuration.

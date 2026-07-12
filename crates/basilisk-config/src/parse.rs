@@ -187,6 +187,11 @@ fn toml_string_array(table: &toml::Table, key: &str) -> Option<Vec<String>> {
 /// Load configuration from `basilisk.json`.
 pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
     let content = std::fs::read_to_string(path).ok()?;
+    parse_json_content(&content)
+}
+
+/// Parse a `basilisk.json` document already held in memory.
+pub(crate) fn parse_json_content(content: &str) -> Option<BasiliskConfig> {
     let json: serde_json::Value = serde_json::from_str(&content).ok()?;
     let obj = json.as_object()?;
 
@@ -264,6 +269,50 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
         }
     }
 
+    // perPathOverrides / per-path-overrides [CONFIGEDITOR-SOURCES]
+    if let Some(overrides_obj) =
+        alias_get(obj, "perPathOverrides", "per-path-overrides").and_then(|v| v.as_object())
+    {
+        for (pattern, override_value) in overrides_obj {
+            let Some(override_obj) = override_value.as_object() else {
+                continue;
+            };
+            let disabled_rules = override_obj
+                .get("disabled")
+                .and_then(serde_json::Value::as_array)
+                .map(|values| {
+                    values
+                        .iter()
+                        .filter_map(serde_json::Value::as_str)
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_default();
+            let rule_overrides = override_obj
+                .get("rules")
+                .and_then(serde_json::Value::as_object)
+                .map(|rules| {
+                    rules
+                        .iter()
+                        .filter_map(|(code, value)| {
+                            value
+                                .as_str()
+                                .and_then(RuleSeverity::parse)
+                                .map(|severity| (code.clone(), severity))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let _ = cfg.per_path_overrides.insert(
+                pattern.clone(),
+                PathOverride {
+                    disabled_rules,
+                    rule_overrides,
+                },
+            );
+        }
+    }
+
     // auto-stub-mode / autoStubMode
     if let Some(val) = alias_get(obj, "autoStubMode", "auto-stub-mode").and_then(|v| v.as_str()) {
         val.clone_into(&mut cfg.auto_stub_mode);
@@ -297,6 +346,11 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
 /// see report.) See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-FILE
 pub fn load_from_pyproject(path: &Path) -> Option<BasiliskConfig> {
     let content = std::fs::read_to_string(path).ok()?;
+    parse_pyproject_content(&content)
+}
+
+/// Parse a `pyproject.toml` document already held in memory.
+pub(crate) fn parse_pyproject_content(content: &str) -> Option<BasiliskConfig> {
     let table: toml::Table = content.parse().ok()?;
 
     let tool = table.get("tool")?.as_table()?;

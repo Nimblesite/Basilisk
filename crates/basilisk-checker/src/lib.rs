@@ -34,6 +34,7 @@ pub mod exports;
 pub mod imports;
 pub mod incremental;
 pub mod inference;
+pub mod rule_catalog;
 pub mod rule_tags;
 pub mod rules;
 pub mod span_util;
@@ -49,6 +50,7 @@ pub use incremental::{
     resolved_module, ConfigInput, ConfigValue, FileRegistry, ModuleExports, ResolvedFile,
     SearchPathsInput, WorkspaceFiles,
 };
+pub use rule_catalog::{rule_catalog, RuleDescriptor};
 
 // Re-export the incremental-database handles so consumers can drive the
 // memoized `checked_file` query without depending on `basilisk-db` directly.

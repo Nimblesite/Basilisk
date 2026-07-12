@@ -24,6 +24,10 @@ mod adopt;
 mod cache_check;
 mod fix;
 mod output;
+mod stubs;
+
+#[cfg(test)]
+use stubs::{cache_stub, find_package_source, run as run_stubs, StubAction, StubGenModeArg};
 
 /// Basilisk — strict-by-default Python type checker.
 ///
@@ -114,38 +118,11 @@ enum Command {
     /// Manage type stubs for untyped packages.
     Stubs {
         #[command(subcommand)]
-        action: StubAction,
+        action: stubs::StubAction,
     },
-}
-
-/// Stub management sub-commands.
-#[derive(Subcommand)]
-enum StubAction {
-    /// Generate best-effort `.pyi` stubs for untyped packages.
-    Generate {
-        /// Package names to generate stubs for.
-        /// Use `--all` to generate for all untyped imports.
-        packages: Vec<String>,
-        /// Generate stubs for all untyped imports in the project.
-        #[arg(long)]
-        all: bool,
-        /// Generation mode: runtime (inspect.signature), ast (parse .py), or hybrid (default).
-        #[arg(long, default_value = "hybrid")]
-        mode: StubGenModeArg,
-        /// Path to the Python interpreter.
-        #[arg(long, default_value = "python3")]
-        python: String,
-    },
-    /// Show stub coverage status for the project.
-    Status,
-}
-
-/// CLI-friendly stub generation mode.
-#[derive(Clone, Copy, Debug, clap::ValueEnum)]
-enum StubGenModeArg {
-    Runtime,
-    Ast,
-    Hybrid,
+    /// Generate a package stub using Pyright's compatibility spelling.
+    #[command(name = "createstub", long_flag = "createstub")]
+    CreateStub(stubs::CreateStubArgs),
 }
 
 /// Handle `--version` / `--version --json` via the Shipwright contract emitter.
@@ -294,188 +271,9 @@ fn run_command(command: Command) -> u8 {
                 }
             },
         },
-        Command::Stubs { action } => run_stubs(action),
+        Command::Stubs { action } => stubs::run(action),
+        Command::CreateStub(args) => stubs::run_create_stub(args),
     }
-}
-
-/// Run the stubs subcommand.
-fn run_stubs(action: StubAction) -> u8 {
-    match action {
-        StubAction::Generate {
-            packages,
-            all,
-            mode,
-            python,
-        } => run_stubs_generate(&packages, all, mode, &python),
-        StubAction::Status => run_stubs_status(),
-    }
-}
-
-/// Cache a generated stub and print the result. Returns `true` on success.
-fn cache_stub(
-    cache_dir: &std::path::Path,
-    package: &str,
-    stub: &basilisk_stubs::generate::GeneratedStub,
-) -> bool {
-    use basilisk_stubs::generate::cache;
-
-    let source_hash = cache::hash_source(&stub.pyi_content);
-    match cache::write_cache(cache_dir, package, &stub.pyi_content, source_hash) {
-        Ok(path) => {
-            println!(
-                "{} Generated stub for `{package}` → {}",
-                "✓".green(),
-                path.display()
-            );
-            true
-        }
-        Err(err) => {
-            eprintln!("{} Failed to write stub for `{package}`: {err}", "✗".red());
-            false
-        }
-    }
-}
-
-/// Generate stubs for specified packages.
-fn run_stubs_generate(packages: &[String], all: bool, mode: StubGenModeArg, python: &str) -> u8 {
-    use basilisk_stubs::generate::{self, StubGenMode};
-
-    let gen_mode = match mode {
-        StubGenModeArg::Runtime => StubGenMode::Runtime,
-        StubGenModeArg::Ast => StubGenMode::Ast,
-        StubGenModeArg::Hybrid => StubGenMode::Hybrid,
-    };
-
-    let python_path = std::path::Path::new(python);
-    let cache_dir = std::path::Path::new(generate::cache::DEFAULT_CACHE_DIR);
-
-    if all {
-        warn!("--all not yet implemented; specify package names explicitly");
-        return 1;
-    }
-
-    if packages.is_empty() {
-        eprintln!("{}: specify package names or use --all", "error".red());
-        return 1;
-    }
-
-    let mut errors = 0u8;
-    for package in packages {
-        let source_path = find_package_source(package, python_path);
-
-        let ok = match source_path {
-            Some(ref src) => {
-                info!(package, source = %src.display(), "generating stubs");
-                match generate::generate_stubs(package, src, python_path, gen_mode) {
-                    Ok(stub) => cache_stub(cache_dir, package, &stub),
-                    Err(err) => {
-                        eprintln!(
-                            "{} Failed to generate stub for `{package}`: {err}",
-                            "✗".red()
-                        );
-                        false
-                    }
-                }
-            }
-            None if gen_mode == StubGenMode::Ast => {
-                eprintln!(
-                    "{} Cannot find source for `{package}` — AST mode requires source files",
-                    "✗".red()
-                );
-                false
-            }
-            None => match generate::runtime::generate_runtime_stubs(package, python_path) {
-                Ok(stub) => cache_stub(cache_dir, package, &stub),
-                Err(err) => {
-                    eprintln!(
-                        "{} Failed to generate stub for `{package}`: {err}",
-                        "✗".red()
-                    );
-                    false
-                }
-            },
-        };
-        if !ok {
-            errors = errors.saturating_add(1);
-        }
-    }
-
-    errors.min(1)
-}
-
-/// Import a module named by `sys.argv[1]` and print its source path.
-const FIND_PACKAGE_SOURCE_SCRIPT: &str = r#"
-import importlib
-import sys
-
-module = importlib.import_module(sys.argv[1])
-source = getattr(module, "__file__", None)
-if source is None:
-    raise SystemExit(1)
-print(source)
-"#;
-
-/// Whether `name` is a dotted sequence of Python identifier components.
-fn is_valid_module_name(name: &str) -> bool {
-    name.split('.').all(|component| {
-        let mut chars = component.chars();
-        chars
-            .next()
-            .is_some_and(|first| first == '_' || first.is_ascii_alphabetic())
-            && chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
-    })
-}
-
-/// Find the source path for an installed package by querying Python.
-fn find_package_source(package: &str, python_path: &std::path::Path) -> Option<std::path::PathBuf> {
-    if !is_valid_module_name(package) {
-        return None;
-    }
-
-    let output = std::process::Command::new(python_path)
-        .args(["-c", FIND_PACKAGE_SOURCE_SCRIPT, package])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let source = std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
-    source.is_file().then_some(source).filter(|path| {
-        path.extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
-    })
-}
-
-/// Show stub coverage status.
-fn run_stubs_status() -> u8 {
-    let cache_dir = std::path::Path::new(basilisk_stubs::generate::cache::DEFAULT_CACHE_DIR);
-
-    if !cache_dir.exists() {
-        println!("No generated stubs found ({})", cache_dir.display());
-        return 0;
-    }
-
-    let mut count = 0u32;
-    if let Ok(entries) = std::fs::read_dir(cache_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "pyi") {
-                let module = path.file_stem().and_then(|s| s.to_str()).unwrap_or("?");
-                println!("  {} {module}", "✓".green());
-                count = count.saturating_add(1);
-            }
-        }
-    }
-
-    if count == 0 {
-        println!("No generated stubs found");
-    } else {
-        println!("\n{count} generated stub(s) in {}", cache_dir.display());
-    }
-
-    0
 }
 
 /// Run the check subcommand.
@@ -552,7 +350,7 @@ fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheO
 
 /// Resolve the paths a check run walks. Implements [CHKARCH-CONFIG-INCLUDE]:
 /// explicit CLI paths win, then the configured `include` roots, then `.`.
-fn effective_check_paths(
+pub(crate) fn effective_check_paths(
     paths: &[String],
     config: &basilisk_config::BasiliskConfig,
     config_root: &std::path::Path,
@@ -617,36 +415,8 @@ fn collect_and_check(
     // Use cwd as the project root — pyproject.toml, uv.lock, and .venv
     // live at the project root, not necessarily in the checked path.
     let project_root = find_project_root(&config_root);
-    let canonical_root = std::fs::canonicalize(&project_root).unwrap_or(project_root.clone());
-    let mut roots = vec![canonical_root.clone()];
-
-    // Add checked directories as search roots for sibling imports.
-    for path_str in paths {
-        let p = std::path::Path::new(path_str);
-        let dir = if p.is_dir() {
-            p
-        } else {
-            p.parent().unwrap_or(p)
-        };
-        if let Ok(abs) = std::fs::canonicalize(dir) {
-            if !roots.contains(&abs) {
-                roots.push(abs);
-            }
-        }
-    }
-
-    // Add include paths from WorkspaceConfig as search roots.
-    let lsp_config = basilisk_lsp::config::load_analysis_config(&project_root);
-    let registry = build_uv_registry(&roots);
-    let mut search_paths =
-        basilisk_lsp::import_resolver::search_paths_from_config(&roots, &lsp_config, registry);
-    // Ensure all roots are also in extra_paths for module resolution.
-    search_paths.roots = roots;
-    info!(
-        site_packages = ?search_paths.site_packages,
-        has_registry = search_paths.registry.is_some(),
-        "built import search paths"
-    );
+    let roots = analysis_roots(paths, &project_root);
+    let search_paths = build_import_search_paths(roots, &project_root);
 
     let cache_context = cache_check::build_context(cache, &config, &search_paths, &project_root);
 
@@ -674,6 +444,45 @@ fn collect_and_check(
         sources,
         failures,
     })
+}
+
+/// Canonical project and checked-directory roots used for import resolution.
+pub(crate) fn analysis_roots(
+    paths: &[String],
+    project_root: &std::path::Path,
+) -> Vec<std::path::PathBuf> {
+    let canonical = std::fs::canonicalize(project_root).unwrap_or_else(|_| project_root.into());
+    paths.iter().fold(vec![canonical], |mut roots, path| {
+        let candidate = std::path::Path::new(path);
+        let directory = candidate
+            .is_dir()
+            .then_some(candidate)
+            .or_else(|| candidate.parent());
+        if let Some(absolute) = directory.and_then(|dir| std::fs::canonicalize(dir).ok()) {
+            if !roots.contains(&absolute) {
+                roots.push(absolute);
+            }
+        }
+        roots
+    })
+}
+
+/// Build the shared CLI/LSP import search path model for a project.
+pub(crate) fn build_import_search_paths(
+    roots: Vec<std::path::PathBuf>,
+    project_root: &std::path::Path,
+) -> basilisk_lsp::import_resolver::ImportSearchPaths {
+    let config = basilisk_lsp::config::load_analysis_config(project_root);
+    let registry = build_uv_registry(&roots);
+    let mut search_paths =
+        basilisk_lsp::import_resolver::search_paths_from_config(&roots, &config, registry);
+    search_paths.roots = roots;
+    info!(
+        site_packages = ?search_paths.site_packages,
+        has_registry = search_paths.registry.is_some(),
+        "built import search paths"
+    );
+    search_paths
 }
 
 /// Build a uv package registry from workspace roots, if this is a uv project.
@@ -740,7 +549,7 @@ fn process_file(
 
 /// Walk up from `start` to find the project root (directory containing
 /// `pyproject.toml` or `uv.lock`). Falls back to cwd, then `start`.
-fn find_project_root(start: &std::path::Path) -> std::path::PathBuf {
+pub(crate) fn find_project_root(start: &std::path::Path) -> std::path::PathBuf {
     let abs = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
     let mut current = abs.as_path();
     loop {

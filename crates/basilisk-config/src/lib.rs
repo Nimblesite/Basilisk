@@ -8,10 +8,15 @@
 //! - Stub path directories (`stub-paths = ["stubs/"]`)
 
 pub mod adoption;
+pub mod editor;
 pub mod overrides;
 mod parse;
 
 pub use adoption::AdoptionStore;
+pub use editor::{
+    discover_config_document, ConfigDocument, ConfigDocumentError, ConfigFormat, ConfigPatch,
+    RuleConfigScope, RuleConfigUpdate,
+};
 pub use overrides::{path_matches_pattern, ModuleOverride, PathOverride, RuleSeverity};
 pub use parse::BasiliskConfig;
 

@@ -186,10 +186,11 @@ publishes diagnostics, sends `basilisk/configurationChanged`, and only then
 returns the new snapshot. The server never writes behind an unsaved config
 buffer or relies on a later watcher race to make its response true.
 
-External changes to `pyproject.toml`, `basilisk.json`, or
-`.basilisk/adoptions.toml` run the same reload/recheck/publish/notify tail in all
-analysis modes. The watcher remains a fallback for external writers, not the
-apply API's completion mechanism.
+External changes to the root's active `pyproject.toml` or `basilisk.json` run
+the same reload/recheck/publish/notify tail in every analysis scope. Adoption is
+ordinary exact-file rule configuration in that same source—there is no sidecar
+to watch. The watcher remains a fallback for external writers, not the apply
+API's completion mechanism.
 
 ### Errors {#LSPARCH-CONFIG-EDITOR-ERRORS}
 
@@ -296,7 +297,7 @@ interface ModuleNode {
     coveragePercent: number;   // annotated/total * 100, rounded; 100 when the module has no symbols
     errors: number;            // 0 when type checking is disabled ([ANALYSIS-ENABLED], #119)
     warnings: number;          // ditto
-    adopted: boolean;          // file is in adopted (errors-as-warnings) mode
+    adopted: boolean;          // exact-file adoption severity config is active
 }
 
 /** A symbol within a module. */

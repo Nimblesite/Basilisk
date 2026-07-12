@@ -58,13 +58,14 @@ pub const PEP_CATEGORIES: [&str; 21] = [
 /// The free-form descriptive tags Basilisk currently uses. Each is carefully
 /// named to avoid colliding with a reserved PEP-category name; the tagging test
 /// ([CHKTAG-TESTS]) asserts this for every entry. [CHKTAG-FREEFORM]
-pub const FREE_FORM_TAGS: [&str; 6] = [
+pub const FREE_FORM_TAGS: [&str; 7] = [
     "style",
     "redundancy",
     "strictness",
     "dependencies",
     "imports",
     "stubs",
+    "suppressions",
 ];
 
 /// The opt-in tag declaration a Basilisk-original rule attaches to itself.

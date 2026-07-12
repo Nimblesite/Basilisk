@@ -152,6 +152,42 @@ type ConfigurationPreview {
   problems: List<ConfigurationProblem>
 }
 
+union FixSafety {
+  Safe
+  Unsafe
+}
+
+type SourcePosition {
+  line: Int
+  character: Int
+}
+
+type SourceRange {
+  start: SourcePosition
+  end: SourcePosition
+}
+
+type RuleOccurrence {
+  ruleCode: String
+  uri: Uri
+  range: SourceRange
+  effectiveSeverity: RuleSeverity
+  fixSafety: Option<FixSafety>
+  configurationSource: Uri
+}
+
+type RuleOccurrencesRequest {
+  rootUri: Uri
+  selector: RuleSelector
+  cursor: Option<String>
+  limit: Int
+}
+
+type RuleOccurrencesResponse {
+  items: List<RuleOccurrence>
+  nextCursor: Option<String>
+}
+
 type ApplyConfigurationRequest {
   rootUri: Uri
   previewId: PreviewId
