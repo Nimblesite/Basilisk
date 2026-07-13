@@ -545,6 +545,27 @@ jobs:
           export PATH="$HOME/.luarocks/bin:$PATH"
           ./scripts/test-nvim.sh
 
+  # Fan-in gate for the Neovim matrix. Branch protection on main requires the
+  # context "Neovim Extension" (the job's pre-matrix name); the matrix legs
+  # report as "Neovim Extension (0.11)" / "(nightly)", so without this job the
+  # required context never reports and every PR is blocked forever — the same
+  # pitfall documented on mutation-test-shard below. Mirrors the Mutation
+  # Testing shard→merge pattern: succeeds only when every leg succeeded, or
+  # when the matrix was legitimately skipped by change scope; a failed or
+  # cancelled leg fails the gate.
+  nvim-gate:
+    name: Neovim Extension
+    needs: test-nvim
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Assert every Neovim matrix leg succeeded
+        run: |
+          result="${{ needs.test-nvim.result }}"
+          echo "test-nvim matrix result: $result"
+          [ "$result" = "success" ] || [ "$result" = "skipped" ]
+
   # ── Mutation testing (runs in parallel shards) ─────────────────────────────
   mutation-test-shard:
     name: Mutation Testing Shard ${{ matrix.label }}
