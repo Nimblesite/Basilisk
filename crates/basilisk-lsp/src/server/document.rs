@@ -406,12 +406,10 @@ async fn refresh_changed_configuration_sources(
         else {
             continue;
         };
-        let is_json = path.file_name().is_some_and(|name| name == "basilisk.json");
         let is_active_pyproject = path
             .file_name()
-            .is_some_and(|name| name == "pyproject.toml")
-            && !root.join("basilisk.json").is_file();
-        if (is_json || is_active_pyproject) && !changed_roots.contains(root) {
+            .is_some_and(|name| name == "pyproject.toml");
+        if is_active_pyproject && !changed_roots.contains(root) {
             changed_roots.push(root.clone());
         }
     }

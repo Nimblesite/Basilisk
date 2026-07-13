@@ -229,7 +229,7 @@ async fn disable_rule_command_persists_and_validates() -> TestResult<()> {
     assert!(disable
         .pointer("/result/path")
         .and_then(serde_json::Value::as_str)
-        .is_some_and(|path| path.ends_with("basilisk.json")));
+        .is_some_and(|path| path.ends_with("pyproject.toml")));
 
     let unknown = request_answering_apply_edit(
         &mut fixture,

@@ -16,8 +16,8 @@ async fn test_ws_whole_module_startup_scan_publishes_diagnostics() -> TestResult
     // Opt into the annotation house rules (off by default) so the scanned file's
     // missing-annotation diagnostics fire. See [CHKARCH-CONFIGURATION-ONLY].
     std::fs::write(
-        dir.join("basilisk.json"),
-        "{\"rules\":{\"BSK-E0001\":\"error\",\"BSK-E0002\":\"error\"}}\n",
+        dir.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
     )?;
     std::fs::write(
         dir.join("check_me.py"),
@@ -229,8 +229,8 @@ async fn test_ws_whole_module_did_close_disk_file_keeps_diagnostics() -> TestRes
     // Opt into the annotation house rules (off by default) so the disk file's
     // missing-annotation diagnostics fire. See [CHKARCH-CONFIGURATION-ONLY].
     std::fs::write(
-        dir.join("basilisk.json"),
-        "{\"rules\":{\"BSK-E0001\":\"error\",\"BSK-E0002\":\"error\"}}\n",
+        dir.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
     )?;
     let file_path = dir.join("wm_close_disk.py");
     std::fs::write(

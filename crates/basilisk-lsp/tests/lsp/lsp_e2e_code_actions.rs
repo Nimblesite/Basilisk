@@ -627,8 +627,8 @@ fn test_lsp_fix_file_command() -> TestResult<()> {
 fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
     std::fs::write(
-        fixture.workspace_root.join("basilisk.json"),
-        r#"{"rules":{"BSK-E0003":"error","BSK-W0050":"warning"}}"#,
+        fixture.workspace_root.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-E0003\" = \"error\"\n\"BSK-W0050\" = \"warning\"\n",
     )?;
     let _ = fixture.initialize()?;
 
@@ -727,8 +727,8 @@ fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
 fn test_fix_commands_enforce_workspace_authority_and_converge() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
     std::fs::write(
-        fixture.workspace_root.join("basilisk.json"),
-        r#"{"rules":{"BSK-W0050":"warning"}}"#,
+        fixture.workspace_root.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-W0050\" = \"warning\"\n",
     )?;
     let _ = fixture.initialize()?;
 

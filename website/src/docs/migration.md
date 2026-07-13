@@ -4,7 +4,7 @@ title: "Migrate to Basilisk from Pyright or mypy"
 description: "Current, honest steps for moving a Python project to Basilisk with per-rule severity and gradual path-based adoption."
 keywords: migrate to basilisk, from pyright, from mypy, python type checker migration
 date: 2026-02-28
-dateModified: 2026-07-12
+dateModified: 2026-07-14
 author: The Basilisk Project
 eleventyNavigation:
   key: Migration
@@ -41,9 +41,10 @@ exclude = [
 Setting `exclude` replaces Basilisk's built-in list, so retain every default you
 still need. See the complete [configuration reference](/docs/configuration/).
 
-If a root-level `basilisk.json` already exists, it currently takes priority over
-`pyproject.toml`; the sources are not merged. Migrate or remove that file before
-expecting TOML edits to take effect.
+A legacy root-level `basilisk.json` is no longer read. If one still exists,
+translate its keys into `[tool.basilisk]` (camelCase → kebab-case, e.g.
+`typeshedPath` → `typeshed-path`) and delete the file; the configuration editor
+reports a stray `basilisk.json` as an ignored shadowed source.
 
 ## 2. Choose the target policy
 

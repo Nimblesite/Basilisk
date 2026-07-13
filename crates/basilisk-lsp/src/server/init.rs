@@ -92,7 +92,7 @@ pub(super) async fn initialize(
     // Store workspace roots for later use by import resolution.
     (*server.workspace_roots.write().await).clone_from(&roots);
 
-    // Load project-level checker config (pyproject.toml / basilisk.json) so
+    // Load project-level checker config (pyproject.toml [tool.basilisk]) so
     // that rule severity overrides, per-module, and per-path settings match
     // the CLI. The loader walks ancestor directories and merges cumulatively
     // ([CHKARCH-CONFIG-DISCOVERY], GitHub #311), so a workspace folder opened
@@ -515,8 +515,8 @@ pub(super) async fn did_change_workspace_folders(
     }
 }
 
-// Implements [LSPUV-WATCHERS] (uv.lock, .python-version, pyproject.toml,
-// basilisk.json; `.venv/pyvenv.cfg` is startup-only detection).
+// Implements [LSPUV-WATCHERS] (uv.lock, .python-version, pyproject.toml;
+// `.venv/pyvenv.cfg` is startup-only detection).
 /// Register file watchers for uv-related configuration files.
 ///
 /// Watches `**/uv.lock`, `**/.python-version`, and `**/pyproject.toml` so
@@ -533,10 +533,6 @@ async fn register_file_watchers(client: &Client) {
         },
         FileSystemWatcher {
             glob_pattern: GlobPattern::String("**/pyproject.toml".into()),
-            kind: None,
-        },
-        FileSystemWatcher {
-            glob_pattern: GlobPattern::String("**/basilisk.json".into()),
             kind: None,
         },
     ];
@@ -561,7 +557,7 @@ async fn register_file_watchers(client: &Client) {
     if let Err(err) = client.register_capability(vec![registration]).await {
         tracing::warn!("failed to register uv file watchers: {err}");
     } else {
-        info!("registered config file watchers (uv.lock, .python-version, pyproject.toml, basilisk.json)");
+        info!("registered config file watchers (uv.lock, .python-version, pyproject.toml)");
     }
 }
 

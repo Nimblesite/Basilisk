@@ -126,8 +126,11 @@ transport derives. An automated regeneration/drift check remains open.
 
 A snapshot contains:
 
-- root, content revision, active source, format, existence/read-only state, and
-  shadowed sources;
+- root, content revision, active source, format (a single `PyprojectToml`
+  variant; the wire enum keeps a deprecated, never-emitted `BasiliskJson`
+  variant for protocol-v1 compatibility), existence/read-only state, and
+  shadowed sources (ignored legacy `basilisk.json` files, reported but never
+  read);
 - rule descriptors with project-configured and effective severity plus
   diagnostic, file, fix, and adoption counts;
 - typed tag facets, debt totals, and server-owned preset mutations; and
@@ -140,18 +143,15 @@ path or field-level provenance for an arbitrary source file.
 
 ## Configuration sources and writes {#CONFIGEDITOR-SOURCES}
 
-For one root, discovery chooses an existing root-level `basilisk.json` first,
-otherwise an existing `pyproject.toml`; if neither exists, `pyproject.toml` is
-the creation target. The files are never merged. Lower-priority existing
-sources are exposed as shadowed, and every mutation targets the one active
-document.
+For one root, discovery always selects the root's `pyproject.toml` — the
+existing file when present, otherwise `pyproject.toml` as the creation target.
+An existing root-level `basilisk.json` is surfaced in `shadowedSources` and is
+never read or written. Every mutation targets the one active document.
 
 The writer validates the original structure, validates every requested
 severity, renders the complete replacement, and validates it again before
 returning a patch. TOML edits preserve unrelated content, comments, ordering,
-and newline style. JSON edits preserve unrelated values and the existing
-`perPathOverrides`/`per-path-overrides` spelling while emitting normalized
-pretty JSON. Reset removes empty generated rule/path/adoption tables.
+and newline style. Reset removes empty generated rule/path/adoption tables.
 
 Closed-source apply sends a whole-document `WorkspaceEdit`, then keeps a
 root-scoped in-memory overlay until the client write is visible on disk. Disk
@@ -159,8 +159,8 @@ revision checks prevent a stale preview from overwriting an external edit.
 
 ### Open buffers and optimistic locks {#CONFIGEDITOR-SOURCES-OPEN-BUFFER}
 
-Clients synchronize candidate `pyproject.toml` and `basilisk.json` documents in
-addition to Python. The LSP accepts only exact root-level candidates into its
+Clients synchronize candidate `pyproject.toml` documents in addition to
+Python. The LSP accepts only exact root-level candidates into its
 configuration state; nested candidates are ignored and are never analysed as
 Python. `didOpen`, incremental `didChange`, `didSave`, and `didClose` keep that
 state aligned with the editor.
@@ -182,7 +182,7 @@ project config file. Presets introduce no second persisted state.
 The snapshot's `pathOverrides` inventory is sorted by pattern and contains every
 persisted rule severity for each path scope. A client can preview a new bounded
 exception or reset every listed rule in an existing entry without parsing the
-underlying TOML/JSON. Preview returns the exact normalized code/scope/resulting
+underlying TOML. Preview returns the exact normalized code/scope/resulting
 setting changes and reruns the full root before anything is written.
 
 Path mutations use project-relative glob syntax. Adoption uses the same domain

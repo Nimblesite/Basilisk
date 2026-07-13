@@ -24,12 +24,14 @@ pub use patch::{build_rule_patch, RuleConfigScope, RuleConfigUpdate};
 pub use write::apply_config_patch;
 
 /// The active on-disk representation for one workspace root.
+///
+/// `pyproject.toml` `[tool.basilisk]` is the only configuration format
+/// ([CHKARCH-CONFIG-FILE]); the enum survives as the stable domain/wire
+/// vocabulary for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigFormat {
     /// `[tool.basilisk]` inside `pyproject.toml`.
     PyprojectToml,
-    /// Root-level `basilisk.json`.
-    BasiliskJson,
 }
 
 /// A validated active configuration source with optimistic-lock revision.
@@ -122,10 +124,11 @@ impl std::error::Error for ConfigDocumentError {}
 
 /// Discover and validate the one active config source for `root`.
 ///
-/// Existing `basilisk.json` has priority. Otherwise the existing
-/// `pyproject.toml` is active, or becomes the creation target when absent.
-/// Malformed active sources are errors and never fall through to a shadowed
-/// source or defaults.
+/// The active source is always the root's `pyproject.toml` — existing, or the
+/// creation target when absent. A stray legacy `basilisk.json` is never read;
+/// it is reported in `shadowed_sources` so tooling can surface the ignored
+/// file. Malformed active sources are errors and never fall through to
+/// defaults.
 ///
 /// # Errors
 ///
@@ -174,22 +177,15 @@ struct ActiveConfigSource {
 }
 
 fn active_config_source(root: &Path) -> ActiveConfigSource {
+    // A legacy basilisk.json is never read; report it as shadowed so the
+    // configuration editor surfaces the ignored file instead of silently
+    // dropping user policy ([CONFIGEDITOR-SOURCES]).
     let json_path = root.join("basilisk.json");
-    let toml_path = root.join("pyproject.toml");
-    let (path, format, shadowed_sources) = if json_path.is_file() {
-        let shadowed = toml_path.is_file().then_some(toml_path);
-        (
-            json_path,
-            ConfigFormat::BasiliskJson,
-            shadowed.into_iter().collect(),
-        )
-    } else {
-        (toml_path, ConfigFormat::PyprojectToml, Vec::new())
-    };
+    let shadowed_sources = json_path.is_file().then_some(json_path);
     ActiveConfigSource {
-        path,
-        format,
-        shadowed_sources,
+        path: root.join("pyproject.toml"),
+        format: ConfigFormat::PyprojectToml,
+        shadowed_sources: shadowed_sources.into_iter().collect(),
     }
 }
 
@@ -230,15 +226,6 @@ pub(super) fn validate_content(
         return Ok(BasiliskConfig::default());
     }
     let config = match format {
-        ConfigFormat::BasiliskJson => {
-            let value: serde_json::Value =
-                serde_json::from_str(content).map_err(|error| ConfigDocumentError::Invalid {
-                    path: path.to_path_buf(),
-                    message: error.to_string(),
-                })?;
-            validate_json_structure(path, &value)?;
-            crate::parse::parse_json_content(content)
-        }
         ConfigFormat::PyprojectToml => {
             let table: toml::Table =
                 content
@@ -259,96 +246,6 @@ pub(super) fn validate_content(
         path: path.to_path_buf(),
         message: "configuration root has the wrong shape".to_owned(),
     })
-}
-
-fn validate_json_structure(
-    path: &Path,
-    value: &serde_json::Value,
-) -> Result<(), ConfigDocumentError> {
-    let root = require_json_object(path, value, "configuration root")?;
-    validate_rule_object(path, root.get("rules"))?;
-    if root.contains_key("perPathOverrides") && root.contains_key("per-path-overrides") {
-        return invalid(
-            path,
-            "cannot define both `perPathOverrides` and `per-path-overrides`",
-        );
-    }
-    let paths = root
-        .get("perPathOverrides")
-        .or_else(|| root.get("per-path-overrides"));
-    if let Some(paths) = paths {
-        let entries = require_json_object(path, paths, "per-path overrides")?;
-        for (pattern, entry) in entries {
-            let entry = require_json_object(path, entry, &format!("path override `{pattern}`"))?;
-            validate_rule_object(path, entry.get("rules"))?;
-            validate_json_disabled(path, entry.get("disabled"), pattern)?;
-            if entry
-                .get("adoption")
-                .is_some_and(|value| !value.is_boolean())
-            {
-                return invalid(
-                    path,
-                    &format!("path override `{pattern}` adoption must be a boolean"),
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
-fn validate_json_disabled(
-    path: &Path,
-    value: Option<&serde_json::Value>,
-    pattern: &str,
-) -> Result<(), ConfigDocumentError> {
-    let Some(value) = value else { return Ok(()) };
-    let Some(codes) = value.as_array() else {
-        return invalid(
-            path,
-            &format!("path override `{pattern}` disabled must be an array"),
-        );
-    };
-    if codes.iter().any(|code| !code.is_string()) {
-        return invalid(
-            path,
-            &format!("path override `{pattern}` disabled entries must be strings"),
-        );
-    }
-    Ok(())
-}
-
-fn validate_rule_object(
-    path: &Path,
-    value: Option<&serde_json::Value>,
-) -> Result<(), ConfigDocumentError> {
-    let Some(value) = value else { return Ok(()) };
-    let rules = require_json_object(path, value, "rules")?;
-    for (code, severity) in rules {
-        let valid = severity
-            .as_str()
-            .and_then(crate::RuleSeverity::parse)
-            .is_some();
-        if !valid {
-            return Err(ConfigDocumentError::Invalid {
-                path: path.to_path_buf(),
-                message: format!("rule `{code}` has an invalid severity"),
-            });
-        }
-    }
-    Ok(())
-}
-
-fn require_json_object<'a>(
-    path: &Path,
-    value: &'a serde_json::Value,
-    name: &str,
-) -> Result<&'a serde_json::Map<String, serde_json::Value>, ConfigDocumentError> {
-    value
-        .as_object()
-        .ok_or_else(|| ConfigDocumentError::Invalid {
-            path: path.to_path_buf(),
-            message: format!("{name} must be an object"),
-        })
 }
 
 fn validate_toml_structure(path: &Path, table: &toml::Table) -> Result<bool, ConfigDocumentError> {

@@ -4,7 +4,7 @@ title: "Configuration Reference — pyproject.toml Settings"
 description: "Complete reference for all Basilisk configuration options in pyproject.toml. Severity overrides, per-path rules, inline suppressions, and Ruff integration."
 keywords: basilisk, configuration, pyproject.toml, settings
 date: 2026-02-28
-dateModified: 2026-07-12
+dateModified: 2026-07-14
 author: The Basilisk Project
 eleventyNavigation:
   key: Configuration
@@ -13,9 +13,18 @@ eleventyNavigation:
 
 # Configuration Reference
 
-`[tool.basilisk]` in `pyproject.toml` is the canonical configuration. Basilisk
-also reads a root-level `basilisk.json` compatibility file; when both exist,
-`basilisk.json` currently wins and the two sources are not merged.
+`[tool.basilisk]` in `pyproject.toml` is the only configuration source. For
+each file it checks, Basilisk walks up from the file's directory and reads
+every ancestor `pyproject.toml` that carries a `[tool.basilisk]` table. The
+tables merge cumulatively, with the nearest file winning wherever the same key
+is set — a `pyproject.toml` in a child folder refines the root configuration,
+it never replaces it.
+
+> **Migrating from `basilisk.json`?** The legacy root-level `basilisk.json`
+> file is no longer read. Translate its keys into `[tool.basilisk]`
+> (camelCase → kebab-case, e.g. `typeshedPath` → `typeshed-path`) and delete
+> the file. The configuration editor reports a stray `basilisk.json` as an
+> ignored shadowed source.
 
 ## Minimal configuration
 
@@ -79,7 +88,6 @@ Additional directories to search for `.pyi` stub files. These sit at the **head*
 **Type:** `string`
 **Default:** _(unset — the bundled typeshed is used)_
 **Example:** `"typeshed-micropython"`
-**`basilisk.json` key:** `typeshedPath`
 **Spec:** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
 
 Path to a directory containing a custom or modified version of typeshed's standard-library stubs. When set, this directory becomes the **canonical source for standard-library types** — step 3 of the [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering), which states that type checkers "SHOULD use this as the canonical source for standard-library types in this step." Basilisk resolves stdlib modules against it in preference to the bundled typeshed; a stdlib module absent from the directory falls through to the remaining resolution steps.
@@ -179,17 +187,12 @@ Because `micropython-stdlib-stubs` is a **partial** stdlib, a module it does not
 
 ### 3. Configure it in the active project file
 
-The same setting is `typeshedPath` (camelCase) in JSON config. In a standalone **`basilisk.json`** at the project root, the key is bare:
-
-```json
-{
-  "typeshedPath": "vendor/typeshed"
-}
-```
-
-`typeshed-path` in `pyproject.toml` and `typeshedPath` in the root-level
-`basilisk.json` are the two spellings for the same project setting. Editors do
-not carry a second copy; the active project config file is authoritative.
+`typeshed-path` lives in `[tool.basilisk]` like every other setting — there is
+no second spelling and no second file. Set it in the `pyproject.toml` that
+governs the files you are checking (the nearest ancestor with a
+`[tool.basilisk]` table). Editors do not carry a second copy; that project
+config file is authoritative. If you are migrating a legacy `basilisk.json`,
+its camelCase `typeshedPath` key becomes `typeshed-path` here.
 
 ### 4. Confirm it took effect — hover provenance
 
@@ -322,13 +325,19 @@ warning, info, or disabled. See the
 
 ## Configuration discovery
 
-Basilisk loads configuration from the selected workspace/check root. A root-level
-`basilisk.json` has priority; otherwise `[tool.basilisk]` in that root's
-`pyproject.toml` is used. The sources are not merged. If both exist, edit
-`basilisk.json` or remove/migrate it—changing the shadowed TOML table has no
-effect.
+Basilisk discovers configuration per checked file by walking **up** from the
+file's directory. Every ancestor `pyproject.toml` that carries a
+`[tool.basilisk]` table contributes, and the tables merge cumulatively: where
+the same key is set in more than one file, the **nearest** file wins. Keys a
+child table does not set continue to come from the ancestors, so a nested
+`pyproject.toml` refines the root configuration — it never blows the root
+config away.
 
-If no configuration file is found, Basilisk uses defaults: the **core PEP conformance rule set** enabled (extra Basilisk rules stay opt-in), `python-version = "3.12"`, check the current directory.
+The legacy root-level `basilisk.json` is **never** read. If one is still
+present, the configuration editor reports it as an ignored shadowed source;
+translate its keys into `[tool.basilisk]` and delete the file.
+
+If no ancestor `pyproject.toml` carries a `[tool.basilisk]` table, Basilisk uses defaults: the **core PEP conformance rule set** enabled (extra Basilisk rules stay opt-in), `python-version = "3.12"`, check the current directory.
 
 ---
 

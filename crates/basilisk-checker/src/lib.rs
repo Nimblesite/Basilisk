@@ -21,7 +21,7 @@
 //! ## Project-level configuration
 //!
 //! [`check_with_config`] applies project-level overrides from `pyproject.toml`
-//! or `basilisk.json`:
+//! `[tool.basilisk]`:
 //! - Global rule severity overrides (`rules."imports_unresolved" = "warning"`)
 //! - Per-module overrides (`per-module-overrides."fastmcp".ignore-missing-stubs`)
 //! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled`)

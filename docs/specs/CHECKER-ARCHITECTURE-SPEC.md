@@ -4,7 +4,7 @@
 
 Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` dial). Everything reported is decided by **configuration alone**: a flat set of per-rule severities set globally, per path, or per file.
 
-1. **The default configuration is pure PEP conformance.** With no config file, Basilisk enables **every rule that implements the Python typing specification, and nothing else**. This unconfigured default is exactly what the conformance scorer runs — no `basilisk.json`, no "conformance mode" ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
+1. **The default configuration is pure PEP conformance.** With no config file, Basilisk enables **every rule that implements the Python typing specification, and nothing else**. This unconfigured default is exactly what the conformance scorer runs — no Basilisk config of any format, no "conformance mode" ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
 2. **Everything beyond the spec is opt-in configuration.** House-style rules — require-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), explicit-`Any` nudge (`BSK-W0014`), uv dependency hygiene, stub suggestions — are **off by default**. A non-disabled severity for that rule is the only way to enable it; there are no rule-family booleans.
 
@@ -342,9 +342,8 @@ Full support for:
 Every rule runs against the **configured** target Python version — never a
 hardcoded constant (issue #93).
 
-- `BasiliskConfig.python_version` / `python_platform` (from `basilisk.json`
-  `pythonVersion`/`pythonPlatform` or `pyproject.toml` `[tool.basilisk]`
-  `python-version`/`python-platform`) parse into a typed
+- `BasiliskConfig.python_version` / `python_platform` (from `pyproject.toml`
+  `[tool.basilisk]` `python-version`/`python-platform`) parse into a typed
   `CheckContext { target_version: (major, minor), target_platform }`
   (`crates/basilisk-checker/src/context.rs`).
 - The centralized default is `DEFAULT_TARGET_VERSION = (3, 12)` — the **only**
@@ -958,14 +957,13 @@ the advanced-features plan.
 
 ### Configuration File {#CHKARCH-CONFIG-FILE}
 
-`pyproject.toml` under `[tool.basilisk]` is the canonical configuration and the
-default write target for new projects. For compatibility, the current loader
-also reads a root-level `basilisk.json` at higher priority. The two files are not
-merged: when both exist, `basilisk.json` is active and the TOML section is
-shadowed. Configuration tooling must expose that provenance and mutate the
-active source or perform an explicit migration—never write an ineffective
-shadowed file. See
-[CONFIGEDITOR-SOURCES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES).
+`pyproject.toml` under `[tool.basilisk]` is the **single** configuration source
+and the creation target for new projects. There is no other Basilisk config
+format: a legacy root-level `basilisk.json` is **never read**, and configuration
+tooling reports such a file as an ignored/shadowed source rather than loading it
+([CONFIGEDITOR-SOURCES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES)).
+How the file is found and how multiple ancestor tables combine is specified in
+[Configuration Discovery](#CHKARCH-CONFIG-DISCOVERY).
 
 Canonical TOML example:
 
@@ -997,11 +995,10 @@ independent of argument order, path spelling, and cwd — for the same file in
 the same project, every surface resolves the identical config.
 
 **Walk.** Starting from the file's own directory, every ancestor directory up
-to the filesystem root is visited. Each directory contributes at most one
-config file — `basilisk.json` first, else `pyproject.toml` with a
-`[tool.basilisk]` table. A `pyproject.toml` **without** `[tool.basilisk]`
-contributes nothing and does not stop the walk (Ruff's `[tool.ruff]`
-semantics).
+to the filesystem root is visited. Each directory contributes at most its
+`pyproject.toml` `[tool.basilisk]` table. A `pyproject.toml` **without**
+`[tool.basilisk]` contributes nothing and does not stop the walk (Ruff's
+`[tool.ruff]` semantics).
 
 **Cumulative merge.** Configs found on the chain merge additively, nearest
 directory winning per key (`BasiliskConfig::merged_with`): a child directory's
@@ -1184,10 +1181,11 @@ that official check did not run against a freshly cloned suite is a BUILD FAILUR
 
 > ⛔️ **DISABLING, DELETING, OR UNREGISTERING ANY CONFORMANCE RULE IS FORBIDDEN.**
 > The binary is scored in its **full default configuration with EVERY core
-> PEP/conformance rule enabled** — no `basilisk.json`, no per-rule override, no "spec-conformance mode",
+> PEP/conformance rule enabled** — no Basilisk config (any format; the legacy
+> `basilisk.json` is no longer read), no per-rule override, no "spec-conformance mode",
 > no skipped fixtures, no deleting rule source (`src/rules/*.rs`), no removing rules
 > from `all_rules()`. The binary is scored over a **fresh `python/typing` clone**
-> whose tree holds no `basilisk.json`, so nothing of ours can silence a rule;
+> whose tree holds no Basilisk config of any format, so nothing of ours can silence a rule;
 > deleting the rules themselves is the **same crime by another route** and equally
 > forbidden — as is hand-editing `conformance/conformance_status.csv` or loosening
 > the `coverage-thresholds.json` gate (`threshold` / `max_false_positives`). A
@@ -1224,7 +1222,7 @@ that official check did not run against a freshly cloned suite is a BUILD FAILUR
   warnings (strictest grading, as pyright is graded); no looser mode, no opt-out.
   The binary runs with **every core PEP/conformance rule enabled** in its default
   configuration over a fresh `python/typing` clone whose tree holds no
-  `basilisk.json`, so nothing of ours can silence a conformance rule. Opt-in
+  Basilisk config of any format, so nothing of ours can silence a conformance rule. Opt-in
   Basilisk-specific rules remain off by the same ordinary default
   ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 - **Gate**: `make test` (via [`scripts/test-rust.sh`](../../scripts/test-rust.sh))
@@ -1244,7 +1242,7 @@ that official check did not run against a freshly cloned suite is a BUILD FAILUR
   **<!--g:pass-->141<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->100.0%<!--/g:score-->**, **<!--g:fp-->0<!--/g:fp--> false positives**, **<!--g:missed-->0<!--/g:missed--> missed required errors**, with
   **<!--g:caught-->970<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
   PEP conformance set — over a fresh `python/typing` clone whose tree holds no
-  `basilisk.json`, so nothing can silence a rule; Basilisk's opt-in house-style rules never run during scoring,
+  Basilisk config of any format, so nothing can silence a rule; Basilisk's opt-in house-style rules never run during scoring,
   so they can neither pad nor sink the number. The gate
   ratchets the pass-percentage **up** and the false-positive ceiling **down**
   (`coverage-thresholds.json` → `conformance.threshold` /
@@ -1259,7 +1257,8 @@ that official check did not run against a freshly cloned suite is a BUILD FAILUR
 There is **no** conformance mode, and there never will be. The scorer runs the binary
 in exactly the configuration a user gets out of the box — the **default config, which
 is the pure PEP conformance set** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY))
-— with no `basilisk.json`, no per-rule override, and no special scoring path. Basilisk's
+— with no Basilisk config of any format (the legacy `basilisk.json` is no longer
+read), no per-rule override, and no special scoring path. Basilisk's
 opinionated *house-style* rules (require-annotations `BSK-E0001`/`BSK-E0002`/`BSK-E0004`,
 require-`@override` `BSK-E0025`, redundant-annotation `BSK-W0050`, the explicit-`Any`
 nudge `BSK-W0014`) are **opt-in and off by default**, so they never run during scoring
@@ -1275,11 +1274,12 @@ run. This has been attempted twice, back when the house rules still ran by defau
 counted toward the score. First, a revision wrote a `basilisk.json` that turned six
 rules off before scoring and reported a **fake 100%**; that was removed, and the
 scorer now runs the binary over a **fresh `python/typing` clone** whose tree contains
-no `basilisk.json`, so no config can silence a rule. Second — when config-disabling
+no Basilisk config of any format (the legacy `basilisk.json` is no longer read at
+all), so no config can silence a rule. Second — when config-disabling
 was blocked — a revision tried to
 *delete the offending rule source files outright* and unregister them from
 `all_rules()`, then re-report a **fake 100%**: the same lie by another route. **Deleting
-a rule to dodge the `basilisk.json` guard is the identical offence.**
+a rule to dodge the config guard is the identical offence.**
 
 The path to 100% is to make the checker **correct**, never to silence a rule at score
 time: implement the spec features it still misses, and teach its conformance rules to

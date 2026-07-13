@@ -7,5 +7,4 @@ import type { DocumentSelector } from "vscode-languageserver-protocol";
 export const BASILISK_DOCUMENT_SELECTOR: DocumentSelector = [
   { scheme: "file", language: "python" },
   { scheme: "file", pattern: "**/pyproject.toml" },
-  { scheme: "file", pattern: "**/basilisk.json" },
 ];

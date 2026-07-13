@@ -30,12 +30,12 @@ pub struct LspStdioFixture {
     pub responses: Receiver<String>,
     /// Auto-incrementing request ID counter.
     pub next_id: i64,
-    /// Temp workspace root opened during initialize. It ships a `basilisk.json`
-    /// that opts into the annotation house rules (off by default — the default
-    /// config is pure PEP conformance). Documents fall back to this root's
-    /// config, so house diagnostics (`BSK-E0001` …) fire exactly as they do for
-    /// a project that enabled them. No modes; configuration.
-    /// See [CHKARCH-CONFIGURATION-ONLY].
+    /// Temp workspace root opened during initialize. It ships a `pyproject.toml`
+    /// whose `[tool.basilisk.rules]` opts into the annotation house rules (off
+    /// by default — the default config is pure PEP conformance). Documents fall
+    /// back to this root's config, so house diagnostics (`BSK-E0001` …) fire
+    /// exactly as they do for a project that enabled them. No modes;
+    /// configuration. See [CHKARCH-CONFIGURATION-ONLY].
     pub workspace_root: std::path::PathBuf,
 }
 
@@ -123,15 +123,14 @@ impl LspStdioFixture {
             std::env::temp_dir().join(format!("bsk_lsp_stdio_{}_{seq}", std::process::id()));
         std::fs::create_dir_all(&workspace_root)?;
         std::fs::write(
-            workspace_root.join("basilisk.json"),
+            workspace_root.join("pyproject.toml"),
             concat!(
-                "{\"rules\":{",
-                "\"BSK-E0001\":\"error\",",
-                "\"BSK-E0002\":\"error\",",
-                "\"BSK-E0003\":\"error\",",
-                "\"BSK-E0005\":\"error\",",
-                "\"BSK-W0050\":\"warning\"",
-                "}}\n"
+                "[tool.basilisk.rules]\n",
+                "\"BSK-E0001\" = \"error\"\n",
+                "\"BSK-E0002\" = \"error\"\n",
+                "\"BSK-E0003\" = \"error\"\n",
+                "\"BSK-E0005\" = \"error\"\n",
+                "\"BSK-W0050\" = \"warning\"\n"
             ),
         )?;
 

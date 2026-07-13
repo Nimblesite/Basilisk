@@ -20,9 +20,13 @@ broader clients, richer metadata, and additional drift/audit automation.
 - [x] Derive the live rule catalog, native/default severities, and canonical
   tags from the checker registry rather than a VSIX-maintained list.
 - [x] Persist `error`, `warning`, `info`, `disabled`, and inherited reset at
-  project and path scope in the one active `pyproject.toml`/`basilisk.json`.
-- [x] Validate complete replacements, preserve TOML comments/newlines and JSON
-  aliases, normalize legacy disabled entries, and remove empty generated paths.
+  project and path scope in the one active config document. (Originally
+  `pyproject.toml` or `basilisk.json`; JSON support was later removed —
+  `pyproject.toml` `[tool.basilisk]` is now the only source.)
+- [x] Validate complete replacements, preserve TOML comments/newlines,
+  normalize legacy disabled entries, and remove empty generated paths. (The
+  JSON-alias preservation this item originally covered was removed along with
+  `basilisk.json` support.)
 - [x] Make overlapping path selection deterministic and cover exact-file over
   broad-glob precedence plus root-relative matching.
 - [x] Expose a sorted, normalized path-override inventory with adoption
@@ -36,8 +40,9 @@ broader clients, richer metadata, and additional drift/audit automation.
   LSP `WorkspaceConfig`.
 - [ ] Add field/winning-path provenance and structured configuration problems;
   decide and enforce the policy for unrelated unknown fields.
-- [ ] Add an explicit migration flow when `basilisk.json` shadows
-  `pyproject.toml`.
+- [x] Resolved by removal rather than a migration flow: `basilisk.json` is no
+  longer read anywhere; a stray file is surfaced as a shadowed source and
+  never loaded.
 - [x] Make LSP edits document-version-aware and prove that an unsaved
   configuration buffer cannot be overwritten.
 

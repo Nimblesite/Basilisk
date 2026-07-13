@@ -36,6 +36,9 @@ union TagKind {
   Descriptive
 }
 
+// BasiliskJson is a deprecated wire variant kept for protocol-v1 stability;
+// the server never emits it — pyproject.toml [tool.basilisk] is the only
+// configuration format ([CHKARCH-CONFIG-FILE]).
 union ConfigurationFormat {
   PyprojectToml
   BasiliskJson

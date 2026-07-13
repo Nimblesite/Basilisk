@@ -73,12 +73,19 @@ The quotes around these two keys are valid TOML and make the diagnostic codes
 easy to recognize. This configuration makes both opt-in rules active at error
 severity across the project.
 
-Basilisk also understands a root-level `basilisk.json` compatibility file. If
-both files exist, that JSON file is the active source; the two files are not
-merged. The configuration editor shows the active source in its header and
-shows any lower-priority source in the Project view. Check that label before
-you edit. Changing a shadowed `pyproject.toml` and expecting it to win is a
-particularly quiet way to waste an afternoon.
+`pyproject.toml` is the only file Basilisk reads for policy, but a repository
+can hold more than one. Basilisk resolves configuration per checked file by
+walking up from that file's directory: every ancestor `pyproject.toml` with a
+`[tool.basilisk]` table contributes, and where two files set the same key, the
+nearer one wins. A child folder's table refines the root policy; it never
+replaces it. In a monorepo the useful question is therefore not "which file is
+active?" but "which `pyproject.toml` is nearest to the file I am looking at?"
+The configuration editor answers it — its source badge names the file an
+approved edit will write. If a legacy root-level `basilisk.json` is still
+lying around, the editor lists it as an ignored source; it is never read, so
+migrate its keys into `[tool.basilisk]` and delete it. Editing the
+`pyproject.toml` that governs a different subtree is the modern way to waste
+the same quiet afternoon.
 
 The editor itself is not a second policy store. It asks the Basilisk language
 server for the live catalog and active configuration, then asks the server to

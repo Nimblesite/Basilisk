@@ -130,9 +130,9 @@ BSK-E0001 = "warning"
 BSK-E0003 = "warning"
 ```
 
-`basilisk.json` uses the equivalent `perPathOverrides` entry. Paths are
-relative to the owning workspace root, and the structure-aware writer retains
-unrelated configuration content. No separate adoption file is read or written.
+Paths are relative to the config file's directory (the discovered config
+root), and the structure-aware writer retains unrelated configuration content.
+No separate adoption file is read or written.
 
 ### Behavior and boundaries {#AUTOFIX-ADOPTION-RULES}
 

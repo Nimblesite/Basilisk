@@ -300,7 +300,7 @@ fn configuration_root(roots: &[PathBuf], path: &Path) -> Option<PathBuf> {
 
 fn is_configuration_path(path: &Path) -> bool {
     path.file_name()
-        .is_some_and(|name| name == "pyproject.toml" || name == "basilisk.json")
+        .is_some_and(|name| name == "pyproject.toml")
 }
 
 #[cfg(test)]

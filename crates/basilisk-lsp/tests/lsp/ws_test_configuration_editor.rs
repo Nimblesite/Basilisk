@@ -133,7 +133,7 @@ async fn configuration_snapshot_reflects_live_diagnostics() -> TestResult<()> {
         .is_some_and(|revision| !revision.is_empty()));
     assert_eq!(
         snapshot.pointer("/source/format/kind"),
-        Some(&serde_json::json!("BasiliskJson"))
+        Some(&serde_json::json!("PyprojectToml"))
     );
     assert_eq!(
         snapshot.pointer("/source/exists"),
@@ -197,7 +197,7 @@ async fn configuration_snapshot_rejects_unknown_roots() -> TestResult<()> {
 async fn open_configuration_buffer_overrides_disk_until_closed() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
-    let config_uri = file_uri(&fixture, "basilisk.json");
+    let config_uri = file_uri(&fixture, "pyproject.toml");
 
     fixture
         .send_json(&serde_json::json!({
@@ -206,9 +206,9 @@ async fn open_configuration_buffer_overrides_disk_until_closed() -> TestResult<(
             "params": {
                 "textDocument": {
                     "uri": config_uri,
-                    "languageId": "json",
+                    "languageId": "toml",
                     "version": 3,
-                    "text": "{\"rules\":{\"BSK-E0001\":\"info\"}}"
+                    "text": "[tool.basilisk.rules]\n\"BSK-E0001\" = \"info\"\n"
                 }
             }
         }))

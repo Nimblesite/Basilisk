@@ -4,7 +4,7 @@ title: 从 Pyright 或 mypy 迁移到 Basilisk
 description: 使用逐规则严重性、路径覆盖和显式采用例外，将现有 Python 项目逐步迁移到 Basilisk。
 keywords: 迁移到basilisk, 从pyright, 从mypy, python类型检查器迁移
 lang: zh
-dateModified: 2026-07-12
+dateModified: 2026-07-14
 ---
 
 # 迁移指南
@@ -29,8 +29,11 @@ exclude = [
 ]
 ```
 
-设置 `exclude` 会替换内置列表，因此请保留仍然需要的默认项。若根目录
-已有 `basilisk.json`，它优先于 `pyproject.toml`，两者不会合并。
+设置 `exclude` 会替换内置列表，因此请保留仍然需要的默认项。旧版根目录
+`basilisk.json` 已不再被读取；若该文件仍然存在，请将其键翻译为
+`[tool.basilisk]`（驼峰式 → 短横线式，例如 `typeshedPath` →
+`typeshed-path`）后删除该文件——配置编辑器会将遗留的 `basilisk.json`
+报告为被忽略的遮蔽来源。
 
 ## 2. 选择目标规则
 

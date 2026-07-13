@@ -630,16 +630,12 @@ pub(crate) fn config_for_path(
 }
 
 /// Walk up from `start` to find the project root (directory containing
-/// `basilisk.json`, `pyproject.toml`, or `uv.lock`). Falls back to cwd, then
-/// `start`.
+/// `pyproject.toml` or `uv.lock`). Falls back to cwd, then `start`.
 pub(crate) fn find_project_root(start: &std::path::Path) -> std::path::PathBuf {
     let abs = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
     let mut current = abs.as_path();
     loop {
-        if current.join("basilisk.json").is_file()
-            || current.join("pyproject.toml").is_file()
-            || current.join("uv.lock").is_file()
-        {
+        if current.join("pyproject.toml").is_file() || current.join("uv.lock").is_file() {
             return current.to_path_buf();
         }
         match current.parent() {
@@ -885,8 +881,8 @@ mod tests {
         let dir = unique_project_dir("basilisk_test_bad_code");
         std::fs::create_dir_all(&dir)?;
         std::fs::write(
-            dir.join("basilisk.json"),
-            b"{\"rules\":{\"BSK-E0001\":\"error\",\"BSK-E0002\":\"error\"}}\n",
+            dir.join("pyproject.toml"),
+            b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
         )?;
         let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x):\n    pass\n")?;
@@ -972,10 +968,7 @@ mod tests {
         let root = unique_project_dir("basilisk_cli_cfg_ancestor");
         let child = root.join("child");
         std::fs::create_dir_all(&child)?;
-        std::fs::write(
-            root.join("pyproject.toml"),
-            ANNOTATION_RULES_TOML,
-        )?;
+        std::fs::write(root.join("pyproject.toml"), ANNOTATION_RULES_TOML)?;
         let py = child.join("bad.py");
         std::fs::write(&py, UNANNOTATED_FN)?;
 
@@ -1002,10 +995,7 @@ mod tests {
         let q = base.join("q");
         std::fs::create_dir_all(&p)?;
         std::fs::create_dir_all(&q)?;
-        std::fs::write(
-            p.join("pyproject.toml"),
-            ANNOTATION_RULES_TOML,
-        )?;
+        std::fs::write(p.join("pyproject.toml"), ANNOTATION_RULES_TOML)?;
         std::fs::write(p.join("bad.py"), UNANNOTATED_FN)?;
         std::fs::write(q.join("bad.py"), UNANNOTATED_FN)?;
 
@@ -1049,10 +1039,7 @@ mod tests {
         let root = unique_project_dir("basilisk_cli_cfg_cumulative");
         let child = root.join("child");
         std::fs::create_dir_all(&child)?;
-        std::fs::write(
-            root.join("pyproject.toml"),
-            ANNOTATION_RULES_TOML,
-        )?;
+        std::fs::write(root.join("pyproject.toml"), ANNOTATION_RULES_TOML)?;
         std::fs::write(
             child.join("pyproject.toml"),
             b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
@@ -1116,8 +1103,8 @@ mod tests {
         let dir = unique_project_dir("basilisk_test_rc_json_bad");
         std::fs::create_dir_all(&dir)?;
         std::fs::write(
-            dir.join("basilisk.json"),
-            b"{\"rules\":{\"BSK-E0001\":\"error\"}}\n",
+            dir.join("pyproject.toml"),
+            b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n",
         )?;
         let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
@@ -1150,8 +1137,8 @@ mod tests {
         let dir = unique_project_dir("basilisk_test_rc_text_bad");
         std::fs::create_dir_all(&dir)?;
         std::fs::write(
-            dir.join("basilisk.json"),
-            b"{\"rules\":{\"BSK-E0001\":\"error\"}}\n",
+            dir.join("pyproject.toml"),
+            b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n",
         )?;
         let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
@@ -1558,11 +1545,15 @@ mod tests {
     ) -> Result<(std::path::PathBuf, String), Box<dyn std::error::Error>> {
         let dir = unique_project_dir(prefix);
         std::fs::create_dir_all(&dir)?;
-        // Anchor the project root at `dir` with a config marker. Without one,
-        // `find_project_root` walks past the temp dir and falls back to the
-        // process cwd, so config-root-relative operations (e.g. `unadopt`'s
+        // Anchor the project root at `dir` with a `pyproject.toml` marker.
+        // Without one, `find_project_root` (which recognises only
+        // `pyproject.toml`/`uv.lock`) walks past the temp dir and falls back to
+        // the process cwd, so config-root-relative operations (e.g. `unadopt`'s
         // `relative_pattern`) see the module as outside the root and error.
-        std::fs::write(dir.join("basilisk.json"), b"{}\n")?;
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            b"[project]\nname = \"fixture\"\nversion = \"0.0.0\"\n",
+        )?;
         let py = dir.join("m.py");
         std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
         let path = py.to_string_lossy().into_owned();

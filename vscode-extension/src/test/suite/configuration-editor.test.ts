@@ -445,16 +445,17 @@ suite("Configuration editor — conflicts, capability, and lifecycle", () => {
     );
     assert.strictEqual(configurationRepairUri("file:///etc/passwd", ROOT_URI), undefined);
     assert.strictEqual(configurationRepairUri(`${ROOT_URI}/nested/pyproject.toml`, ROOT_URI), undefined);
+    assert.strictEqual(configurationRepairUri(`${ROOT_URI}/basilisk.json`, ROOT_URI), undefined);
     assert.strictEqual(configurationRepairUri("https://attacker.invalid/basilisk.json", ROOT_URI), undefined);
 
     const store = createStore();
     const transport = new RecordingTransport();
-    transport.snapshotError = new InvalidConfigurationError(`${ROOT_URI}/basilisk.json`);
+    transport.snapshotError = new InvalidConfigurationError(`${ROOT_URI}/pyproject.toml`);
     const controller = new ConfigurationEditorController(store, transport);
     try {
       controller.open(ROOT_URI);
       await pollUntil(() => store.configurationEditor.value.phase === "error");
-      assert.strictEqual(store.configurationEditor.value.repairUri, `${ROOT_URI}/basilisk.json`);
+      assert.strictEqual(store.configurationEditor.value.repairUri, `${ROOT_URI}/pyproject.toml`);
       assert.strictEqual(store.configurationEditor.value.snapshot, undefined);
     } finally {
       controller.dispose();

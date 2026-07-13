@@ -102,7 +102,7 @@ function clientTransport(store: Store): ConfigurationEditorTransport {
   };
 }
 
-/** Accept only the two active root-level configuration files as repair targets. */
+/** Accept only the root-level `pyproject.toml` as a repair target. */
 export function configurationRepairUri(value: unknown, rootUri: string | undefined): string | undefined {
   if (typeof value !== "string" || rootUri === undefined) { return undefined; }
   try {
@@ -111,9 +111,8 @@ export function configurationRepairUri(value: unknown, rootUri: string | undefin
     if (source.scheme !== "file" || root.scheme !== "file") { return undefined; }
     const sourcePath = path.resolve(source.fsPath);
     const rootPath = path.resolve(root.fsPath);
-    const fileName = path.basename(sourcePath);
     if (path.dirname(sourcePath) !== rootPath) { return undefined; }
-    if (fileName !== "pyproject.toml" && fileName !== "basilisk.json") { return undefined; }
+    if (path.basename(sourcePath) !== "pyproject.toml") { return undefined; }
     return source.toString();
   } catch {
     return undefined;

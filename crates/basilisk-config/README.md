@@ -1,15 +1,19 @@
 # basilisk-config
 
 Configuration parsing for Basilisk — reads `[tool.basilisk]` from
-`pyproject.toml` and the compatibility `basilisk.json` format.
+`pyproject.toml`, the only configuration source.
 
 ## Role in Basilisk
 
 This crate owns the checker-facing `BasiliskConfig`, severity/path/module
-override parsing and shared path matching. Current
-root-level discovery gives `basilisk.json` priority over `[tool.basilisk]`; the
-sources are not merged. LSP/editor settings such as analysis mode live in
-`basilisk-lsp` today and are not parsed by this crate.
+override parsing and shared path matching. Discovery walks **up** from each
+checked file: every ancestor `pyproject.toml` carrying a `[tool.basilisk]`
+table contributes, and the tables merge cumulatively with the nearest file
+winning per key — a nested table refines its ancestors, never replaces them
+([CHKARCH-CONFIG-DISCOVERY]). A stray legacy `basilisk.json` is never read;
+the config editor reports it in `shadowed_sources`. LSP/editor settings such
+as analysis mode live in `basilisk-lsp` today and are not parsed by this
+crate.
 
 ## Key concepts
 
@@ -29,13 +33,15 @@ analysis modes. Those are separate planned/consumer concerns.
 | Crate | Purpose |
 |-------|---------|
 | `serde` | Deserialization |
-| `serde_json` | JSON parsing |
 | `toml` | TOML parsing |
+| `toml_edit` | Format-preserving TOML edits for the editor API |
 
 ## Status
 
 Parsing is consumed by `basilisk-checker`, `basilisk-cli`, and `basilisk-lsp`.
-Validated mutation, active-source discovery, content revisions, and the editor
-API are implemented. Remaining provenance, document-version safety, and domain
-consolidation work is tracked in
+Validated mutation, ancestor-walk cumulative discovery, content revisions, and
+the editor API are implemented; the editor targets `pyproject.toml` only and
+surfaces a stray `basilisk.json` as an ignored shadowed source. Remaining
+provenance, document-version safety, and domain consolidation work is tracked
+in
 [`LSP-CONFIGURATION-EDITOR-PLAN.md`](../../docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md).

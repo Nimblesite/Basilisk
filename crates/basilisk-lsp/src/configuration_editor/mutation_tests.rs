@@ -253,7 +253,7 @@ fn unknown_rule_in_active_config_is_rejected_at_protocol_boundary() {
             .data
             .as_ref()
             .and_then(|data| data.pointer("/context/sourceUri")),
-        Some(&serde_json::json!("file:///workspace/basilisk.json"))
+        Some(&serde_json::json!("file:///workspace/pyproject.toml"))
     );
 }
 
@@ -360,12 +360,12 @@ fn inventory_fixture(total: usize, errors: usize, warnings: usize) -> Inventory 
 fn document(config: BasiliskConfig) -> ConfigDocument {
     ConfigDocument {
         root: PathBuf::from("/workspace"),
-        path: PathBuf::from("/workspace/basilisk.json"),
-        format: ConfigFormat::BasiliskJson,
+        path: PathBuf::from("/workspace/pyproject.toml"),
+        format: ConfigFormat::PyprojectToml,
         exists: true,
         read_only: false,
         shadowed_sources: Vec::new(),
-        content: "{}".to_owned(),
+        content: "[tool.basilisk]\n".to_owned(),
         revision: "revision".to_owned(),
         config,
     }

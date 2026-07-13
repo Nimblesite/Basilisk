@@ -107,7 +107,7 @@ pub(super) fn suppress_with_type_ignore(uri: &Url, diag: &Diagnostic, source: &s
 ///
 /// This generates a command-based code action. The LSP client executes the
 /// `basilisk.disableRule` command, which writes through the configuration
-/// editor service to either `basilisk.json` or `pyproject.toml`.
+/// editor service to the project's `pyproject.toml` `[tool.basilisk]`.
 pub(super) fn disable_in_project_config(uri: &Url, diag: &Diagnostic, code: &str) -> CodeAction {
     CodeAction {
         title: format!("Disable `{code}` in active project configuration"),

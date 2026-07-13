@@ -44,6 +44,8 @@ pub enum TagKind {
 #[serde(tag = "kind")]
 pub enum ConfigurationFormat {
     PyprojectToml,
+    /// Deprecated wire variant kept for protocol-v1 stability; never emitted —
+    /// `pyproject.toml [tool.basilisk]` is the only configuration format.
     BasiliskJson,
 }
 

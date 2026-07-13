@@ -4,11 +4,21 @@ title: 配置参考
 description: Basilisk pyproject.toml 配置选项的完整参考。严重性覆盖、每路径规则、内联抑制和 Ruff 集成。
 keywords: basilisk, 配置, pyproject.toml, 设置
 lang: zh
+dateModified: 2026-07-14
 ---
 
 # 配置参考
 
-Basilisk 通过 `pyproject.toml` 进行配置。所有设置都在 `[tool.basilisk]` 下。
+`pyproject.toml` 中的 `[tool.basilisk]` 是唯一的配置来源。对于每个被检查的
+文件，Basilisk 从该文件所在目录向上遍历，读取每一个带有 `[tool.basilisk]`
+表的祖先 `pyproject.toml`。这些表会累积合并：同一个键在多个文件中都有设置
+时，**最近**的文件生效——子目录中的 `pyproject.toml` 只是细化根配置，
+绝不会将其整体替换。
+
+> **正在从 `basilisk.json` 迁移？** 旧版根目录 `basilisk.json` 文件已不再
+> 被读取。请将其键翻译为 `[tool.basilisk]`（驼峰式 → 短横线式，例如
+> `typeshedPath` → `typeshed-path`），然后删除该文件。配置编辑器会将遗留的
+> `basilisk.json` 报告为被忽略的遮蔽来源。
 
 ## 最小配置
 
@@ -67,7 +77,6 @@ rules."imports_unresolved" = "warning"
 **类型：** `string`
 **默认值：** _（未设置——使用捆绑的 typeshed）_
 **示例：** `"typeshed-micropython"`
-**`basilisk.json` 键：** `typeshedPath`
 **规范：** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
 
 指向包含 typeshed 标准库存根的自定义或修改版本的目录路径。设置后，该目录将成为**标准库类型的规范来源**——[typing 规范的导入解析顺序](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)中的第 3 步，该规范指出类型检查器"SHOULD use this as the canonical source for standard-library types in this step"（应将其用作此步骤中标准库类型的规范来源）。Basilisk 优先针对它解析标准库模块，而不是捆绑的 typeshed；目录中缺失的标准库模块将继续进入后续的解析步骤。
@@ -167,17 +176,11 @@ typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 
 ### 3. 在活动项目文件中配置
 
-在 JSON 配置中，同一设置为 `typeshedPath`（驼峰式）。在项目根目录的独立 **`basilisk.json`** 中，键名不带前缀：
-
-```json
-{
-  "typeshedPath": "vendor/typeshed"
-}
-```
-
-`pyproject.toml` 中的 `typeshed-path` 与项目根目录 `basilisk.json` 中的
-`typeshedPath` 是同一个项目设置的两种拼写。编辑器不会保存第二份副本；
-活动项目配置文件始终是唯一来源。
+`typeshed-path` 与所有其他设置一样位于 `[tool.basilisk]` 中——不存在第二种
+拼写，也不存在第二个文件。请在管辖被检查文件的 `pyproject.toml`（带有
+`[tool.basilisk]` 表的最近祖先）中设置它。编辑器不会保存第二份副本；
+该项目配置文件始终是唯一来源。若你正在迁移旧版 `basilisk.json`，其驼峰式
+键 `typeshedPath` 在这里写作 `typeshed-path`。
 
 ### 4. 确认已生效——悬停溯源
 
@@ -289,12 +292,17 @@ info 或 disabled。格式错误的指令可以被审计，但绝不会真正抑
 
 ## 配置发现
 
-Basilisk 从所选工作区或检查根目录读取配置。根目录的 `basilisk.json` 优先；
-否则使用该根目录 `pyproject.toml` 中的 `[tool.basilisk]`。两个来源不会合并。
-若两者同时存在，`pyproject.toml` 会作为被遮蔽来源显示，但修改它不会改变
-当前策略。
+Basilisk 按被检查的文件逐一发现配置：从该文件所在目录**向上**遍历，每一个
+带有 `[tool.basilisk]` 表的祖先 `pyproject.toml` 都会参与，且这些表会累积
+合并——同一个键在多个文件中都有设置时，**最近**的文件生效。子表未设置的键
+继续沿用祖先的值，因此嵌套的 `pyproject.toml` 只是细化根配置，绝不会将
+根配置整体清除。
 
-如果未找到配置文件，Basilisk 使用默认值：启用**核心 PEP 符合性规则集**（额外的 Basilisk 规则保持可选），`python-version = "3.12"`，检查当前目录。
+旧版根目录 `basilisk.json` **绝不**会被读取。若该文件仍然存在，配置编辑器
+会将其报告为被忽略的遮蔽来源；请将其键翻译为 `[tool.basilisk]` 后删除该
+文件。
+
+如果没有任何祖先 `pyproject.toml` 带有 `[tool.basilisk]` 表，Basilisk 使用默认值：启用**核心 PEP 符合性规则集**（额外的 Basilisk 规则保持可选），`python-version = "3.12"`，检查当前目录。
 
 ---
 
@@ -311,6 +319,6 @@ PEP 分类与策略标签浏览规则，支持逐规则及批量严重性、路�
 
 采用债务也保存在同一个配置文件的精确文件 `per-path-overrides` 中，并带
 `adoption = true` 来源标记；不会创建 `.basilisk/adoptions.toml` 或任何隐藏
-状态。VSIX 本身不解析或写入 TOML/JSON，所有操作均由可复用的 LSP API 完成。
+状态。VSIX 本身不解析或写入配置，所有操作均由可复用的 LSP API 完成。
 
 ![Basilisk 的标签优先 VS Code 配置编辑器，展示实时规则分类和逐规则严重性控制](/assets/images/vscode-configuration-editor.png)

@@ -25,15 +25,13 @@ describe("basilisk LSP integration", function()
     tmpdir = helpers.create_tmpdir()
 
     -- Write a pyproject.toml so basilisk finds a project root.
+    -- [tool.basilisk.rules] opts into the annotation house rules (off by
+    -- default) so untyped-parameter diagnostics fire — mirrors the Rust LSP
+    -- harness fixture (ws_test_common.rs).
     local fh = io.open(tmpdir .. "/pyproject.toml", "w")
     fh:write('[project]\nname = "test"\nversion = "0.1.0"\n')
+    fh:write('\n[tool.basilisk.rules]\n"BSK-E0001" = "error"\n"BSK-E0002" = "error"\n')
     fh:close()
-
-    -- Opt into the annotation house rules (off by default) so untyped-parameter
-    -- diagnostics fire — mirrors the Rust LSP harness fixture (ws_test_common.rs).
-    local cfg = io.open(tmpdir .. "/basilisk.json", "w")
-    cfg:write('{"rules":{"BSK-E0001":"error","BSK-E0002":"error"}}\n')
-    cfg:close()
 
     -- Configure and start the LSP client directly (not via setup()).
     vim.lsp.config("basilisk", {

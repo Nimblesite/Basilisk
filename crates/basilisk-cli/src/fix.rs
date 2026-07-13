@@ -196,20 +196,20 @@ mod tests {
     use tower_lsp::lsp_types::{Position, Range};
 
     /// Write `source` to a uniquely-named temp `.py` file inside an isolated
-    /// project dir that ships a `basilisk.json` opting into the annotation house
-    /// rules. `fix` targets those rules (`BSK-E0001`/`BSK-E0002`/`BSK-E0005`/
-    /// `BSK-W0050`), which are OFF by default — a real user enables them in
-    /// configuration, so the test project does too. The command loads that
-    /// config from disk exactly as it would in production. No modes; this is
-    /// configuration. See [CHKARCH-CONFIGURATION-ONLY].
+    /// project dir that ships a `pyproject.toml` opting into the annotation
+    /// house rules. `fix` targets those rules (`BSK-E0001`/`BSK-E0002`/
+    /// `BSK-E0005`/`BSK-W0050`), which are OFF by default — a real user enables
+    /// them in configuration, so the test project does too. The command loads
+    /// that config from disk exactly as it would in production. No modes; this
+    /// is configuration. See [CHKARCH-CONFIGURATION-ONLY].
     fn write_temp(name: &str, source: &str) -> (std::path::PathBuf, String) {
         let dir = std::env::temp_dir().join(format!("{name}.proj"));
         std::fs::create_dir_all(&dir).expect("create temp project dir");
         std::fs::write(
-            dir.join("basilisk.json"),
-            "{\"rules\":{\"BSK-E0001\":\"error\",\"BSK-E0002\":\"error\",\"BSK-E0005\":\"error\",\"BSK-W0050\":\"warning\"}}\n",
+            dir.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n\"BSK-E0005\" = \"error\"\n\"BSK-W0050\" = \"warning\"\n",
         )
-        .expect("write basilisk.json");
+        .expect("write pyproject.toml");
         let py = dir.join(name);
         std::fs::write(&py, source).expect("write temp file");
         let path = py.to_string_lossy().into_owned();
@@ -442,10 +442,10 @@ mod tests {
         let dir = std::env::temp_dir().join("basilisk_test_fix_dir_traversal");
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(
-            dir.join("basilisk.json"),
-            "{\"rules\":{\"BSK-W0050\":\"warning\"}}\n",
+            dir.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-W0050\" = \"warning\"\n",
         )
-        .expect("write basilisk.json");
+        .expect("write pyproject.toml");
         let file_a = dir.join("a_fix.py");
         let file_b = dir.join("b_fix.py");
         std::fs::write(&file_a, "x: int = 42\n").expect("write a");

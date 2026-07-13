@@ -103,8 +103,10 @@ local function handle_log_message(_err, result)
 end
 
 --- Root-level configuration documents the server may edit on the user's behalf.
---- Matches the discovery targets in [CONFIGEDITOR-SOURCES].
-local CONFIG_BASENAMES = { ["pyproject.toml"] = true, ["basilisk.json"] = true }
+--- Matches the single discovery target in [CONFIGEDITOR-SOURCES]: the server
+--- only ever edits `pyproject.toml` (`[tool.basilisk]`); a stray `basilisk.json`
+--- is reported as shadowed, never read or edited.
+local CONFIG_BASENAMES = { ["pyproject.toml"] = true }
 
 --- Collect the file paths a WorkspaceEdit touches, across both encodings.
 --- Handles `changes` (uri → edits) and `documentChanges` operations

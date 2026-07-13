@@ -289,7 +289,6 @@ name = "basilisk-config"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "serde",
- "serde_json",
  "toml",
  "toml_edit",
  "tracing",

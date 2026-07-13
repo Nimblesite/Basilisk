@@ -78,8 +78,8 @@ to perform one `WorkspaceEdit`, then reloads, rechecks, republishes, and sends
 `basilisk/configurationChanged`. External config-file changes and adoption edits
 use the same refresh tail.
 
-Rule/path/adoption state is stored in the active `pyproject.toml` or
-`basilisk.json`. Snapshot path inventory and checker matching share the same
+Rule/path/adoption state is stored in the active `pyproject.toml`
+(`[tool.basilisk]`). Snapshot path inventory and checker matching share the same
 deterministic path-precedence implementation.
 
 ### Errors {#LSPARCH-CONFIG-EDITOR-ERRORS}

@@ -152,5 +152,5 @@ server path. Wiring these settings is tracked by the conformance-audit plan.
 
 ## Watchers {#LSPUV-WATCHERS}
 
-The server refresh path watches changes to `uv.lock`, `pyproject.toml`, `basilisk.json`, and
+The server refresh path watches changes to `uv.lock`, `pyproject.toml`, and
 `.python-version`. `.venv/pyvenv.cfg` participates in startup detection but is not watched.

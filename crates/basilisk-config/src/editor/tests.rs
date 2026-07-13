@@ -9,22 +9,39 @@ use super::{
 };
 use crate::RuleSeverity;
 
-fn document(format: ConfigFormat, content: &str) -> ConfigDocument {
-    let path = match format {
-        ConfigFormat::PyprojectToml => PathBuf::from("/workspace/pyproject.toml"),
-        ConfigFormat::BasiliskJson => PathBuf::from("/workspace/basilisk.json"),
-    };
+// ---------------------------------------------------------------------------
+// Fixtures.
+// ---------------------------------------------------------------------------
+
+fn document_with_config(content: &str, config: crate::BasiliskConfig) -> ConfigDocument {
     ConfigDocument {
         root: PathBuf::from("/workspace"),
-        path: path.clone(),
-        format,
+        path: PathBuf::from("/workspace/pyproject.toml"),
+        format: ConfigFormat::PyprojectToml,
         exists: true,
         read_only: false,
         shadowed_sources: Vec::new(),
         content: content.to_owned(),
         revision: content_revision(content),
-        config: validate_content(&path, format, content).unwrap(),
+        config,
     }
+}
+
+/// A validated in-memory `pyproject.toml` document.
+fn document(content: &str) -> ConfigDocument {
+    let config = validate_content(
+        &PathBuf::from("/workspace/pyproject.toml"),
+        ConfigFormat::PyprojectToml,
+        content,
+    )
+    .unwrap();
+    document_with_config(content, config)
+}
+
+/// An unvalidated document for exercising patch-time shape errors on content
+/// that document validation would reject up front.
+fn raw_document(content: &str) -> ConfigDocument {
+    document_with_config(content, crate::BasiliskConfig::default())
 }
 
 fn update(scope: RuleConfigScope, code: &str, severity: Option<RuleSeverity>) -> RuleConfigUpdate {
@@ -33,6 +50,47 @@ fn update(scope: RuleConfigScope, code: &str, severity: Option<RuleSeverity>) ->
         rules: BTreeMap::from([(code.to_owned(), severity)]),
     }
 }
+
+fn temp_root(tag: &str) -> PathBuf {
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let seq = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "basilisk-config-{tag}-{}-{seq}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    root
+}
+
+/// A stray legacy `basilisk.json` must never influence discovery, whatever
+/// its contents: the `pyproject.toml` config wins verbatim and the JSON file
+/// is only reported as shadowed — never read, never an error.
+fn assert_stray_json_is_ignored(tag: &str, json_content: &str) {
+    let root = temp_root(tag);
+    std::fs::write(
+        root.join("pyproject.toml"),
+        "[tool.basilisk.rules]\nBSK-E0001 = \"warning\"\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("basilisk.json"), json_content).unwrap();
+    let document = discover_config_document(&root).unwrap();
+    assert_eq!(document.format, ConfigFormat::PyprojectToml);
+    assert_eq!(document.path, root.join("pyproject.toml"));
+    assert_eq!(document.shadowed_sources, vec![root.join("basilisk.json")]);
+    assert_eq!(
+        document.config.rules.get("BSK-E0001"),
+        Some(&RuleSeverity::Warning)
+    );
+    assert_eq!(document.config.rules.len(), 1);
+    assert!(document.config.per_path_overrides.is_empty());
+    assert!(document.config.stub_paths.is_empty());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+// ---------------------------------------------------------------------------
+// Discovery with editor-held content.
+// ---------------------------------------------------------------------------
 
 #[test]
 fn editor_content_can_repair_a_malformed_active_disk_source() {
@@ -58,9 +116,17 @@ fn editor_content_can_repair_a_malformed_active_disk_source() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+// ---------------------------------------------------------------------------
+// Stray legacy basilisk.json — never read, never an error, always shadowed.
+// Each fixture is content the removed JSON parser used to accept or reject;
+// today none of it may have any effect on the loaded config.
+// ---------------------------------------------------------------------------
+
 #[test]
-fn json_mutates_existing_kebab_alias_without_shadowing_it() {
-    let source = r#"{
+fn stray_json_kebab_per_path_overrides_have_no_effect() {
+    assert_stray_json_is_ignored(
+        "stray-kebab",
+        r#"{
   "per-path-overrides": {
     "src/app.py": {
       "adoption": true,
@@ -69,55 +135,97 @@ fn json_mutates_existing_kebab_alias_without_shadowing_it() {
   },
   "custom": { "keep": true }
 }
-"#;
-    let patch = build_rule_patch(
-        &document(ConfigFormat::BasiliskJson, source),
-        &[update(
-            RuleConfigScope::Path {
-                pattern: "src/app.py".to_owned(),
-                adoption: true,
-            },
-            "BSK-E0001",
-            Some(RuleSeverity::Info),
-        )],
-    )
-    .unwrap();
-
-    let value: serde_json::Value = serde_json::from_str(&patch.content).unwrap();
-    assert!(value.get("per-path-overrides").is_some());
-    assert!(value.get("perPathOverrides").is_none());
-    assert_eq!(
-        value["per-path-overrides"]["src/app.py"]["rules"]["BSK-E0001"],
-        "info"
+"#,
     );
-    assert_eq!(value["custom"]["keep"], true);
 }
 
 #[test]
-fn json_rejects_both_per_path_spellings() {
-    let source = r#"{"perPathOverrides": {}, "per-path-overrides": {}}"#;
-    let error = validate_content(
-        &PathBuf::from("basilisk.json"),
-        ConfigFormat::BasiliskJson,
-        source,
-    )
-    .unwrap_err();
-    assert!(error.to_string().contains("cannot define both"));
+fn stray_json_with_both_per_path_spellings_has_no_effect() {
+    assert_stray_json_is_ignored(
+        "stray-both-spellings",
+        r#"{"perPathOverrides": {}, "per-path-overrides": {}}"#,
+    );
 }
 
 #[test]
-fn json_reset_removes_empty_adoption_path_and_rules() {
-    let source = r#"{
-  "perPathOverrides": {
-    "src/app.py": {
-      "adoption": true,
-      "rules": { "BSK-E0001": "warning" }
-    }
-  }
+fn stray_json_with_invalid_syntax_has_no_effect() {
+    assert_stray_json_is_ignored("stray-invalid-syntax", "{not json");
 }
+
+#[test]
+fn stray_json_with_non_object_root_has_no_effect() {
+    assert_stray_json_is_ignored("stray-non-object-root", "[1, 2, 3]");
+}
+
+#[test]
+fn stray_json_with_non_object_rules_has_no_effect() {
+    assert_stray_json_is_ignored("stray-rules-shape", r#"{"rules": "nope"}"#);
+}
+
+#[test]
+fn stray_json_with_invalid_severity_has_no_effect() {
+    assert_stray_json_is_ignored("stray-severity", r#"{"rules": {"BSK-E0001": "louder"}}"#);
+}
+
+#[test]
+fn stray_json_with_non_object_per_path_overrides_has_no_effect() {
+    assert_stray_json_is_ignored("stray-ppo-shape", r#"{"perPathOverrides": 5}"#);
+}
+
+#[test]
+fn stray_json_with_non_object_path_entry_has_no_effect() {
+    assert_stray_json_is_ignored(
+        "stray-path-entry",
+        r#"{"perPathOverrides": {"src/app.py": 5}}"#,
+    );
+}
+
+#[test]
+fn stray_json_with_non_array_disabled_has_no_effect() {
+    assert_stray_json_is_ignored(
+        "stray-disabled-shape",
+        r#"{"perPathOverrides": {"src/app.py": {"disabled": "x"}}}"#,
+    );
+}
+
+#[test]
+fn stray_json_with_non_string_disabled_entries_has_no_effect() {
+    assert_stray_json_is_ignored(
+        "stray-disabled-entries",
+        r#"{"perPathOverrides": {"src/app.py": {"disabled": [1]}}}"#,
+    );
+}
+
+#[test]
+fn stray_json_with_non_boolean_adoption_has_no_effect() {
+    assert_stray_json_is_ignored(
+        "stray-adoption-shape",
+        r#"{"perPathOverrides": {"src/app.py": {"adoption": 1}}}"#,
+    );
+}
+
+#[test]
+fn stray_json_with_camel_case_per_path_overrides_has_no_effect() {
+    assert_stray_json_is_ignored(
+        "stray-camel",
+        r#"{"perPathOverrides": {"src/app.py": {"adoption": true, "rules": {"BSK-E0001": "info"}}}}"#,
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Rule patching — structure preservation and adoption projection.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn toml_reset_removes_empty_adoption_path_and_rules() {
+    let source = r#"[tool.basilisk.per-path-overrides."src/app.py"]
+adoption = true
+
+[tool.basilisk.per-path-overrides."src/app.py".rules]
+BSK-E0001 = "warning"
 "#;
     let patch = build_rule_patch(
-        &document(ConfigFormat::BasiliskJson, source),
+        &document(source),
         &[update(
             RuleConfigScope::Path {
                 pattern: "src/app.py".to_owned(),
@@ -128,10 +236,8 @@ fn json_reset_removes_empty_adoption_path_and_rules() {
         )],
     )
     .unwrap();
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&patch.content).unwrap(),
-        serde_json::json!({})
-    );
+    assert!(patch.content.trim().is_empty());
+    assert!(patch.config.per_path_overrides.is_empty());
 }
 
 #[test]
@@ -158,7 +264,7 @@ fn malformed_existing_pyproject_tables_are_not_defaults() {
 fn toml_patch_preserves_comments_and_projects_replacement_config() {
     let source = "# project comment\n[project]\nname = \"demo\"\n\n[tool.basilisk.rules]\n# rule comment\nBSK-E0001 = \"warning\"\n";
     let patch = build_rule_patch(
-        &document(ConfigFormat::PyprojectToml, source),
+        &document(source),
         &[update(
             RuleConfigScope::Project,
             "BSK-E0001",
@@ -176,73 +282,51 @@ fn toml_patch_preserves_comments_and_projects_replacement_config() {
 }
 
 #[test]
-fn adoption_projection_has_json_toml_parity() {
-    let json = document(
-        ConfigFormat::BasiliskJson,
-        r#"{
-  "perPathOverrides": {
-    "src/app.py": {
-      "adoption": true,
-      "rules": { "BSK-E0001": "warning", "BSK-W0050": "info" }
-    }
-  }
-}
-"#,
-    );
+fn adoption_projection_reads_only_marked_toml_entries() {
     let toml = document(
-        ConfigFormat::PyprojectToml,
         r#"[tool.basilisk.per-path-overrides."src/app.py"]
 adoption = true
 
 [tool.basilisk.per-path-overrides."src/app.py".rules]
 BSK-E0001 = "warning"
 BSK-W0050 = "info"
+
+[tool.basilisk.per-path-overrides."vendor/**".rules]
+BSK-E0001 = "disabled"
 "#,
     );
-    assert_eq!(
-        adoption_rule_overrides(&json),
-        adoption_rule_overrides(&toml)
-    );
+    let expected = BTreeMap::from([(
+        "src/app.py".to_owned(),
+        BTreeMap::from([
+            ("BSK-E0001".to_owned(), RuleSeverity::Warning),
+            ("BSK-W0050".to_owned(), RuleSeverity::Info),
+        ]),
+    )]);
+    assert_eq!(adoption_rule_overrides(&toml), expected);
 }
 
 #[test]
 fn path_severity_canonicalizes_legacy_disabled_entries() {
-    let cases = [
-        (
-            ConfigFormat::BasiliskJson,
-            r#"{
-  "perPathOverrides": {
-    "src/app.py": { "disabled": ["BSK-E0001", "BSK-E0002"] }
-  }
-}
-"#,
-        ),
-        (
-            ConfigFormat::PyprojectToml,
-            r#"[tool.basilisk.per-path-overrides."src/app.py"]
+    let source = r#"[tool.basilisk.per-path-overrides."src/app.py"]
 disabled = ["BSK-E0001", "BSK-E0002"]
-"#,
-        ),
-    ];
-    for (format, source) in cases {
-        for severity in [RuleSeverity::Warning, RuleSeverity::Disabled] {
-            let patch = build_rule_patch(
-                &document(format, source),
-                &[update(
-                    RuleConfigScope::Path {
-                        pattern: "src/app.py".to_owned(),
-                        adoption: false,
-                    },
-                    "BSK-E0001",
-                    Some(severity),
-                )],
-            )
-            .unwrap();
-            let entry = patch.config.per_path_overrides.get("src/app.py").unwrap();
-            assert!(!entry.disabled_rules.contains(&"BSK-E0001".to_owned()));
-            assert!(entry.disabled_rules.contains(&"BSK-E0002".to_owned()));
-            assert_eq!(entry.rule_overrides.get("BSK-E0001"), Some(&severity));
-        }
+"#;
+    for severity in [RuleSeverity::Warning, RuleSeverity::Disabled] {
+        let patch = build_rule_patch(
+            &document(source),
+            &[update(
+                RuleConfigScope::Path {
+                    pattern: "src/app.py".to_owned(),
+                    adoption: false,
+                },
+                "BSK-E0001",
+                Some(severity),
+            )],
+        )
+        .unwrap();
+        let entry = patch.config.per_path_overrides.get("src/app.py").unwrap();
+        assert!(!entry.disabled_rules.contains(&"BSK-E0001".to_owned()));
+        assert!(entry.disabled_rules.contains(&"BSK-E0002".to_owned()));
+        assert_eq!(entry.rule_overrides.get("BSK-E0001"), Some(&severity));
     }
 }
 
@@ -276,34 +360,18 @@ fn atomic_apply_rejects_a_stale_revision_without_overwriting_external_edits() {
 }
 
 // ---------------------------------------------------------------------------
-// Test helpers for filesystem-backed cases.
-// ---------------------------------------------------------------------------
-
-fn temp_root(tag: &str) -> PathBuf {
-    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let seq = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let root = std::env::temp_dir().join(format!(
-        "basilisk-config-{tag}-{}-{seq}",
-        std::process::id()
-    ));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
-    root
-}
-
-// ---------------------------------------------------------------------------
 // ConfigDocumentError Display — all four variants.
 // ---------------------------------------------------------------------------
 
 #[test]
 fn display_read_error_names_path_and_message() {
     let error = ConfigDocumentError::Read {
-        path: PathBuf::from("/workspace/basilisk.json"),
+        path: PathBuf::from("/workspace/pyproject.toml"),
         message: "permission denied".to_owned(),
     };
     assert_eq!(
         error.to_string(),
-        "failed to read /workspace/basilisk.json: permission denied"
+        "failed to read /workspace/pyproject.toml: permission denied"
     );
 }
 
@@ -334,26 +402,17 @@ fn display_revision_conflict_shows_both_revisions() {
 #[test]
 fn display_read_only_error_names_path() {
     let error = ConfigDocumentError::ReadOnly {
-        path: PathBuf::from("/workspace/basilisk.json"),
+        path: PathBuf::from("/workspace/pyproject.toml"),
     };
     assert_eq!(
         error.to_string(),
-        "configuration is read-only: /workspace/basilisk.json"
+        "configuration is read-only: /workspace/pyproject.toml"
     );
 }
 
 // ---------------------------------------------------------------------------
-// validate_content — JSON structure errors.
+// validate_content — TOML structure errors.
 // ---------------------------------------------------------------------------
-
-fn validate_json(source: &str) -> Result<(), ConfigDocumentError> {
-    validate_content(
-        &PathBuf::from("basilisk.json"),
-        ConfigFormat::BasiliskJson,
-        source,
-    )
-    .map(|_| ())
-}
 
 fn validate_toml(source: &str) -> Result<(), ConfigDocumentError> {
     validate_content(
@@ -366,105 +425,14 @@ fn validate_toml(source: &str) -> Result<(), ConfigDocumentError> {
 
 #[test]
 fn empty_content_is_a_default_config() {
-    let json = validate_content(
-        &PathBuf::from("basilisk.json"),
-        ConfigFormat::BasiliskJson,
-        "",
-    )
-    .unwrap();
-    assert!(json.rules.is_empty());
-    let toml = validate_content(
+    let config = validate_content(
         &PathBuf::from("pyproject.toml"),
         ConfigFormat::PyprojectToml,
         "",
     )
     .unwrap();
-    assert!(toml.rules.is_empty());
+    assert!(config.rules.is_empty());
 }
-
-#[test]
-fn json_invalid_syntax_is_rejected() {
-    let error = validate_json("{not json").unwrap_err();
-    assert!(matches!(error, ConfigDocumentError::Invalid { .. }));
-}
-
-#[test]
-fn json_non_object_root_has_wrong_shape() {
-    let error = validate_json("[1, 2, 3]").unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "invalid configuration basilisk.json: configuration root must be an object"
-    );
-}
-
-#[test]
-fn json_rules_must_be_an_object() {
-    let error = validate_json(r#"{"rules": "nope"}"#).unwrap_err();
-    assert!(error.to_string().contains("rules must be an object"));
-}
-
-#[test]
-fn json_invalid_severity_names_the_rule() {
-    let error = validate_json(r#"{"rules": {"BSK-E0001": "louder"}}"#).unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("rule `BSK-E0001` has an invalid severity"));
-}
-
-#[test]
-fn json_per_path_overrides_must_be_an_object() {
-    let error = validate_json(r#"{"perPathOverrides": 5}"#).unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("per-path overrides must be an object"));
-}
-
-#[test]
-fn json_path_override_entry_must_be_an_object() {
-    let error = validate_json(r#"{"perPathOverrides": {"src/app.py": 5}}"#).unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("path override `src/app.py` must be an object"));
-}
-
-#[test]
-fn json_disabled_must_be_an_array() {
-    let error =
-        validate_json(r#"{"perPathOverrides": {"src/app.py": {"disabled": "x"}}}"#).unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("path override `src/app.py` disabled must be an array"));
-}
-
-#[test]
-fn json_disabled_entries_must_be_strings() {
-    let error =
-        validate_json(r#"{"perPathOverrides": {"src/app.py": {"disabled": [1]}}}"#).unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("path override `src/app.py` disabled entries must be strings"));
-}
-
-#[test]
-fn json_adoption_must_be_a_boolean() {
-    let error =
-        validate_json(r#"{"perPathOverrides": {"src/app.py": {"adoption": 1}}}"#).unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("path override `src/app.py` adoption must be a boolean"));
-}
-
-#[test]
-fn json_both_per_path_spellings_via_validate_content() {
-    let error = validate_json(r#"{"perPathOverrides": {}, "per-path-overrides": {}}"#).unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("cannot define both `perPathOverrides` and `per-path-overrides`"));
-}
-
-// ---------------------------------------------------------------------------
-// validate_content — TOML structure errors.
-// ---------------------------------------------------------------------------
 
 #[test]
 fn toml_invalid_syntax_is_rejected() {
@@ -581,18 +549,16 @@ fn content_revision_is_deterministic_and_distinct() {
 }
 
 // ---------------------------------------------------------------------------
-// discover_config_document — read/dir/precedence/read-only.
+// discover_config_document — selection, shadowing, and read-only.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn discover_reads_directory_as_read_error() {
+fn discover_treats_directory_named_pyproject_as_missing() {
     let root = temp_root("discover-dir");
-    // Make basilisk.json a directory so is_file() is false but the caller
-    // still selects it as the JSON source only when it is a file. To force a
-    // read error we make pyproject.toml a directory and select TOML.
+    // A directory named pyproject.toml is not a file: discovery treats the
+    // active source as absent and returns a default config rather than a
+    // read error.
     std::fs::create_dir_all(root.join("pyproject.toml")).unwrap();
-    // is_file() is false for a directory, so discovery treats it as empty and
-    // returns a default config rather than a read error.
     let document = discover_config_document(&root).unwrap();
     assert!(!document.exists);
     assert!(document.config.rules.is_empty());
@@ -612,30 +578,26 @@ fn discover_defaults_when_no_source_exists() {
 }
 
 #[test]
-fn active_config_path_prefers_json_over_toml() {
+fn active_config_path_is_pyproject_even_when_json_present() {
     let root = temp_root("active-precedence");
     std::fs::write(root.join("pyproject.toml"), "[project]\nname = \"x\"\n").unwrap();
     std::fs::write(root.join("basilisk.json"), "{}\n").unwrap();
-    assert_eq!(active_config_path(&root), root.join("basilisk.json"));
+    assert_eq!(active_config_path(&root), root.join("pyproject.toml"));
     let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
-fn discover_shadows_toml_when_json_present() {
-    let root = temp_root("discover-shadow");
-    std::fs::write(root.join("pyproject.toml"), "[project]\nname = \"x\"\n").unwrap();
-    std::fs::write(root.join("basilisk.json"), "{}\n").unwrap();
-    let document = discover_config_document(&root).unwrap();
-    assert_eq!(document.format, ConfigFormat::BasiliskJson);
-    assert_eq!(document.shadowed_sources, vec![root.join("pyproject.toml")]);
-    let _ = std::fs::remove_dir_all(root);
+fn discover_selects_toml_and_shadows_stray_json() {
+    // The two sources conflict on BSK-E0001; the TOML severity must win and
+    // the stray JSON must only be reported as shadowed.
+    assert_stray_json_is_ignored("discover-shadow", r#"{"rules": {"BSK-E0001": "disabled"}}"#);
 }
 
 #[test]
 fn discover_detects_read_only_source() {
     let root = temp_root("discover-readonly");
-    let path = root.join("basilisk.json");
-    std::fs::write(&path, "{}\n").unwrap();
+    let path = root.join("pyproject.toml");
+    std::fs::write(&path, "[tool.basilisk.rules]\nBSK-E0001 = \"warning\"\n").unwrap();
     let mut perms = std::fs::metadata(&path).unwrap().permissions();
     perms.set_readonly(true);
     std::fs::set_permissions(&path, perms).unwrap();
@@ -647,11 +609,15 @@ fn discover_detects_read_only_source() {
 }
 
 #[test]
-fn discover_propagates_invalid_json_error() {
-    let root = temp_root("discover-invalid");
+fn discover_ignores_malformed_stray_json_without_pyproject() {
+    let root = temp_root("discover-stray-invalid");
     std::fs::write(root.join("basilisk.json"), "{not json").unwrap();
-    let error = discover_config_document(&root).unwrap_err();
-    assert!(matches!(error, ConfigDocumentError::Invalid { .. }));
+    let document = discover_config_document(&root).unwrap();
+    assert_eq!(document.format, ConfigFormat::PyprojectToml);
+    assert_eq!(document.path, root.join("pyproject.toml"));
+    assert!(!document.exists);
+    assert!(document.config.rules.is_empty());
+    assert_eq!(document.shadowed_sources, vec![root.join("basilisk.json")]);
     let _ = std::fs::remove_dir_all(root);
 }
 
@@ -661,7 +627,7 @@ fn discover_propagates_invalid_json_error() {
 
 #[test]
 fn build_rule_patch_rejects_read_only_document() {
-    let mut document = document(ConfigFormat::BasiliskJson, "{}\n");
+    let mut document = document("");
     document.read_only = true;
     let error = build_rule_patch(
         &document,
@@ -678,21 +644,10 @@ fn build_rule_patch_rejects_read_only_document() {
 #[test]
 fn build_rule_patch_toml_rejects_non_table_rules_target() {
     // rules-as-string TOML fails document validation, so build the document
-    // manually with content that parses but whose mutation target is
-    // wrong-shaped; patch_toml must reject the target before re-validating.
-    let raw = ConfigDocument {
-        root: PathBuf::from("/workspace"),
-        path: PathBuf::from("/workspace/pyproject.toml"),
-        format: ConfigFormat::PyprojectToml,
-        exists: true,
-        read_only: false,
-        shadowed_sources: Vec::new(),
-        content: "[tool.basilisk]\nrules = \"x\"\n".to_owned(),
-        revision: content_revision("[tool.basilisk]\nrules = \"x\"\n"),
-        config: crate::BasiliskConfig::default(),
-    };
+    // without validation; patch_toml must reject the target before
+    // re-validating.
     let error = build_rule_patch(
-        &raw,
+        &raw_document("[tool.basilisk]\nrules = \"x\"\n"),
         &[update(
             RuleConfigScope::Project,
             "BSK-E0001",
@@ -704,20 +659,9 @@ fn build_rule_patch_toml_rejects_non_table_rules_target() {
 }
 
 #[test]
-fn build_rule_patch_json_rejects_non_object_root() {
-    let raw = ConfigDocument {
-        root: PathBuf::from("/workspace"),
-        path: PathBuf::from("/workspace/basilisk.json"),
-        format: ConfigFormat::BasiliskJson,
-        exists: true,
-        read_only: false,
-        shadowed_sources: Vec::new(),
-        content: "[1, 2, 3]".to_owned(),
-        revision: content_revision("[1, 2, 3]"),
-        config: crate::BasiliskConfig::default(),
-    };
+fn build_rule_patch_toml_rejects_non_table_tool() {
     let error = build_rule_patch(
-        &raw,
+        &raw_document("tool = 1\n"),
         &[update(
             RuleConfigScope::Project,
             "BSK-E0001",
@@ -725,27 +669,13 @@ fn build_rule_patch_json_rejects_non_object_root() {
         )],
     )
     .unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("JSON configuration must be an object"));
+    assert!(error.to_string().contains("`tool` must be a table"));
 }
 
 #[test]
-fn build_rule_patch_json_rejects_both_per_path_spellings() {
-    let source = r#"{"perPathOverrides": {}, "per-path-overrides": {}}"#;
-    let raw = ConfigDocument {
-        root: PathBuf::from("/workspace"),
-        path: PathBuf::from("/workspace/basilisk.json"),
-        format: ConfigFormat::BasiliskJson,
-        exists: true,
-        read_only: false,
-        shadowed_sources: Vec::new(),
-        content: source.to_owned(),
-        revision: content_revision(source),
-        config: crate::BasiliskConfig::default(),
-    };
+fn build_rule_patch_toml_rejects_non_table_path_entry() {
     let error = build_rule_patch(
-        &raw,
+        &raw_document("[tool.basilisk.per-path-overrides]\n\"src/app.py\" = 1\n"),
         &[update(
             RuleConfigScope::Path {
                 pattern: "src/app.py".to_owned(),
@@ -756,37 +686,17 @@ fn build_rule_patch_json_rejects_both_per_path_spellings() {
         )],
     )
     .unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("cannot define both `perPathOverrides` and `per-path-overrides`"));
+    assert!(error.to_string().contains("`src/app.py` must be a table"));
 }
 
 // ---------------------------------------------------------------------------
 // patch rendering — parse and shape errors on manually-built documents.
 // ---------------------------------------------------------------------------
 
-fn raw_document(format: ConfigFormat, content: &str) -> ConfigDocument {
-    let path = match format {
-        ConfigFormat::PyprojectToml => PathBuf::from("/workspace/pyproject.toml"),
-        ConfigFormat::BasiliskJson => PathBuf::from("/workspace/basilisk.json"),
-    };
-    ConfigDocument {
-        root: PathBuf::from("/workspace"),
-        path,
-        format,
-        exists: true,
-        read_only: false,
-        shadowed_sources: Vec::new(),
-        content: content.to_owned(),
-        revision: content_revision(content),
-        config: crate::BasiliskConfig::default(),
-    }
-}
-
 #[test]
 fn patch_toml_reports_unparseable_source() {
     let error = build_rule_patch(
-        &raw_document(ConfigFormat::PyprojectToml, "[tool.basilisk.rules\n"),
+        &raw_document("[tool.basilisk.rules\n"),
         &[update(
             RuleConfigScope::Project,
             "BSK-E0001",
@@ -798,9 +708,9 @@ fn patch_toml_reports_unparseable_source() {
 }
 
 #[test]
-fn patch_json_reports_unparseable_source() {
+fn patch_toml_rejects_non_table_basilisk() {
     let error = build_rule_patch(
-        &raw_document(ConfigFormat::BasiliskJson, "{not json"),
+        &raw_document("[tool]\nbasilisk = 1\n"),
         &[update(
             RuleConfigScope::Project,
             "BSK-E0001",
@@ -808,16 +718,13 @@ fn patch_json_reports_unparseable_source() {
         )],
     )
     .unwrap_err();
-    assert!(matches!(error, ConfigDocumentError::Invalid { .. }));
+    assert!(error.to_string().contains("`basilisk` must be a table"));
 }
 
 #[test]
 fn patch_toml_rejects_non_table_per_path_intermediate() {
     let error = build_rule_patch(
-        &raw_document(
-            ConfigFormat::PyprojectToml,
-            "[tool.basilisk]\nper-path-overrides = \"x\"\n",
-        ),
+        &raw_document("[tool.basilisk]\nper-path-overrides = \"x\"\n"),
         &[update(
             RuleConfigScope::Path {
                 pattern: "src/app.py".to_owned(),
@@ -834,28 +741,31 @@ fn patch_toml_rejects_non_table_per_path_intermediate() {
 }
 
 #[test]
-fn patch_json_rejects_non_object_existing_rules_target() {
+fn patch_toml_rejects_non_table_path_rules_target() {
     let error = build_rule_patch(
-        &raw_document(ConfigFormat::BasiliskJson, r#"{"rules": "nope"}"#),
+        &raw_document("[tool.basilisk.per-path-overrides.\"src/app.py\"]\nrules = \"x\"\n"),
         &[update(
-            RuleConfigScope::Project,
+            RuleConfigScope::Path {
+                pattern: "src/app.py".to_owned(),
+                adoption: false,
+            },
             "BSK-E0001",
             Some(RuleSeverity::Warning),
         )],
     )
     .unwrap_err();
-    assert!(error.to_string().contains("`rules` must be an object"));
+    assert!(error.to_string().contains("`rules` must be a table"));
 }
 
 // ---------------------------------------------------------------------------
-// patch_toml / patch_json — mutation edge cases.
+// patch_toml — mutation edge cases.
 // ---------------------------------------------------------------------------
 
 #[test]
 fn toml_removing_last_project_rule_drops_the_rules_table() {
     let source = "[tool.basilisk.rules]\nBSK-E0001 = \"warning\"\n";
     let patch = build_rule_patch(
-        &document(ConfigFormat::PyprojectToml, source),
+        &document(source),
         &[update(RuleConfigScope::Project, "BSK-E0001", None)],
     )
     .unwrap();
@@ -864,22 +774,24 @@ fn toml_removing_last_project_rule_drops_the_rules_table() {
 }
 
 #[test]
-fn json_removing_last_project_rule_drops_the_rules_object() {
-    let source = "{\n  \"rules\": {\n    \"BSK-E0001\": \"warning\"\n  }\n}\n";
+fn toml_removing_last_rule_gc_keeps_unrelated_content() {
+    let source = "[project]\nname = \"demo\"\n\n[tool.basilisk.rules]\nBSK-E0001 = \"warning\"\n";
     let patch = build_rule_patch(
-        &document(ConfigFormat::BasiliskJson, source),
+        &document(source),
         &[update(RuleConfigScope::Project, "BSK-E0001", None)],
     )
     .unwrap();
-    let value: serde_json::Value = serde_json::from_str(&patch.content).unwrap();
-    assert!(value.get("rules").is_none());
+    let table: toml::Table = patch.content.parse().unwrap();
+    assert!(table.get("tool").is_none());
+    assert_eq!(table["project"]["name"].as_str(), Some("demo"));
+    assert!(patch.config.rules.is_empty());
 }
 
 #[test]
 fn toml_patch_preserves_crlf_newlines() {
     let source = "[tool.basilisk.rules]\r\nBSK-E0001 = \"warning\"\r\n";
     let patch = build_rule_patch(
-        &document(ConfigFormat::PyprojectToml, source),
+        &document(source),
         &[update(
             RuleConfigScope::Project,
             "BSK-E0002",
@@ -897,7 +809,7 @@ fn toml_patch_preserves_crlf_newlines() {
 fn toml_adoption_true_writes_the_adoption_key() {
     let source = "";
     let patch = build_rule_patch(
-        &document(ConfigFormat::PyprojectToml, source),
+        &document(source),
         &[update(
             RuleConfigScope::Path {
                 pattern: "src/app.py".to_owned(),
@@ -913,9 +825,9 @@ fn toml_adoption_true_writes_the_adoption_key() {
 }
 
 #[test]
-fn json_adoption_true_writes_the_adoption_key() {
+fn toml_adoption_patch_round_trips_through_projection() {
     let patch = build_rule_patch(
-        &document(ConfigFormat::BasiliskJson, ""),
+        &document(""),
         &[update(
             RuleConfigScope::Path {
                 pattern: "src/app.py".to_owned(),
@@ -926,15 +838,18 @@ fn json_adoption_true_writes_the_adoption_key() {
         )],
     )
     .unwrap();
-    let value: serde_json::Value = serde_json::from_str(&patch.content).unwrap();
-    assert_eq!(value["perPathOverrides"]["src/app.py"]["adoption"], true);
+    let expected = BTreeMap::from([(
+        "src/app.py".to_owned(),
+        BTreeMap::from([("BSK-E0001".to_owned(), RuleSeverity::Disabled)]),
+    )]);
+    assert_eq!(adoption_rule_overrides(&document(&patch.content)), expected);
 }
 
 #[test]
 fn toml_canonicalize_drops_empty_disabled_array() {
     let source = "[tool.basilisk.per-path-overrides.\"src/app.py\"]\ndisabled = [\"BSK-E0001\"]\n";
     let patch = build_rule_patch(
-        &document(ConfigFormat::PyprojectToml, source),
+        &document(source),
         &[update(
             RuleConfigScope::Path {
                 pattern: "src/app.py".to_owned(),
@@ -954,7 +869,7 @@ fn toml_canonicalize_drops_empty_disabled_array() {
 fn toml_path_entry_becomes_empty_is_removed() {
     let source = "[tool.basilisk.per-path-overrides.\"src/app.py\"]\ndisabled = [\"BSK-E0001\"]\n";
     let patch = build_rule_patch(
-        &document(ConfigFormat::PyprojectToml, source),
+        &document(source),
         &[update(
             RuleConfigScope::Path {
                 pattern: "src/app.py".to_owned(),
@@ -970,15 +885,15 @@ fn toml_path_entry_becomes_empty_is_removed() {
 }
 
 #[test]
-fn json_path_entry_becomes_empty_is_removed() {
-    let source = r#"{
-  "perPathOverrides": {
-    "src/app.py": { "disabled": ["BSK-E0001"] }
-  }
-}
+fn toml_reset_keeps_sibling_path_entries() {
+    let source = r#"[tool.basilisk.per-path-overrides."src/app.py"]
+disabled = ["BSK-E0001"]
+
+[tool.basilisk.per-path-overrides."src/lib.py".rules]
+BSK-E0002 = "info"
 "#;
     let patch = build_rule_patch(
-        &document(ConfigFormat::BasiliskJson, source),
+        &document(source),
         &[update(
             RuleConfigScope::Path {
                 pattern: "src/app.py".to_owned(),
@@ -989,8 +904,13 @@ fn json_path_entry_becomes_empty_is_removed() {
         )],
     )
     .unwrap();
-    let value: serde_json::Value = serde_json::from_str(&patch.content).unwrap();
-    assert_eq!(value, serde_json::json!({}));
+    assert!(!patch.content.contains("src/app.py"));
+    assert_eq!(patch.config.per_path_overrides.len(), 1);
+    let sibling = patch.config.per_path_overrides.get("src/lib.py").unwrap();
+    assert_eq!(
+        sibling.rule_overrides.get("BSK-E0002"),
+        Some(&RuleSeverity::Info)
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1040,14 +960,12 @@ fn apply_config_patch_creates_missing_nested_directory() {
 }
 
 #[test]
-fn apply_config_patch_creates_a_brand_new_json_file() {
-    let root = temp_root("apply-newjson");
-    // No source yet: default target is pyproject.toml, so write a json target
-    // via a document whose content is empty and format forced by an existing
-    // json marker. Simpler: create basilisk.json empty then patch it.
-    std::fs::write(root.join("basilisk.json"), String::new()).unwrap();
+fn apply_config_patch_creates_a_brand_new_pyproject_file() {
+    let root = temp_root("apply-new-toml");
+    // No source exists yet: discovery targets the (absent) pyproject.toml and
+    // applying a patch must create it from empty.
     let document = discover_config_document(&root).unwrap();
-    assert_eq!(document.format, ConfigFormat::BasiliskJson);
+    assert!(!document.exists);
     let patch = build_rule_patch(
         &document,
         &[update(
@@ -1058,10 +976,12 @@ fn apply_config_patch_creates_a_brand_new_json_file() {
     )
     .unwrap();
     apply_config_patch(&patch).unwrap();
-    let value: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(root.join("basilisk.json")).unwrap())
-            .unwrap();
-    assert_eq!(value["rules"]["BSK-E0001"], "warning");
+    let written = std::fs::read_to_string(root.join("pyproject.toml")).unwrap();
+    let table: toml::Table = written.parse().unwrap();
+    assert_eq!(
+        table["tool"]["basilisk"]["rules"]["BSK-E0001"].as_str(),
+        Some("warning")
+    );
     let _ = std::fs::remove_dir_all(root);
 }
 
@@ -1077,8 +997,8 @@ fn apply_config_patch_reports_rename_failure_and_cleans_up_temp() {
     let patch = super::ConfigPatch {
         path: target.clone(),
         base_revision: content_revision(""),
-        content: "{}\n".to_owned(),
-        revision: content_revision("{}\n"),
+        content: "x = 1\n".to_owned(),
+        revision: content_revision("x = 1\n"),
         config: crate::BasiliskConfig::default(),
     };
     let error = apply_config_patch(&patch).unwrap_err();
@@ -1103,16 +1023,16 @@ fn apply_config_patch_reports_rename_failure_and_cleans_up_temp() {
 fn apply_config_patch_reports_unreadable_existing_source() {
     use std::os::unix::fs::PermissionsExt as _;
     let root = temp_root("apply-unreadable");
-    let source_path = root.join("basilisk.json");
-    std::fs::write(&source_path, "{}\n").unwrap();
+    let source_path = root.join("pyproject.toml");
+    std::fs::write(&source_path, "x = 1\n").unwrap();
     // Strip all permissions: the file still reports as a file but cannot be
     // read, exercising the read-error branch of the revision check.
     std::fs::set_permissions(&source_path, std::fs::Permissions::from_mode(0o000)).unwrap();
     let patch = super::ConfigPatch {
         path: source_path.clone(),
-        base_revision: content_revision("{}\n"),
-        content: "{}\n".to_owned(),
-        revision: content_revision("{}\n"),
+        base_revision: content_revision("x = 1\n"),
+        content: "x = 1\n".to_owned(),
+        revision: content_revision("x = 1\n"),
         config: crate::BasiliskConfig::default(),
     };
     let outcome = apply_config_patch(&patch);
@@ -1129,12 +1049,12 @@ fn apply_config_patch_reports_create_dir_all_failure() {
     // directory the temp write needs.
     let blocking_file = root.join("not-a-dir");
     std::fs::write(&blocking_file, "i am a file").unwrap();
-    let target = blocking_file.join("basilisk.json");
+    let target = blocking_file.join("pyproject.toml");
     let patch = super::ConfigPatch {
         path: target,
         base_revision: content_revision(""),
-        content: "{}\n".to_owned(),
-        revision: content_revision("{}\n"),
+        content: "x = 1\n".to_owned(),
+        revision: content_revision("x = 1\n"),
         config: crate::BasiliskConfig::default(),
     };
     let error = apply_config_patch(&patch).unwrap_err();
@@ -1145,15 +1065,15 @@ fn apply_config_patch_reports_create_dir_all_failure() {
 #[test]
 fn apply_config_patch_conflict_when_file_appears_under_empty_base() {
     let root = temp_root("apply-conflict-new");
-    let source_path = root.join("basilisk.json");
+    let source_path = root.join("pyproject.toml");
     // Patch was built against a non-existent source (empty base revision), but
     // a file now exists on disk with different content.
-    std::fs::write(&source_path, "{\"rules\": {}}\n").unwrap();
+    std::fs::write(&source_path, "[tool.basilisk]\n").unwrap();
     let patch = super::ConfigPatch {
         path: source_path.clone(),
         base_revision: content_revision(""),
-        content: "{}\n".to_owned(),
-        revision: content_revision("{}\n"),
+        content: "x = 1\n".to_owned(),
+        revision: content_revision("x = 1\n"),
         config: crate::BasiliskConfig::default(),
     };
     let error = apply_config_patch(&patch).unwrap_err();

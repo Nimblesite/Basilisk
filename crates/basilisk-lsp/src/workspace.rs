@@ -91,7 +91,7 @@ pub struct WorkspaceIndex {
     pub registry: Option<Arc<PackageRegistry>>,
     /// Per-root project-level checker configuration.
     ///
-    /// Each workspace root can have its own `pyproject.toml` or `basilisk.json`
+    /// Each workspace root can have its own `pyproject.toml` `[tool.basilisk]`
     /// with different rule severity overrides, per-module, and per-path settings.
     /// Files are matched to their owning root to apply the correct config.
     pub root_configs: std::collections::HashMap<PathBuf, BasiliskConfig>,
@@ -169,7 +169,7 @@ impl std::fmt::Debug for WorkspaceIndex {
 impl WorkspaceIndex {
     /// Create an empty index for the given roots, mode, and project config.
     ///
-    /// Each root is checked for its own `pyproject.toml` / `basilisk.json`.
+    /// Each root is checked for its own `pyproject.toml` `[tool.basilisk]`.
     /// If a root has no config file, the provided `checker_config` is used as
     /// the fallback for that root.
     #[must_use]
@@ -212,7 +212,7 @@ impl WorkspaceIndex {
     }
 
     /// Load each root's `BasiliskConfig` from its `pyproject.toml` /
-    /// `basilisk.json`, falling back to `fallback` for roots without a config
+    /// falling back to `fallback` for roots without a config
     /// file.
     ///
     /// [CHKARCH-VERSION-TARGET] An explicit `python-version` in the config wins;
@@ -246,7 +246,7 @@ impl WorkspaceIndex {
     }
 
     /// Re-read every root's `BasiliskConfig` from disk so a change to a watched
-    /// config file (`pyproject.toml` / `basilisk.json` / `.python-version`)
+    /// config file (`pyproject.toml` / `.python-version`)
     /// takes effect — version-aware rules and severity overrides — without an
     /// LSP restart. The caller re-checks open files afterwards (e.g. via
     /// [`Self::recheck_all_files`]). Implements [CHKARCH-VERSION-TARGET].
@@ -1520,8 +1520,8 @@ mod tests {
         std::fs::write(dir.join("schema.pb.py"), "z: int = 3\n").unwrap();
         // The user-facing exclude knob, read by the scan via load_config.
         std::fs::write(
-            dir.join("basilisk.json"),
-            r#"{"exclude": ["**/generated/**", "*.pb.py"]}"#,
+            dir.join("pyproject.toml"),
+            "[tool.basilisk]\nexclude = [\"**/generated/**\", \"*.pb.py\"]\n",
         )
         .unwrap();
 

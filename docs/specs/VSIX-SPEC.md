@@ -57,7 +57,6 @@ const clientOptions: LanguageClientOptions = {
   documentSelector: [
     { scheme: "file", language: "python" },
     { scheme: "file", pattern: "**/pyproject.toml" },
-    { scheme: "file", pattern: "**/basilisk.json" },
   ],
   synchronize: { configurationSection: "basilisk" },
   initializationOptions: readBasiliskSettings(),

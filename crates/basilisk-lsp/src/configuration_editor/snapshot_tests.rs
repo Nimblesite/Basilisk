@@ -81,12 +81,12 @@ fn path_document() -> ConfigDocument {
     );
     ConfigDocument {
         root: PathBuf::from("/workspace"),
-        path: PathBuf::from("/workspace/basilisk.json"),
-        format: ConfigFormat::BasiliskJson,
+        path: PathBuf::from("/workspace/pyproject.toml"),
+        format: ConfigFormat::PyprojectToml,
         exists: true,
         read_only: false,
         shadowed_sources: Vec::new(),
-        content: "{}".to_owned(),
+        content: "[tool.basilisk]\n".to_owned(),
         revision: "revision".to_owned(),
         config,
     }
@@ -131,8 +131,8 @@ fn hypothetical_inventory_keeps_excluded_open_files_out_of_preview_counts() {
     let excluded = root.join("generated.py");
     assert!(std::fs::create_dir_all(&root).is_ok());
     assert!(std::fs::write(
-        root.join("basilisk.json"),
-        r#"{"exclude":["generated.py"]}"#,
+        root.join("pyproject.toml"),
+        "[tool.basilisk]\nexclude = [\"generated.py\"]\n",
     )
     .is_ok());
     let index = WorkspaceIndex::new(
@@ -177,8 +177,8 @@ fn indexed_root(name: &str) -> Option<(PathBuf, WorkspaceIndex)> {
     ));
     std::fs::create_dir_all(&root).ok()?;
     std::fs::write(
-        root.join("basilisk.json"),
-        r#"{"rules":{"BSK-E0001":"error"}}"#,
+        root.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n",
     )
     .ok()?;
     let index = WorkspaceIndex::new(
@@ -222,14 +222,14 @@ fn snapshot_reports_rule_states_debt_and_source_metadata() {
     };
     let document = basilisk_config::discover_config_document(&root);
     let Ok(document) = document else {
-        unreachable!("fixture basilisk.json must parse");
+        unreachable!("fixture pyproject.toml must parse");
     };
     let snapshot = build_snapshot(&index, &root, &document);
     assert_eq!(snapshot.revision, document.revision);
-    assert_eq!(snapshot.source.format, ConfigurationFormat::BasiliskJson);
+    assert_eq!(snapshot.source.format, ConfigurationFormat::PyprojectToml);
     assert!(snapshot.source.exists);
     assert!(!snapshot.source.read_only);
-    assert!(snapshot.source.uri.ends_with("basilisk.json"));
+    assert!(snapshot.source.uri.ends_with("pyproject.toml"));
     assert_eq!(snapshot.rules.len(), descriptors().len());
     let annotation = snapshot
         .rules
@@ -262,7 +262,7 @@ fn occurrences_page_stably_with_fix_safety_badges() {
         unreachable!("indexed fixture must produce diagnostics");
     };
     let selected: HashSet<String> = std::iter::once("BSK-E0001".to_owned()).collect();
-    let source_uri = "file:///workspace/basilisk.json";
+    let source_uri = "file:///workspace/pyproject.toml";
     let first = occurrences(&index, &root, source_uri, &selected, None, 1);
     assert_eq!(first.items.len(), 1);
     assert_eq!(first.next_cursor.as_deref(), Some("1"));

@@ -251,7 +251,7 @@ mod tests {
     const CLEAN_PYTHON: &str = "def greet(name: str) -> str:\n    return name\n";
 
     /// Create a fresh temporary project directory (removing any leftover from a
-    /// prior run) that ships a `basilisk.json` opting into the annotation house
+    /// prior run) that ships a `pyproject.toml` opting into the annotation house
     /// rules. `adopt` records the diagnostics a project has enabled, and those
     /// rules (`BSK-E0001`/`BSK-E0002`/…) are off by default — so the test project
     /// turns them on exactly as a real adopter would. No modes; this is
@@ -261,15 +261,15 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         fs::write(
-            dir.join("basilisk.json"),
-            "{\"rules\":{\"BSK-E0001\":\"error\",\"BSK-E0002\":\"error\"}}\n",
+            dir.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
         )
         .unwrap();
         dir
     }
 
     /// Config that opts into the annotation house rules — the in-memory mirror of
-    /// the `basilisk.json` [`temp_dir`] writes, for tests that call
+    /// the `pyproject.toml` [`temp_dir`] writes, for tests that call
     /// `check_file_errors` directly. See [CHKARCH-CONFIGURATION-ONLY].
     fn annotations_on() -> basilisk_config::BasiliskConfig {
         basilisk_config::BasiliskConfig {

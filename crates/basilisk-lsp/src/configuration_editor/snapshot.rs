@@ -181,7 +181,6 @@ pub(super) fn build_snapshot(
             uri: source_uri,
             format: match document.format {
                 ConfigFormat::PyprojectToml => ConfigurationFormat::PyprojectToml,
-                ConfigFormat::BasiliskJson => ConfigurationFormat::BasiliskJson,
             },
             exists: document.exists,
             read_only: document.read_only,

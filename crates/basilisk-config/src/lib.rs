@@ -1,7 +1,7 @@
 //! Implements [STUBRES-CONFIG]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CONFIG
 //! Configuration parsing for Basilisk.
 //!
-//! Parses `pyproject.toml` `[tool.basilisk]` and `basilisk.json` with support for:
+//! Parses `pyproject.toml` `[tool.basilisk]` with support for:
 //! - Global rule severity overrides (`rules."imports_unresolved" = "warning"`)
 //! - Per-module overrides (`per-module-overrides."fastmcp".ignore-missing-stubs = true`)
 //! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled = [...]`)
@@ -23,7 +23,7 @@ use std::path::Path;
 
 /// Directories excluded from analysis by default.
 ///
-/// Users can override this via the `exclude` key in `basilisk.json` or
+/// Users can override this via the `exclude` key in
 /// `pyproject.toml [tool.basilisk]`. Setting `exclude` in config replaces
 /// these defaults entirely — add them back explicitly if still needed.
 pub const DEFAULT_EXCLUDES: &[&str] = &[
@@ -219,8 +219,10 @@ disabled = ["imports_unresolved", "BSK-E0001"]
         );
     }
 
+    /// The legacy `basilisk.json` format is never read: a directory holding
+    /// only a (formerly valid) `basilisk.json` yields the default config.
     #[test]
-    fn load_from_basilisk_json() {
+    fn basilisk_json_is_ignored() {
         with_temp_cfg_dir(
             "bsk_cfg_json_xm",
             &[(
@@ -237,19 +239,25 @@ disabled = ["imports_unresolved", "BSK-E0001"]
             }"#,
             )],
             |cfg| {
-                assert_eq!(cfg.stub_paths.len(), 1);
-                assert_eq!(cfg.typeshed_path, Some(std::path::PathBuf::from("ts-json")));
-                assert_eq!(
-                    cfg.rules.get("imports_unresolved").copied(),
-                    Some(RuleSeverity::Info)
+                assert!(
+                    cfg.stub_paths.is_empty(),
+                    "basilisk.json stubPaths must be ignored"
                 );
-                assert!(cfg.per_module_overrides.contains_key("requests"));
+                assert!(
+                    cfg.typeshed_path.is_none(),
+                    "basilisk.json typeshedPath must be ignored"
+                );
+                assert!(cfg.rules.is_empty(), "basilisk.json rules must be ignored");
+                assert!(
+                    cfg.per_module_overrides.is_empty(),
+                    "basilisk.json perModuleOverrides must be ignored"
+                );
             },
         );
     }
 
     #[test]
-    fn basilisk_json_takes_priority() {
+    fn pyproject_wins_over_stray_basilisk_json() {
         with_temp_cfg_dir(
             "bsk_cfg_priority_xm",
             &[
@@ -261,7 +269,7 @@ disabled = ["imports_unresolved", "BSK-E0001"]
             ],
             |cfg| {
                 assert_eq!(cfg.stub_paths.len(), 1);
-                assert_eq!(cfg.stub_paths.first().unwrap().to_str(), Some("from_json/"));
+                assert_eq!(cfg.stub_paths.first().unwrap().to_str(), Some("from_toml/"));
             },
         );
     }
@@ -299,16 +307,20 @@ disabled = ["imports_unresolved", "BSK-E0001"]
     }
 
     #[test]
-    fn json_exclude_overrides_defaults() {
+    fn json_exclude_does_not_override_defaults() {
         with_temp_cfg_dir(
             "bsk_cfg_json_exclude_xm",
             &[("basilisk.json", r#"{ "exclude": ["vendor", "generated"] }"#)],
             |cfg| {
-                assert_eq!(cfg.exclude, vec!["vendor", "generated"]);
-                // Defaults are replaced, not merged.
+                // The stray basilisk.json is never read: the defaults survive
+                // and none of its entries load.
                 assert!(
-                    !cfg.exclude.iter().any(|e| e == "__pycache__"),
-                    "custom exclude must replace defaults entirely"
+                    cfg.exclude.iter().any(|e| e == "__pycache__"),
+                    "default excludes must survive a stray basilisk.json"
+                );
+                assert!(
+                    !cfg.exclude.iter().any(|e| e == "vendor"),
+                    "stray basilisk.json exclude entries must not load"
                 );
             },
         );
@@ -438,7 +450,7 @@ disabled = ["BSK-E0001"]
     }
 
     #[test]
-    fn json_kebab_case_stub_paths() {
+    fn json_kebab_case_stub_paths_are_ignored() {
         with_temp_cfg_dir(
             "bsk_cfg_json_kebab_stubs_xm",
             &[(
@@ -448,25 +460,16 @@ disabled = ["BSK-E0001"]
             }"#,
             )],
             |cfg| {
-                assert_eq!(
-                    cfg.stub_paths.len(),
-                    2,
-                    "stub-paths kebab key should be accepted"
-                );
-                assert_eq!(
-                    cfg.stub_paths.first().and_then(|p| p.to_str()),
-                    Some("typings/")
-                );
-                assert_eq!(
-                    cfg.stub_paths.get(1).and_then(|p| p.to_str()),
-                    Some("custom-stubs/")
+                assert!(
+                    cfg.stub_paths.is_empty(),
+                    "stray basilisk.json stub-paths must be ignored"
                 );
             },
         );
     }
 
     #[test]
-    fn json_kebab_case_per_module_overrides() {
+    fn json_kebab_case_per_module_overrides_are_ignored() {
         with_temp_cfg_dir(
             "bsk_cfg_json_kebab_pmo_xm",
             &[(
@@ -479,22 +482,15 @@ disabled = ["BSK-E0001"]
             )],
             |cfg| {
                 assert!(
-                    cfg.per_module_overrides.contains_key("numpy"),
-                    "per-module-overrides kebab key should be accepted"
-                );
-                assert!(
-                    cfg.per_module_overrides
-                        .get("numpy")
-                        .unwrap()
-                        .ignore_missing_stubs,
-                    "ignore-missing-stubs kebab key should be accepted"
+                    cfg.per_module_overrides.is_empty(),
+                    "stray basilisk.json per-module-overrides must be ignored"
                 );
             },
         );
     }
 
     #[test]
-    fn malformed_active_json_never_falls_through_to_shadowed_pyproject() {
+    fn malformed_stray_json_never_blocks_the_pyproject_config() {
         with_temp_cfg_dir(
             "bsk_cfg_invalid_json_xm",
             &[
@@ -508,10 +504,14 @@ stub-paths = ["fallback-stubs/"]
                 ),
             ],
             |cfg| {
-                assert!(
-                    cfg.stub_paths.is_empty(),
-                    "a malformed active basilisk.json must not activate shadowed TOML"
+                // basilisk.json is never read — malformed or not — so the
+                // pyproject.toml config always loads.
+                assert_eq!(
+                    cfg.stub_paths.first().and_then(|p| p.to_str()),
+                    Some("fallback-stubs/"),
+                    "a stray basilisk.json must never block pyproject.toml"
                 );
+                assert_eq!(cfg.stub_paths.len(), 1);
             },
         );
     }
@@ -558,8 +558,8 @@ stub-paths = ["fallback-stubs/"]
         )
         .unwrap();
         fs::write(
-            child.join("basilisk.json"),
-            r#"{ "rules": { "BSK-E0001": "disabled" } }"#,
+            child.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
         )
         .unwrap();
 

@@ -60,7 +60,7 @@ fn stdout(output: &Output) -> String {
 }
 
 /// Stage `rels` (fixture-relative paths) into a fresh isolated project dir that
-/// ships a `basilisk.json` opting into the annotation house rules. Those rules
+/// ships a `pyproject.toml` opting into the annotation house rules. Those rules
 /// (`BSK-E0001`/`BSK-E0002`/…) are OFF by default — the binary's default config
 /// is pure PEP conformance — so a project that wants them enables them in config
 /// and these tests do too. Returns the project dir (caller removes it) and the
@@ -75,8 +75,8 @@ fn stage_project(
     let dir = std::env::temp_dir().join(format!("bsk_cli_bin_{}_{n}", std::process::id()));
     std::fs::create_dir_all(&dir)?;
     std::fs::write(
-        dir.join("basilisk.json"),
-        "{\"rules\":{\"BSK-E0001\":\"error\",\"BSK-E0002\":\"error\"}}\n",
+        dir.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
     )?;
     let mut staged = Vec::with_capacity(rels.len());
     for rel in rels {
