@@ -988,6 +988,50 @@ disabled = ["returns_compatibility"]
 rules."imports_unresolved" = "warning"
 ```
 
+### Configuration Discovery {#CHKARCH-CONFIG-DISCOVERY}
+
+Rule configuration is resolved **per checked file** through one shared routine
+(`basilisk_config::load_basilisk_config`), used identically by `basilisk check`,
+`basilisk fix`, `basilisk adopt`, and the LSP (GitHub #311). The result is
+independent of argument order, path spelling, and cwd — for the same file in
+the same project, every surface resolves the identical config.
+
+**Walk.** Starting from the file's own directory, every ancestor directory up
+to the filesystem root is visited. Each directory contributes at most one
+config file — `basilisk.json` first, else `pyproject.toml` with a
+`[tool.basilisk]` table. A `pyproject.toml` **without** `[tool.basilisk]`
+contributes nothing and does not stop the walk (Ruff's `[tool.ruff]`
+semantics).
+
+**Cumulative merge.** Configs found on the chain merge additively, nearest
+directory winning per key (`BasiliskConfig::merged_with`): a child directory's
+config *appends to* an ancestor's, never replaces it wholesale.
+
+- Map fields (`rules`, `per-module-overrides`, `per-path-overrides`) union per
+  key; the child wins on overlap.
+- `stub-paths` appends (deduplicated).
+- Remaining scalar/list fields keep the ancestor's value unless the child
+  explicitly sets one.
+- The nearest config's directory becomes the merged config's `project_root`,
+  anchoring root-relative interpretation (per-path overrides, adoption store).
+
+**Surfaces.**
+
+- **CLI `check`/`fix`**: each collected file is checked with the config
+  discovered from its own directory (memoized per directory —
+  `resolve_dir_configs`). The first path argument only anchors project-level
+  concerns (include expansion, version detection, cache location); the check
+  cache fingerprints every directory's config so a child config edit
+  invalidates cached results.
+- **CLI `adopt`/`unadopt`**: the config root (and adoption store) anchors at
+  the nearest ancestor directory holding a config file
+  (`basilisk_config::discover_config_dir`), so `adopt` writes exactly where
+  `check` discovers.
+- **LSP**: per-file config is the owning workspace root's config merged with
+  the file's discovered ancestor chain (`WorkspaceIndex::config_for_file`,
+  memoized per directory, invalidated on config reload). A workspace folder
+  opened *inside* a project discovers the project's config the same way.
+
 ### Include Semantics {#CHKARCH-CONFIG-INCLUDE}
 
 `include` lists the roots scanned when no CLI paths are given. Explicit CLI paths

@@ -82,6 +82,12 @@ Resolution order (highest wins):
 
 Tier 1 and the fallback are resolved by `resolve_analysis_mode` (`crates/basilisk-lsp/src/workspace_analysis.rs`); the file tier is `load_config` (`crates/basilisk-lsp/src/config.rs`), which the CLI shares.
 
+This tiering governs the **analysis-level** workspace config (mode, formatter,
+etc.) only. **Rule** config (severities, per-module/per-path overrides) is
+resolved per file by walking ancestor directories and merging cumulatively —
+see [CHKARCH-CONFIG-DISCOVERY](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY)
+(GitHub #311) — identically in the CLI and the LSP.
+
 ---
 
 ## Workspace Index {#ANALYSIS-INDEX}

@@ -146,7 +146,7 @@ fn hypothetical_inventory_keeps_excluded_open_files_out_of_preview_counts() {
         let diagnostics = index.set_open(&uri, "value: int = 'wrong'\n", 1);
         assert!(diagnostics.is_empty());
     }
-    let mut strict = index.config_for_file(&excluded).clone();
+    let mut strict = index.config_for_file(&excluded).as_ref().clone();
     let _ = strict
         .rules
         .insert("assignment_compatibility".to_owned(), ConfigSeverity::Error);

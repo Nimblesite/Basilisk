@@ -94,7 +94,9 @@ pub(super) async fn initialize(
 
     // Load project-level checker config (pyproject.toml / basilisk.json) so
     // that rule severity overrides, per-module, and per-path settings match
-    // the CLI.
+    // the CLI. The loader walks ancestor directories and merges cumulatively
+    // ([CHKARCH-CONFIG-DISCOVERY], GitHub #311), so a workspace folder opened
+    // inside a project still discovers the project's config.
     let checker_config = roots
         .first()
         .map(|r| basilisk_config::load_basilisk_config(r))

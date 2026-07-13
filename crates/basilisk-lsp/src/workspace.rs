@@ -98,6 +98,11 @@ pub struct WorkspaceIndex {
     /// Fallback checker configuration used when a file doesn't belong to any
     /// known root, or for single-root backwards compatibility.
     pub checker_config: BasiliskConfig,
+    /// Per-directory merged rule config cache ([CHKARCH-CONFIG-DISCOVERY]):
+    /// the owning root's config merged with configs discovered on the file's
+    /// own ancestor chain, so a child directory's config applies exactly as
+    /// in `basilisk check` (GitHub #311). Cleared by `reload_root_configs`.
+    dir_configs: std::sync::RwLock<std::collections::HashMap<PathBuf, Arc<BasiliskConfig>>>,
     /// Import search paths (venv site-packages, workspace members, stub paths,
     /// uv registry) cached from the last full workspace scan.
     ///
@@ -178,6 +183,7 @@ impl WorkspaceIndex {
             registry: None,
             root_configs,
             checker_config,
+            dir_configs: std::sync::RwLock::new(std::collections::HashMap::new()),
             search_paths: std::sync::RwLock::new(None),
             salsa_engine: crate::salsa_engine::SalsaAnalysisEngine::default(),
         }
@@ -220,8 +226,10 @@ impl WorkspaceIndex {
         roots
             .iter()
             .map(|root| {
-                let has_config =
-                    root.join("pyproject.toml").is_file() || root.join("basilisk.json").is_file();
+                // [CHKARCH-CONFIG-DISCOVERY] A root without its own config
+                // file still discovers ancestor configs (e.g. a workspace
+                // folder opened inside a project) — GitHub #311.
+                let has_config = basilisk_config::discover_config_dir(root).is_some();
                 let mut cfg = if has_config {
                     basilisk_config::load_basilisk_config(root)
                 } else {
@@ -244,6 +252,11 @@ impl WorkspaceIndex {
     /// [`Self::recheck_all_files`]). Implements [CHKARCH-VERSION-TARGET].
     pub fn reload_root_configs(&mut self) {
         self.root_configs = Self::load_root_configs(&self.roots, &self.checker_config);
+        // Discovered per-directory configs derive from disk state — drop them
+        // so the next lookup re-walks ([CHKARCH-CONFIG-DISCOVERY]).
+        if let Ok(mut dir_configs) = self.dir_configs.write() {
+            dir_configs.clear();
+        }
     }
 
     /// Cache the import search paths built during the workspace scan.
@@ -287,7 +300,7 @@ impl WorkspaceIndex {
         // path (no salsa engine): it matches the pre-scan behaviour exactly and
         // avoids marking every third-party import unresolved.
         let Some(search_paths) = self.search_paths_snapshot() else {
-            let (mut entry, lsp_diags) = analyse_with_config(text, path, config);
+            let (mut entry, lsp_diags) = analyse_with_config(text, path, &config);
             if self.is_path_excluded(path) || self.is_outside_include_roots(path) {
                 entry.diagnostics.clear();
                 return (entry, Vec::new());
@@ -301,11 +314,11 @@ impl WorkspaceIndex {
         // populate `imported_symbols` from the other tracked files' current
         // content, so cross-file diagnostics and navigation stay live.
         // Implements [ANALYSIS-INCR-IMPORTS] via [CHKARCH-INCREMENTAL-SALSA].
-        let root_key = self.config_root_key(path);
+        let root_key = Self::config_root_key(path);
         let cross_module = matches!(self.mode(), AnalysisMode::CrossModule);
         let analysis =
             self.salsa_engine
-                .analyse(path, text, config, &root_key, &search_paths, cross_module);
+                .analyse(path, text, &config, &root_key, &search_paths, cross_module);
         let hash = fnv1a(text);
 
         // Parse failure: surface BSK-PARSE, no navigable module (matches the
@@ -338,32 +351,51 @@ impl WorkspaceIndex {
         (entry, lsp_diags)
     }
 
-    /// The config-input key for `file_path`: its owning workspace root, or an
-    /// empty path for the fallback `checker_config`. Files that share a config
-    /// (same owning root) share one salsa `ConfigInput`.
+    /// The config-input key for `file_path`: its own directory. Files in one
+    /// directory share a merged discovered config
+    /// ([CHKARCH-CONFIG-DISCOVERY]), hence one salsa `ConfigInput`; a shared
+    /// per-root key would let files with different child-dir configs thrash a
+    /// single input.
     #[must_use]
-    fn config_root_key(&self, file_path: &std::path::Path) -> PathBuf {
-        self.roots
-            .iter()
-            .filter(|root| file_path.starts_with(root))
-            .max_by_key(|root| root.components().count())
-            .cloned()
-            .unwrap_or_default()
+    fn config_root_key(file_path: &std::path::Path) -> PathBuf {
+        file_path.parent().unwrap_or(file_path).to_path_buf()
     }
 
-    /// Get the checker config for a file, looking up the owning root.
+    /// Get the checker config for a file.
     ///
-    /// Finds the root that is a prefix of the file path, and returns
-    /// that root's config. Falls back to the default `checker_config`.
+    /// Implements [CHKARCH-CONFIG-DISCOVERY] (GitHub #311): the owning root's
+    /// config (falling back to `checker_config`) merged with configs
+    /// discovered on the file's own ancestor chain, so a child directory's
+    /// config applies exactly as in `basilisk check`. Memoized per directory;
+    /// `reload_root_configs` clears the cache.
     #[must_use]
-    pub fn config_for_file(&self, file_path: &std::path::Path) -> &BasiliskConfig {
-        // Find the longest matching root (most specific).
-        self.roots
+    pub fn config_for_file(&self, file_path: &std::path::Path) -> Arc<BasiliskConfig> {
+        let dir = Self::config_root_key(file_path);
+        let cached = self
+            .dir_configs
+            .read()
+            .ok()
+            .and_then(|cache| cache.get(&dir).cloned());
+        if let Some(hit) = cached {
+            return hit;
+        }
+
+        // Find the longest matching root (most specific) for the base config,
+        // then merge the discovered ancestor chain over it. Merging is
+        // idempotent, so re-applying the root's own file config is harmless.
+        let base = self
+            .roots
             .iter()
             .filter(|root| file_path.starts_with(root))
             .max_by_key(|root| root.components().count())
             .and_then(|root| self.root_configs.get(root))
             .unwrap_or(&self.checker_config)
+            .clone();
+        let merged = Arc::new(base.merged_with(basilisk_config::load_basilisk_config(&dir)));
+        if let Ok(mut cache) = self.dir_configs.write() {
+            let _ = cache.insert(dir, Arc::clone(&merged));
+        }
+        merged
     }
 
     /// Whether `file_path` matches the owning root's `exclude` patterns.
@@ -664,7 +696,7 @@ impl WorkspaceIndex {
                 } else {
                     basilisk_checker::check_with_config(
                         &resolved,
-                        self.config_for_file(entry.key()),
+                        &self.config_for_file(entry.key()),
                     )
                 };
                 let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
@@ -3116,6 +3148,48 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// GitHub #311 (CLI⇄LSP parity): per-file rule config must merge a child
+    /// directory's config over the workspace-root config, exactly like the
+    /// CLI's per-file ancestor walk — not pin every file to the workspace
+    /// root's config.
+    #[test]
+    fn set_open_merges_child_dir_config_over_workspace_root_config() {
+        let root = unique_tmp("bsk_cfg_child_merge");
+        let child = root.join("child");
+        std::fs::create_dir_all(&child).unwrap();
+        std::fs::write(
+            root.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            child.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
+        )
+        .unwrap();
+        std::fs::write(child.join("open_me.py"), SRC_MISSING_ANNOTATION).unwrap();
+
+        // Load config the same way the LSP init does for the workspace root.
+        let config = basilisk_config::load_basilisk_config(&root);
+        let idx = WorkspaceIndex::new(vec![root.clone()], AnalysisMode::WholeModule, config);
+
+        let uri = Url::from_file_path(child.join("open_me.py")).unwrap();
+        let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
+        let _ = std::fs::remove_dir_all(&root);
+
+        let codes = lsp_codes(&lsp_diags);
+        assert!(
+            codes.contains(&"BSK-E0002".to_owned()),
+            "the root's rule opt-ins must still apply to files in \
+             the child dir (cumulative merge, GitHub #311); got: {codes:?}"
+        );
+        assert!(
+            !codes.contains(&"BSK-E0001".to_owned()),
+            "the child dir's `BSK-E0001 = disabled` must be honored for files \
+             under it (CLI⇄LSP parity, GitHub #311); got: {codes:?}"
+        );
     }
 
     #[test]

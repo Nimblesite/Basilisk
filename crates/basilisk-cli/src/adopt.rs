@@ -223,19 +223,14 @@ fn relative_pattern(root: &Path, path: &Path) -> Result<String, String> {
 }
 
 /// Resolve the config root directory from the provided paths.
+///
+/// [CHKARCH-CONFIG-DISCOVERY] Anchors at the nearest ancestor directory
+/// holding a config file, so the adoption store is written where `basilisk
+/// check` discovers it (GitHub #311). Falls back to the first path's own
+/// directory when no config exists yet.
 fn resolve_config_root(paths: &[String]) -> std::path::PathBuf {
-    let candidate = paths
-        .first()
-        .map(Path::new)
-        .and_then(|p| {
-            if p.is_dir() {
-                Some(p.to_path_buf())
-            } else {
-                p.parent().map(Path::to_path_buf)
-            }
-        })
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
-    crate::find_project_root(&candidate)
+    let start = crate::first_path_dir(paths);
+    basilisk_config::discover_config_dir(&start).unwrap_or(start)
 }
 
 #[cfg(test)]
@@ -475,14 +470,16 @@ mod tests {
         let path = write_py(&dir, "foo.py", CLEAN_PYTHON);
 
         let root = resolve_config_root(&[path]);
-        assert_eq!(root, dir.canonicalize().unwrap());
+        // [CHKARCH-CONFIG-DISCOVERY] discovery preserves the caller's path
+        // spelling (no canonicalization) — a symlinked temp dir stays as given.
+        assert_eq!(root, dir);
     }
 
     #[test]
     fn resolve_config_root_directory_returns_itself() {
         let dir = temp_dir("resolve_dir");
         let root = resolve_config_root(&[dir.to_string_lossy().into_owned()]);
-        assert_eq!(root, dir.canonicalize().unwrap());
+        assert_eq!(root, dir);
     }
 
     #[test]
@@ -491,7 +488,7 @@ mod tests {
         let src = dir.join("src");
         fs::create_dir_all(&src).unwrap();
         let path = write_py(&src, "nested.py", CLEAN_PYTHON);
-        assert_eq!(resolve_config_root(&[path]), dir.canonicalize().unwrap());
+        assert_eq!(resolve_config_root(&[path]), dir);
     }
 
     #[test]

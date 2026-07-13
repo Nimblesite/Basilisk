@@ -127,6 +127,49 @@ impl BasiliskConfig {
     pub fn is_rule_disabled_for_path(&self, rule_code: &str, file_path: &Path) -> bool {
         crate::overrides::is_rule_disabled_for_path(rule_code, file_path, &self.per_path_overrides)
     }
+
+    /// Merge `child` over `self` cumulatively — a child directory's config
+    /// appends to an ancestor's, never replaces it wholesale.
+    ///
+    /// Implements [CHKARCH-CONFIG-DISCOVERY] (GitHub #311). Semantics:
+    /// - Map fields (`rules`, `per_module_overrides`, `per_path_overrides`)
+    ///   union per key, child wins on overlap.
+    /// - `stub_paths` appends the child's entries (deduplicated).
+    /// - Remaining scalar/list fields keep the ancestor's value unless the
+    ///   child explicitly set one (detected as differing from the default).
+    ///
+    /// Merging a default (empty) config is the identity, in both directions.
+    #[must_use]
+    pub fn merged_with(mut self, child: Self) -> Self {
+        let defaults = Self::default();
+        if child.exclude != defaults.exclude {
+            self.exclude = child.exclude;
+        }
+        if !child.include.is_empty() {
+            self.include = child.include;
+        }
+        for stub_path in child.stub_paths {
+            if !self.stub_paths.contains(&stub_path) {
+                self.stub_paths.push(stub_path);
+            }
+        }
+        self.rules.extend(child.rules);
+        self.per_module_overrides.extend(child.per_module_overrides);
+        self.per_path_overrides.extend(child.per_path_overrides);
+        // The nearest config's directory anchors root-relative interpretation
+        // (per-path overrides, adoption store).
+        self.project_root = child.project_root.or(self.project_root);
+        if child.auto_stub_mode != defaults.auto_stub_mode {
+            self.auto_stub_mode = child.auto_stub_mode;
+        }
+        if child.auto_stub_path != defaults.auto_stub_path {
+            self.auto_stub_path = child.auto_stub_path;
+        }
+        self.typeshed_path = child.typeshed_path.or(self.typeshed_path);
+        self.python_version = child.python_version.or(self.python_version);
+        self.python_platform = child.python_platform.or(self.python_platform);
+        self
+    }
 }
 
 /// Look up a JSON object field by its `camelCase` key, falling back to the

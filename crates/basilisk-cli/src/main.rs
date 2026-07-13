@@ -385,18 +385,11 @@ fn collect_and_check(
     cache: &cache_check::CacheOptions,
     stats: &mut cache_check::CacheStats,
 ) -> Result<CheckOutcome, String> {
-    // Load config from the first path's directory (or cwd).
-    let config_root = paths
-        .first()
-        .map(std::path::Path::new)
-        .and_then(|p| {
-            if p.is_dir() {
-                Some(p.to_path_buf())
-            } else {
-                p.parent().map(std::path::Path::to_path_buf)
-            }
-        })
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    // [CHKARCH-CONFIG-DISCOVERY] The first path only anchors project-level
+    // concerns (include expansion, version detection, cache location); rule
+    // config is resolved per checked file below, so diagnostics never depend
+    // on argument order (GitHub #311).
+    let config_root = first_path_dir(paths);
     let mut config = basilisk_config::load_basilisk_config(&config_root);
     // [CHKARCH-VERSION-TARGET] Detect the target version from project files
     // when the config does not pin one, matching the LSP (issue #93).
@@ -423,15 +416,21 @@ fn collect_and_check(
         import_search::roots_only(roots)
     };
 
-    let cache_context = cache_check::build_context(cache, &config, &search_paths, &project_root);
+    // Per-file rule config, memoized per directory ([CHKARCH-CONFIG-DISCOVERY]).
+    // The cache fingerprint covers every directory's config so a child config
+    // edit invalidates cached results.
+    let dir_configs = resolve_dir_configs(&python_files, &config);
+    let cache_context =
+        cache_check::build_context(cache, &dir_configs, &search_paths, &project_root);
 
     let mut all_diagnostics = Vec::new();
     let mut sources = Vec::new();
     let mut failures = Vec::new();
 
     for path in python_files {
+        let file_config = config_for_path(&dir_configs, &path, &config);
         let outcome = cache_check::check_file(cache_context.as_ref(), stats, &path, || {
-            process_file(&path, &search_paths, &config)
+            process_file(&path, &search_paths, &file_config)
         });
         match outcome {
             Ok((diags, source)) => {
@@ -558,6 +557,76 @@ pub(crate) fn resolve_file_imports(
     // package-dependency metadata (BSK-W0011 transitive-import warnings, etc.).
     basilisk_lsp::import_resolver::resolve_module_imports(&mut resolved, search_paths);
     Ok((resolved, source))
+}
+
+/// The directory anchoring project-level concerns for a CLI invocation: the
+/// first path argument's own directory (or its parent for a file), else cwd.
+pub(crate) fn first_path_dir(paths: &[String]) -> std::path::PathBuf {
+    paths
+        .first()
+        .map(std::path::Path::new)
+        .and_then(|p| {
+            if p.is_dir() {
+                Some(p.to_path_buf())
+            } else {
+                p.parent().map(std::path::Path::to_path_buf)
+            }
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+}
+
+/// The directory owning `path` (its parent, or `.` for a bare filename).
+fn parent_dir_of(path: &str) -> std::path::PathBuf {
+    std::path::Path::new(path)
+        .parent()
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .map_or_else(
+            || std::path::PathBuf::from("."),
+            std::path::Path::to_path_buf,
+        )
+}
+
+/// Resolve the merged rule config for each checked file's directory.
+///
+/// Implements [CHKARCH-CONFIG-DISCOVERY] (GitHub #311): every file is checked
+/// with the config discovered from its own ancestor chain, so diagnostics are
+/// independent of argument order, path spelling, and cwd. Memoized per
+/// directory; `fallback` supplies the detected Python version when a
+/// directory's chain does not pin one ([CHKARCH-VERSION-TARGET]).
+pub(crate) fn resolve_dir_configs(
+    python_files: &[String],
+    fallback: &basilisk_config::BasiliskConfig,
+) -> std::collections::BTreeMap<std::path::PathBuf, std::sync::Arc<basilisk_config::BasiliskConfig>>
+{
+    let mut dir_configs = std::collections::BTreeMap::new();
+    for path in python_files {
+        let _ = dir_configs
+            .entry(parent_dir_of(path))
+            .or_insert_with_key(|dir| {
+                let mut cfg = basilisk_config::load_basilisk_config(dir);
+                if cfg.python_version.is_none() {
+                    cfg.python_version.clone_from(&fallback.python_version);
+                }
+                std::sync::Arc::new(cfg)
+            });
+    }
+    dir_configs
+}
+
+/// The per-directory config for `path`, falling back to `fallback` (only
+/// reachable if `path` was not in the file list the map was built from).
+pub(crate) fn config_for_path(
+    dir_configs: &std::collections::BTreeMap<
+        std::path::PathBuf,
+        std::sync::Arc<basilisk_config::BasiliskConfig>,
+    >,
+    path: &str,
+    fallback: &basilisk_config::BasiliskConfig,
+) -> std::sync::Arc<basilisk_config::BasiliskConfig> {
+    dir_configs
+        .get(&parent_dir_of(path))
+        .cloned()
+        .unwrap_or_else(|| std::sync::Arc::new(fallback.clone()))
 }
 
 /// Walk up from `start` to find the project root (directory containing
@@ -879,6 +948,131 @@ mod tests {
             "project config `BSK-W0050 = \"error\"` must promote BSK-W0050 to error \
              through the CLI; got {:?}",
             w0050.iter().map(|d| d.severity).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    // ── collect_and_check: config discovery (GitHub #311) ─────────────────────
+
+    /// Source that violates the annotation house rules (BSK-E0001 on the
+    /// parameter, BSK-E0002 on the return) once those opt-in rules are enabled.
+    const UNANNOTATED_FN: &[u8] = b"def foo(x):\n    pass\n";
+
+    /// A `[tool.basilisk.rules]` table enabling the opt-in annotation rules.
+    const ANNOTATION_RULES_TOML: &[u8] =
+        b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n";
+
+    /// GitHub #311 (headline): `basilisk check path/to/file.py` must discover
+    /// rule config from ancestor directories. Today the config root is the
+    /// file's own parent dir only, so a repo-root `pyproject.toml` is silently
+    /// ignored and the CLI prints "All checked" on a file the IDE flags.
+    #[test]
+    fn check_file_arg_discovers_config_from_ancestor_directories(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let root = unique_project_dir("basilisk_cli_cfg_ancestor");
+        let child = root.join("child");
+        std::fs::create_dir_all(&child)?;
+        std::fs::write(
+            root.join("pyproject.toml"),
+            ANNOTATION_RULES_TOML,
+        )?;
+        let py = child.join("bad.py");
+        std::fs::write(&py, UNANNOTATED_FN)?;
+
+        let outcome = collect_and_check_uncached(&[py.to_string_lossy().into_owned()]);
+        let _ = std::fs::remove_dir_all(&root);
+        let outcome = outcome?;
+
+        let codes: Vec<&str> = outcome.diagnostics.iter().map(|d| d.code.code).collect();
+        assert!(
+            codes.contains(&"BSK-E0001"),
+            "checking child/bad.py by file path must apply the root pyproject.toml \
+             (ancestor walk, GitHub #311); got codes: {codes:?}"
+        );
+        Ok(())
+    }
+
+    /// GitHub #311 (consequence 3): results must not depend on argument order.
+    /// With rules in `p/pyproject.toml` and none in `q`, both `check p q` and
+    /// `check q p` must flag `p/bad.py` — and never flag `q/bad.py`.
+    #[test]
+    fn check_results_are_independent_of_argument_order() -> Result<(), Box<dyn std::error::Error>> {
+        let base = unique_project_dir("basilisk_cli_cfg_order");
+        let p = base.join("p");
+        let q = base.join("q");
+        std::fs::create_dir_all(&p)?;
+        std::fs::create_dir_all(&q)?;
+        std::fs::write(
+            p.join("pyproject.toml"),
+            ANNOTATION_RULES_TOML,
+        )?;
+        std::fs::write(p.join("bad.py"), UNANNOTATED_FN)?;
+        std::fs::write(q.join("bad.py"), UNANNOTATED_FN)?;
+
+        let p_arg = p.to_string_lossy().into_owned();
+        let q_arg = q.to_string_lossy().into_owned();
+        let p_first = collect_and_check_uncached(&[p_arg.clone(), q_arg.clone()]);
+        let q_first = collect_and_check_uncached(&[q_arg, p_arg]);
+        let _ = std::fs::remove_dir_all(&base);
+
+        for (order, outcome) in [("check p q", p_first?), ("check q p", q_first?)] {
+            let e0001_paths: Vec<&str> = outcome
+                .diagnostics
+                .iter()
+                .filter(|d| d.code.code == "BSK-E0001")
+                .map(|d| d.path.as_str())
+                .collect();
+            assert!(
+                e0001_paths
+                    .iter()
+                    .any(|path| std::path::Path::new(path).starts_with(&p)),
+                "`{order}` must apply p's own config to p/bad.py regardless of \
+                 argument order (GitHub #311); E0001 paths: {e0001_paths:?}"
+            );
+            assert!(
+                e0001_paths
+                    .iter()
+                    .all(|path| !std::path::Path::new(path).starts_with(&q)),
+                "`{order}` must NOT leak p's config onto q/bad.py, which has no \
+                 config anywhere above it (GitHub #311); E0001 paths: {e0001_paths:?}"
+            );
+        }
+        Ok(())
+    }
+
+    /// GitHub #311 (FIX requirement): config is cumulative — a child dir's
+    /// config appends to the root config instead of replacing it. The root
+    /// enables the annotation rules; the child only disables BSK-E0001, so
+    /// BSK-E0002 from the root must still fire on the child's file.
+    #[test]
+    fn check_child_config_appends_to_ancestor_config() -> Result<(), Box<dyn std::error::Error>> {
+        let root = unique_project_dir("basilisk_cli_cfg_cumulative");
+        let child = root.join("child");
+        std::fs::create_dir_all(&child)?;
+        std::fs::write(
+            root.join("pyproject.toml"),
+            ANNOTATION_RULES_TOML,
+        )?;
+        std::fs::write(
+            child.join("pyproject.toml"),
+            b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
+        )?;
+        let py = child.join("bad.py");
+        std::fs::write(&py, UNANNOTATED_FN)?;
+
+        let outcome = collect_and_check_uncached(&[py.to_string_lossy().into_owned()]);
+        let _ = std::fs::remove_dir_all(&root);
+        let outcome = outcome?;
+
+        let codes: Vec<&str> = outcome.diagnostics.iter().map(|d| d.code.code).collect();
+        assert!(
+            codes.contains(&"BSK-E0002"),
+            "the root's rule opt-ins must survive a child config \
+             that only tweaks one rule (cumulative merge, GitHub #311); got: {codes:?}"
+        );
+        assert!(
+            !codes.contains(&"BSK-E0001"),
+            "the child config's `BSK-E0001 = disabled` must be honored; got: {codes:?}"
         );
         Ok(())
     }

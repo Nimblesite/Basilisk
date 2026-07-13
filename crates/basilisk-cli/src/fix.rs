@@ -4,8 +4,6 @@
 //! For each Python file: parse → resolve → check → generate fixes → apply.
 //! Writes the fixed source back to disk.
 
-use std::path::Path;
-
 use basilisk_lsp::code_actions::mass_fix::{ALL_FIXABLE_RULES, SAFE_FIXABLE_RULES};
 use tower_lsp::lsp_types::{TextEdit, Url};
 use tracing::{info, warn};
@@ -71,29 +69,23 @@ fn resolve_rules(include_unsafe: bool, rules: &[String]) -> Vec<String> {
 
 /// Collect Python files, analyse them, apply fixes, and write back.
 fn collect_and_fix(paths: &[String], allowed_rules: &[&str]) -> Result<FixSummary, String> {
-    let config_root = paths
-        .first()
-        .map(Path::new)
-        .and_then(|p| {
-            if p.is_dir() {
-                Some(p.to_path_buf())
-            } else {
-                p.parent().map(Path::to_path_buf)
-            }
-        })
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    // [CHKARCH-CONFIG-DISCOVERY] Rule config resolves per file, exactly like
+    // `basilisk check` (GitHub #311).
+    let config_root = crate::first_path_dir(paths);
     let config = basilisk_config::load_basilisk_config(&config_root);
 
     let excluded = crate::excluded_dirs_and_log(&config, &config_root);
 
     let python_files = crate::collect_python_files(paths, &excluded)?;
+    let dir_configs = crate::resolve_dir_configs(&python_files, &config);
 
     let mut fixed_count: usize = 0;
     let mut files_fixed: usize = 0;
     let mut had_unfixable_errors = false;
 
     for path in python_files {
-        match fix_single_file(&path, allowed_rules, &config) {
+        let file_config = crate::config_for_path(&dir_configs, &path, &config);
+        match fix_single_file(&path, allowed_rules, &file_config) {
             Ok(count) => {
                 fixed_count += count;
                 if count > 0 {

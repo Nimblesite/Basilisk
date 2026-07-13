@@ -49,37 +49,96 @@ pub const DEFAULT_EXCLUDES: &[&str] = &[
     "_vendored",
 ];
 
-/// Load a `BasiliskConfig` from the first config file found in `root`.
+/// Load a `BasiliskConfig` for `start` by discovering config files up the
+/// ancestor directory chain and merging them cumulatively.
 ///
-/// Implements [CHKARCH-CONFIG-FILE]. Search order (highest priority wins):
+/// Implements [CHKARCH-CONFIG-DISCOVERY] (GitHub #311): every surface —
+/// `basilisk check`/`fix`/`adopt` and the LSP — resolves rule config through
+/// this one routine, so the result is independent of argument order, path
+/// spelling, and cwd. The walk visits `start` and every ancestor up to the
+/// filesystem root; each directory contributes its config file (see
+/// [`load_dir_config`] for the per-directory priority), and directories
+/// nearer to `start` win per key over ancestors (see
+/// [`BasiliskConfig::merged_with`]). A `pyproject.toml` without a
+/// `[tool.basilisk]` table contributes nothing and does not stop the walk.
+///
+/// Returns `BasiliskConfig::default()` if no config file is found anywhere
+/// on the chain (and likewise on malformed files — no configuration-error
+/// exit is raised; see report).
+/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY
+#[must_use]
+pub fn load_basilisk_config(start: &Path) -> BasiliskConfig {
+    let chain: Vec<BasiliskConfig> = absolute_start(start)
+        .ancestors()
+        .filter_map(load_dir_config)
+        .collect();
+    // `ancestors()` yields nearest-first; fold from the outermost ancestor so
+    // configs nearer to `start` override it per key.
+    let mut config = chain
+        .into_iter()
+        .rev()
+        .fold(BasiliskConfig::default(), BasiliskConfig::merged_with);
+    // The nearest config-holding directory anchors root-relative
+    // interpretation (per-path overrides, adoption store); with no config
+    // anywhere on the chain, `start` itself anchors, as before.
+    if config.project_root.is_none() {
+        config.project_root = Some(start.to_path_buf());
+    }
+    config
+}
+
+/// The nearest directory at or above `start` holding a recognized config file
+/// (`basilisk.json`, or `pyproject.toml` with a `[tool.basilisk]` table).
+///
+/// This is the anchor directory for artifacts that live next to the config —
+/// e.g. the adoption store — so `basilisk adopt` writes where `basilisk check`
+/// discovers. Implements [CHKARCH-CONFIG-DISCOVERY].
+#[must_use]
+pub fn discover_config_dir(start: &Path) -> Option<std::path::PathBuf> {
+    absolute_start(start)
+        .ancestors()
+        .find(|dir| load_dir_config(dir).is_some())
+        .map(Path::to_path_buf)
+}
+
+/// Load the config from exactly one directory — no ancestor walk.
+///
+/// Implements [CHKARCH-CONFIG-FILE]. Per-directory priority (highest wins):
 /// 1. `basilisk.json`
 /// 2. `pyproject.toml` `[tool.basilisk]`
 ///
-/// Returns `BasiliskConfig::default()` if no config file is found (and likewise
-/// on a malformed file — no configuration-error exit is raised; see report).
-/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-FILE
-#[must_use]
-pub fn load_basilisk_config(root: &Path) -> BasiliskConfig {
-    // 1. basilisk.json
-    let basilisk_json = root.join("basilisk.json");
+/// Returns `None` when the directory holds no parseable config.
+fn load_dir_config(dir: &Path) -> Option<BasiliskConfig> {
+    let basilisk_json = dir.join("basilisk.json");
     if basilisk_json.is_file() {
-        let mut config = parse::load_from_json(&basilisk_json).unwrap_or_default();
-        config.project_root = Some(root.to_path_buf());
-        return config;
+        // A malformed active basilisk.json contributes defaults — it must
+        // not activate a shadowed pyproject.toml in the same directory.
+        let mut cfg = parse::load_from_json(&basilisk_json).unwrap_or_default();
+        cfg.project_root = Some(dir.to_path_buf());
+        return Some(cfg);
     }
 
-    // 2. pyproject.toml [tool.basilisk]
-    let pyproject = root.join("pyproject.toml");
+    let pyproject = dir.join("pyproject.toml");
     if pyproject.is_file() {
         if let Some(mut cfg) = parse::load_from_pyproject(&pyproject) {
-            cfg.project_root = Some(root.to_path_buf());
-            return cfg;
+            cfg.project_root = Some(dir.to_path_buf());
+            return Some(cfg);
         }
     }
 
-    BasiliskConfig {
-        project_root: Some(root.to_path_buf()),
-        ..BasiliskConfig::default()
+    None
+}
+
+/// Absolutize `start` (against cwd) so `ancestors()` walks the full directory
+/// chain even for relative paths like `.` or `child/` — WITHOUT
+/// canonicalizing, so discovered directories keep the caller's path spelling
+/// (a symlinked temp dir must not come back re-rooted, or callers that
+/// `strip_prefix` against their own paths break).
+fn absolute_start(start: &Path) -> std::path::PathBuf {
+    if start.is_absolute() {
+        start.to_path_buf()
+    } else {
+        std::env::current_dir().map_or_else(|_| start.to_path_buf(), |cwd| cwd.join(start))
     }
 }
 
@@ -463,6 +522,68 @@ stub-paths = ["fallback-stubs/"]
                     "a malformed active basilisk.json must not activate shadowed TOML"
                 );
             },
+        );
+    }
+
+    /// GitHub #311: rule config must be discovered by walking ancestor
+    /// directories, not just the exact directory passed in — otherwise
+    /// `basilisk check path/to/file.py` silently ignores the project root
+    /// config. See [CHKARCH-CONFIG-FILE].
+    #[test]
+    fn discovers_config_from_ancestor_directory() {
+        let root = std::env::temp_dir().join(format!("bsk_cfg_walk_up_{}", std::process::id()));
+        let child = root.join("nested").join("pkg");
+        fs::create_dir_all(&child).unwrap();
+        fs::write(
+            root.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"imports_unresolved\" = \"warning\"\n",
+        )
+        .unwrap();
+
+        let cfg = load_basilisk_config(&child);
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(
+            cfg.rules.get("imports_unresolved").copied(),
+            Some(RuleSeverity::Warning),
+            "loading config from a child directory must discover the ancestor's \
+             pyproject.toml [tool.basilisk] (GitHub #311)"
+        );
+    }
+
+    /// GitHub #311: config is cumulative/additive — a child directory's config
+    /// appends to (and per-key overrides) ancestor config; it must never blow
+    /// the ancestor config away.
+    #[test]
+    fn child_config_merges_cumulatively_over_ancestor() {
+        let root = std::env::temp_dir().join(format!("bsk_cfg_cumulative_{}", std::process::id()));
+        let child = root.join("child");
+        fs::create_dir_all(&child).unwrap();
+        fs::write(
+            root.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\
+             \"imports_unresolved\" = \"warning\"\n\
+             \"BSK-E0001\" = \"warning\"\n",
+        )
+        .unwrap();
+        fs::write(
+            child.join("basilisk.json"),
+            r#"{ "rules": { "BSK-E0001": "disabled" } }"#,
+        )
+        .unwrap();
+
+        let cfg = load_basilisk_config(&child);
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(
+            cfg.rules.get("imports_unresolved").copied(),
+            Some(RuleSeverity::Warning),
+            "ancestor rules not mentioned by the child config must survive the merge"
+        );
+        assert_eq!(
+            cfg.rules.get("BSK-E0001").copied(),
+            Some(RuleSeverity::Disabled),
+            "the child config must win where it overlaps the ancestor config"
         );
     }
 }
