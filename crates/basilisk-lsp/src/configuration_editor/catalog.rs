@@ -176,3 +176,243 @@ pub(super) enum SelectionError {
     /// Tag absent from the live registry.
     UnknownTag(String),
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use basilisk_config::RuleSeverity as ConfigSeverity;
+
+    use super::{
+        config_to_wire, descriptors, expand_selector, is_fixable, is_safe_fixable,
+        setting_severity, severities, tag_kind, wire_severity, SelectionError,
+    };
+    use crate::configuration_editor::model::{RuleSelector, RuleSetting, RuleSeverity, TagKind};
+
+    // Implements [CONFIGEDITOR-MODEL]: the checker's severity ladder folds onto
+    // the four wire severities without losing the error class.
+    #[test]
+    fn severity_conversions_round_trip_the_wire_shape() {
+        assert_eq!(
+            wire_severity(basilisk_checker::Severity::Error),
+            RuleSeverity::Error
+        );
+        assert_eq!(
+            wire_severity(basilisk_checker::Severity::SafetyViolation),
+            RuleSeverity::Error
+        );
+        assert_eq!(
+            wire_severity(basilisk_checker::Severity::Warning),
+            RuleSeverity::Warning
+        );
+        assert_eq!(
+            wire_severity(basilisk_checker::Severity::Info),
+            RuleSeverity::Info
+        );
+        for (config, wire) in [
+            (ConfigSeverity::Error, RuleSeverity::Error),
+            (ConfigSeverity::Warning, RuleSeverity::Warning),
+            (ConfigSeverity::Info, RuleSeverity::Info),
+            (ConfigSeverity::Disabled, RuleSeverity::Disabled),
+        ] {
+            assert_eq!(config_to_wire(config), wire);
+        }
+    }
+
+    // Implements [CONFIGEDITOR-TAGS]: descriptors mirror the live checker
+    // registry, complete with docs links and provenance tags.
+    #[test]
+    fn descriptors_expose_the_live_checker_registry() {
+        let catalog = descriptors();
+        assert_eq!(catalog.len(), basilisk_checker::rule_catalog().len());
+        let annotation = catalog.iter().find(|rule| rule.code == "BSK-E0001");
+        let Some(annotation) = annotation else {
+            unreachable!("BSK-E0001 must exist in the live registry");
+        };
+        assert!(annotation.docs_url.contains("BSK-E0001"));
+        assert!(!annotation.title.is_empty());
+        assert!(!annotation.tags.is_empty());
+    }
+
+    #[test]
+    fn severities_prefer_configured_then_default_then_disabled() {
+        let catalog = descriptors();
+        let configured_off = catalog.iter().find(|rule| rule.code == "BSK-E0001");
+        let Some(descriptor) = configured_off else {
+            unreachable!("BSK-E0001 must exist in the live registry");
+        };
+        let mut config = basilisk_config::BasiliskConfig::default();
+        let _ = config
+            .rules
+            .insert("BSK-E0001".to_owned(), ConfigSeverity::Info);
+        assert_eq!(
+            severities(descriptor, &config),
+            (Some(RuleSeverity::Info), RuleSeverity::Info)
+        );
+        let unconfigured = basilisk_config::BasiliskConfig::default();
+        let expected = if descriptor.default_enabled {
+            descriptor.default_severity
+        } else {
+            RuleSeverity::Disabled
+        };
+        assert_eq!(severities(descriptor, &unconfigured), (None, expected));
+        let default_on = descriptors()
+            .into_iter()
+            .find(|rule| rule.default_enabled)
+            .map(|rule| severities(&rule, &unconfigured));
+        assert!(default_on.is_some_and(|(configured, effective)| {
+            configured.is_none() && effective != RuleSeverity::Disabled
+        }));
+    }
+
+    #[test]
+    fn tag_kinds_classify_provenance_pep_and_descriptive_names() {
+        assert_eq!(
+            tag_kind(basilisk_checker::rule_tags::PEP),
+            TagKind::Provenance
+        );
+        assert_eq!(
+            tag_kind(basilisk_checker::rule_tags::BASILISK),
+            TagKind::Provenance
+        );
+        let pep_category = basilisk_checker::rule_tags::PEP_CATEGORIES.first();
+        assert_eq!(
+            pep_category.map(|tag| tag_kind(tag)),
+            Some(TagKind::PepCategory)
+        );
+        assert_eq!(tag_kind("suppressions"), TagKind::Descriptive);
+    }
+
+    #[test]
+    fn selector_expansion_covers_every_selector_kind() {
+        let catalog = descriptors();
+        let safe_code = "BSK-E0001";
+        assert!(is_safe_fixable(safe_code));
+        let unsafe_only = "assignment_compatibility";
+        assert!(!is_safe_fixable(unsafe_only));
+        let counts: HashMap<String, usize> = HashMap::from([
+            (safe_code.to_owned(), 3),
+            (unsafe_only.to_owned(), 1),
+            ("silent_rule".to_owned(), 0),
+        ]);
+
+        let all = expand_selector(&RuleSelector::All, &catalog, &counts);
+        assert_eq!(all.map(|codes| codes.len()), Ok(catalog.len()));
+
+        let codes = expand_selector(
+            &RuleSelector::Codes {
+                codes: vec![safe_code.to_owned()],
+            },
+            &catalog,
+            &counts,
+        );
+        assert_eq!(codes, Ok(vec![safe_code.to_owned()]));
+        assert_eq!(
+            expand_selector(
+                &RuleSelector::Codes {
+                    codes: vec!["NOT-A-RULE".to_owned()],
+                },
+                &catalog,
+                &counts,
+            ),
+            Err(SelectionError::UnknownRule("NOT-A-RULE".to_owned()))
+        );
+
+        let tagged = expand_selector(
+            &RuleSelector::Tags {
+                tags: vec!["suppressions".to_owned()],
+                match_all: false,
+            },
+            &catalog,
+            &counts,
+        );
+        assert!(tagged.is_ok_and(|codes| !codes.is_empty()));
+        let impossible_conjunction = expand_selector(
+            &RuleSelector::Tags {
+                tags: vec![
+                    basilisk_checker::rule_tags::PEP.to_owned(),
+                    basilisk_checker::rule_tags::BASILISK.to_owned(),
+                ],
+                match_all: true,
+            },
+            &catalog,
+            &counts,
+        );
+        assert_eq!(impossible_conjunction, Ok(Vec::new()));
+        assert_eq!(
+            expand_selector(
+                &RuleSelector::Tags {
+                    tags: vec!["not-a-tag".to_owned()],
+                    match_all: false,
+                },
+                &catalog,
+                &counts,
+            ),
+            Err(SelectionError::UnknownTag("not-a-tag".to_owned()))
+        );
+
+        let sorted = |result: Result<Vec<String>, SelectionError>| {
+            result.map(|mut codes| {
+                codes.sort();
+                codes
+            })
+        };
+        let current = sorted(expand_selector(
+            &RuleSelector::CurrentViolations,
+            &catalog,
+            &counts,
+        ));
+        assert_eq!(
+            current,
+            Ok(vec![safe_code.to_owned(), unsafe_only.to_owned()])
+        );
+        let safe = expand_selector(&RuleSelector::SafeFixable, &catalog, &counts);
+        assert_eq!(safe, Ok(vec![safe_code.to_owned()]));
+        let without_safe = expand_selector(&RuleSelector::WithoutSafeFix, &catalog, &counts);
+        assert_eq!(without_safe, Ok(vec![unsafe_only.to_owned()]));
+    }
+
+    #[test]
+    fn setting_severity_resolves_every_intent() {
+        let catalog = descriptors();
+        let Some(descriptor) = catalog.first() else {
+            unreachable!("the live registry is never empty");
+        };
+        assert_eq!(setting_severity(RuleSetting::Inherit, descriptor), None);
+        assert_eq!(
+            setting_severity(RuleSetting::Native, descriptor),
+            Some(match descriptor.default_severity {
+                RuleSeverity::Error => ConfigSeverity::Error,
+                RuleSeverity::Warning => ConfigSeverity::Warning,
+                RuleSeverity::Info => ConfigSeverity::Info,
+                RuleSeverity::Disabled => ConfigSeverity::Disabled,
+            })
+        );
+        assert_eq!(
+            setting_severity(RuleSetting::Error, descriptor),
+            Some(ConfigSeverity::Error)
+        );
+        assert_eq!(
+            setting_severity(RuleSetting::Warning, descriptor),
+            Some(ConfigSeverity::Warning)
+        );
+        assert_eq!(
+            setting_severity(RuleSetting::Info, descriptor),
+            Some(ConfigSeverity::Info)
+        );
+        assert_eq!(
+            setting_severity(RuleSetting::Disabled, descriptor),
+            Some(ConfigSeverity::Disabled)
+        );
+    }
+
+    // Implements [AUTOFIX-CLASSIFY]: the safe tier is a strict subset of the
+    // fixable tier, so occurrence fix badges can never contradict mass-fix.
+    #[test]
+    fn safe_fixable_rules_are_a_subset_of_fixable_rules() {
+        for code in crate::code_actions::mass_fix::SAFE_FIXABLE_RULES {
+            assert!(is_fixable(code), "{code} is safe-fixable but not fixable");
+        }
+        assert!(!is_safe_fixable("unused_suppression"));
+    }
+}

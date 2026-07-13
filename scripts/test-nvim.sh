@@ -82,8 +82,14 @@ if command -v nvim &>/dev/null; then
     # (coverage_boost_spec.lua) legitimately needs ~51s against the
     # coverage-instrumented LSP binary — the child gets SIGTERMed mid-summary
     # and the run fails on "15/16 spec files produced a summary" with zero
-    # actual test failures. 120s keeps the gate strict (every spec must still
-    # summarise clean) without truncating slow-but-passing files.
+    # actual test failures. Neovim NIGHTLY (the CI forward-compat matrix leg)
+    # runs every spec ~3× slower than 0.11, pushing the heaviest file
+    # (profiler_spec.lua, ~32s on 0.11) to ~2.5min — at 120s plenary SIGTERMed
+    # it mid-run, its buffered output was lost, and the run mis-read as a
+    # footer flake. 300s keeps the gate strict (every spec must still
+    # summarise clean) without truncating slow-but-passing files on either
+    # matrix leg; a genuinely hung child is still reaped, backstopped by the
+    # job-level timeout-minutes.
     #
     # Bounded retry (2 attempts): re-run ONLY when plenary_outcome reports a
     # `flake` — every test passed but a spec dropped its per-file `Success:`
@@ -95,7 +101,7 @@ if command -v nvim &>/dev/null; then
         [[ "$attempt" -gt 1 ]] && warn "Neovim LSP e2e: footer flush race on attempt $((attempt - 1)) (all tests passed) — retrying (${attempt}/${max_attempts})"
         set +e
         LUACOV=1 nvim --headless -u tests/minimal_init.lua \
-            -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua', sequential = true, timeout = 120000}" 2>&1 \
+            -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua', sequential = true, timeout = 300000}" 2>&1 \
             | tee "$lsp_out"
         nvim_rc=${PIPESTATUS[0]}
         set -e

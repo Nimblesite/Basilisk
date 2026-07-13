@@ -483,7 +483,11 @@ jobs:
     # over LSP/DAP, so a checker/LSP change alters what this suite exercises.
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.nvim == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # The 0.11 leg finishes in ~7min, but nightly runs the LSP suite ~3× slower
+    # (~12min per pass) and test-nvim.sh's bounded footer-flake retry can
+    # legitimately run the suite twice — build + two passes + screenshots needs
+    # ~30min worst case. This is a hang backstop, not a perf budget.
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:

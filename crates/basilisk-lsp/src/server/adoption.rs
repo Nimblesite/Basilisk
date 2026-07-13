@@ -291,11 +291,17 @@ fn adoption_update(root: &Path, path: &Path, codes: &BTreeSet<String>) -> RuleCo
 fn relative_pattern(root: &Path, path: &Path) -> String {
     let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    // An open-but-unsaved buffer has no on-disk file to canonicalize, so the
+    // canonical pair can disagree behind symlinked roots (macOS /var →
+    // /private/var). Fall back to the raw pair before surrendering to an
+    // absolute path — config patterns must stay root-relative and portable.
     canonical_path
         .strip_prefix(&canonical_root)
-        .unwrap_or(&canonical_path)
-        .to_string_lossy()
-        .replace('\\', "/")
+        .or_else(|_mismatch| path.strip_prefix(root))
+        .map_or_else(
+            |_foreign| canonical_path.to_string_lossy().replace('\\', "/"),
+            |relative| relative.to_string_lossy().replace('\\', "/"),
+        )
 }
 
 fn path_is_within(path: &Path, root: &Path) -> bool {
@@ -309,9 +315,16 @@ fn path_is_within(path: &Path, root: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+    use std::path::{Path, PathBuf};
+
+    use basilisk_config::{RuleConfigScope, RuleSeverity};
+
     use crate::workspace::FileEntry;
 
-    use super::checked_diagnostic_codes;
+    use super::{
+        adoption_update, checked_diagnostic_codes, command_uri, path_is_within, relative_pattern,
+    };
 
     // Implements [CONFIGEDITOR-ADOPTION]: invalid saved source cannot erase
     // adoption debt merely because it produced no checker diagnostics.
@@ -326,5 +339,94 @@ mod tests {
             is_open: true,
         };
         assert!(checked_diagnostic_codes(&entry).is_none());
+    }
+
+    // Implements [CONFIGEDITOR-ADOPTION]: adoption commands take exactly one
+    // file URI; anything else is logged and refused, never guessed.
+    #[test]
+    fn command_uri_accepts_only_a_leading_string_uri() {
+        assert_eq!(command_uri(&[], "adoptFile"), None);
+        assert_eq!(command_uri(&[serde_json::json!(42)], "adoptFile"), None);
+        assert_eq!(
+            command_uri(&[serde_json::json!("not a uri")], "adoptFile"),
+            None
+        );
+        let parsed = command_uri(
+            &[serde_json::json!("file:///workspace/app.py")],
+            "adoptFile",
+        );
+        assert_eq!(
+            parsed.map(|uri| uri.to_string()),
+            Some("file:///workspace/app.py".to_owned())
+        );
+    }
+
+    // Implements [CONFIGEDITOR-ADOPTION]: adoption writes exact-path warning
+    // overrides flagged as adoption entries, one per demoted rule code.
+    #[test]
+    fn adoption_update_demotes_every_code_to_a_path_warning() {
+        let root = Path::new("/workspace/project");
+        let file = root.join("pkg/app.py");
+        let codes: BTreeSet<String> = [
+            "BSK-E0001".to_owned(),
+            "assignment_compatibility".to_owned(),
+        ]
+        .into_iter()
+        .collect();
+        let update = adoption_update(root, &file, &codes);
+        assert_eq!(
+            update.scope,
+            RuleConfigScope::Path {
+                pattern: "pkg/app.py".to_owned(),
+                adoption: true,
+            }
+        );
+        assert_eq!(update.rules.len(), 2);
+        assert!(update
+            .rules
+            .values()
+            .all(|severity| *severity == Some(RuleSeverity::Warning)));
+    }
+
+    #[test]
+    fn relative_pattern_survives_symlinked_roots_and_foreign_paths() {
+        let root =
+            std::env::temp_dir().join(format!("basilisk-adoption-pattern-{}", std::process::id()));
+        let nested = root.join("src");
+        assert!(std::fs::create_dir_all(&nested).is_ok());
+        assert!(std::fs::write(nested.join("app.py"), "x = 1\n").is_ok());
+        // Uncanonicalized root and file (macOS tempdirs live behind /var →
+        // /private/var symlinks) still resolve to a root-relative pattern.
+        assert_eq!(
+            relative_pattern(&root, &nested.join("app.py")),
+            "src/app.py"
+        );
+        // An open-but-unsaved buffer has no file to canonicalize; the raw
+        // root/path pair must still produce a portable relative pattern
+        // instead of leaking an absolute path into the configuration.
+        assert_eq!(
+            relative_pattern(&root, &nested.join("unsaved.py")),
+            "src/unsaved.py"
+        );
+        // A file outside the root keeps its own absolute path rather than
+        // inventing a bogus relative pattern.
+        let foreign = PathBuf::from("/definitely/elsewhere/app.py");
+        assert_eq!(relative_pattern(&root, &foreign), foreign.to_string_lossy());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn path_is_within_requires_a_real_ancestor() {
+        let root = Path::new("/workspace/project");
+        assert!(path_is_within(
+            Path::new("/workspace/project/src/app.py"),
+            root
+        ));
+        assert!(!path_is_within(Path::new("/workspace/other/app.py"), root));
+        // Missing paths cannot be rescued by canonicalization.
+        assert!(!path_is_within(
+            Path::new("/does/not/exist/app.py"),
+            Path::new("/does/not/exist-either")
+        ));
     }
 }
