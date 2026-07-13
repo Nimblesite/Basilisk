@@ -1,7 +1,7 @@
 """
 ETL data pipeline — realistic data engineering code with type violations.
 
-Run:  cargo run -- check examples/data_pipeline.py
+Run:  basilisk check examples/data_pipeline.py
 """
 
 from __future__ import annotations

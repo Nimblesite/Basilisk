@@ -1,5 +1,5 @@
 # A realistic file with a mix of typed and untyped code.
-# Run: cargo run -- check examples/mixed.py
+# Run: basilisk check examples/mixed.py
 #
 # Basilisk will flag the untyped parts and leave the rest alone.
 

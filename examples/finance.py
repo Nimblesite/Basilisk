@@ -4,7 +4,7 @@ Financial calculations — realistic fintech code with type violations.
 The violations here are subtle: wrong numeric types, shadowed names,
 conditional assignments in risk functions that may never bind.
 
-Run:  cargo run -- check examples/finance.py
+Run:  basilisk check examples/finance.py
 """
 
 from __future__ import annotations

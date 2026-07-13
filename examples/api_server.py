@@ -1,7 +1,7 @@
 """
 REST API handler — realistic web service code with type violations.
 
-Run:  cargo run -- check examples/api_server.py
+Run:  basilisk check examples/api_server.py
 """
 
 from __future__ import annotations

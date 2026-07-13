@@ -1,7 +1,7 @@
 """
 REST API handler — fully typed, passes Basilisk with zero diagnostics.
 
-Run:  cargo run -- check examples/api_server_clean.py
+Run:  basilisk check examples/api_server_clean.py
 """
 
 from __future__ import annotations

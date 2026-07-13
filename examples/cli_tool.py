@@ -4,7 +4,7 @@ CLI tool — realistic command-line application with type violations.
 This models the kind of ad-hoc scripting code that gradually grows
 into a maintenance problem.  Every violation has a plausible story.
 
-Run:  cargo run -- check examples/cli_tool.py
+Run:  basilisk check examples/cli_tool.py
 """
 
 from __future__ import annotations

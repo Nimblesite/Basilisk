@@ -88,7 +88,7 @@ pub fn load_basilisk_config(start: &Path) -> BasiliskConfig {
 }
 
 /// The nearest directory at or above `start` holding a recognized config file
-/// (`basilisk.json`, or `pyproject.toml` with a `[tool.basilisk]` table).
+/// (`pyproject.toml` with a `[tool.basilisk]` table).
 ///
 /// This is the anchor directory for artifacts that live next to the config —
 /// e.g. the adoption store — so `basilisk adopt` writes where `basilisk check`
@@ -103,21 +103,12 @@ pub fn discover_config_dir(start: &Path) -> Option<std::path::PathBuf> {
 
 /// Load the config from exactly one directory — no ancestor walk.
 ///
-/// Implements [CHKARCH-CONFIG-FILE]. Per-directory priority (highest wins):
-/// 1. `basilisk.json`
-/// 2. `pyproject.toml` `[tool.basilisk]`
+/// Implements [CHKARCH-CONFIG-FILE]: the only configuration source is the
+/// `[tool.basilisk]` table of the directory's `pyproject.toml`. A
+/// `pyproject.toml` without that table contributes nothing.
 ///
 /// Returns `None` when the directory holds no parseable config.
 fn load_dir_config(dir: &Path) -> Option<BasiliskConfig> {
-    let basilisk_json = dir.join("basilisk.json");
-    if basilisk_json.is_file() {
-        // A malformed active basilisk.json contributes defaults — it must
-        // not activate a shadowed pyproject.toml in the same directory.
-        let mut cfg = parse::load_from_json(&basilisk_json).unwrap_or_default();
-        cfg.project_root = Some(dir.to_path_buf());
-        return Some(cfg);
-    }
-
     let pyproject = dir.join("pyproject.toml");
     if pyproject.is_file() {
         if let Some(mut cfg) = parse::load_from_pyproject(&pyproject) {

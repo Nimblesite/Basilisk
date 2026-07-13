@@ -1,5 +1,5 @@
 //! Implements [STUBRES-CONFIG]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CONFIG
-//! Configuration file parsing — `pyproject.toml` and `basilisk.json`.
+//! Configuration file parsing — `pyproject.toml` `[tool.basilisk]`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -172,29 +172,6 @@ impl BasiliskConfig {
     }
 }
 
-/// Look up a JSON object field by its `camelCase` key, falling back to the
-/// `kebab-case` alias. Config files accept both spellings interchangeably.
-fn alias_get<'a>(
-    obj: &'a serde_json::Map<String, serde_json::Value>,
-    camel: &str,
-    kebab: &str,
-) -> Option<&'a serde_json::Value> {
-    obj.get(camel).or_else(|| obj.get(kebab))
-}
-
-/// Collect the string elements of a JSON array field, if present.
-fn json_string_array(
-    obj: &serde_json::Map<String, serde_json::Value>,
-    key: &str,
-) -> Option<Vec<String>> {
-    let arr = obj.get(key)?.as_array()?;
-    Some(
-        arr.iter()
-            .filter_map(|v| v.as_str().map(String::from))
-            .collect(),
-    )
-}
-
 /// Collect the string elements of a TOML array field, if present.
 fn toml_string_array(table: &toml::Table, key: &str) -> Option<Vec<String>> {
     let arr = table.get(key)?.as_array()?;
@@ -203,145 +180,6 @@ fn toml_string_array(table: &toml::Table, key: &str) -> Option<Vec<String>> {
             .filter_map(|v| v.as_str().map(String::from))
             .collect(),
     )
-}
-
-/// Load configuration from `basilisk.json`.
-pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
-    let content = std::fs::read_to_string(path).ok()?;
-    parse_json_content(&content)
-}
-
-/// Parse a `basilisk.json` document already held in memory.
-pub(crate) fn parse_json_content(content: &str) -> Option<BasiliskConfig> {
-    let json: serde_json::Value = serde_json::from_str(content).ok()?;
-    let obj = json.as_object()?;
-
-    let mut cfg = BasiliskConfig::default();
-
-    if let Some(exclude) = json_string_array(obj, "exclude") {
-        cfg.exclude = exclude;
-    }
-    // [CHKARCH-CONFIG-INCLUDE]
-    if let Some(include) = json_string_array(obj, "include") {
-        cfg.include = include;
-    }
-
-    // stub-paths / stubPaths
-    if let Some(arr) = alias_get(obj, "stubPaths", "stub-paths").and_then(|v| v.as_array()) {
-        cfg.stub_paths = arr
-            .iter()
-            .filter_map(|v| v.as_str().map(PathBuf::from))
-            .collect();
-    }
-
-    // typeshed-path / typeshedPath
-    if let Some(val) = alias_get(obj, "typeshedPath", "typeshed-path").and_then(|v| v.as_str()) {
-        cfg.typeshed_path = Some(PathBuf::from(val));
-    }
-
-    // rules
-    if let Some(rules_obj) = obj.get("rules").and_then(|v| v.as_object()) {
-        for (code, severity_val) in rules_obj {
-            if let Some(severity_str) = severity_val.as_str() {
-                if let Some(severity) = RuleSeverity::parse(severity_str) {
-                    let _ = cfg.rules.insert(code.clone(), severity);
-                }
-            }
-        }
-    }
-
-    // perModuleOverrides
-    if let Some(overrides_obj) =
-        alias_get(obj, "perModuleOverrides", "per-module-overrides").and_then(|v| v.as_object())
-    {
-        for (pattern, override_val) in overrides_obj {
-            if let Some(override_obj) = override_val.as_object() {
-                let ignore = alias_get(override_obj, "ignoreMissingStubs", "ignore-missing-stubs")
-                    .and_then(serde_json::Value::as_bool)
-                    .unwrap_or(false);
-                let _ = cfg.per_module_overrides.insert(
-                    pattern.clone(),
-                    ModuleOverride {
-                        ignore_missing_stubs: ignore,
-                    },
-                );
-            }
-        }
-    }
-
-    parse_json_path_overrides(obj, &mut cfg.per_path_overrides);
-
-    // auto-stub-mode / autoStubMode
-    if let Some(val) = alias_get(obj, "autoStubMode", "auto-stub-mode").and_then(|v| v.as_str()) {
-        val.clone_into(&mut cfg.auto_stub_mode);
-    }
-
-    // auto-stub-path / autoStubPath
-    if let Some(val) = alias_get(obj, "autoStubPath", "auto-stub-path").and_then(|v| v.as_str()) {
-        cfg.auto_stub_path = PathBuf::from(val);
-    }
-
-    // pythonVersion / python-version [CHKARCH-VERSION-TARGET]
-    if let Some(val) = alias_get(obj, "pythonVersion", "python-version").and_then(|v| v.as_str()) {
-        cfg.python_version = Some(val.to_owned());
-    }
-
-    // pythonPlatform / python-platform [CHKARCH-VERSION-TARGET]
-    if let Some(val) = alias_get(obj, "pythonPlatform", "python-platform").and_then(|v| v.as_str())
-    {
-        cfg.python_platform = Some(val.to_owned());
-    }
-
-    Some(cfg)
-}
-
-fn parse_json_path_overrides(
-    root: &serde_json::Map<String, serde_json::Value>,
-    overrides: &mut HashMap<String, PathOverride>,
-) {
-    let Some(entries) = alias_get(root, "perPathOverrides", "per-path-overrides")
-        .and_then(serde_json::Value::as_object)
-    else {
-        return;
-    };
-    for (pattern, value) in entries {
-        let Some(entry) = value.as_object() else {
-            continue;
-        };
-        let disabled_rules = entry
-            .get("disabled")
-            .and_then(serde_json::Value::as_array)
-            .map(|values| {
-                values
-                    .iter()
-                    .filter_map(serde_json::Value::as_str)
-                    .map(str::to_owned)
-                    .collect()
-            })
-            .unwrap_or_default();
-        let rule_overrides = entry
-            .get("rules")
-            .and_then(serde_json::Value::as_object)
-            .map(|rules| {
-                rules
-                    .iter()
-                    .filter_map(|(code, value)| {
-                        value
-                            .as_str()
-                            .and_then(RuleSeverity::parse)
-                            .map(|severity| (code.clone(), severity))
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        let _ = overrides.insert(
-            pattern.clone(),
-            PathOverride {
-                disabled_rules,
-                rule_overrides,
-            },
-        );
-    }
 }
 
 /// Load configuration from `pyproject.toml` `[tool.basilisk]` section.
