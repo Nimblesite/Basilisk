@@ -42,7 +42,9 @@ class Shape:
 
 class Circle(Shape):
     @override
-    def area(self, scale: str) -> float:  # error[classes_override]: incompatible with `Shape.area`
+    def area(
+        self, scale: str
+    ) -> float:  # error[classes_override]: incompatible with `Shape.area`
         return 1.0
 
 
