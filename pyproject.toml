@@ -79,3 +79,15 @@ BSK-W0040 = "warning"
 BSK-W0050 = "warning"
 BSK-W0061 = "warning"
 BSK-W0062 = "warning"
+
+# The examples model the incremental-adoption story the docs teach: PEP
+# typing-spec violations stay errors, while Basilisk's opt-in strictness
+# rules surface as warnings — "this type-checks, but strictness isn't at
+# full yet". See website/src/docs/quick-start.md step 3.
+[tool.basilisk.per-path-overrides."examples/**"]
+rules."BSK-E0001" = "warning"
+rules."BSK-E0002" = "warning"
+rules."BSK-E0003" = "warning"
+rules."BSK-E0004" = "warning"
+rules."BSK-E0005" = "warning"
+rules."BSK-E0025" = "warning"

@@ -95,13 +95,16 @@ Basilisk (alpha) implements Phase 1 of a seven-phase roadmap.
 ## Try it
 
 ```bash
+brew tap Nimblesite/tap && brew install basilisk   # Scoop and binaries: see the install docs
+
 git clone https://github.com/Nimblesite/Basilisk
-cd basilisk
-cargo build --release
-./target/release/basilisk check examples/bad.py
+cd Basilisk
+basilisk check examples/bad.py
 ```
 
-If you want to see the diagnostics in action, the repository includes `examples/bad.py` (with intentional errors), `examples/good.py` (clean), and `examples/mixed.py` (realistic mixed case).
+Or skip the CLI entirely — the [VS Code extension](/docs/install-vscode/) bundles the binary. All install options are in the [installation docs](/docs/install-cli/).
+
+If you want to see the diagnostics in action, the repository includes `examples/bad.py` (every error a genuine typing-spec violation), `examples/good.py` (clean), and `examples/mixed.py` (realistic mixed case).
 
 File issues on [GitHub](https://github.com/Nimblesite/Basilisk/issues). The specification is in `SPEC.md` if you want to understand the full design.
 

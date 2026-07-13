@@ -97,13 +97,16 @@ Basilisk (alpha) 实现了七阶段路线图的前两个阶段。
 ## 试用
 
 ```bash
+brew tap Nimblesite/tap && brew install basilisk   # Scoop 和二进制文件：参见安装文档
+
 git clone https://github.com/Nimblesite/Basilisk
-cd basilisk
-cargo build --release
-./target/release/basilisk check examples/bad.py
+cd Basilisk
+basilisk check examples/bad.py
 ```
 
-如果您想看到诊断的实际效果，存储库包含 `examples/bad.py`（含有意的错误）、`examples/good.py`（干净的）和 `examples/mixed.py`（现实的混合情况）。
+或者完全跳过 CLI——VS Code 扩展内置了该二进制文件。所有安装方式见[安装文档](/zh/docs/installation/)。
+
+如果您想看到诊断的实际效果，存储库包含 `examples/bad.py`（每个错误都是真实的类型规范违反）、`examples/good.py`（干净的）和 `examples/mixed.py`（现实的混合情况）。
 
 在 [GitHub](https://github.com/Nimblesite/Basilisk/issues) 上提交问题。如果您想了解完整设计，规范在 `SPEC.md` 中。
 

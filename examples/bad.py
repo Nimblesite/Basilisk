@@ -7,7 +7,9 @@
 # The final section violates only Basilisk's opt-in strictness rules. Those
 # stay silent until a project enables them — per rule, at any severity — in
 # `[tool.basilisk.rules]` or via "Basilisk: Open Configuration Editor" in
-# VS Code. This repository opts in at the root `pyproject.toml`.
+# VS Code. This repository enables them for `examples/**` as warnings in the
+# root `pyproject.toml`: the incremental-adoption setup, where warnings mean
+# "this type-checks, but strictness isn't at full yet".
 
 from typing import override
 
