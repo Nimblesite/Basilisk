@@ -185,7 +185,7 @@ The path pattern is relative to the project root and uses forward slashes. For
 a matching test file, the path entry wins over the project entry for this one
 rule. Source files elsewhere still receive the project-level error.
 
-![The real Basilisk preview dialog shows BSK-E0002 changing from inherited to warning only for tests, along with recalculated workspace impact and separate Keep editing and Apply once actions.](../assets/screenshots/09-configuration-preview.png)
+![The real Basilisk preview dialog shows BSK-E0002 changing from inherited to warning only for tests, along with recalculated workspace impact and separate Cancel and Apply changes actions.](../assets/screenshots/09-configuration-preview.png)
 
 *Figure 9.3 — The captured preview is deliberately left unapplied. It shows
 which persisted entry would change and how the current Signal Box diagnostics
@@ -194,9 +194,9 @@ would be reclassified without mutating the fixture used to reproduce the image.*
 Read the lower line first: it names `BSK-E0002`, the `tests/**` path, and the
 change from inherited path behaviour to Warning. Then read the impact cards.
 Those numbers are a forecast for the current workspace, not a promise about
-future files. **Keep editing** closes the preview. **Apply once** approves this
-specific preview, writes the active project file through a VS Code workspace
-edit, and asks Basilisk to recheck the root.
+future files. **Cancel** closes the preview without changing anything. **Apply
+changes** approves this specific preview, writes and saves the active project
+file through a VS Code workspace edit, and asks Basilisk to recheck the root.
 
 If the configuration changes after the preview was calculated, Basilisk
 rejects the stale revision instead of overwriting the newer text. Refresh,
@@ -240,8 +240,8 @@ complete decision:
    `tests/test_readings.py` becomes a warning; the missing return in
    `src/signal_box/readings.py` remains an error; the missing parameter remains
    an error because this change names only `BSK-E0002`.
-5. Compare your prediction with the impact preview. Apply once, open the raw
-   configuration, and find the new path table.
+5. Compare your prediction with the impact preview. Apply the changes, open the
+   raw configuration, and find the new path table.
 6. Run the check again. Then use **Inherited · reset** at that path and confirm
    that the explicit test entry disappears and project-level error behaviour
    returns.
@@ -251,7 +251,7 @@ Warning. Which diagnostics change category, and which remain untouched?
 
 For an independent variation, choose one real directory in your own project
 and one rule whose purpose you understand. Write down the expected affected
-files before opening the preview. If the preview surprises you, keep editing;
+files before opening the preview. If the preview surprises you, cancel it;
 the surprise is evidence that the proposed policy was not yet clear enough.
 
 Project and path settings answer broad, durable questions. An inline
@@ -270,7 +270,7 @@ when the repository is actually making a project choice.
 - The configuration editor renders server-owned rules and edits the active
   project file rather than keeping a private settings copy.
 - Preview makes the exact scope, persisted entry, and current diagnostic impact
-  visible before Apply once.
+  visible before you apply the changes.
 - A path override changes one named rule in one bounded area without weakening
   unrelated checks.
 - Presets expand into ordinary rule entries; they are recipes, not modes.

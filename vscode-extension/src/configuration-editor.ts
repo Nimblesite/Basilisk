@@ -459,6 +459,31 @@ export class ConfigurationEditorController implements vscode.Disposable {
   }
 }
 
+/** Locate the open text document backing the active configuration source. */
+function findConfigurationDocument(sourceUri: string): vscode.TextDocument | undefined {
+  try {
+    const target = vscode.Uri.parse(sourceUri, true).toString();
+    return vscode.workspace.textDocuments.find((document) => document.uri.toString() === target);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Implements [CONFIGEDITOR-SOURCES]: a successful apply must reach disk. The
+ * client-side `workspace.applyEdit` only rewrites the in-memory buffer, and the
+ * server overlay merely bridges "until the client write is visible on disk" —
+ * so persist the document the apply edit dirtied.
+ */
+async function saveConfigurationDocument(sourceUri: string): Promise<void> {
+  const document = findConfigurationDocument(sourceUri);
+  if (document?.isDirty !== true) { return; }
+  const saved = await document.save();
+  if (!saved) {
+    Logger.warn("Configuration apply could not save pyproject.toml; the change is still unsaved in the editor");
+  }
+}
+
 function fileIsWithinRoot(target: vscode.Uri, rootUri: string | undefined): boolean {
   if (rootUri === undefined) { return false; }
   try {

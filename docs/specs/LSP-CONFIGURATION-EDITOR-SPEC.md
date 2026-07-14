@@ -79,7 +79,7 @@ For one root, discovery always selects the root's `pyproject.toml` — the exist
 
 The writer validates the original structure, validates every requested severity, renders the complete replacement, and validates it again before returning a patch. TOML edits preserve unrelated content, comments, ordering, and newline style. Reset removes empty generated rule/path/adoption tables.
 
-Closed-source apply sends a whole-document `WorkspaceEdit`, then keeps a root-scoped in-memory overlay until the client write is visible on disk. Disk revision checks prevent a stale preview from overwriting an external edit.
+Closed-source apply sends a whole-document `WorkspaceEdit`, then keeps a root-scoped in-memory overlay until the client write is visible on disk. Disk revision checks prevent a stale preview from overwriting an external edit. The client owns making that write durable: applying a `WorkspaceEdit` only rewrites the in-memory buffer, so after a successful apply the VS Code client saves the configuration document its edit dirtied. A source that already carried the user's own unsaved edits stays under the user's control and is not saved implicitly.
 
 ### Open buffers and optimistic locks {#CONFIGEDITOR-SOURCES-OPEN-BUFFER}
 
