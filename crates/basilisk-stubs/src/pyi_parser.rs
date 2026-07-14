@@ -10,13 +10,13 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use ruff_python_ast::{
-    self as ast, Decorator, Expr, Parameters, Stmt, StmtAnnAssign, StmtAssign, StmtClassDef,
-    StmtFunctionDef,
+    self as ast, Decorator, Expr, Parameters, Stmt, StmtAnnAssign, StmtAssign, StmtAugAssign,
+    StmtClassDef, StmtFunctionDef, StmtIf, StmtImport, StmtImportFrom,
 };
 
 use crate::types::{
-    StubClass, StubFunction, StubModule, StubParam, StubParamKind, StubSource, StubTier,
-    StubVariable,
+    StarReexport, StubClass, StubFunction, StubModule, StubParam, StubParamKind, StubSource,
+    StubTier, StubVariable,
 };
 
 /// Errors that can occur during `.pyi` parsing.
@@ -98,6 +98,9 @@ struct StubExtractor {
     overloads: HashMap<String, Vec<StubFunction>>,
     classes: HashMap<String, StubClass>,
     variables: HashMap<String, StubVariable>,
+    dunder_all: Option<Vec<String>>,
+    reexported_names: Vec<String>,
+    star_reexports: Vec<StarReexport>,
 }
 
 impl StubExtractor {
@@ -111,6 +114,9 @@ impl StubExtractor {
             overloads: HashMap::new(),
             classes: HashMap::new(),
             variables: HashMap::new(),
+            dunder_all: None,
+            reexported_names: Vec::new(),
+            star_reexports: Vec::new(),
         }
     }
 
@@ -124,6 +130,9 @@ impl StubExtractor {
             overloads: self.overloads,
             classes: self.classes,
             variables: self.variables,
+            dunder_all: self.dunder_all,
+            reexported_names: self.reexported_names,
+            star_reexports: self.star_reexports,
         }
     }
 
@@ -135,9 +144,105 @@ impl StubExtractor {
                 Stmt::ClassDef(class) => self.visit_class(class),
                 Stmt::AnnAssign(ann) => self.visit_ann_assign(ann),
                 Stmt::Assign(assign) => self.visit_assign(assign),
+                Stmt::AugAssign(aug) => self.visit_aug_assign(aug),
+                Stmt::Import(import) => self.visit_import(import),
+                Stmt::ImportFrom(import) => self.visit_import_from(import),
+                Stmt::If(if_stmt) => self.visit_if(if_stmt),
                 _ => {}
             }
         }
+    }
+
+    // Implements [STUBRES-PYI-REEXPORTS] — the typing spec's import
+    // conventions: `import x as x` marks `x` as re-exported.
+    fn visit_import(&mut self, import: &StmtImport) {
+        for alias in &import.names {
+            if alias
+                .asname
+                .as_ref()
+                .is_some_and(|asname| asname.as_str() == alias.name.as_str())
+            {
+                self.reexported_names.push(alias.name.to_string());
+            }
+        }
+    }
+
+    // Implements [STUBRES-PYI-REEXPORTS] — `from y import *` re-exports the
+    // target's export set; `from y import x as x` re-exports `x`.
+    fn visit_import_from(&mut self, import: &StmtImportFrom) {
+        if import.names.iter().any(|alias| alias.name.as_str() == "*") {
+            self.star_reexports.push(StarReexport {
+                module: import
+                    .module
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_default(),
+                level: import.level,
+            });
+            return;
+        }
+        for alias in &import.names {
+            if alias
+                .asname
+                .as_ref()
+                .is_some_and(|asname| asname.as_str() == alias.name.as_str())
+            {
+                self.reexported_names.push(alias.name.to_string());
+            }
+        }
+    }
+
+    /// Collect export-affecting statements (`__all__`, re-export imports) from
+    /// version/platform-gated branches (`if sys.version_info >= …:`). Branches
+    /// are unioned: for attribute existence an over-approximation can only
+    /// suppress false positives, never create one ([STUBRES-PYI-REEXPORTS]).
+    /// Definitions inside conditionals stay out of scope, as at top level.
+    fn visit_if(&mut self, if_stmt: &StmtIf) {
+        self.collect_conditional_exports(&if_stmt.body);
+        for clause in &if_stmt.elif_else_clauses {
+            self.collect_conditional_exports(&clause.body);
+        }
+    }
+
+    /// The `if`-body statement walk backing [`Self::visit_if`].
+    fn collect_conditional_exports(&mut self, stmts: &[Stmt]) {
+        for stmt in stmts {
+            match stmt {
+                Stmt::Import(import) => self.visit_import(import),
+                Stmt::ImportFrom(import) => self.visit_import_from(import),
+                Stmt::Assign(assign) => self.collect_assign_dunder_all(assign),
+                Stmt::AugAssign(aug) => self.visit_aug_assign(aug),
+                Stmt::If(nested) => self.visit_if(nested),
+                _ => {}
+            }
+        }
+    }
+
+    /// Record `__all__ = [...]` / `__all__ = (...)` entries.
+    fn collect_assign_dunder_all(&mut self, assign: &StmtAssign) {
+        let targets_all = assign
+            .targets
+            .iter()
+            .any(|target| matches!(target, Expr::Name(name) if name.id == "__all__"));
+        if targets_all {
+            self.record_dunder_all(&assign.value);
+        }
+    }
+
+    /// Record `__all__ += [...]` extensions ([STUBRES-PYI-REEXPORTS]).
+    fn visit_aug_assign(&mut self, aug: &StmtAugAssign) {
+        if matches!(aug.target.as_ref(), Expr::Name(name) if name.id == "__all__") {
+            self.record_dunder_all(&aug.value);
+        }
+    }
+
+    /// Fold the string entries of a list/tuple literal into `dunder_all`.
+    /// A non-literal value (e.g. `__all__ = _helper()`) is ignored.
+    fn record_dunder_all(&mut self, value: &Expr) {
+        let Some(entries) = string_list_entries(value) else {
+            return;
+        };
+        self.dunder_all.get_or_insert_with(Vec::new).extend(entries);
     }
 
     // Implements [STUBRES-PYI] — `@overload` is the one decorator that is
@@ -249,6 +354,7 @@ impl StubExtractor {
     }
 
     fn visit_assign(&mut self, assign: &StmtAssign) {
+        self.collect_assign_dunder_all(assign);
         // Handle `__all__ = [...]` and type alias assignments like `X = int`.
         for target in &assign.targets {
             if let Expr::Name(name_expr) = target {
@@ -263,6 +369,25 @@ impl StubExtractor {
             }
         }
     }
+}
+
+/// The string entries of a list/tuple literal (`["a", "b"]` / `("a", "b")`),
+/// or `None` for any other expression. Non-string elements are skipped.
+fn string_list_entries(expr: &Expr) -> Option<Vec<String>> {
+    let elements = match expr {
+        Expr::List(list) => &list.elts,
+        Expr::Tuple(tuple) => &tuple.elts,
+        _ => return None,
+    };
+    Some(
+        elements
+            .iter()
+            .filter_map(|element| match element {
+                Expr::StringLiteral(literal) => Some(literal.value.to_string()),
+                _ => None,
+            })
+            .collect(),
+    )
 }
 
 /// Extract the target name from an annotated assignment (`x: int = ...`).
