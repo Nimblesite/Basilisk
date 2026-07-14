@@ -2,6 +2,9 @@
 /** Contract, thin-shell, security, accessibility, and lifecycle tests. */
 
 import * as assert from "assert";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import type {
@@ -357,6 +360,63 @@ suite("Configuration editor — transaction lifecycle", () => {
       assert.strictEqual(transport.snapshotRequests.length, 2, "safe fixes refresh exact LSP-owned counts");
     } finally {
       controller.dispose();
+    }
+  });
+
+  // Implements [CONFIGEDITOR-SOURCES]: the server keeps its closed-source
+  // overlay only "until the client write is visible on disk", so a successful
+  // apply must actually reach disk. vscode.workspace.applyEdit (what
+  // vscode-languageclient runs for the server's workspace/applyEdit) only
+  // edits the in-memory buffer — the applied change must not die there.
+  test("apply persists the configuration edit to disk instead of leaving a dirty buffer", async () => {
+    const scratchRoot = fs.mkdtempSync(path.join(os.tmpdir(), "bsk-config-apply-"));
+    const configPath = path.join(scratchRoot, "pyproject.toml");
+    const originalToml = '[project]\nname = "demo"\n';
+    const appliedToml = '[project]\nname = "demo"\n\n[tool.basilisk.rules]\n"BSK-E0001" = "warning"\n';
+    fs.writeFileSync(configPath, originalToml);
+    const configUri = vscode.Uri.file(configPath);
+    const scratchRootUri = vscode.Uri.file(scratchRoot).toString();
+    const scratchSnapshot = (revision: string): ConfigurationSnapshot => ({
+      ...configurationSnapshot(revision),
+      rootUri: scratchRootUri,
+      source: { ...configurationSnapshot(revision).source, uri: configUri.toString() },
+    });
+    const store = createStore();
+    const transport = new RecordingTransport();
+    transport.snapshotResult = scratchSnapshot("revision-1");
+    transport.applyHandler = async () => {
+      const document = await vscode.workspace.openTextDocument(configUri);
+      const replacement = new vscode.WorkspaceEdit();
+      replacement.replace(
+        configUri,
+        new vscode.Range(new vscode.Position(0, 0), document.positionAt(document.getText().length)),
+        appliedToml,
+      );
+      assert.ok(await vscode.workspace.applyEdit(replacement), "harness workspace edit must apply");
+      return scratchSnapshot("revision-2");
+    };
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(scratchRootUri);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      await controller.receive({
+        type: "preview",
+        mutations: [{ selector: { kind: "Codes", codes: ["B001"] }, setting: { kind: "Warning" }, scope: { kind: "Project" } }],
+      });
+      await pollUntil(() => store.configurationEditor.value.phase === "preview");
+      await controller.receive({ type: "apply" });
+      await pollUntil(() => store.configurationEditor.value.snapshot?.revision === "revision-2");
+
+      const document = await vscode.workspace.openTextDocument(configUri);
+      assert.strictEqual(document.isDirty, false, "apply must not strand pyproject.toml as a dirty buffer");
+      assert.strictEqual(
+        fs.readFileSync(configPath, "utf8"),
+        appliedToml,
+        "the applied configuration must be visible on disk",
+      );
+    } finally {
+      controller.dispose();
+      fs.rmSync(scratchRoot, { recursive: true, force: true });
     }
   });
 
