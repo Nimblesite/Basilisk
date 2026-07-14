@@ -65,7 +65,15 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BSK="$ROOT/target/release/basilisk"
-FX="$ROOT/benchmarks/fixtures"
+# Fixtures are timed from a config-neutral copy OUTSIDE the repository:
+# per-file config discovery walks ancestor directories
+# ([CHKARCH-CONFIG-DISCOVERY]), so timing the in-repo files would make
+# basilisk inherit the repo's own [tool.basilisk] rules — measuring opt-in
+# house rules instead of every tool's out-of-the-box default, and skewing
+# the basilisk column relative to competitors.
+FX_SRC="$ROOT/benchmarks/fixtures"
+FX="$(mktemp -d "${TMPDIR:-/tmp}/basilisk-bench-fixtures.XXXXXX")"
+cp "$FX_SRC"/*.py "$FX/"
 OUT="$ROOT/benchmarks/results"
 STATUS_DIR="$ROOT/benchmarks/status"
 RUNS="${RUNS:-10}"
@@ -248,8 +256,10 @@ fi
 # benchmark run never leaves cache litter in the repo. Gated on those two tools
 # being measured so we don't delete an unrelated cache when neither ran. The trap
 # fires on every exit path, including the regression-gate failure (exit 3).
+# The single EXIT trap also removes the config-neutral fixture copy.
 case " ${TOOL_NAMES[*]} " in
-  *" mypy "*|*" zuban "*) trap 'rm -rf .mypy_cache' EXIT ;;
+  *" mypy "*|*" zuban "*) trap 'rm -rf .mypy_cache "$FX"' EXIT ;;
+  *) trap 'rm -rf "$FX"' EXIT ;;
 esac
 
 version_of() {

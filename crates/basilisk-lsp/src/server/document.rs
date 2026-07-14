@@ -9,9 +9,10 @@ use std::sync::Arc;
 
 use tower_lsp::lsp_types::{
     DidChangeTextDocumentParams, DidChangeWatchedFilesParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, FileChangeType, Url,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, FileChangeType,
+    TextDocumentContentChangeEvent, Url,
 };
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::config::AnalysisMode;
 use crate::util::position_to_byte_offset;
@@ -23,6 +24,17 @@ pub(super) async fn did_open(server: &LspServer, params: DidOpenTextDocumentPara
     let uri = params.text_document.uri;
     let text = params.text_document.text;
     let version = params.text_document.version;
+    let roots = server.workspace_roots.read().await.clone();
+    if server
+        .configuration_editor
+        .open_document(&roots, &uri, text.clone(), version)
+    {
+        refresh_configuration_buffer(server, &uri, "bufferOpen").await;
+        return;
+    }
+    if crate::configuration_editor::ConfigurationEditorState::is_configuration_candidate(&uri) {
+        return;
+    }
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else { return };
     let diags = index.set_open(&uri, &text, version);
@@ -36,23 +48,28 @@ pub(super) async fn did_open(server: &LspServer, params: DidOpenTextDocumentPara
 pub(super) async fn did_change(server: &LspServer, params: DidChangeTextDocumentParams) {
     let uri = params.text_document.uri;
     let version = params.text_document.version;
+    if let Some(text) = server.configuration_editor.open_text(&uri) {
+        let text = apply_content_changes(text, params.content_changes);
+        if server
+            .configuration_editor
+            .change_document(&uri, text, version)
+            .is_some()
+        {
+            refresh_configuration_buffer(server, &uri, "bufferChange").await;
+        }
+        return;
+    }
+    if crate::configuration_editor::ConfigurationEditorState::is_configuration_candidate(&uri) {
+        return;
+    }
 
     // Get current text for incremental edits.
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else { return };
-    let mut text = index.get_text(&uri).unwrap_or_default();
+    let text = index.get_text(&uri).unwrap_or_default();
     drop(guard);
 
-    // Apply incremental changes.
-    for change in params.content_changes {
-        if let Some(range) = change.range {
-            let start = position_to_byte_offset(&text, range.start);
-            let end = position_to_byte_offset(&text, range.end);
-            text.replace_range(start..end, &change.text);
-        } else {
-            text = change.text;
-        }
-    }
+    let text = apply_content_changes(text, params.content_changes);
 
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else { return };
@@ -68,6 +85,17 @@ pub(super) async fn did_change(server: &LspServer, params: DidChangeTextDocument
 /// Handle `textDocument/didSave`: re-run the pipeline on the cached text.
 pub(super) async fn did_save(server: &LspServer, params: DidSaveTextDocumentParams) {
     let uri = params.text_document.uri;
+    if server
+        .configuration_editor
+        .save_document(&uri, params.text)
+        .is_some()
+    {
+        refresh_configuration_buffer(server, &uri, "bufferSave").await;
+        return;
+    }
+    if crate::configuration_editor::ConfigurationEditorState::is_configuration_candidate(&uri) {
+        return;
+    }
     // Re-run the pipeline on the cached in-memory text (already up-to-date).
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else { return };
@@ -78,6 +106,10 @@ pub(super) async fn did_save(server: &LspServer, params: DidSaveTextDocumentPara
     drop(guard);
     for (target, diags) in results {
         server.publish_diagnostics_if_enabled(target, diags).await;
+    }
+
+    if let Err(error) = super::adoption::graduate_fixed_rules(server, &uri).await {
+        warn!(uri = %uri, %error, "failed to auto-graduate fixed adoption rules");
     }
 
     // Notify activity panels that this module changed.
@@ -117,6 +149,21 @@ fn is_test_file(path: &std::path::Path) -> bool {
 /// the current analysis mode and whether the file is inside a workspace root.
 pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentParams) {
     let uri = params.text_document.uri;
+    if let Some(root) = server.configuration_editor.close_document(&uri) {
+        if let Err(error) = crate::configuration_editor::refresh_after_configuration_change(
+            server,
+            &root,
+            "bufferClose",
+        )
+        .await
+        {
+            warn!(root = %root.display(), %error, "failed to reload closed configuration buffer");
+        }
+        return;
+    }
+    if crate::configuration_editor::ConfigurationEditorState::is_configuration_candidate(&uri) {
+        return;
+    }
     super::diaglog!("[DIAG] did_close ENTER uri={uri}");
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else {
@@ -177,37 +224,64 @@ pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentPa
     }
 }
 
+fn apply_content_changes(mut text: String, changes: Vec<TextDocumentContentChangeEvent>) -> String {
+    for change in changes {
+        if let Some(range) = change.range {
+            let start = position_to_byte_offset(&text, range.start);
+            let end = position_to_byte_offset(&text, range.end);
+            if start <= end {
+                text.replace_range(start..end, &change.text);
+            }
+        } else {
+            text = change.text;
+        }
+    }
+    text
+}
+
+async fn refresh_configuration_buffer(server: &LspServer, uri: &Url, reason: &str) {
+    let Some(root) = server.configuration_editor.save_document(uri, None) else {
+        return;
+    };
+    if let Err(error) =
+        crate::configuration_editor::refresh_after_configuration_change(server, &root, reason).await
+    {
+        tracing::debug!(root = %root.display(), %error, "configuration buffer is not yet valid");
+    }
+}
+
 /// Handle `workspace/didChangeWatchedFiles`: debounce and republish diagnostics
 /// for changed/created Python files, and clear diagnostics for deleted files.
 pub(super) async fn did_change_watched_files(
     server: &LspServer,
     params: DidChangeWatchedFilesParams,
 ) {
-    // Quick mode check — bail early for openFilesOnly without taking the write lock.
+    log_uv_config_changes(&params);
+    refresh_changed_configuration_sources(server, &params).await;
+
+    let needs_python_version_refresh = params
+        .changes
+        .iter()
+        .any(|change| change.uri.path().ends_with(".python-version"));
+    if needs_python_version_refresh {
+        reload_index_configs(server).await;
+    }
+    let needs_registry_refresh = params.changes.iter().any(|change| {
+        let path = change.uri.path();
+        path.ends_with("uv.lock") || path.ends_with("pyproject.toml")
+    });
+    if needs_registry_refresh || needs_python_version_refresh {
+        super::init::rebuild_registry_and_resolve(server).await;
+    }
+
+    // Config changes are relevant in every analysis mode. Only disk-driven
+    // Python module reloads are skipped when the server tracks open files.
     {
         let guard = server.index.read().await;
         let Some(index) = guard.as_ref() else { return };
         if index.mode() == AnalysisMode::OpenFilesOnly {
-            return; // File-watcher events are irrelevant in openFilesOnly mode.
+            return;
         }
-    }
-
-    // A change to any project config file must update diagnostics without an LSP
-    // restart: reload each root's checker config so version-aware rules and
-    // severity overrides take effect (issue #93 reactivity), then rebuild the uv
-    // package registry and re-resolve + re-check every file.
-    let needs_config_refresh = params.changes.iter().any(|change| {
-        let path = change.uri.path();
-        path.ends_with("uv.lock")
-            || path.ends_with("pyproject.toml")
-            || path.ends_with("basilisk.json")
-            || path.ends_with(".python-version")
-    });
-
-    log_uv_config_changes(&params);
-    if needs_config_refresh {
-        reload_index_configs(server).await;
-        super::init::rebuild_registry_and_resolve(server).await;
     }
 
     // Classify the incoming changes, filtering to Python files only.
@@ -314,6 +388,42 @@ pub(super) async fn did_change_watched_files(
         old.abort();
     }
     *debounce = Some(abort_handle);
+}
+
+async fn refresh_changed_configuration_sources(
+    server: &LspServer,
+    params: &DidChangeWatchedFilesParams,
+) {
+    let roots = server.workspace_roots.read().await.clone();
+    let mut changed_roots = Vec::new();
+    for change in &params.changes {
+        let Ok(path) = change.uri.to_file_path() else {
+            continue;
+        };
+        let Some(root) = roots
+            .iter()
+            .find(|root| path.parent() == Some(root.as_path()))
+        else {
+            continue;
+        };
+        let is_active_pyproject = path
+            .file_name()
+            .is_some_and(|name| name == "pyproject.toml");
+        if is_active_pyproject && !changed_roots.contains(root) {
+            changed_roots.push(root.clone());
+        }
+    }
+    for root in changed_roots {
+        if let Err(error) = crate::configuration_editor::refresh_after_configuration_change(
+            server,
+            &root,
+            "externalEdit",
+        )
+        .await
+        {
+            warn!(root = %root.display(), %error, "failed to refresh changed configuration");
+        }
+    }
 }
 
 /// Re-read each workspace root's checker config from disk after a watched config

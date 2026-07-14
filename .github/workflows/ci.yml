@@ -477,13 +477,28 @@ jobs:
 
   # ── Neovim extension (runs in parallel) ────────────────────────────────────
   test-nvim:
-    name: Neovim Extension
+    name: Neovim Extension (${{ matrix.neovim.label }})
     needs: changes
     # Its own tree, or any core change — the e2e harness drives the real binary
     # over LSP/DAP, so a checker/LSP change alters what this suite exercises.
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.nvim == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # The 0.11 leg finishes in ~7min, but nightly runs the LSP suite ~3× slower
+    # (~12min per pass) and test-nvim.sh's bounded footer-flake retry can
+    # legitimately run the suite twice — build + two passes + screenshots needs
+    # ~30min worst case. This is a hang backstop, not a perf budget.
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        # The plugin requires Neovim 0.11+ (health.lua hard-errors below it and
+        # lua/basilisk/lsp.lua uses the 0.11-only vim.lsp.config/vim.lsp.enable),
+        # so the matrix covers the supported floor and the forward-compat tip.
+        neovim:
+          - label: "0.11"
+            version: v0.11.6
+          - label: nightly
+            version: nightly
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -510,7 +525,7 @@ jobs:
         uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1
         with:
           neovim: true
-          version: v0.11.6
+          version: ${{ matrix.neovim.version }}
 
       # The nvim e2e harness git-clones plenary/dap/mini into /tmp on every run.
       # Cache them so the clones become no-ops — test-nvim.sh skips any dir that
@@ -522,13 +537,34 @@ jobs:
             /tmp/plenary.nvim
             /tmp/nvim-dap
             /tmp/mini.nvim
-          key: nvim-test-plugins-${{ runner.os }}-v1
+          key: nvim-test-plugins-${{ runner.os }}-${{ matrix.neovim.label }}-v1
 
       - name: Run Neovim extension tests
         run: |
           eval "$(luarocks path)"
           export PATH="$HOME/.luarocks/bin:$PATH"
           ./scripts/test-nvim.sh
+
+  # Fan-in gate for the Neovim matrix. Branch protection on main requires the
+  # context "Neovim Extension" (the job's pre-matrix name); the matrix legs
+  # report as "Neovim Extension (0.11)" / "(nightly)", so without this job the
+  # required context never reports and every PR is blocked forever — the same
+  # pitfall documented on mutation-test-shard below. Mirrors the Mutation
+  # Testing shard→merge pattern: succeeds only when every leg succeeded, or
+  # when the matrix was legitimately skipped by change scope; a failed or
+  # cancelled leg fails the gate.
+  nvim-gate:
+    name: Neovim Extension
+    needs: test-nvim
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Assert every Neovim matrix leg succeeded
+        run: |
+          result="${{ needs.test-nvim.result }}"
+          echo "test-nvim matrix result: $result"
+          [ "$result" = "success" ] || [ "$result" = "skipped" ]
 
   # ── Mutation testing (runs in parallel shards) ─────────────────────────────
   mutation-test-shard:

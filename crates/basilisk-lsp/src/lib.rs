@@ -34,6 +34,7 @@ pub mod code_lens;
 pub mod color;
 pub mod completion;
 pub mod config;
+pub mod configuration_editor;
 pub mod coverage;
 pub mod debug;
 pub mod declaration;

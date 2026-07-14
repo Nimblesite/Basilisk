@@ -30,12 +30,12 @@ pub struct LspStdioFixture {
     pub responses: Receiver<String>,
     /// Auto-incrementing request ID counter.
     pub next_id: i64,
-    /// Temp workspace root opened during initialize. It ships a `basilisk.json`
-    /// that opts into the annotation house rules (off by default — the default
-    /// config is pure PEP conformance). Documents fall back to this root's
-    /// config, so house diagnostics (`BSK-E0001` …) fire exactly as they do for
-    /// a project that enabled them. No modes; configuration.
-    /// See [CHKARCH-CONFIGURATION-ONLY].
+    /// Temp workspace root opened during initialize. It ships a `pyproject.toml`
+    /// whose `[tool.basilisk.rules]` opts into the annotation house rules (off
+    /// by default — the default config is pure PEP conformance). Documents fall
+    /// back to this root's config, so house diagnostics (`BSK-E0001` …) fire
+    /// exactly as they do for a project that enabled them. No modes;
+    /// configuration. See [CHKARCH-CONFIGURATION-ONLY].
     pub workspace_root: std::path::PathBuf,
 }
 
@@ -123,8 +123,15 @@ impl LspStdioFixture {
             std::env::temp_dir().join(format!("bsk_lsp_stdio_{}_{seq}", std::process::id()));
         std::fs::create_dir_all(&workspace_root)?;
         std::fs::write(
-            workspace_root.join("basilisk.json"),
-            "{\"strictAnnotations\": true}\n",
+            workspace_root.join("pyproject.toml"),
+            concat!(
+                "[tool.basilisk.rules]\n",
+                "\"BSK-E0001\" = \"error\"\n",
+                "\"BSK-E0002\" = \"error\"\n",
+                "\"BSK-E0003\" = \"error\"\n",
+                "\"BSK-E0005\" = \"error\"\n",
+                "\"BSK-W0050\" = \"warning\"\n"
+            ),
         )?;
 
         Ok(Self {
@@ -271,9 +278,26 @@ impl LspStdioFixture {
     /// Wait for a `publishDiagnostics` notification, skipping unrelated messages.
     #[must_use]
     pub fn wait_for_diagnostics(&self) -> Option<String> {
-        for _ in 0..10 {
+        self.wait_for_diagnostics_matching(|_| true)
+    }
+
+    /// Wait for a `publishDiagnostics` notification whose text satisfies
+    /// `predicate`, draining earlier publishes and unrelated messages.
+    ///
+    /// The server may emit several `publishDiagnostics` for one document (an
+    /// initial publish followed by the settled one, or a stale populated
+    /// publish still in flight when a clearing publish is expected after
+    /// `didClose`). Reading a single notification and asserting on it therefore
+    /// races under parallel load. This drains publishes until one matches,
+    /// keeping the assertion intact while removing the ordering assumption.
+    #[must_use]
+    pub fn wait_for_diagnostics_matching(
+        &self,
+        predicate: impl Fn(&str) -> bool,
+    ) -> Option<String> {
+        for _ in 0..12 {
             let msg = self.recv()?;
-            if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") {
+            if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") && predicate(&msg) {
                 return Some(msg);
             }
         }

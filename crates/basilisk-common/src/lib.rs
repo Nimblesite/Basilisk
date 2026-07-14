@@ -169,6 +169,26 @@ pub mod commands {
     ];
 }
 
+/// Custom request/notification method names for the configuration editor.
+///
+/// Implements [LSPARCH-CONFIG-EDITOR-PROTOCOL]. Keeping these strings in the
+/// dependency-free common crate lets every editor use the exact server contract
+/// without copying method names.
+pub mod configuration_editor {
+    /// Read the resolved configuration, catalog, and workspace impact.
+    pub const SNAPSHOT: &str = "basilisk/configurationSnapshot";
+    /// Validate and analyse a configuration mutation without writing it.
+    pub const PREVIEW: &str = "basilisk/previewConfigurationChange";
+    /// Apply a previously previewed, revision-checked configuration mutation.
+    pub const APPLY: &str = "basilisk/applyConfigurationChange";
+    /// Page through diagnostics selected by rule/tag/fixability.
+    pub const OCCURRENCES: &str = "basilisk/ruleOccurrences";
+    /// Notify clients that a root's effective configuration changed.
+    pub const CHANGED: &str = "basilisk/configurationChanged";
+    /// Current protocol version advertised in `ServerCapabilities.experimental`.
+    pub const VERSION: u8 = 1;
+}
+
 /// Slash command names used in the Zed extension's AI assistant panel.
 ///
 /// These are also used as the canonical identifiers for profiling and memory
@@ -230,11 +250,6 @@ pub mod config_keys {
     pub const UV_EXECUTABLE_PATH: &str = "executablePath";
     /// Auto-sync when pyproject.toml changes.
     pub const UV_AUTO_SYNC: &str = "autoSync";
-    /// Show type stub installation suggestions.
-    pub const UV_STUB_SUGGESTIONS: &str = "stubSuggestions";
-    /// Show dependency hygiene diagnostics.
-    pub const UV_DEPENDENCY_DIAGNOSTICS: &str = "dependencyDiagnostics";
-
     /// Test explorer configuration section.
     pub const TEST_EXPLORER: &str = "testExplorer";
     /// Enable/disable test discovery and execution.

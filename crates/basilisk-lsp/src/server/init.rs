@@ -92,9 +92,11 @@ pub(super) async fn initialize(
     // Store workspace roots for later use by import resolution.
     (*server.workspace_roots.write().await).clone_from(&roots);
 
-    // Load project-level checker config (pyproject.toml / basilisk.json) so
+    // Load project-level checker config (pyproject.toml [tool.basilisk]) so
     // that rule severity overrides, per-module, and per-path settings match
-    // the CLI.
+    // the CLI. The loader walks ancestor directories and merges cumulatively
+    // ([CHKARCH-CONFIG-DISCOVERY], GitHub #311), so a workspace folder opened
+    // inside a project still discovers the project's config.
     let checker_config = roots
         .first()
         .map(|r| basilisk_config::load_basilisk_config(r))
@@ -218,6 +220,13 @@ fn build_capabilities(formatting_enabled: bool) -> ServerCapabilities {
                 ..Default::default()
             }),
         }),
+        experimental: Some(serde_json::json!({
+            "basilisk": {
+                "configurationEditor": {
+                    "version": basilisk_common::configuration_editor::VERSION
+                }
+            }
+        })),
         ..Default::default()
     }
 }
@@ -506,8 +515,8 @@ pub(super) async fn did_change_workspace_folders(
     }
 }
 
-// Implements [LSPUV-WATCHERS] (uv.lock, .python-version, pyproject.toml,
-// basilisk.json; the spec's `.venv/pyvenv.cfg` row is not watched).
+// Implements [LSPUV-WATCHERS] (uv.lock, .python-version, pyproject.toml;
+// `.venv/pyvenv.cfg` is startup-only detection).
 /// Register file watchers for uv-related configuration files.
 ///
 /// Watches `**/uv.lock`, `**/.python-version`, and `**/pyproject.toml` so
@@ -524,10 +533,6 @@ async fn register_file_watchers(client: &Client) {
         },
         FileSystemWatcher {
             glob_pattern: GlobPattern::String("**/pyproject.toml".into()),
-            kind: None,
-        },
-        FileSystemWatcher {
-            glob_pattern: GlobPattern::String("**/basilisk.json".into()),
             kind: None,
         },
     ];
@@ -552,7 +557,7 @@ async fn register_file_watchers(client: &Client) {
     if let Err(err) = client.register_capability(vec![registration]).await {
         tracing::warn!("failed to register uv file watchers: {err}");
     } else {
-        info!("registered config file watchers (uv.lock, .python-version, pyproject.toml, basilisk.json)");
+        info!("registered config file watchers (uv.lock, .python-version, pyproject.toml)");
     }
 }
 
@@ -747,7 +752,9 @@ async fn clear_non_open_diagnostics(server: &LspServer) {
 /// Returns `None` if this is not a uv project, if there is no lock file, or
 /// if the lock file fails to parse. Errors are logged but never fatal — the
 /// LSP falls back to registry-free resolution.
-fn build_uv_registry(roots: &[std::path::PathBuf]) -> Option<Arc<basilisk_uv::PackageRegistry>> {
+pub(crate) fn build_uv_registry(
+    roots: &[std::path::PathBuf],
+) -> Option<Arc<basilisk_uv::PackageRegistry>> {
     let uv_info = basilisk_uv::detect_uv_project(roots)?;
 
     if !uv_info.has_lockfile {

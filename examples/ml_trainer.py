@@ -1,7 +1,7 @@
 """
 Machine-learning training loop — realistic ML code with type violations.
 
-Run:  cargo run -- check examples/ml_trainer.py
+Run:  basilisk check examples/ml_trainer.py
 """
 
 from __future__ import annotations

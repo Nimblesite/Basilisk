@@ -1,0 +1,431 @@
+{
+  "schemaVersion": 1,
+  "policy": "Published manuscript links must use an entry in this ledger.",
+  "sources": [
+    {
+      "key": "python-typing-spec",
+      "title": "Python typing specification",
+      "url": "https://typing.python.org/en/latest/spec/index.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["typing semantics", "normative index"]
+    },
+    {
+      "key": "python-typing-spec-type-system",
+      "title": "The Python type system",
+      "url": "https://typing.python.org/en/latest/spec/type-system.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["static typing", "type system"]
+    },
+    {
+      "key": "python-typing-spec-concepts",
+      "title": "Type system concepts",
+      "url": "https://typing.python.org/en/latest/spec/concepts.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["Any", "object", "assignability", "subtyping", "unions"]
+    },
+    {
+      "key": "python-typing-spec-annotations",
+      "title": "Type annotations",
+      "url": "https://typing.python.org/en/latest/spec/annotations.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["annotations", "annotation evaluation"]
+    },
+    {
+      "key": "python-typing-spec-special-types",
+      "title": "Special types",
+      "url": "https://typing.python.org/en/latest/spec/special-types.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["Any", "Never", "NoReturn", "self"]
+    },
+    {
+      "key": "python-typing-spec-aliases",
+      "title": "Type aliases",
+      "url": "https://typing.python.org/en/latest/spec/aliases.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["aliases", "type statement"]
+    },
+    {
+      "key": "python-typing-spec-callables",
+      "title": "Callables",
+      "url": "https://typing.python.org/en/latest/spec/callables.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["functions", "parameters", "returns", "callable variance"]
+    },
+    {
+      "key": "python-typing-spec-generics",
+      "title": "Generics",
+      "url": "https://typing.python.org/en/latest/spec/generics.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["type parameters", "generics", "variance"]
+    },
+    {
+      "key": "python-typing-spec-overloads",
+      "title": "Overloads",
+      "url": "https://typing.python.org/en/latest/spec/overload.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["overload", "overload implementation"]
+    },
+    {
+      "key": "python-typing-spec-narrowing",
+      "title": "Type narrowing",
+      "url": "https://typing.python.org/en/latest/spec/narrowing.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["narrowing", "TypeGuard", "control flow"]
+    },
+    {
+      "key": "python-typing-unreachable",
+      "title": "Unreachable code and exhaustiveness",
+      "url": "https://typing.python.org/en/latest/guides/unreachable.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living guide",
+      "topics": ["exhaustiveness", "assert_never", "reachability"]
+    },
+    {
+      "key": "python-typing-spec-protocols",
+      "title": "Protocols",
+      "url": "https://typing.python.org/en/latest/spec/protocol.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["protocols", "structural subtyping"]
+    },
+    {
+      "key": "python-typing-spec-typeddict",
+      "title": "Typed dictionaries",
+      "url": "https://typing.python.org/en/latest/spec/typeddict.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["TypedDict", "required keys", "read-only items"]
+    },
+    {
+      "key": "python-typing-spec-dataclasses",
+      "title": "Dataclasses",
+      "url": "https://typing.python.org/en/latest/spec/dataclasses.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["dataclasses", "data class transforms"]
+    },
+    {
+      "key": "python-typing-spec-enums",
+      "title": "Enumerations",
+      "url": "https://typing.python.org/en/latest/spec/enums.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["enums", "enum members"]
+    },
+    {
+      "key": "python-typing-spec-distributing",
+      "title": "Distributing type information",
+      "url": "https://typing.python.org/en/latest/spec/distributing.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["stubs", "py.typed", "import resolution", "packages"]
+    },
+    {
+      "key": "python-typing-spec-directives",
+      "title": "Type checker directives",
+      "url": "https://typing.python.org/en/latest/spec/directives.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["reveal_type", "cast", "type ignore", "TYPE_CHECKING"]
+    },
+    {
+      "key": "python-typing-conformance-tests",
+      "title": "Python typing conformance tests",
+      "url": "https://github.com/python/typing/tree/main/conformance/tests",
+      "authority": "Python typing repository",
+      "versionScope": "live upstream",
+      "topics": ["conformance tests"]
+    },
+    {
+      "key": "python-typing-conformance-results-live",
+      "title": "Python typing conformance results",
+      "url": "https://github.com/python/typing/blob/main/conformance/results/results.html",
+      "authority": "Python typing repository",
+      "versionScope": "live upstream",
+      "topics": ["current conformance results"]
+    },
+    {
+      "key": "python-typing-conformance-results-edition-snapshot",
+      "title": "Python typing conformance results at 6ef9f77",
+      "url": "https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/conformance/results/results.html",
+      "authority": "Python typing repository",
+      "versionScope": "immutable 2026-07-11 snapshot",
+      "topics": ["Basilisk 0.27.0 conformance result"]
+    },
+    {
+      "key": "python-typing-spec-meta",
+      "title": "Typing specification governance and history",
+      "url": "https://typing.python.org/en/latest/spec/meta.html",
+      "authority": "Python Typing Council",
+      "versionScope": "living specification",
+      "topics": ["relationship between the typing spec and PEPs"]
+    },
+    {
+      "key": "python-typing-docs",
+      "title": "Python 3.12 typing documentation",
+      "url": "https://docs.python.org/3.12/library/typing.html",
+      "authority": "Python Software Foundation",
+      "versionScope": "Python 3.12",
+      "topics": ["typing runtime API", "annotation runtime limits"]
+    },
+    {
+      "key": "python-annotations",
+      "title": "Python 3.12 annotation best practices",
+      "url": "https://docs.python.org/3.12/howto/annotations.html",
+      "authority": "Python Software Foundation",
+      "versionScope": "Python 3.12",
+      "topics": ["annotation evaluation", "annotation access"]
+    },
+    {
+      "key": "python-match-statement",
+      "title": "Python 3.12 match statement",
+      "url": "https://docs.python.org/3.12/reference/compound_stmts.html#the-match-statement",
+      "authority": "Python Software Foundation",
+      "versionScope": "Python 3.12",
+      "topics": ["pattern matching", "match statement"]
+    },
+    {
+      "key": "python-dataclasses",
+      "title": "Python 3.12 dataclasses",
+      "url": "https://docs.python.org/3.12/library/dataclasses.html",
+      "authority": "Python Software Foundation",
+      "versionScope": "Python 3.12",
+      "topics": ["dataclass runtime behavior"]
+    },
+    {
+      "key": "python-enum",
+      "title": "Python 3.12 enum",
+      "url": "https://docs.python.org/3.12/library/enum.html",
+      "authority": "Python Software Foundation",
+      "versionScope": "Python 3.12",
+      "topics": ["enum runtime behavior"]
+    },
+    {
+      "key": "python-pdb",
+      "title": "Python 3.12 debugger",
+      "url": "https://docs.python.org/3.12/library/pdb.html",
+      "authority": "Python Software Foundation",
+      "versionScope": "Python 3.12",
+      "topics": ["debugging concepts"]
+    },
+    {
+      "key": "python-tracemalloc",
+      "title": "Python 3.12 tracemalloc",
+      "url": "https://docs.python.org/3.12/library/tracemalloc.html",
+      "authority": "Python Software Foundation",
+      "versionScope": "Python 3.12",
+      "topics": ["memory allocation tracing"]
+    },
+    {
+      "key": "python-gc",
+      "title": "Python 3.12 garbage collector",
+      "url": "https://docs.python.org/3.12/library/gc.html",
+      "authority": "Python Software Foundation",
+      "versionScope": "Python 3.12",
+      "topics": ["garbage collection", "gc.garbage"]
+    },
+    {
+      "key": "cpython-typing-source",
+      "title": "CPython 3.12 typing.py",
+      "url": "https://github.com/python/cpython/blob/3.12/Lib/typing.py",
+      "authority": "Python Software Foundation",
+      "versionScope": "CPython 3.12 branch",
+      "topics": ["typing runtime implementation"]
+    },
+    {
+      "key": "cpython-grammar",
+      "title": "CPython 3.12 grammar",
+      "url": "https://github.com/python/cpython/blob/3.12/Grammar/python.gram",
+      "authority": "Python Software Foundation",
+      "versionScope": "CPython 3.12 branch",
+      "topics": ["Python syntax"]
+    },
+    {
+      "key": "typeshed",
+      "title": "Typeshed",
+      "url": "https://github.com/python/typeshed",
+      "authority": "Python typeshed project",
+      "versionScope": "live upstream; pin exact bundled snapshot for signature claims",
+      "topics": ["standard library stubs", "third-party stubs"]
+    },
+    {
+      "key": "pep-561",
+      "title": "PEP 561 — Distributing and Packaging Type Information",
+      "url": "https://peps.python.org/pep-0561/",
+      "authority": "Python Software Foundation",
+      "versionScope": "historical rationale",
+      "topics": ["py.typed history", "stub distribution history"]
+    },
+    {
+      "key": "pep-604",
+      "title": "PEP 604 — Union types as X | Y",
+      "url": "https://peps.python.org/pep-0604/",
+      "authority": "Python Software Foundation",
+      "versionScope": "accepted PEP",
+      "topics": ["union syntax history"]
+    },
+    {
+      "key": "pep-647",
+      "title": "PEP 647 — User-defined type guards",
+      "url": "https://peps.python.org/pep-0647/",
+      "authority": "Python Software Foundation",
+      "versionScope": "accepted PEP",
+      "topics": ["TypeGuard history"]
+    },
+    {
+      "key": "pep-695",
+      "title": "PEP 695 — Type parameter syntax",
+      "url": "https://peps.python.org/pep-0695/",
+      "authority": "Python Software Foundation",
+      "versionScope": "accepted in Python 3.12",
+      "topics": ["type parameter syntax history"]
+    },
+    {
+      "key": "pep-698",
+      "title": "PEP 698 — Override decorator",
+      "url": "https://peps.python.org/pep-0698/",
+      "authority": "Python Software Foundation",
+      "versionScope": "accepted in Python 3.12",
+      "topics": ["override history"]
+    },
+    {
+      "key": "pep-442",
+      "title": "PEP 442 — Safe object finalization",
+      "url": "https://peps.python.org/pep-0442/",
+      "authority": "Python Software Foundation",
+      "versionScope": "accepted since Python 3.4",
+      "topics": ["finalizers", "cyclic garbage collection"]
+    },
+    {
+      "key": "packaging-pyproject",
+      "title": "pyproject.toml specification",
+      "url": "https://packaging.python.org/en/latest/specifications/pyproject-toml/",
+      "authority": "Python Packaging Authority",
+      "versionScope": "living specification",
+      "topics": ["pyproject.toml", "tool table"]
+    },
+    {
+      "key": "lsp-spec",
+      "title": "Language Server Protocol 3.18 specification",
+      "url": "https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/specification/",
+      "authority": "Microsoft LSP project",
+      "versionScope": "LSP 3.18",
+      "topics": ["language server protocol"]
+    },
+    {
+      "key": "dap-spec",
+      "title": "Debug Adapter Protocol specification",
+      "url": "https://microsoft.github.io/debug-adapter-protocol/specification",
+      "authority": "Microsoft DAP project",
+      "versionScope": "living specification",
+      "topics": ["debug adapter protocol"]
+    },
+    {
+      "key": "basilisk-home",
+      "title": "Basilisk",
+      "url": "https://www.basilisk-python.dev/",
+      "authority": "The Basilisk Project",
+      "versionScope": "live website",
+      "topics": ["project home", "reader navigation"]
+    },
+    {
+      "key": "basilisk-installation",
+      "title": "Install Basilisk",
+      "url": "https://www.basilisk-python.dev/docs/installation/",
+      "authority": "The Basilisk Project",
+      "versionScope": "live website; verify against release artifacts",
+      "topics": ["installation"]
+    },
+    {
+      "key": "basilisk-quick-start",
+      "title": "Basilisk quick start",
+      "url": "https://www.basilisk-python.dev/docs/quick-start/",
+      "authority": "The Basilisk Project",
+      "versionScope": "live website; commands require release verification",
+      "topics": ["first check", "reader navigation"]
+    },
+    {
+      "key": "basilisk-rules",
+      "title": "Basilisk rule reference",
+      "url": "https://www.basilisk-python.dev/docs/rules/",
+      "authority": "The Basilisk Project",
+      "versionScope": "live generated reference",
+      "topics": ["rules", "diagnostics"]
+    },
+    {
+      "key": "basilisk-configuration",
+      "title": "Basilisk configuration",
+      "url": "https://www.basilisk-python.dev/docs/configuration/",
+      "authority": "The Basilisk Project",
+      "versionScope": "live website; verify defaults against release",
+      "topics": ["configuration", "rules", "per-path overrides"]
+    },
+    {
+      "key": "basilisk-migration",
+      "title": "Basilisk migration guide",
+      "url": "https://www.basilisk-python.dev/docs/migration/",
+      "authority": "The Basilisk Project",
+      "versionScope": "live website; verify commands against release",
+      "topics": ["adoption", "migration"]
+    },
+    {
+      "key": "basilisk-refactoring",
+      "title": "Basilisk refactoring",
+      "url": "https://www.basilisk-python.dev/docs/refactoring/",
+      "authority": "The Basilisk Project",
+      "versionScope": "live website; verify capabilities against release",
+      "topics": ["refactoring", "code actions"]
+    },
+    {
+      "key": "basilisk-debugging",
+      "title": "Basilisk debugging",
+      "url": "https://www.basilisk-python.dev/docs/debugging/",
+      "authority": "The Basilisk Project",
+      "versionScope": "live website; verify editor behavior against release",
+      "topics": ["debugging"]
+    },
+    {
+      "key": "basilisk-profiler",
+      "title": "Basilisk profiler",
+      "url": "https://www.basilisk-python.dev/docs/profiler/",
+      "authority": "The Basilisk Project",
+      "versionScope": "live website; verify heuristics against release",
+      "topics": ["CPU profiling", "memory investigation"]
+    },
+    {
+      "key": "basilisk-conformance",
+      "title": "Basilisk conformance method",
+      "url": "https://www.basilisk-python.dev/docs/conformance/",
+      "authority": "The Basilisk Project",
+      "versionScope": "live website; pair with immutable upstream result",
+      "topics": ["conformance methodology"]
+    },
+    {
+      "key": "basilisk-releases",
+      "title": "Basilisk releases",
+      "url": "https://www.basilisk-python.dev/docs/releases/",
+      "authority": "The Basilisk Project",
+      "versionScope": "live website",
+      "topics": ["release notes", "version changes"]
+    },
+    {
+      "key": "basilisk-source",
+      "title": "Basilisk source repository",
+      "url": "https://github.com/Nimblesite/Basilisk",
+      "authority": "The Basilisk Project",
+      "versionScope": "live repository; use a release permalink for exact behavior",
+      "topics": ["source", "tests", "implementation"]
+    }
+  ]
+}
+

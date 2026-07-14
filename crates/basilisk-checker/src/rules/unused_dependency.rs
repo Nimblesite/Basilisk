@@ -12,7 +12,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{info_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -47,7 +47,7 @@ impl UnusedDependency {
         path: &str,
         span: basilisk_resolver::Span,
     ) -> Diagnostic {
-        info_diagnostic_owned(
+        warning_diagnostic_owned(
             Self::CODE.clone(),
             format!(
                 "Package `{package_name}` is declared in [project.dependencies] but never imported"
@@ -114,7 +114,7 @@ mod tests {
     fn make_diagnostic_produces_correct_code() {
         let diagnostic = UnusedDependency::make_diagnostic("flask", "test.py", Span::new(0, 10));
         assert_eq!(diagnostic.code.code, "BSK-W0012");
-        assert_eq!(diagnostic.severity, Severity::Info);
+        assert_eq!(diagnostic.severity, Severity::Warning);
         assert!(diagnostic.message.contains("flask"));
         assert!(diagnostic.message.contains("never imported"));
     }

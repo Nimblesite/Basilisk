@@ -2,6 +2,7 @@
 //!
 //! Type health computation for the type health panel.
 
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use crate::workspace::WorkspaceIndex;
@@ -36,8 +37,7 @@ pub(crate) fn build_type_health(
         });
     }
 
-    let adoption_store =
-        project_root.and_then(|root| basilisk_config::AdoptionStore::load(root).ok());
+    let adoption_paths = project_root.map(load_adoption_paths);
 
     let mut total_symbols: usize = 0;
     let mut total_annotated: usize = 0;
@@ -64,7 +64,7 @@ pub(crate) fn build_type_health(
             &file_entry.diagnostics,
             path,
             project_root,
-            adoption_store.as_ref(),
+            adoption_paths.as_ref(),
         );
 
         total_symbols += health.total_symbols;
@@ -136,7 +136,7 @@ pub(crate) fn compute_file_health(
     diagnostics: &[basilisk_checker::Diagnostic],
     path: &Path,
     project_root: Option<&Path>,
-    adoption_store: Option<&basilisk_config::AdoptionStore>,
+    adoption_paths: Option<&BTreeSet<String>>,
 ) -> FileHealth {
     let (total_symbols, annotated_symbols, unannotated) = count_annotations(resolved);
 
@@ -149,11 +149,13 @@ pub(crate) fn compute_file_health(
         .filter(|d| d.severity == basilisk_checker::Severity::Warning)
         .count();
 
-    let adopted = adoption_store.is_some_and(|store| {
+    let adopted = adoption_paths.is_some_and(|paths| {
         let relative = path
             .strip_prefix(project_root.unwrap_or(Path::new("")))
-            .unwrap_or(path);
-        store.demoted_count(relative) > 0
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        paths.contains(&relative)
     });
 
     FileHealth {
@@ -165,6 +167,16 @@ pub(crate) fn compute_file_health(
         adopted,
         unannotated,
     }
+}
+
+pub(super) fn load_adoption_paths(root: &Path) -> BTreeSet<String> {
+    basilisk_config::discover_config_document(root)
+        .map(|document| {
+            basilisk_config::adoption_rule_overrides(&document)
+                .into_keys()
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Count annotated vs unannotated symbols in a resolved module.
@@ -265,7 +277,14 @@ mod tests {
             roots,
             AnalysisMode::WholeModule,
             basilisk_config::BasiliskConfig {
-                strict_annotations: true,
+                rules: [
+                    ("BSK-E0001", basilisk_config::RuleSeverity::Error),
+                    ("BSK-E0002", basilisk_config::RuleSeverity::Error),
+                    ("BSK-W0050", basilisk_config::RuleSeverity::Warning),
+                ]
+                .into_iter()
+                .map(|(code, severity)| (code.to_owned(), severity))
+                .collect(),
                 ..Default::default()
             },
         )

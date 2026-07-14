@@ -4,7 +4,7 @@ Weird and subtle violations — the cases that fool other type checkers.
 These are not contrived: every pattern appears in real codebases.
 Basilisk catches all of them.
 
-Run:  cargo run -- check examples/weird_violations.py
+Run:  basilisk check examples/weird_violations.py
 """
 
 from __future__ import annotations

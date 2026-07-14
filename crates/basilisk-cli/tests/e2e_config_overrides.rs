@@ -46,15 +46,13 @@ fn run_with_config(
     Ok(check_with_config(&resolved, config))
 }
 
-/// Config that opts into the annotation house rules (`strict_annotations =
-/// true`). `BSK-E0001`/`BSK-E0002` are off by default — the default config is
-/// pure PEP conformance — so a project must enable them before any
-/// severity/path override has something to act on. These tests layer overrides
-/// on top via `..annotations_on()`. No modes; this is configuration. See
-/// [CHKARCH-CONFIGURATION-ONLY].
+/// Config with explicit native severities for the opt-in rules used here.
 fn annotations_on() -> BasiliskConfig {
     BasiliskConfig {
-        strict_annotations: true,
+        rules: HashMap::from([
+            ("BSK-E0001".to_owned(), RuleSeverity::Error),
+            ("BSK-E0002".to_owned(), RuleSeverity::Error),
+        ]),
         ..Default::default()
     }
 }

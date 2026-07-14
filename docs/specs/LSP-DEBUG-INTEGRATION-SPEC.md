@@ -90,7 +90,7 @@ Add `DebugSessionManager` to `LspServer` and handle `basilisk.startDebugSession`
 
 ## VS Code Extension {#LSPDEBUG-VSCODE}
 
-VS Code-specific DAP implementation: [VSIX-SPEC.md VSIX-DAP](VSIX-SPEC.md#VSIX-DAP).
+VS Code-specific DAP implementation: [VSIX-PYTHON-DEBUGGER-DAP](VSIX-SPEC.md#VSIX-PYTHON-DEBUGGER-DAP).
 
 ## Attach Session Flow {#LSPDEBUG-ATTACH}
 

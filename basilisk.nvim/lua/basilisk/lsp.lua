@@ -47,8 +47,6 @@ local function build_settings(config)
         enabled = config.uv.enabled,
         executablePath = config.uv.executable_path,
         autoSync = config.uv.auto_sync,
-        stubSuggestions = config.uv.stub_suggestions,
-        dependencyDiagnostics = config.uv.dependency_diagnostics,
       },
     },
   }
@@ -104,12 +102,79 @@ local function handle_log_message(_err, result)
   end
 end
 
+--- Root-level configuration documents the server may edit on the user's behalf.
+--- Matches the single discovery target in [CONFIGEDITOR-SOURCES]: the server
+--- only ever edits `pyproject.toml` (`[tool.basilisk]`); a stray `basilisk.json`
+--- is reported as shadowed, never read or edited.
+local CONFIG_BASENAMES = { ["pyproject.toml"] = true }
+
+--- Collect the file paths a WorkspaceEdit touches, across both encodings.
+--- Handles `changes` (uri → edits) and `documentChanges` operations
+--- (`TextDocumentEdit` and `Create`/`Rename`/`Delete` resource ops).
+---@param edit table? lsp.WorkspaceEdit
+---@return string[] paths Absolute filesystem paths, deduplicated.
+local function collect_edit_paths(edit)
+  local seen = {}
+  local function add(uri)
+    if type(uri) == "string" and uri ~= "" then
+      seen[vim.uri_to_fname(uri)] = true
+    end
+  end
+  if type(edit) ~= "table" then
+    return {}
+  end
+  for uri in pairs(edit.changes or {}) do
+    add(uri)
+  end
+  for _, change in ipairs(edit.documentChanges or {}) do
+    add(change.uri or (change.textDocument and change.textDocument.uri))
+  end
+  return vim.tbl_keys(seen)
+end
+
+--- Persist a config-file buffer to disk after the server edited it.
+--- Implements [CONFIGEDITOR-SOURCES]: a closed-source apply must become
+--- "visible on disk" so the server's in-memory overlay can retire. Neovim's
+--- default `workspace/applyEdit` only touches the buffer, so config documents
+--- the user never opened stay unsaved without this explicit write.
+---@param path string Absolute filesystem path of an edited document.
+local function persist_config_document(path)
+  if not CONFIG_BASENAMES[vim.fn.fnamemodify(path, ":t")] then
+    return
+  end
+  local bufnr = vim.fn.bufnr(path)
+  if bufnr < 0 or not vim.api.nvim_buf_is_loaded(bufnr) or not vim.bo[bufnr].modified then
+    return
+  end
+  vim.api.nvim_buf_call(bufnr, function()
+    vim.cmd("silent noautocmd keepalt write")
+  end)
+end
+
+--- Apply a server-initiated `workspace/applyEdit`, then persist any edited
+--- root configuration document to disk. Delegates the buffer edit to Neovim's
+--- built-in handler so open buffers, undo, and position encoding stay correct.
+---@param err lsp.ResponseError?
+---@param params lsp.ApplyWorkspaceEditParams
+---@param ctx lsp.HandlerContext
+---@return lsp.ApplyWorkspaceEditResult
+local function handle_apply_edit(err, params, ctx)
+  local result = vim.lsp.handlers["workspace/applyEdit"](err, params, ctx)
+  if result and result.applied then
+    for _, path in ipairs(collect_edit_paths(params and params.edit)) do
+      persist_config_document(path)
+    end
+  end
+  return result
+end
+
 --- Install Basilisk message handlers on already-running clients.
 function M.install_handlers()
   for _, client in ipairs(vim.lsp.get_clients({ name = "basilisk" })) do
     client.handlers = client.handlers or {}
     client.handlers["window/logMessage"] = handle_log_message
     client.handlers["window/showMessage"] = handle_show_message
+    client.handlers["workspace/applyEdit"] = handle_apply_edit
   end
 end
 
@@ -138,6 +203,7 @@ function M.start(config)
     handlers = {
       ["window/logMessage"] = handle_log_message,
       ["window/showMessage"] = handle_show_message,
+      ["workspace/applyEdit"] = handle_apply_edit,
     },
     init_options = {
       analysisMode = config.analysis_mode,

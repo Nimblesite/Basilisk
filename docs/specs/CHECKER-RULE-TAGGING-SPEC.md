@@ -49,18 +49,17 @@ default) makes it `pep`. `rule_tags` reads these from the live rule registry —
 selects exactly the core PEP set. Selection and classification read the **same**
 self-declared source, so they cannot drift:
 
-- `check_with_config` gates a rule off when its `opt_in_spec()` tags are not
-  enabled in config (the `opt_in_tag_enabled` bridge maps config opt-in switches
-  to tags). A rule with no `opt_in_spec()` is `pep` and always runs.
+- `check_with_config` gates a rule off when it has an `opt_in_spec()` and no
+  explicit non-disabled severity. A rule with no `opt_in_spec()` is `pep` and
+  runs unless explicitly disabled.
 - A default-on check is `pep` **even if Basilisk-authored** (e.g.
   `imports_unresolved`, `version_target_syntax` declare no `opt_in_spec()`, so run
   by default and are `pep`). There is no "strict mode".
 
 ## PEP Category Tags {#CHKTAG-PEP-CATEGORIES}
 
-The **only** category axis Basilisk keeps. The vocabulary is verbatim from the
-`python/typing` conformance suite — the file-name prefixes under
-[`conformance/tests/`](../../conformance/tests) and the `category` column of
+The **only** category axis Basilisk keeps. The vocabulary is derived from the
+`python/typing` conformance suite's file-name prefixes and the `category` column of
 [`conformance/conformance_status.csv`](../../conformance/conformance_status.csv) —
 mirrored as `rule_tags::PEP_CATEGORIES`:
 
@@ -96,6 +95,12 @@ Any rule may carry additional descriptive tags. The current vocabulary
 | `dependencies` | Dependency / lock-file hygiene. |
 | `imports` | Import-related house rule (e.g. undeclared-dependency import). |
 | `stubs` | Type-stub hygiene. |
+
+The configuration-editor plan adds `suppressions` when the opt-in suppression-
+audit rule family lands. It means “visibility and hygiene for inline ignore /
+severity directives”; those rules remain off in the unconfigured default. The
+tag must be added to `FREE_FORM_TAGS` in the same change as the first live rule,
+so the invariant test never permits a declared-but-unused parallel taxonomy.
 
 **Conflict rule (load-bearing):** a free-form tag must be non-empty and collide
 with neither a provenance tag (`pep`/`basilisk`) nor a reserved PEP-category
@@ -167,11 +172,11 @@ exposes the queryable API:
   predicates.
 
 This is a **runtime** source of truth: `check_with_config` calls
-`opt_in_spec_for_code` to gate opt-in rules, with `opt_in_tag_enabled`
-([`lib.rs`](../../crates/basilisk-checker/src/lib.rs)) the single bridge from
-config opt-in switches to tags. Selection and classification read the same
-declarations, so cannot drift. The [CHKTAG-CONSUMERS] (LSP/CLI/website) are
-follow-ups.
+`opt_in_spec_for_code` to distinguish default-on rules from opt-in rules. An
+explicit non-disabled severity selects an opt-in rule; tag-oriented editor
+actions expand against this live registry and persist explicit rule entries.
+Selection and classification therefore cannot drift. The configuration editor
+consumes this registry through the LSP contract below; the VSIX never copies it.
 
 A rule's `opt_in_spec().code` moves with its emitted code in the same file as the
 rule-rename work
@@ -182,12 +187,27 @@ the `BSK-` convention.
 
 [CHKARCH-CONFIGURATION-ONLY]: CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIGURATION-ONLY
 
+## Configuration Editor Contract {#CHKTAG-CONFIGURATION-EDITOR}
+
+Tags are the primary browse/filter/bulk-selection surface in
+[CONFIGEDITOR-TAGS](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-TAGS). The LSP
+projects every live rule as one descriptor containing its ordered tags and the
+kind of each tag (provenance, PEP category, or descriptive). Clients must not
+infer categories from code names or maintain label-to-code maps.
+
+Bulk operations accept tag selectors and expand them in the server against a
+specific configuration revision. Preview returns the exact expanded rule-code
+set; apply uses that preview and rejects a stale revision. This preserves the
+flat/multi-tag model: one rule can appear in several tag facets, but it is
+mutated once in a de-duplicated transaction.
+
 ## Consumers {#CHKTAG-CONSUMERS}
 
 Tags drive, without re-deriving classification:
 
 - LSP/CLI filtering and bulk rule operations ("disable all `style` rules", "show
-  only `pep` diagnostics").
+  only `pep` diagnostics"), specified by
+  [CONFIGEDITOR-OPERATIONS](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-OPERATIONS).
 - The website rules reference and per-error pages
   ([WEBSITE-ERROR-PAGES](WEBSITE-ERROR-PAGES-SPEC.md)) — a follow-up reading the
   same source rather than a parallel list.

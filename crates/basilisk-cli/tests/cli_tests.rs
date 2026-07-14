@@ -51,7 +51,10 @@ fn check_fixture_strict(
     Ok(check_with_config(
         &resolved,
         &BasiliskConfig {
-            strict_annotations: true,
+            rules: ["BSK-E0001", "BSK-E0002"]
+                .into_iter()
+                .map(|code| (code.to_owned(), basilisk_config::RuleSeverity::Error))
+                .collect(),
             ..BasiliskConfig::default()
         },
     ))

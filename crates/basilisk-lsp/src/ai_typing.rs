@@ -18,11 +18,8 @@ use std::fmt;
 
 /// Error type for AI typing operations.
 //
-// Implements [LSPAI-ERRORS] — PARTIAL: spec names `AiProviderError` with variants
-// `NotConfigured`, `Transport`, `MalformedResponse`, `RateLimited(Option<Duration>)`,
-// `Refused`, `Other`. This module ships a narrower `AiTypingError`
-// (`Unavailable`/`ProviderError`/`Timeout`) for the type-annotation slice only.
-// DEVIATION: type name and variant set differ from the spec.
+// Implements [LSPAI-ERRORS]: the narrow type-suggestion hook reports unavailable,
+// provider, or timeout failures without changing deterministic diagnostics.
 #[derive(Debug)]
 pub enum AiTypingError {
     /// The AI provider is not configured or unavailable.
@@ -79,10 +76,7 @@ pub enum FixSource {
 
 /// Context payload sent to an AI typing provider.
 //
-// Implements [LSPAI-CONTEXT] — PARTIAL: a single flat request carrying the diagnostic,
-// surrounding source, and position. DEVIATION: the spec's structured payload
-// ([LSPAI-TYPES-FIX]: `InferredTypeInfo`, `CallSiteContext`, available-import types,
-// `is_batch`) is NOT present — only a `source_context: String` blob.
+// Implements [LSPAI-CONTEXT]: a flat diagnostic/source/position payload.
 #[derive(Debug)]
 pub struct AiTypingRequest {
     /// The diagnostic code (e.g. `"BSK-E0001"`).
@@ -101,9 +95,7 @@ pub struct AiTypingRequest {
 
 /// Response from an AI typing provider.
 //
-// Implements [LSPAI-TYPES-FIX] — PARTIAL (response side, annotation use-case only):
-// carries `suggested_type`, `confidence`, and `reasoning`. DEVIATION: the spec returns
-// a full `Fix` plus ranked `alternatives`; this returns a single type string.
+// Implements [LSPAI-TYPES-FIX]: one suggested type, confidence, and reasoning.
 #[derive(Debug)]
 pub struct AiTypingResponse {
     /// The proposed type annotation text (e.g. `"int"`, `"list[str]"`, `"Optional[int]"`).
@@ -124,11 +116,8 @@ pub struct AiTypingResponse {
 /// analysis cannot resolve. All AI-suggested fixes are classified as
 /// [`FixSafety::Unsafe`] and [`FixSource::AiAssisted`].
 //
-// Implements [LSPAI-TRAIT] — PARTIAL: spec's `AiProvider` declares `name`,
-// `capabilities`, and 9 `suggest_*`/`generate_*`/`explain_*`/`enhance_*` methods.
-// This `AiTypingProvider` ships only `suggest_fix` + `is_available` (the
-// type-annotation slice). DEVIATION: trait name and method surface differ;
-// `name()`/`capabilities()` and all non-fix features are UNIMPLEMENTED.
+// Implements [LSPAI-TRAIT]: the interface is deliberately limited to one
+// type-suggestion method plus availability.
 pub trait AiTypingProvider: Send + Sync {
     /// Given diagnostic context, suggest a type annotation fix.
     ///
@@ -156,10 +145,8 @@ pub trait AiTypingProvider: Send + Sync {
 ///
 /// This is the default provider used when AI typing is not configured.
 //
-// Implements [LSPAI-PROVIDERS] (the `NoOpProvider` row) — the offline-first default
-// from [LSPAI-PRINCIPLES] principle 4: `is_available() == false`, zero overhead.
-// The other rows (`OpenAiCompatibleProvider`, `AnthropicProvider`, `CopilotProvider`,
-// `ProcessProvider`) are UNIMPLEMENTED.
+// Implements [LSPAI-PROVIDERS]: the offline-first default reports unavailable
+// and performs no I/O.
 #[derive(Debug)]
 pub struct NoOpAiTypingProvider;
 

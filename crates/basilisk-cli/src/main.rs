@@ -23,7 +23,12 @@ use crate::output::{
 mod adopt;
 mod cache_check;
 mod fix;
+mod import_search;
 mod output;
+mod stubs;
+
+#[cfg(test)]
+use stubs::{cache_stub, find_package_source, run as run_stubs, StubAction, StubGenModeArg};
 
 /// Basilisk — strict-by-default Python type checker.
 ///
@@ -114,38 +119,11 @@ enum Command {
     /// Manage type stubs for untyped packages.
     Stubs {
         #[command(subcommand)]
-        action: StubAction,
+        action: stubs::StubAction,
     },
-}
-
-/// Stub management sub-commands.
-#[derive(Subcommand)]
-enum StubAction {
-    /// Generate best-effort `.pyi` stubs for untyped packages.
-    Generate {
-        /// Package names to generate stubs for.
-        /// Use `--all` to generate for all untyped imports.
-        packages: Vec<String>,
-        /// Generate stubs for all untyped imports in the project.
-        #[arg(long)]
-        all: bool,
-        /// Generation mode: runtime (inspect.signature), ast (parse .py), or hybrid (default).
-        #[arg(long, default_value = "hybrid")]
-        mode: StubGenModeArg,
-        /// Path to the Python interpreter.
-        #[arg(long, default_value = "python3")]
-        python: String,
-    },
-    /// Show stub coverage status for the project.
-    Status,
-}
-
-/// CLI-friendly stub generation mode.
-#[derive(Clone, Copy, Debug, clap::ValueEnum)]
-enum StubGenModeArg {
-    Runtime,
-    Ast,
-    Hybrid,
+    /// Generate a package stub using Pyright's compatibility spelling.
+    #[command(name = "createstub", long_flag = "createstub")]
+    CreateStub(stubs::CreateStubArgs),
 }
 
 /// Handle `--version` / `--version --json` via the Shipwright contract emitter.
@@ -294,188 +272,9 @@ fn run_command(command: Command) -> u8 {
                 }
             },
         },
-        Command::Stubs { action } => run_stubs(action),
+        Command::Stubs { action } => stubs::run(action),
+        Command::CreateStub(args) => stubs::run_create_stub(args),
     }
-}
-
-/// Run the stubs subcommand.
-fn run_stubs(action: StubAction) -> u8 {
-    match action {
-        StubAction::Generate {
-            packages,
-            all,
-            mode,
-            python,
-        } => run_stubs_generate(&packages, all, mode, &python),
-        StubAction::Status => run_stubs_status(),
-    }
-}
-
-/// Cache a generated stub and print the result. Returns `true` on success.
-fn cache_stub(
-    cache_dir: &std::path::Path,
-    package: &str,
-    stub: &basilisk_stubs::generate::GeneratedStub,
-) -> bool {
-    use basilisk_stubs::generate::cache;
-
-    let source_hash = cache::hash_source(&stub.pyi_content);
-    match cache::write_cache(cache_dir, package, &stub.pyi_content, source_hash) {
-        Ok(path) => {
-            println!(
-                "{} Generated stub for `{package}` → {}",
-                "✓".green(),
-                path.display()
-            );
-            true
-        }
-        Err(err) => {
-            eprintln!("{} Failed to write stub for `{package}`: {err}", "✗".red());
-            false
-        }
-    }
-}
-
-/// Generate stubs for specified packages.
-fn run_stubs_generate(packages: &[String], all: bool, mode: StubGenModeArg, python: &str) -> u8 {
-    use basilisk_stubs::generate::{self, StubGenMode};
-
-    let gen_mode = match mode {
-        StubGenModeArg::Runtime => StubGenMode::Runtime,
-        StubGenModeArg::Ast => StubGenMode::Ast,
-        StubGenModeArg::Hybrid => StubGenMode::Hybrid,
-    };
-
-    let python_path = std::path::Path::new(python);
-    let cache_dir = std::path::Path::new(generate::cache::DEFAULT_CACHE_DIR);
-
-    if all {
-        warn!("--all not yet implemented; specify package names explicitly");
-        return 1;
-    }
-
-    if packages.is_empty() {
-        eprintln!("{}: specify package names or use --all", "error".red());
-        return 1;
-    }
-
-    let mut errors = 0u8;
-    for package in packages {
-        let source_path = find_package_source(package, python_path);
-
-        let ok = match source_path {
-            Some(ref src) => {
-                info!(package, source = %src.display(), "generating stubs");
-                match generate::generate_stubs(package, src, python_path, gen_mode) {
-                    Ok(stub) => cache_stub(cache_dir, package, &stub),
-                    Err(err) => {
-                        eprintln!(
-                            "{} Failed to generate stub for `{package}`: {err}",
-                            "✗".red()
-                        );
-                        false
-                    }
-                }
-            }
-            None if gen_mode == StubGenMode::Ast => {
-                eprintln!(
-                    "{} Cannot find source for `{package}` — AST mode requires source files",
-                    "✗".red()
-                );
-                false
-            }
-            None => match generate::runtime::generate_runtime_stubs(package, python_path) {
-                Ok(stub) => cache_stub(cache_dir, package, &stub),
-                Err(err) => {
-                    eprintln!(
-                        "{} Failed to generate stub for `{package}`: {err}",
-                        "✗".red()
-                    );
-                    false
-                }
-            },
-        };
-        if !ok {
-            errors = errors.saturating_add(1);
-        }
-    }
-
-    errors.min(1)
-}
-
-/// Import a module named by `sys.argv[1]` and print its source path.
-const FIND_PACKAGE_SOURCE_SCRIPT: &str = r#"
-import importlib
-import sys
-
-module = importlib.import_module(sys.argv[1])
-source = getattr(module, "__file__", None)
-if source is None:
-    raise SystemExit(1)
-print(source)
-"#;
-
-/// Whether `name` is a dotted sequence of Python identifier components.
-fn is_valid_module_name(name: &str) -> bool {
-    name.split('.').all(|component| {
-        let mut chars = component.chars();
-        chars
-            .next()
-            .is_some_and(|first| first == '_' || first.is_ascii_alphabetic())
-            && chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
-    })
-}
-
-/// Find the source path for an installed package by querying Python.
-fn find_package_source(package: &str, python_path: &std::path::Path) -> Option<std::path::PathBuf> {
-    if !is_valid_module_name(package) {
-        return None;
-    }
-
-    let output = std::process::Command::new(python_path)
-        .args(["-c", FIND_PACKAGE_SOURCE_SCRIPT, package])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let source = std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
-    source.is_file().then_some(source).filter(|path| {
-        path.extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
-    })
-}
-
-/// Show stub coverage status.
-fn run_stubs_status() -> u8 {
-    let cache_dir = std::path::Path::new(basilisk_stubs::generate::cache::DEFAULT_CACHE_DIR);
-
-    if !cache_dir.exists() {
-        println!("No generated stubs found ({})", cache_dir.display());
-        return 0;
-    }
-
-    let mut count = 0u32;
-    if let Ok(entries) = std::fs::read_dir(cache_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "pyi") {
-                let module = path.file_stem().and_then(|s| s.to_str()).unwrap_or("?");
-                println!("  {} {module}", "✓".green());
-                count = count.saturating_add(1);
-            }
-        }
-    }
-
-    if count == 0 {
-        println!("No generated stubs found");
-    } else {
-        println!("\n{count} generated stub(s) in {}", cache_dir.display());
-    }
-
-    0
 }
 
 /// Run the check subcommand.
@@ -552,7 +351,7 @@ fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheO
 
 /// Resolve the paths a check run walks. Implements [CHKARCH-CONFIG-INCLUDE]:
 /// explicit CLI paths win, then the configured `include` roots, then `.`.
-fn effective_check_paths(
+pub(crate) fn effective_check_paths(
     paths: &[String],
     config: &basilisk_config::BasiliskConfig,
     config_root: &std::path::Path,
@@ -586,18 +385,11 @@ fn collect_and_check(
     cache: &cache_check::CacheOptions,
     stats: &mut cache_check::CacheStats,
 ) -> Result<CheckOutcome, String> {
-    // Load config from the first path's directory (or cwd).
-    let config_root = paths
-        .first()
-        .map(std::path::Path::new)
-        .and_then(|p| {
-            if p.is_dir() {
-                Some(p.to_path_buf())
-            } else {
-                p.parent().map(std::path::Path::to_path_buf)
-            }
-        })
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    // [CHKARCH-CONFIG-DISCOVERY] The first path only anchors project-level
+    // concerns (include expansion, version detection, cache location); rule
+    // config is resolved per checked file below, so diagnostics never depend
+    // on argument order (GitHub #311).
+    let config_root = first_path_dir(paths);
     let mut config = basilisk_config::load_basilisk_config(&config_root);
     // [CHKARCH-VERSION-TARGET] Detect the target version from project files
     // when the config does not pin one, matching the LSP (issue #93).
@@ -617,46 +409,28 @@ fn collect_and_check(
     // Use cwd as the project root — pyproject.toml, uv.lock, and .venv
     // live at the project root, not necessarily in the checked path.
     let project_root = find_project_root(&config_root);
-    let canonical_root = std::fs::canonicalize(&project_root).unwrap_or(project_root.clone());
-    let mut roots = vec![canonical_root.clone()];
+    let roots = analysis_roots(paths, &project_root);
+    let search_paths = if import_search::files_might_import(&python_files) {
+        build_import_search_paths(roots, &project_root)
+    } else {
+        import_search::roots_only(roots)
+    };
 
-    // Add checked directories as search roots for sibling imports.
-    for path_str in paths {
-        let p = std::path::Path::new(path_str);
-        let dir = if p.is_dir() {
-            p
-        } else {
-            p.parent().unwrap_or(p)
-        };
-        if let Ok(abs) = std::fs::canonicalize(dir) {
-            if !roots.contains(&abs) {
-                roots.push(abs);
-            }
-        }
-    }
-
-    // Add include paths from WorkspaceConfig as search roots.
-    let lsp_config = basilisk_lsp::config::load_analysis_config(&project_root);
-    let registry = build_uv_registry(&roots);
-    let mut search_paths =
-        basilisk_lsp::import_resolver::search_paths_from_config(&roots, &lsp_config, registry);
-    // Ensure all roots are also in extra_paths for module resolution.
-    search_paths.roots = roots;
-    info!(
-        site_packages = ?search_paths.site_packages,
-        has_registry = search_paths.registry.is_some(),
-        "built import search paths"
-    );
-
-    let cache_context = cache_check::build_context(cache, &config, &search_paths, &project_root);
+    // Per-file rule config, memoized per directory ([CHKARCH-CONFIG-DISCOVERY]).
+    // The cache fingerprint covers every directory's config so a child config
+    // edit invalidates cached results.
+    let dir_configs = resolve_dir_configs(&python_files, &config);
+    let cache_context =
+        cache_check::build_context(cache, &dir_configs, &search_paths, &project_root);
 
     let mut all_diagnostics = Vec::new();
     let mut sources = Vec::new();
     let mut failures = Vec::new();
 
     for path in python_files {
+        let file_config = config_for_path(&dir_configs, &path, &config);
         let outcome = cache_check::check_file(cache_context.as_ref(), stats, &path, || {
-            process_file(&path, &search_paths, &config)
+            process_file(&path, &search_paths, &file_config)
         });
         match outcome {
             Ok((diags, source)) => {
@@ -674,6 +448,45 @@ fn collect_and_check(
         sources,
         failures,
     })
+}
+
+/// Canonical project and checked-directory roots used for import resolution.
+pub(crate) fn analysis_roots(
+    paths: &[String],
+    project_root: &std::path::Path,
+) -> Vec<std::path::PathBuf> {
+    let canonical = std::fs::canonicalize(project_root).unwrap_or_else(|_| project_root.into());
+    paths.iter().fold(vec![canonical], |mut roots, path| {
+        let candidate = std::path::Path::new(path);
+        let directory = candidate
+            .is_dir()
+            .then_some(candidate)
+            .or_else(|| candidate.parent());
+        if let Some(absolute) = directory.and_then(|dir| std::fs::canonicalize(dir).ok()) {
+            if !roots.contains(&absolute) {
+                roots.push(absolute);
+            }
+        }
+        roots
+    })
+}
+
+/// Build the shared CLI/LSP import search path model for a project.
+pub(crate) fn build_import_search_paths(
+    roots: Vec<std::path::PathBuf>,
+    project_root: &std::path::Path,
+) -> basilisk_lsp::import_resolver::ImportSearchPaths {
+    let config = basilisk_lsp::config::load_analysis_config(project_root);
+    let registry = build_uv_registry(&roots);
+    let mut search_paths =
+        basilisk_lsp::import_resolver::search_paths_from_config(&roots, &config, registry);
+    search_paths.roots = roots;
+    info!(
+        site_packages = ?search_paths.site_packages,
+        has_registry = search_paths.registry.is_some(),
+        "built import search paths"
+    );
+    search_paths
 }
 
 /// Build a uv package registry from workspace roots, if this is a uv project.
@@ -722,6 +535,19 @@ fn process_file(
     search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
     config: &basilisk_config::BasiliskConfig,
 ) -> Result<(Vec<basilisk_checker::Diagnostic>, String), String> {
+    let (resolved, source) = resolve_file_imports(path, search_paths)?;
+    // Apply the project's `[tool.basilisk.rules]` / per-path overrides so the
+    // CLI and editor agree on severity (e.g. a project can promote "no type
+    // stubs" to a hard error). Using `check` here would silently drop config.
+    let diagnostics = basilisk_checker::check_with_config(&resolved, config);
+    Ok((diagnostics, source))
+}
+
+/// Parse a source file and resolve its imports through the shared CLI/LSP paths.
+pub(crate) fn resolve_file_imports(
+    path: &str,
+    search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
+) -> Result<(basilisk_resolver::ResolvedModule, String), String> {
     let parsed = basilisk_parser::parse_file(path).map_err(|e| e.to_string())?;
     let source = parsed.source.clone();
     let mut resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
@@ -730,17 +556,82 @@ fn process_file(
     // routine the LSP uses, so the CLI and editor agree on what resolves and on
     // package-dependency metadata (BSK-W0011 transitive-import warnings, etc.).
     basilisk_lsp::import_resolver::resolve_module_imports(&mut resolved, search_paths);
+    Ok((resolved, source))
+}
 
-    // Apply the project's `[tool.basilisk.rules]` / per-path overrides so the
-    // CLI and editor agree on severity (e.g. a project can promote "no type
-    // stubs" to a hard error). Using `check` here would silently drop config.
-    let diags = basilisk_checker::check_with_config(&resolved, config);
-    Ok((diags, source))
+/// The directory anchoring project-level concerns for a CLI invocation: the
+/// first path argument's own directory (or its parent for a file), else cwd.
+pub(crate) fn first_path_dir(paths: &[String]) -> std::path::PathBuf {
+    paths
+        .first()
+        .map(std::path::Path::new)
+        .and_then(|p| {
+            if p.is_dir() {
+                Some(p.to_path_buf())
+            } else {
+                p.parent().map(std::path::Path::to_path_buf)
+            }
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+}
+
+/// The directory owning `path` (its parent, or `.` for a bare filename).
+fn parent_dir_of(path: &str) -> std::path::PathBuf {
+    std::path::Path::new(path)
+        .parent()
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .map_or_else(
+            || std::path::PathBuf::from("."),
+            std::path::Path::to_path_buf,
+        )
+}
+
+/// Resolve the merged rule config for each checked file's directory.
+///
+/// Implements [CHKARCH-CONFIG-DISCOVERY] (GitHub #311): every file is checked
+/// with the config discovered from its own ancestor chain, so diagnostics are
+/// independent of argument order, path spelling, and cwd. Memoized per
+/// directory; `fallback` supplies the detected Python version when a
+/// directory's chain does not pin one ([CHKARCH-VERSION-TARGET]).
+pub(crate) fn resolve_dir_configs(
+    python_files: &[String],
+    fallback: &basilisk_config::BasiliskConfig,
+) -> std::collections::BTreeMap<std::path::PathBuf, std::sync::Arc<basilisk_config::BasiliskConfig>>
+{
+    let mut dir_configs = std::collections::BTreeMap::new();
+    for path in python_files {
+        let _ = dir_configs
+            .entry(parent_dir_of(path))
+            .or_insert_with_key(|dir| {
+                let mut cfg = basilisk_config::load_basilisk_config(dir);
+                if cfg.python_version.is_none() {
+                    cfg.python_version.clone_from(&fallback.python_version);
+                }
+                std::sync::Arc::new(cfg)
+            });
+    }
+    dir_configs
+}
+
+/// The per-directory config for `path`, falling back to `fallback` (only
+/// reachable if `path` was not in the file list the map was built from).
+pub(crate) fn config_for_path(
+    dir_configs: &std::collections::BTreeMap<
+        std::path::PathBuf,
+        std::sync::Arc<basilisk_config::BasiliskConfig>,
+    >,
+    path: &str,
+    fallback: &basilisk_config::BasiliskConfig,
+) -> std::sync::Arc<basilisk_config::BasiliskConfig> {
+    dir_configs
+        .get(&parent_dir_of(path))
+        .cloned()
+        .unwrap_or_else(|| std::sync::Arc::new(fallback.clone()))
 }
 
 /// Walk up from `start` to find the project root (directory containing
 /// `pyproject.toml` or `uv.lock`). Falls back to cwd, then `start`.
-fn find_project_root(start: &std::path::Path) -> std::path::PathBuf {
+pub(crate) fn find_project_root(start: &std::path::Path) -> std::path::PathBuf {
     let abs = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
     let mut current = abs.as_path();
     loop {
@@ -990,8 +881,8 @@ mod tests {
         let dir = unique_project_dir("basilisk_test_bad_code");
         std::fs::create_dir_all(&dir)?;
         std::fs::write(
-            dir.join("basilisk.json"),
-            b"{\"strictAnnotations\": true}\n",
+            dir.join("pyproject.toml"),
+            b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
         )?;
         let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x):\n    pass\n")?;
@@ -1026,14 +917,11 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let dir = unique_project_dir("basilisk_cli_cfg_promote");
         std::fs::create_dir_all(&dir)?;
-        // A severity override only re-grades a rule that is ALREADY enabled;
-        // BSK-W0050 is an off-by-default house rule, so the project must opt in
-        // (`strict-annotations = true`) AND escalate it. See
-        // [CHKARCH-CONFIGURATION-ONLY].
+        // An explicit non-disabled severity both selects and re-grades an
+        // off-by-default rule. See [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
             dir.join("pyproject.toml"),
             b"[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n\
-              [tool.basilisk]\nstrict-annotations = true\n\n\
               [tool.basilisk.rules]\n\"BSK-W0050\" = \"error\"\n",
         )?;
         let py = dir.join("m.py");
@@ -1056,6 +944,122 @@ mod tests {
             "project config `BSK-W0050 = \"error\"` must promote BSK-W0050 to error \
              through the CLI; got {:?}",
             w0050.iter().map(|d| d.severity).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    // ── collect_and_check: config discovery (GitHub #311) ─────────────────────
+
+    /// Source that violates the annotation house rules (BSK-E0001 on the
+    /// parameter, BSK-E0002 on the return) once those opt-in rules are enabled.
+    const UNANNOTATED_FN: &[u8] = b"def foo(x):\n    pass\n";
+
+    /// A `[tool.basilisk.rules]` table enabling the opt-in annotation rules.
+    const ANNOTATION_RULES_TOML: &[u8] =
+        b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n";
+
+    /// GitHub #311 (headline): `basilisk check path/to/file.py` must discover
+    /// rule config from ancestor directories. Today the config root is the
+    /// file's own parent dir only, so a repo-root `pyproject.toml` is silently
+    /// ignored and the CLI prints "All checked" on a file the IDE flags.
+    #[test]
+    fn check_file_arg_discovers_config_from_ancestor_directories(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let root = unique_project_dir("basilisk_cli_cfg_ancestor");
+        let child = root.join("child");
+        std::fs::create_dir_all(&child)?;
+        std::fs::write(root.join("pyproject.toml"), ANNOTATION_RULES_TOML)?;
+        let py = child.join("bad.py");
+        std::fs::write(&py, UNANNOTATED_FN)?;
+
+        let outcome = collect_and_check_uncached(&[py.to_string_lossy().into_owned()]);
+        let _ = std::fs::remove_dir_all(&root);
+        let outcome = outcome?;
+
+        let codes: Vec<&str> = outcome.diagnostics.iter().map(|d| d.code.code).collect();
+        assert!(
+            codes.contains(&"BSK-E0001"),
+            "checking child/bad.py by file path must apply the root pyproject.toml \
+             (ancestor walk, GitHub #311); got codes: {codes:?}"
+        );
+        Ok(())
+    }
+
+    /// GitHub #311 (consequence 3): results must not depend on argument order.
+    /// With rules in `p/pyproject.toml` and none in `q`, both `check p q` and
+    /// `check q p` must flag `p/bad.py` — and never flag `q/bad.py`.
+    #[test]
+    fn check_results_are_independent_of_argument_order() -> Result<(), Box<dyn std::error::Error>> {
+        let base = unique_project_dir("basilisk_cli_cfg_order");
+        let p = base.join("p");
+        let q = base.join("q");
+        std::fs::create_dir_all(&p)?;
+        std::fs::create_dir_all(&q)?;
+        std::fs::write(p.join("pyproject.toml"), ANNOTATION_RULES_TOML)?;
+        std::fs::write(p.join("bad.py"), UNANNOTATED_FN)?;
+        std::fs::write(q.join("bad.py"), UNANNOTATED_FN)?;
+
+        let p_arg = p.to_string_lossy().into_owned();
+        let q_arg = q.to_string_lossy().into_owned();
+        let p_first = collect_and_check_uncached(&[p_arg.clone(), q_arg.clone()]);
+        let q_first = collect_and_check_uncached(&[q_arg, p_arg]);
+        let _ = std::fs::remove_dir_all(&base);
+
+        for (order, outcome) in [("check p q", p_first?), ("check q p", q_first?)] {
+            let e0001_paths: Vec<&str> = outcome
+                .diagnostics
+                .iter()
+                .filter(|d| d.code.code == "BSK-E0001")
+                .map(|d| d.path.as_str())
+                .collect();
+            assert!(
+                e0001_paths
+                    .iter()
+                    .any(|path| std::path::Path::new(path).starts_with(&p)),
+                "`{order}` must apply p's own config to p/bad.py regardless of \
+                 argument order (GitHub #311); E0001 paths: {e0001_paths:?}"
+            );
+            assert!(
+                e0001_paths
+                    .iter()
+                    .all(|path| !std::path::Path::new(path).starts_with(&q)),
+                "`{order}` must NOT leak p's config onto q/bad.py, which has no \
+                 config anywhere above it (GitHub #311); E0001 paths: {e0001_paths:?}"
+            );
+        }
+        Ok(())
+    }
+
+    /// GitHub #311 (FIX requirement): config is cumulative — a child dir's
+    /// config appends to the root config instead of replacing it. The root
+    /// enables the annotation rules; the child only disables BSK-E0001, so
+    /// BSK-E0002 from the root must still fire on the child's file.
+    #[test]
+    fn check_child_config_appends_to_ancestor_config() -> Result<(), Box<dyn std::error::Error>> {
+        let root = unique_project_dir("basilisk_cli_cfg_cumulative");
+        let child = root.join("child");
+        std::fs::create_dir_all(&child)?;
+        std::fs::write(root.join("pyproject.toml"), ANNOTATION_RULES_TOML)?;
+        std::fs::write(
+            child.join("pyproject.toml"),
+            b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
+        )?;
+        let py = child.join("bad.py");
+        std::fs::write(&py, UNANNOTATED_FN)?;
+
+        let outcome = collect_and_check_uncached(&[py.to_string_lossy().into_owned()]);
+        let _ = std::fs::remove_dir_all(&root);
+        let outcome = outcome?;
+
+        let codes: Vec<&str> = outcome.diagnostics.iter().map(|d| d.code.code).collect();
+        assert!(
+            codes.contains(&"BSK-E0002"),
+            "the root's rule opt-ins must survive a child config \
+             that only tweaks one rule (cumulative merge, GitHub #311); got: {codes:?}"
+        );
+        assert!(
+            !codes.contains(&"BSK-E0001"),
+            "the child config's `BSK-E0001 = disabled` must be honored; got: {codes:?}"
         );
         Ok(())
     }
@@ -1099,8 +1103,8 @@ mod tests {
         let dir = unique_project_dir("basilisk_test_rc_json_bad");
         std::fs::create_dir_all(&dir)?;
         std::fs::write(
-            dir.join("basilisk.json"),
-            b"{\"strictAnnotations\": true}\n",
+            dir.join("pyproject.toml"),
+            b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n",
         )?;
         let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
@@ -1133,8 +1137,8 @@ mod tests {
         let dir = unique_project_dir("basilisk_test_rc_text_bad");
         std::fs::create_dir_all(&dir)?;
         std::fs::write(
-            dir.join("basilisk.json"),
-            b"{\"strictAnnotations\": true}\n",
+            dir.join("pyproject.toml"),
+            b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n",
         )?;
         let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
@@ -1380,74 +1384,11 @@ mod tests {
 
     // ── stubs subcommand ─────────────────────────────────────────────────────
     //
-    // The `basilisk stubs` subsystem (run_stubs → run_stubs_generate /
-    // run_stubs_status, cache_stub, find_package_source) is exercised in-process
+    // The `basilisk stubs` subsystem (run_stubs, cache_stub,
+    // find_package_source) is exercised in-process
     // here. Driving it directly — rather than through a spawned binary — keeps
     // its coverage independent of subprocess profile merging, which is unreliable
     // across platforms. Implements [STUBRES-AUTOGEN] on the CLI surface.
-
-    /// `run_stubs_generate` with no packages and `--all` off must error (exit 1)
-    /// after running the mode/cache prologue. Exercises the empty-packages guard
-    /// and the hybrid mode arm.
-    #[test]
-    fn run_stubs_generate_no_packages_returns_one() {
-        assert_eq!(
-            run_stubs_generate(&[], false, StubGenModeArg::Hybrid, "python3"),
-            1,
-            "no packages must return 1"
-        );
-    }
-
-    /// `run_stubs_generate` with `--all` is not yet implemented and must return 1
-    /// before touching any package. Exercises the `all` guard and the runtime
-    /// mode arm.
-    #[test]
-    fn run_stubs_generate_all_flag_returns_one() {
-        assert_eq!(
-            run_stubs_generate(
-                &["requests".to_owned()],
-                true,
-                StubGenModeArg::Runtime,
-                "python3"
-            ),
-            1,
-            "--all is unimplemented and must return 1"
-        );
-    }
-
-    /// `run_stubs_generate` in AST mode for a package with no discoverable source
-    /// must report the missing-source error and return 1. Exercises the
-    /// `None if Ast` branch, the AST mode arm, and the per-package error tally.
-    #[test]
-    fn run_stubs_generate_ast_missing_source_returns_one() {
-        assert_eq!(
-            run_stubs_generate(
-                &["basilisk_no_such_pkg_ast".to_owned()],
-                false,
-                StubGenModeArg::Ast,
-                "python3"
-            ),
-            1,
-            "AST mode with no source must return 1"
-        );
-    }
-
-    /// `run_stubs_generate` in hybrid mode for an uninstalled package falls back
-    /// to runtime generation, which fails, returning 1. Exercises the non-AST
-    /// `None` fallback branch and the runtime-generation error path.
-    #[test]
-    fn run_stubs_generate_hybrid_uninstalled_returns_one() {
-        assert_eq!(
-            run_stubs_generate(
-                &["basilisk_no_such_pkg_hybrid".to_owned()],
-                false,
-                StubGenModeArg::Hybrid,
-                "python3"
-            ),
-            1,
-            "hybrid mode for an uninstalled package must return 1"
-        );
-    }
 
     /// `find_package_source` returns `None` for a package that cannot be imported
     /// (the querying subprocess exits non-zero).
@@ -1604,6 +1545,15 @@ mod tests {
     ) -> Result<(std::path::PathBuf, String), Box<dyn std::error::Error>> {
         let dir = unique_project_dir(prefix);
         std::fs::create_dir_all(&dir)?;
+        // Anchor the project root at `dir` with a `pyproject.toml` marker.
+        // Without one, `find_project_root` (which recognises only
+        // `pyproject.toml`/`uv.lock`) walks past the temp dir and falls back to
+        // the process cwd, so config-root-relative operations (e.g. `unadopt`'s
+        // `relative_pattern`) see the module as outside the root and error.
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            b"[project]\nname = \"fixture\"\nversion = \"0.0.0\"\n",
+        )?;
         let py = dir.join("m.py");
         std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
         let path = py.to_string_lossy().into_owned();

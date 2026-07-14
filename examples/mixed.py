@@ -1,7 +1,9 @@
 # A realistic file with a mix of typed and untyped code.
-# Run: cargo run -- check examples/mixed.py
+# Run: basilisk check examples/mixed.py
 #
-# Basilisk will flag the untyped parts and leave the rest alone.
+# The genuine type error is an error out of the box. The untyped parts only
+# surface once the opt-in strictness rules are enabled — this repository
+# enables them for `examples/**` as warnings in the root `pyproject.toml`.
 
 from typing import Optional
 
@@ -30,3 +32,6 @@ class Config:
 
 def compute(x: int, y: int) -> int:
     return x * y
+
+
+compute(2, "three")  # error[calls_argument_type]: `y` expects `int`, got a `str`

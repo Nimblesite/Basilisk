@@ -54,7 +54,10 @@ const serverOptions: ServerOptions = {
 };
 
 const clientOptions: LanguageClientOptions = {
-  documentSelector: [{ scheme: "file", language: "python" }],
+  documentSelector: [
+    { scheme: "file", language: "python" },
+    { scheme: "file", pattern: "**/pyproject.toml" },
+  ],
   synchronize: { configurationSection: "basilisk" },
   initializationOptions: readBasiliskSettings(),
 };
@@ -75,6 +78,7 @@ client.start();
 "commands": [
     { "command": "basilisk.restartServer", "title": "Basilisk: Restart Language Server" },
     { "command": "basilisk.showOutput", "title": "Basilisk: Show Output" },
+    { "command": "basilisk.openConfigurationEditor", "title": "Basilisk: Open Configuration Editor" },
     { "command": "basilisk.organizeImports", "title": "Basilisk: Organize Imports" },
     { "command": "basilisk.runTests", "title": "Basilisk: Run Tests" },
     { "command": "basilisk.runTestFile", "title": "Basilisk: Run Tests in Current File" },
@@ -83,6 +87,106 @@ client.start();
     { "command": "basilisk.toggleTypeBreakpoints", "title": "Basilisk: Toggle Type Mismatch Breakpoints" }
 ]
 ```
+
+---
+
+## Configuration Editor {#VSIX-CONFIGURATION-EDITOR}
+
+The VSIX is the first visual client for
+[CONFIGEDITOR](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR). It contributes
+the client-only command **Basilisk: Open Configuration Editor**
+(`basilisk.openConfigurationEditor`) and a settings-gear action in the Basilisk
+activity view. The command opens one full-width editor-tab webview; it does not
+take over `pyproject.toml` as a custom editor and does not put the full rule
+catalog into the narrow sidebar.
+
+The command is exposed only when the server advertises
+`capabilities.experimental.basilisk.configurationEditor.version == 1`. Opening
+the tab, revealing raw config, and navigating to an occurrence are VS Code UI
+actions. Configuration changes use the shared
+snapshot/preview/apply/occurrence methods in
+[LSPARCH-CONFIG-EDITOR-PROTOCOL](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR-PROTOCOL).
+The Adoption view's **Apply all safe fixes** action invokes the existing
+`basilisk.fixWorkspace` LSP command with the selected `rootUri`, then reloads
+the authoritative snapshot before any remaining-debt selector is expanded.
+
+### Thin-shell boundary {#VSIX-CONFIGURATION-EDITOR-THIN-SHELL}
+
+The webview posts user intent only: choose an LSP-advertised preset, select a
+tag/rule, stage a setting, request/apply a preview, run root-scoped safe fixes,
+or open docs/location. The extension host runtime-decodes the message and
+forwards server-owned intent. It MUST NOT:
+
+- ship a rule or tag list;
+- parse TOML/JSON or calculate effective severity/precedence;
+- expand a bulk selector;
+- define or expand preset recipes;
+- write configuration or adoption files;
+- infer that an opt-in rule is enabled from VS Code settings.
+
+The VSIX contributes no `basilisk.rules.*`, strictness, adoption, or suppression
+policy settings. Those values live only in the active project config file and
+are accessed through the LSP snapshot/transaction API.
+
+Snapshot/loading/error/revision state lives in the extension's single Signals
+store (`src/store.ts`), with explicit actions; no mutable state lives in the
+panel host or hidden DOM. On reveal, the panel refetches authoritative LSP state
+instead of retaining a stale background document.
+
+### Hosting and visual contract {#VSIX-CONFIGURATION-EDITOR-HOST}
+
+Reuse the lifecycle and security primitives in `src/profiler-webview.ts`
+(singleton host, once-bound message handler, nonce, safe JSON embedding), but
+use a stricter document policy: default-deny CSP, local nonce-gated scripts,
+no remote resources, `localResourceRoots: []`, and no
+`retainContextWhenHidden`. Data is sent with `webview.postMessage` only after a
+ready handshake, never interpolated into executable HTML.
+
+The editor renders Overview, tag-first Rules, Adoption, Path Overrides, and
+Project/source views defined by
+[CONFIGEDITOR-VSIX-EXPERIENCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-VSIX-EXPERIENCE).
+It uses native VS Code fonts/theme tokens plus restrained Basilisk orange/sky
+accents. All controls are semantic, text-labelled, keyboard-operable, high-
+contrast safe, usable at 200% zoom, and reduced-motion aware. Apply/conflict
+status uses an `aria-live` region and refreshes preserve focus.
+
+Rules are virtualized and organized by the server's Sources, PEP categories,
+and Policy tags. Every row exposes Error, Warning, Info, Disabled, Native, and
+Inherited/reset intent. The Path view renders the exact normalized inventory
+from the snapshot. Occurrences load in cursor pages and navigation is restricted
+to the selected workspace root.
+
+The Adoption view renders LSP-owned preset summaries, delegates safe edits to
+the root-scoped command, and delegates the remaining-debt query to the reusable
+`WithoutSafeFix` selector. Its project-wide Disabled action is always previewed
+and states that future diagnostics for those rules will be hidden; path and
+non-disabled alternatives remain available.
+
+### Implementation files and tests {#VSIX-CONFIGURATION-EDITOR-FILES}
+
+Implementation is split into focused files under 500 LOC:
+
+- `configuration-editor.ts` — panel lifecycle and intent routing;
+- `configuration-editor-document.ts` — CSP HTML document;
+- `configuration-editor-model.ts` — generated wire DTOs/projections;
+- `configuration-editor-state.ts` — store actions and immutable state;
+- `configuration-editor-intents.ts` — runtime decoder for untrusted messages;
+- `configuration-editor-styles.ts` and `configuration-editor-script-*.ts` —
+  dependency-free visual/runtime fragments.
+
+Focused VSIX tests exercise all four persisted severities plus Native and
+Inherited reset, server-owned preset relay, tag/all/debt selectors, exact
+preview/apply identity, root-scoped safe-fix delegation and refresh, paged
+occurrences, revision conflicts, capability gating, once-bound handlers,
+CSP/data isolation, semantic labels, theme/responsive/reduced-motion styles,
+and stale async result rejection. A headed screenshot scenario opens the real
+webview against the real LSP and waits for a snapshot. Manual screen-reader,
+200% zoom, cross-theme, and injection evidence plus the committed screenshot
+remain release gates; see
+[CONFIGEDITOR-PLAN-VSIX](../plans/LSP-CONFIGURATION-EDITOR-PLAN.md#CONFIGEDITOR-PLAN-VSIX).
+
+Per repository policy tests do not use `getCommands(true)` or
+`whenCommandReady` as command-existence tests.
 
 ---
 
@@ -189,6 +293,8 @@ Persistent item showing server state and diagnostic count:
 - `$(warning) Basilisk (3)` — errors in current file
 - `$(error) Basilisk` — server failed/not running
 - `$(sync~spin) Basilisk` — analyzing
+
+Clicking the item runs `basilisk.statusMenu`, a quick-pick whose first entry is **Open Configuration Editor** (then Show Output, Restart Language Server) so configuration is reachable from anywhere — the item is always visible even when the sidebar is collapsed. The same settings-gear also appears in the title bar of every Basilisk sidebar view (Modules, Python Processes, Basilisk info), not just the info panel.
 
 Future indicators: type completeness (`"87% typed"`), migration dashboard ([EXTENSION-ACTIVITY-PANEL-SPEC.md](EXTENSION-ACTIVITY-PANEL-SPEC.md)), ownership gutter icons (borrowed/owned/inout).
 

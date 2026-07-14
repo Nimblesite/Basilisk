@@ -179,7 +179,7 @@ follow it exactly. This section is a map, not a restatement (we don't duplicate)
   regressions down; coverage up; mutation score up. A conformance fix that blows the benchmark gate
   isn't done.
 - **Never disable, delete, or unregister a conformance rule to move the score — a punishable offence.**
-  PEP conformance runs the `basilisk` binary with **every rule enabled**: no `basilisk.json`, no
+  PEP conformance runs the `basilisk` binary with **every rule enabled**: no Basilisk config file, no
   per-rule override, no "spec-conformance mode", no skipped fixtures, **no deleting rule source files,
   no removing rules from `all_rules()`**, no exceptions. Equally forbidden: hand-editing
   `conformance/conformance_status.csv` or loosening the `coverage-thresholds.json` gate to match a

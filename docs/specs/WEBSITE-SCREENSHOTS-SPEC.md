@@ -55,6 +55,8 @@ code and runs on every regeneration.
 
 ## Terminal chrome {#WEBSITE-SCREENSHOTS-CHROME}
 
+### ANSI conversion {#WEBSITE-SCREENSHOTS-ANSI}
+
 `website/screenshots/terminal.mjs` builds the window HTML; `ansi.mjs` converts the
 binary's ANSI escapes to themed HTML. The binary emits a fixed SGR set — reset,
 bold, and bold foreground red (errors), yellow (warnings), blue (gutters), cyan

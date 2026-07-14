@@ -53,8 +53,8 @@ pub(super) fn suppress_with_code(
 
 /// Append `  # type: warning[CODE]` to demote the error to a warning.
 // Related to [AUTOFIX-ADOPTION] (error→warning demotion) but a DIFFERENT
-// mechanism: this is a per-LINE inline comment, not the per-file
-// `.basilisk/adoptions.toml` override store the adoption flow uses.
+// mechanism: this is a per-LINE inline comment, not the exact-file active-config
+// override used by the adoption flow.
 pub(super) fn demote_to_warning(
     uri: &Url,
     diag: &Diagnostic,
@@ -103,15 +103,14 @@ pub(super) fn suppress_with_type_ignore(uri: &Url, diag: &Diagnostic, source: &s
     )
 }
 
-/// Offer to disable a rule in `pyproject.toml` via `[tool.basilisk.rules]`.
+/// Offer to disable a rule in the active project configuration.
 ///
 /// This generates a command-based code action. The LSP client executes the
-/// `basilisk.disableRule` command which writes the override to `pyproject.toml`.
-/// Designed to be extensible for future uv integration (per-module overrides,
-/// uv workspace config).
-pub(super) fn disable_in_project_config(diag: &Diagnostic, code: &str) -> CodeAction {
+/// `basilisk.disableRule` command, which writes through the configuration
+/// editor service to the project's `pyproject.toml` `[tool.basilisk]`.
+pub(super) fn disable_in_project_config(uri: &Url, diag: &Diagnostic, code: &str) -> CodeAction {
     CodeAction {
-        title: format!("Disable `{code}` in project config (pyproject.toml)"),
+        title: format!("Disable `{code}` in active project configuration"),
         kind: Some(CodeActionKind::QUICKFIX),
         diagnostics: Some(vec![diag.clone()]),
         command: Some(tower_lsp::lsp_types::Command {
@@ -120,6 +119,7 @@ pub(super) fn disable_in_project_config(diag: &Diagnostic, code: &str) -> CodeAc
             arguments: Some(vec![serde_json::json!({
                 "rule": code,
                 "severity": "off",
+                "uri": uri,
             })]),
         }),
         is_preferred: Some(false),

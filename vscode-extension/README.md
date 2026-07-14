@@ -33,7 +33,7 @@ Basilisk is the **only** Python type checker with a perfect score on the officia
 measured by the real upstream harness on the wheel-installed CLI in its default config.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/vscode-extension/images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in VS Code" width="900">
+  <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/website/src/assets/images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in VS Code" width="900">
 </p>
 
 And it is the **fastest checker we&rsquo;ve measured** &mdash; median cold full-file check, from scratch:

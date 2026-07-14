@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::workspace::WorkspaceIndex;
 
 use super::helpers::{byte_offset_to_line, coverage_percent, module_name_from_path};
-use super::type_health::compute_file_health;
+use super::type_health::{compute_file_health, load_adoption_paths};
 
 /// Result of building the workspace module tree: the per-module nodes (each with
 /// its folded health rollup) plus the workspace-wide health summary.
@@ -63,8 +63,8 @@ pub(crate) fn build_module_tree(
     type_checking_enabled: bool,
     scan_complete: bool,
 ) -> WorkspaceModulesResult {
-    let adoption_store = if type_checking_enabled {
-        project_root.and_then(|root| basilisk_config::AdoptionStore::load(root).ok())
+    let adoption_paths = if type_checking_enabled {
+        project_root.map(load_adoption_paths)
     } else {
         None
     };
@@ -104,7 +104,7 @@ pub(crate) fn build_module_tree(
                 &file_entry.diagnostics,
                 path,
                 project_root,
-                adoption_store.as_ref(),
+                adoption_paths.as_ref(),
             );
             totals.accumulate(&health);
             attach_grading(&mut node, &health);

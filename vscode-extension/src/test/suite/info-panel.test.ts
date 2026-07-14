@@ -6,8 +6,9 @@
  * section header — a single shipped toggle doesn't justify one) plus a compact
  * read-only Server Info section. There is NO Quick Actions section: the high-value
  * actions are Modules-toolbar buttons gated on the server running (see
- * activity-panel.test.ts), Show Output is the status-bar click action, and
- * everything stays in the command palette.
+ * activity-panel.test.ts), the status-bar click opens the basilisk.statusMenu
+ * quick-pick (Open Configuration / Show Output / Restart), and everything stays
+ * in the command palette.
  *
  * This structure is itself the regression guard for issue #103 defect 1
  * ("command not found" quick actions): with no action rows in the panel at
@@ -151,7 +152,10 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     assert.ok(uvRow, "the compact uv row should exist");
     const tip = tooltipOf(uvRow);
     assert.ok(tip.includes("Auto-Sync"), `uv tooltip must carry Auto-Sync, got: "${tip}"`);
-    assert.ok(tip.includes("Stub Suggestions"), `uv tooltip must carry Stub Suggestions, got: "${tip}"`);
+    assert.ok(tip.includes("Executable"), `uv tooltip must carry Executable, got: "${tip}"`);
+    // Stub suggestions are governed by rule severity (BSK-E0152), not a uv
+    // setting, so they are neither a row nor a tooltip line.
+    assert.ok(!tip.includes("Stub Suggestions"), `uv tooltip must not carry the removed Stub Suggestions setting, got: "${tip}"`);
   });
 
   // Defect 2 of issue #103: basilisk.toggleFeature wrote to

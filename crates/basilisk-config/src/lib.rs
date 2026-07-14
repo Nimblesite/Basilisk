@@ -1,17 +1,21 @@
 //! Implements [STUBRES-CONFIG]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CONFIG
 //! Configuration parsing for Basilisk.
 //!
-//! Parses `pyproject.toml` `[tool.basilisk]` and `basilisk.json` with support for:
+//! Parses `pyproject.toml` `[tool.basilisk]` with support for:
 //! - Global rule severity overrides (`rules."imports_unresolved" = "warning"`)
 //! - Per-module overrides (`per-module-overrides."fastmcp".ignore-missing-stubs = true`)
 //! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled = [...]`)
 //! - Stub path directories (`stub-paths = ["stubs/"]`)
 
-pub mod adoption;
+pub mod editor;
 pub mod overrides;
 mod parse;
 
-pub use adoption::AdoptionStore;
+pub use editor::{
+    active_config_path, adoption_rule_overrides, apply_config_patch, build_rule_patch,
+    discover_config_document, discover_config_document_with_content, ConfigDocument,
+    ConfigDocumentError, ConfigFormat, ConfigPatch, RuleConfigScope, RuleConfigUpdate,
+};
 pub use overrides::{path_matches_pattern, ModuleOverride, PathOverride, RuleSeverity};
 pub use parse::BasiliskConfig;
 
@@ -19,7 +23,7 @@ use std::path::Path;
 
 /// Directories excluded from analysis by default.
 ///
-/// Users can override this via the `exclude` key in `basilisk.json` or
+/// Users can override this via the `exclude` key in
 /// `pyproject.toml [tool.basilisk]`. Setting `exclude` in config replaces
 /// these defaults entirely — add them back explicitly if still needed.
 pub const DEFAULT_EXCLUDES: &[&str] = &[
@@ -45,34 +49,88 @@ pub const DEFAULT_EXCLUDES: &[&str] = &[
     "_vendored",
 ];
 
-/// Load a `BasiliskConfig` from the first config file found in `root`.
+/// Load a `BasiliskConfig` for `start` by discovering config files up the
+/// ancestor directory chain and merging them cumulatively.
 ///
-/// Implements [CHKARCH-CONFIG-FILE]. Search order (highest priority wins):
-/// 1. `basilisk.json`
-/// 2. `pyproject.toml` `[tool.basilisk]`
+/// Implements [CHKARCH-CONFIG-DISCOVERY] (GitHub #311): every surface —
+/// `basilisk check`/`fix`/`adopt` and the LSP — resolves rule config through
+/// this one routine, so the result is independent of argument order, path
+/// spelling, and cwd. The walk visits `start` and every ancestor up to the
+/// filesystem root; each directory contributes its config file (see
+/// [`load_dir_config`] for the per-directory priority), and directories
+/// nearer to `start` win per key over ancestors (see
+/// [`BasiliskConfig::merged_with`]). A `pyproject.toml` without a
+/// `[tool.basilisk]` table contributes nothing and does not stop the walk.
 ///
-/// Returns `BasiliskConfig::default()` if no config file is found (and likewise
-/// on a malformed file — no configuration-error exit is raised; see report).
-/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-FILE
+/// Returns `BasiliskConfig::default()` if no config file is found anywhere
+/// on the chain (and likewise on malformed files — no configuration-error
+/// exit is raised; see report).
+/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY
 #[must_use]
-pub fn load_basilisk_config(root: &Path) -> BasiliskConfig {
-    // 1. basilisk.json
-    let basilisk_json = root.join("basilisk.json");
-    if basilisk_json.is_file() {
-        if let Some(cfg) = parse::load_from_json(&basilisk_json) {
-            return cfg;
-        }
+pub fn load_basilisk_config(start: &Path) -> BasiliskConfig {
+    let chain: Vec<BasiliskConfig> = absolute_start(start)
+        .ancestors()
+        .filter_map(load_dir_config)
+        .collect();
+    // `ancestors()` yields nearest-first; fold from the outermost ancestor so
+    // configs nearer to `start` override it per key.
+    let mut config = chain
+        .into_iter()
+        .rev()
+        .fold(BasiliskConfig::default(), BasiliskConfig::merged_with);
+    // The nearest config-holding directory anchors root-relative
+    // interpretation (per-path overrides, adoption store); with no config
+    // anywhere on the chain, `start` itself anchors, as before.
+    if config.project_root.is_none() {
+        config.project_root = Some(start.to_path_buf());
     }
+    config
+}
 
-    // 2. pyproject.toml [tool.basilisk]
-    let pyproject = root.join("pyproject.toml");
+/// The nearest directory at or above `start` holding a recognized config file
+/// (`pyproject.toml` with a `[tool.basilisk]` table).
+///
+/// This is the anchor directory for artifacts that live next to the config —
+/// e.g. the adoption store — so `basilisk adopt` writes where `basilisk check`
+/// discovers. Implements [CHKARCH-CONFIG-DISCOVERY].
+#[must_use]
+pub fn discover_config_dir(start: &Path) -> Option<std::path::PathBuf> {
+    absolute_start(start)
+        .ancestors()
+        .find(|dir| load_dir_config(dir).is_some())
+        .map(Path::to_path_buf)
+}
+
+/// Load the config from exactly one directory — no ancestor walk.
+///
+/// Implements [CHKARCH-CONFIG-FILE]: the only configuration source is the
+/// `[tool.basilisk]` table of the directory's `pyproject.toml`. A
+/// `pyproject.toml` without that table contributes nothing.
+///
+/// Returns `None` when the directory holds no parseable config.
+fn load_dir_config(dir: &Path) -> Option<BasiliskConfig> {
+    let pyproject = dir.join("pyproject.toml");
     if pyproject.is_file() {
-        if let Some(cfg) = parse::load_from_pyproject(&pyproject) {
-            return cfg;
+        if let Some(mut cfg) = parse::load_from_pyproject(&pyproject) {
+            cfg.project_root = Some(dir.to_path_buf());
+            return Some(cfg);
         }
     }
 
-    BasiliskConfig::default()
+    None
+}
+
+/// Absolutize `start` (against cwd) so `ancestors()` walks the full directory
+/// chain even for relative paths like `.` or `child/` — WITHOUT
+/// canonicalizing, so discovered directories keep the caller's path spelling
+/// (a symlinked temp dir must not come back re-rooted, or callers that
+/// `strip_prefix` against their own paths break).
+fn absolute_start(start: &Path) -> std::path::PathBuf {
+    if start.is_absolute() {
+        start.to_path_buf()
+    } else {
+        std::env::current_dir().map_or_else(|_| start.to_path_buf(), |cwd| cwd.join(start))
+    }
 }
 
 #[cfg(test)]
@@ -161,8 +219,10 @@ disabled = ["imports_unresolved", "BSK-E0001"]
         );
     }
 
+    /// The legacy `basilisk.json` format is never read: a directory holding
+    /// only a (formerly valid) `basilisk.json` yields the default config.
     #[test]
-    fn load_from_basilisk_json() {
+    fn basilisk_json_is_ignored() {
         with_temp_cfg_dir(
             "bsk_cfg_json_xm",
             &[(
@@ -179,19 +239,25 @@ disabled = ["imports_unresolved", "BSK-E0001"]
             }"#,
             )],
             |cfg| {
-                assert_eq!(cfg.stub_paths.len(), 1);
-                assert_eq!(cfg.typeshed_path, Some(std::path::PathBuf::from("ts-json")));
-                assert_eq!(
-                    cfg.rules.get("imports_unresolved").copied(),
-                    Some(RuleSeverity::Info)
+                assert!(
+                    cfg.stub_paths.is_empty(),
+                    "basilisk.json stubPaths must be ignored"
                 );
-                assert!(cfg.per_module_overrides.contains_key("requests"));
+                assert!(
+                    cfg.typeshed_path.is_none(),
+                    "basilisk.json typeshedPath must be ignored"
+                );
+                assert!(cfg.rules.is_empty(), "basilisk.json rules must be ignored");
+                assert!(
+                    cfg.per_module_overrides.is_empty(),
+                    "basilisk.json perModuleOverrides must be ignored"
+                );
             },
         );
     }
 
     #[test]
-    fn basilisk_json_takes_priority() {
+    fn pyproject_wins_over_stray_basilisk_json() {
         with_temp_cfg_dir(
             "bsk_cfg_priority_xm",
             &[
@@ -203,7 +269,7 @@ disabled = ["imports_unresolved", "BSK-E0001"]
             ],
             |cfg| {
                 assert_eq!(cfg.stub_paths.len(), 1);
-                assert_eq!(cfg.stub_paths.first().unwrap().to_str(), Some("from_json/"));
+                assert_eq!(cfg.stub_paths.first().unwrap().to_str(), Some("from_toml/"));
             },
         );
     }
@@ -241,16 +307,20 @@ disabled = ["imports_unresolved", "BSK-E0001"]
     }
 
     #[test]
-    fn json_exclude_overrides_defaults() {
+    fn json_exclude_does_not_override_defaults() {
         with_temp_cfg_dir(
             "bsk_cfg_json_exclude_xm",
             &[("basilisk.json", r#"{ "exclude": ["vendor", "generated"] }"#)],
             |cfg| {
-                assert_eq!(cfg.exclude, vec!["vendor", "generated"]);
-                // Defaults are replaced, not merged.
+                // The stray basilisk.json is never read: the defaults survive
+                // and none of its entries load.
                 assert!(
-                    !cfg.exclude.iter().any(|e| e == "__pycache__"),
-                    "custom exclude must replace defaults entirely"
+                    cfg.exclude.iter().any(|e| e == "__pycache__"),
+                    "default excludes must survive a stray basilisk.json"
+                );
+                assert!(
+                    !cfg.exclude.iter().any(|e| e == "vendor"),
+                    "stray basilisk.json exclude entries must not load"
                 );
             },
         );
@@ -269,83 +339,6 @@ exclude = ["legacy", "third_party"]
             )],
             |cfg| {
                 assert_eq!(cfg.exclude, vec!["legacy", "third_party"]);
-            },
-        );
-    }
-
-    #[test]
-    fn json_uv_stub_suggestions_and_dependency_diagnostics() {
-        with_temp_cfg_dir(
-            "bsk_cfg_json_uv_xm",
-            &[(
-                "basilisk.json",
-                r#"{
-                "uv": {
-                    "stubSuggestions": false,
-                    "dependencyDiagnostics": true
-                }
-            }"#,
-            )],
-            |cfg| {
-                assert!(
-                    !cfg.uv_stub_suggestions,
-                    "stubSuggestions should be parsed as false"
-                );
-                assert!(
-                    cfg.uv_dependency_diagnostics,
-                    "dependencyDiagnostics should be parsed as true"
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn json_uv_kebab_case_alternatives() {
-        with_temp_cfg_dir(
-            "bsk_cfg_json_uv_kebab_xm",
-            &[(
-                "basilisk.json",
-                r#"{
-                "uv": {
-                    "stub-suggestions": false,
-                    "dependency-diagnostics": true
-                }
-            }"#,
-            )],
-            |cfg| {
-                assert!(
-                    !cfg.uv_stub_suggestions,
-                    "stub-suggestions kebab key should be accepted"
-                );
-                assert!(
-                    cfg.uv_dependency_diagnostics,
-                    "dependency-diagnostics kebab key should be accepted"
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn toml_uv_stub_suggestions_and_dependency_diagnostics() {
-        with_temp_cfg_dir(
-            "bsk_cfg_toml_uv_xm",
-            &[(
-                "pyproject.toml",
-                r"
-[tool.basilisk.uv]
-stub-suggestions = false
-dependency-diagnostics = true
-",
-            )],
-            |cfg| {
-                assert!(
-                    !cfg.uv_stub_suggestions,
-                    "stub-suggestions should be parsed as false"
-                );
-                assert!(
-                    cfg.uv_dependency_diagnostics,
-                    "dependency-diagnostics should be parsed as true"
-                );
             },
         );
     }
@@ -457,7 +450,7 @@ disabled = ["BSK-E0001"]
     }
 
     #[test]
-    fn json_kebab_case_stub_paths() {
+    fn json_kebab_case_stub_paths_are_ignored() {
         with_temp_cfg_dir(
             "bsk_cfg_json_kebab_stubs_xm",
             &[(
@@ -467,25 +460,16 @@ disabled = ["BSK-E0001"]
             }"#,
             )],
             |cfg| {
-                assert_eq!(
-                    cfg.stub_paths.len(),
-                    2,
-                    "stub-paths kebab key should be accepted"
-                );
-                assert_eq!(
-                    cfg.stub_paths.first().and_then(|p| p.to_str()),
-                    Some("typings/")
-                );
-                assert_eq!(
-                    cfg.stub_paths.get(1).and_then(|p| p.to_str()),
-                    Some("custom-stubs/")
+                assert!(
+                    cfg.stub_paths.is_empty(),
+                    "stray basilisk.json stub-paths must be ignored"
                 );
             },
         );
     }
 
     #[test]
-    fn json_kebab_case_per_module_overrides() {
+    fn json_kebab_case_per_module_overrides_are_ignored() {
         with_temp_cfg_dir(
             "bsk_cfg_json_kebab_pmo_xm",
             &[(
@@ -498,26 +482,18 @@ disabled = ["BSK-E0001"]
             )],
             |cfg| {
                 assert!(
-                    cfg.per_module_overrides.contains_key("numpy"),
-                    "per-module-overrides kebab key should be accepted"
-                );
-                assert!(
-                    cfg.per_module_overrides
-                        .get("numpy")
-                        .unwrap()
-                        .ignore_missing_stubs,
-                    "ignore-missing-stubs kebab key should be accepted"
+                    cfg.per_module_overrides.is_empty(),
+                    "stray basilisk.json per-module-overrides must be ignored"
                 );
             },
         );
     }
 
     #[test]
-    fn fallback_to_pyproject_when_json_is_invalid() {
+    fn malformed_stray_json_never_blocks_the_pyproject_config() {
         with_temp_cfg_dir(
             "bsk_cfg_invalid_json_xm",
             &[
-                // Write invalid JSON so load_from_json returns None.
                 ("basilisk.json", "{ not valid json !!!"),
                 (
                     "pyproject.toml",
@@ -528,34 +504,77 @@ stub-paths = ["fallback-stubs/"]
                 ),
             ],
             |cfg| {
+                // basilisk.json is never read — malformed or not — so the
+                // pyproject.toml config always loads.
                 assert_eq!(
-                    cfg.stub_paths.len(),
-                    1,
-                    "should fall back to pyproject.toml when JSON is invalid"
+                    cfg.stub_paths.first().and_then(|p| p.to_str()),
+                    Some("fallback-stubs/"),
+                    "a stray basilisk.json must never block pyproject.toml"
                 );
-                assert_eq!(
-                    cfg.stub_paths.first().unwrap().to_str(),
-                    Some("fallback-stubs/")
-                );
+                assert_eq!(cfg.stub_paths.len(), 1);
             },
         );
     }
 
+    /// GitHub #311: rule config must be discovered by walking ancestor
+    /// directories, not just the exact directory passed in — otherwise
+    /// `basilisk check path/to/file.py` silently ignores the project root
+    /// config. See [CHKARCH-CONFIG-FILE].
     #[test]
-    fn uv_defaults_when_not_configured() {
-        with_temp_cfg_dir(
-            "bsk_cfg_uv_defaults_xm",
-            &[("basilisk.json", r#"{ "stubPaths": [] }"#)],
-            |cfg| {
-                assert!(
-                    !cfg.uv_stub_suggestions,
-                    "uv_stub_suggestions defaults to false so BSK-E0152 stays off by default (default config = the PEP set only)"
-                );
-                assert!(
-                    !cfg.uv_dependency_diagnostics,
-                    "uv_dependency_diagnostics should default to false"
-                );
-            },
+    fn discovers_config_from_ancestor_directory() {
+        let root = std::env::temp_dir().join(format!("bsk_cfg_walk_up_{}", std::process::id()));
+        let child = root.join("nested").join("pkg");
+        fs::create_dir_all(&child).unwrap();
+        fs::write(
+            root.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"imports_unresolved\" = \"warning\"\n",
+        )
+        .unwrap();
+
+        let cfg = load_basilisk_config(&child);
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(
+            cfg.rules.get("imports_unresolved").copied(),
+            Some(RuleSeverity::Warning),
+            "loading config from a child directory must discover the ancestor's \
+             pyproject.toml [tool.basilisk] (GitHub #311)"
+        );
+    }
+
+    /// GitHub #311: config is cumulative/additive — a child directory's config
+    /// appends to (and per-key overrides) ancestor config; it must never blow
+    /// the ancestor config away.
+    #[test]
+    fn child_config_merges_cumulatively_over_ancestor() {
+        let root = std::env::temp_dir().join(format!("bsk_cfg_cumulative_{}", std::process::id()));
+        let child = root.join("child");
+        fs::create_dir_all(&child).unwrap();
+        fs::write(
+            root.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\
+             \"imports_unresolved\" = \"warning\"\n\
+             \"BSK-E0001\" = \"warning\"\n",
+        )
+        .unwrap();
+        fs::write(
+            child.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
+        )
+        .unwrap();
+
+        let cfg = load_basilisk_config(&child);
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(
+            cfg.rules.get("imports_unresolved").copied(),
+            Some(RuleSeverity::Warning),
+            "ancestor rules not mentioned by the child config must survive the merge"
+        );
+        assert_eq!(
+            cfg.rules.get("BSK-E0001").copied(),
+            Some(RuleSeverity::Disabled),
+            "the child config must win where it overlaps the ancestor config"
         );
     }
 }

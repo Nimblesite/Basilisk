@@ -27,14 +27,19 @@ fn unique_dir(prefix: &str) -> PathBuf {
     dir
 }
 
-/// Write a `basilisk.json` into `dir` opting into the annotation house rules
+/// Write a `pyproject.toml` into `dir` opting into the annotation house rules
 /// (`BSK-E0001`/`BSK-W0050` …), which are off by default — the default config is
 /// pure PEP conformance. Tests that assert those diagnostics call this so they
 /// see exactly what a user who enabled them would. No modes; this is
-/// configuration. See [CHKARCH-CONFIGURATION-ONLY].
+/// configuration. See [CHKARCH-CONFIGURATION-ONLY]. Callers use their own
+/// unique dir and must not also write a `pyproject.toml` there (the config test
+/// below writes its own instead of calling this).
 fn opt_in_house_rules(dir: &std::path::Path) {
-    std::fs::write(dir.join("basilisk.json"), "{\"strictAnnotations\": true}\n")
-        .expect("write basilisk.json");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
+    )
+    .expect("write pyproject.toml");
 }
 
 /// Run `basilisk check <target> --cache --cache-dir <cache> --cache-stats`.
@@ -165,7 +170,7 @@ fn changing_config_invalidates() {
     std::fs::write(&target, "x: int = 42\n").unwrap();
     std::fs::write(
         &pyproject,
-        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\nstrict-annotations = true\n\n[tool.basilisk.rules]\n\"BSK-W0050\" = \"warning\"\n",
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk.rules]\n\"BSK-W0050\" = \"warning\"\n",
     )
     .unwrap();
 
@@ -175,7 +180,7 @@ fn changing_config_invalidates() {
     // Same source, different config: the fingerprint must differ → miss.
     std::fs::write(
         &pyproject,
-        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\nstrict-annotations = true\n\n[tool.basilisk.rules]\n\"BSK-W0050\" = \"error\"\n",
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk.rules]\n\"BSK-W0050\" = \"error\"\n",
     )
     .unwrap();
     assert_stats(&check_cached(&target, &cache), 0, 1);

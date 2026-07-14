@@ -1,0 +1,237 @@
+# typeDiagram model - https://typediagram.dev
+# Source-of-truth wire model for the configuration editor
+# ([CONFIGEDITOR-MODEL] / [LSPARCH-CONFIG-EDITOR-PROTOCOL]).
+# Regenerate the committed language DTO shapes:
+#   typediagram --to rust models/configuration_editor.td
+#   typediagram --to typescript models/configuration_editor.td
+# Render the documentation diagram:
+#   typediagram models/configuration_editor.td > docs/models/configuration_editor.svg
+
+alias Uri = String
+alias Revision = String
+alias PreviewId = String
+
+union RuleSeverity {
+  Error
+  Warning
+  Info
+  Disabled
+}
+
+# Inherit and Native are mutation intents, not persisted severity values.
+# Inherit removes an explicit override. Native writes each selected rule's own
+# default severity and therefore enables opt-in rules without promoting warnings.
+union RuleSetting {
+  Inherit
+  Native
+  Error
+  Warning
+  Info
+  Disabled
+}
+
+union TagKind {
+  Provenance
+  PepCategory
+  Descriptive
+}
+
+// BasiliskJson is a deprecated wire variant kept for protocol-v1 stability;
+// the server never emits it — pyproject.toml [tool.basilisk] is the only
+// configuration format ([CHKARCH-CONFIG-FILE]).
+union ConfigurationFormat {
+  PyprojectToml
+  BasiliskJson
+}
+
+union RuleSelector {
+  All
+  Codes { codes: List<String> }
+  Tags { tags: List<String>, matchAll: Bool }
+  CurrentViolations
+  SafeFixable
+  WithoutSafeFix
+}
+
+union MutationScope {
+  Project
+  Path { pattern: String }
+}
+
+type RuleDescriptor {
+  code: String
+  title: String
+  summary: String
+  docsUrl: Uri
+  tags: List<String>
+  defaultSeverity: RuleSeverity
+  defaultEnabled: Bool
+}
+
+type RuleState {
+  descriptor: RuleDescriptor
+  configuredSeverity: Option<RuleSeverity>
+  effectiveSeverity: RuleSeverity
+  inherited: Bool
+  diagnosticCount: Int
+  affectedFileCount: Int
+  safeFixCount: Int
+  unsafeFixCount: Int
+  adoptionExceptionCount: Int
+}
+
+type TagState {
+  name: String
+  kind: TagKind
+  ruleCount: Int
+  diagnosticCount: Int
+}
+
+type ConfigurationSource {
+  uri: Uri
+  format: ConfigurationFormat
+  exists: Bool
+  readOnly: Bool
+  shadowedSources: List<Uri>
+}
+
+type ConfigurationProblem {
+  code: String
+  message: String
+  uri: Uri
+  line: Int
+  character: Int
+}
+
+type DebtSummary {
+  remainingDiagnostics: Int
+  adoptedFiles: Int
+  adoptionExceptions: Int
+  suppressionDiagnostics: Int
+  disabledRules: Int
+}
+
+# Presets are LSP-owned, one-shot mutation recipes. There is no policy mode:
+# applying a preset expands its mutations to explicit rule severities in the
+# active configuration file, and only those ordinary entries are persisted.
+type ConfigurationPreset {
+  id: String
+  name: String
+  summary: String
+  mutations: List<ConfigurationMutation>
+}
+
+# Exact persisted entries for one existing path scope. Disabled-list aliases are
+# normalized to Disabled so clients never need to understand config syntax.
+type PathRuleSetting {
+  ruleCode: String
+  severity: RuleSeverity
+}
+
+type PathOverrideState {
+  pattern: String
+  adoption: Bool
+  rules: List<PathRuleSetting>
+}
+
+type ConfigurationSnapshot {
+  rootUri: Uri
+  revision: Revision
+  source: ConfigurationSource
+  rules: List<RuleState>
+  tags: List<TagState>
+  presets: List<ConfigurationPreset>
+  pathOverrides: List<PathOverrideState>
+  debt: DebtSummary
+  problems: List<ConfigurationProblem>
+}
+
+type ConfigurationMutation {
+  selector: RuleSelector
+  setting: RuleSetting
+  scope: MutationScope
+}
+
+type PreviewConfigurationRequest {
+  rootUri: Uri
+  baseRevision: Revision
+  mutations: List<ConfigurationMutation>
+}
+
+type ConfigurationImpact {
+  changedRules: Int
+  enabledRules: Int
+  disabledRules: Int
+  diagnosticsBefore: Int
+  diagnosticsAfter: Int
+  errorsBefore: Int
+  errorsAfter: Int
+  warningsBefore: Int
+  warningsAfter: Int
+}
+
+# Fully expanded, normalized result of one real config entry change. Native is
+# resolved to the rule's concrete severity; Inherit means the entry is removed.
+type ResolvedConfigurationChange {
+  ruleCode: String
+  scope: MutationScope
+  previousSetting: RuleSetting
+  resultingSetting: RuleSetting
+}
+
+type ConfigurationPreview {
+  previewId: PreviewId
+  baseRevision: Revision
+  expandedRuleCodes: List<String>
+  changes: List<ResolvedConfigurationChange>
+  impact: ConfigurationImpact
+  problems: List<ConfigurationProblem>
+}
+
+union FixSafety {
+  Safe
+  Unsafe
+}
+
+type SourcePosition {
+  line: Int
+  character: Int
+}
+
+type SourceRange {
+  start: SourcePosition
+  end: SourcePosition
+}
+
+type RuleOccurrence {
+  ruleCode: String
+  uri: Uri
+  range: SourceRange
+  effectiveSeverity: RuleSeverity
+  fixSafety: Option<FixSafety>
+  configurationSource: Uri
+}
+
+type RuleOccurrencesRequest {
+  rootUri: Uri
+  selector: RuleSelector
+  cursor: Option<String>
+  limit: Int
+}
+
+type RuleOccurrencesResponse {
+  items: List<RuleOccurrence>
+  nextCursor: Option<String>
+}
+
+type ApplyConfigurationRequest {
+  rootUri: Uri
+  previewId: PreviewId
+  baseRevision: Revision
+}
+
+type ConfigurationChanged {
+  rootUri: Uri
+  revision: Revision
+  reason: String
+}

@@ -187,9 +187,9 @@ pub fn code_actions(
         actions.push(CodeActionOrCommand::CodeAction(
             suppress::suppress_with_type_ignore(uri, diag, source),
         ));
-        // Offer to disable the rule in pyproject.toml project config.
+        // Offer to disable the rule in the active project configuration.
         actions.push(CodeActionOrCommand::CodeAction(
-            suppress::disable_in_project_config(diag, code),
+            suppress::disable_in_project_config(uri, diag, code),
         ));
     }
 

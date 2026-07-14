@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 /// Severity level for a diagnostic rule override.
 ///
-/// Implements [CHKARCH-STRICTNESS-SEVERITY] (config side): the four modes a rule
+/// Implements [CHKARCH-STRICTNESS-SEVERITY] (config side): the four values a rule
 /// can be set to — `error`, `warning`, `info`, `disabled`. The checker applies
 /// them in `basilisk-checker/src/lib.rs`.
 /// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS-SEVERITY
@@ -24,8 +24,8 @@ pub enum RuleSeverity {
 impl RuleSeverity {
     /// Parse a severity string from config.
     ///
-    /// Implements [CHKARCH-STRICTNESS-SEVERITY]: maps the spec's four mode names
-    /// (plus the documented aliases `warn`/`information`/`off`/`none`) to a mode.
+    /// Implements [CHKARCH-STRICTNESS-SEVERITY]: maps the four severity names
+    /// (plus the documented aliases `warn`/`information`/`off`/`none`) to a severity.
     #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
         match value {
@@ -34,6 +34,17 @@ impl RuleSeverity {
             "info" | "information" => Some(Self::Info),
             "disabled" | "off" | "none" => Some(Self::Disabled),
             _ => None,
+        }
+    }
+
+    /// Canonical lowercase spelling used by both supported config formats.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+            Self::Info => "info",
+            Self::Disabled => "disabled",
         }
     }
 }
@@ -179,11 +190,13 @@ pub fn path_matches_pattern(file_path: &std::path::Path, pattern: &str) -> bool 
             .iter()
             .any(|seg| segment_matches(first.as_bytes(), seg.as_bytes()));
     }
-    // Anchored pattern: match the full path or any ancestor directory of it.
-    (0..=path_segs.len()).any(|len| {
+    // Multi-segment patterns are anchored to the project-relative path. Try
+    // each ancestor prefix so a directory entry selects its subtree, while an
+    // exact file entry cannot match the same suffix under another directory.
+    (1..=path_segs.len()).any(|end| {
         path_segs
-            .get(..len)
-            .is_some_and(|prefix| segments_match(&pattern_segs, prefix))
+            .get(..end)
+            .is_some_and(|candidate| segments_match(&pattern_segs, candidate))
     })
 }
 
@@ -219,8 +232,27 @@ pub fn find_path_override<'a, S: std::hash::BuildHasher>(
 ) -> Option<&'a PathOverride> {
     overrides
         .iter()
-        .find(|(pattern, _)| path_matches_pattern(file_path, pattern))
+        .filter(|(pattern, _)| path_matches_pattern(file_path, pattern))
+        .max_by(|(left, _), (right, _)| {
+            path_pattern_specificity(left)
+                .cmp(&path_pattern_specificity(right))
+                // Stable tie-break independent of HashMap iteration order.
+                .then_with(|| right.cmp(left))
+        })
         .map(|(_, entry)| entry)
+}
+
+fn path_pattern_specificity(pattern: &str) -> (bool, usize, usize) {
+    let has_wildcard = pattern.bytes().any(|byte| matches!(byte, b'*' | b'?'));
+    let literal_characters = pattern
+        .bytes()
+        .filter(|byte| !matches!(byte, b'*' | b'?'))
+        .count();
+    (
+        !has_wildcard,
+        path_segments(pattern).len(),
+        literal_characters,
+    )
 }
 
 /// Check whether a rule is disabled for a given file path.
@@ -236,9 +268,10 @@ pub fn is_rule_disabled_for_path<S: std::hash::BuildHasher>(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::path::Path;
 
-    use super::path_matches_pattern;
+    use super::{find_path_override, path_matches_pattern, PathOverride, RuleSeverity};
 
     fn matches(path: &str, pattern: &str) -> bool {
         path_matches_pattern(Path::new(path), pattern)
@@ -282,6 +315,34 @@ mod tests {
         // Multi-segment relative directory excludes its subtree.
         assert!(matches("src/generated/models.py", "src/generated"));
         assert!(!matches("src/generatedx/models.py", "src/generated"));
+    }
+
+    #[test]
+    fn root_relative_exact_file_is_anchored() {
+        assert!(matches("src/app.py", "src/app.py"));
+        assert!(!matches("src/other.py", "src/app.py"));
+        assert!(!matches("vendor/src/app.py", "src/app.py"));
+    }
+
+    #[test]
+    fn exact_file_override_wins_over_overlapping_glob_deterministically() {
+        let broad = PathOverride {
+            disabled_rules: Vec::new(),
+            rule_overrides: HashMap::from([("BSK-E0001".to_owned(), RuleSeverity::Warning)]),
+        };
+        let exact = PathOverride {
+            disabled_rules: Vec::new(),
+            rule_overrides: HashMap::from([("BSK-E0001".to_owned(), RuleSeverity::Info)]),
+        };
+        let overrides = HashMap::from([
+            ("src/**".to_owned(), broad),
+            ("src/app.py".to_owned(), exact),
+        ]);
+        let selected = find_path_override(Path::new("src/app.py"), &overrides);
+        assert_eq!(
+            selected.and_then(|entry| entry.rule_overrides.get("BSK-E0001")),
+            Some(&RuleSeverity::Info)
+        );
     }
 
     #[test]

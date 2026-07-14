@@ -626,13 +626,20 @@ fn test_lsp_fix_file_command() -> TestResult<()> {
 #[test]
 fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
+    std::fs::write(
+        fixture.workspace_root.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-E0003\" = \"error\"\n\"BSK-W0050\" = \"warning\"\n",
+    )?;
     let _ = fixture.initialize()?;
 
     // Line 0: redundant annotation → BSK-W0050 (Safe fix: remove `: int`).
     // Line 1: unannotated `None` variable → BSK-E0003 (Unsafe fix: insert `: Any`).
-    let uri = "file:///safe_default.py";
+    let uri =
+        tower_lsp::lsp_types::Url::from_file_path(fixture.workspace_root.join("safe_default.py"))
+            .map_err(|()| "fixture path cannot be represented as a URI")?
+            .to_string();
     let code = "x: int = 42\ny = None\n";
-    fixture.did_open(uri, code)?;
+    fixture.did_open(&uri, code)?;
     let _ = fixture
         .wait_for_diagnostics()
         .ok_or("no diagnostics published")?;
@@ -643,7 +650,7 @@ fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
         300,
         "textDocument/codeAction",
         serde_json::json!({
-            "textDocument": { "uri": uri },
+            "textDocument": { "uri": &uri },
             "range": {
                 "start": { "line": 0, "character": 0 },
                 "end": { "line": 2, "character": 0 }
@@ -656,7 +663,7 @@ fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
     )?
     .ok_or("no fix-all code action response")?;
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
-    let edits = parsed["result"][0]["edit"]["changes"][uri]
+    let edits = parsed["result"][0]["edit"]["changes"][&uri]
         .as_array()
         .ok_or("fix-all action should carry edits")?;
     assert!(
@@ -672,18 +679,34 @@ fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
     // Surfaces 2–3: the plain commands (keybinding / context menu / toolbar)
     // are Safe-only by default; the spec-promised all-tier variants
     // ([AUTOFIX-MASS-VSCODE]) exist and widen to the Unsafe BSK-E0003 fix.
-    let expectations: [(&str, u64); 4] = [
-        ("basilisk.fixFile", 1),
-        ("basilisk.fixWorkspace", 1),
-        ("basilisk.fixFileAll", 2),
-        ("basilisk.fixWorkspaceAll", 2),
+    let second_uri =
+        tower_lsp::lsp_types::Url::from_file_path(fixture.workspace_root.join("safe_workspace.py"))
+            .map_err(|()| "fixture path cannot be represented as a URI")?
+            .to_string();
+    let third_uri =
+        tower_lsp::lsp_types::Url::from_file_path(fixture.workspace_root.join("all_file.py"))
+            .map_err(|()| "fixture path cannot be represented as a URI")?
+            .to_string();
+    let expectations: [(&str, &str, bool, u64); 4] = [
+        ("basilisk.fixFile", &uri, false, 1),
+        ("basilisk.fixWorkspace", &second_uri, true, 1),
+        ("basilisk.fixFileAll", &third_uri, true, 2),
+        ("basilisk.fixWorkspaceAll", &uri, false, 2),
     ];
-    for ((command, expected_fixed), request_id) in expectations.into_iter().zip(301_u64..) {
+    for ((command, command_uri, open_first, expected_fixed), request_id) in
+        expectations.into_iter().zip(301_u64..)
+    {
+        if open_first {
+            fixture.did_open(command_uri, code)?;
+            let _ = fixture
+                .wait_for_diagnostics()
+                .ok_or("no diagnostics published for command fixture")?;
+        }
         let resp = send_request(
             &mut fixture,
             request_id,
             "workspace/executeCommand",
-            serde_json::json!({ "command": command, "arguments": [uri] }),
+            serde_json::json!({ "command": command, "arguments": [command_uri] }),
         )?
         .ok_or("no executeCommand response")?;
         let parsed: serde_json::Value = serde_json::from_str(&resp)?;
@@ -694,6 +717,96 @@ fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
              only by default, every fixable rule for the `All` variants: {resp}"
         );
     }
+    Ok(())
+}
+
+// Implements [AUTOFIX-MASS-OVERVIEW] / [CONFIGEDITOR-OPERATIONS]: command
+// arguments are workspace authority boundaries, and accepted edits converge
+// the index before the execute-command response is returned.
+#[test]
+fn test_fix_commands_enforce_workspace_authority_and_converge() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    std::fs::write(
+        fixture.workspace_root.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-W0050\" = \"warning\"\n",
+    )?;
+    let _ = fixture.initialize()?;
+
+    let root_uri =
+        tower_lsp::lsp_types::Url::from_file_path(fixture.workspace_root.join("inside.py"))
+            .map_err(|()| "fixture path cannot be represented as a URI")?
+            .to_string();
+    let external_uri = "file:///external_fix_scope.py";
+    let code = "x: int = 42\n";
+    fixture.did_open(&root_uri, code)?;
+    let _ = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics for in-root document")?;
+    fixture.did_open(external_uri, code)?;
+    let _ = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics for external document")?;
+
+    let workspace = send_request(
+        &mut fixture,
+        320,
+        "workspace/executeCommand",
+        serde_json::json!({
+            "command": "basilisk.fixWorkspace",
+            "arguments": []
+        }),
+    )?
+    .ok_or("no fixWorkspace response")?;
+    let parsed: serde_json::Value = serde_json::from_str(&workspace)?;
+    assert_eq!(parsed["result"]["fixed"].as_u64(), Some(1));
+    assert_eq!(parsed["result"]["files"].as_u64(), Some(1));
+
+    let external = send_request(
+        &mut fixture,
+        321,
+        "workspace/executeCommand",
+        serde_json::json!({
+            "command": "basilisk.fixFile",
+            "arguments": [external_uri]
+        }),
+    )?
+    .ok_or("no external fixFile response")?;
+    let parsed: serde_json::Value = serde_json::from_str(&external)?;
+    assert_eq!(
+        parsed["result"]["fixed"].as_u64(),
+        Some(1),
+        "workspace fix must leave the external open document unchanged: {external}"
+    );
+
+    let malformed = send_request(
+        &mut fixture,
+        322,
+        "workspace/executeCommand",
+        serde_json::json!({
+            "command": "basilisk.fixWorkspace",
+            "arguments": [{}]
+        }),
+    )?
+    .ok_or("no malformed-root response")?;
+    let parsed: serde_json::Value = serde_json::from_str(&malformed)?;
+    assert_eq!(parsed["error"]["code"].as_i64(), Some(-32602));
+
+    let outside_disable = send_request(
+        &mut fixture,
+        323,
+        "workspace/executeCommand",
+        serde_json::json!({
+            "command": "basilisk.disableRule",
+            "arguments": [{
+                "rule": "BSK-W0050",
+                "severity": "off",
+                "uri": external_uri
+            }]
+        }),
+    )?
+    .ok_or("no outside disableRule response")?;
+    let parsed: serde_json::Value = serde_json::from_str(&outside_disable)?;
+    assert_eq!(parsed["error"]["code"].as_i64(), Some(-32602));
     Ok(())
 }
 

@@ -10,7 +10,9 @@ fn run_with_python_version(source: &str, version: &str) -> Vec<Diagnostic> {
     let resolved = resolve(&parsed).unwrap();
     let config = basilisk_config::BasiliskConfig {
         python_version: Some(version.to_owned()),
-        strict_annotations: true,
+        rules: [("BSK-E0025".to_owned(), basilisk_config::RuleSeverity::Error)]
+            .into_iter()
+            .collect(),
         ..Default::default()
     };
     basilisk_checker::check_with_config(&resolved, &config)

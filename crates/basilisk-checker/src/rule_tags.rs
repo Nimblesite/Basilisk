@@ -58,13 +58,14 @@ pub const PEP_CATEGORIES: [&str; 21] = [
 /// The free-form descriptive tags Basilisk currently uses. Each is carefully
 /// named to avoid colliding with a reserved PEP-category name; the tagging test
 /// ([CHKTAG-TESTS]) asserts this for every entry. [CHKTAG-FREEFORM]
-pub const FREE_FORM_TAGS: [&str; 6] = [
+pub const FREE_FORM_TAGS: [&str; 7] = [
     "style",
     "redundancy",
     "strictness",
     "dependencies",
     "imports",
     "stubs",
+    "suppressions",
 ];
 
 /// The opt-in tag declaration a Basilisk-original rule attaches to itself.
@@ -93,6 +94,17 @@ pub struct OptInSpec {
 fn opt_in_specs() -> &'static [OptInSpec] {
     static CACHE: std::sync::OnceLock<Vec<OptInSpec>> = std::sync::OnceLock::new();
     CACHE.get_or_init(crate::rules::opt_in_specs).as_slice()
+}
+
+/// Iterate over live opt-in rule declarations carrying `tag`.
+///
+/// This keeps tag-oriented consumers tied to the rule registry without a
+/// parallel code list or a per-file allocation. [CHKTAG-CONSUMERS]
+pub(crate) fn opt_in_specs_with_tag(tag: &str) -> impl Iterator<Item = OptInSpec> + use<'_> {
+    opt_in_specs()
+        .iter()
+        .copied()
+        .filter(move |spec| spec.tags.contains(&tag))
 }
 
 /// The [`OptInSpec`] a diagnostic `code` was declared with, if it is a Basilisk

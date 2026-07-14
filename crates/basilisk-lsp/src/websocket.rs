@@ -230,7 +230,24 @@ pub async fn handle_connection(
     let (lsp_input_writer, lsp_input_reader) = tokio::io::duplex(DUPLEX_BUFFER_SIZE);
     let (lsp_output_writer, lsp_output_reader) = tokio::io::duplex(DUPLEX_BUFFER_SIZE);
 
-    let (service, socket) = LspService::new(LspServer::new);
+    let (service, socket) = LspService::build(LspServer::new)
+        .custom_method(
+            basilisk_common::configuration_editor::SNAPSHOT,
+            LspServer::configuration_snapshot,
+        )
+        .custom_method(
+            basilisk_common::configuration_editor::PREVIEW,
+            LspServer::preview_configuration_change,
+        )
+        .custom_method(
+            basilisk_common::configuration_editor::APPLY,
+            LspServer::apply_configuration_change,
+        )
+        .custom_method(
+            basilisk_common::configuration_editor::OCCURRENCES,
+            LspServer::rule_occurrences,
+        )
+        .finish();
 
     // Channel for injecting synthesised responses (e.g. parse errors) into
     // the outbound stream without going through tower-lsp.

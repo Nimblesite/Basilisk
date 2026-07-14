@@ -42,8 +42,6 @@ describe("basilisk.config", function()
       assert.is_true(config.defaults.uv.enabled)
       assert.is_nil(config.defaults.uv.executable_path)
       assert.is_false(config.defaults.uv.auto_sync)
-      assert.is_true(config.defaults.uv.stub_suggestions)
-      assert.is_true(config.defaults.uv.dependency_diagnostics)
     end)
 
     it("has keymaps enabled by default", function()

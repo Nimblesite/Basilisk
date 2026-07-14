@@ -3,7 +3,7 @@
 //! Per-run context threaded into every rule (issue #93).
 //!
 //! The configured `python_version` / `python_platform` flow from
-//! `BasiliskConfig` (CLI: `pyproject.toml` / `basilisk.json`; LSP: the
+//! `BasiliskConfig` (CLI: `pyproject.toml` `[tool.basilisk]`; LSP: the
 //! `[LSPUV-PYTHON-VERSION-RESOLUTION-ORDER]` cascade) into [`CheckContext`],
 //! so rules evaluate version/platform conditionals against the *configured*
 //! target instead of a hardcoded constant.

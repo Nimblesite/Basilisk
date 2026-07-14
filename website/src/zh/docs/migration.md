@@ -1,223 +1,152 @@
 ---
 layout: layouts/docs.njk
-title: 迁移指南
-description: 如何从 Pyright 或 mypy 逐步迁移到 Basilisk，包括配置导入、每路径覆盖和渐进式采用策略。
+title: 从 Pyright 或 mypy 迁移到 Basilisk
+description: 使用逐规则严重性、路径覆盖和显式采用例外，将现有 Python 项目逐步迁移到 Basilisk。
 keywords: 迁移到basilisk, 从pyright, 从mypy, python类型检查器迁移
 lang: zh
+dateModified: 2026-07-14
 ---
 
 # 迁移指南
 
-Basilisk 包含帮助现有代码库逐步采用它的工具。在大型代码库上完整迁移可能需要数周时间；以下工具使这个过程可行。
+Basilisk 的默认配置启用完整的核心 PEP 规则集。Basilisk 自有的注解、
+`@override`、样式、依赖和存根规则默认关闭，需要项目显式启用。迁移的
+核心是先确定目标规则，再只为当前无法解决的债务记录小范围例外。
 
----
+> **当前工具状态：** `basilisk migrate`、`basilisk stats` 和
+> `basilisk check --only` 尚未实现。请不要在脚本中使用这些命令。下面
+> 只使用现有配置与命令；可视化配置编辑器的设计见本文末尾。
 
-<h2 id="from-pyright">从 Pyright 迁移</h2>
-
-### 第 1 步——导入您的配置
-
-如果您有 `pyrightconfig.json`，Basilisk 可以读取它并生成等效的 `[tool.basilisk]` 配置：
-
-```bash
-basilisk migrate --from pyright
-```
-
-这从当前目录读取 `pyrightconfig.json` 并将等效设置追加到您的 `pyproject.toml`。
-
-**示例输入（`pyrightconfig.json`）：**
-
-```json
-{
-  "include": ["src"],
-  "exclude": ["**/migrations/**"],
-  "typeCheckingMode": "strict",
-  "pythonVersion": "3.12"
-}
-```
-
-**生成的输出（`pyproject.toml`）：**
+## 1. 添加项目配置
 
 ```toml
 [tool.basilisk]
 python-version = "3.12"
-include = ["src/"]
-exclude = ["**/migrations/**"]
+include = ["src/", "tests/"]
+exclude = [
+  "__pycache__", ".venv", "site-packages", "build", "dist",
+  "**/migrations/**", "**/generated/**",
+]
 ```
 
-### 第 2 步——运行 Basilisk
+设置 `exclude` 会替换内置列表，因此请保留仍然需要的默认项。旧版根目录
+`basilisk.json` 已不再被读取；若该文件仍然存在，请将其键翻译为
+`[tool.basilisk]`（驼峰式 → 短横线式，例如 `typeshedPath` →
+`typeshed-path`）后删除该文件——配置编辑器会将遗留的 `basilisk.json`
+报告为被忽略的遮蔽来源。
 
-```bash
-basilisk check src/
-```
+## 2. 选择目标规则
 
-如果您已经将 Pyright 与 `typeCheckingMode = "strict"` 一起使用，您会看到相对较少的新错误。最常见的添加：
-
-| Pyright 规则 | Basilisk 等效 |
-|---|---|
-| `reportMissingTypeArgument` | callables_annotation |
-| `reportReturnType` | BSK-E0002 |
-| `reportArgumentType` | calls_argument_type |
-| `reportAttributeAccessIssue` | aliases_newtype |
-| `reportUndefinedVariable` | names_undefined |
-| `reportOperatorIssue` | assignment_compatibility |
-
-Basilisk 添加了即使在严格模式下 Pyright 也不标记的错误：
-- **BSK-E0001** — 缺少参数类型注解（严格强制执行）
-- **BSK-E0002** — 缺少返回类型注解（严格强制执行）
-- **returns_compatibility** — 参数和返回位置中的显式 `Any`——需要说明理由
-- **match_exhaustiveness** — 非穷举 `match` 语句（缺少情况）
-- **BSK-E0025** — 覆盖方法缺少 `@override` 装饰器
-
-### 第 3 步——处理 `# type: ignore` 注释
-
-Pyright 使用 `# type: ignore` 进行内联抑制。Basilisk 需要不同的格式，带有强制原因：
-
-```python
-# Pyright
-x = get_value()  # type: ignore[reportArgumentType]
-
-# Basilisk
-x = get_value()  # basilisk: ignore[calls_argument_type] -- third-party API mismatch, tracked in #456
-```
-
-Basilisk 将标记裸 `# type: ignore` 注释，因为它不识别它们。迁移工具建议正确的 `# basilisk: ignore[CODE] -- reason` 格式。
-
-### 第 4 步——通过每路径覆盖渐进式采用
-
-对于大型代码库，在遗留目录中降低或禁用最嘈杂的规则，并随着进展逐步收紧：
+核心 PEP 规则无需开关。Basilisk 扩展规则通过明确的逐规则严重性启用：
 
 ```toml
-[tool.basilisk]
-python-version = "3.12"
-include = ["src/"]
-
-[tool.basilisk.per-path-overrides."legacy/**"]
-rules."returns_compatibility" = "warning"   # 将最嘈杂的规则降级为警告
+[tool.basilisk.rules]
+"BSK-E0001" = "error"
+"BSK-E0025" = "error"
+"BSK-W0011" = "warning"
+"BSK-E0152" = "error"
 ```
 
-您也可以在单个文件顶部添加 `# basilisk: relaxed`，在处理该文件期间将其所有错误变为警告。
+规则按实时的来源、PEP 类别和描述性标签组织。Basilisk 没有
+basic/standard/strict 运行模式或规则族开关；策略由配置文件中的逐规则严重性组成。
 
-### 严格模式差异
-
-如果您将 Pyright 与 `typeCheckingMode = "basic"` 或 `"standard"` 一起使用，您会看到 Basilisk 报告的错误明显更多——因为这些模式允许未类型化的代码。这是预期的，也正是关键所在。使用每路径覆盖，逐目录地分阶段执行。
-
----
-
-<h2 id="from-mypy">从 mypy 迁移</h2>
-
-### 第 1 步——导入您的配置
-
-如果您有 `mypy.ini` 或带有 `[mypy]` 部分的 `setup.cfg`：
+## 3. 先应用安全修复
 
 ```bash
-basilisk migrate --from mypy
+basilisk check src/ tests/
+basilisk fix src/ tests/
 ```
 
-**示例输入（`mypy.ini`）：**
+`basilisk fix` 默认只应用确定性的 Safe 修复。随后重新检查，剩余项目
+才是需要显式决策的债务。
 
-```ini
-[mypy]
-python_version = 3.12
-strict = True
-ignore_missing_imports = True
-exclude = migrations/
-```
+## 4. 只降低当前无法修复的规则
 
-**生成的输出：**
+优先保留可见的 warning/info，而不是完全隐藏规则：
 
 ```toml
-[tool.basilisk]
-python-version = "3.12"
-exclude = ["**/migrations/**"]
-# 注意：ignore_missing_imports → imports_unresolved 仍然激活；
-# 对没有存根的特定包使用每路径覆盖
+[tool.basilisk.rules]
+"returns_compatibility" = "warning"
+"imports_unresolved" = "info"
 ```
 
-### 第 2 步——mypy `--strict` 标志是子集
+支持 `error`、`warning`、`info` 和 `disabled`。显式的非 disabled 严重性
+也会启用一个默认关闭的 Basilisk 规则。
 
-mypy 的 `--strict` 启用一组特定的标志。Basilisk 强制执行所有这些标志以及更多。从 `mypy --strict` 迁移时，预期：
-
-- **来自 returns_compatibility 的更多错误** — mypy 在某些 Basilisk 不允许的位置允许 `Any`
-- **来自 match_exhaustiveness 的更多错误** — mypy 不检查的非穷举 `match` 语句
-- **来自 BSK-E0025 的更多错误** — mypy 不要求的缺失 `@override` 装饰器
-
-### 第 3 步——mypy 插件
-
-mypy 插件（Django、SQLAlchemy、Pydantic）不能与 Basilisk 一起使用。Basilisk 的 WASM 插件系统计划在第 5 阶段。在此之前，您可能会看到框架特定模式的错误，这些错误以前被 mypy 插件抑制。
-
-等待 WASM 插件期间的解决方法：
-
-```toml
-[tool.basilisk.per-path-overrides."models/**"]
-disabled = ["returns_compatibility"]  # Django 模型字段广泛使用 Any
-```
-
-### 第 4 步——更新内联抑制
-
-mypy 使用 `# type: ignore[error-code]`。Basilisk 需要 `# basilisk: ignore[BSK-EXXXX] -- reason`。
-
-迁移工具生成代码库中每个 `# type: ignore` 注释的列表，以及建议的 Basilisk 等效和添加原因的提醒。
-
-### 第 5 步——删除守护进程
-
-mypy 的守护进程（`dmypy`）之所以需要，是因为 mypy 很慢。Basilisk 的增量计算是内置的。替换您的 mypy CI 步骤：
-
-```yaml
-# 旧（mypy）
-- run: dmypy run -- src/
-
-# 新（Basilisk）
-- run: basilisk check src/
-```
-
----
-
-## 一般迁移建议
-
-### 从缺失注解开始
-
-BSK-E0001（缺失参数注解）和 BSK-E0002（缺失返回注解）往往会级联。首先修复它们通常会自动解决下游错误。
-
-最初只使用这些规则运行：
-
-```bash
-basilisk check --only E0001,E0002 src/
-```
-
-### 对遗留目录使用每路径覆盖
-
-不要试图一次性类型化所有内容。在遗留路径中降低最嘈杂的规则，并保持新代码严格：
+将遗留债务限制在路径中：
 
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
 rules."returns_compatibility" = "warning"
-
-[tool.basilisk.per-path-overrides."new_modules/**"]
-# 新代码立即完全严格
+rules."imports_unresolved" = "info"
 ```
 
-### 使用 `basilisk stats` 跟踪进度
+项目级 `disabled` 也会隐藏以后新增的问题；若债务只存在于旧文件，
+路径或精确文件例外更安全。
 
-```bash
-basilisk stats src/
+## 5. 保留并审计内联忽略
+
+Basilisk 使用标准语法：
+
+```python
+value = legacy_api()  # type: ignore[returns_compatibility]
+value = legacy_api()  # type: warning[calls_argument_type]
 ```
 
-输出：
+裸 `# type: ignore` 会忽略该行的所有诊断。外部检查器的错误码无法映射
+时，也按 PEP 484 的宽泛忽略处理；应尽可能替换成真实的 Basilisk 规则码。
 
-```
-Type coverage report — src/
-  Files:     142 total, 98 fully typed, 44 partially typed
-  Functions: 1,847 total, 1,203 typed (65%)
-  Classes:   318 total, 241 typed (76%)
+配置编辑器中的 `suppressions` 规则族会把有效特定、宽泛、未使用和格式
+错误的指令变成可搜索诊断。该规则族默认关闭，每条审计规则都可独立设为
+error、warning、info 或 disabled。
 
-  Top offenders (most errors):
-    src/legacy/data_pipeline.py   — 47 errors
-    src/utils/converters.py       — 23 errors
-    src/models/legacy_models.py   — 19 errors
-```
+## 从 Pyright 迁移
 
-每周使用此报告跟踪迁移进度。
+请复制实际需要的设置，不要翻译模式名称：
 
-### 优先考虑关键路径
+| Pyright | Basilisk |
+|---|---|
+| `pythonVersion` | `[tool.basilisk].python-version` |
+| `include` / `exclude` | `[tool.basilisk].include` / `exclude` |
+| `stubPath` | `[tool.basilisk].stub-paths` |
+| `typeshedPath` | `[tool.basilisk].typeshed-path` |
+| `report…` 严重性 | `[tool.basilisk.rules]."RULE_CODE"` |
+| 执行环境例外 | 语义相符时使用 `per-path-overrides` |
 
-在实践中，导入最多的模块中的错误是最高优先级的，因为它们也可能在调用者中导致类型错误。首先修复最深层的共享工具。
+不要机械映射 `typeCheckingMode`；Basilisk 将策略保存为显式规则严重性，
+而不是模式。
+
+## 从 mypy 迁移
+
+| mypy | Basilisk |
+|---|---|
+| `python_version` | `[tool.basilisk].python-version` |
+| `exclude` | `[tool.basilisk].exclude` |
+| `mypy_path` | 包含存根时使用 `[tool.basilisk].stub-paths` |
+| `custom_typeshed_dir` | `[tool.basilisk].typeshed-path` |
+| 每模块放宽 | 适用时使用每路径覆盖 |
+| `# type: ignore[code]` | 保留语法并换成 Basilisk 规则码 |
+
+mypy 插件不能直接加载到 Basilisk。对于框架特有债务，应使用有针对性的
+路径或规则例外，而不是全局关闭无关检查。
+
+## 可视化严格优先迁移
+
+VS Code 配置编辑器采用标签优先界面，并由可复用 LSP API 驱动：
+
+1. 按权威标签浏览实时规则目录；
+2. 预览 LSP 提供的 **Strict preset**，把所有规则按各自原生严重性启用；
+3. 先运行 Safe 修复；
+4. 按标签、规则、文件和可修复性审查剩余债务；
+5. 只降低选中的规则，或为受影响文件记录精确例外；
+6. 检查准确影响后，通过版本令牌应用；
+7. 持续查找采用例外和可选的忽略审计诊断。
+
+Preset 是一次性的配置配方，不是运行模式。应用 Strict 后，LSP 会把展开
+后的逐规则严重性写入当前有效配置文件。精确文件采用同样写入该文件的
+`per-path-overrides`，不会创建 `.basilisk/adoptions.toml` 或隐藏状态。
+
+参见权威的
+[规范](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md)
+与
+[实施计划](https://github.com/Nimblesite/Basilisk/blob/main/docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md)。

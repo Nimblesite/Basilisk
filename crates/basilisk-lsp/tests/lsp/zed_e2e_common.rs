@@ -31,10 +31,11 @@ pub struct ZedLspFixture {
     pub responses: Receiver<String>,
     /// Auto-incrementing request ID counter.
     pub next_id: i64,
-    /// Temp workspace root opened during initialize, shipping a `basilisk.json`
-    /// that opts into the annotation house rules (off by default — the default
-    /// config is pure PEP conformance). Documents fall back to this root's
-    /// config. No modes; configuration. See [CHKARCH-CONFIGURATION-ONLY].
+    /// Temp workspace root opened during initialize, shipping a `pyproject.toml`
+    /// whose `[tool.basilisk.rules]` opts into the annotation house rules (off
+    /// by default — the default config is pure PEP conformance). Documents fall
+    /// back to this root's config. No modes; configuration.
+    /// See [CHKARCH-CONFIGURATION-ONLY].
     pub workspace_root: std::path::PathBuf,
 }
 
@@ -114,8 +115,8 @@ impl ZedLspFixture {
             std::env::temp_dir().join(format!("bsk_zed_fixture_{}_{seq}", std::process::id()));
         std::fs::create_dir_all(&workspace_root)?;
         std::fs::write(
-            workspace_root.join("basilisk.json"),
-            "{\"strictAnnotations\": true}\n",
+            workspace_root.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
         )?;
 
         Ok(Self {

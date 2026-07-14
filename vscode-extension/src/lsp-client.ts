@@ -19,6 +19,7 @@ import {
 import { effect } from "@preact/signals-core";
 import { Logger } from "./logger";
 import { createLspTraceChannel } from "./lsp-trace";
+import { BASILISK_DOCUMENT_SELECTOR } from "./lsp-document-selector";
 import { type Store, type LspState } from "./store";
 
 /** Maximum LSP errors before shutting down the server. */
@@ -37,8 +38,6 @@ function readUvSettings(cfg: vscode.WorkspaceConfiguration): Record<string, unkn
     enabled: cfg.get<boolean>("uv.enabled") ?? true,
     executablePath: cfg.get<string>("uv.executablePath") ?? "",
     autoSync: cfg.get<boolean>("uv.autoSync") ?? false,
-    stubSuggestions: cfg.get<boolean>("uv.stubSuggestions") ?? true,
-    dependencyDiagnostics: cfg.get<boolean>("uv.dependencyDiagnostics") ?? true,
   };
 }
 
@@ -204,7 +203,7 @@ function buildClientOptions(
   // synchronize.configurationSection "basilisk", initializationOptions, and the
   // trace channel wiring per the spec's client-options shape.
   return {
-    documentSelector: [{ scheme: "file", language: "python" }],
+    documentSelector: BASILISK_DOCUMENT_SELECTOR,
     synchronize: {
       configurationSection: "basilisk",
       fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{py,pyi}"),

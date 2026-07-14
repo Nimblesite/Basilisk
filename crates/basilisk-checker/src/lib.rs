@@ -4,7 +4,7 @@
 //! The public API is [`check`] and [`check_with_config`], which take a
 //! [`ResolvedModule`] and return a list of [`Diagnostic`]s.
 //!
-//! ## Suppression and Mode Override
+//! ## Suppression and Severity Overrides
 //!
 //! Basilisk supports a rich set of inline directives for controlling diagnostic
 //! severity. See CHECKER-ARCHITECTURE-SPEC.md Section 4.1.3 for the full specification.
@@ -21,7 +21,7 @@
 //! ## Project-level configuration
 //!
 //! [`check_with_config`] applies project-level overrides from `pyproject.toml`
-//! or `basilisk.json`:
+//! `[tool.basilisk]`:
 //! - Global rule severity overrides (`rules."imports_unresolved" = "warning"`)
 //! - Per-module overrides (`per-module-overrides."fastmcp".ignore-missing-stubs`)
 //! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled`)
@@ -34,10 +34,12 @@ pub mod exports;
 pub mod imports;
 pub mod incremental;
 pub mod inference;
+pub mod rule_catalog;
 pub mod rule_tags;
 pub mod rules;
 pub mod span_util;
 pub mod suppression;
+mod suppression_audit;
 pub mod types;
 pub mod types_parsing;
 
@@ -49,12 +51,13 @@ pub use incremental::{
     resolved_module, ConfigInput, ConfigValue, FileRegistry, ModuleExports, ResolvedFile,
     SearchPathsInput, WorkspaceFiles,
 };
+pub use rule_catalog::{rule_catalog, RuleDescriptor};
 
 // Re-export the incremental-database handles so consumers can drive the
 // memoized `checked_file` query without depending on `basilisk-db` directly.
 pub use basilisk_db::{BasiliskDatabase, Db, SourceFile};
 
-/// Run all rules and apply inline suppression / mode overrides.
+/// Run all rules and apply inline suppression and severity overrides.
 ///
 /// Uses default configuration (no project-level overrides).
 #[must_use]
@@ -76,11 +79,21 @@ pub fn check_with_config(
     module: &basilisk_resolver::ResolvedModule,
     config: &basilisk_config::BasiliskConfig,
 ) -> Vec<Diagnostic> {
-    let inline_overrides =
-        suppression::parse_source_overrides_with_comments(&module.source, &module.comment_ranges);
-    let has_inline_overrides = !inline_overrides.is_empty();
     let source = &module.source;
-    let file_path = std::path::Path::new(&module.path);
+    let source_path = std::path::Path::new(&module.path);
+    let file_path = config
+        .project_root
+        .as_deref()
+        .and_then(|root| source_path.strip_prefix(root).ok())
+        .unwrap_or(source_path);
+    let effective_rules = EffectiveRuleConfig::new(file_path, config);
+    let audit_selected = suppression_audit_selected(effective_rules);
+    let inline_overrides = suppression::parse_source_overrides_with_comments(
+        &module.source,
+        &module.comment_ranges,
+        audit_selected,
+    );
+    let has_inline_overrides = !inline_overrides.is_empty();
     // [CHKARCH-VERSION-TARGET] every rule sees the configured target, plus a
     // shared line index so offset→line lookups (here and in rules) stay O(log n)
     // instead of rescanning the source per diagnostic / per function.
@@ -127,84 +140,150 @@ pub fn check_with_config(
     // from hiding every other unresolved import in the file.
     let suppressed_unresolved_spans = suppressed_unresolved_import_spans(module, config);
     let has_suppressed_unresolved_spans = !suppressed_unresolved_spans.is_empty();
-    let has_path_overrides = !config.per_path_overrides.is_empty();
-    let has_rule_overrides = !config.rules.is_empty();
 
-    let mut filtered = Vec::with_capacity(raw.len());
-    filtered.extend(raw.into_iter().filter_map(|mut diag| {
-        let code = diag.code.code;
+    // Apply every project-level decision first, retaining this pre-inline view
+    // for suppression auditing. Audit diagnostics are appended only after the
+    // ordinary diagnostics pass through inline suppression, so a directive can
+    // never hide the audit finding about itself.
+    let prepared = raw
+        .into_iter()
+        .filter_map(|mut diag| {
+            let code = diag.code.code;
 
-        // 0. Opt-in gating. Basilisk-original rules (provenance `basilisk`)
-        //    are off by default; each turns on only when the configuration
-        //    opts into one of its tags. PEP rules always run. Provenance and
-        //    tags come from the rule itself via the tagging layer — there is
-        //    no hand-maintained code list here. [CHKTAG-PROVENANCE]
-        if let Some(spec) = rule_tags::opt_in_spec_for_code(code) {
-            if !spec.tags.iter().any(|tag| opt_in_tag_enabled(tag, config)) {
+            // 0. Opt-in gating. Basilisk-original rules (provenance `basilisk`)
+            //    are off by default; each turns on only with an explicit
+            //    non-disabled severity. PEP rules run unless disabled.
+            //    Provenance comes from the rule itself via the tagging layer —
+            //    there is no hand-maintained code list. [CHKTAG-PROVENANCE]
+            if !effective_rules.selected(code) {
                 return None;
             }
-        }
 
-        // 1. Per-path: check if rule is completely disabled for this file path.
-        if has_path_overrides && config.is_rule_disabled_for_path(code, file_path) {
-            return None;
-        }
-
-        // 2. Per-module: suppress imports_unresolved for modules with ignore-missing-stubs.
-        if code == "imports_unresolved"
-            && has_suppressed_unresolved_spans
-            && suppressed_unresolved_spans.contains(&(diag.span.start, diag.span.end))
-        {
-            return None;
-        }
-
-        // 3. Cascade suppression: suppress downstream errors that reference
-        //    symbols from unresolved imports. Only applies to type-checking
-        //    rules whose results depend on resolved import types. Structural
-        //    rules (Final, deprecated, Protocol, Generic params, etc.) fire
-        //    independently of type resolution and must never be suppressed.
-        if is_cascade_suppressible(code) && should_suppress_cascade(&diag, &untyped_names, source) {
-            return None;
-        }
-
-        // 4. Tier-based severity adjustment: Tier3 (best-effort) stubs
-        //    produce info-level diagnostics, not errors.
-        if diag.provenance == Some(basilisk_stubs::TypeProvenance::StubTier3) {
-            diag.severity = Severity::Info;
-        }
-
-        // 5. Global rule severity override from config.
-        if has_rule_overrides {
-            if let Some(severity) = config.rule_severity(code) {
-                match severity {
-                    basilisk_config::RuleSeverity::Disabled => return None,
-                    basilisk_config::RuleSeverity::Warning => diag.severity = Severity::Warning,
-                    basilisk_config::RuleSeverity::Info => diag.severity = Severity::Info,
-                    basilisk_config::RuleSeverity::Error => diag.severity = Severity::Error,
-                }
+            // 1. Per-module: suppress imports_unresolved for modules with ignore-missing-stubs.
+            if code == "imports_unresolved"
+                && has_suppressed_unresolved_spans
+                && suppressed_unresolved_spans.contains(&(diag.span.start, diag.span.end))
+            {
+                return None;
             }
-        }
 
-        // 6. Per-path rule severity override.
-        if let Some(path_severity) = has_path_overrides
-            .then(|| find_path_rule_severity(code, file_path, &config.per_path_overrides))
-            .flatten()
-        {
-            match path_severity {
-                basilisk_config::RuleSeverity::Disabled => return None,
-                basilisk_config::RuleSeverity::Warning => diag.severity = Severity::Warning,
-                basilisk_config::RuleSeverity::Info => diag.severity = Severity::Info,
-                basilisk_config::RuleSeverity::Error => diag.severity = Severity::Error,
+            // 2. Cascade suppression: suppress downstream errors that reference
+            //    symbols from unresolved imports. Only applies to type-checking
+            //    rules whose results depend on resolved import types. Structural
+            //    rules (Final, deprecated, Protocol, Generic params, etc.) fire
+            //    independently of type resolution and must never be suppressed.
+            if is_cascade_suppressible(code)
+                && should_suppress_cascade(&diag, &untyped_names, source)
+            {
+                return None;
             }
-        }
 
-        // 7. Inline source overrides (highest priority). The 0-based line is
-        //    the count of newlines before the span start — the shared line
-        //    index answers that in O(log n) instead of rescanning the prefix
-        //    for every diagnostic.
-        finish_inline_override(diag, has_inline_overrides, &inline_overrides, &ctx)
-    }));
+            // 3. Tier-based severity adjustment: Tier3 (best-effort) stubs
+            //    produce info-level diagnostics, not errors.
+            if diag.provenance == Some(basilisk_stubs::TypeProvenance::StubTier3) {
+                diag.severity = Severity::Info;
+            }
+
+            // 4. Effective configured severity. A matching per-path value
+            //    replaces the global value, including re-enabling a globally
+            //    disabled rule for one path.
+            if let Some(severity) = effective_rules.severity(code) {
+                apply_configured_severity(&mut diag, severity)?;
+            }
+
+            Some(diag)
+        })
+        .collect::<Vec<_>>();
+
+    // 7. Inline source overrides (highest priority). The 0-based line is the
+    //    count of newlines before the span start — the shared line index answers
+    //    that in O(log n) instead of rescanning the prefix for every diagnostic.
+    let mut filtered = prepared
+        .iter()
+        .cloned()
+        .filter_map(|diag| {
+            finish_inline_override(diag, has_inline_overrides, &inline_overrides, &ctx)
+        })
+        .collect::<Vec<_>>();
+
+    if audit_selected {
+        filtered.extend(
+            suppression_audit::diagnostics(source, &inline_overrides, &prepared, &module.path)
+                .into_iter()
+                .filter_map(|diagnostic| configure_suppression_audit(diagnostic, effective_rules)),
+        );
+    }
     filtered
+}
+
+#[derive(Clone, Copy)]
+struct EffectiveRuleConfig<'a> {
+    config: &'a basilisk_config::BasiliskConfig,
+    path_override: Option<&'a basilisk_config::PathOverride>,
+}
+
+impl<'a> EffectiveRuleConfig<'a> {
+    fn new(file_path: &std::path::Path, config: &'a basilisk_config::BasiliskConfig) -> Self {
+        Self {
+            config,
+            path_override: basilisk_config::overrides::find_path_override(
+                file_path,
+                &config.per_path_overrides,
+            ),
+        }
+    }
+
+    fn severity(self, code: &str) -> Option<basilisk_config::RuleSeverity> {
+        self.path_override
+            .and_then(|entry| entry.rule_overrides.get(code).copied())
+            .or_else(|| self.config.rule_severity(code))
+    }
+
+    fn selected(self, code: &str) -> bool {
+        if self
+            .path_override
+            .is_some_and(|entry| entry.disabled_rules.iter().any(|disabled| disabled == code))
+        {
+            return false;
+        }
+        self.severity(code).map_or_else(
+            || rule_tags::opt_in_spec_for_code(code).is_none(),
+            |severity| severity != basilisk_config::RuleSeverity::Disabled,
+        )
+    }
+}
+
+/// Whether a rule is selected before it runs.
+///
+fn suppression_audit_selected(effective_rules: EffectiveRuleConfig<'_>) -> bool {
+    rule_tags::opt_in_specs_with_tag("suppressions").any(|spec| effective_rules.selected(spec.code))
+}
+
+fn configure_suppression_audit(
+    mut diagnostic: Diagnostic,
+    effective_rules: EffectiveRuleConfig<'_>,
+) -> Option<Diagnostic> {
+    let code = diagnostic.code.code;
+    if !effective_rules.selected(code) {
+        return None;
+    }
+    if let Some(severity) = effective_rules.severity(code) {
+        apply_configured_severity(&mut diagnostic, severity)?;
+    }
+    Some(diagnostic)
+}
+
+fn apply_configured_severity(
+    diagnostic: &mut Diagnostic,
+    severity: basilisk_config::RuleSeverity,
+) -> Option<()> {
+    diagnostic.severity = match severity {
+        basilisk_config::RuleSeverity::Disabled => return None,
+        basilisk_config::RuleSeverity::Warning => Severity::Warning,
+        basilisk_config::RuleSeverity::Info => Severity::Info,
+        basilisk_config::RuleSeverity::Error => Severity::Error,
+    };
+    Some(())
 }
 
 fn finish_inline_override(
@@ -221,21 +300,6 @@ fn finish_inline_override(
         .line(diag.span.start_usize())
         .saturating_sub(1);
     suppression::apply_overrides_at_line(diag, diag_line, inline_overrides)
-}
-
-/// Whether a Basilisk rule's free-form `tag` is opted into by `config`.
-///
-/// This is the single bridge from the configuration's opt-in switches to rule
-/// tags. Selection is by tag, so adding a Basilisk rule needs only a tag on the
-/// rule itself — never an entry in a code list here or in the tagging layer.
-/// [CHKARCH-CONFIGURATION-ONLY]
-fn opt_in_tag_enabled(tag: &str, config: &basilisk_config::BasiliskConfig) -> bool {
-    match tag {
-        "strictness" | "style" | "redundancy" => config.strict_annotations,
-        "dependencies" | "imports" => config.uv_dependency_diagnostics,
-        "stubs" => config.uv_stub_suggestions,
-        _ => false,
-    }
 }
 
 /// Returns `true` if this diagnostic code can be cascade-suppressed.
@@ -347,16 +411,6 @@ fn suppressed_unresolved_import_spans(
         .collect()
 }
 
-/// Look up per-path rule severity override for a specific rule code.
-fn find_path_rule_severity(
-    rule_code: &str,
-    file_path: &std::path::Path,
-    overrides: &std::collections::HashMap<String, basilisk_config::PathOverride>,
-) -> Option<basilisk_config::RuleSeverity> {
-    basilisk_config::overrides::find_path_override(file_path, overrides)
-        .and_then(|o| o.rule_overrides.get(rule_code).copied())
-}
-
 #[cfg(test)]
 #[expect(
     clippy::unwrap_used,
@@ -383,6 +437,30 @@ mod tests {
         assert!(!contains_identifier("", "Foo"));
         // A single-char text vs a 2-char ident (len boundary at exactly len-1).
         assert!(!contains_identifier("F", "Fo"));
+    }
+
+    #[test]
+    fn explicit_suppression_tagged_rule_selects_audit_family_from_live_metadata() {
+        let specs = rule_tags::opt_in_specs_with_tag("suppressions").collect::<Vec<_>>();
+        assert!(
+            !specs.is_empty(),
+            "the live catalog must expose suppression rules"
+        );
+
+        for spec in specs {
+            let config = basilisk_config::BasiliskConfig {
+                rules: [(spec.code.to_owned(), basilisk_config::RuleSeverity::Info)]
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            };
+            let effective = EffectiveRuleConfig::new(std::path::Path::new("test.py"), &config);
+            assert!(
+                suppression_audit_selected(effective),
+                "explicitly selecting live suppression rule {} must enable audit parsing",
+                spec.code
+            );
+        }
     }
 
     #[test]
