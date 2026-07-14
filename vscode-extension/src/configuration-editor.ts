@@ -332,12 +332,18 @@ export class ConfigurationEditorController implements vscode.Disposable {
     const generation = this.loadGeneration;
     this.previewGeneration += 1;
     this.store.beginConfigurationApply();
+    const sourceWasDirty = findConfigurationDocument(snapshot.source.uri)?.isDirty === true;
     try {
       const fresh = await this.transport.apply({
         rootUri: snapshot.rootUri,
         previewId: preview.previewId,
         baseRevision: preview.baseRevision,
       });
+      // The save must run before the staleness check: the server's
+      // configurationChanged notification precedes the apply response, so a
+      // racing refresh routinely bumps the generation — the disk write still
+      // has to land.
+      if (!sourceWasDirty) { await saveConfigurationDocument(fresh.source.uri); }
       if (generation !== this.loadGeneration || this.disposed || !this.panel.isOpen()) { return; }
       this.store.acceptConfigurationSnapshot(fresh);
     } catch (error: unknown) {
