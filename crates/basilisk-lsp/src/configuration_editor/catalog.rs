@@ -63,7 +63,10 @@ pub(super) fn descriptors() -> Vec<RuleDescriptor> {
 /// at `error` and every other rule is disabled. A `disabled` resolution can
 /// never apply to a `pep` rule — such configuration is invalid and the rule
 /// keeps running at `error`.
-pub(super) fn effective_severity(descriptor: &RuleDescriptor, config: &BasiliskConfig) -> RuleSeverity {
+pub(super) fn effective_severity(
+    descriptor: &RuleDescriptor,
+    config: &BasiliskConfig,
+) -> RuleSeverity {
     let tags: Vec<&str> = descriptor.tags.iter().map(String::as_str).collect();
     let resolved = config
         .resolve_severity(&descriptor.code, &tags)

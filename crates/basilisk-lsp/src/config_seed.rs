@@ -167,11 +167,7 @@ mod tests {
     #[test]
     fn seeding_preserves_existing_pyproject_content() {
         let root = temp_root("preserve");
-        std::fs::write(
-            root.join("pyproject.toml"),
-            "[project]\nname = \"demo\"\n",
-        )
-        .unwrap();
+        std::fs::write(root.join("pyproject.toml"), "[project]\nname = \"demo\"\n").unwrap();
         assert!(seed_root_if_unconfigured(&root));
         let content = std::fs::read_to_string(root.join("pyproject.toml")).unwrap();
         assert!(content.contains("[project]"), "{content}");

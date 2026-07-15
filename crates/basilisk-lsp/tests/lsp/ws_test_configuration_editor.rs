@@ -96,13 +96,12 @@ pub fn rule_state<'a>(
     })
 }
 
-pub fn tag_state<'a>(
-    snapshot: &'a serde_json::Value,
-    name: &str,
-) -> Option<&'a serde_json::Value> {
-    snapshot.get("tags")?.as_array()?.iter().find(|state| {
-        state.get("name").and_then(serde_json::Value::as_str) == Some(name)
-    })
+pub fn tag_state<'a>(snapshot: &'a serde_json::Value, name: &str) -> Option<&'a serde_json::Value> {
+    snapshot
+        .get("tags")?
+        .as_array()?
+        .iter()
+        .find(|state| state.get("name").and_then(serde_json::Value::as_str) == Some(name))
 }
 
 pub async fn snapshot_result(

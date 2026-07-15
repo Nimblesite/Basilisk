@@ -52,7 +52,11 @@ async fn published_codes(fixture: &mut WsTestFixture, uri: &str) -> TestResult<V
             .await
             .map_err(|error| format!("no diagnostics for {uri}: {error}"))?;
         let parsed: serde_json::Value = serde_json::from_str(&msg)?;
-        if parsed.pointer("/params/uri").and_then(serde_json::Value::as_str) != Some(uri) {
+        if parsed
+            .pointer("/params/uri")
+            .and_then(serde_json::Value::as_str)
+            != Some(uri)
+        {
             continue;
         }
         let codes = parsed

@@ -192,8 +192,7 @@ async fn test_ws_code_action_suppress_inserts_at_end_of_line() -> TestResult<()>
     let code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///ca_suppress_pos.py", code).await?;
 
-    let resp =
-        code_action_for(&mut fixture, "file:///ca_suppress_pos.py", 206, "BSK-0001").await?;
+    let resp = code_action_for(&mut fixture, "file:///ca_suppress_pos.py", 206, "BSK-0001").await?;
 
     // The edit should be an insert (start == end), not a replace.
     let action_json: serde_json::Value = serde_json::from_str(&resp)?;

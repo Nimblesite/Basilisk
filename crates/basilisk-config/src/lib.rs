@@ -437,10 +437,7 @@ exclude = ["legacy", "third_party"]
                 assert_eq!(cfg.auto_stub_path, std::path::PathBuf::from("stubs_gen"));
                 let merged = BasiliskConfig::default().merged_with(cfg);
                 assert_eq!(merged.auto_stub_mode, "runtime");
-                assert_eq!(
-                    merged.auto_stub_path,
-                    std::path::PathBuf::from("stubs_gen")
-                );
+                assert_eq!(merged.auto_stub_path, std::path::PathBuf::from("stubs_gen"));
             },
         );
     }

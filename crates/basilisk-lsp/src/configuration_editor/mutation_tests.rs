@@ -20,7 +20,11 @@ use crate::configuration_editor::model::{EditorMutation, RuleSeverity as WireSev
 use crate::configuration_editor::snapshot::Inventory;
 
 fn error_kind(error: &tower_lsp::jsonrpc::Error) -> Option<serde_json::Value> {
-    error.data.as_ref().and_then(|data| data.get("kind")).cloned()
+    error
+        .data
+        .as_ref()
+        .and_then(|data| data.get("kind"))
+        .cloned()
 }
 
 /// A `pep`-tagged and an analyze-scope rule code from the live registry.
@@ -47,7 +51,10 @@ fn empty_mutation_lists_are_rejected() {
     let Err(error) = require_mutations(&[]) else {
         panic!("empty mutation list must fail");
     };
-    assert_eq!(error_kind(&error), Some(serde_json::json!("invalidMutation")));
+    assert_eq!(
+        error_kind(&error),
+        Some(serde_json::json!("invalidMutation"))
+    );
     assert!(require_mutations(&[EditorMutation::RemoveTag {
         tag: "basilisk".to_owned(),
     }])
@@ -119,7 +126,10 @@ fn unknown_codes_and_tags_are_rejected() {
     ) else {
         panic!("unknown tag must fail");
     };
-    assert_eq!(error_kind(&tag_error), Some(serde_json::json!("unknownTag")));
+    assert_eq!(
+        error_kind(&tag_error),
+        Some(serde_json::json!("unknownTag"))
+    );
 }
 
 /// [CHKARCH-CONFIG-MODEL]: requesting `disabled` for a `pep`-tagged rule —
@@ -140,7 +150,10 @@ fn pep_disable_mutations_are_rejected() {
     ) else {
         panic!("pep disable must fail");
     };
-    assert_eq!(error_kind(&direct), Some(serde_json::json!("pepRuleDisable")));
+    assert_eq!(
+        error_kind(&direct),
+        Some(serde_json::json!("pepRuleDisable"))
+    );
 
     // Disabling an analyze rule is legitimate configuration.
     assert!(build_update(
@@ -174,7 +187,10 @@ fn pep_disable_mutations_are_rejected() {
     let Err(error) = pep_disabled_by_tag else {
         panic!("pep tag entry at disabled must fail");
     };
-    assert_eq!(error_kind(&error), Some(serde_json::json!("pepRuleDisable")));
+    assert_eq!(
+        error_kind(&error),
+        Some(serde_json::json!("pepRuleDisable"))
+    );
 }
 
 /// [CONFIGEDITOR-MODEL]: a preview reports fully resolved effective-severity
@@ -250,7 +266,10 @@ fn revision_gate_reports_both_revisions_on_conflict() {
     let Err(error) = require_revision(&document, "stale") else {
         panic!("stale revision must conflict");
     };
-    assert_eq!(error_kind(&error), Some(serde_json::json!("revisionConflict")));
+    assert_eq!(
+        error_kind(&error),
+        Some(serde_json::json!("revisionConflict"))
+    );
     assert_eq!(
         error
             .data

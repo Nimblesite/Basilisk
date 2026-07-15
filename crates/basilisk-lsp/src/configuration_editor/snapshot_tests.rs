@@ -6,9 +6,7 @@ use std::path::PathBuf;
 
 use basilisk_config::{BasiliskConfig, RuleSeverity as ConfigSeverity};
 
-use super::{
-    build_snapshot, hypothetical_inventory, inventory, occurrences, page_occurrences,
-};
+use super::{build_snapshot, hypothetical_inventory, inventory, occurrences, page_occurrences};
 use crate::config::AnalysisMode;
 use crate::configuration_editor::catalog::descriptors;
 use crate::configuration_editor::model::{

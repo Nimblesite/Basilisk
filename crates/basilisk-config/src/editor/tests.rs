@@ -309,8 +309,7 @@ fn wrong_shaped_tool_roots_are_invalid() {
     let root = temp_root("tool_shape");
     let result = discover_config_document_with_content(&root, "tool = 3\n".to_owned());
     assert!(matches!(result, Err(ConfigDocumentError::Invalid { .. })));
-    let result =
-        discover_config_document_with_content(&root, "[tool]\nbasilisk = 3\n".to_owned());
+    let result = discover_config_document_with_content(&root, "[tool]\nbasilisk = 3\n".to_owned());
     assert!(matches!(result, Err(ConfigDocumentError::Invalid { .. })));
     let document = document_for(&root, "[tool.poetry]\nname = \"demo\"\n");
     assert!(!document.config.has_config_table());

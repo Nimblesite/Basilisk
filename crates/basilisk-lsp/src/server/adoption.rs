@@ -127,9 +127,7 @@ pub(super) async fn execute_unadopt_file(
         .map(|tables| {
             codes
                 .iter()
-                .filter(|code| {
-                    tables.rules.get(*code).copied() == Some(RuleSeverity::Warning)
-                })
+                .filter(|code| tables.rules.get(*code).copied() == Some(RuleSeverity::Warning))
                 .map(|code| (code.clone(), None))
                 .collect()
         })
@@ -141,9 +139,8 @@ pub(super) async fn execute_unadopt_file(
         rules: adopted,
         rule_tags: BTreeMap::new(),
     };
-    let _ =
-        crate::configuration_editor::apply_rule_updates(server, &root, &update, "unadoptFile")
-            .await?;
+    let _ = crate::configuration_editor::apply_rule_updates(server, &root, &update, "unadoptFile")
+        .await?;
     info!(uri = %uri, "removed adoption entries from active configuration");
     Ok(Some(serde_json::json!({ "unadopted": true })))
 }
@@ -303,12 +300,10 @@ mod tests {
     // warning entries — one per demoted rule code, no scopes, no markers.
     #[test]
     fn adoption_update_demotes_every_code_to_a_plain_warning_entry() {
-        let codes: BTreeSet<String> = [
-            "BSK-0001".to_owned(),
-            "assignment_compatibility".to_owned(),
-        ]
-        .into_iter()
-        .collect();
+        let codes: BTreeSet<String> =
+            ["BSK-0001".to_owned(), "assignment_compatibility".to_owned()]
+                .into_iter()
+                .collect();
         let update = adoption_update(&codes);
         assert_eq!(update.rules.len(), 2);
         assert!(update.rule_tags.is_empty());

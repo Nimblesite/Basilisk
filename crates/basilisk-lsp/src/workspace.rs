@@ -2513,8 +2513,7 @@ mod tests {
 
     #[test]
     fn config_override_demotes_e0001_to_warning_in_checker() {
-        let idx =
-            make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Warning);
+        let idx = make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Warning);
         let uri = make_uri("/tmp/cfg_demote_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_checker_severity(&idx, &uri, "BSK-0001", basilisk_checker::Severity::Warning);
@@ -2522,8 +2521,7 @@ mod tests {
 
     #[test]
     fn config_override_demotes_e0001_to_warning_in_lsp() {
-        let idx =
-            make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Warning);
+        let idx = make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Warning);
         let uri = make_uri("/tmp/cfg_demote_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_lsp_severity(
@@ -3267,10 +3265,7 @@ mod tests {
             .collect();
 
         // Both should have BSK-0001 diagnostics.
-        assert!(
-            !default_severities.is_empty(),
-            "default must have BSK-0001"
-        );
+        assert!(!default_severities.is_empty(), "default must have BSK-0001");
         assert!(!custom_severities.is_empty(), "custom must have BSK-0001");
 
         // Default = ERROR, Custom = WARNING.

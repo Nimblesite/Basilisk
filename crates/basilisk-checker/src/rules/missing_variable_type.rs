@@ -141,15 +141,21 @@ mod tests {
     /// per kind — so dropping an arm changes the user-facing message.
     #[test]
     fn make_diagnostic_renders_a_message_per_rhs_kind() {
-        assert!(make_diagnostic(&unannotated("xs", RhsKind::EmptyList), "m.py")
-            .message
-            .contains("empty list"));
-        assert!(make_diagnostic(&unannotated("d", RhsKind::EmptyDict), "m.py")
-            .message
-            .contains("empty dict"));
-        assert!(make_diagnostic(&unannotated("n", RhsKind::NoneValue), "m.py")
-            .message
-            .contains("`None`"));
+        assert!(
+            make_diagnostic(&unannotated("xs", RhsKind::EmptyList), "m.py")
+                .message
+                .contains("empty list")
+        );
+        assert!(
+            make_diagnostic(&unannotated("d", RhsKind::EmptyDict), "m.py")
+                .message
+                .contains("empty dict")
+        );
+        assert!(
+            make_diagnostic(&unannotated("n", RhsKind::NoneValue), "m.py")
+                .message
+                .contains("`None`")
+        );
         // The catch-all arm covers every other kind with the generic message.
         assert!(make_diagnostic(&unannotated("v", RhsKind::Other), "m.py")
             .message
