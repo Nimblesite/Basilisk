@@ -106,27 +106,23 @@ the tab, revealing raw config, and navigating to an occurrence are VS Code UI
 actions. Configuration changes use the shared
 snapshot/preview/apply/occurrence methods in
 [LSPARCH-CONFIG-EDITOR-PROTOCOL](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR-PROTOCOL).
-The Adoption view's **Apply all safe fixes** action invokes the existing
-`basilisk.fixWorkspace` LSP command with the selected `rootUri`, then reloads
-the authoritative snapshot before any remaining-debt selector is expanded.
 
 ### Thin-shell boundary {#VSIX-CONFIGURATION-EDITOR-THIN-SHELL}
 
-The webview posts user intent only: choose an LSP-advertised preset, select a
-tag/rule, stage a setting, request/apply a preview, run root-scoped safe fixes,
-or open docs/location. The extension host runtime-decodes the message and
-forwards server-owned intent. It MUST NOT:
+The webview posts user intent only: select a tag/rule, stage a severity entry
+or an entry removal, request/apply a preview, or open docs/location. The
+extension host runtime-decodes the message and forwards server-owned intent. It
+MUST NOT:
 
 - ship a rule or tag list;
-- parse TOML/JSON or calculate effective severity/precedence;
+- parse TOML or calculate effective severity;
 - expand a bulk selector;
-- define or expand preset recipes;
-- write configuration or adoption files;
-- infer that an opt-in rule is enabled from VS Code settings.
+- write configuration files;
+- infer that a rule is enabled from VS Code settings.
 
-The VSIX contributes no `basilisk.rules.*`, strictness, adoption, or suppression
-policy settings. Those values live only in the active project config file and
-are accessed through the LSP snapshot/transaction API.
+The VSIX contributes no `basilisk.rules.*`, strictness, or suppression policy
+settings. Those values live only in the project's config files and are accessed
+through the LSP snapshot/transaction API.
 
 Snapshot/loading/error/revision state lives in the extension's single Signals
 store (`src/store.ts`), with explicit actions; no mutable state lives in the
@@ -142,8 +138,8 @@ no remote resources, `localResourceRoots: []`, and no
 `retainContextWhenHidden`. Data is sent with `webview.postMessage` only after a
 ready handshake, never interpolated into executable HTML.
 
-The editor renders Overview, tag-first Rules, Adoption, Path Overrides, and
-Project/source views defined by
+The editor renders the tag-first Rules view and a project/source overview
+defined by
 [CONFIGEDITOR-VSIX-EXPERIENCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-VSIX-EXPERIENCE).
 It uses native VS Code fonts/theme tokens plus restrained Basilisk orange/sky
 accents. All controls are semantic, text-labelled, keyboard-operable, high-
@@ -151,16 +147,12 @@ contrast safe, usable at 200% zoom, and reduced-motion aware. Apply/conflict
 status uses an `aria-live` region and refreshes preserve focus.
 
 Rules are virtualized and organized by the server's Sources, PEP categories,
-and Policy tags. Every row exposes Error, Warning, Info, Disabled, Native, and
-Inherited/reset intent. The Path view renders the exact normalized inventory
-from the snapshot. Occurrences load in cursor pages and navigation is restricted
-to the selected workspace root.
-
-The Adoption view renders LSP-owned preset summaries, delegates safe edits to
-the root-scoped command, and delegates the remaining-debt query to the reusable
-`WithoutSafeFix` selector. Its project-wide Disabled action is always previewed
-and states that future diagnostics for those rules will be hidden; path and
-non-disabled alternatives remain available.
+and Policy tags. Every row exposes Error, Warning, Info, Disabled, and
+remove-entry controls — nothing else, because nothing else exists
+([CONFIGEDITOR-SEVERITY](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEVERITY)).
+Occurrences load in cursor pages and navigation is restricted to the selected
+workspace root. Disabling or removing rules is always previewed, and the
+preview's diagnostic impact makes the consequence visible before apply.
 
 ### Implementation files and tests {#VSIX-CONFIGURATION-EDITOR-FILES}
 
@@ -174,9 +166,8 @@ Implementation is split into focused files under 500 LOC:
 - `configuration-editor-styles.ts` and `configuration-editor-script-*.ts` —
   dependency-free visual/runtime fragments.
 
-Focused VSIX tests exercise all four persisted severities plus Native and
-Inherited reset, server-owned preset relay, tag/all/debt selectors, exact
-preview/apply identity, root-scoped safe-fix delegation and refresh, paged
+Focused VSIX tests exercise all four persisted severities plus entry removal,
+tag/all selectors, exact preview/apply identity, paged
 occurrences, revision conflicts, capability gating, once-bound handlers,
 CSP/data isolation, semantic labels, theme/responsive/reduced-motion styles,
 and stale async result rejection. A headed screenshot scenario opens the real

@@ -41,8 +41,8 @@ test, profiling, and memory namespaces. Detailed contracts live in their feature
 ## Configuration editor API {#LSPARCH-CONFIG-EDITOR}
 
 The LSP is the configuration authority; clients render controls and relay typed
-operations. The product contract, generated model, selectors, strict-first
-workflow, and adoption behavior are specified in
+operations. The product contract, generated model, selectors, and seeding
+behavior are specified in
 [LSP-CONFIGURATION-EDITOR-SPEC.md](LSP-CONFIGURATION-EDITOR-SPEC.md).
 
 ### Protocol {#LSPARCH-CONFIG-EDITOR-PROTOCOL}
@@ -61,11 +61,11 @@ generated from `models/configuration_editor.td`.
 Every request identifies its workspace root. Unknown roots, rules, tags, settings, and stale
 revisions are errors; they never fall back to a different root or to defaults.
 
-The safe-fix step is the existing `basilisk.fixWorkspace` execute command rather
-than another configuration method. A supplied `{ rootUri }` is validated and
-restricts the edit to that active root; the VS Code configuration editor always
-supplies one. Presets are server-advertised one-shot mutation recipes and never
-introduce another persisted setting.
+A mutation writes explicit rule entries or removes them — there are no preset,
+inherit, or native intents
+([CONFIGEDITOR-SEVERITY](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEVERITY)).
+Mass fixing stays the standalone `basilisk.fixWorkspace` execute command; a
+supplied `{ rootUri }` is validated and restricts the edit to that active root.
 
 ### Transaction and refresh {#LSPARCH-CONFIG-EDITOR-TRANSACTION}
 
@@ -75,19 +75,18 @@ the one active source, validates and expands the selector, builds an in-memory
 patch, and returns normalized changes plus full-root diagnostic impact. Apply
 accepts only that preview and its unchanged root/base revision, asks the client
 to perform one `WorkspaceEdit`, then reloads, rechecks, republishes, and sends
-`basilisk/configurationChanged`. External config-file changes and adoption edits
-use the same refresh tail.
+`basilisk/configurationChanged`. External config-file changes use the same
+refresh tail.
 
-Rule/path/adoption state is stored in the active `pyproject.toml`
-(`[tool.basilisk]`). Snapshot path inventory and checker matching share the same
-deterministic path-precedence implementation.
+Rule entries are stored in `pyproject.toml` (`[tool.basilisk]`) config files; a
+folder's file overrides its ancestors per rule
+([CONFIGEDITOR-OVERRIDES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-OVERRIDES)).
 
 ### Errors {#LSPARCH-CONFIG-EDITOR-ERRORS}
 
 Protocol failures are JSON-RPC errors with a stable `data.kind`. Current
 handlers distinguish invalid input/configuration, unknown selectors, revision
-conflicts, read-only sources, rejected edits, and expired previews. Shadowed
-sources are reported as snapshot provenance rather than treated as an error.
+conflicts, read-only sources, rejected edits, and expired previews.
 Malformed-source errors include the source URI so a client can open it for
 repair.
 

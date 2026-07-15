@@ -52,10 +52,8 @@ safe rules; the `All` variants widen the rule set.
 `source.fixAll.basilisk` is the file code-action kind. The CLI uses safe rules
 by default and widens with `--unsafe` or explicit `--rules`.
 
-The configuration editor's **Apply all safe fixes** control calls the
-root-scoped safe workspace command and reloads its LSP snapshot after the edit.
-This is a standalone source-edit operation, not part of a configuration preset
-or preview transaction.
+This is a standalone source-edit operation, never part of a configuration
+preview transaction.
 
 ### Conflicts {#AUTOFIX-CONFLICTS}
 
@@ -69,21 +67,17 @@ One file-level mass action returns one `WorkspaceEdit`, so the editor can treat
 it as one undo operation. Workspace behavior follows the client's handling of
 the returned edit.
 
-## Strict-first configuration workflow {#AUTOFIX-STRICT-FIRST}
+## Configuration seeding and fixes {#AUTOFIX-STRICT-FIRST}
 
-The configuration editor composes existing LSP operations in this order:
-
-1. Preview and apply an LSP-advertised target preset such as Strict. The preset
-   expands to explicit per-rule severities in the active config.
-2. Execute root-scoped `basilisk.fixWorkspace`, which applies safe fixes only.
-3. Reload the root inventory, then query `WithoutSafeFix` occurrences.
-4. Preview an explicit project/path severity change for the remaining debt.
-   The supplied bulk action chooses `Disabled` and clearly warns that future
-   diagnostics for those rules will also be hidden.
-
-Steps 2 and 3 are separated deliberately: selector expansion must use the
-post-fix diagnostic inventory. Unsafe fixes are never included implicitly, and
-no rule is disabled without an ordinary configuration preview/apply.
+There is no preset workflow. Seeding already materializes a strict starting
+point: a project with no config gets every PEP rule at `error` and every house
+rule at `warning`, written explicitly
+([CONFIGEDITOR-SEEDING](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEEDING)).
+Tightening or relaxing from there is ordinary bulk mutation through
+preview/apply, while root-scoped `basilisk.fixWorkspace` applies the currently
+safe fixes as a separate, reviewable source edit. Unsafe fixes are never
+included implicitly, and no rule is disabled without an ordinary configuration
+preview/apply writing an explicit `disabled` entry.
 
 ## Gradual adoption {#AUTOFIX-ADOPTION}
 
@@ -148,7 +142,6 @@ No separate adoption file is read or written.
 ### VS Code surface {#AUTOFIX-ADOPTION-VSCODE}
 
 The server advertises Adopt File, Adopt Workspace, and Un-adopt File. The
-activity panel and configuration editor derive adopted-file state from the
-active configuration. The configuration editor additionally exposes the
-target-preset → safe-fix → remaining-debt workflow described by
-[CONFIGEDITOR-ADOPTION](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-ADOPTION).
+activity panel derives adopted-file state from the active configuration.
+Adoption is not part of the configuration-editor contract
+([CONFIGEDITOR-ACCEPTANCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-ACCEPTANCE)).

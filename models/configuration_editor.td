@@ -11,19 +11,12 @@ alias Uri = String
 alias Revision = String
 alias PreviewId = String
 
+# The only persisted values. A rule with no entry in any config file on the
+# ancestor chain is disabled: there are no default severities, no inherited
+# state, and no mutation intents ([CONFIGEDITOR-SEVERITY]). Disabled exists as
+# an explicit entry so a child folder's config can switch off a rule an
+# ancestor enables ([CONFIGEDITOR-OVERRIDES]).
 union RuleSeverity {
-  Error
-  Warning
-  Info
-  Disabled
-}
-
-# Inherit and Native are mutation intents, not persisted severity values.
-# Inherit removes an explicit override. Native writes each selected rule's own
-# default severity and therefore enables opt-in rules without promoting warnings.
-union RuleSetting {
-  Inherit
-  Native
   Error
   Warning
   Info
@@ -36,26 +29,20 @@ union TagKind {
   Descriptive
 }
 
-// BasiliskJson is a deprecated wire variant kept for protocol-v1 stability;
-// the server never emits it — pyproject.toml [tool.basilisk] is the only
-// configuration format ([CHKARCH-CONFIG-FILE]).
-union ConfigurationFormat {
-  PyprojectToml
-  BasiliskJson
-}
-
+# Bulk selection for mutations and occurrence queries ([CONFIGEDITOR-TAGS]).
+# Selectors expand at preview time to explicit per-rule entries.
 union RuleSelector {
   All
   Codes { codes: List<String> }
   Tags { tags: List<String>, matchAll: Bool }
-  CurrentViolations
-  SafeFixable
-  WithoutSafeFix
 }
 
-union MutationScope {
-  Project
-  Path { pattern: String }
+# Set writes an explicit severity entry. Remove deletes the entry, returning
+# the rule to disabled (or to the nearest ancestor entry, under a child
+# folder's config). Nothing else can be requested.
+union ConfigurationMutation {
+  Set { selector: RuleSelector, severity: RuleSeverity }
+  Remove { selector: RuleSelector }
 }
 
 type RuleDescriptor {
@@ -64,20 +51,14 @@ type RuleDescriptor {
   summary: String
   docsUrl: Uri
   tags: List<String>
-  defaultSeverity: RuleSeverity
-  defaultEnabled: Bool
 }
 
+# severity mirrors the edited config file exactly: None means no entry, and a
+# rule with no entry does not run.
 type RuleState {
   descriptor: RuleDescriptor
-  configuredSeverity: Option<RuleSeverity>
-  effectiveSeverity: RuleSeverity
-  inherited: Bool
+  severity: Option<RuleSeverity>
   diagnosticCount: Int
-  affectedFileCount: Int
-  safeFixCount: Int
-  unsafeFixCount: Int
-  adoptionExceptionCount: Int
 }
 
 type TagState {
@@ -87,69 +68,12 @@ type TagState {
   diagnosticCount: Int
 }
 
-type ConfigurationSource {
-  uri: Uri
-  format: ConfigurationFormat
-  exists: Bool
-  readOnly: Bool
-  shadowedSources: List<Uri>
-}
-
-type ConfigurationProblem {
-  code: String
-  message: String
-  uri: Uri
-  line: Int
-  character: Int
-}
-
-type DebtSummary {
-  remainingDiagnostics: Int
-  adoptedFiles: Int
-  adoptionExceptions: Int
-  suppressionDiagnostics: Int
-  disabledRules: Int
-}
-
-# Presets are LSP-owned, one-shot mutation recipes. There is no policy mode:
-# applying a preset expands its mutations to explicit rule severities in the
-# active configuration file, and only those ordinary entries are persisted.
-type ConfigurationPreset {
-  id: String
-  name: String
-  summary: String
-  mutations: List<ConfigurationMutation>
-}
-
-# Exact persisted entries for one existing path scope. Disabled-list aliases are
-# normalized to Disabled so clients never need to understand config syntax.
-type PathRuleSetting {
-  ruleCode: String
-  severity: RuleSeverity
-}
-
-type PathOverrideState {
-  pattern: String
-  adoption: Bool
-  rules: List<PathRuleSetting>
-}
-
 type ConfigurationSnapshot {
   rootUri: Uri
+  configUri: Uri
   revision: Revision
-  source: ConfigurationSource
   rules: List<RuleState>
   tags: List<TagState>
-  presets: List<ConfigurationPreset>
-  pathOverrides: List<PathOverrideState>
-  debt: DebtSummary
-  problems: List<ConfigurationProblem>
-}
-
-type ConfigurationMutation {
-  selector: RuleSelector
-  setting: RuleSetting
-  scope: MutationScope
 }
 
 type PreviewConfigurationRequest {
@@ -158,10 +82,15 @@ type PreviewConfigurationRequest {
   mutations: List<ConfigurationMutation>
 }
 
+# One real config entry change, fully expanded and normalized.
+# None on either side means "no entry".
+type ResolvedConfigurationChange {
+  ruleCode: String
+  previousSeverity: Option<RuleSeverity>
+  newSeverity: Option<RuleSeverity>
+}
+
 type ConfigurationImpact {
-  changedRules: Int
-  enabledRules: Int
-  disabledRules: Int
   diagnosticsBefore: Int
   diagnosticsAfter: Int
   errorsBefore: Int
@@ -170,27 +99,17 @@ type ConfigurationImpact {
   warningsAfter: Int
 }
 
-# Fully expanded, normalized result of one real config entry change. Native is
-# resolved to the rule's concrete severity; Inherit means the entry is removed.
-type ResolvedConfigurationChange {
-  ruleCode: String
-  scope: MutationScope
-  previousSetting: RuleSetting
-  resultingSetting: RuleSetting
-}
-
 type ConfigurationPreview {
   previewId: PreviewId
   baseRevision: Revision
-  expandedRuleCodes: List<String>
   changes: List<ResolvedConfigurationChange>
   impact: ConfigurationImpact
-  problems: List<ConfigurationProblem>
 }
 
-union FixSafety {
-  Safe
-  Unsafe
+type ApplyConfigurationRequest {
+  rootUri: Uri
+  previewId: PreviewId
+  baseRevision: Revision
 }
 
 type SourcePosition {
@@ -207,9 +126,7 @@ type RuleOccurrence {
   ruleCode: String
   uri: Uri
   range: SourceRange
-  effectiveSeverity: RuleSeverity
-  fixSafety: Option<FixSafety>
-  configurationSource: Uri
+  severity: RuleSeverity
 }
 
 type RuleOccurrencesRequest {
@@ -222,12 +139,6 @@ type RuleOccurrencesRequest {
 type RuleOccurrencesResponse {
   items: List<RuleOccurrence>
   nextCursor: Option<String>
-}
-
-type ApplyConfigurationRequest {
-  rootUri: Uri
-  previewId: PreviewId
-  baseRevision: Revision
 }
 
 type ConfigurationChanged {

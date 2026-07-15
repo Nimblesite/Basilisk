@@ -2,18 +2,19 @@
 
 ## No "strict mode" — behaviour is configuration only {#CHKARCH-CONFIGURATION-ONLY}
 
-Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` dial). Everything reported is decided by **configuration alone**: a flat set of per-rule severities set globally, per path, or per file.
+Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` dial). Everything reported is decided by **configuration alone**: a flat set of per-rule severities written explicitly in folder-level config files. A rule with no config entry does not run ([CONFIGEDITOR-SEVERITY](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEVERITY)).
 
-1. **The default configuration is pure PEP conformance.** With no config file, Basilisk enables **every rule that implements the Python typing specification, and nothing else**. This unconfigured default is exactly what the conformance scorer runs — no Basilisk config of any format, no "conformance mode" ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
+1. **No config file anywhere means the in-memory PEP seed.** When configuration discovery finds no `[tool.basilisk]` table on the entire ancestor walk, Basilisk synthesizes the seed in memory: **every rule that implements the Python typing specification at `error`, and nothing else**. This unconfigured default is exactly what the conformance scorer runs — no Basilisk config of any format, no "conformance mode" ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)). It exists only for that bare, config-less case: the moment any config file exists — even an empty one, which disables every rule — the file is the only truth.
 
-2. **Everything beyond the spec is opt-in configuration.** House-style rules — require-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), explicit-`Any` nudge (`BSK-W0014`), uv dependency hygiene, stub suggestions — are **off by default**. A non-disabled severity for that rule is the only way to enable it; there are no rule-family booleans.
+2. **Every rule runs only with an explicit config entry.** House-style rules — require-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), explicit-`Any` nudge (`BSK-W0014`), uv dependency hygiene, stub suggestions — are **not in the PEP seed**; an explicit config entry is the only way to run them, and there are no rule-family booleans.
 
 "Strict" is a property of a chosen configuration, never a precondition of the conformance score. No PEP rule may be disabled, deleted, or unregistered to move that number ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
-Editors may advertise named **presets** as one-shot configuration recipes. The
-configuration editor's Strict preset expands the live catalog to explicit native
-severities in the active config file; it does not add a runtime mode or persist
-a preset flag ([CONFIGEDITOR-PRESETS](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-PRESETS)).
+There are no presets and no editor-owned mutation intents. When the LSP opens a
+project with no config file, it materializes the configuration to disk — every
+PEP rule at `error`, every house rule at `warning`, all written explicitly —
+and from then on users edit that file
+([CONFIGEDITOR-SEEDING](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEEDING)).
 
 ---
 
@@ -102,19 +103,18 @@ Every rule has four configurable severity values:
 | `info` | Informational hint only | No | Blue hint |
 | `disabled` | Rule emits no diagnostic | No | Nothing |
 
-The default severity for each rule comes from its code prefix (`E` = error, `W` = warning). Every value can be overridden per-line, per-block, per-file, and per-project.
-
-At project/path scope, a non-disabled explicit severity both **enables** and
-grades an opt-in rule. `disabled` explicitly deselects it. Removing the entry
-means “inherit” and returns selection to the rule's tag/default gate. This makes
-every rule independently controllable; a user does not need to enable a broad
-tag gate merely to promote one rule. “Inherited” and the bulk “native severity”
-operation are editor intents, not additional persisted severity values. See
+Severity comes only from explicit config entries. A rule with no entry in any
+config file on the ancestor chain does not run; deleting an entry disables the
+rule. The letter in a rule code (`E`/`W`/`I`) is naming, not behaviour, and
+there are no default, inherited, or "native" severity values — see
 [CONFIGEDITOR-SEVERITY](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEVERITY).
+Inline directives can still override an enabled rule per line, block, or file
+([CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION)).
 
-`disabled` currently guarantees no output, not zero execution cost: the checker
-runs the shared rule registry before filtering configured diagnostics. Moving
-selection ahead of rule execution is an optimisation tracked by
+A rule without an entry (or set `disabled`) must emit nothing; the current
+implementation still executes the shared rule registry and filters output
+afterwards, so absence guarantees no diagnostic, not zero execution cost.
+Skipping execution entirely is an optimisation tracked by
 [CONFIGEDITOR-PLAN-DOMAIN](../plans/LSP-CONFIGURATION-EDITOR-PLAN.md#CONFIGEDITOR-PLAN-DOMAIN),
 not part of severity correctness.
 
@@ -241,26 +241,26 @@ The `# type:` prefix keeps compatibility with tools that recognize `# type: igno
 
 #### Suppression Directives as Opt-In Diagnostics {#CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS}
 
-Suppression auditing is a Basilisk-specific, **off-by-default** rule family. The
-unconfigured PEP-default experience emits none of these diagnostics. Once the
-project enables the `suppressions` tag or an individual rule, every parsed
-source directive produces at most one audit diagnostic at the directive's
-comment span:
+Suppression auditing is a Basilisk-specific rule family. Like every rule, the
+audit rules run only with an explicit config entry — the PEP seed contains none
+of them, so a bare clone emits no audit diagnostics. Once an entry enables a
+rule, every parsed source directive produces at most one audit diagnostic at
+the directive's comment span:
 
-| Rule | Native severity when enabled | Classification |
-|---|---|---|
-| `BSK-I0060` | Info | A valid code-specific directive actively suppresses a diagnostic or changes its severity |
-| `BSK-W0061` | Warning | An active blanket directive applies without a Basilisk rule selector |
-| `BSK-W0062` | Warning | A syntactically valid directive matches nothing or changes no effective severity |
-| `BSK-E0063` | Error | The directive is malformed, names an unknown rule, conflicts with another directive, or has an unmatched block boundary |
+| Rule | Classification |
+|---|---|
+| `BSK-I0060` | A valid code-specific directive actively suppresses a diagnostic or changes its severity |
+| `BSK-W0061` | An active blanket directive applies without a Basilisk rule selector |
+| `BSK-W0062` | A syntactically valid directive matches nothing or changes no effective severity |
+| `BSK-E0063` | The directive is malformed, names an unknown rule, conflicts with another directive, or has an unmatched block boundary |
 
 Classification precedence is malformed → unused → active blanket → active
 specific, so a directive never produces duplicate audit noise. The audit data
 records its kind, scope, selected codes, and matched-diagnostic count for LSP
 navigation. These diagnostics are appended **after** ordinary inline suppression
 and are not passed through that same directive set; an ignore cannot hide the
-audit diagnostic describing itself. Project/path configuration can still set
-each audit rule to `error`, `warning`, `info`, or `disabled` normally.
+audit diagnostic describing itself. Configuration can still set each audit rule
+to `error`, `warning`, `info`, or `disabled` normally.
 
 All four rules carry the tags `basilisk` and `suppressions`. Their workspace
 configuration/editor behavior is specified by
@@ -415,12 +415,12 @@ Every diagnostic must be:
 
 ### Error Code System {#CHKARCH-DIAG-CODES}
 
-Format: `BSK-Xnnnn` where X = default severity class:
-- `E` = Error (blocks CI by default)
-- `W` = Warning (does not block by default)
-- `I` = Info (suggestion by default)
+Format: `BSK-Xnnnn` where X classifies the rule's intent in documentation:
+- `E` = Error-class (correctness)
+- `W` = Warning-class (hygiene)
+- `I` = Info-class (suggestion)
 
-The prefix sets the **default** severity. Every rule can be overridden to any of the four values (`error`, `warning`, `info`, `disabled`) at every scope level (line, block, file, path, global) — see [CHKARCH-STRICTNESS-SEVERITY](#CHKARCH-STRICTNESS-SEVERITY) and [CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION).
+The letter is naming only — it sets no runtime severity. A rule runs at whatever severity its config entry states (`error`, `warning`, `info`, or `disabled`), and a rule without an entry does not run; inline directives can still override per line, block, or file — see [CHKARCH-STRICTNESS-SEVERITY](#CHKARCH-STRICTNESS-SEVERITY) and [CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION).
 
 ### Generated rule index {#CHKARCH-DIAG-REFERENCE}
 
@@ -958,9 +958,10 @@ the advanced-features plan.
 ### Configuration File {#CHKARCH-CONFIG-FILE}
 
 `pyproject.toml` under `[tool.basilisk]` is the **single** configuration source
-and the creation target for new projects. There is no other Basilisk config
-format: a legacy root-level `basilisk.json` is **never read**, and configuration
-tooling reports such a file as an ignored/shadowed source rather than loading it
+and the seeding target for new projects
+([CONFIGEDITOR-SEEDING](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEEDING)).
+There is no other Basilisk config format: a legacy root-level `basilisk.json`
+is **never read or written**
 ([CONFIGEDITOR-SOURCES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES)).
 How the file is found and how multiple ancestor tables combine is specified in
 [Configuration Discovery](#CHKARCH-CONFIG-DISCOVERY).
@@ -981,10 +982,14 @@ ownership = true                 # Enable ownership tracking (default: true)
 immutability = true              # Parameters immutable by default (default: true)
 no-implicit-coercion = true      # Flag implicit type coercion (default: true)
 
-[tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["returns_compatibility"]
-rules."imports_unresolved" = "warning"
+[tool.basilisk.rules]
+"returns_compatibility" = "error"   # explicit entries are the only enablement
+"imports_unresolved" = "warning"    # no entry means the rule does not run
 ```
+
+Scoping a rule differently for part of the tree means placing another
+`pyproject.toml` with a `[tool.basilisk]` table in that folder; the nearest
+entry wins per rule ([CONFIGEDITOR-OVERRIDES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-OVERRIDES)).
 
 ### Configuration Discovery {#CHKARCH-CONFIG-DISCOVERY}
 
