@@ -120,6 +120,35 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 | `basilisk.uv.stubSuggestions` | `boolean` | `true` | Suggest installing type stub packages |
 | `basilisk.uv.dependencyDiagnostics` | `boolean` | `false` | Enable BSK-W0011/W0012/W0013 dependency hygiene warnings |
 
+## Resolved Environment Reporting {#LSPARCH-RESOLVED-ENV}
+
+The server — never the editor — is authoritative for what auto-detection actually resolved (GitHub #153). Its `initialize` response reports the environment in `capabilities.experimental`:
+
+```json
+{
+    "basilisk": {
+        "resolvedEnvironment": {
+            "python": { "path": "/abs/path/to/python3", "version": "3.12.4" },
+            "uv":     { "path": "/abs/path/to/uv",      "version": "0.5.11" },
+            "binary": { "path": "/abs/path/to/basilisk", "version": "0.34.0" }
+        }
+    }
+}
+```
+
+- **`python`** — the interpreter the [LSPDEBUG-PYRES](LSP-DEBUG-INTEGRATION-SPEC.md#LSPDEBUG-PYRES) cascade resolves for the first workspace root, honouring a `basilisk.python` override from `initializationOptions`. Bare command-name fallbacks (`python3`) are located on `PATH` so the reported path is concrete.
+- **`uv`** — the [uv binary cascade](#LSPARCH-UV-BINRES) outcome, honouring `basilisk.uv.executablePath`.
+- **`binary`** — the running server itself: `current_exe()` + crate version. Never `null` in practice — the server always knows its own path.
+- Each slot is `{"path", "version"}` or `null` when nothing usable exists; `version` is `null` when the `--version` probe fails but the path is real. Versions come from running `<tool> --version` once at initialize.
+
+Editor rendering rules (Server Info UIs, e.g. [EXTACT-INFO-SERVER-INFO](EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-SERVER-INFO)):
+
+- A resolved tool renders `<version> (<path>)`.
+- With an empty (auto-detect) setting, the row shows the outcome — `auto-detect → 3.12.4 (/usr/bin/python3)`, `auto-detect → none found`, or `auto-detect → awaiting server…` before any live data. The bare `auto-detect` placeholder is forbidden.
+- The Binary row renders only from this payload: populated while a server is running, absent otherwise — never blank and never derived from the raw `basilisk.executablePath` setting.
+
+Implemented in `crates/basilisk-lsp/src/server/resolved_env.rs` (payload) and `crates/basilisk-lsp/src/server/init.rs` (wiring); version probing shared with the profiler's `version_via_command` (`crates/basilisk-lsp/src/profiler/processes.rs`).
+
 ## Command Registration Rule {#LSPARCH-CMDREG}
 
 Reference: https://code.visualstudio.com/api/references/vscode-api#commands

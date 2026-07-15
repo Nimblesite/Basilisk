@@ -635,13 +635,17 @@ Asserted by e2e tests driving the real contribution, not by inspecting the regis
 ### Server Info Section {#EXTACT-INFO-SERVER-INFO}
 
 Compact read-only information fetched from:
-- LSP `initialize` response (server version — row appears once the server is up)
-- Extension settings (binary path, python path, analysis mode, uv)
+- LSP `initialize` response (server version — row appears once the server is up; resolved python/uv/binary via [LSPARCH-RESOLVED-ENV](LSP-ARCHITECTURE-SPEC.md#LSPARCH-RESOLVED-ENV))
+- Extension settings (analysis mode, uv toggles)
 
 Rules (issue #103):
 - **No live server-state row** — the status bar is the single home for "running/stopped".
 - **One uv row** — sub-settings (executable path, auto-sync, stub suggestions) live in its tooltip, not separate rows.
 - **Never stale** — re-renders on `lspState`/`client` signal changes (defect 3), so the Version row tracks the server lifecycle.
+
+Rules (issue #153 — resolution rows show what was RESOLVED, never a raw placeholder):
+- **Python / uv rows** render the server-resolved value per [LSPARCH-RESOLVED-ENV](LSP-ARCHITECTURE-SPEC.md#LSPARCH-RESOLVED-ENV): `auto-detect → <version> (<path>)` when the setting is empty, explicit failure (`auto-detect → none found`) when detection fails, `auto-detect → awaiting server…` before live data. The bare `auto-detect` literal never renders.
+- **Binary row** is populated exclusively from the server's own report of its running executable (version + absolute path) and is absent while no server is running — a blank Binary row is forbidden.
 
 Every row is read-only per [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE): no command, no inline button, no button-like icon.
 

@@ -91,6 +91,50 @@ async fn test_ws_initialize_advertises_type_hierarchy_provider() -> TestResult<(
     Ok(())
 }
 
+// Tests [LSPARCH-RESOLVED-ENV] (server/resolved_env.rs, wired in server/init.rs):
+// initialize surfaces the resolved python/uv/binary environment so editors can
+// render what auto-detect found instead of a bare placeholder (GitHub #153).
+#[tokio::test]
+async fn test_ws_initialize_advertises_resolved_environment() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let response = fixture.initialize().await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&response)?;
+    let env = parsed
+        .pointer("/result/capabilities/experimental/basilisk/resolvedEnvironment")
+        .ok_or("missing experimental.basilisk.resolvedEnvironment in initialize response")?;
+
+    for slot in ["python", "uv", "binary"] {
+        assert!(
+            env.get(slot).is_some(),
+            "resolvedEnvironment must carry a `{slot}` slot (object or null): {env}"
+        );
+    }
+
+    // The server always knows its own binary — never null, absolute path,
+    // version present (this is what fixes the blank Binary row of #153).
+    let binary = env
+        .get("binary")
+        .and_then(serde_json::Value::as_object)
+        .ok_or("resolvedEnvironment.binary must be an object")?;
+    let path = binary
+        .get("path")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("binary.path must be a string")?;
+    assert!(
+        std::path::Path::new(path).is_absolute(),
+        "binary.path must be the absolute path of the running server: {path}"
+    );
+    assert!(
+        binary
+            .get("version")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|version| !version.is_empty()),
+        "binary.version must be populated: {binary:?}"
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_ws_initialize_advertises_declaration_provider() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
