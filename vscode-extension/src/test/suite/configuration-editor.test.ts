@@ -19,7 +19,6 @@ import type {
 import {
   ConfigurationEditorController,
   configurationRepairUri,
-  configurationEditorCapabilityVersion,
   supportsConfigurationEditor,
   type ConfigurationEditorTransport,
 } from "../../configuration-editor";
@@ -564,22 +563,22 @@ suite("Configuration editor — conflicts, capability, and lifecycle", () => {
     }
   });
 
-  // [LSPARCH-CONFIG-EDITOR-PROTOCOL] / [VSIX-CONFIGURATION-EDITOR]: the client
-  // requires exactly protocol version 2 — v1 (the removed preset/adoption
-  // protocol) and any future version are unsupported.
-  test("recognizes only version 2 of the experimental capability", () => {
-    function clientWithVersion(version: unknown): LanguageClient {
+  // [LSPARCH-CONFIG-EDITOR-PROTOCOL] / [VSIX-CONFIGURATION-EDITOR]: the
+  // capability is pure presence — the editor ships with the server, so there
+  // is no protocol version to negotiate.
+  test("gates on presence of the experimental capability", () => {
+    function clientWithCapability(configurationEditor: unknown): LanguageClient {
       return {
         initializeResult: {
-          capabilities: { experimental: { basilisk: { configurationEditor: { version } } } },
+          capabilities: { experimental: { basilisk: { configurationEditor } } },
         },
       } as unknown as LanguageClient;
     }
-    assert.strictEqual(configurationEditorCapabilityVersion(clientWithVersion(2)), 2);
-    assert.strictEqual(supportsConfigurationEditor(clientWithVersion(2)), true);
-    assert.strictEqual(supportsConfigurationEditor(clientWithVersion(1)), false);
-    assert.strictEqual(supportsConfigurationEditor(clientWithVersion(3)), false);
-    assert.strictEqual(supportsConfigurationEditor(clientWithVersion("2")), false);
+    assert.strictEqual(supportsConfigurationEditor(clientWithCapability(true)), true);
+    assert.strictEqual(supportsConfigurationEditor(clientWithCapability({})), true);
+    assert.strictEqual(supportsConfigurationEditor(clientWithCapability(false)), false);
+    assert.strictEqual(supportsConfigurationEditor(clientWithCapability(undefined)), false);
+    assert.strictEqual(supportsConfigurationEditor(clientWithCapability(null)), false);
     assert.strictEqual(supportsConfigurationEditor(undefined), false);
   });
 

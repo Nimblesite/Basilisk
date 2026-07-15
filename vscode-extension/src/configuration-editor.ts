@@ -24,8 +24,6 @@ import type { Store } from "./store";
 
 export const CONFIGURATION_EDITOR_COMMAND = "basilisk.openConfigurationEditor";
 export const CONFIGURATION_EDITOR_CONTEXT = "basilisk.configurationEditorSupported";
-/** [LSPARCH-CONFIG-EDITOR-PROTOCOL]: exact match with the server's advertised version. */
-export const CONFIGURATION_EDITOR_VERSION = 2;
 const SNAPSHOT_METHOD = "basilisk/configurationSnapshot";
 const PREVIEW_METHOD = "basilisk/previewConfigurationChange";
 const APPLY_METHOD = "basilisk/applyConfigurationChange";
@@ -43,7 +41,7 @@ export interface ConfigurationEditorTransport {
 
 interface ExperimentalCapabilities {
   readonly basilisk?: {
-    readonly configurationEditor?: { readonly version?: unknown };
+    readonly configurationEditor?: unknown;
   };
 }
 
@@ -53,16 +51,15 @@ interface ConfigurationError {
   readonly repairUri: string | undefined;
 }
 
-/** Read the versioned experimental capability without trusting its runtime shape. */
-export function configurationEditorCapabilityVersion(client: LanguageClient | undefined): number | undefined {
-  const experimental = client?.initializeResult?.capabilities.experimental as unknown;
-  if (typeof experimental !== "object" || experimental === null) { return undefined; }
-  const version = (experimental as ExperimentalCapabilities).basilisk?.configurationEditor?.version;
-  return typeof version === "number" && Number.isInteger(version) ? version : undefined;
-}
-
+/**
+ * [LSPARCH-CONFIG-EDITOR-PROTOCOL]: the editor ships with the server, so the
+ * capability is pure presence — `configurationEditor` advertised truthy.
+ */
 export function supportsConfigurationEditor(client: LanguageClient | undefined): boolean {
-  return configurationEditorCapabilityVersion(client) === CONFIGURATION_EDITOR_VERSION;
+  const experimental = client?.initializeResult?.capabilities.experimental as unknown;
+  if (typeof experimental !== "object" || experimental === null) { return false; }
+  const capability = (experimental as ExperimentalCapabilities).basilisk?.configurationEditor;
+  return capability !== undefined && capability !== null && capability !== false;
 }
 
 function clientTransport(store: Store): ConfigurationEditorTransport {

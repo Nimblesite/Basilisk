@@ -79,13 +79,16 @@ operations. The product contract, wire model, and selectors are specified in
 ### Protocol {#LSPARCH-CONFIG-EDITOR-PROTOCOL}
 
 Method names are constants in `basilisk_common::configuration_editor` and their DTOs are
-generated from `models/configuration_editor.td`.
+generated from `models/configuration_editor.td`. The server advertises the editor as
+`capabilities.experimental.basilisk.configurationEditor` — pure presence, no version
+negotiation: the editor ships with the server, so client and server can never disagree
+about the protocol.
 
 | Method | Kind | Purpose |
 |---|---|---|
 | `basilisk/configurationSnapshot` | request | Read one workspace root's effective configuration. |
 | `basilisk/previewConfigurationChange` | request | Validate and analyse a hypothetical mutation without writing. |
-| `basilisk/applyConfigurationChange` | request | Apply a versioned preview, reload, and recheck. |
+| `basilisk/applyConfigurationChange` | request | Apply a revision-checked preview, reload, and recheck. |
 | `basilisk/ruleOccurrences` | request | Page through locations selected by the all/codes/tags selectors. |
 | `basilisk/configurationChanged` | notification | Tell clients to refresh after an effective change. |
 

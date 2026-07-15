@@ -401,4 +401,47 @@ exclude = ["legacy", "third_party"]
             },
         );
     }
+
+    /// [CHKARCH-CONFIG-MODEL]: `RuleTables::is_empty` distinguishes an empty
+    /// table (exists, decides nothing) from one carrying entries.
+    #[test]
+    fn rule_tables_report_emptiness() {
+        assert!(RuleTables::default().is_empty());
+        let tagged = RuleTables {
+            rules: std::collections::HashMap::new(),
+            rule_tags: std::collections::HashMap::from([(
+                "basilisk".to_owned(),
+                RuleSeverity::Error,
+            )]),
+        };
+        assert!(!tagged.is_empty());
+        let ruled = RuleTables {
+            rules: std::collections::HashMap::from([("BSK-0001".to_owned(), RuleSeverity::Info)]),
+            rule_tags: std::collections::HashMap::new(),
+        };
+        assert!(!ruled.is_empty());
+    }
+
+    /// [CHKARCH-CONFIG-FILE]: `auto-stub-mode`/`auto-stub-path` parse from the
+    /// file, and a child's non-default values win when folders merge.
+    #[test]
+    fn auto_stub_settings_parse_and_child_wins_merge() {
+        with_temp_cfg_dir(
+            "bsk_cfg_auto_stub_xm",
+            &[(
+                "pyproject.toml",
+                "[tool.basilisk]\nauto-stub-mode = \"runtime\"\nauto-stub-path = \"stubs_gen\"\n",
+            )],
+            |cfg| {
+                assert_eq!(cfg.auto_stub_mode, "runtime");
+                assert_eq!(cfg.auto_stub_path, std::path::PathBuf::from("stubs_gen"));
+                let merged = BasiliskConfig::default().merged_with(cfg);
+                assert_eq!(merged.auto_stub_mode, "runtime");
+                assert_eq!(
+                    merged.auto_stub_path,
+                    std::path::PathBuf::from("stubs_gen")
+                );
+            },
+        );
+    }
 }

@@ -101,7 +101,8 @@ take over `pyproject.toml` as a custom editor and does not put the full rule
 catalog into the narrow sidebar.
 
 The command is exposed only when the server advertises
-`capabilities.experimental.basilisk.configurationEditor.version == 2`. Opening
+`capabilities.experimental.basilisk.configurationEditor` — pure presence, no
+version negotiation: the editor ships with the server. Opening
 the tab, revealing raw config, and navigating to an occurrence are VS Code UI
 actions. Configuration changes use the shared
 snapshot/preview/apply/occurrence methods in

@@ -8,7 +8,7 @@
 import { SHOTS } from "../../screenshots/shots.mjs";
 
 const RULE_SHOT = /^e\d+$/;
-const RULE_CODE = /^BSK-[EW]\d{4}$/;
+const RULE_CODE = /^BSK-\d{4}$/;
 
 export default Object.fromEntries(
   SHOTS.filter((shot) => RULE_SHOT.test(shot.name) && RULE_CODE.test(shot.expect)).map(

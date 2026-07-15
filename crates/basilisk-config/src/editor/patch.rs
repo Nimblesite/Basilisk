@@ -108,16 +108,10 @@ fn child_table_mut<'a>(
     key: &str,
     source_path: &std::path::Path,
 ) -> Result<&'a mut Table, ConfigDocumentError> {
-    let item = table
+    table
         .entry(key)
-        .or_insert_with(|| Item::Table(Table::new()));
-    if !item.is_table() {
-        return Err(ConfigDocumentError::Invalid {
-            path: source_path.to_path_buf(),
-            message: format!("`{key}` must be a table"),
-        });
-    }
-    item.as_table_mut()
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_mut()
         .ok_or_else(|| ConfigDocumentError::Invalid {
             path: source_path.to_path_buf(),
             message: format!("`{key}` must be a table"),

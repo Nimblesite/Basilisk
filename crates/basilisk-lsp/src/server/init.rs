@@ -252,11 +252,12 @@ fn build_capabilities(formatting_enabled: bool) -> ServerCapabilities {
                 ..Default::default()
             }),
         }),
+        // [LSPARCH-CONFIG-EDITOR-PROTOCOL]: presence of `configurationEditor`
+        // is the whole capability — the editor ships with the server, so
+        // there is no protocol version to negotiate.
         experimental: Some(serde_json::json!({
             "basilisk": {
-                "configurationEditor": {
-                    "version": basilisk_common::configuration_editor::VERSION
-                }
+                "configurationEditor": true
             }
         })),
         ..Default::default()

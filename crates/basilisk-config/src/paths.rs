@@ -180,4 +180,15 @@ mod tests {
     fn empty_pattern_never_matches() {
         assert!(!matches("anything.py", ""));
     }
+
+    #[test]
+    fn question_mark_matches_exactly_one_character() {
+        assert!(matches("cache_a/x.py", "cache_?"));
+        assert!(matches("v1/data.py", "v?"));
+        // `?` requires exactly one character — never zero, never two.
+        assert!(!matches("cache_/x.py", "cache_?"));
+        assert!(!matches("cache_ab/x.py", "cache_?"));
+        // `?` composes with `*` backtracking inside one segment.
+        assert!(matches("report_2024_final.py", "report_?024*.py"));
+    }
 }

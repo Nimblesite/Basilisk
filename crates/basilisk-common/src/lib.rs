@@ -185,8 +185,6 @@ pub mod configuration_editor {
     pub const OCCURRENCES: &str = "basilisk/ruleOccurrences";
     /// Notify clients that a root's effective configuration changed.
     pub const CHANGED: &str = "basilisk/configurationChanged";
-    /// Current protocol version advertised in `ServerCapabilities.experimental`.
-    pub const VERSION: u8 = 2;
 }
 
 /// Slash command names used in the Zed extension's AI assistant panel.
