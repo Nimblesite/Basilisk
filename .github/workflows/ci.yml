@@ -315,6 +315,19 @@ jobs:
     runs-on: ${{ vars.BIG_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 20
     steps:
+      # cargo-llvm-cov instruments and RE-compiles the entire workspace, and the
+      # conformance gate clones python/typing fresh — together they exhausted the
+      # runner's ~14 GB root disk ("No space left on device" mid-build). Reclaim
+      # the ~25 GB of preinstalled toolchains this job never touches
+      # (dotnet/android/ghc/CodeQL/boost) up front so the instrumented artifacts
+      # always fit. Runs first, before any toolchain setup; harmless on runners
+      # that lack these dirs (|| true). `df -h` logs the reclaimed headroom.
+      - name: Free disk space for the instrumented build
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          df -h /
+
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
