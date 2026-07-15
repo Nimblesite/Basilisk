@@ -1,20 +1,20 @@
 # Basilisk checker architecture {#CHKARCH}
 
-## No "strict mode" — behaviour is configuration only {#CHKARCH-CONFIGURATION-ONLY}
+## No "strict mode" — two commands, one config {#CHKARCH-CONFIGURATION-ONLY}
 
-Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` dial). Everything reported is decided by **configuration alone**: a flat set of per-rule severities written explicitly in folder-level config files. A rule with no config entry does not run ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)).
+Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` dial). One rule universe is partitioned exactly once, by provenance tag, into two commands ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)):
 
-1. **No config file anywhere means the in-memory PEP seed.** When configuration discovery finds no `[tool.basilisk]` table on the entire ancestor walk, Basilisk synthesizes the seed in memory: **every rule that implements the Python typing specification at `error`, and nothing else**. This unconfigured default is exactly what the conformance scorer runs — no Basilisk config of any format, no "conformance mode" ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)). It exists only for that bare, config-less case: the moment any `[tool.basilisk]` table exists on the walk — even an empty one, which disables every rule — the tables are the only truth. A `pyproject.toml` without the table contributes nothing ([CHKARCH-CONFIG-DISCOVERY](#CHKARCH-CONFIG-DISCOVERY)).
+1. **`basilisk check` — the typing spec, always.** Every `pep`-tagged rule runs on every check, config or no config. Configuration can grade a PEP rule (`error`/`warning`/`info`) but can **never disable one**. A bare tree — exactly what the conformance scorer runs, no Basilisk config of any format, no "conformance mode" — is therefore every PEP rule at `error` ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
-2. **Every rule runs only with an explicit config entry.** House-style rules — require-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), explicit-`Any` nudge (`BSK-W0014`), uv dependency hygiene, stub suggestions — are **not in the PEP seed**; an explicit config entry is the only way to run them, and there are no rule-family booleans.
+2. **`basilisk analyze` — the opt-in layer, tabula rasa.** Every rule *not* tagged `pep` — require-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), explicit-`Any` nudge (`BSK-W0014`), suppression audit, uv dependency hygiene, stub suggestions — runs only when configuration resolves it to a non-disabled severity. No entry, no check. An empty or missing `[tool.basilisk]` table means `analyze` reports nothing.
 
-"Strict" is a property of a chosen configuration, never a precondition of the conformance score. No PEP rule may be disabled, deleted, or unregistered to move that number ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
+Configuration **grades**; commands **select**. The config file never chooses commands, and there are no presets, mutation intents, or rule-family booleans. Strict-by-default is delivered by the LSP's one-time two-line seed — `"basilisk" = "error"` — never by hidden defaults ([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
 
-There are no presets and no editor-owned mutation intents. When the LSP opens a
-project with no config file, it materializes the configuration to disk — every
-PEP rule at `error`, every house rule at `warning`, all written explicitly —
-and from then on users edit that file
-([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
+No PEP rule may be disabled, deleted, or unregistered to move the conformance number ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
+
+### The partition {#CHKARCH-COMMANDS}
+
+A rule is check-scope **iff** it carries the `pep` provenance tag; everything else is analyze-scope. Every rule belongs to exactly one command, and the registry's canonical tags are the single source of that partition. The LSP publishes the union of both scopes by default; an IDE-level client option — never project config — can restrict it to check ([LSPARCH-DIAGNOSTIC-SCOPE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE)).
 
 ---
 
@@ -48,18 +48,18 @@ How Basilisk decides what to report (configuration, not modes), the PEPs it cove
 
 ### Strictness Model {#CHKARCH-STRICTNESS}
 
-Behaviour is per-rule configuration. The subsections define the default (pure PEP conformance), suppression/override directives, and their precedence.
+Behaviour is per-rule configuration over the two-command partition ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)): `check` is pure PEP conformance, always; `analyze` is the explicit opt-in layer. The subsections define severity values, suppression/override directives, and their precedence.
 
 #### No Modes — Configuration Decides Everything {#CHKARCH-STRICTNESS-ONLY}
 
-The require-annotation house rules (`BSK-E0001`/`BSK-E0002`) fire **only with a config entry** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)). Under the PEP seed these snippets pass:
+The require-annotation house rules (`BSK-E0001`/`BSK-E0002`) are analyze-scope ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)): `basilisk check` never fires them, and `basilisk analyze` fires them only when configuration resolves them to a non-disabled severity. With no config these snippets pass everywhere:
 
 ```python
-# Passes under the PEP seed; fires BSK-E0001 only when that rule has an entry
+# Passes check always; fires BSK-E0001 under analyze once configured
 def greet(name):
     return f"Hello, {name}"
 
-# Passes under the PEP seed; fires BSK-E0002 only when that rule has an entry
+# Passes check always; fires BSK-E0002 under analyze once configured
 def greet(name: str):
     return f"Hello, {name}"
 
@@ -103,12 +103,13 @@ Every rule has four configurable severity values:
 | `info` | Informational hint only | No | Blue hint |
 | `disabled` | Rule emits no diagnostic | No | Nothing |
 
-Severity comes only from explicit config entries. A rule with no entry in any
-config file on the ancestor chain does not run; deleting an entry disables the
-rule. The letter in a rule code (`E`/`W`/`I`) is naming, not behaviour, and
-there are no default, inherited, or "native" severity values — see
-[CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL).
-Inline directives can still override an enabled rule per line, block, or file
+Severity resolves through [CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL): the
+nearest deciding table wins, a rule entry beats tag entries, and the strictest
+matching tag entry wins. PEP rules bottom out at `error` and can never be
+disabled; analyze rules bottom out at disabled — no entry, no check. There are
+no default, inherited, or "native" severity values, and the letter in a rule
+code (`E`/`W`/`I`) is naming, not behaviour. Inline directives can still
+override any running rule per line, block, or file
 ([CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION)).
 
 A rule without an entry (or set `disabled`) must emit nothing; the current
@@ -173,23 +174,24 @@ Block directives work with all severity values: `# type: warning[CODE]` / `# typ
 # Demote E0010 and E0011 to warnings for the entire file
 ```
 
-**Per-folder configuration** in `pyproject.toml` — the nearest table's entry
+**Per-folder configuration** in `pyproject.toml` — the nearest deciding table
 wins per rule ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)):
 ```toml
 # pyproject.toml at the project root
+[tool.basilisk.rule-tags]
+"basilisk" = "error"            # every house rule on — strict by default
+
 [tool.basilisk.rules]
-"returns_compatibility" = "error"
-"imports_unresolved" = "error"
-"BSK-E0001" = "error"
+"BSK-W0050" = "warning"         # ...except this one, graded down
 ```
 ```toml
-# legacy/pyproject.toml — overrides the root, per rule, for everything under legacy/
+# legacy/pyproject.toml — decides, per rule, for everything under legacy/
 [tool.basilisk.rules]
-"returns_compatibility" = "disabled"
-"BSK-E0001" = "warning"
+"BSK-E0001" = "disabled"        # house rules may be disabled
+"imports_unresolved" = "warning" # PEP rules may be graded — never disabled
 ```
 
-Third-party import noise is handled the same way: scope `imports_unresolved`
+Third-party import noise is handled the same way: grade `imports_unresolved`
 in the folder that contains the affected code, or use the inline directives
 above at the import site. There are no module-pattern or glob-path override
 tables.
@@ -201,9 +203,10 @@ When multiple overrides apply, the most specific wins:
 1. **Per-line comment** (highest priority)
 2. **Per-block comment**
 3. **Per-file directive**
-4. **Nearest folder config entry** for the rule
-   ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)) — no entry anywhere means
-   the rule does not run (lowest priority)
+4. **Nearest deciding folder config** — rule entry over tag entry, strictest
+   matching tag ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL))
+5. **Scope default** (lowest): `pep` rules run at `error`; everything else
+   does not run ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS))
 
 #### Compatibility {#CHKARCH-STRICTNESS-COMPAT}
 
@@ -227,11 +230,12 @@ The `# type:` prefix keeps compatibility with tools that recognize `# type: igno
 
 #### Suppression Directives as Opt-In Diagnostics {#CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS}
 
-Suppression auditing is a Basilisk-specific rule family. Like every rule, the
-audit rules run only with an explicit config entry — the PEP seed contains none
-of them, so a bare clone emits no audit diagnostics. Once an entry enables a
-rule, every parsed source directive produces at most one audit diagnostic at
-the directive's comment span:
+Suppression auditing is a Basilisk-specific rule family and analyze-scope
+([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)): `basilisk check` never emits it, so a
+bare clone stays clean, and the standard seed's `"basilisk" = "error"` tag
+entry turns it on ([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
+Once a rule resolves to a non-disabled severity, every parsed source directive
+produces at most one audit diagnostic at the directive's comment span:
 
 | Rule | Classification |
 |---|---|
@@ -406,7 +410,7 @@ Format: `BSK-Xnnnn` where X classifies the rule's intent in documentation:
 - `W` = Warning-class (hygiene)
 - `I` = Info-class (suggestion)
 
-The letter is naming only — it sets no runtime severity. A rule runs at whatever severity its config entry states (`error`, `warning`, `info`, or `disabled`), and a rule without an entry does not run; inline directives can still override per line, block, or file — see [CHKARCH-STRICTNESS-SEVERITY](#CHKARCH-STRICTNESS-SEVERITY) and [CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION).
+The letter is naming only — it sets no runtime severity. Severity resolves through [CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL): PEP rules always run in `check` and bottom out at `error`; analyze rules run only when configuration decides them. Inline directives can still override per line, block, or file — see [CHKARCH-STRICTNESS-SEVERITY](#CHKARCH-STRICTNESS-SEVERITY) and [CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION).
 
 ### Generated rule index {#CHKARCH-DIAG-REFERENCE}
 
@@ -944,44 +948,42 @@ the advanced-features plan.
 ### Configuration Model {#CHKARCH-CONFIG-MODEL}
 
 The design source is [`models/configuration.td`](../../models/configuration.td)
-(rendered [SVG](../models/configuration.svg)). A configuration is a flat list
-of explicit rule entries — code plus severity — and nothing else. The config
-file is the complete truth about which rules run:
+(rendered [SVG](../models/configuration.svg)). A configuration is two flat
+maps and nothing else:
 
-- A rule **with an entry** runs at exactly that severity: `error`, `warning`,
-  or `info` — or is explicitly `disabled`.
-- A rule **without an entry** does not run: no diagnostic, no analyzer check.
-  Deleting an entry disables the rule.
-- An **empty** `[tool.basilisk]` table disables every rule. That is a
-  legitimate, explicit user choice, and tooling never overrides it.
+- `[tool.basilisk.rules]` — explicit per-rule entries:
+  `"<code>" = "error" | "warning" | "info" | "disabled"`.
+- `[tool.basilisk.rule-tags]` — explicit group entries:
+  `"<tag>" = "<severity>"` — one written line that grades every rule carrying
+  the tag (e.g. `"basilisk" = "error"` turns every house rule on). A tag entry
+  is config in the file, never an implicit switch.
 
-There are no default severities, no ambient enablement, no tag gates, and no
-inherited state. The `E`/`W`/`I` letters in rule codes are naming, not
-behaviour.
+**Resolution** — per rule, per checked file, one walk, first decision wins:
 
-Folder configs are the only scoping mechanism. The nearest config file with an
-entry for a rule wins, per rule, per checked file — the walk is specified in
-[Configuration Discovery](#CHKARCH-CONFIG-DISCOVERY):
+1. Walk from the file's folder to the root. The **nearest** `[tool.basilisk]`
+   table that decides the rule wins outright.
+2. Within a table, a per-rule entry beats tag entries; among matching tag
+   entries the **strictest** severity wins
+   (`error` > `warning` > `info` > `disabled`).
+3. No table decides the rule: `pep`-tagged rules run at `error`
+   ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)); every other rule is disabled.
 
-- child entry present → the child's severity applies, including an explicit
-  `disabled`;
-- child entry absent → the nearest ancestor's entry applies;
-- no entry anywhere → the rule is disabled.
-
-There are no glob path patterns, per-file exceptions, precedence scores, or
-merge intents. Scoping a rule differently for part of the tree means putting a
-config file in that folder.
-
-One boundary case exists solely because the conformance harness checks a bare
-clone with no config anywhere ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)):
-when discovery finds **no** `[tool.basilisk]` table on the entire ancestor
-walk, the checker synthesizes the PEP seed in memory — every PEP typing-spec
-rule at `error`, nothing else — and writes nothing to disk
-([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)). The LSP
-materializes that seed as a real file on first open
+That is the whole model. There are no default severities beyond the check
+scope's `error`, no inherited state, no glob path patterns, no per-file or
+per-module exceptions, no precedence scores, and no merge intents. Scoping a
+rule differently for part of the tree means putting a config file in that
+folder. A missing table and an empty table behave identically — PEP rules at
+`error`, nothing else runs; the only thing that distinguishes them is the
+LSP's one-time seed
 ([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
-The moment any `[tool.basilisk]` table exists on the walk, even an empty one,
-the tables are the only truth.
+
+`disabled` never applies to a `pep`-tagged rule: any configuration that
+resolves a PEP rule to `disabled` — by rule entry or tag entry — is invalid
+and fails config loading. Line-level `# type: ignore` and `exclude` remain the
+escape hatches ([CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION),
+[CHKARCH-CONFIG-EXCLUDE](#CHKARCH-CONFIG-EXCLUDE)).
+
+The `E`/`W`/`I` letters in rule codes are naming, not behaviour.
 
 ### Configuration File {#CHKARCH-CONFIG-FILE}
 
@@ -1006,13 +1008,16 @@ include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]
 
 [tool.basilisk.rules]
-"returns_compatibility" = "error"   # explicit entries are the only enablement
-"imports_unresolved" = "warning"    # no entry means the rule does not run
+"imports_unresolved" = "warning"    # a PEP rule graded down — never disabled
+"BSK-W0050" = "error"               # one house rule promoted above its tag entry
+
+[tool.basilisk.rule-tags]
+"basilisk" = "error"                # every house rule on — strict by default
 ```
 
 Scoping a rule differently for part of the tree means placing another
 `pyproject.toml` with a `[tool.basilisk]` table in that folder; the nearest
-entry wins per rule ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)).
+deciding table wins per rule ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)).
 
 ### Configuration Discovery {#CHKARCH-CONFIG-DISCOVERY}
 
@@ -1028,16 +1033,15 @@ to the filesystem root is visited. Each directory contributes at most its
 `[tool.basilisk]` contributes nothing and does not stop the walk (Ruff's
 `[tool.ruff]` semantics).
 
-**Cumulative merge.** Configs found on the chain merge additively, nearest
-directory winning per key (`BasiliskConfig::merged_with`): a child directory's
-config *appends to* an ancestor's, never replaces it wholesale.
+**Rule resolution.** Rules are never merged: the nearest table that decides a
+rule — per-rule entry first, then tag entries — wins outright
+([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)).
 
-- The `rules` map unions per key; the child wins on overlap.
-- `stub-paths` appends (deduplicated).
-- Remaining scalar/list fields keep the ancestor's value unless the child
-  explicitly sets one.
-- The nearest config's directory becomes the merged config's `project_root`,
-  anchoring root-relative interpretation (`include`/`exclude` globs).
+**Scalar merge.** Non-rule fields merge additively, nearest directory winning
+per key: `stub-paths` appends (deduplicated); remaining scalar/list fields
+keep the ancestor's value unless the child explicitly sets one; the nearest
+config's directory becomes the merged config's `project_root`, anchoring
+`include`/`exclude` globs.
 
 **Surfaces.**
 

@@ -38,33 +38,37 @@ The stable shared surface includes the executable and Python paths, analysis mod
 typeshed paths, formatter selection, inlay-hint switches, debugger settings, and the uv,
 test, profiling, and memory namespaces. Detailed contracts live in their feature specs.
 
+## Diagnostic scope {#LSPARCH-DIAGNOSTIC-SCOPE}
+
+The LSP publishes the **union** of both command scopes — every `pep`-tagged
+rule plus every configured analyze rule
+([CHKARCH-COMMANDS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS)) — through
+one diagnostics stream. An IDE-level client option
+(`initializationOptions.basilisk.analyze: false`, surfaced as an editor
+setting) restricts publication to check scope. This is per-user editor
+ergonomics: project configuration grades rules and never selects commands.
+
 ## Configuration seeding {#LSPARCH-CONFIG-SEEDING}
 
 When the LSP opens a workspace root whose ancestor walk finds no
 `[tool.basilisk]` table
 ([CHKARCH-CONFIG-DISCOVERY](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY)),
-it materializes the configuration before doing anything else, writing into the
-root's `pyproject.toml` (creating the file when the project has none):
-
-- every PEP typing-spec rule, explicitly, at `error`; and
-- every current Basilisk house rule (including the suppression-audit rules),
-  explicitly, at `warning`.
+it writes exactly one thing into the root's `pyproject.toml` (creating the
+file when the project has none) — the two-line strict-by-default seed:
 
 ```toml
-[tool.basilisk.rules]
-"returns_compatibility" = "error"    # …every PEP rule, written explicitly
-"imports_unresolved" = "error"
-"BSK-E0001" = "warning"              # …every Basilisk rule, written explicitly
-"BSK-W0050" = "warning"
+[tool.basilisk.rule-tags]
+"basilisk" = "error"
 ```
 
-Seeding is a one-time write derived from the in-memory PEP seed — which itself
-contains only PEP rules at `error` and never any house rule
-([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)) —
-plus every house rule at `warning`. It is not a default consulted afterwards.
-The user deletes the entries they do not want, and a deleted rule is simply
-disabled. The LSP never re-seeds while any `[tool.basilisk]` table exists on
-the walk and never resurrects a removed entry.
+PEP rules need no seeding — `check` always runs them
+([CHKARCH-COMMANDS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS)) — so this
+one tag entry is the entire out-of-the-box configuration: every house rule on,
+at `error`, in a file the user owns from that moment. Seeding happens once.
+The LSP never re-seeds while any `[tool.basilisk]` table exists on the walk,
+never edits the entry afterwards, and never resurrects anything the user
+deletes — deleting the tag entry switches the house rules back off. The CLI
+never seeds.
 
 ## Configuration editor API {#LSPARCH-CONFIG-EDITOR}
 
@@ -89,8 +93,9 @@ Every request identifies its workspace root. Unknown roots, rules, tags, severit
 selectors, and stale revisions are errors; they never fall back to a different root
 or to defaults.
 
-A mutation writes explicit rule entries or removes them — there are no preset,
-inherit, or native intents
+A mutation sets or removes one rule entry or one tag entry — nothing else
+exists: no preset, inherit, or native intents, and setting `disabled` on a
+`pep`-tagged rule is a request error
 ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 Mass fixing stays the standalone `basilisk.fixWorkspace` execute command; a
 supplied `{ rootUri }` is validated and restricts the edit to that active root.
@@ -106,8 +111,8 @@ to perform one `WorkspaceEdit`, then reloads, rechecks, republishes, and sends
 `basilisk/configurationChanged`. External config-file changes use the same
 refresh tail.
 
-Rule entries are stored in `pyproject.toml` (`[tool.basilisk]`) config files; a
-folder's file overrides its ancestors per rule
+Rule and tag entries are stored in `pyproject.toml` (`[tool.basilisk]`) config
+files; the nearest folder table that decides a rule wins
 ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 
 ### Errors {#LSPARCH-CONFIG-EDITOR-ERRORS}

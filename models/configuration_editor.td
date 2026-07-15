@@ -3,9 +3,9 @@
 # ([CONFIGEDITOR-MODEL] / [LSPARCH-CONFIG-EDITOR-PROTOCOL]).
 #
 # This file is the LSP editor protocol ONLY. It builds on the core
-# configuration model in models/configuration.td (RuleCode, RuleSeverity) and
-# MUST NOT add anything to it: the editor reads and writes plain rule entries,
-# nothing more.
+# configuration model in models/configuration.td (RuleCode, RuleTag,
+# RuleSeverity) and MUST NOT add anything to it: the editor reads and writes
+# plain rule and tag entries, nothing more.
 #
 # Regenerate the committed DTO shapes (concatenation is required: codegen
 # rejects undeclared names, so the core model must come first). Reconcile the
@@ -27,20 +27,23 @@ union TagKind {
   Descriptive
 }
 
-# Bulk selection for mutations and occurrence queries ([CONFIGEDITOR-TAGS]).
-# Selectors expand server-side, at preview time, to plain rule entries.
+# The only four things the editor can ask for - exactly the four things a
+# config file can express: a rule entry, a tag entry, or the absence of
+# either ([CHKARCH-CONFIG-MODEL]). Setting Disabled on a pep-tagged rule is a
+# request error.
+union EditorMutation {
+  SetRule { code: RuleCode, severity: RuleSeverity }
+  RemoveRule { code: RuleCode }
+  SetTag { tag: RuleTag, severity: RuleSeverity }
+  RemoveTag { tag: RuleTag }
+}
+
+# Read-side bulk selection for occurrence queries only; mutations never take
+# selectors.
 union RuleSelector {
   All
   Codes { codes: List<RuleCode> }
-  Tags { tags: List<String>, matchAll: Bool }
-}
-
-# The only two things the editor can ask for. Set writes explicit entries;
-# Remove deletes entries, and a rule without an entry is disabled
-# ([CHKARCH-CONFIG-MODEL]).
-union EditorMutation {
-  Set { selector: RuleSelector, severity: RuleSeverity }
-  Remove { selector: RuleSelector }
+  Tags { tags: List<RuleTag>, matchAll: Bool }
 }
 
 type RuleDescriptor {
@@ -48,19 +51,24 @@ type RuleDescriptor {
   title: String
   summary: String
   docsUrl: Uri
-  tags: List<String>
+  tags: List<RuleTag>
 }
 
-# severity mirrors the edited config file exactly: None means no entry.
+# entry mirrors the edited config file exactly (None = no per-rule entry).
+# effectiveSeverity is what actually runs at the root scope after tag-entry
+# resolution: Disabled means "does not run" and never appears on a pep rule.
 type RuleState {
   descriptor: RuleDescriptor
-  severity: Option<RuleSeverity>
+  entry: Option<RuleSeverity>
+  effectiveSeverity: RuleSeverity
   diagnosticCount: Int
 }
 
+# entry mirrors [tool.basilisk.rule-tags] exactly (None = no tag entry).
 type TagState {
-  name: String
+  name: RuleTag
   kind: TagKind
+  entry: Option<RuleSeverity>
   ruleCount: Int
   diagnosticCount: Int
 }
@@ -79,12 +87,12 @@ type PreviewConfigurationRequest {
   mutations: List<EditorMutation>
 }
 
-# One real entry change, fully expanded and normalized.
-# None on either side means "no entry".
-type ResolvedEntryChange {
+# One rule's effective-severity change, fully resolved. Disabled = does not
+# run; a pep rule is never Disabled on either side.
+type ResolvedRuleChange {
   code: RuleCode
-  previousSeverity: Option<RuleSeverity>
-  newSeverity: Option<RuleSeverity>
+  before: RuleSeverity
+  after: RuleSeverity
 }
 
 # A complete before/after partition by the three emitting severities; the
@@ -101,7 +109,7 @@ type ConfigurationImpact {
 type ConfigurationPreview {
   previewId: PreviewId
   baseRevision: Revision
-  changes: List<ResolvedEntryChange>
+  changes: List<ResolvedRuleChange>
   impact: ConfigurationImpact
 }
 
