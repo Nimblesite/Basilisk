@@ -95,3 +95,64 @@ fn make_diagnostic(var: &VariableInfo, path: &str) -> Diagnostic {
         ),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use basilisk_resolver::{RhsKind, Span, VariableInfo};
+
+    use super::{is_unresolvable, make_diagnostic, MissingVariableType, Rule};
+
+    fn unannotated(name: &str, rhs: RhsKind) -> VariableInfo {
+        VariableInfo {
+            name: name.to_owned(),
+            name_span: Span { start: 0, end: 1 },
+            has_annotation: false,
+            rhs_kind: rhs,
+            annotation_span: None,
+            rhs_span: None,
+        }
+    }
+
+    /// [CHKARCH-CONFIG-MODEL]: BSK-0003 is an opt-in `strictness` house rule,
+    /// never a PEP rule. Provenance is read from `opt_in_spec`, so a `None`
+    /// here would silently promote the rule to always-on — guard it directly.
+    #[test]
+    fn opt_in_spec_marks_a_strictness_house_rule() {
+        let spec = MissingVariableType.opt_in_spec();
+        assert!(spec.is_some(), "BSK-0003 must stay opt-in");
+        if let Some(spec) = spec {
+            assert_eq!(spec.code, "BSK-0003");
+            assert_eq!(spec.tags, &["strictness"]);
+        }
+    }
+
+    /// Only empty collections and `None` leave the element/value type
+    /// unknowable from the literal alone; every other RHS is resolvable.
+    #[test]
+    fn only_empty_collections_and_none_are_unresolvable() {
+        assert!(is_unresolvable(&RhsKind::EmptyList));
+        assert!(is_unresolvable(&RhsKind::EmptyDict));
+        assert!(is_unresolvable(&RhsKind::NoneValue));
+        assert!(!is_unresolvable(&RhsKind::IntLiteral));
+        assert!(!is_unresolvable(&RhsKind::Other));
+    }
+
+    /// Each unresolvable RHS renders its own tailored guidance — one match arm
+    /// per kind — so dropping an arm changes the user-facing message.
+    #[test]
+    fn make_diagnostic_renders_a_message_per_rhs_kind() {
+        assert!(make_diagnostic(&unannotated("xs", RhsKind::EmptyList), "m.py")
+            .message
+            .contains("empty list"));
+        assert!(make_diagnostic(&unannotated("d", RhsKind::EmptyDict), "m.py")
+            .message
+            .contains("empty dict"));
+        assert!(make_diagnostic(&unannotated("n", RhsKind::NoneValue), "m.py")
+            .message
+            .contains("`None`"));
+        // The catch-all arm covers every other kind with the generic message.
+        assert!(make_diagnostic(&unannotated("v", RhsKind::Other), "m.py")
+            .message
+            .contains("module-level variable"));
+    }
+}

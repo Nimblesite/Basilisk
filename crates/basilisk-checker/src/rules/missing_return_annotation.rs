@@ -60,3 +60,21 @@ fn make_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
         Some("In Basilisk, all functions require an explicit return type".to_owned()),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{MissingReturnAnnotation, Rule};
+
+    /// [CHKARCH-CONFIG-MODEL]: BSK-0002 is an opt-in `strictness` house rule,
+    /// never a PEP rule. Provenance is read from `opt_in_spec`, so a `None`
+    /// here would silently promote the rule to always-on — guard it directly.
+    #[test]
+    fn opt_in_spec_marks_a_strictness_house_rule() {
+        let spec = MissingReturnAnnotation.opt_in_spec();
+        assert!(spec.is_some(), "BSK-0002 must stay opt-in");
+        if let Some(spec) = spec {
+            assert_eq!(spec.code, "BSK-0002");
+            assert_eq!(spec.tags, &["strictness"]);
+        }
+    }
+}

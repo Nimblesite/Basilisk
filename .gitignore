@@ -38,6 +38,8 @@ vscode-extension/coverage/
 vscode-extension/bin/
 vscode-extension/bundled/
 vscode-extension/shipwright.json
+vscode-extension/NOTICES
+vscode-extension/test-fixtures/workspace/wm_scan_target.py
 *.vsix
 *.tgz
 .npm/
