@@ -70,7 +70,7 @@ mod tests {
     }
 
     /// [CHKARCH-DIAG-CODES]: codes carry no severity class — `BSK-nnnn` or a
-    /// conformance snake_case name, nothing else.
+    /// conformance `snake_case` name, nothing else.
     #[test]
     fn codes_carry_no_severity_class() {
         for rule in rule_catalog() {

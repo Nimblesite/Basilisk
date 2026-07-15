@@ -199,9 +199,9 @@ fn bare_config_runs_pep_rules_only() {
         "pep rules must fire with no config"
     );
     assert!(
-        !diagnostics
+        diagnostics
             .iter()
-            .any(|d| basilisk_checker::is_pep_rule(d.code.code) == false),
+            .all(|d| basilisk_checker::is_pep_rule(d.code.code)),
         "no analyze rule may fire with no config"
     );
 }

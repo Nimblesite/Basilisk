@@ -17,7 +17,7 @@ import { SHOTS } from "../../screenshots/shots.mjs";
 // code actually renders on that code's page.
 // See docs/specs/WEBSITE-ERROR-PAGES-SPEC.md.
 
-type Rule = { code: string; severity: string; summary: string };
+type Rule = { code: string; scope: string; summary: string };
 
 // The generated data the pages are built from — the single source of truth.
 const RULES: Rule[] = JSON.parse(
@@ -30,7 +30,7 @@ const RULES: Rule[] = JSON.parse(
 // stem and the diagnostic code differ (e.g. e0011 → BSK-0014).
 // Worked-example shots, keyed by the code each one triggers (shot.expect).
 const EXAMPLE_CODES = SHOTS.filter(
-  (s) => /^e\d+$/.test(s.name) && /^BSK-[EW]\d{4}$/.test(s.expect),
+  (s) => /^e\d+$/.test(s.name) && /^BSK-\d{4}$/.test(s.expect),
 ).map((s) => ({ code: s.expect, stem: s.name }));
 
 const expectRendered = async (page: Page, src: string): Promise<void> => {
@@ -53,13 +53,13 @@ test.describe("error reference pages", () => {
     expect(RULES.length).toBeGreaterThanOrEqual(155); // every CLI-linked code, at least
   });
 
-  test("a sampled page renders its code, title and severity", async ({ page }) => {
+  test("a sampled page renders its code, title and scope badge", async ({ page }) => {
     for (const code of ["BSK-0001", "BSK-0014", "protocols_explicit", RULES[RULES.length - 1].code]) {
       const rule = RULES.find((r) => r.code === code)!;
       await page.goto(`/errors/${code}/`);
       await expect(page.locator("h1.error-title code")).toHaveText(code);
       await expect(page).toHaveTitle(new RegExp(code));
-      await expect(page.locator(`.badge--${rule.severity}`)).toBeVisible();
+      await expect(page.locator(`.badge--${rule.scope}`)).toBeVisible();
     }
   });
 
