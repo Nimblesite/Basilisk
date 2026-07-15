@@ -14,10 +14,7 @@
 # anywhere: pep rules run at error, everything else is disabled.
 #
 # Editor/LSP wire types live in models/configuration_editor.td and MUST NOT
-# leak into this file.
-#
-# Render the documentation diagram:
-#   typediagram models/configuration.td > docs/models/configuration.svg
+# leak into this file. Codegen only — no SVG rendering.
 
 alias RuleCode = String
 alias RuleTag = String

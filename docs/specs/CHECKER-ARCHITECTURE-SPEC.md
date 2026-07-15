@@ -947,9 +947,8 @@ the advanced-features plan.
 
 ### Configuration Model {#CHKARCH-CONFIG-MODEL}
 
-The design source is [`models/configuration.td`](../../models/configuration.td)
-(rendered [SVG](../models/configuration.svg)). A configuration is two flat
-maps and nothing else:
+The design source is [`models/configuration.td`](../../models/configuration.td).
+A configuration is two flat maps and nothing else:
 
 - `[tool.basilisk.rules]` — explicit per-rule entries:
   `"<code>" = "error" | "warning" | "info" | "disabled"`.

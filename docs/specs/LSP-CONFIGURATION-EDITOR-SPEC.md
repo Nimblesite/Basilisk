@@ -37,7 +37,7 @@ Unknown roots, rule codes, tags, severities, and selectors, pep-disable requests
 
 ## Wire model {#CONFIGEDITOR-MODEL}
 
-The editor protocol's design source is [`models/configuration_editor.td`](../../models/configuration_editor.td), with its rendered [SVG](../models/configuration_editor.svg). It builds on the core configuration model in [`models/configuration.td`](../../models/configuration.td) ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)) — `RuleCode`, `RuleTag`, `RuleSeverity` — and **MUST NOT add anything to it**: the two models are separate files precisely so editor machinery can never contaminate the config model. Language DTOs are regenerated from the two files together; an automated drift check remains open.
+The editor protocol's design source is [`models/configuration_editor.td`](../../models/configuration_editor.td). It builds on the core configuration model in [`models/configuration.td`](../../models/configuration.td) ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)) — `RuleCode`, `RuleTag`, `RuleSeverity` — and **MUST NOT add anything to it**: the two models are separate files precisely so editor machinery can never contaminate the config model. Language DTOs are regenerated from the two files together; an automated drift check remains open.
 
 The protocol is deliberately small:
 

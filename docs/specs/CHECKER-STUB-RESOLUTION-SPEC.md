@@ -147,7 +147,7 @@ The resolver returns a `StubResolution` tagged with **where** the type info came
 from (`StubSource`) and **how much to trust it** (`StubTier`). The data model is
 defined in [typeDiagram](https://typediagram.dev) markup — source of truth
 [`models/stub_resolution.td`](../../models/stub_resolution.td), rendered to
-[`docs/models/stub_resolution.svg`](../models/stub_resolution.svg). The Rust
+[`models/stub_resolution.td`](../../models/stub_resolution.td). The Rust
 ADTs in `crates/basilisk-stubs/src/types.rs` are generated from it
 (`typediagram --to rust models/stub_resolution.td`):
 

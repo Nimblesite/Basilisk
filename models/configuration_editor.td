@@ -14,8 +14,7 @@
 #     -> crates/basilisk-lsp/src/configuration_editor/model.rs
 #   cat models/configuration.td models/configuration_editor.td | typediagram --to typescript
 #     -> vscode-extension/src/configuration-editor-model.ts
-# Render the documentation diagram:
-#   typediagram models/configuration_editor.td > docs/models/configuration_editor.svg
+# Codegen only — no SVG rendering.
 
 alias Uri = String
 alias Revision = String

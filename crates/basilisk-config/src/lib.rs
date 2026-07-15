@@ -1,23 +1,30 @@
-//! Implements [STUBRES-CONFIG]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CONFIG
+//! Implements [CHKARCH-CONFIG-MODEL] and [CHKARCH-CONFIG-DISCOVERY]. See
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL
+//!
 //! Configuration parsing for Basilisk.
 //!
-//! Parses `pyproject.toml` `[tool.basilisk]` with support for:
-//! - Global rule severity overrides (`rules."imports_unresolved" = "warning"`)
-//! - Per-module overrides (`per-module-overrides."fastmcp".ignore-missing-stubs = true`)
-//! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled = [...]`)
-//! - Stub path directories (`stub-paths = ["stubs/"]`)
+//! Parses `pyproject.toml` `[tool.basilisk]`. A configuration is two flat
+//! maps and nothing else ([CHKARCH-CONFIG-MODEL]):
+//! - `[tool.basilisk.rules]` — explicit per-rule severity entries
+//! - `[tool.basilisk.rule-tags]` — explicit group entries
+//!
+//! Resolution is per rule, per checked file: the nearest table on the
+//! ancestor walk that decides the rule wins outright
+//! ([`BasiliskConfig::resolve_severity`]).
 
 pub mod editor;
-pub mod overrides;
 mod parse;
+mod paths;
+mod severity;
 
 pub use editor::{
-    active_config_path, adoption_rule_overrides, apply_config_patch, build_rule_patch,
-    discover_config_document, discover_config_document_with_content, ConfigDocument,
-    ConfigDocumentError, ConfigFormat, ConfigPatch, RuleConfigScope, RuleConfigUpdate,
+    active_config_path, apply_config_patch, build_rule_patch, discover_config_document,
+    discover_config_document_with_content, ConfigDocument, ConfigDocumentError, ConfigPatch,
+    RuleConfigUpdate,
 };
-pub use overrides::{path_matches_pattern, ModuleOverride, PathOverride, RuleSeverity};
-pub use parse::BasiliskConfig;
+pub use parse::{BasiliskConfig, RuleTables};
+pub use paths::path_matches_pattern;
+pub use severity::RuleSeverity;
 
 use std::path::Path;
 
@@ -50,22 +57,21 @@ pub const DEFAULT_EXCLUDES: &[&str] = &[
 ];
 
 /// Load a `BasiliskConfig` for `start` by discovering config files up the
-/// ancestor directory chain and merging them cumulatively.
+/// ancestor directory chain.
 ///
 /// Implements [CHKARCH-CONFIG-DISCOVERY] (GitHub #311): every surface —
-/// `basilisk check`/`fix`/`adopt` and the LSP — resolves rule config through
-/// this one routine, so the result is independent of argument order, path
-/// spelling, and cwd. The walk visits `start` and every ancestor up to the
-/// filesystem root; each directory contributes its config file (see
-/// [`load_dir_config`] for the per-directory priority), and directories
-/// nearer to `start` win per key over ancestors (see
-/// [`BasiliskConfig::merged_with`]). A `pyproject.toml` without a
-/// `[tool.basilisk]` table contributes nothing and does not stop the walk.
+/// `basilisk check`/`analyze`/`fix`/`adopt` and the LSP — resolves rule config
+/// through this one routine, so the result is independent of argument order,
+/// path spelling, and cwd. The walk visits `start` and every ancestor up to
+/// the filesystem root; each directory contributes its `[tool.basilisk]`
+/// table to the nearest-first [`BasiliskConfig::rule_chain`], and non-rule
+/// fields merge with directories nearer to `start` winning per key. A
+/// `pyproject.toml` without a `[tool.basilisk]` table contributes nothing and
+/// does not stop the walk.
 ///
-/// Returns `BasiliskConfig::default()` if no config file is found anywhere
-/// on the chain (and likewise on malformed files — no configuration-error
-/// exit is raised; see report).
-/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY
+/// Returns `BasiliskConfig::default()` (empty chain — PEP rules at `error`,
+/// nothing else runs; [CHKARCH-CONFIG-MODEL]) if no config table is found
+/// anywhere on the chain, and likewise on malformed files.
 #[must_use]
 pub fn load_basilisk_config(start: &Path) -> BasiliskConfig {
     let chain: Vec<BasiliskConfig> = absolute_start(start)
@@ -73,14 +79,14 @@ pub fn load_basilisk_config(start: &Path) -> BasiliskConfig {
         .filter_map(load_dir_config)
         .collect();
     // `ancestors()` yields nearest-first; fold from the outermost ancestor so
-    // configs nearer to `start` override it per key.
+    // configs nearer to `start` end up in front of the rule chain.
     let mut config = chain
         .into_iter()
         .rev()
         .fold(BasiliskConfig::default(), BasiliskConfig::merged_with);
     // The nearest config-holding directory anchors root-relative
-    // interpretation (per-path overrides, adoption store); with no config
-    // anywhere on the chain, `start` itself anchors, as before.
+    // interpretation (`include`/`exclude` globs); with no config anywhere on
+    // the chain, `start` itself anchors, as before.
     if config.project_root.is_none() {
         config.project_root = Some(start.to_path_buf());
     }
@@ -90,9 +96,9 @@ pub fn load_basilisk_config(start: &Path) -> BasiliskConfig {
 /// The nearest directory at or above `start` holding a recognized config file
 /// (`pyproject.toml` with a `[tool.basilisk]` table).
 ///
-/// This is the anchor directory for artifacts that live next to the config —
-/// e.g. the adoption store — so `basilisk adopt` writes where `basilisk check`
-/// discovers. Implements [CHKARCH-CONFIG-DISCOVERY].
+/// This anchors artifacts that live next to the config, so `basilisk adopt`
+/// writes where `basilisk check` discovers. Implements
+/// [CHKARCH-CONFIG-DISCOVERY].
 #[must_use]
 pub fn discover_config_dir(start: &Path) -> Option<std::path::PathBuf> {
     absolute_start(start)
@@ -152,6 +158,9 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    /// [CHKARCH-CONFIG-MODEL]: no config table anywhere means an empty rule
+    /// chain — the caller's scope default applies (PEP at error, nothing
+    /// else runs).
     #[test]
     fn load_default_when_no_config() {
         with_temp_cfg_dir("bsk_cfg_empty_xm", &[], |cfg| {
@@ -160,18 +169,15 @@ mod tests {
                 cfg.exclude.iter().any(|e| e == "site-packages"),
                 "default excludes must contain site-packages"
             );
-            assert!(
-                cfg.exclude.iter().any(|e| e == "__pycache__"),
-                "default excludes must contain __pycache__"
-            );
             assert!(cfg.stub_paths.is_empty());
             assert!(cfg.typeshed_path.is_none());
-            assert!(cfg.rules.is_empty());
-            assert!(cfg.per_module_overrides.is_empty());
-            assert!(cfg.per_path_overrides.is_empty());
+            assert!(!cfg.has_config_table(), "no table anywhere -> empty chain");
+            assert_eq!(cfg.resolve_severity("anything", &["pep"]), None);
         });
     }
 
+    /// [CHKARCH-CONFIG-FILE]: `[tool.basilisk.rules]` and
+    /// `[tool.basilisk.rule-tags]` parse into one folder table.
     #[test]
     fn load_from_pyproject_toml() {
         with_temp_cfg_dir(
@@ -187,14 +193,8 @@ typeshed-path = "typeshed-mp"
 "imports_unresolved" = "warning"
 "BSK-E0001" = "disabled"
 
-[tool.basilisk.per-module-overrides.fastmcp]
-ignore-missing-stubs = true
-
-[tool.basilisk.per-module-overrides."django.*"]
-ignore-missing-stubs = true
-
-[tool.basilisk.per-path-overrides."vendor/**"]
-disabled = ["imports_unresolved", "BSK-E0001"]
+[tool.basilisk.rule-tags]
+"basilisk" = "error"
 "#,
             )],
             |cfg| {
@@ -203,18 +203,85 @@ disabled = ["imports_unresolved", "BSK-E0001"]
                     cfg.typeshed_path,
                     Some(std::path::PathBuf::from("typeshed-mp"))
                 );
-                assert_eq!(cfg.rules.len(), 2);
+                let tables = cfg.nearest_tables().unwrap();
                 assert_eq!(
-                    cfg.rules.get("imports_unresolved").copied(),
+                    tables.rules.get("imports_unresolved").copied(),
                     Some(RuleSeverity::Warning)
                 );
                 assert_eq!(
-                    cfg.rules.get("BSK-E0001").copied(),
+                    tables.rules.get("BSK-E0001").copied(),
                     Some(RuleSeverity::Disabled)
                 );
-                assert!(cfg.per_module_overrides.contains_key("fastmcp"));
-                assert!(cfg.per_module_overrides.contains_key("django.*"));
-                assert!(cfg.per_path_overrides.contains_key("vendor/**"));
+                assert_eq!(
+                    tables.rule_tags.get("basilisk").copied(),
+                    Some(RuleSeverity::Error)
+                );
+            },
+        );
+    }
+
+    /// [CHKARCH-CONFIG-MODEL] resolution: within a table a per-rule entry
+    /// beats tag entries.
+    #[test]
+    fn rule_entry_beats_tag_entry_within_a_table() {
+        with_temp_cfg_dir(
+            "bsk_cfg_rule_over_tag_xm",
+            &[(
+                "pyproject.toml",
+                r#"
+[tool.basilisk.rules]
+"BSK-W0050" = "warning"
+
+[tool.basilisk.rule-tags]
+"basilisk" = "error"
+"#,
+            )],
+            |cfg| {
+                assert_eq!(
+                    cfg.resolve_severity("BSK-W0050", &["basilisk", "redundancy"]),
+                    Some(RuleSeverity::Warning),
+                    "the per-rule entry must beat the tag entry"
+                );
+                assert_eq!(
+                    cfg.resolve_severity("BSK-E0001", &["basilisk"]),
+                    Some(RuleSeverity::Error),
+                    "rules without their own entry take the tag entry"
+                );
+                assert_eq!(
+                    cfg.resolve_severity("returns_compatibility", &["pep"]),
+                    None,
+                    "rules no table decides resolve to None"
+                );
+            },
+        );
+    }
+
+    /// [CHKARCH-CONFIG-MODEL] resolution: among matching tag entries the
+    /// strictest severity wins (error > warning > info > disabled).
+    #[test]
+    fn strictest_matching_tag_entry_wins() {
+        with_temp_cfg_dir(
+            "bsk_cfg_strictest_tag_xm",
+            &[(
+                "pyproject.toml",
+                r#"
+[tool.basilisk.rule-tags]
+"basilisk" = "info"
+"suppressions" = "error"
+"style" = "disabled"
+"#,
+            )],
+            |cfg| {
+                assert_eq!(
+                    cfg.resolve_severity("BSK-W0061", &["basilisk", "suppressions"]),
+                    Some(RuleSeverity::Error),
+                    "error must beat info among overlapping tag entries"
+                );
+                assert_eq!(
+                    cfg.resolve_severity("BSK-W0014", &["basilisk", "style"]),
+                    Some(RuleSeverity::Info),
+                    "info must beat disabled among overlapping tag entries"
+                );
             },
         );
     }
@@ -229,99 +296,12 @@ disabled = ["imports_unresolved", "BSK-E0001"]
                 "basilisk.json",
                 r#"{
                 "stubPaths": ["stubs/"],
-                "typeshedPath": "ts-json",
-                "rules": {
-                    "imports_unresolved": "info"
-                },
-                "perModuleOverrides": {
-                    "requests": { "ignoreMissingStubs": true }
-                }
+                "rules": { "imports_unresolved": "info" }
             }"#,
             )],
             |cfg| {
-                assert!(
-                    cfg.stub_paths.is_empty(),
-                    "basilisk.json stubPaths must be ignored"
-                );
-                assert!(
-                    cfg.typeshed_path.is_none(),
-                    "basilisk.json typeshedPath must be ignored"
-                );
-                assert!(cfg.rules.is_empty(), "basilisk.json rules must be ignored");
-                assert!(
-                    cfg.per_module_overrides.is_empty(),
-                    "basilisk.json perModuleOverrides must be ignored"
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn pyproject_wins_over_stray_basilisk_json() {
-        with_temp_cfg_dir(
-            "bsk_cfg_priority_xm",
-            &[
-                ("basilisk.json", r#"{ "stubPaths": ["from_json/"] }"#),
-                (
-                    "pyproject.toml",
-                    "[tool.basilisk]\nstub-paths = [\"from_toml/\"]\n",
-                ),
-            ],
-            |cfg| {
-                assert_eq!(cfg.stub_paths.len(), 1);
-                assert_eq!(cfg.stub_paths.first().unwrap().to_str(), Some("from_toml/"));
-            },
-        );
-    }
-
-    #[test]
-    fn module_override_wildcard_matching() {
-        let override_entry = ModuleOverride {
-            ignore_missing_stubs: true,
-        };
-        let cfg = BasiliskConfig {
-            per_module_overrides: [("django.*".to_owned(), override_entry)]
-                .into_iter()
-                .collect(),
-            ..Default::default()
-        };
-        assert!(cfg.should_ignore_missing_stubs("django.db"));
-        assert!(cfg.should_ignore_missing_stubs("django.db.models"));
-        assert!(!cfg.should_ignore_missing_stubs("flask"));
-    }
-
-    #[test]
-    fn exact_module_override() {
-        let override_entry = ModuleOverride {
-            ignore_missing_stubs: true,
-        };
-        let cfg = BasiliskConfig {
-            per_module_overrides: [("fastmcp".to_owned(), override_entry)]
-                .into_iter()
-                .collect(),
-            ..Default::default()
-        };
-        assert!(cfg.should_ignore_missing_stubs("fastmcp"));
-        assert!(cfg.should_ignore_missing_stubs("fastmcp.server"));
-        assert!(!cfg.should_ignore_missing_stubs("flask"));
-    }
-
-    #[test]
-    fn json_exclude_does_not_override_defaults() {
-        with_temp_cfg_dir(
-            "bsk_cfg_json_exclude_xm",
-            &[("basilisk.json", r#"{ "exclude": ["vendor", "generated"] }"#)],
-            |cfg| {
-                // The stray basilisk.json is never read: the defaults survive
-                // and none of its entries load.
-                assert!(
-                    cfg.exclude.iter().any(|e| e == "__pycache__"),
-                    "default excludes must survive a stray basilisk.json"
-                );
-                assert!(
-                    !cfg.exclude.iter().any(|e| e == "vendor"),
-                    "stray basilisk.json exclude entries must not load"
-                );
+                assert!(cfg.stub_paths.is_empty());
+                assert!(!cfg.has_config_table());
             },
         );
     }
@@ -343,183 +323,9 @@ exclude = ["legacy", "third_party"]
         );
     }
 
-    #[test]
-    fn toml_per_path_overrides_with_rules() {
-        with_temp_cfg_dir(
-            "bsk_cfg_toml_path_rules_xm",
-            &[(
-                "pyproject.toml",
-                r#"
-[tool.basilisk.per-path-overrides."tests/**"]
-disabled = ["BSK-E0001"]
-
-[tool.basilisk.per-path-overrides."tests/**".rules]
-"imports_unresolved" = "warning"
-"BSK-E0005" = "info"
-"#,
-            )],
-            |cfg| {
-                assert!(
-                    cfg.per_path_overrides.contains_key("tests/**"),
-                    "per-path-overrides should contain tests/** key"
-                );
-                let tests_override = cfg.per_path_overrides.get("tests/**").unwrap();
-                assert_eq!(
-                    tests_override.disabled_rules,
-                    vec!["BSK-E0001"],
-                    "disabled rules should be parsed"
-                );
-                assert_eq!(
-                    tests_override
-                        .rule_overrides
-                        .get("imports_unresolved")
-                        .copied(),
-                    Some(RuleSeverity::Warning),
-                    "rule overrides should contain imports_unresolved as warning"
-                );
-                assert_eq!(
-                    tests_override.rule_overrides.get("BSK-E0005").copied(),
-                    Some(RuleSeverity::Info),
-                    "rule overrides should contain BSK-E0005 as info"
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn rule_severity_returns_configured_override() {
-        let cfg = BasiliskConfig {
-            rules: [
-                ("imports_unresolved".to_owned(), RuleSeverity::Warning),
-                ("BSK-E0001".to_owned(), RuleSeverity::Disabled),
-            ]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        };
-
-        assert_eq!(
-            cfg.rule_severity("imports_unresolved"),
-            Some(RuleSeverity::Warning)
-        );
-        assert_eq!(cfg.rule_severity("BSK-E0001"), Some(RuleSeverity::Disabled));
-        assert_eq!(
-            cfg.rule_severity("BSK-E9999"),
-            None,
-            "unconfigured rule should return None"
-        );
-    }
-
-    #[test]
-    fn is_rule_disabled_for_path_uses_overrides() {
-        let cfg = BasiliskConfig {
-            per_path_overrides: [(
-                "vendor/**".to_owned(),
-                PathOverride {
-                    disabled_rules: vec!["imports_unresolved".to_owned(), "BSK-E0001".to_owned()],
-                    rule_overrides: std::collections::HashMap::new(),
-                },
-            )]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        };
-
-        assert!(
-            cfg.is_rule_disabled_for_path(
-                "imports_unresolved",
-                std::path::Path::new("vendor/lib/foo.py")
-            ),
-            "imports_unresolved should be disabled for vendor paths"
-        );
-        assert!(
-            cfg.is_rule_disabled_for_path("BSK-E0001", std::path::Path::new("vendor/bar.py")),
-            "BSK-E0001 should be disabled for vendor paths"
-        );
-        assert!(
-            !cfg.is_rule_disabled_for_path(
-                "imports_unresolved",
-                std::path::Path::new("src/app.py")
-            ),
-            "imports_unresolved should NOT be disabled for non-vendor paths"
-        );
-        assert!(
-            !cfg.is_rule_disabled_for_path("BSK-E9999", std::path::Path::new("vendor/foo.py")),
-            "non-listed rule should NOT be disabled even for vendor paths"
-        );
-    }
-
-    #[test]
-    fn json_kebab_case_stub_paths_are_ignored() {
-        with_temp_cfg_dir(
-            "bsk_cfg_json_kebab_stubs_xm",
-            &[(
-                "basilisk.json",
-                r#"{
-                "stub-paths": ["typings/", "custom-stubs/"]
-            }"#,
-            )],
-            |cfg| {
-                assert!(
-                    cfg.stub_paths.is_empty(),
-                    "stray basilisk.json stub-paths must be ignored"
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn json_kebab_case_per_module_overrides_are_ignored() {
-        with_temp_cfg_dir(
-            "bsk_cfg_json_kebab_pmo_xm",
-            &[(
-                "basilisk.json",
-                r#"{
-                "per-module-overrides": {
-                    "numpy": { "ignore-missing-stubs": true }
-                }
-            }"#,
-            )],
-            |cfg| {
-                assert!(
-                    cfg.per_module_overrides.is_empty(),
-                    "stray basilisk.json per-module-overrides must be ignored"
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn malformed_stray_json_never_blocks_the_pyproject_config() {
-        with_temp_cfg_dir(
-            "bsk_cfg_invalid_json_xm",
-            &[
-                ("basilisk.json", "{ not valid json !!!"),
-                (
-                    "pyproject.toml",
-                    r#"
-[tool.basilisk]
-stub-paths = ["fallback-stubs/"]
-"#,
-                ),
-            ],
-            |cfg| {
-                // basilisk.json is never read — malformed or not — so the
-                // pyproject.toml config always loads.
-                assert_eq!(
-                    cfg.stub_paths.first().and_then(|p| p.to_str()),
-                    Some("fallback-stubs/"),
-                    "a stray basilisk.json must never block pyproject.toml"
-                );
-                assert_eq!(cfg.stub_paths.len(), 1);
-            },
-        );
-    }
-
     /// GitHub #311: rule config must be discovered by walking ancestor
-    /// directories, not just the exact directory passed in — otherwise
-    /// `basilisk check path/to/file.py` silently ignores the project root
-    /// config. See [CHKARCH-CONFIG-FILE].
+    /// directories, not just the exact directory passed in. See
+    /// [CHKARCH-CONFIG-DISCOVERY].
     #[test]
     fn discovers_config_from_ancestor_directory() {
         let root = std::env::temp_dir().join(format!("bsk_cfg_walk_up_{}", std::process::id()));
@@ -535,31 +341,31 @@ stub-paths = ["fallback-stubs/"]
         let _ = fs::remove_dir_all(&root);
 
         assert_eq!(
-            cfg.rules.get("imports_unresolved").copied(),
+            cfg.resolve_severity("imports_unresolved", &["pep", "imports"]),
             Some(RuleSeverity::Warning),
             "loading config from a child directory must discover the ancestor's \
              pyproject.toml [tool.basilisk] (GitHub #311)"
         );
     }
 
-    /// GitHub #311: config is cumulative/additive — a child directory's config
-    /// appends to (and per-key overrides) ancestor config; it must never blow
-    /// the ancestor config away.
+    /// [CHKARCH-CONFIG-MODEL]: the nearest table that decides a rule wins
+    /// outright — including a child tag entry beating an ancestor per-rule
+    /// entry, because proximity beats specificity across tables.
     #[test]
-    fn child_config_merges_cumulatively_over_ancestor() {
-        let root = std::env::temp_dir().join(format!("bsk_cfg_cumulative_{}", std::process::id()));
+    fn nearest_deciding_table_wins_across_folders() {
+        let root = std::env::temp_dir().join(format!("bsk_cfg_nearest_{}", std::process::id()));
         let child = root.join("child");
         fs::create_dir_all(&child).unwrap();
         fs::write(
             root.join("pyproject.toml"),
             "[tool.basilisk.rules]\n\
              \"imports_unresolved\" = \"warning\"\n\
-             \"BSK-E0001\" = \"warning\"\n",
+             \"BSK-E0001\" = \"error\"\n",
         )
         .unwrap();
         fs::write(
             child.join("pyproject.toml"),
-            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
+            "[tool.basilisk.rule-tags]\n\"basilisk\" = \"info\"\n",
         )
         .unwrap();
 
@@ -567,14 +373,29 @@ stub-paths = ["fallback-stubs/"]
         let _ = fs::remove_dir_all(&root);
 
         assert_eq!(
-            cfg.rules.get("imports_unresolved").copied(),
-            Some(RuleSeverity::Warning),
-            "ancestor rules not mentioned by the child config must survive the merge"
+            cfg.resolve_severity("BSK-E0001", &["basilisk"]),
+            Some(RuleSeverity::Info),
+            "the child's tag entry must beat the ancestor's per-rule entry"
         );
         assert_eq!(
-            cfg.rules.get("BSK-E0001").copied(),
-            Some(RuleSeverity::Disabled),
-            "the child config must win where it overlaps the ancestor config"
+            cfg.resolve_severity("imports_unresolved", &["pep", "imports"]),
+            Some(RuleSeverity::Warning),
+            "rules the child does not decide fall through to the ancestor"
+        );
+    }
+
+    /// [CHKARCH-CONFIG-MODEL]: an explicitly empty table decides nothing but
+    /// still counts as an existing table (the LSP seed distinction).
+    #[test]
+    fn empty_table_exists_but_decides_nothing() {
+        with_temp_cfg_dir(
+            "bsk_cfg_empty_table_xm",
+            &[("pyproject.toml", "[tool.basilisk]\n")],
+            |cfg| {
+                assert!(cfg.has_config_table(), "an empty table still exists");
+                assert_eq!(cfg.resolve_severity("BSK-E0001", &["basilisk"]), None);
+                assert_eq!(cfg.resolve_severity("returns_compatibility", &["pep"]), None);
+            },
         );
     }
 }
