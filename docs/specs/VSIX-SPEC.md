@@ -146,12 +146,14 @@ contrast safe, usable at 200% zoom, and reduced-motion aware. Apply/conflict
 status uses an `aria-live` region and refreshes preserve focus.
 
 Rules are virtualized and organized by the server's Sources, PEP categories,
-and Policy tags. Every row exposes Error, Warning, Info, Disabled, and
-remove-entry controls — nothing else, because nothing else exists
+and Policy tags. Tag groups expose the tag-entry control; rows expose
+per-rule entry controls — Error, Warning, Info, and remove-entry, plus
+Disabled only on analyze rows: PEP rules have no disable control because no
+disable exists for them
 ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 Occurrences load in cursor pages and navigation is restricted to the selected
-workspace root. Disabling or removing rules is always previewed, and the
-preview's diagnostic impact makes the consequence visible before apply.
+workspace root. Every change is previewed, and the preview's diagnostic
+impact makes the consequence visible before apply.
 
 ### Implementation files and tests {#VSIX-CONFIGURATION-EDITOR-FILES}
 

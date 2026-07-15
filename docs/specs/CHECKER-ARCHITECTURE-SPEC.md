@@ -112,9 +112,9 @@ code (`E`/`W`/`I`) is naming, not behaviour. Inline directives can still
 override any running rule per line, block, or file
 ([CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION)).
 
-A rule without an entry (or set `disabled`) must emit nothing; the current
+A rule that resolves to disabled must emit nothing; the current
 implementation still executes the shared rule registry and filters output
-afterwards, so absence guarantees no diagnostic, not zero execution cost.
+afterwards, so disabled guarantees no diagnostic, not zero execution cost.
 Skipping execution entirely is an optimisation tracked by
 [CONFIGEDITOR-PLAN-DOMAIN](../plans/LSP-CONFIGURATION-EDITOR-PLAN.md#CONFIGEDITOR-PLAN-DOMAIN),
 not part of severity correctness.

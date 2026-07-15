@@ -70,15 +70,16 @@ the returned edit.
 
 ## Configuration seeding and fixes {#AUTOFIX-SEEDING}
 
-There is no preset workflow. Seeding already materializes a strict starting
-point: a project with no config gets every PEP rule at `error` and every house
-rule at `warning`, written explicitly
-([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
-Tightening or relaxing from there is ordinary bulk mutation through
-preview/apply, while root-scoped `basilisk.fixWorkspace` applies the currently
-safe fixes as a separate, reviewable source edit. Unsafe fixes are never
-included implicitly, and no rule is disabled without an ordinary configuration
-preview/apply writing an explicit `disabled` entry.
+There is no preset workflow. `check` always runs the PEP rules, and the
+two-line seed (`"basilisk" = "error"`) turns every house rule on
+([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)) —
+strict by default with no hidden state. Tightening or relaxing from there is
+ordinary rule/tag entry mutation through preview/apply, while root-scoped
+`basilisk.fixWorkspace` applies the currently safe fixes as a separate,
+reviewable source edit. Unsafe fixes are never included implicitly, and no
+analyze rule is disabled without an ordinary configuration preview/apply
+writing an explicit `disabled` entry; PEP rules cannot be disabled at all
+([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 
 ## Gradual adoption {#AUTOFIX-ADOPTION}
 
@@ -91,8 +92,9 @@ ownership markers, or sidecar state
 ### Flow {#AUTOFIX-ADOPTION-FLOW}
 
 `basilisk.adoptFile` and `basilisk.adoptWorkspace` read the current error and
-safety-violation codes from the workspace index and demote them to `warning`
-in the nearest config file governing each affected folder, through the shared
+safety-violation codes from the workspace index and demote them to `warning` —
+analyze rules may go to `disabled`, PEP rules never below `info` — in the
+nearest config file governing each affected folder, through the shared
 root-aware configuration mutation service — the same reload/recheck/notify
 tail as every configuration write. `basilisk.unadoptFile` deletes those folder
 entries again, restoring the ancestor severity. Re-running adoption recomputes
