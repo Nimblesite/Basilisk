@@ -12,14 +12,17 @@ import * as vscode from "vscode";
 import { type Store } from "./store";
 import { subscribeRevision } from "./reactive-refresh";
 import { Logger } from "./logger";
+import {
+  DiagnosticTreeItem,
+  diagnosticItems,
+  type DiagnosticNode,
+} from "./module-explorer-diagnostics";
 
 // ── LSP response types ───────────────────────────────────────────────────
 //
 // Implements the client mirror of [EXTACT-DATA-MODEL] — the shared
-// WorkspaceModulesResponse / ModuleNode / SymbolNode / HealthStats wire shapes
-// returned by basilisk.workspaceModules. (The spec's DiagnosticNode /
-// ModuleNode.diagnostics drill-down [EXTACT-MODULES-DIAGNOSTICS] is not yet
-// modelled here — see the activity-panel audit notes.)
+// WorkspaceModulesResponse / ModuleNode / SymbolNode / DiagnosticNode /
+// HealthStats wire shapes returned by basilisk.workspaceModules.
 
 interface SymbolNode {
   readonly name: string;
@@ -35,6 +38,12 @@ interface ModuleNode {
   readonly path: string;
   readonly kind: "package" | "module";
   readonly symbols: readonly SymbolNode[];
+  // Every diagnostic for this module, rendered as the first drill-down rows so
+  // the errors/warnings tallies below are navigable, never dead
+  // ([EXTACT-MODULES-DIAGNOSTICS], #235). Empty while Type Checking is
+  // disabled; optional only to stay crash-safe against a pre-#235 server
+  // binary supplied via basilisk.executablePath.
+  readonly diagnostics?: readonly DiagnosticNode[];
   // Health rollup folded into each module by basilisk.workspaceModules
   // [EXTACT-MODULES] — coverage %, diagnostic counts, and adoption state, so the
   // merged panel needs no separate basilisk.typeHealth round-trip. ABSENT while
@@ -95,7 +104,7 @@ interface PackageTreeNode {
 
 // ── Tree items ───────────────────────────────────────────────────────────
 
-type TreeItem = ModuleTreeItem | SymbolTreeItem | PackageTreeItem;
+type TreeItem = ModuleTreeItem | SymbolTreeItem | PackageTreeItem | DiagnosticTreeItem;
 
 // Implements [EXTACT-MODULES-MODULE-ROW] — the module row: label, coverage-tinted
 // icon, folded-health description, tooltip, and open-on-click action.
@@ -109,7 +118,9 @@ export class ModuleTreeItem extends vscode.TreeItem {
   ) {
     super(
       displayName,
-      module.symbols.length > 0
+      // Diagnostics count as expandable children too: a symbol-less module
+      // with errors must still open to its diagnostic rows (#235).
+      module.symbols.length > 0 || (module.diagnostics?.length ?? 0) > 0
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
     );
@@ -467,8 +478,19 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
       );
     }
 
+    // Diagnostic rows are leaves ([EXTACT-MODULES-DIAGNOSTICS]) — never let
+    // one fall through to the root fetch below.
+    if (element instanceof DiagnosticTreeItem) {
+      return [];
+    }
+
     if (element instanceof ModuleTreeItem) {
-      return ModuleExplorerProvider.symbolItems(element.module);
+      // Diagnostics FIRST — above the symbols — so the row's tally is
+      // navigable ([EXTACT-MODULES-DIAGNOSTICS], #235).
+      return [
+        ...diagnosticItems(element.module.diagnostics, element.module.path),
+        ...ModuleExplorerProvider.symbolItems(element.module),
+      ];
     }
 
     if (element instanceof PackageTreeItem) {
@@ -556,12 +578,17 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     return new PackageTreeItem(node);
   }
 
-  /** Children of a package/folder: nested nodes first, then the package's symbols. */
+  /** Children of a package/folder: nested nodes first, then the package's own
+   *  diagnostics above its symbols ([EXTACT-MODULES-DIAGNOSTICS], #235). */
   private static packageChildren(node: PackageTreeNode): TreeItem[] {
     const childItems = ModuleExplorerProvider.sortNodes([...node.children.values()])
       .map((child) => ModuleExplorerProvider.nodeToItem(child));
     if (node.module === undefined) { return childItems; }
-    return [...childItems, ...ModuleExplorerProvider.symbolItems(node.module)];
+    return [
+      ...childItems,
+      ...diagnosticItems(node.module.diagnostics, node.module.path),
+      ...ModuleExplorerProvider.symbolItems(node.module),
+    ];
   }
 
   /** Structural sibling order: containers before leaf modules, each alphabetical. */

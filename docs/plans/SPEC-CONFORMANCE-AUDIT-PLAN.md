@@ -54,7 +54,7 @@ a false claim.
 | `LSPAI` (whole spec) | Only the `AiTypingProvider` trait + `NoOpAiTypingProvider` default + request/response/error types exist (`ai_typing.rs`, ~250 LOC). All providers, features, config, protocol commands, truncation, and tests are unbuilt. | **Status banner added** |
 | `COMPILER` (whole spec) | `basilisk-compiler` is a parse→resolve→check→**tree-walking interpreter** (~1.8k LOC). No HIR, LLVM/Cranelift, native codegen, AOT/JIT, interop, runtime, stdlib, or `run`/`build` CLI. The four "new" crates do not exist. | **Status banner added**; false "Cranelift JIT" claim in `compiler/src/lib.rs` corrected |
 | `COMPILER-LAYOUT-ISINSTANCE` | `codegen.rs` `isinstance` is a stub returning `true` unconditionally | Roadmap (interpreter limitation) |
-| `EXTACT-MODULES-DIAGNOSTICS` | `ModuleNode.diagnostics` drill-down not implemented; the `nE nW` tally has no child rows | Roadmap |
+| `EXTACT-MODULES-DIAGNOSTICS` | `ModuleNode.diagnostics` drill-down not implemented; the `nE nW` tally has no child rows | **Fixed** (#235): implemented end-to-end — server serialization (`module_tree.rs` `diagnostic_nodes`) + VS Code drill-down rows (`module-explorer-diagnostics.ts`) |
 | `AUTOFIX-AI` / `AUTOFIX-AI-SCOPE` | AI-enhanced autofix not built (deterministic mass-fix is) | Roadmap |
 | `AUTOFIX-ADOPTION-VSCODE` | No status-bar "Adopted (N)" / gutter icons; auto-graduation never invoked in production | Roadmap |
 | `PROFILE-CONFIG-CODES` (`BSK-PROF-GIL`) | GIL-contention diagnostic documented but never emitted | Roadmap |
