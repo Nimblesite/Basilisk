@@ -284,7 +284,7 @@
       "master": "assets/screenshots/masters/09-configuration-preview-full.png",
       "path": "assets/screenshots/09-configuration-preview.png",
       "title": "Review a path-scoped rule change before writing it",
-      "alt": "The real Basilisk preview shows BSK-E0002 changing from inherited to warning for tests, recalculated workspace impact, and separate editing and apply actions.",
+      "alt": "The real Basilisk preview shows BSK-0002 changing from inherited to warning for tests, recalculated workspace impact, and separate editing and apply actions.",
       "capture": {
         "date": "2026-07-12",
         "environment": "macOS 26.5.1 arm64",

@@ -7,33 +7,30 @@ use super::common::*;
 fn type_ignore_suppresses_all() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def process(data) -> None:  # type: ignore\n    pass\n";
     let diags = run(source)?;
-    // BSK-E0001 should be suppressed by type: ignore
+    // BSK-0001 should be suppressed by type: ignore
     assert!(
-        !codes(&diags).contains(&"BSK-E0001"),
-        "type: ignore should suppress BSK-E0001"
+        !codes(&diags).contains(&"BSK-0001"),
+        "type: ignore should suppress BSK-0001"
     );
     Ok(())
 }
 
 #[test]
 fn type_ignore_with_code_suppresses_specific() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "def process(data) -> None:  # type: ignore[BSK-E0001]\n    pass\n";
+    let source = "def process(data) -> None:  # type: ignore[BSK-0001]\n    pass\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0001"),
-        "type: ignore[BSK-E0001] should suppress BSK-E0001"
+        !codes(&diags).contains(&"BSK-0001"),
+        "type: ignore[BSK-0001] should suppress BSK-0001"
     );
     Ok(())
 }
 
 #[test]
 fn type_warning_demotes_to_warning() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "def process(data) -> None:  # type: warning[BSK-E0001]\n    pass\n";
+    let source = "def process(data) -> None:  # type: warning[BSK-0001]\n    pass\n";
     let diags = run(source)?;
-    let e0001_diags: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
-        .collect();
+    let e0001_diags: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0001").collect();
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,
@@ -61,10 +58,10 @@ fn basilisk_relaxed_demotes_errors() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn file_disabled_suppresses_specific_rule() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "# basilisk: file-disabled[BSK-E0001]\ndef process(data) -> None:\n    pass\n";
+    let source = "# basilisk: file-disabled[BSK-0001]\ndef process(data) -> None:\n    pass\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0001"),
+        !codes(&diags).contains(&"BSK-0001"),
         "file-disabled should suppress specific rule"
     );
     Ok(())
@@ -72,12 +69,9 @@ fn file_disabled_suppresses_specific_rule() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn type_info_demotes_to_info() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "def process(data) -> None:  # type: info[BSK-E0001]\n    pass\n";
+    let source = "def process(data) -> None:  # type: info[BSK-0001]\n    pass\n";
     let diags = run(source)?;
-    let e0001_diags: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
-        .collect();
+    let e0001_diags: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0001").collect();
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,

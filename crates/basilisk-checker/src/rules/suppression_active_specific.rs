@@ -1,5 +1,5 @@
-//! Implements [BSK-I0060] from [CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS].
-//! BSK-I0060: Active code-specific suppression.
+//! Implements [BSK-0060] from [CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS].
+//! BSK-0060: Active code-specific suppression.
 //!
 //! Reports a valid source directive that names one or more Basilisk rules and
 //! actively suppresses a diagnostic or changes its effective severity.
@@ -11,8 +11,8 @@ use crate::diagnostic::{info_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-I0060",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-I0060",
+    code: "BSK-0060",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0060",
 };
 
 /// Registry identity for active code-specific suppression auditing.

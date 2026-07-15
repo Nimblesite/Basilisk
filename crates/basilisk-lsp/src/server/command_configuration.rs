@@ -25,15 +25,26 @@ pub(super) async fn execute_disable_rule(
         .and_then(serde_json::Value::as_str)
         .unwrap_or("off");
     validate_rule(rule)?;
+    let parsed_severity = parse_severity(severity)?;
+    // Implements [CHKARCH-CONFIG-MODEL] via [CONFIGEDITOR-OPERATIONS]: pep
+    // rules are graded, never disabled — a disable request is an error.
+    if parsed_severity == basilisk_config::RuleSeverity::Disabled
+        && basilisk_checker::is_pep_rule(rule)
+    {
+        return Err(command_error(
+            "pepRuleDisable",
+            "pep rules are graded, never disabled",
+        ));
+    }
     let root = command_root(server, argument).await?;
     let update = basilisk_config::RuleConfigUpdate {
-        scope: basilisk_config::RuleConfigScope::Project,
-        rules: BTreeMap::from([(rule.to_owned(), Some(parse_severity(severity)?))]),
+        rules: BTreeMap::from([(rule.to_owned(), Some(parsed_severity))]),
+        rule_tags: BTreeMap::new(),
     };
     let document = crate::configuration_editor::apply_rule_updates(
         server,
         &root,
-        &[update],
+        &update,
         "legacyDisableRule",
     )
     .await?;

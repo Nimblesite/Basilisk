@@ -6,7 +6,7 @@ Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` d
 
 1. **`basilisk check` — the typing spec, always.** Every `pep`-tagged rule runs on every check, config or no config. Configuration can grade a PEP rule (`error`/`warning`/`info`) but can **never disable one**. A bare tree — exactly what the conformance scorer runs, no Basilisk config of any format, no "conformance mode" — is therefore every PEP rule at `error` ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
-2. **`basilisk analyze` — the opt-in layer, tabula rasa.** Every rule *not* tagged `pep` — require-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), explicit-`Any` nudge (`BSK-W0014`), suppression audit, uv dependency hygiene, stub suggestions — runs only when configuration resolves it to a non-disabled severity. No entry, no check. An empty or missing `[tool.basilisk]` table means `analyze` reports nothing.
+2. **`basilisk analyze` — the opt-in layer, tabula rasa.** Every rule *not* tagged `pep` — require-annotation (`BSK-0001`/`BSK-0002`/`BSK-0004`), require-`@override` (`BSK-0025`), redundant-annotation (`BSK-0050`), explicit-`Any` nudge (`BSK-0014`), suppression audit, uv dependency hygiene, stub suggestions — runs only when configuration resolves it to a non-disabled severity. No entry, no check. An empty or missing `[tool.basilisk]` table means `analyze` reports nothing.
 
 Configuration **grades**; commands **select**. The config file never chooses commands, and there are no presets, mutation intents, or rule-family booleans. Strict-by-default is delivered by the LSP's one-time two-line seed — `"basilisk" = "error"` — never by hidden defaults ([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
 
@@ -52,14 +52,14 @@ Behaviour is per-rule configuration over the two-command partition ([CHKARCH-COM
 
 #### No Modes — Configuration Decides Everything {#CHKARCH-STRICTNESS-ONLY}
 
-The require-annotation house rules (`BSK-E0001`/`BSK-E0002`) are analyze-scope ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)): `basilisk check` never fires them, and `basilisk analyze` fires them only when configuration resolves them to a non-disabled severity. With no config these snippets pass everywhere:
+The require-annotation house rules (`BSK-0001`/`BSK-0002`) are analyze-scope ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)): `basilisk check` never fires them, and `basilisk analyze` fires them only when configuration resolves them to a non-disabled severity. With no config these snippets pass everywhere:
 
 ```python
-# Passes check always; fires BSK-E0001 under analyze once configured
+# Passes check always; fires BSK-0001 under analyze once configured
 def greet(name):
     return f"Hello, {name}"
 
-# Passes check always; fires BSK-E0002 under analyze once configured
+# Passes check always; fires BSK-0002 under analyze once configured
 def greet(name: str):
     return f"Hello, {name}"
 
@@ -80,7 +80,7 @@ from untyped_lib import do_stuff
 result: Any = do_stuff()  # basilisk: allow[imports_unresolved] -- untyped dependency, tracking in #1234
 
 # ERROR (when the explicit-Any house rule is enabled): Bare Any without justification
-def process(data: Any) -> Any:  # BSK-W0014: Explicit Any requires reason comment
+def process(data: Any) -> Any:  # BSK-0014: Explicit Any requires reason comment
     pass
 ```
 
@@ -107,9 +107,9 @@ Severity resolves through [CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL): the
 nearest deciding table wins, a rule entry beats tag entries, and the strictest
 matching tag entry wins. PEP rules bottom out at `error` and can never be
 disabled; analyze rules bottom out at disabled — no entry, no check. There are
-no default, inherited, or "native" severity values, and the letter in a rule
-code (`E`/`W`/`I`) is naming, not behaviour. Inline directives can still
-override any running rule per line, block, or file
+no default, inherited, or "native" severity values, and rule codes carry no
+severity class ([CHKARCH-DIAG-CODES](#CHKARCH-DIAG-CODES)). Inline directives
+can still override any running rule per line, block, or file
 ([CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION)).
 
 A rule that resolves to disabled must emit nothing; the current
@@ -182,12 +182,12 @@ wins per rule ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)):
 "basilisk" = "error"            # every house rule on — strict by default
 
 [tool.basilisk.rules]
-"BSK-W0050" = "warning"         # ...except this one, graded down
+"BSK-0050" = "warning"         # ...except this one, graded down
 ```
 ```toml
 # legacy/pyproject.toml — decides, per rule, for everything under legacy/
 [tool.basilisk.rules]
-"BSK-E0001" = "disabled"        # house rules may be disabled
+"BSK-0001" = "disabled"        # house rules may be disabled
 "imports_unresolved" = "warning" # PEP rules may be graded — never disabled
 ```
 
@@ -239,10 +239,10 @@ produces at most one audit diagnostic at the directive's comment span:
 
 | Rule | Classification |
 |---|---|
-| `BSK-I0060` | A valid code-specific directive actively suppresses a diagnostic or changes its severity |
-| `BSK-W0061` | An active blanket directive applies without a Basilisk rule selector |
-| `BSK-W0062` | A syntactically valid directive matches nothing or changes no effective severity |
-| `BSK-E0063` | The directive is malformed, names an unknown rule, conflicts with another directive, or has an unmatched block boundary |
+| `BSK-0060` | A valid code-specific directive actively suppresses a diagnostic or changes its severity |
+| `BSK-0061` | An active blanket directive applies without a Basilisk rule selector |
+| `BSK-0062` | A syntactically valid directive matches nothing or changes no effective severity |
+| `BSK-0063` | The directive is malformed, names an unknown rule, conflicts with another directive, or has an unmatched block boundary |
 
 Classification precedence is malformed → unused → active blanket → active
 specific, so a directive never produces duplicate audit noise. The audit data
@@ -294,7 +294,7 @@ Basilisk's **target** is 100% conformance with the Python typing specification. 
 
 ### Type Inference Engine {#CHKARCH-INFERENCE}
 
-When the require-annotation rules (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`) have config entries, explicit annotations are required on public APIs; local variable types are always inferred:
+When the require-annotation rules (`BSK-0001`/`BSK-0002`/`BSK-0004`) have config entries, explicit annotations are required on public APIs; local variable types are always inferred:
 
 ```python
 def process(items: list[str]) -> int:
@@ -405,12 +405,7 @@ Every diagnostic must be:
 
 ### Error Code System {#CHKARCH-DIAG-CODES}
 
-Format: `BSK-Xnnnn` where X classifies the rule's intent in documentation:
-- `E` = Error-class (correctness)
-- `W` = Warning-class (hygiene)
-- `I` = Info-class (suggestion)
-
-The letter is naming only — it sets no runtime severity. Severity resolves through [CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL): PEP rules always run in `check` and bottom out at `error`; analyze rules run only when configuration decides them. Inline directives can still override per line, block, or file — see [CHKARCH-STRICTNESS-SEVERITY](#CHKARCH-STRICTNESS-SEVERITY) and [CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION).
+Format: `BSK-nnnn` for Basilisk-original rules; conformance-named PEP rules keep their `python/typing` snake_case names. A code carries **no severity class** — severity resolves through [CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL): PEP rules always run in `check` and bottom out at `error`; analyze rules run only when configuration decides them. Inline directives can still override per line, block, or file — see [CHKARCH-STRICTNESS-SEVERITY](#CHKARCH-STRICTNESS-SEVERITY) and [CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION).
 
 ### Generated rule index {#CHKARCH-DIAG-REFERENCE}
 
@@ -982,7 +977,8 @@ and fails config loading. Line-level `# type: ignore` and `exclude` remain the
 escape hatches ([CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION),
 [CHKARCH-CONFIG-EXCLUDE](#CHKARCH-CONFIG-EXCLUDE)).
 
-The `E`/`W`/`I` letters in rule codes are naming, not behaviour.
+Rule codes carry no severity class (`BSK-nnnn`, or a conformance snake_case
+name — [CHKARCH-DIAG-CODES](#CHKARCH-DIAG-CODES)); only entries carry severity.
 
 ### Configuration File {#CHKARCH-CONFIG-FILE}
 
@@ -1008,7 +1004,7 @@ exclude = ["**/migrations/**"]
 
 [tool.basilisk.rules]
 "imports_unresolved" = "warning"    # a PEP rule graded down — never disabled
-"BSK-W0050" = "error"               # one house rule promoted above its tag entry
+"BSK-0050" = "error"               # one house rule promoted above its tag entry
 
 [tool.basilisk.rule-tags]
 "basilisk" = "error"                # every house rule on — strict by default
@@ -1112,15 +1108,15 @@ rule configuration.
 Diagnostics follow the rustc format:
 
 ```
-error[BSK-E0001]: Missing parameter type annotation
+error[BSK-0001]: Missing parameter type annotation
   --> src/utils.py:14:5
    |
 14 | def process(data):
    |             ^^^^ parameter `data` has no type annotation
    |
    = help: Add a type annotation: `data: <type>`
-   = note: this project's configuration enables BSK-E0001, which requires explicit parameter types
-   = see: https://www.basilisk-python.dev/errors/BSK-E0001
+   = note: this project's configuration enables BSK-0001, which requires explicit parameter types
+   = see: https://www.basilisk-python.dev/errors/BSK-0001
 ```
 
 ### Quick Fixes {#CHKARCH-DIAGEXP-QUICKFIXES}
@@ -1129,8 +1125,8 @@ Every error has at least one associated code action:
 
 | Error | Quick Fix |
 |---|---|
-| BSK-E0001 (missing param type) | Insert `: <inferred_type>` |
-| BSK-E0002 (missing return type) | Insert `-> <inferred_type>` |
+| BSK-0001 (missing param type) | Insert `: <inferred_type>` |
+| BSK-0002 (missing return type) | Insert `-> <inferred_type>` |
 | enums_behaviors (mutation of immutable param) | Add `InOut` annotation |
 | dataclasses_order (implicit coercion) | Wrap in explicit conversion |
 
@@ -1288,9 +1284,9 @@ in exactly the configuration a user gets out of the box — the **default config
 is the pure PEP conformance set** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY))
 — with no Basilisk config of any format (the legacy `basilisk.json` is no longer
 read), no per-rule override, and no special scoring path. Basilisk's
-opinionated *house-style* rules (require-annotations `BSK-E0001`/`BSK-E0002`/`BSK-E0004`,
-require-`@override` `BSK-E0025`, redundant-annotation `BSK-W0050`, the explicit-`Any`
-nudge `BSK-W0014`) are **opt-in and off by default**, so they never run during scoring
+opinionated *house-style* rules (require-annotations `BSK-0001`/`BSK-0002`/`BSK-0004`,
+require-`@override` `BSK-0025`, redundant-annotation `BSK-0050`, the explicit-`Any`
+nudge `BSK-0014`) are **opt-in and off by default**, so they never run during scoring
 and can neither pad nor sink the number. The figure is the genuine out-of-the-box
 conformance result — currently <!--g:score-->100.0%<!--/g:score-->. Any shortfall would be a real
 checker bug to fix (a missing spec feature, or a false positive from an over-strict

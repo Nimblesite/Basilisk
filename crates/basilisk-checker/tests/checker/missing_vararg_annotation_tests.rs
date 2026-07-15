@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0004] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
-// Integration tests for BSK-E0004: Missing *args/**kwargs type annotation.
+//! Tests for [BSK-0004] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
+// Integration tests for BSK-0004: Missing *args/**kwargs type annotation.
 
 use super::common::*;
 
@@ -10,8 +10,8 @@ fn unannotated_args_fires() -> Result<(), Box<dyn std::error::Error>> {
         &annotation_rules_config(),
     )?;
     assert!(
-        codes(&diags).contains(&"BSK-E0004"),
-        "unannotated *args should fire BSK-E0004, got: {:?}",
+        codes(&diags).contains(&"BSK-0004"),
+        "unannotated *args should fire BSK-0004, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -24,8 +24,8 @@ fn unannotated_kwargs_fires() -> Result<(), Box<dyn std::error::Error>> {
         &annotation_rules_config(),
     )?;
     assert!(
-        codes(&diags).contains(&"BSK-E0004"),
-        "unannotated **kwargs should fire BSK-E0004, got: {:?}",
+        codes(&diags).contains(&"BSK-0004"),
+        "unannotated **kwargs should fire BSK-0004, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -38,8 +38,8 @@ fn annotated_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
         &annotation_rules_config(),
     )?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0004"),
-        "annotated *args should not fire BSK-E0004"
+        !codes(&diags).contains(&"BSK-0004"),
+        "annotated *args should not fire BSK-0004"
     );
     Ok(())
 }
@@ -51,8 +51,8 @@ fn annotated_kwargs_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
         &annotation_rules_config(),
     )?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0004"),
-        "annotated **kwargs should not fire BSK-E0004"
+        !codes(&diags).contains(&"BSK-0004"),
+        "annotated **kwargs should not fire BSK-0004"
     );
     Ok(())
 }
@@ -63,10 +63,10 @@ fn both_unannotated_fires_twice() -> Result<(), Box<dyn std::error::Error>> {
         "def foo(*args, **kwargs) -> None:\n    pass\n",
         &annotation_rules_config(),
     )?;
-    let count = diags.iter().filter(|d| d.code.code == "BSK-E0004").count();
+    let count = diags.iter().filter(|d| d.code.code == "BSK-0004").count();
     assert_eq!(
         count, 2,
-        "both unannotated *args and **kwargs should fire BSK-E0004"
+        "both unannotated *args and **kwargs should fire BSK-0004"
     );
     Ok(())
 }
@@ -78,8 +78,8 @@ fn stub_body_exempt() -> Result<(), Box<dyn std::error::Error>> {
         &annotation_rules_config(),
     )?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0004"),
-        "stub body should be exempt from BSK-E0004"
+        !codes(&diags).contains(&"BSK-0004"),
+        "stub body should be exempt from BSK-0004"
     );
     Ok(())
 }

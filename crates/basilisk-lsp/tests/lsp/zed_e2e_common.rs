@@ -116,7 +116,7 @@ impl ZedLspFixture {
         std::fs::create_dir_all(&workspace_root)?;
         std::fs::write(
             workspace_root.join("pyproject.toml"),
-            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"error\"\n\"BSK-0002\" = \"error\"\n",
         )?;
 
         Ok(Self {

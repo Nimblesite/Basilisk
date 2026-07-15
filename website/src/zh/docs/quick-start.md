@@ -115,8 +115,8 @@ Basilisk 自己的严格性规则（每个参数、返回类型、属性等都�
 ```toml
 # pyproject.toml
 [tool.basilisk.rules]
-"BSK-E0001" = "warning"  # 每个参数都需要类型注解
-"BSK-E0002" = "warning"  # 每个函数都需要返回类型
+"BSK-0001" = "warning"  # 每个参数都需要类型注解
+"BSK-0002" = "warning"  # 每个函数都需要返回类型
 ```
 
 在 `good.py` 中添加一个没有注解的函数：
@@ -127,7 +127,7 @@ def process(data):
 ```
 
 ```
-warning[BSK-E0001]: Missing parameter type annotation for `data`
+warning[BSK-0001]: Missing parameter type annotation for `data`
   --> good.py:15:13
    |
 15 | def process(data):
@@ -135,9 +135,9 @@ warning[BSK-E0001]: Missing parameter type annotation for `data`
    |
    = help: Add a type annotation: `data: <type>`
    = note: In Basilisk, all function parameters require explicit types
-   = see: https://www.basilisk-python.dev/errors/BSK-E0001
+   = see: https://www.basilisk-python.dev/errors/BSK-0001
 
-warning[BSK-E0002]: Missing return type annotation for function `process`
+warning[BSK-0002]: Missing return type annotation for function `process`
   --> good.py:15:5
    |
 15 | def process(data):
@@ -145,7 +145,7 @@ warning[BSK-E0002]: Missing return type annotation for function `process`
    |
    = help: Add a return type: `def process(...) -> <type>:`
    = note: In Basilisk, all functions require an explicit return type
-   = see: https://www.basilisk-python.dev/errors/BSK-E0002
+   = see: https://www.basilisk-python.dev/errors/BSK-0002
 
 Found 2 diagnostics (0 errors).
 ```
@@ -205,7 +205,7 @@ error[calls_argument_type]: Argument `name` of `greet` expects `str`…
 
 - **`error[rule_code]`** — 严重性加上触发的规则。PEP 类型规范规则使用描述性
   代码（`calls_argument_type`）；Basilisk 的可选严格性规则使用 `BSK-` 代码
-  （`BSK-E0001`）
+  （`BSK-0001`）
 - **`-->`** — 文件中的位置
 - **`^^^^`** — 导致诊断的确切标记
 - **`= help:`** — 修复它的具体更改

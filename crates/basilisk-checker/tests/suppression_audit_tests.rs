@@ -18,13 +18,12 @@ fn check(
     let parsed = basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned())
         .expect("source should parse");
     let resolved = basilisk_resolver::resolve(&parsed).expect("source should resolve");
-    let config = BasiliskConfig {
-        rules: rules
+    let config = BasiliskConfig::with_rule_entries(
+        rules
             .into_iter()
             .map(|(code, severity)| (code.to_owned(), severity))
             .collect::<HashMap<_, _>>(),
-        ..Default::default()
-    };
+    );
     basilisk_checker::check_with_config(&resolved, &config)
 }
 
@@ -41,7 +40,7 @@ fn suppression_auditing_is_off_by_default() {
     let diagnostics = check(source, []);
     assert!(!diagnostics.iter().any(|diagnostic| matches!(
         diagnostic.code.code,
-        "BSK-I0060" | "BSK-W0061" | "BSK-W0062" | "BSK-E0063"
+        "BSK-0060" | "BSK-0061" | "BSK-0062" | "BSK-0063"
     )));
 }
 
@@ -49,15 +48,15 @@ fn suppression_auditing_is_off_by_default() {
 fn each_audit_rule_honours_every_configured_severity() {
     let cases = [
         (
-            "BSK-I0060",
+            "BSK-0060",
             "x: int = \"bad\"  # type: ignore[assignment_compatibility]\n",
         ),
-        ("BSK-W0061", "x: int = \"bad\"  # type: ignore\n"),
+        ("BSK-0061", "x: int = \"bad\"  # type: ignore\n"),
         (
-            "BSK-W0062",
+            "BSK-0062",
             "x: int = 1  # type: ignore[assignment_compatibility]\n",
         ),
-        ("BSK-E0063", "x: int = \"bad\"  # type: ignore[BSK-E9999]\n"),
+        ("BSK-0063", "x: int = \"bad\"  # type: ignore[BSK-9999]\n"),
     ];
     let severities = [
         (RuleSeverity::Error, Some(Severity::Error)),
@@ -89,8 +88,8 @@ fn each_audit_rule_honours_every_configured_severity() {
 #[test]
 fn a_blanket_directive_cannot_suppress_its_own_audit_diagnostic() {
     let source = "x: int = \"bad\"  # type: ignore\n";
-    let diagnostics = check(source, [("BSK-W0061", RuleSeverity::Error)]);
-    let audit = diagnostics_for(&diagnostics, "BSK-W0061");
+    let diagnostics = check(source, [("BSK-0061", RuleSeverity::Error)]);
+    let audit = diagnostics_for(&diagnostics, "BSK-0061");
     assert_eq!(audit.len(), 1);
     assert_eq!(audit[0].severity, Severity::Error);
     assert!(diagnostics_for(&diagnostics, "assignment_compatibility").is_empty());
@@ -99,8 +98,8 @@ fn a_blanket_directive_cannot_suppress_its_own_audit_diagnostic() {
 #[test]
 fn line_block_and_file_directives_retain_auditable_spans_and_usage() {
     let line = "x: int = \"bad\"  # type: ignore[assignment_compatibility]\n";
-    let line_diagnostics = check(line, [("BSK-I0060", RuleSeverity::Info)]);
-    let line_audit = diagnostics_for(&line_diagnostics, "BSK-I0060");
+    let line_diagnostics = check(line, [("BSK-0060", RuleSeverity::Info)]);
+    let line_audit = diagnostics_for(&line_diagnostics, "BSK-0060");
     assert_eq!(line_audit.len(), 1);
     assert!(line_audit[0]
         .span
@@ -108,8 +107,8 @@ fn line_block_and_file_directives_retain_auditable_spans_and_usage() {
         .is_some_and(|text| text.starts_with("# type:")));
 
     let block = "# type: disabled[assignment_compatibility]\nx: int = \"bad\"\n# type: end-disabled[assignment_compatibility]\n";
-    let block_diagnostics = check(block, [("BSK-I0060", RuleSeverity::Info)]);
-    let block_audit = diagnostics_for(&block_diagnostics, "BSK-I0060");
+    let block_diagnostics = check(block, [("BSK-0060", RuleSeverity::Info)]);
+    let block_audit = diagnostics_for(&block_diagnostics, "BSK-0060");
     assert_eq!(block_audit.len(), 2, "both paired boundaries retain usage");
     assert!(block_audit.iter().all(|diagnostic| diagnostic
         .span
@@ -117,8 +116,8 @@ fn line_block_and_file_directives_retain_auditable_spans_and_usage() {
         .is_some_and(|text| text.starts_with("# type:"))));
 
     let file = "# basilisk: file-disabled[assignment_compatibility]\nx: int = \"bad\"\n";
-    let file_diagnostics = check(file, [("BSK-I0060", RuleSeverity::Info)]);
-    let file_audit = diagnostics_for(&file_diagnostics, "BSK-I0060");
+    let file_diagnostics = check(file, [("BSK-0060", RuleSeverity::Info)]);
+    let file_audit = diagnostics_for(&file_diagnostics, "BSK-0060");
     assert_eq!(file_audit.len(), 1);
     assert_eq!(
         file_audit[0].span.slice_source(file),
@@ -131,16 +130,16 @@ fn unmatched_and_unclosed_block_boundaries_are_malformed() {
     let unmatched = "# type: end-disabled[assignment_compatibility]\n";
     assert_eq!(
         diagnostics_for(
-            &check(unmatched, [("BSK-E0063", RuleSeverity::Error)]),
-            "BSK-E0063"
+            &check(unmatched, [("BSK-0063", RuleSeverity::Error)]),
+            "BSK-0063"
         )
         .len(),
         1
     );
 
     let unclosed = "# type: disabled[assignment_compatibility]\nx: int = \"bad\"\n";
-    let diagnostics = check(unclosed, [("BSK-E0063", RuleSeverity::Error)]);
-    assert_eq!(diagnostics_for(&diagnostics, "BSK-E0063").len(), 1);
+    let diagnostics = check(unclosed, [("BSK-0063", RuleSeverity::Error)]);
+    assert_eq!(diagnostics_for(&diagnostics, "BSK-0063").len(), 1);
     let assignment = diagnostics_for(&diagnostics, "assignment_compatibility");
     assert_eq!(assignment.len(), 1, "an unclosed block must be inert");
     assert_eq!(assignment[0].severity, Severity::Error);
@@ -162,9 +161,9 @@ fn conflicting_line_directives_are_reported_and_all_inert() {
             3,
         ),
     ] {
-        let diagnostics = check(source, [("BSK-E0063", RuleSeverity::Error)]);
+        let diagnostics = check(source, [("BSK-0063", RuleSeverity::Error)]);
         assert_eq!(
-            diagnostics_for(&diagnostics, "BSK-E0063").len(),
+            diagnostics_for(&diagnostics, "BSK-0063").len(),
             participants,
             "every conflict participant must be reported"
         );
@@ -177,15 +176,15 @@ fn conflicting_line_directives_are_reported_and_all_inert() {
 #[test]
 fn valid_line_and_closed_block_directives_still_apply() {
     let line = "x: int = \"bad\"  # type: warning[assignment_compatibility]\n";
-    let line_diagnostics = check(line, [("BSK-E0063", RuleSeverity::Error)]);
-    assert!(diagnostics_for(&line_diagnostics, "BSK-E0063").is_empty());
+    let line_diagnostics = check(line, [("BSK-0063", RuleSeverity::Error)]);
+    assert!(diagnostics_for(&line_diagnostics, "BSK-0063").is_empty());
     let assignment = diagnostics_for(&line_diagnostics, "assignment_compatibility");
     assert_eq!(assignment.len(), 1);
     assert_eq!(assignment[0].severity, Severity::Warning);
 
     let block = "# type: disabled[assignment_compatibility]\nx: int = \"bad\"\n# type: end-disabled[assignment_compatibility]\n";
-    let block_diagnostics = check(block, [("BSK-E0063", RuleSeverity::Error)]);
-    assert!(diagnostics_for(&block_diagnostics, "BSK-E0063").is_empty());
+    let block_diagnostics = check(block, [("BSK-0063", RuleSeverity::Error)]);
+    assert!(diagnostics_for(&block_diagnostics, "BSK-0063").is_empty());
     assert!(diagnostics_for(&block_diagnostics, "assignment_compatibility").is_empty());
 }
 
@@ -203,9 +202,9 @@ fn malformed_line_directives_are_reported_but_never_applied() {
         "x: int = \"bad\"  # type: ignore[assignment_compatibility\n",
         "x: int = \"bad\"  # type: ignore[]\n",
     ] {
-        let diagnostics = check(source, [("BSK-E0063", RuleSeverity::Error)]);
+        let diagnostics = check(source, [("BSK-0063", RuleSeverity::Error)]);
         assert_eq!(
-            diagnostics_for(&diagnostics, "BSK-E0063").len(),
+            diagnostics_for(&diagnostics, "BSK-0063").len(),
             1,
             "the malformed suppression must remain auditable"
         );
@@ -234,7 +233,7 @@ fn ignore_with_trailing_text_blanket_suppresses_and_is_auditable() {
         "x: int = \"bad\"  # type: ignore # other comment\n",
         "x: int = \"bad\"  # type: ignore assignment_compatibility\n",
     ] {
-        let diagnostics = check(source, [("BSK-E0063", RuleSeverity::Error)]);
+        let diagnostics = check(source, [("BSK-0063", RuleSeverity::Error)]);
         assert!(
             diagnostics_for(&diagnostics, "assignment_compatibility").is_empty(),
             "blanket ignore with trailing text must suppress the diagnostic: {source}"
@@ -254,16 +253,16 @@ def render(value):
     let diagnostics = check(
         source,
         [
-            ("BSK-I0060", RuleSeverity::Info),
-            ("BSK-W0061", RuleSeverity::Warning),
-            ("BSK-W0062", RuleSeverity::Warning),
-            ("BSK-E0063", RuleSeverity::Error),
+            ("BSK-0060", RuleSeverity::Info),
+            ("BSK-0061", RuleSeverity::Warning),
+            ("BSK-0062", RuleSeverity::Warning),
+            ("BSK-0063", RuleSeverity::Error),
         ],
     );
     assert!(
         diagnostics.iter().all(|diagnostic| !matches!(
             diagnostic.code.code,
-            "BSK-I0060" | "BSK-W0061" | "BSK-W0062" | "BSK-E0063"
+            "BSK-0060" | "BSK-0061" | "BSK-0062" | "BSK-0063"
         )),
         "standard variable and function type comments must not enter the suppression ledger"
     );
@@ -276,9 +275,9 @@ fn file_directives_after_code_are_malformed_and_never_applied() {
         "marker = 1\n# basilisk: file-disabled[assignment_compatibility]\nx: int = \"bad\"\n",
         "marker = 1\n# type: ignore\nx: int = \"bad\"\n",
     ] {
-        let diagnostics = check(source, [("BSK-E0063", RuleSeverity::Error)]);
+        let diagnostics = check(source, [("BSK-0063", RuleSeverity::Error)]);
         assert_eq!(
-            diagnostics_for(&diagnostics, "BSK-E0063").len(),
+            diagnostics_for(&diagnostics, "BSK-0063").len(),
             1,
             "a file directive outside the header must be reported"
         );

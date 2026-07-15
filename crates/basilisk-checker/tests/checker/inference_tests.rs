@@ -74,22 +74,16 @@ def process(flag: bool):
 #[test]
 fn test_self_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config("def method(self): pass\n", &annotation_rules_config())?;
-    let e0001: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
-        .collect();
-    assert!(e0001.is_empty(), "self parameter should not fire BSK-E0001");
+    let e0001: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0001").collect();
+    assert!(e0001.is_empty(), "self parameter should not fire BSK-0001");
     Ok(())
 }
 
 #[test]
 fn test_cls_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config("def method(cls): pass\n", &annotation_rules_config())?;
-    let e0001: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
-        .collect();
-    assert!(e0001.is_empty(), "cls parameter should not fire BSK-E0001");
+    let e0001: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0001").collect();
+    assert!(e0001.is_empty(), "cls parameter should not fire BSK-0001");
     Ok(())
 }
 
@@ -97,13 +91,10 @@ fn test_cls_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_unannotated_param_fires_e0001() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config("def process(data): pass\n", &annotation_rules_config())?;
-    let e0001: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
-        .collect();
+    let e0001: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0001").collect();
     assert!(
         !e0001.is_empty(),
-        "unannotated parameter should fire BSK-E0001"
+        "unannotated parameter should fire BSK-0001"
     );
     Ok(())
 }
@@ -111,13 +102,10 @@ fn test_unannotated_param_fires_e0001() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn test_missing_return_fires_e0002() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config("def process(data: str): pass\n", &annotation_rules_config())?;
-    let e0002: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0002")
-        .collect();
+    let e0002: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0002").collect();
     assert!(
         !e0002.is_empty(),
-        "missing return annotation should fire BSK-E0002"
+        "missing return annotation should fire BSK-0002"
     );
     Ok(())
 }
@@ -251,15 +239,12 @@ STATUS = "active"
 reveal_type(STATUS)  # should be Literal["active"]
 "#;
     let diags = run_with_config(src, &annotation_rules_config())?;
-    // BSK-E0003 fires for unannotated module vars once the annotation house rules
+    // BSK-0003 fires for unannotated module vars once the annotation house rules
     // are enabled in config — exclude it here; this test is about literal inference.
-    let non_e0003: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code != "BSK-E0003")
-        .collect();
+    let non_e0003: Vec<_> = diags.iter().filter(|d| d.code.code != "BSK-0003").collect();
     assert!(
         non_e0003.is_empty(),
-        "module-level literal inference should be clean (excluding BSK-E0003), got: {:?}",
+        "module-level literal inference should be clean (excluding BSK-0003), got: {:?}",
         non_e0003.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
     Ok(())
@@ -283,13 +268,10 @@ def f() -> None:
 #[test]
 fn test_annotated_var_redundant() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config("x: int = 42\n", &annotation_rules_config())?;
-    let w0050: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-W0050")
-        .collect();
+    let w0050: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0050").collect();
     assert!(
         !w0050.is_empty(),
-        "redundant annotation should fire BSK-W0050"
+        "redundant annotation should fire BSK-0050"
     );
     Ok(())
 }
@@ -317,14 +299,11 @@ z: bool = True
 w: bytes = b"data"
 "#;
     let diags = run_with_config(src, &annotation_rules_config())?;
-    let w0050: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-W0050")
-        .collect();
+    let w0050: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0050").collect();
     assert_eq!(
         w0050.len(),
         4,
-        "all redundant annotations should fire BSK-W0050"
+        "all redundant annotations should fire BSK-0050"
     );
     Ok(())
 }
@@ -337,13 +316,10 @@ y: list[int | str] = [1]
 z: tuple[float, float] = (0, 0)
 ";
     let diags = run_with_config(src, &annotation_rules_config())?;
-    let w0050: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-W0050")
-        .collect();
+    let w0050: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0050").collect();
     assert!(
         w0050.is_empty(),
-        "widening annotations should not fire BSK-W0050"
+        "widening annotations should not fire BSK-0050"
     );
     Ok(())
 }
@@ -379,7 +355,7 @@ z: float = 3.14
         .collect();
 
     // This test should pass - there should be no E0014 errors
-    // BSK-W0050 warnings are expected and should not cause test failure
+    // BSK-0050 warnings are expected and should not cause test failure
     assert!(e0014.is_empty(), "compatible types should not fire E0014");
     Ok(())
 }
@@ -392,15 +368,12 @@ y: dict[str, int] = {"a": 1, "b": 2}
 z: set[int] = {1, 2, 3}
 "#;
     let diags = run_with_config(src, &annotation_rules_config())?;
-    let w0050: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-W0050")
-        .collect();
+    let w0050: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0050").collect();
     // Collection inference is working but types don't match exactly due to internal type differences
-    // This is expected behavior - BSK-W0050 only fires for exact type matches
+    // This is expected behavior - BSK-0050 only fires for exact type matches
     assert!(
         w0050.is_empty(),
-        "collection types with internal differences should not fire BSK-W0050"
+        "collection types with internal differences should not fire BSK-0050"
     );
     Ok(())
 }
@@ -413,13 +386,10 @@ y: dict[str, int | float] = {"a": 1, "b": 3.14}
 z: set[int | bool] = {1, True}
 "#;
     let diags = run_with_config(src, &annotation_rules_config())?;
-    let w0050: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-W0050")
-        .collect();
+    let w0050: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0050").collect();
     assert!(
         w0050.is_empty(),
-        "heterogeneous collections should not fire BSK-W0050"
+        "heterogeneous collections should not fire BSK-0050"
     );
     Ok(())
 }
@@ -431,13 +401,10 @@ def f(x: int) -> None:
     pass
 ";
     let diags = run_with_config(src, &annotation_rules_config())?;
-    let w0050: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-W0050")
-        .collect();
+    let w0050: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0050").collect();
     assert!(
         w0050.is_empty(),
-        "function parameters should be exempt from BSK-W0050"
+        "function parameters should be exempt from BSK-0050"
     );
     Ok(())
 }
@@ -449,13 +416,10 @@ def f() -> int:
     return 42
 ";
     let diags = run_with_config(src, &annotation_rules_config())?;
-    let w0050: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-W0050")
-        .collect();
+    let w0050: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0050").collect();
     assert!(
         w0050.is_empty(),
-        "return types should be exempt from BSK-W0050"
+        "return types should be exempt from BSK-0050"
     );
     Ok(())
 }

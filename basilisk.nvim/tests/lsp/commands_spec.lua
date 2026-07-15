@@ -172,7 +172,7 @@ describe("basilisk commands with real LSP", function()
     basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
     require("basilisk.commands").register(basilisk.config)
 
-    local ok = pcall(vim.cmd, "BasiliskDisableRule BSK-E0001")
+    local ok = pcall(vim.cmd, "BasiliskDisableRule BSK-0001")
     assert.is_true(ok, ":BasiliskDisableRule should not error")
 
     -- Verify pyproject.toml was modified.

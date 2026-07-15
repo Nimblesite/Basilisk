@@ -2,11 +2,10 @@
 /** Untrusted webview messages accepted by the configuration editor host. */
 
 import type {
-  ConfigurationMutation,
-  MutationScope,
+  EditorMutation,
   RuleOccurrencesRequest,
   RuleSelector,
-  RuleSetting,
+  RuleSeverity,
 } from "./configuration-editor-model";
 
 const MAX_MUTATIONS = 512;
@@ -18,10 +17,9 @@ const MAX_OCCURRENCES = 500;
 export type ConfigurationEditorIntent =
   | { readonly type: "ready" }
   | { readonly type: "refresh" }
-  | { readonly type: "fixSafe" }
   | { readonly type: "openRaw" }
   | { readonly type: "apply" }
-  | { readonly type: "preview"; readonly mutations: ConfigurationMutation[] }
+  | { readonly type: "preview"; readonly mutations: EditorMutation[] }
   | { readonly type: "occurrences"; readonly request: Omit<RuleOccurrencesRequest, "rootUri"> }
   | { readonly type: "openDocs"; readonly uri: string }
   | { readonly type: "openOccurrence"; readonly uri: string; readonly line: number; readonly character: number };
@@ -42,13 +40,11 @@ function stringList(value: unknown, maximum: number): string[] | undefined {
   return strings.every((item): item is string => item !== undefined) ? strings : undefined;
 }
 
+/** Read-side occurrence selectors only — mutations never take selectors ([CONFIGEDITOR-MODEL]). */
 function decodeSelector(value: unknown): RuleSelector | undefined {
   if (!isRecord(value) || typeof value.kind !== "string") { return undefined; }
   switch (value.kind) {
     case "All": return { kind: "All" };
-    case "CurrentViolations": return { kind: "CurrentViolations" };
-    case "SafeFixable": return { kind: "SafeFixable" };
-    case "WithoutSafeFix": return { kind: "WithoutSafeFix" };
     case "Codes": {
       const codes = stringList(value.codes, MAX_CODES);
       return codes === undefined ? undefined : { kind: "Codes", codes };
@@ -63,11 +59,9 @@ function decodeSelector(value: unknown): RuleSelector | undefined {
   }
 }
 
-function decodeSetting(value: unknown): RuleSetting | undefined {
+function decodeSeverity(value: unknown): RuleSeverity | undefined {
   if (!isRecord(value) || typeof value.kind !== "string") { return undefined; }
   switch (value.kind) {
-    case "Inherit": return { kind: "Inherit" };
-    case "Native": return { kind: "Native" };
     case "Error": return { kind: "Error" };
     case "Warning": return { kind: "Warning" };
     case "Info": return { kind: "Info" };
@@ -76,22 +70,37 @@ function decodeSetting(value: unknown): RuleSetting | undefined {
   }
 }
 
-function decodeScope(value: unknown): MutationScope | undefined {
+/**
+ * The only four things the editor can request: set or remove one rule entry
+ * or one tag entry ([CHKARCH-CONFIG-MODEL], [CONFIGEDITOR-OPERATIONS]).
+ */
+function decodeMutation(value: unknown): EditorMutation | undefined {
   if (!isRecord(value) || typeof value.kind !== "string") { return undefined; }
-  if (value.kind === "Project") { return { kind: "Project" }; }
-  if (value.kind !== "Path") { return undefined; }
-  const pattern = boundedString(value.pattern);
-  return pattern === undefined ? undefined : { kind: "Path", pattern };
-}
-
-function decodeMutation(value: unknown): ConfigurationMutation | undefined {
-  if (!isRecord(value)) { return undefined; }
-  const selector = decodeSelector(value.selector);
-  const setting = decodeSetting(value.setting);
-  const scope = decodeScope(value.scope);
-  return selector === undefined || setting === undefined || scope === undefined
-    ? undefined
-    : { selector, setting, scope };
+  switch (value.kind) {
+    case "SetRule": {
+      const code = boundedString(value.code);
+      const severity = decodeSeverity(value.severity);
+      return code === undefined || severity === undefined
+        ? undefined
+        : { kind: "SetRule", code, severity };
+    }
+    case "RemoveRule": {
+      const code = boundedString(value.code);
+      return code === undefined ? undefined : { kind: "RemoveRule", code };
+    }
+    case "SetTag": {
+      const tag = boundedString(value.tag);
+      const severity = decodeSeverity(value.severity);
+      return tag === undefined || severity === undefined
+        ? undefined
+        : { kind: "SetTag", tag, severity };
+    }
+    case "RemoveTag": {
+      const tag = boundedString(value.tag);
+      return tag === undefined ? undefined : { kind: "RemoveTag", tag };
+    }
+    default: return undefined;
+  }
 }
 
 function decodePreview(value: Record<string, unknown>): ConfigurationEditorIntent | undefined {
@@ -99,7 +108,7 @@ function decodePreview(value: Record<string, unknown>): ConfigurationEditorInten
     return undefined;
   }
   const mutations = value.mutations.map(decodeMutation);
-  if (!mutations.every((mutation): mutation is ConfigurationMutation => mutation !== undefined)) {
+  if (!mutations.every((mutation): mutation is EditorMutation => mutation !== undefined)) {
     return undefined;
   }
   return { type: "preview", mutations };
@@ -137,7 +146,6 @@ export function decodeConfigurationEditorIntent(value: unknown): ConfigurationEd
   switch (value.type) {
     case "ready": return { type: "ready" };
     case "refresh": return { type: "refresh" };
-    case "fixSafe": return { type: "fixSafe" };
     case "openRaw": return { type: "openRaw" };
     case "apply": return { type: "apply" };
     case "preview": return decodePreview(value);

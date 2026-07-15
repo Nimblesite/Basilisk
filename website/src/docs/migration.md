@@ -53,10 +53,10 @@ severities (or apply a configuration-editor preset, which writes these entries):
 
 ```toml
 [tool.basilisk.rules]
-"BSK-E0001" = "error"
-"BSK-E0025" = "error"
-"BSK-W0011" = "warning"
-"BSK-E0152" = "error"
+"BSK-0001" = "error"
+"BSK-0025" = "error"
+"BSK-0011" = "warning"
+"BSK-0152" = "error"
 ```
 
 Rules are organised by their live
@@ -129,8 +129,8 @@ value = legacy_api()  # type: warning[calls_argument_type]
 ```
 
 The `suppressions` tag contains opt-in diagnostics for active specific
-(`BSK-I0060`), active blanket (`BSK-W0061`), unused (`BSK-W0062`), and malformed
-(`BSK-E0063`) directives. They emit nothing by default; configure each rule at
+(`BSK-0060`), active blanket (`BSK-0061`), unused (`BSK-0062`), and malformed
+(`BSK-0063`) directives. They emit nothing by default; configure each rule at
 error, warning, info, or disabled to navigate ignores workspace-wide.
 
 ## From Pyright

@@ -14,7 +14,7 @@ from typing import Any, overload
 
 # ── E0003: empty dict hiding inside a function default ───────────────────────
 # (Basilisk checks module-level assignments)
-_cache = {}  # BSK-E0003: type of values unknown
+_cache = {}  # BSK-0003: type of values unknown
 
 
 # ── E0014: bool is a subtype of int in Python, but Basilisk still flags
@@ -68,11 +68,11 @@ def sum_with_retry(values: list[int], retries: int) -> int:
 # ── E0021: unannotated overload params look identical to the checker ─────────
 # (differs only in return type — unannotated param means both have same signature)
 @overload
-def load(path) -> bytes: ...  # BSK-E0001: path untyped
+def load(path) -> bytes: ...  # BSK-0001: path untyped
 
 
 @overload
-def load(path) -> str: ...  # BSK-E0001 + overloads_consistency: duplicate
+def load(path) -> str: ...  # BSK-0001 + overloads_consistency: duplicate
 
 
 def load(path: str) -> bytes | str:
@@ -82,11 +82,11 @@ def load(path: str) -> bytes | str:
 
 # ── E0021: unannotated + Any together — Any is explicit, param is bare ────────
 @overload
-def wrap(value) -> list[Any]: ...  # BSK-E0001: value untyped
+def wrap(value) -> list[Any]: ...  # BSK-0001: value untyped
 
 
 @overload
-def wrap(value) -> list[Any]: ...  # BSK-E0001 + overloads_consistency: duplicate
+def wrap(value) -> list[Any]: ...  # BSK-0001 + overloads_consistency: duplicate
 
 
 def wrap(value: Any) -> list[Any]:  # returns_compatibility: Any without justification
@@ -117,13 +117,13 @@ class Serializable:
 class Timestamped:
     def to_json(
         self,
-    ) -> str:  # BSK-E0025: no @override (inherits from Serializable via MRO)
+    ) -> str:  # BSK-0025: no @override (inherits from Serializable via MRO)
         return '{"ts": 0}'
 
 
 # ── Combination: untyped + Any return + unhashable key ───────────────────────
-def batch_lookup(keys, db):  # BSK-E0001: keys, db untyped
+def batch_lookup(keys, db):  # BSK-0001: keys, db untyped
     results = {}
     for key in keys:
         results[key] = db.get(key)
-    return results  # BSK-E0002: no return type
+    return results  # BSK-0002: no return type

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0003] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
-//! BSK-E0003: Missing variable type annotation.
+//! Implements [BSK-0003] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
+//! BSK-0003: Missing variable type annotation.
 //!
 //! Fires when a module-level variable has no type annotation.  This house rule
 //! is off by default — the default configuration is pure PEP conformance — and
@@ -14,11 +14,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0003",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0003",
+    code: "BSK-0003",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0003",
 };
 
-/// Emits BSK-E0003 for every unannotated module-level variable.
+/// Emits BSK-0003 for every unannotated module-level variable.
 pub(crate) struct MissingVariableType;
 
 impl Rule for MissingVariableType {

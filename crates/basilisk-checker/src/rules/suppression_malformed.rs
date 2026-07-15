@@ -1,5 +1,5 @@
-//! Implements [BSK-E0063] from [CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS].
-//! BSK-E0063: Malformed suppression directive.
+//! Implements [BSK-0063] from [CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS].
+//! BSK-0063: Malformed suppression directive.
 //!
 //! Reports malformed directives, unknown Basilisk rule codes, conflicting
 //! directives, and unmatched block boundaries.
@@ -11,8 +11,8 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0063",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0063",
+    code: "BSK-0063",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0063",
 };
 
 /// Registry identity for malformed suppression auditing.

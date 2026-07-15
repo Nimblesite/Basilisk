@@ -224,7 +224,7 @@ y: int = 0  # Correct
 
 ---
 
-### BSK-E0025 — Missing `@override` decorator
+### BSK-0025 — Missing `@override` decorator
 
 A method that overrides a parent class method is missing the `@override` decorator (PEP 698).
 
@@ -240,7 +240,7 @@ class Child(Base):
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0025 for a missing @override decorator](/assets/images/e0025.png)
+![basilisk check output reporting BSK-0025 for a missing @override decorator](/assets/images/e0025.png)
 
 ---
 

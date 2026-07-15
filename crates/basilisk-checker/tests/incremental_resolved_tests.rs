@@ -34,10 +34,10 @@ use import_support::{make_search_paths, make_tmp_dir};
 const PROBE: &str = "zzz_unique_import_probe";
 
 fn e0001_config() -> BasiliskConfig {
-    BasiliskConfig {
-        rules: HashMap::from([("BSK-E0001".to_owned(), basilisk_config::RuleSeverity::Error)]),
-        ..BasiliskConfig::default()
-    }
+    BasiliskConfig::with_rule_entries(HashMap::from([(
+        "BSK-0001".to_owned(),
+        basilisk_config::RuleSeverity::Error,
+    )]))
 }
 
 fn default_config(db: &EventDb) -> ConfigInput {
@@ -191,8 +191,8 @@ fn editing_config_invalidates_resolved_query() {
         "editing the config input must re-execute the resolved query exactly once"
     );
     assert!(
-        after.iter().any(|d| d.code.code == "BSK-E0001"),
-        "an explicit severity must surface BSK-E0001 in the resolved query"
+        after.iter().any(|d| d.code.code == "BSK-0001"),
+        "an explicit severity must surface BSK-0001 in the resolved query"
     );
 }
 

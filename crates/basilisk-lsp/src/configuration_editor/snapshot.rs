@@ -1,73 +1,73 @@
 //! Snapshot, impact, and occurrence projections over one workspace root.
+//!
+//! Implements [CONFIGEDITOR-OPERATIONS] / [CONFIGEDITOR-MODEL]: a snapshot is
+//! the catalog with per-rule entries, effective severities, diagnostic
+//! counts, and tag states with their entries — nothing else.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
-use basilisk_config::{adoption_rule_overrides, BasiliskConfig, ConfigDocument, ConfigFormat};
+use basilisk_config::{BasiliskConfig, ConfigDocument, RuleTables};
 use tower_lsp::lsp_types::Url;
 
-use super::catalog::{
-    config_to_wire, descriptors, is_fixable, is_safe_fixable, severities, tag_kind, wire_severity,
-};
+use super::catalog::{descriptors, effective_severity, tag_kind, wire_severity};
 use super::model::{
-    ConfigurationFormat, ConfigurationMutation, ConfigurationPreset, ConfigurationSnapshot,
-    ConfigurationSource, DebtSummary, FixSafety, MutationScope, PathOverrideState, PathRuleSetting,
-    RuleDescriptor, RuleOccurrence, RuleOccurrencesResponse, RuleSelector, RuleSetting,
-    RuleSeverity, RuleState, SourcePosition, SourceRange, TagState,
+    ConfigurationSnapshot, RuleOccurrence, RuleOccurrencesResponse, RuleState, SourcePosition,
+    SourceRange, TagState,
 };
 use crate::workspace::WorkspaceIndex;
 
-/// Per-root diagnostic inventory used by snapshots and selectors.
+/// Per-root diagnostic inventory used by snapshots and previews.
 pub(super) struct Inventory {
     /// Occurrence count by code.
     pub counts: HashMap<String, usize>,
-    /// Distinct affected file count by code.
-    pub files: HashMap<String, usize>,
-    /// Total emitted diagnostics.
-    pub total: usize,
     /// Error diagnostics.
     pub errors: usize,
     /// Warning diagnostics.
     pub warnings: usize,
+    /// Info diagnostics.
+    pub infos: usize,
+}
+
+impl Inventory {
+    fn new() -> Self {
+        Self {
+            counts: HashMap::new(),
+            errors: 0,
+            warnings: 0,
+            infos: 0,
+        }
+    }
+
+    fn record(&mut self, code: &str, severity: basilisk_checker::Severity) {
+        *self.counts.entry(code.to_owned()).or_insert(0) += 1;
+        match severity {
+            basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation => {
+                self.errors += 1;
+            }
+            basilisk_checker::Severity::Warning => self.warnings += 1,
+            basilisk_checker::Severity::Info => self.infos += 1,
+        }
+    }
+
+    /// Total emitted diagnostics — the sum of the three severity partitions.
+    #[cfg(test)]
+    pub(super) fn total(&self) -> usize {
+        self.errors + self.warnings + self.infos
+    }
 }
 
 /// Build current counts from the indexed diagnostics owned by `root`.
 pub(super) fn inventory(index: &WorkspaceIndex, root: &Path) -> Inventory {
-    let mut counts = HashMap::new();
-    let mut files_by_code: HashMap<String, HashSet<std::path::PathBuf>> = HashMap::new();
-    let mut errors = 0;
-    let mut warnings = 0;
+    let mut inventory = Inventory::new();
     for entry in index.files.iter().filter(|entry| {
         entry.key().starts_with(root) && index.configuration_path_is_in_scope(entry.key())
     }) {
         for diagnostic in &entry.diagnostics {
-            let code = diagnostic.code.code.to_owned();
-            *counts.entry(code.clone()).or_insert(0) += 1;
-            let _ = files_by_code
-                .entry(code)
-                .or_default()
-                .insert(entry.key().clone());
-            match diagnostic.severity {
-                basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation => {
-                    errors += 1;
-                }
-                basilisk_checker::Severity::Warning => warnings += 1,
-                basilisk_checker::Severity::Info => {}
-            }
+            inventory.record(diagnostic.code.code, diagnostic.severity);
         }
     }
-    let total = counts.values().sum();
-    let files = files_by_code
-        .into_iter()
-        .map(|(code, paths)| (code, paths.len()))
-        .collect();
-    Inventory {
-        counts,
-        files,
-        total,
-        errors,
-        warnings,
-    }
+    inventory
 }
 
 /// Analyse current indexed modules using a hypothetical root config.
@@ -76,45 +76,18 @@ pub(super) fn hypothetical_inventory(
     root: &Path,
     config: &BasiliskConfig,
 ) -> Inventory {
-    let mut counts = HashMap::new();
-    let mut files_by_code: HashMap<String, HashSet<std::path::PathBuf>> = HashMap::new();
-    let mut errors = 0;
-    let mut warnings = 0;
+    let mut inventory = Inventory::new();
     for entry in index.files.iter().filter(|entry| {
         entry.key().starts_with(root) && index.configuration_path_is_in_scope(entry.key())
     }) {
         let Some(resolved) = &entry.resolved else {
             continue;
         };
-        let diagnostics = basilisk_checker::check_with_config(resolved, config);
-        for diagnostic in diagnostics {
-            let code = diagnostic.code.code.to_owned();
-            *counts.entry(code.clone()).or_insert(0) += 1;
-            let _ = files_by_code
-                .entry(code)
-                .or_default()
-                .insert(entry.key().clone());
-            match diagnostic.severity {
-                basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation => {
-                    errors += 1;
-                }
-                basilisk_checker::Severity::Warning => warnings += 1,
-                basilisk_checker::Severity::Info => {}
-            }
+        for diagnostic in basilisk_checker::check_with_config(resolved, config) {
+            inventory.record(diagnostic.code.code, diagnostic.severity);
         }
     }
-    let total = counts.values().sum();
-    let files = files_by_code
-        .into_iter()
-        .map(|(code, paths)| (code, paths.len()))
-        .collect();
-    Inventory {
-        counts,
-        files,
-        total,
-        errors,
-        warnings,
-    }
+    inventory
 }
 
 /// Build a complete wire snapshot from a validated active document.
@@ -125,164 +98,33 @@ pub(super) fn build_snapshot(
 ) -> ConfigurationSnapshot {
     let catalog = descriptors();
     let inventory = inventory(index, root);
-    let adoption_entries = adoption_rule_overrides(document);
-    let adoption: Vec<(String, String)> = adoption_entries
-        .clone()
-        .into_iter()
-        .flat_map(|(pattern, rules)| rules.into_keys().map(move |code| (pattern.clone(), code)))
-        .collect();
+    let entries = document.config.nearest_tables();
     let rules: Vec<RuleState> = catalog
         .iter()
-        .map(|descriptor| {
-            let (configured_severity, effective_severity) =
-                severities(descriptor, &document.config);
-            let diagnostic_count = count_i64(*inventory.counts.get(&descriptor.code).unwrap_or(&0));
-            RuleState {
-                descriptor: descriptor.clone(),
-                configured_severity,
-                effective_severity,
-                inherited: configured_severity.is_none(),
-                diagnostic_count,
-                affected_file_count: count_i64(
-                    *inventory.files.get(&descriptor.code).unwrap_or(&0),
-                ),
-                safe_fix_count: if is_safe_fixable(&descriptor.code) {
-                    diagnostic_count
-                } else {
-                    0
-                },
-                unsafe_fix_count: if is_fixable(&descriptor.code)
-                    && !is_safe_fixable(&descriptor.code)
-                {
-                    diagnostic_count
-                } else {
-                    0
-                },
-                adoption_exception_count: count_i64(
-                    adoption
-                        .iter()
-                        .filter(|(_, code)| code == &descriptor.code)
-                        .count(),
-                ),
-            }
+        .map(|descriptor| RuleState {
+            descriptor: descriptor.clone(),
+            entry: entries
+                .and_then(|tables| tables.rules.get(&descriptor.code))
+                .copied()
+                .map(super::catalog::config_to_wire),
+            effective_severity: effective_severity(descriptor, &document.config),
+            diagnostic_count: count_i64(*inventory.counts.get(&descriptor.code).unwrap_or(&0)),
         })
-        .collect();
-    let tags = tag_states(&rules);
-    let source_uri = path_uri(&document.path);
-    let shadowed_sources = document
-        .shadowed_sources
-        .iter()
-        .map(|path| path_uri(path))
         .collect();
     ConfigurationSnapshot {
         root_uri: path_uri(root),
+        config_uri: path_uri(&document.path),
         revision: document.revision.clone(),
-        source: ConfigurationSource {
-            uri: source_uri,
-            format: match document.format {
-                ConfigFormat::PyprojectToml => ConfigurationFormat::PyprojectToml,
-            },
-            exists: document.exists,
-            read_only: document.read_only,
-            shadowed_sources,
-        },
-        debt: DebtSummary {
-            remaining_diagnostics: count_i64(inventory.total),
-            adopted_files: count_i64(
-                adoption
-                    .iter()
-                    .map(|(path, _)| path)
-                    .collect::<HashSet<_>>()
-                    .len(),
-            ),
-            adoption_exceptions: count_i64(adoption.len()),
-            suppression_diagnostics: suppression_count(&inventory.counts, &catalog),
-            disabled_rules: count_i64(
-                rules
-                    .iter()
-                    .filter(|state| state.effective_severity == RuleSeverity::Disabled)
-                    .count(),
-            ),
-        },
+        tags: tag_states(&rules, entries),
         rules,
-        tags,
-        presets: presets(),
-        path_overrides: path_override_states(document, &adoption_entries),
-        problems: Vec::new(),
     }
 }
 
-fn presets() -> Vec<ConfigurationPreset> {
-    vec![
-        ConfigurationPreset {
-            id: "strict".to_owned(),
-            name: "Strict".to_owned(),
-            summary: "Enable every live rule at its native severity.".to_owned(),
-            mutations: vec![ConfigurationMutation {
-                selector: RuleSelector::All,
-                setting: RuleSetting::Native,
-                scope: MutationScope::Project,
-            }],
-        },
-        ConfigurationPreset {
-            id: "maximum".to_owned(),
-            name: "Maximum".to_owned(),
-            summary: "Enable every live rule and promote every diagnostic to an error.".to_owned(),
-            mutations: vec![ConfigurationMutation {
-                selector: RuleSelector::All,
-                setting: RuleSetting::Error,
-                scope: MutationScope::Project,
-            }],
-        },
-        ConfigurationPreset {
-            id: "suppression-audit".to_owned(),
-            name: "Suppression audit".to_owned(),
-            summary: "Surface unused, broad, conflicting, and malformed suppressions.".to_owned(),
-            mutations: vec![ConfigurationMutation {
-                selector: RuleSelector::Tags {
-                    tags: vec!["suppressions".to_owned()],
-                    match_all: false,
-                },
-                setting: RuleSetting::Native,
-                scope: MutationScope::Project,
-            }],
-        },
-    ]
-}
-
-fn path_override_states(
-    document: &ConfigDocument,
-    adoption: &BTreeMap<String, BTreeMap<String, basilisk_config::RuleSeverity>>,
-) -> Vec<PathOverrideState> {
-    let mut entries: Vec<_> = document.config.per_path_overrides.iter().collect();
-    entries.sort_by_key(|(pattern, _)| (*pattern).clone());
-    entries
-        .into_iter()
-        .map(|(pattern, entry)| {
-            let mut rules: BTreeMap<String, RuleSeverity> = entry
-                .rule_overrides
-                .iter()
-                .map(|(code, severity)| (code.clone(), config_to_wire(*severity)))
-                .collect();
-            for code in &entry.disabled_rules {
-                let _ = rules.insert(code.clone(), RuleSeverity::Disabled);
-            }
-            PathOverrideState {
-                pattern: pattern.clone(),
-                adoption: adoption.contains_key(pattern),
-                rules: rules
-                    .into_iter()
-                    .map(|(rule_code, severity)| PathRuleSetting {
-                        rule_code,
-                        severity,
-                    })
-                    .collect(),
-            }
-        })
-        .collect()
-}
-
-fn tag_states(rules: &[RuleState]) -> Vec<TagState> {
+/// Fold rule states into per-tag facets with their explicit tag entries.
+///
+/// Implements [CONFIGEDITOR-TAGS]: a tag is both a facet (grouping) and,
+/// when written into `[tool.basilisk.rule-tags]`, one visible entry.
+fn tag_states(rules: &[RuleState], entries: Option<&RuleTables>) -> Vec<TagState> {
     let mut values: BTreeMap<String, (usize, i64)> = BTreeMap::new();
     for rule in rules {
         for tag in &rule.descriptor.tags {
@@ -295,6 +137,10 @@ fn tag_states(rules: &[RuleState]) -> Vec<TagState> {
         .into_iter()
         .map(|(name, (rule_count, diagnostic_count))| TagState {
             kind: tag_kind(&name),
+            entry: entries
+                .and_then(|tables| tables.rule_tags.get(&name))
+                .copied()
+                .map(super::catalog::config_to_wire),
             name,
             rule_count: count_i64(rule_count),
             diagnostic_count,
@@ -306,7 +152,6 @@ fn tag_states(rules: &[RuleState]) -> Vec<TagState> {
 pub(super) fn occurrences(
     index: &WorkspaceIndex,
     root: &Path,
-    source_uri: &str,
     selected: &HashSet<String>,
     cursor: Option<&str>,
     limit: usize,
@@ -330,7 +175,7 @@ pub(super) fn occurrences(
             let end =
                 crate::util::byte_offset_to_position(&entry.text, diagnostic.span.end_usize());
             items.push(RuleOccurrence {
-                rule_code: diagnostic.code.code.to_owned(),
+                code: diagnostic.code.code.to_owned(),
                 uri: uri.to_string(),
                 range: SourceRange {
                     start: SourcePosition {
@@ -342,15 +187,7 @@ pub(super) fn occurrences(
                         character: i64::from(end.character),
                     },
                 },
-                effective_severity: wire_severity(diagnostic.severity),
-                fix_safety: if is_safe_fixable(diagnostic.code.code) {
-                    Some(FixSafety::Safe)
-                } else if is_fixable(diagnostic.code.code) {
-                    Some(FixSafety::Unsafe)
-                } else {
-                    None
-                },
-                configuration_source: source_uri.to_owned(),
+                severity: wire_severity(diagnostic.severity),
             });
         }
     }
@@ -359,13 +196,13 @@ pub(super) fn occurrences(
             &left.uri,
             left.range.start.line,
             left.range.start.character,
-            &left.rule_code,
+            &left.code,
         )
             .cmp(&(
                 &right.uri,
                 right.range.start.line,
                 right.range.start.character,
-                &right.rule_code,
+                &right.code,
             ))
     });
     page_occurrences(&items, cursor, limit)
@@ -388,24 +225,14 @@ fn page_occurrences(
     }
 }
 
-fn suppression_count(counts: &HashMap<String, usize>, catalog: &[RuleDescriptor]) -> i64 {
-    catalog
-        .iter()
-        .filter(|rule| rule.tags.iter().any(|tag| tag == "suppressions"))
-        .map(|rule| counts.get(&rule.code).copied().unwrap_or(0))
-        .sum::<usize>()
-        .try_into()
-        .unwrap_or(i64::MAX)
-}
-
-fn path_uri(path: &Path) -> String {
+pub(super) fn path_uri(path: &Path) -> String {
     Url::from_file_path(path).map_or_else(
         |()| path.to_string_lossy().into_owned(),
         |uri| uri.to_string(),
     )
 }
 
-fn count_i64(value: usize) -> i64 {
+pub(super) fn count_i64(value: usize) -> i64 {
     i64::try_from(value).unwrap_or(i64::MAX)
 }
 

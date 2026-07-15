@@ -12,12 +12,12 @@ Basilisk combines conservative shared inference with focused typing-rule algorit
 
 ## Redundant Annotation Principle {#TYPEINF-REDUNDANT}
 
-`BSK-W0050` is an opt-in house rule. When the narrow syntactic inference engine can prove
+`BSK-0050` is an opt-in house rule. When the narrow syntactic inference engine can prove
 that an assignment annotation exactly repeats its RHS type, it may suggest removing the
 annotation. It never overrides typing-spec syntax or a semantic annotation purpose.
 
 ```python
-# BAD — BSK-W0050: annotation equals inferred type
+# BAD — BSK-0050: annotation equals inferred type
 x: int = 42                     # inferred: int
 z: list[int] = [1, 2, 3]        # inferred: list[int]
 
@@ -168,10 +168,10 @@ The walrus operator `:=` assigns the value and the **expression type equals the 
 ### Parameters {#TYPEINF-FUNC-PARAMS}
 
 When the opt-in annotation policy is enabled, an unannotated non-receiver parameter fires
-`BSK-E0001`. The unconfigured PEP default does not require annotations merely for style.
+`BSK-0001`. The unconfigured PEP default does not require annotations merely for style.
 
 ```python
-def process(data):          # BSK-E0001: parameter 'data' has no type annotation
+def process(data):          # BSK-0001: parameter 'data' has no type annotation
     pass
 
 def process(data: bytes):   # ✓
@@ -192,7 +192,7 @@ A default expression does not become a declared parameter type. Under the opt-in
 policy the parameter still needs an annotation.
 
 ```python
-def connect(timeout=30):        # BSK-E0001 — annotation required even with default
+def connect(timeout=30):        # BSK-0001 — annotation required even with default
     pass
 
 def connect(timeout: int = 30): # ✓
@@ -257,12 +257,12 @@ reveal_type(b)  # AdvancedBuilder — not Builder
 ### Lambda Inference {#TYPEINF-FUNC-LAMBDA}
 
 The shared engine represents a lambda as `Callable[..., Unknown]`; it does not infer lambda
-parameter or return types from an expected callable. The opt-in `BSK-W0040` rule warns when a
+parameter or return types from an expected callable. The opt-in `BSK-0040` rule warns when a
 module/class variable is assigned a lambda without a target annotation.
 
 ```python
 transform: Callable[[int], str] = lambda x: str(x)  # declared target accepted
-f = lambda x: x + 1   # BSK-W0040 when the strictness tag is enabled
+f = lambda x: x + 1   # BSK-0040 when the strictness tag is enabled
 ```
 
 ### Overloads {#TYPEINF-FUNC-OVERLOADS}
@@ -761,7 +761,7 @@ Nominal MRO walking and structural Protocol/TypedDict compatibility are NOT cent
 
 ### `Any` {#TYPEINF-SPECIAL-ANY}
 
-`Any` is bidirectionally compatible with all types — an **explicit escape hatch**, never inferred as a fallback; it appears only when written. Unannotated parameters do not silently become explicit `Any`; the opt-in annotation policy may report `BSK-E0001`.
+`Any` is bidirectionally compatible with all types — an **explicit escape hatch**, never inferred as a fallback; it appears only when written. Unannotated parameters do not silently become explicit `Any`; the opt-in annotation policy may report `BSK-0001`.
 
 > **Authority**: [PEP 484 §The `Any` type](https://peps.python.org/pep-0484/#the-any-type): "Every type is consistent with `Any`."
 
@@ -837,7 +837,7 @@ Union-of-element-types inference applies to all containers unconditionally — n
 ### Lambda Warnings {#TYPEINF-EXCEEDS-LAMBDA}
 
 With the `strictness` tag enabled, a module/class variable assigned a lambda without a target
-annotation emits `BSK-W0040`. The diagnostic is an annotation nudge, not evidence that lambda
+annotation emits `BSK-0040`. The diagnostic is an annotation nudge, not evidence that lambda
 parameters were otherwise contextually inferred.
 
 ### Annotation Required, Not Optional {#TYPEINF-EXCEEDS-REQUIRED}

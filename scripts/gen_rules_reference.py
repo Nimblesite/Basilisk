@@ -45,7 +45,7 @@ DEFAULT_DATA_OUT = ROOT / "website" / "src" / "_data" / "rules.json"
 CONFORMANCE_STATUS = ROOT / "conformance" / "conformance_status.csv"
 ERRORS_BASE_URL = "https://www.basilisk-python.dev/errors"
 
-HEADER = re.compile(r"//!\s*(BSK-[EWI]\d{4}|`[a-z0-9_]+`):\s*(.*)")
+HEADER = re.compile(r"//!\s*(BSK-\d{4}|`[a-z0-9_]+`):\s*(.*)")
 DOC = re.compile(r"//!\s?(.*)")
 DOCS_URL = re.compile(r'docs_url:\s*"([^"]+)"')
 SPEC_REF = re.compile(r"^Implements ")
@@ -65,15 +65,17 @@ OPT_IN_TAGS = re.compile(
 )
 TAG = re.compile(r'"([^"]+)"')
 
-# Coarse groups for filtering/badging on the website. Errors outside the two
-# foundational ranges are all part of the broader type-system surface.
-GROUPS = (
-    ("E", 1, 9, "Missing Annotations"),
-    ("E", 10, 29, "Type Safety"),
-    ("E", 30, 9999, "Type System"),
-    ("W", 0, 9999, "Warnings"),
-    ("I", 0, 9999, "Information"),
-)
+# Coarse groups for filtering/badging on the website, derived from the rule's
+# own tags — codes carry no severity class ([CHKARCH-DIAG-CODES]).
+GROUP_BY_TAG = {
+    "strictness": "Missing Annotations",
+    "style": "Style",
+    "redundancy": "Redundancy",
+    "suppressions": "Suppressions",
+    "dependencies": "Dependencies",
+    "imports": "Imports",
+    "stubs": "Stubs",
+}
 
 
 def pep_categories() -> frozenset[str]:
@@ -100,31 +102,26 @@ def is_bsk(code: str) -> bool:
     return code.startswith("BSK-")
 
 
-def severity_for(code: str) -> str:
-    # BSK opt-in codes carry severity in the letter; named PEP-conformance
-    # codes are all type errors (spec violations).
+def scope_for(provenance: str) -> str:
+    # The command partition [CHKARCH-COMMANDS]: pep-tagged rules belong to
+    # `basilisk check` (always run); everything else to `basilisk analyze`.
+    return "check" if provenance == "pep" else "analyze"
+
+
+def sort_key(code: str) -> tuple[int, int, str]:
+    # BSK codes first (numeric), then named conformance codes alphabetically.
     if is_bsk(code):
-        return {"E": "error", "W": "warning", "I": "info"}[code[4]]
-    return "error"
+        return (0, int(code[4:]), "")
+    return (1, 0, code)
 
 
-def sort_key(code: str) -> tuple[int, int, int, str]:
-    # BSK opt-in codes first (E before W before I, then numeric), then named
-    # conformance codes alphabetically.
-    if is_bsk(code):
-        severity_order = {"E": 0, "W": 1, "I": 2}
-        return (0, severity_order[code[4]], int(code[5:]), "")
-    return (1, 0, 0, code)
-
-
-def group_for(code: str) -> str:
+def group_for(code: str, free_form_tags: list[str]) -> str:
     if not is_bsk(code):
         # Named conformance rules span the broad type-system surface.
         return "Type System"
-    kind, num = code[4], int(code[5:])
-    for gk, lo, hi, label in GROUPS:
-        if gk == kind and lo <= num <= hi:
-            return label
+    for tag in free_form_tags:
+        if tag in GROUP_BY_TAG:
+            return GROUP_BY_TAG[tag]
     return "Type System"
 
 
@@ -233,13 +230,13 @@ def extract() -> list[dict]:
             )
             records[code] = {
                 "code": code,
-                "severity": severity_for(code),
+                "scope": scope_for(provenance),
                 "provenance": provenance,
                 "tags": tags,
                 "summary": clean(summary),
                 "summaryHtml": inline_html(clean(summary)),
                 "body": parse_body(body_lines),
-                "group": group_for(code),
+                "group": group_for(code, free_form_tags),
                 "docsUrl": file_docs_url.group(1)
                 if file_docs_url
                 else f"{ERRORS_BASE_URL}/{code}",
@@ -261,19 +258,15 @@ def main() -> int:
         return 0
     if "--data" in sys.argv:
         # [WEBSITE-ERROR-PAGES-DATA]: write website/src/_data/rules.json — one
-        # record per code (summary, body blocks, severity, group, docsUrl).
+        # record per code (summary, body blocks, scope, group, docsUrl).
         idx = sys.argv.index("--data")
         out = Path(sys.argv[idx + 1]) if idx + 1 < len(sys.argv) else DEFAULT_DATA_OUT
         out.write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")
-        errors = sum(r["severity"] == "error" for r in records)
-        warnings = sum(r["severity"] == "warning" for r in records)
-        information = sum(r["severity"] == "info" for r in records)
-        opt_in = sum(r["provenance"] == "basilisk" for r in records)
-        pep = len(records) - opt_in
+        check = sum(r["scope"] == "check" for r in records)
+        analyze = len(records) - check
         print(
-            f"Wrote {len(records)} codes ({errors} errors, {warnings} warnings, "
-            f"{information} information; "
-            f"{pep} PEP-conformance, {opt_in} opt-in) -> {out}"
+            f"Wrote {len(records)} codes ({check} check-scope PEP rules, "
+            f"{analyze} analyze-scope Basilisk rules) -> {out}"
         )
         return 0
     if "--check" in sys.argv:

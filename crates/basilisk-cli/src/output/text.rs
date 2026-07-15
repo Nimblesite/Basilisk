@@ -2,7 +2,7 @@
 //!
 //! Example output (without ANSI codes):
 //! ```text
-//! error[BSK-E0001]: Missing parameter type annotation for `data`
+//! error[BSK-0001]: Missing parameter type annotation for `data`
 //!   --> src/utils.py:14:5
 //!    |
 //! 14 | def process(data):
@@ -10,7 +10,7 @@
 //!    |
 //!    = help: Add a type annotation: `data: <type>`
 //!    = note: In Basilisk, all function parameters require explicit types
-//!    = see: https://www.basilisk-python.dev/errors/BSK-E0001
+//!    = see: https://www.basilisk-python.dev/errors/BSK-0001
 //! ```
 
 use std::fmt::Write as _;
@@ -170,7 +170,7 @@ pub(super) fn format_one(
 ) -> String {
     let mut out = String::new();
 
-    // Header: error[BSK-E0001]: Message
+    // Header: error[BSK-0001]: Message
     let severity_label = color_severity(diag.severity, &format!("{}", diag.severity));
     let code = format!("[{}]", diag.code.code).bold();
     let message = diag.message.bold();

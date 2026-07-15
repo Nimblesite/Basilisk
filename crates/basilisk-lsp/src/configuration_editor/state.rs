@@ -313,9 +313,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    use basilisk_config::{
-        build_rule_patch, ConfigDocument, RuleConfigScope, RuleConfigUpdate, RuleSeverity,
-    };
+    use basilisk_config::{build_rule_patch, ConfigDocument, RuleConfigUpdate, RuleSeverity};
     use tower_lsp::lsp_types::Url;
 
     use super::ConfigurationEditorState;
@@ -340,7 +338,7 @@ mod tests {
         let uri = Url::from_file_path(&path).unwrap();
         let dirty = concat!(
             "[project]\nname = \"demo\"\n\n",
-            "[tool.basilisk.rules]\nBSK-E0001 = \"warning\"\n",
+            "[tool.basilisk.rules]\nBSK-0001 = \"warning\"\n",
         );
         let state = ConfigurationEditorState::default();
 
@@ -350,7 +348,11 @@ mod tests {
         assert_eq!(effective.version, Some(7));
         assert_eq!(effective.document.content, dirty);
         assert_eq!(
-            effective.document.config.rules.get("BSK-E0001"),
+            effective
+                .document
+                .config
+                .nearest_tables()
+                .and_then(|tables| tables.rules.get("BSK-0001")),
             Some(&RuleSeverity::Warning)
         );
         assert_eq!(
@@ -366,7 +368,7 @@ mod tests {
         let path = root.join("pyproject.toml");
         std::fs::write(&path, "[tool.basilisk.rules\n").unwrap();
         let uri = Url::from_file_path(path).unwrap();
-        let repaired = "[tool.basilisk.rules]\nBSK-E0001 = \"error\"\n";
+        let repaired = "[tool.basilisk.rules]\nBSK-0001 = \"error\"\n";
         let state = ConfigurationEditorState::default();
 
         assert!(state.open_document(std::slice::from_ref(&root), &uri, repaired.to_owned(), 11,));
@@ -389,17 +391,15 @@ mod tests {
         assert!(state.open_document(std::slice::from_ref(&root), &uri, original.clone(), 7,));
         let document = state.effective_document(&root).unwrap();
         let update = RuleConfigUpdate {
-            scope: RuleConfigScope::Project,
-            rules: BTreeMap::from([("BSK-E0001".to_owned(), Some(RuleSeverity::Warning))]),
+            rules: BTreeMap::from([("BSK-0001".to_owned(), Some(RuleSeverity::Warning))]),
+            rule_tags: BTreeMap::new(),
         };
-        let rendered = build_rule_patch(&document, &[update]).unwrap();
+        let rendered = build_rule_patch(&document, &update).unwrap();
         let applied = ConfigDocument {
             root: document.root.clone(),
             path: rendered.path.clone(),
-            format: document.format,
             exists: true,
             read_only: false,
-            shadowed_sources: document.shadowed_sources.clone(),
             content: rendered.content.clone(),
             revision: rendered.revision.clone(),
             config: rendered.config.clone(),
@@ -428,14 +428,14 @@ mod tests {
         assert!(state.open_document(
             std::slice::from_ref(&root),
             &uri,
-            "[tool.basilisk.rules]\nBSK-E0001 = \"warning\"\n".to_owned(),
+            "[tool.basilisk.rules]\nBSK-0001 = \"warning\"\n".to_owned(),
             3,
         ));
         let before = state.effective_document(&root).unwrap().revision;
 
         let _ = state.change_document(
             &uri,
-            "[tool.basilisk.rules]\nBSK-E0001 = \"error\"\n".to_owned(),
+            "[tool.basilisk.rules]\nBSK-0001 = \"error\"\n".to_owned(),
             4,
         );
         let after = state.effective_document_with_version(&root).unwrap();

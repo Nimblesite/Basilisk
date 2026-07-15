@@ -29,10 +29,10 @@ editor exposes no fix affordance of its own.
 Safety is currently a rule-level allowlist in `code_actions/mass_fix.rs`, not
 per-diagnostic metadata.
 
-- Safe default: `BSK-E0001`, `BSK-E0002`, `BSK-E0005`, and `BSK-W0050`.
-- All/unsafe additionally includes `BSK-E0003`.
+- Safe default: `BSK-0001`, `BSK-0002`, `BSK-0005`, and `BSK-0050`.
+- All/unsafe additionally includes `BSK-0003`.
 
-`BSK-E0003` is excluded from the safe set because repeated application can
+`BSK-0003` is excluded from the safe set because repeated application can
 conflict with redundant-annotation removal. The explicit all/unsafe path
 applies its edits immediately; no unsafe-review list is generated.
 

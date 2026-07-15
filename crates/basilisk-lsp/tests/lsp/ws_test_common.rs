@@ -38,7 +38,7 @@ pub struct WsTestFixture {
     /// `pyproject.toml` whose `[tool.basilisk.rules]` opts into the annotation
     /// house rules (off by default — the default config is pure PEP
     /// conformance). Documents fall back to this root's config, so house
-    /// diagnostics (`BSK-E0001` …) fire exactly as they do for a project that
+    /// diagnostics (`BSK-0001` …) fire exactly as they do for a project that
     /// enabled them. No modes; configuration.
     /// See [CHKARCH-CONFIGURATION-ONLY].
     pub workspace_root: std::path::PathBuf,
@@ -81,20 +81,20 @@ impl WsTestFixture {
         let workspace_root = unique_temp_dir("bsk_ws_fixture");
         std::fs::create_dir_all(&workspace_root)?;
         // Opt into the full annotation house-rule bundle that the removed
-        // `strictAnnotations` flag used to enable (BSK-E0001..E0005, E0025,
+        // `strictAnnotations` flag used to enable (BSK-0001..E0005, E0025,
         // W0014, W0050), so every ws diagnostics test that relies on one of
         // them keeps firing. See [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
             workspace_root.join("pyproject.toml"),
             "[tool.basilisk.rules]\n\
-\"BSK-E0001\" = \"error\"\n\
-\"BSK-E0002\" = \"error\"\n\
-\"BSK-E0003\" = \"error\"\n\
-\"BSK-E0004\" = \"error\"\n\
-\"BSK-E0005\" = \"error\"\n\
-\"BSK-E0025\" = \"error\"\n\
-\"BSK-W0014\" = \"warning\"\n\
-\"BSK-W0050\" = \"warning\"\n",
+\"BSK-0001\" = \"error\"\n\
+\"BSK-0002\" = \"error\"\n\
+\"BSK-0003\" = \"error\"\n\
+\"BSK-0004\" = \"error\"\n\
+\"BSK-0005\" = \"error\"\n\
+\"BSK-0025\" = \"error\"\n\
+\"BSK-0014\" = \"warning\"\n\
+\"BSK-0050\" = \"warning\"\n",
         )?;
 
         Ok(Self {

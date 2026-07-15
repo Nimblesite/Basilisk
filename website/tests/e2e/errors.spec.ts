@@ -27,7 +27,7 @@ const RULES: Rule[] = JSON.parse(
 // Tests [WEBSITE-SCREENSHOTS-MANIFEST]: drive the worked-example verification off
 // the manifest's `expect` field (the code each snippet must produce) rather than
 // the filename, so the page→screenshot mapping stays correct even where the image
-// stem and the diagnostic code differ (e.g. e0011 → BSK-W0014).
+// stem and the diagnostic code differ (e.g. e0011 → BSK-0014).
 // Worked-example shots, keyed by the code each one triggers (shot.expect).
 const EXAMPLE_CODES = SHOTS.filter(
   (s) => /^e\d+$/.test(s.name) && /^BSK-[EW]\d{4}$/.test(s.expect),
@@ -54,7 +54,7 @@ test.describe("error reference pages", () => {
   });
 
   test("a sampled page renders its code, title and severity", async ({ page }) => {
-    for (const code of ["BSK-E0001", "BSK-W0014", "protocols_explicit", RULES[RULES.length - 1].code]) {
+    for (const code of ["BSK-0001", "BSK-0014", "protocols_explicit", RULES[RULES.length - 1].code]) {
       const rule = RULES.find((r) => r.code === code)!;
       await page.goto(`/errors/${code}/`);
       await expect(page.locator("h1.error-title code")).toHaveText(code);

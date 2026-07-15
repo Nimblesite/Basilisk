@@ -13,7 +13,7 @@
 //! every `.py` file in `tests/e2e/`, runs it through `compile_and_run`, and
 //! asserts captured stdout matches the corresponding `-expectedoutput.txt`
 //! byte-for-byte. Also implements [COMPILER-TESTING-FAILURES]: a `-expectederror.txt`
-//! fixture asserts the expected diagnostic code (e.g. BSK-E0001) instead.
+//! fixture asserts the expected diagnostic code (e.g. BSK-0001) instead.
 //! Fixtures present today: hello, arithmetic, classes, closures, dicts, dostuff,
 //! lists, recursion, strings (the `controlflow` example from the spec is absent;
 //! `fizzbuzz`-style control flow is exercised via the other fixtures).

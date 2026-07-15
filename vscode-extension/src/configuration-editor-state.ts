@@ -68,8 +68,7 @@ export function decodeConfigurationChanged(value: unknown): ConfigurationChanged
   if (typeof value !== "object" || value === null || Array.isArray(value)) { return undefined; }
   const candidate = value as Record<string, unknown>;
   return typeof candidate.rootUri === "string" && typeof candidate.revision === "string"
-    && typeof candidate.reason === "string"
-    ? { rootUri: candidate.rootUri, revision: candidate.revision, reason: candidate.reason }
+    ? { rootUri: candidate.rootUri, revision: candidate.revision }
     : undefined;
 }
 
@@ -80,7 +79,11 @@ export function requestConfigurationRefresh(
 ): void {
   if (state.value.rootUri !== change.rootUri) { return; }
   if (state.value.snapshot?.revision === change.revision) { return; }
-  state.value = { ...state.value, message: change.reason, refreshRequested: true };
+  state.value = {
+    ...state.value,
+    message: "The project configuration changed; refreshing…",
+    refreshRequested: true,
+  };
 }
 
 function beginLoad(state: Signal<ConfigurationEditorState>, rootUri: string): void {
@@ -128,7 +131,7 @@ function acceptPreview(state: Signal<ConfigurationEditorState>, preview: Configu
     ...state.value,
     phase: "preview",
     preview,
-    message: `Preview ready for ${preview.expandedRuleCodes.length} rule(s)`,
+    message: `Preview ready: ${preview.changes.length} rule(s) change effective severity`,
   };
 }
 

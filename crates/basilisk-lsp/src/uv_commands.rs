@@ -71,7 +71,7 @@ pub async fn uv_add(project_root: &Path, package: &str) -> Result<UvCommandResul
 /// Returns an `io::Error` if the subprocess cannot be spawned.
 //
 // Implements [LSPUV-COMMANDS] — `basilisk.uv.addDev` {package} →
-// `uv add --dev <pkg>` (the BSK-E0152 stub-install path, [LSPUV-ACTIONS-QUICK-FIXES]).
+// `uv add --dev <pkg>` (the BSK-0152 stub-install path, [LSPUV-ACTIONS-QUICK-FIXES]).
 pub async fn uv_add_dev(
     project_root: &Path,
     package: &str,

@@ -1,5 +1,5 @@
-//! Implements [BSK-W0061] from [CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS].
-//! BSK-W0061: Active blanket suppression.
+//! Implements [BSK-0061] from [CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS].
+//! BSK-0061: Active blanket suppression.
 //!
 //! Reports a valid source directive that actively changes diagnostics without
 //! selecting individual Basilisk rule codes.
@@ -11,8 +11,8 @@ use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-W0061",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-W0061",
+    code: "BSK-0061",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0061",
 };
 
 /// Registry identity for active blanket suppression auditing.

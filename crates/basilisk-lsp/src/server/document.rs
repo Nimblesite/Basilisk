@@ -108,10 +108,6 @@ pub(super) async fn did_save(server: &LspServer, params: DidSaveTextDocumentPara
         server.publish_diagnostics_if_enabled(target, diags).await;
     }
 
-    if let Err(error) = super::adoption::graduate_fixed_rules(server, &uri).await {
-        warn!(uri = %uri, %error, "failed to auto-graduate fixed adoption rules");
-    }
-
     // Notify activity panels that this module changed.
     super::activity_panel::send_module_changed(server, &uri).await;
 
@@ -328,6 +324,7 @@ pub(super) async fn did_change_watched_files(
     // Clone the toggle so the debounced re-analysis respects [ANALYSIS-ENABLED]
     // when it fires after the handler has returned.
     let enabled = Arc::clone(&server.type_checking_enabled);
+    let analyze = Arc::clone(&server.analyze_enabled);
 
     let task = tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(FILE_WATCHER_DEBOUNCE_MS)).await;
@@ -375,10 +372,10 @@ pub(super) async fn did_change_watched_files(
         drop(guard);
 
         for (uri, diags) in publish_set {
-            super::publish_diagnostics_gated(&client, &enabled, uri, diags).await;
+            super::publish_diagnostics_gated(&client, &enabled, &analyze, uri, diags).await;
         }
         for uri in delete_targets {
-            super::publish_diagnostics_gated(&client, &enabled, uri, vec![]).await;
+            super::publish_diagnostics_gated(&client, &enabled, &analyze, uri, vec![]).await;
         }
     });
 

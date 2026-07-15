@@ -765,6 +765,11 @@
           "default": true,
           "description": "Enable or disable the Basilisk type checker."
         },
+        "basilisk.analyze": {
+          "type": "boolean",
+          "default": true,
+          "description": "Publish analyze-scope diagnostics (configured non-PEP rules) in addition to the always-on PEP check scope. Disable to restrict the editor to check scope; project configuration is unaffected. See LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE."
+        },
         "basilisk.useLsp": {
           "type": "boolean",
           "default": true,

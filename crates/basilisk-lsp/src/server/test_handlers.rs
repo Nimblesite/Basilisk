@@ -371,13 +371,13 @@ impl tower_lsp::lsp_types::notification::Notification for CoverageResultNotifica
 
 /// Diagnostic code for pytest not found in a uv project.
 ///
-/// Dedicated to this diagnostic — `BSK-W0014` is the explicit-`Any` nudge rule
+/// Dedicated to this diagnostic — `BSK-0014` is the explicit-`Any` nudge rule
 /// and must not be reused here ([LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION]).
-pub(crate) const PYTEST_NOT_FOUND_CODE: &str = "BSK-W0015";
+pub(crate) const PYTEST_NOT_FOUND_CODE: &str = "BSK-0015";
 
 // Implements [LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION] — "pytest not in uv.lock" Warning
 // with the `basilisk.uv.addDev` quick fix (attached in code_actions).
-/// Build the pytest-missing diagnostic (`BSK-W0015`) for a uv test file.
+/// Build the pytest-missing diagnostic (`BSK-0015`) for a uv test file.
 pub(super) fn make_pytest_not_found_diagnostic() -> Diagnostic {
     Diagnostic {
         range: Range {
@@ -523,10 +523,10 @@ mod tests {
 
     #[test]
     fn pytest_not_found_code_is_dedicated_not_explicit_any() {
-        // BSK-W0014 is the explicit-`Any` nudge rule; the pytest-missing
+        // BSK-0014 is the explicit-`Any` nudge rule; the pytest-missing
         // diagnostic must use its own code, not collide with it.
-        assert_eq!(PYTEST_NOT_FOUND_CODE, "BSK-W0015");
-        assert_ne!(PYTEST_NOT_FOUND_CODE, "BSK-W0014");
+        assert_eq!(PYTEST_NOT_FOUND_CODE, "BSK-0015");
+        assert_ne!(PYTEST_NOT_FOUND_CODE, "BSK-0014");
     }
 
     #[test]

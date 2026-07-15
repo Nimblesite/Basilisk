@@ -47,7 +47,7 @@ include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
 
 [tool.basilisk.rules]
-"BSK-E0001" = "warning"             # selects this opt-in rule at warning
+"BSK-0001" = "warning"             # selects this opt-in rule at warning
 "imports_unresolved" = "info"
 "dataclasses_order" = "disabled"
 
@@ -224,10 +224,10 @@ Every opt-in rule is selected by assigning that rule a non-disabled severity:
 
 ```toml
 [tool.basilisk.rules]
-"BSK-E0001" = "error"   # required parameter annotations
-"BSK-E0025" = "error"   # required @override
-"BSK-W0011" = "warning" # undeclared dependency imports
-"BSK-E0152" = "error"   # missing type stubs
+"BSK-0001" = "error"   # required parameter annotations
+"BSK-0025" = "error"   # required @override
+"BSK-0011" = "warning" # undeclared dependency imports
+"BSK-0152" = "error"   # missing type stubs
 ```
 
 There are no family switches in the project or editor settings. Use the
@@ -242,7 +242,7 @@ selects it:
 ```toml
 [tool.basilisk.rules]
 "imports_unresolved" = "warning"
-"BSK-W0050" = "error"
+"BSK-0050" = "error"
 "dataclasses_order" = "disabled"
 ```
 
@@ -269,7 +269,7 @@ rules."returns_compatibility" = "warning"
 ### `disabled`
 
 **Type:** `string[]`
-**Example:** `["returns_compatibility", "BSK-E0001"]`
+**Example:** `["returns_compatibility", "BSK-0001"]`
 
 Rule codes to disable entirely for files matching this glob.
 
@@ -316,8 +316,8 @@ File-level directives are standalone comments:
 ```
 
 Suppression auditing is an **opt-in** tagged rule family. It emits nothing by
-default. Configure `BSK-I0060` (active specific), `BSK-W0061` (active blanket),
-`BSK-W0062` (unused), and `BSK-E0063` (malformed) independently at error,
+default. Configure `BSK-0060` (active specific), `BSK-0061` (active blanket),
+`BSK-0062` (unused), and `BSK-0063` (malformed) independently at error,
 warning, info, or disabled. See the
 [configuration-editor specification](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SUPPRESSIONS).
 

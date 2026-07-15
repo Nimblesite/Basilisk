@@ -361,7 +361,7 @@ pub(super) fn source_slice_span(source: &str, span: Span) -> Option<&str> {
 }
 
 // ---------------------------------------------------------------------------
-// PEP 695 type parameter bound violation detection (for BSK-E0087)
+// PEP 695 type parameter bound violation detection (for BSK-0087)
 // ---------------------------------------------------------------------------
 
 /// Walk all statements and collect PEP 695 type parameter bound violations.

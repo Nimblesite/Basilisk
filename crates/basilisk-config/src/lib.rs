@@ -191,7 +191,7 @@ typeshed-path = "typeshed-mp"
 
 [tool.basilisk.rules]
 "imports_unresolved" = "warning"
-"BSK-E0001" = "disabled"
+"BSK-0001" = "disabled"
 
 [tool.basilisk.rule-tags]
 "basilisk" = "error"
@@ -209,7 +209,7 @@ typeshed-path = "typeshed-mp"
                     Some(RuleSeverity::Warning)
                 );
                 assert_eq!(
-                    tables.rules.get("BSK-E0001").copied(),
+                    tables.rules.get("BSK-0001").copied(),
                     Some(RuleSeverity::Disabled)
                 );
                 assert_eq!(
@@ -230,7 +230,7 @@ typeshed-path = "typeshed-mp"
                 "pyproject.toml",
                 r#"
 [tool.basilisk.rules]
-"BSK-W0050" = "warning"
+"BSK-0050" = "warning"
 
 [tool.basilisk.rule-tags]
 "basilisk" = "error"
@@ -238,12 +238,12 @@ typeshed-path = "typeshed-mp"
             )],
             |cfg| {
                 assert_eq!(
-                    cfg.resolve_severity("BSK-W0050", &["basilisk", "redundancy"]),
+                    cfg.resolve_severity("BSK-0050", &["basilisk", "redundancy"]),
                     Some(RuleSeverity::Warning),
                     "the per-rule entry must beat the tag entry"
                 );
                 assert_eq!(
-                    cfg.resolve_severity("BSK-E0001", &["basilisk"]),
+                    cfg.resolve_severity("BSK-0001", &["basilisk"]),
                     Some(RuleSeverity::Error),
                     "rules without their own entry take the tag entry"
                 );
@@ -273,12 +273,12 @@ typeshed-path = "typeshed-mp"
             )],
             |cfg| {
                 assert_eq!(
-                    cfg.resolve_severity("BSK-W0061", &["basilisk", "suppressions"]),
+                    cfg.resolve_severity("BSK-0061", &["basilisk", "suppressions"]),
                     Some(RuleSeverity::Error),
                     "error must beat info among overlapping tag entries"
                 );
                 assert_eq!(
-                    cfg.resolve_severity("BSK-W0014", &["basilisk", "style"]),
+                    cfg.resolve_severity("BSK-0014", &["basilisk", "style"]),
                     Some(RuleSeverity::Info),
                     "info must beat disabled among overlapping tag entries"
                 );
@@ -360,7 +360,7 @@ exclude = ["legacy", "third_party"]
             root.join("pyproject.toml"),
             "[tool.basilisk.rules]\n\
              \"imports_unresolved\" = \"warning\"\n\
-             \"BSK-E0001\" = \"error\"\n",
+             \"BSK-0001\" = \"error\"\n",
         )
         .unwrap();
         fs::write(
@@ -373,7 +373,7 @@ exclude = ["legacy", "third_party"]
         let _ = fs::remove_dir_all(&root);
 
         assert_eq!(
-            cfg.resolve_severity("BSK-E0001", &["basilisk"]),
+            cfg.resolve_severity("BSK-0001", &["basilisk"]),
             Some(RuleSeverity::Info),
             "the child's tag entry must beat the ancestor's per-rule entry"
         );
@@ -393,8 +393,11 @@ exclude = ["legacy", "third_party"]
             &[("pyproject.toml", "[tool.basilisk]\n")],
             |cfg| {
                 assert!(cfg.has_config_table(), "an empty table still exists");
-                assert_eq!(cfg.resolve_severity("BSK-E0001", &["basilisk"]), None);
-                assert_eq!(cfg.resolve_severity("returns_compatibility", &["pep"]), None);
+                assert_eq!(cfg.resolve_severity("BSK-0001", &["basilisk"]), None);
+                assert_eq!(
+                    cfg.resolve_severity("returns_compatibility", &["pep"]),
+                    None
+                );
             },
         );
     }

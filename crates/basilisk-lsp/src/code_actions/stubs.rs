@@ -1,6 +1,6 @@
 //! Implements [STUBRES-CREATE-LOCAL]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#stubres-create-local
 //!
-//! Quick fix for BSK-E0152 (missing type stubs): scaffold a local `.pyi` stub.
+//! Quick fix for BSK-0152 (missing type stubs): scaffold a local `.pyi` stub.
 //!
 //! Unlike the typeshed quick fix (`make_uv_add_stubs_action`), this action is
 //! offered for *every* untyped package — including those with no published
@@ -250,7 +250,7 @@ mod tests {
     fn diag() -> Diagnostic {
         Diagnostic {
             range: Range::default(),
-            code: Some(NumberOrString::String("BSK-E0152".to_owned())),
+            code: Some(NumberOrString::String("BSK-0152".to_owned())),
             message: "Package `acme` is installed but has no type stubs available".to_owned(),
             ..Diagnostic::default()
         }

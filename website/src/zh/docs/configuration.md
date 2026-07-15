@@ -210,10 +210,10 @@ typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 
 ```toml
 [tool.basilisk.rules]
-"BSK-E0001" = "error"
-"BSK-W0011" = "warning"
-"BSK-E0152" = "error"
-"BSK-I0060" = "info"
+"BSK-0001" = "error"
+"BSK-0011" = "warning"
+"BSK-0152" = "error"
+"BSK-0060" = "info"
 ```
 
 可用值为 `"error"`、`"warning"`、`"info"` 与 `"disabled"`。标签只用于
@@ -239,7 +239,7 @@ rules."returns_compatibility" = "warning"
 ### `disabled`
 
 **类型：** `string[]`
-**示例：** `["returns_compatibility", "BSK-E0001"]`
+**示例：** `["returns_compatibility", "BSK-0001"]`
 
 为匹配此 glob 的文件完全禁用的规则代码。
 
@@ -283,9 +283,9 @@ value = legacy_call()  # type: disabled[returns_compatibility]
 # basilisk: file-disabled[imports_unresolved]
 ```
 
-`suppressions` 标签下的四条审计规则默认全部关闭：`BSK-I0060`（有效且
-精确）、`BSK-W0061`（有效但宽泛）、`BSK-W0062`（未使用）与
-`BSK-E0063`（格式错误）。它们和其他规则一样可分别配置为 error、warning、
+`suppressions` 标签下的四条审计规则默认全部关闭：`BSK-0060`（有效且
+精确）、`BSK-0061`（有效但宽泛）、`BSK-0062`（未使用）与
+`BSK-0063`（格式错误）。它们和其他规则一样可分别配置为 error、warning、
 info 或 disabled。格式错误的指令可以被审计，但绝不会真正抑制诊断。
 
 ---

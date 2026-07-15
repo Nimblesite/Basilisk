@@ -394,7 +394,7 @@ for FILE in "${FIXTURES[@]}"; do
     output="$($CMD 2>/dev/null)"; code=$?
     case "$name" in
       # Conformance rules use their rule name as the code (error[typeddicts_inheritance]);
-      # house rules use BSK-XXXX (error[BSK-E0001]) — match any error[...] diagnostic.
+      # house rules use BSK-XXXX (error[BSK-0001]) — match any error[...] diagnostic.
       basilisk) n=$(printf '%s\n' "$output" | grep -cE "^error\[" || true) ;;
       pyright)  n=$(printf '%s\n' "$output" | grep -cE " - error:" || true) ;;
       mypy)     n=$(printf '%s\n' "$output" | grep -cE ": error:" || true) ;;

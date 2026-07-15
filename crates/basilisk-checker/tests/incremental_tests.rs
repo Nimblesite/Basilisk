@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use basilisk_checker::{
     checked_file, file_diagnostics, ConfigInput, ConfigValue, Diagnostic, SourceFile,
 };
-use basilisk_config::{BasiliskConfig, ModuleOverride, PathOverride};
+use basilisk_config::{BasiliskConfig, RuleTables};
 use basilisk_test_utils::EventDb;
 use salsa::Setter;
 
@@ -54,13 +54,13 @@ fn default_config(db: &EventDb) -> ConfigInput {
 }
 
 fn e0001_config() -> BasiliskConfig {
-    BasiliskConfig {
-        rules: HashMap::from([("BSK-E0001".to_owned(), basilisk_config::RuleSeverity::Error)]),
-        ..BasiliskConfig::default()
-    }
+    BasiliskConfig::with_rule_entries(HashMap::from([(
+        "BSK-0001".to_owned(),
+        basilisk_config::RuleSeverity::Error,
+    )]))
 }
 
-/// A `ConfigInput` with BSK-E0001 explicitly enabled.
+/// A `ConfigInput` with BSK-0001 explicitly enabled.
 fn strict_config(db: &EventDb) -> ConfigInput {
     ConfigInput::new(db, ConfigValue(e0001_config()))
 }
@@ -180,13 +180,13 @@ fn editing_one_file_does_not_recheck_another() {
 }
 
 /// The query must honour the configuration, not a hard-wired default: the same
-/// source yields BSK-E0001 (an opt-in strict-annotation rule) only when the
-/// `ConfigInput` assigns BSK-E0001 an explicit severity. Kills the `check_with_config` →
+/// source yields BSK-0001 (an opt-in strict-annotation rule) only when the
+/// `ConfigInput` assigns BSK-0001 an explicit severity. Kills the `check_with_config` →
 /// `check` mutant. [CHKARCH-CONFIGURATION-ONLY]
 #[test]
 fn checked_file_honours_explicit_rule_severity() {
     let db = EventDb::default();
-    // An unannotated parameter: spec-valid under default config, BSK-E0001 under
+    // An unannotated parameter: spec-valid under default config, BSK-0001 under
     // the opt-in strict-annotation rules.
     let file = SourceFile::new(
         &db,
@@ -196,14 +196,14 @@ fn checked_file_honours_explicit_rule_severity() {
 
     let default_diags = file_diagnostics(&db, file, default_config(&db));
     assert!(
-        !default_diags.iter().any(|d| d.code.code == "BSK-E0001"),
-        "with the default config the opt-in rule BSK-E0001 must NOT fire"
+        !default_diags.iter().any(|d| d.code.code == "BSK-0001"),
+        "with the default config the opt-in rule BSK-0001 must NOT fire"
     );
 
     let strict_diags = file_diagnostics(&db, file, strict_config(&db));
     assert!(
-        strict_diags.iter().any(|d| d.code.code == "BSK-E0001"),
-        "an explicit severity must surface BSK-E0001 for the unannotated parameter"
+        strict_diags.iter().any(|d| d.code.code == "BSK-0001"),
+        "an explicit severity must surface BSK-0001 for the unannotated parameter"
     );
 }
 
@@ -232,33 +232,27 @@ fn editing_config_input_invalidates_checked_file() {
         "editing the config input must re-execute the query exactly once"
     );
     assert!(
-        after.iter().any(|d| d.code.code == "BSK-E0001"),
-        "after configuring BSK-E0001 the re-checked file must surface it"
+        after.iter().any(|d| d.code.code == "BSK-0001"),
+        "after configuring BSK-0001 the re-checked file must surface it"
     );
 }
 
-/// Editing nested override maps (not just scalar fields) invalidates the query,
-/// proving the config's *value identity* — down through the `ModuleOverride` and
-/// `PathOverride` maps — drives salsa invalidation.
+/// Editing the rule chain (not just scalar fields) invalidates the query,
+/// proving the config's *value identity* — down through [`RuleTables`] rule
+/// and tag entries — drives salsa invalidation. [CHKARCH-CONFIG-MODEL]
 #[test]
-fn editing_override_maps_reinvalidates() {
+fn editing_rule_chain_reinvalidates() {
     let mut db = EventDb::default();
     let file = SourceFile::new(&db, "f.py".to_owned(), "x: int = 1\n".to_owned());
 
     let base = BasiliskConfig {
-        per_module_overrides: HashMap::from([(
-            "m".to_owned(),
-            ModuleOverride {
-                ignore_missing_stubs: false,
-            },
-        )]),
-        per_path_overrides: HashMap::from([(
-            "/p".to_owned(),
-            PathOverride {
-                disabled_rules: Vec::new(),
-                rule_overrides: HashMap::new(),
-            },
-        )]),
+        rule_chain: vec![RuleTables {
+            rules: HashMap::from([(
+                "BSK-0001".to_owned(),
+                basilisk_config::RuleSeverity::Warning,
+            )]),
+            rule_tags: HashMap::new(),
+        }],
         ..BasiliskConfig::default()
     };
     let config = ConfigInput::new(&db, ConfigValue(base.clone()));
@@ -266,14 +260,13 @@ fn editing_override_maps_reinvalidates() {
     let _first = checked_file(&db, file, config);
     let _ = db.executions_of("checked_file"); // drain priming
 
-    // Edit A: flip the per-module override value (same key) — drives ModuleOverride::eq.
+    // Edit A: flip the per-rule entry's severity (same key) — drives
+    // RuleTables::eq through the rules map.
     let cfg_a = BasiliskConfig {
-        per_module_overrides: HashMap::from([(
-            "m".to_owned(),
-            ModuleOverride {
-                ignore_missing_stubs: true,
-            },
-        )]),
+        rule_chain: vec![RuleTables {
+            rules: HashMap::from([("BSK-0001".to_owned(), basilisk_config::RuleSeverity::Error)]),
+            rule_tags: HashMap::new(),
+        }],
         ..base.clone()
     };
     let _previous_a = config.set_value(&mut db).to(ConfigValue(cfg_a.clone()));
@@ -281,19 +274,19 @@ fn editing_override_maps_reinvalidates() {
     assert_eq!(
         db.executions_of("checked_file"),
         1,
-        "changing a per-module override must re-execute the query (drives ModuleOverride::eq)"
+        "changing a rule entry must re-execute the query (drives RuleTables::eq)"
     );
 
-    // Edit B: change a per-path override's disabled_rules, module map held
-    // identical — forces PathOverride::eq past the equal ModuleOverride map.
+    // Edit B: add a tag entry, rules map held identical — forces
+    // RuleTables::eq past the equal rules map.
     let cfg_b = BasiliskConfig {
-        per_path_overrides: HashMap::from([(
-            "/p".to_owned(),
-            PathOverride {
-                disabled_rules: vec!["imports_unresolved".to_owned()],
-                rule_overrides: HashMap::new(),
-            },
-        )]),
+        rule_chain: vec![RuleTables {
+            rules: HashMap::from([("BSK-0001".to_owned(), basilisk_config::RuleSeverity::Error)]),
+            rule_tags: HashMap::from([(
+                "basilisk".to_owned(),
+                basilisk_config::RuleSeverity::Error,
+            )]),
+        }],
         ..cfg_a
     };
     let _previous_b = config.set_value(&mut db).to(ConfigValue(cfg_b));
@@ -301,30 +294,24 @@ fn editing_override_maps_reinvalidates() {
     assert_eq!(
         db.executions_of("checked_file"),
         1,
-        "changing a per-path override must re-execute the query (drives PathOverride::eq)"
+        "changing a tag entry must re-execute the query (drives RuleTables::eq)"
     );
 }
 
-/// Direct coverage of the new `PartialEq`/`Eq` derives on `BasiliskConfig` and
-/// its override structs: equal configs compare equal, and a difference in either
-/// override map (or a scalar field) compares unequal. This pins value identity
+/// Direct coverage of the `PartialEq`/`Eq` derives on `BasiliskConfig` and
+/// [`RuleTables`]: equal configs compare equal, and a difference in either
+/// entry map (or a scalar field) compares unequal. This pins value identity
 /// independently of salsa's internal use of it.
 #[test]
-fn config_value_equality_distinguishes_overrides() {
+fn config_value_equality_distinguishes_rule_chain() {
     let base = BasiliskConfig {
-        per_module_overrides: HashMap::from([(
-            "m".to_owned(),
-            ModuleOverride {
-                ignore_missing_stubs: false,
-            },
-        )]),
-        per_path_overrides: HashMap::from([(
-            "/p".to_owned(),
-            PathOverride {
-                disabled_rules: Vec::new(),
-                rule_overrides: HashMap::new(),
-            },
-        )]),
+        rule_chain: vec![RuleTables {
+            rules: HashMap::from([(
+                "BSK-0001".to_owned(),
+                basilisk_config::RuleSeverity::Warning,
+            )]),
+            rule_tags: HashMap::new(),
+        }],
         ..BasiliskConfig::default()
     };
 
@@ -334,35 +321,36 @@ fn config_value_equality_distinguishes_overrides() {
         "structurally identical configs must compare equal"
     );
 
-    let module_diff = BasiliskConfig {
-        per_module_overrides: HashMap::from([(
-            "m".to_owned(),
-            ModuleOverride {
-                ignore_missing_stubs: true,
-            },
-        )]),
+    let rule_diff = BasiliskConfig {
+        rule_chain: vec![RuleTables {
+            rules: HashMap::from([("BSK-0001".to_owned(), basilisk_config::RuleSeverity::Error)]),
+            rule_tags: HashMap::new(),
+        }],
         ..base.clone()
     };
     assert_ne!(
         ConfigValue(base.clone()),
-        ConfigValue(module_diff),
-        "a per-module override difference must compare unequal (ModuleOverride::eq)"
+        ConfigValue(rule_diff),
+        "a rule-entry difference must compare unequal (RuleTables::eq)"
     );
 
-    let path_diff = BasiliskConfig {
-        per_path_overrides: HashMap::from([(
-            "/p".to_owned(),
-            PathOverride {
-                disabled_rules: vec!["imports_unresolved".to_owned()],
-                rule_overrides: HashMap::new(),
-            },
-        )]),
+    let tag_diff = BasiliskConfig {
+        rule_chain: vec![RuleTables {
+            rules: HashMap::from([(
+                "BSK-0001".to_owned(),
+                basilisk_config::RuleSeverity::Warning,
+            )]),
+            rule_tags: HashMap::from([(
+                "basilisk".to_owned(),
+                basilisk_config::RuleSeverity::Error,
+            )]),
+        }],
         ..base.clone()
     };
     assert_ne!(
         ConfigValue(base.clone()),
-        ConfigValue(path_diff),
-        "a per-path override difference must compare unequal (PathOverride::eq)"
+        ConfigValue(tag_diff),
+        "a tag-entry difference must compare unequal (RuleTables::eq)"
     );
 
     let scalar_diff = BasiliskConfig {

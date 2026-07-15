@@ -205,7 +205,7 @@ def read_rate() -> int:
 
 #[tokio::test]
 async fn test_ws_multiple_rules_same_file() -> TestResult<()> {
-    // This file intentionally triggers BSK-E0001, BSK-E0002, E0014, E0023
+    // This file intentionally triggers BSK-0001, BSK-0002, E0014, E0023
     let code = "\
 count: int = \"wrong\"
 
@@ -239,10 +239,10 @@ def classify(x):
         );
     }
 
-    // Must fire at least BSK-E0001 (unannotated param) and E0014 (int = "wrong")
+    // Must fire at least BSK-0001 (unannotated param) and E0014 (int = "wrong")
     assert!(
-        extract_diagnostic(&json, "BSK-E0001").is_some(),
-        "should fire BSK-E0001 for unannotated param: {raw}"
+        extract_diagnostic(&json, "BSK-0001").is_some(),
+        "should fire BSK-0001 for unannotated param: {raw}"
     );
     assert!(
         extract_diagnostic(&json, "assignment_compatibility").is_some(),

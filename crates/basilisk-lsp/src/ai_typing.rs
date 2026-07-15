@@ -79,7 +79,7 @@ pub enum FixSource {
 // Implements [LSPAI-CONTEXT]: a flat diagnostic/source/position payload.
 #[derive(Debug)]
 pub struct AiTypingRequest {
-    /// The diagnostic code (e.g. `"BSK-E0001"`).
+    /// The diagnostic code (e.g. `"BSK-0001"`).
     pub diagnostic_code: String,
     /// Human-readable diagnostic message.
     pub diagnostic_message: String,
@@ -177,7 +177,7 @@ mod tests {
 
     fn sample_request() -> AiTypingRequest {
         AiTypingRequest {
-            diagnostic_code: "BSK-E0001".to_owned(),
+            diagnostic_code: "BSK-0001".to_owned(),
             diagnostic_message: "Missing type annotation".to_owned(),
             source_context: "def foo(x): ...".to_owned(),
             file_path: "test.py".to_owned(),

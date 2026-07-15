@@ -17,7 +17,7 @@ async fn test_ws_whole_module_startup_scan_publishes_diagnostics() -> TestResult
     // missing-annotation diagnostics fire. See [CHKARCH-CONFIGURATION-ONLY].
     std::fs::write(
         dir.join("pyproject.toml"),
-        "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
+        "[tool.basilisk.rules]\n\"BSK-0001\" = \"error\"\n\"BSK-0002\" = \"error\"\n",
     )?;
     std::fs::write(
         dir.join("check_me.py"),
@@ -230,7 +230,7 @@ async fn test_ws_whole_module_did_close_disk_file_keeps_diagnostics() -> TestRes
     // missing-annotation diagnostics fire. See [CHKARCH-CONFIGURATION-ONLY].
     std::fs::write(
         dir.join("pyproject.toml"),
-        "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
+        "[tool.basilisk.rules]\n\"BSK-0001\" = \"error\"\n\"BSK-0002\" = \"error\"\n",
     )?;
     let file_path = dir.join("wm_close_disk.py");
     std::fs::write(

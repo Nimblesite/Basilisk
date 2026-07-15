@@ -1,54 +1,32 @@
-//! Mutation validation, selector expansion, and impact projection.
+//! Mutation validation and effective-severity change projection.
+//!
+//! Implements [CONFIGEDITOR-OPERATIONS]: a mutation is `SetRule`,
+//! `RemoveRule`, `SetTag`, or `RemoveTag` — nothing else. Requesting
+//! `disabled` for a `pep`-tagged rule (directly, or via a tag entry that
+//! would resolve one to `disabled`) is a request error
+//! ([CHKARCH-CONFIG-MODEL]).
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::HashSet;
 
-use basilisk_config::{
-    ConfigDocument, ConfigPatch, RuleConfigScope, RuleConfigUpdate, RuleSeverity as ConfigSeverity,
-};
+use basilisk_config::{BasiliskConfig, ConfigDocument, RuleConfigUpdate};
 use tower_lsp::jsonrpc::{Error, Result as LspResult};
 
-use super::catalog::{descriptors, expand_selector, setting_severity, severities, SelectionError};
+use super::catalog::{descriptors, effective_severity, wire_to_config, SelectionError};
 use super::model::{
-    ConfigurationImpact, MutationScope, PreviewConfigurationRequest, ResolvedConfigurationChange,
-    RuleSelector, RuleSetting,
+    ConfigurationImpact, EditorMutation, ResolvedRuleChange, RuleDescriptor, RuleSeverity,
 };
 use super::protocol::{path_uri, rpc_error, rpc_error_data};
+use super::snapshot::{count_i64, Inventory};
 
-pub(super) fn validate_selector(selector: &RuleSelector) -> LspResult<()> {
-    match selector {
-        RuleSelector::Codes { codes } if codes.is_empty() => Err(rpc_error(
-            "invalidMutation",
-            "a code selector requires at least one rule code",
-        )),
-        RuleSelector::Tags { tags, .. } if tags.is_empty() => Err(rpc_error(
-            "invalidMutation",
-            "a tag selector requires at least one tag",
-        )),
-        _ => Ok(()),
-    }
-}
-
+/// Reject active configuration whose rule entries name unknown rules.
 pub(super) fn validate_document_rules(document: &ConfigDocument) -> LspResult<()> {
     let catalog = descriptors();
     let known: HashSet<&str> = catalog.iter().map(|rule| rule.code.as_str()).collect();
     let unknown = document
         .config
-        .rules
-        .keys()
-        .chain(
-            document
-                .config
-                .per_path_overrides
-                .values()
-                .flat_map(|entry| entry.rule_overrides.keys()),
-        )
-        .chain(
-            document
-                .config
-                .per_path_overrides
-                .values()
-                .flat_map(|entry| entry.disabled_rules.iter()),
-        )
+        .nearest_tables()
+        .into_iter()
+        .flat_map(|tables| tables.rules.keys())
         .find(|code| !known.contains(code.as_str()));
     if let Some(code) = unknown {
         Err(rpc_error_data(
@@ -61,201 +39,124 @@ pub(super) fn validate_document_rules(document: &ConfigDocument) -> LspResult<()
     }
 }
 
-pub(super) fn expand_mutations(
-    request: &PreviewConfigurationRequest,
-    catalog: &[super::model::RuleDescriptor],
-    counts: &HashMap<String, usize>,
-) -> LspResult<(Vec<RuleConfigUpdate>, Vec<String>)> {
-    let by_code: HashMap<&str, &super::model::RuleDescriptor> = catalog
+/// Fold the requested mutations into one validated entry update.
+///
+/// Implements [CONFIGEDITOR-OPERATIONS] and `EditorMutation` in
+/// `models/configuration_editor.td`: unknown codes and tags are request
+/// errors, and an explicit `SetRule(disabled)` on a `pep` rule fails before
+/// any patch is rendered.
+pub(super) fn build_update(
+    mutations: &[EditorMutation],
+    catalog: &[RuleDescriptor],
+) -> LspResult<RuleConfigUpdate> {
+    let known_codes: HashSet<&str> = catalog.iter().map(|rule| rule.code.as_str()).collect();
+    let known_tags: HashSet<&str> = catalog
         .iter()
-        .map(|descriptor| (descriptor.code.as_str(), descriptor))
+        .flat_map(|rule| rule.tags.iter().map(String::as_str))
         .collect();
-    let mut updates: Vec<RuleConfigUpdate> = Vec::new();
-    let mut expanded = HashSet::new();
-    for mutation in &request.mutations {
-        let codes =
-            expand_selector(&mutation.selector, catalog, counts).map_err(selection_error)?;
-        let scope = mutation_scope(&mutation.scope)?;
-        if !updates.iter().any(|update| update.scope == scope) {
-            updates.push(RuleConfigUpdate {
-                scope: scope.clone(),
-                rules: BTreeMap::new(),
-            });
-        }
-        let target = updates
-            .iter_mut()
-            .find(|update| update.scope == scope)
-            .ok_or_else(|| rpc_error("invalidMutation", "failed to group mutation scope"))?;
-        for code in codes {
-            let descriptor = by_code.get(code.as_str()).ok_or_else(|| {
-                rpc_error_data(
-                    "unknownRule",
-                    "rule disappeared during selector expansion",
-                    serde_json::json!({ "rule": code }),
-                )
-            })?;
-            let _ = target
-                .rules
-                .insert(code.clone(), setting_severity(mutation.setting, descriptor));
-            let _ = expanded.insert(code);
+    let mut update = RuleConfigUpdate::default();
+    for mutation in mutations {
+        match mutation {
+            EditorMutation::SetRule { code, severity } => {
+                require_known_rule(&known_codes, code)?;
+                if *severity == RuleSeverity::Disabled && basilisk_checker::is_pep_rule(code) {
+                    return Err(pep_disable_error(std::slice::from_ref(code)));
+                }
+                let _ = update
+                    .rules
+                    .insert(code.clone(), Some(wire_to_config(*severity)));
+            }
+            EditorMutation::RemoveRule { code } => {
+                require_known_rule(&known_codes, code)?;
+                let _ = update.rules.insert(code.clone(), None);
+            }
+            EditorMutation::SetTag { tag, severity } => {
+                require_known_tag(&known_tags, tag)?;
+                let _ = update
+                    .rule_tags
+                    .insert(tag.clone(), Some(wire_to_config(*severity)));
+            }
+            EditorMutation::RemoveTag { tag } => {
+                require_known_tag(&known_tags, tag)?;
+                let _ = update.rule_tags.insert(tag.clone(), None);
+            }
         }
     }
-    let expanded_rule_codes = catalog
-        .iter()
-        .filter(|rule| expanded.contains(&rule.code))
-        .map(|rule| rule.code.clone())
-        .collect();
-    Ok((updates, expanded_rule_codes))
+    Ok(update)
 }
 
-fn mutation_scope(scope: &MutationScope) -> LspResult<RuleConfigScope> {
-    match scope {
-        MutationScope::Project => Ok(RuleConfigScope::Project),
-        MutationScope::Path { pattern } => {
-            validate_path_pattern(pattern)?;
-            Ok(RuleConfigScope::Path {
-                pattern: pattern.clone(),
-                adoption: false,
-            })
-        }
+/// Reject a hypothetical configuration that resolves any `pep` rule to
+/// `disabled` ([CHKARCH-CONFIG-MODEL]) — by rule entry or tag entry.
+pub(super) fn require_no_pep_disable(config: &BasiliskConfig) -> LspResult<()> {
+    let violations = basilisk_checker::pep_disable_violations(config);
+    if violations.is_empty() {
+        Ok(())
+    } else {
+        Err(pep_disable_error(&violations))
     }
 }
 
-fn validate_path_pattern(pattern: &str) -> LspResult<()> {
-    let trimmed = pattern.trim();
-    if trimmed.is_empty() || matches!(trimmed, "." | "./") {
-        return Err(invalid_path_pattern(
-            "path mutation pattern must select a project-relative path",
-        ));
-    }
-    if trimmed != pattern {
-        return Err(invalid_path_pattern(
-            "path mutation pattern must not have leading or trailing whitespace",
-        ));
-    }
-    let bytes = pattern.as_bytes();
-    let windows_absolute =
-        bytes.get(1) == Some(&b':') && bytes.first().is_some_and(u8::is_ascii_alphabetic);
-    if pattern.starts_with('/') || pattern.starts_with('\\') || windows_absolute {
-        return Err(invalid_path_pattern(
-            "path mutation pattern must not be absolute",
-        ));
-    }
-    if pattern.contains('\\') {
-        return Err(invalid_path_pattern(
-            "path mutation pattern must use forward-slash separators",
-        ));
-    }
-    if pattern.chars().any(char::is_control) {
-        return Err(invalid_path_pattern(
-            "path mutation pattern must not contain control characters",
-        ));
-    }
-    if pattern
-        .split('/')
-        .any(|component| component.is_empty() || matches!(component, "." | ".."))
-    {
-        return Err(invalid_path_pattern(
-            "path mutation pattern contains an empty, dot, or parent component",
-        ));
-    }
-    Ok(())
+fn pep_disable_error<S: AsRef<str>>(codes: &[S]) -> Error {
+    rpc_error_data(
+        "pepRuleDisable",
+        "pep rules are graded, never disabled",
+        serde_json::json!({
+            "rules": codes.iter().map(AsRef::as_ref).collect::<Vec<_>>(),
+        }),
+    )
 }
 
-fn invalid_path_pattern(message: &str) -> Error {
-    rpc_error("invalidMutation", message)
-}
-
-pub(super) fn build_impact(
-    patch: &ConfigPatch,
-    catalog: &[super::model::RuleDescriptor],
-    changes: &[ResolvedConfigurationChange],
-    before: &super::snapshot::Inventory,
-    after: &super::snapshot::Inventory,
-) -> ConfigurationImpact {
-    let changed_rules = changes
-        .iter()
-        .map(|change| change.rule_code.as_str())
-        .collect::<HashSet<_>>()
-        .len();
-    let enabled_rules = catalog
-        .iter()
-        .filter(|rule| severities(rule, &patch.config).1 != super::model::RuleSeverity::Disabled)
-        .count();
-    let disabled_rules = catalog.len().saturating_sub(enabled_rules);
-    ConfigurationImpact {
-        changed_rules: count_i64(changed_rules),
-        enabled_rules: count_i64(enabled_rules),
-        disabled_rules: count_i64(disabled_rules),
-        diagnostics_before: count_i64(before.total),
-        diagnostics_after: count_i64(after.total),
-        errors_before: count_i64(before.errors),
-        errors_after: count_i64(after.errors),
-        warnings_before: count_i64(before.warnings),
-        warnings_after: count_i64(after.warnings),
+fn require_known_rule(known: &HashSet<&str>, code: &str) -> LspResult<()> {
+    if known.contains(code) {
+        Ok(())
+    } else {
+        Err(selection_error(SelectionError::UnknownRule(
+            code.to_owned(),
+        )))
     }
 }
 
-/// Project the concrete config entries that a preview would actually change.
+fn require_known_tag(known: &HashSet<&str>, tag: &str) -> LspResult<()> {
+    if known.contains(tag) {
+        Ok(())
+    } else {
+        Err(selection_error(SelectionError::UnknownTag(tag.to_owned())))
+    }
+}
+
+/// Project the fully resolved per-rule effective-severity changes.
+///
+/// Implements [CONFIGEDITOR-MODEL]: a preview reports what actually changes
+/// after resolution — rules whose effective severity is identical on both
+/// sides are omitted.
 pub(super) fn resolved_changes(
-    document: &ConfigDocument,
-    updates: &[RuleConfigUpdate],
-) -> Vec<ResolvedConfigurationChange> {
-    updates
+    catalog: &[RuleDescriptor],
+    before: &BasiliskConfig,
+    after: &BasiliskConfig,
+) -> Vec<ResolvedRuleChange> {
+    catalog
         .iter()
-        .flat_map(|update| {
-            update.rules.iter().filter_map(|(code, severity)| {
-                let before = configured_in_scope(document, &update.scope, code);
-                (before != *severity).then(|| ResolvedConfigurationChange {
-                    rule_code: code.clone(),
-                    scope: wire_scope(&update.scope),
-                    previous_setting: wire_setting(before),
-                    resulting_setting: wire_setting(*severity),
-                })
+        .filter_map(|descriptor| {
+            let previous = effective_severity(descriptor, before);
+            let next = effective_severity(descriptor, after);
+            (previous != next).then(|| ResolvedRuleChange {
+                code: descriptor.code.clone(),
+                before: previous,
+                after: next,
             })
         })
         .collect()
 }
 
-fn configured_in_scope(
-    document: &ConfigDocument,
-    scope: &RuleConfigScope,
-    code: &str,
-) -> Option<ConfigSeverity> {
-    match scope {
-        RuleConfigScope::Project => document.config.rules.get(code).copied(),
-        RuleConfigScope::Path { pattern, .. } => document
-            .config
-            .per_path_overrides
-            .get(pattern)
-            .and_then(|entry| {
-                entry.rule_overrides.get(code).copied().or_else(|| {
-                    entry
-                        .disabled_rules
-                        .iter()
-                        .any(|disabled| disabled == code)
-                        .then_some(ConfigSeverity::Disabled)
-                })
-            }),
-    }
-}
-
-fn wire_scope(scope: &RuleConfigScope) -> MutationScope {
-    match scope {
-        RuleConfigScope::Project => MutationScope::Project,
-        RuleConfigScope::Path { pattern, .. } => MutationScope::Path {
-            pattern: pattern.clone(),
-        },
-    }
-}
-
-const fn wire_setting(severity: Option<ConfigSeverity>) -> RuleSetting {
-    match severity {
-        None => RuleSetting::Inherit,
-        Some(ConfigSeverity::Error) => RuleSetting::Error,
-        Some(ConfigSeverity::Warning) => RuleSetting::Warning,
-        Some(ConfigSeverity::Info) => RuleSetting::Info,
-        Some(ConfigSeverity::Disabled) => RuleSetting::Disabled,
+/// Fold both inventories into the complete before/after impact partition.
+pub(super) fn build_impact(before: &Inventory, after: &Inventory) -> ConfigurationImpact {
+    ConfigurationImpact {
+        errors_before: count_i64(before.errors),
+        errors_after: count_i64(after.errors),
+        warnings_before: count_i64(before.warnings),
+        warnings_after: count_i64(after.warnings),
+        infos_before: count_i64(before.infos),
+        infos_after: count_i64(after.infos),
     }
 }
 
@@ -275,19 +176,27 @@ pub(super) fn selection_error(error: SelectionError) -> Error {
     match error {
         SelectionError::UnknownRule(rule) => rpc_error_data(
             "unknownRule",
-            "selector contains an unknown rule",
+            "request names an unknown rule",
             serde_json::json!({ "rule": rule }),
         ),
         SelectionError::UnknownTag(tag) => rpc_error_data(
             "unknownTag",
-            "selector contains an unknown tag",
+            "request names an unknown tag",
             serde_json::json!({ "tag": tag }),
         ),
     }
 }
 
-fn count_i64(value: usize) -> i64 {
-    i64::try_from(value).unwrap_or(i64::MAX)
+/// Reject an empty mutation list before any state is touched.
+pub(super) fn require_mutations(mutations: &[EditorMutation]) -> LspResult<()> {
+    if mutations.is_empty() {
+        Err(rpc_error(
+            "invalidMutation",
+            "configuration preview requires at least one mutation",
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

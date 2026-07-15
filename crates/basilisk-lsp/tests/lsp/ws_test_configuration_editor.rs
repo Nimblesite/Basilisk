@@ -1,11 +1,11 @@
 //! Tests for [LSPARCH-CONFIG-EDITOR], [CONFIGEDITOR-OPERATIONS],
-//! [CONFIGEDITOR-SOURCES-OPEN-BUFFER], and [CONFIGEDITOR-ADOPTION].
-//! See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR.
+//! [CONFIGEDITOR-MODEL], and [CONFIGEDITOR-SOURCES-OPEN-BUFFER].
+//! See docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md.
 //!
-//! Drives the typed configuration-editor protocol end to end over the real
+//! Drives the typed configuration-editor protocol v2 end to end over the real
 //! WebSocket server: snapshot → preview → apply (answering the server's
-//! `workspace/applyEdit` round trip), rule occurrences, adoption commands,
-//! and open-buffer configuration authority.
+//! `workspace/applyEdit` round trip), rule occurrences, and open-buffer
+//! configuration authority.
 
 use super::ws_test_common::*;
 
@@ -96,6 +96,15 @@ pub fn rule_state<'a>(
     })
 }
 
+pub fn tag_state<'a>(
+    snapshot: &'a serde_json::Value,
+    name: &str,
+) -> Option<&'a serde_json::Value> {
+    snapshot.get("tags")?.as_array()?.iter().find(|state| {
+        state.get("name").and_then(serde_json::Value::as_str) == Some(name)
+    })
+}
+
 pub async fn snapshot_result(
     fixture: &mut WsTestFixture,
     id: u64,
@@ -115,8 +124,9 @@ pub async fn snapshot_result(
         .ok_or_else(|| format!("configurationSnapshot returned no result: {response}").into())
 }
 
-// Implements [CONFIGEDITOR-OPERATIONS]: the snapshot mirrors the live catalog,
-// the configured source, and the debt produced by real diagnostics.
+// Implements [CONFIGEDITOR-MODEL]: the snapshot is the root, the config
+// document URI, a revision, rule states (entry + effective severity +
+// diagnostic count), and tag states with their entries — nothing else.
 #[tokio::test]
 async fn configuration_snapshot_reflects_live_diagnostics() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
@@ -131,34 +141,36 @@ async fn configuration_snapshot_reflects_live_diagnostics() -> TestResult<()> {
         .get("revision")
         .and_then(serde_json::Value::as_str)
         .is_some_and(|revision| !revision.is_empty()));
-    assert_eq!(
-        snapshot.pointer("/source/format/kind"),
-        Some(&serde_json::json!("PyprojectToml"))
-    );
-    assert_eq!(
-        snapshot.pointer("/source/exists"),
-        Some(&serde_json::json!(true))
-    );
+    assert!(snapshot
+        .get("configUri")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|config_uri| config_uri.ends_with("pyproject.toml")));
     let annotation =
-        rule_state(&snapshot, "BSK-E0001").ok_or("BSK-E0001 missing from snapshot rules")?;
+        rule_state(&snapshot, "BSK-0001").ok_or("BSK-0001 missing from snapshot rules")?;
     assert_eq!(
-        annotation.pointer("/configuredSeverity/kind"),
+        annotation.pointer("/entry/kind"),
+        Some(&serde_json::json!("Error"))
+    );
+    assert_eq!(
+        annotation.pointer("/effectiveSeverity/kind"),
         Some(&serde_json::json!("Error"))
     );
     assert!(annotation
         .get("diagnosticCount")
         .and_then(serde_json::Value::as_i64)
         .is_some_and(|count| count >= 1));
-    assert!(snapshot
-        .pointer("/debt/remainingDiagnostics")
-        .and_then(serde_json::Value::as_i64)
-        .is_some_and(|count| count >= 1));
+    // Removed v1 machinery must be absent from the wire ([CONFIGEDITOR-ACCEPTANCE]).
+    for gone in ["presets", "debt", "pathOverrides", "problems", "source"] {
+        assert!(
+            snapshot.get(gone).is_none(),
+            "removed field '{gone}' must not be serialized: {snapshot}"
+        );
+    }
+    // The provenance tag facets are present ([CONFIGEDITOR-TAGS]).
+    let pep_tag = tag_state(&snapshot, "pep").ok_or("pep tag missing from snapshot")?;
     assert_eq!(
-        snapshot
-            .get("presets")
-            .and_then(serde_json::Value::as_array)
-            .map(Vec::len),
-        Some(3)
+        pep_tag.pointer("/kind/kind"),
+        Some(&serde_json::json!("Provenance"))
     );
     Ok(())
 }
@@ -208,7 +220,7 @@ async fn open_configuration_buffer_overrides_disk_until_closed() -> TestResult<(
                     "uri": config_uri,
                     "languageId": "toml",
                     "version": 3,
-                    "text": "[tool.basilisk.rules]\n\"BSK-E0001\" = \"info\"\n"
+                    "text": "[tool.basilisk.rules]\n\"BSK-0001\" = \"info\"\n"
                 }
             }
         }))
@@ -216,9 +228,9 @@ async fn open_configuration_buffer_overrides_disk_until_closed() -> TestResult<(
 
     let buffered = snapshot_result(&mut fixture, 790).await?;
     let buffered_rule =
-        rule_state(&buffered, "BSK-E0001").ok_or("BSK-E0001 missing from buffered snapshot")?;
+        rule_state(&buffered, "BSK-0001").ok_or("BSK-0001 missing from buffered snapshot")?;
     assert_eq!(
-        buffered_rule.pointer("/configuredSeverity/kind"),
+        buffered_rule.pointer("/entry/kind"),
         Some(&serde_json::json!("Info")),
         "open buffer must override the on-disk severity: {buffered}"
     );
@@ -226,9 +238,9 @@ async fn open_configuration_buffer_overrides_disk_until_closed() -> TestResult<(
     fixture.did_close(&config_uri).await?;
     let from_disk = snapshot_result(&mut fixture, 791).await?;
     let disk_rule =
-        rule_state(&from_disk, "BSK-E0001").ok_or("BSK-E0001 missing from disk snapshot")?;
+        rule_state(&from_disk, "BSK-0001").ok_or("BSK-0001 missing from disk snapshot")?;
     assert_eq!(
-        disk_rule.pointer("/configuredSeverity/kind"),
+        disk_rule.pointer("/entry/kind"),
         Some(&serde_json::json!("Error")),
         "closing the buffer must restore disk authority: {from_disk}"
     );

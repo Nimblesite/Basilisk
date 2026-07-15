@@ -169,8 +169,8 @@ mod tests {
     fn diag(help: Option<&str>, note: Option<&str>) -> basilisk_checker::Diagnostic {
         basilisk_checker::Diagnostic {
             code: basilisk_checker::ErrorCode {
-                code: "BSK-E0152",
-                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0152",
+                code: "BSK-0152",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-0152",
             },
             severity: basilisk_checker::Severity::Error,
             message: "Package `acme` is installed but has no type stubs available".to_owned(),

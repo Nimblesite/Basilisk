@@ -1,9 +1,12 @@
 //! Implements [CONFIGEDITOR-TAGS] and [CHKTAG-CONSUMERS].
 //! Public, live metadata for every rule in the checker registry.
 
-use crate::diagnostic::Severity;
-
 /// Stable metadata needed by configuration clients.
+///
+/// Mirrors `RuleDescriptor` in `models/configuration_editor.td`: code, prose,
+/// documentation URL, and canonical tags. A descriptor carries no severity —
+/// severity comes only from configuration entries ([CHKARCH-CONFIG-MODEL]),
+/// and scope comes from the `pep` provenance tag ([CHKARCH-COMMANDS]).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuleDescriptor {
@@ -15,10 +18,6 @@ pub struct RuleDescriptor {
     pub summary: &'static str,
     /// Canonical documentation page.
     pub docs_url: &'static str,
-    /// Native severity when the rule is enabled and not overridden.
-    pub default_severity: Severity,
-    /// Whether an unconfigured project selects this rule.
-    pub default_enabled: bool,
     /// Canonical provenance, PEP-category, and descriptive tags.
     pub tags: Vec<&'static str>,
 }
@@ -29,7 +28,6 @@ struct GeneratedRuleDescriptor {
     title: &'static str,
     summary: &'static str,
     docs_url: &'static str,
-    default_severity: Severity,
 }
 
 include!(concat!(env!("OUT_DIR"), "/rule_catalog_generated.rs"));
@@ -37,9 +35,9 @@ include!(concat!(env!("OUT_DIR"), "/rule_catalog_generated.rs"));
 /// Return the complete rule catalog in live registry order.
 ///
 /// Static prose and code metadata are generated from each registered rule's
-/// source header. Tags and default selection are resolved at runtime through
-/// the same `opt_in_spec` declarations used by checking, so consumers cannot
-/// drift from rule selection.
+/// source header. Tags are resolved at runtime through the same
+/// `opt_in_spec` declarations used by checking, so consumers cannot drift
+/// from rule selection.
 #[must_use]
 pub fn rule_catalog() -> Vec<RuleDescriptor> {
     GENERATED_RULES
@@ -49,8 +47,6 @@ pub fn rule_catalog() -> Vec<RuleDescriptor> {
             title: rule.title,
             summary: rule.summary,
             docs_url: rule.docs_url,
-            default_severity: rule.default_severity,
-            default_enabled: crate::rule_tags::opt_in_spec_for_code(rule.code).is_none(),
             tags: crate::rule_tags::tags_for_code(rule.code),
         })
         .collect()
@@ -71,5 +67,26 @@ mod tests {
             .map(|rule| rule.code)
             .collect::<BTreeSet<_>>();
         assert_eq!(codes.len(), catalog.len(), "catalog codes must be unique");
+    }
+
+    /// [CHKARCH-DIAG-CODES]: codes carry no severity class — `BSK-nnnn` or a
+    /// conformance snake_case name, nothing else.
+    #[test]
+    fn codes_carry_no_severity_class() {
+        for rule in rule_catalog() {
+            let valid_bsk = rule
+                .code
+                .strip_prefix("BSK-")
+                .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()));
+            let valid_named = rule
+                .code
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
+            assert!(
+                valid_bsk || valid_named,
+                "rule code `{}` must be BSK-nnnn or snake_case",
+                rule.code
+            );
+        }
     }
 }

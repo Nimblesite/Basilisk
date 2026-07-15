@@ -9,27 +9,27 @@ from __future__ import annotations
 from typing import Any, overload
 
 
-# ── BSK-E0003: unannotated empty collections ─────────────────────────────────
-_metric_history = []  # BSK-E0003: empty list, type unknown
-_checkpoint_index = {}  # BSK-E0003: empty dict, type unknown
+# ── BSK-0003: unannotated empty collections ─────────────────────────────────
+_metric_history = []  # BSK-0003: empty list, type unknown
+_checkpoint_index = {}  # BSK-0003: empty dict, type unknown
 
 
-# ── BSK-E0001/E0002: untyped training functions ──────────────────────────────
-def forward_pass(model, batch, device):  # BSK-E0001: three untyped params
+# ── BSK-0001/0002: untyped training functions ──────────────────────────────
+def forward_pass(model, batch, device):  # BSK-0001: three untyped params
     inputs, labels = batch
     logits = model(inputs.to(device))
-    return logits  # BSK-E0002: no return type
+    return logits  # BSK-0002: no return type
 
 
-def compute_loss(logits, labels, weights):  # BSK-E0001: three untyped params
+def compute_loss(logits, labels, weights):  # BSK-0001: three untyped params
     loss = ((logits - labels) ** 2).mean()
-    return loss  # BSK-E0002: no return type
+    return loss  # BSK-0002: no return type
 
 
-def backward_and_step(loss, optimizer):  # BSK-E0001: two untyped params
+def backward_and_step(loss, optimizer):  # BSK-0001: two untyped params
     loss.backward()
     optimizer.step()
-    optimizer.zero_grad()  # BSK-E0002: no return type
+    optimizer.zero_grad()  # BSK-0002: no return type
 
 
 # ── returns_compatibility: Any used in public interfaces without justification ────────────
@@ -75,13 +75,13 @@ def run_epoch(data: list[dict[str, float]], validate: bool) -> dict[str, float]:
 
 # ── overloads_consistency: unannotated params make overloads identical ───────────────────
 @overload
-def decode_predictions(raw) -> list[int]: ...  # BSK-E0001: raw untyped
+def decode_predictions(raw) -> list[int]: ...  # BSK-0001: raw untyped
 
 
 @overload
 def decode_predictions(
     raw,
-) -> list[int]: ...  # BSK-E0001 + overloads_consistency: duplicate
+) -> list[int]: ...  # BSK-0001 + overloads_consistency: duplicate
 
 
 def decode_predictions(raw: list[float]) -> list[int]:
@@ -103,7 +103,7 @@ def build_optimizer(name: str, lr: float) -> str:
     # match_exhaustiveness: no wildcard branch — other values fall through silently
 
 
-# ── BSK-E0025: override without @override ────────────────────────────────────
+# ── BSK-0025: override without @override ────────────────────────────────────
 class BaseCallback:
     def on_epoch_end(self, epoch: int, metrics: dict[str, float]) -> None:
         pass
@@ -112,7 +112,7 @@ class BaseCallback:
 class EarlyStoppingCallback(BaseCallback):
     patience: int = 5
 
-    def on_epoch_end(  # BSK-E0025: missing @override
+    def on_epoch_end(  # BSK-0025: missing @override
         self, epoch: int, metrics: dict[str, float]
     ) -> None:
         pass

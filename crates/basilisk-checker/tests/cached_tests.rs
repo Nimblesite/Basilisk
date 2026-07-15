@@ -27,13 +27,13 @@ fn sample(code: &'static str, with_extras: bool) -> Diagnostic {
 
 #[test]
 fn projection_round_trips_through_serde_preserving_every_field() {
-    let original = sample("BSK-E0001", true);
+    let original = sample("BSK-0001", true);
     let cached = CachedDiagnostic::from(&original);
     let json = serde_json::to_string(&cached).expect("serialize");
     let restored: CachedDiagnostic = serde_json::from_str(&json).expect("deserialize");
     let diagnostic = restored.into_diagnostic();
 
-    assert_eq!(diagnostic.code.code, "BSK-E0001");
+    assert_eq!(diagnostic.code.code, "BSK-0001");
     assert_eq!(diagnostic.code.docs_url, original.code.docs_url);
     assert_eq!(diagnostic.severity, Severity::Error);
     assert_eq!(diagnostic.message, "boom");
@@ -46,7 +46,7 @@ fn projection_round_trips_through_serde_preserving_every_field() {
 
 #[test]
 fn optional_fields_round_trip_as_none() {
-    let cached = CachedDiagnostic::from(&sample("BSK-E0002", false));
+    let cached = CachedDiagnostic::from(&sample("BSK-0002", false));
     let diagnostic = cached.into_diagnostic();
     assert_eq!(diagnostic.help, None);
     assert_eq!(diagnostic.note, None);

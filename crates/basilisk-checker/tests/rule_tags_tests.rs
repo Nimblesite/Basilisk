@@ -9,11 +9,11 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use basilisk_checker::rule_catalog;
 use basilisk_checker::rule_tags::{
     basilisk_rule_codes, is_pep_category, is_provenance, is_valid_free_form, tags_for_code,
     BASILISK, FREE_FORM_TAGS, PEP, PEP_CATEGORIES,
 };
-use basilisk_checker::{rule_catalog, Severity};
 
 fn rules_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -95,30 +95,29 @@ fn public_catalog_matches_every_live_rule_code_exactly_once() {
             format!("https://www.basilisk-python.dev/errors/{}", descriptor.code)
         );
         assert!(!descriptor.tags.is_empty());
+        // [CHKARCH-COMMANDS]: the pep provenance tag IS the partition; the
+        // catalog agrees with the checker's own scope answer.
         assert_eq!(
-            descriptor.default_enabled,
+            basilisk_checker::is_pep_rule(descriptor.code),
             !descriptor.tags.contains(&BASILISK)
         );
     }
 }
 
+/// [CONFIGEDITOR-SUPPRESSIONS]: the audit family is analyze-scope — tagged
+/// `basilisk` + `suppressions`, no descriptor severity ([CHKARCH-CONFIG-MODEL]:
+/// severity comes only from configuration entries).
 #[test]
-fn suppression_audit_catalog_metadata_is_complete_and_default_off() {
-    let expected = [
-        ("BSK-I0060", Severity::Info),
-        ("BSK-W0061", Severity::Warning),
-        ("BSK-W0062", Severity::Warning),
-        ("BSK-E0063", Severity::Error),
-    ];
+fn suppression_audit_catalog_metadata_is_complete_and_analyze_scope() {
+    let expected = ["BSK-0060", "BSK-0061", "BSK-0062", "BSK-0063"];
     let catalog = rule_catalog();
-    for (code, severity) in expected {
+    for code in expected {
         let descriptor = catalog.iter().find(|descriptor| descriptor.code == code);
         assert!(descriptor.is_some(), "{code} must be catalogued");
         if let Some(descriptor) = descriptor {
-            assert_eq!(descriptor.default_severity, severity);
-            assert!(!descriptor.default_enabled);
             assert!(descriptor.tags.contains(&BASILISK));
             assert!(descriptor.tags.contains(&"suppressions"));
+            assert!(!basilisk_checker::is_pep_rule(code));
         }
     }
 }
@@ -127,25 +126,19 @@ fn suppression_audit_catalog_metadata_is_complete_and_default_off() {
 fn catalog_serializes_for_configuration_clients_in_camel_case() {
     let descriptor = rule_catalog()
         .into_iter()
-        .find(|descriptor| descriptor.code == "BSK-I0060");
+        .find(|descriptor| descriptor.code == "BSK-0060");
     assert!(descriptor.is_some());
     if let Some(descriptor) = descriptor {
         let value = serde_json::to_value(descriptor);
         assert!(value.is_ok());
         if let Ok(value) = value {
-            assert_eq!(
-                value
-                    .get("defaultSeverity")
-                    .and_then(serde_json::Value::as_str),
-                Some("Info")
-            );
-            assert_eq!(
-                value
-                    .get("defaultEnabled")
-                    .and_then(serde_json::Value::as_bool),
-                Some(false)
-            );
             assert!(value.get("docsUrl").is_some());
+            assert!(
+                value.get("defaultSeverity").is_none(),
+                "descriptors carry no severity — severity comes only from \
+                 configuration entries [CHKARCH-CONFIG-MODEL]"
+            );
+            assert!(value.get("defaultEnabled").is_none());
         }
     }
 }
@@ -247,13 +240,7 @@ fn cross_cutting_core_checks_are_pep_without_a_category() {
 /// [CHKTAG-INVARIANTS] #4 / [CHKTAG-PROVENANCE]: `basilisk` rules carry no category.
 #[test]
 fn basilisk_rules_are_tagged_basilisk_and_never_carry_a_pep_category() {
-    for code in [
-        "BSK-E0001",
-        "BSK-E0025",
-        "BSK-W0014",
-        "BSK-W0050",
-        "BSK-E0152",
-    ] {
+    for code in ["BSK-0001", "BSK-0025", "BSK-0014", "BSK-0050", "BSK-0152"] {
         let tags = tags_for_code(code);
         assert!(
             tags.contains(&BASILISK),
@@ -375,10 +362,10 @@ fn pep_categories_match_conformance_test_prefixes() {
     }
 }
 
-/// [CHKTAG-MODEL] / [CHKTAG-FREEFORM]: worked example `BSK-W0050 -> redundancy + style`.
+/// [CHKTAG-MODEL] / [CHKTAG-FREEFORM]: worked example `BSK-0050 -> redundancy + style`.
 #[test]
 fn redundant_annotation_carries_redundancy_and_style() {
-    let tags = tags_for_code("BSK-W0050");
+    let tags = tags_for_code("BSK-0050");
     assert!(tags.contains(&"redundancy"));
     assert!(tags.contains(&"style"));
 }

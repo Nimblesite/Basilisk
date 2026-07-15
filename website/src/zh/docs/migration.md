@@ -41,10 +41,10 @@ exclude = [
 
 ```toml
 [tool.basilisk.rules]
-"BSK-E0001" = "error"
-"BSK-E0025" = "error"
-"BSK-W0011" = "warning"
-"BSK-E0152" = "error"
+"BSK-0001" = "error"
+"BSK-0025" = "error"
+"BSK-0011" = "warning"
+"BSK-0152" = "error"
 ```
 
 规则按实时的来源、PEP 类别和描述性标签组织。Basilisk 没有

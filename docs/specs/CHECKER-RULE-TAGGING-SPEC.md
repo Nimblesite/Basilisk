@@ -26,7 +26,7 @@ aliases_newtype        -> ["pep", "aliases"]
 narrowing_typeguard    -> ["pep", "narrowing"]
 returns_compatibility  -> ["pep"]                       # cross-cutting core check
 imports_unresolved     -> ["pep"]                       # core check, on by default
-BSK-W0050              -> ["basilisk", "redundancy", "style"]   # opt-in house rule
+BSK-0050              -> ["basilisk", "redundancy", "style"]   # opt-in house rule
 ```
 
 ## Provenance Tags {#CHKTAG-PROVENANCE}
@@ -113,7 +113,7 @@ Add a free-form tag by extending `FREE_FORM_TAGS` and the relevant
 
 ## The `BSK-` Naming Convention {#CHKTAG-BSK-PREFIX}
 
-Basilisk-original rules are conventionally prefixed `BSK` (e.g. `BSK-W0050`) —
+Basilisk-original rules are conventionally prefixed `BSK` (e.g. `BSK-0050`) —
 **purely cosmetic**. The checker identifies a Basilisk rule **solely by its
 `basilisk` tag** (its `opt_in_spec()` declaration), never the prefix. Dropping
 the prefix would leave provenance unchanged; [CHKTAG-TESTS] asserts convention

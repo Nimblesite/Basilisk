@@ -58,13 +58,10 @@ async function captureBookConfigurationPreview(
     controller: ConfigurationEditorController,
     store: NonNullable<ReturnType<typeof getStore>>,
 ): Promise<void> {
+    // [CONFIGEDITOR-MODEL]: one typed SetRule mutation — the only write shape.
     await controller.receive({
         type: 'preview',
-        mutations: [{
-            selector: { kind: 'Codes', codes: ['BSK-E0002'] },
-            setting: { kind: 'Warning' },
-            scope: { kind: 'Path', pattern: 'tests/**' },
-        }],
+        mutations: [{ kind: 'SetRule', code: 'BSK-0002', severity: { kind: 'Warning' } }],
     });
     if (store.configurationEditor.value.preview === undefined) {
         throw new Error('configuration editor did not render the real LSP preview');

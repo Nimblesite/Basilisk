@@ -8,7 +8,7 @@ use basilisk_lsp::code_actions::mass_fix::{ALL_FIXABLE_RULES, SAFE_FIXABLE_RULES
 use tower_lsp::lsp_types::{TextEdit, Url};
 use tracing::{info, warn};
 
-use crate::pluralise;
+use crate::pipeline::pluralise;
 
 /// Run the fix subcommand.
 ///
@@ -71,20 +71,20 @@ fn resolve_rules(include_unsafe: bool, rules: &[String]) -> Vec<String> {
 fn collect_and_fix(paths: &[String], allowed_rules: &[&str]) -> Result<FixSummary, String> {
     // [CHKARCH-CONFIG-DISCOVERY] Rule config resolves per file, exactly like
     // `basilisk check` (GitHub #311).
-    let config_root = crate::first_path_dir(paths);
+    let config_root = crate::pipeline::first_path_dir(paths);
     let config = basilisk_config::load_basilisk_config(&config_root);
 
-    let excluded = crate::excluded_dirs_and_log(&config, &config_root);
+    let excluded = crate::pipeline::excluded_dirs_and_log(&config, &config_root);
 
-    let python_files = crate::collect_python_files(paths, &excluded)?;
-    let dir_configs = crate::resolve_dir_configs(&python_files, &config);
+    let python_files = crate::pipeline::collect_python_files(paths, &excluded)?;
+    let dir_configs = crate::pipeline::resolve_dir_configs(&python_files, &config);
 
     let mut fixed_count: usize = 0;
     let mut files_fixed: usize = 0;
     let mut had_unfixable_errors = false;
 
     for path in python_files {
-        let file_config = crate::config_for_path(&dir_configs, &path, &config);
+        let file_config = crate::pipeline::config_for_path(&dir_configs, &path, &config);
         match fix_single_file(&path, allowed_rules, &file_config) {
             Ok(count) => {
                 fixed_count += count;
@@ -197,8 +197,8 @@ mod tests {
 
     /// Write `source` to a uniquely-named temp `.py` file inside an isolated
     /// project dir that ships a `pyproject.toml` opting into the annotation
-    /// house rules. `fix` targets those rules (`BSK-E0001`/`BSK-E0002`/
-    /// `BSK-E0005`/`BSK-W0050`), which are OFF by default — a real user enables
+    /// house rules. `fix` targets those rules (`BSK-0001`/`BSK-0002`/
+    /// `BSK-0005`/`BSK-0050`), which are OFF by default — a real user enables
     /// them in configuration, so the test project does too. The command loads
     /// that config from disk exactly as it would in production. No modes; this
     /// is configuration. See [CHKARCH-CONFIGURATION-ONLY].
@@ -207,7 +207,7 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("create temp project dir");
         std::fs::write(
             dir.join("pyproject.toml"),
-            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n\"BSK-E0005\" = \"error\"\n\"BSK-W0050\" = \"warning\"\n",
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"error\"\n\"BSK-0002\" = \"error\"\n\"BSK-0005\" = \"error\"\n\"BSK-0050\" = \"warning\"\n",
         )
         .expect("write pyproject.toml");
         let py = dir.join(name);
@@ -321,18 +321,18 @@ mod tests {
     #[test]
     fn run_fix_with_specific_rule_only_fixes_that_rule() {
         let (py, path) = write_temp("basilisk_test_fix_specific_rule.py", "x: int = 42\n");
-        let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-W0050".to_owned()]);
+        let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-0050".to_owned()]);
         assert_eq!(code, 0);
         assert_eq!(
             fixed, "x = 42\n",
-            "BSK-W0050 fix should be applied when specified"
+            "BSK-0050 fix should be applied when specified"
         );
     }
 
     #[test]
     fn run_fix_with_unmatched_rule_does_not_fix() {
         let (py, path) = write_temp("basilisk_test_fix_unmatched_rule.py", "x: int = 42\n");
-        let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-E0001".to_owned()]);
+        let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-0001".to_owned()]);
         assert_eq!(code, 0);
         assert_eq!(
             fixed, "x: int = 42\n",
@@ -355,7 +355,7 @@ mod tests {
         assert_eq!(code, 0);
         assert_eq!(
             fixed, "x = 42\n",
-            "default (safe) rules should fix BSK-W0050"
+            "default (safe) rules should fix BSK-0050"
         );
     }
 
@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn resolve_rules_specific_list() {
-        let input = vec!["BSK-E0001".to_owned(), "BSK-W0050".to_owned()];
+        let input = vec!["BSK-0001".to_owned(), "BSK-0050".to_owned()];
         assert_eq!(resolve_rules(false, &input), input);
     }
 
@@ -394,24 +394,24 @@ mod tests {
     #[test]
     fn run_fix_applies_e0001_missing_param_annotation() {
         let (py, path) = write_temp("basilisk_test_fix_e0001.py", "def foo(x):\n    pass\n");
-        let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-E0001".to_owned()]);
-        assert_eq!(code, 0, "BSK-E0001 fix must return 0");
+        let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-0001".to_owned()]);
+        assert_eq!(code, 0, "BSK-0001 fix must return 0");
         assert!(fixed.contains("def foo(x: Any)"), "got: {fixed}");
     }
 
     #[test]
     fn run_fix_applies_e0002_missing_return_annotation() {
         let (py, path) = write_temp("basilisk_test_fix_e0002.py", "def foo(x: int):\n    pass\n");
-        let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-E0002".to_owned()]);
-        assert_eq!(code, 0, "BSK-E0002 fix must return 0");
+        let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-0002".to_owned()]);
+        assert_eq!(code, 0, "BSK-0002 fix must return 0");
         assert_eq!(fixed, "def foo(x: int) -> None:\n    pass\n");
     }
 
     #[test]
     fn run_fix_applies_e0005_missing_attribute_annotation() {
         let (py, path) = write_temp("basilisk_test_fix_e0005.py", "class Foo:\n    bar = []\n");
-        let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-E0005".to_owned()]);
-        assert_eq!(code, 0, "BSK-E0005 fix must return 0");
+        let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-0005".to_owned()]);
+        assert_eq!(code, 0, "BSK-0005 fix must return 0");
         assert!(fixed.contains("bar: Any = []"), "got: {fixed}");
     }
 
@@ -425,15 +425,15 @@ mod tests {
         assert_eq!(code, 0);
         assert!(
             fixed.contains("x: Any"),
-            "BSK-E0001 not applied, got: {fixed}"
+            "BSK-0001 not applied, got: {fixed}"
         );
         assert!(
             fixed.contains("-> None"),
-            "BSK-E0002 not applied, got: {fixed}"
+            "BSK-0002 not applied, got: {fixed}"
         );
         assert!(
             fixed.contains("y = 42"),
-            "BSK-W0050 not applied, got: {fixed}"
+            "BSK-0050 not applied, got: {fixed}"
         );
     }
 
@@ -443,7 +443,7 @@ mod tests {
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(
             dir.join("pyproject.toml"),
-            "[tool.basilisk.rules]\n\"BSK-W0050\" = \"warning\"\n",
+            "[tool.basilisk.rules]\n\"BSK-0050\" = \"warning\"\n",
         )
         .expect("write pyproject.toml");
         let file_a = dir.join("a_fix.py");
@@ -453,16 +453,16 @@ mod tests {
         let code = run_fix(
             &[dir.to_string_lossy().into_owned()],
             false,
-            &["BSK-W0050".to_owned()],
+            &["BSK-0050".to_owned()],
         );
         let fixed_a = std::fs::read_to_string(&file_a).expect("read a");
         let fixed_b = std::fs::read_to_string(&file_b).expect("read b");
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(code, 0);
-        assert_eq!(fixed_a, "x = 42\n", "BSK-W0050 not applied to first file");
+        assert_eq!(fixed_a, "x = 42\n", "BSK-0050 not applied to first file");
         assert_eq!(
             fixed_b, "y = \"hello\"\n",
-            "BSK-W0050 not applied to second file"
+            "BSK-0050 not applied to second file"
         );
     }
 
@@ -488,7 +488,7 @@ mod tests {
         assert_eq!(code, 0);
         assert_eq!(
             fixed, "x = 42\n",
-            "include_unsafe=true should apply BSK-W0050"
+            "include_unsafe=true should apply BSK-0050"
         );
     }
 
@@ -510,7 +510,7 @@ mod tests {
             fixed.contains("def greet(name: str) -> str:"),
             "clean fn changed"
         );
-        assert!(fixed.contains("x = 42"), "BSK-W0050 fix not applied");
+        assert!(fixed.contains("x = 42"), "BSK-0050 fix not applied");
     }
 
     #[test]

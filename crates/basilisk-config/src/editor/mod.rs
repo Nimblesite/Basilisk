@@ -1,15 +1,14 @@
 //! Validated, revisioned configuration documents and structure-aware patches.
 //!
 //! Implements [CONFIGEDITOR-SOURCES]. This is the reusable persistence domain;
-//! LSP and CLI callers provide rule intent but never parse or edit config text.
+//! LSP and CLI callers provide rule/tag intent but never parse or edit config
+//! text themselves.
 
-mod adoption;
 mod patch;
 mod write;
 
 #[cfg(test)]
 #[expect(
-    clippy::indexing_slicing,
     clippy::unwrap_used,
     reason = "test fixtures use direct assertions for compact failure output"
 )]
@@ -19,36 +18,24 @@ use std::path::{Path, PathBuf};
 
 use crate::BasiliskConfig;
 
-pub use adoption::adoption_rule_overrides;
-pub use patch::{build_rule_patch, RuleConfigScope, RuleConfigUpdate};
+pub use patch::{build_rule_patch, RuleConfigUpdate};
 pub use write::apply_config_patch;
 
-/// The active on-disk representation for one workspace root.
-///
-/// `pyproject.toml` `[tool.basilisk]` is the only configuration format
-/// ([CHKARCH-CONFIG-FILE]); the enum survives as the stable domain/wire
-/// vocabulary for it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConfigFormat {
-    /// `[tool.basilisk]` inside `pyproject.toml`.
-    PyprojectToml,
-}
-
 /// A validated active configuration source with optimistic-lock revision.
+///
+/// The active source is always the root's `pyproject.toml` `[tool.basilisk]`
+/// — the only configuration format ([CHKARCH-CONFIG-FILE]). A legacy
+/// `basilisk.json` is never read or written.
 #[derive(Debug, Clone)]
 pub struct ConfigDocument {
     /// Workspace root this source belongs to.
     pub root: PathBuf,
     /// Active source path (existing or the default creation target).
     pub path: PathBuf,
-    /// Active source representation.
-    pub format: ConfigFormat,
     /// Whether the active target already exists.
     pub exists: bool,
     /// Whether filesystem metadata marks the source read-only.
     pub read_only: bool,
-    /// Lower-priority existing sources ignored by discovery.
-    pub shadowed_sources: Vec<PathBuf>,
     /// Exact source content used to compute [`Self::revision`].
     pub content: String,
     /// Stable content revision used for preview/apply conflict checks.
@@ -125,26 +112,24 @@ impl std::error::Error for ConfigDocumentError {}
 /// Discover and validate the one active config source for `root`.
 ///
 /// The active source is always the root's `pyproject.toml` — existing, or the
-/// creation target when absent. A stray legacy `basilisk.json` is never read;
-/// it is reported in `shadowed_sources` so tooling can surface the ignored
-/// file. Malformed active sources are errors and never fall through to
-/// defaults.
+/// creation target when absent ([LSPARCH-CONFIG-SEEDING]). Malformed active
+/// sources are errors and never fall through to defaults.
 ///
 /// # Errors
 ///
 /// Returns [`ConfigDocumentError`] when the active source cannot be read or
 /// parsed, or when its configuration structure is invalid.
 pub fn discover_config_document(root: &Path) -> Result<ConfigDocument, ConfigDocumentError> {
-    let source = active_config_source(root);
-    let content = if source.path.is_file() {
-        std::fs::read_to_string(&source.path).map_err(|error| ConfigDocumentError::Read {
-            path: source.path.clone(),
+    let path = active_config_path(root);
+    let content = if path.is_file() {
+        std::fs::read_to_string(&path).map_err(|error| ConfigDocumentError::Read {
+            path: path.clone(),
             message: error.to_string(),
         })?
     } else {
         String::new()
     };
-    build_config_document(root, source, content)
+    build_config_document(root, path, content)
 }
 
 /// Discover and validate the active configuration using editor-held content.
@@ -155,62 +140,36 @@ pub fn discover_config_document(root: &Path) -> Result<ConfigDocument, ConfigDoc
 ///
 /// # Errors
 ///
-/// Returns [`ConfigDocumentError`] when `content` is not a valid document for
-/// the active source format.
+/// Returns [`ConfigDocumentError`] when `content` is not a valid document.
 pub fn discover_config_document_with_content(
     root: &Path,
     content: String,
 ) -> Result<ConfigDocument, ConfigDocumentError> {
-    build_config_document(root, active_config_source(root), content)
+    build_config_document(root, active_config_path(root), content)
 }
 
-/// Return the path selected by the one-active-configuration precedence rules.
+/// Return the path selected by the one-active-configuration rule: the root's
+/// `pyproject.toml`.
 #[must_use]
 pub fn active_config_path(root: &Path) -> PathBuf {
-    active_config_source(root).path
-}
-
-struct ActiveConfigSource {
-    path: PathBuf,
-    format: ConfigFormat,
-    shadowed_sources: Vec<PathBuf>,
-}
-
-fn active_config_source(root: &Path) -> ActiveConfigSource {
-    // A legacy basilisk.json is never read; report it as shadowed so the
-    // configuration editor surfaces the ignored file instead of silently
-    // dropping user policy ([CONFIGEDITOR-SOURCES]).
-    let json_path = root.join("basilisk.json");
-    let shadowed_sources = json_path.is_file().then_some(json_path);
-    ActiveConfigSource {
-        path: root.join("pyproject.toml"),
-        format: ConfigFormat::PyprojectToml,
-        shadowed_sources: shadowed_sources.into_iter().collect(),
-    }
+    root.join("pyproject.toml")
 }
 
 fn build_config_document(
     root: &Path,
-    source: ActiveConfigSource,
+    path: PathBuf,
     content: String,
 ) -> Result<ConfigDocument, ConfigDocumentError> {
-    let ActiveConfigSource {
-        path,
-        format,
-        shadowed_sources,
-    } = source;
     let exists = path.is_file();
-    let mut config = validate_content(&path, format, &content)?;
+    let mut config = validate_content(&path, &content)?;
     config.project_root = Some(root.to_path_buf());
     let read_only = exists
         && std::fs::metadata(&path).map_or(true, |metadata| metadata.permissions().readonly());
     Ok(ConfigDocument {
         root: root.to_path_buf(),
         path,
-        format,
         exists,
         read_only,
-        shadowed_sources,
         revision: content_revision(&content),
         content,
         config,
@@ -219,28 +178,23 @@ fn build_config_document(
 
 pub(super) fn validate_content(
     path: &Path,
-    format: ConfigFormat,
     content: &str,
 ) -> Result<BasiliskConfig, ConfigDocumentError> {
     if content.is_empty() {
         return Ok(BasiliskConfig::default());
     }
-    let config = match format {
-        ConfigFormat::PyprojectToml => {
-            let table: toml::Table =
-                content
-                    .parse()
-                    .map_err(|error: toml::de::Error| ConfigDocumentError::Invalid {
-                        path: path.to_path_buf(),
-                        message: error.to_string(),
-                    })?;
-            let has_basilisk = validate_toml_structure(path, &table)?;
-            if has_basilisk {
-                crate::parse::parse_pyproject_content(content)
-            } else {
-                Some(BasiliskConfig::default())
-            }
-        }
+    let table: toml::Table =
+        content
+            .parse()
+            .map_err(|error: toml::de::Error| ConfigDocumentError::Invalid {
+                path: path.to_path_buf(),
+                message: error.to_string(),
+            })?;
+    let has_basilisk = validate_toml_structure(path, &table)?;
+    let config = if has_basilisk {
+        crate::parse::parse_pyproject_content(content)
+    } else {
+        Some(BasiliskConfig::default())
     };
     config.ok_or_else(|| ConfigDocumentError::Invalid {
         path: path.to_path_buf(),
@@ -248,6 +202,8 @@ pub(super) fn validate_content(
     })
 }
 
+/// Validate the `[tool.basilisk]` shape: `rules` and `rule-tags` must be
+/// `"<key>" = "<severity>"` tables ([CHKARCH-CONFIG-MODEL]).
 fn validate_toml_structure(path: &Path, table: &toml::Table) -> Result<bool, ConfigDocumentError> {
     let Some(tool_value) = table.get("tool") else {
         return Ok(false);
@@ -261,58 +217,21 @@ fn validate_toml_structure(path: &Path, table: &toml::Table) -> Result<bool, Con
     let Some(basilisk) = basilisk_value.as_table() else {
         return invalid(path, "`tool.basilisk` must be a table");
     };
-    validate_toml_rule_table(path, basilisk.get("rules"))?;
-    if let Some(paths_value) = basilisk.get("per-path-overrides") {
-        let Some(paths) = paths_value.as_table() else {
-            return invalid(path, "`tool.basilisk.per-path-overrides` must be a table");
-        };
-        for (pattern, entry_value) in paths {
-            let Some(entry) = entry_value.as_table() else {
-                return invalid(path, &format!("path override `{pattern}` must be a table"));
-            };
-            validate_toml_rule_table(path, entry.get("rules"))?;
-            validate_toml_disabled(path, entry.get("disabled"), pattern)?;
-            if entry.get("adoption").is_some_and(|value| !value.is_bool()) {
-                return invalid(
-                    path,
-                    &format!("path override `{pattern}` adoption must be a boolean"),
-                );
-            }
-        }
-    }
+    validate_toml_severity_table(path, basilisk.get("rules"), "rules")?;
+    validate_toml_severity_table(path, basilisk.get("rule-tags"), "rule-tags")?;
     Ok(true)
 }
 
-fn validate_toml_disabled(
+fn validate_toml_severity_table(
     path: &Path,
     value: Option<&toml::Value>,
-    pattern: &str,
+    table_name: &str,
 ) -> Result<(), ConfigDocumentError> {
     let Some(value) = value else { return Ok(()) };
-    let Some(codes) = value.as_array() else {
-        return invalid(
-            path,
-            &format!("path override `{pattern}` disabled must be an array"),
-        );
+    let Some(entries) = value.as_table() else {
+        return invalid(path, &format!("`{table_name}` must be a table"));
     };
-    if codes.iter().any(|code| !code.is_str()) {
-        return invalid(
-            path,
-            &format!("path override `{pattern}` disabled entries must be strings"),
-        );
-    }
-    Ok(())
-}
-
-fn validate_toml_rule_table(
-    path: &Path,
-    value: Option<&toml::Value>,
-) -> Result<(), ConfigDocumentError> {
-    let Some(value) = value else { return Ok(()) };
-    let Some(rules) = value.as_table() else {
-        return invalid(path, "rules must be a table");
-    };
-    for (code, severity) in rules {
+    for (key, severity) in entries {
         let valid = severity
             .as_str()
             .and_then(crate::RuleSeverity::parse)
@@ -320,7 +239,7 @@ fn validate_toml_rule_table(
         if !valid {
             return Err(ConfigDocumentError::Invalid {
                 path: path.to_path_buf(),
-                message: format!("rule `{code}` has an invalid severity"),
+                message: format!("`{table_name}` entry `{key}` has an invalid severity"),
             });
         }
     }

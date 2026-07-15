@@ -1,4 +1,5 @@
-//! Generated from `models/configuration_editor.td`.
+//! Generated from `models/configuration.td` + `models/configuration_editor.td`
+//! (`cat models/configuration.td models/configuration_editor.td | typediagram --to rust`).
 //!
 //! Implements [CONFIGEDITOR-MODEL] / [LSPARCH-CONFIG-EDITOR-PROTOCOL]. The
 //! declarations below preserve the typeDiagram shapes; derives and serde tags
@@ -11,21 +12,14 @@ use serde::{Deserialize, Serialize};
 pub type Uri = String;
 pub type Revision = String;
 pub type PreviewId = String;
+pub type RuleCode = String;
+pub type RuleTag = String;
 
+/// The four values an entry can state ([CHKARCH-CONFIG-MODEL]). `Disabled`
+/// can never apply to a `pep`-tagged rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum RuleSeverity {
-    Error,
-    Warning,
-    Info,
-    Disabled,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind")]
-pub enum RuleSetting {
-    Inherit,
-    Native,
     Error,
     Warning,
     Info,
@@ -40,149 +34,89 @@ pub enum TagKind {
     Descriptive,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// The only four things the editor can ask for — exactly the four things a
+/// config file can express ([CHKARCH-CONFIG-MODEL]). Setting `Disabled` on a
+/// `pep`-tagged rule is a request error.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
-pub enum ConfigurationFormat {
-    PyprojectToml,
-    /// Deprecated wire variant kept for protocol-v1 stability; never emitted —
-    /// `pyproject.toml [tool.basilisk]` is the only configuration format.
-    BasiliskJson,
+pub enum EditorMutation {
+    SetRule {
+        code: RuleCode,
+        severity: RuleSeverity,
+    },
+    RemoveRule {
+        code: RuleCode,
+    },
+    SetTag {
+        tag: RuleTag,
+        severity: RuleSeverity,
+    },
+    RemoveTag {
+        tag: RuleTag,
+    },
 }
 
+/// Read-side bulk selection for occurrence queries only; mutations never take
+/// selectors.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum RuleSelector {
     All,
     Codes {
-        codes: Vec<String>,
+        codes: Vec<RuleCode>,
     },
     Tags {
-        tags: Vec<String>,
+        tags: Vec<RuleTag>,
         #[serde(rename = "matchAll")]
         match_all: bool,
     },
-    CurrentViolations,
-    SafeFixable,
-    WithoutSafeFix,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind")]
-pub enum MutationScope {
-    Project,
-    Path { pattern: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuleDescriptor {
-    pub code: String,
+    pub code: RuleCode,
     pub title: String,
     pub summary: String,
     pub docs_url: Uri,
-    pub tags: Vec<String>,
-    pub default_severity: RuleSeverity,
-    pub default_enabled: bool,
+    pub tags: Vec<RuleTag>,
 }
 
+/// `entry` mirrors the edited config file exactly (`None` = no per-rule
+/// entry). `effective_severity` is what actually runs at the root scope after
+/// tag-entry resolution: `Disabled` means "does not run" and never appears on
+/// a `pep` rule.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuleState {
     pub descriptor: RuleDescriptor,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub configured_severity: Option<RuleSeverity>,
+    pub entry: Option<RuleSeverity>,
     pub effective_severity: RuleSeverity,
-    pub inherited: bool,
     pub diagnostic_count: i64,
-    pub affected_file_count: i64,
-    pub safe_fix_count: i64,
-    pub unsafe_fix_count: i64,
-    pub adoption_exception_count: i64,
 }
 
+/// `entry` mirrors `[tool.basilisk.rule-tags]` exactly (`None` = no tag
+/// entry).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TagState {
-    pub name: String,
+    pub name: RuleTag,
     pub kind: TagKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry: Option<RuleSeverity>,
     pub rule_count: i64,
     pub diagnostic_count: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ConfigurationSource {
-    pub uri: Uri,
-    pub format: ConfigurationFormat,
-    pub exists: bool,
-    pub read_only: bool,
-    pub shadowed_sources: Vec<Uri>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ConfigurationProblem {
-    pub code: String,
-    pub message: String,
-    pub uri: Uri,
-    pub line: i64,
-    pub character: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DebtSummary {
-    pub remaining_diagnostics: i64,
-    pub adopted_files: i64,
-    pub adoption_exceptions: i64,
-    pub suppression_diagnostics: i64,
-    pub disabled_rules: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ConfigurationPreset {
-    pub id: String,
-    pub name: String,
-    pub summary: String,
-    pub mutations: Vec<ConfigurationMutation>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PathRuleSetting {
-    pub rule_code: String,
-    pub severity: RuleSeverity,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PathOverrideState {
-    pub pattern: String,
-    pub adoption: bool,
-    pub rules: Vec<PathRuleSetting>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ConfigurationSnapshot {
     pub root_uri: Uri,
+    pub config_uri: Uri,
     pub revision: Revision,
-    pub source: ConfigurationSource,
     pub rules: Vec<RuleState>,
     pub tags: Vec<TagState>,
-    pub presets: Vec<ConfigurationPreset>,
-    pub path_overrides: Vec<PathOverrideState>,
-    pub debt: DebtSummary,
-    pub problems: Vec<ConfigurationProblem>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ConfigurationMutation {
-    pub selector: RuleSelector,
-    pub setting: RuleSetting,
-    pub scope: MutationScope,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -190,30 +124,30 @@ pub struct ConfigurationMutation {
 pub struct PreviewConfigurationRequest {
     pub root_uri: Uri,
     pub base_revision: Revision,
-    pub mutations: Vec<ConfigurationMutation>,
+    pub mutations: Vec<EditorMutation>,
 }
 
+/// One rule's effective-severity change, fully resolved. `Disabled` = does
+/// not run; a `pep` rule is never `Disabled` on either side.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedRuleChange {
+    pub code: RuleCode,
+    pub before: RuleSeverity,
+    pub after: RuleSeverity,
+}
+
+/// A complete before/after partition by the three emitting severities; the
+/// total diagnostic count is their sum.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigurationImpact {
-    pub changed_rules: i64,
-    pub enabled_rules: i64,
-    pub disabled_rules: i64,
-    pub diagnostics_before: i64,
-    pub diagnostics_after: i64,
     pub errors_before: i64,
     pub errors_after: i64,
     pub warnings_before: i64,
     pub warnings_after: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ResolvedConfigurationChange {
-    pub rule_code: String,
-    pub scope: MutationScope,
-    pub previous_setting: RuleSetting,
-    pub resulting_setting: RuleSetting,
+    pub infos_before: i64,
+    pub infos_after: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -221,17 +155,18 @@ pub struct ResolvedConfigurationChange {
 pub struct ConfigurationPreview {
     pub preview_id: PreviewId,
     pub base_revision: Revision,
-    pub expanded_rule_codes: Vec<String>,
-    pub changes: Vec<ResolvedConfigurationChange>,
+    pub changes: Vec<ResolvedRuleChange>,
     pub impact: ConfigurationImpact,
-    pub problems: Vec<ConfigurationProblem>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind")]
-pub enum FixSafety {
-    Safe,
-    Unsafe,
+/// `root_uri` + `preview_id` fully identify the cached preview, which already
+/// pins its base revision; the server rejects the apply if that revision is
+/// stale.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyConfigurationRequest {
+    pub root_uri: Uri,
+    pub preview_id: PreviewId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -251,13 +186,10 @@ pub struct SourceRange {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuleOccurrence {
-    pub rule_code: String,
+    pub code: RuleCode,
     pub uri: Uri,
     pub range: SourceRange,
-    pub effective_severity: RuleSeverity,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fix_safety: Option<FixSafety>,
-    pub configuration_source: Uri,
+    pub severity: RuleSeverity,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -278,18 +210,11 @@ pub struct RuleOccurrencesResponse {
     pub next_cursor: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ApplyConfigurationRequest {
-    pub root_uri: Uri,
-    pub preview_id: PreviewId,
-    pub base_revision: Revision,
-}
-
+/// Refresh signal: the snapshot for `root_uri` is stale; refetch at
+/// `revision`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigurationChanged {
     pub root_uri: Uri,
     pub revision: Revision,
-    pub reason: String,
 }

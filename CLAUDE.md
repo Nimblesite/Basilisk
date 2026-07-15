@@ -22,7 +22,7 @@ Target: **100% PEP conformance**, canonical Python **3.12**. Read the [PEP confo
 
 We are building a better Python developer experience: one IDE extension for a complete, fast workflow. The LSP drives all functionality — IDE extensions only react to LSP signals (commands, state changes) and NEVER register a command the LSP doesn't advertise.
 
-Basilisk has **no modes** — behaviour is per-rule configuration ([CHKARCH-CONFIGURATION-ONLY]). The default enables every PEP typing-spec rule and nothing else; opinionated house-style rules (require-annotation `BSK-E0001/E0002/E0004`, require-`@override` `BSK-E0025`, redundant-annotation `BSK-W0050`, explicit-`Any` nudge `BSK-W0014`) are opt-in. Every diagnostic must teach — explain why, not just what.
+Basilisk has **no modes** — behaviour is per-rule configuration ([CHKARCH-CONFIGURATION-ONLY]). The default enables every PEP typing-spec rule and nothing else; opinionated house-style rules (require-annotation `BSK-0001/0002/0004`, require-`@override` `BSK-0025`, redundant-annotation `BSK-0050`, explicit-`Any` nudge `BSK-0014`) are opt-in. Every diagnostic must teach — explain why, not just what.
 
 # Documentation Structure
 

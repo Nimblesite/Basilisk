@@ -1,236 +1,286 @@
-//! Implements [CHKARCH-CLI]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI
-//! `basilisk adopt` and `basilisk unadopt` subcommands.
+//! Implements [AUTOFIX-ADOPTION]. See docs/specs/LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-ADOPTION
+//! `basilisk adopt`, `basilisk unadopt`, and `basilisk adopt --status`.
 //!
-//! `adopt` records remaining errors as exact-file warning overrides in the
-//! active project configuration; `unadopt` removes those editor-owned entries.
+//! Adoption records current error debt as **ordinary warning-severity rule
+//! entries** in the config file of the nearest folder governing each affected
+//! file — plain `code -> severity` entries in the one configuration model
+//! ([CHKARCH-CONFIG-MODEL]). There are no exact-file overrides, ownership
+//! markers, or sidecar state: the adoption state IS the set of
+//! warning-severity `[tool.basilisk.rules]` entries, `unadopt` deletes them,
+//! and re-running `adopt` recomputes them so rules that no longer fire revert
+//! without manual bookkeeping ([AUTOFIX-ADOPTION-FLOW]).
 
-use std::collections::{BTreeSet, HashSet};
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
-use basilisk_config::{RuleConfigScope, RuleConfigUpdate, RuleSeverity};
+use basilisk_config::{RuleConfigUpdate, RuleSeverity};
+use tracing::{error, info};
 
-use tracing::{error, info, warn};
-
-use crate::pluralise;
+use crate::pipeline::{
+    collect_and_check, find_project_root, first_path_dir, parent_dir_of, pluralise,
+    DiagnosticScope, PipelineError,
+};
 
 /// Run the adopt subcommand.
 ///
-/// Exit codes:
+/// Exit codes ([CHKARCH-CLI-EXITCODES]):
 /// - `0` — adoption recorded successfully
+/// - `2` — invalid configuration
 /// - `3` — internal error
 pub(crate) fn run_adopt(paths: &[String]) -> u8 {
-    match adopt_files(paths) {
+    match adopt_folders(paths) {
         Ok(summary) => {
             println!(
-                "Adopted {} file{} with {} demoted error{}.",
-                summary.files_adopted,
-                pluralise(summary.files_adopted),
+                "Adopted {} folder config{} with {} demoted rule code{}.",
+                summary.folders_updated,
+                pluralise(summary.folders_updated),
                 summary.demoted_count,
                 pluralise(summary.demoted_count),
             );
             0
         }
-        Err(err) => {
-            error!(%err, "adopt failed");
-            3
-        }
+        Err(err) => report_failure(&err, "adopt failed"),
     }
 }
 
 /// Run the unadopt subcommand.
 ///
-/// Exit codes:
-/// - `0` — un-adoption recorded successfully
-/// - `3` — internal error
+/// Exit codes: `0` on success, `2` on invalid configuration, `3` on
+/// internal error.
 pub(crate) fn run_unadopt(paths: &[String]) -> u8 {
-    match unadopt_files(paths) {
-        Ok(count) => {
-            println!("Un-adopted {} file{}.", count, pluralise(count));
+    match unadopt_folders(paths) {
+        Ok(removed) => {
+            println!(
+                "Un-adopted {} rule entr{}.",
+                removed,
+                if removed == 1 { "y" } else { "ies" },
+            );
             0
         }
-        Err(err) => {
-            error!(%err, "unadopt failed");
-            3
-        }
+        Err(err) => report_failure(&err, "unadopt failed"),
     }
 }
 
 /// Run the adopt --status subcommand.
 ///
-/// Exit codes:
-/// - `0` — always
-/// - `3` — internal error
+/// Reports, per governing folder config, the warning-severity rule entries
+/// that constitute the adoption state ([AUTOFIX-ADOPTION]).
+///
+/// Exit codes: `0` on success, `3` on internal error.
 pub(crate) fn run_adopt_status(paths: &[String]) -> u8 {
-    let config_root = resolve_config_root(paths);
-    let document = match basilisk_config::discover_config_document(&config_root) {
-        Ok(document) => document,
-        Err(err) => {
-            error!(%err, "failed to load active configuration");
-            return 3;
-        }
+    let roots = match governing_roots(paths) {
+        Ok(roots) => roots,
+        Err(err) => return report_failure(&err, "adopt --status failed"),
     };
-    let adoption = basilisk_config::adoption_rule_overrides(&document);
-    if adoption.is_empty() {
-        println!("No files are currently adopted.");
-        return 0;
+    let mut adopted_any = false;
+    for root in roots {
+        let entries = match adopted_entries(&root) {
+            Ok(entries) => entries,
+            Err(err) => return report_failure(&err, "adopt --status failed"),
+        };
+        if entries.is_empty() {
+            continue;
+        }
+        adopted_any = true;
+        println!(
+            "{} ({} demoted code{}):",
+            root.display(),
+            entries.len(),
+            pluralise(entries.len()),
+        );
+        for code in entries {
+            println!("  {code}");
+        }
     }
-    println!(
-        "{} adopted file{}:",
-        adoption.len(),
-        pluralise(adoption.len()),
-    );
-    for (file, rules) in adoption {
-        let count = rules.len();
-        println!("  {} ({} demoted code{})", file, count, pluralise(count));
+    if !adopted_any {
+        println!("No folders are currently adopted.");
     }
-
     0
+}
+
+/// Log a pipeline failure and map it to its exit code.
+fn report_failure(err: &PipelineError, context: &'static str) -> u8 {
+    match err {
+        PipelineError::Config(message) => {
+            error!(%message, "{context}: configuration error");
+            2
+        }
+        PipelineError::Internal(message) => {
+            error!(%message, "{context}");
+            3
+        }
+    }
 }
 
 /// Summary of an adopt run.
 struct AdoptSummary {
-    /// Number of files that were adopted.
-    files_adopted: usize,
-    /// Total number of error codes demoted across all files.
+    /// Number of folder configs that were rewritten.
+    folders_updated: usize,
+    /// Total number of rule codes demoted across all folders.
     demoted_count: usize,
 }
 
-/// Adopt files: check each file and persist exact-path warning overrides.
-fn adopt_files(paths: &[String]) -> Result<AdoptSummary, String> {
-    let config_root = resolve_config_root(paths);
-    let document = basilisk_config::discover_config_document(&config_root)
-        .map_err(|error| error.to_string())?;
-    let config = document.config.clone();
-    let excluded = crate::excluded_dirs_and_log(&config, &config_root);
-    let python_files = crate::collect_python_files(paths, &excluded)?;
-    let mut files_adopted: usize = 0;
-    let mut demoted_count: usize = 0;
-    let mut updates = Vec::new();
+/// Current debt for one governing folder config.
+#[derive(Default)]
+struct FolderDebt {
+    /// Codes firing at `error`/`safety-violation` — the debt to demote.
+    error_codes: BTreeSet<String>,
+    /// Codes firing at any severity — existing adoption entries for codes
+    /// absent here have graduated and are removed on recompute.
+    firing_codes: BTreeSet<String>,
+}
 
-    for path_str in python_files {
-        match check_file_errors(&path_str, &config) {
-            Ok(error_codes) => {
-                if error_codes.is_empty() {
-                    continue;
-                }
-                let path = Path::new(&path_str);
-                let count = error_codes.len();
-                updates.push(RuleConfigUpdate {
-                    scope: RuleConfigScope::Path {
-                        pattern: relative_pattern(&config_root, path)?,
-                        adoption: true,
-                    },
-                    rules: error_codes
-                        .into_iter()
-                        .map(|code| (code, Some(RuleSeverity::Warning)))
-                        .collect(),
-                });
-                files_adopted += 1;
-                demoted_count += count;
-                info!(path = path_str, count, "adopted file");
-            }
-            Err(err) => {
-                warn!(path = path_str, %err, "error checking file");
+/// Adopt: check both command scopes at their resolved severities
+/// ([CHKARCH-COMMANDS]) and rewrite each governing folder config's adoption
+/// entries to exactly the current debt ([AUTOFIX-ADOPTION-FLOW]).
+fn adopt_folders(paths: &[String]) -> Result<AdoptSummary, PipelineError> {
+    let debt_by_root = collect_folder_debt(paths)?;
+    let mut folders_updated: usize = 0;
+    let mut demoted_count: usize = 0;
+
+    for (root, debt) in debt_by_root {
+        let existing = adopted_entries(&root)?;
+        let mut rules: BTreeMap<String, Option<RuleSeverity>> = debt
+            .error_codes
+            .iter()
+            .map(|code| (code.clone(), Some(RuleSeverity::Warning)))
+            .collect();
+        // Recompute: an adoption entry whose rule no longer fires anywhere in
+        // the scanned scope has graduated — delete it ([AUTOFIX-ADOPTION-FLOW]).
+        for code in existing {
+            if !debt.firing_codes.contains(&code) {
+                let _ = rules.entry(code).or_insert(None);
             }
         }
-    }
-    if !updates.is_empty() {
-        let patch = basilisk_config::build_rule_patch(&document, &updates)
-            .map_err(|error| error.to_string())?;
-        basilisk_config::apply_config_patch(&patch).map_err(|error| error.to_string())?;
+        if rules.is_empty() {
+            continue;
+        }
+        write_rule_entries(&root, rules.clone())?;
+        folders_updated += 1;
+        demoted_count += debt.error_codes.len();
+        info!(
+            root = %root.display(),
+            demoted = debt.error_codes.len(),
+            "adopted folder config"
+        );
     }
 
     Ok(AdoptSummary {
-        files_adopted,
+        folders_updated,
         demoted_count,
     })
 }
 
-/// Un-adopt files: remove adoption overrides for each path.
-fn unadopt_files(paths: &[String]) -> Result<usize, String> {
-    let config_root = resolve_config_root(paths);
-    let document = basilisk_config::discover_config_document(&config_root)
-        .map_err(|error| error.to_string())?;
-    let config = document.config.clone();
-    let excluded: HashSet<&str> = config.exclude.iter().map(String::as_str).collect();
-    let python_files = crate::collect_python_files(paths, &excluded)?;
-    let adoption = basilisk_config::adoption_rule_overrides(&document);
-    let mut count: usize = 0;
-    let mut updates = Vec::new();
-    for path_str in python_files {
-        let path = Path::new(&path_str);
-        let pattern = relative_pattern(&config_root, path)?;
-        if let Some(rules) = adoption.get(&pattern) {
-            updates.push(RuleConfigUpdate {
-                scope: RuleConfigScope::Path {
-                    pattern,
-                    adoption: false,
-                },
-                rules: rules.keys().map(|code| (code.clone(), None)).collect(),
-            });
-            count += 1;
-            info!(path = path_str, "un-adopted file");
+/// Unadopt: delete every warning-severity rule entry — the adoption state —
+/// from each governing folder config ([AUTOFIX-ADOPTION]).
+fn unadopt_folders(paths: &[String]) -> Result<usize, PipelineError> {
+    let mut removed: usize = 0;
+    for root in governing_roots(paths)? {
+        let entries = adopted_entries(&root)?;
+        if entries.is_empty() {
+            continue;
         }
+        removed += entries.len();
+        let rules: BTreeMap<String, Option<RuleSeverity>> =
+            entries.into_iter().map(|code| (code, None)).collect();
+        write_rule_entries(&root, rules)?;
+        info!(root = %root.display(), "un-adopted folder config");
     }
-    if !updates.is_empty() {
-        let patch = basilisk_config::build_rule_patch(&document, &updates)
-            .map_err(|error| error.to_string())?;
-        basilisk_config::apply_config_patch(&patch).map_err(|error| error.to_string())?;
-    }
-
-    Ok(count)
+    Ok(removed)
 }
 
-/// Check a single file under the project configuration and return all error
-/// codes found. Honors config so adoption records exactly the diagnostics the
-/// project has enabled (house rules are off by default). See
-/// [CHKARCH-CONFIGURATION-ONLY].
-fn check_file_errors(
-    path: &str,
-    config: &basilisk_config::BasiliskConfig,
-) -> Result<Vec<String>, String> {
-    let parsed = basilisk_parser::parse_file(path).map_err(|e| e.to_string())?;
-    let resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
-    let diags = basilisk_checker::check_with_config(&resolved, config);
+/// Run the shared pipeline over both scopes and group the result per
+/// governing folder config. Every scanned file registers its root even when
+/// clean, so recompute can graduate stale entries.
+fn collect_folder_debt(paths: &[String]) -> Result<BTreeMap<PathBuf, FolderDebt>, PipelineError> {
+    let no_cache = crate::cache_check::CacheOptions {
+        enabled: false,
+        dir: None,
+        stats: false,
+    };
+    let mut stats = crate::cache_check::CacheStats::default();
+    let outcome = collect_and_check(paths, &no_cache, &mut stats, DiagnosticScope::Union)?;
+    for failure in &outcome.failures {
+        tracing::warn!(path = %failure.path, error = %failure.message, "error checking file");
+    }
 
-    let codes: BTreeSet<String> = diags
+    let mut debt: BTreeMap<PathBuf, FolderDebt> = BTreeMap::new();
+    for source in &outcome.sources {
+        let _ = debt.entry(governing_root(&source.path)).or_default();
+    }
+    for diagnostic in &outcome.diagnostics {
+        let entry = debt.entry(governing_root(&diagnostic.path)).or_default();
+        let code = diagnostic.code.code.to_owned();
+        if matches!(
+            diagnostic.severity,
+            basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation
+        ) {
+            let _ = entry.error_codes.insert(code.clone());
+        }
+        let _ = entry.firing_codes.insert(code);
+    }
+    Ok(debt)
+}
+
+/// The unique governing folder configs for the Python files under `paths`.
+fn governing_roots(paths: &[String]) -> Result<BTreeSet<PathBuf>, PipelineError> {
+    let config_root = first_path_dir(paths);
+    let config = basilisk_config::load_basilisk_config(&config_root);
+    let excluded = crate::pipeline::excluded_dirs_and_log(&config, &config_root);
+    let python_files =
+        crate::pipeline::collect_python_files(paths, &excluded).map_err(PipelineError::Internal)?;
+    Ok(python_files
         .iter()
-        .filter(|diagnostic| {
-            matches!(
-                diagnostic.severity,
-                basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation
-            )
-        })
-        .map(|d| d.code.code.to_owned())
-        .collect();
-
-    Ok(codes.into_iter().collect())
+        .map(|file| governing_root(file))
+        .collect())
 }
 
-fn relative_pattern(root: &Path, path: &Path) -> Result<String, String> {
-    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    canonical_path
-        .strip_prefix(&canonical_root)
-        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
-        .map_err(|error| {
-            format!(
-                "{} is outside the selected project root {}: {error}",
-                canonical_path.display(),
-                canonical_root.display()
-            )
-        })
+/// The folder whose config file governs `file`: the nearest ancestor holding
+/// a `[tool.basilisk]` table, else the project root (whose `pyproject.toml`
+/// becomes the creation target). [CHKARCH-CONFIG-DISCOVERY]
+fn governing_root(file: &str) -> PathBuf {
+    let parent = parent_dir_of(file);
+    basilisk_config::discover_config_dir(&parent).unwrap_or_else(|| find_project_root(&parent))
 }
 
-/// Resolve the config root directory from the provided paths.
-///
-/// [CHKARCH-CONFIG-DISCOVERY] Anchors at the nearest ancestor directory
-/// holding a config file, so the adoption store is written where `basilisk
-/// check` discovers it (GitHub #311). Falls back to the first path's own
-/// directory when no config exists yet.
-fn resolve_config_root(paths: &[String]) -> std::path::PathBuf {
-    let start = crate::first_path_dir(paths);
-    basilisk_config::discover_config_dir(&start).unwrap_or(start)
+/// The adoption state of one folder config: its warning-severity
+/// `[tool.basilisk.rules]` entries ([AUTOFIX-ADOPTION]).
+fn adopted_entries(root: &Path) -> Result<BTreeSet<String>, PipelineError> {
+    let document = discover_document(root)?;
+    Ok(document
+        .config
+        .nearest_tables()
+        .map(|tables| {
+            tables
+                .rules
+                .iter()
+                .filter(|(_, severity)| **severity == RuleSeverity::Warning)
+                .map(|(code, _)| code.clone())
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+/// Apply plain rule-entry updates to the folder config at `root` through the
+/// shared configuration mutation service ([AUTOFIX-ADOPTION-FLOW]).
+fn write_rule_entries(
+    root: &Path,
+    rules: BTreeMap<String, Option<RuleSeverity>>,
+) -> Result<(), PipelineError> {
+    let document = discover_document(root)?;
+    let update = RuleConfigUpdate {
+        rules,
+        rule_tags: BTreeMap::new(),
+    };
+    let patch = basilisk_config::build_rule_patch(&document, &update)
+        .map_err(|err| PipelineError::Config(err.to_string()))?;
+    basilisk_config::apply_config_patch(&patch)
+        .map_err(|err| PipelineError::Internal(err.to_string()))
+}
+
+fn discover_document(root: &Path) -> Result<basilisk_config::ConfigDocument, PipelineError> {
+    basilisk_config::discover_config_document(root)
+        .map_err(|err| PipelineError::Config(err.to_string()))
 }
 
 #[cfg(test)]
@@ -241,44 +291,32 @@ fn resolve_config_root(paths: &[String]) -> std::path::PathBuf {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::PathBuf;
 
-    /// Python code with a missing parameter annotation (triggers BSK-E0001)
-    /// and a missing return type annotation (triggers BSK-E0002).
+    /// Python code with a missing parameter annotation (triggers BSK-0001)
+    /// and a missing return type annotation (triggers BSK-0002).
     const BAD_PYTHON: &str = "def foo(x):\n    pass\n";
 
     /// Fully typed Python code that should produce zero errors.
     const CLEAN_PYTHON: &str = "def greet(name: str) -> str:\n    return name\n";
 
-    /// Create a fresh temporary project directory (removing any leftover from a
-    /// prior run) that ships a `pyproject.toml` opting into the annotation house
-    /// rules. `adopt` records the diagnostics a project has enabled, and those
-    /// rules (`BSK-E0001`/`BSK-E0002`/…) are off by default — so the test project
-    /// turns them on exactly as a real adopter would. No modes; this is
-    /// configuration. See [CHKARCH-CONFIGURATION-ONLY].
+    /// Python code with a check-scope (pep) error: wrong return type.
+    const PEP_ERROR_PYTHON: &str = "def bad() -> int:\n    return \"x\"\n";
+
+    /// Create a fresh temporary project directory (removing any leftover from
+    /// a prior run) that ships a `pyproject.toml` opting into the annotation
+    /// house rules. `adopt` records the diagnostics a project has enabled,
+    /// and those analyze-scope rules are off by default — so the test project
+    /// turns them on exactly as a real adopter would ([CHKARCH-COMMANDS]).
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("bsk_adopt_test_{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         fs::write(
             dir.join("pyproject.toml"),
-            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"error\"\n\"BSK-0002\" = \"error\"\n",
         )
         .unwrap();
         dir
-    }
-
-    /// Config that opts into the annotation house rules — the in-memory mirror of
-    /// the `pyproject.toml` [`temp_dir`] writes, for tests that call
-    /// `check_file_errors` directly. See [CHKARCH-CONFIGURATION-ONLY].
-    fn annotations_on() -> basilisk_config::BasiliskConfig {
-        basilisk_config::BasiliskConfig {
-            rules: ["BSK-E0001", "BSK-E0002"]
-                .into_iter()
-                .map(|code| (code.to_owned(), basilisk_config::RuleSeverity::Error))
-                .collect(),
-            ..Default::default()
-        }
     }
 
     /// Write a `.py` file inside `dir` and return its absolute path as a `String`.
@@ -288,30 +326,76 @@ mod tests {
         path.to_string_lossy().into_owned()
     }
 
-    fn adoption(
-        dir: &Path,
-    ) -> std::collections::BTreeMap<String, std::collections::BTreeMap<String, RuleSeverity>> {
-        let document = basilisk_config::discover_config_document(dir).unwrap();
-        basilisk_config::adoption_rule_overrides(&document)
+    /// The warning-severity rule entries in `dir`'s config — the adoption
+    /// state ([AUTOFIX-ADOPTION]).
+    fn adoption(dir: &Path) -> BTreeSet<String> {
+        adopted_entries(dir).unwrap()
     }
 
-    // ── run_adopt ────────────────────────────────────────────────────────────
+    /// The full `[tool.basilisk.rules]` table in `dir`'s config.
+    fn rule_entries(dir: &Path) -> BTreeMap<String, RuleSeverity> {
+        let document = basilisk_config::discover_config_document(dir).unwrap();
+        document
+            .config
+            .nearest_tables()
+            .map(|tables| tables.rules.clone().into_iter().collect())
+            .unwrap_or_default()
+    }
 
+    // ── run_adopt ([AUTOFIX-ADOPTION]) ───────────────────────────────────
+
+    /// [AUTOFIX-ADOPTION]: adopting a folder with analyze-scope error debt
+    /// demotes the firing codes to plain warning entries in the governing
+    /// folder config — no exact-file overrides, no markers.
     #[test]
-    fn run_adopt_bad_code_produces_adoptions() {
+    fn run_adopt_bad_code_demotes_codes_in_folder_config() {
         let dir = temp_dir("adopt_bad");
         let path = write_py(&dir, "bad.py", BAD_PYTHON);
 
         let exit = run_adopt(&[path]);
         assert_eq!(exit, 0, "adopt should succeed with exit code 0");
 
-        let adopted = adoption(&dir);
-        assert_eq!(adopted.len(), 1);
+        let entries = rule_entries(&dir);
+        assert_eq!(
+            entries.get("BSK-0001"),
+            Some(&RuleSeverity::Warning),
+            "BSK-0001 must be demoted to a folder-level warning entry, got: {entries:?}"
+        );
+        assert_eq!(
+            entries.get("BSK-0002"),
+            Some(&RuleSeverity::Warning),
+            "BSK-0002 must be demoted to a folder-level warning entry, got: {entries:?}"
+        );
+    }
+
+    /// [AUTOFIX-ADOPTION-FLOW]: pep debt is demoted to `warning` (never below
+    /// info) as an ordinary folder entry, so `check` reports it as a warning
+    /// afterwards.
+    #[test]
+    fn run_adopt_records_pep_debt_as_warning_entry() {
+        let dir = std::env::temp_dir().join("bsk_adopt_test_pep_debt");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("pyproject.toml"),
+            "[project]\nname = \"x\"\nversion = \"0.0.0\"\n",
+        )
+        .unwrap();
+        let path = write_py(&dir, "bad.py", PEP_ERROR_PYTHON);
+
+        let exit = run_adopt(&[path]);
+        assert_eq!(exit, 0, "adopt should succeed");
+
+        let entries = rule_entries(&dir);
+        let demoted_pep: Vec<_> = entries
+            .iter()
+            .filter(|(code, severity)| {
+                basilisk_checker::is_pep_rule(code) && **severity == RuleSeverity::Warning
+            })
+            .collect();
         assert!(
-            adopted
-                .get("bad.py")
-                .is_some_and(|rules| rules.contains_key("BSK-E0001")),
-            "bad.py should have BSK-E0001 demoted"
+            !demoted_pep.is_empty(),
+            "the firing pep code must be demoted to warning in the folder config, got: {entries:?}"
         );
     }
 
@@ -325,7 +409,7 @@ mod tests {
 
         assert!(
             adoption(&dir).is_empty(),
-            "clean code should produce no adoptions"
+            "clean code should produce no adoption entries"
         );
     }
 
@@ -335,8 +419,11 @@ mod tests {
         assert_eq!(exit, 3, "nonexistent path should return exit code 3");
     }
 
+    /// [AUTOFIX-ADOPTION-RULES]: a folder entry is a plain override — two bad
+    /// files in one folder produce one set of folder entries, not per-file
+    /// state.
     #[test]
-    fn run_adopt_directory_traversal_adopts_multiple_files() {
+    fn run_adopt_directory_traversal_writes_one_folder_entry_set() {
         let dir = temp_dir("adopt_multi");
         let _ = write_py(&dir, "a.py", BAD_PYTHON);
         let _ = write_py(&dir, "b.py", BAD_PYTHON);
@@ -346,28 +433,65 @@ mod tests {
 
         let adopted = adoption(&dir);
         assert_eq!(
-            adopted.len(),
-            2,
-            "both bad files should be adopted, got: {adopted:?}"
+            adopted,
+            ["BSK-0001", "BSK-0002"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>(),
+            "both files' debt collapses into the one governing folder config"
         );
     }
 
+    /// [AUTOFIX-ADOPTION]: debt in differently-governed folders is demoted in
+    /// each folder's own config file (the old single-store restriction is
+    /// gone).
     #[test]
-    fn run_adopt_rejects_files_from_different_project_roots() {
+    fn run_adopt_writes_each_governing_folder_config() {
         let first = temp_dir("adopt_cross_root_first");
         let second = temp_dir("adopt_cross_root_second");
         let first_path = write_py(&first, "first.py", BAD_PYTHON);
         let second_path = write_py(&second, "second.py", BAD_PYTHON);
 
-        assert_eq!(run_adopt(&[first_path, second_path]), 3);
-        assert!(adoption(&first).is_empty());
-        assert!(adoption(&second).is_empty());
+        assert_eq!(run_adopt(&[first_path, second_path]), 0);
+        assert!(
+            adoption(&first).contains("BSK-0001"),
+            "first root must hold its own adoption entries"
+        );
+        assert!(
+            adoption(&second).contains("BSK-0001"),
+            "second root must hold its own adoption entries"
+        );
     }
 
-    // ── run_unadopt ──────────────────────────────────────────────────────────
-
+    /// [AUTOFIX-ADOPTION-FLOW]: re-running adopt recomputes — entries for
+    /// rules that no longer fire anywhere in the folder are deleted.
     #[test]
-    fn run_unadopt_removes_adoptions() {
+    fn run_adopt_rerun_graduates_fixed_rules() {
+        let dir = temp_dir("adopt_rerun");
+        let path = write_py(&dir, "bad.py", BAD_PYTHON);
+
+        assert_eq!(run_adopt(std::slice::from_ref(&path)), 0);
+        assert!(
+            !adoption(&dir).is_empty(),
+            "precondition: adoption entries exist"
+        );
+
+        // Fix the debt, re-run adopt: the entries must graduate away.
+        let _ = write_py(&dir, "bad.py", CLEAN_PYTHON);
+        assert_eq!(run_adopt(&[path]), 0);
+        assert!(
+            adoption(&dir).is_empty(),
+            "re-running adopt must remove entries whose rules no longer fire, got: {:?}",
+            adoption(&dir)
+        );
+    }
+
+    // ── run_unadopt ([AUTOFIX-ADOPTION]) ─────────────────────────────────
+
+    /// [AUTOFIX-ADOPTION-FLOW]: unadopt deletes the folder's warning entries,
+    /// restoring the ancestor severity.
+    #[test]
+    fn run_unadopt_removes_adoption_entries() {
         let dir = temp_dir("unadopt_remove");
         let path = write_py(&dir, "bad.py", BAD_PYTHON);
 
@@ -389,6 +513,26 @@ mod tests {
         );
     }
 
+    /// Unadopt leaves non-warning entries (the user's own error opt-ins)
+    /// untouched — only the adoption state is deleted. [AUTOFIX-ADOPTION]
+    #[test]
+    fn run_unadopt_preserves_error_entries() {
+        let dir = temp_dir("unadopt_preserve");
+        let path = write_py(&dir, "bad.py", BAD_PYTHON);
+        assert_eq!(run_adopt(std::slice::from_ref(&path)), 0);
+        assert_eq!(run_unadopt(&[path]), 0);
+
+        // BSK-0001/BSK-0002 were rewritten to warning by adopt and removed by
+        // unadopt; a config with only non-warning entries would keep them.
+        let entries = rule_entries(&dir);
+        assert!(
+            entries
+                .values()
+                .all(|severity| *severity != RuleSeverity::Warning),
+            "no warning entries may remain after unadopt, got: {entries:?}"
+        );
+    }
+
     #[test]
     fn run_unadopt_on_clean_dir_returns_0() {
         let dir = temp_dir("unadopt_clean");
@@ -404,18 +548,19 @@ mod tests {
         assert_eq!(exit, 3);
     }
 
-    // ── run_adopt_status ─────────────────────────────────────────────────────
+    // ── run_adopt_status ([AUTOFIX-ADOPTION]) ────────────────────────────
 
     #[test]
-    fn run_adopt_status_empty_prints_no_files() {
+    fn run_adopt_status_empty_prints_no_folders() {
         let dir = temp_dir("status_empty");
         // Create the directory but no adoptions.
+        let _ = write_py(&dir, "clean.py", CLEAN_PYTHON);
         let exit = run_adopt_status(&[dir.to_string_lossy().into_owned()]);
         assert_eq!(exit, 0);
     }
 
     #[test]
-    fn run_adopt_status_shows_adopted_files() {
+    fn run_adopt_status_shows_adopted_folders() {
         let dir = temp_dir("status_shows");
         let path = write_py(&dir, "bad.py", BAD_PYTHON);
 
@@ -426,91 +571,41 @@ mod tests {
         assert_eq!(exit, 0);
     }
 
-    // ── check_file_errors ────────────────────────────────────────────────────
+    // ── governing_root ([CHKARCH-CONFIG-DISCOVERY]) ──────────────────────
 
     #[test]
-    fn check_file_errors_bad_code_returns_error_codes() {
-        let dir = temp_dir("check_bad");
-        let path = write_py(&dir, "bad.py", BAD_PYTHON);
-
-        let codes = check_file_errors(&path, &annotations_on()).unwrap();
-        assert!(
-            !codes.is_empty(),
-            "bad code must produce at least one error"
-        );
-        assert!(
-            codes.contains(&"BSK-E0001".to_owned()),
-            "expected BSK-E0001 in {codes:?}"
-        );
-    }
-
-    #[test]
-    fn check_file_errors_clean_code_returns_empty() {
-        let dir = temp_dir("check_clean");
-        let path = write_py(&dir, "clean.py", CLEAN_PYTHON);
-
-        let codes = check_file_errors(&path, &annotations_on()).unwrap();
-        assert!(
-            codes.is_empty(),
-            "clean code should produce no errors, got: {codes:?}"
-        );
-    }
-
-    #[test]
-    fn check_file_errors_nonexistent_file_returns_err() {
-        let result = check_file_errors("/no/such/file.py", &annotations_on());
-        assert!(result.is_err(), "nonexistent file must return Err");
-    }
-
-    // ── resolve_config_root ──────────────────────────────────────────────────
-
-    #[test]
-    fn resolve_config_root_file_returns_parent() {
+    fn governing_root_file_returns_config_dir() {
         let dir = temp_dir("resolve_file");
         let path = write_py(&dir, "foo.py", CLEAN_PYTHON);
 
-        let root = resolve_config_root(&[path]);
-        // [CHKARCH-CONFIG-DISCOVERY] discovery preserves the caller's path
-        // spelling (no canonicalization) — a symlinked temp dir stays as given.
-        assert_eq!(root, dir);
+        // Discovery preserves the caller's path spelling (no
+        // canonicalization) — a symlinked temp dir stays as given.
+        assert_eq!(governing_root(&path), dir);
     }
 
     #[test]
-    fn resolve_config_root_directory_returns_itself() {
-        let dir = temp_dir("resolve_dir");
-        let root = resolve_config_root(&[dir.to_string_lossy().into_owned()]);
-        assert_eq!(root, dir);
-    }
-
-    #[test]
-    fn resolve_config_root_nested_file_finds_project_config() {
+    fn governing_root_nested_file_finds_project_config() {
         let dir = temp_dir("resolve_nested");
         let src = dir.join("src");
         fs::create_dir_all(&src).unwrap();
         let path = write_py(&src, "nested.py", CLEAN_PYTHON);
-        assert_eq!(resolve_config_root(&[path]), dir);
+        assert_eq!(governing_root(&path), dir);
     }
 
+    /// A nested folder with its own `[tool.basilisk]` table governs its files
+    /// — adoption writes there, exactly where `check` discovers.
+    /// [CHKARCH-CONFIG-DISCOVERY]
     #[test]
-    fn resolve_config_root_empty_returns_cwd() {
-        let root = resolve_config_root(&[]);
-        assert_eq!(root, crate::find_project_root(Path::new(".")));
-    }
-
-    // ── pluralise ────────────────────────────────────────────────────────────
-
-    #[test]
-    fn pluralise_zero_returns_s() {
-        assert_eq!(pluralise(0), "s");
-    }
-
-    #[test]
-    fn pluralise_one_returns_empty() {
-        assert_eq!(pluralise(1), "");
-    }
-
-    #[test]
-    fn pluralise_many_returns_s() {
-        assert_eq!(pluralise(5), "s");
+    fn governing_root_prefers_nearest_config_table() {
+        let dir = temp_dir("resolve_nearest");
+        let sub = dir.join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(
+            sub.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"error\"\n",
+        )
+        .unwrap();
+        let path = write_py(&sub, "nested.py", CLEAN_PYTHON);
+        assert_eq!(governing_root(&path), sub);
     }
 }

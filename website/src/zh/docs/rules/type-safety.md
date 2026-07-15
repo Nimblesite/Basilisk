@@ -182,7 +182,7 @@ y: int = 0  # 正确
 
 ---
 
-### BSK-E0025 — 缺少 `@override` 装饰器
+### BSK-0025 — 缺少 `@override` 装饰器
 
 覆盖父类方法的方法缺少 `@override` 装饰器（PEP 698）。
 

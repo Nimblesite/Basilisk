@@ -24,8 +24,8 @@ def func(*args) -> None:
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        codes(&diags).contains(&"BSK-E0004"),
-        "unannotated *args should fire BSK-E0004, got: {:?}",
+        codes(&diags).contains(&"BSK-0004"),
+        "unannotated *args should fire BSK-0004, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -39,8 +39,8 @@ def func(*args: int) -> None:
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0004"),
-        "annotated *args should not fire BSK-E0004"
+        !codes(&diags).contains(&"BSK-0004"),
+        "annotated *args should not fire BSK-0004"
     );
     Ok(())
 }
@@ -53,8 +53,8 @@ def func(**kwargs) -> None:
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        codes(&diags).contains(&"BSK-E0004"),
-        "unannotated **kwargs should fire BSK-E0004, got: {:?}",
+        codes(&diags).contains(&"BSK-0004"),
+        "unannotated **kwargs should fire BSK-0004, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -770,12 +770,12 @@ y: str = "hello"
 
 #[test]
 fn type_ignore_with_code_suppresses() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "def bad(x) -> None:  # type: ignore[BSK-E0001]\n    pass\n";
+    let source = "def bad(x) -> None:  # type: ignore[BSK-0001]\n    pass\n";
     let diags = run(source)?;
-    let e0001_count = diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
+    let e0001_count = diags.iter().filter(|d| d.code.code == "BSK-0001").count();
     assert_eq!(
         e0001_count, 0,
-        "type: ignore[BSK-E0001] should suppress BSK-E0001"
+        "type: ignore[BSK-0001] should suppress BSK-0001"
     );
     Ok(())
 }

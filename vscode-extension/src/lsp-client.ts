@@ -69,11 +69,17 @@ export function readBasiliskSettings(): Record<string, unknown> {
   // #65 / #119). Implements [ANALYSIS-ENABLED] (server side) and the
   // [EXTACT-INFO-FEATURE-STATUS] "Type Checking" effect.
   const enabled = cfg.get<boolean>("enabled") ?? true;
+  // [LSPARCH-DIAGNOSTIC-SCOPE]: `basilisk.analyze` is the per-user editor
+  // opt-out that restricts publication to check scope (pep rules only). It is
+  // relayed as initializationOptions.basilisk.analyze; project configuration
+  // grades rules and never selects commands.
+  const analyze = cfg.get<boolean>("analyze") ?? true;
   return {
     enabled,
     analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
     basilisk: {
       enabled,
+      analyze,
       python: cfg.get<string>("python") ?? "",
       analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
       inlayHints: readInlayHints(cfg),

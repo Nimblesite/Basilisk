@@ -10,21 +10,21 @@ import json
 from typing import Any, overload
 
 
-# ── BSK-E0003: can't infer type from empty dict literal ─────────────────────
-_route_table = {}  # BSK-E0003: empty dict, no annotation
-_middleware_stack = []  # BSK-E0003: empty list, no annotation
+# ── BSK-0003: can't infer type from empty dict literal ─────────────────────
+_route_table = {}  # BSK-0003: empty dict, no annotation
+_middleware_stack = []  # BSK-0003: empty list, no annotation
 
 
-# ── BSK-E0001/E0002: untyped handler signatures ──────────────────────────────
-def handle_get(request, context):  # BSK-E0001: request, context untyped
+# ── BSK-0001/0002: untyped handler signatures ──────────────────────────────
+def handle_get(request, context):  # BSK-0001: request, context untyped
     user_id = request.get("user_id")
-    return {"user": user_id}  # BSK-E0002: no return type
+    return {"user": user_id}  # BSK-0002: no return type
 
 
-def handle_post(request, body, auth):  # BSK-E0001: three untyped params
+def handle_post(request, body, auth):  # BSK-0001: three untyped params
     if not auth:
         return None
-    return body  # BSK-E0002: no return type
+    return body  # BSK-0002: no return type
 
 
 # ── returns_compatibility: naked Any in public API signature ─────────────────────────────
@@ -50,11 +50,11 @@ class AdminRoute(BaseRoute):
 
 # ── overloads_consistency: overload signatures identical (both take no-annotation param) ──
 @overload
-def parse_id(raw) -> int: ...  # BSK-E0001: raw untyped
+def parse_id(raw) -> int: ...  # BSK-0001: raw untyped
 
 
 @overload
-def parse_id(raw) -> int: ...  # BSK-E0001 + overloads_consistency: duplicate overload
+def parse_id(raw) -> int: ...  # BSK-0001 + overloads_consistency: duplicate overload
 
 
 def parse_id(raw: str) -> int:
@@ -68,7 +68,7 @@ def default_routes() -> dict[
     return {["GET", "POST"]: "/"}  # dict_key_hashable: list literal as key
 
 
-# ── BSK-E0025: override without @override decorator ─────────────────────────
+# ── BSK-0025: override without @override decorator ─────────────────────────
 class Router:
     def resolve(self, path: str) -> str:
         return path
@@ -77,7 +77,7 @@ class Router:
 class PrefixRouter(Router):
     prefix: str = "/api"
 
-    def resolve(self, path: str) -> str:  # BSK-E0025: missing @override
+    def resolve(self, path: str) -> str:  # BSK-0025: missing @override
         return self.p + path
 
 

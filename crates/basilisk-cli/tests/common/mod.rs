@@ -83,21 +83,20 @@ pub fn run_with_config(
 pub fn annotation_rules_config() -> BasiliskConfig {
     use basilisk_config::RuleSeverity::{Error, Warning};
 
-    BasiliskConfig {
-        rules: [
-            ("BSK-E0001", Error),
-            ("BSK-E0002", Error),
-            ("BSK-E0003", Error),
-            ("BSK-E0004", Error),
-            ("BSK-E0005", Error),
-            ("BSK-E0025", Error),
-            ("BSK-W0014", Warning),
-            ("BSK-W0040", Warning),
-            ("BSK-W0050", Warning),
+    BasiliskConfig::with_rule_entries(
+        [
+            ("BSK-0001", Error),
+            ("BSK-0002", Error),
+            ("BSK-0003", Error),
+            ("BSK-0004", Error),
+            ("BSK-0005", Error),
+            ("BSK-0025", Error),
+            ("BSK-0014", Warning),
+            ("BSK-0040", Warning),
+            ("BSK-0050", Warning),
         ]
         .into_iter()
         .map(|(code, severity)| (code.to_owned(), severity))
         .collect(),
-        ..BasiliskConfig::default()
-    }
+    )
 }

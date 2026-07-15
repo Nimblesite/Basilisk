@@ -25,10 +25,8 @@ fn applied_document(document: &ConfigDocument, patch: &ConfigPatch) -> ConfigDoc
     ConfigDocument {
         root: document.root.clone(),
         path: patch.path.clone(),
-        format: document.format,
         exists: true,
         read_only: false,
-        shadowed_sources: document.shadowed_sources.clone(),
         content: patch.content.clone(),
         revision: patch.revision.clone(),
         config: patch.config.clone(),
@@ -81,12 +79,12 @@ fn replacement_edit(
     })
 }
 
-/// Apply expanded rule updates through the same validated client-edit service
+/// Apply one validated entry update through the same client-edit service
 /// used by the typed preview/apply protocol.
 pub(crate) async fn apply_rule_updates(
     server: &LspServer,
     root: &Path,
-    updates: &[RuleConfigUpdate],
+    update: &RuleConfigUpdate,
     reason: &str,
 ) -> LspResult<ConfigDocument> {
     let effective = server
@@ -97,7 +95,7 @@ pub(crate) async fn apply_rule_updates(
     let disk_revision = server
         .configuration_editor
         .disk_revision_for(root, &document.revision);
-    let patch = build_rule_patch(&document, updates).map_err(config_error)?;
+    let patch = build_rule_patch(&document, update).map_err(config_error)?;
     apply_prepared_patch(
         server,
         root,
@@ -187,12 +185,17 @@ pub(super) async fn refresh_with_document(
             .publish_diagnostics_if_enabled(uri, diagnostics)
             .await;
     }
+    tracing::info!(
+        root = %root.display(),
+        revision = %document.revision,
+        reason,
+        "configuration refresh complete"
+    );
     server
         .client
         .send_notification::<ConfigurationChangedNotification>(ConfigurationChanged {
             root_uri: path_uri(root),
             revision: document.revision.clone(),
-            reason: reason.to_owned(),
         })
         .await;
     Ok(())
@@ -221,7 +224,7 @@ impl tower_lsp::lsp_types::notification::Notification for ConfigurationChangedNo
 mod tests {
     use std::path::PathBuf;
 
-    use basilisk_config::{BasiliskConfig, ConfigDocument, ConfigFormat, ConfigPatch};
+    use basilisk_config::{BasiliskConfig, ConfigDocument, ConfigPatch};
     use tower_lsp::lsp_types::{DocumentChangeOperation, DocumentChanges, Url};
 
     use super::{configuration_result_is_publishable, replacement_edit};
@@ -258,10 +261,8 @@ mod tests {
         let document = ConfigDocument {
             root: PathBuf::from("/workspace"),
             path: source_path.clone(),
-            format: ConfigFormat::PyprojectToml,
             exists: true,
             read_only: false,
-            shadowed_sources: Vec::new(),
             content: "[project]\n".to_owned(),
             revision: "before".to_owned(),
             config: BasiliskConfig::default(),

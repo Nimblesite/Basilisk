@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::as_conversions
 )]
-//! E2E tests for error codes E0010 through BSK-E0025.
+//! E2E tests for error codes E0010 through BSK-0025.
 //!
 //! Includes both exact-diagnostic tests and presence-check tests for
 //! rules that are partially implemented.
@@ -41,8 +41,8 @@ fn explicit_any_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config("errors/e0011_explicit_any.py", &annotation_rules_config())?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-W0014"),
-        "should emit BSK-W0014 for explicit Any annotations, got: {diags:#?}"
+        codes.contains(&"BSK-0014"),
+        "should emit BSK-0014 for explicit Any annotations, got: {diags:#?}"
     );
     Ok(())
 }
@@ -62,9 +62,9 @@ fn any_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Error>> {
         &src,
         &diags,
         &[
-            Expected::warning("BSK-W0014", "return annotation", 4, 5),
-            Expected::warning("BSK-W0014", "`args`", 4, 14),
-            Expected::warning("BSK-W0014", "`kwargs`", 4, 27),
+            Expected::warning("BSK-0014", "return annotation", 4, 5),
+            Expected::warning("BSK-0014", "`args`", 4, 14),
+            Expected::warning("BSK-0014", "`kwargs`", 4, 27),
         ],
     );
     Ok(())
@@ -202,7 +202,7 @@ fn overlapping_overload_signatures() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// exact diagnostics: overlapping overloads also trigger BSK-E0001
+// exact diagnostics: overlapping overloads also trigger BSK-0001
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -216,11 +216,11 @@ fn exact_diagnostics_for_overlapping_overloads() -> Result<(), Box<dyn std::erro
         &src,
         &diags,
         &[
-            Expected::error("BSK-E0001", "`x`", 5, 13),
+            Expected::error("BSK-0001", "`x`", 5, 13),
             Expected::error("overloads_consistency", "`process`", 9, 5),
             // The second overload returns `str`, not assignable to the impl's `int`.
             Expected::error("overloads_consistency_3", "`process`", 9, 5),
-            Expected::error("BSK-E0001", "`x`", 9, 13),
+            Expected::error("BSK-0001", "`x`", 9, 13),
         ],
     );
     Ok(())
@@ -288,8 +288,8 @@ fn override_without_decorator() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-E0025"),
-        "should emit BSK-E0025 for override without @override, got: {diags:#?}"
+        codes.contains(&"BSK-0025"),
+        "should emit BSK-0025 for override without @override, got: {diags:#?}"
     );
     Ok(())
 }

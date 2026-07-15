@@ -48,8 +48,8 @@ per `[GITHUB-NO-ARTIFACTS]`.
 `website/screenshots/shots.mjs` is the single source of truth for every CLI
 screenshot. Each entry pairs the **exact** docs snippet with the code it must
 produce (`expect`). Snippets isolate one rule — e.g. `e0001` keeps the `-> str`
-return annotation so only `BSK-E0001` fires, not `BSK-E0002`; `e0011` documents
-the explicit-`Any` check and asserts `BSK-W0014`; the home shots assert the
+return annotation so only `BSK-0001` fires, not `BSK-0002`; `e0011` documents
+the explicit-`Any` check and asserts `BSK-0014`; the home shots assert the
 summary line (`Found 6 diagnostics`, `No issues found`). The assertion lives in
 code and runs on every regeneration.
 

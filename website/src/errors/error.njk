@@ -30,7 +30,7 @@ eleventyComputed:
 
 <h1 class="error-title">
   <code>{{ rule.code }}</code>
-  <span class="badge badge--{{ rule.severity }}">{{ rule.severity }}</span>
+  <span class="badge badge--{{ rule.scope }}">{{ rule.scope }}</span>
 </h1>
 
 <p class="error-summary">{{ rule.summaryHtml | safe }}</p>

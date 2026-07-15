@@ -61,7 +61,7 @@ pub(super) fn fix_missing_variable_annotation(uri: &Url, diag: &Diagnostic) -> C
     )
 }
 
-/// Remove redundant type annotation (for BSK-W0050).
+/// Remove redundant type annotation (for BSK-0050).
 ///
 /// Example: `x: int = 42` → `x = 42`
 /// Finds the colon on the diagnostic's source line and removes everything

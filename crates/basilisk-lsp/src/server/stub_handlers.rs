@@ -5,7 +5,7 @@
 //! Scaffolds a permissive local `.pyi` stub for an untyped package under the
 //! workspace's `.basilisk/stubs/` directory — the same Tier-3 stub cache the
 //! resolver auto-includes on its search path ([`basilisk_stubs::generate::cache`]).
-//! Writing it there means the import resolves on the next rebuild and BSK-E0152
+//! Writing it there means the import resolves on the next rebuild and BSK-0152
 //! clears with no config edit required.
 
 use std::io::Write as _;
@@ -20,7 +20,7 @@ use super::LspServer;
 /// Permissive PEP 484 stub skeleton for `module`.
 ///
 /// **Strict by default**: the skeleton declares *nothing*, so once it exists the
-/// `BSK-E0152` "no stubs" error clears, and accessing any attribute the stub does
+/// `BSK-0152` "no stubs" error clears, and accessing any attribute the stub does
 /// not declare is a `imports_module_attribute` error — forcing the developer to type what they
 /// actually use. The opt-out (`def __getattr__(name: str) -> Any: ...`, the
 /// authoring guide's "incomplete stub" escape hatch that makes every attribute
@@ -125,7 +125,7 @@ pub(super) async fn execute_create_local_stub(
                 .client
                 .log_message(MessageType::INFO, format!("Basilisk: {msg}"))
                 .await;
-            // Re-resolve so the new stub is picked up and BSK-E0152 clears.
+            // Re-resolve so the new stub is picked up and BSK-0152 clears.
             super::init::rebuild_registry_and_resolve(server).await;
             Ok(Some(serde_json::json!({
                 "created": created,

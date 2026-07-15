@@ -240,19 +240,19 @@ When provenance is `Untyped`, one diagnostic at the import site replaces cascadi
 
 ### Code Actions for Unresolved Imports {#STUBRES-CODEACTIONS}
 
-**Principle**: Diagnostics MUST NOT tell users to run CLI commands; the LSP provides one-click code actions that do the work. Every imports_unresolved and BSK-E0152 diagnostic MUST have an associated code action:
+**Principle**: Diagnostics MUST NOT tell users to run CLI commands; the LSP provides one-click code actions that do the work. Every imports_unresolved and BSK-0152 diagnostic MUST have an associated code action:
 
 | Diagnostic | Scenario | Code Action | LSP Command |
 |------------|----------|-------------|-------------|
 | imports_unresolved | Package not installed | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
 | imports_unresolved | Package not in deps (transitive only) | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
 | imports_unresolved | Package declared but not synced | "Sync environment" | `basilisk.uv.sync` |
-| BSK-E0152 | Package installed, typeshed stub exists | "Install type stubs: `types-{pkg}`" | `basilisk.uv.addDev` |
-| BSK-E0152 | Package installed, **no** typeshed stub | "Create local type stub for `{pkg}`" | `basilisk.stubs.createLocal` |
+| BSK-0152 | Package installed, typeshed stub exists | "Install type stubs: `types-{pkg}`" | `basilisk.uv.addDev` |
+| BSK-0152 | Package installed, **no** typeshed stub | "Create local type stub for `{pkg}`" | `basilisk.stubs.createLocal` |
 
 The `uv`-backed actions execute via `workspace/executeCommand`: the LSP spawns `uv` as a subprocess, reports progress via `window/logMessage`, and re-resolves on completion — the diagnostic clears automatically.
 
-The create-local action is offered for **every** BSK-E0152 (the only fix when typeshed publishes nothing, a fallback when it does), so the "every diagnostic has a code action" guarantee holds even for packages with no published stubs.
+The create-local action is offered for **every** BSK-0152 (the only fix when typeshed publishes nothing, a fallback when it does), so the "every diagnostic has a code action" guarantee holds even for packages with no published stubs.
 
 Diagnostic help text describes **what's wrong**, not a CLI command; the action is the fix. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-ACTIONS](LSP-UV-INTEGRATION-SPEC.md#LSPUV-ACTIONS).
 
@@ -266,7 +266,7 @@ stub for an untyped package.
   [§STUBRES-AUTOGEN](#STUBRES-AUTOGEN) and `ImportSearchPaths::from_config`), so
   the import re-resolves with **no config edit**.
 - **Skeleton (strict by default)**: header comments only, declaring *nothing*.
-  Creating it clears `BSK-E0152`; because the stub is authoritative
+  Creating it clears `BSK-0152`; because the stub is authoritative
   ([§STUBRES-MEMBER via E0154](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STUB-MEMBER)),
   `imports_module_attribute` then prompts the developer to declare each name used.
   The comment documents the opt-out (a module-level
@@ -274,10 +274,10 @@ stub for an untyped package.
   skeleton deliberately does **not** emit it.
 - **Idempotent**: an existing stub is never clobbered (handler returns
   `created: false`).
-- After writing, the handler calls `rebuild_registry_and_resolve` so BSK-E0152
+- After writing, the handler calls `rebuild_registry_and_resolve` so BSK-0152
   clears automatically.
 
-The BSK-E0152 `help`/`note` text names this `stub-paths`/`.pyi` route and links
+The BSK-0152 `help`/`note` text names this `stub-paths`/`.pyi` route and links
 [PEP 561](https://peps.python.org/pep-0561/) and the
 [stub-writing guide](https://typing.python.org/en/latest/guides/writing_stubs.html),
 folded onto the LSP diagnostic message (the LSP `Diagnostic` has no `help`/`note`

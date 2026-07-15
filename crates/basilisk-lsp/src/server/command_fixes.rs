@@ -410,10 +410,7 @@ mod tests {
 
     #[test]
     fn open_targets_use_versioned_document_changes() -> Result<(), Box<dyn StdError>> {
-        let config = basilisk_config::BasiliskConfig {
-            rules: enabled_fix_test_rules(),
-            ..Default::default()
-        };
+        let config = basilisk_config::BasiliskConfig::with_rule_entries(enabled_fix_test_rules());
         let index =
             WorkspaceIndex::new(vec![PathBuf::from("/")], AnalysisMode::WholeModule, config);
         let uri = Url::parse("file:///versioned.py")?;
@@ -435,10 +432,7 @@ mod tests {
     #[test]
     fn accepted_partial_fixes_converge_index_and_keep_remaining_diagnostics(
     ) -> Result<(), Box<dyn StdError>> {
-        let config = basilisk_config::BasiliskConfig {
-            rules: enabled_fix_test_rules(),
-            ..Default::default()
-        };
+        let config = basilisk_config::BasiliskConfig::with_rule_entries(enabled_fix_test_rules());
         let index =
             WorkspaceIndex::new(vec![PathBuf::from("/")], AnalysisMode::WholeModule, config);
         let uri = Url::parse("file:///converged.py")?;
@@ -457,14 +451,14 @@ mod tests {
         assert!(entry
             .diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code.code == "BSK-E0003"));
+            .any(|diagnostic| diagnostic.code.code == "BSK-0003"));
         assert!(published.iter().any(|(published_uri, diagnostics)| {
             published_uri == &uri
                 && diagnostics.iter().any(|diagnostic| {
                     matches!(
                         diagnostic.code.as_ref(),
                         Some(tower_lsp::lsp_types::NumberOrString::String(code))
-                            if code == "BSK-E0003"
+                            if code == "BSK-0003"
                     )
                 })
         }));
@@ -473,9 +467,9 @@ mod tests {
 
     fn enabled_fix_test_rules() -> HashMap<String, basilisk_config::RuleSeverity> {
         HashMap::from([
-            ("BSK-E0003".to_owned(), basilisk_config::RuleSeverity::Error),
+            ("BSK-0003".to_owned(), basilisk_config::RuleSeverity::Error),
             (
-                "BSK-W0050".to_owned(),
+                "BSK-0050".to_owned(),
                 basilisk_config::RuleSeverity::Warning,
             ),
         ])

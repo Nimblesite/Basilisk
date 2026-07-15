@@ -153,7 +153,7 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     const tip = tooltipOf(uvRow);
     assert.ok(tip.includes("Auto-Sync"), `uv tooltip must carry Auto-Sync, got: "${tip}"`);
     assert.ok(tip.includes("Executable"), `uv tooltip must carry Executable, got: "${tip}"`);
-    // Stub suggestions are governed by rule severity (BSK-E0152), not a uv
+    // Stub suggestions are governed by rule severity (BSK-0152), not a uv
     // setting, so they are neither a row nor a tooltip line.
     assert.ok(!tip.includes("Stub Suggestions"), `uv tooltip must not carry the removed Stub Suggestions setting, got: "${tip}"`);
   });

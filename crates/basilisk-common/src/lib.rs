@@ -57,7 +57,7 @@ pub mod commands {
     /// name, start line, end line).
     pub const MOVE_SYMBOL: &str = "basilisk.moveSymbol";
     /// Scaffold a local `.pyi` stub for an untyped package under
-    /// `.basilisk/stubs/` (arg: module name). Quick fix for BSK-E0152 when no
+    /// `.basilisk/stubs/` (arg: module name). Quick fix for BSK-0152 when no
     /// published typeshed stub exists. Implements [STUBRES-CREATE-LOCAL].
     pub const STUBS_CREATE_LOCAL: &str = "basilisk.stubs.createLocal";
     /// Append a missing member (method or attribute) to a local stub
@@ -181,12 +181,12 @@ pub mod configuration_editor {
     pub const PREVIEW: &str = "basilisk/previewConfigurationChange";
     /// Apply a previously previewed, revision-checked configuration mutation.
     pub const APPLY: &str = "basilisk/applyConfigurationChange";
-    /// Page through diagnostics selected by rule/tag/fixability.
+    /// Page through diagnostics selected by the all/codes/tags selectors.
     pub const OCCURRENCES: &str = "basilisk/ruleOccurrences";
     /// Notify clients that a root's effective configuration changed.
     pub const CHANGED: &str = "basilisk/configurationChanged";
     /// Current protocol version advertised in `ServerCapabilities.experimental`.
-    pub const VERSION: u8 = 1;
+    pub const VERSION: u8 = 2;
 }
 
 /// Slash command names used in the Zed extension's AI assistant panel.

@@ -84,7 +84,7 @@ broader clients, richer metadata, and additional drift/audit automation.
 
 ## Suppression diagnostics {#CONFIGEDITOR-PLAN-SUPPRESSIONS}
 
-- [x] Ship `BSK-I0060`–`BSK-E0063` as an off-by-default, tag-selectable family
+- [x] Ship `BSK-0060`–`BSK-0063` as an off-by-default, tag-selectable family
   with independently configurable severity.
 - [x] Parse directives once, apply only valid directives, append audit
   diagnostics after suppression, and prevent self-suppression.

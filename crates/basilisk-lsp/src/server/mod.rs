@@ -148,6 +148,13 @@ pub struct LspServer {
     // (file-watcher, startup scan) can read it after the handler returns.
     /// Whether type checking (diagnostic publication) is enabled.
     pub(super) type_checking_enabled: Arc<RwLock<bool>>,
+    // Implements [LSPARCH-DIAGNOSTIC-SCOPE]: the LSP publishes the union of
+    // both command scopes by default; the IDE-level initialization option
+    // `basilisk.analyze = false` restricts publication to check scope
+    // (`pep`-tagged rules only). Per-user editor ergonomics — project
+    // configuration grades rules and never selects commands.
+    /// Whether analyze-scope diagnostics are published (default true).
+    pub(super) analyze_enabled: Arc<std::sync::atomic::AtomicBool>,
     // Implements [LSPFMT-CONFIG] (`basilisk.formatter`): when the client or
     // config selects `"none"`, formatting capabilities are not advertised and
     // the handlers answer `None` even if a client calls them anyway.
@@ -187,6 +194,9 @@ impl LspServer {
             // Type checking is on by default; the client opts out via
             // `basilisk.enabled = false`. Implements [ANALYSIS-ENABLED].
             type_checking_enabled: Arc::new(RwLock::new(true)),
+            // Both scopes publish by default; the client opts out of analyze
+            // scope via `basilisk.analyze = false`. [LSPARCH-DIAGNOSTIC-SCOPE]
+            analyze_enabled: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             // Formatting is on by default (`basilisk.formatter = "ruff"`);
             // `initialize` flips this off for `"none"`. [LSPFMT-CONFIG]
             formatting_enabled: std::sync::atomic::AtomicBool::new(true),
@@ -228,7 +238,14 @@ impl LspServer {
     /// [`publish_diagnostics_gated`] with `force_clear`. Implements
     /// [ANALYSIS-ENABLED] / [ANALYSIS-PUBLISH].
     pub(super) async fn publish_diagnostics_if_enabled(&self, uri: Url, diags: Vec<Diagnostic>) {
-        publish_diagnostics_gated(&self.client, &self.type_checking_enabled, uri, diags).await;
+        publish_diagnostics_gated(
+            &self.client,
+            &self.type_checking_enabled,
+            &self.analyze_enabled,
+            uri,
+            diags,
+        )
+        .await;
     }
 
     /// Borrow the index and call `f` with it. Returns `None` if not yet
@@ -287,16 +304,37 @@ impl LspServer {
 pub(super) async fn publish_diagnostics_gated(
     client: &Client,
     enabled: &RwLock<bool>,
+    analyze: &std::sync::atomic::AtomicBool,
     uri: Url,
-    diags: Vec<Diagnostic>,
+    mut diags: Vec<Diagnostic>,
 ) {
     let is_enabled = *enabled.read().await;
+    // Implements [LSPARCH-DIAGNOSTIC-SCOPE]: with the analyze opt-out set,
+    // only check-scope (`pep`-tagged) diagnostics publish. The edge filter is
+    // `is_pep_rule` — project configuration never selects scope.
+    if !analyze.load(std::sync::atomic::Ordering::Relaxed) {
+        diags.retain(is_check_scope);
+    }
     diaglog!(
         "[DIAG] publish n={} enabled={is_enabled} uri={uri}",
         diags.len()
     );
     if is_enabled {
         client.publish_diagnostics(uri, diags, None).await;
+    }
+}
+
+/// Whether a published diagnostic belongs to check scope.
+///
+/// Implements [LSPARCH-DIAGNOSTIC-SCOPE] / [CHKARCH-COMMANDS]: `pep`-tagged
+/// rules are check scope. Diagnostics without a registry code (syntax errors,
+/// tooling notices) are never analyze-scope rules and always publish.
+fn is_check_scope(diagnostic: &Diagnostic) -> bool {
+    match &diagnostic.code {
+        Some(tower_lsp::lsp_types::NumberOrString::String(code)) => {
+            basilisk_checker::is_pep_rule(code)
+        }
+        Some(tower_lsp::lsp_types::NumberOrString::Number(_)) | None => true,
     }
 }
 

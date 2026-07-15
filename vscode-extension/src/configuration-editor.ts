@@ -24,12 +24,12 @@ import type { Store } from "./store";
 
 export const CONFIGURATION_EDITOR_COMMAND = "basilisk.openConfigurationEditor";
 export const CONFIGURATION_EDITOR_CONTEXT = "basilisk.configurationEditorSupported";
-export const CONFIGURATION_EDITOR_VERSION = 1;
+/** [LSPARCH-CONFIG-EDITOR-PROTOCOL]: exact match with the server's advertised version. */
+export const CONFIGURATION_EDITOR_VERSION = 2;
 const SNAPSHOT_METHOD = "basilisk/configurationSnapshot";
 const PREVIEW_METHOD = "basilisk/previewConfigurationChange";
 const APPLY_METHOD = "basilisk/applyConfigurationChange";
 const OCCURRENCES_METHOD = "basilisk/ruleOccurrences";
-const FIX_WORKSPACE_COMMAND = "basilisk.fixWorkspace";
 const CONFIGURATION_VIEW_TYPE = "basilisk.configurationEditor";
 const CONFLICT_WORDS = ["stale", "conflict", "revision", "changed since preview"] as const;
 
@@ -39,20 +39,11 @@ export interface ConfigurationEditorTransport {
   preview(request: PreviewConfigurationRequest): Promise<ConfigurationPreview>;
   apply(request: ApplyConfigurationRequest): Promise<ConfigurationSnapshot>;
   occurrences(request: RuleOccurrencesRequest): Promise<RuleOccurrencesResponse>;
-  fixSafe(rootUri: string): Promise<SafeFixResult>;
-}
-
-/** Exact result returned by the LSP-owned, safe-only workspace fixer. */
-export interface SafeFixResult {
-  readonly fixed: number;
-  readonly files: number;
 }
 
 interface ExperimentalCapabilities {
   readonly basilisk?: {
-    readonly configurationEditor?: {
-      readonly version?: unknown;
-    };
+    readonly configurationEditor?: { readonly version?: unknown };
   };
 }
 
@@ -93,16 +84,10 @@ function clientTransport(store: Store): ConfigurationEditorTransport {
     async occurrences(request: RuleOccurrencesRequest): Promise<RuleOccurrencesResponse> {
       return runningClient().sendRequest<RuleOccurrencesResponse>(OCCURRENCES_METHOD, request);
     },
-    async fixSafe(rootUri: string): Promise<SafeFixResult> {
-      return runningClient().sendRequest<SafeFixResult>("workspace/executeCommand", {
-        command: FIX_WORKSPACE_COMMAND,
-        arguments: [{ rootUri }],
-      });
-    },
   };
 }
 
-/** Accept only the root-level `pyproject.toml` as a repair target. */
+/** Accept only the root-level `pyproject.toml` as a repair/open target. */
 export function configurationRepairUri(value: unknown, rootUri: string | undefined): string | undefined {
   if (typeof value !== "string" || rootUri === undefined) { return undefined; }
   try {
@@ -157,12 +142,12 @@ export async function selectConfigurationRoot(): Promise<string | undefined> {
   if (roots.length === 0) { return undefined; }
   const choice = await vscode.window.showQuickPick(
     roots.map((root) => ({ label: root.name, detail: root.uri.fsPath, rootUri: root.uri.toString() })),
-    { title: "Basilisk Configuration", placeHolder: "Choose the workspace policy to edit" },
+    { title: "Basilisk Configuration", placeHolder: "Choose the workspace configuration to edit" },
   );
   return choice?.rootUri;
 }
 
-/** Singleton editor tab and intent router; all policy state remains in Store. */
+/** Singleton editor tab and intent router; all configuration state remains in Store. */
 export class ConfigurationEditorController implements vscode.Disposable {
   private readonly panel: SingletonWebviewPanel;
   private readonly transport: ConfigurationEditorTransport;
@@ -239,7 +224,6 @@ export class ConfigurationEditorController implements vscode.Disposable {
     switch (intent.type) {
       case "ready": this.handleReady(); return;
       case "refresh": await this.refresh(); return;
-      case "fixSafe": await this.fixSafe(); return;
       case "preview": await this.preview(intent); return;
       case "apply": await this.apply(); return;
       case "occurrences": await this.loadOccurrences(intent.request); return;
@@ -332,46 +316,23 @@ export class ConfigurationEditorController implements vscode.Disposable {
     const generation = this.loadGeneration;
     this.previewGeneration += 1;
     this.store.beginConfigurationApply();
-    const sourceWasDirty = findConfigurationDocument(snapshot.source.uri)?.isDirty === true;
+    const sourceWasDirty = findConfigurationDocument(snapshot.configUri)?.isDirty === true;
     try {
+      // [CONFIGEDITOR-OPERATIONS]: rootUri + previewId fully identify the
+      // cached preview; the preview itself pins the base revision.
       const fresh = await this.transport.apply({
         rootUri: snapshot.rootUri,
         previewId: preview.previewId,
-        baseRevision: preview.baseRevision,
       });
-      // The save must run before the staleness check: the server's
-      // configurationChanged notification precedes the apply response, so a
-      // racing refresh routinely bumps the generation — the disk write still
-      // has to land.
-      if (!sourceWasDirty) { await saveConfigurationDocument(fresh.source.uri); }
+      // Save before the staleness check: the server's configurationChanged
+      // notification precedes the apply response, so a racing refresh
+      // routinely bumps the generation — the disk write still has to land.
+      if (!sourceWasDirty) { await saveConfigurationDocument(fresh.configUri); }
       if (generation !== this.loadGeneration || this.disposed || !this.panel.isOpen()) { return; }
       this.store.acceptConfigurationSnapshot(fresh);
     } catch (error: unknown) {
       if (generation !== this.loadGeneration || this.disposed || !this.panel.isOpen()) { return; }
       const details = errorDetails(error, snapshot.rootUri);
-      this.store.failConfigurationEditor(details.message, details.conflict, details.repairUri);
-    }
-  }
-
-  private async fixSafe(): Promise<void> {
-    const state = this.store.configurationEditor.value;
-    const rootUri = state.snapshot?.rootUri;
-    if (rootUri === undefined || state.phase === "applying" || state.phase === "previewing") { return; }
-    const generation = this.loadGeneration;
-    this.previewGeneration += 1;
-    this.store.beginConfigurationApply();
-    try {
-      const result = await this.transport.fixSafe(rootUri);
-      if (this.requestIsStale(generation, rootUri)) { return; }
-      void vscode.window.showInformationMessage(
-        result.fixed === 0
-          ? "Basilisk found no safe fixes to apply."
-          : `Basilisk applied ${result.fixed} safe fix${result.fixed === 1 ? "" : "es"} across ${result.files} file${result.files === 1 ? "" : "s"}.`,
-      );
-      await this.load(rootUri);
-    } catch (error: unknown) {
-      if (this.requestIsStale(generation, rootUri)) { return; }
-      const details = errorDetails(error, rootUri);
       this.store.failConfigurationEditor(details.message, details.conflict, details.repairUri);
     }
   }
@@ -398,19 +359,18 @@ export class ConfigurationEditorController implements vscode.Disposable {
 
   private async openRawConfiguration(): Promise<void> {
     const state = this.store.configurationEditor.value;
-    const source = state.snapshot?.source;
     const repairUri = state.repairUri;
     if (repairUri !== undefined) {
       await vscode.window.showTextDocument(vscode.Uri.parse(repairUri, true), { preview: false });
       return;
     }
-    if (!source?.exists) {
-      void vscode.window.showInformationMessage("Basilisk will create pyproject.toml when you apply a configuration change.");
-      return;
-    }
-    const sourceUri = configurationRepairUri(source.uri, state.snapshot?.rootUri);
+    const sourceUri = configurationRepairUri(state.snapshot?.configUri, state.snapshot?.rootUri);
     if (sourceUri === undefined) { return; }
-    await vscode.window.showTextDocument(vscode.Uri.parse(sourceUri, true), { preview: false });
+    try {
+      await vscode.window.showTextDocument(vscode.Uri.parse(sourceUri, true), { preview: false });
+    } catch {
+      void vscode.window.showInformationMessage("Basilisk will create pyproject.toml when you apply a configuration change.");
+    }
   }
 
   private async openRuleDocs(uri: string): Promise<void> {
@@ -429,10 +389,7 @@ export class ConfigurationEditorController implements vscode.Disposable {
     const rootUri = this.store.configurationEditor.value.rootUri;
     if (target.scheme !== "file" || !fileIsWithinRoot(target, rootUri)) { return; }
     const position = new vscode.Position(intent.line, intent.character);
-    await vscode.window.showTextDocument(target, {
-      preview: false,
-      selection: new vscode.Range(position, position),
-    });
+    await vscode.window.showTextDocument(target, { preview: false, selection: new vscode.Range(position, position) });
   }
 
   public dispose(): void {
@@ -448,7 +405,7 @@ export class ConfigurationEditorController implements vscode.Disposable {
     if (this.isOpen() && rootUri !== undefined) { void this.load(rootUri); }
   }
 
-  /** Invalidate in-flight work and clear policy data when support disappears. */
+  /** Invalidate in-flight work and clear configuration data when support disappears. */
   public capabilityLost(message: string): void {
     this.loadGeneration += 1;
     this.previewGeneration += 1;
@@ -470,10 +427,10 @@ function findConfigurationDocument(sourceUri: string): vscode.TextDocument | und
 }
 
 /**
- * Implements [CONFIGEDITOR-SOURCES]: a successful apply must reach disk. The
- * client-side `workspace.applyEdit` only rewrites the in-memory buffer, and the
- * server overlay merely bridges "until the client write is visible on disk" —
- * so persist the document the apply edit dirtied.
+ * Implements [CONFIGEDITOR-SOURCES]: a successful apply must reach disk.
+ * `workspace.applyEdit` only rewrites the in-memory buffer, and the server
+ * overlay merely bridges "until the client write is visible on disk" — so
+ * persist the document the apply edit dirtied.
  */
 async function saveConfigurationDocument(sourceUri: string): Promise<void> {
   const document = findConfigurationDocument(sourceUri);

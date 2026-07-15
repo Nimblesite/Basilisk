@@ -13,30 +13,30 @@ import sys
 from typing import Any, overload
 
 
-# ── BSK-E0003: unannotated state at module scope ─────────────────────────────
-_parsed_flags = {}  # BSK-E0003: empty dict
-_positional_args = []  # BSK-E0003: empty list
-_subcommand_map = {}  # BSK-E0003: empty dict
+# ── BSK-0003: unannotated state at module scope ─────────────────────────────
+_parsed_flags = {}  # BSK-0003: empty dict
+_positional_args = []  # BSK-0003: empty list
+_subcommand_map = {}  # BSK-0003: empty dict
 
 
-# ── BSK-E0001/E0002: argument parsing functions without any types ─────────────
-def parse_flag(argv, name, default):  # BSK-E0001: three untyped params
+# ── BSK-0001/0002: argument parsing functions without any types ─────────────
+def parse_flag(argv, name, default):  # BSK-0001: three untyped params
     """Return the value of --name from argv, or default."""
     for i, arg in enumerate(argv):
         if arg == f"--{name}" and i + 1 < len(argv):
             return argv[i + 1]
-    return default  # BSK-E0002: no return type
+    return default  # BSK-0002: no return type
 
 
-def run_subcommand(name, args, env):  # BSK-E0001: three untyped params
+def run_subcommand(name, args, env):  # BSK-0001: three untyped params
     handler = _subcommand_map.get(name)
     if handler:
         handler(args, env)
-    # BSK-E0002: no return type
+    # BSK-0002: no return type
 
 
-def format_error(code, message, context):  # BSK-E0001: three untyped params
-    return f"[E{code}] {message} ({context})"  # BSK-E0002: no return type
+def format_error(code, message, context):  # BSK-0001: three untyped params
+    return f"[E{code}] {message} ({context})"  # BSK-0002: no return type
 
 
 # ── returns_compatibility: Any in public-facing output function ──────────────────────────
@@ -88,11 +88,11 @@ def resolve_output(flags: dict[str, str], default: bool) -> str:
 
 # ── overloads_consistency: unannotated params make overloads identical ───────────────────
 @overload
-def coerce_value(raw, kind) -> int: ...  # BSK-E0001: raw, kind untyped
+def coerce_value(raw, kind) -> int: ...  # BSK-0001: raw, kind untyped
 
 
 @overload
-def coerce_value(raw, kind) -> int: ...  # BSK-E0001 + overloads_consistency: duplicate
+def coerce_value(raw, kind) -> int: ...  # BSK-0001 + overloads_consistency: duplicate
 
 
 def coerce_value(raw: str, kind: str) -> int:
@@ -116,7 +116,7 @@ def emit_log(level: str, msg: str) -> None:
     # match_exhaustiveness: no wildcard — "debug", "trace" etc. are silently dropped
 
 
-# ── BSK-E0025: override missing @override decorator ─────────────────────────
+# ── BSK-0025: override missing @override decorator ─────────────────────────
 class BaseFormatter:
     def format(self, record: dict[str, str]) -> str:
         return str(record)
@@ -125,7 +125,7 @@ class BaseFormatter:
 class JsonFormatter(BaseFormatter):
     indent: int = 2
 
-    def format(self, record: dict[str, str]) -> str:  # BSK-E0025: no @override
+    def format(self, record: dict[str, str]) -> str:  # BSK-0025: no @override
         import json
 
         return json.dumps(record, indent=self.indent)

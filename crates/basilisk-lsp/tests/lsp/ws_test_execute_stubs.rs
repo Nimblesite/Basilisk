@@ -1,5 +1,5 @@
 //! Tests for [STUBRES-CREATE-LOCAL]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#stubres-create-local
-// E2E test for the `basilisk.stubs.createLocal` quick fix (BSK-E0152).
+// E2E test for the `basilisk.stubs.createLocal` quick fix (BSK-0152).
 //
 // Drives the full pipeline through `workspace/executeCommand`:
 //   1. the command dispatches to the stub handler

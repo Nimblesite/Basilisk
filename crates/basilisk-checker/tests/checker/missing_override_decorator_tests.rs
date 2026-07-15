@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0025] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0025: Missing @override decorator.
+//! Tests for [BSK-0025] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for BSK-0025: Missing @override decorator.
 
 use super::common::*;
 
@@ -10,16 +10,17 @@ fn run_with_python_version(source: &str, version: &str) -> Vec<Diagnostic> {
     let resolved = resolve(&parsed).unwrap();
     let config = basilisk_config::BasiliskConfig {
         python_version: Some(version.to_owned()),
-        rules: [("BSK-E0025".to_owned(), basilisk_config::RuleSeverity::Error)]
-            .into_iter()
-            .collect(),
-        ..Default::default()
+        ..basilisk_config::BasiliskConfig::with_rule_entries(
+            [("BSK-0025".to_owned(), basilisk_config::RuleSeverity::Error)]
+                .into_iter()
+                .collect(),
+        )
     };
     basilisk_checker::check_with_config(&resolved, &config)
 }
 
 /// The exact repro from issue #171: an unparameterized override that fires
-/// BSK-E0025 on the default target.
+/// BSK-0025 on the default target.
 const ISSUE_171_SOURCE: &str = r#"
 class Test:
     def test() -> None:
@@ -43,8 +44,8 @@ class Child(Base):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        codes(&diags).contains(&"BSK-E0025"),
-        "overriding method without @override should fire BSK-E0025, got: {:?}",
+        codes(&diags).contains(&"BSK-0025"),
+        "overriding method without @override should fire BSK-0025, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -66,8 +67,8 @@ class Child(Base):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0025"),
-        "method with @override should not fire BSK-E0025"
+        !codes(&diags).contains(&"BSK-0025"),
+        "method with @override should not fire BSK-0025"
     );
     Ok(())
 }
@@ -85,23 +86,23 @@ class Child(Base):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0025"),
-        "different method name should not fire BSK-E0025"
+        !codes(&diags).contains(&"BSK-0025"),
+        "different method name should not fire BSK-0025"
     );
     Ok(())
 }
 
 // Issue #171: `@override` (PEP 698 / `typing.override`) only exists from Python
 // 3.12. When the configured target is 3.10 or 3.11, suggesting `@override` is a
-// false positive — the decorator cannot be imported there. BSK-E0025 must be silent
+// false positive — the decorator cannot be imported there. BSK-0025 must be silent
 // below 3.12.
 
 #[test]
 fn silent_on_3_11_target() {
     let diags = run_with_python_version(ISSUE_171_SOURCE, "3.11");
     assert!(
-        !codes(&diags).contains(&"BSK-E0025"),
-        "`@override` requires Python 3.12+ (PEP 698); BSK-E0025 must not fire on a 3.11 target: {:?}",
+        !codes(&diags).contains(&"BSK-0025"),
+        "`@override` requires Python 3.12+ (PEP 698); BSK-0025 must not fire on a 3.11 target: {:?}",
         codes(&diags)
     );
 }
@@ -110,8 +111,8 @@ fn silent_on_3_11_target() {
 fn silent_on_3_10_target() {
     let diags = run_with_python_version(ISSUE_171_SOURCE, "3.10");
     assert!(
-        !codes(&diags).contains(&"BSK-E0025"),
-        "`@override` requires Python 3.12+ (PEP 698); BSK-E0025 must not fire on a 3.10 target: {:?}",
+        !codes(&diags).contains(&"BSK-0025"),
+        "`@override` requires Python 3.12+ (PEP 698); BSK-0025 must not fire on a 3.10 target: {:?}",
         codes(&diags)
     );
 }
@@ -120,8 +121,8 @@ fn silent_on_3_10_target() {
 fn fires_on_3_12_target() {
     let diags = run_with_python_version(ISSUE_171_SOURCE, "3.12");
     assert!(
-        codes(&diags).contains(&"BSK-E0025"),
-        "`@override` is native on 3.12; BSK-E0025 must still fire there: {:?}",
+        codes(&diags).contains(&"BSK-0025"),
+        "`@override` is native on 3.12; BSK-0025 must still fire there: {:?}",
         codes(&diags)
     );
 }
@@ -144,9 +145,9 @@ class Client(httpx.Client):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0025"),
+        !codes(&diags).contains(&"BSK-0025"),
         "a class is not an override of itself; base-name collision with an \
-         external attribute base must not fire BSK-E0025: {:?}",
+         external attribute base must not fire BSK-0025: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -166,8 +167,8 @@ class Impl(MyProto):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0025"),
-        "Protocol implementation should be exempt from BSK-E0025"
+        !codes(&diags).contains(&"BSK-0025"),
+        "Protocol implementation should be exempt from BSK-0025"
     );
     Ok(())
 }

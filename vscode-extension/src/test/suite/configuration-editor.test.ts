@@ -8,8 +8,10 @@ import * as path from "path";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import type {
+  ApplyConfigurationRequest,
   ConfigurationPreview,
   ConfigurationSnapshot,
+  EditorMutation,
   PreviewConfigurationRequest,
   RuleOccurrencesRequest,
   RuleOccurrencesResponse,
@@ -25,69 +27,58 @@ import {
   decodeConfigurationChanged,
   IDLE_CONFIGURATION_EDITOR,
 } from "../../configuration-editor-state";
+import { readBasiliskSettings } from "../../lsp-client";
 import { createStore } from "../../store";
 
 const ROOT_URI = "file:///workspace";
+const PEP_CODE = "BSK-0001";
+const ANALYZE_CODE = "BSK-0060";
 
+/**
+ * [CONFIGEDITOR-MODEL]: one pep rule (check scope, never disabled) and one
+ * analyze rule, plus one tag with an explicit `rule-tags` entry.
+ */
 function configurationSnapshot(revision = "revision-1"): ConfigurationSnapshot {
   return {
     rootUri: ROOT_URI,
+    configUri: `${ROOT_URI}/pyproject.toml`,
     revision,
-    source: {
-      uri: `${ROOT_URI}/pyproject.toml`,
-      format: { kind: "PyprojectToml" },
-      exists: true,
-      readOnly: false,
-      shadowedSources: [],
-    },
     rules: [{
       descriptor: {
-        code: "B001",
-        title: "No implicit Any",
-        summary: "Keep boundaries explicit.",
-        docsUrl: "https://example.test/rules/B001",
-        tags: ["strictness"],
-        defaultSeverity: { kind: "Error" },
-        defaultEnabled: true,
+        code: PEP_CODE,
+        title: "Incompatible assignment",
+        summary: "Assignments must satisfy the declared type.",
+        docsUrl: `https://example.test/errors/${PEP_CODE}`,
+        tags: ["pep", "assignability"],
       },
-      configuredSeverity: undefined,
+      entry: undefined,
       effectiveSeverity: { kind: "Error" },
-      inherited: true,
       diagnosticCount: 3,
-      affectedFileCount: 2,
-      safeFixCount: 1,
-      unsafeFixCount: 0,
-      adoptionExceptionCount: 1,
+    }, {
+      descriptor: {
+        code: ANALYZE_CODE,
+        title: "Active code-specific directive",
+        summary: "Audit inline suppressions.",
+        docsUrl: `https://example.test/errors/${ANALYZE_CODE}`,
+        tags: ["basilisk", "suppressions"],
+      },
+      entry: { kind: "Warning" },
+      effectiveSeverity: { kind: "Warning" },
+      diagnosticCount: 1,
     }],
     tags: [{
-      name: "strictness",
-      kind: { kind: "Descriptive" },
+      name: "basilisk",
+      kind: { kind: "Provenance" },
+      entry: { kind: "Error" },
+      ruleCount: 1,
+      diagnosticCount: 1,
+    }, {
+      name: "pep",
+      kind: { kind: "Provenance" },
+      entry: undefined,
       ruleCount: 1,
       diagnosticCount: 3,
     }],
-    presets: [{
-      id: "strict",
-      name: "Strict",
-      summary: "Enable the complete live catalog at each rule's native severity.",
-      mutations: [{
-        selector: { kind: "All" },
-        setting: { kind: "Native" },
-        scope: { kind: "Project" },
-      }],
-    }],
-    pathOverrides: [{
-      pattern: "legacy/**",
-      adoption: true,
-      rules: [{ ruleCode: "B001", severity: { kind: "Warning" } }],
-    }],
-    debt: {
-      remainingDiagnostics: 3,
-      adoptedFiles: 1,
-      adoptionExceptions: 1,
-      suppressionDiagnostics: 0,
-      disabledRules: 0,
-    },
-    problems: [],
   };
 }
 
@@ -95,25 +86,19 @@ function configurationPreview(baseRevision = "revision-1"): ConfigurationPreview
   return {
     previewId: "preview-1",
     baseRevision,
-    expandedRuleCodes: ["B001"],
     changes: [{
-      ruleCode: "B001",
-      scope: { kind: "Project" },
-      previousSetting: { kind: "Inherit" },
-      resultingSetting: { kind: "Warning" },
+      code: PEP_CODE,
+      before: { kind: "Error" },
+      after: { kind: "Warning" },
     }],
     impact: {
-      changedRules: 1,
-      enabledRules: 1,
-      disabledRules: 0,
-      diagnosticsBefore: 3,
-      diagnosticsAfter: 1,
       errorsBefore: 3,
-      errorsAfter: 1,
-      warningsBefore: 0,
-      warningsAfter: 0,
+      errorsAfter: 0,
+      warningsBefore: 1,
+      warningsAfter: 4,
+      infosBefore: 0,
+      infosAfter: 0,
     },
-    problems: [],
   };
 }
 
@@ -124,10 +109,8 @@ class RecordingTransport implements ConfigurationEditorTransport {
   public occurrenceResult: RuleOccurrencesResponse = { items: [], nextCursor: undefined };
   public readonly snapshotRequests: string[] = [];
   public readonly previewRequests: PreviewConfigurationRequest[] = [];
-  public readonly applyRequests: { rootUri: string; previewId: string; baseRevision: string }[] = [];
+  public readonly applyRequests: ApplyConfigurationRequest[] = [];
   public readonly occurrenceRequests: RuleOccurrencesRequest[] = [];
-  public readonly safeFixRequests: string[] = [];
-  public safeFixResult = { fixed: 2, files: 1 };
   public previewError: Error | undefined;
   public snapshotError: Error | undefined;
   public snapshotHandler: ((rootUri: string) => Promise<ConfigurationSnapshot>) | undefined;
@@ -149,7 +132,7 @@ class RecordingTransport implements ConfigurationEditorTransport {
     return this.previewResult;
   }
 
-  public async apply(request: { rootUri: string; previewId: string; baseRevision: string }): Promise<ConfigurationSnapshot> {
+  public async apply(request: ApplyConfigurationRequest): Promise<ConfigurationSnapshot> {
     this.applyRequests.push(request);
     if (this.applyHandler !== undefined) { return this.applyHandler(); }
     return this.applyResult;
@@ -159,11 +142,6 @@ class RecordingTransport implements ConfigurationEditorTransport {
     this.occurrenceRequests.push(request);
     if (this.occurrenceHandler !== undefined) { return this.occurrenceHandler(request); }
     return this.occurrenceResult;
-  }
-
-  public async fixSafe(rootUri: string): Promise<{ fixed: number; files: number }> {
-    this.safeFixRequests.push(rootUri);
-    return this.safeFixResult;
   }
 }
 
@@ -182,12 +160,10 @@ class InvalidConfigurationError extends Error {
 
 function occurrence(line: number): RuleOccurrencesResponse["items"][number] {
   return {
-    ruleCode: "B001",
+    code: PEP_CODE,
     uri: `${ROOT_URI}/source.py`,
     range: { start: { line, character: 0 }, end: { line, character: 1 } },
-    effectiveSeverity: { kind: "Error" },
-    fixSafety: undefined,
-    configurationSource: `${ROOT_URI}/pyproject.toml`,
+    severity: { kind: "Error" },
   };
 }
 
@@ -200,62 +176,93 @@ async function pollUntil(predicate: () => boolean, timeoutMs = 5_000): Promise<v
 }
 
 suite("Configuration editor — generated contract and central state", () => {
-  test("stores snapshots and exact previews without inventing policy state", () => {
+  // [CONFIGEDITOR-MODEL]: snapshot carries rule entries + effective severity;
+  // preview is the resolved changes plus the errors/warnings/infos partition.
+  test("stores snapshots and exact previews without inventing configuration state", () => {
     const store = createStore();
     store.beginConfigurationLoad(ROOT_URI);
     assert.strictEqual(store.configurationEditor.value.phase, "loading");
     store.acceptConfigurationSnapshot(configurationSnapshot());
-    assert.strictEqual(store.configurationEditor.value.snapshot?.rules[0]?.descriptor.code, "B001");
+    assert.strictEqual(store.configurationEditor.value.snapshot?.rules[0]?.descriptor.code, PEP_CODE);
+    assert.strictEqual(store.configurationEditor.value.snapshot?.rules[1]?.entry?.kind, "Warning");
+    assert.strictEqual(store.configurationEditor.value.snapshot?.tags[0]?.entry?.kind, "Error");
 
     store.beginConfigurationPreview();
     store.acceptConfigurationPreview(configurationPreview());
     assert.strictEqual(store.configurationEditor.value.phase, "preview");
-    assert.deepStrictEqual(store.configurationEditor.value.preview?.expandedRuleCodes, ["B001"]);
+    assert.deepStrictEqual(
+      store.configurationEditor.value.preview?.changes.map((change) => change.code),
+      [PEP_CODE],
+    );
 
-    store.markConfigurationChanged({ rootUri: "file:///other", revision: "r2", reason: "other" });
+    store.markConfigurationChanged({ rootUri: "file:///other", revision: "r2" });
     assert.strictEqual(store.configurationEditor.value.refreshRequested, false);
-    store.markConfigurationChanged({ rootUri: ROOT_URI, revision: "revision-2", reason: "Changed on disk" });
+    store.markConfigurationChanged({ rootUri: ROOT_URI, revision: "revision-2" });
     assert.strictEqual(store.configurationEditor.value.refreshRequested, true);
-    assert.strictEqual(store.configurationEditor.value.message, "Changed on disk");
     store.resetConfigurationEditor();
     assert.deepStrictEqual(store.configurationEditor.value, IDLE_CONFIGURATION_EDITOR);
   });
 
+  // [LSPARCH-CONFIG-EDITOR-PROTOCOL]: configurationChanged is rootUri +
+  // revision — nothing else (no reason field survives the redesign).
   test("validates server invalidations before shared state consumes them", () => {
     assert.deepStrictEqual(
-      decodeConfigurationChanged({ rootUri: ROOT_URI, revision: "r2", reason: "Updated" }),
-      { rootUri: ROOT_URI, revision: "r2", reason: "Updated" },
+      decodeConfigurationChanged({ rootUri: ROOT_URI, revision: "r2" }),
+      { rootUri: ROOT_URI, revision: "r2" },
     );
-    assert.strictEqual(decodeConfigurationChanged({ rootUri: ROOT_URI, revision: 2, reason: "bad" }), undefined);
+    assert.strictEqual(decodeConfigurationChanged({ rootUri: ROOT_URI, revision: 2 }), undefined);
     assert.strictEqual(decodeConfigurationChanged(null), undefined);
   });
 });
 
-suite("Configuration editor — thin LSP shell", () => {
-  test("relays exact preset mutations through preview then applies only the preview id", async () => {
+suite("Configuration editor — typed mutation routing", () => {
+  // [CONFIGEDITOR-OPERATIONS] / [CHKARCH-CONFIG-MODEL]: the editor can request
+  // exactly four things — set/remove one rule entry or one tag entry. Each is
+  // relayed verbatim through preview, and apply sends only root + preview id.
+  test("relays each of the four EditorMutation kinds verbatim through preview", async () => {
+    const mutations: EditorMutation[] = [
+      { kind: "SetRule", code: PEP_CODE, severity: { kind: "Warning" } },
+      { kind: "RemoveRule", code: ANALYZE_CODE },
+      { kind: "SetTag", tag: "basilisk", severity: { kind: "Info" } },
+      { kind: "RemoveTag", tag: "basilisk" },
+    ];
+    for (const mutation of mutations) {
+      const store = createStore();
+      const transport = new RecordingTransport();
+      const controller = new ConfigurationEditorController(store, transport);
+      try {
+        controller.open(ROOT_URI);
+        await pollUntil(() => store.configurationEditor.value.phase === "ready");
+        await controller.receive({ type: "preview", mutations: [mutation] });
+        assert.deepStrictEqual(transport.previewRequests, [{
+          rootUri: ROOT_URI,
+          baseRevision: "revision-1",
+          mutations: [mutation],
+        }], `${mutation.kind} must be relayed without translation`);
+        assert.strictEqual(store.configurationEditor.value.phase, "preview");
+      } finally {
+        controller.dispose();
+      }
+    }
+  });
+
+  // [CONFIGEDITOR-OPERATIONS]: rootUri + previewId fully identify the cached
+  // preview; the preview pins its own base revision, so apply carries none.
+  test("applies a preview with only rootUri and previewId", async () => {
     const store = createStore();
     const transport = new RecordingTransport();
     const controller = new ConfigurationEditorController(store, transport);
     try {
       controller.open(ROOT_URI);
       await pollUntil(() => store.configurationEditor.value.phase === "ready");
-      assert.deepStrictEqual(transport.snapshotRequests, [ROOT_URI]);
-
-      const strictMutation = configurationSnapshot().presets[0]?.mutations[0];
-      assert.ok(strictMutation);
-      await controller.receive({ type: "preview", mutations: [strictMutation] });
-      assert.deepStrictEqual(transport.previewRequests, [{
-        rootUri: ROOT_URI,
-        baseRevision: "revision-1",
-        mutations: [strictMutation],
-      }]);
-      assert.strictEqual(store.configurationEditor.value.phase, "preview");
-
+      await controller.receive({
+        type: "preview",
+        mutations: [{ kind: "SetRule", code: PEP_CODE, severity: { kind: "Warning" } }],
+      });
       await controller.receive({ type: "apply" });
       assert.deepStrictEqual(transport.applyRequests, [{
         rootUri: ROOT_URI,
         previewId: "preview-1",
-        baseRevision: "revision-1",
       }]);
       assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-2");
     } finally {
@@ -263,6 +270,35 @@ suite("Configuration editor — thin LSP shell", () => {
     }
   });
 
+  // [VSIX-CONFIGURATION-EDITOR-THIN-SHELL]: legacy selector-based mutations,
+  // Inherit/Native settings, and scopes are no longer decodable intent.
+  test("rejects legacy selector/setting/scope mutation payloads outright", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      await controller.receive({
+        type: "preview",
+        mutations: [{ selector: { kind: "All" }, setting: { kind: "Native" }, scope: { kind: "Project" } }],
+      });
+      await controller.receive({
+        type: "preview",
+        mutations: [{ kind: "SetRule", code: PEP_CODE, severity: { kind: "Inherit" } }],
+      });
+      await controller.receive({ type: "preview", mutations: [] });
+      await controller.receive({ type: "fixSafe" });
+      assert.strictEqual(transport.previewRequests.length, 0);
+    } finally {
+      controller.dispose();
+    }
+  });
+});
+
+suite("Configuration editor — thin LSP shell", () => {
+  // [CONFIGEDITOR-OPERATIONS]: cursor-paged occurrences over the read-side
+  // all/codes/tags selectors; navigation is allowlisted to loaded items.
   test("routes paged occurrence reads and ignores invalid or untrusted navigation", async () => {
     const store = createStore();
     const transport = new RecordingTransport();
@@ -275,11 +311,11 @@ suite("Configuration editor — thin LSP shell", () => {
         nextCursor: "100",
       };
       await controller.receive({
-        type: "occurrences", selector: { kind: "Codes", codes: ["B001"] }, cursor: undefined, limit: 100,
+        type: "occurrences", selector: { kind: "Codes", codes: [PEP_CODE] }, cursor: undefined, limit: 100,
       });
       transport.occurrenceResult = { items: [occurrence(100)], nextCursor: undefined };
       await controller.receive({
-        type: "occurrences", selector: { kind: "Codes", codes: ["B001"] }, cursor: "100", limit: 100,
+        type: "occurrences", selector: { kind: "Codes", codes: [PEP_CODE] }, cursor: "100", limit: 100,
       });
       assert.strictEqual(store.configurationEditor.value.occurrences?.items.length, 101);
       assert.strictEqual(store.configurationEditor.value.occurrences?.nextCursor, undefined);
@@ -303,10 +339,10 @@ suite("Configuration editor — thin LSP shell", () => {
       controller.open(ROOT_URI);
       await pollUntil(() => store.configurationEditor.value.phase === "ready");
       const stale = controller.receive({
-        type: "occurrences", selector: { kind: "Codes", codes: ["B001"] }, cursor: undefined, limit: 100,
+        type: "occurrences", selector: { kind: "Codes", codes: [PEP_CODE] }, cursor: undefined, limit: 100,
       });
       const newest = controller.receive({
-        type: "occurrences", selector: { kind: "WithoutSafeFix" }, cursor: undefined, limit: 100,
+        type: "occurrences", selector: { kind: "Tags", tags: ["pep"], matchAll: false }, cursor: undefined, limit: 100,
       });
       await pollUntil(() => pending.length === 2);
       pending[1]?.({ items: [occurrence(9)], nextCursor: undefined });
@@ -322,7 +358,7 @@ suite("Configuration editor — thin LSP shell", () => {
 });
 
 suite("Configuration editor — transaction lifecycle", () => {
-  test("keeps the newest preview, applies once, and delegates safe fixes to the LSP", async () => {
+  test("keeps the newest preview and submits an applying preview only once", async () => {
     const store = createStore();
     const transport = new RecordingTransport();
     const pending: ((preview: ConfigurationPreview) => void)[] = [];
@@ -333,11 +369,11 @@ suite("Configuration editor — transaction lifecycle", () => {
       await pollUntil(() => store.configurationEditor.value.phase === "ready");
       const first = controller.receive({
         type: "preview",
-        mutations: [{ selector: { kind: "All" }, setting: { kind: "Warning" }, scope: { kind: "Project" } }],
+        mutations: [{ kind: "SetTag", tag: "basilisk", severity: { kind: "Warning" } }],
       });
       const second = controller.receive({
         type: "preview",
-        mutations: [{ selector: { kind: "All" }, setting: { kind: "Error" }, scope: { kind: "Project" } }],
+        mutations: [{ kind: "SetTag", tag: "basilisk", severity: { kind: "Error" } }],
       });
       await pollUntil(() => pending.length === 2);
       pending[1]?.({ ...configurationPreview(), previewId: "newest" });
@@ -354,10 +390,7 @@ suite("Configuration editor — transaction lifecycle", () => {
       assert.strictEqual(transport.applyRequests.length, 1, "an applying preview cannot be submitted twice");
       finishApply?.(configurationSnapshot("revision-2"));
       await apply;
-
-      await controller.receive({ type: "fixSafe" });
-      assert.deepStrictEqual(transport.safeFixRequests, [ROOT_URI]);
-      assert.strictEqual(transport.snapshotRequests.length, 2, "safe fixes refresh exact LSP-owned counts");
+      assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-2");
     } finally {
       controller.dispose();
     }
@@ -371,7 +404,7 @@ suite("Configuration editor — transaction lifecycle", () => {
       controller.open(ROOT_URI);
       await pollUntil(() => transport.snapshotRequests.length === 1);
       transport.snapshotResult = configurationSnapshot("revision-2");
-      store.markConfigurationChanged({ rootUri: ROOT_URI, revision: "revision-2", reason: "Changed on disk" });
+      store.markConfigurationChanged({ rootUri: ROOT_URI, revision: "revision-2" });
       await pollUntil(() => transport.snapshotRequests.length === 2);
       await pollUntil(() => store.configurationEditor.value.snapshot?.revision === "revision-2");
     } finally {
@@ -391,49 +424,13 @@ suite("Configuration editor — transaction lifecycle", () => {
 
       const refresh = controller.receive({ type: "refresh" });
       await pollUntil(() => transport.snapshotRequests.length === 2);
-      store.markConfigurationChanged({ rootUri: ROOT_URI, revision: "revision-3", reason: "Changed again" });
+      store.markConfigurationChanged({ rootUri: ROOT_URI, revision: "revision-3" });
       pending[0]?.(configurationSnapshot("revision-2"));
       await refresh;
 
       await pollUntil(() => transport.snapshotRequests.length === 3);
       pending[1]?.(configurationSnapshot("revision-3"));
       await pollUntil(() => store.configurationEditor.value.snapshot?.revision === "revision-3");
-    } finally {
-      controller.dispose();
-    }
-  });
-
-  test("does not return to an old root when a safe-fix request finishes late", async () => {
-    const store = createStore();
-    const transport = new RecordingTransport();
-    let finishFix: ((result: { fixed: number; files: number }) => void) | undefined;
-    transport.fixSafe = async (rootUri: string) => {
-      transport.safeFixRequests.push(rootUri);
-      return new Promise((resolve) => { finishFix = resolve; });
-    };
-    const controller = new ConfigurationEditorController(store, transport);
-    try {
-      controller.open(ROOT_URI);
-      await pollUntil(() => store.configurationEditor.value.phase === "ready");
-      const fix = controller.receive({ type: "fixSafe" });
-      await pollUntil(() => transport.safeFixRequests.length === 1);
-
-      const otherRoot = "file:///other-workspace";
-      transport.snapshotResult = {
-        ...configurationSnapshot("other-revision"),
-        rootUri: otherRoot,
-        source: {
-          ...configurationSnapshot().source,
-          uri: `${otherRoot}/pyproject.toml`,
-        },
-      };
-      controller.open(otherRoot);
-      await pollUntil(() => store.configurationEditor.value.snapshot?.rootUri === otherRoot);
-      finishFix?.({ fixed: 1, files: 1 });
-      await fix;
-
-      assert.deepStrictEqual(transport.snapshotRequests, [ROOT_URI, otherRoot]);
-      assert.strictEqual(store.configurationEditor.value.snapshot?.rootUri, otherRoot);
     } finally {
       controller.dispose();
     }
@@ -460,11 +457,11 @@ function createScratchConfigWorkspace(): ScratchConfigWorkspace {
     rootUri,
     configUri,
     configPath,
-    appliedToml: '[project]\nname = "demo"\n\n[tool.basilisk.rules]\n"BSK-E0001" = "warning"\n',
+    appliedToml: '[project]\nname = "demo"\n\n[tool.basilisk.rules]\n"BSK-0001" = "warning"\n',
     snapshot: (revision: string): ConfigurationSnapshot => ({
       ...configurationSnapshot(revision),
       rootUri,
-      source: { ...configurationSnapshot(revision).source, uri: configUri.toString() },
+      configUri: configUri.toString(),
     }),
     dispose: (): void => { fs.rmSync(scratchRoot, { recursive: true, force: true }); },
   };
@@ -503,7 +500,7 @@ suite("Configuration editor — apply persistence", () => {
       await pollUntil(() => store.configurationEditor.value.phase === "ready");
       await controller.receive({
         type: "preview",
-        mutations: [{ selector: { kind: "Codes", codes: ["B001"] }, setting: { kind: "Warning" }, scope: { kind: "Project" } }],
+        mutations: [{ kind: "SetRule", code: PEP_CODE, severity: { kind: "Warning" } }],
       });
       await pollUntil(() => store.configurationEditor.value.phase === "preview");
       await controller.receive({ type: "apply" });
@@ -558,7 +555,7 @@ suite("Configuration editor — conflicts, capability, and lifecycle", () => {
       await pollUntil(() => store.configurationEditor.value.phase === "ready");
       await controller.receive({
         type: "preview",
-        mutations: [{ selector: { kind: "All" }, setting: { kind: "Native" }, scope: { kind: "Project" } }],
+        mutations: [{ kind: "RemoveTag", tag: "basilisk" }],
       });
       assert.strictEqual(store.configurationEditor.value.phase, "conflict");
       assert.strictEqual(store.configurationEditor.value.message, "The write was rejected");
@@ -567,24 +564,26 @@ suite("Configuration editor — conflicts, capability, and lifecycle", () => {
     }
   });
 
-  test("recognizes only the versioned experimental capability", () => {
-    const supported = {
-      initializeResult: {
-        capabilities: { experimental: { basilisk: { configurationEditor: { version: 1 } } } },
-      },
-    } as unknown as LanguageClient;
-    const future = {
-      initializeResult: {
-        capabilities: { experimental: { basilisk: { configurationEditor: { version: 2 } } } },
-      },
-    } as unknown as LanguageClient;
-    assert.strictEqual(configurationEditorCapabilityVersion(supported), 1);
-    assert.strictEqual(supportsConfigurationEditor(supported), true);
-    assert.strictEqual(supportsConfigurationEditor(future), false);
+  // [LSPARCH-CONFIG-EDITOR-PROTOCOL] / [VSIX-CONFIGURATION-EDITOR]: the client
+  // requires exactly protocol version 2 — v1 (the removed preset/adoption
+  // protocol) and any future version are unsupported.
+  test("recognizes only version 2 of the experimental capability", () => {
+    function clientWithVersion(version: unknown): LanguageClient {
+      return {
+        initializeResult: {
+          capabilities: { experimental: { basilisk: { configurationEditor: { version } } } },
+        },
+      } as unknown as LanguageClient;
+    }
+    assert.strictEqual(configurationEditorCapabilityVersion(clientWithVersion(2)), 2);
+    assert.strictEqual(supportsConfigurationEditor(clientWithVersion(2)), true);
+    assert.strictEqual(supportsConfigurationEditor(clientWithVersion(1)), false);
+    assert.strictEqual(supportsConfigurationEditor(clientWithVersion(3)), false);
+    assert.strictEqual(supportsConfigurationEditor(clientWithVersion("2")), false);
     assert.strictEqual(supportsConfigurationEditor(undefined), false);
   });
 
-  test("capability loss clears stale policy and invalidates occurrence loading", async () => {
+  test("capability loss clears stale configuration and invalidates occurrence loading", async () => {
     const store = createStore();
     const controller = new ConfigurationEditorController(store, new RecordingTransport());
     try {
@@ -625,5 +624,29 @@ suite("Configuration editor — conflicts, capability, and lifecycle", () => {
       controller.dispose();
     }
     assert.strictEqual(controller.isOpen(), false);
+  });
+});
+
+suite("Configuration editor — diagnostic scope setting relay", () => {
+  // [LSPARCH-DIAGNOSTIC-SCOPE]: `basilisk.analyze` is a per-user editor
+  // setting relayed as initializationOptions.basilisk.analyze — it restricts
+  // publication to check scope and never touches project configuration.
+  test("basilisk.analyze defaults to true and is relayed under initializationOptions.basilisk", async () => {
+    const cfg = vscode.workspace.getConfiguration("basilisk");
+    const inspected = cfg.inspect<boolean>("analyze");
+    assert.strictEqual(inspected?.defaultValue, true, "package.json must declare the default");
+
+    const relayedDefault = readBasiliskSettings();
+    const nested = relayedDefault.basilisk as Record<string, unknown>;
+    assert.strictEqual(nested.analyze, true);
+
+    try {
+      await cfg.update("analyze", false, vscode.ConfigurationTarget.Workspace);
+      const relayed = readBasiliskSettings();
+      const nestedOff = relayed.basilisk as Record<string, unknown>;
+      assert.strictEqual(nestedOff.analyze, false, "the opt-out must reach the LSP payload");
+    } finally {
+      await cfg.update("analyze", undefined, vscode.ConfigurationTarget.Workspace);
+    }
   });
 });

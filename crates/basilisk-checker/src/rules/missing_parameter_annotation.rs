@@ -1,5 +1,5 @@
-//! Implements [BSK-E0001] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
-//! BSK-E0001: Missing parameter type annotation.
+//! Implements [BSK-0001] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
+//! BSK-0001: Missing parameter type annotation.
 
 use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule};
 
@@ -8,11 +8,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::{guards::is_stub_context, Rule};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0001",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
+    code: "BSK-0001",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0001",
 };
 
-/// Emits BSK-E0001 for every unannotated regular parameter (not `*args`/`**kwargs`).
+/// Emits BSK-0001 for every unannotated regular parameter (not `*args`/`**kwargs`).
 ///
 /// `*args` and `**kwargs` are handled by [`super::missing_vararg_annotation`].
 /// Skipped for `@overload`, `@abstractmethod`, and `Protocol` methods.

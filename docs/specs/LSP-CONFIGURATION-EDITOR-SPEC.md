@@ -68,10 +68,10 @@ The suppression-audit family consists of four ordinary analyze-scope rules — `
 
 | Rule | Meaning |
 |---|---|
-| `BSK-I0060` | Active code-specific directive |
-| `BSK-W0061` | Active blanket directive |
-| `BSK-W0062` | Unused directive |
-| `BSK-E0063` | Malformed, unknown, conflicting, or unpaired directive |
+| `BSK-0060` | Active code-specific directive |
+| `BSK-0061` | Active blanket directive |
+| `BSK-0062` | Unused directive |
+| `BSK-0063` | Malformed, unknown, conflicting, or unpaired directive |
 
 Audit diagnostics are emitted after ordinary inline suppression is applied, so a directive cannot hide its own audit. Malformed or misplaced directives are audited but never applied to ordinary diagnostics. All four rules carry `basilisk` and `suppressions` tags and participate in tag facets, occurrence pagination, and preview/apply like any rule.
 

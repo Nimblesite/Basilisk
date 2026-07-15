@@ -90,7 +90,7 @@ pub(super) fn run_create_stub(args: CreateStubArgs) -> u8 {
 }
 
 fn run_generate(packages: &[String], all: bool, mode: StubGenModeArg, python: &str) -> u8 {
-    let project_root = crate::find_project_root(Path::new("."));
+    let project_root = crate::pipeline::find_project_root(Path::new("."));
     let python_path = Path::new(python);
     let targets = match generation_targets(packages, all, python_path, &project_root) {
         Ok(targets) => targets,
@@ -140,11 +140,11 @@ fn generation_targets(
 // generate only imports that resolve to untyped site-packages source.
 fn discover_untyped_imports(project_root: &Path) -> Result<Vec<GenerationTarget>, String> {
     let config = basilisk_config::load_basilisk_config(project_root);
-    let excluded = crate::excluded_dirs_and_log(&config, project_root);
-    let paths = crate::effective_check_paths(&[], &config, project_root);
-    let files = crate::collect_python_files(&paths, &excluded)?;
-    let roots = crate::analysis_roots(&paths, project_root);
-    let search_paths = crate::build_import_search_paths(roots, project_root);
+    let excluded = crate::pipeline::excluded_dirs_and_log(&config, project_root);
+    let paths = crate::pipeline::effective_check_paths(&[], &config, project_root);
+    let files = crate::pipeline::collect_python_files(&paths, &excluded)?;
+    let roots = crate::pipeline::analysis_roots(&paths, project_root);
+    let search_paths = crate::pipeline::build_import_search_paths(roots, project_root);
     let Some(site_packages) = search_paths.site_packages.as_deref() else {
         return Ok(Vec::new());
     };
@@ -167,7 +167,7 @@ fn collect_file_targets(
     site_packages: &Path,
     targets: &mut BTreeMap<String, PathBuf>,
 ) -> Result<(), String> {
-    let (resolved, _) = crate::resolve_file_imports(file, search_paths)?;
+    let (resolved, _) = crate::pipeline::resolve_file_imports(file, search_paths)?;
     resolved
         .imports
         .iter()
@@ -297,7 +297,7 @@ pub(super) fn find_package_source(package: &str, python_path: &Path) -> Option<P
 }
 
 fn run_status() -> u8 {
-    let project_root = crate::find_project_root(Path::new("."));
+    let project_root = crate::pipeline::find_project_root(Path::new("."));
     let cache_dir = project_root.join(generate::cache::DEFAULT_CACHE_DIR);
     if !cache_dir.exists() {
         println!("No generated stubs found ({})", cache_dir.display());

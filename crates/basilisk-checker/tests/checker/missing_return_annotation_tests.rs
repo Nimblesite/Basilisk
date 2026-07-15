@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0002] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
-// Integration tests for BSK-E0002: Missing return type annotation.
+//! Tests for [BSK-0002] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
+// Integration tests for BSK-0002: Missing return type annotation.
 
 use super::common::*;
 
@@ -11,8 +11,8 @@ def greet(name: str):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        codes(&diags).contains(&"BSK-E0002"),
-        "function without return annotation should fire BSK-E0002, got: {:?}",
+        codes(&diags).contains(&"BSK-0002"),
+        "function without return annotation should fire BSK-0002, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -26,8 +26,8 @@ def greet(name: str) -> str:
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0002"),
-        "function with return annotation should not fire BSK-E0002"
+        !codes(&diags).contains(&"BSK-0002"),
+        "function with return annotation should not fire BSK-0002"
     );
     Ok(())
 }
@@ -40,8 +40,8 @@ def do_nothing() -> None:
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0002"),
-        "function with -> None should not fire BSK-E0002"
+        !codes(&diags).contains(&"BSK-0002"),
+        "function with -> None should not fire BSK-0002"
     );
     Ok(())
 }

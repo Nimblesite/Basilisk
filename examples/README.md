@@ -40,14 +40,14 @@ the VS Code configuration editor (**Basilisk: Open Configuration Editor**).
 
 | File | Domain | PEP errors (always on) | Strictness warnings (opt-in) |
 |---|---|---|---|
-| [bad.py](bad.py) | Minimal tour | `calls_argument_type`, `returns_compatibility`, `assignment_compatibility`, `calls_argument_count`, `classes_override`, `names_unbound`, `match_exhaustiveness` | BSK-E0001, E0002, E0004 |
-| [mixed.py](mixed.py) | Mixed typed / untyped | `calls_argument_type` | BSK-E0001, E0002 |
-| [api_server.py](api_server.py) | REST API handler | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-E0001–E0003, E0025, W0014, W0050 |
-| [data_pipeline.py](data_pipeline.py) | ETL pipeline | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-E0001–E0003, E0025, W0014 |
-| [ml_trainer.py](ml_trainer.py) | ML training loop | `assignment_compatibility`, `overloads_consistency`, `match_exhaustiveness`, `dict_key_hashable`, `classes_override_2` | BSK-E0001–E0003, E0025, W0014, W0050 |
-| [finance.py](finance.py) | Financial calculations | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-E0001–E0003, E0025, W0014, W0050 |
-| [cli_tool.py](cli_tool.py) | CLI application | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-E0001–E0003, E0025, W0014, W0050 |
-| [weird_violations.py](weird_violations.py) | Subtle edge cases | `overloads_consistency`, `names_unbound`, `classes_override_2`, `assignment_compatibility`, `match_exhaustiveness`, `dict_key_hashable` | BSK-E0001–E0003, W0014, W0050 |
+| [bad.py](bad.py) | Minimal tour | `calls_argument_type`, `returns_compatibility`, `assignment_compatibility`, `calls_argument_count`, `classes_override`, `names_unbound`, `match_exhaustiveness` | BSK-0001, E0002, E0004 |
+| [mixed.py](mixed.py) | Mixed typed / untyped | `calls_argument_type` | BSK-0001, E0002 |
+| [api_server.py](api_server.py) | REST API handler | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [data_pipeline.py](data_pipeline.py) | ETL pipeline | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014 |
+| [ml_trainer.py](ml_trainer.py) | ML training loop | `assignment_compatibility`, `overloads_consistency`, `match_exhaustiveness`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [finance.py](finance.py) | Financial calculations | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [cli_tool.py](cli_tool.py) | CLI application | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [weird_violations.py](weird_violations.py) | Subtle edge cases | `overloads_consistency`, `names_unbound`, `classes_override_2`, `assignment_compatibility`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, W0014, W0050 |
 
 ### Clean counterparts (zero diagnostics)
 
@@ -93,10 +93,10 @@ catalog lives at [basilisk-python.dev/docs/rules](https://www.basilisk-python.de
 
 | Code | Meaning |
 |---|---|
-| BSK-E0001 | Missing parameter type annotation |
-| BSK-E0002 | Missing return type annotation |
-| BSK-E0003 | Cannot infer type of empty collection or `None` |
-| BSK-E0004 | Missing `*args` / `**kwargs` type annotation |
-| BSK-E0025 | Override missing `@override` decorator |
-| BSK-W0014 | Explicit `Any` without justification |
-| BSK-W0050 | Redundant type annotation |
+| BSK-0001 | Missing parameter type annotation |
+| BSK-0002 | Missing return type annotation |
+| BSK-0003 | Cannot infer type of empty collection or `None` |
+| BSK-0004 | Missing `*args` / `**kwargs` type annotation |
+| BSK-0025 | Override missing `@override` decorator |
+| BSK-0014 | Explicit `Any` without justification |
+| BSK-0050 | Redundant type annotation |

@@ -1,10 +1,15 @@
-//! Live checker-catalog adapter and selector expansion.
+//! Live checker-catalog adapter, effective-severity resolution, and selector
+//! expansion.
+//!
+//! Implements [CONFIGEDITOR-TAGS]: the checker registry is the one rule
+//! catalog; severity comes only from configuration entries resolved over the
+//! model in [CHKARCH-CONFIG-MODEL].
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashSet};
 
 use basilisk_config::{BasiliskConfig, RuleSeverity as ConfigSeverity};
 
-use super::model::{RuleDescriptor, RuleSelector, RuleSetting, RuleSeverity, TagKind};
+use super::model::{RuleDescriptor, RuleSelector, RuleSeverity, TagKind};
 
 /// Map the checker's diagnostic severity to the four configuration severities.
 pub(super) const fn wire_severity(value: basilisk_checker::Severity) -> RuleSeverity {
@@ -27,6 +32,16 @@ pub(super) const fn config_to_wire(value: ConfigSeverity) -> RuleSeverity {
     }
 }
 
+/// Map a wire severity back onto the persisted config severity.
+pub(super) const fn wire_to_config(value: RuleSeverity) -> ConfigSeverity {
+    match value {
+        RuleSeverity::Error => ConfigSeverity::Error,
+        RuleSeverity::Warning => ConfigSeverity::Warning,
+        RuleSeverity::Info => ConfigSeverity::Info,
+        RuleSeverity::Disabled => ConfigSeverity::Disabled,
+    }
+}
+
 /// Expand the live checker registry into the generated wire descriptor shape.
 pub(super) fn descriptors() -> Vec<RuleDescriptor> {
     basilisk_checker::rule_catalog()
@@ -37,28 +52,30 @@ pub(super) fn descriptors() -> Vec<RuleDescriptor> {
             summary: rule.summary.to_owned(),
             docs_url: rule.docs_url.to_owned(),
             tags: rule.tags.into_iter().map(str::to_owned).collect(),
-            default_severity: wire_severity(rule.default_severity),
-            default_enabled: rule.default_enabled,
         })
         .collect()
 }
 
-/// Current configured and effective severity for one catalog rule.
-pub(super) fn severities(
-    descriptor: &RuleDescriptor,
-    config: &BasiliskConfig,
-) -> (Option<RuleSeverity>, RuleSeverity) {
-    let configured = config
-        .rules
-        .get(&descriptor.code)
-        .copied()
+/// Resolve one rule's effective severity at the root scope.
+///
+/// Implements [CHKARCH-CONFIG-MODEL] / [CHKARCH-COMMANDS]: the configured
+/// resolution wins when a table decides the rule; otherwise `pep` rules run
+/// at `error` and every other rule is disabled. A `disabled` resolution can
+/// never apply to a `pep` rule — such configuration is invalid and the rule
+/// keeps running at `error`.
+pub(super) fn effective_severity(descriptor: &RuleDescriptor, config: &BasiliskConfig) -> RuleSeverity {
+    let tags: Vec<&str> = descriptor.tags.iter().map(String::as_str).collect();
+    let resolved = config
+        .resolve_severity(&descriptor.code, &tags)
         .map(config_to_wire);
-    let effective = match (configured, descriptor.default_enabled) {
-        (Some(severity), _) => severity,
-        (None, true) => descriptor.default_severity,
-        (None, false) => RuleSeverity::Disabled,
-    };
-    (configured, effective)
+    let is_pep = basilisk_checker::is_pep_rule(&descriptor.code);
+    match resolved {
+        // An (invalid) disabled resolution never applies to a pep rule, and
+        // with no deciding table a pep rule runs at error.
+        None | Some(RuleSeverity::Disabled) if is_pep => RuleSeverity::Error,
+        Some(severity) => severity,
+        None => RuleSeverity::Disabled,
+    }
 }
 
 /// Classify a canonical catalog tag for the tag dashboard.
@@ -72,11 +89,13 @@ pub(super) fn tag_kind(tag: &str) -> TagKind {
     }
 }
 
-/// Expand a selector against the live catalog and current occurrence counts.
+/// Expand an occurrence selector against the live catalog.
+///
+/// Implements [CONFIGEDITOR-OPERATIONS]: selectors exist only on the read
+/// side (`basilisk/ruleOccurrences`); mutations never take selectors.
 pub(super) fn expand_selector(
     selector: &RuleSelector,
     catalog: &[RuleDescriptor],
-    counts: &HashMap<String, usize>,
 ) -> Result<Vec<String>, SelectionError> {
     let catalog_codes: HashSet<&str> = catalog.iter().map(|rule| rule.code.as_str()).collect();
     let catalog_tags: HashSet<&str> = catalog
@@ -111,61 +130,12 @@ pub(super) fn expand_selector(
                 .map(|rule| rule.code.as_str())
                 .collect()
         }
-        RuleSelector::CurrentViolations => counts
-            .iter()
-            .filter(|(_, count)| **count > 0)
-            .map(|(code, _)| code.as_str())
-            .collect(),
-        RuleSelector::SafeFixable => counts
-            .iter()
-            .filter(|(code, count)| **count > 0 && is_safe_fixable(code))
-            .map(|(code, _)| code.as_str())
-            .collect(),
-        RuleSelector::WithoutSafeFix => counts
-            .iter()
-            .filter(|(code, count)| **count > 0 && !is_safe_fixable(code))
-            .map(|(code, _)| code.as_str())
-            .collect(),
     };
     Ok(catalog
         .iter()
         .filter(|rule| selected.contains(rule.code.as_str()))
         .map(|rule| rule.code.clone())
         .collect())
-}
-
-/// Resolve an intent to a concrete persisted severity for one rule.
-pub(super) fn setting_severity(
-    setting: RuleSetting,
-    descriptor: &RuleDescriptor,
-) -> Option<ConfigSeverity> {
-    match setting {
-        RuleSetting::Inherit => None,
-        RuleSetting::Native => Some(wire_to_config(descriptor.default_severity)),
-        RuleSetting::Error => Some(ConfigSeverity::Error),
-        RuleSetting::Warning => Some(ConfigSeverity::Warning),
-        RuleSetting::Info => Some(ConfigSeverity::Info),
-        RuleSetting::Disabled => Some(ConfigSeverity::Disabled),
-    }
-}
-
-const fn wire_to_config(value: RuleSeverity) -> ConfigSeverity {
-    match value {
-        RuleSeverity::Error => ConfigSeverity::Error,
-        RuleSeverity::Warning => ConfigSeverity::Warning,
-        RuleSeverity::Info => ConfigSeverity::Info,
-        RuleSeverity::Disabled => ConfigSeverity::Disabled,
-    }
-}
-
-/// Whether a rule has a safe deterministic fixer.
-pub(super) fn is_safe_fixable(code: &str) -> bool {
-    crate::code_actions::mass_fix::SAFE_FIXABLE_RULES.contains(&code)
-}
-
-/// Whether a rule has any deterministic fixer.
-pub(super) fn is_fixable(code: &str) -> bool {
-    crate::code_actions::mass_fix::ALL_FIXABLE_RULES.contains(&code)
 }
 
 /// Selector validation failure.
@@ -184,10 +154,10 @@ mod tests {
     use basilisk_config::RuleSeverity as ConfigSeverity;
 
     use super::{
-        config_to_wire, descriptors, expand_selector, is_fixable, is_safe_fixable,
-        setting_severity, severities, tag_kind, wire_severity, SelectionError,
+        config_to_wire, descriptors, effective_severity, expand_selector, tag_kind, wire_severity,
+        wire_to_config, SelectionError,
     };
-    use crate::configuration_editor::model::{RuleSelector, RuleSetting, RuleSeverity, TagKind};
+    use crate::configuration_editor::model::{RuleSelector, RuleSeverity, TagKind};
 
     // Implements [CONFIGEDITOR-MODEL]: the checker's severity ladder folds onto
     // the four wire severities without losing the error class.
@@ -216,6 +186,7 @@ mod tests {
             (ConfigSeverity::Disabled, RuleSeverity::Disabled),
         ] {
             assert_eq!(config_to_wire(config), wire);
+            assert_eq!(wire_to_config(wire), config);
         }
     }
 
@@ -225,44 +196,47 @@ mod tests {
     fn descriptors_expose_the_live_checker_registry() {
         let catalog = descriptors();
         assert_eq!(catalog.len(), basilisk_checker::rule_catalog().len());
-        let annotation = catalog.iter().find(|rule| rule.code == "BSK-E0001");
+        let annotation = catalog.iter().find(|rule| rule.code == "BSK-0001");
         let Some(annotation) = annotation else {
-            unreachable!("BSK-E0001 must exist in the live registry");
+            unreachable!("BSK-0001 must exist in the live registry");
         };
-        assert!(annotation.docs_url.contains("BSK-E0001"));
+        assert!(annotation.docs_url.contains("BSK-0001"));
         assert!(!annotation.title.is_empty());
         assert!(!annotation.tags.is_empty());
     }
 
+    /// [CHKARCH-CONFIG-MODEL] / [CHKARCH-COMMANDS]: with no deciding table a
+    /// `pep` rule runs at `error` and an analyze rule is disabled; explicit
+    /// entries win; `disabled` never lands on a `pep` rule.
     #[test]
-    fn severities_prefer_configured_then_default_then_disabled() {
+    fn effective_severity_applies_the_scope_default_partition() {
         let catalog = descriptors();
-        let configured_off = catalog.iter().find(|rule| rule.code == "BSK-E0001");
-        let Some(descriptor) = configured_off else {
-            unreachable!("BSK-E0001 must exist in the live registry");
+        let pep = catalog
+            .iter()
+            .find(|rule| basilisk_checker::is_pep_rule(&rule.code));
+        let analyze = catalog
+            .iter()
+            .find(|rule| !basilisk_checker::is_pep_rule(&rule.code));
+        let (Some(pep), Some(analyze)) = (pep, analyze) else {
+            unreachable!("registry holds both pep and analyze rules");
         };
-        let mut config = basilisk_config::BasiliskConfig::default();
-        let _ = config
-            .rules
-            .insert("BSK-E0001".to_owned(), ConfigSeverity::Info);
-        assert_eq!(
-            severities(descriptor, &config),
-            (Some(RuleSeverity::Info), RuleSeverity::Info)
-        );
-        let unconfigured = basilisk_config::BasiliskConfig::default();
-        let expected = if descriptor.default_enabled {
-            descriptor.default_severity
-        } else {
-            RuleSeverity::Disabled
-        };
-        assert_eq!(severities(descriptor, &unconfigured), (None, expected));
-        let default_on = descriptors()
-            .into_iter()
-            .find(|rule| rule.default_enabled)
-            .map(|rule| severities(&rule, &unconfigured));
-        assert!(default_on.is_some_and(|(configured, effective)| {
-            configured.is_none() && effective != RuleSeverity::Disabled
-        }));
+        let bare = basilisk_config::BasiliskConfig::default();
+        assert_eq!(effective_severity(pep, &bare), RuleSeverity::Error);
+        assert_eq!(effective_severity(analyze, &bare), RuleSeverity::Disabled);
+
+        let graded = basilisk_config::BasiliskConfig::with_rule_entries(HashMap::from([
+            (pep.code.clone(), ConfigSeverity::Info),
+            (analyze.code.clone(), ConfigSeverity::Warning),
+        ]));
+        assert_eq!(effective_severity(pep, &graded), RuleSeverity::Info);
+        assert_eq!(effective_severity(analyze, &graded), RuleSeverity::Warning);
+
+        // An (invalid) pep-disable resolution never surfaces as Disabled.
+        let invalid = basilisk_config::BasiliskConfig::with_rule_entries(HashMap::from([(
+            pep.code.clone(),
+            ConfigSeverity::Disabled,
+        )]));
+        assert_eq!(effective_severity(pep, &invalid), RuleSeverity::Error);
     }
 
     #[test]
@@ -283,37 +257,27 @@ mod tests {
         assert_eq!(tag_kind("suppressions"), TagKind::Descriptive);
     }
 
+    // Implements [CONFIGEDITOR-OPERATIONS]: the occurrence selectors are
+    // all/codes/tags — nothing else — and unknown names fail loudly.
     #[test]
     fn selector_expansion_covers_every_selector_kind() {
         let catalog = descriptors();
-        let safe_code = "BSK-E0001";
-        assert!(is_safe_fixable(safe_code));
-        let unsafe_only = "assignment_compatibility";
-        assert!(!is_safe_fixable(unsafe_only));
-        let counts: HashMap<String, usize> = HashMap::from([
-            (safe_code.to_owned(), 3),
-            (unsafe_only.to_owned(), 1),
-            ("silent_rule".to_owned(), 0),
-        ]);
-
-        let all = expand_selector(&RuleSelector::All, &catalog, &counts);
+        let all = expand_selector(&RuleSelector::All, &catalog);
         assert_eq!(all.map(|codes| codes.len()), Ok(catalog.len()));
 
         let codes = expand_selector(
             &RuleSelector::Codes {
-                codes: vec![safe_code.to_owned()],
+                codes: vec!["BSK-0001".to_owned()],
             },
             &catalog,
-            &counts,
         );
-        assert_eq!(codes, Ok(vec![safe_code.to_owned()]));
+        assert_eq!(codes, Ok(vec!["BSK-0001".to_owned()]));
         assert_eq!(
             expand_selector(
                 &RuleSelector::Codes {
                     codes: vec!["NOT-A-RULE".to_owned()],
                 },
                 &catalog,
-                &counts,
             ),
             Err(SelectionError::UnknownRule("NOT-A-RULE".to_owned()))
         );
@@ -324,7 +288,6 @@ mod tests {
                 match_all: false,
             },
             &catalog,
-            &counts,
         );
         assert!(tagged.is_ok_and(|codes| !codes.is_empty()));
         let impossible_conjunction = expand_selector(
@@ -336,7 +299,6 @@ mod tests {
                 match_all: true,
             },
             &catalog,
-            &counts,
         );
         assert_eq!(impossible_conjunction, Ok(Vec::new()));
         assert_eq!(
@@ -346,73 +308,8 @@ mod tests {
                     match_all: false,
                 },
                 &catalog,
-                &counts,
             ),
             Err(SelectionError::UnknownTag("not-a-tag".to_owned()))
         );
-
-        let sorted = |result: Result<Vec<String>, SelectionError>| {
-            result.map(|mut codes| {
-                codes.sort();
-                codes
-            })
-        };
-        let current = sorted(expand_selector(
-            &RuleSelector::CurrentViolations,
-            &catalog,
-            &counts,
-        ));
-        assert_eq!(
-            current,
-            Ok(vec![safe_code.to_owned(), unsafe_only.to_owned()])
-        );
-        let safe = expand_selector(&RuleSelector::SafeFixable, &catalog, &counts);
-        assert_eq!(safe, Ok(vec![safe_code.to_owned()]));
-        let without_safe = expand_selector(&RuleSelector::WithoutSafeFix, &catalog, &counts);
-        assert_eq!(without_safe, Ok(vec![unsafe_only.to_owned()]));
-    }
-
-    #[test]
-    fn setting_severity_resolves_every_intent() {
-        let catalog = descriptors();
-        let Some(descriptor) = catalog.first() else {
-            unreachable!("the live registry is never empty");
-        };
-        assert_eq!(setting_severity(RuleSetting::Inherit, descriptor), None);
-        assert_eq!(
-            setting_severity(RuleSetting::Native, descriptor),
-            Some(match descriptor.default_severity {
-                RuleSeverity::Error => ConfigSeverity::Error,
-                RuleSeverity::Warning => ConfigSeverity::Warning,
-                RuleSeverity::Info => ConfigSeverity::Info,
-                RuleSeverity::Disabled => ConfigSeverity::Disabled,
-            })
-        );
-        assert_eq!(
-            setting_severity(RuleSetting::Error, descriptor),
-            Some(ConfigSeverity::Error)
-        );
-        assert_eq!(
-            setting_severity(RuleSetting::Warning, descriptor),
-            Some(ConfigSeverity::Warning)
-        );
-        assert_eq!(
-            setting_severity(RuleSetting::Info, descriptor),
-            Some(ConfigSeverity::Info)
-        );
-        assert_eq!(
-            setting_severity(RuleSetting::Disabled, descriptor),
-            Some(ConfigSeverity::Disabled)
-        );
-    }
-
-    // Implements [AUTOFIX-CLASSIFY]: the safe tier is a strict subset of the
-    // fixable tier, so occurrence fix badges can never contradict mass-fix.
-    #[test]
-    fn safe_fixable_rules_are_a_subset_of_fixable_rules() {
-        for code in crate::code_actions::mass_fix::SAFE_FIXABLE_RULES {
-            assert!(is_fixable(code), "{code} is safe-fixable but not fixable");
-        }
-        assert!(!is_safe_fixable("unused_suppression"));
     }
 }

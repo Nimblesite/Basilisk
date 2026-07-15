@@ -53,7 +53,7 @@ Basilisk's default *is* the Python typing spec — full PEP conformance, with no
 
 This is not about making Python developers' lives harder. It's about making the safe path easy to reach. The spec-conformant baseline is the default; stricter checking is there the moment a team decides they want it — switched on in config, scoped per-project or per-path, never forced.
 
-Turning that stricter checking on for an existing codebase does require work — but it's work that surfaces real bugs. With Basilisk's annotation rules switched on, every BSK-E0001 is a function where the type contract was never defined. A non-exhaustive `match` is a case silently ignored. These are not false positives — they are places where the type system was not being used.
+Turning that stricter checking on for an existing codebase does require work — but it's work that surfaces real bugs. With Basilisk's annotation rules switched on, every BSK-0001 is a function where the type contract was never defined. A non-exhaustive `match` is a case silently ignored. These are not false positives — they are places where the type system was not being used.
 
 ## Why Rust
 

@@ -35,8 +35,8 @@ The maintained typing specification also says:
 > for all arguments and the return type.” — [Python typing specification: annotations](https://typing.python.org/en/latest/spec/annotations.html)
 
 That sentence is why this chapter treats required annotations as an explicit
-Basilisk choice. `BSK-E0001` reports a missing parameter annotation and
-`BSK-E0002` reports a missing return annotation, but both are opt-in Basilisk
+Basilisk choice. `BSK-0001` reports a missing parameter annotation and
+`BSK-0002` reports a missing return annotation, but both are opt-in Basilisk
 rules. They are not requirements that the Python typing specification silently
 forgot to mention.
 
@@ -65,8 +65,8 @@ root-level `pyproject.toml`. The rule table is a child of that namespace:
 
 ```toml
 [tool.basilisk.rules]
-"BSK-E0001" = "error"
-"BSK-E0002" = "error"
+"BSK-0001" = "error"
+"BSK-0002" = "error"
 ```
 
 The quotes around these two keys are valid TOML and make the diagnostic codes
@@ -123,7 +123,7 @@ Read the screen from left to right:
    edit. In the capture it is Signal Box's `pyproject.toml`.
 
 Do not turn a moving total from this screen into team policy. “We enable
-`BSK-E0002` at error” is reviewable. “We enable all 165 rules” will become stale
+`BSK-0002` at error” is reviewable. “We enable all 165 rules” will become stale
 as the catalog changes and does not explain why any one rule belongs.
 
 ## Six editor choices, four stored severities
@@ -169,29 +169,29 @@ and its hypothetical diagnostic impact.
 then apply once. Until the last step, `pyproject.toml` is unchanged.*
 
 Signal Box has one missing-return diagnostic in its test helper. The project
-policy reports `BSK-E0002` as an error, but we can preview a warning for the
+policy reports `BSK-0002` as an error, but we can preview a warning for the
 bounded `tests/**` path. The exact intended result is:
 
 ```toml
 [tool.basilisk.rules]
-"BSK-E0001" = "error"
-"BSK-E0002" = "error"
+"BSK-0001" = "error"
+"BSK-0002" = "error"
 
 [tool.basilisk.per-path-overrides."tests/**".rules]
-"BSK-E0002" = "warning"
+"BSK-0002" = "warning"
 ```
 
 The path pattern is relative to the project root and uses forward slashes. For
 a matching test file, the path entry wins over the project entry for this one
 rule. Source files elsewhere still receive the project-level error.
 
-![The real Basilisk preview dialog shows BSK-E0002 changing from inherited to warning only for tests, along with recalculated workspace impact and separate Cancel and Apply changes actions.](../assets/screenshots/09-configuration-preview.png)
+![The real Basilisk preview dialog shows BSK-0002 changing from inherited to warning only for tests, along with recalculated workspace impact and separate Cancel and Apply changes actions.](../assets/screenshots/09-configuration-preview.png)
 
 *Figure 9.3 — The captured preview is deliberately left unapplied. It shows
 which persisted entry would change and how the current Signal Box diagnostics
 would be reclassified without mutating the fixture used to reproduce the image.*
 
-Read the lower line first: it names `BSK-E0002`, the `tests/**` path, and the
+Read the lower line first: it names `BSK-0002`, the `tests/**` path, and the
 change from inherited path behaviour to Warning. Then read the impact cards.
 Those numbers are a forecast for the current workspace, not a promise about
 future files. **Cancel** closes the preview without changing anything. **Apply
@@ -231,15 +231,15 @@ complete decision:
 1. Run `basilisk check` from the Signal Box root. Identify the missing
    parameter annotation in `src/signal_box/readings.py` and the two missing
    return annotations. They are errors because the project explicitly selects
-   `BSK-E0001` and `BSK-E0002` at error.
+   `BSK-0001` and `BSK-0002` at error.
 2. Open **Basilisk: Open Configuration Editor**. Confirm that the source badge
    names `signal-box/pyproject.toml`.
-3. In Rules, tick the checkbox beside `BSK-E0002`. Open Path Overrides, enter
+3. In Rules, tick the checkbox beside `BSK-0002`. Open Path Overrides, enter
    `tests/**`, choose Warning, and request a preview.
 4. Before applying, predict the result: the helper in
    `tests/test_readings.py` becomes a warning; the missing return in
    `src/signal_box/readings.py` remains an error; the missing parameter remains
-   an error because this change names only `BSK-E0002`.
+   an error because this change names only `BSK-0002`.
 5. Compare your prediction with the impact preview. Apply the changes, open the
    raw configuration, and find the new path table.
 6. Run the check again. Then use **Inherited · reset** at that path and confirm

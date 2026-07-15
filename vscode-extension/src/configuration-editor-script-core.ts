@@ -8,8 +8,9 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     const ROW_HEIGHT = 112;
     const OVERSCAN = 5;
     const OCCURRENCE_LIMIT = 100;
-    const SEVERITY_OPTIONS = ['Inherit', 'Native', 'Error', 'Warning', 'Info', 'Disabled'];
-    const SECTION_NAMES = ['overview', 'rules', 'adoption', 'paths', 'project'];
+    const PEP_TAG = 'pep';
+    const NO_ENTRY = 'None';
+    const SEVERITIES = ['Error', 'Warning', 'Info', 'Disabled'];
     let editorState = { phase: 'idle', message: '' };
     let snapshot;
     let preview;
@@ -17,10 +18,8 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     let filteredRules = [];
     let activeTag;
     let selectedRuleCode;
-    let activeSection = 'rules';
     let lastFocusedRule;
     let overlayWasBlocking = false;
-    const selectedCodes = new Set();
 
     function byId(id) { return document.getElementById(id); }
     function clear(node) { node.replaceChildren(); }
@@ -44,10 +43,12 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
       }
     }
     function formatNumber(value) { return Number(value || 0).toLocaleString(); }
-    function configuredValue(rule) {
-      return rule.inherited ? 'Inherit' : kind(rule.configuredSeverity, kind(rule.effectiveSeverity, 'Error'));
-    }
+    // entry mirrors the config file exactly: undefined = no per-rule/tag entry.
+    function entryValue(entry) { return entry === undefined || entry === null ? NO_ENTRY : kind(entry, NO_ENTRY); }
     function effectiveValue(rule) { return kind(rule.effectiveSeverity, 'Error'); }
+    // THE partition ([CHKARCH-COMMANDS]): pep-tagged rules always run and can
+    // never be disabled; only analyze rules get a Disabled control.
+    function isPepRule(rule) { return rule.descriptor.tags.indexOf(PEP_TAG) !== -1; }
     function ruleSearchText(rule) {
       const descriptor = rule.descriptor;
       return [descriptor.code, descriptor.title, descriptor.summary].concat(descriptor.tags).join(' ').toLowerCase();
@@ -57,13 +58,8 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
       if (lower.startsWith('tag:')) return rule.descriptor.tags.some((tag) => tag.toLowerCase() === lower.slice(4));
       if (lower.startsWith('severity:')) return effectiveValue(rule).toLowerCase() === lower.slice(9);
       if (lower === 'status:disabled') return effectiveValue(rule) === 'Disabled';
-      if (lower === 'status:inherited') return rule.inherited === true;
-      if (lower === 'status:changed') return rule.inherited !== true;
+      if (lower === 'status:entry') return rule.entry !== undefined && rule.entry !== null;
       if (lower === 'has:diagnostics') return rule.diagnosticCount > 0;
-      if (lower === 'fix:none') return rule.safeFixCount === 0 && rule.unsafeFixCount === 0;
-      if (lower === 'fix:without-safe') return rule.diagnosticCount > 0 && rule.safeFixCount === 0;
-      if (lower === 'fix:safe') return rule.safeFixCount > 0;
-      if (lower === 'fix:unsafe') return rule.unsafeFixCount > 0;
       return ruleSearchText(rule).includes(lower);
     }
     function applyFilter() {
@@ -78,42 +74,24 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
       result.textContent = formatNumber(filteredRules.length) + ' of ' + formatNumber(snapshot.rules.length);
       renderRuleWindow();
     }
-    function selectorForSelection() {
-      if (selectedCodes.size > 0) return { kind: 'Codes', codes: Array.from(selectedCodes).sort() };
-      if (activeTag) return { kind: 'Tags', tags: [activeTag], matchAll: false };
-      return undefined;
-    }
-    function projectScope() { return { kind: 'Project' }; }
-    function setting(kindValue) { return { kind: kindValue }; }
     function announce(message) {
       byId('announcer').textContent = '';
       window.setTimeout(() => { byId('announcer').textContent = message; }, 20);
     }
-    function postPreview(selector, settingValue, scope) {
-      vscode.postMessage({
-        type: 'preview',
-        mutations: [{ selector, setting: setting(settingValue), scope }],
-      });
+    function postPreview(mutations) {
+      vscode.postMessage({ type: 'preview', mutations });
     }
-    function postPreset(presetId) {
-      const preset = snapshot && snapshot.presets.find((candidate) => candidate.id === presetId);
-      if (!preset) { announce('That preset is no longer available. Refresh configuration.'); return; }
-      vscode.postMessage({ type: 'preview', mutations: preset.mutations });
+    // A rule row can request exactly SetRule or RemoveRule ([CONFIGEDITOR-MODEL]).
+    function ruleMutation(code, value) {
+      return value === NO_ENTRY
+        ? { kind: 'RemoveRule', code }
+        : { kind: 'SetRule', code, severity: { kind: value } };
     }
-    function showSection(name) {
-      if (!SECTION_NAMES.includes(name)) return;
-      activeSection = name;
-      document.querySelectorAll('[data-section]').forEach((section) => {
-        section.hidden = section.getAttribute('data-section') !== name;
-      });
-      document.querySelectorAll('#section-nav [data-section-target]').forEach((button) => {
-        const current = button.getAttribute('data-section-target') === name;
-        if (current) button.setAttribute('aria-current', 'page');
-        else button.removeAttribute('aria-current');
-      });
-      if (name === 'rules') window.requestAnimationFrame(renderRuleWindow);
-      const heading = document.querySelector('[data-section="' + name + '"] h2');
-      if (heading) heading.setAttribute('tabindex', '-1');
+    // A tag group can request exactly SetTag or RemoveTag ([CONFIGEDITOR-MODEL]).
+    function tagMutation(tag, value) {
+      return value === NO_ENTRY
+        ? { kind: 'RemoveTag', tag }
+        : { kind: 'SetTag', tag, severity: { kind: value } };
     }
     function selectedRule() {
       return snapshot && snapshot.rules.find((rule) => rule.descriptor.code === selectedRuleCode);
@@ -123,14 +101,14 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
       const row = active && active.closest ? active.closest('[data-rule-code]') : undefined;
       lastFocusedRule = row ? {
         code: row.getAttribute('data-rule-code'),
-        control: active.matches('select') ? 'select' : active.matches('input') ? 'checkbox' : 'detail',
+        control: active.matches('select') ? 'select' : 'detail',
       } : undefined;
     }
     function restoreFocus() {
       if (!lastFocusedRule) return;
       const row = document.querySelector('[data-rule-code="' + CSS.escape(lastFocusedRule.code) + '"]');
       if (!row) return;
-      const selector = lastFocusedRule.control === 'select' ? 'select' : lastFocusedRule.control === 'checkbox' ? 'input' : '.rule-copy button';
+      const selector = lastFocusedRule.control === 'select' ? 'select' : '.rule-copy button';
       const control = row.querySelector(selector);
       if (control) control.focus();
     }

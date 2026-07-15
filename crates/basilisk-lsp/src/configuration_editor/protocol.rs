@@ -1,4 +1,6 @@
-//! Typed v1 custom-request handlers and revision-checked apply transaction.
+//! Typed v2 custom-request handlers and revision-checked apply transaction.
+//!
+//! Implements [LSPARCH-CONFIG-EDITOR-PROTOCOL] / [CONFIGEDITOR-OPERATIONS].
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -14,8 +16,8 @@ use super::model::{
     PreviewConfigurationRequest, RuleOccurrencesRequest, RuleOccurrencesResponse,
 };
 use super::mutation::{
-    build_impact, expand_mutations, require_revision, resolved_changes, selection_error,
-    validate_document_rules, validate_selector,
+    build_impact, build_update, require_mutations, require_no_pep_disable, require_revision,
+    resolved_changes, selection_error, validate_document_rules,
 };
 use super::snapshot::{
     build_snapshot, hypothetical_inventory, inventory, occurrences as build_occurrences,
@@ -53,31 +55,24 @@ impl LspServer {
             .map_err(config_error)?;
         validate_document_rules(&document)?;
         require_revision(&document, &request.base_revision)?;
-        if request.mutations.is_empty() {
-            return Err(rpc_error(
-                "invalidMutation",
-                "configuration preview requires at least one mutation",
-            ));
-        }
-        for mutation in &request.mutations {
-            validate_selector(&mutation.selector)?;
-        }
+        require_mutations(&request.mutations)?;
+        let catalog = descriptors();
+        let update = build_update(&request.mutations, &catalog)?;
+        let patch = build_rule_patch(&document, &update).map_err(config_error)?;
+        require_no_pep_disable(&patch.config)?;
         let disk_revision = self
             .configuration_editor
             .disk_revision_for(&root, &document.revision);
-        let catalog = descriptors();
         let guard = self.index.read().await;
         let index = guard
             .as_ref()
             .ok_or_else(|| rpc_error("invalidMutation", "workspace index is not ready"))?;
         let _ = index.preload_root_for_configuration(&root);
         let before = inventory(index, &root);
-        let (updates, expanded_rule_codes) = expand_mutations(&request, &catalog, &before.counts)?;
-        let patch = build_rule_patch(&document, &updates).map_err(config_error)?;
-        let changes = resolved_changes(&document, &updates);
         let after = hypothetical_inventory(index, &root, &patch.config);
-        let impact = build_impact(&patch, &catalog, &changes, &before, &after);
         drop(guard);
+        let changes = resolved_changes(&catalog, &document.config, &patch.config);
+        let impact = build_impact(&before, &after);
         let prepared = PreparedPreview {
             root,
             patch,
@@ -87,14 +82,15 @@ impl LspServer {
         Ok(ConfigurationPreview {
             preview_id,
             base_revision: request.base_revision,
-            expanded_rule_codes,
             changes,
             impact,
-            problems: Vec::new(),
         })
     }
 
     /// Handle `basilisk/applyConfigurationChange`.
+    ///
+    /// The preview pins its base revision ([CONFIGEDITOR-MODEL]); apply
+    /// rejects it when the current document has moved past that revision.
     pub(crate) async fn apply_configuration_change(
         &self,
         request: ApplyConfigurationRequest,
@@ -109,17 +105,17 @@ impl LspServer {
                     "configuration preview is unknown or expired",
                 )
             })?;
-        if prepared.root != root || prepared.patch.base_revision != request.base_revision {
+        if prepared.root != root {
             return Err(rpc_error(
                 "invalidMutation",
-                "preview does not match root and base revision",
+                "preview belongs to a different workspace root",
             ));
         }
         let current = self
             .configuration_editor
             .effective_document_with_version(&root)
             .map_err(config_error)?;
-        require_revision(&current.document, &request.base_revision)?;
+        require_revision(&current.document, &prepared.patch.base_revision)?;
         let applied = apply_prepared_patch(
             self,
             &root,
@@ -144,16 +140,13 @@ impl LspServer {
             .effective_document(&root)
             .map_err(config_error)?;
         validate_document_rules(&document)?;
-        validate_selector(&request.selector)?;
         let guard = self.index.read().await;
         let index = guard
             .as_ref()
             .ok_or_else(|| rpc_error("invalidMutation", "workspace index is not ready"))?;
         let _ = index.preload_root_for_configuration(&root);
-        let current = inventory(index, &root);
         let catalog = descriptors();
-        let codes = expand_selector(&request.selector, &catalog, &current.counts)
-            .map_err(selection_error)?;
+        let codes = expand_selector(&request.selector, &catalog).map_err(selection_error)?;
         let selected: HashSet<String> = codes.into_iter().collect();
         let limit = usize::try_from(request.limit).map_err(|_conversion_error| {
             rpc_error(
@@ -170,7 +163,6 @@ impl LspServer {
         Ok(build_occurrences(
             index,
             &root,
-            &path_uri(&document.path),
             &selected,
             request.cursor.as_deref(),
             limit,
@@ -258,10 +250,7 @@ pub(super) fn rpc_error_data(kind: &str, message: &str, context: serde_json::Val
 }
 
 pub(super) fn path_uri(path: &Path) -> String {
-    Url::from_file_path(path).map_or_else(
-        |()| path.to_string_lossy().into_owned(),
-        |uri| uri.to_string(),
-    )
+    super::snapshot::path_uri(path)
 }
 
 #[cfg(test)]

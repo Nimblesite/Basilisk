@@ -1310,9 +1310,9 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .error-title code { font-size: 1.5rem; color: var(--color-text-primary); background: var(--color-bg-tertiary); border: 1px solid var(--color-border-bright); padding: 0.1em 0.4em; }
 
 .badge { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.2em 0.6em; border-radius: var(--radius-sm); }
-.badge--error { color: var(--color-error); background: var(--color-error-dim); border: 1px solid rgba(248, 113, 113, 0.35); }
-.badge--warning { color: var(--color-warning); background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); }
-.badge--info { color: var(--color-info); background: color-mix(in srgb, var(--color-info) 12%, transparent); border: 1px solid color-mix(in srgb, var(--color-info) 35%, transparent); }
+/* Command-scope badges ([CHKARCH-COMMANDS]): check = always-on PEP rules, analyze = opt-in Basilisk rules. */
+.badge--check { color: var(--color-error); background: var(--color-error-dim); border: 1px solid rgba(248, 113, 113, 0.35); }
+.badge--analyze { color: var(--color-info); background: color-mix(in srgb, var(--color-info) 12%, transparent); border: 1px solid color-mix(in srgb, var(--color-info) 35%, transparent); }
 
 .error-summary { font-size: 1.125rem; color: var(--color-text-secondary); margin: var(--space-4) 0 var(--space-6); }
 .error-screenshot { max-width: 100%; height: auto; border-radius: var(--radius-lg); border: 1px solid var(--color-border-bright); display: block; }

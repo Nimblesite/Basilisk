@@ -154,7 +154,7 @@ suite('Basilisk uv Integration Tests', () => {
         assert.strictEqual(
             cfg.inspect<boolean>('uv.stubSuggestions')?.defaultValue,
             undefined,
-            'stub suggestions must be configured through BSK-E0152 severity, not a VS Code setting'
+            'stub suggestions must be configured through BSK-0152 severity, not a VS Code setting'
         );
         assert.strictEqual(
             cfg.inspect<boolean>('uv.dependencyDiagnostics')?.defaultValue,
@@ -167,7 +167,7 @@ suite('Basilisk uv Integration Tests', () => {
     // Quick-fix success toast names the package (regression)
     // ----------------------------------------------------------------
 
-    // A code action (e.g. the BSK-E0152 "install stubs" fix) invokes
+    // A code action (e.g. the BSK-0152 "install stubs" fix) invokes
     // basilisk.uv.addDev with a BARE STRING argument, not a `{ package }`
     // object. The success toast must read the package name from either shape;
     // previously it only handled the object form and showed "undefined".

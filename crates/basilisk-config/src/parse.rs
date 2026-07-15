@@ -111,6 +111,21 @@ impl Default for BasiliskConfig {
 }
 
 impl BasiliskConfig {
+    /// A config whose single nearest table holds these per-rule entries.
+    ///
+    /// Convenience for callers and tests that need one folder's
+    /// `[tool.basilisk.rules]` table without parsing TOML.
+    #[must_use]
+    pub fn with_rule_entries(rules: HashMap<String, RuleSeverity>) -> Self {
+        Self {
+            rule_chain: vec![RuleTables {
+                rules,
+                rule_tags: HashMap::new(),
+            }],
+            ..Default::default()
+        }
+    }
+
     /// Resolve the configured severity for `code` carrying `tags`.
     ///
     /// Implements [CHKARCH-CONFIG-MODEL] resolution: one walk, first decision

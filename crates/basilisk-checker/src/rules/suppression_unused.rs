@@ -1,5 +1,5 @@
-//! Implements [BSK-W0062] from [CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS].
-//! BSK-W0062: Unused suppression directive.
+//! Implements [BSK-0062] from [CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS].
+//! BSK-0062: Unused suppression directive.
 //!
 //! Reports a syntactically valid directive that matches no diagnostic or does
 //! not change the effective severity of anything it matches.
@@ -11,8 +11,8 @@ use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-W0062",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-W0062",
+    code: "BSK-0062",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0062",
 };
 
 /// Registry identity for unused suppression auditing.

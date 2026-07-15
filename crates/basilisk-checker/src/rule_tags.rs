@@ -83,7 +83,7 @@ pub const FREE_FORM_TAGS: [&str; 7] = [
 /// rules attach to themselves; the rest of this module is its public query API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OptInSpec {
-    /// The diagnostic code this opt-in rule emits (e.g. `"BSK-W0050"`).
+    /// The diagnostic code this opt-in rule emits (e.g. `"BSK-0050"`).
     pub code: &'static str,
     /// The free-form tags the rule carries, beyond its [`BASILISK`] provenance.
     pub tags: &'static [&'static str],

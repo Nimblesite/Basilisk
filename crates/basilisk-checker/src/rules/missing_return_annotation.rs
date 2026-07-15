@@ -1,5 +1,5 @@
-//! Implements [BSK-E0002] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
-//! BSK-E0002: Missing return type annotation.
+//! Implements [BSK-0002] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
+//! BSK-0002: Missing return type annotation.
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
@@ -8,11 +8,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::{guards::is_stub_context, Rule};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0002",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0002",
+    code: "BSK-0002",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0002",
 };
 
-/// Emits BSK-E0002 for every function without a return type annotation.
+/// Emits BSK-0002 for every function without a return type annotation.
 ///
 /// Skipped for `@overload`, `@abstractmethod`, and `Protocol` methods.
 pub(crate) struct MissingReturnAnnotation;

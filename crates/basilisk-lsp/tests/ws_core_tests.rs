@@ -25,6 +25,8 @@ mod ws_test_capabilities;
 mod ws_test_diagnostics_rules;
 #[path = "lsp/ws_test_diagnostics_rules_advanced.rs"]
 mod ws_test_diagnostics_rules_advanced;
+#[path = "lsp/ws_test_diagnostic_scope.rs"]
+mod ws_test_diagnostic_scope;
 #[path = "lsp/ws_test_diagnostics_structure.rs"]
 mod ws_test_diagnostics_structure;
 #[path = "lsp/ws_test_shutdown.rs"]

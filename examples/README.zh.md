@@ -39,14 +39,14 @@ basilisk check examples/bad.py --output json
 
 | 文件 | 领域 | PEP 错误（始终启用） | 严格性警告（可选启用） |
 |---|---|---|---|
-| [bad.py](bad.py) | 最小化导览 | `calls_argument_type`, `returns_compatibility`, `assignment_compatibility`, `calls_argument_count`, `classes_override`, `names_unbound`, `match_exhaustiveness` | BSK-E0001, E0002, E0004 |
-| [mixed.py](mixed.py) | 混合：有类型 / 无类型 | `calls_argument_type` | BSK-E0001, E0002 |
-| [api_server.py](api_server.py) | REST API 处理器 | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-E0001–E0003, E0025, W0014, W0050 |
-| [data_pipeline.py](data_pipeline.py) | ETL 管道 | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-E0001–E0003, E0025, W0014 |
-| [ml_trainer.py](ml_trainer.py) | 机器学习训练循环 | `assignment_compatibility`, `overloads_consistency`, `match_exhaustiveness`, `dict_key_hashable`, `classes_override_2` | BSK-E0001–E0003, E0025, W0014, W0050 |
-| [finance.py](finance.py) | 财务计算 | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-E0001–E0003, E0025, W0014, W0050 |
-| [cli_tool.py](cli_tool.py) | CLI 应用程序 | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-E0001–E0003, E0025, W0014, W0050 |
-| [weird_violations.py](weird_violations.py) | 微妙的边界情况 | `overloads_consistency`, `names_unbound`, `classes_override_2`, `assignment_compatibility`, `match_exhaustiveness`, `dict_key_hashable` | BSK-E0001–E0003, W0014, W0050 |
+| [bad.py](bad.py) | 最小化导览 | `calls_argument_type`, `returns_compatibility`, `assignment_compatibility`, `calls_argument_count`, `classes_override`, `names_unbound`, `match_exhaustiveness` | BSK-0001, E0002, E0004 |
+| [mixed.py](mixed.py) | 混合：有类型 / 无类型 | `calls_argument_type` | BSK-0001, E0002 |
+| [api_server.py](api_server.py) | REST API 处理器 | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [data_pipeline.py](data_pipeline.py) | ETL 管道 | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014 |
+| [ml_trainer.py](ml_trainer.py) | 机器学习训练循环 | `assignment_compatibility`, `overloads_consistency`, `match_exhaustiveness`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [finance.py](finance.py) | 财务计算 | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [cli_tool.py](cli_tool.py) | CLI 应用程序 | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [weird_violations.py](weird_violations.py) | 微妙的边界情况 | `overloads_consistency`, `names_unbound`, `classes_override_2`, `assignment_compatibility`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, W0014, W0050 |
 
 ### 无错误对照版本（零诊断）
 
@@ -91,10 +91,10 @@ basilisk check examples/bad.py --output json
 
 | 代码 | 含义 |
 |---|---|
-| BSK-E0001 | 缺少参数类型注解 |
-| BSK-E0002 | 缺少返回值类型注解 |
-| BSK-E0003 | 无法推断空集合或 `None` 的类型 |
-| BSK-E0004 | 缺少 `*args` / `**kwargs` 类型注解 |
-| BSK-E0025 | 重写缺少 `@override` 装饰器 |
-| BSK-W0014 | 使用显式 `Any` 但缺少说明 |
-| BSK-W0050 | 冗余的类型注解 |
+| BSK-0001 | 缺少参数类型注解 |
+| BSK-0002 | 缺少返回值类型注解 |
+| BSK-0003 | 无法推断空集合或 `None` 的类型 |
+| BSK-0004 | 缺少 `*args` / `**kwargs` 类型注解 |
+| BSK-0025 | 重写缺少 `@override` 装饰器 |
+| BSK-0014 | 使用显式 `Any` 但缺少说明 |
+| BSK-0050 | 冗余的类型注解 |

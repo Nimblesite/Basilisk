@@ -5,26 +5,26 @@
 //! ```
 //! basilisk check [paths...]
 //! basilisk check [paths...] --output json
+//! basilisk analyze [paths...]
 //! ```
 
-use std::collections::HashSet;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize as _;
 use shipwright::{dispatch, BuildInfo, VersionSpec};
 use shipwright_manifest::{ExecutableKind, Language};
-use tracing::{error, info, warn};
+use tracing::error;
 
-use crate::output::{
-    render_diagnostics, render_diagnostics_json, ColorMode, FileSource, OutputFormat,
-};
+use crate::output::{render_diagnostics, render_diagnostics_json, ColorMode, OutputFormat};
+use crate::pipeline::{collect_and_check, pluralise, DiagnosticScope, PipelineError};
 
 mod adopt;
 mod cache_check;
 mod fix;
 mod import_search;
 mod output;
+mod pipeline;
 mod stubs;
 
 #[cfg(test)]
@@ -49,35 +49,50 @@ enum Transport {
     Ws,
 }
 
-// Implements [CHKARCH-CLI-COMMANDS]: the `check` core command (with `--watch`
-// deferred — see report). `fix`/`adopt`/`unadopt`/`lsp`/`stubs` extend the spec
-// list; the spec's `stats`/`migrate`/`init` commands are not implemented.
+/// The paths/`--output`/`--color`/`--cache*` surface shared verbatim by
+/// `check` and `analyze` — the two commands run the identical pipeline and
+/// differ only in diagnostic scope ([CHKARCH-COMMANDS]).
+#[derive(clap::Args)]
+struct CheckArgs {
+    /// Paths to check. Directories are traversed recursively for `.py`
+    /// files. Defaults to the configured `[tool.basilisk] include` roots,
+    /// else the current directory.
+    paths: Vec<String>,
+    /// Output format: text (default, human-readable) or json (machine-readable).
+    #[arg(long, default_value = "text")]
+    output: OutputFormat,
+    /// When to use terminal colours: auto (default), always, or never.
+    #[arg(long, default_value = "auto")]
+    color: ColorMode,
+    /// Enable the opt-in result cache: unchanged files are served from a
+    /// persistent cache. A hit is returned only when the file, every file
+    /// it reads, the config, and the checker version are unchanged.
+    #[arg(long)]
+    cache: bool,
+    /// Override the cache directory (default: `<project>/.basilisk/cache/check`).
+    #[arg(long, value_name = "DIR")]
+    cache_dir: Option<std::path::PathBuf>,
+    /// Print cache hit/miss counts to stderr after checking.
+    #[arg(long)]
+    cache_stats: bool,
+}
+
+// Implements [CHKARCH-CLI-COMMANDS]: the `check`/`analyze` core commands
+// ([CHKARCH-COMMANDS]) plus `fix`/`adopt`/`unadopt`/`lsp`/`stubs`.
 // See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-COMMANDS
 #[derive(Subcommand)]
 enum Command {
-    /// Type check one or more files or directories.
+    /// Type check one or more files or directories — the PEP typing spec,
+    /// always. Emits only `pep`-tagged rules ([CHKARCH-COMMANDS]).
     Check {
-        /// Paths to check. Directories are traversed recursively for `.py`
-        /// files. Defaults to the configured `[tool.basilisk] include` roots,
-        /// else the current directory.
-        paths: Vec<String>,
-        /// Output format: text (default, human-readable) or json (machine-readable).
-        #[arg(long, default_value = "text")]
-        output: OutputFormat,
-        /// When to use terminal colours: auto (default), always, or never.
-        #[arg(long, default_value = "auto")]
-        color: ColorMode,
-        /// Enable the opt-in result cache: unchanged files are served from a
-        /// persistent cache. A hit is returned only when the file, every file
-        /// it reads, the config, and the checker version are unchanged.
-        #[arg(long)]
-        cache: bool,
-        /// Override the cache directory (default: `<project>/.basilisk/cache/check`).
-        #[arg(long, value_name = "DIR")]
-        cache_dir: Option<std::path::PathBuf>,
-        /// Print cache hit/miss counts to stderr after checking.
-        #[arg(long)]
-        cache_stats: bool,
+        #[command(flatten)]
+        args: CheckArgs,
+    },
+    /// Run the opt-in analysis layer — every rule *not* tagged `pep`, fired
+    /// only when configuration selects it ([CHKARCH-COMMANDS]).
+    Analyze {
+        #[command(flatten)]
+        args: CheckArgs,
     },
     /// Apply autofixes to one or more files or directories.
     Fix {
@@ -87,12 +102,13 @@ enum Command {
         /// Include unsafe (heuristic) fixes alongside safe fixes.
         #[arg(long)]
         r#unsafe: bool,
-        /// Comma-separated list of rule codes to fix (e.g. BSK-E0001,BSK-E0003).
+        /// Comma-separated list of rule codes to fix (e.g. BSK-0001,BSK-0003).
         /// If omitted, all safe rules are applied. Use `--rules all` for all rules.
         #[arg(long, value_delimiter = ',')]
         rules: Vec<String>,
     },
-    /// Adopt files — demote remaining errors to warnings for gradual migration.
+    /// Adopt current error debt — demote firing error codes to folder-level
+    /// warning entries for gradual migration ([AUTOFIX-ADOPTION]).
     Adopt {
         /// Paths to adopt. Directories are traversed recursively for `.py` files.
         #[arg(default_value = ".")]
@@ -101,7 +117,8 @@ enum Command {
         #[arg(long)]
         status: bool,
     },
-    /// Un-adopt files — restore full strictness.
+    /// Un-adopt — delete the folder-level warning entries, restoring the
+    /// ancestor severity ([AUTOFIX-ADOPTION]).
     Unadopt {
         /// Paths to un-adopt. Directories are traversed recursively for `.py` files.
         #[arg(default_value = ".")]
@@ -206,10 +223,10 @@ fn main() -> ExitCode {
 
     let cli = Cli::parse();
 
-    // Command dispatch runs on an analysis-sized stack: `check`/`fix`/`adopt`
-    // walk the AST recursively and overflow the default main-thread stack
-    // (~8 MiB on macOS/Linux, ~1 MiB on Windows) on deeply chained
-    // expressions in generated code. Implements [LSPARCH-ARCH-STACK]
+    // Command dispatch runs on an analysis-sized stack: `check`/`analyze`/
+    // `fix`/`adopt` walk the AST recursively and overflow the default
+    // main-thread stack (~8 MiB on macOS/Linux, ~1 MiB on Windows) on deeply
+    // chained expressions in generated code. Implements [LSPARCH-ARCH-STACK]
     // (GitHub #278).
     let exit_code =
         match basilisk_lsp::runtime::run_with_analysis_stack("basilisk-cli", move || {
@@ -227,22 +244,9 @@ fn main() -> ExitCode {
 /// Dispatch the parsed subcommand. Returns the process exit code.
 fn run_command(command: Command) -> u8 {
     match command {
-        Command::Check {
-            paths,
-            output,
-            color,
-            cache,
-            cache_dir,
-            cache_stats,
-        } => {
-            color.apply();
-            let cache_options = cache_check::CacheOptions {
-                enabled: cache,
-                dir: cache_dir,
-                stats: cache_stats,
-            };
-            run_check(&paths, output, &cache_options)
-        }
+        // [CHKARCH-COMMANDS]: identical pipeline, different edge filter.
+        Command::Check { args } => run_scoped_check(&args, DiagnosticScope::Check),
+        Command::Analyze { args } => run_scoped_check(&args, DiagnosticScope::Analyze),
         Command::Fix {
             paths,
             r#unsafe: include_unsafe,
@@ -277,19 +281,23 @@ fn run_command(command: Command) -> u8 {
     }
 }
 
-/// Run the check subcommand.
+/// Run the `check`/`analyze` pipeline and render its outcome.
 ///
 /// Implements [CHKARCH-CLI-EXITCODES]. Exit codes:
 /// - `0` — clean, no errors
-/// - `1` — type errors found
+/// - `1` — error diagnostics found
+/// - `2` — invalid configuration (a `pep` rule resolved to `disabled`,
+///   [CHKARCH-CONFIG-MODEL])
 /// - `3` — internal error
-///
-/// Note: the spec's exit code `2` (configuration error) is not produced — a
-/// malformed config silently falls back to defaults rather than erroring (see
-/// report). See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-EXITCODES
-fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheOptions) -> u8 {
+fn run_scoped_check(args: &CheckArgs, scope: DiagnosticScope) -> u8 {
+    args.color.apply();
+    let cache = cache_check::CacheOptions {
+        enabled: args.cache,
+        dir: args.cache_dir.clone(),
+        stats: args.cache_stats,
+    };
     let mut stats = cache_check::CacheStats::default();
-    let result = collect_and_check(paths, cache, &mut stats);
+    let result = collect_and_check(&args.paths, &cache, &mut stats, scope);
     if cache.stats {
         stats.report();
     }
@@ -298,41 +306,7 @@ fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheO
         // machine-readable JSON. The spec's `sarif`/`junit` formats are not
         // implemented (see report).
         Ok(outcome) => {
-            let diagnostic_exit = match format {
-                OutputFormat::Json => {
-                    render_diagnostics_json(&outcome.diagnostics, &outcome.sources);
-                    let error_count = outcome
-                        .diagnostics
-                        .iter()
-                        .filter(|d| d.severity == basilisk_checker::Severity::Error)
-                        .count();
-                    u8::from(error_count > 0)
-                }
-                OutputFormat::Text => {
-                    let error_count = render_diagnostics(&outcome.diagnostics, &outcome.sources);
-                    let total = outcome.diagnostics.len();
-                    if total == 0 && outcome.failures.is_empty() {
-                        println!("{}", "All checked. No issues found.".green().bold());
-                        0
-                    } else if total == 0 {
-                        0
-                    } else {
-                        let summary = format!(
-                            "Found {} diagnostic{} ({} error{}).",
-                            total,
-                            pluralise(total),
-                            error_count,
-                            pluralise(error_count),
-                        );
-                        if error_count > 0 {
-                            println!("{}", summary.red().bold());
-                        } else {
-                            println!("{}", summary.yellow().bold());
-                        }
-                        u8::from(error_count > 0)
-                    }
-                }
-            };
+            let diagnostic_exit = render_outcome(&outcome, args.output);
             for failure in &outcome.failures {
                 error!(path = %failure.path, error = %failure.message, "error processing file");
             }
@@ -342,561 +316,59 @@ fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheO
                 3
             }
         }
-        Err(err) => {
-            error!(%err, "internal error");
+        Err(PipelineError::Config(message)) => {
+            error!(%message, "configuration error");
+            2
+        }
+        Err(PipelineError::Internal(message)) => {
+            error!(%message, "internal error");
             3
         }
     }
 }
 
-/// Resolve the paths a check run walks. Implements [CHKARCH-CONFIG-INCLUDE]:
-/// explicit CLI paths win, then the configured `include` roots, then `.`.
-pub(crate) fn effective_check_paths(
-    paths: &[String],
-    config: &basilisk_config::BasiliskConfig,
-    config_root: &std::path::Path,
-) -> Vec<String> {
-    if !paths.is_empty() {
-        return paths.to_vec();
-    }
-    if config.include.is_empty() {
-        return vec![".".to_owned()];
-    }
-    config
-        .include
-        .iter()
-        .map(|inc| config_root.join(inc).to_string_lossy().into_owned())
-        .collect()
-}
-
-struct FileAnalysisFailure {
-    path: String,
-    message: String,
-}
-
-struct CheckOutcome {
-    diagnostics: Vec<basilisk_checker::Diagnostic>,
-    sources: Vec<FileSource>,
-    failures: Vec<FileAnalysisFailure>,
-}
-
-fn collect_and_check(
-    paths: &[String],
-    cache: &cache_check::CacheOptions,
-    stats: &mut cache_check::CacheStats,
-) -> Result<CheckOutcome, String> {
-    // [CHKARCH-CONFIG-DISCOVERY] The first path only anchors project-level
-    // concerns (include expansion, version detection, cache location); rule
-    // config is resolved per checked file below, so diagnostics never depend
-    // on argument order (GitHub #311).
-    let config_root = first_path_dir(paths);
-    let mut config = basilisk_config::load_basilisk_config(&config_root);
-    // [CHKARCH-VERSION-TARGET] Detect the target version from project files
-    // when the config does not pin one, matching the LSP (issue #93).
-    if config.python_version.is_none() {
-        config.python_version =
-            basilisk_uv::python_version::resolve_target_python_version(&config_root);
-    }
-
-    let excluded = excluded_dirs_and_log(&config, &config_root);
-
-    // Implements [CHKARCH-CONFIG-INCLUDE] (issue #37): a no-args run walks
-    // only the configured include roots, never the whole repository.
-    let paths = &effective_check_paths(paths, &config, &config_root);
-    let python_files = collect_python_files(paths, &excluded)?;
-
-    // Build import search paths (venv, uv registry, workspace members).
-    // Use cwd as the project root — pyproject.toml, uv.lock, and .venv
-    // live at the project root, not necessarily in the checked path.
-    let project_root = find_project_root(&config_root);
-    let roots = analysis_roots(paths, &project_root);
-    let search_paths = if import_search::files_might_import(&python_files) {
-        build_import_search_paths(roots, &project_root)
-    } else {
-        import_search::roots_only(roots)
-    };
-
-    // Per-file rule config, memoized per directory ([CHKARCH-CONFIG-DISCOVERY]).
-    // The cache fingerprint covers every directory's config so a child config
-    // edit invalidates cached results.
-    let dir_configs = resolve_dir_configs(&python_files, &config);
-    let cache_context =
-        cache_check::build_context(cache, &dir_configs, &search_paths, &project_root);
-
-    let mut all_diagnostics = Vec::new();
-    let mut sources = Vec::new();
-    let mut failures = Vec::new();
-
-    for path in python_files {
-        let file_config = config_for_path(&dir_configs, &path, &config);
-        let outcome = cache_check::check_file(cache_context.as_ref(), stats, &path, || {
-            process_file(&path, &search_paths, &file_config)
-        });
-        match outcome {
-            Ok((diags, source)) => {
-                all_diagnostics.extend(diags);
-                sources.push(FileSource { path, text: source });
-            }
-            Err(err) => {
-                failures.push(FileAnalysisFailure { path, message: err });
-            }
+/// Render diagnostics in the requested format; `1` when errors exist, else `0`.
+fn render_outcome(outcome: &pipeline::CheckOutcome, format: OutputFormat) -> u8 {
+    match format {
+        OutputFormat::Json => {
+            render_diagnostics_json(&outcome.diagnostics, &outcome.sources);
+            let error_count = outcome
+                .diagnostics
+                .iter()
+                .filter(|d| d.severity == basilisk_checker::Severity::Error)
+                .count();
+            u8::from(error_count > 0)
         }
-    }
-
-    Ok(CheckOutcome {
-        diagnostics: all_diagnostics,
-        sources,
-        failures,
-    })
-}
-
-/// Canonical project and checked-directory roots used for import resolution.
-pub(crate) fn analysis_roots(
-    paths: &[String],
-    project_root: &std::path::Path,
-) -> Vec<std::path::PathBuf> {
-    let canonical = std::fs::canonicalize(project_root).unwrap_or_else(|_| project_root.into());
-    paths.iter().fold(vec![canonical], |mut roots, path| {
-        let candidate = std::path::Path::new(path);
-        let directory = candidate
-            .is_dir()
-            .then_some(candidate)
-            .or_else(|| candidate.parent());
-        if let Some(absolute) = directory.and_then(|dir| std::fs::canonicalize(dir).ok()) {
-            if !roots.contains(&absolute) {
-                roots.push(absolute);
-            }
-        }
-        roots
-    })
-}
-
-/// Build the shared CLI/LSP import search path model for a project.
-pub(crate) fn build_import_search_paths(
-    roots: Vec<std::path::PathBuf>,
-    project_root: &std::path::Path,
-) -> basilisk_lsp::import_resolver::ImportSearchPaths {
-    let config = basilisk_lsp::config::load_analysis_config(project_root);
-    let registry = build_uv_registry(&roots);
-    let mut search_paths =
-        basilisk_lsp::import_resolver::search_paths_from_config(&roots, &config, registry);
-    search_paths.roots = roots;
-    info!(
-        site_packages = ?search_paths.site_packages,
-        has_registry = search_paths.registry.is_some(),
-        "built import search paths"
-    );
-    search_paths
-}
-
-/// Build a uv package registry from workspace roots, if this is a uv project.
-fn build_uv_registry(
-    roots: &[std::path::PathBuf],
-) -> Option<std::sync::Arc<basilisk_uv::PackageRegistry>> {
-    let uv_info = basilisk_uv::detect_uv_project(roots)?;
-
-    if !uv_info.has_lockfile {
-        info!(
-            root = %uv_info.root.display(),
-            "uv project detected but no uv.lock — skipping registry"
-        );
-        return None;
-    }
-
-    let lock_path = uv_info.root.join("uv.lock");
-    let lock_file = match basilisk_uv::parse_lock_file(&lock_path) {
-        Ok(lock) => lock,
-        Err(err) => {
-            warn!(
-                path = %lock_path.display(),
-                %err,
-                "failed to parse uv.lock — package registry unavailable"
-            );
-            return None;
-        }
-    };
-
-    let deps = basilisk_uv::extract_pyproject_deps(&uv_info.root);
-    let registry = basilisk_uv::PackageRegistry::from_lock_file(&lock_file, &deps);
-
-    let pkg_count = registry.all_packages().count();
-    info!(
-        root = %uv_info.root.display(),
-        packages = pkg_count,
-        direct_deps = deps.len(),
-        "built uv package registry"
-    );
-
-    Some(std::sync::Arc::new(registry))
-}
-
-fn process_file(
-    path: &str,
-    search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
-    config: &basilisk_config::BasiliskConfig,
-) -> Result<(Vec<basilisk_checker::Diagnostic>, String), String> {
-    let (resolved, source) = resolve_file_imports(path, search_paths)?;
-    // Apply the project's `[tool.basilisk.rules]` / per-path overrides so the
-    // CLI and editor agree on severity (e.g. a project can promote "no type
-    // stubs" to a hard error). Using `check` here would silently drop config.
-    let diagnostics = basilisk_checker::check_with_config(&resolved, config);
-    Ok((diagnostics, source))
-}
-
-/// Parse a source file and resolve its imports through the shared CLI/LSP paths.
-pub(crate) fn resolve_file_imports(
-    path: &str,
-    search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
-) -> Result<(basilisk_resolver::ResolvedModule, String), String> {
-    let parsed = basilisk_parser::parse_file(path).map_err(|e| e.to_string())?;
-    let source = parsed.source.clone();
-    let mut resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
-
-    // Resolve imports against venv/site-packages and uv registry using the same
-    // routine the LSP uses, so the CLI and editor agree on what resolves and on
-    // package-dependency metadata (BSK-W0011 transitive-import warnings, etc.).
-    basilisk_lsp::import_resolver::resolve_module_imports(&mut resolved, search_paths);
-    Ok((resolved, source))
-}
-
-/// The directory anchoring project-level concerns for a CLI invocation: the
-/// first path argument's own directory (or its parent for a file), else cwd.
-pub(crate) fn first_path_dir(paths: &[String]) -> std::path::PathBuf {
-    paths
-        .first()
-        .map(std::path::Path::new)
-        .and_then(|p| {
-            if p.is_dir() {
-                Some(p.to_path_buf())
+        OutputFormat::Text => {
+            let error_count = render_diagnostics(&outcome.diagnostics, &outcome.sources);
+            let total = outcome.diagnostics.len();
+            if total == 0 && outcome.failures.is_empty() {
+                println!("{}", "All checked. No issues found.".green().bold());
+                0
+            } else if total == 0 {
+                0
             } else {
-                p.parent().map(std::path::Path::to_path_buf)
-            }
-        })
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-}
-
-/// The directory owning `path` (its parent, or `.` for a bare filename).
-fn parent_dir_of(path: &str) -> std::path::PathBuf {
-    std::path::Path::new(path)
-        .parent()
-        .filter(|dir| !dir.as_os_str().is_empty())
-        .map_or_else(
-            || std::path::PathBuf::from("."),
-            std::path::Path::to_path_buf,
-        )
-}
-
-/// Resolve the merged rule config for each checked file's directory.
-///
-/// Implements [CHKARCH-CONFIG-DISCOVERY] (GitHub #311): every file is checked
-/// with the config discovered from its own ancestor chain, so diagnostics are
-/// independent of argument order, path spelling, and cwd. Memoized per
-/// directory; `fallback` supplies the detected Python version when a
-/// directory's chain does not pin one ([CHKARCH-VERSION-TARGET]).
-pub(crate) fn resolve_dir_configs(
-    python_files: &[String],
-    fallback: &basilisk_config::BasiliskConfig,
-) -> std::collections::BTreeMap<std::path::PathBuf, std::sync::Arc<basilisk_config::BasiliskConfig>>
-{
-    let mut dir_configs = std::collections::BTreeMap::new();
-    for path in python_files {
-        let _ = dir_configs
-            .entry(parent_dir_of(path))
-            .or_insert_with_key(|dir| {
-                let mut cfg = basilisk_config::load_basilisk_config(dir);
-                if cfg.python_version.is_none() {
-                    cfg.python_version.clone_from(&fallback.python_version);
+                let summary = format!(
+                    "Found {} diagnostic{} ({} error{}).",
+                    total,
+                    pluralise(total),
+                    error_count,
+                    pluralise(error_count),
+                );
+                if error_count > 0 {
+                    println!("{}", summary.red().bold());
+                } else {
+                    println!("{}", summary.yellow().bold());
                 }
-                std::sync::Arc::new(cfg)
-            });
-    }
-    dir_configs
-}
-
-/// The per-directory config for `path`, falling back to `fallback` (only
-/// reachable if `path` was not in the file list the map was built from).
-pub(crate) fn config_for_path(
-    dir_configs: &std::collections::BTreeMap<
-        std::path::PathBuf,
-        std::sync::Arc<basilisk_config::BasiliskConfig>,
-    >,
-    path: &str,
-    fallback: &basilisk_config::BasiliskConfig,
-) -> std::sync::Arc<basilisk_config::BasiliskConfig> {
-    dir_configs
-        .get(&parent_dir_of(path))
-        .cloned()
-        .unwrap_or_else(|| std::sync::Arc::new(fallback.clone()))
-}
-
-/// Walk up from `start` to find the project root (directory containing
-/// `pyproject.toml` or `uv.lock`). Falls back to cwd, then `start`.
-pub(crate) fn find_project_root(start: &std::path::Path) -> std::path::PathBuf {
-    let abs = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
-    let mut current = abs.as_path();
-    loop {
-        if current.join("pyproject.toml").is_file() || current.join("uv.lock").is_file() {
-            return current.to_path_buf();
-        }
-        match current.parent() {
-            Some(parent) => current = parent,
-            None => break,
-        }
-    }
-    // Fallback: cwd, then the original start path.
-    std::env::current_dir().unwrap_or_else(|_| start.to_path_buf())
-}
-
-/// Return `"s"` for counts != 1, empty string otherwise.
-pub(crate) fn pluralise(count: usize) -> &'static str {
-    if count == 1 {
-        ""
-    } else {
-        "s"
-    }
-}
-
-/// Whether `path` is excluded by any configured pattern, matched
-/// gitignore-style against the path relative to the walk `root`.
-///
-/// Implements [CHKARCH-CONFIG-EXCLUDE]. See
-/// docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-EXCLUDE
-///
-/// Uses the same [`basilisk_config::path_matches_pattern`] matcher as the LSP
-/// workspace scan, so `basilisk check` and the editor agree on what is skipped:
-/// bare names (`build`) at any depth, directory globs (`**/generated/**`),
-/// and file globs (`*.pb.py`) all work — not just literal directory names.
-fn is_excluded_path(
-    path: &std::path::Path,
-    root: &std::path::Path,
-    excluded: &HashSet<&str>,
-) -> bool {
-    let relative = path.strip_prefix(root).unwrap_or(path);
-    excluded
-        .iter()
-        .any(|pattern| basilisk_config::path_matches_pattern(relative, pattern))
-}
-
-/// Build the excluded-directory set from `config` and log that the config at
-/// `config_root` was loaded. Shared setup prologue for the CLI subcommands.
-pub(crate) fn excluded_dirs_and_log<'a>(
-    config: &'a basilisk_config::BasiliskConfig,
-    config_root: &std::path::Path,
-) -> HashSet<&'a str> {
-    let excluded: HashSet<&str> = config.exclude.iter().map(String::as_str).collect();
-    info!(
-        excluded_dirs = ?config.exclude,
-        "loaded config from {}",
-        config_root.display()
-    );
-    excluded
-}
-
-/// `true` for the Python source extensions Basilisk type-checks: `.py`
-/// implementation files and `.pyi` stub files (whose overload-definition and
-/// `@final`/`@override` rules differ — see `overloads_*`). Stubs were silently
-/// dropped before, so a `basilisk check foo.pyi` produced no diagnostics.
-fn is_python_source_ext(ext: &std::ffi::OsStr) -> bool {
-    ext.eq_ignore_ascii_case("py") || ext.eq_ignore_ascii_case("pyi")
-}
-
-pub(crate) fn collect_python_files(
-    paths: &[String],
-    excluded: &HashSet<&str>,
-) -> Result<Vec<String>, String> {
-    let mut files = Vec::new();
-
-    for root in paths {
-        let meta = match std::fs::metadata(root) {
-            Ok(m) => m,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Err(format!("cannot access {root}: {e}"));
-            }
-            Err(e) => {
-                warn!(root, %e, "cannot access path");
-                continue;
-            }
-        };
-
-        if meta.is_file() {
-            if std::path::Path::new(root)
-                .extension()
-                .is_some_and(is_python_source_ext)
-            {
-                files.push(root.clone());
-            }
-        } else {
-            let root_path = std::path::Path::new(root);
-            for entry in walkdir::WalkDir::new(root)
-                .follow_links(false)
-                .into_iter()
-                .filter_entry(|e| {
-                    if !e.file_type().is_dir() {
-                        return true;
-                    }
-                    // Never exclude the root entry (depth 0) — the user
-                    // explicitly asked to check this path (often `.`).
-                    if e.depth() == 0 {
-                        return true;
-                    }
-                    let name = e.file_name().to_string_lossy();
-                    // Hidden directories are always excluded.
-                    if name.starts_with('.') {
-                        return false;
-                    }
-                    !is_excluded_path(e.path(), root_path, excluded)
-                })
-                .filter_map(Result::ok)
-                .filter(|e| e.file_type().is_file())
-                .filter(|e| e.path().extension().is_some_and(is_python_source_ext))
-                // File-level globs (e.g. `*.pb.py`, `**/conftest.py`) are honoured
-                // here; directory globs are already pruned above before recursing.
-                .filter(|e| !is_excluded_path(e.path(), root_path, excluded))
-            {
-                files.push(entry.path().to_string_lossy().into_owned());
+                u8::from(error_count > 0)
             }
         }
     }
-
-    Ok(files)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Default excludes for test helpers.
-    fn test_excludes() -> HashSet<&'static str> {
-        basilisk_config::DEFAULT_EXCLUDES.iter().copied().collect()
-    }
-
-    /// Disabled cache options for tests that exercise the plain check pipeline.
-    fn no_cache() -> cache_check::CacheOptions {
-        cache_check::CacheOptions {
-            enabled: false,
-            dir: None,
-            stats: false,
-        }
-    }
-
-    /// Run `collect_and_check` with the cache disabled and a throwaway tally.
-    fn collect_and_check_uncached(paths: &[String]) -> Result<CheckOutcome, String> {
-        collect_and_check(paths, &no_cache(), &mut cache_check::CacheStats::default())
-    }
-
-    // ── collect_python_files ──────────────────────────────────────────────────
-
-    #[test]
-    fn collect_python_files_returns_err_for_nonexistent_path() {
-        let result = collect_python_files(&["/no/such/path/ever.py".to_owned()], &test_excludes());
-        assert!(result.is_err(), "nonexistent path must return Err");
-    }
-
-    #[test]
-    fn collect_python_files_skips_non_py_file() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let txt = dir.join("basilisk_test_skip.txt");
-        std::fs::write(&txt, b"hello")?;
-        let path = txt.to_string_lossy().into_owned();
-        let files = collect_python_files(&[path], &test_excludes())?;
-        assert!(files.is_empty(), "non-.py file must be skipped");
-        let _ = std::fs::remove_file(&txt);
-        Ok(())
-    }
-
-    // ── collect_and_check: process_file error branch ─────────────────────────
-
-    #[test]
-    #[cfg(unix)]
-    fn collect_and_check_handles_unreadable_py_file() -> Result<(), Box<dyn std::error::Error>> {
-        use std::os::unix::fs::PermissionsExt;
-
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_locked.py");
-        std::fs::write(&py, b"def foo(): pass")?;
-        std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o000))?;
-
-        let path = py.to_string_lossy().into_owned();
-        let result = collect_and_check_uncached(&[path]);
-        std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o644))?;
-        let _ = std::fs::remove_file(&py);
-
-        let outcome = result?;
-        assert!(
-            outcome.diagnostics.is_empty(),
-            "unreadable file produces no diagnostics, got: {:#?}",
-            outcome.diagnostics
-        );
-        assert_eq!(
-            outcome.failures.len(),
-            1,
-            "unreadable file must be a failure"
-        );
-        Ok(())
-    }
-
-    // ── collect_python_files: .py file is included ────────────────────────────
-
-    #[test]
-    fn collect_python_files_includes_py_file() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_include.py");
-        std::fs::write(&py, b"x = 1")?;
-        let path = py.to_string_lossy().into_owned();
-        let files = collect_python_files(&[path], &test_excludes())?;
-        let _ = std::fs::remove_file(&py);
-        assert_eq!(files.len(), 1, ".py file must be included");
-        Ok(())
-    }
-
-    // ── collect_python_files: directory traversal ─────────────────────────────
-
-    #[test]
-    fn collect_python_files_walks_directory() -> Result<(), Box<dyn std::error::Error>> {
-        let base = std::env::temp_dir().join("basilisk_test_walk_dir");
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base)?;
-        std::fs::write(base.join("a.py"), b"x = 1")?;
-        std::fs::write(base.join("b.txt"), b"ignored")?;
-        let path = base.to_string_lossy().into_owned();
-        let files = collect_python_files(&[path], &test_excludes())?;
-        let _ = std::fs::remove_dir_all(&base);
-        assert_eq!(
-            files.len(),
-            1,
-            "directory walk must find exactly one .py file"
-        );
-        Ok(())
-    }
-
-    // ── collect_and_check: produces diagnostics for bad code ──────────────────
-
-    #[test]
-    fn collect_and_check_returns_diagnostics_for_bad_code() -> Result<(), Box<dyn std::error::Error>>
-    {
-        // `def foo(x)` violates the annotation house rules (BSK-E0001/E0002),
-        // which are OFF by default — the default config is pure PEP conformance.
-        // Run inside an isolated project that opts in, exactly as a user would.
-        // See [CHKARCH-CONFIGURATION-ONLY].
-        let dir = unique_project_dir("basilisk_test_bad_code");
-        std::fs::create_dir_all(&dir)?;
-        std::fs::write(
-            dir.join("pyproject.toml"),
-            b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n",
-        )?;
-        let py = dir.join("bad.py");
-        std::fs::write(&py, b"def foo(x):\n    pass\n")?;
-        let path = py.to_string_lossy().into_owned();
-        let outcome = collect_and_check_uncached(&[path])?;
-        let _ = std::fs::remove_dir_all(&dir);
-        assert!(
-            !outcome.diagnostics.is_empty(),
-            "unannotated function must produce diagnostics"
-        );
-        Ok(())
-    }
-
-    // ── collect_and_check: project config severity overrides are applied ──────
 
     /// Unique temp dir for tests that need an isolated project root.
     fn unique_project_dir(prefix: &str) -> std::path::PathBuf {
@@ -906,492 +378,180 @@ mod tests {
         std::env::temp_dir().join(format!("{prefix}_{}_{n}", std::process::id()))
     }
 
-    /// Regression: the `basilisk check` CLI must honor `[tool.basilisk.rules]`
-    /// severity overrides from `pyproject.toml`. A project that escalates a
-    /// warning-default rule (BSK-W0050) to "error" must see it surface as a
-    /// hard error through the real CLI pipeline — otherwise strictness config
-    /// is silently ignored in CI. Previously `process_file` called
-    /// `basilisk_checker::check` (default config), dropping all overrides.
-    #[test]
-    fn collect_and_check_applies_project_rule_severity_override(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let dir = unique_project_dir("basilisk_cli_cfg_promote");
+    /// `CheckArgs` for a plain, uncached run over `paths`.
+    fn plain_args(paths: Vec<String>, output: OutputFormat) -> CheckArgs {
+        CheckArgs {
+            paths,
+            output,
+            color: ColorMode::Never,
+            cache: false,
+            cache_dir: None,
+            cache_stats: false,
+        }
+    }
+
+    /// An isolated project that opts the annotation house rule in, holding
+    /// one file that violates it. Returns the dir and the file path.
+    fn house_rule_project(prefix: &str) -> Result<(std::path::PathBuf, String), std::io::Error> {
+        let dir = unique_project_dir(prefix);
         std::fs::create_dir_all(&dir)?;
-        // An explicit non-disabled severity both selects and re-grades an
-        // off-by-default rule. See [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
             dir.join("pyproject.toml"),
-            b"[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n\
-              [tool.basilisk.rules]\n\"BSK-W0050\" = \"error\"\n",
+            b"[tool.basilisk.rules]\n\"BSK-0001\" = \"error\"\n",
+        )?;
+        let py = dir.join("bad.py");
+        std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
+        Ok((dir, py.to_string_lossy().into_owned()))
+    }
+
+    // ── run_scoped_check exit codes ([CHKARCH-CLI-EXITCODES]) ──────────────
+
+    /// [CHKARCH-COMMANDS]: an analyze-scope error (configured house rule)
+    /// makes `analyze` exit 1 — in both output formats.
+    #[test]
+    fn analyze_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, path) = house_rule_project("basilisk_test_rc_analyze_bad")?;
+        let json = run_scoped_check(
+            &plain_args(vec![path.clone()], OutputFormat::Json),
+            DiagnosticScope::Analyze,
+        );
+        let text = run_scoped_check(
+            &plain_args(vec![path], OutputFormat::Text),
+            DiagnosticScope::Analyze,
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(json, 1, "analyze-scope errors must exit 1 (Json)");
+        assert_eq!(text, 1, "analyze-scope errors must exit 1 (Text)");
+        Ok(())
+    }
+
+    /// [CHKARCH-COMMANDS]: `check` never sees house diagnostics, even when
+    /// configuration selects them — the same file exits 0 under check.
+    #[test]
+    fn check_ignores_configured_house_rules() -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, path) = house_rule_project("basilisk_test_rc_check_scope")?;
+        let code = run_scoped_check(
+            &plain_args(vec![path], OutputFormat::Json),
+            DiagnosticScope::Check,
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(code, 0, "check must not exit 1 on analyze-scope debt");
+        Ok(())
+    }
+
+    /// A pep-scope error (`return "x"` from `-> int`) makes `check` exit 1
+    /// in both formats. [CHKARCH-COMMANDS]
+    #[test]
+    fn check_pep_error_returns_one() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = unique_project_dir("basilisk_test_rc_check_pep");
+        std::fs::create_dir_all(&dir)?;
+        let py = dir.join("bad.py");
+        std::fs::write(&py, b"def foo() -> int:\n    return \"x\"\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let json = run_scoped_check(
+            &plain_args(vec![path.clone()], OutputFormat::Json),
+            DiagnosticScope::Check,
+        );
+        let text = run_scoped_check(
+            &plain_args(vec![path], OutputFormat::Text),
+            DiagnosticScope::Check,
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(json, 1, "pep errors must make check exit 1 (Json)");
+        assert_eq!(text, 1, "pep errors must make check exit 1 (Text)");
+        Ok(())
+    }
+
+    /// Clean code exits 0 under both commands and formats.
+    #[test]
+    fn clean_code_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_clean.py");
+        std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
+        let path = py.to_string_lossy().into_owned();
+        for scope in [DiagnosticScope::Check, DiagnosticScope::Analyze] {
+            for output in [OutputFormat::Text, OutputFormat::Json] {
+                assert_eq!(
+                    run_scoped_check(&plain_args(vec![path.clone()], output), scope),
+                    0,
+                    "clean code must exit 0 ({scope:?}, {output:?})"
+                );
+            }
+        }
+        let _ = std::fs::remove_file(&py);
+        Ok(())
+    }
+
+    /// [CHKARCH-CONFIG-MODEL] / [CHKARCH-CLI-EXITCODES]: a config that
+    /// resolves a pep rule to `disabled` is a configuration error — exit 2,
+    /// for both commands, before any checking.
+    #[test]
+    fn pep_disable_config_returns_two() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = unique_project_dir("basilisk_test_rc_pep_disable");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            b"[tool.basilisk.rules]\n\"imports_unresolved\" = \"disabled\"\n",
         )?;
         let py = dir.join("m.py");
-        std::fs::write(&py, b"x: int = 42\n")?;
-
+        std::fs::write(&py, b"x: int = 1\n")?;
         let path = py.to_string_lossy().into_owned();
-        let outcome = collect_and_check_uncached(&[path])?;
-        let _ = std::fs::remove_dir_all(&dir);
-
-        let w0050: Vec<_> = outcome
-            .diagnostics
-            .iter()
-            .filter(|d| d.code.code == "BSK-W0050")
-            .collect();
-        assert!(!w0050.is_empty(), "BSK-W0050 must still fire");
-        assert!(
-            w0050
-                .iter()
-                .all(|d| d.severity == basilisk_checker::Severity::Error),
-            "project config `BSK-W0050 = \"error\"` must promote BSK-W0050 to error \
-             through the CLI; got {:?}",
-            w0050.iter().map(|d| d.severity).collect::<Vec<_>>()
-        );
-        Ok(())
-    }
-
-    // ── collect_and_check: config discovery (GitHub #311) ─────────────────────
-
-    /// Source that violates the annotation house rules (BSK-E0001 on the
-    /// parameter, BSK-E0002 on the return) once those opt-in rules are enabled.
-    const UNANNOTATED_FN: &[u8] = b"def foo(x):\n    pass\n";
-
-    /// A `[tool.basilisk.rules]` table enabling the opt-in annotation rules.
-    const ANNOTATION_RULES_TOML: &[u8] =
-        b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n\"BSK-E0002\" = \"error\"\n";
-
-    /// GitHub #311 (headline): `basilisk check path/to/file.py` must discover
-    /// rule config from ancestor directories. Today the config root is the
-    /// file's own parent dir only, so a repo-root `pyproject.toml` is silently
-    /// ignored and the CLI prints "All checked" on a file the IDE flags.
-    #[test]
-    fn check_file_arg_discovers_config_from_ancestor_directories(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let root = unique_project_dir("basilisk_cli_cfg_ancestor");
-        let child = root.join("child");
-        std::fs::create_dir_all(&child)?;
-        std::fs::write(root.join("pyproject.toml"), ANNOTATION_RULES_TOML)?;
-        let py = child.join("bad.py");
-        std::fs::write(&py, UNANNOTATED_FN)?;
-
-        let outcome = collect_and_check_uncached(&[py.to_string_lossy().into_owned()]);
-        let _ = std::fs::remove_dir_all(&root);
-        let outcome = outcome?;
-
-        let codes: Vec<&str> = outcome.diagnostics.iter().map(|d| d.code.code).collect();
-        assert!(
-            codes.contains(&"BSK-E0001"),
-            "checking child/bad.py by file path must apply the root pyproject.toml \
-             (ancestor walk, GitHub #311); got codes: {codes:?}"
-        );
-        Ok(())
-    }
-
-    /// GitHub #311 (consequence 3): results must not depend on argument order.
-    /// With rules in `p/pyproject.toml` and none in `q`, both `check p q` and
-    /// `check q p` must flag `p/bad.py` — and never flag `q/bad.py`.
-    #[test]
-    fn check_results_are_independent_of_argument_order() -> Result<(), Box<dyn std::error::Error>> {
-        let base = unique_project_dir("basilisk_cli_cfg_order");
-        let p = base.join("p");
-        let q = base.join("q");
-        std::fs::create_dir_all(&p)?;
-        std::fs::create_dir_all(&q)?;
-        std::fs::write(p.join("pyproject.toml"), ANNOTATION_RULES_TOML)?;
-        std::fs::write(p.join("bad.py"), UNANNOTATED_FN)?;
-        std::fs::write(q.join("bad.py"), UNANNOTATED_FN)?;
-
-        let p_arg = p.to_string_lossy().into_owned();
-        let q_arg = q.to_string_lossy().into_owned();
-        let p_first = collect_and_check_uncached(&[p_arg.clone(), q_arg.clone()]);
-        let q_first = collect_and_check_uncached(&[q_arg, p_arg]);
-        let _ = std::fs::remove_dir_all(&base);
-
-        for (order, outcome) in [("check p q", p_first?), ("check q p", q_first?)] {
-            let e0001_paths: Vec<&str> = outcome
-                .diagnostics
-                .iter()
-                .filter(|d| d.code.code == "BSK-E0001")
-                .map(|d| d.path.as_str())
-                .collect();
-            assert!(
-                e0001_paths
-                    .iter()
-                    .any(|path| std::path::Path::new(path).starts_with(&p)),
-                "`{order}` must apply p's own config to p/bad.py regardless of \
-                 argument order (GitHub #311); E0001 paths: {e0001_paths:?}"
-            );
-            assert!(
-                e0001_paths
-                    .iter()
-                    .all(|path| !std::path::Path::new(path).starts_with(&q)),
-                "`{order}` must NOT leak p's config onto q/bad.py, which has no \
-                 config anywhere above it (GitHub #311); E0001 paths: {e0001_paths:?}"
+        for scope in [DiagnosticScope::Check, DiagnosticScope::Analyze] {
+            assert_eq!(
+                run_scoped_check(&plain_args(vec![path.clone()], OutputFormat::Json), scope),
+                2,
+                "pep-disable config must exit 2 ({scope:?})"
             );
         }
-        Ok(())
-    }
-
-    /// GitHub #311 (FIX requirement): config is cumulative — a child dir's
-    /// config appends to the root config instead of replacing it. The root
-    /// enables the annotation rules; the child only disables BSK-E0001, so
-    /// BSK-E0002 from the root must still fire on the child's file.
-    #[test]
-    fn check_child_config_appends_to_ancestor_config() -> Result<(), Box<dyn std::error::Error>> {
-        let root = unique_project_dir("basilisk_cli_cfg_cumulative");
-        let child = root.join("child");
-        std::fs::create_dir_all(&child)?;
-        std::fs::write(root.join("pyproject.toml"), ANNOTATION_RULES_TOML)?;
-        std::fs::write(
-            child.join("pyproject.toml"),
-            b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
-        )?;
-        let py = child.join("bad.py");
-        std::fs::write(&py, UNANNOTATED_FN)?;
-
-        let outcome = collect_and_check_uncached(&[py.to_string_lossy().into_owned()]);
-        let _ = std::fs::remove_dir_all(&root);
-        let outcome = outcome?;
-
-        let codes: Vec<&str> = outcome.diagnostics.iter().map(|d| d.code.code).collect();
-        assert!(
-            codes.contains(&"BSK-E0002"),
-            "the root's rule opt-ins must survive a child config \
-             that only tweaks one rule (cumulative merge, GitHub #311); got: {codes:?}"
-        );
-        assert!(
-            !codes.contains(&"BSK-E0001"),
-            "the child config's `BSK-E0001 = disabled` must be honored; got: {codes:?}"
-        );
-        Ok(())
-    }
-
-    // ── collect_and_check: clean code produces no diagnostics ─────────────────
-
-    #[test]
-    fn collect_and_check_returns_no_diagnostics_for_clean_code(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_clean_code.py");
-        std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
-        let path = py.to_string_lossy().into_owned();
-        let outcome = collect_and_check_uncached(&[path])?;
-        let _ = std::fs::remove_file(&py);
-        assert!(
-            outcome.diagnostics.is_empty(),
-            "fully annotated code must produce no diagnostics"
-        );
-        Ok(())
-    }
-
-    // ── run_check: return value tests (lines 63, 65, 81) ────────────────────
-    //
-    // run_check returns:
-    //   0  — no errors (Json: error_count == 0; Text: total == 0 OR error_count == 0)
-    //   1  — errors found
-    //   3  — internal error
-    //
-    // Mutants:
-    //   line 63  == → !=  : Json path, error filter
-    //   line 65  > → ==/</>= : Json path, i32::from(error_count > 0)
-    //   line 81  > → >=   : Text path, i32::from(error_count > 0)
-
-    /// `run_check` Json path: bad code must return 1.
-    /// Kills `!=` at line 63 (which would invert the severity filter)
-    /// and `== / < / >=` at line 65 (which would change the return value).
-    #[test]
-    fn run_check_json_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
-        // BSK-E0001 (unannotated `x`) is off by default; opt in via project config.
-        let dir = unique_project_dir("basilisk_test_rc_json_bad");
-        std::fs::create_dir_all(&dir)?;
-        std::fs::write(
-            dir.join("pyproject.toml"),
-            b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n",
-        )?;
-        let py = dir.join("bad.py");
-        std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
-        let path = py.to_string_lossy().into_owned();
-        let code = run_check(&[path], OutputFormat::Json, &no_cache());
         let _ = std::fs::remove_dir_all(&dir);
-        assert_eq!(code, 1, "bad code must make run_check return 1 (Json)");
         Ok(())
     }
 
-    /// `run_check` Json path: clean code must return 0.
-    /// Kills `==` mutant at line 65 (which would return 1 for clean code).
+    /// Internal error path: nonexistent path must return 3.
     #[test]
-    fn run_check_json_clean_code_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_rc_json_clean.py");
-        std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
-        let path = py.to_string_lossy().into_owned();
-        let code = run_check(&[path], OutputFormat::Json, &no_cache());
-        let _ = std::fs::remove_file(&py);
-        assert_eq!(code, 0, "clean code must make run_check return 0 (Json)");
-        Ok(())
-    }
-
-    /// `run_check` Text path: bad code must return 1.
-    /// Kills `>=` mutant at line 81 (which always returns 1 since usize >= 0).
-    #[test]
-    fn run_check_text_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
-        // BSK-E0001 (unannotated `x`) is off by default; opt in via project config.
-        let dir = unique_project_dir("basilisk_test_rc_text_bad");
-        std::fs::create_dir_all(&dir)?;
-        std::fs::write(
-            dir.join("pyproject.toml"),
-            b"[tool.basilisk.rules]\n\"BSK-E0001\" = \"error\"\n",
-        )?;
-        let py = dir.join("bad.py");
-        std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
-        let path = py.to_string_lossy().into_owned();
-        let code = run_check(&[path], OutputFormat::Text, &no_cache());
-        let _ = std::fs::remove_dir_all(&dir);
-        assert_eq!(code, 1, "bad code must make run_check return 1 (Text)");
-        Ok(())
-    }
-
-    /// `run_check` Text path: clean code must return 0.
-    /// Kills `>=` mutant at line 81: if `> 0` became `>= 0`, clean code (count=0) would return 1.
-    #[test]
-    fn run_check_text_clean_code_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_rc_text_clean.py");
-        std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
-        let path = py.to_string_lossy().into_owned();
-        let code = run_check(&[path], OutputFormat::Text, &no_cache());
-        let _ = std::fs::remove_file(&py);
-        assert_eq!(code, 0, "clean code must make run_check return 0 (Text)");
-        Ok(())
-    }
-
-    /// `run_check` internal error path: nonexistent path must return 3.
-    #[test]
-    fn run_check_nonexistent_path_returns_three() {
-        let code = run_check(
-            &["/no/such/path.py".to_owned()],
-            OutputFormat::Text,
-            &no_cache(),
+    fn nonexistent_path_returns_three() {
+        let code = run_scoped_check(
+            &plain_args(vec!["/no/such/path.py".to_owned()], OutputFormat::Text),
+            DiagnosticScope::Check,
         );
-        assert_eq!(code, 3, "nonexistent path must make run_check return 3");
+        assert_eq!(code, 3, "nonexistent path must exit 3");
     }
 
-    // ── collect_python_files: MatchArmGuard mutant at main.rs:129 ────────────
-
-    /// `collect_python_files` — `MatchArmGuard → true` at line 129.
-    /// The guard `e.kind() == ErrorKind::NotFound` distinguishes "not found" from
-    /// other I/O errors. If the guard is replaced with `true`, ALL I/O errors
-    /// would return Err instead of continuing. We test that the `NotFound` path
-    /// specifically returns Err (not Ok with empty list).
+    /// Warnings-only code must return 0 (no errors) in both formats:
+    /// an inline `# type: warning[...]` demotion of a pep error.
     #[test]
-    fn collect_python_files_not_found_returns_err() {
-        let result = collect_python_files(
-            &["/absolutely/does/not/exist/file.py".to_owned()],
-            &test_excludes(),
-        );
-        assert!(result.is_err(), "NotFound path must return Err, not Ok");
-    }
-
-    /// `run_check` Text path: warnings-only code must return 0 (no errors).
-    #[test]
-    fn run_check_text_warnings_only_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+    fn warnings_only_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
         let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_rc_text_warn.py");
-        // Demote the missing-param-annotation error to a warning via inline override.
+        let py = dir.join("basilisk_test_rc_warn.py");
         std::fs::write(
             &py,
-            b"def foo(x) -> None:  # type: warning[BSK-E0001]\n    pass\n",
+            b"import basilisk_no_such_module_xyz  # type: warning[imports_unresolved]\n",
         )?;
         let path = py.to_string_lossy().into_owned();
-        let code = run_check(&[path], OutputFormat::Text, &no_cache());
-        let _ = std::fs::remove_file(&py);
-        assert_eq!(
-            code, 0,
-            "warnings-only code must make run_check return 0 (Text)"
-        );
-        Ok(())
-    }
-
-    /// `run_check` Json path: warnings-only code must return 0 (no errors).
-    #[test]
-    fn run_check_json_warnings_only_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_rc_json_warn.py");
-        std::fs::write(
-            &py,
-            b"def foo(x) -> None:  # type: warning[BSK-E0001]\n    pass\n",
-        )?;
-        let path = py.to_string_lossy().into_owned();
-        let code = run_check(&[path], OutputFormat::Json, &no_cache());
-        let _ = std::fs::remove_file(&py);
-        assert_eq!(
-            code, 0,
-            "warnings-only code must make run_check return 0 (Json)"
-        );
-        Ok(())
-    }
-
-    /// Complement: a path that exists but is not .py returns Ok with empty list.
-    /// This kills the `true` guard mutant: if all errors → Err, this would fail.
-    #[test]
-    fn collect_python_files_non_py_existing_file_returns_ok_empty(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let txt = dir.join("basilisk_test_guard_complement.txt");
-        std::fs::write(&txt, b"hello")?;
-        let path = txt.to_string_lossy().into_owned();
-        let result = collect_python_files(&[path], &test_excludes());
-        let _ = std::fs::remove_file(&txt);
-        assert!(result.is_ok(), "existing non-py file must return Ok");
-        assert!(result?.is_empty(), "non-py file must produce empty list");
-        Ok(())
-    }
-
-    // ── directory exclusion ─────────────────────────────────────────────────
-
-    #[test]
-    fn collect_python_files_skips_excluded_directories() -> Result<(), Box<dyn std::error::Error>> {
-        let base = std::env::temp_dir().join("basilisk_test_exclude_dirs");
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base)?;
-
-        // File in root — should be found.
-        std::fs::write(base.join("app.py"), b"x = 1")?;
-
-        // Files in default-excluded directories — should be skipped.
-        for excluded in &["__pycache__", "venv", "site-packages", "node_modules"] {
-            let sub = base.join(excluded);
-            std::fs::create_dir_all(&sub)?;
-            std::fs::write(sub.join("hidden.py"), b"x = 1")?;
+        for output in [OutputFormat::Text, OutputFormat::Json] {
+            assert_eq!(
+                run_scoped_check(
+                    &plain_args(vec![path.clone()], output),
+                    DiagnosticScope::Check
+                ),
+                0,
+                "warnings-only code must exit 0 ({output:?})"
+            );
         }
-
-        // File in a hidden directory — should be skipped.
-        let hidden = base.join(".hidden");
-        std::fs::create_dir_all(&hidden)?;
-        std::fs::write(hidden.join("secret.py"), b"x = 1")?;
-
-        let path = base.to_string_lossy().into_owned();
-        let files = collect_python_files(&[path], &test_excludes())?;
-        let _ = std::fs::remove_dir_all(&base);
-
-        assert_eq!(
-            files.len(),
-            1,
-            "only root app.py should be found, got: {files:?}"
-        );
+        let _ = std::fs::remove_file(&py);
         Ok(())
     }
 
-    #[test]
-    fn collect_python_files_respects_custom_excludes() -> Result<(), Box<dyn std::error::Error>> {
-        let base = std::env::temp_dir().join("basilisk_test_custom_exclude");
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base)?;
-
-        std::fs::write(base.join("app.py"), b"x = 1")?;
-        let sub = base.join("vendor");
-        std::fs::create_dir_all(&sub)?;
-        std::fs::write(sub.join("lib.py"), b"x = 1")?;
-
-        // Custom exclude: only "vendor", not the defaults.
-        let custom: HashSet<&str> = ["vendor"].into_iter().collect();
-        let path = base.to_string_lossy().into_owned();
-        let files = collect_python_files(&[path], &custom)?;
-        let _ = std::fs::remove_dir_all(&base);
-
-        assert_eq!(
-            files.len(),
-            1,
-            "vendor should be excluded, only app.py found"
-        );
-        Ok(())
-    }
-
-    /// Regression: the `basilisk check` CLI ignored user **glob** excludes.
-    /// `collect_python_files` matched only bare directory names against the
-    /// exclude set (and never applied any exclude to individual files), so a
-    /// project configuring `exclude = ["**/generated/**", "*.pb.py"]` still had
-    /// its generated tree and `*.pb.py` files type-checked — diverging from the
-    /// LSP workspace scan, which honours the same gitignore-style globs via
-    /// `basilisk_config::path_matches_pattern`. The CLI must agree with the LSP.
-    #[test]
-    fn collect_python_files_honors_user_glob_excludes() -> Result<(), Box<dyn std::error::Error>> {
-        let base = std::env::temp_dir().join(format!(
-            "basilisk_test_cli_glob_exclude_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&base);
-        let gen = base.join("src").join("generated");
-        std::fs::create_dir_all(&gen)?;
-        std::fs::write(base.join("app.py"), b"x = 1")?; // real code — must survive
-        std::fs::write(gen.join("models.py"), b"y = 2")?; // excluded by **/generated/**
-        std::fs::write(base.join("schema.pb.py"), b"z = 3")?; // excluded by *.pb.py
-
-        let excludes: HashSet<&str> = ["**/generated/**", "*.pb.py"].into_iter().collect();
-        let path = base.to_string_lossy().into_owned();
-        let files = collect_python_files(&[path], &excludes)?;
-        let _ = std::fs::remove_dir_all(&base);
-
-        let names: Vec<String> = files.iter().map(|f| f.replace('\\', "/")).collect();
-        assert_eq!(
-            files.len(),
-            1,
-            "only app.py should survive the glob excludes, got: {names:?}"
-        );
-        assert!(
-            names.iter().any(|f| f.ends_with("/app.py")),
-            "app.py must still be collected: {names:?}"
-        );
-        assert!(
-            !names.iter().any(|f| f.contains("generated")),
-            "**/generated/** must exclude the nested directory: {names:?}"
-        );
-        assert!(
-            !names.iter().any(|f| f.contains("schema.pb.py")),
-            "*.pb.py glob must exclude the file: {names:?}"
-        );
-        Ok(())
-    }
-
-    /// Regression: `basilisk check .` found zero files because the root
-    /// entry `.` starts with `.` and was rejected by the hidden-dir filter.
-    /// The same bug hits any user-supplied root whose name starts with `.`
-    /// (e.g. `.myproject`).
-    #[test]
-    fn collect_python_files_hidden_root_dir_still_walked() -> Result<(), Box<dyn std::error::Error>>
-    {
-        let base = std::env::temp_dir().join("basilisk_test_hidden_root");
-        let _ = std::fs::remove_dir_all(&base);
-
-        // Root directory whose name starts with `.` — simulates the `.`
-        // case (or any hidden-named project root).
-        let hidden = base.join(".myproject");
-        std::fs::create_dir_all(&hidden)?;
-        std::fs::write(hidden.join("app.py"), b"x = 1")?;
-        let sub = hidden.join("pkg");
-        std::fs::create_dir_all(&sub)?;
-        std::fs::write(sub.join("mod.py"), b"y = 2")?;
-
-        let path = hidden.to_string_lossy().into_owned();
-        let files = collect_python_files(&[path], &test_excludes())?;
-        let _ = std::fs::remove_dir_all(&base);
-
-        assert_eq!(
-            files.len(),
-            2,
-            "user-supplied root starting with '.' must still be walked, got: {files:?}"
-        );
-        Ok(())
-    }
-
-    // ── stubs subcommand ─────────────────────────────────────────────────────
+    // ── stubs subcommand ─────────────────────────────────────────────────
     //
     // The `basilisk stubs` subsystem (run_stubs, cache_stub,
-    // find_package_source) is exercised in-process
-    // here. Driving it directly — rather than through a spawned binary — keeps
-    // its coverage independent of subprocess profile merging, which is unreliable
-    // across platforms. Implements [STUBRES-AUTOGEN] on the CLI surface.
+    // find_package_source) is exercised in-process here. Driving it directly
+    // — rather than through a spawned binary — keeps its coverage independent
+    // of subprocess profile merging, which is unreliable across platforms.
+    // Implements [STUBRES-AUTOGEN] on the CLI surface.
 
-    /// `find_package_source` returns `None` for a package that cannot be imported
-    /// (the querying subprocess exits non-zero).
+    /// `find_package_source` returns `None` for a package that cannot be
+    /// imported (the querying subprocess exits non-zero).
     #[test]
     fn find_package_source_returns_none_for_unknown_package() {
         let result = find_package_source(
@@ -1502,8 +662,8 @@ mod tests {
         Ok(())
     }
 
-    /// `run_stubs(Status)` always reports without error (exit 0), whether or not
-    /// any stubs are cached. Exercises the `Status` dispatch arm.
+    /// `run_stubs(Status)` always reports without error (exit 0), whether or
+    /// not any stubs are cached. Exercises the `Status` dispatch arm.
     #[test]
     fn run_stubs_status_returns_zero() {
         assert_eq!(
@@ -1513,8 +673,8 @@ mod tests {
         );
     }
 
-    /// `run_stubs(Generate { .. })` dispatches to generation; with no packages it
-    /// returns 1. Exercises the `Generate` dispatch arm end to end.
+    /// `run_stubs(Generate { .. })` dispatches to generation; with no packages
+    /// it returns 1. Exercises the `Generate` dispatch arm end to end.
     #[test]
     fn run_stubs_generate_dispatch_no_packages_returns_one() {
         let action = StubAction::Generate {
@@ -1530,12 +690,12 @@ mod tests {
         );
     }
 
-    // ── run_command dispatch ─────────────────────────────────────────────────
+    // ── run_command dispatch ─────────────────────────────────────────────
     //
     // `run_command` is the parsed-subcommand dispatcher `main` delegates to on
-    // the analysis stack. Driving each arm in-process — rather than only through
-    // the spawned binary — keeps the dispatch covered independently of
-    // subprocess profile merging. The `Lsp` arm is excluded on purpose: it
+    // the analysis stack. Driving each arm in-process — rather than only
+    // through the spawned binary — keeps the dispatch covered independently
+    // of subprocess profile merging. The `Lsp` arm is excluded on purpose: it
     // blocks on a running server.
 
     /// A temp project holding one clean, fully-annotated module. Returns the
@@ -1547,9 +707,8 @@ mod tests {
         std::fs::create_dir_all(&dir)?;
         // Anchor the project root at `dir` with a `pyproject.toml` marker.
         // Without one, `find_project_root` (which recognises only
-        // `pyproject.toml`/`uv.lock`) walks past the temp dir and falls back to
-        // the process cwd, so config-root-relative operations (e.g. `unadopt`'s
-        // `relative_pattern`) see the module as outside the root and error.
+        // `pyproject.toml`/`uv.lock`) walks past the temp dir and falls back
+        // to the process cwd.
         std::fs::write(
             dir.join("pyproject.toml"),
             b"[project]\nname = \"fixture\"\nversion = \"0.0.0\"\n",
@@ -1560,20 +719,20 @@ mod tests {
         Ok((dir, path))
     }
 
-    /// `run_command(Check)` (text) on clean code returns 0 and applies colour mode.
+    /// `run_command(Check)` (text) on clean code returns 0 and applies colour
+    /// mode; `run_command(Analyze)` mirrors it ([CHKARCH-COMMANDS]).
     #[test]
-    fn run_command_check_text_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+    fn run_command_check_and_analyze_text_return_zero() -> Result<(), Box<dyn std::error::Error>> {
         let (dir, py) = clean_project("rc_check_text")?;
-        let code = run_command(Command::Check {
-            paths: vec![py],
-            output: OutputFormat::Text,
-            color: ColorMode::Never,
-            cache: false,
-            cache_dir: None,
-            cache_stats: false,
+        let check = run_command(Command::Check {
+            args: plain_args(vec![py.clone()], OutputFormat::Text),
+        });
+        let analyze = run_command(Command::Analyze {
+            args: plain_args(vec![py], OutputFormat::Text),
         });
         let _ = std::fs::remove_dir_all(&dir);
-        assert_eq!(code, 0, "clean check (text) must return 0");
+        assert_eq!(check, 0, "clean check (text) must return 0");
+        assert_eq!(analyze, 0, "clean analyze (text) must return 0");
         Ok(())
     }
 
@@ -1582,12 +741,14 @@ mod tests {
     fn run_command_check_json_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
         let (dir, py) = clean_project("rc_check_json")?;
         let code = run_command(Command::Check {
-            paths: vec![py],
-            output: OutputFormat::Json,
-            color: ColorMode::Always,
-            cache: false,
-            cache_dir: None,
-            cache_stats: false,
+            args: CheckArgs {
+                paths: vec![py],
+                output: OutputFormat::Json,
+                color: ColorMode::Always,
+                cache: false,
+                cache_dir: None,
+                cache_stats: false,
+            },
         });
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(code, 0, "clean check (json) must return 0");
@@ -1602,12 +763,14 @@ mod tests {
         let (dir, py) = clean_project("rc_check_cache")?;
         let cache_dir = dir.join("cache");
         let code = run_command(Command::Check {
-            paths: vec![py],
-            output: OutputFormat::Text,
-            color: ColorMode::Auto,
-            cache: true,
-            cache_dir: Some(cache_dir),
-            cache_stats: true,
+            args: CheckArgs {
+                paths: vec![py],
+                output: OutputFormat::Text,
+                color: ColorMode::Auto,
+                cache: true,
+                cache_dir: Some(cache_dir),
+                cache_stats: true,
+            },
         });
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(code, 0, "cached clean check must return 0");
@@ -1628,8 +791,9 @@ mod tests {
         Ok(())
     }
 
-    /// `run_command(Adopt)` and `run_command(Adopt { status })` both succeed on a
-    /// clean project — exercising both the adopt and the status dispatch branch.
+    /// `run_command(Adopt)` and `run_command(Adopt { status })` both succeed on
+    /// a clean project — exercising both the adopt and status dispatch branch.
+    /// [AUTOFIX-ADOPTION]
     #[test]
     fn run_command_adopt_and_status_return_zero() -> Result<(), Box<dyn std::error::Error>> {
         let (dir, py) = clean_project("rc_adopt")?;
@@ -1647,7 +811,7 @@ mod tests {
         Ok(())
     }
 
-    /// `run_command(Unadopt)` on a clean project returns 0.
+    /// `run_command(Unadopt)` on a clean project returns 0. [AUTOFIX-ADOPTION]
     #[test]
     fn run_command_unadopt_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
         let (dir, py) = clean_project("rc_unadopt")?;

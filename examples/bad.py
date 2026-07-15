@@ -63,9 +63,9 @@ def classify(value: int | str) -> str:
 # ── Opt-in strictness rules — silent until enabled ──────────────────────────
 
 
-def process(data):  # BSK-E0001: `data` untyped; BSK-E0002: no return type
+def process(data):  # BSK-0001: `data` untyped; BSK-0002: no return type
     return data.upper()
 
 
-def log_all(*args, **kwargs):  # BSK-E0004: `*args` / `**kwargs` untyped
+def log_all(*args, **kwargs):  # BSK-0004: `*args` / `**kwargs` untyped
     pass

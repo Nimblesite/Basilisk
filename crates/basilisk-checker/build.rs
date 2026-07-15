@@ -10,7 +10,6 @@ struct CatalogEntry {
     code: String,
     title: String,
     docs_url: String,
-    severity: &'static str,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -78,7 +77,6 @@ fn catalog_entry(rules_dir: &Path, module: &str) -> Result<CatalogEntry, String>
     let docs_url = format!("https://www.basilisk-python.dev/errors/{code}");
 
     Ok(CatalogEntry {
-        severity: severity_for(&code),
         code,
         title: clean_sentence(&title),
         docs_url,
@@ -90,9 +88,11 @@ fn extract_header(text: &str) -> Option<(String, String)> {
         let doc = line.trim().strip_prefix("//! ")?;
         let (raw_code, title) = doc.split_once(':')?;
         let code = raw_code.trim().trim_matches('`');
+        // Codes carry no severity class ([CHKARCH-DIAG-CODES]): Basilisk
+        // rules are `BSK-nnnn`, conformance rules keep their snake_case names.
         let valid_bsk = code
             .strip_prefix("BSK-")
-            .is_some_and(|rest| matches!(rest.as_bytes().first(), Some(b'E' | b'W' | b'I')));
+            .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_digit()));
         let valid_named = code
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_');
@@ -102,16 +102,6 @@ fn extract_header(text: &str) -> Option<(String, String)> {
 
 fn clean_sentence(value: &str) -> String {
     value.trim().trim_end_matches('.').trim().to_owned()
-}
-
-fn severity_for(code: &str) -> &'static str {
-    if code.starts_with("BSK-I") {
-        "Info"
-    } else if code.starts_with("BSK-W") {
-        "Warning"
-    } else {
-        "Error"
-    }
 }
 
 fn render(entries: &[CatalogEntry]) -> Result<String, std::fmt::Error> {
@@ -126,11 +116,6 @@ fn render(entries: &[CatalogEntry]) -> Result<String, std::fmt::Error> {
         writeln!(&mut output, "        title: {:?},", entry.title)?;
         writeln!(&mut output, "        summary: {:?},", entry.title)?;
         writeln!(&mut output, "        docs_url: {:?},", entry.docs_url)?;
-        writeln!(
-            &mut output,
-            "        default_severity: Severity::{},",
-            entry.severity
-        )?;
         output.push_str("    },\n");
     }
     output.push_str("];\n");

@@ -1,7 +1,7 @@
 [
   {
-    "code": "BSK-E0001",
-    "severity": "error",
+    "code": "BSK-0001",
+    "scope": "analyze",
     "provenance": "basilisk",
     "tags": [
       "basilisk",
@@ -11,11 +11,11 @@
     "summaryHtml": "Missing parameter type annotation",
     "body": [],
     "group": "Missing Annotations",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0001"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0001"
   },
   {
-    "code": "BSK-E0002",
-    "severity": "error",
+    "code": "BSK-0002",
+    "scope": "analyze",
     "provenance": "basilisk",
     "tags": [
       "basilisk",
@@ -25,11 +25,11 @@
     "summaryHtml": "Missing return type annotation",
     "body": [],
     "group": "Missing Annotations",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0002"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0002"
   },
   {
-    "code": "BSK-E0003",
-    "severity": "error",
+    "code": "BSK-0003",
+    "scope": "analyze",
     "provenance": "basilisk",
     "tags": [
       "basilisk",
@@ -44,11 +44,11 @@
       }
     ],
     "group": "Missing Annotations",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0003"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0003"
   },
   {
-    "code": "BSK-E0004",
-    "severity": "error",
+    "code": "BSK-0004",
+    "scope": "analyze",
     "provenance": "basilisk",
     "tags": [
       "basilisk",
@@ -63,11 +63,11 @@
       }
     ],
     "group": "Missing Annotations",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0004"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0004"
   },
   {
-    "code": "BSK-E0005",
-    "severity": "error",
+    "code": "BSK-0005",
+    "scope": "analyze",
     "provenance": "basilisk",
     "tags": [
       "basilisk",
@@ -86,11 +86,115 @@
       }
     ],
     "group": "Missing Annotations",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0005"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0005"
   },
   {
-    "code": "BSK-E0025",
-    "severity": "error",
+    "code": "BSK-0011",
+    "scope": "analyze",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "dependencies",
+      "imports"
+    ],
+    "summary": "Undeclared dependency import",
+    "summaryHtml": "Undeclared dependency import",
+    "body": [
+      {
+        "type": "text",
+        "html": "Fires when an import resolves to a package that is only a transitive dependency \u2014 present in <code>uv.lock</code> but not listed in the project&#x27;s <code>project.dependencies</code> in <code>pyproject.toml</code>."
+      },
+      {
+        "type": "text",
+        "html": "Transitive dependencies can disappear when a direct dependency drops them, breaking imports that relied on their implicit availability."
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "import urllib3  # BSK-0011: 'urllib3' is a transitive dependency (via requests)"
+      }
+    ],
+    "group": "Dependencies",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0011"
+  },
+  {
+    "code": "BSK-0012",
+    "scope": "analyze",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "dependencies"
+    ],
+    "summary": "Unused dependency",
+    "summaryHtml": "Unused dependency",
+    "body": [
+      {
+        "type": "text",
+        "html": "Fires when a package is declared in <code>project.dependencies</code> but no module in the workspace imports it. This indicates a dependency that can be removed, reducing the project&#x27;s dependency footprint."
+      },
+      {
+        "type": "text",
+        "html": "This is a **whole-module-only** diagnostic \u2014 it requires scanning all files in the workspace to determine which packages are actually imported. The rule currently provides the skeleton; it activates when the workspace layer provides aggregate import data."
+      }
+    ],
+    "group": "Dependencies",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0012"
+  },
+  {
+    "code": "BSK-0013",
+    "scope": "analyze",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "dependencies"
+    ],
+    "summary": "Stale uv lock file",
+    "summaryHtml": "Stale uv lock file",
+    "body": [
+      {
+        "type": "text",
+        "html": "Fires when the <code>uv.lock</code> file is older than <code>pyproject.toml</code>, indicating that dependencies may have changed without re-locking. This can cause import resolution to use stale package versions."
+      },
+      {
+        "type": "text",
+        "html": "This rule currently provides the skeleton; it activates when the workspace provides lock-file staleness information via the resolver context."
+      }
+    ],
+    "group": "Dependencies",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0013"
+  },
+  {
+    "code": "BSK-0014",
+    "scope": "analyze",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "style",
+      "strictness"
+    ],
+    "summary": "Explicit `Any` annotation",
+    "summaryHtml": "Explicit <code>Any</code> annotation",
+    "body": [
+      {
+        "type": "text",
+        "html": "Emitted as a <code>Warning</code> when a function parameter or return annotation is written as <code>Any</code> (from <code>typing</code>). <code>Any</code> silences all type checking for the annotated value and should be used only when intentional."
+      },
+      {
+        "type": "text",
+        "html": "This is an opinionated <em>strictness nudge</em>, not a type-system requirement: the typing spec treats <code>Any</code> as a fully valid type. It is therefore a distinct (user-suppressible) code from the genuine return-type-mismatch error (returns_compatibility); the two used to share a code, so a user could not silence the style nudge while keeping the real type check. BSK-0014 itself is never disabled for PEP conformance \u2014 like every rule it runs fully enabled during scoring; there is no &quot;spec-conformance mode&quot; that turns it off. See CHKARCH-CONFORMANCE-MODE."
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "from typing import Any\n\ndef greet(name: Any) -> str: ...  # BSK-0014 \u2014 parameter `name` is annotated Any\ndef parse(text: str) -> Any: ...  # BSK-0014 \u2014 return annotation is Any\n\ndef greet(name: str) -> str: ...  # NO warning \u2014 concrete types"
+      }
+    ],
+    "group": "Style",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0014"
+  },
+  {
+    "code": "BSK-0025",
+    "scope": "analyze",
     "provenance": "basilisk",
     "tags": [
       "basilisk",
@@ -113,162 +217,15 @@
       },
       {
         "type": "text",
-        "html": "Version gate (issue #171): <code>@override</code> (PEP 698 / <code>typing.override</code>) was introduced in Python 3.12, so suggesting it on an older configured target is a false positive \u2014 the decorator cannot be imported there. BSK-E0025 is silent when the configured <code>python_version</code> is below 3.12."
+        "html": "Version gate (issue #171): <code>@override</code> (PEP 698 / <code>typing.override</code>) was introduced in Python 3.12, so suggesting it on an older configured target is a false positive \u2014 the decorator cannot be imported there. BSK-0025 is silent when the configured <code>python_version</code> is below 3.12."
       }
     ],
-    "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0025"
+    "group": "Missing Annotations",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0025"
   },
   {
-    "code": "BSK-E0063",
-    "severity": "error",
-    "provenance": "basilisk",
-    "tags": [
-      "basilisk",
-      "suppressions"
-    ],
-    "summary": "Malformed suppression directive",
-    "summaryHtml": "Malformed suppression directive",
-    "body": [
-      {
-        "type": "text",
-        "html": "Reports malformed directives, unknown Basilisk rule codes, conflicting directives, and unmatched block boundaries."
-      }
-    ],
-    "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0063"
-  },
-  {
-    "code": "BSK-E0152",
-    "severity": "error",
-    "provenance": "basilisk",
-    "tags": [
-      "basilisk",
-      "stubs"
-    ],
-    "summary": "Missing type stubs for installed package",
-    "summaryHtml": "Missing type stubs for installed package",
-    "body": [
-      {
-        "type": "text",
-        "html": "Fires when a package is imported and resolves to a <code>.py</code> source file (not <code>.pyi</code>) without a <code>py.typed</code> marker. This means the package is installed but lacks type information, reducing type safety. This rule is off by default \u2014 the default configuration is pure PEP conformance \u2014 and a project opts in with an explicit <code>BSK-E0152</code> severity. Once enabled, an untyped third-party import is a hard error; a project can soften it per import (<code># type: warningBSK-E0152</code>) or globally (<code>&quot;BSK-E0152&quot; = &quot;warning&quot;</code>) to use non-type-safe libraries at its own risk."
-      },
-      {
-        "type": "code",
-        "lang": "python",
-        "code": "import flask  # E0152: Package 'flask' is installed but has no type stubs"
-      }
-    ],
-    "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0152"
-  },
-  {
-    "code": "BSK-W0011",
-    "severity": "warning",
-    "provenance": "basilisk",
-    "tags": [
-      "basilisk",
-      "dependencies",
-      "imports"
-    ],
-    "summary": "Undeclared dependency import",
-    "summaryHtml": "Undeclared dependency import",
-    "body": [
-      {
-        "type": "text",
-        "html": "Fires when an import resolves to a package that is only a transitive dependency \u2014 present in <code>uv.lock</code> but not listed in the project&#x27;s <code>project.dependencies</code> in <code>pyproject.toml</code>."
-      },
-      {
-        "type": "text",
-        "html": "Transitive dependencies can disappear when a direct dependency drops them, breaking imports that relied on their implicit availability."
-      },
-      {
-        "type": "code",
-        "lang": "python",
-        "code": "import urllib3  # BSK-W0011: 'urllib3' is a transitive dependency (via requests)"
-      }
-    ],
-    "group": "Warnings",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0011"
-  },
-  {
-    "code": "BSK-W0012",
-    "severity": "warning",
-    "provenance": "basilisk",
-    "tags": [
-      "basilisk",
-      "dependencies"
-    ],
-    "summary": "Unused dependency",
-    "summaryHtml": "Unused dependency",
-    "body": [
-      {
-        "type": "text",
-        "html": "Fires when a package is declared in <code>project.dependencies</code> but no module in the workspace imports it. This indicates a dependency that can be removed, reducing the project&#x27;s dependency footprint."
-      },
-      {
-        "type": "text",
-        "html": "This is a **whole-module-only** diagnostic \u2014 it requires scanning all files in the workspace to determine which packages are actually imported. The rule currently provides the skeleton; it activates when the workspace layer provides aggregate import data."
-      }
-    ],
-    "group": "Warnings",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0012"
-  },
-  {
-    "code": "BSK-W0013",
-    "severity": "warning",
-    "provenance": "basilisk",
-    "tags": [
-      "basilisk",
-      "dependencies"
-    ],
-    "summary": "Stale uv lock file",
-    "summaryHtml": "Stale uv lock file",
-    "body": [
-      {
-        "type": "text",
-        "html": "Fires when the <code>uv.lock</code> file is older than <code>pyproject.toml</code>, indicating that dependencies may have changed without re-locking. This can cause import resolution to use stale package versions."
-      },
-      {
-        "type": "text",
-        "html": "This rule currently provides the skeleton; it activates when the workspace provides lock-file staleness information via the resolver context."
-      }
-    ],
-    "group": "Warnings",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0013"
-  },
-  {
-    "code": "BSK-W0014",
-    "severity": "warning",
-    "provenance": "basilisk",
-    "tags": [
-      "basilisk",
-      "style",
-      "strictness"
-    ],
-    "summary": "Explicit `Any` annotation",
-    "summaryHtml": "Explicit <code>Any</code> annotation",
-    "body": [
-      {
-        "type": "text",
-        "html": "Emitted as a <code>Warning</code> when a function parameter or return annotation is written as <code>Any</code> (from <code>typing</code>). <code>Any</code> silences all type checking for the annotated value and should be used only when intentional."
-      },
-      {
-        "type": "text",
-        "html": "This is an opinionated <em>strictness nudge</em>, not a type-system requirement: the typing spec treats <code>Any</code> as a fully valid type. It is therefore a distinct (user-suppressible) code from the genuine return-type-mismatch error (returns_compatibility); the two used to share a code, so a user could not silence the style nudge while keeping the real type check. BSK-W0014 itself is never disabled for PEP conformance \u2014 like every rule it runs fully enabled during scoring; there is no &quot;spec-conformance mode&quot; that turns it off. See CHKARCH-CONFORMANCE-MODE."
-      },
-      {
-        "type": "code",
-        "lang": "python",
-        "code": "from typing import Any\n\ndef greet(name: Any) -> str: ...  # BSK-W0014 \u2014 parameter `name` is annotated Any\ndef parse(text: str) -> Any: ...  # BSK-W0014 \u2014 return annotation is Any\n\ndef greet(name: str) -> str: ...  # NO warning \u2014 concrete types"
-      }
-    ],
-    "group": "Warnings",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0014"
-  },
-  {
-    "code": "BSK-W0040",
-    "severity": "warning",
+    "code": "BSK-0040",
+    "scope": "analyze",
     "provenance": "basilisk",
     "tags": [
       "basilisk",
@@ -287,12 +244,12 @@
         "code": "# BAD (warning)\nf = lambda x: x + 1  # W: lambda assigned to unannotated variable 'f'\n\n# GOOD\nf: Callable[[int], int] = lambda x: x + 1  # OK: variable has type annotation"
       }
     ],
-    "group": "Warnings",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0040"
+    "group": "Missing Annotations",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0040"
   },
   {
-    "code": "BSK-W0050",
-    "severity": "warning",
+    "code": "BSK-0050",
+    "scope": "analyze",
     "provenance": "basilisk",
     "tags": [
       "basilisk",
@@ -309,53 +266,15 @@
       {
         "type": "code",
         "lang": "python",
-        "code": "x: int = 42        # BSK-W0050 \u2014 annotation is redundant\ny: str = \"hello\"   # BSK-W0050 \u2014 annotation is redundant\nz: float = 42      # NO warning \u2014 annotation adds information (widening)"
+        "code": "x: int = 42        # BSK-0050 \u2014 annotation is redundant\ny: str = \"hello\"   # BSK-0050 \u2014 annotation is redundant\nz: float = 42      # NO warning \u2014 annotation adds information (widening)"
       }
     ],
-    "group": "Warnings",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0050"
+    "group": "Redundancy",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0050"
   },
   {
-    "code": "BSK-W0061",
-    "severity": "warning",
-    "provenance": "basilisk",
-    "tags": [
-      "basilisk",
-      "suppressions"
-    ],
-    "summary": "Active blanket suppression",
-    "summaryHtml": "Active blanket suppression",
-    "body": [
-      {
-        "type": "text",
-        "html": "Reports a valid source directive that actively changes diagnostics without selecting individual Basilisk rule codes."
-      }
-    ],
-    "group": "Warnings",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0061"
-  },
-  {
-    "code": "BSK-W0062",
-    "severity": "warning",
-    "provenance": "basilisk",
-    "tags": [
-      "basilisk",
-      "suppressions"
-    ],
-    "summary": "Unused suppression directive",
-    "summaryHtml": "Unused suppression directive",
-    "body": [
-      {
-        "type": "text",
-        "html": "Reports a syntactically valid directive that matches no diagnostic or does not change the effective severity of anything it matches."
-      }
-    ],
-    "group": "Warnings",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-W0062"
-  },
-  {
-    "code": "BSK-I0060",
-    "severity": "info",
+    "code": "BSK-0060",
+    "scope": "analyze",
     "provenance": "basilisk",
     "tags": [
       "basilisk",
@@ -369,12 +288,93 @@
         "html": "Reports a valid source directive that names one or more Basilisk rules and actively suppresses a diagnostic or changes its effective severity."
       }
     ],
-    "group": "Information",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-I0060"
+    "group": "Suppressions",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0060"
+  },
+  {
+    "code": "BSK-0061",
+    "scope": "analyze",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "suppressions"
+    ],
+    "summary": "Active blanket suppression",
+    "summaryHtml": "Active blanket suppression",
+    "body": [
+      {
+        "type": "text",
+        "html": "Reports a valid source directive that actively changes diagnostics without selecting individual Basilisk rule codes."
+      }
+    ],
+    "group": "Suppressions",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0061"
+  },
+  {
+    "code": "BSK-0062",
+    "scope": "analyze",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "suppressions"
+    ],
+    "summary": "Unused suppression directive",
+    "summaryHtml": "Unused suppression directive",
+    "body": [
+      {
+        "type": "text",
+        "html": "Reports a syntactically valid directive that matches no diagnostic or does not change the effective severity of anything it matches."
+      }
+    ],
+    "group": "Suppressions",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0062"
+  },
+  {
+    "code": "BSK-0063",
+    "scope": "analyze",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "suppressions"
+    ],
+    "summary": "Malformed suppression directive",
+    "summaryHtml": "Malformed suppression directive",
+    "body": [
+      {
+        "type": "text",
+        "html": "Reports malformed directives, unknown Basilisk rule codes, conflicting directives, and unmatched block boundaries."
+      }
+    ],
+    "group": "Suppressions",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0063"
+  },
+  {
+    "code": "BSK-0152",
+    "scope": "analyze",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "stubs"
+    ],
+    "summary": "Missing type stubs for installed package",
+    "summaryHtml": "Missing type stubs for installed package",
+    "body": [
+      {
+        "type": "text",
+        "html": "Fires when a package is imported and resolves to a <code>.py</code> source file (not <code>.pyi</code>) without a <code>py.typed</code> marker. This means the package is installed but lacks type information, reducing type safety. This rule is off by default \u2014 the default configuration is pure PEP conformance \u2014 and a project opts in with an explicit <code>BSK-0152</code> severity. Once enabled, an untyped third-party import is a hard error; a project can soften it per import (<code># type: warningBSK-0152</code>) or globally (<code>&quot;BSK-0152&quot; = &quot;warning&quot;</code>) to use non-type-safe libraries at its own risk."
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "import flask  # E0152: Package 'flask' is installed but has no type stubs"
+      }
+    ],
+    "group": "Stubs",
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0152"
   },
   {
     "code": "aliases_implicit",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -402,7 +402,7 @@
   },
   {
     "code": "aliases_newtype",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -430,7 +430,7 @@
   },
   {
     "code": "aliases_recursive",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -454,7 +454,7 @@
   },
   {
     "code": "aliases_type_statement",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -478,7 +478,7 @@
   },
   {
     "code": "aliases_typealiastype",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -518,7 +518,7 @@
   },
   {
     "code": "annotations_forward_refs",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -554,7 +554,7 @@
   },
   {
     "code": "annotations_generators",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -586,7 +586,7 @@
   },
   {
     "code": "annotations_generators_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -610,7 +610,7 @@
   },
   {
     "code": "annotations_typeexpr",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -634,7 +634,7 @@
   },
   {
     "code": "assignment_compatibility",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep"
@@ -661,7 +661,7 @@
   },
   {
     "code": "callables_annotation",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -688,7 +688,7 @@
   },
   {
     "code": "callables_kwargs",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -707,7 +707,7 @@
   },
   {
     "code": "callables_protocol",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -726,7 +726,7 @@
   },
   {
     "code": "callables_protocol_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -745,7 +745,7 @@
   },
   {
     "code": "callables_subtyping",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -777,7 +777,7 @@
   },
   {
     "code": "calls_argument_count",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep"
@@ -804,7 +804,7 @@
   },
   {
     "code": "calls_argument_type",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep"
@@ -827,7 +827,7 @@
   },
   {
     "code": "classes_classvar",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -871,7 +871,7 @@
   },
   {
     "code": "classes_override",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -899,7 +899,7 @@
   },
   {
     "code": "classes_override_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -923,7 +923,7 @@
   },
   {
     "code": "classes_override_3",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -951,7 +951,7 @@
   },
   {
     "code": "constructors_call_init",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -990,7 +990,7 @@
   },
   {
     "code": "constructors_call_new",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1026,7 +1026,7 @@
   },
   {
     "code": "constructors_call_type",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1057,7 +1057,7 @@
   },
   {
     "code": "constructors_callable",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1098,7 +1098,7 @@
   },
   {
     "code": "dataclasses_frozen",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1122,7 +1122,7 @@
   },
   {
     "code": "dataclasses_hash",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1150,7 +1150,7 @@
   },
   {
     "code": "dataclasses_inheritance",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1174,7 +1174,7 @@
   },
   {
     "code": "dataclasses_kwonly",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1198,7 +1198,7 @@
   },
   {
     "code": "dataclasses_match_args",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1222,7 +1222,7 @@
   },
   {
     "code": "dataclasses_order",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1250,7 +1250,7 @@
   },
   {
     "code": "dataclasses_postinit",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1282,7 +1282,7 @@
   },
   {
     "code": "dataclasses_slots",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1306,7 +1306,7 @@
   },
   {
     "code": "dataclasses_transform_class",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1334,7 +1334,7 @@
   },
   {
     "code": "dataclasses_transform_meta",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1362,7 +1362,7 @@
   },
   {
     "code": "dataclasses_usage",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1386,7 +1386,7 @@
   },
   {
     "code": "dict_key_hashable",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep"
@@ -1409,7 +1409,7 @@
   },
   {
     "code": "directives_assert_type",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1432,7 +1432,7 @@
   },
   {
     "code": "directives_assert_type_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1456,7 +1456,7 @@
   },
   {
     "code": "directives_cast",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1479,7 +1479,7 @@
   },
   {
     "code": "directives_deprecated",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1503,7 +1503,7 @@
   },
   {
     "code": "directives_disjoint_base",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1531,7 +1531,7 @@
   },
   {
     "code": "directives_reveal_type",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1554,7 +1554,7 @@
   },
   {
     "code": "directives_version_platform",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1578,7 +1578,7 @@
   },
   {
     "code": "enums_behaviors",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1602,7 +1602,7 @@
   },
   {
     "code": "enums_definition",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1630,7 +1630,7 @@
   },
   {
     "code": "enums_expansion",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1654,7 +1654,7 @@
   },
   {
     "code": "enums_member_values",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1678,7 +1678,7 @@
   },
   {
     "code": "enums_members",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1706,7 +1706,7 @@
   },
   {
     "code": "enums_members_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1730,7 +1730,7 @@
   },
   {
     "code": "generics_base_class",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1749,7 +1749,7 @@
   },
   {
     "code": "generics_base_class_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1777,7 +1777,7 @@
   },
   {
     "code": "generics_base_class_3",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1801,7 +1801,7 @@
   },
   {
     "code": "generics_basic",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1820,7 +1820,7 @@
   },
   {
     "code": "generics_basic_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1844,7 +1844,7 @@
   },
   {
     "code": "generics_basic_3",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1875,7 +1875,7 @@
   },
   {
     "code": "generics_defaults",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1902,7 +1902,7 @@
   },
   {
     "code": "generics_defaults_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1934,7 +1934,7 @@
   },
   {
     "code": "generics_defaults_referential",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1962,7 +1962,7 @@
   },
   {
     "code": "generics_defaults_referential_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -1990,7 +1990,7 @@
   },
   {
     "code": "generics_defaults_specialization",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2022,7 +2022,7 @@
   },
   {
     "code": "generics_scoping",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2050,7 +2050,7 @@
   },
   {
     "code": "generics_self_attributes",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2078,7 +2078,7 @@
   },
   {
     "code": "generics_self_basic",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2110,7 +2110,7 @@
   },
   {
     "code": "generics_self_protocols",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2134,7 +2134,7 @@
   },
   {
     "code": "generics_self_usage",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2170,7 +2170,7 @@
   },
   {
     "code": "generics_syntax_compatibility",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2194,7 +2194,7 @@
   },
   {
     "code": "generics_syntax_declarations",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2218,7 +2218,7 @@
   },
   {
     "code": "generics_syntax_declarations_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2242,7 +2242,7 @@
   },
   {
     "code": "generics_syntax_scoping",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2274,7 +2274,7 @@
   },
   {
     "code": "generics_type_erasure",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2298,7 +2298,7 @@
   },
   {
     "code": "generics_typevartuple_args",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2322,7 +2322,7 @@
   },
   {
     "code": "generics_typevartuple_basic",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2350,7 +2350,7 @@
   },
   {
     "code": "generics_typevartuple_basic_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2374,7 +2374,7 @@
   },
   {
     "code": "generics_typevartuple_basic_3",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2398,7 +2398,7 @@
   },
   {
     "code": "generics_typevartuple_callable",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2422,7 +2422,7 @@
   },
   {
     "code": "generics_typevartuple_specialization",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2446,7 +2446,7 @@
   },
   {
     "code": "generics_typevartuple_specialization_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2483,7 +2483,7 @@
   },
   {
     "code": "generics_typevartuple_unpack",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2507,7 +2507,7 @@
   },
   {
     "code": "generics_upper_bound",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2531,7 +2531,7 @@
   },
   {
     "code": "generics_upper_bound_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2555,7 +2555,7 @@
   },
   {
     "code": "generics_variance",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2579,7 +2579,7 @@
   },
   {
     "code": "generics_variance_inference",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2606,7 +2606,7 @@
   },
   {
     "code": "historical_positional",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2642,7 +2642,7 @@
   },
   {
     "code": "imports_module_attribute",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep"
@@ -2673,7 +2673,7 @@
   },
   {
     "code": "imports_unresolved",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep"
@@ -2695,7 +2695,7 @@
   },
   {
     "code": "literals_literalstring",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2727,7 +2727,7 @@
   },
   {
     "code": "literals_parameterizations",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2750,7 +2750,7 @@
   },
   {
     "code": "literals_parameterizations_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2774,7 +2774,7 @@
   },
   {
     "code": "literals_semantics",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2798,7 +2798,7 @@
   },
   {
     "code": "literals_semantics_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2830,7 +2830,7 @@
   },
   {
     "code": "match_exhaustiveness",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep"
@@ -2852,7 +2852,7 @@
   },
   {
     "code": "namedtuples_define_class",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2887,7 +2887,7 @@
   },
   {
     "code": "namedtuples_define_functional",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2919,7 +2919,7 @@
   },
   {
     "code": "namedtuples_type_compat",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2947,7 +2947,7 @@
   },
   {
     "code": "namedtuples_usage",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -2975,7 +2975,7 @@
   },
   {
     "code": "names_unbound",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep"
@@ -2998,7 +2998,7 @@
   },
   {
     "code": "names_undefined",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep"
@@ -3021,7 +3021,7 @@
   },
   {
     "code": "narrowing_typeguard",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3040,7 +3040,7 @@
   },
   {
     "code": "narrowing_typeis",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3064,7 +3064,7 @@
   },
   {
     "code": "narrowing_typeis_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3083,7 +3083,7 @@
   },
   {
     "code": "overloads_basic",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3107,7 +3107,7 @@
   },
   {
     "code": "overloads_consistency",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3130,7 +3130,7 @@
   },
   {
     "code": "overloads_consistency_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3153,7 +3153,7 @@
   },
   {
     "code": "overloads_consistency_3",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3176,7 +3176,7 @@
   },
   {
     "code": "overloads_definitions",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3199,7 +3199,7 @@
   },
   {
     "code": "overloads_evaluation",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3223,7 +3223,7 @@
   },
   {
     "code": "protocols_class_objects",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3251,7 +3251,7 @@
   },
   {
     "code": "protocols_class_objects_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3283,7 +3283,7 @@
   },
   {
     "code": "protocols_definition",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3311,7 +3311,7 @@
   },
   {
     "code": "protocols_definition_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3347,7 +3347,7 @@
   },
   {
     "code": "protocols_explicit",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3371,7 +3371,7 @@
   },
   {
     "code": "protocols_explicit_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3395,7 +3395,7 @@
   },
   {
     "code": "protocols_explicit_3",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3419,7 +3419,7 @@
   },
   {
     "code": "protocols_generic",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3459,7 +3459,7 @@
   },
   {
     "code": "protocols_merging",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3483,7 +3483,7 @@
   },
   {
     "code": "protocols_modules",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3515,7 +3515,7 @@
   },
   {
     "code": "protocols_runtime_checkable",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3539,7 +3539,7 @@
   },
   {
     "code": "protocols_runtime_checkable_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3563,7 +3563,7 @@
   },
   {
     "code": "protocols_subtyping",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3587,7 +3587,7 @@
   },
   {
     "code": "protocols_variance",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3614,7 +3614,7 @@
   },
   {
     "code": "protocols_variance_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3642,7 +3642,7 @@
   },
   {
     "code": "qualifiers_annotated",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3674,7 +3674,7 @@
   },
   {
     "code": "qualifiers_annotated_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3698,7 +3698,7 @@
   },
   {
     "code": "qualifiers_final_annotation",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3734,7 +3734,7 @@
   },
   {
     "code": "qualifiers_final_annotation_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3789,7 +3789,7 @@
   },
   {
     "code": "qualifiers_final_decorator",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3820,7 +3820,7 @@
   },
   {
     "code": "returns_compatibility",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep"
@@ -3843,7 +3843,7 @@
   },
   {
     "code": "returns_compatibility_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep"
@@ -3861,7 +3861,7 @@
   },
   {
     "code": "specialtypes_never",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3901,7 +3901,7 @@
   },
   {
     "code": "specialtypes_never_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3929,7 +3929,7 @@
   },
   {
     "code": "specialtypes_promotions",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3957,7 +3957,7 @@
   },
   {
     "code": "specialtypes_type",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -3992,7 +3992,7 @@
   },
   {
     "code": "tuples_index",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4025,7 +4025,7 @@
   },
   {
     "code": "tuples_index_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4049,7 +4049,7 @@
   },
   {
     "code": "tuples_type_compat",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4089,7 +4089,7 @@
   },
   {
     "code": "tuples_type_form",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4117,7 +4117,7 @@
   },
   {
     "code": "tuples_type_form_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4145,7 +4145,7 @@
   },
   {
     "code": "typeddicts_alt_syntax",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4168,7 +4168,7 @@
   },
   {
     "code": "typeddicts_class_syntax",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4187,7 +4187,7 @@
   },
   {
     "code": "typeddicts_class_syntax_2",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4210,7 +4210,7 @@
   },
   {
     "code": "typeddicts_extra_items",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4229,7 +4229,7 @@
   },
   {
     "code": "typeddicts_inheritance",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4260,7 +4260,7 @@
   },
   {
     "code": "typeddicts_operations",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4288,7 +4288,7 @@
   },
   {
     "code": "typeddicts_readonly",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4312,7 +4312,7 @@
   },
   {
     "code": "typeddicts_required",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4348,7 +4348,7 @@
   },
   {
     "code": "typeddicts_usage",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep",
@@ -4376,7 +4376,7 @@
   },
   {
     "code": "version_target_syntax",
-    "severity": "error",
+    "scope": "check",
     "provenance": "pep",
     "tags": [
       "pep"

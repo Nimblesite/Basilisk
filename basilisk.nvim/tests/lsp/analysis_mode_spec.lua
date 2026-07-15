@@ -24,7 +24,7 @@ describe("analysis mode", function()
     -- harness fixture (ws_test_common.rs).
     local fh = io.open(tmpdir .. "/pyproject.toml", "w")
     fh:write('[project]\nname = "test"\nversion = "0.1.0"\n')
-    fh:write('\n[tool.basilisk.rules]\n"BSK-E0001" = "error"\n"BSK-E0002" = "error"\n')
+    fh:write('\n[tool.basilisk.rules]\n"BSK-0001" = "error"\n"BSK-0002" = "error"\n')
     fh:close()
   end)
 

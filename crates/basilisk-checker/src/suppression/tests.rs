@@ -48,7 +48,7 @@ fn parse_type_disabled_and_info() {
 #[test]
 fn two_type_directives_on_one_line_are_both_parsed() {
     let source =
-        "x: int = \"hi\"  # type: ignore[BSK-E9999]  # type: warning[assignment_compatibility]\n";
+        "x: int = \"hi\"  # type: ignore[BSK-9999]  # type: warning[assignment_compatibility]\n";
     let overrides = parse_source_overrides(source);
     let line = overrides
         .line_overrides
@@ -58,7 +58,7 @@ fn two_type_directives_on_one_line_are_both_parsed() {
         .collect::<Vec<_>>();
     assert_eq!(line.len(), 2);
     assert!(line.iter().any(|line_override| {
-        line_override.mode == RuleMode::Ignore && line_override.codes == ["BSK-E9999"]
+        line_override.mode == RuleMode::Ignore && line_override.codes == ["BSK-9999"]
     }));
     assert!(line.iter().any(|line_override| {
         line_override.mode == RuleMode::Warning

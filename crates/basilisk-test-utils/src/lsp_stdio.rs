@@ -33,7 +33,7 @@ pub struct LspStdioFixture {
     /// Temp workspace root opened during initialize. It ships a `pyproject.toml`
     /// whose `[tool.basilisk.rules]` opts into the annotation house rules (off
     /// by default — the default config is pure PEP conformance). Documents fall
-    /// back to this root's config, so house diagnostics (`BSK-E0001` …) fire
+    /// back to this root's config, so house diagnostics (`BSK-0001` …) fire
     /// exactly as they do for a project that enabled them. No modes;
     /// configuration. See [CHKARCH-CONFIGURATION-ONLY].
     pub workspace_root: std::path::PathBuf,
@@ -126,11 +126,11 @@ impl LspStdioFixture {
             workspace_root.join("pyproject.toml"),
             concat!(
                 "[tool.basilisk.rules]\n",
-                "\"BSK-E0001\" = \"error\"\n",
-                "\"BSK-E0002\" = \"error\"\n",
-                "\"BSK-E0003\" = \"error\"\n",
-                "\"BSK-E0005\" = \"error\"\n",
-                "\"BSK-W0050\" = \"warning\"\n"
+                "\"BSK-0001\" = \"error\"\n",
+                "\"BSK-0002\" = \"error\"\n",
+                "\"BSK-0003\" = \"error\"\n",
+                "\"BSK-0005\" = \"error\"\n",
+                "\"BSK-0050\" = \"warning\"\n"
             ),
         )?;
 

@@ -122,8 +122,8 @@ warnings tell you strictness isn't at full yet:
 ```toml
 # pyproject.toml
 [tool.basilisk.rules]
-"BSK-E0001" = "warning"  # every parameter needs a type annotation
-"BSK-E0002" = "warning"  # every function needs a return type
+"BSK-0001" = "warning"  # every parameter needs a type annotation
+"BSK-0002" = "warning"  # every function needs a return type
 ```
 
 Add an unannotated function to `good.py`:
@@ -134,7 +134,7 @@ def process(data):
 ```
 
 ```
-warning[BSK-E0001]: Missing parameter type annotation for `data`
+warning[BSK-0001]: Missing parameter type annotation for `data`
   --> good.py:15:13
    |
 15 | def process(data):
@@ -142,9 +142,9 @@ warning[BSK-E0001]: Missing parameter type annotation for `data`
    |
    = help: Add a type annotation: `data: <type>`
    = note: In Basilisk, all function parameters require explicit types
-   = see: https://www.basilisk-python.dev/errors/BSK-E0001
+   = see: https://www.basilisk-python.dev/errors/BSK-0001
 
-warning[BSK-E0002]: Missing return type annotation for function `process`
+warning[BSK-0002]: Missing return type annotation for function `process`
   --> good.py:15:5
    |
 15 | def process(data):
@@ -152,7 +152,7 @@ warning[BSK-E0002]: Missing return type annotation for function `process`
    |
    = help: Add a return type: `def process(...) -> <type>:`
    = note: In Basilisk, all functions require an explicit return type
-   = see: https://www.basilisk-python.dev/errors/BSK-E0002
+   = see: https://www.basilisk-python.dev/errors/BSK-0002
 
 Found 2 diagnostics (0 errors).
 ```
@@ -215,7 +215,7 @@ error[calls_argument_type]: Argument `name` of `greet` expects `str`…
 
 - **`error[rule_code]`** — severity plus the rule that fired. PEP typing-spec
   rules use descriptive codes (`calls_argument_type`); Basilisk's opt-in
-  strictness rules use `BSK-` codes (`BSK-E0001`)
+  strictness rules use `BSK-` codes (`BSK-0001`)
 - **`-->`** — location in your file
 - **`^^^^`** — exactly which token caused the diagnostic
 - **`= help:`** — the specific change that will fix it

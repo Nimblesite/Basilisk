@@ -34,13 +34,13 @@ import {
 /** Time (ms) to wait for re-diagnosis after applying edits. */
 const RECHECK_WAIT_MS = 3_000;
 
-/** Filter diagnostics to only BSK-W0050 (redundant annotation). */
+/** Filter diagnostics to only BSK-0050 (redundant annotation). */
 function filterW0050(diagnostics: vscode.Diagnostic[]): vscode.Diagnostic[] {
     return diagnostics.filter((d) => {
         if (typeof d.code === 'object' && d.code !== null && 'value' in d.code) {
-            return d.code.value === 'BSK-W0050';
+            return d.code.value === 'BSK-0050';
         }
-        return typeof d.code === 'string' && d.code === 'BSK-W0050';
+        return typeof d.code === 'string' && d.code === 'BSK-0050';
     });
 }
 
@@ -81,7 +81,7 @@ suite('LSP Fix-All Tests', () => {
         const w0050 = filterW0050(diagnostics);
         assert.ok(
             w0050.length > 0,
-            `Expected BSK-W0050 diagnostic for redundant annotation, ` +
+            `Expected BSK-0050 diagnostic for redundant annotation, ` +
             `got: ${diagnostics.map((d) => JSON.stringify(d.code)).join(', ')}`
         );
 
@@ -163,7 +163,7 @@ suite('LSP Fix-All Tests', () => {
         const w0050s = filterW0050(diagnostics);
         assert.ok(
             w0050s.length >= 2,
-            `Expected at least 2 BSK-W0050 diagnostics, got ${w0050s.length}`
+            `Expected at least 2 BSK-0050 diagnostics, got ${w0050s.length}`
         );
 
         // Execute fixFile — should fix both in one action.
