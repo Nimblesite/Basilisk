@@ -55,7 +55,7 @@ Basilisk 的默认*就是* Python 类型规范——完全符合 PEP，没有要
 
 这不是为了让 Python 开发人员的生活更艰难。这是为了让安全路径触手可及。符合规范的基线就是默认；而当团队决定想要更严格的检查时，它随时都在——在配置中开启，按项目或路径限定，绝不强加。
 
-为现有代码库开启这种更严格的检查确实需要工作——但这是暴露真实错误的工作。开启 Basilisk 的注解规则后，每个 BSK-E0001 都是一个从未定义类型契约的函数。一个非穷举的 `match` 就是一个被静默忽略的情况。这些不是误报——它们是类型系统未被使用的地方。
+为现有代码库开启这种更严格的检查确实需要工作——但这是暴露真实错误的工作。开启 Basilisk 的注解规则后，每个 BSK-0001 都是一个从未定义类型契约的函数。一个非穷举的 `match` 就是一个被静默忽略的情况。这些不是误报——它们是类型系统未被使用的地方。
 
 ## 为什么选择 Rust
 
@@ -97,13 +97,16 @@ Basilisk (alpha) 实现了七阶段路线图的前两个阶段。
 ## 试用
 
 ```bash
+brew tap Nimblesite/tap && brew install basilisk   # Scoop 和二进制文件：参见安装文档
+
 git clone https://github.com/Nimblesite/Basilisk
-cd basilisk
-cargo build --release
-./target/release/basilisk check examples/bad.py
+cd Basilisk
+basilisk check examples/bad.py
 ```
 
-如果您想看到诊断的实际效果，存储库包含 `examples/bad.py`（含有意的错误）、`examples/good.py`（干净的）和 `examples/mixed.py`（现实的混合情况）。
+或者完全跳过 CLI——VS Code 扩展内置了该二进制文件。所有安装方式见[安装文档](/zh/docs/installation/)。
+
+如果您想看到诊断的实际效果，存储库包含 `examples/bad.py`（每个错误都是真实的类型规范违反）、`examples/good.py`（干净的）和 `examples/mixed.py`（现实的混合情况）。
 
 在 [GitHub](https://github.com/Nimblesite/Basilisk/issues) 上提交问题。如果您想了解完整设计，规范在 `SPEC.md` 中。
 

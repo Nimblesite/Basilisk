@@ -199,9 +199,9 @@ fn test_zed_diagnostics_on_open() -> TestResult<()> {
         .wait_for_diagnostics()
         .ok_or("no diagnostics received")?;
 
-    // Must report missing type annotations (BSK-E0001 and BSK-E0002).
-    assert!(diag.contains("BSK-E0001"), "missing param type: {diag}");
-    assert!(diag.contains("BSK-E0002"), "missing return type: {diag}");
+    // Must report missing type annotations (BSK-0001 and BSK-0002).
+    assert!(diag.contains("BSK-0001"), "missing param type: {diag}");
+    assert!(diag.contains("BSK-0002"), "missing return type: {diag}");
 
     Ok(())
 }

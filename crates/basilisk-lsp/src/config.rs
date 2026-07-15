@@ -3,8 +3,8 @@
 //! Workspace configuration reader.
 //!
 //! Parses `pyrightconfig.json` and `pyproject.toml` `[tool.basilisk]` /
-//! `[tool.pyright]` sections to configure strictness, include/exclude paths,
-//! and Python version.
+//! `[tool.pyright]` sections to configure include/exclude paths, import
+//! resolution, and Python version. Rule strictness lives in rule configuration.
 
 use std::path::{Path, PathBuf};
 
@@ -90,8 +90,6 @@ pub struct WorkspaceConfig {
     pub exclude: Vec<PathBuf>,
     /// Extra paths for module resolution (e.g. `src/`).
     pub extra_paths: Vec<PathBuf>,
-    /// Strictness level.
-    pub strict: bool,
     /// Venv path for resolving third-party packages.
     pub venv_path: Option<PathBuf>,
     /// The venv name within `venv_path`.
@@ -121,7 +119,6 @@ impl Default for WorkspaceConfig {
             include: Vec::new(),
             exclude: Vec::new(),
             extra_paths: Vec::new(),
-            strict: true, // Basilisk is strict-by-default
             venv_path: None,
             venv: None,
             analysis_mode: AnalysisMode::WholeModule,
@@ -136,9 +133,8 @@ impl Default for WorkspaceConfig {
 /// Load workspace configuration from the given root directory.
 ///
 /// Searches for (in priority order):
-/// 1. `basilisk.json`
-/// 2. `pyrightconfig.json`
-/// 3. `pyproject.toml` `[tool.basilisk]` or `[tool.pyright]`
+/// 1. `pyrightconfig.json` (pyright compatibility)
+/// 2. `pyproject.toml` `[tool.basilisk]` or `[tool.pyright]`
 ///
 /// Returns `Default` if no config file is found.
 ///
@@ -214,15 +210,7 @@ pub fn load_format_style(root: &Path) -> FormatStyle {
 
 /// Parse the config file without post-processing the resulting paths.
 fn load_config_raw(root: &Path) -> WorkspaceConfig {
-    // 1. basilisk.json
-    let basilisk_json = root.join("basilisk.json");
-    if basilisk_json.is_file() {
-        if let Some(cfg) = load_json_config(&basilisk_json) {
-            return cfg;
-        }
-    }
-
-    // 2. pyrightconfig.json
+    // 1. pyrightconfig.json (pyright compatibility)
     let pyright_json = root.join("pyrightconfig.json");
     if pyright_json.is_file() {
         if let Some(cfg) = load_json_config(&pyright_json) {
@@ -230,18 +218,10 @@ fn load_config_raw(root: &Path) -> WorkspaceConfig {
         }
     }
 
-    // 3. pyproject.toml — look for [tool.basilisk] or [tool.pyright]
+    // 2. pyproject.toml — [tool.basilisk] or, failing that, [tool.pyright]
     let pyproject = root.join("pyproject.toml");
     if pyproject.is_file() {
-        if let Some(mut cfg) = load_pyproject_config(&pyproject) {
-            // `load_pyproject_config` is a line scanner that cannot parse TOML
-            // arrays (and mishandles inline comments), so `stub-paths` was
-            // silently dropped (issue #173). Delegate the path fields to the
-            // canonical toml-crate parser in `basilisk-config`, which reads the
-            // same `[tool.basilisk]` section correctly.
-            let bcfg = basilisk_config::load_basilisk_config(root);
-            cfg.stub_paths = bcfg.stub_paths;
-            cfg.typeshed_path = bcfg.typeshed_path;
+        if let Some(cfg) = load_pyproject_config(&pyproject) {
             return cfg;
         }
     }
@@ -256,7 +236,7 @@ fn json_path_list(arr: &[serde_json::Value]) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Parse a JSON config file (basilisk.json or pyrightconfig.json).
+/// Parse a `pyrightconfig.json` compatibility config file.
 fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
     let content = std::fs::read_to_string(path).ok()?;
     let json: serde_json::Value = serde_json::from_str(&content).ok()?;
@@ -278,9 +258,6 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
     }
     if let Some(arr) = obj.get("extraPaths").and_then(|v| v.as_array()) {
         cfg.extra_paths = json_path_list(arr);
-    }
-    if let Some(v) = obj.get("typeCheckingMode").and_then(|v| v.as_str()) {
-        cfg.strict = v == "strict" || v == "all";
     }
     if let Some(v) = obj.get("venvPath").and_then(|v| v.as_str()) {
         cfg.venv_path = Some(PathBuf::from(v));
@@ -312,76 +289,80 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
     Some(cfg)
 }
 
-/// Parse pyproject.toml for `[tool.basilisk]` or `[tool.pyright]` config.
+/// Parse pyproject.toml for `[tool.basilisk]` or, failing that, `[tool.pyright]`
+/// (pyright compatibility) analysis settings.
 ///
-/// This is a minimal TOML parser — we only extract the fields we care about
-/// from the raw JSON structure produced by `serde_json` after converting the
-/// relevant TOML section. For a proper implementation, a TOML crate would be
-/// used, but we avoid adding dependencies for now.
+/// Uses the real `toml` parser, so array-valued fields (`include`, `exclude`,
+/// `extra-paths`, `stub-paths`) parse correctly — the previous line scanner
+/// silently dropped them (issue #173).
 fn load_pyproject_config(path: &Path) -> Option<WorkspaceConfig> {
     let content = std::fs::read_to_string(path).ok()?;
+    let table: toml::Table = content.parse().ok()?;
+    let tool = table.get("tool")?.as_table()?;
+    let section = tool
+        .get("basilisk")
+        .or_else(|| tool.get("pyright"))?
+        .as_table()?;
+    Some(workspace_config_from_toml(section))
+}
 
-    // Minimal extraction: find [tool.basilisk] or [tool.pyright] section.
-    // We look for key = value pairs after the section header.
-    let section_name = if content.contains("[tool.basilisk]") {
-        "[tool.basilisk]"
-    } else if content.contains("[tool.pyright]") {
-        "[tool.pyright]"
-    } else {
-        return None;
-    };
-
-    let section_start = content.find(section_name)?;
-    let after_header = &content[section_start + section_name.len()..];
-
-    // Extract lines until the next section header.
+/// Map one `[tool.basilisk]` / `[tool.pyright]` table onto a `WorkspaceConfig`.
+///
+/// Accepts Basilisk's kebab-case spellings and pyright's camelCase equivalents.
+fn workspace_config_from_toml(section: &toml::Table) -> WorkspaceConfig {
     let mut cfg = WorkspaceConfig::default();
-    for line in after_header.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with('[') {
-            break; // next section
-        }
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        if let Some((key, value)) = trimmed.split_once('=') {
-            let key = key.trim();
-            let value = value.trim().trim_matches('"');
-            match key {
-                "pythonVersion" | "python_version" => {
-                    cfg.python_version = Some(value.to_owned());
-                }
-                "pythonPlatform" | "python_platform" => {
-                    cfg.python_platform = Some(value.to_owned());
-                }
-                "typeCheckingMode" | "type_checking_mode" => {
-                    cfg.strict = value == "strict" || value == "all";
-                }
-                "venvPath" | "venv_path" => {
-                    cfg.venv_path = Some(PathBuf::from(value));
-                }
-                "venv" => {
-                    cfg.venv = Some(value.to_owned());
-                }
-                "analysisMode" | "analysis_mode" => {
-                    cfg.analysis_mode = AnalysisMode::parse(value);
-                }
-                "formatter" => {
-                    cfg.formatter = FormatterEngine::parse(value);
-                }
-                "stubPaths" | "stub_paths" | "stub-paths" => {
-                    // Simple single-value handling; array parsing requires TOML crate.
-                    cfg.stub_paths.push(PathBuf::from(value));
-                }
-                "typeshedPath" | "typeshed_path" | "typeshed-path" => {
-                    cfg.typeshed_path = Some(PathBuf::from(value));
-                }
-                _ => {}
-            }
-        }
+    if let Some(v) = toml_str(section, &["python-version", "pythonVersion"]) {
+        cfg.python_version = Some(v.to_owned());
     }
+    if let Some(v) = toml_str(section, &["python-platform", "pythonPlatform"]) {
+        cfg.python_platform = Some(v.to_owned());
+    }
+    if let Some(paths) = toml_paths(section, &["include"]) {
+        cfg.include = paths;
+    }
+    if let Some(paths) = toml_paths(section, &["exclude"]) {
+        cfg.exclude = paths;
+    }
+    if let Some(paths) = toml_paths(section, &["extra-paths", "extraPaths"]) {
+        cfg.extra_paths = paths;
+    }
+    if let Some(v) = toml_str(section, &["venv-path", "venvPath"]) {
+        cfg.venv_path = Some(PathBuf::from(v));
+    }
+    if let Some(v) = toml_str(section, &["venv"]) {
+        cfg.venv = Some(v.to_owned());
+    }
+    if let Some(v) = toml_str(section, &["analysis-mode", "analysisMode"]) {
+        cfg.analysis_mode = AnalysisMode::parse(v);
+    }
+    if let Some(v) = toml_str(section, &["formatter"]) {
+        cfg.formatter = FormatterEngine::parse(v);
+    }
+    if let Some(paths) = toml_paths(section, &["stub-paths", "stubPaths"]) {
+        cfg.stub_paths = paths;
+    }
+    if let Some(v) = toml_str(section, &["typeshed-path", "typeshedPath"]) {
+        cfg.typeshed_path = Some(PathBuf::from(v));
+    }
+    cfg
+}
 
-    Some(cfg)
+/// First string value found among the given key spellings.
+fn toml_str<'a>(table: &'a toml::Table, keys: &[&str]) -> Option<&'a str> {
+    keys.iter()
+        .find_map(|key| table.get(*key).and_then(toml::Value::as_str))
+}
+
+/// First array value found among the given key spellings, as `PathBuf`s.
+fn toml_paths(table: &toml::Table, keys: &[&str]) -> Option<Vec<PathBuf>> {
+    let arr = keys
+        .iter()
+        .find_map(|key| table.get(*key).and_then(toml::Value::as_array))?;
+    Some(
+        arr.iter()
+            .filter_map(|v| v.as_str().map(PathBuf::from))
+            .collect(),
+    )
 }
 
 #[cfg(test)]
@@ -396,7 +377,6 @@ mod tests {
     fn test_default_config() {
         let cfg = WorkspaceConfig::default();
         assert_eq!(cfg.python_version.as_deref(), Some("3.12"));
-        assert!(cfg.strict);
         assert!(cfg.include.is_empty());
         assert!(cfg.exclude.is_empty());
         assert!(cfg.typeshed_path.is_none());
@@ -411,7 +391,6 @@ mod tests {
             &config_path,
             r#"{
                 "pythonVersion": "3.11",
-                "typeCheckingMode": "basic",
                 "include": ["src"],
                 "exclude": ["tests", "build"],
                 "extraPaths": ["vendor"]
@@ -421,7 +400,6 @@ mod tests {
 
         let cfg = load_json_config(&config_path).unwrap();
         assert_eq!(cfg.python_version.as_deref(), Some("3.11"));
-        assert!(!cfg.strict);
         assert_eq!(cfg.include, vec![PathBuf::from("src")]);
         assert_eq!(
             cfg.exclude,
@@ -438,7 +416,6 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let cfg = load_config(&dir);
         assert_eq!(cfg.python_version.as_deref(), Some("3.12"));
-        assert!(cfg.strict);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -482,11 +459,76 @@ mod tests {
     fn test_load_typeshed_path_from_json() {
         let dir = std::env::temp_dir().join("basilisk_cfg_typeshed_json");
         std::fs::create_dir_all(&dir).unwrap();
-        let config_path = dir.join("basilisk.json");
+        let config_path = dir.join("pyrightconfig.json");
         std::fs::write(&config_path, r#"{ "typeshedPath": "ts" }"#).unwrap();
 
         let cfg = load_json_config(&config_path).unwrap();
         assert_eq!(cfg.typeshed_path, Some(PathBuf::from("ts")));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // The pyproject loader uses the real `toml` parser, so array-valued fields
+    // like `include` / `exclude` / `stub-paths` under `[tool.basilisk]` parse
+    // correctly — the previous line scanner silently dropped them (issue #173).
+    #[test]
+    fn test_load_pyproject_basilisk_arrays() {
+        let dir = std::env::temp_dir().join("basilisk_cfg_pyproject_arrays");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            concat!(
+                "[tool.basilisk]\n",
+                "python-version = \"3.11\"\n",
+                "include = [\"src\", \"tools\"]\n",
+                "exclude = [\"**/generated/**\", \"*.pb.py\"]\n",
+                "extra-paths = [\"vendor\"]\n",
+                "stub-paths = [\"stubs\", \"more-stubs\"]\n",
+            ),
+        )
+        .unwrap();
+
+        let cfg = load_config(&dir);
+        assert_eq!(cfg.python_version.as_deref(), Some("3.11"));
+        assert_eq!(
+            cfg.include,
+            vec![PathBuf::from("src"), PathBuf::from("tools")]
+        );
+        assert_eq!(
+            cfg.exclude,
+            vec![PathBuf::from("**/generated/**"), PathBuf::from("*.pb.py")]
+        );
+        assert_eq!(cfg.extra_paths, vec![PathBuf::from("vendor")]);
+        // Relative stub paths resolve against the workspace root.
+        assert_eq!(
+            cfg.stub_paths,
+            vec![dir.join("stubs"), dir.join("more-stubs")]
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // `[tool.pyright]` (camelCase spellings) is the compatibility fallback when
+    // no `[tool.basilisk]` table exists.
+    #[test]
+    fn test_load_pyproject_pyright_fallback() {
+        let dir = std::env::temp_dir().join("basilisk_cfg_pyproject_pyright");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            concat!(
+                "[tool.pyright]\n",
+                "pythonVersion = \"3.10\"\n",
+                "exclude = [\"build\"]\n",
+                "extraPaths = [\"vendor\"]\n",
+            ),
+        )
+        .unwrap();
+
+        let cfg = load_config(&dir);
+        assert_eq!(cfg.python_version.as_deref(), Some("3.10"));
+        assert_eq!(cfg.exclude, vec![PathBuf::from("build")]);
+        assert_eq!(cfg.extra_paths, vec![PathBuf::from("vendor")]);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

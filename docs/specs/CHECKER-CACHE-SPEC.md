@@ -94,13 +94,18 @@ and the documentation must say so plainly.
 
 ## `CHKCACHE-READSET` — Capturing the exact read-set {#CHKCACHE-READSET}
 
+### Tracked filesystem reads {#CHKCACHE-READSET-FS}
+
 All checker file reads go through `basilisk_parser::parse_file` (target +
 imported `.py` sources) and `basilisk_stubs::parse_pyi_file` (`.pyi` stubs), both
-routing `read_to_string` through `basilisk_common::fs::read_tracked`
-(`CHKCACHE-READSET-FS`). When a thread-local `ReadRecorder` is active, every read
-records `(canonical_path, content_hash)`. The recorder is an RAII guard
-(`CHKCACHE-READSET-GUARD`): inert when absent (zero behaviour change for the LSP
-and non-cached CLI runs), active only during a cached check.
+routing `read_to_string` through `basilisk_common::fs::read_tracked`. When a
+thread-local `ReadRecorder` is active, every read records
+`(canonical_path, content_hash)`.
+
+### Recorder guard {#CHKCACHE-READSET-GUARD}
+
+The recorder is an RAII guard: inert when absent (zero behaviour change for the
+LSP and non-cached CLI runs), active only during a cached check.
 
 ---
 
@@ -123,11 +128,17 @@ Each entry stores:
 
 - `version`, `config_hash`, `env_hash`
 - `deps`: `[(canonical_path, content_hash)]` (includes the target)
-- `diagnostics`: `[CachedDiagnostic]` — an owned, serde projection of
-  `Diagnostic` (`CHKCACHE-DIAG`). `docs_url` is **not** stored: it is rebuilt
-  deterministically from the code. On replay, the `&'static` `code`/`docs_url`
-  are produced via a bounded process-wide interner (`CHKCACHE-DIAG-INTERN`,
-  ≤ one entry per distinct BSK code).
+- `diagnostics`: `[CachedDiagnostic]`, described below.
+
+### Diagnostic projection {#CHKCACHE-DIAG}
+
+`CachedDiagnostic` is an owned serde projection of `Diagnostic`. `docs_url` is not stored; it
+is rebuilt deterministically from the code.
+
+#### Bounded code interning {#CHKCACHE-DIAG-INTERN}
+
+On replay, the `&'static` code/docs URL values come from a bounded process-wide interner with
+at most one entry per distinct Basilisk code.
 
 A lookup loads the entry, checks `version`/`config_hash`/`env_hash`, then
 re-hashes every `deps` path against its stored hash. All match ⟹ HIT.

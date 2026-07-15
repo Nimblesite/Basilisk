@@ -5,6 +5,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const defaultWorkspace = path.join(__dirname, 'test-fixtures', 'workspace');
+const screenshotWorkspace = process.env.BASILISK_SCREENSHOT_WORKSPACE;
+const workspaceFolder = process.env.BASILISK_SCREENSHOTS && screenshotWorkspace
+    ? path.resolve(screenshotWorkspace)
+    : defaultWorkspace;
 
 // VS Code listens on a Unix socket inside the user-data dir; macOS caps
 // AF_UNIX socket paths at 104 bytes ("IPC handle longer than 103 chars").
@@ -24,7 +29,7 @@ export default defineConfig({
         // Open the test-fixtures/workspace so the LSP server gets a rootUri.
         // This enables whole-module analysis tests that write Python files to the
         // workspace root without opening them in the editor.
-        workspaceFolder: path.join(__dirname, 'test-fixtures', 'workspace'),
+        workspaceFolder,
         launchArgs: [
             '--disable-extensions',
             '--user-data-dir', userDataDir,

@@ -5,7 +5,7 @@ Code here must comfortably pass review at a top-tier engineering org. Keep quali
 
 ⚠️ The conformance test suite is the **single source of all authority**: https://github.com/python/typing/tree/main/conformance/tests. Conformance is measured ONLY by how accurately Basilisk passes these tests — nothing else. ⚠️
 
-⚠️ Disabling, deleting, or unregistering ANY conformance rule is FORBIDDEN. Move the number by FIXING the checker, NEVER by touching the scoreboard: no `basilisk.json`, no deleting rule source (`crates/basilisk-checker/src/rules/*.rs`), no removing rules from `all_rules()`, no hand-editing `conformance/conformance_status.csv`, no loosening `coverage-thresholds.json` (`threshold` / `max_false_positives`). The score comes from RUNNING the real `python/typing` harness over a FRESH clone whose tree holds no `basilisk.json` — deleting a rule to dodge that is the SAME crime by another route. See [CHKARCH-CONFORMANCE], [CHKARCH-CONFORMANCE-MODE]. ⚠️
+⚠️ Disabling, deleting, or unregistering ANY conformance rule is FORBIDDEN. Move the number by FIXING the checker, NEVER by touching the scoreboard: no rule-suppressing config file (the legacy `basilisk.json` is no longer even read), no deleting rule source (`crates/basilisk-checker/src/rules/*.rs`), no removing rules from `all_rules()`, no hand-editing `conformance/conformance_status.csv`, no loosening `coverage-thresholds.json` (`threshold` / `max_false_positives`). The score comes from RUNNING the real `python/typing` harness over a FRESH clone whose tree holds no Basilisk config — deleting a rule to dodge that is the SAME crime by another route. See [CHKARCH-CONFORMANCE], [CHKARCH-CONFORMANCE-MODE]. ⚠️
 
 ⚠️ There is ONE conformance path — the REAL upstream harness, run FRESH every CI run (`conformance/run_conformance.py`). The mechanism, in order, no step skippable: **(1)** freshly `git clone` the tests **and** the harness from `python/typing@main`'s LATEST commit — no cache, no committed fixtures, no vendored calculator; **(2)** freshly build a CLEAN `cargo build --release` basilisk binary from THIS checkout — never the PyPI wheel (a prior version), never an instrumented build; **(3)** run the suite's OWN unmodified `conformance/src/main.py --only-run basilisk` (its `type_checker.py` already ships the official `BasiliskTypeChecker`) against that binary via `BASILISK_BIN` and **fail HARD on ANY false positive or ANY missed required error** (100% / 0 FP); **(4)** regenerate `conformance_status.csv` from the harness's OWN `results/basilisk/*.toml`. **NO** vendored calculator, **NO** reimplemented/injected adapter, **NO** cached fixtures, **NO** committed results substituting for a live run. A build where that official check did not actually run against a freshly-cloned suite is a **BUILD FAILURE** — never re-introduce a home-grown scorer. ⚠️
 
@@ -22,7 +22,7 @@ Target: **100% PEP conformance**, canonical Python **3.12**. Read the [PEP confo
 
 We are building a better Python developer experience: one IDE extension for a complete, fast workflow. The LSP drives all functionality — IDE extensions only react to LSP signals (commands, state changes) and NEVER register a command the LSP doesn't advertise.
 
-Basilisk has **no modes** — behaviour is per-rule configuration ([CHKARCH-CONFIGURATION-ONLY]). The default enables every PEP typing-spec rule and nothing else; opinionated house-style rules (require-annotation `BSK-E0001/E0002/E0004`, require-`@override` `BSK-E0025`, redundant-annotation `BSK-W0050`, explicit-`Any` nudge `BSK-W0014`) are opt-in. Every diagnostic must teach — explain why, not just what.
+Basilisk has **no modes** — behaviour is per-rule configuration ([CHKARCH-CONFIGURATION-ONLY]). The default enables every PEP typing-spec rule and nothing else; opinionated house-style rules (require-annotation `BSK-0001/0002/0004`, require-`@override` `BSK-0025`, redundant-annotation `BSK-0050`, explicit-`Any` nudge `BSK-0014`) are opt-in. Every diagnostic must teach — explain why, not just what.
 
 # Documentation Structure
 
@@ -78,6 +78,7 @@ Git is off-limits unless you are explicitly asked. When git IS used:
 - **NEVER list the agent as a commit co-author** — no `Co-Authored-By` trailer, no agent attribution.
 - **Work on exactly ONE branch.** Reuse the existing feature branch; never open a second. If multiple feature branches exist, merge them into one immediately before any other work.
 - **Worktrees are forbidden** — never run `git worktree`.
+- **NEVER close anything you did not open** — no issue, PR, discussion, or review thread, however stale or fixed. This includes auto-close keywords: write `Refs #123`, never `Closes/Fixes #123`.
 
 ## Testing
 

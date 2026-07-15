@@ -1,5 +1,5 @@
-//! Implements [BSK-E0004] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
-//! BSK-E0004: Missing `*args` / `**kwargs` type annotation.
+//! Implements [BSK-0004] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
+//! BSK-0004: Missing `*args` / `**kwargs` type annotation.
 //!
 //! This house rule is off by default — the default configuration is pure PEP
 //! conformance. When a project enables it, every variadic positional parameter
@@ -13,11 +13,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::{guards::is_stub_context, Rule};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0004",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0004",
+    code: "BSK-0004",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0004",
 };
 
-/// Emits BSK-E0004 for unannotated `*args` and `**kwargs` parameters.
+/// Emits BSK-0004 for unannotated `*args` and `**kwargs` parameters.
 ///
 /// Skipped for `@overload`, `@abstractmethod`, and `Protocol` methods.
 pub(crate) struct MissingVarArgAnnotation;

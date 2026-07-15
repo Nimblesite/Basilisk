@@ -86,10 +86,10 @@ mod tests {
 
     #[test]
     fn bench_workspace_modules_under_100ms_for_1000_files() {
-        let (idx, root) = build_large_workspace(1000);
+        let (idx, _root) = build_large_workspace(1000);
 
         let start = Instant::now();
-        let result = build_module_tree(&idx, "", Some(&root), true, true);
+        let result = build_module_tree(&idx, "", true, true);
         let elapsed = start.elapsed();
 
         let target_ms = 100 * TIMING_MULTIPLIER;
@@ -130,10 +130,10 @@ mod tests {
 
     #[test]
     fn bench_type_health_under_50ms_for_1000_files() {
-        let (idx, root) = build_large_workspace(1000);
+        let (idx, _root) = build_large_workspace(1000);
 
         let start = Instant::now();
-        let health = build_type_health(&idx, Some(&root), true);
+        let health = build_type_health(&idx, true);
         let elapsed = start.elapsed();
 
         let target_ms = 50 * TIMING_MULTIPLIER;

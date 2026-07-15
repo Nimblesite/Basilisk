@@ -4,7 +4,7 @@ title: "Quick Start — Type-Check Your First File in 5 Minutes"
 description: "Get started with Basilisk in 5 minutes. Install the VS Code extension, run your first type check, and see PEP-conformant Python diagnostics in action."
 keywords: basilisk, quick start, python language server, type checking, tutorial, vs code
 date: 2026-02-28
-dateModified: 2026-03-31
+dateModified: 2026-07-14
 author: The Basilisk Project
 eleventyNavigation:
   key: Quick Start
@@ -17,20 +17,25 @@ This guide walks through your first type check with Basilisk. Estimated time: 5 
 
 ## Step 1 — Run your first check
 
-Create a Python file, or use the example from the repository:
+Create a Python file, or use the example from the repository. Every problem in
+it is a genuine violation of the Python typing spec — no configuration needed:
 
 ```python
 # bad.py
-def process(data):
-    return data.upper()
+def greet(name: str) -> str:
+    return "Hello, " + name
 
-class User:
-    def __init__(self, name, age):
-        self.name = name
-        self.age  = age
 
-    def greet(self):
-        return f"Hello, {self.name}"
+greet(42)
+
+
+count: int = "zero"
+
+
+def describe(flag: bool) -> str:
+    if flag:
+        label = "on"
+    return label
 ```
 
 Run Basilisk:
@@ -42,50 +47,60 @@ basilisk check bad.py
 Output:
 
 ```
-error[BSK-E0001]: Missing parameter type annotation for `data`
-  --> bad.py:1:13
-    |
-1 | def process(data):
-    |             ^^^^
-    |
-   = help: Add a type annotation: `data: <type>`
-   = note: In Basilisk, all function parameters require explicit types
-   = see: https://www.basilisk-python.dev/errors/BSK-E0001
+error[calls_argument_type]: Argument `name` of `greet` expects `str` but received an `int` literal
+  --> bad.py:5:7
+  |
+5 | greet(42)
+  |       ^^
+  |
+   = help: Pass a value of type `str` for parameter `name`
+   = note: Basilisk checks that literal arguments are compatible with declared parameter types
+   = see: https://www.basilisk-python.dev/errors/calls_argument_type
 
-error[BSK-E0002]: Missing return type annotation for function `process`
-  --> bad.py:1:5
-    |
-1 | def process(data):
-    |     ^^^^^^^^^^^^^
-    |
-   = help: Add a return type: `def process(...) -> <type>:`
-   = note: In Basilisk, all functions require an explicit return type
-   = see: https://www.basilisk-python.dev/errors/BSK-E0002
+error[assignment_compatibility]: Type mismatch: `count` is annotated `int` (int) but assigned str
+  --> bad.py:8:1
+  |
+8 | count: int = "zero"
+  | ^^^^^
+  |
+   = help: Either change the annotation to match the value, or change the value to `int`
+   = note: Basilisk requires the inferred type to be assignable to the declared type
+   = see: https://www.basilisk-python.dev/errors/assignment_compatibility
 
-... 4 more errors (untyped `name`, `age`, `__init__`, and `greet`) ...
+error[names_unbound]: Function `describe` returns `label` but `label` may be unbound on some paths
+  --> bad.py:14:12
+   |
+14 |     return label
+   |            ^^^^^
+   |
+   = help: Assign `label` unconditionally before the `return`, or add a default value
+   = note: Basilisk detects variables that are assigned only inside conditional branches (if/while/try) and may not be defined on every execution path
+   = see: https://www.basilisk-python.dev/errors/names_unbound
 
-Found 6 diagnostics (6 errors).
+Found 3 diagnostics (3 errors).
 ```
+
+Out of the box, Basilisk enables the complete PEP typing-spec rule set, and
+every violation is an **error**. Nothing here is house style — this is the
+[Python type system specification](https://typing.python.org/en/latest/spec/index.html),
+enforced.
 
 ## Step 2 — Fix the errors
 
-Add type annotations to every parameter and return type:
-
 ```python
 # good.py
-def process(data: str) -> str:
-    return data.upper()
+def greet(name: str) -> str:
+    return "Hello, " + name
 
-class User:
-    name: str
-    age: int
 
-    def __init__(self, name: str, age: int) -> None:
-        self.name = name
-        self.age  = age
+greet("world")
 
-    def greet(self) -> str:
-        return f"Hello, {self.name}"
+
+count: int = 0
+
+
+def describe(flag: bool) -> str:
+    return "on" if flag else "off"
 ```
 
 ```bash
@@ -94,10 +109,67 @@ basilisk check good.py
 
 ```
 All checked. No issues found.
-Checked 1 file — 0 errors, 0 warnings.
 ```
 
-## Step 3 — Check a directory
+## Step 3 — Turn strictness up to full
+
+A clean pass means your code obeys the typing spec — but nothing yet *requires*
+annotations. Basilisk's own strictness rules (annotations on every parameter,
+return type, attribute, and more) are **opt-in and silent by default**. Enable
+them as **warnings** while you migrate — the code still type-checks, and the
+warnings tell you strictness isn't at full yet:
+
+```toml
+# pyproject.toml
+[tool.basilisk.rules]
+"BSK-0001" = "warning"  # every parameter needs a type annotation
+"BSK-0002" = "warning"  # every function needs a return type
+```
+
+Add an unannotated function to `good.py`:
+
+```python
+def process(data):
+    return data.upper()
+```
+
+```
+warning[BSK-0001]: Missing parameter type annotation for `data`
+  --> good.py:15:13
+   |
+15 | def process(data):
+   |             ^^^^
+   |
+   = help: Add a type annotation: `data: <type>`
+   = note: In Basilisk, all function parameters require explicit types
+   = see: https://www.basilisk-python.dev/errors/BSK-0001
+
+warning[BSK-0002]: Missing return type annotation for function `process`
+  --> good.py:15:5
+   |
+15 | def process(data):
+   |     ^^^^^^^^^^^^^
+   |
+   = help: Add a return type: `def process(...) -> <type>:`
+   = note: In Basilisk, all functions require an explicit return type
+   = see: https://www.basilisk-python.dev/errors/BSK-0002
+
+Found 2 diagnostics (0 errors).
+```
+
+Errors are spec violations; warnings are strictness you haven't finished
+adopting. When the warnings hit zero, promote the rules to `"error"` and your
+project is at full strictness.
+
+In VS Code, skip the hand-editing: run **Basilisk: Open Configuration Editor**
+from the Command Palette. It shows every rule with its live severity, previews
+changes before applying them, and its **Strict preset** turns the complete
+catalog on in one click. See the
+[configuration reference](/docs/configuration/) for the full schema.
+
+![Basilisk's tag-first VS Code configuration editor, showing live rule facets and per-rule severity controls](/assets/images/vscode-configuration-editor.png)
+
+## Step 4 — Check a directory
 
 Basilisk recursively checks every `.py` file in a directory:
 
@@ -111,7 +183,7 @@ To check the current directory:
 basilisk check
 ```
 
-## Step 4 — Add to pyproject.toml
+## Step 5 — Add to pyproject.toml
 
 Create a `[tool.basilisk]` section in your `pyproject.toml`:
 
@@ -124,27 +196,29 @@ exclude = ["**/migrations/**"]
 
 With a config file present, running `basilisk check` uses these settings automatically.
 
-## Step 5 — Understand a diagnostic
+## Step 6 — Understand a diagnostic
 
 Basilisk uses the same output format as the Rust compiler (`rustc`). Every diagnostic includes:
 
 ```
-error[BSK-E0001]: Missing parameter type annotation for `data`
-^^^^^            ^                                  ← severity + message
-  --> bad.py:1:13                                   ← file:line:column
-    |
-1 | def process(data):                              ← source context
-    |             ^^^^                               ← caret pointing at the issue
-    |
-   = help: Add a type annotation: `data: <type>`    ← actionable fix
-   = note: In Basilisk, all function parameters require explicit types  ← explanation
-   = see: https://www.basilisk-python.dev/errors/BSK-E0001  ← documentation link
+error[calls_argument_type]: Argument `name` of `greet` expects `str`…
+^^^^^                      ^                     ← severity + message
+  --> bad.py:5:7                                 ← file:line:column
+  |
+5 | greet(42)                                    ← source context
+  |       ^^                                     ← caret pointing at the issue
+  |
+   = help: Pass a value of type `str` for parameter `name`   ← actionable fix
+   = note: Basilisk checks that literal arguments are…       ← explanation
+   = see: https://www.basilisk-python.dev/errors/calls_argument_type  ← documentation link
 ```
 
-- **`error[BSK-EXXXX]`** — error with its unique code (orange)
-- **`-->`** — location in your file (blue)
-- **`^^^^`** — exactly which token caused the error (red underline)
-- **`= help:`** — the specific change that will fix it (green)
+- **`error[rule_code]`** — severity plus the rule that fired. PEP typing-spec
+  rules use descriptive codes (`calls_argument_type`); Basilisk's opt-in
+  strictness rules use `BSK-` codes (`BSK-0001`)
+- **`-->`** — location in your file
+- **`^^^^`** — exactly which token caused the diagnostic
+- **`= help:`** — the specific change that will fix it
 - **`= note:`** — why the rule exists
 - **`= see:`** — link to full documentation
 
@@ -152,18 +226,18 @@ The same information is available in your editor — hover any symbol for its in
 
 ![Basilisk hover in VS Code — hovering a function shows its full inferred signature](/assets/images/vscode-hover.png)
 
-## Step 6 — Intentional suppressions
+## Step 7 — Intentional suppressions
 
 When you genuinely need to use `Any` or suppress a diagnostic, you can — but you must provide a reason:
 
 ```python
 # This suppression requires a reason comment
-result: Any = legacy_sdk_call()  # basilisk: ignore[returns_compatibility] -- tracked in #847
+result: Any = legacy_sdk_call()  # type: ignore[returns_compatibility]
 ```
 
 Suppressions without reasons are themselves flagged. This is intentional: if you need to suppress a diagnostic, you should be able to explain why.
 
-## Step 7 — Check stats
+## Step 8 — Check stats
 
 Get a type coverage report for your project:
 
@@ -173,7 +247,7 @@ basilisk stats src/
 
 Output includes: total functions, typed functions, type coverage percentage, files with no annotations.
 
-## Step 8 — Profile a running script
+## Step 9 — Profile a running script
 
 Basilisk includes an integrated CPU and memory profiler. To try it in VS Code:
 
@@ -190,5 +264,5 @@ See the [Profiler guide](/docs/profiler/) for the full workflow — flame graphs
 - [Configuration reference](/docs/configuration/) — full `pyproject.toml` schema
 - [Profiler](/docs/profiler/) — CPU heatmaps, flamegraphs, and memory leak detection
 - [Debugging](/docs/debugging/) — F5 to debug, breakpoints, stepping, watch expressions
-- [All rules](/docs/rules/) — every BSK-E and BSK-W code explained
+- [All rules](/docs/rules/) — every rule explained, PEP and opt-in alike
 - [Migration guide](/docs/migration/) — migrating from Pyright or mypy

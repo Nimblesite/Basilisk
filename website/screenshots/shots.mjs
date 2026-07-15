@@ -17,34 +17,34 @@
 const RULE_SHOTS = [
   {
     name: "e0001",
-    expect: "BSK-E0001",
+    expect: "BSK-0001",
     code: `def process(data) -> str:
     return data.upper()
 `,
   },
   {
     name: "e0002",
-    expect: "BSK-E0002",
+    expect: "BSK-0002",
     code: `def get_user(user_id: int):
     return {"id": user_id}
 `,
   },
   {
     name: "e0003",
-    expect: "BSK-E0003",
+    expect: "BSK-0003",
     code: `data = []
 `,
   },
   {
     name: "e0004",
-    expect: "BSK-E0004",
+    expect: "BSK-0004",
     code: `def log(*args, **kwargs) -> None:
     print(args, kwargs)
 `,
   },
   {
     name: "e0005",
-    expect: "BSK-E0005",
+    expect: "BSK-0005",
     code: `class Registry:
     entries = []
 `,
@@ -57,7 +57,7 @@ const RULE_SHOTS = [
   },
   {
     name: "e0011",
-    expect: "BSK-W0014",
+    expect: "BSK-0014",
     code: `from typing import Any
 
 
@@ -129,7 +129,7 @@ class Child(Base):
   },
   {
     name: "e0025",
-    expect: "BSK-E0025",
+    expect: "BSK-0025",
     code: `class Base:
     def process(self) -> str:
         return "base"

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1600" height="2560" viewBox="0 0 1600 2560" role="img" aria-labelledby="title description">
+  <title id="title">The Basilisk Book</title>
+  <desc id="description">Dark portrait cover with the Basilisk mark, an ember path through Python type symbols, the title, subtitle, author, and website.</desc>
+  <defs>
+    <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M80 0H0V80" fill="none" stroke="#252d3f" stroke-width="2" opacity="0.42"/>
+      <circle cx="0" cy="0" r="3" fill="#4a5468" opacity="0.38"/>
+    </pattern>
+    <filter id="soft-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="logo-clip"><circle cx="800" cy="410" r="214"/></clipPath>
+  </defs>
+
+  <rect width="1600" height="2560" fill="#0a0c12"/>
+  <rect x="56" y="56" width="1488" height="2448" rx="34" fill="url(#grid)" stroke="#252d3f" stroke-width="3"/>
+
+  <path d="M197 2158C436 2000 326 1766 566 1622C824 1467 723 1226 986 1090C1210 974 1147 738 1416 575" fill="none" stroke="#e8500a" stroke-width="30" stroke-linecap="round" opacity="0.18" filter="url(#soft-glow)"/>
+  <path d="M197 2158C436 2000 326 1766 566 1622C824 1467 723 1226 986 1090C1210 974 1147 738 1416 575" fill="none" stroke="#e8500a" stroke-width="9" stroke-linecap="round"/>
+  <path d="M120 2290C400 2163 438 1958 344 1808M1192 826C1321 752 1390 669 1474 530" fill="none" stroke="#6ec5e9" stroke-width="4" stroke-dasharray="12 18" opacity="0.72"/>
+
+  <g fill="#141820" stroke="#252d3f" stroke-width="3">
+    <rect x="96" y="1670" width="302" height="96" rx="48"/>
+    <rect x="112" y="2075" width="370" height="96" rx="48"/>
+    <rect x="1130" y="540" width="326" height="96" rx="48"/>
+  </g>
+  <g fill="#8892a4" font-family="'JetBrains Mono','SFMono-Regular',Consolas,monospace" font-size="38">
+    <text x="151" y="1733">T | None</text>
+    <text x="164" y="2138">basilisk check</text>
+    <text x="1194" y="603">py.typed</text>
+  </g>
+
+  <g>
+    <circle cx="800" cy="410" r="236" fill="#0f1218" stroke="#e8500a" stroke-width="7"/>
+    <circle cx="800" cy="410" r="215" fill="#141820" stroke="#252d3f" stroke-width="3"/>
+    <image x="632" y="242" width="336" height="336" href="../brand/basilisk-logo.png" xlink:href="../brand/basilisk-logo.png" clip-path="url(#logo-clip)" preserveAspectRatio="xMidYMid meet"/>
+  </g>
+
+  <g text-anchor="middle" font-family="'Space Grotesk','Arial Black',system-ui,sans-serif">
+    <text x="800" y="825" fill="#e8500a" font-size="54" font-weight="700" letter-spacing="22">THE</text>
+    <text x="800" y="1050" fill="#f0f2f7" font-size="206" font-weight="800" letter-spacing="-10">BASILISK</text>
+    <text x="800" y="1240" fill="#f0f2f7" font-size="206" font-weight="800" letter-spacing="12">BOOK</text>
+    <rect x="456" y="1316" width="688" height="8" rx="4" fill="#e8500a"/>
+    <text x="800" y="1417" fill="#a3adbd" font-size="44" font-weight="500">A practical guide to typed Python</text>
+    <text x="800" y="1482" fill="#a3adbd" font-size="44" font-weight="500">and the Basilisk developer workflow</text>
+  </g>
+
+  <g transform="translate(128 2262)">
+    <rect width="1344" height="164" rx="28" fill="#0f1218" stroke="#252d3f" stroke-width="3"/>
+    <text x="48" y="72" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="40" font-weight="700">CHRISTIAN FINDLAY</text>
+    <text x="48" y="122" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="29">basilisk-python.dev</text>
+    <g transform="translate(1164 42)" fill="none" stroke="#6ec5e9" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 38h78M52 12l26 26-26 26"/>
+      <circle cx="94" cy="38" r="8" fill="#6ec5e9" stroke="none"/>
+    </g>
+  </g>
+</svg>

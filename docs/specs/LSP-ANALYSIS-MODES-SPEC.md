@@ -77,10 +77,16 @@ Default: `"wholeModule"`. The user must explicitly opt down to `openFilesOnly`.
 Resolution order (highest wins):
 
 1. Editor workspace setting (`basilisk.analysisMode`) — delivered as `initializationOptions.analysisMode` at startup and re-applied at runtime via `workspace/didChangeConfiguration` (top-level `analysisMode` or nested `basilisk.analysisMode`). Editors that always forward a value (the VS Code extension and basilisk.nvim both send their `wholeModule` default) pin the mode from the editor side; clients that send no value (e.g. the Zed extension) fall through to the file tier.
-2. The first parseable config file in the first workspace root, checked in this order: `basilisk.json`, then `pyrightconfig.json` (pyright compatibility), then `pyproject.toml` — `[tool.basilisk]` or, failing that, `[tool.pyright]`. The winning file supplies the entire workspace config: precedence is first-file-wins, NOT per-field merging, so a `basilisk.json` that omits `analysisMode` resolves to the default even if `pyproject.toml` sets one (mirroring [pyright's own whole-file precedence](https://microsoft.github.io/pyright/#/configuration) of `pyrightconfig.json` over `pyproject.toml`).
+2. The first parseable config file in the first workspace root, checked in this order: `pyrightconfig.json` (pyright compatibility), then `pyproject.toml` — `[tool.basilisk]` or, failing that, `[tool.pyright]`. The winning file supplies the entire workspace config: precedence is first-file-wins, NOT per-field merging, so a `pyrightconfig.json` that omits `analysisMode` resolves to the default even if `pyproject.toml` sets one (mirroring [pyright's own whole-file precedence](https://microsoft.github.io/pyright/#/configuration) of `pyrightconfig.json` over `pyproject.toml`).
 3. Hard default: `wholeModule`.
 
 Tier 1 and the fallback are resolved by `resolve_analysis_mode` (`crates/basilisk-lsp/src/workspace_analysis.rs`); the file tier is `load_config` (`crates/basilisk-lsp/src/config.rs`), which the CLI shares.
+
+This tiering governs the **analysis-level** workspace config (mode, formatter,
+etc.) only. **Rule** config (severities, per-module/per-path overrides) is
+resolved per file by walking ancestor directories and merging cumulatively —
+see [CHKARCH-CONFIG-DISCOVERY](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY)
+(GitHub #311) — identically in the CLI and the LSP.
 
 ---
 

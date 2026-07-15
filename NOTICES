@@ -78,7 +78,7 @@ binary as perfect-hash maps by `crates/basilisk-stubs/build.rs`:
     `stdlib/VERSIONS`), used to recognise stdlib imports; and
   - the import-root → stub-distribution index (from typeshed's `stubs/<DIST>/`
     directories), used to offer `uv add --dev types-<dist>` quick fixes
-    (BSK-E0152) — see `data/typeshed_stub_distributions.tsv`.
+    (BSK-0152) — see `data/typeshed_stub_distributions.tsv`.
 
 typeshed is also the Tier-1 baseline for standard-library stubs
 ([CHKARCH-STUBS-TYPESHED]); users may replace it wholesale via the

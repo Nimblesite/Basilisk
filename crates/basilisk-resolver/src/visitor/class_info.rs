@@ -97,7 +97,7 @@ pub(super) fn collect_class_body(
             }
             Stmt::ClassDef(inner_class) => {
                 // Recurse into nested classes so their methods are checked
-                // by BSK-E0001/BSK-E0002.  The inner ClassInfo is not added to the
+                // by BSK-0001/BSK-0002.  The inner ClassInfo is not added to the
                 // module's class list (Phase 1 limitation), but all its
                 // method FunctionInfos land in `functions`.
                 let _inner_info = class_info_from(inner_class, functions, match_stmts);

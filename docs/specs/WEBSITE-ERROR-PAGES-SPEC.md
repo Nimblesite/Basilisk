@@ -3,7 +3,7 @@
 ## Purpose {#WEBSITE-ERROR-PAGES-PURPOSE}
 
 Every diagnostic Basilisk reports ends with a deep link, e.g.
-`= see: https://www.basilisk-python.dev/errors/BSK-E0001`. That URL is baked into
+`= see: https://www.basilisk-python.dev/errors/BSK-0001`. That URL is baked into
 each rule (`docs_url` on the `ErrorCode` in
 `crates/basilisk-checker/src/rules/*.rs`). This spec generates a landing page for
 **every** diagnostic code at `/errors/BSK-XXXX/`, built from the checker source so
@@ -46,7 +46,7 @@ entries never flood the docs sidebar.
 `_data/examples.js` maps a code to its demonstrating screenshot by reading the
 manifest's `expect` field ([WEBSITE-SCREENSHOTS-MANIFEST]), so the mapping is
 correct even where image stem and code differ (e.g. `e0011.png` demonstrates
-`BSK-W0014`). Adding a verified shot to `screenshots/shots.mjs` and regenerating
+`BSK-0014`). Adding a verified shot to `screenshots/shots.mjs` and regenerating
 gives a code's page a real-output example.
 
 ## Verification {#WEBSITE-ERROR-PAGES-VERIFY}

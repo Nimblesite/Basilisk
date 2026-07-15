@@ -1,5 +1,5 @@
-//! Implements [BSK-W0011] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-W0011: Undeclared dependency import.
+//! Implements [BSK-0011] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! BSK-0011: Undeclared dependency import.
 //!
 //! Fires when an import resolves to a package that is only a transitive
 //! dependency — present in `uv.lock` but not listed in the project's
@@ -9,7 +9,7 @@
 //! breaking imports that relied on their implicit availability.
 //!
 //! ```python
-//! import urllib3  # BSK-W0011: 'urllib3' is a transitive dependency (via requests)
+//! import urllib3  # BSK-0011: 'urllib3' is a transitive dependency (via requests)
 //! ```
 
 use basilisk_resolver::{ImportResolution, PackageDepKind, ResolvedModule};
@@ -19,11 +19,11 @@ use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-W0011",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-W0011",
+    code: "BSK-0011",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0011",
 };
 
-/// Emits BSK-W0011 when an import uses a transitive dependency that is not
+/// Emits BSK-0011 when an import uses a transitive dependency that is not
 /// declared in `[project.dependencies]`.
 pub(crate) struct UndeclaredDependencyImport;
 
@@ -131,7 +131,7 @@ mod tests {
         );
         let diagnostics = run_check(import);
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].code.code, "BSK-W0011");
+        assert_eq!(diagnostics[0].code.code, "BSK-0011");
         assert!(diagnostics[0].message.contains("transitive"));
     }
 

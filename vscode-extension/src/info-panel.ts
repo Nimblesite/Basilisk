@@ -121,8 +121,8 @@ function buildFeatureToggles(): FeatureItem[] {
 }
 
 /**
- * Build the single compact uv info row. The verbose sub-settings (auto-sync,
- * stub suggestions) live in the tooltip, not as their own rows (issue #103).
+ * Build the single compact uv info row. Auto-sync lives in the tooltip rather
+ * than as its own row (issue #103).
  *
  * Implements the one-uv-row rule of [EXTACT-INFO-SERVER-INFO].
  */
@@ -130,7 +130,6 @@ function buildUvInfoItem(cfg: vscode.WorkspaceConfiguration): InfoTextItem {
   const uvEnabled = cfg.get<boolean>("uv.enabled") ?? true;
   const uvPath = cfg.get<string>("uv.executablePath") ?? "";
   const uvAutoSync = cfg.get<boolean>("uv.autoSync") ?? false;
-  const uvStubs = cfg.get<boolean>("uv.stubSuggestions") ?? true;
 
   const item = new InfoTextItem(
     "uv",
@@ -141,7 +140,6 @@ function buildUvInfoItem(cfg: vscode.WorkspaceConfiguration): InfoTextItem {
     `uv Integration: ${uvEnabled ? "enabled" : "disabled"}`,
     `Executable: ${uvPath === "" ? "auto-detect" : uvPath}`,
     `Auto-Sync: ${uvAutoSync ? "on" : "off"}`,
-    `Stub Suggestions: ${uvStubs ? "on" : "off"}`,
   ].join("\n");
   return item;
 }

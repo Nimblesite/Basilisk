@@ -350,8 +350,8 @@ fn test_lsp_code_action_missing_param_annotation() -> TestResult<()> {
 
     let e0001 = diagnostics
         .iter()
-        .find(|d| d["code"].as_str() == Some("BSK-E0001"))
-        .ok_or("no BSK-E0001 diagnostic")?;
+        .find(|d| d["code"].as_str() == Some("BSK-0001"))
+        .ok_or("no BSK-0001 diagnostic")?;
 
     let resp = send_request(
         &mut fixture,
@@ -397,8 +397,8 @@ fn test_lsp_code_action_missing_return_annotation() -> TestResult<()> {
 
     let e0002 = diagnostics
         .iter()
-        .find(|d| d["code"].as_str() == Some("BSK-E0002"))
-        .ok_or("no BSK-E0002 diagnostic")?;
+        .find(|d| d["code"].as_str() == Some("BSK-0002"))
+        .ok_or("no BSK-0002 diagnostic")?;
 
     let resp = send_request(
         &mut fixture,
@@ -470,8 +470,8 @@ fn test_lsp_code_action_redundant_annotation_w0050() -> TestResult<()> {
 
     let w0050 = diagnostics
         .iter()
-        .find(|d| d["code"].as_str() == Some("BSK-W0050"))
-        .ok_or("no BSK-W0050 diagnostic")?;
+        .find(|d| d["code"].as_str() == Some("BSK-0050"))
+        .ok_or("no BSK-0050 diagnostic")?;
 
     let resp = send_request(
         &mut fixture,
@@ -516,7 +516,7 @@ fn test_lsp_fix_all_in_file_returns_combined_edit() -> TestResult<()> {
         .ok_or("no diagnostics published")?;
 
     // Request source.fixAll code actions — the server should return a single
-    // combined action with edits for both BSK-W0050 diagnostics.
+    // combined action with edits for both BSK-0050 diagnostics.
     let resp = send_request(
         &mut fixture,
         200,
@@ -620,19 +620,26 @@ fn test_lsp_fix_file_command() -> TestResult<()> {
 
 // Regression for issue #245 [AUTOFIX-CLASSIFY] / [AUTOFIX-MASS-VSCODE]: every
 // LSP fix-all surface must apply Safe fixes only by default. The Unsafe
-// BSK-E0003 fix (insert `: Any` on an unannotated variable) may only be
+// BSK-0003 fix (insert `: Any` on an unannotated variable) may only be
 // applied by the explicit all-tier command variants (`basilisk.fixFileAll` /
 // `basilisk.fixWorkspaceAll`), mirroring the CLI's safe-only default.
 #[test]
 fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
+    std::fs::write(
+        fixture.workspace_root.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-0003\" = \"error\"\n\"BSK-0050\" = \"warning\"\n",
+    )?;
     let _ = fixture.initialize()?;
 
-    // Line 0: redundant annotation → BSK-W0050 (Safe fix: remove `: int`).
-    // Line 1: unannotated `None` variable → BSK-E0003 (Unsafe fix: insert `: Any`).
-    let uri = "file:///safe_default.py";
+    // Line 0: redundant annotation → BSK-0050 (Safe fix: remove `: int`).
+    // Line 1: unannotated `None` variable → BSK-0003 (Unsafe fix: insert `: Any`).
+    let uri =
+        tower_lsp::lsp_types::Url::from_file_path(fixture.workspace_root.join("safe_default.py"))
+            .map_err(|()| "fixture path cannot be represented as a URI")?
+            .to_string();
     let code = "x: int = 42\ny = None\n";
-    fixture.did_open(uri, code)?;
+    fixture.did_open(&uri, code)?;
     let _ = fixture
         .wait_for_diagnostics()
         .ok_or("no diagnostics published")?;
@@ -643,7 +650,7 @@ fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
         300,
         "textDocument/codeAction",
         serde_json::json!({
-            "textDocument": { "uri": uri },
+            "textDocument": { "uri": &uri },
             "range": {
                 "start": { "line": 0, "character": 0 },
                 "end": { "line": 2, "character": 0 }
@@ -656,34 +663,50 @@ fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
     )?
     .ok_or("no fix-all code action response")?;
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
-    let edits = parsed["result"][0]["edit"]["changes"][uri]
+    let edits = parsed["result"][0]["edit"]["changes"][&uri]
         .as_array()
         .ok_or("fix-all action should carry edits")?;
     assert!(
         edits.iter().all(|e| e["newText"].as_str() != Some(": Any")),
-        "source.fixAll must not apply the Unsafe BSK-E0003 `: Any` insertion: {resp}"
+        "source.fixAll must not apply the Unsafe BSK-0003 `: Any` insertion: {resp}"
     );
     assert_eq!(
         edits.len(),
         1,
-        "source.fixAll should include exactly the Safe BSK-W0050 fix: {resp}"
+        "source.fixAll should include exactly the Safe BSK-0050 fix: {resp}"
     );
 
     // Surfaces 2–3: the plain commands (keybinding / context menu / toolbar)
     // are Safe-only by default; the spec-promised all-tier variants
-    // ([AUTOFIX-MASS-VSCODE]) exist and widen to the Unsafe BSK-E0003 fix.
-    let expectations: [(&str, u64); 4] = [
-        ("basilisk.fixFile", 1),
-        ("basilisk.fixWorkspace", 1),
-        ("basilisk.fixFileAll", 2),
-        ("basilisk.fixWorkspaceAll", 2),
+    // ([AUTOFIX-MASS-VSCODE]) exist and widen to the Unsafe BSK-0003 fix.
+    let second_uri =
+        tower_lsp::lsp_types::Url::from_file_path(fixture.workspace_root.join("safe_workspace.py"))
+            .map_err(|()| "fixture path cannot be represented as a URI")?
+            .to_string();
+    let third_uri =
+        tower_lsp::lsp_types::Url::from_file_path(fixture.workspace_root.join("all_file.py"))
+            .map_err(|()| "fixture path cannot be represented as a URI")?
+            .to_string();
+    let expectations: [(&str, &str, bool, u64); 4] = [
+        ("basilisk.fixFile", &uri, false, 1),
+        ("basilisk.fixWorkspace", &second_uri, true, 1),
+        ("basilisk.fixFileAll", &third_uri, true, 2),
+        ("basilisk.fixWorkspaceAll", &uri, false, 2),
     ];
-    for ((command, expected_fixed), request_id) in expectations.into_iter().zip(301_u64..) {
+    for ((command, command_uri, open_first, expected_fixed), request_id) in
+        expectations.into_iter().zip(301_u64..)
+    {
+        if open_first {
+            fixture.did_open(command_uri, code)?;
+            let _ = fixture
+                .wait_for_diagnostics()
+                .ok_or("no diagnostics published for command fixture")?;
+        }
         let resp = send_request(
             &mut fixture,
             request_id,
             "workspace/executeCommand",
-            serde_json::json!({ "command": command, "arguments": [uri] }),
+            serde_json::json!({ "command": command, "arguments": [command_uri] }),
         )?
         .ok_or("no executeCommand response")?;
         let parsed: serde_json::Value = serde_json::from_str(&resp)?;
@@ -697,6 +720,96 @@ fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
     Ok(())
 }
 
+// Implements [AUTOFIX-MASS-OVERVIEW] / [CONFIGEDITOR-OPERATIONS]: command
+// arguments are workspace authority boundaries, and accepted edits converge
+// the index before the execute-command response is returned.
+#[test]
+fn test_fix_commands_enforce_workspace_authority_and_converge() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    std::fs::write(
+        fixture.workspace_root.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-0050\" = \"warning\"\n",
+    )?;
+    let _ = fixture.initialize()?;
+
+    let root_uri =
+        tower_lsp::lsp_types::Url::from_file_path(fixture.workspace_root.join("inside.py"))
+            .map_err(|()| "fixture path cannot be represented as a URI")?
+            .to_string();
+    let external_uri = "file:///external_fix_scope.py";
+    let code = "x: int = 42\n";
+    fixture.did_open(&root_uri, code)?;
+    let _ = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics for in-root document")?;
+    fixture.did_open(external_uri, code)?;
+    let _ = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics for external document")?;
+
+    let workspace = send_request(
+        &mut fixture,
+        320,
+        "workspace/executeCommand",
+        serde_json::json!({
+            "command": "basilisk.fixWorkspace",
+            "arguments": []
+        }),
+    )?
+    .ok_or("no fixWorkspace response")?;
+    let parsed: serde_json::Value = serde_json::from_str(&workspace)?;
+    assert_eq!(parsed["result"]["fixed"].as_u64(), Some(1));
+    assert_eq!(parsed["result"]["files"].as_u64(), Some(1));
+
+    let external = send_request(
+        &mut fixture,
+        321,
+        "workspace/executeCommand",
+        serde_json::json!({
+            "command": "basilisk.fixFile",
+            "arguments": [external_uri]
+        }),
+    )?
+    .ok_or("no external fixFile response")?;
+    let parsed: serde_json::Value = serde_json::from_str(&external)?;
+    assert_eq!(
+        parsed["result"]["fixed"].as_u64(),
+        Some(1),
+        "workspace fix must leave the external open document unchanged: {external}"
+    );
+
+    let malformed = send_request(
+        &mut fixture,
+        322,
+        "workspace/executeCommand",
+        serde_json::json!({
+            "command": "basilisk.fixWorkspace",
+            "arguments": [{}]
+        }),
+    )?
+    .ok_or("no malformed-root response")?;
+    let parsed: serde_json::Value = serde_json::from_str(&malformed)?;
+    assert_eq!(parsed["error"]["code"].as_i64(), Some(-32602));
+
+    let outside_disable = send_request(
+        &mut fixture,
+        323,
+        "workspace/executeCommand",
+        serde_json::json!({
+            "command": "basilisk.disableRule",
+            "arguments": [{
+                "rule": "BSK-0050",
+                "severity": "off",
+                "uri": external_uri
+            }]
+        }),
+    )?
+    .ok_or("no outside disableRule response")?;
+    let parsed: serde_json::Value = serde_json::from_str(&outside_disable)?;
+    assert_eq!(parsed["error"]["code"].as_i64(), Some(-32602));
+    Ok(())
+}
+
 // ── Fix All by Rule ─────────────────────────────────────────────────────────
 
 #[test]
@@ -705,7 +818,7 @@ fn test_lsp_fix_all_by_rule_in_quickfix_menu() -> TestResult<()> {
     let _ = fixture.initialize()?;
 
     // Three redundant annotations — requesting code actions for the first
-    // diagnostic should include a "Fix all `BSK-W0050`" quickfix action.
+    // diagnostic should include a "Fix all `BSK-0050`" quickfix action.
     let code = "x: int = 42\ny: str = \"hello\"\nz: bool = True\n";
     fixture.did_open("file:///fixrule.py", code)?;
 
@@ -720,8 +833,8 @@ fn test_lsp_fix_all_by_rule_in_quickfix_menu() -> TestResult<()> {
 
     let w0050 = diagnostics
         .iter()
-        .find(|d| d["code"].as_str() == Some("BSK-W0050"))
-        .ok_or("no BSK-W0050 diagnostic")?;
+        .find(|d| d["code"].as_str() == Some("BSK-0050"))
+        .ok_or("no BSK-0050 diagnostic")?;
 
     let resp = send_request(
         &mut fixture,
@@ -738,12 +851,12 @@ fn test_lsp_fix_all_by_rule_in_quickfix_menu() -> TestResult<()> {
     .ok_or("no code action response")?;
 
     assert!(
-        resp.contains("Fix all `BSK-W0050` in this file"),
+        resp.contains("Fix all `BSK-0050` in this file"),
         "should contain per-rule fix-all action: {resp}"
     );
     assert!(
         resp.contains("3 fixes"),
-        "should fix all 3 BSK-W0050 instances: {resp}"
+        "should fix all 3 BSK-0050 instances: {resp}"
     );
     // Also verify the global fix-all is present.
     assert!(
@@ -758,7 +871,7 @@ fn test_lsp_fix_all_by_rule_not_shown_for_single_instance() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
     let _ = fixture.initialize()?;
 
-    // Only one BSK-W0050 — per-rule fix-all should not appear.
+    // Only one BSK-0050 — per-rule fix-all should not appear.
     let code = "x: int = 42\n";
     fixture.did_open("file:///fixrule1.py", code)?;
 
@@ -773,8 +886,8 @@ fn test_lsp_fix_all_by_rule_not_shown_for_single_instance() -> TestResult<()> {
 
     let w0050 = diagnostics
         .iter()
-        .find(|d| d["code"].as_str() == Some("BSK-W0050"))
-        .ok_or("no BSK-W0050 diagnostic")?;
+        .find(|d| d["code"].as_str() == Some("BSK-0050"))
+        .ok_or("no BSK-0050 diagnostic")?;
 
     let resp = send_request(
         &mut fixture,
@@ -791,7 +904,7 @@ fn test_lsp_fix_all_by_rule_not_shown_for_single_instance() -> TestResult<()> {
     .ok_or("no code action response")?;
 
     assert!(
-        !resp.contains("Fix all `BSK-W0050` in this file"),
+        !resp.contains("Fix all `BSK-0050` in this file"),
         "per-rule fix-all should NOT appear for single instance: {resp}"
     );
     Ok(())

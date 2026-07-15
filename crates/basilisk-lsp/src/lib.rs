@@ -34,6 +34,8 @@ pub mod code_lens;
 pub mod color;
 pub mod completion;
 pub mod config;
+pub(crate) mod config_seed;
+pub mod configuration_editor;
 pub mod coverage;
 pub mod debug;
 pub mod declaration;
@@ -70,7 +72,7 @@ pub mod workspace_scan;
 /// Run the Basilisk checker on a Python source string.
 ///
 /// Returns one formatted string per diagnostic in the form
-/// `"BSK-E0001:1:9: Missing parameter type annotation for `x`"`.
+/// `"BSK-0001:1:9: Missing parameter type annotation for `x`"`.
 ///
 /// Returns an empty `Vec` when the source has no type errors.
 ///
@@ -86,7 +88,7 @@ pub fn check_source(source: &str) -> Vec<String> {
 // Implements [LSPARCH-ARCH-PIPELINE]
 /// Like [`check_source`] but honoring an explicit project configuration.
 ///
-/// House rules (e.g. require-annotation `BSK-E0001`) are off by default — the
+/// House rules (e.g. require-annotation `BSK-0001`) are off by default — the
 /// default config is pure PEP conformance — so pass a config that opts them in
 /// to observe them. The checker does exactly what the config says; there are no
 /// modes. See [CHKARCH-CONFIGURATION-ONLY].

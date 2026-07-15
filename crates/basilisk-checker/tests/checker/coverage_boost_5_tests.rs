@@ -495,7 +495,7 @@ fn suppression_type_ignore() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn suppression_type_ignore_specific() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "def f(x):  # type: ignore[BSK-E0001]\n    return x\n";
+    let source = "def f(x):  # type: ignore[BSK-0001]\n    return x\n";
     let diags = run(source)?;
     let _ = diags;
     Ok(())
@@ -511,7 +511,7 @@ fn suppression_basilisk_relaxed() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn suppression_file_disabled() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "# basilisk: file-disabled[BSK-E0001]\ndef f(x):\n    return x\n";
+    let source = "# basilisk: file-disabled[BSK-0001]\ndef f(x):\n    return x\n";
     let diags = run(source)?;
     let _ = diags;
     Ok(())
@@ -519,7 +519,7 @@ fn suppression_file_disabled() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn suppression_type_warning() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "def f(x):  # type: warning[BSK-E0001]\n    return x\n";
+    let source = "def f(x):  # type: warning[BSK-0001]\n    return x\n";
     let diags = run(source)?;
     let _ = diags;
     Ok(())

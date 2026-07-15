@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "title": "The Basilisk Book",
+  "status": "structural-prototype",
+  "canonicalPythonVersion": "3.12",
+  "basiliskRelease": null,
+  "targets": {
+    "words": 29700,
+    "printEquivalentPages": 105,
+    "figures": 40
+  },
+  "sections": [
+    {
+      "kind": "front-matter",
+      "part": "Front matter",
+      "title": "How to use this book",
+      "file": "manuscript/00-how-to-use-this-book.md",
+      "status": "draft-complete",
+      "targetWords": 1200,
+      "targetPages": 5,
+      "targetFigures": 1
+    },
+    {
+      "kind": "chapter",
+      "part": "Part I — See the system",
+      "number": 1,
+      "title": "Meet Basilisk",
+      "file": "manuscript/01-meet-basilisk.md",
+      "status": "outline",
+      "targetWords": 1800,
+      "targetPages": 6,
+      "targetFigures": 2
+    },
+    {
+      "kind": "chapter",
+      "part": "Part I — See the system",
+      "number": 2,
+      "title": "Your first ten minutes",
+      "file": "manuscript/02-your-first-ten-minutes.md",
+      "status": "outline",
+      "targetWords": 2200,
+      "targetPages": 7,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part I — See the system",
+      "number": 3,
+      "title": "Read the evidence",
+      "file": "manuscript/03-read-the-evidence.md",
+      "status": "outline",
+      "targetWords": 2200,
+      "targetPages": 7,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part II — Think in types",
+      "number": 4,
+      "title": "The everyday type vocabulary",
+      "file": "manuscript/04-everyday-type-vocabulary.md",
+      "status": "outline",
+      "targetWords": 2400,
+      "targetPages": 8,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part II — Think in types",
+      "number": 5,
+      "title": "Compatibility is the question",
+      "file": "manuscript/05-compatibility-is-the-question.md",
+      "status": "outline",
+      "targetWords": 2400,
+      "targetPages": 8,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part II — Think in types",
+      "number": 6,
+      "title": "Inference, narrowing, and all the paths",
+      "file": "manuscript/06-inference-narrowing-paths.md",
+      "status": "outline",
+      "targetWords": 2100,
+      "targetPages": 7,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part II — Think in types",
+      "number": 7,
+      "title": "Reusable contracts and structured data",
+      "file": "manuscript/07-reusable-contracts-structured-data.md",
+      "status": "outline",
+      "targetWords": 2700,
+      "targetPages": 9,
+      "targetFigures": 4
+    },
+    {
+      "kind": "chapter",
+      "part": "Part II — Think in types",
+      "number": 8,
+      "title": "Imports, packages, and the world of stubs",
+      "file": "manuscript/08-imports-packages-stubs.md",
+      "status": "outline",
+      "targetWords": 2300,
+      "targetPages": 8,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part III — Make it your workflow",
+      "number": 9,
+      "title": "Configure the project, not a mood",
+      "file": "manuscript/09-configure-the-project.md",
+      "status": "draft-complete",
+      "targetWords": 2200,
+      "targetPages": 8,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part III — Make it your workflow",
+      "number": 10,
+      "title": "Adopt a codebase without hiding it",
+      "file": "manuscript/10-adopt-without-hiding.md",
+      "status": "outline",
+      "targetWords": 2200,
+      "targetPages": 8,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part III — Make it your workflow",
+      "number": 11,
+      "title": "Let the editor carry context",
+      "file": "manuscript/11-editor-carries-context.md",
+      "status": "outline",
+      "targetWords": 2300,
+      "targetPages": 8,
+      "targetFigures": 4
+    },
+    {
+      "kind": "chapter",
+      "part": "Part III — Make it your workflow",
+      "number": 12,
+      "title": "Run, investigate, and ship",
+      "file": "manuscript/12-run-investigate-ship.md",
+      "status": "outline",
+      "targetWords": 2500,
+      "targetPages": 9,
+      "targetFigures": 5
+    },
+    {
+      "kind": "back-matter",
+      "part": "Back matter",
+      "title": "Appendices and next steps",
+      "file": "manuscript/90-appendices-and-next-steps.md",
+      "status": "outline",
+      "targetWords": 1200,
+      "targetPages": 7,
+      "targetFigures": 0
+    }
+  ]
+}

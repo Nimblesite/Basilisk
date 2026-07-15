@@ -5,7 +5,7 @@
 # Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup mutation-test conformance bench reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease
+.PHONY: build test lint fmt clean ci setup book mutation-test conformance bench reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -25,6 +25,7 @@ endif
 _EXTENSION_DIR             := vscode-extension
 _ZED_DIR                   := basilisk-zed
 _NVIM_DIR                  := basilisk.nvim
+_BOOK_DIR                  := book
 _MUTATION_DIR              := mutation_testing
 _MUTATION_TEST_PACKAGE     := basilisk-checker
 _MUTATION_TEST_MARKER      := mutation_safe
@@ -104,6 +105,10 @@ setup:
 # =============================================================================
 # Repo-Specific Targets
 # =============================================================================
+
+## book: Build and EPUBCheck The Basilisk Book outline EPUB
+book:
+	@$(MAKE) --no-print-directory -C $(_BOOK_DIR) epub
 
 ## mutation-test: Mutate a crate's source and kill with its fast test suite.
 ## PKG=basilisk-checker (default) | basilisk-lsp. The per-PR `working` gate scopes

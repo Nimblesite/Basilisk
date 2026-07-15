@@ -21,6 +21,8 @@ mod ws_test_analysis_modes;
 mod ws_test_basics;
 #[path = "lsp/ws_test_capabilities.rs"]
 mod ws_test_capabilities;
+#[path = "lsp/ws_test_diagnostic_scope.rs"]
+mod ws_test_diagnostic_scope;
 #[path = "lsp/ws_test_diagnostics_rules.rs"]
 mod ws_test_diagnostics_rules;
 #[path = "lsp/ws_test_diagnostics_rules_advanced.rs"]

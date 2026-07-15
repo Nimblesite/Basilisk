@@ -1,0 +1,413 @@
+{
+  "schemaVersion": 1,
+  "targets": {
+    "figureCount": 40,
+    "diagramCanvas": "1600x1000",
+    "coverCanvas": "1600x2560"
+  },
+  "cover": {
+    "id": "cover",
+    "kind": "cover",
+    "status": "ready",
+    "master": "assets/cover/cover.svg",
+    "path": "assets/cover/cover.png",
+    "alt": "Cover of The Basilisk Book with the Basilisk mark above a glowing path through a field of Python type symbols."
+  },
+  "figures": [
+    {
+      "id": "fig-00-reading-journey",
+      "section": "front-matter",
+      "kind": "diagram",
+      "status": "ready",
+      "master": "assets/diagrams/00-reading-journey.svg",
+      "path": "assets/diagrams/00-reading-journey.png",
+      "title": "The journey from first diagnostic to team workflow",
+      "alt": "A four-stage reading journey from checking one Python call through understanding types, configuring a project, and shipping in CI."
+    },
+    {
+      "id": "fig-01-system-map",
+      "section": "01",
+      "kind": "diagram",
+      "status": "ready",
+      "master": "assets/diagrams/01-basilisk-system-map.svg",
+      "path": "assets/diagrams/01-basilisk-system-map.png",
+      "title": "One analysis engine, several developer surfaces",
+      "alt": "Python source and project configuration flow through Basilisk's parser, resolver, and checker to CLI diagnostics and editor language features."
+    },
+    {
+      "id": "shot-01-product",
+      "section": "01",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/01-basilisk-workspace.png",
+      "title": "Basilisk in a real editor workspace",
+      "alt": "A clean VS Code workspace showing Basilisk diagnostics, hover information, and the Basilisk activity panel around the Signal Box project."
+    },
+    {
+      "id": "fig-02-install-chooser",
+      "section": "02",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/02-installation-paths.png",
+      "title": "Choose the integration that matches your editor",
+      "alt": "A decision map routes VS Code-family, Neovim, Zed, and command-line readers to the appropriate Basilisk installation path."
+    },
+    {
+      "id": "shot-02-version",
+      "section": "02",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/02-version.png",
+      "title": "Verify the Basilisk binary",
+      "alt": "A terminal displays the Basilisk version and formatter provenance before the first project check."
+    },
+    {
+      "id": "shot-02-first-check",
+      "section": "02",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/02-first-check.png",
+      "title": "A default Python-spec error and its clean result",
+      "alt": "Side-by-side terminal output shows a wrong argument type reported by Basilisk and the same file passing after correction."
+    },
+    {
+      "id": "fig-03-diagnostic-anatomy",
+      "section": "03",
+      "kind": "annotated-screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/03-diagnostic-anatomy.png",
+      "title": "Anatomy of a Basilisk diagnostic",
+      "alt": "Numbered callouts identify severity, stable rule identifier, source span, help, note, and website link in a real diagnostic."
+    },
+    {
+      "id": "shot-03-hover",
+      "section": "03",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/03-hover.png",
+      "title": "Hover reveals the inferred contract",
+      "alt": "An editor hover over a Signal Box function displays its inferred callable signature and source provenance."
+    },
+    {
+      "id": "fig-03-evidence-loop",
+      "section": "03",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/03-diagnostic-evidence-loop.png",
+      "title": "Observe before you change",
+      "alt": "A feedback loop moves from source evidence to a type relationship, a deliberate code change, and a repeated Basilisk check."
+    },
+    {
+      "id": "fig-04-runtime-static",
+      "section": "04",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/04-runtime-static-split.png",
+      "title": "Annotations inform tools without converting values",
+      "alt": "Two aligned lanes separate a Python value's runtime behavior from the static information an annotation gives Basilisk."
+    },
+    {
+      "id": "fig-04-unions",
+      "section": "04",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/04-union-values.png",
+      "title": "A union describes several permitted possibilities",
+      "alt": "Example string, float, and None values enter one union-typed boundary while unrelated values stop outside it."
+    },
+    {
+      "id": "fig-04-any",
+      "section": "04",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/04-any-information-loss.png",
+      "title": "Any removes information in both directions",
+      "alt": "A precise type trace becomes an unlabelled channel at Any, illustrating why later operations carry less useful static evidence."
+    },
+    {
+      "id": "fig-05-compatibility-gate",
+      "section": "05",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/05-compatibility-gate.png",
+      "title": "Can this value be used here?",
+      "alt": "Values approach a labelled destination type; compatible values pass through while an incompatible value produces a diagnostic."
+    },
+    {
+      "id": "fig-05-function-contract",
+      "section": "05",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/05-function-contract.png",
+      "title": "Parameters receive and returns promise",
+      "alt": "A function contract connects typed argument ports to a body and a typed return port with concrete Signal Box values."
+    },
+    {
+      "id": "fig-05-mutable-collection",
+      "section": "05",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/05-mutable-collection-trap.png",
+      "title": "Mutation changes the compatibility question",
+      "alt": "The same mutable list is read and written through two type views, exposing the unsafe write that prevents a tempting substitution."
+    },
+    {
+      "id": "fig-06-narrowing-tree",
+      "section": "06",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/06-narrowing-tree.png",
+      "title": "Each branch carries more specific information",
+      "alt": "A broad reading union splits across None, numeric, and error branches, with the remaining type labelled on every path."
+    },
+    {
+      "id": "fig-06-typeguard",
+      "section": "06",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/06-typeguard.png",
+      "title": "A TypeGuard gives a checker-readable positive test",
+      "alt": "A user-defined predicate checks dictionary evidence and narrows the true branch to the SignalReading TypedDict."
+    },
+    {
+      "id": "fig-06-match-coverage",
+      "section": "06",
+      "kind": "annotated-screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/06-match-coverage.png",
+      "title": "A missing case leaves a visible path",
+      "alt": "A real Basilisk match diagnostic points to an unhandled alert variant, followed by a clean exhaustive match."
+    },
+    {
+      "id": "fig-07-boundary-transformation",
+      "section": "07",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/07-boundary-transformation.png",
+      "title": "External shape in, domain model out",
+      "alt": "A dictionary-shaped external reading is validated and transformed into a dataclass before reaching the core application."
+    },
+    {
+      "id": "fig-07-structure-comparison",
+      "section": "07",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/07-structured-data-comparison.png",
+      "title": "Choose a structure that matches the boundary",
+      "alt": "The same reading fields appear as a TypedDict, dataclass, named tuple, and ordinary class with their relevant differences highlighted."
+    },
+    {
+      "id": "fig-07-generic-payload",
+      "section": "07",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/07-generic-payload.png",
+      "title": "One container preserves different payload types",
+      "alt": "A generic page container keeps its reading payload type as concrete examples substitute different type arguments."
+    },
+    {
+      "id": "fig-07-overload-table",
+      "section": "07",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/07-overload-decision.png",
+      "title": "Overloads connect inputs to precise outputs",
+      "alt": "Two documented call shapes map to distinct return types while sharing one implementation body."
+    },
+    {
+      "id": "fig-08-import-stack",
+      "section": "08",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/08-import-resolution-stack.png",
+      "title": "Basilisk searches type information in order",
+      "alt": "Stacked search layers show project stub overrides, source packages, standard-library typeshed information, and installed typed packages."
+    },
+    {
+      "id": "shot-08-hover-provenance",
+      "section": "08",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/08-hover-provenance.png",
+      "title": "Hover shows where an imported signature came from",
+      "alt": "An editor hover identifies whether a sensor package signature came from source, a local stub, or a typeshed source."
+    },
+    {
+      "id": "fig-08-stub-workflow",
+      "section": "08",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/08-local-stub-workflow.png",
+      "title": "Generate, inspect, narrow, and maintain a local stub",
+      "alt": "A package without type information moves through stub generation, human review, project override, and a successful re-check."
+    },
+    {
+      "id": "fig-09-config-precedence",
+      "section": "09",
+      "kind": "diagram",
+      "status": "ready",
+      "master": "assets/diagrams/09-configuration-resolution.svg",
+      "path": "assets/diagrams/09-configuration-resolution.png",
+      "title": "Preview one deliberate configuration change before applying it",
+      "alt": "One rule and test-path choice moves through Basilisk preview, human review, an approved pyproject.toml edit, and a project recheck."
+    },
+    {
+      "id": "shot-09-config-editor",
+      "section": "09",
+      "kind": "screenshot",
+      "status": "draft-capture",
+      "master": "assets/screenshots/masters/09-configuration-editor-full.png",
+      "path": "assets/screenshots/09-configuration-editor.png",
+      "title": "Browse and preview rules in the configuration editor",
+      "alt": "The real VS Code configuration editor for Signal Box shows tag facets, searchable rule rows, diagnostic counts, and explicit severity controls.",
+      "capture": {
+        "date": "2026-07-12",
+        "environment": "macOS 26.5.1 arm64",
+        "editor": "VS Code 1.128.0 Extension Development Host",
+        "theme": "Dark Modern",
+        "zoom": "0; 1440x900 viewport at 2x device scale",
+        "pythonTarget": "3.12",
+        "basiliskVersion": "unreleased working-tree build (0.0.0-PLACEHOLDER)",
+        "fixture": "examples/signal-box",
+        "command": "make -C book screenshots",
+        "method": "headed VS Code test with real bundled Basilisk LSP, captured over Chrome DevTools Protocol",
+        "nativeSize": "2880x1800 master; deterministic 1600x1000 publication crop",
+        "sha256": "15d946f6228d9193254fd93e458f72fff2d49d6d722b34eba585a14752891639"
+      },
+      "publicationGate": "Recapture from the pinned Basilisk release before publication."
+    },
+    {
+      "id": "shot-09-config-preview",
+      "section": "09",
+      "kind": "screenshot",
+      "status": "draft-capture",
+      "master": "assets/screenshots/masters/09-configuration-preview-full.png",
+      "path": "assets/screenshots/09-configuration-preview.png",
+      "title": "Review a path-scoped rule change before writing it",
+      "alt": "The real Basilisk preview shows BSK-0002 changing from inherited to warning for tests, recalculated workspace impact, and separate editing and apply actions.",
+      "capture": {
+        "date": "2026-07-12",
+        "environment": "macOS 26.5.1 arm64",
+        "editor": "VS Code 1.128.0 Extension Development Host",
+        "theme": "Dark Modern",
+        "zoom": "0; 1440x900 viewport at 2x device scale",
+        "pythonTarget": "3.12",
+        "basiliskVersion": "unreleased working-tree build (0.0.0-PLACEHOLDER)",
+        "fixture": "examples/signal-box",
+        "command": "make -C book screenshots",
+        "method": "real LSP preview in headed VS Code, left unapplied and captured over Chrome DevTools Protocol",
+        "nativeSize": "2880x1800 master; deterministic 1600x1000 publication crop",
+        "sha256": "b1c790ed5a4ff4b393e5e86aa4cae5ceab45f29c2fe13c7de672654bea00a2ef"
+      },
+      "publicationGate": "Recapture from the pinned Basilisk release before publication."
+    },
+    {
+      "id": "fig-10-adoption-funnel",
+      "section": "10",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/10-adoption-funnel.png",
+      "title": "Reduce high-confidence work before adopting the remainder",
+      "alt": "An initial diagnostic set passes through safe fixes and review before the remaining files enter an explicit adopted-warning state."
+    },
+    {
+      "id": "shot-10-cli-fix",
+      "section": "10",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/10-cli-fix.png",
+      "title": "Preview the work a safe fix actually performed",
+      "alt": "A terminal and source diff show a bounded Basilisk fix followed by diagnostics that still require a human decision."
+    },
+    {
+      "id": "shot-10-adopt-status",
+      "section": "10",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/10-adopt-status.png",
+      "title": "Adopted work remains visible",
+      "alt": "Basilisk adoption status lists migrated and remaining Signal Box files without removing their diagnostics from the workflow."
+    },
+    {
+      "id": "fig-11-lsp-loop",
+      "section": "11",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/11-lsp-request-loop.png",
+      "title": "The editor asks; Basilisk answers from shared analysis",
+      "alt": "Editor requests for hover, completion, navigation, and rename loop through one Basilisk language-server workspace state."
+    },
+    {
+      "id": "shot-11-hover",
+      "section": "11",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/11-hover-signature.png",
+      "title": "Keep the contract in view while editing",
+      "alt": "A compact editor crop combines function completion, signature help, and hover around a Signal Box call site."
+    },
+    {
+      "id": "shot-11-rename",
+      "section": "11",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/11-rename-preview.png",
+      "title": "Preview a rename across modules",
+      "alt": "A real rename preview lists references in several Signal Box modules before any workspace edit is accepted."
+    },
+    {
+      "id": "shot-11-quickfix",
+      "section": "11",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/11-quickfix-preview.png",
+      "title": "A quick fix is a proposed edit",
+      "alt": "The editor lightbulb and diff preview show a narrow Basilisk code action while leaving a separate type decision untouched."
+    },
+    {
+      "id": "fig-12-evidence-loop",
+      "section": "12",
+      "kind": "diagram",
+      "status": "planned",
+      "path": "assets/diagrams/12-runtime-evidence-loop.png",
+      "title": "Static checks, tests, debugging, and profiling answer different questions",
+      "alt": "Four connected evidence lanes show Basilisk checking compatibility, tests checking examples, debugging inspecting state, and profiling measuring execution."
+    },
+    {
+      "id": "shot-12-tests",
+      "section": "12",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/12-test-explorer.png",
+      "title": "Discover and run the Signal Box tests",
+      "alt": "The editor Test Explorer displays discovered Signal Box tests and a selected passing result with source navigation."
+    },
+    {
+      "id": "shot-12-debugger",
+      "section": "12",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/12-debugger.png",
+      "title": "Pause where the static model meets runtime state",
+      "alt": "A real VS Code debug session pauses in Signal Box with the relevant variables, call stack, and current source line visible."
+    },
+    {
+      "id": "shot-12-profiler",
+      "section": "12",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/12-profiler.png",
+      "title": "Measure a hot path before changing it",
+      "alt": "Basilisk CPU profiling shows source heat annotations and a flame graph that identify the Signal Box aggregation hot path."
+    },
+    {
+      "id": "shot-12-ci",
+      "section": "12",
+      "kind": "screenshot",
+      "status": "planned",
+      "path": "assets/screenshots/12-ci.png",
+      "title": "Run the same verified check in CI",
+      "alt": "A clean CI terminal capture shows the pinned Basilisk version, project-root check, test result, and successful process status."
+    }
+  ]
+}

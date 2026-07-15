@@ -173,7 +173,7 @@ function M.register(config)
   vim.api.nvim_create_user_command("BasiliskDisableRule", function(opts)
     local rule = opts.args
     if rule == "" then
-      vim.ui.input({ prompt = "Diagnostic code to disable (e.g. BSK-E0001): " }, function(input)
+      vim.ui.input({ prompt = "Diagnostic code to disable (e.g. BSK-0001): " }, function(input)
         if input and input ~= "" then
           execute_command("basilisk.disableRule", { { rule = input, severity = "off" } })
         end

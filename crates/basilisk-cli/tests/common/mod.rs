@@ -73,17 +73,30 @@ pub fn run_with_config(
     Ok(check_with_config(&resolved, config))
 }
 
-/// The project configuration that opts into Basilisk's annotation house rules
-/// (`strict_annotations = true`): `BSK-E0001`..`BSK-E0005`, `BSK-E0025`,
-/// `BSK-W0014`, `BSK-W0040`, `BSK-W0050`.
+/// Project configuration with explicit native severities for Basilisk's
+/// annotation house rules.
 ///
 /// This is configuration **data** — exactly what a project writes in
-/// `basilisk.toml` to enable these off-by-default rules — not a checker "mode".
+/// config file to enable these off-by-default rules — not a checker "mode".
 /// See [CHKARCH-CONFIGURATION-ONLY].
 #[must_use]
 pub fn annotation_rules_config() -> BasiliskConfig {
-    BasiliskConfig {
-        strict_annotations: true,
-        ..BasiliskConfig::default()
-    }
+    use basilisk_config::RuleSeverity::{Error, Warning};
+
+    BasiliskConfig::with_rule_entries(
+        [
+            ("BSK-0001", Error),
+            ("BSK-0002", Error),
+            ("BSK-0003", Error),
+            ("BSK-0004", Error),
+            ("BSK-0005", Error),
+            ("BSK-0025", Error),
+            ("BSK-0014", Warning),
+            ("BSK-0040", Warning),
+            ("BSK-0050", Warning),
+        ]
+        .into_iter()
+        .map(|(code, severity)| (code.to_owned(), severity))
+        .collect(),
+    )
 }

@@ -56,6 +56,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Callable
 
@@ -426,10 +427,16 @@ def parse_args(argv: list[str]) -> dict:
 
 
 def resolve_suite(opts: dict, root: Path) -> tuple[Path, dict]:
+    # The clone lives OUTSIDE the repository tree: per-file config discovery
+    # walks ancestor directories ([CHKARCH-CONFIG-DISCOVERY]), so a clone under
+    # the repo would inherit the repo's own `[tool.basilisk]` rules and the
+    # score would no longer be the binary's out-of-the-box default. A neutral
+    # system-temp location keeps the suite config-free, exactly what a user
+    # gets with no configuration ([CHKARCH-CONFORMANCE]).
     dest = (
         Path(opts["suite_dir"])
         if opts["suite_dir"]
-        else root / "target" / "typing-upstream"
+        else Path(tempfile.gettempdir()) / "basilisk-typing-upstream"
     )
     if opts["reuse_clone"] and (dest / "conformance" / "src" / "main.py").is_file():
         conf, commit = _suite_paths(dest)

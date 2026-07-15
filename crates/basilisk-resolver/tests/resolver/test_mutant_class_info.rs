@@ -5,7 +5,7 @@ use super::common::resolve_src;
 
 #[test]
 fn body_is_stub_ellipsis_only_is_stub() -> Result<(), Box<dyn std::error::Error>> {
-    // @overload functions with `...` bodies are stubs — BSK-E0001/BSK-E0002 must not fire.
+    // @overload functions with `...` bodies are stubs — BSK-0001/BSK-0002 must not fire.
     let src = concat!(
         "from typing import overload\n",
         "@overload\n",

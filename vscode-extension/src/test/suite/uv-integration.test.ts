@@ -144,25 +144,22 @@ suite('Basilisk uv Integration Tests', () => {
         );
     });
 
-    test('Extension contributes basilisk.uv.stubSuggestions setting', () => {
+    test('Rule-family policy is not exposed as VS Code settings', () => {
         const cfg = vscode.workspace.getConfiguration('basilisk');
-        const inspected = cfg.inspect<boolean>('uv.stubSuggestions');
-        assert.ok(inspected, 'basilisk.uv.stubSuggestions should be a contributed setting');
+        // A key that is NOT contributed as a setting has no declared default.
+        // (Recent VS Code returns a shaped inspect() object with every value
+        // `undefined` for an unknown key under a known section rather than a
+        // literal `undefined`, so assert on the absence of a `defaultValue` —
+        // a contributed boolean setting would report its declared default.)
         assert.strictEqual(
-            inspected.defaultValue,
-            true,
-            'Default uv.stubSuggestions should be true'
+            cfg.inspect<boolean>('uv.stubSuggestions')?.defaultValue,
+            undefined,
+            'stub suggestions must be configured through BSK-0152 severity, not a VS Code setting'
         );
-    });
-
-    test('Extension contributes basilisk.uv.dependencyDiagnostics setting', () => {
-        const cfg = vscode.workspace.getConfiguration('basilisk');
-        const inspected = cfg.inspect<boolean>('uv.dependencyDiagnostics');
-        assert.ok(inspected, 'basilisk.uv.dependencyDiagnostics should be a contributed setting');
         assert.strictEqual(
-            inspected.defaultValue,
-            true,
-            'Default uv.dependencyDiagnostics should be true'
+            cfg.inspect<boolean>('uv.dependencyDiagnostics')?.defaultValue,
+            undefined,
+            'dependency diagnostics must be configured through explicit rule severities, not a VS Code setting'
         );
     });
 
@@ -170,7 +167,7 @@ suite('Basilisk uv Integration Tests', () => {
     // Quick-fix success toast names the package (regression)
     // ----------------------------------------------------------------
 
-    // A code action (e.g. the BSK-E0152 "install stubs" fix) invokes
+    // A code action (e.g. the BSK-0152 "install stubs" fix) invokes
     // basilisk.uv.addDev with a BARE STRING argument, not a `{ package }`
     // object. The success toast must read the package name from either shape;
     // previously it only handled the object form and showed "undefined".
@@ -208,5 +205,4 @@ suite('Basilisk uv Integration Tests', () => {
     });
 
 });
-
 

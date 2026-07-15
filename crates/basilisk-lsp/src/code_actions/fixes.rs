@@ -7,10 +7,8 @@
 
 // Implements [AUTOFIX-MASS] (Single-diagnostic scope) — these per-diagnostic
 // edits are the unit that mass_fix collects and combines for File/Workspace
-// scope. NOTE: the spec's `Fix` metadata struct ([AUTOFIX-METADATA]) with
-// `safety`/`combinable`/`source` fields is NOT modelled here; each fn returns a
-// bare `CodeAction`. Safety is tracked separately as static rule-code lists in
-// mass_fix (SAFE_FIXABLE_RULES / ALL_FIXABLE_RULES). See report DEVIATION.
+// scope. Per [AUTOFIX-METADATA], each function returns a bare `CodeAction`;
+// safety is tracked by the static rule-code lists in `mass_fix`.
 
 use std::collections::HashMap;
 
@@ -63,7 +61,7 @@ pub(super) fn fix_missing_variable_annotation(uri: &Url, diag: &Diagnostic) -> C
     )
 }
 
-/// Remove redundant type annotation (for BSK-W0050).
+/// Remove redundant type annotation (for BSK-0050).
 ///
 /// Example: `x: int = 42` → `x = 42`
 /// Finds the colon on the diagnostic's source line and removes everything

@@ -19,26 +19,40 @@ basilisk check examples/
 basilisk check examples/bad.py --output json
 ```
 
+## 错误 vs 警告
+
+下面的每个**错误**都是对
+[Python 类型规范](https://typing.python.org/en/latest/spec/index.html)的真实违反。
+这些规则开箱即用——在您自己的项目中，无需任何配置，您得到的正是它们。
+
+每个**警告**都来自 Basilisk 的可选严格性规则（处处要求注解、要求
+`@override` 等）。它们默认关闭；本仓库通过根 `pyproject.toml` 中的
+`per-path-overrides` 条目为 `examples/**` 以警告级别启用了它们。这正是文档
+教授的渐进式采纳方式：警告意味着"这段代码通过类型检查，但严格度还没有
+拉满"。当警告清零后，把这些规则提升为 `error`——在 `[tool.basilisk.rules]`
+中，或使用 VS Code 配置编辑器（**Basilisk: Open Configuration Editor**）
+的 Strict 预设。
+
 ## 文件
 
 ### 违规展示（包含大量诊断）
 
-| 文件 | 领域 | 主要违规 |
-|---|---|---|
-| [bad.py](bad.py) | 最小化示例 | E0001, E0002, E0004, E0005 |
-| [mixed.py](mixed.py) | 混合：有类型 / 无类型 | E0001, E0002 |
-| [api_server.py](api_server.py) | REST API 处理器 | E0001–E0003, E0011, E0014, E0017, E0019, E0025 |
-| [data_pipeline.py](data_pipeline.py) | ETL 管道 | E0001–E0003, E0011, E0014, E0017, E0019, E0022, E0025 |
-| [ml_trainer.py](ml_trainer.py) | 机器学习训练循环 | E0001–E0003, E0011, E0014, E0017, E0018, E0023, E0025 |
-| [finance.py](finance.py) | 财务计算 | E0001–E0003, E0011, E0014, E0017, E0018, E0019, E0023, E0025 |
-| [cli_tool.py](cli_tool.py) | CLI 应用程序 | E0001–E0003, E0011, E0014, E0017, E0019, E0023, E0025 |
-| [weird_violations.py](weird_violations.py) | 微妙的边界情况 | E0003, E0011, E0014, E0017, E0019, E0021, E0023, E0025 |
+| 文件 | 领域 | PEP 错误（始终启用） | 严格性警告（可选启用） |
+|---|---|---|---|
+| [bad.py](bad.py) | 最小化导览 | `calls_argument_type`, `returns_compatibility`, `assignment_compatibility`, `calls_argument_count`, `classes_override`, `names_unbound`, `match_exhaustiveness` | BSK-0001, E0002, E0004 |
+| [mixed.py](mixed.py) | 混合：有类型 / 无类型 | `calls_argument_type` | BSK-0001, E0002 |
+| [api_server.py](api_server.py) | REST API 处理器 | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [data_pipeline.py](data_pipeline.py) | ETL 管道 | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014 |
+| [ml_trainer.py](ml_trainer.py) | 机器学习训练循环 | `assignment_compatibility`, `overloads_consistency`, `match_exhaustiveness`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [finance.py](finance.py) | 财务计算 | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [cli_tool.py](cli_tool.py) | CLI 应用程序 | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [weird_violations.py](weird_violations.py) | 微妙的边界情况 | `overloads_consistency`, `names_unbound`, `classes_override_2`, `assignment_compatibility`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, W0014, W0050 |
 
 ### 无错误对照版本（零诊断）
 
 | 文件 | 对照 |
 |---|---|
-| [good.py](good.py) | 最小化示例的修复版 |
+| [good.py](good.py) | `bad.py` 的修复版——在完全严格模式下通过 |
 | [api_server_clean.py](api_server_clean.py) | `api_server.py` 的修复版 |
 
 ### 调试器与性能分析器演示（按 F5 启动）
@@ -53,28 +67,34 @@ basilisk check examples/bad.py --output json
 | [memory_demo.py](memory_demo.py) | 内存——持续泄漏、瞬时峰值、引用循环；该运行会在退出时捕获最终快照，因此结束时会生成可查看的热力图 / `.heapprofile` | 一键操作：**Run & Track Memory (Current File)** |
 | [heap_demo.py](heap_demo.py) | 内存——约 70 MB 的大块温缓存，分布在约 40 个不同的分配位置，使 `.heapprofile` 火焰图和 Self-Size 表格填满多样、真实的数据切片 | 一键操作：**Run & Track Memory (Current File)** |
 
-## 错误代码参考
+## 规则参考
+
+每条诊断末尾都带有指向其文档页面的 `see:` 链接。完整目录见
+[basilisk-python.dev/docs/rules](https://www.basilisk-python.dev/docs/rules/)。
+
+### 此处展示的 PEP 类型规范规则（错误，始终启用）
 
 | 代码 | 含义 |
 |---|---|
-| E0001 | 缺少参数类型注解 |
-| E0002 | 缺少返回值类型注解 |
-| E0003 | 无法推断空集合或 `None` 的类型 |
-| E0004 | 缺少 `*args` / `**kwargs` 类型注解 |
-| E0005 | 缺少类属性类型注解 |
-| E0010 | 未类型化的导入 |
-| E0011 | 使用显式 `Any` 但缺少说明注释 |
-| E0012 | 传递给函数的参数类型错误 |
-| E0013 | 声明 `-> None` 的函数返回了非 None 值 |
-| E0014 | 赋值类型不匹配 |
-| E0015 | 无效的类型参数 |
-| E0016 | 方法签名不兼容的重写 |
-| E0017 | 属性类型不兼容的重写 |
-| E0018 | 变量在定义之前被使用 |
-| E0019 | 变量在某些代码路径上可能未绑定 |
-| E0020 | `@overload` 组缺少实现 |
-| E0021 | 重叠的重载签名 |
-| E0022 | 不可哈希的类型被用作字典键 |
-| E0023 | 非穷尽的 `match` 语句 |
-| E0024 | 无效的类型形式 |
-| E0025 | 重写缺少 `@override` 装饰器 |
+| `calls_argument_type` | 实参与形参声明的类型不兼容 |
+| `calls_argument_count` | 调用时参数数量错误 |
+| `returns_compatibility` / `returns_compatibility_2` | 返回值不能赋值给声明的返回类型 |
+| `assignment_compatibility` | 赋的值不能赋值给注解类型 |
+| `classes_override` | `@override` 方法与基类方法不兼容 |
+| `classes_override_2` | 属性重写与基类不兼容 |
+| `names_unbound` | 变量在某些执行路径上可能未绑定 |
+| `match_exhaustiveness` | 非穷尽的 `match`——缺少通配 `case _:` 分支 |
+| `dict_key_hashable` | 不可哈希的类型被用作字典键 |
+| `overloads_consistency` | `@overload` 组不一致或相互重叠 |
+
+### 此处展示的 Basilisk 严格性规则（警告，可选启用）
+
+| 代码 | 含义 |
+|---|---|
+| BSK-0001 | 缺少参数类型注解 |
+| BSK-0002 | 缺少返回值类型注解 |
+| BSK-0003 | 无法推断空集合或 `None` 的类型 |
+| BSK-0004 | 缺少 `*args` / `**kwargs` 类型注解 |
+| BSK-0025 | 重写缺少 `@override` 装饰器 |
+| BSK-0014 | 使用显式 `Any` 但缺少说明 |
+| BSK-0050 | 冗余的类型注解 |

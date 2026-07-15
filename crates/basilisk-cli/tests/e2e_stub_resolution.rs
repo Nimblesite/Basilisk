@@ -242,7 +242,7 @@ fn autofix_stub_install_flips_source_resolution_to_stub() {
         after.resolution,
         ImportResolution::StubPyi,
         "after `uv add --dev types-requests` the import must resolve to the stub \
-         package so BSK-E0152 clears, got: {:?} at {:?}",
+         package so BSK-0152 clears, got: {:?} at {:?}",
         after.resolution,
         after.path
     );

@@ -29,6 +29,7 @@ const LABELS = {
   imports: ["Imports", "导入"],
   redundancy: ["Redundancy", "冗余代码"],
   stubs: ["Type stubs", "类型存根"],
+  suppressions: ["Suppressions", "抑制指令"],
 };
 
 const PEP_ORDER = [
@@ -40,6 +41,7 @@ const PEP_ORDER = [
 
 const BASILISK_ORDER = [
   "strictness", "dependencies", "style", "imports", "redundancy", "stubs",
+  "suppressions",
 ];
 
 function rulesFor(provenance, tag) {

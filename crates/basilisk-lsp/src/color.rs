@@ -194,3 +194,227 @@ fn hex_val(b: u8) -> Option<u8> {
 fn hex_byte(hi: u8, lo: u8) -> Option<u8> {
     Some(hex_val(hi)? * 16 + hex_val(lo)?)
 }
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    reason = "test-only code: indexing acceptable in unit tests"
+)]
+mod tests {
+    use super::*;
+
+    const EPS: f32 = 0.001;
+
+    fn approx(a: f32, b: f32) -> bool {
+        (a - b).abs() < EPS
+    }
+
+    #[test]
+    fn no_color_source_returns_empty() {
+        assert!(document_colors("x = 1\ny = 'hello world'\n").is_empty());
+    }
+
+    #[test]
+    fn hash_without_hex_is_ignored() {
+        // `#` not followed by a valid hex-length run.
+        assert!(document_colors("s = '# not a color'").is_empty());
+        // `#` at end of string.
+        assert!(document_colors("s = 'trailing #'").is_empty());
+    }
+
+    #[test]
+    fn hash_outside_string_is_ignored() {
+        // A `#` comment outside any string literal must not be scanned.
+        assert!(document_colors("x = 1  # ff0000 looks hex but isn't a string").is_empty());
+    }
+
+    #[test]
+    fn short_and_invalid_hex_ignored() {
+        // 2-digit run: not 3/6/8.
+        assert!(document_colors("s = '#ab'").is_empty());
+        // 4-digit run: not a supported length.
+        assert!(document_colors("s = '#abcd'").is_empty());
+        // 5-digit run.
+        assert!(document_colors("s = '#abcde'").is_empty());
+        // 7-digit run.
+        assert!(document_colors("s = '#abcdef0'").is_empty());
+        // `#` followed by non-hex.
+        assert!(document_colors("s = '#zzz'").is_empty());
+    }
+
+    #[test]
+    fn six_digit_double_quote_red() {
+        let colors = document_colors("c = \"#ff0000\"");
+        assert_eq!(colors.len(), 1);
+        let color = colors[0].color;
+        assert!(approx(color.red, 1.0));
+        assert!(approx(color.green, 0.0));
+        assert!(approx(color.blue, 0.0));
+        assert!(approx(color.alpha, 1.0));
+    }
+
+    #[test]
+    fn six_digit_single_quote_green() {
+        let colors = document_colors("c = '#00ff00'");
+        assert_eq!(colors.len(), 1);
+        let color = colors[0].color;
+        assert!(approx(color.red, 0.0));
+        assert!(approx(color.green, 1.0));
+        assert!(approx(color.blue, 0.0));
+        assert!(approx(color.alpha, 1.0));
+    }
+
+    #[test]
+    fn six_digit_range_spans_hash_through_last_digit() {
+        // `c = "#ff0000"` — the `#` is at byte offset 5, span covers 7 bytes.
+        let source = "c = \"#ff0000\"";
+        let colors = document_colors(source);
+        assert_eq!(colors.len(), 1);
+        let range = colors[0].range;
+        assert_eq!(range.start.line, 0);
+        assert_eq!(range.start.character, 5);
+        assert_eq!(range.end.line, 0);
+        assert_eq!(range.end.character, 12);
+    }
+
+    #[test]
+    fn three_digit_expands_to_full_byte() {
+        // `#f00` → red channel f -> 0xff, green/blue 0.
+        let colors = document_colors("c = '#f00'");
+        assert_eq!(colors.len(), 1);
+        let color = colors[0].color;
+        assert!(approx(color.red, 1.0));
+        assert!(approx(color.green, 0.0));
+        assert!(approx(color.blue, 0.0));
+        assert!(approx(color.alpha, 1.0));
+        // Span covers `#` + 3 digits = 4 bytes.
+        assert_eq!(colors[0].range.start.character, 5);
+        assert_eq!(colors[0].range.end.character, 9);
+    }
+
+    #[test]
+    fn three_digit_mid_nibble_expands() {
+        // `#abc` → a->0xaa, b->0xbb, c->0xcc.
+        let colors = document_colors("c = '#abc'");
+        assert_eq!(colors.len(), 1);
+        let color = colors[0].color;
+        assert!(approx(color.red, f32::from(0xaa_u8) / 255.0));
+        assert!(approx(color.green, f32::from(0xbb_u8) / 255.0));
+        assert!(approx(color.blue, f32::from(0xcc_u8) / 255.0));
+    }
+
+    #[test]
+    fn eight_digit_carries_alpha() {
+        // `#ff000080` → red 1.0, alpha 0x80/255.
+        let colors = document_colors("c = '#ff000080'");
+        assert_eq!(colors.len(), 1);
+        let color = colors[0].color;
+        assert!(approx(color.red, 1.0));
+        assert!(approx(color.green, 0.0));
+        assert!(approx(color.blue, 0.0));
+        assert!(approx(color.alpha, f32::from(0x80_u8) / 255.0));
+        // Span covers `#` + 8 digits = 9 bytes.
+        assert_eq!(colors[0].range.start.character, 5);
+        assert_eq!(colors[0].range.end.character, 14);
+    }
+
+    #[test]
+    fn uppercase_hex_digits_parse() {
+        let colors = document_colors("c = '#00FF00'");
+        assert_eq!(colors.len(), 1);
+        assert!(approx(colors[0].color.green, 1.0));
+    }
+
+    #[test]
+    fn multiple_colors_on_one_line() {
+        let colors = document_colors("c = '#ff0000 and #0000ff'");
+        assert_eq!(colors.len(), 2);
+        assert!(approx(colors[0].color.red, 1.0));
+        assert!(approx(colors[1].color.blue, 1.0));
+    }
+
+    #[test]
+    fn colors_in_different_literals() {
+        let source = "a = '#ff0000'\nb = \"#00ff00\"\n";
+        let colors = document_colors(source);
+        assert_eq!(colors.len(), 2);
+        assert_eq!(colors[0].range.start.line, 0);
+        assert_eq!(colors[1].range.start.line, 1);
+        assert!(approx(colors[0].color.red, 1.0));
+        assert!(approx(colors[1].color.green, 1.0));
+    }
+
+    #[test]
+    fn escaped_char_skipped_in_string() {
+        // The backslash escape advances two bytes; the color after it still parses.
+        let colors = document_colors("s = 'a\\t#00ff00'");
+        assert_eq!(colors.len(), 1);
+        assert!(approx(colors[0].color.green, 1.0));
+    }
+
+    #[test]
+    fn presentations_opaque_returns_six_and_eight_digit() {
+        let color = Color {
+            red: 1.0,
+            green: 0.0,
+            blue: 0.0,
+            alpha: 1.0,
+        };
+        let range = Range::default();
+        let presentations = color_presentations(&color, &range);
+        assert_eq!(presentations.len(), 2);
+        assert_eq!(presentations[0].label, "#ff0000");
+        assert_eq!(presentations[1].label, "#ff0000ff");
+        // Both carry a text edit with matching new_text.
+        assert_eq!(
+            presentations[0]
+                .text_edit
+                .as_ref()
+                .map(|e| e.new_text.clone()),
+            Some("#ff0000".to_owned())
+        );
+        assert_eq!(
+            presentations[1]
+                .text_edit
+                .as_ref()
+                .map(|e| e.new_text.clone()),
+            Some("#ff0000ff".to_owned())
+        );
+    }
+
+    #[test]
+    fn presentations_translucent_returns_only_eight_digit() {
+        let color = Color {
+            red: 0.0,
+            green: 0.0,
+            blue: 1.0,
+            alpha: f32::from(0x80_u8) / 255.0,
+        };
+        let range = Range::default();
+        let presentations = color_presentations(&color, &range);
+        assert_eq!(presentations.len(), 1);
+        assert_eq!(presentations[0].label, "#0000ff80");
+    }
+
+    #[test]
+    fn parse_hex_color_rejects_bad_lengths() {
+        // Directly exercise the helper's rejected branches.
+        assert!(parse_hex_color(b"ab", 0).is_none());
+        assert!(parse_hex_color(b"abcd", 0).is_none());
+        assert!(parse_hex_color(b"", 0).is_none());
+    }
+
+    #[test]
+    fn hex_val_and_hex_byte_cover_ranges() {
+        assert_eq!(hex_val(b'0'), Some(0));
+        assert_eq!(hex_val(b'9'), Some(9));
+        assert_eq!(hex_val(b'a'), Some(10));
+        assert_eq!(hex_val(b'F'), Some(15));
+        assert_eq!(hex_val(b'g'), None);
+        assert_eq!(hex_byte(b'f', b'f'), Some(255));
+        assert_eq!(hex_byte(b'0', b'0'), Some(0));
+        assert_eq!(hex_byte(b'z', b'0'), None);
+    }
+}

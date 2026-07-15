@@ -1,5 +1,5 @@
-//! Implements [BSK-W0040] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! BSK-W0040: Lambda function missing type annotations.
+//! Implements [BSK-0040] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! BSK-0040: Lambda function missing type annotations.
 //!
 //! Emitted when a lambda function is assigned to a variable without type annotations.
 //! This is a warning rather than an error since lambda functions are often used for simple
@@ -20,12 +20,12 @@ use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-W0040",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-W0040",
+    code: "BSK-0040",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0040",
 };
 
-/// Emits BSK-W0040 when lambda functions are assigned to unannotated variables.
-// Implements [TYPEINF-FUNC-LAMBDA] / [TYPEINF-EXCEEDS-LAMBDA] — warn (BSK-W0040)
+/// Emits BSK-0040 when lambda functions are assigned to unannotated variables.
+// Implements [TYPEINF-FUNC-LAMBDA] / [TYPEINF-EXCEEDS-LAMBDA] — warn (BSK-0040)
 // when a lambda's parameter types cannot be inferred from an expected type;
 // an annotated target supplies that context and is accepted.
 pub(crate) struct LambdaMissingAnnotations;

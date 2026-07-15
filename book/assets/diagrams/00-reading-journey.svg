@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">The reading journey from first diagnostic to repeatable workflow</title>
+  <desc id="desc">Four connected stages carry the reader from seeing a Python diagnostic through explaining the type relationship and choosing project policy to repeating the same check locally and in CI.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0A0C12"/>
+      <stop offset="1" stop-color="#141820"/>
+    </linearGradient>
+    <linearGradient id="trace" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6EC5E9"/>
+      <stop offset="0.5" stop-color="#E8500A"/>
+      <stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <style>
+      .display { font: 700 54px 'Space Grotesk', Arial, sans-serif; fill: #F0F2F7; letter-spacing: 1px; }
+      .eyebrow { font: 700 25px 'Space Grotesk', Arial, sans-serif; fill: #E8500A; letter-spacing: 5px; }
+      .number { font: 700 24px 'Space Grotesk', Arial, sans-serif; fill: #0A0C12; }
+      .card-title { font: 700 32px 'Space Grotesk', Arial, sans-serif; fill: #F0F2F7; }
+      .body { font: 400 26px 'Space Grotesk', Arial, sans-serif; fill: #B9C1CF; }
+      .code { font: 500 24px 'JetBrains Mono', monospace; fill: #F0F2F7; }
+      .small { font: 600 22px 'Space Grotesk', Arial, sans-serif; fill: #8892A4; letter-spacing: 2px; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1000" fill="url(#background)"/>
+  <path d="M0 180 H1600" stroke="#242B38" stroke-width="2"/>
+  <text x="90" y="88" class="eyebrow">THE COVER-TO-COVER PATH</text>
+  <text x="90" y="150" class="display">From one question to a repeatable workflow</text>
+
+  <path d="M206 425 H1394" stroke="#252C39" stroke-width="22" stroke-linecap="round"/>
+  <path d="M206 425 H1394" stroke="url(#trace)" stroke-width="7" stroke-linecap="round" filter="url(#glow)"/>
+
+  <g transform="translate(84 252)">
+    <rect width="332" height="426" rx="28" fill="#141820" stroke="#354052" stroke-width="2"/>
+    <circle cx="64" cy="64" r="29" fill="#6EC5E9"/>
+    <text x="57" y="73" class="number">1</text>
+    <text x="108" y="73" class="small">PART I</text>
+    <text x="34" y="140" class="card-title">See the evidence</text>
+    <rect x="34" y="178" width="264" height="112" rx="14" fill="#0A0C12" stroke="#3B4657"/>
+    <text x="54" y="214" class="code">value: int</text>
+    <path d="M54 231 H250" stroke="#F87171" stroke-width="5"/>
+    <text x="54" y="269" class="code" fill="#F87171">boundary: str</text>
+    <text x="34" y="338" class="body">Observe the span,</text>
+    <text x="34" y="374" class="body">code, help, and type</text>
+    <text x="34" y="410" class="body">information first.</text>
+  </g>
+
+  <g transform="translate(450 252)">
+    <rect width="332" height="426" rx="28" fill="#141820" stroke="#354052" stroke-width="2"/>
+    <circle cx="64" cy="64" r="29" fill="#6EC5E9"/>
+    <text x="57" y="73" class="number">2</text>
+    <text x="108" y="73" class="small">PART II</text>
+    <text x="34" y="140" class="card-title">Explain the type</text>
+    <rect x="34" y="184" width="92" height="58" rx="29" fill="#183447" stroke="#6EC5E9" stroke-width="2"/>
+    <text x="61" y="221" class="code">int</text>
+    <path d="M138 213 H196" stroke="#8892A4" stroke-width="4" stroke-dasharray="8 8"/>
+    <path d="M184 202 L200 213 L184 224" fill="none" stroke="#8892A4" stroke-width="4"/>
+    <rect x="208" y="184" width="90" height="58" rx="12" fill="#2E1C18" stroke="#E8500A" stroke-width="2"/>
+    <text x="230" y="221" class="code">str</text>
+    <text x="34" y="302" class="body">Name the value, the</text>
+    <text x="34" y="338" class="body">required boundary,</text>
+    <text x="34" y="374" class="body">and why they do—or</text>
+    <text x="34" y="410" class="body">do not—fit.</text>
+  </g>
+
+  <g transform="translate(816 252)">
+    <rect width="332" height="426" rx="28" fill="#141820" stroke="#354052" stroke-width="2"/>
+    <circle cx="64" cy="64" r="29" fill="#E8500A"/>
+    <text x="57" y="73" class="number">3</text>
+    <text x="108" y="73" class="small">PART III</text>
+    <text x="34" y="140" class="card-title">Choose policy</text>
+    <rect x="34" y="178" width="264" height="126" rx="14" fill="#0A0C12" stroke="#E8500A" stroke-width="2"/>
+    <text x="54" y="216" class="code">pyproject.toml</text>
+    <text x="54" y="256" class="code">BSK-0002</text>
+    <text x="54" y="286" class="code">severity: error</text>
+    <text x="34" y="338" class="body">Make a visible,</text>
+    <text x="34" y="374" class="body">reviewable project</text>
+    <text x="34" y="410" class="body">decision.</text>
+  </g>
+
+  <g transform="translate(1182 252)">
+    <rect width="332" height="426" rx="28" fill="#141820" stroke="#354052" stroke-width="2"/>
+    <circle cx="64" cy="64" r="29" fill="#34D399"/>
+    <text x="57" y="73" class="number">4</text>
+    <text x="108" y="73" class="small">WORKFLOW</text>
+    <text x="34" y="140" class="card-title">Repeat the check</text>
+    <g transform="translate(34 184)">
+      <rect width="64" height="62" rx="12" fill="#0A0C12" stroke="#34D399" stroke-width="2"/>
+      <text x="11" y="39" class="code">IDE</text>
+      <path d="M72 31 H92" stroke="#8892A4" stroke-width="3"/>
+      <rect x="100" width="64" height="62" rx="12" fill="#0A0C12" stroke="#34D399" stroke-width="2"/>
+      <text x="111" y="39" class="code">CLI</text>
+      <path d="M172 31 H192" stroke="#8892A4" stroke-width="3"/>
+      <rect x="200" width="64" height="62" rx="12" fill="#0A0C12" stroke="#34D399" stroke-width="2"/>
+      <text x="216" y="39" class="code">CI</text>
+    </g>
+    <path d="M54 290 H278" stroke="#34D399" stroke-width="5" stroke-linecap="round"/>
+    <path d="M260 276 L280 290 L260 304" fill="none" stroke="#34D399" stroke-width="5"/>
+    <text x="34" y="350" class="body">Carry the same check</text>
+    <text x="34" y="386" class="body">from edit to delivery.</text>
+  </g>
+
+  <g transform="translate(90 766)">
+    <rect width="1420" height="142" rx="28" fill="#10141C" stroke="#303847" stroke-width="2"/>
+    <text x="38" y="48" class="small">THE SIGNAL BOX LOOP</text>
+    <text x="38" y="98" class="body">Predict</text>
+    <circle cx="198" cy="90" r="7" fill="#6EC5E9"/>
+    <text x="228" y="98" class="body">Check</text>
+    <circle cx="354" cy="90" r="7" fill="#6EC5E9"/>
+    <text x="384" y="98" class="body">Explain</text>
+    <circle cx="544" cy="90" r="7" fill="#E8500A"/>
+    <text x="574" y="98" class="body">Change</text>
+    <circle cx="744" cy="90" r="7" fill="#E8500A"/>
+    <text x="774" y="98" class="body">Re-check</text>
+    <path d="M1000 88 H1324" stroke="url(#trace)" stroke-width="6" stroke-linecap="round"/>
+    <path d="M1304 73 L1328 88 L1304 103" fill="none" stroke="#34D399" stroke-width="6"/>
+  </g>
+</svg>

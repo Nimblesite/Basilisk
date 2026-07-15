@@ -1,0 +1,138 @@
+//! Structure-preserving rule and tag mutations for active config documents.
+//!
+//! Implements [CONFIGEDITOR-SOURCES]: the writer validates the original
+//! structure, applies plain entry updates, and validates the complete
+//! replacement. Empty tables are never pruned — an empty table means
+//! `analyze` runs nothing, and pruning it would re-arm the one-time seed
+//! ([LSPARCH-CONFIG-SEEDING]).
+
+use std::collections::BTreeMap;
+
+use toml_edit::{value, DocumentMut, Item, Table};
+
+use super::{content_revision, validate_content, ConfigDocument, ConfigDocumentError, ConfigPatch};
+use crate::RuleSeverity;
+
+/// Expanded, validated entry updates. `None` removes the entry.
+///
+/// The only mutations a config file can express ([CHKARCH-CONFIG-MODEL],
+/// `EditorMutation` in `models/configuration_editor.td`): set or remove a
+/// per-rule entry, set or remove a tag entry. There are no scopes, presets,
+/// or path patterns.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RuleConfigUpdate {
+    /// `[tool.basilisk.rules]` — code → explicit severity, or `None` to
+    /// remove the entry.
+    pub rules: BTreeMap<String, Option<RuleSeverity>>,
+    /// `[tool.basilisk.rule-tags]` — tag → explicit severity, or `None` to
+    /// remove the entry.
+    pub rule_tags: BTreeMap<String, Option<RuleSeverity>>,
+}
+
+/// Build and validate a complete replacement without writing it.
+///
+/// # Errors
+///
+/// Returns [`ConfigDocumentError`] when the source is read-only, malformed,
+/// has a wrong-shaped mutation target, or the rendered replacement is invalid.
+pub fn build_rule_patch(
+    document: &ConfigDocument,
+    update: &RuleConfigUpdate,
+) -> Result<ConfigPatch, ConfigDocumentError> {
+    if document.read_only {
+        return Err(ConfigDocumentError::ReadOnly {
+            path: document.path.clone(),
+        });
+    }
+    let content = patch_toml(&document.content, update, &document.path)?;
+    // Validate the complete rendered document before exposing a patch.
+    let mut config = validate_content(&document.path, &content)?;
+    config.project_root = Some(document.root.clone());
+    Ok(ConfigPatch {
+        path: document.path.clone(),
+        base_revision: document.revision.clone(),
+        revision: content_revision(&content),
+        content,
+        config,
+    })
+}
+
+fn patch_toml(
+    content: &str,
+    update: &RuleConfigUpdate,
+    path: &std::path::Path,
+) -> Result<String, ConfigDocumentError> {
+    let mut document =
+        content
+            .parse::<DocumentMut>()
+            .map_err(|error| ConfigDocumentError::Invalid {
+                path: path.to_path_buf(),
+                message: error.to_string(),
+            })?;
+    if !update.rules.is_empty() {
+        let rules = nested_table_mut(
+            document.as_table_mut(),
+            &["tool", "basilisk", "rules"],
+            path,
+        )?;
+        apply_table_updates(rules, &update.rules);
+    }
+    if !update.rule_tags.is_empty() {
+        let tags = nested_table_mut(
+            document.as_table_mut(),
+            &["tool", "basilisk", "rule-tags"],
+            path,
+        )?;
+        apply_table_updates(tags, &update.rule_tags);
+    }
+    let rendered = document.to_string();
+    Ok(match newline_style(content) {
+        "\r\n" => rendered.replace("\r\n", "\n").replace('\n', "\r\n"),
+        _ => rendered,
+    })
+}
+
+fn nested_table_mut<'a>(
+    mut root: &'a mut Table,
+    keys: &[&str],
+    source_path: &std::path::Path,
+) -> Result<&'a mut Table, ConfigDocumentError> {
+    for key in keys {
+        root = child_table_mut(root, key, source_path)?;
+    }
+    Ok(root)
+}
+
+fn child_table_mut<'a>(
+    table: &'a mut Table,
+    key: &str,
+    source_path: &std::path::Path,
+) -> Result<&'a mut Table, ConfigDocumentError> {
+    table
+        .entry(key)
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| ConfigDocumentError::Invalid {
+            path: source_path.to_path_buf(),
+            message: format!("`{key}` must be a table"),
+        })
+}
+
+fn apply_table_updates(table: &mut Table, entries: &BTreeMap<String, Option<RuleSeverity>>) {
+    for (key, severity) in entries {
+        match severity {
+            Some(severity) => table[key] = value(severity.as_str()),
+            None => {
+                let _ = table.remove(key);
+            }
+        }
+    }
+}
+
+fn newline_style(content: &str) -> &'static str {
+    if content.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    }
+}

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0005] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
-//! BSK-E0005: Missing class attribute type annotation.
+//! Implements [BSK-0005] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
+//! BSK-0005: Missing class attribute type annotation.
 //!
 //! Every class attribute declared in the class body must have an explicit type
 //! annotation.  Without one, Basilisk cannot verify assignments to the
@@ -19,11 +19,11 @@ use super::{
 };
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0005",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0005",
+    code: "BSK-0005",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0005",
 };
 
-/// Emits BSK-E0005 for every unannotated class attribute.
+/// Emits BSK-0005 for every unannotated class attribute.
 pub(crate) struct MissingAttributeAnnotation;
 
 impl Rule for MissingAttributeAnnotation {
@@ -41,7 +41,7 @@ impl Rule for MissingAttributeAnnotation {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         // Collect all TypeVar names (module-level and class-body) so we can
-        // exempt unannotated TypeVar assignments like `T = TypeVar("T")` from BSK-E0005.
+        // exempt unannotated TypeVar assignments like `T = TypeVar("T")` from BSK-0005.
         let typevar_names: std::collections::HashSet<&str> = module
             .typevar_calls
             .iter()

@@ -301,7 +301,7 @@ fn test_zed_multiple_documents() -> TestResult<()> {
 
     for _ in 0..20 {
         let Some(msg) = fixture.recv() else { break };
-        if msg.contains("doc_a.py") && msg.contains("BSK-E0001") {
+        if msg.contains("doc_a.py") && msg.contains("BSK-0001") {
             got_a = true;
         }
         if msg.contains("doc_b.py") && msg.contains("\"diagnostics\":[]") {

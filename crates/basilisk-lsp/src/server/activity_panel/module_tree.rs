@@ -23,7 +23,6 @@ struct HealthTotals {
     annotated: usize,
     errors: usize,
     warnings: usize,
-    adopted: usize,
 }
 
 impl HealthTotals {
@@ -32,9 +31,6 @@ impl HealthTotals {
         self.annotated += health.annotated_symbols;
         self.errors += health.errors;
         self.warnings += health.warnings;
-        if health.adopted {
-            self.adopted += 1;
-        }
     }
 }
 
@@ -42,33 +38,26 @@ impl HealthTotals {
 /// Build the module tree from the workspace index.
 ///
 /// Implements the server side of [EXTACT-MODULES-MODULE-ROW] (each node carries
-/// the folded coverage %, error/warning counts, and adoption state rendered on
-/// the module row) and [EXTACT-MODULES-HEADER] (the `workspace` `HealthStats`
-/// summary that drives the view's message + badge).
+/// the folded coverage % and error/warning counts rendered on the module row)
+/// and [EXTACT-MODULES-HEADER] (the `workspace` `HealthStats` summary that
+/// drives the view's message + badge).
 ///
 /// Each file becomes a module node containing its top-level symbols and a folded
-/// health rollup (coverage %, error/warning counts, adoption state). The
+/// health rollup (coverage %, error/warning counts). The
 /// workspace-wide rollup is accumulated in the same single pass, so the merged
 /// Modules panel needs no separate `basilisk.typeHealth` round-trip.
 ///
 /// With type checking disabled ([ANALYSIS-ENABLED], GitHub #119) the payload
-/// carries NO grading data at all — no coverage %, no error/warning tallies, no
-/// adoption state — only the navigation tree plus `typeCheckingEnabled: false`.
+/// carries NO grading data at all — no coverage % and no error/warning tallies
+/// — only the navigation tree plus `typeCheckingEnabled: false`.
 /// The grading fields are OMITTED (not zeroed) so no client can render a
 /// "NN% typed" header or coverage-tinted rows while the toggle is off.
 pub(crate) fn build_module_tree(
     idx: &WorkspaceIndex,
     scope: &str,
-    project_root: Option<&Path>,
     type_checking_enabled: bool,
     scan_complete: bool,
 ) -> WorkspaceModulesResult {
-    let adoption_store = if type_checking_enabled {
-        project_root.and_then(|root| basilisk_config::AdoptionStore::load(root).ok())
-    } else {
-        None
-    };
-
     let mut modules = Vec::new();
     let mut totals = HealthTotals::default();
 
@@ -99,13 +88,7 @@ pub(crate) fn build_module_tree(
         });
 
         if type_checking_enabled {
-            let health = compute_file_health(
-                resolved,
-                &file_entry.diagnostics,
-                path,
-                project_root,
-                adoption_store.as_ref(),
-            );
+            let health = compute_file_health(resolved, &file_entry.diagnostics);
             totals.accumulate(&health);
             attach_grading(&mut node, &health);
         }
@@ -148,7 +131,6 @@ fn attach_grading(node: &mut serde_json::Value, health: &super::type_health::Fil
         let _ = obj.insert("coveragePercent".into(), health.coverage_percent.into());
         let _ = obj.insert("errors".into(), health.errors.into());
         let _ = obj.insert("warnings".into(), health.warnings.into());
-        let _ = obj.insert("adopted".into(), health.adopted.into());
     }
 }
 
@@ -177,7 +159,6 @@ fn workspace_rollup(
         "coveragePercent": coverage_percent(totals.annotated, totals.symbols),
         "errors": totals.errors,
         "warnings": totals.warnings,
-        "adoptedFiles": totals.adopted,
         "totalFiles": total_files,
         "scanComplete": scan_complete,
     })
@@ -341,7 +322,7 @@ mod tests {
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_b, "y: str = 'hi'\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "", true, true);
         assert_eq!(tree.modules.len(), 2, "expected 2 modules in the tree");
 
         let names: Vec<&str> = tree
@@ -369,7 +350,7 @@ mod tests {
         let uri = make_uri("/workspace/pkg/__init__.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "", true, true);
         assert_eq!(tree.modules.len(), 1);
         let kind = tree.modules[0]
             .get("kind")
@@ -385,7 +366,7 @@ mod tests {
         let uri = make_uri("/workspace/mod.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "", true, true);
         assert_eq!(tree.modules.len(), 1);
         let kind = tree.modules[0]
             .get("kind")
@@ -403,7 +384,7 @@ mod tests {
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_b, "y: int = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "pkg", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "pkg", true, true);
         assert_eq!(tree.modules.len(), 1, "scope filter should keep only pkg.a");
         let name = tree.modules[0]
             .get("name")
@@ -424,11 +405,11 @@ mod tests {
         let uri = make_uri("/workspace/untyped.py");
         let _ = idx.set_open(&uri, "def bare(a):\n    return a\n\nb = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), false, true);
+        let tree = build_module_tree(&idx, "", false, true);
 
         assert_eq!(tree.modules.len(), 1, "module list stays for navigation");
         let module = &tree.modules[0];
-        for field in ["coveragePercent", "errors", "warnings", "adopted"] {
+        for field in ["coveragePercent", "errors", "warnings"] {
             assert!(
                 module.get(field).is_none(),
                 "disabled toggle must omit grading field '{field}' from module nodes, got {module}"
@@ -464,7 +445,7 @@ mod tests {
         let uri = make_uri("/workspace/mod.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "", true, true);
         assert_eq!(
             tree.workspace
                 .get("typeCheckingEnabled")
@@ -488,11 +469,11 @@ mod tests {
         let _ = idx.set_open(&uri_full, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_partial, "a: int = 1\nb = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "", true, true);
 
         // Every module node carries its folded health fields.
         for module in &tree.modules {
-            for field in ["coveragePercent", "errors", "warnings", "adopted"] {
+            for field in ["coveragePercent", "errors", "warnings"] {
                 assert!(
                     module.get(field).is_some(),
                     "module node missing folded health field '{field}'"

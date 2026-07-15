@@ -132,8 +132,9 @@ async function main(): Promise<void> {
         delete process.env.BASILISK_BINARY_DIR;
 
         // Open the SAME workspace the CI runner (.vscode-test.mjs) opens. The
-        // diagnostics suites depend on its config — `basilisk.json` turns on
-        // the opt-in strict-annotation rules their fixtures trip, and
+        // diagnostics suites depend on its config — the `[tool.basilisk]`
+        // table in `pyproject.toml` turns on the opt-in strict-annotation
+        // rules their fixtures trip, and
         // `.vscode/settings.json` selects wholeModule analysis — while its
         // settings carry no binary override, so activation still proves the
         // bundled VSIX path. A bare temp workspace silently disarms every

@@ -298,7 +298,7 @@ pub(super) async fn execute_uv_add(
 /// Handle `basilisk.uv.addDev`.
 //
 // Implements [LSPUV-COMMANDS] / [LSPUV-ACTIONS-QUICK-FIXES] — dispatch for the
-// `basilisk.uv.addDev` command (the BSK-E0152 "Install type stubs" quick fix).
+// `basilisk.uv.addDev` command (the BSK-0152 "Install type stubs" quick fix).
 pub(super) async fn execute_uv_add_dev(
     server: &LspServer,
     args: &[serde_json::Value],
