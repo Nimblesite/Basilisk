@@ -138,8 +138,7 @@ no remote resources, `localResourceRoots: []`, and no
 `retainContextWhenHidden`. Data is sent with `webview.postMessage` only after a
 ready handshake, never interpolated into executable HTML.
 
-The editor renders the tag-first Rules view and a project/source overview
-defined by
+The editor renders the tag-first Rules view defined by
 [CONFIGEDITOR-VSIX-EXPERIENCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-VSIX-EXPERIENCE).
 It uses native VS Code fonts/theme tokens plus restrained Basilisk orange/sky
 accents. All controls are semantic, text-labelled, keyboard-operable, high-
@@ -149,7 +148,7 @@ status uses an `aria-live` region and refreshes preserve focus.
 Rules are virtualized and organized by the server's Sources, PEP categories,
 and Policy tags. Every row exposes Error, Warning, Info, Disabled, and
 remove-entry controls — nothing else, because nothing else exists
-([CONFIGEDITOR-SEVERITY](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEVERITY)).
+([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 Occurrences load in cursor pages and navigation is restricted to the selected
 workspace root. Disabling or removing rules is always previewed, and the
 preview's diagnostic impact makes the consequence visible before apply.

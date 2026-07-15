@@ -1,7 +1,7 @@
 # Mass autofix and adoption {#AUTOFIX}
 
 This document records the shipped batch-fix engine, the root-scoped safe-fix
-operation used by the configuration editor, and active-configuration adoption.
+commands, and gradual adoption.
 
 ## Mass autofix {#AUTOFIX-MASS}
 
@@ -21,8 +21,8 @@ commands use that engine across their selected scope. The CLI exposes
   files beneath it. Omitting the argument retains the all-indexed-roots
   behavior used by existing clients.
 
-The configuration editor always supplies its selected root to the safe-only
-`basilisk.fixWorkspace` command.
+Any client UI may invoke the commands with a `rootUri`; the configuration
+editor exposes no fix affordance of its own.
 
 ### Classification {#AUTOFIX-CLASSIFY}
 
@@ -40,9 +40,10 @@ applies its edits immediately; no unsafe-review list is generated.
 
 Fix functions return ordinary LSP `CodeAction` values containing
 `WorkspaceEdit`s. There is no shipped per-diagnostic fix-safety object,
-combinability flag, or source enum. Callers select the static safe/all rule list
-before collecting edits. Configuration-editor snapshots and occurrences
-project safe/unsafe counts from those same lists.
+combinability flag, or source enum. Callers select the static safe/all rule
+list before collecting edits. Safe/unsafe classification is consumed only by
+these mass-fix commands; it appears nowhere in the configuration-editor
+protocol ([CONFIGEDITOR-MODEL](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-MODEL)).
 
 ### VS Code and CLI surface {#AUTOFIX-MASS-VSCODE}
 
@@ -67,12 +68,12 @@ One file-level mass action returns one `WorkspaceEdit`, so the editor can treat
 it as one undo operation. Workspace behavior follows the client's handling of
 the returned edit.
 
-## Configuration seeding and fixes {#AUTOFIX-STRICT-FIRST}
+## Configuration seeding and fixes {#AUTOFIX-SEEDING}
 
 There is no preset workflow. Seeding already materializes a strict starting
 point: a project with no config gets every PEP rule at `error` and every house
 rule at `warning`, written explicitly
-([CONFIGEDITOR-SEEDING](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEEDING)).
+([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
 Tightening or relaxing from there is ordinary bulk mutation through
 preview/apply, while root-scoped `basilisk.fixWorkspace` applies the currently
 safe fixes as a separate, reviewable source edit. Unsafe fixes are never
@@ -81,67 +82,41 @@ preview/apply writing an explicit `disabled` entry.
 
 ## Gradual adoption {#AUTOFIX-ADOPTION}
 
-Adoption records current file debt as ordinary exact-path rule overrides in the
-active configuration. The `adoption = true` marker identifies editor-generated
-debt for snapshots and activity views; its severities participate in normal
-configuration resolution.
+Adoption records current error debt as ordinary warning-severity rule entries
+in the config file of the folder that holds the debt — plain code → severity
+entries in the one configuration model, with no exact-file overrides,
+ownership markers, or sidecar state
+([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 
-### Current flow {#AUTOFIX-ADOPTION-FLOW}
+### Flow {#AUTOFIX-ADOPTION-FLOW}
 
-`basilisk.adoptFile` and `basilisk.adoptWorkspace` read current error and
-safety-violation codes from the workspace index, write warning-severity
-exact-file overrides through the configuration-editor transaction, then reload
-and recheck. The workspace command groups files by their owning root and writes
-each root's active config independently. `basilisk.unadoptFile` removes the
-generated rules for one file through the same refresh path.
+`basilisk.adoptFile` and `basilisk.adoptWorkspace` read the current error and
+safety-violation codes from the workspace index and demote them to `warning`
+in the nearest config file governing each affected folder, through the shared
+root-aware configuration mutation service — the same reload/recheck/notify
+tail as every configuration write. `basilisk.unadoptFile` deletes those folder
+entries again, restoring the ancestor severity. Re-running adoption recomputes
+the debt and rewrites the entries, so rules that no longer fire in a folder
+revert without manual bookkeeping. The CLI `basilisk adopt`,
+`basilisk unadopt`, and `basilisk adopt --status` operate on the same
+representation.
 
-On `textDocument/didSave`, the LSP rechecks the saved file and compares its
-current codes with its adopted rule set. A rule graduates when its last matching
-diagnostic is gone: that explicit warning entry is removed, an empty generated
-file entry is cleaned up, diagnostics are republished, and
-`basilisk/configurationChanged` refreshes clients.
-
-The direct adopt commands record the diagnostics they receive; they do not run
-safe fixes first. Users who want safe-fix-first adoption use the explicit
-configuration-editor sequence above, so the post-fix inventory is visible and
-reviewable.
-
-The CLI `basilisk adopt`, `basilisk unadopt`, and `basilisk adopt --status`
-operate on the same active configuration representation. CLI adoption is
-durable but does not perform LSP post-save graduation while no server is
-running.
-
-### Configuration format {#AUTOFIX-ADOPTION-FILE}
-
-For a `pyproject.toml` active source, a generated entry has this shape:
-
-```toml
-[tool.basilisk.per-path-overrides."src/utils.py"]
-adoption = true
-
-[tool.basilisk.per-path-overrides."src/utils.py".rules]
-BSK-E0001 = "warning"
-BSK-E0003 = "warning"
-```
-
-Paths are relative to the config file's directory (the discovered config
-root), and the structure-aware writer retains unrelated configuration content.
-No separate adoption file is read or written.
+The adopt commands record the diagnostics they receive; they do not run safe
+fixes first. Safe fixing, adoption, and later tightening are distinct
+reviewable operations, not one atomic command.
 
 ### Behavior and boundaries {#AUTOFIX-ADOPTION-RULES}
 
-- Only explicitly recorded file/code pairs are demoted.
-- New files are unaffected by existing exact-file exceptions.
-- Manual un-adoption, durable rechecks, post-save graduation, and empty-entry
-  cleanup are implemented.
-- Graduation is driven by an LSP save/recheck. It is not a background CLI
-  migration process.
-- Safe fixing, adoption, and later config demotion are distinct reviewable
-  operations, not one atomic command.
+- Only rules that currently fire are demoted, and only in the folders where
+  they fire.
+- A folder entry is a plain override: new files in that folder inherit it,
+  exactly like any folder config entry.
+- There is no post-save graduation daemon and no background migration process;
+  re-running adoption is the explicit, reviewable way to tighten.
 
 ### VS Code surface {#AUTOFIX-ADOPTION-VSCODE}
 
 The server advertises Adopt File, Adopt Workspace, and Un-adopt File. The
-activity panel derives adopted-file state from the active configuration.
+activity panel derives adoption state from the config files themselves.
 Adoption is not part of the configuration-editor contract
 ([CONFIGEDITOR-ACCEPTANCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-ACCEPTANCE)).

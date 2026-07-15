@@ -38,11 +38,38 @@ The stable shared surface includes the executable and Python paths, analysis mod
 typeshed paths, formatter selection, inlay-hint switches, debugger settings, and the uv,
 test, profiling, and memory namespaces. Detailed contracts live in their feature specs.
 
+## Configuration seeding {#LSPARCH-CONFIG-SEEDING}
+
+When the LSP opens a workspace root whose ancestor walk finds no
+`[tool.basilisk]` table
+([CHKARCH-CONFIG-DISCOVERY](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY)),
+it materializes the configuration before doing anything else, writing into the
+root's `pyproject.toml` (creating the file when the project has none):
+
+- every PEP typing-spec rule, explicitly, at `error`; and
+- every current Basilisk house rule (including the suppression-audit rules),
+  explicitly, at `warning`.
+
+```toml
+[tool.basilisk.rules]
+"returns_compatibility" = "error"    # …every PEP rule, written explicitly
+"imports_unresolved" = "error"
+"BSK-E0001" = "warning"              # …every Basilisk rule, written explicitly
+"BSK-W0050" = "warning"
+```
+
+Seeding is a one-time write derived from the in-memory PEP seed — which itself
+contains only PEP rules at `error` and never any house rule
+([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)) —
+plus every house rule at `warning`. It is not a default consulted afterwards.
+The user deletes the entries they do not want, and a deleted rule is simply
+disabled. The LSP never re-seeds while any `[tool.basilisk]` table exists on
+the walk and never resurrects a removed entry.
+
 ## Configuration editor API {#LSPARCH-CONFIG-EDITOR}
 
 The LSP is the configuration authority; clients render controls and relay typed
-operations. The product contract, generated model, selectors, and seeding
-behavior are specified in
+operations. The product contract, wire model, and selectors are specified in
 [LSP-CONFIGURATION-EDITOR-SPEC.md](LSP-CONFIGURATION-EDITOR-SPEC.md).
 
 ### Protocol {#LSPARCH-CONFIG-EDITOR-PROTOCOL}
@@ -55,15 +82,16 @@ generated from `models/configuration_editor.td`.
 | `basilisk/configurationSnapshot` | request | Read one workspace root's effective configuration. |
 | `basilisk/previewConfigurationChange` | request | Validate and analyse a hypothetical mutation without writing. |
 | `basilisk/applyConfigurationChange` | request | Apply a versioned preview, reload, and recheck. |
-| `basilisk/ruleOccurrences` | request | Page through locations selected by rule/tag/query. |
+| `basilisk/ruleOccurrences` | request | Page through locations selected by the all/codes/tags selectors. |
 | `basilisk/configurationChanged` | notification | Tell clients to refresh after an effective change. |
 
-Every request identifies its workspace root. Unknown roots, rules, tags, settings, and stale
-revisions are errors; they never fall back to a different root or to defaults.
+Every request identifies its workspace root. Unknown roots, rules, tags, severities,
+selectors, and stale revisions are errors; they never fall back to a different root
+or to defaults.
 
 A mutation writes explicit rule entries or removes them — there are no preset,
 inherit, or native intents
-([CONFIGEDITOR-SEVERITY](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEVERITY)).
+([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 Mass fixing stays the standalone `basilisk.fixWorkspace` execute command; a
 supplied `{ rootUri }` is validated and restricts the edit to that active root.
 
@@ -80,7 +108,7 @@ refresh tail.
 
 Rule entries are stored in `pyproject.toml` (`[tool.basilisk]`) config files; a
 folder's file overrides its ancestors per rule
-([CONFIGEDITOR-OVERRIDES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-OVERRIDES)).
+([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 
 ### Errors {#LSPARCH-CONFIG-EDITOR-ERRORS}
 

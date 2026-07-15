@@ -1,27 +1,25 @@
 # typeDiagram model - https://typediagram.dev
-# Source-of-truth wire model for the configuration editor
+# Editor wire protocol for the configuration editor
 # ([CONFIGEDITOR-MODEL] / [LSPARCH-CONFIG-EDITOR-PROTOCOL]).
-# Regenerate the committed language DTO shapes:
-#   typediagram --to rust models/configuration_editor.td
-#   typediagram --to typescript models/configuration_editor.td
+#
+# This file is the LSP editor protocol ONLY. It builds on the core
+# configuration model in models/configuration.td (RuleCode, RuleSeverity) and
+# MUST NOT add anything to it: the editor reads and writes plain rule entries,
+# nothing more.
+#
+# Regenerate the committed DTO shapes (concatenation is required: codegen
+# rejects undeclared names, so the core model must come first). Reconcile the
+# stdout into the committed files:
+#   cat models/configuration.td models/configuration_editor.td | typediagram --to rust
+#     -> crates/basilisk-lsp/src/configuration_editor/model.rs
+#   cat models/configuration.td models/configuration_editor.td | typediagram --to typescript
+#     -> vscode-extension/src/configuration-editor-model.ts
 # Render the documentation diagram:
 #   typediagram models/configuration_editor.td > docs/models/configuration_editor.svg
 
 alias Uri = String
 alias Revision = String
 alias PreviewId = String
-
-# The only persisted values. A rule with no entry in any config file on the
-# ancestor chain is disabled: there are no default severities, no inherited
-# state, and no mutation intents ([CONFIGEDITOR-SEVERITY]). Disabled exists as
-# an explicit entry so a child folder's config can switch off a rule an
-# ancestor enables ([CONFIGEDITOR-OVERRIDES]).
-union RuleSeverity {
-  Error
-  Warning
-  Info
-  Disabled
-}
 
 union TagKind {
   Provenance
@@ -30,31 +28,30 @@ union TagKind {
 }
 
 # Bulk selection for mutations and occurrence queries ([CONFIGEDITOR-TAGS]).
-# Selectors expand at preview time to explicit per-rule entries.
+# Selectors expand server-side, at preview time, to plain rule entries.
 union RuleSelector {
   All
-  Codes { codes: List<String> }
+  Codes { codes: List<RuleCode> }
   Tags { tags: List<String>, matchAll: Bool }
 }
 
-# Set writes an explicit severity entry. Remove deletes the entry, returning
-# the rule to disabled (or to the nearest ancestor entry, under a child
-# folder's config). Nothing else can be requested.
-union ConfigurationMutation {
+# The only two things the editor can ask for. Set writes explicit entries;
+# Remove deletes entries, and a rule without an entry is disabled
+# ([CHKARCH-CONFIG-MODEL]).
+union EditorMutation {
   Set { selector: RuleSelector, severity: RuleSeverity }
   Remove { selector: RuleSelector }
 }
 
 type RuleDescriptor {
-  code: String
+  code: RuleCode
   title: String
   summary: String
   docsUrl: Uri
   tags: List<String>
 }
 
-# severity mirrors the edited config file exactly: None means no entry, and a
-# rule with no entry does not run.
+# severity mirrors the edited config file exactly: None means no entry.
 type RuleState {
   descriptor: RuleDescriptor
   severity: Option<RuleSeverity>
@@ -79,37 +76,40 @@ type ConfigurationSnapshot {
 type PreviewConfigurationRequest {
   rootUri: Uri
   baseRevision: Revision
-  mutations: List<ConfigurationMutation>
+  mutations: List<EditorMutation>
 }
 
-# One real config entry change, fully expanded and normalized.
+# One real entry change, fully expanded and normalized.
 # None on either side means "no entry".
-type ResolvedConfigurationChange {
-  ruleCode: String
+type ResolvedEntryChange {
+  code: RuleCode
   previousSeverity: Option<RuleSeverity>
   newSeverity: Option<RuleSeverity>
 }
 
+# A complete before/after partition by the three emitting severities; the
+# total diagnostic count is their sum.
 type ConfigurationImpact {
-  diagnosticsBefore: Int
-  diagnosticsAfter: Int
   errorsBefore: Int
   errorsAfter: Int
   warningsBefore: Int
   warningsAfter: Int
+  infosBefore: Int
+  infosAfter: Int
 }
 
 type ConfigurationPreview {
   previewId: PreviewId
   baseRevision: Revision
-  changes: List<ResolvedConfigurationChange>
+  changes: List<ResolvedEntryChange>
   impact: ConfigurationImpact
 }
 
+# rootUri + previewId fully identify the cached preview, which already pins
+# its base revision; the server rejects the apply if that revision is stale.
 type ApplyConfigurationRequest {
   rootUri: Uri
   previewId: PreviewId
-  baseRevision: Revision
 }
 
 type SourcePosition {
@@ -123,7 +123,7 @@ type SourceRange {
 }
 
 type RuleOccurrence {
-  ruleCode: String
+  code: RuleCode
   uri: Uri
   range: SourceRange
   severity: RuleSeverity
@@ -141,8 +141,8 @@ type RuleOccurrencesResponse {
   nextCursor: Option<String>
 }
 
+# Refresh signal: the snapshot for rootUri is stale; refetch at revision.
 type ConfigurationChanged {
   rootUri: Uri
   revision: Revision
-  reason: String
 }

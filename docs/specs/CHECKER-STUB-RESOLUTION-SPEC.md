@@ -341,16 +341,14 @@ typeshed-path = "typeshed-micropython"   # optional: provide canonical stdlib st
 
 [tool.basilisk.rules]
 "imports_unresolved" = "warning"
-
-[tool.basilisk.per-module-overrides."fastmcp"]
-ignore-missing-stubs = true
-
-[tool.basilisk.per-module-overrides."django.*"]
-ignore-missing-stubs = true
-
-[tool.basilisk.per-path-overrides."vendor/**"]
-disabled = ["imports_unresolved"]
 ```
+
+Scoping `imports_unresolved` differently for part of the tree (for example
+vendored code) means placing a `pyproject.toml` with a `[tool.basilisk]` table
+in that folder — the nearest entry wins per rule
+([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)) —
+or using inline directives at the import site. There are no module-pattern or
+glob-path override tables.
 
 ---
 

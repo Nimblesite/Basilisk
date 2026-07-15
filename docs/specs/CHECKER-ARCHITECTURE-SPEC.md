@@ -2,9 +2,9 @@
 
 ## No "strict mode" — behaviour is configuration only {#CHKARCH-CONFIGURATION-ONLY}
 
-Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` dial). Everything reported is decided by **configuration alone**: a flat set of per-rule severities written explicitly in folder-level config files. A rule with no config entry does not run ([CONFIGEDITOR-SEVERITY](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEVERITY)).
+Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` dial). Everything reported is decided by **configuration alone**: a flat set of per-rule severities written explicitly in folder-level config files. A rule with no config entry does not run ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)).
 
-1. **No config file anywhere means the in-memory PEP seed.** When configuration discovery finds no `[tool.basilisk]` table on the entire ancestor walk, Basilisk synthesizes the seed in memory: **every rule that implements the Python typing specification at `error`, and nothing else**. This unconfigured default is exactly what the conformance scorer runs — no Basilisk config of any format, no "conformance mode" ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)). It exists only for that bare, config-less case: the moment any config file exists — even an empty one, which disables every rule — the file is the only truth.
+1. **No config file anywhere means the in-memory PEP seed.** When configuration discovery finds no `[tool.basilisk]` table on the entire ancestor walk, Basilisk synthesizes the seed in memory: **every rule that implements the Python typing specification at `error`, and nothing else**. This unconfigured default is exactly what the conformance scorer runs — no Basilisk config of any format, no "conformance mode" ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)). It exists only for that bare, config-less case: the moment any `[tool.basilisk]` table exists on the walk — even an empty one, which disables every rule — the tables are the only truth. A `pyproject.toml` without the table contributes nothing ([CHKARCH-CONFIG-DISCOVERY](#CHKARCH-CONFIG-DISCOVERY)).
 
 2. **Every rule runs only with an explicit config entry.** House-style rules — require-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), explicit-`Any` nudge (`BSK-W0014`), uv dependency hygiene, stub suggestions — are **not in the PEP seed**; an explicit config entry is the only way to run them, and there are no rule-family booleans.
 
@@ -14,7 +14,7 @@ There are no presets and no editor-owned mutation intents. When the LSP opens a
 project with no config file, it materializes the configuration to disk — every
 PEP rule at `error`, every house rule at `warning`, all written explicitly —
 and from then on users edit that file
-([CONFIGEDITOR-SEEDING](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEEDING)).
+([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
 
 ---
 
@@ -52,18 +52,18 @@ Behaviour is per-rule configuration. The subsections define the default (pure PE
 
 #### No Modes — Configuration Decides Everything {#CHKARCH-STRICTNESS-ONLY}
 
-The require-annotation house rules (`BSK-E0001`/`BSK-E0002`) fire **only once enabled in configuration** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)). Under the default config these snippets pass:
+The require-annotation house rules (`BSK-E0001`/`BSK-E0002`) fire **only with a config entry** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)). Under the PEP seed these snippets pass:
 
 ```python
-# ERROR: Missing parameter type annotation [BSK-E0001]
+# Passes under the PEP seed; fires BSK-E0001 only when that rule has an entry
 def greet(name):
     return f"Hello, {name}"
 
-# ERROR: Missing return type annotation [BSK-E0002]
+# Passes under the PEP seed; fires BSK-E0002 only when that rule has an entry
 def greet(name: str):
     return f"Hello, {name}"
 
-# OK
+# OK under any configuration
 def greet(name: str) -> str:
     return f"Hello, {name}"
 ```
@@ -80,7 +80,7 @@ from untyped_lib import do_stuff
 result: Any = do_stuff()  # basilisk: allow[imports_unresolved] -- untyped dependency, tracking in #1234
 
 # ERROR (when the explicit-Any house rule is enabled): Bare Any without justification
-def process(data: Any) -> Any:  # BSK-W0011: Explicit Any requires reason comment
+def process(data: Any) -> Any:  # BSK-W0014: Explicit Any requires reason comment
     pass
 ```
 
@@ -107,7 +107,7 @@ Severity comes only from explicit config entries. A rule with no entry in any
 config file on the ancestor chain does not run; deleting an entry disables the
 rule. The letter in a rule code (`E`/`W`/`I`) is naming, not behaviour, and
 there are no default, inherited, or "native" severity values — see
-[CONFIGEDITOR-SEVERITY](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEVERITY).
+[CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL).
 Inline directives can still override an enabled rule per line, block, or file
 ([CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION)).
 
@@ -173,39 +173,26 @@ Block directives work with all severity values: `# type: warning[CODE]` / `# typ
 # Demote E0010 and E0011 to warnings for the entire file
 ```
 
-**Per-directory configuration** in `pyproject.toml`:
+**Per-folder configuration** in `pyproject.toml` — the nearest table's entry
+wins per rule ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)):
 ```toml
+# pyproject.toml at the project root
 [tool.basilisk.rules]
-# No "strict"/"mode" switch; opt into house-style rules explicitly:
+"returns_compatibility" = "error"
+"imports_unresolved" = "error"
 "BSK-E0001" = "error"
-"BSK-E0002" = "error"
-"BSK-E0004" = "error"
-
-[tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["returns_compatibility"]              # disable rules entirely for legacy code
-
-[tool.basilisk.per-path-overrides."vendor/**"]
-disabled = ["imports_unresolved"]
-rules."BSK-E0001" = "warning"
-rules."BSK-E0002" = "warning"
 ```
-
-**Per-module override** (for third-party imports):
 ```toml
-[tool.basilisk.per-module-overrides."requests"]
-ignore-missing-stubs = true
-
-[tool.basilisk.per-module-overrides."django.*"]
-ignore-missing-stubs = true
-```
-
-**Global rule severity override**:
-```toml
+# legacy/pyproject.toml — overrides the root, per rule, for everything under legacy/
 [tool.basilisk.rules]
-"imports_unresolved" = "warning"    # demote globally
-"BSK-W0050" = "error"      # promote globally
-"dataclasses_order" = "disabled"   # disable globally
+"returns_compatibility" = "disabled"
+"BSK-E0001" = "warning"
 ```
+
+Third-party import noise is handled the same way: scope `imports_unresolved`
+in the folder that contains the affected code, or use the inline directives
+above at the import site. There are no module-pattern or glob-path override
+tables.
 
 #### Suppression Precedence {#CHKARCH-STRICTNESS-PRECEDENCE}
 
@@ -214,10 +201,9 @@ When multiple overrides apply, the most specific wins:
 1. **Per-line comment** (highest priority)
 2. **Per-block comment**
 3. **Per-file directive**
-4. **Per-path override** in pyproject.toml
-5. **Per-module override** in pyproject.toml
-6. **Global rule override** in pyproject.toml
-7. **Rule default** (lowest priority)
+4. **Nearest folder config entry** for the rule
+   ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)) — no entry anywhere means
+   the rule does not run (lowest priority)
 
 #### Compatibility {#CHKARCH-STRICTNESS-COMPAT}
 
@@ -304,7 +290,7 @@ Basilisk's **target** is 100% conformance with the Python typing specification. 
 
 ### Type Inference Engine {#CHKARCH-INFERENCE}
 
-Annotations are enforced on public APIs; local variable types are inferred:
+When the require-annotation rules (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`) have config entries, explicit annotations are required on public APIs; local variable types are always inferred:
 
 ```python
 def process(items: list[str]) -> int:
@@ -314,7 +300,7 @@ def process(items: list[str]) -> int:
     return count
 ```
 
-- **Public APIs** (module-level functions/variables, class methods): explicit annotations required
+- **Public APIs** (module-level functions/variables, class methods): explicit annotations required when the require-annotation rules are enabled in configuration
 - **Local variables**: inferred from assignments, comprehensions, control flow
 - **Cross-module**: does NOT cross boundaries for public symbols; imports from typed modules resolve to declared types, from untyped modules produce `imports_unresolved`
 
@@ -955,11 +941,53 @@ the advanced-features plan.
 
 ## Configuration {#CHKARCH-CONFIG}
 
+### Configuration Model {#CHKARCH-CONFIG-MODEL}
+
+The design source is [`models/configuration.td`](../../models/configuration.td)
+(rendered [SVG](../models/configuration.svg)). A configuration is a flat list
+of explicit rule entries — code plus severity — and nothing else. The config
+file is the complete truth about which rules run:
+
+- A rule **with an entry** runs at exactly that severity: `error`, `warning`,
+  or `info` — or is explicitly `disabled`.
+- A rule **without an entry** does not run: no diagnostic, no analyzer check.
+  Deleting an entry disables the rule.
+- An **empty** `[tool.basilisk]` table disables every rule. That is a
+  legitimate, explicit user choice, and tooling never overrides it.
+
+There are no default severities, no ambient enablement, no tag gates, and no
+inherited state. The `E`/`W`/`I` letters in rule codes are naming, not
+behaviour.
+
+Folder configs are the only scoping mechanism. The nearest config file with an
+entry for a rule wins, per rule, per checked file — the walk is specified in
+[Configuration Discovery](#CHKARCH-CONFIG-DISCOVERY):
+
+- child entry present → the child's severity applies, including an explicit
+  `disabled`;
+- child entry absent → the nearest ancestor's entry applies;
+- no entry anywhere → the rule is disabled.
+
+There are no glob path patterns, per-file exceptions, precedence scores, or
+merge intents. Scoping a rule differently for part of the tree means putting a
+config file in that folder.
+
+One boundary case exists solely because the conformance harness checks a bare
+clone with no config anywhere ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)):
+when discovery finds **no** `[tool.basilisk]` table on the entire ancestor
+walk, the checker synthesizes the PEP seed in memory — every PEP typing-spec
+rule at `error`, nothing else — and writes nothing to disk
+([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)). The LSP
+materializes that seed as a real file on first open
+([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
+The moment any `[tool.basilisk]` table exists on the walk, even an empty one,
+the tables are the only truth.
+
 ### Configuration File {#CHKARCH-CONFIG-FILE}
 
 `pyproject.toml` under `[tool.basilisk]` is the **single** configuration source
 and the seeding target for new projects
-([CONFIGEDITOR-SEEDING](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SEEDING)).
+([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
 There is no other Basilisk config format: a legacy root-level `basilisk.json`
 is **never read or written**
 ([CONFIGEDITOR-SOURCES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES)).
@@ -977,11 +1005,6 @@ stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub di
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]
 
-[tool.basilisk.mojo-safety]
-ownership = true                 # Enable ownership tracking (default: true)
-immutability = true              # Parameters immutable by default (default: true)
-no-implicit-coercion = true      # Flag implicit type coercion (default: true)
-
 [tool.basilisk.rules]
 "returns_compatibility" = "error"   # explicit entries are the only enablement
 "imports_unresolved" = "warning"    # no entry means the rule does not run
@@ -989,7 +1012,7 @@ no-implicit-coercion = true      # Flag implicit type coercion (default: true)
 
 Scoping a rule differently for part of the tree means placing another
 `pyproject.toml` with a `[tool.basilisk]` table in that folder; the nearest
-entry wins per rule ([CONFIGEDITOR-OVERRIDES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-OVERRIDES)).
+entry wins per rule ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)).
 
 ### Configuration Discovery {#CHKARCH-CONFIG-DISCOVERY}
 
@@ -1009,13 +1032,12 @@ to the filesystem root is visited. Each directory contributes at most its
 directory winning per key (`BasiliskConfig::merged_with`): a child directory's
 config *appends to* an ancestor's, never replaces it wholesale.
 
-- Map fields (`rules`, `per-module-overrides`, `per-path-overrides`) union per
-  key; the child wins on overlap.
+- The `rules` map unions per key; the child wins on overlap.
 - `stub-paths` appends (deduplicated).
 - Remaining scalar/list fields keep the ancestor's value unless the child
   explicitly sets one.
 - The nearest config's directory becomes the merged config's `project_root`,
-  anchoring root-relative interpretation (per-path overrides, adoption store).
+  anchoring root-relative interpretation (`include`/`exclude` globs).
 
 **Surfaces.**
 
@@ -1025,10 +1047,9 @@ config *appends to* an ancestor's, never replaces it wholesale.
   concerns (include expansion, version detection, cache location); the check
   cache fingerprints every directory's config so a child config edit
   invalidates cached results.
-- **CLI `adopt`/`unadopt`**: the config root (and adoption store) anchors at
-  the nearest ancestor directory holding a config file
-  (`basilisk_config::discover_config_dir`), so `adopt` writes exactly where
-  `check` discovers.
+- **CLI `adopt`/`unadopt`**: the config root anchors at the nearest ancestor
+  directory holding a config table (`basilisk_config::discover_config_dir`),
+  so `adopt` writes exactly where `check` discovers.
 - **LSP**: per-file config is the owning workspace root's config merged with
   the file's discovered ancestor chain (`WorkspaceIndex::config_for_file`,
   memoized per directory, invalidated on config reload). A workspace folder
@@ -1050,8 +1071,8 @@ diagnostics even when opened, like an `exclude`d file.
 
 ### Exclude Semantics {#CHKARCH-CONFIG-EXCLUDE}
 
-`exclude` (and `per-path-overrides` keys) use **gitignore-style globs**, matched
-against the path relative to the workspace root:
+`exclude` uses **gitignore-style globs**, matched against the path relative to
+the workspace root:
 
 - a bare name with no `/` matches that segment at **any** depth — `build` excludes
   every `build` dir, `*.pb.py` every generated file;
@@ -1095,7 +1116,7 @@ error[BSK-E0001]: Missing parameter type annotation
    |             ^^^^ parameter `data` has no type annotation
    |
    = help: Add a type annotation: `data: <type>`
-   = note: In Basilisk, all function parameters require explicit types
+   = note: this project's configuration enables BSK-E0001, which requires explicit parameter types
    = see: https://www.basilisk-python.dev/errors/BSK-E0001
 ```
 
@@ -1404,8 +1425,11 @@ Map supported Pyright settings and emit an explicit unmapped-options report.
 
 ### Gradual-adoption mapping {#CHKARCH-MIGRATION-GRADUAL}
 
-The CLI and LSP record current error debt as exact-file warning severities in
-ordinary `per-path-overrides`, marked `adoption = true` in the one active config
-file. There is no hidden compatibility mode or sidecar. On save, the LSP removes
-adoption-owned rule entries whose diagnostics have been fixed, while unrelated
-user-authored overrides remain untouched.
+The CLI and LSP record current error debt as ordinary warning-severity rule
+entries in the config file of the folder holding the debt — plain entries in
+the one configuration model, with no exact-file overrides, ownership markers,
+or sidecar state ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)). Re-running
+adoption recomputes the debt and rewrites those entries, so rules that no
+longer fire revert to the ancestor severity by deleting the folder entry.
+There is no hidden compatibility mode
+([AUTOFIX-ADOPTION](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-ADOPTION)).
