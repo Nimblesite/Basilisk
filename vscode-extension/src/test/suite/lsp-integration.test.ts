@@ -17,14 +17,17 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-    DIAGNOSTIC_TIMEOUT_MS,
-    NO_DIAGNOSTIC_WAIT_MS,
-    SUITE_SETUP_TIMEOUT_MS,
     closeAllEditors,
+    DIAGNOSTIC_TIMEOUT_MS,
     extractHoverText,
+    filterBasiliskDiagnostics,
     findBasiliskBinary,
+    flattenSymbolNames,
+    NO_DIAGNOSTIC_WAIT_MS,
     openPythonFile,
     pollUntilResult,
+    removeTestDir,
+    SUITE_SETUP_TIMEOUT_MS,
     waitForDiagnostics,
     waitForDiagnosticsCleared,
     waitForLspReady,
@@ -54,36 +57,6 @@ const COMPLETION_TRIGGER_COLUMN = 3;
 /** Max completion items to display in assertion messages. */
 const COMPLETION_PREVIEW_LIMIT = 10;
 
-/**
- * Filter diagnostics to only those produced by the Basilisk LSP server.
- */
-function filterBasiliskDiagnostics(diags: vscode.Diagnostic[]): vscode.Diagnostic[] {
-    return diags.filter(
-        (d) =>
-            d.source === 'basilisk' ||
-            (typeof d.code === 'object' &&
-                d.code !== null &&
-                'value' in d.code &&
-                typeof d.code.value === 'string' &&
-                d.code.value.startsWith('BSK'))
-    );
-}
-
-/**
- * Recursively flatten document symbol names so we can search
- * through nested symbols (e.g. methods inside classes).
- */
-function flattenSymbolNames(symbols: vscode.DocumentSymbol[]): string[] {
-    const names: string[] = [];
-    for (const sym of symbols) {
-        names.push(sym.name);
-        if (sym.children.length > 0) {
-            names.push(...flattenSymbolNames(sym.children));
-        }
-    }
-    return names;
-}
-
 // eslint-disable-next-line max-lines-per-function
 suite('LSP Integration Tests', () => {
     let tmpDir: string;
@@ -108,7 +81,7 @@ suite('LSP Integration Tests', () => {
     suiteTeardown(async () => {
         await closeAllEditors();
         if (tmpDir !== undefined && tmpDir !== '' && fs.existsSync(tmpDir)) {
-            fs.rmSync(tmpDir, { recursive: true, force: true });
+            removeTestDir(tmpDir);
         }
     });
 

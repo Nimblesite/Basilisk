@@ -24,7 +24,7 @@ import * as os from 'os';
 import * as net from 'net';
 import { execFileSync } from 'child_process';
 
-import { findBasiliskBinary } from './test-helpers';
+import { findBasiliskBinary, removeTestDir } from './test-helpers';
 import { getStore } from '../../extension';
 import { currentStoppedFrameId, evaluateInDebugSession } from '../../dap-evaluate';
 import { debugOutputCursor, debugOutputSince } from '../../dap-output';
@@ -687,7 +687,7 @@ suite('Debug Integration E2E Tests', () => {
         clearAllBreakpoints();
         await stopActiveDebugSession();
         if (tmpDir !== undefined && tmpDir !== '' && fs.existsSync(tmpDir)) {
-            fs.rmSync(tmpDir, { recursive: true, force: true });
+            removeTestDir(tmpDir);
         }
     });
 

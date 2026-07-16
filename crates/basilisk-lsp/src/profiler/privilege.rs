@@ -149,9 +149,15 @@ fn check_permissions_for_platform(pid: u32) -> Result<PermissionStatus, String> 
 }
 
 /// Platform-specific permission check dispatch.
+///
+/// The Result type is kept for cross-platform signature consistency.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Cross-platform signature consistency with Linux variant"
+)]
 #[cfg(target_os = "windows")]
 fn check_permissions_for_platform(_pid: u32) -> Result<PermissionStatus, String> {
-    check_windows_permissions()
+    Ok(check_windows_permissions())
 }
 
 /// Fallback for unsupported platforms.
@@ -277,9 +283,9 @@ fn read_ptrace_scope() -> Result<u8, String> {
 /// Implements [PROFILE-PERMISSIONS-WINDOWS]: `ReadProcessMemory` works without
 /// elevation for same-user processes, so this is always `Allowed`.
 #[cfg(target_os = "windows")]
-fn check_windows_permissions() -> Result<PermissionStatus, String> {
+fn check_windows_permissions() -> PermissionStatus {
     debug!("Windows: ReadProcessMemory works for same-user processes");
-    Ok(PermissionStatus::Allowed)
+    PermissionStatus::Allowed
 }
 
 // ── Shared helpers ─────────────────────────────────────────────────────────
