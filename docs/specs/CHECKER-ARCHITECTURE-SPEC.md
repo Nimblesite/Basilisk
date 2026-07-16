@@ -872,6 +872,8 @@ Compatibility anchors: supported methods {#CHKARCH-LSP-METHODS}; custom commands
 
 - `basilisk check [paths]` / `basilisk analyze [paths]` — the two scopes of the
   partition ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)), identical pipeline
+- `basilisk format [paths] [--check]` — the embedded Ruff formatter
+  ([LSPFMT-CLIENTS](LSP-FORMATTING-SPEC.md#LSPFMT-CLIENTS))
 - `basilisk fix [paths] [--unsafe] [--rules ...]`
 - `basilisk adopt|unadopt [paths]`
 - `basilisk lsp [--transport stdio|ws]`
@@ -1050,13 +1052,17 @@ config's directory becomes the merged config's `project_root`, anchoring
 - **CLI `adopt`/`unadopt`**: the config root anchors at the nearest ancestor
   directory holding a config table (`basilisk_config::discover_config_dir`),
   so `adopt` writes exactly where `check` discovers.
-- **LSP**: per-file config is the owning workspace root's config merged with
-  the file's discovered ancestor chain (`WorkspaceIndex::config_for_file`,
-  memoized per directory; the shared refresh tail the server runs on every
-  configuration change invalidates the memo —
-  [LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)). A workspace
-  folder opened *inside* a project discovers the project's config the same
-  way.
+- **LSP**: per-file config is the owning workspace root's **in-memory** config
+  merged with the ancestor chain discovered strictly *below* that root
+  (`WorkspaceIndex::config_for_file` / `load_basilisk_config_below`, memoized
+  per directory; the shared refresh tail the server runs on every
+  configuration change invalidates the memo). The root's own config file is
+  never re-read from disk here: the in-memory root config already reflects it
+  — or, authoritatively, an applied editor-UI change or an open, unsaved
+  config buffer ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)).
+  A workspace folder opened *inside* a project discovers the project's config
+  the same way (its root config is loaded through the full ancestor walk at
+  index build/reload).
 
 ### Include Semantics {#CHKARCH-CONFIG-INCLUDE}
 

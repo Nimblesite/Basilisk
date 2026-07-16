@@ -54,6 +54,15 @@ Client `didChangeWatchedFiles` events are only a latency optimization; both path
 one per-source disk baseline so a change refreshes exactly once
 (E2E: `tests/lsp/ws_test_configuration_watch.rs`).
 
+The refreshed in-memory root config is **authoritative over disk**: an applied
+editor-UI change or an open, unsaved config buffer decides even while the root's
+on-disk file still holds older content. Per-file config discovery therefore never
+re-reads a root's own config file — inside a root, the discovered ancestor chain is
+bounded to directories strictly below it (`workspace.rs` `config_for_file`,
+`load_basilisk_config_below`); only nested child configs come from disk. Re-merging
+the root's disk file over the in-memory config would silently resurrect stale state
+between the apply and the client's write reaching disk.
+
 Two tiers, stated once: **project configuration** (the watched files above) defines
 semantics and is fully live. **Editor session settings** (`initializationOptions` /
 `workspace/didChangeConfiguration` — formatter selection, analysis-mode override, inlay

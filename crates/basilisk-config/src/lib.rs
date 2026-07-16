@@ -93,6 +93,33 @@ pub fn load_basilisk_config(start: &Path) -> BasiliskConfig {
     config
 }
 
+/// Load the discovered-config chain for `start` bounded to directories
+/// strictly below `stop` (exclusive): nested child configs only, never
+/// `stop`'s own config file.
+///
+/// Implements [LSPARCH-CONFIG] via [CHKARCH-CONFIG-DISCOVERY]: a live server
+/// holds the authoritative effective config for each workspace root in memory
+/// — an applied configuration-editor change or an open, unsaved config buffer
+/// is authoritative over whatever is currently on disk — so the root's file
+/// must NOT be re-read here and merged back over it. Callers merge this
+/// result over that in-memory root config. With no nested config on the
+/// chain, the result is `BasiliskConfig::default()` with no `project_root`,
+/// so the merge keeps the root config's own anchoring.
+#[must_use]
+pub fn load_basilisk_config_below(start: &Path, stop: &Path) -> BasiliskConfig {
+    let chain: Vec<BasiliskConfig> = absolute_start(start)
+        .ancestors()
+        .take_while(|dir| *dir != stop)
+        .filter_map(load_dir_config)
+        .collect();
+    // `ancestors()` yields nearest-first; fold from the outermost ancestor so
+    // configs nearer to `start` end up in front of the rule chain.
+    chain
+        .into_iter()
+        .rev()
+        .fold(BasiliskConfig::default(), BasiliskConfig::merged_with)
+}
+
 /// The nearest directory at or above `start` holding a recognized config file
 /// (`pyproject.toml` with a `[tool.basilisk]` table).
 ///
