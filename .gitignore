@@ -33,6 +33,7 @@ target/
 node_modules/
 vscode-extension/out/
 vscode-extension/.vscode-test/
+vscode-extension/.real-world/
 vscode-extension/.screenshots/
 vscode-extension/coverage/
 vscode-extension/bin/

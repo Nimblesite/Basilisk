@@ -1,5 +1,6 @@
 // Implements [VSIX]. See docs/specs/VSIX-SPEC.md#VSIX
 import * as vscode from "vscode";
+import * as fs from "fs";
 import * as path from "path";
 import { Logger } from "./logger";
 
@@ -9,11 +10,17 @@ const BASILISK_COMPONENT_ID = "basilisk";
 interface ShipwrightApi {
   activateShipwright?: ActivateRuntime;
   activateDeploymentToolkit?: ActivateRuntime;
+  detectPlatform?: (platform: NodeJS.Platform, arch: string) => string;
+  probeBinaryVersion?: (file: string) => Promise<{ name: string; version: string } | undefined>;
 }
 
 type ActivateRuntime = (
   context: vscode.ExtensionContext,
-  options: { readonly vscode: typeof vscode; readonly manifestPath: string }
+  options: {
+    readonly vscode: typeof vscode;
+    readonly manifestPath: string;
+    readonly showMessages?: boolean;
+  }
 ) => Promise<ActivationResult>;
 
 interface ActivationResult {
@@ -52,12 +59,21 @@ export async function resolveBasiliskRuntime(context: vscode.ExtensionContext): 
   if (activate === undefined) {
     throw new Error(`${SHIPWRIGHT_PACKAGE} does not export a VS Code activation function.`);
   }
+  // showMessages: false — Shipwright AWAITS its error toast's action buttons,
+  // which blocks activation forever in headless hosts (e2e tests) and stalls
+  // real users behind a modal-ish prompt. Failures are surfaced by our own
+  // non-blocking reportRuntimeFailure path instead.
   const result = await activate(context, {
     vscode,
     manifestPath: path.join(context.extensionPath, "shipwright.json"),
+    showMessages: false,
   });
   const diagnostic = basiliskDiagnostic(result);
   if (!result.ok) {
+    const fallback = await bundledFallback(api, context);
+    if (fallback !== undefined) {
+      return fallback;
+    }
     throw new Error(formatActivationFailure(result));
   }
   if (diagnostic === undefined) {
@@ -72,6 +88,46 @@ export async function resolveBasiliskRuntime(context: vscode.ExtensionContext): 
     executablePath,
     source: diagnostic.resolution.source ?? "unknown",
     version: diagnostic.resolution.version ?? undefined,
+  };
+}
+
+/**
+ * Windows fallback for the bundled binary — works around an upstream
+ * Shipwright defect (Nimblesite/Shipwright): `shipwright-core`'s
+ * `joinBinary()` builds resolve candidates with `/` separators while
+ * `shipwright-vscode`'s `candidatePaths()` keys its probe map via
+ * `path.join()` (`\` on win32), so the probe lookup never matches and the
+ * bundled source resolves as `no-source-resolved` on every Windows install.
+ * Until that separator normalisation is fixed upstream, probe the bundled
+ * path ourselves and use it when it is a genuine basilisk binary.
+ * Remove once shipwright-vscode ships the fix.
+ */
+async function bundledFallback(
+  api: ShipwrightApi,
+  context: vscode.ExtensionContext
+): Promise<BasiliskRuntime | undefined> {
+  if (api.detectPlatform === undefined || api.probeBinaryVersion === undefined) {
+    return undefined;
+  }
+  const platform = api.detectPlatform(process.platform, process.arch);
+  const exe = process.platform === "win32" ? ".exe" : "";
+  const candidate = path.join(context.extensionPath, "bin", platform, `basilisk${exe}`);
+  if (!fs.existsSync(candidate)) {
+    return undefined;
+  }
+  const probe = await api.probeBinaryVersion(candidate);
+  if (probe?.name !== BASILISK_COMPONENT_ID) {
+    return undefined;
+  }
+  Logger.warn(
+    `Shipwright could not resolve the bundled basilisk binary; using direct bundled fallback at ${candidate} ` +
+    "(upstream win32 path-separator defect — see shipwright-runtime.ts bundledFallback)"
+  );
+  return {
+    componentId: BASILISK_COMPONENT_ID,
+    executablePath: candidate,
+    source: "bundled-fallback",
+    version: probe.version,
   };
 }
 

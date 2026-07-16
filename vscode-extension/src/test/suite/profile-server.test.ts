@@ -14,6 +14,7 @@ import * as http from "http";
 import * as os from "os";
 import * as path from "path";
 import { disposeProfileServer, serveProfileForBrowser } from "../../profile-server";
+import { removeTestDir } from './test-helpers';
 
 /** GET a URL and resolve status, headers, and body. */
 async function fetchUrl(
@@ -47,7 +48,7 @@ suite("Profile loopback server — speedscope deep links load automatically", ()
 
   suiteTeardown(() => {
     disposeProfileServer();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    removeTestDir(tmpDir);
   });
 
   test("a registered profile is served with the headers speedscope's importer needs", async () => {

@@ -593,6 +593,42 @@ fn collect_and_check_returns_no_diagnostics_for_clean_code(
     Ok(())
 }
 
+// ── Self-named external bases (issues #278/#299 family) ──────────────────
+
+/// `class EnvironBuilder(werkzeug.test.EnvironBuilder)` — flask 3.1.1
+/// `src/flask/testing.py`, hit by the [VSIX-REALWORLD-JOURNEY] flask corpus —
+/// records its unresolved external base under the class's own terminal name.
+/// On the FULL CLI pipeline (which, unlike the bare parse→resolve→check test
+/// harness, first runs `resolve_module_imports`) the base walk must not
+/// recurse through the self-referential class-map entry: before the fix this
+/// stack-overflowed and aborted the whole `basilisk check` process (and
+/// crash-looped the LSP on the same code path).
+#[test]
+fn self_named_attribute_base_check_does_not_overflow() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_project_dir("bsk_selfnamed_attr_base");
+    std::fs::create_dir_all(&dir)?;
+    let py = dir.join("repro.py");
+    std::fs::write(
+        &py,
+        b"import werkzeug.test\n\n\nclass EnvironBuilder(werkzeug.test.EnvironBuilder):\n    pass\n",
+    )?;
+    let path = py.to_string_lossy().into_owned();
+    let outcome =
+        collect_uncached(&[path], DiagnosticScope::Check).map_err(|err| err.to_string())?;
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        outcome.failures.is_empty(),
+        "self-named external base must analyse cleanly, got failures: {:?}",
+        outcome.failures
+    );
+    assert_eq!(
+        outcome.sources.len(),
+        1,
+        "exactly the repro file is checked"
+    );
+    Ok(())
+}
+
 // ── pluralise ─────────────────────────────────────────────────────────────
 
 #[test]

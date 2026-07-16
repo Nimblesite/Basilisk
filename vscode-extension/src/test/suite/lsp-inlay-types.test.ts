@@ -25,17 +25,18 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import {
-    DIAGNOSTIC_TIMEOUT_MS,
-    SUITE_SETUP_TIMEOUT_MS,
-    openPythonFile,
     closeAllEditors,
-    waitForLspReady,
-    replaceDocumentContent,
-    locate,
+    DIAGNOSTIC_TIMEOUT_MS,
     getInlayHints,
     inlayLabelsOnLine,
+    locate,
     normalizedInlayLabel,
+    openPythonFile,
+    removeTestDir,
+    replaceDocumentContent,
+    SUITE_SETUP_TIMEOUT_MS,
     waitForInlayLabel,
+    waitForLspReady,
 } from './test-helpers';
 
 /** Additional time (ms) added to DIAGNOSTIC_TIMEOUT_MS for individual test timeouts. */
@@ -90,7 +91,7 @@ suite('Inline Type Visibility (inlay hints)', () => {
     suiteTeardown(async () => {
         await closeAllEditors();
         if (tmpDir !== undefined && tmpDir !== '' && fs.existsSync(tmpDir)) {
-            fs.rmSync(tmpDir, { recursive: true, force: true });
+            removeTestDir(tmpDir);
         }
     });
 

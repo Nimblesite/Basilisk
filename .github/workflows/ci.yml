@@ -381,8 +381,10 @@ jobs:
     # release binary, so a checker/LSP change alters what this suite exercises.
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.vscode == 'true'
     runs-on: ubuntu-24.04
-    # TIMEOUT EXCEPTION: VS Code extension e2e tests launch a full VS Code instance via xvfb, requiring ~25 min
-    timeout-minutes: 35
+    # TIMEOUT EXCEPTION: VS Code extension e2e tests launch a full VS Code instance
+    # via xvfb (~25 min), plus one VS Code session per real-world corpus repo
+    # ([VSIX-REALWORLD-WIRING]: flask/rich/fastapi whole-workspace analysis)
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -436,6 +438,15 @@ jobs:
           path: vscode-extension/.vscode-test
           key: vscode-test-${{ runner.os }}-${{ hashFiles('vscode-extension/.vscode-test.mjs', 'vscode-extension/.vscode-test.js', 'vscode-extension/package.json') }}
           restore-keys: vscode-test-${{ runner.os }}-
+
+      # The real-world corpus ([VSIX-REALWORLD-CORPUS]) is pinned to exact
+      # commit SHAs in the manifest, so a cache hit is byte-identical to a
+      # fresh fetch; the fetch script re-validates the pin marker either way.
+      - name: Cache real-world corpus repos
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: vscode-extension/.real-world
+          key: real-world-corpus-${{ hashFiles('vscode-extension/test-fixtures/real-world-corpus.json') }}
 
       - name: Run VS Code extension tests
         run: make _test_vsix

@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { type Store } from '../../store-types';
 
 
 export { POLL_INTERVAL_MS, WAIT_MS } from '../../timeouts';
@@ -264,8 +265,21 @@ export async function waitForLspReady(): Promise<void> {
         }
         await new Promise<void>((r) => setTimeout(r, SERVER_READINESS_POLL_INTERVAL_MS));
     }
-    throw new Error(
-        `LSP server failed to become responsive within ${SERVER_START_WAIT_MS}ms. ` +
+    throw new Error(describeLspStartTimeout(getStoreFromExtension()));
+}
+
+/**
+ * Diagnostic message for an LSP start timeout: include the store's view of
+ * the world (which stage stalled — binary resolution, client start, or
+ * command advertisement) instead of a blind "not responsive".
+ */
+function describeLspStartTimeout(store: Store | undefined): string {
+    const resolution = store?.runtimeResolution.value;
+    return (
+        `LSP server failed to become responsive within ${SERVER_START_WAIT_MS}ms ` +
+        `(lspState=${store?.lspState.value ?? 'no-store'}, ` +
+        `client=${store?.client.value !== undefined ? 'created' : 'missing'}, ` +
+        `binary=${resolution?.path ?? 'unresolved'}, source=${resolution?.source ?? 'n/a'}). ` +
         'Ensure the basilisk binary is built: cargo build -p basilisk-cli'
     );
 }
@@ -292,11 +306,30 @@ export async function setupLspTestSuite(
     return { tmpDir, basiliskBinary: binary };
 }
 
+/**
+ * Best-effort removal of a test directory tree.
+ *
+ * On Windows the server (or the editor) may hold a handle inside the dir
+ * well past the last test — a bare rmSync races it and fails the suite's
+ * after-all hook with EPERM/EBUSY over pure housekeeping. Cleanup is not
+ * an assertion: retry hard, then warn and move on (the OS temp dir is
+ * reaped eventually). ALL suite teardowns must use this, never raw rmSync.
+ */
+export function removeTestDir(dir: string): void {
+    if (dir === '' || !fs.existsSync(dir)) {
+        return;
+    }
+    try {
+        fs.rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    } catch (error) {
+        // eslint-disable-next-line no-console -- test-harness stderr, surfaced in the runner log
+        console.warn(`removeTestDir: leaving ${dir} for the OS to reap: ${String(error)}`);
+    }
+}
+
 /** Clean up a tmpDir created by setupLspTestSuite. */
 export function teardownLspTestSuite(tmpDir: string): void {
-    if (tmpDir !== '' && fs.existsSync(tmpDir)) {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
+    removeTestDir(tmpDir);
 }
 
 // ── Hover & navigation helpers ───────────────────────────────────────
@@ -462,6 +495,57 @@ export interface InlayLabelWait {
 export async function waitForInlayLabel(opts: InlayLabelWait): Promise<vscode.InlayHint[]> {
     const { doc, line, label, timeoutMs = DIAGNOSTIC_TIMEOUT_MS } = opts;
     return pollInlayHints(doc, (r) => inlayLabelsOnLine(r, line).includes(label), timeoutMs);
+}
+
+/**
+ * Filter diagnostics to only those produced by the Basilisk LSP server —
+ * `source: "basilisk"` or a `BSK`-prefixed code. Shared by the integration
+ * suite and the real-world journey suites ([VSIX-REALWORLD-JOURNEY]).
+ */
+export function filterBasiliskDiagnostics(diags: readonly vscode.Diagnostic[]): vscode.Diagnostic[] {
+    return diags.filter(
+        (d) =>
+            d.source === 'basilisk' ||
+            (typeof d.code === 'object' &&
+                d.code !== null &&
+                'value' in d.code &&
+                typeof d.code.value === 'string' &&
+                d.code.value.startsWith('BSK'))
+    );
+}
+
+/**
+ * Recursively flatten document symbol names so callers can search through
+ * nested symbols (e.g. methods inside classes). Shared by the integration
+ * suite and the real-world journey suites ([VSIX-REALWORLD-JOURNEY]).
+ */
+export function flattenSymbolNames(symbols: readonly vscode.DocumentSymbol[]): string[] {
+    const names: string[] = [];
+    for (const sym of symbols) {
+        names.push(sym.name);
+        if (sym.children.length > 0) {
+            names.push(...flattenSymbolNames(sym.children));
+        }
+    }
+    return names;
+}
+
+/**
+ * Poll the document-symbol provider until `predicate` holds. Returns `[]` on
+ * timeout — never throws — so callers assert with a descriptive message.
+ */
+export async function getDocumentSymbols(
+    uri: vscode.Uri,
+    predicate: (symbols: vscode.DocumentSymbol[]) => boolean = (s) => s.length > 0,
+    timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS,
+): Promise<vscode.DocumentSymbol[]> {
+    return pollUntilResult({
+        fn: async () => vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+            'vscode.executeDocumentSymbolProvider', uri,
+        ).then((r) => r ?? [], () => [] as vscode.DocumentSymbol[]),
+        predicate,
+        timeoutMs,
+    }).catch(() => [] as vscode.DocumentSymbol[]);
 }
 
 /** Definition-family providers usable with {@link getNavLocations}. */

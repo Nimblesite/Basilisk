@@ -11,6 +11,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { resolveMarkerFilePayload } from "../../dap-evaluate";
+import { removeTestDir } from './test-helpers';
 
 suite("Memory courier — large payload file handoff", () => {
   test("a file-handoff marker is replaced by the file's full contents, then cleaned up", async () => {
@@ -25,7 +26,7 @@ suite("Memory courier — large payload file handoff", () => {
 
     assert.strictEqual(resolved, payload, "the full payload must return intact from the file");
     assert.ok(!fs.existsSync(file), "the temp payload file must be removed after reading");
-    fs.rmSync(dir, { recursive: true, force: true });
+    removeTestDir(dir);
   });
 
   test("output without a file marker passes through unchanged (CPU acks, OK markers)", async () => {
@@ -38,6 +39,6 @@ suite("Memory courier — large payload file handoff", () => {
     const missing = path.join(dir, "absent.txt");
     const raw = `__BASILISK_MEM_FILE__${missing}\n`;
     assert.strictEqual(await resolveMarkerFilePayload(raw), raw);
-    fs.rmSync(dir, { recursive: true, force: true });
+    removeTestDir(dir);
   });
 });

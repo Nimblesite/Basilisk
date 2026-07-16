@@ -15,13 +15,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
+    closeAllEditors,
     DIAGNOSTIC_TIMEOUT_MS,
     EXTENSION_ID,
+    filterBasiliskDiagnostics,
     NO_DIAGNOSTIC_WAIT_MS,
+    openPythonFile,
+    removeTestDir,
     SERVER_START_WAIT_MS,
     SUITE_SETUP_TIMEOUT_MS,
-    closeAllEditors,
-    openPythonFile,
     waitForDiagnostics,
     waitForDiagnosticsCleared,
 } from './test-helpers';
@@ -95,21 +97,6 @@ async function assertDiagnosticsStayCleared(uri: vscode.Uri, windowMs: number): 
     }
 }
 
-/**
- * Filter diagnostics to only those produced by the Basilisk LSP server.
- */
-function filterBasiliskDiagnostics(diags: vscode.Diagnostic[]): vscode.Diagnostic[] {
-    return diags.filter(
-        (d) =>
-            d.source === 'basilisk' ||
-            (typeof d.code === 'object' &&
-                d.code !== null &&
-                'value' in d.code &&
-                typeof d.code.value === 'string' &&
-                d.code.value.startsWith('BSK'))
-    );
-}
-
 // Tests the editor-setting source of [ANALYSIS-CONFIG-SRC] — the
 // `basilisk.analysisMode` workspace setting: default `wholeModule`, all three
 // enum values accepted, and the server respecting the selected scope.
@@ -124,7 +111,7 @@ suite('Analysis Mode Tests', () => {
     suiteTeardown(async () => {
         await closeAllEditors();
         if (tmpDir !== undefined && tmpDir !== '' && fs.existsSync(tmpDir)) {
-            fs.rmSync(tmpDir, { recursive: true, force: true });
+            removeTestDir(tmpDir);
         }
     });
 
@@ -453,7 +440,7 @@ suite('Analysis Mode Tests', () => {
             // …and assert the closed file's stale diagnostics never come back.
             await assertDiagnosticsStayCleared(uri, STALE_REPUBLISH_GRACE_MS);
         } finally {
-            fs.rmSync(fodderDir, { recursive: true, force: true });
+            removeTestDir(fodderDir);
             await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Workspace);
         }
     });
