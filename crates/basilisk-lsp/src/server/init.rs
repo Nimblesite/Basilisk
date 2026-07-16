@@ -126,9 +126,13 @@ pub(super) async fn initialize(
 
     // Resolve the environment actually in use (python / uv / this binary) and
     // surface it via `experimental.basilisk.resolvedEnvironment` so editors can
-    // show what auto-detect found ([LSPARCH-RESOLVED-ENV], GitHub #153).
+    // show what auto-detect found ([LSPARCH-RESOLVED-ENV], GitHub #153). The
+    // payload MERGES into the experimental capabilities from
+    // `build_capabilities` — `configurationEditor`
+    // ([LSPARCH-CONFIG-EDITOR-PROTOCOL]) must survive alongside it.
     let mut capabilities = build_capabilities(formatting_enabled);
     capabilities.experimental = Some(super::resolved_env::experimental_payload(
+        capabilities.experimental.take(),
         params.initialization_options.as_ref(),
         &roots,
     ));

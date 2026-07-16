@@ -21,14 +21,32 @@ struct ResolvedTool {
     version: Option<String>,
 }
 
-/// Build the `experimental` capabilities payload for the `initialize` response.
+/// Build the `experimental` capabilities payload for the `initialize` response
+/// by MERGING `resolvedEnvironment` into `base` — every capability already
+/// advertised there (e.g. `basilisk.configurationEditor`,
+/// [LSPARCH-CONFIG-EDITOR-PROTOCOL]) is preserved, never replaced.
 ///
-/// Shape: `{"basilisk": {"resolvedEnvironment": {"python": …, "uv": …,
-/// "binary": …}}}` where each tool is `{"path", "version"}` or `null` when
-/// nothing usable was found — clients surface that as an explicit
+/// Shape: `{"basilisk": {…existing keys…, "resolvedEnvironment": {"python": …,
+/// "uv": …, "binary": …}}}` where each tool is `{"path", "version"}` or `null`
+/// when nothing usable was found — clients surface that as an explicit
 /// "none found", never a silent placeholder.
-pub(super) fn experimental_payload(init_options: Option<&Value>, roots: &[PathBuf]) -> Value {
-    json!({ "basilisk": { "resolvedEnvironment": resolved_environment(init_options, roots) } })
+pub(super) fn experimental_payload(
+    base: Option<Value>,
+    init_options: Option<&Value>,
+    roots: &[PathBuf],
+) -> Value {
+    let mut payload = match base {
+        Some(Value::Object(map)) => map,
+        _ => serde_json::Map::new(),
+    };
+    let basilisk = payload.entry("basilisk").or_insert_with(|| json!({}));
+    if let Some(map) = basilisk.as_object_mut() {
+        drop(map.insert(
+            "resolvedEnvironment".to_owned(),
+            resolved_environment(init_options, roots),
+        ));
+    }
+    Value::Object(payload)
 }
 
 /// Resolve the python/uv/binary triple, honouring the editor's configured
@@ -156,8 +174,26 @@ mod tests {
     }
 
     #[test]
+    fn merging_preserves_existing_experimental_capabilities() {
+        // Regression: the resolved-environment payload once REPLACED the whole
+        // `experimental` object, silently dropping `configurationEditor`
+        // ([LSPARCH-CONFIG-EDITOR-PROTOCOL]) and un-gating the editor command.
+        let base = json!({ "basilisk": { "configurationEditor": true } });
+        let payload = experimental_payload(Some(base), None, &[]);
+        assert_eq!(
+            payload.pointer("/basilisk/configurationEditor"),
+            Some(&Value::Bool(true)),
+            "resolvedEnvironment must merge alongside configurationEditor, never replace it: {payload}"
+        );
+        assert!(
+            payload.pointer("/basilisk/resolvedEnvironment").is_some(),
+            "merged payload must still carry resolvedEnvironment: {payload}"
+        );
+    }
+
+    #[test]
     fn payload_always_carries_all_three_slots_and_the_running_binary() {
-        let payload = experimental_payload(None, &[]);
+        let payload = experimental_payload(None, None, &[]);
         let env = payload
             .get("basilisk")
             .and_then(|b| b.get("resolvedEnvironment"))
@@ -182,7 +218,7 @@ mod tests {
     #[test]
     fn nonexistent_python_override_resolves_to_null() {
         let options = json!({ "basilisk": { "python": "/definitely/not/here/python" } });
-        let payload = experimental_payload(Some(&options), &[]);
+        let payload = experimental_payload(None, Some(&options), &[]);
         let python = payload
             .pointer("/basilisk/resolvedEnvironment/python")
             .expect("python slot");
@@ -204,7 +240,7 @@ mod tests {
         std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
 
         let options = json!({ "basilisk": { "python": fake.to_string_lossy() } });
-        let payload = experimental_payload(Some(&options), &[]);
+        let payload = experimental_payload(None, Some(&options), &[]);
         let python = payload
             .pointer("/basilisk/resolvedEnvironment/python")
             .expect("python slot");

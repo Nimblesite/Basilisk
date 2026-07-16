@@ -519,7 +519,7 @@ mod tests {
         let uri = make_uri("/workspace/broken.py");
         let _ = idx.set_open(&uri, "x: int = \"not an int\"\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "", true, true);
         assert_eq!(tree.modules.len(), 1);
         let module = &tree.modules[0];
 
@@ -586,7 +586,7 @@ mod tests {
         let uri = make_uri("/workspace/broken.py");
         let _ = idx.set_open(&uri, "x: int = \"not an int\"\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), false, true);
+        let tree = build_module_tree(&idx, "", false, true);
         assert_eq!(tree.modules.len(), 1);
         assert_eq!(
             tree.modules[0].get("diagnostics"),

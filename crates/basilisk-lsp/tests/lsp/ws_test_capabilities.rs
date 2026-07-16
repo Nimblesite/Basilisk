@@ -132,6 +132,17 @@ async fn test_ws_initialize_advertises_resolved_environment() -> TestResult<()> 
             .is_some_and(|version| !version.is_empty()),
         "binary.version must be populated: {binary:?}"
     );
+
+    // Regression: resolvedEnvironment must MERGE into the experimental
+    // capabilities, not replace them — configurationEditor
+    // ([LSPARCH-CONFIG-EDITOR-PROTOCOL], server/init.rs build_capabilities)
+    // gates the editor command in every client and once vanished when this
+    // payload overwrote the whole `experimental` object.
+    assert_eq!(
+        parsed.pointer("/result/capabilities/experimental/basilisk/configurationEditor"),
+        Some(&serde_json::Value::Bool(true)),
+        "configurationEditor must survive alongside resolvedEnvironment: {response}"
+    );
     Ok(())
 }
 
