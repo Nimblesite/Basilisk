@@ -153,7 +153,9 @@ fn user_stub_path<'a>(
 }
 
 /// Build the [`ImportedModuleApi`] (top-level member names + `__getattr__`
-/// presence) from a parsed user stub.
+/// presence) from a parsed user stub. Names the stub re-exports — redundant
+/// aliases, `__all__` entries, and star-imported submodules' export sets
+/// ([STUBRES-PYI-REEXPORTS], GitHub #312) — are members too.
 fn build_stub_api(
     stub: &basilisk_stubs::StubModule,
     stub_path: &std::path::Path,
@@ -163,6 +165,7 @@ fn build_stub_api(
     member_names.extend(stub.classes.keys().cloned());
     member_names.extend(stub.variables.keys().cloned());
     member_names.extend(stub.overloads.keys().cloned());
+    member_names.extend(basilisk_stubs::reexported_member_names(stub));
     ImportedModuleApi {
         member_names,
         has_getattr: stub.functions.contains_key("__getattr__"),

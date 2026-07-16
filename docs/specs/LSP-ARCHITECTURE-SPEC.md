@@ -102,6 +102,31 @@ never edits the entry afterwards, and never resurrects anything the user
 deletes — deleting the tag entry switches the house rules back off. The CLI
 never seeds.
 
+## Resolved environment reporting {#LSPARCH-RESOLVED-ENV}
+
+The server — never the editor — is authoritative for what auto-detection actually
+resolved (GitHub #153). Its `initialize` response reports
+`capabilities.experimental.basilisk.resolvedEnvironment` with three slots —
+`python` (the [LSPDEBUG-PYRES](LSP-DEBUG-INTEGRATION-SPEC.md#LSPDEBUG-PYRES) cascade
+outcome, honouring a `basilisk.python` override, with bare command names located on
+`PATH` so the reported path is concrete), `uv` (the
+[uv binary cascade](#LSPARCH-UV-BINRES) outcome, honouring
+`basilisk.uv.executablePath`), and `binary` (the running server itself:
+`current_exe()` + crate version). Each slot is `{"path", "version"}` or `null` when
+nothing usable exists; `version` is `null` when the `--version` probe fails but the
+path is real. Versions come from running `<tool> --version` once at initialize.
+
+Editors render a resolved tool as `<version> (<path>)`; with an empty (auto-detect)
+setting the row shows the outcome — `auto-detect → 3.12.4 (/usr/bin/python3)`,
+`auto-detect → none found`, or `auto-detect → awaiting server…` — never the bare
+`auto-detect` placeholder. The Binary row renders only from this payload: populated
+while a server is running, absent otherwise
+([EXTACT-INFO-SERVER-INFO](EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-SERVER-INFO)).
+
+Implemented in `crates/basilisk-lsp/src/server/resolved_env.rs` (payload) and
+`crates/basilisk-lsp/src/server/init.rs` (wiring); version probing shared with the
+profiler's `version_via_command` (`crates/basilisk-lsp/src/profiler/processes.rs`).
+
 ## Configuration editor API {#LSPARCH-CONFIG-EDITOR}
 
 The LSP is the configuration authority; clients render controls and relay typed

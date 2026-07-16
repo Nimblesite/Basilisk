@@ -43,6 +43,16 @@ pub(crate) fn byte_offset_to_line(text: &str, offset: u32) -> usize {
         .count()
 }
 
+/// Convert a byte offset to a 0-based character column on its own line.
+///
+/// Pairs with [`byte_offset_to_line`] to give the spec's `DiagnosticNode`
+/// start position for navigate-on-click ([EXTACT-MODULES-DIAGNOSTICS], #235).
+pub(crate) fn byte_offset_to_character(text: &str, offset: u32) -> usize {
+    let offset = usize::try_from(offset).unwrap_or(0).min(text.len());
+    let line_start = text[..offset].rfind('\n').map_or(0, |newline| newline + 1);
+    text[line_start..offset].chars().count()
+}
+
 /// Compute coverage percentage without raw `as` casts.
 ///
 /// Implements the spec's coverage formula `annotatedSymbols / totalSymbols * 100`
@@ -155,6 +165,31 @@ mod tests {
     #[test]
     fn test_byte_offset_within_second_line() {
         assert_eq!(byte_offset_to_line("ab\ncd\nef\n", 4), 1);
+    }
+
+    // ── byte_offset_to_character ──────────────────────────────────────────
+
+    // Tests the position half of [EXTACT-MODULES-DIAGNOSTICS] (#235).
+    #[test]
+    fn test_character_on_first_line_is_the_offset() {
+        assert_eq!(byte_offset_to_character("hello\nworld\n", 3), 3);
+    }
+
+    #[test]
+    fn test_character_resets_after_newline() {
+        assert_eq!(byte_offset_to_character("hello\nworld\n", 6), 0);
+        assert_eq!(byte_offset_to_character("hello\nworld\n", 8), 2);
+    }
+
+    #[test]
+    fn test_character_counts_chars_not_bytes() {
+        // 'é' is 2 bytes; the column after it is character 1, not 2.
+        assert_eq!(byte_offset_to_character("é=1\n", 2), 1);
+    }
+
+    #[test]
+    fn test_character_clamps_past_end_of_text() {
+        assert_eq!(byte_offset_to_character("ab\ncd", 99), 2);
     }
 
     // ── coverage_percent ──────────────────────────────────────────────────

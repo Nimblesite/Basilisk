@@ -28,7 +28,7 @@
       "threshold": 95
     },
     "basilisk-stubs": {
-      "threshold": 92
+      "threshold": 93
     },
     "basilisk-config": {
       "threshold": 97

@@ -198,6 +198,18 @@ pub struct StubVariable {
     pub annotation: Option<String>,
 }
 
+/// A `from <module> import *` statement in a stub, recorded so re-export
+/// following ([STUBRES-PYI-REEXPORTS]) can resolve the target module relative
+/// to the stub file and fold its export set into the importer's public API.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StarReexport {
+    /// The dotted module path after `from`, without leading dots
+    /// (`"tasks"` for `from .tasks import *`; empty for `from . import *`).
+    pub module: String,
+    /// Relative-import level: number of leading dots (0 = absolute).
+    pub level: u32,
+}
+
 /// All type information extracted from a single `.pyi` file.
 ///
 /// Designed for efficient lookup by symbol name. Overloaded functions
@@ -221,4 +233,14 @@ pub struct StubModule {
     pub classes: HashMap<String, StubClass>,
     /// Module-level variable annotations.
     pub variables: HashMap<String, StubVariable>,
+    /// Union of every `__all__` assignment's string entries, including
+    /// version/platform-gated branches (`if sys.version_info >= …:`).
+    /// `None` when the stub never assigns `__all__` ([STUBRES-PYI-REEXPORTS]).
+    pub dunder_all: Option<Vec<String>>,
+    /// Names re-exported via the typing spec's redundant-alias convention:
+    /// `from y import x as x` / `import x as x` ([STUBRES-PYI-REEXPORTS]).
+    pub reexported_names: Vec<String>,
+    /// `from <module> import *` statements, whose targets' export sets are
+    /// part of this module's public API ([STUBRES-PYI-REEXPORTS]).
+    pub star_reexports: Vec<StarReexport>,
 }

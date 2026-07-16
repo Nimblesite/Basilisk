@@ -6,7 +6,9 @@ use std::path::Path;
 
 use crate::workspace::WorkspaceIndex;
 
-use super::helpers::{byte_offset_to_line, coverage_percent, module_name_from_path};
+use super::helpers::{
+    byte_offset_to_character, byte_offset_to_line, coverage_percent, module_name_from_path,
+};
 use super::type_health::compute_file_health;
 
 /// Result of building the workspace module tree: the per-module nodes (each with
@@ -85,6 +87,15 @@ pub(crate) fn build_module_tree(
             "path": path.display().to_string(),
             "kind": module_kind(path),
             "symbols": build_symbol_list(resolved, &file_entry.text),
+            // The navigable drill-down behind the row's error/warning tally
+            // ([EXTACT-MODULES-DIAGNOSTICS], GitHub #235). EMPTY while type
+            // checking is disabled ([ANALYSIS-ENABLED]): possibly-stale
+            // diagnostics must not leak through the drill-down either.
+            "diagnostics": if type_checking_enabled {
+                diagnostic_nodes(&file_entry.diagnostics, &file_entry.text)
+            } else {
+                Vec::new()
+            },
         });
 
         if type_checking_enabled {
@@ -110,6 +121,43 @@ pub(crate) fn build_module_tree(
     );
 
     WorkspaceModulesResult { modules, workspace }
+}
+
+/// Serialize a file's diagnostics as the spec's `DiagnosticNode` rows —
+/// errors before warnings, then ascending line — so every count advertised on
+/// the module row is navigable ([EXTACT-MODULES-DIAGNOSTICS], GitHub #235).
+///
+/// Only exact `Error`/`Warning` severities are serialized — the same filter
+/// [`compute_file_health`] counts — so the spec invariant
+/// `errors == diagnostics.filter(d => d.severity == "error").length` holds
+/// (`Info` and the opt-in `SafetyViolation` are excluded from both).
+fn diagnostic_nodes(
+    diagnostics: &[basilisk_checker::Diagnostic],
+    text: &str,
+) -> Vec<serde_json::Value> {
+    let mut rows: Vec<(bool, usize, serde_json::Value)> = diagnostics
+        .iter()
+        .filter_map(|diagnostic| {
+            let severity = match diagnostic.severity {
+                basilisk_checker::Severity::Error => "error",
+                basilisk_checker::Severity::Warning => "warning",
+                basilisk_checker::Severity::Info | basilisk_checker::Severity::SafetyViolation => {
+                    return None;
+                }
+            };
+            let line = byte_offset_to_line(text, diagnostic.span.start);
+            let node = serde_json::json!({
+                "severity": severity,
+                "code": diagnostic.code.code,
+                "message": diagnostic.message,
+                "line": line,
+                "character": byte_offset_to_character(text, diagnostic.span.start),
+            });
+            Some((severity != "error", line, node))
+        })
+        .collect();
+    rows.sort_by_key(|&(is_warning, line, _)| (is_warning, line));
+    rows.into_iter().map(|(_, _, node)| node).collect()
 }
 
 /// Node kind: `__init__.py(i)` files are packages, everything else a module.
@@ -457,6 +505,163 @@ mod tests {
             tree.modules[0].get("coveragePercent").is_some(),
             "enabled payload keeps the grading rollup"
         );
+    }
+
+    // Tests [EXTACT-MODULES-DIAGNOSTICS] (GitHub #235): every module node must
+    // carry its diagnostics as a navigable list so the `errors`/`warnings`
+    // tallies rendered on the row are reachable, not dead. The wire shape is the
+    // spec's DiagnosticNode: severity/code/message/line/character, with the
+    // count invariant `errors == diagnostics.filter(severity == "error").len()`.
+    #[test]
+    fn test_module_nodes_carry_navigable_diagnostics() {
+        let root = PathBuf::from("/workspace");
+        let idx = make_index_with_roots(vec![root.clone()]);
+        let uri = make_uri("/workspace/broken.py");
+        let _ = idx.set_open(&uri, "x: int = \"not an int\"\n", 1);
+
+        let tree = build_module_tree(&idx, "", true, true);
+        assert_eq!(tree.modules.len(), 1);
+        let module = &tree.modules[0];
+
+        // Precondition: the fixture really produces a type error, so the test
+        // exercises a non-empty drill-down (not a vacuously-empty list).
+        let errors = module
+            .get("errors")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap();
+        assert!(
+            errors > 0,
+            "fixture must produce a type error, got {module}"
+        );
+
+        assert!(
+            module.get("diagnostics").is_some(),
+            "module node must carry a `diagnostics` array so the `errors` tally \
+             is navigable ([EXTACT-MODULES-DIAGNOSTICS], #235), got {module}"
+        );
+        let diagnostics = module
+            .get("diagnostics")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+
+        // Count invariant from [EXTACT-DATA-MODEL].
+        let error_rows = diagnostics
+            .iter()
+            .filter(|d| d.get("severity").and_then(serde_json::Value::as_str) == Some("error"))
+            .count();
+        assert_eq!(
+            u64::try_from(error_rows).unwrap(),
+            errors,
+            "errors tally must equal the number of error-severity diagnostic rows"
+        );
+
+        // Each row is the spec's DiagnosticNode shape.
+        for entry in diagnostics {
+            for field in ["severity", "code", "message", "line", "character"] {
+                assert!(
+                    entry.get(field).is_some(),
+                    "diagnostic row missing `{field}`: {entry}"
+                );
+            }
+        }
+
+        // Single-line fixture: the error anchors to line 0 (zero-based).
+        assert_eq!(
+            diagnostics[0]
+                .get("line")
+                .and_then(serde_json::Value::as_u64),
+            Some(0),
+            "diagnostic line must be the zero-based source line"
+        );
+    }
+
+    // [ANALYSIS-ENABLED] × [EXTACT-MODULES-DIAGNOSTICS]: with type checking
+    // disabled the drill-down carries nothing — an empty array, mirroring the
+    // omitted count fields, so no client can render stale diagnostics while
+    // the toggle is off.
+    #[test]
+    fn test_disabled_toggle_serves_empty_diagnostics() {
+        let root = PathBuf::from("/workspace");
+        let idx = make_index_with_roots(vec![root.clone()]);
+        let uri = make_uri("/workspace/broken.py");
+        let _ = idx.set_open(&uri, "x: int = \"not an int\"\n", 1);
+
+        let tree = build_module_tree(&idx, "", false, true);
+        assert_eq!(tree.modules.len(), 1);
+        assert_eq!(
+            tree.modules[0].get("diagnostics"),
+            Some(&serde_json::json!([])),
+            "disabled toggle must serve an EMPTY diagnostics list, got {}",
+            tree.modules[0]
+        );
+    }
+
+    /// Hand-built diagnostic for the ordering/filtering tests below.
+    fn make_diag(
+        severity: basilisk_checker::Severity,
+        start: u32,
+        message: &str,
+    ) -> basilisk_checker::Diagnostic {
+        basilisk_checker::Diagnostic {
+            code: basilisk_checker::ErrorCode {
+                code: "test_rule",
+                docs_url: "https://example.invalid/test_rule",
+            },
+            severity,
+            message: message.to_owned(),
+            span: basilisk_resolver::Span::new(start, start + 1),
+            path: "/workspace/x.py".to_owned(),
+            help: None,
+            note: None,
+            provenance: None,
+        }
+    }
+
+    // Tests the ordering + severity-filter rules of [EXTACT-MODULES-DIAGNOSTICS]:
+    // errors before warnings, then ascending line; Info and the opt-in
+    // SafetyViolation stay off the wire so the count invariant against
+    // compute_file_health holds exactly.
+    #[test]
+    fn test_diagnostic_nodes_sorts_errors_first_then_line_and_filters_severities() {
+        use basilisk_checker::Severity;
+        // Offsets land on lines 0..4 of this 5-line text (6 bytes per line).
+        let text = "aaaaa\nbbbbb\nccccc\nddddd\neeeee\n";
+        let diagnostics = vec![
+            make_diag(Severity::Warning, 0, "warning on line 0"),
+            make_diag(Severity::Error, 18, "error on line 3"),
+            make_diag(Severity::Info, 6, "info stays off the wire"),
+            make_diag(Severity::Error, 6, "error on line 1"),
+            make_diag(Severity::SafetyViolation, 12, "safety stays off the wire"),
+        ];
+
+        let rows = diagnostic_nodes(&diagnostics, text);
+
+        let rendered: Vec<(&str, u64)> = rows
+            .iter()
+            .map(|row| {
+                (
+                    row.get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap(),
+                    row.get("line").and_then(serde_json::Value::as_u64).unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            rendered,
+            vec![
+                ("error on line 1", 1),
+                ("error on line 3", 3),
+                ("warning on line 0", 0),
+            ],
+            "errors before warnings, then ascending line; Info/SafetyViolation excluded"
+        );
+        // Every row carries the full DiagnosticNode shape.
+        for row in &rows {
+            for field in ["severity", "code", "message", "line", "character"] {
+                assert!(row.get(field).is_some(), "row missing `{field}`: {row}");
+            }
+        }
     }
 
     #[test]

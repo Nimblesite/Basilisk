@@ -236,6 +236,14 @@ advertisement rather than registered twice.
 Read-only rows show available server version, analysis mode, Python selection, uv settings,
 and Basilisk binary. The status bar, not this panel, owns live running/stopped state.
 
+Resolution rows show what was resolved, never a raw placeholder (issue #153): Python and uv
+rows render the server-resolved value per
+[LSPARCH-RESOLVED-ENV](LSP-ARCHITECTURE-SPEC.md#LSPARCH-RESOLVED-ENV) — `auto-detect →
+<version> (<path>)`, explicit failure (`auto-detect → none found`), or `auto-detect →
+awaiting server…` before live data; the bare `auto-detect` literal never renders. The Binary
+row comes exclusively from the server's own report of its running executable and is absent
+while no server is running.
+
 ## Editor ownership {#EXTACT-EDITORS}
 
 ### VS Code {#EXTACT-EDITORS-VSCODE}

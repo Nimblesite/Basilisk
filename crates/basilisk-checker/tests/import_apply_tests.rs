@@ -127,6 +127,62 @@ fn user_stub_without_getattr_is_strict() {
     let _ = fs::remove_dir_all(&stub_dir);
 }
 
+/// Regression for GitHub #312: a package stub's `__init__.pyi` may build its
+/// public API entirely out of re-exports — `from .sub import *` and the
+/// redundant-alias form `from .sub import Name as Name` — per the typing
+/// spec's import conventions
+/// (<https://typing.python.org/en/latest/spec/distributing.html#import-conventions>).
+/// The captured member API must include those re-exported names, otherwise
+/// `imports_module_attribute` reports false "Module `X` has no attribute"
+/// errors on spec-valid access (e.g. `asyncio.sleep` with
+/// micropython-stdlib-stubs).
+#[test]
+fn captures_reexports_through_package_init_stub() {
+    let stub_dir = make_tmp_dir("bsk_ir_reexport_pkg");
+    let pkg = stub_dir.join("aio");
+    fs::create_dir_all(&pkg).unwrap();
+    // Mirrors micropython-stdlib-stubs' asyncio/__init__.pyi: nothing defined
+    // locally, everything re-exported from submodules.
+    fs::write(
+        pkg.join("__init__.pyi"),
+        "from .tasks import *\nfrom .tasks import Task as Task\nfrom .runners import *\n",
+    )
+    .unwrap();
+    // Like typeshed's real tasks.pyi: `Task` arrives via a redundant-alias
+    // re-export and `__all__` is a tuple inside version-gated branches.
+    fs::write(
+        pkg.join("tasks.pyi"),
+        "import sys\nfrom _asyncio import Task as Task\n\nif sys.version_info >= (3, 12):\n    __all__ = (\"Task\", \"sleep\")\nelse:\n    __all__ = (\"Task\", \"sleep\")\n\nasync def sleep(delay: float) -> None: ...\n",
+    )
+    .unwrap();
+    fs::write(
+        pkg.join("runners.pyi"),
+        "__all__ = (\"run\",)\n\ndef run(main: object) -> None: ...\n",
+    )
+    .unwrap();
+
+    let mut paths = make_search_paths(vec![]);
+    paths.stub_paths = vec![stub_dir.clone()];
+
+    let mut resolved = module_with_plain_import("aio");
+    resolve_module_imports(&mut resolved, &paths);
+
+    let api = resolved
+        .imported_modules
+        .get("aio")
+        .expect("package __init__.pyi under stub-paths must be captured");
+    for name in ["sleep", "Task", "run"] {
+        assert!(
+            api.member_names.contains(name),
+            "`{name}` is re-exported through aio/__init__.pyi and must be in \
+             the captured member API (GitHub #312); got {:?}",
+            api.member_names
+        );
+    }
+
+    let _ = fs::remove_dir_all(&stub_dir);
+}
+
 #[test]
 fn does_not_capture_non_stub_import() {
     // A plain `.py` source resolution (not a user stub) is not captured.

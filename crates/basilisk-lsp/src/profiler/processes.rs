@@ -630,7 +630,11 @@ fn resolve_python_version(
 }
 
 /// Run `<exe> --version` and parse the reported version (stdout or stderr).
-fn version_via_command(exe: &str) -> Option<String> {
+///
+/// Shared with [LSPARCH-RESOLVED-ENV] (`server/resolved_env.rs`), which probes
+/// the resolved interpreter and uv binary the same way for the `initialize`
+/// response.
+pub(crate) fn version_via_command(exe: &str) -> Option<String> {
     let output = std::process::Command::new(exe)
         .arg("--version")
         .output()
@@ -643,17 +647,15 @@ fn version_via_command(exe: &str) -> Option<String> {
     parse_version_output(&String::from_utf8_lossy(&stream))
 }
 
-/// Parse `Python 3.12.13` (and `PyPy`'s `Python 3.9.18 [PyPy …]`) into `3.12.13`.
+/// Extract the first dotted version token from a `--version` line — handles
+/// `Python 3.12.13`, `PyPy`'s `Python 3.9.18 [PyPy …]`, and `uv 0.5.11 (…)`.
 fn parse_version_output(text: &str) -> Option<String> {
-    let trimmed = text.trim();
-    let rest = trimmed.strip_prefix("Python ").unwrap_or(trimmed);
-    let token = rest.split_whitespace().next()?;
-    let starts_with_digit = token.chars().next().is_some_and(|ch| ch.is_ascii_digit());
-    if starts_with_digit && token.contains('.') {
-        Some(token.to_owned())
-    } else {
-        None
-    }
+    text.split_whitespace()
+        .find(|token| {
+            let starts_with_digit = token.chars().next().is_some_and(|ch| ch.is_ascii_digit());
+            starts_with_digit && token.contains('.')
+        })
+        .map(str::to_owned)
 }
 
 /// Derive `major.minor` from a `pythonX.Y` interpreter basename, if it encodes
@@ -706,6 +708,11 @@ mod tests {
             Some("3.9.18".to_owned())
         );
         assert_eq!(parse_version_output("garbage"), None);
+        // uv-style banner ([LSPARCH-RESOLVED-ENV] probes uv with this parser).
+        assert_eq!(
+            parse_version_output("uv 0.5.11 (Homebrew 2025-01-01)"),
+            Some("0.5.11".to_owned())
+        );
     }
 
     #[test]
