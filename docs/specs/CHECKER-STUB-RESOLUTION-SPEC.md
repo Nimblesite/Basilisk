@@ -81,8 +81,13 @@ modified version of typeshed; if this option is provided, type checkers SHOULD
 use this as the canonical source for standard-library types in this step"
 ([typing spec, import resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)).
 
-Basilisk satisfies this with `typeshed-path` (`pyproject.toml`; LSP JSON:
-`typeshedPath`) — a single path to the root of a typeshed-layout directory that
+Basilisk satisfies this with `typeshed-path` in the one project configuration —
+`pyproject.toml` `[tool.basilisk]`
+([CHKARCH-CONFIG-FILE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-FILE)); the
+pyright-compat camelCase spelling `typeshedPath` is accepted in the same table
+and in the pyright compatibility sources
+([ANALYSIS-CONFIG-PRI](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CONFIG-PRI)). The
+value is a single path to the root of a typeshed-layout directory that
 supplies standard-library stubs:
 
 ```toml
@@ -324,13 +329,20 @@ Stub/import diagnostics use the checker's ordinary severity and inline-suppressi
 there is no stub-specific suppression grammar. See
 [CHKARCH-STRICTNESS-SUPPRESSION](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS-SUPPRESSION).
 
-| Setting Key | Type | Default | Description |
-|------------|------|---------|-------------|
-| `basilisk.stubPaths` | `string[]` | `[]` | Additional directories to search for `.pyi` stubs (resolution step 1 — [§STUBRES-PEP561](#STUBRES-PEP561)) |
-| `basilisk.typeshedPath` | `string` | _(built-in index)_ | Path to a custom/modified typeshed directory that becomes the canonical source for standard-library types (resolution step 3 — [§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)) |
+| Config key (`[tool.basilisk]`) | Type | Default | Description |
+|-------------------------------|------|---------|-------------|
+| `stub-paths` | `string[]` | `[]` | Additional directories to search for `.pyi` stubs (resolution step 1 — [§STUBRES-PEP561](#STUBRES-PEP561)) |
+| `typeshed-path` | `string` | _(built-in index)_ | Path to a custom/modified typeshed directory that becomes the canonical source for standard-library types (resolution step 3 — [§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)) |
 
-Both keys accept the `pyproject.toml` kebab-case (`stub-paths`, `typeshed-path`)
-and the LSP JSON camelCase (`stubPaths`, `typeshedPath`) spellings.
+Both keys live in the one project configuration — `pyproject.toml`
+`[tool.basilisk]`
+([CHKARCH-CONFIG-FILE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-FILE)) —
+with kebab-case as the canonical spelling. The camelCase spellings
+(`stubPaths`, `typeshedPath`) are pyright-migration aliases accepted in the
+same table and in the pyright compatibility sources (`[tool.pyright]`,
+`pyrightconfig.json` —
+[ANALYSIS-CONFIG-PRI](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CONFIG-PRI)). There
+is no separate LSP-side JSON configuration.
 
 `pyproject.toml` configuration:
 

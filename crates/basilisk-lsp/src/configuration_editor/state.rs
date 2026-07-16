@@ -56,6 +56,10 @@ pub(crate) struct ConfigurationEditorState {
     applied: Mutex<HashMap<PathBuf, AppliedDocument>>,
     open: Mutex<HashMap<PathBuf, OpenDocument>>,
     pending_open_edits: Mutex<HashMap<PathBuf, PendingOpenEdit>>,
+    // Implements [LSPARCH-CONFIG]: the last on-disk configuration
+    // content observed per root, shared by the server-owned watcher and the
+    // client `didChangeWatchedFiles` path so one disk change refreshes once.
+    disk_contents: Mutex<HashMap<PathBuf, String>>,
 }
 
 impl Default for ConfigurationEditorState {
@@ -66,6 +70,7 @@ impl Default for ConfigurationEditorState {
             applied: Mutex::new(HashMap::new()),
             open: Mutex::new(HashMap::new()),
             pending_open_edits: Mutex::new(HashMap::new()),
+            disk_contents: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -262,6 +267,30 @@ impl ConfigurationEditorState {
                 document,
             },
         );
+    }
+
+    /// Seed the observed on-disk configuration baseline for `root` without
+    /// treating it as a change (startup / new-root registration). Never
+    /// overwrites an existing baseline. Implements [LSPARCH-CONFIG].
+    pub(crate) fn seed_disk_content(&self, root: &Path, content: String) {
+        let _ = lock(&self.disk_contents)
+            .entry(root.to_path_buf())
+            .or_insert(content);
+    }
+
+    /// Record the latest observed on-disk configuration content for `root`,
+    /// returning whether it differs from the recorded baseline. A first
+    /// observation counts as changed, so a missed seed refreshes rather than
+    /// going stale. Implements [LSPARCH-CONFIG].
+    pub(crate) fn record_disk_content(&self, root: &Path, content: &str) -> bool {
+        let mut contents = lock(&self.disk_contents);
+        match contents.get(root) {
+            Some(previous) if previous == content => false,
+            _ => {
+                let _ = contents.insert(root.to_path_buf(), content.to_owned());
+                true
+            }
+        }
     }
 
     /// Bridge the short interval between a successful client edit and didChange.

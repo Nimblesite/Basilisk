@@ -8,12 +8,12 @@ Design principle (per [LSPARCH](LSP-ARCHITECTURE-SPEC.md#LSPARCH)): the LSP owns
 
 ## Decision: everything in the binary, no `ruff` subprocess {#LSPFMT-DECISION}
 
-Formatting and import hygiene are **self-contained in the `basilisk` binary**. The external `ruff` CLI is **jettisoned** — it is never spawned. Two independent mechanisms replace it:
+Formatting and import hygiene are **self-contained in the `basilisk` binary**. The external `ruff` CLI is never spawned. Two independent mechanisms:
 
-| Concern | Old (removed) | New |
-|---|---|---|
-| Formatting | spawn `ruff format` | link the `ruff_python_formatter` crate, call it in-process ([LSPFMT-ENGINE]) |
-| Import hygiene | spawn `ruff check --select I/F403/E401 --fix` | native AST fixers in the binary ([LSPFMT-IMPORTS]) |
+| Concern | Mechanism |
+|---|---|
+| Formatting | the `ruff_python_formatter` crate, linked and called in-process ([LSPFMT-ENGINE]) |
+| Import hygiene | native AST fixers in the binary ([LSPFMT-IMPORTS]) |
 
 Rationale — one engine in one binary is the only design uniform across all four consumers, removes the PATH/bundle/silent-no-op failure mode, and eliminates version skew between "the ruff that parses" and "the ruff that formats". The CLI-bundle and VS-Code-extension-dependency approaches were rejected because each serves at most one editor and splits ownership away from the LSP.
 
@@ -43,7 +43,7 @@ Each release's notes MUST enumerate, from a single generated source (not hand-ty
 
 ## Configuration {#LSPFMT-CONFIG}
 
-One new setting replaces the two removed `basilisk.ruff.*` settings (there is no `ruff` binary, so `executablePath` is meaningless):
+One setting selects the formatter engine (there is no `ruff` binary, so no executable path exists to configure):
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
@@ -63,7 +63,7 @@ The server advertises formatting as LSP capabilities, so all four consumers get 
 - `documentRangeFormattingProvider` — Format Selection (shares the embedded engine; Ruff widens the selection to whole logical lines).
 - `documentOnTypeFormattingProvider` — format-as-you-type (future, optional).
 
-All are attributed to the single identity **"Basilisk"** (`serverInfo.name`); VS Code shows the extension `displayName`, Zed/Neovim show the server id. There is no per-provider display name in LSP or VS Code — the Ruff engine is disclosed via [LSPFMT-PROVENANCE], never a picker label. When `basilisk.formatter` is `"none"`, none of these are advertised.
+All are attributed to the single identity **"Basilisk"** (`serverInfo.name`); VS Code shows the extension `displayName`, Zed/Neovim show the server id. There is no per-provider display name in LSP or VS Code — the Ruff engine is disclosed via [LSPFMT-PROVENANCE], never a picker label. When `basilisk.formatter` is `"none"`, none of these are advertised. Formatter *selection* is an editor session setting resolved at `initialize` — capability advertisement is per-session, deliberately outside the live-watched project configuration ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)). Formatter *style* (`[tool.ruff]`) is re-read from `pyproject.toml` on every format request, so style edits apply live.
 
 ## Native import hygiene {#LSPFMT-IMPORTS}
 

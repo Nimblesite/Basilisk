@@ -259,6 +259,18 @@ impl WorkspaceIndex {
         }
     }
 
+    /// Replace one root's checker config with an already-resolved document
+    /// (a live configuration buffer or a freshly observed disk edit) and drop
+    /// the discovered per-directory config cache so the next lookup re-merges
+    /// instead of serving the stale entry. Implements [LSPARCH-CONFIG]
+    /// via [CHKARCH-CONFIG-DISCOVERY].
+    pub fn set_root_config(&mut self, root: PathBuf, config: BasiliskConfig) {
+        let _ = self.root_configs.insert(root, config);
+        if let Ok(mut dir_configs) = self.dir_configs.write() {
+            dir_configs.clear();
+        }
+    }
+
     /// Cache the import search paths built during the workspace scan.
     ///
     /// Subsequent incremental analyses (`didOpen` / `didChange` / disk reload)

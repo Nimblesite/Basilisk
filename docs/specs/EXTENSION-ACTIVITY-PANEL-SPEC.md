@@ -148,7 +148,11 @@ while the server is running, and Fix Workspace also requires
 
 Manual refresh clears cached modules and refetches. Server start, module changes,
 `scanComplete`, and debounced diagnostics update the shared analysis revision, which causes
-reactive consumers to refetch.
+reactive consumers to refetch. Configuration changes are server-pushed, never polled
+([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)): the refresh tail's
+republished diagnostics bump the analysis revision for the panel, and
+`basilisk/configurationChanged` refreshes the configuration editor state directly
+(`src/store.ts` notification subscriptions).
 
 ### Centralized reactive state {#EXTACT-REACTIVE-STATE}
 
