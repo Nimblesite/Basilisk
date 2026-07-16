@@ -17,10 +17,11 @@ import * as os from 'os';
 import * as path from 'path';
 
 import {
-    SUITE_SETUP_TIMEOUT_MS,
     closeAllEditors,
     findBasiliskBinary,
     openPythonFile,
+    removeTestDir,
+    SUITE_SETUP_TIMEOUT_MS,
     waitForDiagnostics,
     waitForLspReady,
 } from './test-helpers';
@@ -90,7 +91,7 @@ suite('Editor screenshots', function () {
     suiteTeardown(async () => {
         await closeAllEditors();
         if (tmpDir !== undefined && tmpDir !== '' && fs.existsSync(tmpDir)) {
-            fs.rmSync(tmpDir, { recursive: true, force: true });
+            removeTestDir(tmpDir);
         }
     });
 

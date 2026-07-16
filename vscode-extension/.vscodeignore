@@ -1,6 +1,7 @@
 .vscode/**
 .vscode-test/**
 .vscode-test.mjs
+.real-world/**
 .screenshots/**
 .ruff_cache/**
 coverage/**

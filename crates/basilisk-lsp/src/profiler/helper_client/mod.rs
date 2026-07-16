@@ -290,9 +290,16 @@ async fn handshake(
                 });
             }
             Ok(Err(err)) => {
-                return Err(SamplerError::AttachFailed(format!(
-                    "attach handshake failed: {err}"
-                )))
+                // A read error (e.g. ECONNRESET) races bare EOF when the
+                // helper dies mid-handshake — reap it and surface its exit
+                // status and stderr exactly like the EOF path above, so the
+                // user still sees WHY (issue #81).
+                let diagnosis = helper_exit_diagnosis(child).await;
+                let message = format!("attach handshake failed: {err} ({diagnosis})");
+                return Err(match classify_attach_error(&message) {
+                    AttachErrorKind::PermissionDenied => SamplerError::PermissionDenied(message),
+                    _ => SamplerError::AttachFailed(message),
+                });
             }
             Err(_elapsed) => {
                 let diagnosis = helper_exit_diagnosis(child).await;

@@ -28,6 +28,7 @@ import {
 } from "../../configuration-editor-state";
 import { readBasiliskSettings } from "../../lsp-client";
 import { createStore } from "../../store";
+import { removeTestDir } from './test-helpers';
 
 const ROOT_URI = "file:///workspace";
 const PEP_CODE = "BSK-0001";
@@ -462,7 +463,7 @@ function createScratchConfigWorkspace(): ScratchConfigWorkspace {
       rootUri,
       configUri: configUri.toString(),
     }),
-    dispose: (): void => { fs.rmSync(scratchRoot, { recursive: true, force: true }); },
+    dispose: (): void => { removeTestDir(scratchRoot); },
   };
 }
 

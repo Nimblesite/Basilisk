@@ -210,6 +210,30 @@ mod tests {
     }
 
     #[test]
+    fn test_dot_completion_self_in_second_class() {
+        // Regression for [LSPARCH-FEATURES-COMPLETION]: `self.` inside a class
+        // defined AFTER another class must complete the ENCLOSING class's
+        // members, not the first class in the file. Found by the
+        // [VSIX-REALWORLD] rich corpus: `self.` inside Console (declared after
+        // ConsoleOptions in rich/console.py) offered ConsoleOptions attributes.
+        let code = "class Options:\n    width: int\n    def copy(self) -> str:\n        return \"copy\"\n\nclass Console:\n    file: str\n    def print_line(self) -> str:\n        return \"line\"\n    def log(self) -> str:\n        return self.";
+        let byte_offset = code.len();
+        let resolved = resolve_patched(code, 10);
+        let items = complete(&resolved, code, byte_offset);
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        assert!(labels.contains(&"file"), "missing 'file': {labels:?}");
+        assert!(
+            labels.contains(&"print_line"),
+            "missing 'print_line': {labels:?}"
+        );
+        assert!(labels.contains(&"log"), "missing 'log': {labels:?}");
+        assert!(
+            !labels.contains(&"width") && !labels.contains(&"copy"),
+            "leaked members of the FIRST class instead of the enclosing one: {labels:?}"
+        );
+    }
+
+    #[test]
     fn test_dot_completion_self() {
         let code = "class Cat:\n    color: str\n    age: int\n    def meow(self) -> str:\n        return \"meow\"\n    def describe(self) -> str:\n        return self.";
         let byte_offset = code.len();

@@ -61,6 +61,7 @@ impl std::fmt::Display for PipelineError {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct FileAnalysisFailure {
     pub(crate) path: String,
     pub(crate) message: String,

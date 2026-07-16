@@ -580,13 +580,16 @@ mod tests {
     #[test]
     fn find_package_source_resolves_stdlib_package() {
         let result = find_package_source("json", std::path::Path::new("python3"));
-        // Skip silently only if no usable interpreter is on PATH; otherwise the
-        // success branch must resolve `json/__init__.py`.
-        if std::process::Command::new("python3")
+        // Skip silently only if no USABLE interpreter is on PATH; otherwise the
+        // success branch must resolve `json/__init__.py`. `output().is_ok()`
+        // alone is not enough: the Windows Store `python3` execution alias
+        // spawns successfully but only prints an install hint and exits
+        // non-zero, so the guard must require the interpreter to actually run.
+        let usable = std::process::Command::new("python3")
             .arg("--version")
             .output()
-            .is_ok()
-        {
+            .is_ok_and(|out| out.status.success());
+        if usable {
             assert!(
                 result.is_some_and(|p| p.ends_with("__init__.py")),
                 "the `json` stdlib package must resolve to its __init__.py"
