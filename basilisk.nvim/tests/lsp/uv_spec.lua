@@ -26,13 +26,6 @@ describe("uv integration", function()
       assert.is_false(config_mod.defaults.uv.auto_sync)
     end)
 
-    it("uv stub_suggestions defaults to true", function()
-      assert.is_true(config_mod.defaults.uv.stub_suggestions)
-    end)
-
-    it("uv dependency_diagnostics defaults to true", function()
-      assert.is_true(config_mod.defaults.uv.dependency_diagnostics)
-    end)
   end)
 
   -- uv config resolution
@@ -43,8 +36,6 @@ describe("uv integration", function()
       assert.is_true(resolved.uv.enabled)
       assert.is_nil(resolved.uv.executable_path)
       assert.is_false(resolved.uv.auto_sync)
-      assert.is_true(resolved.uv.stub_suggestions)
-      assert.is_true(resolved.uv.dependency_diagnostics)
     end)
 
     it("overrides uv settings from user config", function()
@@ -53,15 +44,11 @@ describe("uv integration", function()
           enabled = false,
           executable_path = "/usr/local/bin/uv",
           auto_sync = true,
-          stub_suggestions = false,
-          dependency_diagnostics = false,
         },
       })
       assert.is_false(resolved.uv.enabled)
       assert.are.equal("/usr/local/bin/uv", resolved.uv.executable_path)
       assert.is_true(resolved.uv.auto_sync)
-      assert.is_false(resolved.uv.stub_suggestions)
-      assert.is_false(resolved.uv.dependency_diagnostics)
     end)
 
     it("partial uv override preserves other defaults", function()
@@ -70,7 +57,6 @@ describe("uv integration", function()
       })
       assert.is_true(resolved.uv.enabled)
       assert.is_true(resolved.uv.auto_sync)
-      assert.is_true(resolved.uv.stub_suggestions)
     end)
   end)
 

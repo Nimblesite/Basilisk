@@ -1,13 +1,13 @@
 """
 REST API handler — fully typed, passes Basilisk with zero diagnostics.
 
-Run:  cargo run -- check examples/api_server_clean.py
+Run:  basilisk check examples/api_server_clean.py
 """
 
 from __future__ import annotations
 
 import json
-from typing import overload, override
+from typing import ClassVar, overload, override
 
 
 # Properly annotated module-level state
@@ -31,10 +31,9 @@ def handle_post(
     return body
 
 
-# Any is justified here — JSON can be any valid JSON type
-def serialize(
-    value: object,
-) -> str:  # basilisk: allow[returns_compatibility] -- JSON is inherently untyped
+# `object` instead of `Any` — JSON can be any valid JSON type, and
+# `json.dumps` accepts `object`, so no suppression is needed
+def serialize(value: object) -> str:
     return json.dumps(value)
 
 
@@ -79,7 +78,7 @@ class Router:
 
 
 class PrefixRouter(Router):
-    prefix: str = "/api"
+    prefix: ClassVar[str] = "/api"
 
     @override
     def resolve(self, path: str) -> str:

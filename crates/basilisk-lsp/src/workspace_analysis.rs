@@ -8,8 +8,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use basilisk_config::AdoptionStore;
-
 use crate::config::{AnalysisMode, WorkspaceConfig};
 
 use super::workspace::FileEntry;
@@ -163,28 +161,6 @@ pub fn resolve_analysis_mode(
     AnalysisMode::WholeModule
 }
 
-/// Apply adoption overrides to checker diagnostics.
-///
-/// Demotes adopted error codes from `Error` to `Warning` severity for the
-/// given file path. The path is made relative to `project_root` before
-/// looking up the adoption store.
-pub(crate) fn apply_adoptions(
-    diagnostics: &mut [basilisk_checker::Diagnostic],
-    file_path: &Path,
-    project_root: &Path,
-    store: &AdoptionStore,
-) {
-    let relative = file_path.strip_prefix(project_root).unwrap_or(file_path);
-
-    for diag in diagnostics.iter_mut() {
-        if diag.severity == basilisk_checker::Severity::Error
-            && store.is_demoted(relative, diag.code.code)
-        {
-            diag.severity = basilisk_checker::Severity::Warning;
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::bsk_to_lsp;
@@ -193,8 +169,8 @@ mod tests {
     fn diag(help: Option<&str>, note: Option<&str>) -> basilisk_checker::Diagnostic {
         basilisk_checker::Diagnostic {
             code: basilisk_checker::ErrorCode {
-                code: "BSK-E0152",
-                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0152",
+                code: "BSK-0152",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-0152",
             },
             severity: basilisk_checker::Severity::Error,
             message: "Package `acme` is installed but has no type stubs available".to_owned(),

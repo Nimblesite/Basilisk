@@ -100,7 +100,7 @@ impl PackageRegistry {
     /// `types_requests` for `requests`).
     ///
     /// Returns the import name of the stub package if present. This is a
-    /// plain registry lookup; the BSK-E0152 stub *suggestion* path
+    /// plain registry lookup; the BSK-0152 stub *suggestion* path
     /// ([LSPUV-DIAGNOSTICS-MISSING-STUBS]) instead uses the bundled typeshed
     /// index (`basilisk_stubs::typeshed_stub_distribution`), and installed
     /// `{name}-stubs` packages are honoured at import-resolution time
@@ -346,7 +346,7 @@ mod tests {
     }
 
     // A `types-<pkg>` entry in uv.lock is discoverable as the matching stub
-    // package (keyed `types_<pkg>`). Registry lookup only — the BSK-E0152
+    // package (keyed `types_<pkg>`). Registry lookup only — the BSK-0152
     // suggestion path ([LSPUV-DIAGNOSTICS-MISSING-STUBS]) uses the bundled
     // typeshed index instead.
     #[test]

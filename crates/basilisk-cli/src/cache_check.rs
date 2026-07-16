@@ -48,10 +48,14 @@ pub struct CacheContext {
 }
 
 /// Build a [`CacheContext`] when the cache is enabled, else `None`.
+///
+/// `dir_configs` is the per-directory rule-config map for this run
+/// ([CHKARCH-CONFIG-DISCOVERY]) — every directory's config participates in
+/// the fingerprint so a child config edit invalidates cached results.
 #[must_use]
 pub fn build_context(
     options: &CacheOptions,
-    config: &BasiliskConfig,
+    dir_configs: &std::collections::BTreeMap<PathBuf, std::sync::Arc<BasiliskConfig>>,
     search_paths: &ImportSearchPaths,
     project_root: &Path,
 ) -> Option<CacheContext> {
@@ -64,7 +68,7 @@ pub fn build_context(
         .unwrap_or_else(|| default_cache_dir(project_root));
     let fingerprint = Fingerprint {
         version: env!("CARGO_PKG_VERSION").to_owned(),
-        config_hash: hash_config(config),
+        config_hash: hash_dir_configs(dir_configs),
         env_hash: hash_env(search_paths, project_root),
     };
     Some(CacheContext {
@@ -78,13 +82,23 @@ fn default_cache_dir(project_root: &Path) -> PathBuf {
     project_root.join(".basilisk").join("cache").join("check")
 }
 
-/// Hash the *effective* config. Canonicalised through `serde_json::Value` so the
-/// hash is stable across runs despite `HashMap` iteration order.
-fn hash_config(config: &BasiliskConfig) -> u64 {
-    serde_json::to_value(config)
-        .ok()
-        .and_then(|value| serde_json::to_string(&value).ok())
-        .map_or(0, |json| content_hash(&json))
+/// Hash the *effective* per-directory configs. Canonicalised through
+/// `serde_json::Value` so the hash is stable across runs despite `HashMap`
+/// iteration order; the `BTreeMap` fixes the directory order.
+fn hash_dir_configs(
+    dir_configs: &std::collections::BTreeMap<PathBuf, std::sync::Arc<BasiliskConfig>>,
+) -> u64 {
+    let parts: Vec<String> = dir_configs
+        .iter()
+        .map(|(dir, config)| {
+            let json = serde_json::to_value(config.as_ref())
+                .ok()
+                .and_then(|value| serde_json::to_string(&value).ok())
+                .unwrap_or_default();
+            format!("{}={json}", dir.display())
+        })
+        .collect();
+    content_hash(&parts.join("\n"))
 }
 
 /// Hash the resolution environment: search paths plus `uv.lock` contents.

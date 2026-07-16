@@ -30,8 +30,6 @@ local M = {}
 ---@field enabled boolean
 ---@field executable_path? string
 ---@field auto_sync boolean
----@field stub_suggestions boolean
----@field dependency_diagnostics boolean
 
 ---@class BasiliskKeymaps
 ---@field enabled boolean
@@ -92,8 +90,6 @@ M.defaults = {
     enabled = true,
     executable_path = nil,
     auto_sync = false,
-    stub_suggestions = true,
-    dependency_diagnostics = true,
   },
   keymaps = {
     enabled = true,

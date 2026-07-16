@@ -118,11 +118,11 @@ pub fn code_actions(
             continue;
         };
         let fix = match code.as_str() {
-            "BSK-E0001" => Some(fixes::fix_missing_param_annotation(uri, diag)),
-            "BSK-E0002" => Some(fixes::fix_missing_return_annotation(uri, diag)),
-            "BSK-E0003" => Some(fixes::fix_missing_variable_annotation(uri, diag)),
-            "BSK-W0050" => Some(fixes::fix_remove_redundant_annotation(uri, diag, source)),
-            "BSK-E0005" => Some(fixes::fix_missing_attribute_annotation(uri, diag)),
+            "BSK-0001" => Some(fixes::fix_missing_param_annotation(uri, diag)),
+            "BSK-0002" => Some(fixes::fix_missing_return_annotation(uri, diag)),
+            "BSK-0003" => Some(fixes::fix_missing_variable_annotation(uri, diag)),
+            "BSK-0050" => Some(fixes::fix_remove_redundant_annotation(uri, diag, source)),
+            "BSK-0005" => Some(fixes::fix_missing_attribute_annotation(uri, diag)),
             _ => None,
         };
 
@@ -140,7 +140,7 @@ pub fn code_actions(
                 }
             }
         }
-        if code == "BSK-E0152" {
+        if code == "BSK-0152" {
             if let Some(module) = extract_module_from_diagnostic(&diag.message) {
                 // Install a published typeshed stub when one exists...
                 let install = make_uv_add_stubs_action(diag, &module);
@@ -162,7 +162,7 @@ pub fn code_actions(
                 actions.push(CodeActionOrCommand::CodeAction(action));
             }
         }
-        if code == "BSK-W0013" {
+        if code == "BSK-0013" {
             actions.push(CodeActionOrCommand::CodeAction(make_uv_sync_action(diag)));
         }
         if code == crate::server::test_handlers::PYTEST_NOT_FOUND_CODE {
@@ -187,9 +187,9 @@ pub fn code_actions(
         actions.push(CodeActionOrCommand::CodeAction(
             suppress::suppress_with_type_ignore(uri, diag, source),
         ));
-        // Offer to disable the rule in pyproject.toml project config.
+        // Offer to disable the rule in the active project configuration.
         actions.push(CodeActionOrCommand::CodeAction(
-            suppress::disable_in_project_config(diag, code),
+            suppress::disable_in_project_config(uri, diag, code),
         ));
     }
 
@@ -456,7 +456,7 @@ mod tests {
         let uri = Url::parse("file:///test.py").unwrap();
         let diag = make_diagnostic(
             DiagnosticSeverity::WARNING,
-            "BSK-W0050",
+            "BSK-0050",
             "Redundant type annotation",
             range_at((0, 0), (0, 1)),
         );
@@ -481,7 +481,7 @@ mod tests {
         let uri = Url::parse("file:///test.py").unwrap();
         let diag = make_diagnostic(
             DiagnosticSeverity::WARNING,
-            "BSK-W0050",
+            "BSK-0050",
             "Redundant type annotation",
             range_at((0, 0), (0, 1)),
         );
@@ -625,7 +625,7 @@ mod tests {
     fn test_bsk_e0152_code_action_includes_uv_add_dev() {
         let diag = make_diagnostic(
             DiagnosticSeverity::ERROR,
-            "BSK-E0152",
+            "BSK-0152",
             "Package `requests` is installed but has no type stubs available",
             range_at((0, 0), (0, 8)),
         );
@@ -653,7 +653,7 @@ mod tests {
     fn test_bsk_e0152_action_suppressed_for_unknown_stub() {
         let diag = make_diagnostic(
             DiagnosticSeverity::ERROR,
-            "BSK-E0152",
+            "BSK-0152",
             "Package `pydantic_ai` is installed but has no type stubs available",
             range_at((0, 0), (0, 12)),
         );
@@ -674,7 +674,7 @@ mod tests {
     fn test_bsk_e0152_offers_local_stub_alongside_install_for_typeshed() {
         let diag = make_diagnostic(
             DiagnosticSeverity::ERROR,
-            "BSK-E0152",
+            "BSK-0152",
             "Package `requests` is installed but has no type stubs available",
             range_at((0, 0), (0, 8)),
         );

@@ -649,6 +649,46 @@ suite("Basilisk Activity Panel E2E Tests", function () {
       "moduleExplorer welcome should mention no modules found",
     );
   });
+
+  // The settings cog was only on the BASILISK info panel title — easy to miss.
+  // [VSIX-STATUS-BAR]: Open Configuration must be reachable from EVERY Basilisk
+  // sidebar view title, plus the always-visible status bar (basilisk.statusMenu).
+  test("Open Configuration is reachable from every Basilisk view title, not just the info panel", function () {
+    const contributes = loadContributes();
+    const titleMenus = contributes?.menus?.["view/title"] ?? [];
+    const configViews = new Set(
+      titleMenus
+        .filter((entry) => entry.command === "basilisk.openConfigurationEditor")
+        .map((entry) => {
+          const match = /view == (basilisk\.[A-Za-z]+)/.exec(entry.when);
+          return match?.[1];
+        })
+        .filter((view): view is string => view !== undefined),
+    );
+    for (const view of ["basilisk.info", "basilisk.moduleExplorer", "basilisk.pythonProcesses"]) {
+      assert.ok(
+        configViews.has(view),
+        `Open Configuration must be contributed to ${view}'s title bar; got: ${[...configViews].join(", ")}`,
+      );
+    }
+    // Every config-cog entry must stay gated on editor support so it never
+    // renders a dead button when the server lacks the configuration editor.
+    for (const entry of titleMenus.filter((menu) => menu.command === "basilisk.openConfigurationEditor")) {
+      assert.ok(
+        entry.when.includes("basilisk.configurationEditorSupported"),
+        `config cog on '${entry.when}' must be gated on basilisk.configurationEditorSupported`,
+      );
+    }
+  });
+
+  test("clicking the status bar opens the config-first status menu, which is a declared command", function () {
+    const contributes = loadContributes();
+    const statusMenu = (contributes?.commands ?? []).find(
+      (cmd) => cmd.command === "basilisk.statusMenu",
+    );
+    assert.ok(statusMenu, "basilisk.statusMenu must be declared in package.json");
+    assertCommandRegistered("basilisk.statusMenu", "Status bar menu");
+  });
 });
 
 // ── Merged Modules panel: health chrome + per-module coverage [EXTACT-MODULES] ─

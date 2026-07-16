@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 title: Missing Annotations — E0001–E0009
-description: "Basilisk rules that flag missing type annotations — unannotated parameters, return types, variables, *args/**kwargs, and class attributes. BSK-E0001 through E0009."
-keywords: basilisk, missing annotations, type annotations, BSK-E0001, BSK-E0002
+description: "Basilisk rules that flag missing type annotations — unannotated parameters, return types, variables, *args/**kwargs, and class attributes. BSK-0001 through E0009."
+keywords: basilisk, missing annotations, type annotations, BSK-0001, BSK-0002
 date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project
@@ -20,7 +20,7 @@ Rules that flag code where type information is absent.
 
 ---
 
-### BSK-E0001 — Missing parameter type annotation
+### BSK-0001 — Missing parameter type annotation
 
 Every function parameter must have an explicit type annotation.
 
@@ -36,11 +36,11 @@ def process(data: str) -> str:
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0001 for an unannotated parameter](/assets/images/e0001.png)
+![basilisk check output reporting BSK-0001 for an unannotated parameter](/assets/images/e0001.png)
 
 ---
 
-### BSK-E0002 — Missing return type annotation
+### BSK-0002 — Missing return type annotation
 
 Every function must declare its return type.
 
@@ -56,11 +56,11 @@ def get_user(user_id: int) -> dict[str, int]:
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0002 for a missing return type](/assets/images/e0002.png)
+![basilisk check output reporting BSK-0002 for a missing return type](/assets/images/e0002.png)
 
 ---
 
-### BSK-E0003 — Missing variable type annotation
+### BSK-0003 — Missing variable type annotation
 
 A module-level variable whose type cannot be inferred — for example an empty collection — must carry an explicit annotation.
 
@@ -74,11 +74,11 @@ data: list[str] = []
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0003 for an unannotated empty list](/assets/images/e0003.png)
+![basilisk check output reporting BSK-0003 for an unannotated empty list](/assets/images/e0003.png)
 
 ---
 
-### BSK-E0004 — Missing `*args` or `**kwargs` annotation
+### BSK-0004 — Missing `*args` or `**kwargs` annotation
 
 Variadic arguments must be annotated.
 
@@ -94,11 +94,11 @@ def log(*args: str, **kwargs: int) -> None:
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0004 for unannotated *args and **kwargs](/assets/images/e0004.png)
+![basilisk check output reporting BSK-0004 for unannotated *args and **kwargs](/assets/images/e0004.png)
 
 ---
 
-### BSK-E0005 — Missing class attribute annotation
+### BSK-0005 — Missing class attribute annotation
 
 A class attribute whose type cannot be inferred — for example an empty collection — must be explicitly annotated.
 
@@ -114,4 +114,4 @@ class Registry:
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0005 for an unannotated class attribute](/assets/images/e0005.png)
+![basilisk check output reporting BSK-0005 for an unannotated class attribute](/assets/images/e0005.png)

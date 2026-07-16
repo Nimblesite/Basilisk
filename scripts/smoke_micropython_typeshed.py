@@ -6,7 +6,7 @@ release — the exact tree the feature's reporter (Jos Verlinde, maintainer of
 ``micropython-stubs``) ships — and drives the real ``basilisk`` binary over it.
 
 Spec: docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED
-Plan: docs/plans/CHECKER-STUB-RESOLUTION-PLAN.md (acceptance box "MicroPython
+(custom typeshed acceptance: "MicroPython
       real-tree smoke test").
 
 It proves the two behaviours the reporter asked for, as an A/B contrast whose

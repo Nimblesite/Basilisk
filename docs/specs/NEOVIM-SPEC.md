@@ -404,4 +404,4 @@ GitHub Actions: the `test-nvim` job in `ci.yml` runs the plenary.nvim suite on a
 
 The mirror is tagged with the identical `vX.Y.Z`, so the plugin version matches the binary that `binary.lua` auto-downloads from `Nimblesite/Basilisk` releases and that version-pinned installs (`vim.pack` / lazy.nvim) resolve. Versioning is **tag-only** — no embedded version string; `:BasiliskInfo` and `:checkhealth basilisk` report the binary version, which equals the tag.
 
-See `docs/plans/NEOVIM-RELEASE-PLAN.md` for the full rollout, secrets, and the LuaRocks / nvim-lspconfig secondary channels.
+The core plugin is shipped. Registry submission and mirror publication remain external release follow-ups in the [roadmap](../plans/ROADMAP-NEXT-STEPS-PLAN.md#NEXTSTEPS-DISTRIBUTION).

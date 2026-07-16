@@ -57,7 +57,7 @@ pub enum RuleMode {
     Ignore,
 }
 
-/// A parsed inline suppression or mode override from a source comment.
+/// A parsed inline suppression or severity override from a source comment.
 ///
 /// The data shape behind [CHKARCH-STRICTNESS-SUPPRESSION] / the compat table in
 /// [CHKARCH-STRICTNESS-COMPAT] — a `# type: <mode>[codes]` or block/file
@@ -284,7 +284,7 @@ mod tests {
     fn diag(help: Option<&str>, note: Option<&str>) -> Diagnostic {
         Diagnostic {
             code: ErrorCode {
-                code: "BSK-E0000",
+                code: "BSK-0000",
                 docs_url: "https://www.basilisk-python.dev",
             },
             severity: Severity::Error,

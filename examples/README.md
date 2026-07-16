@@ -18,26 +18,42 @@ basilisk check examples/
 basilisk check examples/bad.py --output json
 ```
 
+## Errors vs warnings
+
+Every **error** below is a genuine violation of the
+[Python typing spec](https://typing.python.org/en/latest/spec/index.html).
+Those rules are on out of the box — in your own project, with no
+configuration, you get exactly them.
+
+Every **warning** comes from Basilisk's opt-in strictness rules (annotations
+required everywhere, `@override` required, and so on). They are silent by
+default; this repository enables them for `examples/**` as warnings via a
+`per-path-overrides` entry in the root `pyproject.toml`. That is the
+incremental-adoption setup the docs teach: warnings mean "this type-checks,
+but strictness isn't at full yet". When the warnings hit zero, promote the
+rules to `error` — in `[tool.basilisk.rules]`, or with the Strict preset in
+the VS Code configuration editor (**Basilisk: Open Configuration Editor**).
+
 ## Files
 
 ### Violation showcases (many diagnostics)
 
-| File | Domain | Notable violations |
-|---|---|---|
-| [bad.py](bad.py) | Minimal toy | E0001, E0002, E0004, E0005 |
-| [mixed.py](mixed.py) | Mixed typed / untyped | E0001, E0002 |
-| [api_server.py](api_server.py) | REST API handler | E0001–E0003, E0011, E0014, E0017, E0019, E0025 |
-| [data_pipeline.py](data_pipeline.py) | ETL pipeline | E0001–E0003, E0011, E0014, E0017, E0019, E0022, E0025 |
-| [ml_trainer.py](ml_trainer.py) | ML training loop | E0001–E0003, E0011, E0014, E0017, E0018, E0023, E0025 |
-| [finance.py](finance.py) | Financial calculations | E0001–E0003, E0011, E0014, E0017, E0018, E0019, E0023, E0025 |
-| [cli_tool.py](cli_tool.py) | CLI application | E0001–E0003, E0011, E0014, E0017, E0019, E0023, E0025 |
-| [weird_violations.py](weird_violations.py) | Subtle edge cases | E0003, E0011, E0014, E0017, E0019, E0021, E0023, E0025 |
+| File | Domain | PEP errors (always on) | Strictness warnings (opt-in) |
+|---|---|---|---|
+| [bad.py](bad.py) | Minimal tour | `calls_argument_type`, `returns_compatibility`, `assignment_compatibility`, `calls_argument_count`, `classes_override`, `names_unbound`, `match_exhaustiveness` | BSK-0001, E0002, E0004 |
+| [mixed.py](mixed.py) | Mixed typed / untyped | `calls_argument_type` | BSK-0001, E0002 |
+| [api_server.py](api_server.py) | REST API handler | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [data_pipeline.py](data_pipeline.py) | ETL pipeline | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014 |
+| [ml_trainer.py](ml_trainer.py) | ML training loop | `assignment_compatibility`, `overloads_consistency`, `match_exhaustiveness`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [finance.py](finance.py) | Financial calculations | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [cli_tool.py](cli_tool.py) | CLI application | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, E0025, W0014, W0050 |
+| [weird_violations.py](weird_violations.py) | Subtle edge cases | `overloads_consistency`, `names_unbound`, `classes_override_2`, `assignment_compatibility`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, W0014, W0050 |
 
 ### Clean counterparts (zero diagnostics)
 
 | File | Counterpart |
 |---|---|
-| [good.py](good.py) | Minimal toy fixed |
+| [good.py](good.py) | `bad.py` fixed — passes at full strictness |
 | [api_server_clean.py](api_server_clean.py) | `api_server.py` fixed |
 
 ### Debugger & profiler demos (launch with F5)
@@ -53,28 +69,34 @@ debugger rather than statically checked. Open one and press F5.
 | [memory_demo.py](memory_demo.py) | Memory — sustained leak, transient spike, reference cycle; the run captures a final snapshot at exit, so it ends in a viewable heat map / `.heapprofile` | One click: **Run & Track Memory (Current File)** |
 | [heap_demo.py](heap_demo.py) | Memory — a chunky ~70 MB warm cache across ~40 distinct allocation sites, so the `.heapprofile` flame chart and Self-Size table fill with varied, real slices | One click: **Run & Track Memory (Current File)** |
 
-## Error code reference
+## Rule reference
+
+Every diagnostic ends with a `see:` link to its documentation page. The full
+catalog lives at [basilisk-python.dev/docs/rules](https://www.basilisk-python.dev/docs/rules/).
+
+### PEP typing-spec rules shown here (errors, always on)
 
 | Code | Meaning |
 |---|---|
-| E0001 | Missing parameter type annotation |
-| E0002 | Missing return type annotation |
-| E0003 | Cannot infer type of empty collection or `None` |
-| E0004 | Missing `*args` / `**kwargs` type annotation |
-| E0005 | Missing class attribute annotation |
-| E0010 | Untyped import |
-| E0011 | Explicit `Any` without justification comment |
-| E0012 | Wrong argument type passed to a function |
-| E0013 | `-> None` function returns a non-None value |
-| E0014 | Assignment type mismatch |
-| E0015 | Invalid type argument |
-| E0016 | Method signature incompatible override |
-| E0017 | Attribute type incompatible override |
-| E0018 | Variable used before it is defined |
-| E0019 | Variable may be unbound on some code paths |
-| E0020 | `@overload` group missing implementation |
-| E0021 | Overlapping overload signatures |
-| E0022 | Unhashable type used as dict key |
-| E0023 | Non-exhaustive `match` statement |
-| E0024 | Invalid type form |
-| E0025 | Override missing `@override` decorator |
+| `calls_argument_type` | Argument incompatible with the parameter's declared type |
+| `calls_argument_count` | Wrong number of arguments in a call |
+| `returns_compatibility` / `returns_compatibility_2` | Returned value not assignable to the declared return type |
+| `assignment_compatibility` | Assigned value not assignable to the annotation |
+| `classes_override` | `@override` method incompatible with the base-class method |
+| `classes_override_2` | Attribute override incompatible with the base class |
+| `names_unbound` | Variable may be unbound on some execution paths |
+| `match_exhaustiveness` | Non-exhaustive `match` — no wildcard `case _:` branch |
+| `dict_key_hashable` | Unhashable type used as a dict key |
+| `overloads_consistency` | Inconsistent or overlapping `@overload` group |
+
+### Basilisk strictness rules shown here (warnings, opt-in)
+
+| Code | Meaning |
+|---|---|
+| BSK-0001 | Missing parameter type annotation |
+| BSK-0002 | Missing return type annotation |
+| BSK-0003 | Cannot infer type of empty collection or `None` |
+| BSK-0004 | Missing `*args` / `**kwargs` type annotation |
+| BSK-0025 | Override missing `@override` decorator |
+| BSK-0014 | Explicit `Any` without justification |
+| BSK-0050 | Redundant type annotation |

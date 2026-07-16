@@ -9,7 +9,7 @@
 唯一在官方 [`python/typing` 符合性套件](https://github.com/python/typing/blob/main/conformance/results/results.html)中取得 100% 满分的 Python 类型检查器 —— 也是我们测过的最快的。使用 Rust 构建的完整开源 Python 开发环境：类型检查器、语言服务器、调试器与性能分析器，并提供 VS Code、Cursor、Zed 与 Neovim 扩展。默认严格。
 
 <p align="center">
-  <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
+  <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/website/src/assets/images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
 </p>
 
 ## 在 Basilisk 中的角色

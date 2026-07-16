@@ -58,10 +58,10 @@ Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> sin
 The `examples/` folder has ready-to-go Python files:
 
 ```sh
-basilisk check examples/bad.py    # everything flagged
-basilisk check examples/good.py   # clean
-basilisk check examples/mixed.py  # some errors, some clean
-basilisk check examples/          # all three at once
+basilisk check examples/bad.py    # typing-spec errors + strictness warnings
+basilisk check examples/good.py   # clean, even at full strictness
+basilisk check examples/mixed.py  # one real type error, plus untyped-code warnings
+basilisk check examples/          # the whole folder at once
 ```
 
 

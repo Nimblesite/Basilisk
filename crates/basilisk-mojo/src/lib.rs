@@ -2,7 +2,7 @@
 //! Mojo-inspired ownership and immutability analysis for Basilisk.
 //!
 //! Houses ownership tracking, immutability enforcement, and coercion
-//! detection (BSK-E003x, BSK-E004x, BSK-E006x) in Phase 4.
+//! detection (BSK-003x, BSK-004x, BSK-006x) in Phase 4.
 
 /// Mutating methods that modify a collection in place.
 const MUTATING_METHODS: &[&str] = &[
@@ -13,7 +13,7 @@ const MUTATING_METHODS: &[&str] = &[
 /// Check a Python source string for Mojo-style ownership violations.
 ///
 /// Detects mutation of `Borrowed` parameters via mutating method calls
-/// (BSK-E003x / BSK-E004x / BSK-E006x).
+/// (BSK-003x / BSK-004x / BSK-006x).
 #[must_use]
 pub fn check_ownership(source: &str) -> Vec<String> {
     let mut violations = Vec::new();

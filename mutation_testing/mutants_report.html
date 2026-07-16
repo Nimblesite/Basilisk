@@ -2385,7 +2385,7 @@
 +++ replace &lt;impl Rule for MissingReturnAnnotation&gt;::opt_in_spec -&gt; Option&lt;crate::rule_tags::OptInSpec&gt; with None
 @@ -14,20 +14,17 @@
  
- /// Emits BSK-E0002 for every function without a return type annotation.
+ /// Emits BSK-0002 for every function without a return type annotation.
  ///
  /// Skipped for `@overload`, `@abstractmethod`, and `Protocol` methods.
  pub(crate) struct MissingReturnAnnotation;
@@ -2579,10 +2579,10 @@
         <pre id='diff-72' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
 +++ replace &lt;impl Rule for MissingVariableType&gt;::opt_in_spec -&gt; Option&lt;crate::rule_tags::OptInSpec&gt; with None
 @@ -18,20 +18,17 @@
-     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0003&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-0003&quot;,
  };
  
- /// Emits BSK-E0003 for every unannotated module-level variable.
+ /// Emits BSK-0003 for every unannotated module-level variable.
  pub(crate) struct MissingVariableType;
  
  impl Rule for MissingVariableType {
@@ -4562,7 +4562,7 @@
 +++ replace &lt;impl Rule for MissingReturnAnnotation&gt;::opt_in_spec -&gt; Option&lt;crate::rule_tags::OptInSpec&gt; with Some(Default::default())
 @@ -14,20 +14,17 @@
  
- /// Emits BSK-E0002 for every function without a return type annotation.
+ /// Emits BSK-0002 for every function without a return type annotation.
  ///
  /// Skipped for `@overload`, `@abstractmethod`, and `Protocol` methods.
  pub(crate) struct MissingReturnAnnotation;
@@ -4635,10 +4635,10 @@
         <pre id='diff-65' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
 +++ replace &lt;impl Rule for MissingVariableType&gt;::opt_in_spec -&gt; Option&lt;crate::rule_tags::OptInSpec&gt; with Some(Default::default())
 @@ -18,20 +18,17 @@
-     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0003&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-0003&quot;,
  };
  
- /// Emits BSK-E0003 for every unannotated module-level variable.
+ /// Emits BSK-0003 for every unannotated module-level variable.
  pub(crate) struct MissingVariableType;
  
  impl Rule for MissingVariableType {

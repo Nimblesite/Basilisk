@@ -199,7 +199,6 @@ function buildUvInfoItem(
   const uvEnabled = cfg.get<boolean>("uv.enabled") ?? true;
   const uvPath = cfg.get<string>("uv.executablePath") ?? "";
   const uvAutoSync = cfg.get<boolean>("uv.autoSync") ?? false;
-  const uvStubs = cfg.get<boolean>("uv.stubSuggestions") ?? true;
 
   const item = new InfoTextItem(
     "uv",
@@ -211,7 +210,6 @@ function buildUvInfoItem(
     `Executable: ${uvPath === "" ? "auto-detect" : uvPath}`,
     `Resolved: ${resolutionDescription(uvPath, env, "uv")}`,
     `Auto-Sync: ${uvAutoSync ? "on" : "off"}`,
-    `Stub Suggestions: ${uvStubs ? "on" : "off"}`,
   ].join("\n");
   return item;
 }

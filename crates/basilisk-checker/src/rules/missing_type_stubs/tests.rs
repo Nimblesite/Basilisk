@@ -1,4 +1,4 @@
-//! Tests for [STUBRES-PEP561] step 6 (no stubs found → BSK-E0152) and the
+//! Tests for [STUBRES-PEP561] step 6 (no stubs found → BSK-0152) and the
 //! [STUBRES-PROVENANCE-DIAG]/[STUBRES-CODEACTIONS] help-text contract for the
 //! `Untyped` provenance row. Exercises `MissingTypeStubs::check`,
 //! `make_diagnostic`, and `stub_help_text` in `super`.
@@ -62,11 +62,11 @@ fn fires_for_site_packages_source_py() {
     );
     let diagnostics = run_check(import);
     assert_eq!(diagnostics.len(), 1);
-    assert_eq!(diagnostics[0].code.code, "BSK-E0152");
+    assert_eq!(diagnostics[0].code.code, "BSK-0152");
 }
 
 /// When this opt-in rule fires, an untyped third-party import is a hard ERROR,
-/// not a warning. A project can soften it (`"BSK-E0152" = "warning"`) to import
+/// not a warning. A project can soften it (`"BSK-0152" = "warning"`) to import
 /// at its own risk; this asserts the rule's default severity is an error.
 #[test]
 fn defaults_to_error_severity() {
@@ -239,7 +239,7 @@ fn skips_site_packages_package_with_py_typed_marker() -> Result<(), Box<dyn std:
 
     assert!(
         diagnostics.is_empty(),
-        "PEP 561 inline-typed packages must not emit BSK-E0152"
+        "PEP 561 inline-typed packages must not emit BSK-0152"
     );
     Ok(())
 }

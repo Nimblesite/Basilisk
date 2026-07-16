@@ -26,7 +26,7 @@ Zed extensions are Rust compiled to WASM with a deliberately narrow API:
 | File watchers | **No** | Not available |
 | Terminal control | **No** | Not available |
 
-All intelligence flows through LSP and DAP — no client-side tricks. See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDRULE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDRULE): the server advertises all commands, clients never pre-register them.
+All intelligence flows through LSP and DAP — no client-side tricks. See [LSPARCH-CMDREG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDREG): the server advertises all commands, clients never pre-register them.
 
 ## Architecture {#ZED-ARCH}
 
@@ -402,4 +402,4 @@ The LSP produces all underlying data; only visualization differs.
 | Flamegraph rendering | Per-editor | VS Code webview / browser fallback |
 | Tree-sitter queries | Zed-only | `basilisk-zed/languages/python/` |
 
-The entire backend is shared; only thin editor-specific glue differs. See [LSP-PLAN.md](../plans/LSP-PLAN.md) for cross-editor phasing.
+The entire backend is shared; only thin editor-specific glue differs. Remaining cross-editor work is tracked in the [roadmap](../plans/ROADMAP-NEXT-STEPS-PLAN.md).

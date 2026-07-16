@@ -7,16 +7,19 @@
     clippy::panic,
     clippy::as_conversions
 )]
-//! Tests for project-level configuration overrides via `check_with_config`.
+//! Tests for the configuration model via `check_with_config`.
 //!
-//! Exercises the config-realized severity model [CHKARCH-STRICTNESS-SEVERITY]
-//! (disable / demote-to-warning / demote-to-info / promote-to-error), the
-//! per-path and per-module rungs of [CHKARCH-STRICTNESS-PRECEDENCE], and the
-//! opt-in house-rule discipline of [CHKARCH-CONFIGURATION-ONLY].
+//! Exercises [CHKARCH-CONFIG-MODEL] (per-rule entries, tag entries, rule
+//! entry over tag entry, strictest matching tag), the command partition
+//! [CHKARCH-COMMANDS] (`pep` rules always run and can never be disabled;
+//! everything else runs only when configuration decides it), and the
+//! severity values of [CHKARCH-STRICTNESS-SEVERITY]. Code under test:
+//! `basilisk-checker/src/lib.rs` (`EffectiveRuleConfig`,
+//! `pep_disable_violations`, `is_pep_rule`).
 
 use std::collections::HashMap;
 
-use basilisk_config::{BasiliskConfig, ModuleOverride, PathOverride, RuleSeverity};
+use basilisk_config::{BasiliskConfig, RuleSeverity, RuleTables};
 
 /// Parse source and check with the given config, returning diagnostics.
 fn check_with(
@@ -35,161 +38,229 @@ fn check_default(source: &str, path: &str) -> Vec<basilisk_checker::Diagnostic> 
     check_with(source, path, &BasiliskConfig::default())
 }
 
-/// Config that opts into the annotation house rules (`strict_annotations = true`).
-///
-/// `BSK-E0001`/`BSK-W0050` and friends are off by default — the default config is
-/// pure PEP conformance. They fire only once a project enables them, which is the
-/// precondition for any severity/path override to have something to act on. These
-/// tests use `..annotations_on()` to layer overrides on top. Basilisk has no
-/// modes; this is just configuration. See [CHKARCH-CONFIGURATION-ONLY].
-fn annotations_on() -> BasiliskConfig {
+/// A config whose single table holds the given rule and tag entries.
+fn config_with(
+    rules: &[(&str, RuleSeverity)],
+    rule_tags: &[(&str, RuleSeverity)],
+) -> BasiliskConfig {
     BasiliskConfig {
-        strict_annotations: true,
+        rule_chain: vec![RuleTables {
+            rules: rules
+                .iter()
+                .map(|(code, severity)| ((*code).to_owned(), *severity))
+                .collect(),
+            rule_tags: rule_tags
+                .iter()
+                .map(|(tag, severity)| ((*tag).to_owned(), *severity))
+                .collect(),
+        }],
         ..Default::default()
     }
 }
 
+/// [CHKARCH-CONFIG-MODEL]: an explicit per-rule entry runs an analyze rule at
+/// exactly that severity.
 #[test]
-fn global_rule_severity_override_disables_rule() {
+fn rule_entry_selects_an_analyze_rule_at_each_severity() {
     let source = "def foo(x):\n    return x\n";
-    let enabled_diags = check_with(source, "test.py", &annotations_on());
-    let e0001_count = enabled_diags
+    for (configured, expected) in [
+        (RuleSeverity::Error, basilisk_checker::Severity::Error),
+        (RuleSeverity::Warning, basilisk_checker::Severity::Warning),
+        (RuleSeverity::Info, basilisk_checker::Severity::Info),
+    ] {
+        let config = config_with(&[("BSK-0001", configured)], &[]);
+        let diagnostics = check_with(source, "test.py", &config);
+        let selected = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code.code == "BSK-0001")
+            .collect::<Vec<_>>();
+        assert!(
+            !selected.is_empty(),
+            "an explicit {configured:?} entry must run the analyze rule"
+        );
+        assert!(selected
+            .iter()
+            .all(|diagnostic| diagnostic.severity == expected));
+    }
+}
+
+/// [CHKARCH-CONFIG-MODEL]: no entry means no check; an explicit `disabled`
+/// entry means the same. Analyze rules are tabula rasa.
+#[test]
+fn analyze_rule_without_entry_or_disabled_stays_off() {
+    let source = "def foo(x):\n    return x\n";
+    let no_entry = check_default(source, "test.py");
+    assert!(!no_entry
         .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
-        .count();
+        .any(|diagnostic| diagnostic.code.code == "BSK-0001"));
+
+    let disabled = config_with(&[("BSK-0001", RuleSeverity::Disabled)], &[]);
+    assert!(!check_with(source, "test.py", &disabled)
+        .iter()
+        .any(|diagnostic| diagnostic.code.code == "BSK-0001"));
+}
+
+/// [CHKARCH-CONFIG-MODEL]: one tag entry grades every rule carrying the tag —
+/// the two-line seed (`rule-tags."basilisk" = "error"`) turns every house
+/// rule on at error ([LSPARCH-CONFIG-SEEDING]).
+#[test]
+fn tag_entry_enables_every_rule_carrying_the_tag() {
+    let source = "def foo(x):\n    return x\n";
+    let config = config_with(&[], &[("basilisk", RuleSeverity::Error)]);
+    let diagnostics = check_with(source, "test.py", &config);
+    let e0001: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-0001")
+        .collect();
     assert!(
-        e0001_count > 0,
-        "BSK-E0001 should fire once the house rule is enabled in config"
+        !e0001.is_empty(),
+        "the basilisk tag entry must run the require-annotation rule"
     );
+    assert!(e0001
+        .iter()
+        .all(|d| d.severity == basilisk_checker::Severity::Error));
+}
 
-    let config = BasiliskConfig {
-        rules: HashMap::from([("BSK-E0001".to_owned(), RuleSeverity::Disabled)]),
-        ..annotations_on()
-    };
-    let diags = check_with(source, "test.py", &config);
-    let e0001_after = diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
-    assert_eq!(
-        e0001_after, 0,
-        "BSK-E0001 should be suppressed when disabled"
+/// [CHKARCH-CONFIG-MODEL]: within a table a per-rule entry beats tag entries.
+#[test]
+fn rule_entry_beats_tag_entry() {
+    let source = "def foo(x):\n    return x\n";
+    let config = config_with(
+        &[("BSK-0001", RuleSeverity::Info)],
+        &[("basilisk", RuleSeverity::Error)],
+    );
+    let diagnostics = check_with(source, "test.py", &config);
+    let selected: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-0001")
+        .collect();
+    assert!(!selected.is_empty());
+    assert!(
+        selected
+            .iter()
+            .all(|d| d.severity == basilisk_checker::Severity::Info),
+        "the per-rule entry must override the tag entry"
     );
 }
 
+/// [CHKARCH-CONFIG-MODEL]: among matching tag entries the strictest severity
+/// wins. BSK-0050 carries `basilisk` and `redundancy`.
 #[test]
-fn global_rule_severity_override_demotes_to_warning() {
-    let source = "def foo(x):\n    return x\n";
-    let config = BasiliskConfig {
-        rules: HashMap::from([("BSK-E0001".to_owned(), RuleSeverity::Warning)]),
-        ..annotations_on()
-    };
-    let diags = check_with(source, "test.py", &config);
-    let e0001_diags: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
-        .collect();
-    assert!(!e0001_diags.is_empty(), "BSK-E0001 should still fire");
-    for diag in &e0001_diags {
-        assert_eq!(
-            diag.severity,
-            basilisk_checker::Severity::Warning,
-            "BSK-E0001 should be demoted to warning"
-        );
-    }
-}
-
-#[test]
-fn global_rule_severity_override_demotes_to_info() {
-    let source = "def foo(x):\n    return x\n";
-    let config = BasiliskConfig {
-        rules: HashMap::from([("BSK-E0001".to_owned(), RuleSeverity::Info)]),
-        ..annotations_on()
-    };
-    let diags = check_with(source, "test.py", &config);
-    let e0001_diags: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
-        .collect();
-    assert!(!e0001_diags.is_empty(), "BSK-E0001 should still fire");
-    for diag in &e0001_diags {
-        assert_eq!(
-            diag.severity,
-            basilisk_checker::Severity::Info,
-            "BSK-E0001 should be demoted to info"
-        );
-    }
-}
-
-#[test]
-fn global_rule_severity_override_promotes_warning_to_error() {
-    // BSK-W0050 (redundant annotation) is a house rule a project opts into. Once
-    // enabled it defaults to a warning, and `rules."BSK-W0050" = "error"` must be
-    // able to promote it to a hard ERROR — letting a project dial severity UP, not
-    // just down. See [CHKARCH-CONFIGURATION-ONLY].
+fn strictest_matching_tag_entry_wins() {
     let source = "x: int = 42\n";
-    let enabled_diags = check_with(source, "test.py", &annotations_on());
-    let w0050_default: Vec<_> = enabled_diags
+    let config = config_with(
+        &[],
+        &[
+            ("basilisk", RuleSeverity::Info),
+            ("redundancy", RuleSeverity::Error),
+        ],
+    );
+    let diagnostics = check_with(source, "test.py", &config);
+    let w0050: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-W0050")
+        .filter(|d| d.code.code == "BSK-0050")
         .collect();
+    assert!(!w0050.is_empty(), "the tag entries must run BSK-0050");
     assert!(
-        !w0050_default.is_empty(),
-        "BSK-W0050 should fire once the house rule is enabled in config"
+        w0050
+            .iter()
+            .all(|d| d.severity == basilisk_checker::Severity::Error),
+        "error must beat info among overlapping tag entries"
     );
-    assert_eq!(
-        w0050_default[0].severity,
-        basilisk_checker::Severity::Warning,
-        "BSK-W0050 defaults to warning"
-    );
-
-    let config = BasiliskConfig {
-        rules: HashMap::from([("BSK-W0050".to_owned(), RuleSeverity::Error)]),
-        ..annotations_on()
-    };
-    let diags = check_with(source, "test.py", &config);
-    let promoted: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-W0050")
-        .collect();
-    assert!(
-        !promoted.is_empty(),
-        "BSK-W0050 should still fire when promoted to error"
-    );
-    for diag in &promoted {
-        assert_eq!(
-            diag.severity,
-            basilisk_checker::Severity::Error,
-            "BSK-W0050 should be promoted to a hard error via config"
-        );
-    }
 }
 
+/// [CHKARCH-CONFIG-MODEL]: entries dial severity up as well as down — a
+/// house rule promoted to a hard error.
 #[test]
-fn per_path_override_disables_rule() {
-    let source = "def foo(x):\n    return x\n";
+fn rule_entry_promotes_to_error() {
+    let source = "x: int = 42\n";
+    let config = config_with(&[("BSK-0050", RuleSeverity::Error)], &[]);
+    let diagnostics = check_with(source, "test.py", &config);
+    let promoted: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-0050")
+        .collect();
+    assert!(!promoted.is_empty());
+    assert!(promoted
+        .iter()
+        .all(|d| d.severity == basilisk_checker::Severity::Error));
+}
 
-    // With the house rule enabled but no path override, BSK-E0001 fires.
-    let enabled_diags = check_with(source, "vendor/lib/foo.py", &annotations_on());
-    let has_e0001 = enabled_diags.iter().any(|d| d.code.code == "BSK-E0001");
-    assert!(has_e0001, "BSK-E0001 should fire without path override");
-
-    // With per-path override disabling BSK-E0001 for vendor/**.
-    let config = BasiliskConfig {
-        per_path_overrides: HashMap::from([(
-            "vendor/**".to_owned(),
-            PathOverride {
-                disabled_rules: vec!["BSK-E0001".to_owned()],
-                rule_overrides: HashMap::new(),
-            },
-        )]),
-        ..annotations_on()
-    };
-    let diags = check_with(source, "vendor/lib/foo.py", &config);
-    let has_e0001_after = diags.iter().any(|d| d.code.code == "BSK-E0001");
+/// [CHKARCH-COMMANDS]: `pep` rules run with no config at all — the bare-tree
+/// conformance surface — and analyze rules do not.
+#[test]
+fn bare_config_runs_pep_rules_only() {
+    let source = "import definitely_missing_basilisk_module\n\ndef foo(x):\n    return x\n";
+    let diagnostics = check_default(source, "test.py");
     assert!(
-        !has_e0001_after,
-        "BSK-E0001 should be disabled for vendor/**"
+        diagnostics
+            .iter()
+            .any(|d| d.code.code == "imports_unresolved"),
+        "pep rules must fire with no config"
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .all(|d| basilisk_checker::is_pep_rule(d.code.code)),
+        "no analyze rule may fire with no config"
     );
 }
 
+/// [CHKARCH-CONFIG-MODEL]: PEP rules can be graded — never disabled.
+#[test]
+fn pep_rule_can_be_graded_down() {
+    let source = "import definitely_missing_basilisk_module\n";
+    let config = config_with(&[("imports_unresolved", RuleSeverity::Warning)], &[]);
+    let diagnostics = check_with(source, "test.py", &config);
+    let graded: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "imports_unresolved")
+        .collect();
+    assert!(!graded.is_empty(), "the graded pep rule must still fire");
+    assert!(graded
+        .iter()
+        .all(|d| d.severity == basilisk_checker::Severity::Warning));
+}
+
+/// [CHKARCH-CONFIG-MODEL]: a `disabled` resolution never applies to a `pep`
+/// rule — the rule keeps firing, and the config is reported invalid through
+/// [`basilisk_checker::pep_disable_violations`].
+#[test]
+fn pep_rule_disable_is_invalid_and_never_applied() {
+    let source = "import definitely_missing_basilisk_module\n";
+    let config = config_with(&[("imports_unresolved", RuleSeverity::Disabled)], &[]);
+
+    let diagnostics = check_with(source, "test.py", &config);
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.code.code == "imports_unresolved"),
+        "a pep rule must keep firing even when config tries to disable it"
+    );
+
+    let violations = basilisk_checker::pep_disable_violations(&config);
+    assert!(
+        violations.contains(&"imports_unresolved"),
+        "the invalid pep-disable must be reported: {violations:?}"
+    );
+
+    let clean = config_with(&[("imports_unresolved", RuleSeverity::Warning)], &[]);
+    assert!(
+        basilisk_checker::pep_disable_violations(&clean).is_empty(),
+        "grading a pep rule is valid"
+    );
+}
+
+/// [CHKARCH-COMMANDS]: the partition is the `pep` provenance tag.
+#[test]
+fn partition_is_the_pep_tag() {
+    assert!(basilisk_checker::is_pep_rule("imports_unresolved"));
+    assert!(basilisk_checker::is_pep_rule("returns_compatibility"));
+    assert!(!basilisk_checker::is_pep_rule("BSK-0001"));
+    assert!(!basilisk_checker::is_pep_rule("BSK-0050"));
+}
+
+/// The default config is behaviourally identical to passing no config.
 #[test]
 fn default_config_does_not_change_behaviour() {
     let source = "def foo(x):\n    return x\n";
@@ -202,80 +273,16 @@ fn default_config_does_not_change_behaviour() {
     );
 }
 
+/// [CHKARCH-CONFIG-MODEL]: `with_rule_entries` and a hand-built chain agree.
 #[test]
-fn per_module_override_suppresses_e0010() {
-    // E0010 fires for unresolved third-party imports.
-    let source = "import fastmcp\n";
-    let default_diags = check_default(source, "test.py");
-    let has_e0010 = default_diags
-        .iter()
-        .any(|d| d.code.code == "imports_unresolved");
-    assert!(has_e0010, "E0010 should fire for unresolved import");
-
-    let config = BasiliskConfig {
-        per_module_overrides: HashMap::from([(
-            "fastmcp".to_owned(),
-            ModuleOverride {
-                ignore_missing_stubs: true,
-            },
-        )]),
-        ..Default::default()
-    };
-    let diags = check_with(source, "test.py", &config);
-    let has_e0010_after = diags.iter().any(|d| d.code.code == "imports_unresolved");
-    assert!(
-        !has_e0010_after,
-        "E0010 should be suppressed for fastmcp with ignore-missing-stubs"
-    );
-}
-
-#[test]
-fn per_module_override_only_suppresses_the_matching_import() {
-    let source = "import fastmcp\nimport definitely_missing_basilisk_module\n";
-    let config = BasiliskConfig {
-        per_module_overrides: HashMap::from([(
-            "fastmcp".to_owned(),
-            ModuleOverride {
-                ignore_missing_stubs: true,
-            },
-        )]),
-        ..Default::default()
-    };
-
-    let unresolved = check_with(source, "test.py", &config)
-        .into_iter()
-        .filter(|diagnostic| diagnostic.code.code == "imports_unresolved")
-        .collect::<Vec<_>>();
-
+fn with_rule_entries_matches_hand_built_chain() {
+    let by_helper = BasiliskConfig::with_rule_entries(HashMap::from([(
+        "BSK-0001".to_owned(),
+        RuleSeverity::Warning,
+    )]));
+    let by_hand = config_with(&[("BSK-0001", RuleSeverity::Warning)], &[]);
     assert_eq!(
-        unresolved.len(),
-        1,
-        "ignoring one missing module must not hide unrelated unresolved imports"
-    );
-    assert!(
-        unresolved[0]
-            .message
-            .contains("definitely_missing_basilisk_module"),
-        "the unrelated unresolved import must remain visible"
-    );
-}
-
-#[test]
-fn per_module_wildcard_override() {
-    let source = "import django.db.models\n";
-    let config = BasiliskConfig {
-        per_module_overrides: HashMap::from([(
-            "django.*".to_owned(),
-            ModuleOverride {
-                ignore_missing_stubs: true,
-            },
-        )]),
-        ..Default::default()
-    };
-    let diags = check_with(source, "test.py", &config);
-    let has_e0010 = diags.iter().any(|d| d.code.code == "imports_unresolved");
-    assert!(
-        !has_e0010,
-        "E0010 should be suppressed for django.* wildcard"
+        by_helper.resolve_severity("BSK-0001", &["basilisk"]),
+        by_hand.resolve_severity("BSK-0001", &["basilisk"]),
     );
 }

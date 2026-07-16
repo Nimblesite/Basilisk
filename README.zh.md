@@ -57,10 +57,10 @@ Basilisk 是**唯一**在官方
 `examples/` 文件夹中提供了可直接运行的 Python 文件：
 
 ```sh
-basilisk check examples/bad.py    # everything flagged
-basilisk check examples/good.py   # clean
-basilisk check examples/mixed.py  # some errors, some clean
-basilisk check examples/          # all three at once
+basilisk check examples/bad.py    # 类型规范错误 + 严格性警告
+basilisk check examples/good.py   # 干净——即使在完全严格模式下
+basilisk check examples/mixed.py  # 一个真实的类型错误，加上未注解代码的警告
+basilisk check examples/          # 一次检查整个文件夹
 ```
 
 ## 编辑器

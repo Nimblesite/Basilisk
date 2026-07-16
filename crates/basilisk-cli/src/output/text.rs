@@ -2,7 +2,7 @@
 //!
 //! Example output (without ANSI codes):
 //! ```text
-//! error[BSK-E0001]: Missing parameter type annotation for `data`
+//! error[BSK-0001]: Missing parameter type annotation for `data`
 //!   --> src/utils.py:14:5
 //!    |
 //! 14 | def process(data):
@@ -10,7 +10,7 @@
 //!    |
 //!    = help: Add a type annotation: `data: <type>`
 //!    = note: In Basilisk, all function parameters require explicit types
-//!    = see: https://www.basilisk-python.dev/errors/BSK-E0001
+//!    = see: https://www.basilisk-python.dev/errors/BSK-0001
 //! ```
 
 use std::fmt::Write as _;
@@ -29,29 +29,41 @@ pub fn render_diagnostics(diagnostics: &[Diagnostic], sources: &[FileSource]) ->
     // Precompute one line index per source; every diagnostic then converts its
     // span to line/col in O(log n) instead of rescanning the source prefix.
     let indexes = super::SourceIndexes::new(sources);
-    // Buffer the whole render: stdout is line-buffered, so unbuffered printing
-    // costs one write syscall per output line — thousands on error-dense files.
-    let mut out = std::io::BufWriter::new(std::io::stdout().lock());
     let colorize = colored::control::SHOULD_COLORIZE.should_colorize();
-    let mut rendered = String::with_capacity(512);
-    let mut count = 0;
-    for diagnostic in diagnostics {
-        if diagnostic.severity == Severity::Error {
-            count += 1;
+    let count = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.severity == Severity::Error)
+        .count();
+
+    let mut stdout = std::io::stdout().lock();
+    if colorize {
+        // Keep terminal output incremental so a large project starts showing
+        // useful diagnostics immediately.
+        let mut out = std::io::BufWriter::new(stdout);
+        for diagnostic in diagnostics {
+            let rendered = format_one(diagnostic, indexes.for_path(&diagnostic.path));
+            let _ = out.write_all(rendered.as_bytes());
         }
-        if colorize {
-            rendered = format_one(diagnostic, indexes.for_path(&diagnostic.path));
-        } else {
-            rendered.clear();
+        let _ = out.flush();
+    } else {
+        // Pipes, CI, editors, and benchmark runs are the overwhelmingly common
+        // high-volume path. Build their plain render once and write it in one
+        // operation instead of feeding the 8 KiB BufWriter once per diagnostic.
+        // Cap only the initial reservation; String can still grow for genuinely
+        // large output without an attacker-controlled eager allocation.
+        let initial_capacity = diagnostics.len().saturating_mul(384).min(8 * 1024 * 1024);
+        let mut rendered = String::with_capacity(initial_capacity);
+        for diagnostic in diagnostics {
             format_one_plain_into(
                 &mut rendered,
                 diagnostic,
                 indexes.for_path(&diagnostic.path),
             );
         }
-        let _ = out.write_all(rendered.as_bytes());
+        let _ = stdout.write_all(rendered.as_bytes());
+        let _ = stdout.flush();
     }
-    let _ = out.flush();
+
     count
 }
 
@@ -158,7 +170,7 @@ pub(super) fn format_one(
 ) -> String {
     let mut out = String::new();
 
-    // Header: error[BSK-E0001]: Message
+    // Header: error[BSK-0001]: Message
     let severity_label = color_severity(diag.severity, &format!("{}", diag.severity));
     let code = format!("[{}]", diag.code.code).bold();
     let message = diag.message.bold();

@@ -907,17 +907,21 @@ jobs:
         shell: bash
         # The suite already ships the official Basilisk adapter (BasiliskTypeChecker
         # in conformance/src/type_checker.py) — nothing of ours is injected.
-        run: git clone --depth 1 https://github.com/python/typing typing-upstream
+        # Cloned OUTSIDE the repo checkout: per-file config discovery walks
+        # ancestor directories ([CHKARCH-CONFIG-DISCOVERY]), so an in-repo clone
+        # would inherit the repo's own [tool.basilisk] rules instead of scoring
+        # the wheel's out-of-the-box default.
+        run: git clone --depth 1 https://github.com/python/typing "$RUNNER_TEMP/typing-upstream"
 
       - name: Run the REAL upstream harness against the installed wheel
-        working-directory: typing-upstream/conformance
+        working-directory: ${{ runner.temp }}/typing-upstream/conformance
         shell: bash
         # `basilisk` resolves to the pip-installed wheel on PATH (BASILISK_BIN unset).
         run: python src/main.py --only-run basilisk
 
       - name: Assert the wheel scores 100% / zero false positives
         shell: bash
-        run: python conformance/assert_wheel_conformance.py typing-upstream/conformance/results/basilisk
+        run: python conformance/assert_wheel_conformance.py "$RUNNER_TEMP/typing-upstream/conformance/results/basilisk"
 
   publish-pypi:
     name: Publish wheels to PyPI

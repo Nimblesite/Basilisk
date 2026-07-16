@@ -33,8 +33,8 @@ pub struct CompileResult {
 /// Compile and execute a Python source file.
 ///
 /// Implements [COMPILER-PIPELINE] — the parse → resolve → check (hard GATE)
-/// stage sequence. The spec's `basilisk run` CLI command is NOT yet wired
-/// (the CLI exposes no `run`/`build` subcommand); this is the library entry
+/// stage sequence. Native compiler commands remain [COMPILERPLAN-NATIVE-INTEROP]
+/// work; this is the library entry
 /// point the e2e tests drive directly. It:
 /// 1. Parses the source
 /// 2. Resolves names

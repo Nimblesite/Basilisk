@@ -60,6 +60,28 @@ pub(super) async fn initialize(
         &roots,
     );
 
+    // Implements [LSPARCH-DIAGNOSTIC-SCOPE]: `basilisk.analyze = false`
+    // restricts published diagnostics to check scope (`pep` rules only).
+    // Default true — the LSP publishes the union of both scopes. Project
+    // configuration never selects scope.
+    if let Some(analyze) = params
+        .initialization_options
+        .as_ref()
+        .and_then(parse_analyze)
+    {
+        server
+            .analyze_enabled
+            .store(analyze, std::sync::atomic::Ordering::Relaxed);
+        info!(analyze, "diagnostic scope option applied");
+    }
+
+    // Implements [LSPARCH-CONFIG-SEEDING]: seed each unconfigured root's
+    // pyproject.toml with the two-line strict-by-default seed BEFORE the
+    // first analysis, so the checker config loaded below already sees it.
+    for root in &roots {
+        let _ = crate::config_seed::seed_root_if_unconfigured(root);
+    }
+
     // Honor the Type Checking toggle (`basilisk.enabled`) supplied at startup so
     // a client that opens with type checking off never sees a flash of
     // diagnostics from the initial scan. Implements [ANALYSIS-ENABLED] (#65/#119).
@@ -92,9 +114,11 @@ pub(super) async fn initialize(
     // Store workspace roots for later use by import resolution.
     (*server.workspace_roots.write().await).clone_from(&roots);
 
-    // Load project-level checker config (pyproject.toml / basilisk.json) so
+    // Load project-level checker config (pyproject.toml [tool.basilisk]) so
     // that rule severity overrides, per-module, and per-path settings match
-    // the CLI.
+    // the CLI. The loader walks ancestor directories and merges cumulatively
+    // ([CHKARCH-CONFIG-DISCOVERY], GitHub #311), so a workspace folder opened
+    // inside a project still discovers the project's config.
     let checker_config = roots
         .first()
         .map(|r| basilisk_config::load_basilisk_config(r))
@@ -126,6 +150,16 @@ pub(super) async fn initialize(
         }),
         capabilities,
     })
+}
+
+/// Read the analyze-scope opt-out from `initializationOptions`
+/// ([LSPARCH-DIAGNOSTIC-SCOPE]). Accepts the flat `analyze` key and the
+/// nested `{ basilisk: { analyze } }` shape.
+fn parse_analyze(value: &serde_json::Value) -> Option<bool> {
+    value
+        .get("analyze")
+        .or_else(|| value.get("basilisk").and_then(|b| b.get("analyze")))
+        .and_then(serde_json::Value::as_bool)
 }
 
 /// Read the `formatter` engine from `initializationOptions` ([LSPFMT-CONFIG]).
@@ -227,6 +261,14 @@ fn build_capabilities(formatting_enabled: bool) -> ServerCapabilities {
                 ..Default::default()
             }),
         }),
+        // [LSPARCH-CONFIG-EDITOR-PROTOCOL]: presence of `configurationEditor`
+        // is the whole capability — the editor ships with the server, so
+        // there is no protocol version to negotiate.
+        experimental: Some(serde_json::json!({
+            "basilisk": {
+                "configurationEditor": true
+            }
+        })),
         ..Default::default()
     }
 }
@@ -502,6 +544,11 @@ pub(super) async fn did_change_workspace_folders(
             .map_or(AnalysisMode::OpenFilesOnly, WorkspaceIndex::mode)
     };
 
+    // Newly added roots get the one-time seed too ([LSPARCH-CONFIG-SEEDING]).
+    for root in &updated_roots {
+        let _ = crate::config_seed::seed_root_if_unconfigured(root);
+    }
+
     let checker_config = updated_roots
         .first()
         .map(|r| basilisk_config::load_basilisk_config(r))
@@ -515,8 +562,8 @@ pub(super) async fn did_change_workspace_folders(
     }
 }
 
-// Implements [LSPUV-WATCHERS] (uv.lock, .python-version, pyproject.toml,
-// basilisk.json; the spec's `.venv/pyvenv.cfg` row is not watched).
+// Implements [LSPUV-WATCHERS] (uv.lock, .python-version, pyproject.toml;
+// `.venv/pyvenv.cfg` is startup-only detection).
 /// Register file watchers for uv-related configuration files.
 ///
 /// Watches `**/uv.lock`, `**/.python-version`, and `**/pyproject.toml` so
@@ -533,10 +580,6 @@ async fn register_file_watchers(client: &Client) {
         },
         FileSystemWatcher {
             glob_pattern: GlobPattern::String("**/pyproject.toml".into()),
-            kind: None,
-        },
-        FileSystemWatcher {
-            glob_pattern: GlobPattern::String("**/basilisk.json".into()),
             kind: None,
         },
     ];
@@ -561,7 +604,7 @@ async fn register_file_watchers(client: &Client) {
     if let Err(err) = client.register_capability(vec![registration]).await {
         tracing::warn!("failed to register uv file watchers: {err}");
     } else {
-        info!("registered config file watchers (uv.lock, .python-version, pyproject.toml, basilisk.json)");
+        info!("registered config file watchers (uv.lock, .python-version, pyproject.toml)");
     }
 }
 
@@ -578,6 +621,7 @@ async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
     // Clone the toggle so the spawned scan suppresses publication when type
     // checking is off. Implements [ANALYSIS-ENABLED].
     let scan_enabled = Arc::clone(&server.type_checking_enabled);
+    let scan_analyze = Arc::clone(&server.analyze_enabled);
     let scan_complete = Arc::clone(&server.initial_scan_complete);
     drop(tokio::spawn(async move {
         let ScanResult {
@@ -589,7 +633,14 @@ async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
             let Some(index) = guard.as_ref() else { return };
             scan_resolve_and_check_with_roots(index, &scan_roots)
         };
-        publish_scan_results(&scan_index, &scan_client, &scan_enabled, diagnostics).await;
+        publish_scan_results(
+            &scan_index,
+            &scan_client,
+            &scan_enabled,
+            &scan_analyze,
+            diagnostics,
+        )
+        .await;
         // Zero-file rollups are trustworthy from here on. Flip the flag BEFORE
         // notifying, so a refetch triggered by the notification reads
         // `scanComplete: true`. The notification is what settles the client's
@@ -625,6 +676,7 @@ async fn publish_scan_results(
     index: &RwLock<Option<WorkspaceIndex>>,
     client: &Client,
     enabled: &RwLock<bool>,
+    analyze: &std::sync::atomic::AtomicBool,
     diagnostics: Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)>,
 ) {
     for (uri, diags) in diagnostics {
@@ -635,7 +687,7 @@ async fn publish_scan_results(
                 .is_some_and(|idx| scan_entry_still_current(idx, &uri))
         };
         if still_current {
-            super::publish_diagnostics_gated(client, enabled, uri, diags).await;
+            super::publish_diagnostics_gated(client, enabled, analyze, uri, diags).await;
         } else {
             super::diaglog!("[DIAG] scan publish SKIPPED (stale) uri={uri}");
         }
@@ -756,7 +808,9 @@ async fn clear_non_open_diagnostics(server: &LspServer) {
 /// Returns `None` if this is not a uv project, if there is no lock file, or
 /// if the lock file fails to parse. Errors are logged but never fatal — the
 /// LSP falls back to registry-free resolution.
-fn build_uv_registry(roots: &[std::path::PathBuf]) -> Option<Arc<basilisk_uv::PackageRegistry>> {
+pub(crate) fn build_uv_registry(
+    roots: &[std::path::PathBuf],
+) -> Option<Arc<basilisk_uv::PackageRegistry>> {
     let uv_info = basilisk_uv::detect_uv_project(roots)?;
 
     if !uv_info.has_lockfile {
@@ -876,6 +930,7 @@ fn spawn_initial_test_discovery(server: &LspServer) {
     let client = server.client.clone();
     let index = Arc::clone(&server.index);
     let enabled = Arc::clone(&server.type_checking_enabled);
+    let analyze = Arc::clone(&server.analyze_enabled);
     let roots_lock = &server.workspace_roots;
 
     // Read the workspace root synchronously (fast, just a lock read).
@@ -906,7 +961,7 @@ fn spawn_initial_test_discovery(server: &LspServer) {
             .await;
 
         // Check pytest availability using the cloned index.
-        check_pytest_from_index(&client, &index, &enabled, &root).await;
+        check_pytest_from_index(&client, &index, &enabled, &analyze, &root).await;
     }));
 }
 
@@ -918,6 +973,7 @@ async fn check_pytest_from_index(
     client: &Client,
     index: &Arc<RwLock<Option<WorkspaceIndex>>>,
     enabled: &RwLock<bool>,
+    analyze: &std::sync::atomic::AtomicBool,
     root: &std::path::Path,
 ) {
     // We need workspace roots to detect uv — use root directly.
@@ -952,7 +1008,7 @@ async fn check_pytest_from_index(
             };
             let diag = super::test_handlers::make_pytest_not_found_diagnostic();
             // Suppressed while type checking is off ([ANALYSIS-ENABLED]).
-            super::publish_diagnostics_gated(client, enabled, uri, vec![diag]).await;
+            super::publish_diagnostics_gated(client, enabled, analyze, uri, vec![diag]).await;
         }
     }
 

@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use basilisk_uv::PackageRegistry;
 
+mod ambient;
+
 // The pure import engine, hoisted to basilisk-checker. Re-exported so existing
 // callers (`basilisk_lsp::import_resolver::X`) keep resolving unchanged.
 pub use basilisk_checker::imports::{
@@ -159,29 +161,7 @@ fn site_packages_in_dir(base: &Path) -> Option<PathBuf> {
 /// Searches `sys.path` entries for directories ending in `site-packages`.
 /// Returns the first valid site-packages directory found.
 fn detect_python_site_packages() -> Option<PathBuf> {
-    let output = std::process::Command::new("python3")
-        .args(["-c", "import sys; print('\\n'.join(sys.path))"])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let path = PathBuf::from(trimmed);
-        if path.ends_with("site-packages") && path.is_dir() {
-            return Some(path);
-        }
-    }
-    None
+    ambient::detect_python_site_packages()
 }
 
 // Implements [LSPUV-DETECTION-FALLBACK] — the existing venv-discovery path used

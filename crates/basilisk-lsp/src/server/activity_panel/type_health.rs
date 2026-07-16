@@ -2,8 +2,6 @@
 //!
 //! Type health computation for the type health panel.
 
-use std::path::Path;
-
 use crate::workspace::WorkspaceIndex;
 
 use super::helpers::{coverage_percent, module_name_from_path};
@@ -12,7 +10,7 @@ use super::helpers::{coverage_percent, module_name_from_path};
 ///
 /// Implements the server side of [EXTACT-HEALTH-TREE-STRUCTURE] and
 /// [EXTACT-HEALTH-ITEM-PROPERTIES]: the workspace `HealthStats` plus the
-/// per-module `ModuleHealth` list (path, coverage %, errors/warnings, adopted,
+/// per-module `ModuleHealth` list (path, coverage %, errors/warnings,
 /// unannotated names), sorted worst-first (ascending coverage) per
 /// [EXTACT-HEALTH-TOOLBAR]'s default. This is the shared surface for editors
 /// without a unified panel (Zed `/health`, Neovim `:BasiliskHealth`).
@@ -23,7 +21,6 @@ use super::helpers::{coverage_percent, module_name_from_path};
 /// so no editor surface can grade code while the user has switched checking off.
 pub(crate) fn build_type_health(
     idx: &WorkspaceIndex,
-    project_root: Option<&Path>,
     type_checking_enabled: bool,
 ) -> serde_json::Value {
     if !type_checking_enabled {
@@ -36,14 +33,10 @@ pub(crate) fn build_type_health(
         });
     }
 
-    let adoption_store =
-        project_root.and_then(|root| basilisk_config::AdoptionStore::load(root).ok());
-
     let mut total_symbols: usize = 0;
     let mut total_annotated: usize = 0;
     let mut total_errors: usize = 0;
     let mut total_warnings: usize = 0;
-    let mut total_adopted: usize = 0;
     let mut module_health: Vec<serde_json::Value> = Vec::new();
 
     for entry in &idx.files {
@@ -59,21 +52,12 @@ pub(crate) fn build_type_health(
             continue;
         };
 
-        let health = compute_file_health(
-            resolved,
-            &file_entry.diagnostics,
-            path,
-            project_root,
-            adoption_store.as_ref(),
-        );
+        let health = compute_file_health(resolved, &file_entry.diagnostics);
 
         total_symbols += health.total_symbols;
         total_annotated += health.annotated_symbols;
         total_errors += health.errors;
         total_warnings += health.warnings;
-        if health.adopted {
-            total_adopted += 1;
-        }
 
         module_health.push(serde_json::json!({
             "name": module_name,
@@ -81,7 +65,6 @@ pub(crate) fn build_type_health(
             "coveragePercent": health.coverage_percent,
             "errors": health.errors,
             "warnings": health.warnings,
-            "adopted": health.adopted,
             "unannotated": health.unannotated,
         }));
     }
@@ -108,7 +91,6 @@ pub(crate) fn build_type_health(
             "coveragePercent": workspace_coverage,
             "errors": total_errors,
             "warnings": total_warnings,
-            "adoptedFiles": total_adopted,
             "totalFiles": idx.files.len(),
         },
         "modules": module_health,
@@ -119,14 +101,15 @@ pub(crate) fn build_type_health(
 ///
 /// Single source of truth shared by the `basilisk.typeHealth` command and the
 /// health rollup folded into each `basilisk.workspaceModules` node — so the
-/// coverage/diagnostic/adoption numbers are computed in exactly one place.
+/// coverage and diagnostic numbers are computed in exactly one place.
+/// Adoption is folder-level plain configuration entries ([AUTOFIX-ADOPTION]);
+/// there are no per-file adoption markers to surface here.
 pub(crate) struct FileHealth {
     pub total_symbols: usize,
     pub annotated_symbols: usize,
     pub coverage_percent: u64,
     pub errors: usize,
     pub warnings: usize,
-    pub adopted: bool,
     pub unannotated: Vec<String>,
 }
 
@@ -134,9 +117,6 @@ pub(crate) struct FileHealth {
 pub(crate) fn compute_file_health(
     resolved: &basilisk_resolver::ResolvedModule,
     diagnostics: &[basilisk_checker::Diagnostic],
-    path: &Path,
-    project_root: Option<&Path>,
-    adoption_store: Option<&basilisk_config::AdoptionStore>,
 ) -> FileHealth {
     let (total_symbols, annotated_symbols, unannotated) = count_annotations(resolved);
 
@@ -149,20 +129,12 @@ pub(crate) fn compute_file_health(
         .filter(|d| d.severity == basilisk_checker::Severity::Warning)
         .count();
 
-    let adopted = adoption_store.is_some_and(|store| {
-        let relative = path
-            .strip_prefix(project_root.unwrap_or(Path::new("")))
-            .unwrap_or(path);
-        store.demoted_count(relative) > 0
-    });
-
     FileHealth {
         total_symbols,
         annotated_symbols,
         coverage_percent: coverage_percent(annotated_symbols, total_symbols),
         errors,
         warnings,
-        adopted,
         unannotated,
     }
 }
@@ -230,7 +202,6 @@ pub(crate) fn empty_health_stats() -> serde_json::Value {
         "coveragePercent": 100,
         "errors": 0,
         "warnings": 0,
-        "adoptedFiles": 0,
         "totalFiles": 0,
     })
 }
@@ -264,10 +235,16 @@ mod tests {
         WorkspaceIndex::new(
             roots,
             AnalysisMode::WholeModule,
-            basilisk_config::BasiliskConfig {
-                strict_annotations: true,
-                ..Default::default()
-            },
+            basilisk_config::BasiliskConfig::with_rule_entries(
+                [
+                    ("BSK-0001", basilisk_config::RuleSeverity::Error),
+                    ("BSK-0002", basilisk_config::RuleSeverity::Error),
+                    ("BSK-0050", basilisk_config::RuleSeverity::Warning),
+                ]
+                .into_iter()
+                .map(|(code, severity)| (code.to_owned(), severity))
+                .collect(),
+            ),
         )
     }
 
@@ -343,7 +320,7 @@ mod tests {
         let uri_partial = make_uri("/workspace/partial.py");
         let _ = idx.set_open(&uri_partial, "a: int = 1\nb = 2\n", 1);
 
-        let health = build_type_health(&idx, Some(&root), true);
+        let health = build_type_health(&idx, true);
 
         // Workspace-level stats.
         let ws = health.get("workspace").unwrap();
@@ -387,7 +364,7 @@ mod tests {
         let uri_full = make_uri("/workspace/full.py");
         let _ = idx.set_open(&uri_full, "x: int = 1\n", 1);
 
-        let health = build_type_health(&idx, Some(&root), true);
+        let health = build_type_health(&idx, true);
         let modules = health.get("modules").and_then(|v| v.as_array()).unwrap();
 
         // Modules should be sorted ascending by coveragePercent.
@@ -412,7 +389,7 @@ mod tests {
         let uri = make_uri("/workspace/errs.py");
         let _ = idx.set_open(&uri, "def foo(x: int):\n    return x\n", 1);
 
-        let health = build_type_health(&idx, Some(&root), true);
+        let health = build_type_health(&idx, true);
         let ws = health.get("workspace").unwrap();
 
         // The checker should produce at least one error or warning for the
@@ -435,7 +412,7 @@ mod tests {
         let uri = make_uri("/workspace/errs.py");
         let _ = idx.set_open(&uri, "def foo(x: int):\n    return x\n", 1);
 
-        let health = build_type_health(&idx, Some(&root), false);
+        let health = build_type_health(&idx, false);
 
         let modules = health.get("modules").and_then(|v| v.as_array()).unwrap();
         assert!(

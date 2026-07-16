@@ -1,13 +1,13 @@
-//! Implements [BSK-E0152] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0152: Missing type stubs for installed package.
+//! Implements [BSK-0152] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! BSK-0152: Missing type stubs for installed package.
 //!
 //! Fires when a package is imported and resolves to a `.py` source file (not
 //! `.pyi`) without a `py.typed` marker. This means the package is installed
 //! but lacks type information, reducing type safety. This rule is off by
 //! default — the default configuration is pure PEP conformance — and a project
-//! opts in via configuration (`uv.stubSuggestions`). Once enabled, an untyped
+//! opts in with an explicit `BSK-0152` severity. Once enabled, an untyped
 //! third-party import is a hard error; a project can soften it per import
-//! (`# type: warning[BSK-E0152]`) or globally (`"BSK-E0152" = "warning"`) to
+//! (`# type: warning[BSK-0152]`) or globally (`"BSK-0152" = "warning"`) to
 //! use non-type-safe libraries at its own risk.
 //!
 //! ```python
@@ -29,11 +29,11 @@ use super::Rule;
 mod tests;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0152",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0152",
+    code: "BSK-0152",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0152",
 };
 
-/// Emits BSK-E0152 when an imported package resolves to a `.py` source file
+/// Emits BSK-0152 when an imported package resolves to a `.py` source file
 /// without a `py.typed` marker, indicating missing type stubs.
 pub(crate) struct MissingTypeStubs;
 
@@ -45,7 +45,7 @@ impl Rule for MissingTypeStubs {
         })
     }
 
-    // Implements [STUBRES-PEP561] step 6 (no stubs found) — fires the BSK-E0152
+    // Implements [STUBRES-PEP561] step 6 (no stubs found) — fires the BSK-0152
     // import-site diagnostic only for a site-packages `.py` import that is not
     // stdlib and carries no PEP 561 `py.typed` marker (i.e. resolution exhausted
     // steps 1-5 without type information).

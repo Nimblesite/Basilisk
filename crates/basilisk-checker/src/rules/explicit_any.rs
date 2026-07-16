@@ -1,5 +1,5 @@
-//! Implements [BSK-W0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-W0014: Explicit `Any` annotation.
+//! Implements [BSK-0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! BSK-0014: Explicit `Any` annotation.
 //!
 //! Emitted as a `Warning` when a function parameter or return annotation is
 //! written as `Any` (from `typing`). `Any` silences all type checking for the
@@ -9,7 +9,7 @@
 //! the typing spec treats `Any` as a fully valid type. It is therefore a
 //! distinct (user-suppressible) code from the genuine return-type-mismatch
 //! error ([`returns_compatibility`]); the two used to share a code, so a user could not
-//! silence the style nudge while keeping the real type check. BSK-W0014 itself is
+//! silence the style nudge while keeping the real type check. BSK-0014 itself is
 //! never disabled for PEP conformance — like every rule it runs fully enabled
 //! during scoring; there is no "spec-conformance mode" that turns it off. See
 //! [CHKARCH-CONFORMANCE-MODE].
@@ -17,8 +17,8 @@
 //! ```python
 //! from typing import Any
 //!
-//! def greet(name: Any) -> str: ...  # BSK-W0014 — parameter `name` is annotated Any
-//! def parse(text: str) -> Any: ...  # BSK-W0014 — return annotation is Any
+//! def greet(name: Any) -> str: ...  # BSK-0014 — parameter `name` is annotated Any
+//! def parse(text: str) -> Any: ...  # BSK-0014 — return annotation is Any
 //!
 //! def greet(name: str) -> str: ...  # NO warning — concrete types
 //! ```
@@ -30,11 +30,11 @@ use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-W0014",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-W0014",
+    code: "BSK-0014",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0014",
 };
 
-/// Emits BSK-W0014 for explicit `Any` annotations on parameters and returns.
+/// Emits BSK-0014 for explicit `Any` annotations on parameters and returns.
 pub(crate) struct ExplicitAny;
 
 impl Rule for ExplicitAny {

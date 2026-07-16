@@ -68,7 +68,7 @@ pub struct ReturnStmtInfo {
     pub value_is_call: bool,
     /// What kind of expression is returned, if any.
     ///
-    /// Used for return type inference in BSK-E0002.
+    /// Used for return type inference in BSK-0002.
     pub rhs_kind: RhsKind,
 }
 
@@ -143,7 +143,7 @@ pub struct FunctionInfo {
     pub unhashable_keys: Vec<super::module_types::UnhashableKeyRef>,
     /// `true` when the entire function body is a stub (only `...` or `pass`).
     ///
-    /// Stub bodies are exempt from BSK-E0001/BSK-E0002/BSK-E0004: they appear in overload
+    /// Stub bodies are exempt from BSK-0001/BSK-0002/BSK-0004: they appear in overload
     /// signatures, Protocol bodies used as stubs, and `.pyi`-style inline stubs.
     pub is_stub_body: bool,
     /// `true` when the last top-level statement in the function body unconditionally

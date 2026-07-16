@@ -1,158 +1,124 @@
-# Mass Autofix & Gradual Adoption — Specification {#AUTOFIX}
+# Mass autofix and adoption {#AUTOFIX}
 
-Two features for adopting strict-by-default checking on existing code:
+This document records the shipped batch-fix engine, the root-scoped safe-fix
+commands, and gradual adoption.
 
-1. **Mass Autofix** — apply every safe autofix in one action (single diagnostic, file, or module).
-2. **Gradual Adoption Mode** — after autofixing, demote remaining errors to warnings *per-file* for incremental fixing without being blocked.
+## Mass autofix {#AUTOFIX-MASS}
 
-## Mass Autofix {#AUTOFIX-MASS}
+Single-diagnostic quick fixes are produced by `code_actions/fixes.rs`. The
+mass-fix engine combines applicable edits for one file; file and workspace
+commands use that engine across their selected scope. The CLI exposes
+`basilisk fix [--unsafe] [--rules ...] [path]`.
 
 ### Scopes {#AUTOFIX-MASS-OVERVIEW}
 
-Applies all applicable fixes in one action at three scopes:
+- A diagnostic lightbulb applies one fix.
+- File actions apply all selected fixable rules in the active file.
+- Workspace/CLI actions apply the same selection to each discovered file.
+- `basilisk.fixWorkspace` and `basilisk.fixWorkspaceAll` accept an optional
+  `{ "rootUri": "file:///..." }` execute-command argument. When supplied, the
+  server validates that it is an active workspace root and edits only indexed
+  files beneath it. Omitting the argument retains the all-indexed-roots
+  behavior used by existing clients.
 
-| Scope | Trigger | What it does |
-|---|---|---|
-| **Single diagnostic** | Code action on a specific squiggle | Applies the fix for that one diagnostic |
-| **File** | Command / code action at file level | Applies all fixable diagnostics in the current file |
-| **Module / Workspace** | Command palette / CLI flag | Applies all fixable diagnostics across all files in scope |
+Any client UI may invoke the commands with a `rootUri`; the configuration
+editor exposes no fix affordance of its own.
 
-### Fix Classification {#AUTOFIX-CLASSIFY}
+### Classification {#AUTOFIX-CLASSIFY}
 
-Every autofix is classified into one of two safety tiers:
+Safety is currently a rule-level allowlist in `code_actions/mass_fix.rs`, not
+per-diagnostic metadata.
 
-| Tier | Label | Meaning | Example |
-|---|---|---|---|
-| **Safe** | `SafeFix` | Guaranteed not to change runtime semantics. Can be applied without review. | Adding `: int` to a parameter where the type is unambiguously inferred from usage |
-| **Unsafe** | `UnsafeFix` | Might change semantics or could be wrong. Requires review. | Inserting `-> None` on a function that might actually return something in an unreachable branch |
+- Safe default: `BSK-0001`, `BSK-0002`, `BSK-0005`, and `BSK-0050`.
+- All/unsafe additionally includes `BSK-0003`.
 
-The user chooses one of:
+`BSK-0003` is excluded from the safe set because repeated application can
+conflict with redundant-annotation removal. The explicit all/unsafe path
+applies its edits immediately; no unsafe-review list is generated.
 
-- **Safe only** (default) — applies only `SafeFix` items.
-- **All fixes** — applies `SafeFix` and `UnsafeFix`, each unsafe fix marked in a review list.
+### Fix representation {#AUTOFIX-METADATA}
 
-### Fix Metadata {#AUTOFIX-METADATA}
+Fix functions return ordinary LSP `CodeAction` values containing
+`WorkspaceEdit`s. There is no shipped per-diagnostic fix-safety object,
+combinability flag, or source enum. Callers select the static safe/all rule
+list before collecting edits. Safe/unsafe classification is consumed only by
+these mass-fix commands; it appears nowhere in the configuration-editor
+protocol ([CONFIGEDITOR-MODEL](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-MODEL)).
 
-Each diagnostic that supports autofix carries a `Fix` structure:
+### VS Code and CLI surface {#AUTOFIX-MASS-VSCODE}
 
-```rust
-pub struct Fix {
-    /// Human-readable description of what the fix does
-    pub message: String,
-    /// The text edits to apply
-    pub edits: Vec<TextEdit>,
-    /// Safety classification
-    pub safety: FixSafety,
-    /// Whether this fix can be combined with other fixes in the same file
-    pub combinable: bool,
-    /// Source of the fix (rule-based, heuristic, or AI-assisted)
-    pub source: FixSource,
-}
+The server advertises `basilisk.fixFile`, `basilisk.fixFileAll`,
+`basilisk.fixWorkspace`, and `basilisk.fixWorkspaceAll`. The plain names select
+safe rules; the `All` variants widen the rule set.
+`source.fixAll.basilisk` is the file code-action kind. The CLI uses safe rules
+by default and widens with `--unsafe` or explicit `--rules`.
 
-pub enum FixSafety {
-    Safe,
-    Unsafe,
-}
+This is a standalone source-edit operation, never part of a configuration
+preview transaction.
 
-pub enum FixSource {
-    /// Deterministic fix derived from the rule definition
-    RuleBased,
-    /// Heuristic fix based on usage patterns and type inference
-    Heuristic,
-    /// AI-assisted fix (see Feature 3: AI Typing)
-    AiAssisted,
-}
-```
+### Conflicts {#AUTOFIX-CONFLICTS}
 
-### VS Code Integration {#AUTOFIX-MASS-VSCODE}
-
-Exposed through:
-
-1. **Code Actions** — on a diagnostic, the lightbulb shows "Fix this", "Fix all in file (safe)", "Fix all in file (all)".
-2. **Command Palette** (the plain command IDs are the Safe default tier; the
-   `*All` variants widen to Unsafe fixes, mirroring the CLI's `--unsafe`):
-   - `Basilisk: Fix All (Safe) in File` (`basilisk.fixFile`)
-   - `Basilisk: Fix All in File` (`basilisk.fixFileAll`)
-   - `Basilisk: Fix All (Safe) in Workspace` (`basilisk.fixWorkspace`)
-   - `Basilisk: Fix All in Workspace` (`basilisk.fixWorkspaceAll`)
-3. **CLI** — `basilisk fix [--unsafe] [path]`
-
-### Conflict Resolution {#AUTOFIX-CONFLICTS}
-
-When multiple fixes produce overlapping text edits in the same file (`collect_non_overlapping_edits`, `crates/basilisk-lsp/src/code_actions/mass_fix.rs`):
-
-1. Candidate edits are sorted by start position (line, then character), ascending.
-2. Edits are accepted greedily in that order; an edit whose range overlaps the previously accepted edit is skipped. Resolution is purely positional — safety is never compared at this stage. With the shipped fix set, Safe and Unsafe fixes cannot produce overlapping edits: all fixes except BSK-W0050's annotation removal are zero-width inserts targeting mutually exclusive constructs.
-3. Skipped edits are silently dropped from the batch — they are not applied and not itemised in the result.
-4. Re-evaluation happens through the normal check loop rather than an internal second pass: in the editor, applying the `WorkspaceEdit` triggers a re-check that re-publishes remaining diagnostics (and their fixes); on the CLI, `basilisk fix` is idempotent and a re-run applies any fix that became applicable.
-
-Safety scoping is the caller's concern, upstream of conflict resolution: the CLI filters to safe-only by default (`--unsafe` / `--rules` / `all` widen it), and the LSP surfaces do the same — the `source.fixAll` code action, `basilisk.fixFile`, and `basilisk.fixWorkspace` apply `SAFE_FIXABLE_RULES` only, while the explicit `basilisk.fixFileAll` / `basilisk.fixWorkspaceAll` variants widen to `ALL_FIXABLE_RULES`.
+Candidate edits are sorted by start position. The engine greedily retains
+non-overlapping edits and silently skips a later overlap. A normal recheck
+exposes anything still applicable; there is no internal multi-pass loop.
 
 ### Undo {#AUTOFIX-UNDO}
 
-Mass Autofix is a single undo unit in VS Code — one `Ctrl+Z` reverts the whole batch.
+One file-level mass action returns one `WorkspaceEdit`, so the editor can treat
+it as one undo operation. Workspace behavior follows the client's handling of
+the returned edit.
 
----
+## Configuration seeding and fixes {#AUTOFIX-SEEDING}
 
-## Gradual Adoption Mode {#AUTOFIX-ADOPTION}
+There is no preset workflow. `check` always runs the PEP rules, and the
+two-line seed (`"basilisk" = "error"`) turns every house rule on
+([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)) —
+strict by default with no hidden state. Tightening or relaxing from there is
+ordinary rule/tag entry mutation through preview/apply, while root-scoped
+`basilisk.fixWorkspace` applies the currently safe fixes as a separate,
+reviewable source edit. Unsafe fixes are never included implicitly, and no
+analyze rule is disabled without an ordinary configuration preview/apply
+writing an explicit `disabled` entry; PEP rules cannot be disabled at all
+([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 
-After Mass Autofix runs, diagnostics that cannot be auto-fixed are demoted from error to warning **per-file** for incremental fixing.
+## Gradual adoption {#AUTOFIX-ADOPTION}
 
-### How It Works {#AUTOFIX-ADOPTION-FLOW}
+Adoption records current error debt as ordinary warning-severity rule entries
+in the config file of the folder that holds the debt — plain code → severity
+entries in the one configuration model, with no exact-file overrides,
+ownership markers, or sidecar state
+([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 
-1. User triggers **"Basilisk: Adopt File"** (or "Adopt Workspace").
-2. Basilisk runs Mass Autofix (safe only) on the target scope.
-3. For each remaining error diagnostic in each file:
-   - The diagnostic code (e.g. `BSK-E0001`) is recorded in a per-file override list.
-   - The severity for that code **in that file only** is demoted from `Error` to `Warning`.
-4. The override list is written to a `.basilisk/adoptions.toml` file in the project root.
-5. From this point on, Basilisk uses `Warning` severity for those codes in those files.
+### Flow {#AUTOFIX-ADOPTION-FLOW}
 
-### Adoption File Format {#AUTOFIX-ADOPTION-FILE}
+`basilisk.adoptFile` and `basilisk.adoptWorkspace` read the current error and
+safety-violation codes from the workspace index and demote them to `warning` —
+analyze rules may go to `disabled`, PEP rules never below `info` — in the
+nearest config file governing each affected folder, through the shared
+root-aware configuration mutation service — the same reload/recheck/notify
+tail as every configuration write. `basilisk.unadoptFile` deletes those folder
+entries again, restoring the ancestor severity. Re-running adoption recomputes
+the debt and rewrites the entries, so rules that no longer fire in a folder
+revert without manual bookkeeping. The CLI `basilisk adopt`,
+`basilisk unadopt`, and `basilisk adopt --status` operate on the same
+representation.
 
-```toml
-# .basilisk/adoptions.toml
-# Auto-generated by Basilisk Gradual Adoption Mode
-# Remove entries as you fix the underlying issues
+The adopt commands record the diagnostics they receive; they do not run safe
+fixes first. Safe fixing, adoption, and later tightening are distinct
+reviewable operations, not one atomic command.
 
-[overrides]
+### Behavior and boundaries {#AUTOFIX-ADOPTION-RULES}
 
-[overrides."src/utils.py"]
-demoted = ["BSK-E0001", "BSK-E0003", "calls_argument_type"]
+- Only rules that currently fire are demoted, and only in the folders where
+  they fire.
+- A folder entry is a plain override: new files in that folder inherit it,
+  exactly like any folder config entry.
+- There is no post-save graduation daemon and no background migration process;
+  re-running adoption is the explicit, reviewable way to tighten.
 
-[overrides."src/models/user.py"]
-demoted = ["BSK-E0001", "BSK-E0002"]
-```
+### VS Code surface {#AUTOFIX-ADOPTION-VSCODE}
 
-### Behavior Rules {#AUTOFIX-ADOPTION-RULES}
-
-- **New code is still strict.** Adoption applies only to explicitly adopted files; new files are all errors.
-- **New violations in adopted files stay demoted.** Demotion is per-code-per-file, not per-instance: a new `BSK-E0001` in a file with `BSK-E0001` demoted is still a warning.
-- **Fixing all instances auto-removes the override.** When a file has zero remaining instances of a demoted code, Basilisk removes that code from the adoption file — the file "graduates" to full strictness.
-- **Manual un-adoption.** Remove entries from `adoptions.toml` manually or via `Basilisk: Un-adopt File`.
-
-### VS Code Integration {#AUTOFIX-ADOPTION-VSCODE}
-
-1. **Command Palette**:
-   - `Basilisk: Adopt File` — autofix + demote remaining errors for current file
-   - `Basilisk: Adopt Workspace` — autofix + demote remaining errors for all files
-   - `Basilisk: Un-adopt File` — restore full strictness for current file
-2. **Status Bar** — when a file has active adoptions, the status bar shows "Basilisk: Adopted (N rules demoted)".
-3. **Gutter indicators** — adopted (demoted) warnings get a distinct icon to differentiate them from "natural" warnings.
-
----
-
-## AI Typing Hooks {#AUTOFIX-AI}
-
-For a diagnostic that cannot be deterministically autofixed (typically missing type information), AI Typing feeds analyzer context (AST, inferred types, call graph, usage patterns, surrounding code) to an AI model that returns a candidate fix. AI-assisted fixes are always `Unsafe` and require confirmation.
-
-> The AI provider abstraction, request/response types, and plan live in [LSP-AI-SPEC.md §LSPAI-FEATURE-MASSAUTOFIX](LSP-AI-SPEC.md#LSPAI-FEATURE-MASSAUTOFIX). This section documents only the Mass Autofix ↔ AI integration point.
-
-### Scope {#AUTOFIX-AI-SCOPE}
-
-AI Typing implementation is out of scope here. This spec requires only the AI-ready seams in the fix pipeline:
-
-1. The `FixSource::AiAssisted` variant in the fix metadata.
-2. The `AiTypingProvider` trait definition.
-3. A no-op default implementation returning `None` for all requests.
-4. The `AiTypingRequest` / `AiTypingResponse` structures.
+The server advertises Adopt File, Adopt Workspace, and Un-adopt File. The
+activity panel derives adoption state from the config files themselves.
+Adoption is not part of the configuration-editor contract
+([CONFIGEDITOR-ACCEPTANCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-ACCEPTANCE)).

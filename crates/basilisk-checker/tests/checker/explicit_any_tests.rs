@@ -1,5 +1,5 @@
-//! Tests for [BSK-W0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// E2E tests for BSK-W0014: Explicit `Any` annotation warning (split from returns_compatibility).
+//! Tests for [BSK-0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// E2E tests for BSK-0014: Explicit `Any` annotation warning (split from returns_compatibility).
 
 use super::common::*;
 
@@ -8,8 +8,8 @@ fn explicit_any_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import Any\n\ndef greet(name: Any) -> str:\n    return name\n";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        codes(&diags).contains(&"BSK-W0014"),
-        "explicit Any param annotation should fire BSK-W0014, got: {:?}",
+        codes(&diags).contains(&"BSK-0014"),
+        "explicit Any param annotation should fire BSK-0014, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -20,8 +20,8 @@ fn explicit_any_return_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import Any\n\ndef greet(name: str) -> Any:\n    return name\n";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        codes(&diags).contains(&"BSK-W0014"),
-        "explicit Any return annotation should fire BSK-W0014, got: {:?}",
+        codes(&diags).contains(&"BSK-0014"),
+        "explicit Any return annotation should fire BSK-0014, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -33,8 +33,8 @@ fn explicit_any_fires_even_on_stub() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import Any\n\ndef greet(name: Any) -> str:\n    ...\n";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        codes(&diags).contains(&"BSK-W0014"),
-        "explicit Any should fire BSK-W0014 even on stub body, got: {:?}",
+        codes(&diags).contains(&"BSK-0014"),
+        "explicit Any should fire BSK-0014 even on stub body, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -59,8 +59,8 @@ fn concrete_types_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def greet(name: str) -> str:\n    return name\n";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !codes(&diags).contains(&"BSK-W0014"),
-        "concrete annotations should not fire BSK-W0014, got: {:?}",
+        !codes(&diags).contains(&"BSK-0014"),
+        "concrete annotations should not fire BSK-0014, got: {:?}",
         codes(&diags)
     );
     Ok(())

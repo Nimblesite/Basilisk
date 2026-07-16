@@ -15,7 +15,7 @@
  * production creates one in activate().
  */
 
-import { signal, computed, type ReadonlySignal, type Signal } from "@preact/signals-core";
+import { signal, computed } from "@preact/signals-core";
 import { type LanguageClient, State } from "vscode-languageclient/node";
 import * as vscode from "vscode";
 import { Logger, type LogSink } from "./logger";
@@ -28,15 +28,20 @@ import {
   isCpuBusy,
   isMemoryBusy,
   IDLE_PROFILER_SESSION,
-  type ProfilerActions,
   type ProfilerSession,
 } from "./profiler-state";
 import {
   createProcessPanelActions,
   IDLE_PROCESS_PANEL,
-  type ProcessPanelActions,
   type ProcessPanelState,
 } from "./processes-state";
+import {
+  createConfigurationEditorActions,
+  decodeConfigurationChanged,
+  IDLE_CONFIGURATION_EDITOR,
+  requestConfigurationRefresh,
+  type ConfigurationEditorState,
+} from "./configuration-editor-state";
 import {
   awaitLspReady,
   createReadyHandle,
@@ -44,112 +49,11 @@ import {
   type LspState,
   type ReadyHandle,
 } from "./store-ready";
+import type { RuntimeResolution, Store, StoreSignals } from "./store-types";
 
 // Re-exported so consumers keep importing the LSP lifecycle type from the store.
 export { type LspState } from "./store-ready";
-
-/** Runtime binary selected by Shipwright during activation. */
-export interface RuntimeResolution {
-  readonly componentId: string;
-  readonly path: string;
-  readonly source: string;
-  readonly version: string | undefined;
-}
-
-export interface Store extends ProfilerActions, ProcessPanelActions {
-  // Read-only signals — consumers can .value but cannot assign.
-  readonly client: ReadonlySignal<LanguageClient | undefined>;
-  readonly serverCommands: ReadonlySignal<ReadonlySet<string>>;
-  readonly clientCommands: ReadonlySignal<ReadonlySet<string>>;
-  readonly statusBarItem: ReadonlySignal<vscode.StatusBarItem | undefined>;
-  readonly outputChannel: ReadonlySignal<vscode.LogOutputChannel | undefined>;
-  readonly logSink: ReadonlySignal<LogSink | undefined>;
-  readonly lspState: ReadonlySignal<LspState>;
-  readonly isServerReady: ReadonlySignal<boolean>;
-  /**
-   * Monotonic counter that bumps whenever fresh analysis may be available:
-   * the server reaches Running, `basilisk/moduleChanged` fires, or
-   * diagnostics change (debounced). Panels subscribe via a signals `effect`
-   * so they refresh automatically — never via per-panel polling
-   * ([EXTACT-REACTIVE-STATE], issue #58).
-   */
-  readonly analysisRevision: ReadonlySignal<number>;
-  readonly runtimeResolution: ReadonlySignal<RuntimeResolution | undefined>;
-  /** Map of VS Code debug session id → debuggee OS process id (from the DAP `process` event). */
-  readonly sessionIdToPid: ReadonlySignal<ReadonlyMap<string, number>>;
-  /**
-   * Canonical reactive profiling state ([PROFILE-PROCESSES-REACTIVE]). The CPU
-   * status bar, the Python Processes panel, and the gating context keys all
-   * subscribe to this one signal — mutate it only through the ProfilerActions.
-   */
-  readonly profiler: ReadonlySignal<ProfilerSession>;
-  /** True while any CPU or memory profiling activity is starting or running. */
-  readonly profilerBusy: ReadonlySignal<boolean>;
-  /** True while the CPU leg is starting or running (gates CPU starts only). */
-  readonly cpuBusy: ReadonlySignal<boolean>;
-  /** True while the memory leg is starting or running (gates memory starts only). */
-  readonly memoryBusy: ReadonlySignal<boolean>;
-  /**
-   * Centralised Python Processes panel state (#148): the fetched list, the
-   * fetch lifecycle behind the welcome's honesty (#147), the sort/group/filter
-   * view modes, and the active debuggee. Fed by the store-side poll
-   * (process-poll.ts); the panel renders it as a pure projection.
-   */
-  readonly processes: ReadonlySignal<ProcessPanelState>;
-  /**
-   * Monotonic process-panel change counter ([EXTACT-REACTIVE-STATE]) — the
-   * signal the panel subscribes to via `subscribeRevision`, mirroring how the
-   * Modules panel keys off `analysisRevision`.
-   */
-  readonly processesRevision: ReadonlySignal<number>;
-
-  // Read-only access to the ready handle (for whenReady callers).
-  readonly lspReadyPromise: ReadonlySignal<Promise<void> | undefined>;
-
-  // Write actions — the only way to mutate state.
-  setClient(context: vscode.ExtensionContext, c: LanguageClient): void;
-  setStatusBarItem(item: vscode.StatusBarItem): void;
-  setOutputChannel(ch: vscode.LogOutputChannel): void;
-  setLogSink(sink: LogSink): void;
-  setRuntimeResolution(resolution: RuntimeResolution): void;
-  /** Record the debuggee PID captured from a debug session's DAP `process` event. */
-  setDebuggeeProcessId(sessionId: string, pid: number): void;
-  /** Look up the debuggee PID for a debug session, or undefined if not yet known. */
-  getDebuggeeProcessId(sessionId: string): number | undefined;
-  /** Forget a debug session's PID mapping (called when the session terminates). */
-  clearDebuggeeProcessId(sessionId: string): void;
-  /** Signal that fresh analysis may be available ([EXTACT-REACTIVE-STATE]). */
-  bumpAnalysisRevision(): void;
-  isClientCommandRegistered(id: string): boolean;
-  isServerCommandAdvertised(id: string): boolean;
-  ensureLspReadyPromise(timeoutMs?: number): Promise<Result<LanguageClient>>;
-  reset(): void;
-}
-
-/** Internal mutable signals backing the store. */
-interface StoreSignals {
-  client: Signal<LanguageClient | undefined>;
-  serverCommands: Signal<ReadonlySet<string>>;
-  clientCommands: Signal<ReadonlySet<string>>;
-  statusBarItem: Signal<vscode.StatusBarItem | undefined>;
-  outputChannel: Signal<vscode.LogOutputChannel | undefined>;
-  logSink: Signal<LogSink | undefined>;
-  lspState: Signal<LspState>;
-  runtimeResolution: Signal<RuntimeResolution | undefined>;
-  sessionIdToPid: Signal<Map<string, number>>;
-  profiler: Signal<ProfilerSession>;
-  processes: Signal<ProcessPanelState>;
-  readyHandle: Signal<ReadyHandle | undefined>;
-  analysisRevision: Signal<number>;
-  /** Trailing-debounce timer for diagnostics-driven analysisRevision bumps. */
-  diagnosticsDebounce: ReturnType<typeof setTimeout> | undefined;
-  /** Whether the global diagnostics listener has been registered. */
-  diagnosticsListenerBound: boolean;
-  /** Disposables for client-registered commands — disposed on LSP stop/restart. */
-  commandDisposables: vscode.Disposable[];
-  /** Disposables for server-advertised command registrations — disposed on LSP stop/restart. */
-  serverCommandDisposables: vscode.Disposable[];
-}
+export type { RuntimeResolution, Store } from "./store-types";
 
 // ── Private helpers operating on StoreSignals ─────────────────────────────
 
@@ -323,6 +227,12 @@ function bindClientStateListener(
         lspClient.onNotification("basilisk/scanComplete", () => {
           bumpAnalysisRevision(signals);
         }),
+        lspClient.onNotification("basilisk/configurationChanged", (value: unknown) => {
+          const change = decodeConfigurationChanged(value);
+          if (change !== undefined) {
+            requestConfigurationRefresh(signals.configurationEditor, change);
+          }
+        }),
       );
       resolveLspReady(signals);
       // Initial analysis becomes available once the server runs.
@@ -357,6 +267,7 @@ function resetSignals(signals: StoreSignals): void {
   signals.sessionIdToPid.value = new Map();
   signals.profiler.value = IDLE_PROFILER_SESSION;
   signals.processes.value = IDLE_PROCESS_PANEL;
+  signals.configurationEditor.value = IDLE_CONFIGURATION_EDITOR;
   signals.readyHandle.value = undefined;
   // outputChannel and logSink are stable logging infrastructure created once by
   // initLogging (and owned by context.subscriptions) — they are deliberately
@@ -430,6 +341,7 @@ function createStoreSignals(): StoreSignals {
     sessionIdToPid: signal<Map<string, number>>(new Map()),
     profiler: signal<ProfilerSession>(IDLE_PROFILER_SESSION),
     processes: signal<ProcessPanelState>(IDLE_PROCESS_PANEL),
+    configurationEditor: signal<ConfigurationEditorState>(IDLE_CONFIGURATION_EDITOR),
     readyHandle: signal<ReadyHandle | undefined>(undefined),
     analysisRevision: signal<number>(0),
     diagnosticsDebounce: undefined,
@@ -462,11 +374,13 @@ export function createStore(onReset?: () => void): Store {
     memoryBusy: computed(() => isMemoryBusy(signals.profiler.value)),
     processes: signals.processes,
     processesRevision: computed(() => signals.processes.value.revision),
+    configurationEditor: signals.configurationEditor,
     lspReadyPromise,
     isServerReady,
     analysisRevision: signals.analysisRevision,
     ...createProfilerActions(signals.profiler),
     ...createProcessPanelActions(signals.processes),
+    ...createConfigurationEditorActions(signals.configurationEditor),
 
     setClient(context: vscode.ExtensionContext, c: LanguageClient): void {
       signals.client.value = c;

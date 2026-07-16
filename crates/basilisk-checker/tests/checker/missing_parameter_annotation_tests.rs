@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0001] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
-// Integration tests for BSK-E0001: Missing parameter type annotation.
+//! Tests for [BSK-0001] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
+// Integration tests for BSK-0001: Missing parameter type annotation.
 
 use super::common::*;
 
@@ -11,8 +11,8 @@ def greet(name):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        codes(&diags).contains(&"BSK-E0001"),
-        "unannotated parameter should fire BSK-E0001, got: {:?}",
+        codes(&diags).contains(&"BSK-0001"),
+        "unannotated parameter should fire BSK-0001, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -26,8 +26,8 @@ def greet(name: str) -> str:
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0001"),
-        "annotated parameter should not fire BSK-E0001"
+        !codes(&diags).contains(&"BSK-0001"),
+        "annotated parameter should not fire BSK-0001"
     );
     Ok(())
 }
@@ -41,8 +41,8 @@ class Foo:
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0001"),
-        "self parameter should not fire BSK-E0001"
+        !codes(&diags).contains(&"BSK-0001"),
+        "self parameter should not fire BSK-0001"
     );
     Ok(())
 }
@@ -57,8 +57,8 @@ class Foo:
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0001"),
-        "cls parameter should not fire BSK-E0001"
+        !codes(&diags).contains(&"BSK-0001"),
+        "cls parameter should not fire BSK-0001"
     );
     Ok(())
 }
@@ -70,10 +70,10 @@ def add(a, b):
     return a + b
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
-    let e0001_count = codes(&diags).iter().filter(|c| **c == "BSK-E0001").count();
+    let e0001_count = codes(&diags).iter().filter(|c| **c == "BSK-0001").count();
     assert!(
         e0001_count >= 2,
-        "two unannotated params should fire BSK-E0001 at least twice, got {e0001_count}"
+        "two unannotated params should fire BSK-0001 at least twice, got {e0001_count}"
     );
     Ok(())
 }
