@@ -1,5 +1,6 @@
 import { defineConfig } from '@vscode/test-cli';
 import crypto from 'crypto';
+import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -23,8 +24,36 @@ const userDataDir = defaultUserDataDir.length > 80
     )
     : defaultUserDataDir;
 
+// [VSIX-REALWORLD-WIRING]: one config per pinned real-world repo (see
+// docs/specs/VSIX-REAL-WORLD-SPEC.md). Each opens the fetched tree (staged by
+// scripts/fetch-real-world-repos.mjs — wired as `pretest`) as the workspace
+// and selects its corpus entry via BSK_REAL_WORLD_REPO. Skipped in the
+// screenshots flow, which drives vscode-test directly without the corpus.
+const corpus = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'test-fixtures', 'real-world-corpus.json'), 'utf8'),
+);
+const realWorldTests = process.env.BASILISK_SCREENSHOTS
+    ? []
+    : corpus.repos.map((repo) => ({
+        label: `real-world-${repo.name}`,
+        files: 'out/test/real-world/**/*.test.js',
+        workspaceFolder: path.join(__dirname, '.real-world', repo.name),
+        launchArgs: ['--disable-extensions', '--user-data-dir', userDataDir],
+        env: { BSK_REAL_WORLD_REPO: repo.name },
+        srcDir: __dirname,
+        // Analysis of a whole real repo is the slowest thing the suite waits
+        // on; per-test timeouts inside the suite scale off the corpus budgets,
+        // so this outer timeout only needs to exceed the largest of them.
+        mocha: {
+            bail: true,
+            reporter: 'list',
+            timeout: 600_000,
+        },
+    }));
+
 export default defineConfig({
     tests: [{
+        label: 'workspace-suite',
         files: 'out/test/suite/**/*.test.js',
         // Open the test-fixtures/workspace so the LSP server gets a rootUri.
         // This enables whole-module analysis tests that write Python files to the
@@ -57,7 +86,7 @@ export default defineConfig({
             timeout: 45_000,
             require: './out/test/suite/index.js',
         },
-    }],
+    }, ...realWorldTests],
     coverage: {
         includeAll: false,
         // @vscode/test-cli sets report.exclude.relativePath = false, which

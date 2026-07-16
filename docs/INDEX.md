@@ -32,6 +32,7 @@ linked to an active plan.
 | [Test integration](specs/LSP-TEST-INTEGRATION-SPEC.md) | Test discovery, execution, debug, and coverage protocol. |
 | [Activity panel](specs/EXTENSION-ACTIVITY-PANEL-SPEC.md) | Module/health wire data and shipped VS Code views. |
 | [VS Code extension](specs/VSIX-SPEC.md) | VS Code client behavior. |
+| [Real-world e2e suites](specs/VSIX-REAL-WORLD-SPEC.md) | Pinned real-repo journeys with memory/CPU budgets. |
 | [Neovim extension](specs/NEOVIM-SPEC.md) | `basilisk.nvim` client behavior. |
 | [Zed extension](specs/ZED-SPEC.md) | Zed WASM client behavior. |
 | [Editor screenshots](specs/VSIX-EDITOR-SCREENSHOTS-SPEC.md) | Automated real VS Code screenshots. |

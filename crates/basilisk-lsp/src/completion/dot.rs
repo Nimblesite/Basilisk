@@ -35,6 +35,12 @@ pub(super) fn dot_completions(
 }
 
 /// Find the innermost class that encloses `offset`.
+///
+/// A `self.` expression always sits inside a method body, which always
+/// follows its own `def` — so the enclosing class is the one owning the
+/// NEAREST PRECEDING method start, not the first method in the file
+/// (regression: members of the file's first class leaked into every later
+/// class).
 fn enclosing_class(
     resolved: &basilisk_resolver::ResolvedModule,
     offset: usize,
@@ -42,7 +48,8 @@ fn enclosing_class(
     let func = resolved
         .functions
         .iter()
-        .find(|f| f.class_name.is_some() && f.def_span.start_usize() <= offset)?;
+        .filter(|f| f.class_name.is_some() && f.def_span.start_usize() <= offset)
+        .max_by_key(|f| f.def_span.start_usize())?;
     let class_name = func.class_name.as_ref()?;
     resolved.classes.iter().find(|c| &c.name == class_name)
 }

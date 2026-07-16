@@ -28,9 +28,10 @@ import {
     workspaceHealthMessage,
 } from '../../module-explorer';
 import {
-    DIAGNOSTIC_TIMEOUT_MS,
     closeAllEditors,
+    DIAGNOSTIC_TIMEOUT_MS,
     openPythonFile,
+    removeTestDir,
     waitForDiagnostics,
     waitForDiagnosticsCleared,
 } from './test-helpers';
@@ -176,7 +177,7 @@ suite('Type Checking Toggle (basilisk.enabled)', function () {
     suiteTeardown(async () => {
         await closeAllEditors();
         if (tmpDir !== undefined && tmpDir !== '' && fs.existsSync(tmpDir)) {
-            fs.rmSync(tmpDir, { recursive: true, force: true });
+            removeTestDir(tmpDir);
         }
     });
 
