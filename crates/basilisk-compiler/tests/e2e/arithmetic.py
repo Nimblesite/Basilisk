@@ -2,7 +2,7 @@ def add(a: int, b: int) -> int:
     return a + b
 
 
-def multiply(x: int, y: int) -> int:
+def multiply(x, y) -> int:
     return x * y
 
 

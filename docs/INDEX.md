@@ -48,7 +48,7 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [Roadmap](plans/ROADMAP-NEXT-STEPS-PLAN.md) | Distribution follow-ups, scale, ecosystem, and links to focused plans. |
 | [Specification conformance audit](plans/SPEC-CONFORMANCE-AUDIT-PLAN.md) | Confirmed implementation/spec deviations. |
 | [Configuration editor](plans/LSP-CONFIGURATION-EDITOR-PLAN.md) | Buffer safety, protocol E2E coverage, provenance/metadata, cross-editor clients, and release evidence. |
-| [Formatting](plans/LSP-FORMATTING-PLAN.md) | Release provenance, remaining clients/CLI/docs, and acceptance. |
+| [Formatting](plans/LSP-FORMATTING-PLAN.md) | VS Code default-formatter opt-in and published-artifact verification. |
 | [AI-assisted LSP](plans/LSP-AI-PLAN.md) | First opt-in provider slice and privacy/safety gate. |
 | [Activity panel](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Settings wiring and remaining cross-editor/test quality. |
 | [Type narrowing](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Flow, expression inference, constraints, and shared subtyping. |

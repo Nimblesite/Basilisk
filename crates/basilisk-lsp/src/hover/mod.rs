@@ -254,3 +254,11 @@ use members::{builtin_member_hover, external_member_hover, find_class_init};
     reason = "test-only code: expect/panic acceptable in unit tests"
 )]
 mod tests;
+
+#[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test-only code: expect/panic acceptable in unit tests"
+)]
+mod tests_diagnostics;

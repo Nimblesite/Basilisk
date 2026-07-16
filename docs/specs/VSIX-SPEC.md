@@ -95,10 +95,13 @@ client.start();
 The VSIX is the first visual client for
 [CONFIGEDITOR](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR). It contributes
 the client-only command **Basilisk: Open Configuration Editor**
-(`basilisk.openConfigurationEditor`) and a settings-gear action in the Basilisk
-activity view. The command opens one full-width editor-tab webview; it does not
-take over `pyproject.toml` as a custom editor and does not put the full rule
-catalog into the narrow sidebar.
+(`basilisk.openConfigurationEditor`), a settings-gear action in the Basilisk
+activity view, and an **Edit Config** item (`basilisk.editConfig`, hidden from
+the palette) at the top of the file-explorer context menu on `pyproject.toml`
+(`explorer/context`, group `navigation@1`), which opens the editor for the
+workspace folder that owns the clicked file. The command opens one full-width
+editor-tab webview; it does not take over `pyproject.toml` as a custom editor
+and does not put the full rule catalog into the narrow sidebar.
 
 The command is exposed only when the server advertises
 `capabilities.experimental.basilisk.configurationEditor` — pure presence, no

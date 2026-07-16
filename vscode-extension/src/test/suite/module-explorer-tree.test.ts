@@ -35,6 +35,8 @@ interface TestModule {
   readonly kind: "package" | "module";
   readonly symbols: readonly TestSymbol[];
   readonly coveragePercent: number;
+  readonly totalSymbols?: number;
+  readonly annotatedSymbols?: number;
   readonly errors: number;
   readonly warnings: number;
   readonly adopted: boolean;
@@ -47,13 +49,23 @@ function sym(name: string): TestSymbol {
 function mod(
   name: string,
   kind: "package" | "module",
-  opts: { coverage: number; symbols?: readonly TestSymbol[]; errors?: number; warnings?: number; path?: string },
+  opts: {
+    coverage: number;
+    symbols?: readonly TestSymbol[];
+    totalSymbols?: number;
+    annotatedSymbols?: number;
+    errors?: number;
+    warnings?: number;
+    path?: string;
+  },
 ): TestModule {
   return {
     name,
     kind,
     symbols: opts.symbols ?? [],
     coveragePercent: opts.coverage,
+    totalSymbols: opts.totalSymbols,
+    annotatedSymbols: opts.annotatedSymbols,
     path: opts.path ?? `/ws/${name.split(".").join("/")}.py`,
     errors: opts.errors ?? 0,
     warnings: opts.warnings ?? 0,
@@ -291,6 +303,80 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
         labelsOf(await provider.getChildren()),
         ["beta", "alpha", "gamma"],
         "path sort orders modules by file path, distinct from name/score order (#189)",
+      );
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  // Tests [EXTACT-MODULES-TREE-STRUCTURE] coverage rollup: folder/package rows
+  // must show the subtree's symbol-weighted type-coverage % — not just error
+  // tallies, and not only the package's own __init__.py coverage.
+  test("folder/package rows roll up subtree type coverage, symbol-weighted like the workspace header", async () => {
+    // Weights are chosen so the honest symbol-weighted rollup for `app`
+    // ((2+1+0) annotated / (2+2+6) total = 30%) differs from a naive average of
+    // child percentages ((100+50+0)/3 = 50%) — only a weighted rollup passes.
+    const modules = [
+      mod("app", "package", { coverage: 100, totalSymbols: 2, annotatedSymbols: 2 }),
+      mod("app.api.auth", "module", { coverage: 50, totalSymbols: 2, annotatedSymbols: 1 }),
+      mod("app.models.user", "module", { coverage: 0, totalSymbols: 6, annotatedSymbols: 0 }),
+      mod("util", "module", { coverage: 100, totalSymbols: 1, annotatedSymbols: 1 }),
+    ];
+    const provider = new ModuleExplorerProvider(storeWith(modules));
+    try {
+      const roots = await provider.getChildren();
+
+      const app = roots.find((row) => labelOf(row) === "app");
+      assert.ok(app instanceof PackageTreeItem, "'app' is a package container");
+      const appDesc = String(app.description);
+      assert.ok(
+        appDesc.includes("30%"),
+        `'app' must show the subtree's symbol-weighted coverage (3/10 = 30%), got: ${appDesc}`,
+      );
+      assert.ok(
+        appDesc.includes("█") || appDesc.includes("░"),
+        `'app' must render the coverage bar like module rows do, got: ${appDesc}`,
+      );
+
+      // A synthesised pure folder (models/ has no __init__.py, so no module of
+      // its own) must still show its subtree's coverage — this is the exact
+      // "folders show no percentage" bug.
+      const appChildren = await provider.getChildren(app);
+      const models = appChildren.find((row) => labelOf(row) === "models");
+      assert.ok(models instanceof PackageTreeItem, "'models' is a synthesised folder");
+      const modelsDesc = String(models.description);
+      assert.ok(
+        modelsDesc.includes("0%"),
+        `pure folder must show its subtree coverage (0/6 = 0%), got: "${modelsDesc}"`,
+      );
+
+      const api = appChildren.find((row) => labelOf(row) === "api");
+      assert.ok(api instanceof PackageTreeItem, "'api' is a synthesised folder");
+      assert.ok(
+        String(api.description).includes("50%"),
+        `'api' folder must show its subtree coverage (1/2 = 50%), got: "${String(api.description)}"`,
+      );
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  // Tests [EXTACT-MODULES-TREE-STRUCTURE] + [ANALYSIS-ENABLED] (#119): with type
+  // checking disabled the server omits all grading, so folder rows must render
+  // NO percentage — never a vacuous 100% conjured from zero data.
+  test("folder rows show no coverage percentage while type checking is disabled (#119)", async () => {
+    const ungraded = [
+      { name: "app", kind: "package", symbols: [], path: "/ws/app/__init__.py" },
+      { name: "app.mod", kind: "module", symbols: [], path: "/ws/app/mod.py" },
+    ];
+    const provider = new ModuleExplorerProvider(storeWith(ungraded as unknown as readonly TestModule[]));
+    try {
+      const roots = await provider.getChildren();
+      const app = roots.find((row) => labelOf(row) === "app");
+      assert.ok(app instanceof PackageTreeItem, "'app' is a package container");
+      assert.ok(
+        !String(app.description ?? "").includes("%"),
+        `ungraded folder must show no percentage, got: "${String(app.description)}"`,
       );
     } finally {
       provider.dispose();
