@@ -31,13 +31,13 @@ A mutation is `SetRule`, `RemoveRule`, `SetTag`, or `RemoveTag` — nothing else
 
 Snapshot, preview, and occurrence inventory cover the complete selected root, even when analysis is configured to publish only open files. Open buffers stay authoritative; eligible closed files are loaded from disk into the server index without publishing additional diagnostics.
 
-The legacy `basilisk.disableRule` command writes an explicit `disabled` rule entry through the same validated, root-aware mutation service, and is rejected for `pep`-tagged rules. Active configuration watchers run the shared refresh tail and emit the changed notification.
+The `basilisk.disableRule` command writes an explicit `disabled` rule entry through the same validated, root-aware mutation service, and is rejected for `pep`-tagged rules. Configuration watching is server-owned ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)).
 
 Unknown roots, rule codes, tags, severities, and selectors, pep-disable requests, stale revisions, malformed configuration, expired previews, and client-rejected edits are request errors ([LSPARCH-CONFIG-EDITOR-ERRORS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR-ERRORS)).
 
 ## Wire model {#CONFIGEDITOR-MODEL}
 
-The editor protocol's design source is [`models/configuration_editor.td`](../../models/configuration_editor.td). It builds on the core configuration model in [`models/configuration.td`](../../models/configuration.td) ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)) — `RuleCode`, `RuleTag`, `RuleSeverity` — and **MUST NOT add anything to it**: the two models are separate files precisely so editor machinery can never contaminate the config model. Language DTOs are regenerated from the two files together; an automated drift check remains open.
+The editor protocol's design source is [`models/configuration_editor.td`](../../models/configuration_editor.td). It builds on the core configuration model in [`models/configuration.td`](../../models/configuration.td) ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)) — `RuleCode`, `RuleTag`, `RuleSeverity` — and **MUST NOT add anything to it**: the two models are separate files precisely so editor machinery can never contaminate the config model. Language DTOs are regenerated from the two files together.
 
 The protocol is deliberately small:
 
@@ -60,20 +60,11 @@ Closed-source apply sends a whole-document `WorkspaceEdit`, then keeps a root-sc
 
 Clients synchronize candidate `pyproject.toml` documents in addition to Python. The LSP accepts both the root-level document and nested folder-config documents into its configuration state — nested candidates participate as folder overrides ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)) and are never analysed as Python. `didOpen`, incremental `didChange`, `didSave`, and `didClose` keep that state aligned with the editor.
 
-When the active source is open, its in-memory text is authoritative for snapshot, preview, validation, and apply, even if the disk source is malformed. Apply rechecks the content revision and emits a `TextDocumentEdit` carrying the current LSP document version. A processed content change fails the revision check; a change racing the client edit fails the versioned workspace edit. A short-lived pending projection bridges successful `workspace/applyEdit` and its following `didChange` without changing the base text used for incremental edits. Closing the buffer removes the projection and restores disk authority.
+When the active source is open, its in-memory text is authoritative for snapshot, preview, validation, and apply, even if the disk source is malformed. Apply rechecks the content revision and emits a `TextDocumentEdit` carrying the current LSP document version. A processed content change fails the revision check; a change racing the client edit fails the versioned workspace edit. A short-lived pending projection bridges successful `workspace/applyEdit` and its following `didChange` without changing the base text used for incremental edits. Closing the buffer removes the projection, restores disk authority, and runs the shared refresh tail from the on-disk content ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)): discarding unsaved edits changes the effective configuration without touching disk, so no watcher fires — the close itself triggers the refresh.
 
 ## Suppression diagnostics {#CONFIGEDITOR-SUPPRESSIONS}
 
-The suppression-audit family consists of four ordinary analyze-scope rules — `check` never emits them, and the standard seed's `"basilisk" = "error"` tag entry turns them on ([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)):
-
-| Rule | Meaning |
-|---|---|
-| `BSK-0060` | Active code-specific directive |
-| `BSK-0061` | Active blanket directive |
-| `BSK-0062` | Unused directive |
-| `BSK-0063` | Malformed, unknown, conflicting, or unpaired directive |
-
-Audit diagnostics are emitted after ordinary inline suppression is applied, so a directive cannot hide its own audit. Malformed or misplaced directives are audited but never applied to ordinary diagnostics. All four rules carry `basilisk` and `suppressions` tags and participate in tag facets, occurrence pagination, and preview/apply like any rule.
+The four suppression-audit rules (`BSK-0060`–`BSK-0063`) are ordinary analyze-scope rules whose classification, emission order, and precedence are defined in [CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS); the standard seed turns them on ([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)). In the editor they behave like any rule: they carry the `basilisk` and `suppressions` tags and participate in tag facets, occurrence pagination, and preview/apply.
 
 ## VS Code experience {#CONFIGEDITOR-VSIX-EXPERIENCE}
 
@@ -89,18 +80,8 @@ The webview uses theme tokens, text-labelled severities, keyboard controls, high
 
 Automated tests cover the CSP/data boundary, intent decoding, semantic labels, responsive/reduced-motion styles, stale async result rejection, singleton message binding, capability gating, and typed routing. Recorded cross-platform keyboard, screen-reader, zoom, CSP, and injection audits remain release gates.
 
-## Acceptance and removals {#CONFIGEDITOR-ACCEPTANCE}
+## Acceptance {#CONFIGEDITOR-ACCEPTANCE}
 
-The v1 acceptance surface is: the four LSP operations over the core configuration model (rule entries + tag entries, pep-disable rejected), the thin tag-first VS Code client, and unsaved-buffer/apply-race safety. The partition, seeding, and diagnostic scope are accepted where they are specified ([CHKARCH-COMMANDS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS), [LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING), [LSPARCH-DIAGNOSTIC-SCOPE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE)).
+The acceptance surface is: the four LSP operations over the core configuration model (rule entries + tag entries, pep-disable rejected), the thin tag-first VS Code client, and unsaved-buffer/apply-race safety. The partition, seeding, and diagnostic scope are accepted where they are specified ([CHKARCH-COMMANDS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS), [LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING), [LSPARCH-DIAGNOSTIC-SCOPE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE)).
 
-**Removed from this contract** (implementations still carrying them are legacy to remove):
-
-- the fused single model file — the config model lives in `models/configuration.td`, the editor wire protocol in `models/configuration_editor.td`, and the latter never contaminates the former;
-- selector-based mutations, `Inherit`/`Native` intents, `defaultSeverity`, `defaultEnabled`, and every notion of a rule's "native" severity;
-- presets (`ConfigurationPreset`) and the strict-first preset workflow — the two-line seed replaces them;
-- glob path overrides (`MutationScope::Path`, `PathOverrideState`, path-precedence scoring) and per-module overrides — folder configs replace them;
-- per-file adoption in the editor contract (`adoption` provenance, adoption counts, debt summary);
-- fixability selectors (`CurrentViolations`, `SafeFixable`, `WithoutSafeFix`) and per-occurrence fix-safety metadata — mass fixes remain a standalone command ([AUTOFIX](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX));
-- `ConfigurationFormat` (including the deprecated `BasiliskJson` wire variant), shadowed-source reporting, and `ConfigurationProblem` — malformed configuration is a structured request error.
-
-Neovim/Zed clients and the generated-DTO drift check remain non-blocking follow-up work.
+The contract deliberately excludes — and tests assert the absence of — selector-based mutations, `Inherit`/`Native` intents, native/default severities, presets, glob path and per-module overrides (folder configs cover scoped grading), per-file adoption state, fixability selectors and per-occurrence fix-safety metadata (mass fixes are the standalone [AUTOFIX](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX) command), configuration-format enums, shadowed-source reporting, and problem lists (malformed configuration is a structured request error).

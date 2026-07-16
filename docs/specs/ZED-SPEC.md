@@ -23,7 +23,7 @@ Zed extensions are Rust compiled to WASM with a deliberately narrow API:
 | Custom commands | **No** | Only slash commands in AI context |
 | Status bar items | **No** | Not available |
 | Custom settings schema | **No** | Read-only access to Zed settings |
-| File watchers | **No** | Not available |
+| File watchers | **No** | Not available — config watching is server-owned ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)) |
 | Terminal control | **No** | Not available |
 
 All intelligence flows through LSP and DAP — no client-side tricks. See [LSPARCH-CMDREG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDREG): the server advertises all commands, clients never pre-register them.
@@ -383,7 +383,8 @@ VS Code features with no Zed equivalent:
 | "Install debugpy" button | Notification action | Not available | Error message tells user to `pip install debugpy` |
 | Webview flamegraph | WebviewPanel | Not available | Open speedscope in browser |
 | Inline profiling heat map | TextEditorDecorationType | Not available | LSP hint diagnostics |
-| Custom settings UI | contributes.configuration | Not available | Manual settings.json |
+| Custom settings UI (editor settings) | contributes.configuration | Not available | Manual settings.json |
+| Configuration editor (project rules) | Webview ([LSPARCH-CONFIG-EDITOR](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR)) | Not available (no webviews) | Edit `pyproject.toml` `[tool.basilisk]` directly — the server-owned watcher applies it live: recheck, republish, `basilisk/configurationChanged`, no restart ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)) |
 | Auto-restart on crash | Client-side logic | Not available | Zed handles LSP restart natively |
 
 The LSP produces all underlying data; only visualization differs.

@@ -161,12 +161,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # shipwright.json and the notes generator live in the repo; check out
+      # BEFORE downloading artifacts so checkout's clean cannot remove them.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
       - name: Download platform archives
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
           pattern: basilisk-*
           merge-multiple: true
+
+      # Release notes cannot drift from what actually shipped: the component
+      # block is generated from shipwright.json and the release binary itself
+      # ([LSPFMT-RELEASE-NOTES]), then appended to the auto-generated notes.
+      # Drift-tested against the built binary in
+      # crates/basilisk-cli/tests/e2e_release_notes_block.rs.
+      - name: Generate release-notes component block
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -xzf artifacts/basilisk-*-linux-x64.tar.gz basilisk
+          chmod +x basilisk
+          python3 scripts/gen_release_notes.py ./basilisk "$GITHUB_REF_NAME" > release-notes-block.md
 
       # Create the release up front and attach the platform archives to it.
       # Every downstream job (VSIX, Homebrew, Scoop) pulls its binaries from
@@ -176,6 +193,10 @@ jobs:
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           generate_release_notes: true
+          # The generated component block ([LSPFMT-RELEASE-NOTES]) is appended
+          # to the auto-generated notes rather than replacing them.
+          body_path: release-notes-block.md
+          append_body: true
           # Publish immediately — never leave the release as a draft. The action
           # defaults to draft=false, but it only WRITES the fields you give it:
           # on a re-run over a tag whose release already exists as a draft (a

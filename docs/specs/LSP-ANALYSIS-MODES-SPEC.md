@@ -77,10 +77,12 @@ Default: `"wholeModule"`. The user must explicitly opt down to `openFilesOnly`.
 Resolution order (highest wins):
 
 1. Editor workspace setting (`basilisk.analysisMode`) — delivered as `initializationOptions.analysisMode` at startup and re-applied at runtime via `workspace/didChangeConfiguration` (top-level `analysisMode` or nested `basilisk.analysisMode`). Editors that always forward a value (the VS Code extension and basilisk.nvim both send their `wholeModule` default) pin the mode from the editor side; clients that send no value (e.g. the Zed extension) fall through to the file tier.
-2. The first parseable config file in the first workspace root, checked in this order: `pyrightconfig.json` (pyright compatibility), then `pyproject.toml` — `[tool.basilisk]` or, failing that, `[tool.pyright]`. The winning file supplies the entire workspace config: precedence is first-file-wins, NOT per-field merging, so a `pyrightconfig.json` that omits `analysisMode` resolves to the default even if `pyproject.toml` sets one (mirroring [pyright's own whole-file precedence](https://microsoft.github.io/pyright/#/configuration) of `pyrightconfig.json` over `pyproject.toml`).
+2. The first parseable config file in the first workspace root, checked in this order: `pyrightconfig.json` (pyright compatibility), then `pyproject.toml` — `[tool.basilisk]` or, failing that, `[tool.pyright]`. The winning file supplies the entire workspace config: precedence is first-file-wins, NOT per-field merging, so a `pyrightconfig.json` that omits `analysisMode` resolves to the default even if `pyproject.toml` sets one (mirroring [pyright's own whole-file precedence](https://microsoft.github.io/pyright/#/configuration) of `pyrightconfig.json` over `pyproject.toml`). These pyright files are **compatibility inputs to this analysis tier only**, parsed into the one shared model — rule and tag entries live solely in `pyproject.toml` `[tool.basilisk]` ([CHKARCH-CONFIG-FILE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-FILE)), which the server watches live ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)); `pyrightconfig.json` is read at startup and registry rebuilds, and is not watched.
 3. Hard default: `wholeModule`.
 
 Tier 1 and the fallback are resolved by `resolve_analysis_mode` (`crates/basilisk-lsp/src/workspace_analysis.rs`); the file tier is `load_config` (`crates/basilisk-lsp/src/config.rs`), which the CLI shares.
+
+To be explicit about liveness ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)): the analysis **mode** is resolved when the index is (re)built — at `initialize`, on a `didChangeConfiguration` that supplies a mode, and on workspace-folder changes — it is a session-scoped structural choice, not hot-swapped per keystroke. **Rule** configuration, include/exclude, and the import environment are fully live: the server's own watcher refreshes them through the shared refresh tail without any client watcher support and without a restart.
 
 This tiering governs the **analysis-level** workspace config (mode, formatter,
 etc.) only. **Rule** config (severities, per-module/per-path overrides) is
@@ -120,6 +122,11 @@ A `FileEntry` is invalidated when:
 - Its on-disk content changes (file-watcher event) AND `source_hash` changes
 - The editor sends a `didChange` notification for it
 - A file it depends on changes in a way that affects its output (`crossModule` only)
+- The root configuration changes — config-editor apply, edit to an open config
+  buffer, or a disk change seen by the server-owned watcher: the shared refresh
+  tail replaces the root config, invalidates the per-directory config memo, and
+  rechecks every indexed file
+  ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG))
 
 When invalidated, the file is re-analysed **through the salsa engine**
 ([CHKARCH-INCREMENTAL-SALSA]), which re-runs only the queries whose inputs
@@ -273,6 +280,8 @@ Incremental edits are applied to the in-memory buffer, then parse → resolve �
 ### Import resolution on incremental re-check {#ANALYSIS-INCR-IMPORTS}
 
 The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, uv registry) the full scan used. The full scan builds and caches these on the workspace index; incremental re-checks reuse the cached value (site-packages discovery may touch the filesystem or spawn a subprocess and MUST NOT run per keystroke).
+
+The cached `ImportSearchPaths` are a **derived config cache**: they are built from configuration (`stub-paths`, `typeshed-path`, venv/uv state), so every observed change to a watched configuration or environment source rebuilds them before the recheck runs — via the server-owned watcher or a client watcher event, whichever fires first ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG), [LSPUV-WATCHERS](LSP-UV-INTEGRATION-SPEC.md#LSPUV-WATCHERS)). "Cached" means reused across keystrokes, never past a configuration change.
 
 Otherwise the syntactic resolver marks every import `Unresolved`, resurrecting false `imports_unresolved` for packages that resolve cleanly on the CLI and at startup. The diagnostics an incremental re-check **publishes** MUST reflect import resolution — not just the cached symbol table used by navigation.
 

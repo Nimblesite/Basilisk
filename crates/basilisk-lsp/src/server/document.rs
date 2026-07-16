@@ -254,21 +254,7 @@ pub(super) async fn did_change_watched_files(
 ) {
     log_uv_config_changes(&params);
     refresh_changed_configuration_sources(server, &params).await;
-
-    let needs_python_version_refresh = params
-        .changes
-        .iter()
-        .any(|change| change.uri.path().ends_with(".python-version"));
-    if needs_python_version_refresh {
-        reload_index_configs(server).await;
-    }
-    let needs_registry_refresh = params.changes.iter().any(|change| {
-        let path = change.uri.path();
-        path.ends_with("uv.lock") || path.ends_with("pyproject.toml")
-    });
-    if needs_registry_refresh || needs_python_version_refresh {
-        super::init::rebuild_registry_and_resolve(server).await;
-    }
+    refresh_changed_environment_sources(server, &params).await;
 
     // Config changes are relevant in every analysis mode. Only disk-driven
     // Python module reloads are skipped when the server tracks open files.
@@ -410,26 +396,71 @@ async fn refresh_changed_configuration_sources(
             changed_roots.push(root.clone());
         }
     }
+    // Route through the shared disk baseline ([LSPARCH-CONFIG]) so a
+    // change seen by both the client watcher and the server-owned watcher
+    // refreshes exactly once — whichever observes it first wins.
+    let handles = server.refresh_handles();
     for root in changed_roots {
-        if let Err(error) = crate::configuration_editor::refresh_after_configuration_change(
-            server,
+        crate::configuration_editor::refresh_root_from_disk(
+            &handles,
+            &roots,
             &root,
             "externalEdit",
         )
-        .await
-        {
-            warn!(root = %root.display(), %error, "failed to refresh changed configuration");
-        }
+        .await;
     }
 }
 
-/// Re-read each workspace root's checker config from disk after a watched config
-/// file changed, so version-aware rules and severity overrides update without an
-/// LSP restart. Implements [CHKARCH-VERSION-TARGET] reactivity.
-async fn reload_index_configs(server: &LspServer) {
-    let mut guard = server.index.write().await;
-    if let Some(index) = guard.as_mut() {
-        index.reload_root_configs();
+/// Route client-watched environment changes (`uv.lock`, `.python-version`,
+/// nested `pyproject.toml`) through the same guarded refresh the server-owned
+/// watcher uses, so both observers share one baseline ([LSPARCH-CONFIG] /
+/// [LSPUV-WATCHERS], [CHKARCH-VERSION-TARGET] reactivity).
+async fn refresh_changed_environment_sources(
+    server: &LspServer,
+    params: &DidChangeWatchedFilesParams,
+) {
+    let roots = server.workspace_roots.read().await.clone();
+    let mut changed_roots = Vec::new();
+    let mut nested_change = false;
+    for change in &params.changes {
+        let Ok(path) = change.uri.to_file_path() else {
+            continue;
+        };
+        let is_environment_source = path
+            .file_name()
+            .is_some_and(|name| name == "uv.lock" || name == ".python-version");
+        let is_nested_pyproject = path
+            .file_name()
+            .is_some_and(|name| name == "pyproject.toml")
+            && !roots
+                .iter()
+                .any(|root| path.parent() == Some(root.as_path()));
+        if !is_environment_source && !is_nested_pyproject {
+            continue;
+        }
+        match roots
+            .iter()
+            .find(|root| path.parent() == Some(root.as_path()))
+        {
+            Some(root) if !changed_roots.contains(root) => changed_roots.push(root.clone()),
+            Some(_) => {}
+            // A nested workspace-member file still shifts the registry and the
+            // discovered folder configs — fall back to the whole-workspace path.
+            None => nested_change = true,
+        }
+    }
+    let handles = server.refresh_handles();
+    for root in changed_roots {
+        crate::configuration_editor::refresh_environment_from_disk(&handles, &roots, &root).await;
+    }
+    if nested_change {
+        {
+            let mut guard = server.index.write().await;
+            if let Some(index) = guard.as_mut() {
+                index.reload_root_configs();
+            }
+        }
+        super::init::rebuild_registry_and_resolve(server).await;
     }
 }
 

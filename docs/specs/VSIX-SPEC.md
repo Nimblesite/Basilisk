@@ -128,7 +128,11 @@ through the LSP snapshot/transaction API.
 Snapshot/loading/error/revision state lives in the extension's single Signals
 store (`src/store.ts`), with explicit actions; no mutable state lives in the
 panel host or hidden DOM. On reveal, the panel refetches authoritative LSP state
-instead of retaining a stale background document.
+instead of retaining a stale background document. While visible, it refreshes on
+the server's `basilisk/configurationChanged` push — the server watches every
+configuration source itself and pushes after every change (editor apply,
+open-buffer edit, external disk edit), so the panel never polls and is never
+left stale ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)).
 
 ### Hosting and visual contract {#VSIX-CONFIGURATION-EDITOR-HOST}
 
