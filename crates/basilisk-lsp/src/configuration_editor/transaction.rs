@@ -1,6 +1,7 @@
 //! Workspace-edit apply and deterministic configuration refresh tail.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use basilisk_config::{build_rule_patch, ConfigDocument, ConfigPatch, RuleConfigUpdate};
 use tower_lsp::jsonrpc::Result as LspResult;
@@ -12,7 +13,25 @@ use tower_lsp::lsp_types::{
 
 use super::model::ConfigurationChanged;
 use super::protocol::{config_error, path_uri, rpc_error, rpc_error_data};
+use super::state::ConfigurationEditorState;
 use crate::server::LspServer;
+
+/// Cloneable server handles for the shared configuration refresh tail, so the
+/// server-owned configuration watcher ([LSPARCH-CONFIG]) and request
+/// handlers run the exact same reload → recheck → republish → notify sequence.
+#[derive(Clone)]
+pub(crate) struct ConfigurationRefreshHandles {
+    /// The workspace index holding per-root checker configuration.
+    pub(crate) index: Arc<tokio::sync::RwLock<Option<crate::workspace::WorkspaceIndex>>>,
+    /// LSP client for publishing diagnostics and notifications.
+    pub(crate) client: tower_lsp::Client,
+    /// The `basilisk.enabled` toggle gate ([ANALYSIS-ENABLED]).
+    pub(crate) type_checking_enabled: Arc<tokio::sync::RwLock<bool>>,
+    /// The analyze-scope publication gate ([LSPARCH-DIAGNOSTIC-SCOPE]).
+    pub(crate) analyze_enabled: Arc<std::sync::atomic::AtomicBool>,
+    /// Open-buffer overlays and disk baselines for configuration sources.
+    pub(crate) configuration_editor: Arc<ConfigurationEditorState>,
+}
 
 pub(crate) fn configuration_document(server: &LspServer, root: &Path) -> LspResult<ConfigDocument> {
     server
@@ -146,7 +165,7 @@ pub(super) async fn apply_prepared_patch(
             applied.clone(),
         );
     }
-    refresh_with_document(server, root, reason, &applied).await?;
+    refresh_with_document(&server.refresh_handles(), root, reason, &applied).await?;
     Ok(applied)
 }
 
@@ -156,24 +175,35 @@ pub(crate) async fn refresh_after_configuration_change(
     root: &Path,
     reason: &str,
 ) -> LspResult<()> {
-    let document = configuration_document(server, root)?;
-    refresh_with_document(server, root, reason, &document).await
+    refresh_after_configuration_change_with(&server.refresh_handles(), root, reason).await
+}
+
+/// Handle-based variant of [`refresh_after_configuration_change`] for spawned
+/// tasks (the server-owned configuration watcher, [LSPARCH-CONFIG]).
+pub(crate) async fn refresh_after_configuration_change_with(
+    handles: &ConfigurationRefreshHandles,
+    root: &Path,
+    reason: &str,
+) -> LspResult<()> {
+    let document = handles
+        .configuration_editor
+        .effective_document(root)
+        .map_err(config_error)?;
+    refresh_with_document(handles, root, reason, &document).await
 }
 
 pub(super) async fn refresh_with_document(
-    server: &LspServer,
+    handles: &ConfigurationRefreshHandles,
     root: &Path,
     reason: &str,
     document: &ConfigDocument,
 ) -> LspResult<()> {
     let results = {
-        let mut guard = server.index.write().await;
+        let mut guard = handles.index.write().await;
         let index = guard
             .as_mut()
             .ok_or_else(|| rpc_error("invalidMutation", "workspace index is not ready"))?;
-        let _ = index
-            .root_configs
-            .insert(root.to_path_buf(), document.config.clone());
+        index.set_root_config(root.to_path_buf(), document.config.clone());
         let mut results = index.reresolve_imports_and_recheck();
         if index.mode() == crate::config::AnalysisMode::OpenFilesOnly {
             results.retain(|(uri, _)| configuration_result_is_publishable(index, uri));
@@ -181,9 +211,14 @@ pub(super) async fn refresh_with_document(
         results
     };
     for (uri, diagnostics) in results {
-        server
-            .publish_diagnostics_if_enabled(uri, diagnostics)
-            .await;
+        crate::server::publish_diagnostics_gated(
+            &handles.client,
+            &handles.type_checking_enabled,
+            &handles.analyze_enabled,
+            uri,
+            diagnostics,
+        )
+        .await;
     }
     tracing::info!(
         root = %root.display(),
@@ -191,7 +226,7 @@ pub(super) async fn refresh_with_document(
         reason,
         "configuration refresh complete"
     );
-    server
+    handles
         .client
         .send_notification::<ConfigurationChangedNotification>(ConfigurationChanged {
             root_uri: path_uri(root),

@@ -13,7 +13,7 @@ use super::ws_test_configuration_editor::{
     tag_state, APPLY, OCCURRENCES, PREVIEW,
 };
 
-async fn snapshot_revision(fixture: &mut WsTestFixture, id: u64) -> TestResult<String> {
+pub async fn snapshot_revision(fixture: &mut WsTestFixture, id: u64) -> TestResult<String> {
     let snapshot = snapshot_result(fixture, id).await?;
     Ok(snapshot
         .get("revision")
@@ -22,7 +22,7 @@ async fn snapshot_revision(fixture: &mut WsTestFixture, id: u64) -> TestResult<S
         .to_owned())
 }
 
-async fn preview_result(
+pub async fn preview_result(
     fixture: &mut WsTestFixture,
     id: u64,
     revision: &str,
@@ -62,7 +62,7 @@ async fn apply_preview(
     .await
 }
 
-fn preview_id_of(preview: &serde_json::Value) -> TestResult<String> {
+pub fn preview_id_of(preview: &serde_json::Value) -> TestResult<String> {
     Ok(preview
         .get("previewId")
         .and_then(serde_json::Value::as_str)

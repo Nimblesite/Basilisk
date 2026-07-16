@@ -259,6 +259,18 @@ impl WorkspaceIndex {
         }
     }
 
+    /// Replace one root's checker config with an already-resolved document
+    /// (a live configuration buffer or a freshly observed disk edit) and drop
+    /// the discovered per-directory config cache so the next lookup re-merges
+    /// instead of serving the stale entry. Implements [LSPARCH-CONFIG]
+    /// via [CHKARCH-CONFIG-DISCOVERY].
+    pub fn set_root_config(&mut self, root: PathBuf, config: BasiliskConfig) {
+        let _ = self.root_configs.insert(root, config);
+        if let Ok(mut dir_configs) = self.dir_configs.write() {
+            dir_configs.clear();
+        }
+    }
+
     /// Cache the import search paths built during the workspace scan.
     ///
     /// Subsequent incremental analyses (`didOpen` / `didChange` / disk reload)
@@ -381,17 +393,26 @@ impl WorkspaceIndex {
         }
 
         // Find the longest matching root (most specific) for the base config,
-        // then merge the discovered ancestor chain over it. Merging is
-        // idempotent, so re-applying the root's own file config is harmless.
-        let base = self
+        // then merge the discovered ancestor chain over it. Inside a root the
+        // walk stops BELOW the root ([LSPARCH-CONFIG]): the in-memory root
+        // config is the authoritative effective config — an applied
+        // configuration-editor change or an open, unsaved config buffer beats
+        // disk — so re-reading the root's file here would resurrect stale
+        // disk state over it.
+        let owning_root = self
             .roots
             .iter()
             .filter(|root| file_path.starts_with(root))
-            .max_by_key(|root| root.components().count())
+            .max_by_key(|root| root.components().count());
+        let base = owning_root
             .and_then(|root| self.root_configs.get(root))
             .unwrap_or(&self.checker_config)
             .clone();
-        let merged = Arc::new(base.merged_with(basilisk_config::load_basilisk_config(&dir)));
+        let discovered = owning_root.map_or_else(
+            || basilisk_config::load_basilisk_config(&dir),
+            |root| basilisk_config::load_basilisk_config_below(&dir, root),
+        );
+        let merged = Arc::new(base.merged_with(discovered));
         if let Ok(mut cache) = self.dir_configs.write() {
             let _ = cache.insert(dir, Arc::clone(&merged));
         }
@@ -2967,6 +2988,51 @@ mod tests {
         assert!(
             !cfg.has_config_table(),
             "fallback config should have no rule tables"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn set_root_config_is_authoritative_over_stale_disk_config() {
+        // [LSPARCH-CONFIG] via [CHKARCH-CONFIG-DISCOVERY]: after an applied
+        // configuration-editor change or an open, unsaved config buffer, the
+        // in-memory root config decides. config_for_file must not re-read the
+        // root's pyproject.toml from disk and merge its stale severities back
+        // over the applied one (crates/basilisk-lsp/src/workspace.rs
+        // config_for_file bounded walk).
+        let root = unique_tmp("bsk_cfg_authority");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"error\"\n",
+        )
+        .unwrap();
+
+        let mut idx = WorkspaceIndex::new(
+            vec![root.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let file = root.join("app.py");
+        assert_eq!(
+            idx.config_for_file(&file).resolve_severity("BSK-0001", &[]),
+            Some(basilisk_config::RuleSeverity::Error),
+            "disk config decides before any in-memory update"
+        );
+
+        // The applied document parses exactly as the configuration editor
+        // builds it; disk still holds the stale "error" entry.
+        let applied = basilisk_config::discover_config_document_with_content(
+            &root,
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"warning\"\n".to_owned(),
+        )
+        .unwrap();
+        idx.set_root_config(root.clone(), applied.config);
+        assert_eq!(
+            idx.config_for_file(&file).resolve_severity("BSK-0001", &[]),
+            Some(basilisk_config::RuleSeverity::Warning),
+            "the in-memory root config must beat the stale on-disk entry"
         );
 
         let _ = std::fs::remove_dir_all(&root);

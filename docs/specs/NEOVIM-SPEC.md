@@ -75,7 +75,7 @@ vim.lsp.config('basilisk', {
   root_markers = { 'pyproject.toml', 'setup.py', 'setup.cfg', '.git' },
   settings = {
     basilisk = {
-      -- All settings from LSP-ARCHITECTURE-SPEC.md "Shared Configuration Settings"
+      -- All settings from LSP-ARCHITECTURE-SPEC.md § Shared configuration [LSPARCH-CONFIG]
       python = config.python,
       analysisMode = config.analysis_mode,
       inlayHints = {
@@ -91,6 +91,16 @@ vim.lsp.config('basilisk', {
 
 vim.lsp.enable('basilisk')
 ```
+
+Only Python buffers attach — unlike the VSIX, whose `documentSelector` includes
+`**/pyproject.toml`
+([VSIX-LSP-CLIENT-CONFIGURATION](VSIX-SPEC.md#VSIX-LSP-CLIENT-CONFIGURATION)) — so the
+open-config-buffer authority path
+([CONFIGEDITOR-SOURCES-OPEN-BUFFER](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES-OPEN-BUFFER))
+does not apply in Neovim. Configuration reactivity is unaffected: the server watches the
+config sources itself and pushes refreshed diagnostics on every saved change — same
+behaviour as every other IDE, no client watcher needed
+([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)).
 
 ### Neovim API Mappings for LSP Features {#NVIM-LSP-CLIENT-CONFIGURATION-API-MAPPINGS}
 

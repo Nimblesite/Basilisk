@@ -160,6 +160,15 @@ All options with defaults: >lua
   })
 <
 
+Formatting                                              *basilisk-formatting*
+
+Format the current buffer with the embedded Ruff formatter (no `ruff`
+install needed): >lua
+  vim.lsp.buf.format({ name = "basilisk" })
+<
+Style options come from `[tool.ruff]` / `[tool.ruff.format]` in the
+project's pyproject.toml. Set `formatter = "none"` in setup() to disable.
+
 ==============================================================================
 5. COMMANDS                                                 *basilisk-commands*
 

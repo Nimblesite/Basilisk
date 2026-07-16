@@ -57,7 +57,12 @@ site-packages to discover import roots, so unmapped multi-root distributions may
 ### Hot reload {#LSPUV-LOCK-HOT-RELOAD}
 
 Relevant file changes and successful uv commands rebuild the full registry and recheck the
-workspace. There is no package-level diff path.
+workspace. There is no package-level diff path. Observation is server-owned: the LSP's own
+watcher covers each root's `pyproject.toml`, `uv.lock`, and `.python-version`
+([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)), so hot reload works
+identically on clients with no file watchers (Zed); client `didChangeWatchedFiles` events
+are only a latency optimization, deduplicated through the shared per-source disk baseline
+so one change rebuilds exactly once.
 
 ## Target Python version {#LSPUV-PYTHON-VERSION}
 
@@ -152,5 +157,12 @@ server path. Wiring these settings is tracked by the conformance-audit plan.
 
 ## Watchers {#LSPUV-WATCHERS}
 
-The server refresh path watches changes to `uv.lock`, `pyproject.toml`, and
-`.python-version`. `.venv/pyvenv.cfg` participates in startup detection but is not watched.
+The server watches `uv.lock`, `pyproject.toml`, and `.python-version` at each workspace
+root **itself** — the server-owned poll in `configuration_editor/watch.rs`
+([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)) — and additionally registers
+client `**/uv.lock`, `**/.python-version`, and `**/pyproject.toml` watchers as a latency
+optimization that also covers nested workspace-member files. A `.python-version` change
+reloads root configs (target version); `uv.lock` and `pyproject.toml` changes rebuild the
+package registry and import search paths; every path ends in one recheck. Both observers
+share one per-source disk baseline, so a change refreshes exactly once.
+`.venv/pyvenv.cfg` participates in startup detection but is not watched.

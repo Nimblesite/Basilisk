@@ -6,6 +6,7 @@
 //! basilisk check [paths...]
 //! basilisk check [paths...] --output json
 //! basilisk analyze [paths...]
+//! basilisk format [paths...] [--check]
 //! ```
 
 use std::process::ExitCode;
@@ -22,6 +23,7 @@ use crate::pipeline::{collect_and_check, pluralise, DiagnosticScope, PipelineErr
 mod adopt;
 mod cache_check;
 mod fix;
+mod format;
 mod import_search;
 mod output;
 mod pipeline;
@@ -78,7 +80,7 @@ struct CheckArgs {
 }
 
 // Implements [CHKARCH-CLI-COMMANDS]: the `check`/`analyze` core commands
-// ([CHKARCH-COMMANDS]) plus `fix`/`adopt`/`unadopt`/`lsp`/`stubs`.
+// ([CHKARCH-COMMANDS]) plus `format`/`fix`/`adopt`/`unadopt`/`lsp`/`stubs`.
 // See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-COMMANDS
 #[derive(Subcommand)]
 enum Command {
@@ -93,6 +95,16 @@ enum Command {
     Analyze {
         #[command(flatten)]
         args: CheckArgs,
+    },
+    /// Format Python files with the embedded Ruff formatter — the same
+    /// engine and style configuration as LSP formatting ([LSPFMT-CLIENTS]).
+    Format {
+        /// Paths to format. Directories are traversed recursively for `.py` files.
+        #[arg(default_value = ".")]
+        paths: Vec<String>,
+        /// Report files that would change without rewriting them.
+        #[arg(long)]
+        check: bool,
     },
     /// Apply autofixes to one or more files or directories.
     Fix {
@@ -247,6 +259,7 @@ fn run_command(command: Command) -> u8 {
         // [CHKARCH-COMMANDS]: identical pipeline, different edge filter.
         Command::Check { args } => run_scoped_check(&args, DiagnosticScope::Check),
         Command::Analyze { args } => run_scoped_check(&args, DiagnosticScope::Analyze),
+        Command::Format { paths, check } => format::run_format(&paths, check),
         Command::Fix {
             paths,
             r#unsafe: include_unsafe,
