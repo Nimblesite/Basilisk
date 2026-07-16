@@ -104,7 +104,7 @@ suite("Configuration editor — hardened, accessible document", () => {
 
   // [CONFIGEDITOR-VSIX-EXPERIENCE]: the tag-first Rules view is the whole
   // editor. Tag groups get the tag-entry control; rows get per-rule entry
-  // controls; pep rows have no Disabled option ([CHKARCH-CONFIG-MODEL]).
+  // controls; pep controls have no Disabled option ([CHKARCH-CONFIG-MODEL]).
   test("renders the tag-first Rules view with pep-gated entry controls", () => {
     const html = buildConfigurationEditorDocument();
     assert.ok(html.includes("select.dataset.tagEntry = tag.name"), "tag groups expose the tag-entry control");
@@ -112,11 +112,9 @@ suite("Configuration editor — hardened, accessible document", () => {
     assert.ok(html.includes("const PEP_TAG = 'pep'"));
     assert.ok(
       html.includes("SEVERITIES.filter((value) => value !== 'Disabled')"),
-      "pep rows must offer error/warning/info/remove-entry and never Disabled",
+      "pep controls must offer error/warning/info and never Disabled",
     );
     assert.ok(html.includes("isPepRule(rule)"));
-    assert.ok(html.includes("{ kind: 'RemoveRule', code }"), "remove-entry emits RemoveRule");
-    assert.ok(html.includes("{ kind: 'RemoveTag', tag }"), "remove-entry emits RemoveTag");
     assert.ok(html.includes("{ kind: 'SetRule', code, severity: { kind: value } }"));
     assert.ok(html.includes("{ kind: 'SetTag', tag, severity: { kind: value } }"));
     assert.ok(html.includes("Load more occurrences"));

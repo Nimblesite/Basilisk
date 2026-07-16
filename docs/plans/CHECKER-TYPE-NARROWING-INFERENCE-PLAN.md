@@ -45,8 +45,12 @@ environment, expression inferrer, constraint solver, or subtype context.
 - Preserve the gradual guarantee as a testable invariant, keep the
   zero-false-positive conformance gate, and hold both benchmark ratchets
   ([CHKARCH-TESTING-BENCH-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET)).
-- Beat competing checkers on the measurable axes in
-  [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS).
+- **Superiority is the exit criterion, not an aspiration.** Basilisk MUST end
+  this plan with measurably better type inference than pyright, mypy, ty,
+  pyrefly, and zuban. The plan is not complete while any competitor leads any
+  axis in [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS); the mechanism that makes
+  the claim honest, enforceable, and permanent is the superiority gate in
+  [NARROWPLAN-SUPERIORITY](#NARROWPLAN-SUPERIORITY).
 
 **Non-goals**
 
@@ -192,7 +196,8 @@ spec-ID-linked mutation-resistant tests for each migrated behavior.
 
 ## Measurable targets {#NARROWPLAN-TARGETS}
 
-Dimensions on which Basilisk can beat Pyrefly, each with its measurement:
+The axes on which inference superiority is defined and measured. Each axis has
+a concrete metric so the lead is provable, not asserted:
 
 - **Bidirectional literal/generic inference:** deferred bounded type variables
   preserve `list[int]` vs `list[Literal[1]]` precision *and* accept more
@@ -211,6 +216,46 @@ Dimensions on which Basilisk can beat Pyrefly, each with its measurement:
 - **Gradual-guarantee conformance:** a differential test that strips
   annotations and asserts no new errors — Pyrefly fails this by design;
   Basilisk should pass.
+
+## Superiority gate {#NARROWPLAN-SUPERIORITY}
+
+Basilisk MUST have better type inference than every officially-recognized
+competitor. "Better" is defined operationally and enforced exactly the way
+this repo already enforces conformance and speed — self-measured,
+reproducible, write-always, ratcheted:
+
+- **Definition.** Basilisk is superior on an axis when it scores strictly
+  better than the LATEST official release of every officially-recognized
+  competitor (pyright, mypy, ty, pyrefly, zuban — the same set as the speed
+  benchmarks) on that axis's metric, measured by Basilisk's own harness with
+  the methodology stated in the results. Consistent with the documentation
+  honesty rules, we never claim a lead by comparing our numbers against
+  vendor-published figures — only same-harness, same-corpus, same-machine
+  measurements count.
+- **Inference scoreboard harness.** Mirror the `benchmarks/` design: every run
+  pulls the latest official release of each competitor and runs the full
+  corpus set against all checkers — the reveal_type-precision corpus
+  (containers/comprehensions/lambdas/literal-generic precision), the
+  utahplt/ifT narrowing benchmark, the higher-order corpus, the
+  gradual-guarantee differential suite, and the incremental-latency
+  measurement. Scores are written to a status file **immediately and
+  unconditionally** (WRITE-ALWAYS); a separate read-only gate compares against
+  the committed baseline (GATE-SEPARATELY). A run that measured a score but
+  didn't record it is a lie.
+- **Ratchet.** Once Basilisk takes the lead on an axis, the lead becomes a CI
+  gate: falling behind any competitor on a led axis is a build failure. Leads
+  only accumulate. The plan exits only when Basilisk leads **all five axes
+  simultaneously** while the 100%/0-FP conformance gate and the speed
+  benchmark gate stay green — inference superiority must never be bought by
+  regressing conformance or performance, and vice versa.
+- **Moving targets.** Because the harness pulls latest competitor releases,
+  superiority is continuously re-proven against competitors as they improve —
+  never against frozen versions. If a competitor release takes back an axis,
+  CI goes red and reclaiming that axis becomes the top-priority work item on
+  this plan.
+- **Claims discipline.** No "better inference than X" statement ships in
+  docs, website, or marketing unless the current committed scoreboard run
+  shows the lead, and the claim links to how it is measured.
 
 ## Risks and decision thresholds {#NARROWPLAN-RISKS}
 
@@ -251,7 +296,12 @@ Dimensions on which Basilisk can beat Pyrefly, each with its measurement:
 - **Source quality of competitor numbers.** Comparative figures quoted in
   [TYPEINF-RESEARCH-COMPETITORS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-RESEARCH-COMPETITORS)
   are vendor/benchmark claims, not independently audited; treat them as
-  directional.
+  directional. The only numbers Basilisk acts on are the ones its own
+  scoreboard harness produces ([NARROWPLAN-SUPERIORITY](#NARROWPLAN-SUPERIORITY)).
+- **Competitors are moving targets.** Pyrefly and ty ship fast and are well
+  funded; ty is actively closing its bidirectional gap. The superiority gate
+  is designed for this: leads are re-proven against latest releases on every
+  run, and a lost axis turns CI red rather than silently eroding the claim.
 
 ## Acceptance {#NARROWPLAN-ACCEPTANCE}
 
@@ -260,6 +310,11 @@ Dimensions on which Basilisk can beat Pyrefly, each with its measurement:
 - Hover/inlay results and checker diagnostics agree for the same expression.
 - The gradual-guarantee differential suite (strip annotations → assert no new
   errors) passes.
+- The inference scoreboard ([NARROWPLAN-SUPERIORITY](#NARROWPLAN-SUPERIORITY))
+  shows Basilisk strictly ahead of the latest official releases of pyright,
+  mypy, ty, pyrefly, and zuban on **every** axis in
+  [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS), and the per-axis ratchet is wired
+  into CI so the lead cannot silently erode.
 - `make test`, mutation/coverage ratchets, benchmarks for touched hot paths, and
   the live 141/141 conformance gate all pass with zero false positives.
 
@@ -364,6 +419,27 @@ Dimensions on which Basilisk can beat Pyrefly, each with its measurement:
 - [ ] Represent mapped types as kind `Type → Type` operators and conditional
   types as guarded rewrites on assignability, evaluated lazily
   (call-by-need).
+
+### Superiority gate
+
+- [ ] Build the inference scoreboard harness mirroring `benchmarks/`: pull the
+  latest official release of each competitor (pyright, mypy, ty, pyrefly,
+  zuban) every run; write scores to a status file immediately and
+  unconditionally; gate read-only against the committed baseline.
+- [ ] Build the reveal_type-precision corpus
+  (containers/comprehensions/lambdas/literal-generic precision) and score all
+  checkers on it.
+- [ ] Wire the utahplt/ifT narrowing benchmark, the higher-order corpus, the
+  gradual-guarantee differential suite, and the incremental-latency
+  measurement into the scoreboard.
+- [ ] Add per-axis ratchet entries: once Basilisk leads an axis, falling
+  behind any competitor on that axis fails CI; leads only accumulate.
+- [ ] Take and hold the lead on **all five axes simultaneously**, with the
+  100%/0-FP conformance gate and the speed benchmark gate green in the same
+  run.
+- [ ] Enforce claims discipline: every superiority statement in docs, website,
+  or marketing traces to the current committed scoreboard run and states the
+  methodology.
 
 ### Integration and acceptance
 

@@ -877,7 +877,10 @@ The design is oriented toward
 must be powerful enough to host PEP 827-style conditional/mapped types — but
 implementing PEP 827 itself is out of scope; only the inference-engine
 groundwork is specified here. Every claim below is grounded in the research
-survey in [TYPEINF-RESEARCH](#TYPEINF-RESEARCH).
+survey in [TYPEINF-RESEARCH](#TYPEINF-RESEARCH). The outcome requirement —
+inference measurably superior to every officially-recognized competitor,
+proven and held by a self-measured ratcheted scoreboard — is defined in
+[NARROWPLAN-SUPERIORITY](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUPERIORITY).
 
 ### Bidirectional core {#TYPEINF-TARGET-BIDIRECTIONAL}
 

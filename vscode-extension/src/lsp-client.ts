@@ -237,6 +237,7 @@ function buildClientOptions(
     },
     middleware: {
       executeCommand: executeCommandMiddleware,
+      // eslint-disable-next-line max-params -- vscode-languageclient fixes the 4-arg middleware signature.
       provideHover: async (document, position, token, next) =>
         trustConfigureSeverityLinks(await next(document, position, token)),
       workspace: {

@@ -32,6 +32,8 @@ interface DomTestResult {
   readonly maxScrollTop?: number;
   readonly bskRowRendered?: boolean;
   readonly detailHeading?: string;
+  readonly searchValue?: string;
+  readonly filteredCount?: string;
 }
 
 /** A realistic snapshot: pep rules first, basilisk rules at the bottom. */
@@ -78,15 +80,23 @@ function fixtureSnapshot(): unknown {
  * real host produces, and keeps the REAL acquireVsCodeApi handle for the
  * driver to report results back to the extension host.
  */
-function hostShimScript(): string {
+function hostShimScript(focusRule: string | null = null): string {
   return `
     const __realApi = acquireVsCodeApi();
     window.__realApi = __realApi;
+    // Boot beacon + page-error reporting: lets the extension-side test tell
+    // "webview never loaded" apart from "driver hung" and surfaces script
+    // errors that would otherwise silently eat the result.
+    __realApi.postMessage({ type: 'domTestBoot' });
+    window.addEventListener('error', (event) => {
+      __realApi.postMessage({ type: 'domTestResult', ok: false, reason: 'page error: ' + event.message });
+    });
     const __snapshot = ${embedJson(fixtureSnapshot())};
     let __state = {
       phase: 'ready', rootUri: __snapshot.rootUri, snapshot: __snapshot,
       preview: undefined, occurrences: undefined, occurrencesLoading: false,
       repairUri: undefined, message: 'Configuration is up to date', refreshRequested: false,
+      focusRule: ${embedJson(focusRule)},
     };
     const __push = (partial) => {
       __state = Object.assign({}, __state, partial);
@@ -180,35 +190,77 @@ function driverScript(): string {
   `;
 }
 
+/**
+ * The Configure Severity deep-link scenario ([CONFIGEDITOR-VSIX-EXPERIENCE]):
+ * the state arrives with a focusRule; the runtime must prefill the search
+ * filter with the code and open that rule's detail panel — no user input.
+ */
+function focusDriverScript(): string {
+  return `
+    (async () => {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const heading = () => {
+        const node = document.querySelector('#detail-content h3');
+        return node && node.textContent ? node.textContent : '';
+      };
+      const report = (result) => window.__realApi.postMessage(Object.assign({ type: 'domTestResult' }, result));
+      try {
+        let waited = 0;
+        while (!document.querySelector('[data-rule-code]') && waited < 200) { await sleep(25); waited += 1; }
+        // Allow the occurrences round trip triggered by showRule to settle.
+        await sleep(300);
+        report({
+          ok: true,
+          searchValue: document.getElementById('rule-search').value,
+          filteredCount: document.getElementById('filter-result').textContent,
+          detailHeading: heading(),
+        });
+      } catch (error) {
+        report({ ok: false, reason: String(error) });
+      }
+    })();
+  `;
+}
+
 /** Inject the shim before and the driver after the real runtime, same nonce. */
-function harnessDocument(): string {
+function harnessDocument(driver: string, focusRule: string | null = null): string {
   const html = buildConfigurationEditorDocument();
   const openTag = /<script nonce="[^"]+">/.exec(html);
   assert.ok(openTag, "the configuration editor document must carry one nonce-gated script");
   return html
-    .replace(openTag[0], `${openTag[0]}${hostShimScript()}\n;`)
-    .replace("</script>\n</body>", `;\n${driverScript()}</script>\n</body>`);
+    .replace(openTag[0], `${openTag[0]}${hostShimScript(focusRule)}\n;`)
+    .replace("</script>\n</body>", `;\n${driver}</script>\n</body>`);
 }
 
-async function runWebviewScenario(): Promise<DomTestResult> {
+async function runWebviewScenario(document: string): Promise<DomTestResult> {
+  // A hidden webview gets its timers throttled and requestAnimationFrame
+  // paused, which starves both the driver and the virtualized rule window —
+  // start from a clean editor area so the panel is frontmost and stays so.
+  await vscode.commands.executeCommand("workbench.action.closeAllEditors");
   const panel = vscode.window.createWebviewPanel(
     "basilisk.configurationEditorDomTest",
     "Configuration Editor DOM Test",
     vscode.ViewColumn.One,
-    { enableScripts: true, localResourceRoots: [] },
+    { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] },
   );
   try {
     return await new Promise<DomTestResult>((resolve, reject) => {
+      let booted = false;
       const timer = setTimeout(() => {
-        reject(new Error("the webview driver never reported a result"));
+        reject(new Error(
+          "the webview driver never reported a result "
+          + `(boot beacon ${booted ? "received" : "missing"}; panel visible=${panel.visible}, active=${panel.active})`,
+        ));
       }, RESULT_TIMEOUT_MS);
       panel.webview.onDidReceiveMessage((message: DomTestResult & { type?: string }) => {
-        if (message.type === "domTestResult") {
+        if (message.type === "domTestBoot") {
+          booted = true;
+        } else if (message.type === "domTestResult") {
           clearTimeout(timer);
           resolve(message);
         }
       });
-      panel.webview.html = harnessDocument();
+      panel.webview.html = document;
     });
   } finally {
     panel.dispose();
@@ -221,7 +273,7 @@ suite("Configuration editor — rule detail panel in a real webview DOM", () => 
   // because restoreFocus() yanks every scroll back to that rule's row.
   test("scrolling to and clicking a basilisk rule updates the rule detail panel", async function () {
     this.timeout(RESULT_TIMEOUT_MS + 15_000);
-    const result = await runWebviewScenario();
+    const result = await runWebviewScenario(harnessDocument(driverScript()));
     assert.strictEqual(result.ok, true, `webview driver failed: ${result.reason ?? "unknown"}`);
     assert.ok(
       result.headingAfterPep?.includes("pep_rule_000"),
@@ -235,6 +287,29 @@ suite("Configuration editor — rule detail panel in a real webview DOM", () => 
     assert.ok(
       result.detailHeading?.includes("BSK-0005"),
       `clicking a basilisk rule must show ITS detail, not stale data (panel shows "${result.detailHeading}")`,
+    );
+  });
+
+  // [CONFIGEDITOR-VSIX-EXPERIENCE]: the Configure Severity hover deep link —
+  // a state carrying focusRule must open the editor "to the right place":
+  // search prefilled with the code, the list filtered to it, and the rule's
+  // detail panel open, all without any user interaction.
+  test("a focusRule state opens the editor focused on that rule", async function () {
+    this.timeout(RESULT_TIMEOUT_MS + 15_000);
+    const result = await runWebviewScenario(harnessDocument(focusDriverScript(), "BSK-0003"));
+    assert.strictEqual(result.ok, true, `webview driver failed: ${result.reason ?? "unknown"}`);
+    assert.strictEqual(
+      result.searchValue,
+      "BSK-0003",
+      `the search filter must be prefilled with the focused rule code (got "${result.searchValue}")`,
+    );
+    assert.ok(
+      result.filteredCount?.startsWith("1 "),
+      `the rule list must be filtered to the focused rule (got "${result.filteredCount}")`,
+    );
+    assert.ok(
+      result.detailHeading?.includes("BSK-0003"),
+      `the focused rule's detail panel must open (panel shows "${result.detailHeading}")`,
     );
   });
 });

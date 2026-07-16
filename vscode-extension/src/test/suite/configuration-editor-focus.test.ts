@@ -47,19 +47,21 @@ function snapshotWithRule(): ConfigurationSnapshot {
 }
 
 /** Snapshot-only transport; preview/apply/occurrences are unreachable here. */
-class SnapshotTransport implements ConfigurationEditorTransport {
-  public async snapshot(_rootUri: string): Promise<ConfigurationSnapshot> {
-    return snapshotWithRule();
-  }
-  public async preview(_request: PreviewConfigurationRequest): Promise<ConfigurationPreview> {
-    throw new Error("preview is not under test");
-  }
-  public async apply(_request: ApplyConfigurationRequest): Promise<ConfigurationSnapshot> {
-    throw new Error("apply is not under test");
-  }
-  public async occurrences(_request: RuleOccurrencesRequest): Promise<RuleOccurrencesResponse> {
-    throw new Error("occurrences is not under test");
-  }
+function snapshotTransport(): ConfigurationEditorTransport {
+  return {
+    async snapshot(_rootUri: string): Promise<ConfigurationSnapshot> {
+      return snapshotWithRule();
+    },
+    async preview(_request: PreviewConfigurationRequest): Promise<ConfigurationPreview> {
+      throw new Error("preview is not under test");
+    },
+    async apply(_request: ApplyConfigurationRequest): Promise<ConfigurationSnapshot> {
+      throw new Error("apply is not under test");
+    },
+    async occurrences(_request: RuleOccurrencesRequest): Promise<RuleOccurrencesResponse> {
+      throw new Error("occurrences is not under test");
+    },
+  };
 }
 
 async function pollUntil(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
@@ -109,7 +111,7 @@ suite("Configuration editor — Configure Severity deep link", () => {
   // into the state the webview renders; a later plain open clears it.
   test("open(rootUri, rule) keeps the focus target through load; plain open clears it", async () => {
     const store = createStore();
-    const controller = new ConfigurationEditorController(store, new SnapshotTransport());
+    const controller = new ConfigurationEditorController(store, snapshotTransport());
     try {
       controller.open(ROOT_URI, RULE_CODE);
       await pollUntil(() => store.configurationEditor.value.phase === "ready");
