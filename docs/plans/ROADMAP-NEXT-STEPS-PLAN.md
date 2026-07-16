@@ -53,7 +53,9 @@ complete:
 - [CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md](CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md)
   — replace Python-structure reconstruction from raw lines with Ruff AST data.
 - [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md)
-  — non-conformance inference and flow-analysis improvements.
+  — the bidirectional/constraint-based inference-engine upgrade (fixes
+  inference-gap issues like #317, PEP 827 readiness), flow analysis, and
+  shared subtyping.
 - [LSP-AI-PLAN.md](LSP-AI-PLAN.md),
   [COMPILER-ARCHITECTURE-PLAN.md](COMPILER-ARCHITECTURE-PLAN.md), and
   [CHECKER-ADVANCED-FEATURES-PLAN.md](CHECKER-ADVANCED-FEATURES-PLAN.md) — larger,

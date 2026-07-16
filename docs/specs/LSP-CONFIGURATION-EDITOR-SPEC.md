@@ -74,6 +74,8 @@ The Rules view is tag-first, grouping source, PEP-category, and policy facets. T
 
 Multi-root selection is explicit: the active editor's root wins, otherwise the user chooses a workspace. Responses and navigation are checked against that root. The extension does not read or write configuration files itself. The analyze opt-out is an ordinary editor setting relayed as an initialization option ([LSPARCH-DIAGNOSTIC-SCOPE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE)), not part of this editor.
 
+A non-PEP diagnostic's hover carries a **Configure Severity** deep link ([LSPARCH-FEATURES-HOVER](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-HOVER)): the LSP embeds a `command:basilisk.openConfigurationEditor` link with a `{ "rule": <code> }` argument, the client trusts hover markdown for exactly that one command, and the opened editor focuses the rule once per webview lifetime — the search filter is prefilled with the code and the rule's detail opens. The argument is untrusted input: anything but a bounded, non-empty string is ignored, and an unknown code opens the editor unfocused. PEP rules get no link — no disable exists for them.
+
 ## Accessibility and security {#CONFIGEDITOR-ACCESSIBILITY-SECURITY}
 
 The webview uses theme tokens, text-labelled severities, keyboard controls, high-contrast/responsive styles, reduced-motion handling, a default-deny CSP, nonce-gated local scripts, no remote resources, and runtime-decoded intents. Workspace data arrives only after the ready handshake and is never interpolated into executable HTML.

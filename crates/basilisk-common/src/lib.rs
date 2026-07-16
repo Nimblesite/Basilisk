@@ -175,6 +175,16 @@ pub mod commands {
 /// dependency-free common crate lets every editor use the exact server contract
 /// without copying method names.
 pub mod configuration_editor {
+    /// Client-registered command that opens the configuration editor UI.
+    ///
+    /// Unlike [`crate::commands::ALL`] this is NOT a server-executed command:
+    /// the editor host (VS Code) registers it, capability-gated on the
+    /// server's `configurationEditor` capability. The server references it in
+    /// hover markdown command links (`command:` URIs) so a diagnostic can
+    /// deep-link into the editor ([CONFIGEDITOR-VSIX-EXPERIENCE]). An optional
+    /// `{ "rule": "BSK-XXXX" }` argument focuses that rule on open.
+    pub const OPEN_EDITOR_COMMAND: &str = "basilisk.openConfigurationEditor";
+
     /// Read the resolved configuration, catalog, and workspace impact.
     pub const SNAPSHOT: &str = "basilisk/configurationSnapshot";
     /// Validate and analyse a configuration mutation without writing it.

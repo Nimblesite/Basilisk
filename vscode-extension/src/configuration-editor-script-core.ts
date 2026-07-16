@@ -20,6 +20,10 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     let selectedRuleCode;
     let lastFocusedRule;
     let overlayWasBlocking = false;
+    // One-shot per webview lifetime: the Configure Severity deep link's
+    // focus target is applied on the first snapshot render only, so later
+    // state posts never stomp the user's own search/selection.
+    let focusRuleConsumed = false;
 
     function byId(id) { return document.getElementById(id); }
     function clear(node) { node.replaceChildren(); }

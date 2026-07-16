@@ -126,9 +126,14 @@ fn module_kind(path: &Path) -> &'static str {
 
 /// Fold the per-file grading rollup into a module node — enabled path only
 /// ([ANALYSIS-ENABLED]): while disabled these fields are absent by construction.
+/// The raw symbol counts ride along so clients can roll folder/package coverage
+/// up symbol-weighted — matching the workspace header — instead of averaging
+/// pre-divided percentages ([EXTACT-MODULES-TREE-STRUCTURE]).
 fn attach_grading(node: &mut serde_json::Value, health: &super::type_health::FileHealth) {
     if let Some(obj) = node.as_object_mut() {
         let _ = obj.insert("coveragePercent".into(), health.coverage_percent.into());
+        let _ = obj.insert("totalSymbols".into(), health.total_symbols.into());
+        let _ = obj.insert("annotatedSymbols".into(), health.annotated_symbols.into());
         let _ = obj.insert("errors".into(), health.errors.into());
         let _ = obj.insert("warnings".into(), health.warnings.into());
     }

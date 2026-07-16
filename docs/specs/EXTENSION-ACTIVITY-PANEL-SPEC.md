@@ -44,6 +44,8 @@ interface ModuleNode {
   kind: "package" | "module";
   symbols: SymbolNode[];
   coveragePercent?: number;
+  totalSymbols?: number;
+  annotatedSymbols?: number;
   errors?: number;
   warnings?: number;
   adopted?: boolean;
@@ -116,8 +118,12 @@ state even when the workspace is empty.
 
 Clients split dotted names into segments. Real package modules attach to their segment;
 missing intermediate packages become structural folders. Containers precede leaf modules,
-then sort alphabetically. Container issue counts roll up from descendants. Flat view removes
-folders but keeps symbols under their owning module.
+then sort alphabetically. Container issue counts roll up from descendants, and so does type
+coverage: each module node's `totalSymbols`/`annotatedSymbols` are summed across the subtree
+and the folder row shows the symbol-weighted percentage — the same aggregation as the
+workspace header, never an average of child percentages. Ungraded subtrees (type checking
+disabled) show no percentage. Flat view removes folders but keeps symbols under their owning
+module.
 
 ### Symbol items {#EXTACT-MODULES-ITEM-PROPERTIES}
 

@@ -126,6 +126,36 @@ suite("Configuration editor — hardened, accessible document", () => {
     assert.ok(html.includes("Open raw"));
   });
 
+  // [CONFIGEDITOR-VSIX-EXPERIENCE] / [CHKARCH-CONFIG-MODEL]: an entry dropdown
+  // lists concrete severities only. "No entry" duplicated Disabled — an analyze
+  // rule or tag with no entry does not run (resolution step 3) — so the
+  // redundant choice is gone from every select. Disabled is gone from every
+  // pep-affecting control (pep rows, the pep source tag, PEP-category tags)
+  // because no disable exists for pep rules.
+  test("entry dropdowns never offer No entry and pep-affecting controls omit Disabled", () => {
+    const html = buildConfigurationEditorDocument();
+    assert.ok(
+      !html.includes("[NO_ENTRY].concat"),
+      "no dropdown may offer a No-entry option",
+    );
+    assert.ok(
+      html.includes("severityOptions(isPepRule(rule))"),
+      "rule rows must gate Disabled on pep provenance",
+    );
+    assert.ok(
+      html.includes("severityOptions(isPepTag(tag))"),
+      "tag controls must gate Disabled on pep-affecting tags",
+    );
+    assert.ok(
+      !html.includes("'RemoveRule'"),
+      "a dropdown change always writes a rule entry — never removes one",
+    );
+    assert.ok(
+      !html.includes("'RemoveTag'"),
+      "a dropdown change always writes a tag entry — never removes one",
+    );
+  });
+
   // [CONFIGEDITOR-ACCEPTANCE]: adoption, path overrides, presets, and
   // Inherit/Native controls are removed outright — no legacy shims.
   test("carries no adoption, path-override, preset, or Inherit/Native UI", () => {

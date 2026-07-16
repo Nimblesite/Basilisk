@@ -167,12 +167,29 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       byId('root-label').textContent = compactUri(snapshot.rootUri);
       byId('source-label').textContent = compactUri(snapshot.configUri) + ' · revision ' + snapshot.revision;
     }
+    // Configure Severity deep link ([CONFIGEDITOR-VSIX-EXPERIENCE]): focus
+    // the requested rule once — prefill the search filter with its code,
+    // scroll its row into the virtual window, and open its detail panel.
+    function consumeFocusRule() {
+      const code = editorState.focusRule;
+      if (focusRuleConsumed || !code || !snapshot) return;
+      if (!snapshot.rules.some((rule) => rule.descriptor.code === code)) return;
+      focusRuleConsumed = true;
+      byId('rule-search').value = code;
+      applyFilter();
+      const index = filteredRules.findIndex((rule) => rule.descriptor.code === code);
+      if (index >= 0) byId('rule-viewport').scrollTop = index * ROW_HEIGHT;
+      renderRuleWindow();
+      showRule(code);
+      announce('Focused rule ' + code);
+    }
     function renderSnapshot() {
       if (!snapshot) return;
       saveFocus();
       renderSource();
       renderTags();
       applyFilter();
+      consumeFocusRule();
       renderRuleDetail();
       window.requestAnimationFrame(restoreFocus);
     }
