@@ -13,7 +13,7 @@
       "threshold": 100
     },
     "basilisk-lsp": {
-      "threshold": 83
+      "threshold": 84
     },
     "basilisk-mojo": {
       "threshold": 90
@@ -31,7 +31,7 @@
       "threshold": 92
     },
     "basilisk-config": {
-      "threshold": 96
+      "threshold": 97
     },
     "vsix": {
       "threshold": 92

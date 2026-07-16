@@ -38,6 +38,38 @@ The stable shared surface includes the executable and Python paths, analysis mod
 typeshed paths, formatter selection, inlay-hint switches, debugger settings, and the uv,
 test, profiling, and memory namespaces. Detailed contracts live in their feature specs.
 
+There is ONE project configuration
+([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)), shared by
+every surface and identical across IDEs: the CLI reads it fresh on every run; the LSP
+watches it live; any future server surface (e.g. MCP) MUST consume the same model. The
+LSP watches each root's active source itself, along with the `uv.lock` and
+`.python-version` environment sources (`configuration_editor/watch.rs`,
+`CONFIG_WATCH_POLL_MS`) — it MUST NOT depend on client file watchers (Zed has none).
+Every change — editor-UI apply, open-buffer edit, or external disk edit/create/delete —
+runs one shared refresh tail (`configuration_editor/transaction.rs`): reload the
+effective document, update root config **and invalidate every derived config cache**,
+recheck, republish, push `basilisk/configurationChanged`. The server pushes; clients
+never poll; no configuration change ever requires a restart; the UI is never left stale.
+Client `didChangeWatchedFiles` events are only a latency optimization; both paths share
+one per-source disk baseline so a change refreshes exactly once
+(E2E: `tests/lsp/ws_test_configuration_watch.rs`).
+
+The refreshed in-memory root config is **authoritative over disk**: an applied
+editor-UI change or an open, unsaved config buffer decides even while the root's
+on-disk file still holds older content. Per-file config discovery therefore never
+re-reads a root's own config file — inside a root, the discovered ancestor chain is
+bounded to directories strictly below it (`workspace.rs` `config_for_file`,
+`load_basilisk_config_below`); only nested child configs come from disk. Re-merging
+the root's disk file over the in-memory config would silently resurrect stale state
+between the apply and the client's write reaching disk.
+
+Two tiers, stated once: **project configuration** (the watched files above) defines
+semantics and is fully live. **Editor session settings** (`initializationOptions` /
+`workspace/didChangeConfiguration` — formatter selection, analysis-mode override, inlay
+hints, the analyze/enabled toggles) are per-user ergonomics delivered by the client;
+they never define project semantics and their capability advertisements are fixed at
+`initialize` unless a feature spec says otherwise.
+
 ## Diagnostic scope {#LSPARCH-DIAGNOSTIC-SCOPE}
 
 The LSP publishes the **union** of both command scopes — every `pep`-tagged
@@ -112,7 +144,7 @@ patch, and returns normalized changes plus full-root diagnostic impact. Apply
 accepts only that preview and its unchanged root/base revision, asks the client
 to perform one `WorkspaceEdit`, then reloads, rechecks, republishes, and sends
 `basilisk/configurationChanged`. External config-file changes use the same
-refresh tail.
+refresh tail ([LSPARCH-CONFIG](#LSPARCH-CONFIG)).
 
 Rule and tag entries are stored in `pyproject.toml` (`[tool.basilisk]`) config
 files; the nearest folder table that decides a rule wins

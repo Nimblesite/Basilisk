@@ -119,6 +119,11 @@ reviewable operations, not one atomic command.
 ### VS Code surface {#AUTOFIX-ADOPTION-VSCODE}
 
 The server advertises Adopt File, Adopt Workspace, and Un-adopt File. The
-activity panel derives adoption state from the config files themselves.
+activity panel derives adoption state from the server's effective
+configuration — the config files remain the only source of truth, with no
+sidecar state. The panel never reads or polls config files itself: adoption
+writes land in `pyproject.toml`, the server-owned watcher picks them up, and
+the shared refresh tail's pushed updates re-render the panel
+([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)).
 Adoption is not part of the configuration-editor contract
 ([CONFIGEDITOR-ACCEPTANCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-ACCEPTANCE)).

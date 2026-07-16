@@ -32,6 +32,8 @@ mod ws_test_configuration_adoption;
 mod ws_test_configuration_editor;
 #[path = "lsp/ws_test_configuration_preview.rs"]
 mod ws_test_configuration_preview;
+#[path = "lsp/ws_test_configuration_watch.rs"]
+mod ws_test_configuration_watch;
 #[path = "lsp/ws_test_execute_command.rs"]
 mod ws_test_execute_command;
 #[path = "lsp/ws_test_execute_stubs.rs"]

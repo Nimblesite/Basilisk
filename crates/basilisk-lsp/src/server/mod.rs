@@ -124,8 +124,10 @@ pub struct LspServer {
     pub(super) client: Client,
     /// Workspace index (None until initialized).
     pub(super) index: Arc<RwLock<Option<WorkspaceIndex>>>,
-    /// Workspace root folders discovered during initialization.
-    pub(super) workspace_roots: RwLock<Vec<std::path::PathBuf>>,
+    /// Workspace root folders discovered during initialization. Shared as an
+    /// `Arc` so the server-owned configuration watcher ([LSPARCH-CONFIG])
+    /// follows root changes after the handler returns.
+    pub(super) workspace_roots: Arc<RwLock<Vec<std::path::PathBuf>>>,
     // Implements [LSPDEBUG-WIRE] (DebugSessionManager added to LspServer)
     /// Debug session manager — spawns debugpy and tracks active sessions.
     pub(super) debug_manager: crate::debug::DebugSessionManager,
@@ -168,7 +170,15 @@ pub struct LspServer {
     /// Whether the initial workspace scan has completed.
     pub(super) initial_scan_complete: Arc<std::sync::atomic::AtomicBool>,
     /// Revision-checked configuration previews awaiting an explicit apply.
-    pub(crate) configuration_editor: crate::configuration_editor::ConfigurationEditorState,
+    /// Shared as an `Arc` so the server-owned configuration watcher
+    /// ([LSPARCH-CONFIG]) runs the same refresh tail from its own task.
+    pub(crate) configuration_editor: Arc<crate::configuration_editor::ConfigurationEditorState>,
+    // Implements [LSPARCH-CONFIG]: the server watches the active
+    // configuration source itself — reactivity never depends on the client
+    // supporting `workspace/didChangeWatchedFiles` (Zed advertises no file
+    // watchers at all; see docs/specs/ZED-SPEC.md).
+    /// The server-owned configuration watcher task, aborted on shutdown.
+    pub(super) config_watcher: Mutex<Option<AbortHandle>>,
 }
 
 impl std::fmt::Debug for LspServer {
@@ -184,7 +194,7 @@ impl LspServer {
         Self {
             client,
             index: Arc::new(RwLock::new(None)),
-            workspace_roots: RwLock::new(Vec::new()),
+            workspace_roots: Arc::new(RwLock::new(Vec::new())),
             debug_manager: crate::debug::DebugSessionManager::new(),
             profiler_manager: crate::profiler::ProfileSessionManager::new(),
             memory_manager: crate::profiler::memory::session::MemorySessionManager::new(),
@@ -203,7 +213,25 @@ impl LspServer {
             // No scan has run yet: zero-file rollups are NOT trustworthy until
             // the first scan completes. [EXTACT-MODULES-HEADER-LOADING], #144.
             initial_scan_complete: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            configuration_editor: crate::configuration_editor::ConfigurationEditorState::default(),
+            configuration_editor: Arc::new(
+                crate::configuration_editor::ConfigurationEditorState::default(),
+            ),
+            config_watcher: Mutex::new(None),
+        }
+    }
+
+    /// Cloneable handles for the shared configuration refresh tail, so the
+    /// server-owned configuration watcher can run it from a spawned task.
+    /// Implements [LSPARCH-CONFIG].
+    pub(crate) fn refresh_handles(
+        &self,
+    ) -> crate::configuration_editor::ConfigurationRefreshHandles {
+        crate::configuration_editor::ConfigurationRefreshHandles {
+            index: Arc::clone(&self.index),
+            client: self.client.clone(),
+            type_checking_enabled: Arc::clone(&self.type_checking_enabled),
+            analyze_enabled: Arc::clone(&self.analyze_enabled),
+            configuration_editor: Arc::clone(&self.configuration_editor),
         }
     }
 

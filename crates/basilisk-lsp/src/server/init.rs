@@ -279,6 +279,18 @@ pub(super) async fn initialized(server: &LspServer) {
         register_file_watchers(&client).await;
     }));
 
+    // Implements [LSPARCH-CONFIG]: the server watches the active
+    // configuration source itself. Client `didChangeWatchedFiles` support is
+    // an optimization, never a requirement — clients without watchers (Zed)
+    // get identical reactive configuration behaviour.
+    let watcher = crate::configuration_editor::spawn_configuration_watcher(
+        server.refresh_handles(),
+        Arc::clone(&server.workspace_roots),
+    );
+    if let Some(previous) = server.config_watcher.lock().await.replace(watcher) {
+        previous.abort();
+    }
+
     // Read the analysis mode, then release the lock immediately so the
     // message loop is not blocked while the workspace scan runs.
     let mode = {
@@ -1023,9 +1035,13 @@ async fn check_pytest_from_index(
     }
 }
 
-/// Handle the `shutdown` request: stop all debug and profiling sessions.
+/// Handle the `shutdown` request: stop all debug and profiling sessions and
+/// the server-owned configuration watcher ([LSPARCH-CONFIG]).
 pub(super) async fn shutdown(server: &LspServer) -> LspResult<()> {
     server.debug_manager.stop_all().await;
     server.profiler_manager.stop_all().await;
+    if let Some(watcher) = server.config_watcher.lock().await.take() {
+        watcher.abort();
+    }
     Ok(())
 }
