@@ -38,6 +38,49 @@ pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
     }
 }
 
+/// Returns `true` when the CURRENT engine fully determines a usable declared
+/// type from this RHS alone — i.e. [`infer_rhs`] produces a type with no
+/// `Unknown`/`Never` component and no widening guess.
+///
+/// Implements [TYPEINF-EXCEEDS-REQUIRED]: a missing-annotation rule
+/// (BSK-0001/BSK-0002) must never fire where this returns `true`, and must
+/// keep firing where it returns `false`. The predicate is deliberately exactly
+/// as strong as today's inference and no stronger:
+///
+/// - scalar literals (`int`/`float`/`str`/`bool`/`bytes`) determine their type;
+/// - non-empty containers of determining elements determine theirs;
+/// - `None` does NOT determine a declared type (`T | None` needs `T`);
+/// - empty containers do NOT (element types unknown);
+/// - calls, lambdas, names, and arbitrary expressions do NOT
+///   ([TYPEINF-EXCEEDS-NOUNKNOWN] keeps them `Unknown`).
+#[must_use]
+pub fn rhs_fully_determines_type(rhs: &RhsKind) -> bool {
+    match rhs {
+        RhsKind::IntLiteral
+        | RhsKind::FloatLiteral
+        | RhsKind::StrLiteral
+        | RhsKind::BoolLiteral
+        | RhsKind::BytesLiteral => true,
+        RhsKind::List(elements) | RhsKind::Set(elements) | RhsKind::Tuple(elements) => {
+            !elements.is_empty() && elements.iter().all(rhs_fully_determines_type)
+        }
+        RhsKind::Dict(pairs) => {
+            !pairs.is_empty()
+                && pairs
+                    .iter()
+                    .all(|(k, v)| rhs_fully_determines_type(k) && rhs_fully_determines_type(v))
+        }
+        RhsKind::NoneValue
+        | RhsKind::EmptyList
+        | RhsKind::EmptyDict
+        | RhsKind::CallExpr
+        | RhsKind::KnownCall(_)
+        | RhsKind::TypeCall
+        | RhsKind::Lambda
+        | RhsKind::Other => false,
+    }
+}
+
 /// Checks if a variable assignment is valid given its annotation and inferred RHS type.
 ///
 /// # Errors

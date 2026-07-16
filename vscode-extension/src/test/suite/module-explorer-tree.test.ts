@@ -124,6 +124,12 @@ function labelsOf(items: readonly vscode.TreeItem[]): string[] {
   return items.map(labelOf);
 }
 
+/** Theme-colour id of a row's icon tint, or undefined when untinted. */
+function iconColorId(item: vscode.TreeItem): string | undefined {
+  const icon = item.iconPath as vscode.ThemeIcon;
+  return (icon.color as { id?: string } | undefined)?.id;
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line max-lines-per-function
@@ -378,6 +384,139 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
         !String(app.description ?? "").includes("%"),
         `ungraded folder must show no percentage, got: "${String(app.description)}"`,
       );
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  // Tests [EXTACT-MODULES-TREE-STRUCTURE] icon tint: the folder/package icon
+  // colour must follow the SUBTREE rollup, never the package's own
+  // __init__.py coverage — a green __init__.py over a red subtree reads red.
+  test("package icon tint follows the subtree coverage rollup, not the package's own coverage", async () => {
+    // `app`'s own module is fully typed (green on its own: 100% ≥ 90), but the
+    // subtree rolls up to 2/12 ≈ 17% (< 50) — only the rolled-up tint is red.
+    const modules = [
+      mod("app", "package", { coverage: 100, totalSymbols: 2, annotatedSymbols: 2 }),
+      mod("app.core", "module", { coverage: 0, totalSymbols: 10, annotatedSymbols: 0 }),
+    ];
+    const provider = new ModuleExplorerProvider(storeWith(modules));
+    try {
+      const app = (await provider.getChildren()).find((row) => labelOf(row) === "app");
+      assert.ok(app instanceof PackageTreeItem, "'app' is a package container");
+      assert.strictEqual(
+        iconColorId(app),
+        "list.errorForeground",
+        "tint must come from the subtree rollup (17% → red), not the package's own 100% (green)",
+      );
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  test("package icon tint bands: subtree errors win, then warnings, then coverage colour, untinted when ungraded", async () => {
+    const cases: readonly { readonly modules: readonly TestModule[]; readonly expected: string | undefined; readonly why: string }[] = [
+      {
+        modules: [
+          mod("app", "package", { coverage: 100, totalSymbols: 2, annotatedSymbols: 2 }),
+          mod("app.core", "module", { coverage: 100, totalSymbols: 2, annotatedSymbols: 2, errors: 1 }),
+        ],
+        expected: "list.errorForeground",
+        why: "a subtree error tints red even when fully typed",
+      },
+      {
+        modules: [
+          mod("app", "package", { coverage: 100, totalSymbols: 2, annotatedSymbols: 2 }),
+          mod("app.core", "module", { coverage: 100, totalSymbols: 2, annotatedSymbols: 2, warnings: 3 }),
+        ],
+        expected: "list.warningForeground",
+        why: "a warning-only subtree tints yellow",
+      },
+      {
+        modules: [
+          mod("app", "package", { coverage: 100, totalSymbols: 9, annotatedSymbols: 9 }),
+          mod("app.core", "module", { coverage: 90, totalSymbols: 1, annotatedSymbols: 1 }),
+        ],
+        expected: "testing.iconPassed",
+        why: "a clean ≥90% subtree tints green",
+      },
+      {
+        modules: [
+          mod("app", "package", { coverage: 100, totalSymbols: 1, annotatedSymbols: 1 }),
+          mod("app.core", "module", { coverage: 0, totalSymbols: 1, annotatedSymbols: 0 }),
+        ],
+        expected: "list.warningForeground",
+        why: "a clean 50–89% subtree tints yellow",
+      },
+      {
+        modules: [
+          { name: "app", kind: "package", symbols: [], path: "/ws/app/__init__.py" },
+          { name: "app.core", kind: "module", symbols: [], path: "/ws/app/core.py" },
+        ] as unknown as readonly TestModule[],
+        expected: undefined,
+        why: "an ungraded subtree (Type Checking disabled, #119) stays untinted",
+      },
+    ];
+    for (const { modules, expected, why } of cases) {
+      const provider = new ModuleExplorerProvider(storeWith(modules));
+      try {
+        const app = (await provider.getChildren()).find((row) => labelOf(row) === "app");
+        assert.ok(app instanceof PackageTreeItem, `'app' is a package container (${why})`);
+        assert.strictEqual(iconColorId(app), expected, why);
+      } finally {
+        provider.dispose();
+      }
+    }
+  });
+
+  // Tests [EXTACT-MODULES-TREE-STRUCTURE] tooltips: folder tooltips must quote
+  // the SUBTREE rollup (labelled as such) and module tooltips the row's stats.
+  test("package tooltip quotes the subtree coverage rollup and subtree tallies; module tooltip its own stats", async () => {
+    const modules = [
+      mod("app", "package", { coverage: 100, totalSymbols: 2, annotatedSymbols: 2 }),
+      mod("app.core", "module", {
+        coverage: 0, totalSymbols: 10, annotatedSymbols: 0, errors: 1, warnings: 2,
+      }),
+    ];
+    const provider = new ModuleExplorerProvider(storeWith(modules));
+    try {
+      const roots = await provider.getChildren();
+      const app = roots.find((row) => labelOf(row) === "app");
+      assert.ok(app instanceof PackageTreeItem, "'app' is a package container");
+      const packageTip = String(app.tooltip);
+      assert.ok(
+        packageTip.includes("Coverage: 17% (subtree)"),
+        `package tooltip must quote the rolled-up subtree coverage (2/12 = 17%), not its own 100%, got: ${packageTip}`,
+      );
+      assert.ok(
+        packageTip.includes("Subtree: 1 error, 2 warnings"),
+        `package tooltip must tally subtree diagnostics with correct pluralisation, got: ${packageTip}`,
+      );
+
+      const core = (await provider.getChildren(app)).find((row) => labelOf(row) === "core");
+      assert.ok(core instanceof ModuleTreeItem, "'core' is a leaf module");
+      const moduleTip = String(core.tooltip);
+      for (const line of ["app.core", "/ws/app/core.py", "Coverage: 0%", "Errors: 1", "Warnings: 2"]) {
+        assert.ok(moduleTip.includes(line), `module tooltip must include "${line}", got: ${moduleTip}`);
+      }
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  // Tests the graded-but-empty branch: a graded subtree with zero symbols is
+  // vacuously fully typed — it must render 100%, never NaN or a blank.
+  test("a graded folder with zero symbols renders 100%, never NaN", async () => {
+    const modules = [
+      mod("app", "package", { coverage: 100, totalSymbols: 0, annotatedSymbols: 0 }),
+      mod("app.core", "module", { coverage: 100, totalSymbols: 0, annotatedSymbols: 0 }),
+    ];
+    const provider = new ModuleExplorerProvider(storeWith(modules));
+    try {
+      const app = (await provider.getChildren()).find((row) => labelOf(row) === "app");
+      assert.ok(app instanceof PackageTreeItem, "'app' is a package container");
+      const desc = String(app.description);
+      assert.ok(desc.includes("100%"), `zero-symbol graded folder shows 100%, got: "${desc}"`);
+      assert.ok(!desc.includes("NaN"), `must never render NaN, got: "${desc}"`);
     } finally {
       provider.dispose();
     }
