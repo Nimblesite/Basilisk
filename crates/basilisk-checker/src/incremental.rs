@@ -324,9 +324,47 @@ pub fn cross_resolved_module(
                 .get(path)
                 .map(|imported| module_exports(db, *imported).0.as_slice())
         },
+        |path, request| {
+            let key =
+                ExternalModuleKey::new(db, path.to_string_lossy().into_owned(), request.clone());
+            std::sync::Arc::clone(external_module(db, key, search_paths))
+        },
         custom_typeshed,
     );
     ResolvedFile::Resolved(std::sync::Arc::new(resolved))
+}
+
+/// Interned key for one external (non-workspace) type-bearing module file:
+/// its absolute path plus what to load from it.
+#[salsa::interned(debug)]
+pub struct ExternalModuleKey<'db> {
+    /// Absolute path of the external module file.
+    #[returns(ref)]
+    pub path: String,
+    /// What to load: `py.typed` module or `.pyi` stub (with provenance).
+    #[returns(ref)]
+    pub request: crate::exports::ExternalModuleRequest,
+}
+
+/// Tracked query: the parsed view of one **external** module — its exports
+/// plus `py.typed` re-export edges — memoized per `(path, request)`.
+///
+/// This is the sharing layer that fixes GitHub #304: every importer in the
+/// workspace reads the same memo instead of re-parsing the external file, so
+/// a scan's external work is bounded by the number of external modules, not
+/// `files × imported names × package closure`. The read is untracked disk
+/// I/O, mirroring the [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)
+/// boundary; reading `search_paths.value(db)` registers the input edge, so a
+/// re-set `SearchPathsInput` (venv sync, `uv.lock` edit, config change)
+/// refreshes the memo from disk.
+#[salsa::tracked(returns(ref))]
+pub fn external_module<'db>(
+    db: &'db dyn Db,
+    key: ExternalModuleKey<'db>,
+    search_paths: SearchPathsInput,
+) -> crate::exports::SharedExternalModule {
+    let _ = search_paths.value(db);
+    crate::exports::load_external_module(std::path::Path::new(key.path(db)), key.request(db))
 }
 
 /// Tracked query: the **cross-module** diagnostics for one file — a thin

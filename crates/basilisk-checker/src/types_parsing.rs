@@ -234,14 +234,18 @@ fn parse_single_literal(val: &str) -> InferredType {
         }
     }
 
-    if (val.starts_with('"') && val.ends_with('"'))
-        || (val.starts_with('\'') && val.ends_with('\''))
+    // Length guards keep the slices in range: a lone `'` both starts AND ends
+    // with a quote (same byte), and `val[1..0]` panics (issue #316).
+    if val.len() >= 2
+        && ((val.starts_with('"') && val.ends_with('"'))
+            || (val.starts_with('\'') && val.ends_with('\'')))
     {
         let content = &val[1..val.len() - 1];
         return InferredType::Literal(LiteralValue::Str(content.to_owned()));
     }
 
-    if (val.starts_with("b\"") || val.starts_with("b'"))
+    if val.len() >= 3
+        && (val.starts_with("b\"") || val.starts_with("b'"))
         && (val.ends_with('"') || val.ends_with('\''))
     {
         let content = &val[2..val.len() - 1];
@@ -264,20 +268,31 @@ pub(super) fn parse_key_value_args(inner: &str) -> Option<(InferredType, Inferre
     Some((key, value))
 }
 
-/// Split type parameters by top-level commas, respecting bracket nesting.
+/// Split type parameters by top-level commas, respecting bracket nesting and
+/// string literals — a comma inside quotes (`Literal[',']`) is part of the
+/// literal value, not a separator (issue #316).
 pub(super) fn split_type_params(inner: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut depth = 0u32;
+    let mut in_string: Option<char> = None;
     let mut start = 0;
     for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' | '{' => depth = depth.saturating_add(1),
-            ']' | ')' | '}' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                parts.push(&inner[start..idx]);
-                start = idx + 1;
+        match in_string {
+            Some(quote) => {
+                if ch == quote {
+                    in_string = None;
+                }
             }
-            _ => {}
+            None => match ch {
+                '\'' | '"' => in_string = Some(ch),
+                '[' | '(' | '{' => depth = depth.saturating_add(1),
+                ']' | ')' | '}' => depth = depth.saturating_sub(1),
+                ',' if depth == 0 => {
+                    parts.push(&inner[start..idx]);
+                    start = idx + 1;
+                }
+                _ => {}
+            },
         }
     }
     let remainder = &inner[start..];
