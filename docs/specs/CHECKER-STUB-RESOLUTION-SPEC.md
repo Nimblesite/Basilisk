@@ -216,6 +216,35 @@ alternate or richer signatures.
 - Bodies (`...`/`pass`) ignored; no runtime analysis
 - `@overload` is significant
 
+#### Re-exports {#STUBRES-PYI-REEXPORTS}
+
+A stub's public interface is not just the names it defines. Per the typing
+spec's [import conventions](https://typing.python.org/en/latest/spec/distributing.html#import-conventions),
+it also includes names the stub re-exports (GitHub #312):
+
+- **Redundant aliases** — `from y import x as x` and `import x as x` re-export
+  `x`.
+- **`__all__`** — names listed in `__all__` (list or tuple of string literals,
+  including `+=` extensions) are exported.
+- **Star imports** — `from .sub import *` re-exports the target stub's export
+  set: its `__all__` when it defines one (authoritative, exactly like runtime
+  `import *`), otherwise its public (non-underscore) top-level names and
+  re-exports, followed recursively. Targets resolve relative to the stub file;
+  absolute star imports are not followed (intra-package re-exports in stubs
+  are conventionally relative — typeshed style).
+
+Version/platform-gated branches (`if sys.version_info >= …:`) are **unioned**
+for `__all__` and re-export imports: for attribute existence an
+over-approximation can only suppress false positives, never create one. The
+extractor (`crates/basilisk-stubs/src/pyi_parser.rs`) records these on
+`StubModule`; `crates/basilisk-stubs/src/reexports.rs` resolves star-import
+chains; and the user-stub member API consumed by `imports_module_attribute`
+([CHKARCH-DIAG-STUB-MEMBER](CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-stub-member))
+folds the result into `member_names`
+(`crates/basilisk-checker/src/imports/apply.rs`), so a package `__init__.pyi`
+built from re-exports (e.g. `asyncio` in micropython-stdlib-stubs) surfaces
+`sleep`/`Task`/`run` as attributes of the package.
+
 ---
 
 ## Type Provenance {#STUBRES-PROVENANCE}

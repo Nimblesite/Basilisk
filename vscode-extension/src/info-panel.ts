@@ -15,6 +15,7 @@
 
 import * as vscode from "vscode";
 import { effect } from "@preact/signals-core";
+import type { LanguageClient } from "vscode-languageclient/node";
 import { type Store } from "./store";
 
 // ── Tree node types ──────────────────────────────────────────────────────
@@ -103,6 +104,69 @@ const FEATURES: readonly FeatureDef[] = [
   { label: "Type Checking", settingKey: "basilisk.enabled" },
 ];
 
+// ── Resolved environment ([LSPARCH-RESOLVED-ENV]) ────────────────────────
+
+/** One resolved tool from the server's initialize payload. */
+interface ResolvedTool {
+  readonly path: string;
+  readonly version?: string | null;
+}
+
+/** The server-resolved python/uv/binary environment (`null` = none found). */
+interface ResolvedEnvironment {
+  readonly python?: ResolvedTool | null;
+  readonly uv?: ResolvedTool | null;
+  readonly binary?: ResolvedTool | null;
+}
+
+/**
+ * Read the resolved environment the server reported in its initialize
+ * response ([LSPARCH-RESOLVED-ENV]) — the LSP is authoritative for what
+ * auto-detection found (issue #153); the extension never re-derives it.
+ * `undefined` while no live server data exists (starting/stopped).
+ */
+function resolvedEnvironment(client: LanguageClient | undefined): ResolvedEnvironment | undefined {
+  const experimental = client?.initializeResult?.capabilities.experimental as
+    | { basilisk?: { resolvedEnvironment?: ResolvedEnvironment } }
+    | undefined;
+  return experimental?.basilisk?.resolvedEnvironment;
+}
+
+/** Render a tool as `version (path)` — bare path when the probe failed. */
+function formatResolvedTool(tool: ResolvedTool): string {
+  const { path, version } = tool;
+  return version !== undefined && version !== null && version !== "" ? `${version} (${path})` : path;
+}
+
+/**
+ * Row value for a setting whose `""` default means auto-detect (issue #153):
+ * an explicit setting shows what the server resolved it to (the raw setting
+ * before the server is up, an explicit `none found (…)` when the server
+ * couldn't use it), and auto-detect always shows its outcome —
+ * `auto-detect → <version> (<path>)`, `→ none found` on failure, or
+ * `→ awaiting server…` before any authoritative data exists. The bare
+ * placeholder never renders.
+ */
+function resolutionDescription(
+  configured: string,
+  env: ResolvedEnvironment | undefined,
+  key: "python" | "uv",
+): string {
+  const tool = env?.[key];
+  if (configured !== "") {
+    if (env === undefined) { return configured; }
+    return tool === undefined || tool === null
+      ? `none found (${configured})`
+      : formatResolvedTool(tool);
+  }
+  if (env === undefined) {
+    return "auto-detect → awaiting server…";
+  }
+  return tool === undefined || tool === null
+    ? "auto-detect → none found"
+    : `auto-detect → ${formatResolvedTool(tool)}`;
+}
+
 // ── Provider ─────────────────────────────────────────────────────────────
 
 /**
@@ -121,24 +185,30 @@ function buildFeatureToggles(): FeatureItem[] {
 }
 
 /**
- * Build the single compact uv info row. Auto-sync lives in the tooltip rather
- * than as its own row (issue #103).
+ * Build the single compact uv info row. The verbose sub-settings (auto-sync,
+ * stub suggestions) live in the tooltip, not as their own rows (issue #103).
+ * The row value is the RESOLVED uv binary from the server, never the bare
+ * `auto-detect` placeholder (issue #153).
  *
  * Implements the one-uv-row rule of [EXTACT-INFO-SERVER-INFO].
  */
-function buildUvInfoItem(cfg: vscode.WorkspaceConfiguration): InfoTextItem {
+function buildUvInfoItem(
+  cfg: vscode.WorkspaceConfiguration,
+  env: ResolvedEnvironment | undefined,
+): InfoTextItem {
   const uvEnabled = cfg.get<boolean>("uv.enabled") ?? true;
   const uvPath = cfg.get<string>("uv.executablePath") ?? "";
   const uvAutoSync = cfg.get<boolean>("uv.autoSync") ?? false;
 
   const item = new InfoTextItem(
     "uv",
-    uvEnabled ? (uvPath === "" ? "auto-detect" : uvPath) : "disabled",
+    uvEnabled ? resolutionDescription(uvPath, env, "uv") : "disabled",
     "package",
   );
   item.tooltip = [
     `uv Integration: ${uvEnabled ? "enabled" : "disabled"}`,
     `Executable: ${uvPath === "" ? "auto-detect" : uvPath}`,
+    `Resolved: ${resolutionDescription(uvPath, env, "uv")}`,
     `Auto-Sync: ${uvAutoSync ? "on" : "off"}`,
   ].join("\n");
   return item;
@@ -203,25 +273,33 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
   }
 
   // Implements [EXTACT-INFO-SERVER-INFO]: compact read-only Version / Analysis
-  // Mode / Python / uv / Binary rows; no live server-state row.
+  // Mode / Python / uv / Binary rows; no live server-state row. Python, uv,
+  // and Binary render the server-RESOLVED values from [LSPARCH-RESOLVED-ENV]
+  // (issue #153) — never a bare `auto-detect` placeholder or a blank row.
   private buildServerInfoSection(): SectionItem {
     // No live "Server" state row: the status bar already shows it (issue
     // #103). The lspState/client effect in the constructor still re-renders
     // this section so the Version row appears as soon as the server is up.
     const client = this.store.client.value;
     const serverInfo = client?.initializeResult?.serverInfo;
+    const env = resolvedEnvironment(client);
     const cfg = vscode.workspace.getConfiguration("basilisk");
 
     const mode = cfg.get<string>("analysisMode") ?? "wholeModule";
-    const pythonPath = cfg.get<string>("python") ?? "auto";
-    const execPath = cfg.get<string>("executablePath") ?? "basilisk";
+    const pythonPath = cfg.get<string>("python") ?? "";
+    const binary = env?.binary;
 
     const items: InfoTextItem[] = [
       ...(serverInfo !== undefined ? [new InfoTextItem("Version", serverInfo.version ?? "unknown", "versions")] : []),
       new InfoTextItem("Analysis Mode", mode, "symbol-keyword"),
-      new InfoTextItem("Python", pythonPath === "" ? "auto-detect" : pythonPath, "symbol-namespace"),
-      buildUvInfoItem(cfg),
-      new InfoTextItem("Binary", execPath, "file-binary"),
+      new InfoTextItem("Python", resolutionDescription(pythonPath, env, "python"), "symbol-namespace"),
+      buildUvInfoItem(cfg, env),
+      // The running server binary, from the server itself (current_exe) — the
+      // one source that cannot lie about which basilisk is answering. Absent
+      // (never blank) while no server is running (issue #153 defect 3).
+      ...(binary !== undefined && binary !== null
+        ? [new InfoTextItem("Binary", formatResolvedTool(binary), "file-binary")]
+        : []),
     ];
 
     return new SectionItem("Server Info", items);

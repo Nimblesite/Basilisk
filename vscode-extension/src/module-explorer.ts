@@ -27,10 +27,14 @@ import {
   type SymbolNode,
   type WorkspaceModulesResponse,
 } from "./module-explorer-render";
+import {
+  DiagnosticTreeItem,
+  diagnosticItems,
+} from "./module-explorer-diagnostics";
 
 // ── Tree items ───────────────────────────────────────────────────────────
 
-type TreeItem = ModuleTreeItem | SymbolTreeItem | PackageTreeItem;
+type TreeItem = ModuleTreeItem | SymbolTreeItem | PackageTreeItem | DiagnosticTreeItem;
 
 // Implements [EXTACT-MODULES-MODULE-ROW] — the module row: label, coverage-tinted
 // icon, folded-health description, tooltip, and open-on-click action.
@@ -44,7 +48,9 @@ export class ModuleTreeItem extends vscode.TreeItem {
   ) {
     super(
       displayName,
-      module.symbols.length > 0
+      // Diagnostics count as expandable children too: a symbol-less module
+      // with errors must still open to its diagnostic rows (#235).
+      module.symbols.length > 0 || (module.diagnostics?.length ?? 0) > 0
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
     );
@@ -307,8 +313,19 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
       );
     }
 
+    // Diagnostic rows are leaves ([EXTACT-MODULES-DIAGNOSTICS]) — never let
+    // one fall through to the root fetch below.
+    if (element instanceof DiagnosticTreeItem) {
+      return [];
+    }
+
     if (element instanceof ModuleTreeItem) {
-      return ModuleExplorerProvider.symbolItems(element.module);
+      // Diagnostics FIRST — above the symbols — so the row's tally is
+      // navigable ([EXTACT-MODULES-DIAGNOSTICS], #235).
+      return [
+        ...diagnosticItems(element.module.diagnostics, element.module.path),
+        ...ModuleExplorerProvider.symbolItems(element.module),
+      ];
     }
 
     if (element instanceof PackageTreeItem) {
@@ -419,12 +436,17 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     return new PackageTreeItem(node);
   }
 
-  /** Children of a package/folder: nested nodes first, then the package's symbols. */
+  /** Children of a package/folder: nested nodes first, then the package's own
+   *  diagnostics above its symbols ([EXTACT-MODULES-DIAGNOSTICS], #235). */
   private static packageChildren(node: PackageTreeNode): TreeItem[] {
     const childItems = ModuleExplorerProvider.sortNodes([...node.children.values()])
       .map((child) => ModuleExplorerProvider.nodeToItem(child));
     if (node.module === undefined) { return childItems; }
-    return [...childItems, ...ModuleExplorerProvider.symbolItems(node.module)];
+    return [
+      ...childItems,
+      ...diagnosticItems(node.module.diagnostics, node.module.path),
+      ...ModuleExplorerProvider.symbolItems(node.module),
+    ];
   }
 
   /** Structural sibling order: containers before leaf modules, each alphabetical. */

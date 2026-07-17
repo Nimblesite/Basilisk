@@ -8,14 +8,13 @@
  */
 
 import * as vscode from "vscode";
+import { type DiagnosticNode } from "./module-explorer-diagnostics";
 
 // ── LSP response types ───────────────────────────────────────────────────
 //
 // Implements the client mirror of [EXTACT-DATA-MODEL] — the shared
-// WorkspaceModulesResponse / ModuleNode / SymbolNode / HealthStats wire shapes
-// returned by basilisk.workspaceModules. (The spec's DiagnosticNode /
-// ModuleNode.diagnostics drill-down [EXTACT-MODULES-DIAGNOSTICS] is not yet
-// modelled here — see the activity-panel audit notes.)
+// WorkspaceModulesResponse / ModuleNode / SymbolNode / DiagnosticNode /
+// HealthStats wire shapes returned by basilisk.workspaceModules.
 
 export interface SymbolNode {
   readonly name: string;
@@ -31,6 +30,12 @@ export interface ModuleNode {
   readonly path: string;
   readonly kind: "package" | "module";
   readonly symbols: readonly SymbolNode[];
+  // Every diagnostic for this module, rendered as the first drill-down rows so
+  // the errors/warnings tallies below are navigable, never dead
+  // ([EXTACT-MODULES-DIAGNOSTICS], #235). Empty while Type Checking is
+  // disabled; optional only to stay crash-safe against a pre-#235 server
+  // binary supplied via basilisk.executablePath.
+  readonly diagnostics?: readonly DiagnosticNode[];
   // Health rollup folded into each module by basilisk.workspaceModules
   // [EXTACT-MODULES] — coverage %, diagnostic counts, and adoption state, so the
   // merged panel needs no separate basilisk.typeHealth round-trip. ABSENT while

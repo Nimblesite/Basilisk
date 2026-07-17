@@ -124,6 +124,19 @@ pub(super) async fn initialize(
         .map(|r| basilisk_config::load_basilisk_config(r))
         .unwrap_or_default();
 
+    // Resolve the environment actually in use (python / uv / this binary) and
+    // surface it via `experimental.basilisk.resolvedEnvironment` so editors can
+    // show what auto-detect found ([LSPARCH-RESOLVED-ENV], GitHub #153). The
+    // payload MERGES into the experimental capabilities from
+    // `build_capabilities` — `configurationEditor`
+    // ([LSPARCH-CONFIG-EDITOR-PROTOCOL]) must survive alongside it.
+    let mut capabilities = build_capabilities(formatting_enabled);
+    capabilities.experimental = Some(super::resolved_env::experimental_payload(
+        capabilities.experimental.take(),
+        params.initialization_options.as_ref(),
+        &roots,
+    ));
+
     // Build the workspace index now so `initialized()` can scan immediately.
     let index = WorkspaceIndex::new(roots, mode, checker_config);
     *server.index.write().await = Some(index);
@@ -139,7 +152,7 @@ pub(super) async fn initialize(
                 crate::formatting::EMBEDDED_RUFF_FORMATTER_VERSION
             )),
         }),
-        capabilities: build_capabilities(formatting_enabled),
+        capabilities,
     })
 }
 
