@@ -9,7 +9,7 @@
 //! a single implementation of "what does a module export" and "which of those
 //! exports does an import bind".
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use basilisk_resolver::scope::{ExternalMethod, ExternalSymbol, ExternalSymbolKind, ImportKind};
@@ -191,27 +191,109 @@ pub fn extract_stub_exports(
     exports
 }
 
-/// Extract exported symbols from an external `.py` package that ships inline
-/// PEP 561 types (a `py.typed` marker).
+/// A parsed external (non-workspace) type-bearing module: its exports plus
+/// the re-export edges the `py.typed` chase follows.
 ///
-/// Parses and resolves the file, then reuses [`extract_exports`]. Callers MUST
-/// gate this on [`basilisk_stubs::has_py_typed_marker`] — a package without the
-/// marker has not opted in to inline type distribution, so its annotations must
-/// not be trusted. Returns an empty vec if the file cannot be read or parsed.
-/// Implements [ANALYSIS-CROSSLSP].
+/// Built by [`load_external_module`] from **one** read+parse of the on-disk
+/// file, and memoized per path by the salsa layer
+/// ([`crate::incremental::external_module`]) so a workspace scan parses each
+/// external module once — not once per workspace file per imported name,
+/// which pinned a CPU core for hours on large workspaces (GitHub #304).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ExternalModule {
+    /// The module's exported symbols.
+    pub exports: Vec<(String, ExternalSymbol)>,
+    /// Module-level `from … import` edges into sibling module files, for the
+    /// `py.typed` re-export chase. Empty for `.pyi` stubs (no chase).
+    pub reexports: Vec<ReexportEdge>,
+}
+
+/// One `from … import` edge of a `py.typed` module, pre-resolved to the
+/// sibling file it points at.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReexportEdge {
+    /// The binding names the edge re-exports, or `None` for `import *`.
+    pub names: Option<Vec<String>>,
+    /// The sibling module file the edge resolves to.
+    pub target: PathBuf,
+}
+
+/// What to load from an external import target's on-disk file.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ExternalModuleRequest {
+    /// An inline-typed (PEP 561 `py.typed`) package module. Callers MUST gate
+    /// this on [`basilisk_stubs::has_py_typed_marker`] — a package without the
+    /// marker has not opted in to inline type distribution.
+    PyTyped,
+    /// A `.pyi` stub, with the importing module name and stub provenance.
+    Stub {
+        /// The module name the import refers to (drives stub parsing).
+        module_name: String,
+        /// Where the stub came from, for honest hover provenance.
+        source: StubSource,
+    },
+}
+
+/// A shared handle to an external module's parsed view.
+pub type SharedExternalModule = std::sync::Arc<ExternalModule>;
+
+/// Load one external module's exports and re-export edges from disk.
+///
+/// This is the **uncached** producer: one read + parse + resolve per call. The
+/// salsa layer memoizes it per `(path, request)`
+/// ([`crate::incremental::external_module`]) so consumers share the work;
+/// callers outside the engine (tests) may use it directly as the
+/// `external_module` argument of [`populate_imported_symbols`]. A file that
+/// cannot be read, parsed, or resolved yields an empty module. Implements
+/// [ANALYSIS-CROSSLSP].
 #[must_use]
-pub fn extract_py_typed_exports(py_path: &Path) -> Vec<(String, ExternalSymbol)> {
+pub fn load_external_module(path: &Path, request: &ExternalModuleRequest) -> SharedExternalModule {
+    match request {
+        ExternalModuleRequest::Stub {
+            module_name,
+            source,
+        } => std::sync::Arc::new(ExternalModule {
+            exports: extract_stub_exports(path, module_name, *source),
+            reexports: Vec::new(),
+        }),
+        ExternalModuleRequest::PyTyped => std::sync::Arc::new(load_py_typed_module(path)),
+    }
+}
+
+/// Load a `py.typed` module: exports plus chase edges, from one parse.
+fn load_py_typed_module(py_path: &Path) -> ExternalModule {
     let Ok(text) = std::fs::read_to_string(py_path) else {
-        return Vec::new();
+        return ExternalModule::default();
     };
     let path_str = py_path.to_string_lossy().into_owned();
     let Ok(parsed) = basilisk_parser::parse_source(text, path_str) else {
-        return Vec::new();
+        return ExternalModule::default();
     };
     let Ok(resolved) = basilisk_resolver::resolve(&parsed) else {
-        return Vec::new();
+        return ExternalModule::default();
     };
-    extract_exports(&resolved, py_path)
+    let reexports = py_path
+        .parent()
+        .map(|dir| {
+            resolved
+                .imports
+                .iter()
+                .filter_map(|import| {
+                    let names = match import.kind {
+                        ImportKind::From => Some(Some(import.names.clone())),
+                        ImportKind::Star => Some(None),
+                        ImportKind::Plain => None,
+                    }?;
+                    let target = sibling_module_file(dir, &import.module)?;
+                    Some(ReexportEdge { names, target })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    ExternalModule {
+        exports: extract_exports(&resolved, py_path),
+        reexports,
+    }
 }
 
 /// Resolve `name` through the re-export chain of a `py.typed` module.
@@ -219,41 +301,40 @@ pub fn extract_py_typed_exports(py_path: &Path) -> Vec<(String, ExternalSymbol)>
 /// A package `__init__.py` often defines nothing itself and re-exports its
 /// public names from submodules — pydantic v2 exposes `BaseModel` only via
 /// `if TYPE_CHECKING: from .main import *` (runtime uses a lazy module
-/// `__getattr__`). When the resolved file's own definitions miss `name`,
-/// follow its module-level `from … import name` and `from … import *`
-/// statements into the sibling module file and take the symbol — with its
-/// methods — from there (GitHub #287). `visited` breaks import cycles.
-fn chase_py_typed_reexport(
+/// `__getattr__`). When the module's own exports miss `name`, follow its
+/// `from … import name` and `from … import *` edges into the sibling module
+/// and take the symbol — with its methods — from there (GitHub #287).
+/// `visited` breaks import cycles. Every module is fetched through the shared
+/// `external_module` lookup, so the chase never re-parses a file (GitHub #304).
+fn chase_py_typed_reexport<E>(
     py_path: &Path,
     name: &str,
-    external_cache: &mut HashMap<PathBuf, Vec<(String, ExternalSymbol)>>,
+    external_module: &mut E,
     visited: &mut HashSet<PathBuf>,
-) -> Option<ExternalSymbol> {
+) -> Option<ExternalSymbol>
+where
+    E: FnMut(&Path, &ExternalModuleRequest) -> SharedExternalModule,
+{
     if !visited.insert(py_path.to_path_buf()) {
         return None;
     }
-    let text = std::fs::read_to_string(py_path).ok()?;
-    let parsed =
-        basilisk_parser::parse_source(text, py_path.to_string_lossy().into_owned()).ok()?;
-    let resolved = basilisk_resolver::resolve(&parsed).ok()?;
-    let dir = py_path.parent()?;
-    resolved
-        .imports
+    let module = external_module(py_path, &ExternalModuleRequest::PyTyped);
+    module
+        .reexports
         .iter()
-        .filter(|import| match import.kind {
-            ImportKind::From => import.names.iter().any(|n| n == name),
-            ImportKind::Star => true,
-            ImportKind::Plain => false,
+        .filter(|edge| {
+            edge.names
+                .as_ref()
+                .is_none_or(|names| names.iter().any(|n| n == name))
         })
-        .filter_map(|import| sibling_module_file(dir, &import.module))
-        .find_map(|target| {
-            let direct = external_cache
-                .entry(target.clone())
-                .or_insert_with(|| extract_py_typed_exports(&target))
+        .find_map(|edge| {
+            let direct = external_module(&edge.target, &ExternalModuleRequest::PyTyped)
+                .exports
                 .iter()
                 .find(|(export_name, _)| export_name == name)
                 .map(|(_, symbol)| symbol.clone());
-            direct.or_else(|| chase_py_typed_reexport(&target, name, external_cache, visited))
+            direct
+                .or_else(|| chase_py_typed_reexport(&edge.target, name, external_module, visited))
         })
 }
 
@@ -350,9 +431,13 @@ fn stub_source_for(resolved_path: &Path, custom_typeshed: Option<&Path>) -> Stub
 /// `workspace_exports` supplies the exports of a **workspace-tracked** file
 /// (the caller decides the lookup — the salsa query resolves through the
 /// memoized [`crate::incremental::module_exports`]); imports outside the
-/// workspace fall back to on-demand parsing of external `.pyi` stubs and
-/// PEP 561 `py.typed` packages from disk. Non-`py.typed` `.py` packages are
-/// skipped — their annotations must not be trusted (PEP 561 opt-in).
+/// workspace fall back to `external_module`, the caller-supplied lookup for
+/// external `.pyi` stubs and PEP 561 `py.typed` packages. The salsa engine
+/// supplies the memoized [`crate::incremental::external_module`] query there,
+/// so external modules are parsed once per workspace — not once per importing
+/// file per name, which pinned a CPU core for hours on large workspaces
+/// (GitHub #304). Non-`py.typed` `.py` packages are skipped — their
+/// annotations must not be trusted (PEP 561 opt-in).
 ///
 /// Stale entries are cleared first so a renamed or removed export disappears
 /// from importers — without this the old name lingers and keeps suppressing its
@@ -364,17 +449,15 @@ fn stub_source_for(resolved_path: &Path, custom_typeshed: Option<&Path>) -> Stub
 /// [`StubSource::CustomTypeshed`] so hover reads `(custom typeshed)` and a
 /// `MicroPython` signature is never reported as the bundled `CPython` one
 /// ([STUBRES-CUSTOM-TYPESHED]). Pass `None` for the default bundled typeshed.
-pub fn populate_imported_symbols<'a, F>(
+pub fn populate_imported_symbols<'a, F, E>(
     resolved: &mut basilisk_resolver::ResolvedModule,
     mut workspace_exports: F,
+    mut external_module: E,
     custom_typeshed: Option<&Path>,
 ) where
     F: FnMut(&Path) -> Option<&'a [(String, ExternalSymbol)]>,
+    E: FnMut(&Path, &ExternalModuleRequest) -> SharedExternalModule,
 {
-    // External type sources (`.pyi` stubs, `py.typed` packages) are parsed on
-    // demand and cached per path so multiple imports of one module parse once.
-    let mut external_cache: HashMap<PathBuf, Vec<(String, ExternalSymbol)>> = HashMap::new();
-
     let imports = &resolved.imports;
     let imported_symbols = &mut resolved.imported_symbols;
     imported_symbols.clear();
@@ -384,9 +467,11 @@ pub fn populate_imported_symbols<'a, F>(
             continue;
         };
 
-        // Prefer workspace exports; otherwise parse an external `.pyi` stub
-        // or an inline-typed `py.typed` package (PEP 561 opt-in only).
+        // Prefer workspace exports; otherwise load the external `.pyi` stub
+        // or inline-typed `py.typed` package (PEP 561 opt-in only) through the
+        // shared lookup.
         let mut py_typed_source = false;
+        let external;
         let target_exports: &[(String, ExternalSymbol)] = if let Some(exports) =
             workspace_exports(resolved_path)
         {
@@ -395,17 +480,18 @@ pub fn populate_imported_symbols<'a, F>(
             // Classify the stub's provenance: a `.pyi` under the configured
             // custom typeshed's `stdlib/` is CustomTypeshed
             // ([STUBRES-CUSTOM-TYPESHED]); every other stub is StubPackage/Tier1.
-            let stub_source = stub_source_for(resolved_path, custom_typeshed);
-            external_cache
-                .entry(resolved_path.clone())
-                .or_insert_with(|| extract_stub_exports(resolved_path, &import.module, stub_source))
+            let request = ExternalModuleRequest::Stub {
+                module_name: import.module.clone(),
+                source: stub_source_for(resolved_path, custom_typeshed),
+            };
+            external = external_module(resolved_path, &request);
+            &external.exports
         } else if resolved_path.extension().is_some_and(|ext| ext == "py")
             && basilisk_stubs::has_py_typed_marker(resolved_path)
         {
             py_typed_source = true;
-            external_cache
-                .entry(resolved_path.clone())
-                .or_insert_with(|| extract_py_typed_exports(resolved_path))
+            external = external_module(resolved_path, &ExternalModuleRequest::PyTyped);
+            &external.exports
         } else {
             continue;
         };
@@ -415,18 +501,11 @@ pub fn populate_imported_symbols<'a, F>(
         // object — it is not a member to look up in `foo`'s exports.
         if import.kind == ImportKind::From {
             // `from foo import bar, baz` — only import the named symbols.
-            let direct: Vec<(String, Option<ExternalSymbol>)> = import
-                .names
-                .iter()
-                .map(|import_name| {
-                    let symbol = target_exports
-                        .iter()
-                        .find(|(name, _)| name == import_name)
-                        .map(|(_, symbol)| symbol.clone());
-                    (import_name.clone(), symbol)
-                })
-                .collect();
-            for (import_name, symbol) in direct {
+            for import_name in &import.names {
+                let symbol = target_exports
+                    .iter()
+                    .find(|(name, _)| name == import_name)
+                    .map(|(_, symbol)| symbol.clone());
                 // A `py.typed` package `__init__.py` may only *re-export* the
                 // name from a submodule (pydantic v2) — chase it (GitHub #287).
                 let symbol = symbol.or_else(|| {
@@ -434,15 +513,15 @@ pub fn populate_imported_symbols<'a, F>(
                         .then(|| {
                             chase_py_typed_reexport(
                                 resolved_path,
-                                &import_name,
-                                &mut external_cache,
+                                import_name,
+                                &mut external_module,
                                 &mut HashSet::new(),
                             )
                         })
                         .flatten()
                 });
                 if let Some(symbol) = symbol {
-                    let _ = imported_symbols.insert(import_name, symbol);
+                    let _ = imported_symbols.insert(import_name.clone(), symbol);
                 }
             }
         } else {

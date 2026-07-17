@@ -411,7 +411,12 @@ fn custom_typeshed_stub_exports_carry_custom_provenance() {
 
     // WITH the custom typeshed: the stub's `uname` export is CustomTypeshed.
     let mut with_custom = resolved.clone();
-    populate_imported_symbols(&mut with_custom, no_workspace, Some(&typeshed));
+    populate_imported_symbols(
+        &mut with_custom,
+        no_workspace,
+        basilisk_checker::exports::load_external_module,
+        Some(&typeshed),
+    );
     let uname = with_custom
         .imported_symbols
         .get("uname")
@@ -426,7 +431,12 @@ fn custom_typeshed_stub_exports_carry_custom_provenance() {
     // WITHOUT the custom typeshed argument (same file on disk): a plain Tier-1
     // stub. Only the `custom_typeshed` argument decides provenance.
     let mut without_custom = resolved.clone();
-    populate_imported_symbols(&mut without_custom, no_workspace, None);
+    populate_imported_symbols(
+        &mut without_custom,
+        no_workspace,
+        basilisk_checker::exports::load_external_module,
+        None,
+    );
     assert_eq!(
         without_custom
             .imported_symbols
@@ -483,7 +493,12 @@ fn custom_typeshed_does_not_taint_user_stubs_outside_its_stdlib() {
     // Even WITH the custom typeshed configured, a stub outside its stdlib/ is a
     // plain Tier-1 stub: provenance tracks the on-disk source, not merely whether
     // a custom typeshed exists.
-    populate_imported_symbols(&mut resolved, no_workspace, Some(&typeshed));
+    populate_imported_symbols(
+        &mut resolved,
+        no_workspace,
+        basilisk_checker::exports::load_external_module,
+        Some(&typeshed),
+    );
     assert_eq!(
         resolved.imported_symbols.get("tux").unwrap().provenance,
         Some(TypeProvenance::StubTier1),
