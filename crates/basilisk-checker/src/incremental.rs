@@ -325,11 +325,8 @@ pub fn cross_resolved_module(
                 .map(|imported| module_exports(db, *imported).0.as_slice())
         },
         |path, request| {
-            let key = ExternalModuleKey::new(
-                db,
-                path.to_string_lossy().into_owned(),
-                request.clone(),
-            );
+            let key =
+                ExternalModuleKey::new(db, path.to_string_lossy().into_owned(), request.clone());
             std::sync::Arc::clone(external_module(db, key, search_paths))
         },
         custom_typeshed,

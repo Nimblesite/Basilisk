@@ -333,8 +333,7 @@ where
                 .iter()
                 .find(|(export_name, _)| export_name == name)
                 .map(|(_, symbol)| symbol.clone());
-            direct
-                .or_else(|| chase_py_typed_reexport(&edge.target, name, external_module, visited))
+            direct.or_else(|| chase_py_typed_reexport(&edge.target, name, external_module, visited))
         })
 }
 
@@ -472,29 +471,28 @@ pub fn populate_imported_symbols<'a, F, E>(
         // shared lookup.
         let mut py_typed_source = false;
         let external;
-        let target_exports: &[(String, ExternalSymbol)] = if let Some(exports) =
-            workspace_exports(resolved_path)
-        {
-            exports
-        } else if resolved_path.extension().is_some_and(|ext| ext == "pyi") {
-            // Classify the stub's provenance: a `.pyi` under the configured
-            // custom typeshed's `stdlib/` is CustomTypeshed
-            // ([STUBRES-CUSTOM-TYPESHED]); every other stub is StubPackage/Tier1.
-            let request = ExternalModuleRequest::Stub {
-                module_name: import.module.clone(),
-                source: stub_source_for(resolved_path, custom_typeshed),
+        let target_exports: &[(String, ExternalSymbol)] =
+            if let Some(exports) = workspace_exports(resolved_path) {
+                exports
+            } else if resolved_path.extension().is_some_and(|ext| ext == "pyi") {
+                // Classify the stub's provenance: a `.pyi` under the configured
+                // custom typeshed's `stdlib/` is CustomTypeshed
+                // ([STUBRES-CUSTOM-TYPESHED]); every other stub is StubPackage/Tier1.
+                let request = ExternalModuleRequest::Stub {
+                    module_name: import.module.clone(),
+                    source: stub_source_for(resolved_path, custom_typeshed),
+                };
+                external = external_module(resolved_path, &request);
+                &external.exports
+            } else if resolved_path.extension().is_some_and(|ext| ext == "py")
+                && basilisk_stubs::has_py_typed_marker(resolved_path)
+            {
+                py_typed_source = true;
+                external = external_module(resolved_path, &ExternalModuleRequest::PyTyped);
+                &external.exports
+            } else {
+                continue;
             };
-            external = external_module(resolved_path, &request);
-            &external.exports
-        } else if resolved_path.extension().is_some_and(|ext| ext == "py")
-            && basilisk_stubs::has_py_typed_marker(resolved_path)
-        {
-            py_typed_source = true;
-            external = external_module(resolved_path, &ExternalModuleRequest::PyTyped);
-            &external.exports
-        } else {
-            continue;
-        };
 
         // Discriminate on `kind`, not `names.is_empty()`: a plain `import foo
         // as f` carries its alias in `names`, but the alias binds the module
