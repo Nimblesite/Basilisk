@@ -12,8 +12,6 @@ description: >-
   interpreting diagnostics, configuring and adopting projects, and connecting
   editor, refactoring, debugging, testing, profiling, and CI workflows.
 edition: "Structural prototype 0.1"
-python-version: "3.12"
 basilisk-version: "TO BE PINNED BEFORE PUBLICATION"
 website: "https://www.basilisk-python.dev/"
 ...
-

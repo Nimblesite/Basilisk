@@ -79,7 +79,7 @@ calculation is correct, or that untyped external data is trustworthy.
 Python's own documentation states the boundary plainly:
 
 > “The Python runtime does not enforce function and variable type
-> annotations.” — [Python 3.12 `typing` documentation](https://docs.python.org/3.12/library/typing.html)
+> annotations.” — [Python `typing` documentation](https://docs.python.org/3/library/typing.html)
 
 An annotation gives a checker information; it does not normally convert or
 validate the value at runtime. That is why this book keeps separate lanes for
@@ -138,12 +138,19 @@ essential instructions from a picture.
 
 ## Check the edition before you begin
 
-This working edition targets Python 3.12. Its exact Basilisk release is still
-marked **TO BE PINNED BEFORE PUBLICATION** in the edition metadata. Until that
-field names a released build, product commands, diagnostics, and screenshots
-remain editorial evidence rather than publication claims. The free public
-edition will record its Basilisk version, build date, Python target, example
-test result, link-audit result, and screenshot environment.
+This book does not declare one Python release to be Basilisk's canonical
+target. The maintained typing specification is the authority. When a lesson
+uses syntax or runtime behaviour that begins with a particular Python release,
+the lesson names that boundary and cites the governing PEP or Python
+documentation; otherwise the example follows the reader's project environment.
+
+The exact Basilisk release for this working edition is still marked **TO BE
+PINNED BEFORE PUBLICATION** in the edition metadata. Until that field names a
+released build, product commands, diagnostics, and screenshots remain
+editorial evidence rather than publication claims. The free public edition
+will record its Basilisk version, build date, the interpreter used to run the
+examples, example test result, link-audit result, and screenshot environment.
+The interpreter is a reproducibility fact, not a support boundary.
 
 That record is your starting point when the live product moves on. Follow the
 book with its named release for reproducible results; follow the website when
@@ -152,4 +159,3 @@ version change to investigate, not as a reason to silently rewrite the example.
 
 You are now ready to begin with the smallest useful distinction: running a
 Python program and asking a static question about it are not the same act.
-

@@ -11,9 +11,11 @@ Use the first applicable level:
    [Python typing specification](https://typing.python.org/en/latest/spec/),
    then the official [`python/typing`](https://github.com/python/typing)
    repository and conformance suite.
-2. **Python language and runtime behavior:** versioned
-   [Python 3.12 documentation](https://docs.python.org/3.12/) and the
+2. **Python language and runtime behavior:** the official
+   [Python documentation](https://docs.python.org/3/) and the
    [`python/cpython`](https://github.com/python/cpython) source repository.
+   Use the versioned documentation matching the behaviour only when the claim
+   actually depends on a Python release.
 3. **Design history and accepted changes:** published
    [Python Enhancement Proposals](https://peps.python.org/). A PEP explains the
    accepted proposal and rationale; the maintained typing specification wins

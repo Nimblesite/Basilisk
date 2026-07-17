@@ -23,7 +23,7 @@ Python's authorities draw a useful boundary around this discussion. The
 versioned Python documentation says:
 
 > “The Python runtime does not enforce function and variable type
-> annotations.” — [Python 3.12 `typing` documentation](https://docs.python.org/3.12/library/typing.html)
+> annotations.” — [Python `typing` documentation](https://docs.python.org/3/library/typing.html)
 
 Changing a Basilisk severity therefore changes static feedback. It does not
 insert a runtime check, convert a value, or change what Python executes. Your
@@ -285,7 +285,7 @@ current catalog. Check both against the Basilisk release used by your project.
 - [The Python type system](https://typing.python.org/en/latest/spec/type-system.html)
 - [Python typing specification: annotations](https://typing.python.org/en/latest/spec/annotations.html)
 - [Python typing specification: type-checker directives](https://typing.python.org/en/latest/spec/directives.html)
-- [Python 3.12 `typing` documentation](https://docs.python.org/3.12/library/typing.html)
+- [Python `typing` documentation](https://docs.python.org/3/library/typing.html)
 - [`pyproject.toml` specification](https://packaging.python.org/en/latest/specifications/pyproject-toml/)
 - [Basilisk configuration guide](https://www.basilisk-python.dev/docs/configuration/)
 - [Basilisk rule reference](https://www.basilisk-python.dev/docs/rules/)

@@ -55,7 +55,8 @@ evidence of behavior; diagrams explain relationships that screenshots cannot.
 
 - The promise and intended reader
 - Prerequisites: ordinary Python, no prior static-typing expertise
-- Python 3.12 as the canonical language target for this edition
+- The maintained typing specification as the authority; Python-version
+  boundaries appear only when a governing PEP or runtime behaviour requires one
 - How to run, change, and re-check every example
 - What a type checker can and cannot tell you
 - Edition, Basilisk release, platform, and screenshot provenance
@@ -128,12 +129,11 @@ without confusing annotations with runtime conversion.
 - Names, values, annotations, and runtime behavior
 - Built-in scalar and collection types
 - `T | None`, unions, and literal values
-- `object`, `Any`, and the cost of opting out of useful information
-- Type aliases that clarify a domain
+- Type aliases that clarify a domain without creating a distinct type
 - Checkpoint: annotate raw readings and normalized readings
-- Visuals: runtime/static split; union flow; `Any` information-loss diagram
+- Visuals: runtime/static split; union flow; alias equivalence diagram
 - Source keys: `python-typing-docs`, `python-typing-spec-concepts`,
-  `cpython-typing-source`, `pep-604`
+  `python-typing-spec-aliases`, `pep-585`, `pep-604`
 
 ### Chapter 5 — Compatibility is the question
 

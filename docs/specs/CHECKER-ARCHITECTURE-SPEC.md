@@ -335,24 +335,24 @@ Full support for:
 
 ### Target Version and Platform {#CHKARCH-VERSION-TARGET}
 
-Every rule runs against the **configured** target Python version — never a
-hardcoded constant (issue #93).
+A rule consults the project's Python version only when the maintained typing
+specification, an accepted PEP, or Python language semantics makes its result
+version-dependent. A version-independent rule must not branch on a Python
+release. Basilisk has no canonical Python version.
 
 - `BasiliskConfig.python_version` / `python_platform` (from `pyproject.toml`
   `[tool.basilisk]` `python-version`/`python-platform`) parse into a typed
   `CheckContext { target_version: (major, minor), target_platform }`
   (`crates/basilisk-checker/src/context.rs`).
-- The centralized default is `DEFAULT_TARGET_VERSION = (3, 12)` — the **only**
-  place the default version constant lives. A malformed version string falls
-  back to the default rather than panicking or disabling gating.
 - When the checker config does not pin a version, the CLI and LSP detect it
   from project files per
   [`[LSPUV-PYTHON-VERSION-RESOLUTION-ORDER]`](LSP-UV-INTEGRATION-SPEC.md):
   `.python-version` → `[project].requires-python` lower bound → `uv.lock`
   `requires-python` lower bound (`basilisk_uv::python_version::resolve_target_python_version`).
 - `rules::run_all(module, ctx)` threads the context into every
-  `Rule::check(module, ctx, diagnostics)` — no rule may reference a literal
-  target version.
+  `Rule::check(module, ctx, diagnostics)`. Feature-version boundaries come from
+  their governing PEP or Python language rule, never from a book-wide or
+  product-wide support target.
 
 #### Version/Platform Narrowing {#CHKARCH-VERSION-NARROWING}
 
@@ -1000,11 +1000,10 @@ is **never read or written**
 How the file is found and how multiple ancestor tables combine is specified in
 [Configuration Discovery](#CHKARCH-CONFIG-DISCOVERY).
 
-Canonical TOML example:
+Project TOML example:
 
 ```toml
 [tool.basilisk]
-python-version = "3.12"
 python-platform = "All"          # Default: check for all platforms
 stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
 # typeshed-path = "typeshed-x"   # resolution step 3: provide canonical stdlib stubs

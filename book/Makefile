@@ -3,6 +3,7 @@ PYTHON ?= python3
 .PHONY: check check-links render-assets screenshots epub release clean
 
 check:
+	$(PYTHON) -m unittest scripts.test_book_contract
 	$(PYTHON) scripts/check_book.py
 	$(PYTHON) scripts/check_links.py
 

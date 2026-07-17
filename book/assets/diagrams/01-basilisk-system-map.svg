@@ -27,7 +27,7 @@
     <text x="28" y="95" fill="#7dd3fc" font-family="'JetBrains Mono',monospace" font-size="23">normalize("18.4")</text>
     <rect y="170" width="310" height="120" rx="20" fill="#141820" stroke="#8892a4" stroke-width="3"/>
     <text x="28" y="217" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="26">pyproject.toml</text>
-    <text x="28" y="252" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="18">Python target · rules</text>
+    <text x="28" y="252" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="18">project context · rules</text>
     <text x="28" y="278" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="18">project paths</text>
   </g>
 

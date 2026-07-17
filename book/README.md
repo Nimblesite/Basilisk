@@ -64,8 +64,6 @@ make epub              # build and validate the structural EPUB prototype
 make release           # strict checks, external links, EPUB, EPUBCheck
 ```
 
-Requirements: Python 3.12+, Pandoc 3+, and EPUBCheck 5+.
-
 ## Drafting rules
 
 1. Treat `book.json` as the one source of chapter order and production targets.

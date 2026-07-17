@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">A union names several permitted value types</title>
+  <desc id="description">String, float, and None values flow through a gate labelled ReadingValue equals str or float or None. A list reaches a stop outside the gate because it is not a named alternative.</desc>
+  <defs>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="2" fill="#252d3f"/>
+    </pattern>
+    <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#6ec5e9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-coral" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#f87171" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="url(#dots)" stroke="#252d3f" stroke-width="3"/>
+
+  <text x="82" y="112" fill="#e8500a" font-family="'JetBrains Mono',monospace" font-size="28" font-weight="700" letter-spacing="5">A BOUNDED SET OF POSSIBILITIES</text>
+  <text x="82" y="178" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="60" font-weight="800">A union permits what it names</text>
+  <text x="84" y="226" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="29">It adds alternatives to a contract; it does not perform conversions.</text>
+
+  <g transform="translate(92 305)">
+    <rect width="360" height="132" rx="66" fill="#141820" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="180" y="57" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="35">"21.5"</text>
+    <text x="180" y="100" text-anchor="middle" fill="#bae6fd" font-family="'JetBrains Mono',monospace" font-size="28">str</text>
+
+    <rect y="178" width="360" height="132" rx="66" fill="#141820" stroke="#34d399" stroke-width="4"/>
+    <text x="180" y="235" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="35">21.5</text>
+    <text x="180" y="278" text-anchor="middle" fill="#a7f3d0" font-family="'JetBrains Mono',monospace" font-size="28">float</text>
+
+    <rect y="356" width="360" height="132" rx="66" fill="#141820" stroke="#8892a4" stroke-width="4"/>
+    <text x="180" y="413" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="35">None</text>
+    <text x="180" y="456" text-anchor="middle" fill="#cbd5e1" font-family="'JetBrains Mono',monospace" font-size="28">None</text>
+
+    <path d="M380 66H620" fill="none" stroke="#6ec5e9" stroke-width="5" marker-end="url(#arrow-blue)"/>
+    <path d="M380 244H620" fill="none" stroke="#6ec5e9" stroke-width="5" marker-end="url(#arrow-blue)"/>
+    <path d="M380 422H620" fill="none" stroke="#6ec5e9" stroke-width="5" marker-end="url(#arrow-blue)"/>
+  </g>
+
+  <g transform="translate(760 322)">
+    <path d="M0 0H610V442H0M0 0V145M0 297V442" fill="#0f1218" stroke="#e8500a" stroke-width="7" stroke-linejoin="round"/>
+    <rect x="-18" y="145" width="36" height="152" rx="18" fill="#e8500a"/>
+    <text x="305" y="83" text-anchor="middle" fill="#e8500a" font-family="'JetBrains Mono',monospace" font-size="28" font-weight="700" letter-spacing="4">READINGVALUE</text>
+    <text x="305" y="171" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="42">str | float | None</text>
+    <text x="305" y="235" text-anchor="middle" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="30">Each named alternative passes.</text>
+    <line x1="86" y1="289" x2="524" y2="289" stroke="#252d3f" stroke-width="3"/>
+    <text x="305" y="352" text-anchor="middle" fill="#bae6fd" font-family="'JetBrains Mono',monospace" font-size="29">PEP 604 spelling</text>
+    <text x="305" y="397" text-anchor="middle" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="27">Python 3.10+ syntax boundary</text>
+  </g>
+
+  <g transform="translate(92 832)">
+    <rect width="360" height="104" rx="52" fill="#141820" stroke="#f87171" stroke-width="4"/>
+    <text x="180" y="65" text-anchor="middle" fill="#fecaca" font-family="'JetBrains Mono',monospace" font-size="32">[] · list</text>
+    <path d="M380 52H592" fill="none" stroke="#f87171" stroke-width="5" marker-end="url(#arrow-coral)"/>
+    <line x1="638" y1="11" x2="638" y2="93" stroke="#f87171" stroke-width="10" stroke-linecap="round"/>
+    <text x="686" y="62" fill="#fecaca" font-family="'Space Grotesk',system-ui,sans-serif" font-size="29">Not a named alternative</text>
+  </g>
+</svg>

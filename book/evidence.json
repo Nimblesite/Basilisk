@@ -2,10 +2,56 @@
   "schemaVersion": 1,
   "policy": "A chapter is publishable only when its governing spec, pinned release implementation, and executable evidence agree.",
   "chapters": [
-    {"section": "01", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {
+      "section": "01",
+      "decision": "withhold-until-versioned-release",
+      "governingSpecs": [
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS",
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET",
+        "docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-SYSTEM",
+        "docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-PIPELINE"
+      ],
+      "releaseImplementation": [],
+      "workingTreeImplementation": [
+        "crates/basilisk-cli/src/main.rs",
+        "crates/basilisk-cli/src/pipeline/",
+        "crates/basilisk-lsp/src/workspace_analysis.rs"
+      ],
+      "executableEvidence": [
+        "Python 3.14.6 executed the Signal Box normalization call and returned the documented dictionary on 2026-07-17",
+        "target/release/basilisk check --color never . reported the documented return incompatibility in Signal Box on 2026-07-17",
+        "target/release/basilisk analyze --color never . reported the configured missing-parameter policy in Signal Box on 2026-07-17"
+      ],
+      "blocker": "The current build identifies itself as 0.0.0-PLACEHOLDER, and the Chapter 1 editor screenshot is still planned. Pin a released Basilisk version, rerun the evidence, and capture the real editor surface before setting decision to publish."
+    },
     {"section": "02", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {"section": "03", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
-    {"section": "04", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {
+      "section": "04",
+      "decision": "withhold-until-versioned-release",
+      "governingSpecs": [
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE",
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET",
+        "https://typing.python.org/en/latest/spec/annotations.html",
+        "https://typing.python.org/en/latest/spec/concepts.html",
+        "https://typing.python.org/en/latest/spec/aliases.html"
+      ],
+      "releaseImplementation": [],
+      "workingTreeImplementation": [
+        "crates/basilisk-checker/src/types.rs",
+        "crates/basilisk-checker/src/types_parsing.rs",
+        "crates/basilisk-checker/src/inference.rs"
+      ],
+      "executableEvidence": [
+        "Python 3.14.6 ran the Chapter 4 Signal Box checkpoint: 3 tests passed on 2026-07-17",
+        "target/release/basilisk check --color never src reported no issue for the Chapter 4 checkpoint on 2026-07-17",
+        "The placeholder release binary rejected the Chapter 4 string-to-float assignment, mixed list element, and list-to-union incompatibilities on 2026-07-17"
+      ],
+      "omitted": [
+        "The planned object-versus-Any lesson is omitted because the working-tree assignment path currently collapses object into Any; the maintained typing specification distinguishes them."
+      ],
+      "blocker": "The current build identifies itself as 0.0.0-PLACEHOLDER. Pin a released Basilisk version, rerun the Chapter 4 static evidence, and capture any release-specific output before setting decision to publish."
+    },
     {"section": "05", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {"section": "06", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {"section": "07", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},

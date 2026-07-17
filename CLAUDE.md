@@ -11,7 +11,11 @@ Code here must comfortably pass review at a top-tier engineering org. Keep quali
 
 ## Conformance Is the Prime Directive
 
-Target: **100% PEP conformance**, canonical Python **3.12**. Read the [PEP conformance README](https://github.com/python/typing/blob/main/conformance/README.md) carefully. This discipline outranks every other concern in this file.
+Target: **100% conformance with the maintained Python typing specification**.
+Python-version boundaries apply only where the typing specification, an
+accepted PEP, or Python language semantics defines one; Basilisk has no
+canonical Python release. Read the [PEP conformance README](https://github.com/python/typing/blob/main/conformance/README.md)
+carefully. This discipline outranks every other concern in this file.
 
 - **One reproducible path — the real harness.** `python3 conformance/run_conformance.py` clones `python/typing@main` FRESH and runs the suite's OWN unmodified harness (`src/main.py --only-run basilisk`) over the binary in its default config — every PEP rule on, nothing configured ([CHKARCH-CONFORMANCE], [CHKARCH-CONFIGURATION-ONLY]). The score is exactly what a user gets out of the box; never quote a number produced any other way, and never re-introduce a home-grown/vendored scorer.
 - **Precision is the whole game.** A file passes iff the upstream `errors_diff` is empty: emit an error on EVERY `# E` line, satisfy EVERY `# E[tag]` group, and emit NOTHING on a line the suite does not mark. Follow each PEP exactly — no missed required error, no stray diagnostic.

@@ -29,9 +29,10 @@ class solely for the type checker.
 
 ## Preserve a payload with a type parameter
 
-Create one generic page or result container using Python 3.12 type-parameter
-syntax. Demonstrate substitution with concrete payloads before using the word
-“generic.”
+Create one generic page or result container using syntax supported by the
+reader's project. If the example uses PEP 695 type-parameter syntax, label its
+Python-version boundary. Demonstrate substitution with concrete payloads before
+using the word “generic.”
 
 ## Overload only when calls truly differ
 
@@ -53,4 +54,3 @@ generic report page. Run the same tests through two storage implementations.
 - [Overloads](https://typing.python.org/en/latest/spec/overload.html)
 - Browse related diagnostics in the
   [Basilisk rule reference](https://www.basilisk-python.dev/docs/rules/).
-

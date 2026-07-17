@@ -1,0 +1,6 @@
+[project]
+name = "signal-box-ch04"
+version = "0.1.0"
+
+[tool.basilisk]
+include = ["src"]

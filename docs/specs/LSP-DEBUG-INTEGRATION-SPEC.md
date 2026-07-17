@@ -137,4 +137,6 @@ When the Python interpreter can't be found, the error lists what was tried:
 
 ## Python Version Targeting {#LSPDEBUG-PYTHON}
 
-Primary target Python 3.12 (canonical Basilisk version), where debugpy's `sys.settrace`/pydevd path is fully supported.
+The session uses the interpreter resolved by [LSPDEBUG-PYRES](#LSPDEBUG-PYRES).
+Interpreter compatibility belongs to that runtime and debugpy; Basilisk does
+not declare one canonical Python release for debugging.

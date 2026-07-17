@@ -71,7 +71,8 @@ so one change rebuilds exactly once.
 An explicit Basilisk config value is applied by the consumer first. Otherwise
 `basilisk-uv` checks `.python-version`, then the lower bound of
 `[project].requires-python`, then the lock file's `requires-python`. If none exists, the
-checker uses its centralized default. No interpreter subprocess is probed.
+resolver returns no project-version evidence. No interpreter subprocess is probed by this
+resolution path.
 
 ## Diagnostics {#LSPUV-DIAGNOSTICS}
 
