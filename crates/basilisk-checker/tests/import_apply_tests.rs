@@ -41,7 +41,7 @@ fn make_registry() -> Arc<PackageRegistry> {
     };
     let registry_pkg = |name: &str, ver: &str, deps: Vec<LockDependency>| LockPackage {
         name: name.to_owned(),
-        version: ver.to_owned(),
+        version: Some(ver.to_owned()),
         source: Some(LockSource {
             registry: Some("https://pypi.org/simple".to_owned()),
             editable: None,
@@ -53,7 +53,7 @@ fn make_registry() -> Arc<PackageRegistry> {
     };
     let root = LockPackage {
         name: "my-project".to_owned(),
-        version: "0.1.0".to_owned(),
+        version: Some("0.1.0".to_owned()),
         source: Some(LockSource {
             registry: None,
             editable: None,
