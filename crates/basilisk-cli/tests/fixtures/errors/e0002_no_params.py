@@ -1,10 +1,10 @@
 def get_version():
-    return "1.0.0"
+    return "1.0.0".strip()
 
 
 def get_timestamp():
-    return 0
+    return abs(0)
 
 
 def noop():
-    pass
+    return print()

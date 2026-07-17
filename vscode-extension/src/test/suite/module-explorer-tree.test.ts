@@ -482,7 +482,8 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
       const roots = await provider.getChildren();
       const app = roots.find((row) => labelOf(row) === "app");
       assert.ok(app instanceof PackageTreeItem, "'app' is a package container");
-      const packageTip = String(app.tooltip);
+      assert.strictEqual(typeof app.tooltip, "string", "package tooltip is plain text");
+      const packageTip = app.tooltip as string;
       assert.ok(
         packageTip.includes("Coverage: 17% (subtree)"),
         `package tooltip must quote the rolled-up subtree coverage (2/12 = 17%), not its own 100%, got: ${packageTip}`,
@@ -494,7 +495,8 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
 
       const core = (await provider.getChildren(app)).find((row) => labelOf(row) === "core");
       assert.ok(core instanceof ModuleTreeItem, "'core' is a leaf module");
-      const moduleTip = String(core.tooltip);
+      assert.strictEqual(typeof core.tooltip, "string", "module tooltip is plain text");
+      const moduleTip = core.tooltip as string;
       for (const line of ["app.core", "/ws/app/core.py", "Coverage: 0%", "Errors: 1", "Warnings: 2"]) {
         assert.ok(moduleTip.includes(line), `module tooltip must include "${line}", got: ${moduleTip}`);
       }

@@ -3,4 +3,5 @@
 [tool.basilisk]
 
 [tool.basilisk.rule-tags]
-basilisk = "error"
+basilisk = "info"
+pep = "warning"

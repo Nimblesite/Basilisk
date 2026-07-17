@@ -1,5 +1,5 @@
 def fetch(url: str):
-    pass
+    return url.encode()
 
 
 def compute(x: int, y: int):
@@ -7,4 +7,4 @@ def compute(x: int, y: int):
 
 
 def noop():
-    pass
+    return print()

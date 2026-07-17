@@ -115,8 +115,8 @@ Basilisk 自己的严格性规则（每个参数、返回类型、属性等都�
 ```toml
 # pyproject.toml
 [tool.basilisk.rules]
-"BSK-0001" = "warning"  # 每个参数都需要类型注解
-"BSK-0002" = "warning"  # 每个函数都需要返回类型
+"BSK-0001" = "warning"  # 无法推断类型的参数需要类型注解
+"BSK-0002" = "warning"  # 无法推断返回类型的函数需要返回类型注解
 ```
 
 在 `good.py` 中添加一个没有注解的函数：
@@ -134,7 +134,7 @@ warning[BSK-0001]: Missing parameter type annotation for `data`
    |             ^^^^
    |
    = help: Add a type annotation: `data: <type>`
-   = note: In Basilisk, all function parameters require explicit types
+   = note: Basilisk requires an explicit parameter type wherever it cannot be inferred; a literal default (e.g. `timeout=30`) infers the type and needs no annotation
    = see: https://www.basilisk-python.dev/errors/BSK-0001
 
 warning[BSK-0002]: Missing return type annotation for function `process`
@@ -144,7 +144,7 @@ warning[BSK-0002]: Missing return type annotation for function `process`
    |     ^^^^^^^^^^^^^
    |
    = help: Add a return type: `def process(...) -> <type>:`
-   = note: In Basilisk, all functions require an explicit return type
+   = note: Basilisk requires an explicit return type wherever it cannot be inferred; literal-only returns (e.g. `return 42`) infer the type and need no annotation
    = see: https://www.basilisk-python.dev/errors/BSK-0002
 
 Found 2 diagnostics (0 errors).

@@ -481,7 +481,9 @@ mod tests {
         assert_eq!(tree.modules.len(), 1);
         let module = &tree.modules[0];
         assert_eq!(
-            module.get("totalSymbols").and_then(serde_json::Value::as_u64),
+            module
+                .get("totalSymbols")
+                .and_then(serde_json::Value::as_u64),
             Some(2),
             "module node must carry totalSymbols as the client's rollup weight, got {module}"
         );

@@ -457,7 +457,10 @@ fn pep_grade_config_is_valid() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Source that violates the annotation house rules (BSK-0001 on the
 /// parameter, BSK-0002 on the return) once those opt-in rules are enabled.
-const UNANNOTATED_FN: &[u8] = b"def foo(x):\n    pass\n";
+// `x` has no default to infer from (BSK-0001) and `return x` is not inferable
+// (BSK-0002) — a `pass` body would infer `-> None` and only fire BSK-0001
+// ([TYPEINF-FUNC-RETURN]).
+const UNANNOTATED_FN: &[u8] = b"def foo(x):\n    return x\n";
 
 /// A `[tool.basilisk.rules]` table enabling the opt-in annotation rules.
 const ANNOTATION_RULES_TOML: &[u8] =

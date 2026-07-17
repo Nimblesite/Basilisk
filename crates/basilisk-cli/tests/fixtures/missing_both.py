@@ -3,4 +3,4 @@ def broken(x, y):
 
 
 def also_broken(name):
-    pass
+    return name

@@ -17,9 +17,10 @@ import {
   ConfigurationEditorController,
   CONFIGURATION_EDITOR_COMMAND,
   configurationEditorFocusRule,
+  EDIT_CONFIG_COMMAND,
   type ConfigurationEditorTransport,
 } from "../../configuration-editor";
-import { trustConfigureSeverityLinks } from "../../lsp-client";
+import { buildClientOptions, trustConfigureSeverityLinks } from "../../lsp-client";
 import { createStore } from "../../store";
 
 const ROOT_URI = "file:///workspace";
@@ -139,5 +140,76 @@ suite("Configuration editor — Configure Severity deep link", () => {
 
     assert.strictEqual(trustConfigureSeverityLinks(null), null);
     assert.strictEqual(trustConfigureSeverityLinks(undefined), undefined);
+  });
+
+  // The wiring, not just the helper: buildClientOptions must actually route
+  // hovers through trustConfigureSeverityLinks — deleting the provideHover
+  // middleware line would pass the helper test above but fail this one.
+  test("buildClientOptions pipes hovers through the trust middleware", async () => {
+    const trace = vscode.window.createOutputChannel("bsk-focus-test-trace", { log: true });
+    const options = buildClientOptions(undefined, trace, () => undefined);
+    try {
+      const provideHover = options.middleware?.provideHover;
+      assert.ok(provideHover, "client options must register the hover middleware");
+      const markdown = new vscode.MarkdownString(
+        `[Configure Severity](command:${CONFIGURATION_EDITOR_COMMAND})`,
+      );
+      const hover = await provideHover(
+        {} as vscode.TextDocument,
+        new vscode.Position(0, 0),
+        new vscode.CancellationTokenSource().token,
+        async () => new vscode.Hover([markdown]),
+      );
+      assert.ok(hover, "middleware must return the server's hover");
+      const [content] = hover.contents;
+      assert.ok(content instanceof vscode.MarkdownString);
+      assert.deepStrictEqual(
+        content.isTrusted,
+        { enabledCommands: [CONFIGURATION_EDITOR_COMMAND] },
+        "hover leaving the middleware must trust exactly the one command",
+      );
+    } finally {
+      const watcher = options.synchronize?.fileEvents;
+      if (watcher !== undefined && !Array.isArray(watcher)) { watcher.dispose(); }
+      trace.dispose();
+    }
+  });
+
+  // The registerCommand glue [CONFIGEDITOR-VSIX-EXPERIENCE]: executing the
+  // real basilisk.editConfig with an explorer resource must open the
+  // configuration editor panel for that resource's workspace folder.
+  test("basilisk.editConfig opens the configuration editor for the resource's folder", async function () {
+    this.timeout(60_000);
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    assert.ok(folder, "the e2e suite always opens a workspace folder");
+    const resource = vscode.Uri.joinPath(folder.uri, "pyproject.toml");
+
+    // The command registers once the live server advertises the editor
+    // capability — poll execution until the capability effect has fired.
+    const deadline = Date.now() + 45_000;
+    let lastError: unknown;
+    let executed = false;
+    while (!executed && Date.now() < deadline) {
+      try {
+        await vscode.commands.executeCommand(EDIT_CONFIG_COMMAND, resource);
+        executed = true;
+      } catch (error) {
+        lastError = error;
+        await new Promise<void>((resolve) => setTimeout(resolve, 250));
+      }
+    }
+    assert.ok(executed, `basilisk.editConfig never became executable: ${String(lastError)}`);
+
+    function isConfigTab(tab: vscode.Tab): boolean {
+      return tab.input instanceof vscode.TabInputWebview
+        && tab.input.viewType.includes("basilisk.configurationEditor");
+    }
+    await pollUntil(() =>
+      vscode.window.tabGroups.all.some((group) => group.tabs.some(isConfigTab)));
+    const tab = vscode.window.tabGroups.all
+      .flatMap((group) => group.tabs)
+      .find(isConfigTab);
+    assert.ok(tab, "the configuration editor webview tab must open");
+    await vscode.window.tabGroups.close(tab);
   });
 });

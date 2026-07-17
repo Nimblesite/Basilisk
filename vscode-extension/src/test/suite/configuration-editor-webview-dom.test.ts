@@ -34,6 +34,14 @@ interface DomTestResult {
   readonly detailHeading?: string;
   readonly searchValue?: string;
   readonly filteredCount?: string;
+  readonly searchAfterPush?: string;
+  readonly detailAfterPush?: string;
+  readonly pepRuleSelect?: string;
+  readonly pepRuleHasDisabledOption?: boolean;
+  readonly disabledRuleSelect?: string;
+  readonly disabledRuleHasDisabledOption?: boolean;
+  readonly pepTagSelect?: string;
+  readonly basiliskTagSelect?: string;
 }
 
 /** A realistic snapshot: pep rules first, basilisk rules at the bottom. */
@@ -59,7 +67,10 @@ function fixtureSnapshot(): unknown {
       docsUrl: `https://www.basilisk-python.dev/errors/BSK-${String(index + 1).padStart(4, "0")}`,
     },
     entry: undefined,
-    effectiveSeverity: { kind: "Error" },
+    // The last basilisk rule resolves to Disabled ([CHKARCH-CONFIG-MODEL]
+    // step 3: an untouched analyze rule does not run) — the no-entry select
+    // display-value test reads it.
+    effectiveSeverity: index === BASILISK_RULE_COUNT - 1 ? { kind: "Disabled" } : { kind: "Error" },
     diagnosticCount: index + 1,
   }));
   return {
@@ -102,6 +113,8 @@ function hostShimScript(focusRule: string | null = null): string {
       __state = Object.assign({}, __state, partial);
       window.dispatchEvent(new MessageEvent('message', { data: { type: 'state', state: __state } }));
     };
+    // Drivers re-push state to simulate later host updates (one-shot focus).
+    window.__push = __push;
     window.acquireVsCodeApi = () => ({
       postMessage(message) {
         if (message.type === 'ready') {
@@ -222,6 +235,91 @@ function focusDriverScript(): string {
   `;
 }
 
+/**
+ * One-shot semantics: focus is applied on the first snapshot render ONLY —
+ * once the user edits the search, later host state pushes (still carrying the
+ * same focusRule) must never stomp their filter or selection.
+ */
+function oneShotDriverScript(): string {
+  return `
+    (async () => {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const heading = () => {
+        const node = document.querySelector('#detail-content h3');
+        return node && node.textContent ? node.textContent : '';
+      };
+      const report = (result) => window.__realApi.postMessage(Object.assign({ type: 'domTestResult' }, result));
+      try {
+        let waited = 0;
+        while (!document.querySelector('[data-rule-code]') && waited < 200) { await sleep(25); waited += 1; }
+        await sleep(300);
+        const searchValue = document.getElementById('rule-search').value;
+        // The user retargets the filter to a pep rule...
+        const search = document.getElementById('rule-search');
+        search.value = 'pep_rule_001';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        await sleep(100);
+        // ...then the host pushes a later state still carrying the focusRule.
+        window.__push({});
+        await sleep(250);
+        report({
+          ok: true,
+          searchValue,
+          searchAfterPush: document.getElementById('rule-search').value,
+          filteredCount: document.getElementById('filter-result').textContent,
+          detailAfterPush: heading(),
+        });
+      } catch (error) {
+        report({ ok: false, reason: String(error) });
+      }
+    })();
+  `;
+}
+
+/**
+ * Chrome scenario: a no-entry select must DISPLAY the resolved severity —
+ * an untouched pep rule/tag reads Error, an untouched analyze rule its
+ * effective value (Disabled for one that does not run), an untouched
+ * non-pep tag Disabled — and only non-pep controls offer Disabled at all.
+ */
+function selectValueDriverScript(): string {
+  return `
+    (async () => {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const report = (result) => window.__realApi.postMessage(Object.assign({ type: 'domTestResult' }, result));
+      const optionValues = (select) => Array.from(select.options).map((option) => option.value);
+      try {
+        let waited = 0;
+        while (!document.querySelector('[data-rule-code]') && waited < 200) { await sleep(25); waited += 1; }
+        const pepRule = document.querySelector('select[data-rule-entry="pep_rule_000"]');
+        const pepTag = document.querySelector('select[data-tag-entry="pep"]');
+        const basiliskTag = document.querySelector('select[data-tag-entry="basilisk"]');
+        // The Disabled analyze rule sits below the virtual window — filter to it.
+        const search = document.getElementById('rule-search');
+        search.value = 'BSK-0005';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        await sleep(150);
+        const disabledRule = document.querySelector('select[data-rule-entry="BSK-0005"]');
+        if (!pepRule || !pepTag || !basiliskTag || !disabledRule) {
+          report({ ok: false, reason: 'expected entry selects did not render' });
+          return;
+        }
+        report({
+          ok: true,
+          pepRuleSelect: pepRule.value,
+          pepRuleHasDisabledOption: optionValues(pepRule).includes('Disabled'),
+          disabledRuleSelect: disabledRule.value,
+          disabledRuleHasDisabledOption: optionValues(disabledRule).includes('Disabled'),
+          pepTagSelect: pepTag.value,
+          basiliskTagSelect: basiliskTag.value,
+        });
+      } catch (error) {
+        report({ ok: false, reason: String(error) });
+      }
+    })();
+  `;
+}
+
 /** Inject the shim before and the driver after the real runtime, same nonce. */
 function harnessDocument(driver: string, focusRule: string | null = null): string {
   const html = buildConfigurationEditorDocument();
@@ -310,6 +408,80 @@ suite("Configuration editor — rule detail panel in a real webview DOM", () => 
     assert.ok(
       result.detailHeading?.includes("BSK-0003"),
       `the focused rule's detail panel must open (panel shows "${result.detailHeading}")`,
+    );
+  });
+
+  // One-shot: the focus target is applied on the FIRST snapshot render only.
+  // Later state pushes (occurrences round trips, refreshes) still carry the
+  // focusRule — they must never stomp the user's own search or selection.
+  test("a later state push never re-applies the consumed focusRule over the user's search", async function () {
+    this.timeout(RESULT_TIMEOUT_MS + 15_000);
+    const result = await runWebviewScenario(harnessDocument(oneShotDriverScript(), "BSK-0003"));
+    assert.strictEqual(result.ok, true, `webview driver failed: ${result.reason ?? "unknown"}`);
+    assert.strictEqual(result.searchValue, "BSK-0003", "the deep link must focus first");
+    assert.strictEqual(
+      result.searchAfterPush,
+      "pep_rule_001",
+      `a later state push must keep the user's own filter (got "${result.searchAfterPush}")`,
+    );
+    assert.ok(
+      result.filteredCount?.startsWith("1 "),
+      `the list must stay filtered to the USER's query, not the focus target (got "${result.filteredCount}")`,
+    );
+  });
+
+  // A focus target the snapshot does not contain (stale hover, wrong server)
+  // must be ignored gracefully: no crash, no vacuous filter, no detail panel.
+  test("an unknown focusRule is ignored without filtering or crashing", async function () {
+    this.timeout(RESULT_TIMEOUT_MS + 15_000);
+    const result = await runWebviewScenario(harnessDocument(focusDriverScript(), "BSK-9999"));
+    assert.strictEqual(result.ok, true, `webview driver failed: ${result.reason ?? "unknown"}`);
+    assert.strictEqual(
+      result.searchValue,
+      "",
+      `an unknown focus target must not prefill the search (got "${result.searchValue}")`,
+    );
+    assert.ok(
+      !(result.detailHeading ?? "").includes("BSK-9999"),
+      `an unknown focus target must not open a detail panel (panel shows "${result.detailHeading}")`,
+    );
+  });
+
+  // [CHKARCH-CONFIG-MODEL] resolution shown honestly: a no-entry select must
+  // DISPLAY what no entry resolves to — never a blank or a lying default.
+  test("no-entry selects display the resolved severity (pep→Error, analyze→effective, non-pep tag→Disabled)", async function () {
+    this.timeout(RESULT_TIMEOUT_MS + 15_000);
+    const result = await runWebviewScenario(harnessDocument(selectValueDriverScript()));
+    assert.strictEqual(result.ok, true, `webview driver failed: ${result.reason ?? "unknown"}`);
+    assert.strictEqual(
+      result.pepRuleSelect,
+      "Error",
+      `an untouched pep rule runs at error and its select must say so (got "${result.pepRuleSelect}")`,
+    );
+    assert.strictEqual(
+      result.pepRuleHasDisabledOption,
+      false,
+      "pep rule selects must not offer Disabled ([CHKARCH-CONFIG-MODEL])",
+    );
+    assert.strictEqual(
+      result.disabledRuleSelect,
+      "Disabled",
+      `an untouched analyze rule that does not run must display Disabled (got "${result.disabledRuleSelect}")`,
+    );
+    assert.strictEqual(
+      result.disabledRuleHasDisabledOption,
+      true,
+      "analyze rule selects must offer Disabled",
+    );
+    assert.strictEqual(
+      result.pepTagSelect,
+      "Error",
+      `an untouched pep tag grades at error and its select must say so (got "${result.pepTagSelect}")`,
+    );
+    assert.strictEqual(
+      result.basiliskTagSelect,
+      "Disabled",
+      `an untouched non-pep tag does not run and its select must say so (got "${result.basiliskTagSelect}")`,
     );
   });
 });

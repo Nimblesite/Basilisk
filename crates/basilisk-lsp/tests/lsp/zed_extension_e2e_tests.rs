@@ -192,7 +192,10 @@ fn test_zed_diagnostics_on_open() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
     let _ = fixture.initialize_zed_style()?;
 
-    let code = "def greet(name):\n    return f\"Hello, {name}!\"\n";
+    // `name` has no default to infer from (BSK-0001) and the returned method
+    // call is not inferable (BSK-0002) — an f-string return would infer
+    // `-> str` and silence BSK-0002 ([TYPEINF-FUNC-RETURN]).
+    let code = "def greet(name):\n    return name.upper()\n";
     fixture.did_open("file:///greet.py", code)?;
 
     let diag = fixture

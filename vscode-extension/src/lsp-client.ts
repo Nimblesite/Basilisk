@@ -201,7 +201,12 @@ function bindLspStateEffects(store: Store, updateStatusBar: StatusBarUpdater): v
   });
 }
 
-function buildClientOptions(
+/**
+ * Build the LanguageClient options — documentSelector, synchronize,
+ * middleware (hover trust, executeCommand UI, configuration merge), and
+ * error recovery. Exported so tests can exercise the middleware wiring.
+ */
+export function buildClientOptions(
   outputCh: vscode.LogOutputChannel | undefined,
   traceCh: vscode.LogOutputChannel,
   updateStatusBar: StatusBarUpdater

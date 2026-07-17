@@ -61,7 +61,7 @@ final_reassignment	zuban	1	500
 generics_defaults_specialization	basilisk	1	560
 generics_defaults_specialization	pyright	1	560
 generics_defaults_specialization	mypy	1	560
-generics_defaults_specialization	ty	1	421
+generics_defaults_specialization	ty	1	420
 generics_defaults_specialization	pyrefly	1	560
 generics_defaults_specialization	zuban	1	560
 literals_semantics	basilisk	1	576
@@ -73,7 +73,7 @@ literals_semantics	zuban	1	576
 match_exhaustiveness	basilisk	1	500
 match_exhaustiveness	pyright	0	0
 match_exhaustiveness	mypy	0	0
-match_exhaustiveness	ty	1	500
+match_exhaustiveness	ty	0	0
 match_exhaustiveness	pyrefly	0	0
 match_exhaustiveness	zuban	0	0
 narrowing_typeis	basilisk	1	520
@@ -85,7 +85,7 @@ narrowing_typeis	zuban	1	520
 newtype_definition	basilisk	1	2000
 newtype_definition	pyright	1	2000
 newtype_definition	mypy	1	2000
-newtype_definition	ty	0	0
+newtype_definition	ty	1	2000
 newtype_definition	pyrefly	1	2000
 newtype_definition	zuban	1	2000
 overloads_evaluation	basilisk	1	600
@@ -127,7 +127,7 @@ typeddict_key_access	zuban	1	500
 typeddict_readonly_inheritance	basilisk	1	500
 typeddict_readonly_inheritance	pyright	1	500
 typeddict_readonly_inheritance	mypy	1	500
-typeddict_readonly_inheritance	ty	1	2
+typeddict_readonly_inheritance	ty	0	0
 typeddict_readonly_inheritance	pyrefly	1	500
 typeddict_readonly_inheritance	zuban	1	500
 typeddict_readonly_mutation	basilisk	1	500

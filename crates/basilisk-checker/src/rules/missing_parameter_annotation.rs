@@ -1,9 +1,27 @@
 //! Implements [BSK-0001] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
 //! BSK-0001: Missing parameter type annotation.
+//!
+//! Never fires where the current engine already infers the parameter type: a
+//! scalar-literal default (`timeout=30` → `int`) determines the type, so
+//! demanding an annotation there would be redundant ([TYPEINF-FUNC-DEFAULTS]).
+//! Defaults that do NOT determine the type — `None`, empty containers, calls,
+//! lambdas, arbitrary expressions — still require an annotation.
+//!
+//! ```python
+//! def connect(timeout=30):              # ✓ — type inferred as int
+//!     pass
+//!
+//! def connect(retries):                 # BSK-0001 — nothing to infer from
+//!     pass
+//!
+//! def connect(timeout=None):            # BSK-0001 — None does not determine T | None
+//!     pass
+//! ```
 
 use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::inference::rhs_fully_determines_type;
 
 use super::{guards::is_stub_context, Rule};
 
@@ -48,8 +66,20 @@ impl Rule for MissingParameterAnnotation {
 fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
     func.parameters
         .iter()
-        .filter(|p| !p.has_annotation && p.name != "self" && p.name != "cls")
+        .filter(|p| {
+            !p.has_annotation && p.name != "self" && p.name != "cls" && !default_determines_type(p)
+        })
         .for_each(|p| out.push(make_diagnostic(p, path)));
+}
+
+/// Implements [TYPEINF-FUNC-DEFAULTS]: `true` when the parameter's default
+/// alone already tells the current engine the type — the annotation would be
+/// redundant, so BSK-0001 must stay silent.
+fn default_determines_type(param: &ParameterInfo) -> bool {
+    param
+        .default_rhs_kind
+        .as_ref()
+        .is_some_and(rhs_fully_determines_type)
 }
 
 fn make_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
@@ -59,6 +89,10 @@ fn make_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
         param.name_span,
         path,
         Some(format!("Add a type annotation: `{}: <type>`", param.name)),
-        Some("In Basilisk, all function parameters require explicit types".to_owned()),
+        Some(
+            "Basilisk requires an explicit parameter type wherever it cannot be inferred; \
+             a literal default (e.g. `timeout=30`) infers the type and needs no annotation"
+                .to_owned(),
+        ),
     )
 }

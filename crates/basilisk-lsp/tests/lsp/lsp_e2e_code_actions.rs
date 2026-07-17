@@ -383,7 +383,10 @@ fn test_lsp_code_action_missing_return_annotation() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
     let _ = fixture.initialize()?;
 
-    let code = "def greet(name: str):\n    return f\"Hello, {name}!\"";
+    // The returned method call is not inferable, so BSK-0002 fires — an
+    // f-string return would infer `-> str` and stay silent
+    // ([TYPEINF-FUNC-RETURN]).
+    let code = "def greet(name: str):\n    return name.upper()";
     fixture.did_open("file:///retact.py", code)?;
 
     let diag_msg = fixture
@@ -415,8 +418,8 @@ fn test_lsp_code_action_missing_return_annotation() -> TestResult<()> {
     .ok_or("no code action response")?;
 
     assert!(
-        resp.contains("-> None"),
-        "code action should insert '-> None': {resp}"
+        resp.contains("-> Any"),
+        "code action should insert '-> Any': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
@@ -431,7 +434,7 @@ fn test_lsp_code_action_missing_return_annotation() -> TestResult<()> {
         .ok_or("expected result array")?;
     let return_fix = actions
         .iter()
-        .find(|a| a["title"].as_str().is_some_and(|t| t.contains("-> None")))
+        .find(|a| a["title"].as_str().is_some_and(|t| t.contains("-> Any")))
         .ok_or("no return type fix action")?;
     let edit = &return_fix["edit"]["changes"]["file:///retact.py"][0];
     let start_line = edit["range"]["start"]["line"].as_u64().unwrap_or(u64::MAX);
@@ -445,8 +448,8 @@ fn test_lsp_code_action_missing_return_annotation() -> TestResult<()> {
         "edit must insert at column 20 (after closing paren), not at function name"
     );
     assert_eq!(
-        new_text, " -> None",
-        "inserted text must be ' -> None' (space before arrow)"
+        new_text, " -> Any",
+        "inserted text must be ' -> Any' (space before arrow)"
     );
     Ok(())
 }

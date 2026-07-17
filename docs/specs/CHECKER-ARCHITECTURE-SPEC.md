@@ -60,13 +60,19 @@ def greet(name):
     return f"Hello, {name}"
 
 # Passes check always; fires BSK-0002 under analyze once configured
+# (the returned call is not inferable — a literal/f-string return would
+# infer the type and stay silent, [TYPEINF-EXCEEDS-REQUIRED])
 def greet(name: str):
-    return f"Hello, {name}"
+    return build_greeting(name)
 
 # OK under any configuration
 def greet(name: str) -> str:
     return f"Hello, {name}"
 ```
+
+Even when enabled, the require-annotation rules fire only where the type cannot
+be inferred — see
+[TYPEINF-EXCEEDS-REQUIRED](CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-EXCEEDS-REQUIRED).
 
 #### `Any` Is Explicit, Never Implicit {#CHKARCH-STRICTNESS-ANY}
 
@@ -294,7 +300,7 @@ Basilisk's **target** is 100% conformance with the Python typing specification. 
 
 ### Type Inference Engine {#CHKARCH-INFERENCE}
 
-When the require-annotation rules (`BSK-0001`/`BSK-0002`/`BSK-0004`) have config entries, explicit annotations are required on public APIs; local variable types are always inferred:
+When the require-annotation rules (`BSK-0001`/`BSK-0002`/`BSK-0004`) have config entries, explicit annotations are required on public APIs **only where the type cannot be inferred** ([TYPEINF-EXCEEDS-REQUIRED](CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-EXCEEDS-REQUIRED)); local variable types are always inferred:
 
 ```python
 def process(items: list[str]) -> int:
@@ -1135,8 +1141,8 @@ Every error has at least one associated code action:
 
 | Error | Quick Fix |
 |---|---|
-| BSK-0001 (missing param type) | Insert `: <inferred_type>` |
-| BSK-0002 (missing return type) | Insert `-> <inferred_type>` |
+| BSK-0001 (missing param type) | Insert `: Any` (the rule only fires where no type is inferable, [TYPEINF-EXCEEDS-REQUIRED](CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-EXCEEDS-REQUIRED)) |
+| BSK-0002 (missing return type) | Insert `-> Any` (same rationale) |
 | enums_behaviors (mutation of immutable param) | Add `InOut` annotation |
 | dataclasses_order (implicit coercion) | Wrap in explicit conversion |
 

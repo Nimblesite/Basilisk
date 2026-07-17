@@ -22,6 +22,12 @@ pub struct ParameterInfo {
     pub annotation_is_numeric_literal: bool,
     /// `true` when the parameter has a default value (`param = default`).
     pub has_default: bool,
+    /// Classified kind of the default expression, if present.
+    ///
+    /// Lets BSK-0001 skip parameters whose type the current engine already
+    /// infers from a literal default (`timeout=30` → `int`) — see
+    /// [TYPEINF-FUNC-DEFAULTS]. `None` when there is no default.
+    pub default_rhs_kind: Option<super::rhs::RhsKind>,
     /// The source span of the parameter name token.
     pub name_span: Span,
     /// The source span of the annotation expression, if present.

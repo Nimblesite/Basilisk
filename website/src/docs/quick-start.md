@@ -122,8 +122,8 @@ warnings tell you strictness isn't at full yet:
 ```toml
 # pyproject.toml
 [tool.basilisk.rules]
-"BSK-0001" = "warning"  # every parameter needs a type annotation
-"BSK-0002" = "warning"  # every function needs a return type
+"BSK-0001" = "warning"  # parameters need a type where none is inferable
+"BSK-0002" = "warning"  # functions need a return type where none is inferable
 ```
 
 Add an unannotated function to `good.py`:
@@ -141,7 +141,7 @@ warning[BSK-0001]: Missing parameter type annotation for `data`
    |             ^^^^
    |
    = help: Add a type annotation: `data: <type>`
-   = note: In Basilisk, all function parameters require explicit types
+   = note: Basilisk requires an explicit parameter type wherever it cannot be inferred; a literal default (e.g. `timeout=30`) infers the type and needs no annotation
    = see: https://www.basilisk-python.dev/errors/BSK-0001
 
 warning[BSK-0002]: Missing return type annotation for function `process`
@@ -151,7 +151,7 @@ warning[BSK-0002]: Missing return type annotation for function `process`
    |     ^^^^^^^^^^^^^
    |
    = help: Add a return type: `def process(...) -> <type>:`
-   = note: In Basilisk, all functions require an explicit return type
+   = note: Basilisk requires an explicit return type wherever it cannot be inferred; literal-only returns (e.g. `return 42`) infer the type and need no annotation
    = see: https://www.basilisk-python.dev/errors/BSK-0002
 
 Found 2 diagnostics (0 errors).

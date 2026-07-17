@@ -171,48 +171,84 @@ The walrus operator `:=` assigns the value and the **expression type equals the 
 ### Parameters {#TYPEINF-FUNC-PARAMS}
 
 When the opt-in annotation policy is enabled, an unannotated non-receiver parameter fires
-`BSK-0001`. The unconfigured PEP default does not require annotations merely for style.
+`BSK-0001` **only when the current engine cannot infer its type** — see
+[TYPEINF-EXCEEDS-REQUIRED](#TYPEINF-EXCEEDS-REQUIRED) for the governing
+principle. The unconfigured PEP default does not require annotations merely for style.
 
 ```python
-def process(data):          # BSK-0001: parameter 'data' has no type annotation
+def process(data):          # BSK-0001: nothing to infer 'data' from
     pass
 
 def process(data: bytes):   # ✓
     pass
 ```
 
-The only parameters inferred rather than annotated are:
+Parameters inferred rather than annotated:
 
 - `self` in instance methods → inferred as `Self` (the containing class bound to `Self`)
 - `cls` in class methods → inferred as `type[Self]`
 - `__` (positional-only placeholder) → accepted as `Any` for compatibility
+- parameters whose literal default determines the type —
+  [TYPEINF-FUNC-DEFAULTS](#TYPEINF-FUNC-DEFAULTS)
 
 > **Authority**: [PEP 673 (Self type)](https://peps.python.org/pep-0673/) for `Self` semantics.
 
 ### Default Parameters {#TYPEINF-FUNC-DEFAULTS}
 
-A default expression does not become a declared parameter type. Under the opt-in annotation
-policy the parameter still needs an annotation.
+A type-determining literal default infers the parameter type, so `BSK-0001`
+MUST NOT fire there — demanding an annotation the engine already knows is
+redundant. A default that does **not** determine the type (`None`, empty
+containers, calls, lambdas, arbitrary expressions) still requires one.
 
 ```python
-def connect(timeout=30):        # BSK-0001 — annotation required even with default
+def connect(timeout=30):             # ✓ — inferred as int from the default
     pass
 
-def connect(timeout: int = 30): # ✓
+def connect(timeout: int = 30):      # ✓ — explicit annotation always accepted
+    pass
+
+def connect(timeout=None):           # BSK-0001 — None does not determine T | None
+    pass
+
+def connect(timeout=make_default()): # BSK-0001 — call results are not inferable
     pass
 ```
+
+The exemption is exactly as strong as the current engine
+(`rhs_fully_determines_type` in `crates/basilisk-checker/src/inference.rs`):
+scalar literals and non-empty containers of type-determining elements qualify;
+nothing else does.
 
 ### Return Types {#TYPEINF-FUNC-RETURN}
 
 Focused resolver/checker paths infer simple return expressions and validate them against a
-declared return type. The opt-in annotation policy can separately require a public return
-annotation; there is no universal PEP-default requirement.
+declared return type. The opt-in annotation policy can separately require a return
+annotation, but `BSK-0002` fires **only when the current engine cannot infer the
+return type** ([TYPEINF-EXCEEDS-REQUIRED](#TYPEINF-EXCEEDS-REQUIRED)); there is
+no universal PEP-default requirement.
 
 ```python
 def f(x: int) -> int | str:    # ✓ — annotation matches inference
     if x > 0:
         return x               # int
     return "negative"          # str
+```
+
+A function is exempt from `BSK-0002` when every `return` is bare or carries a
+type-determining literal, or the body has no `return` at all (inferred `None`):
+
+```python
+def answer():          # ✓ — inferred as int
+    return 42
+
+def log_it(msg: str):  # ✓ — no return: inferred as None
+    print(msg)
+
+def fetch(url: str):   # BSK-0002 — call result is not inferable
+    return download(url)
+
+def numbers():         # BSK-0002 — Generator[...] is not inferable from returns
+    yield 1
 ```
 
 If the annotated return type is **narrower** than the inferred union, Basilisk emits `returns_compatibility` (return type mismatch).
@@ -843,9 +879,26 @@ With the `strictness` tag enabled, a module/class variable assigned a lambda wit
 annotation emits `BSK-0040`. The diagnostic is an annotation nudge, not evidence that lambda
 parameters were otherwise contextually inferred.
 
-### Annotation Required, Not Optional {#TYPEINF-EXCEEDS-REQUIRED}
+### Annotation Required Only Where Inference Fails {#TYPEINF-EXCEEDS-REQUIRED}
 
-When the require-annotation house rules are enabled, missing public-API annotations are diagnostics. They are not part of the unconfigured PEP default.
+When the require-annotation house rules are enabled, missing public-API annotations are
+diagnostics. They are not part of the unconfigured PEP default.
+
+**Inference-first principle:** a missing-annotation rule MUST NOT fire where the
+current engine already infers the type — demanding a type the checker knows is
+redundant noise (and contradicts `BSK-0050`, which flags exactly such
+annotations as redundant). Each rule fires only where inference fails:
+
+| Rule | Exempt (inferable today) | Still fires (not inferable today) |
+|---|---|---|
+| `BSK-0001` (parameter) | `self`/`cls`; type-determining literal default ([TYPEINF-FUNC-DEFAULTS](#TYPEINF-FUNC-DEFAULTS)) | no default; `None`/empty-container/call/lambda default |
+| `BSK-0002` (return) | all returns bare/literal, or no returns → `None` ([TYPEINF-FUNC-RETURN](#TYPEINF-FUNC-RETURN)) | any uninferable return; generators |
+| `BSK-0003` (module var) | any RHS except empty containers / `None` | `[]`, `{}`, `None` |
+| `BSK-0005` (class attr) | scalar/tuple literal RHS | everything else |
+| `BSK-0004` (`*args`/`**kwargs`), `BSK-0040` (lambda) | — (nothing inferable today) | always |
+
+The exemptions are exactly as strong as today's inference and MUST widen as the
+engine grows ([TYPEINF-TARGET](#TYPEINF-TARGET)) — never the reverse.
 
 ---
 
