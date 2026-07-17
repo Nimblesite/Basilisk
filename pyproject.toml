@@ -1,7 +1,93 @@
-[tool]
+# PyPI packaging for the `basilisk` type checker.
+#
+# This wraps the SAME native `basilisk` binary that ships via GitHub Releases,
+# Homebrew and Scoop into a Python wheel, so `pip install basilisk-python`
+# lands the executable on PATH. It exists so tools that manage type checkers
+# through Python environments — notably the `python/typing` conformance suite,
+# which installs every checker with `uv sync` — can pull Basilisk the same way
+# they pull ty, pyrefly and zuban (all Rust binaries shipped as wheels).
+#
+# The distribution name is `basilisk-python` because `basilisk` is already
+# taken on PyPI; the installed console script is still `basilisk`.
+#
+# Version is single-sourced from the Cargo workspace (`dynamic = ["version"]`
+# reads `crates/basilisk-cli/Cargo.toml`), which `scripts/stamp-version.sh`
+# stamps at release time alongside every other versioned artifact — so the
+# wheel version, the binary's `--version`, and the GitHub Release tag can never
+# drift apart.
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "basilisk-python"
+description = "Basilisk — the only Python type checker scoring 100% on the official python/typing conformance suite (https://github.com/python/typing/blob/main/conformance/results/results.html) — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default."
+readme = "README-pypi.md"
+requires-python = ">=3.8"
+license = "MIT"
+# The wheel bundles the native binary, which statically links MIT-licensed
+# third-party code (notably the Ruff crates by Astral — "Copyright (c) 2022
+# Charles Marsh"). Their copyright notices MUST travel with every copy, so the
+# notice files are packaged into the wheel's `.dist-info/licenses/` explicitly
+# rather than relying on the default license-file glob.
+license-files = ["LICENSE", "NOTICES", "THIRD-PARTY-LICENSES"]
+authors = [{ name = "Nimblesite", email = "cftools@nimblesite.co" }]
+dynamic = ["version"]
+keywords = ["type-checker", "typing", "static-analysis", "lsp", "pep", "python"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Programming Language :: Rust",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://www.basilisk-python.dev"
+Repository = "https://github.com/Nimblesite/Basilisk"
+Documentation = "https://www.basilisk-python.dev/docs/"
+Changelog = "https://github.com/Nimblesite/Basilisk/releases"
+
+# `bindings = "bin"` packages the compiled `basilisk` executable (from the
+# basilisk-cli crate) into the wheel's scripts directory — a binary-only wheel
+# with no Python extension module, so it works on any CPython/PyPy 3.x.
+[tool.maturin]
+bindings = "bin"
+manifest-path = "crates/basilisk-cli/Cargo.toml"
+strip = true
 
 [tool.basilisk]
 
-[tool.basilisk.rule-tags]
-basilisk = "info"
-pep = "warning"
+[tool.basilisk.rules]
+BSK-0001 = "error"
+BSK-0002 = "error"
+BSK-0003 = "error"
+BSK-0004 = "error"
+BSK-0005 = "error"
+BSK-0025 = "error"
+BSK-0063 = "error"
+BSK-0152 = "error"
+BSK-0060 = "info"
+BSK-0011 = "warning"
+BSK-0012 = "warning"
+BSK-0013 = "warning"
+BSK-0014 = "warning"
+BSK-0040 = "warning"
+BSK-0050 = "warning"
+BSK-0061 = "warning"
+BSK-0062 = "warning"
+
+# The examples model the incremental-adoption story the docs teach: PEP
+# typing-spec violations stay errors, while Basilisk's opt-in strictness
+# rules surface as warnings — "this type-checks, but strictness isn't at
+# full yet". See website/src/docs/quick-start.md step 3.
+[tool.basilisk.per-path-overrides."examples/**"]
+rules."BSK-0001" = "warning"
+rules."BSK-0002" = "warning"
+rules."BSK-0003" = "warning"
+rules."BSK-0004" = "warning"
+rules."BSK-0005" = "warning"
+rules."BSK-0025" = "warning"
