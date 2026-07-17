@@ -240,7 +240,9 @@ pub(crate) fn typevar_tuple_names(typevar_calls: &[TypeVarCallInfo]) -> HashSet<
 // String splitting
 // ---------------------------------------------------------------------------
 
-/// Split `s` at every top-level comma, respecting bracket nesting.
+/// Split `s` at every top-level comma, respecting bracket nesting and string
+/// literals — a comma inside quotes (`Literal[',']`) is part of the literal
+/// value, not a separator (issue #316).
 ///
 /// Returns slices into the original string (no allocation for the parts
 /// themselves). Callers that need trimmed/owned values can chain
@@ -248,16 +250,25 @@ pub(crate) fn typevar_tuple_names(typevar_calls: &[TypeVarCallInfo]) -> HashSet<
 pub(crate) fn split_top_level_commas(s: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut depth: usize = 0;
+    let mut in_string: Option<char> = None;
     let mut start = 0;
     for (idx, ch) in s.char_indices() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                parts.push(&s[start..idx]);
-                start = idx + 1;
+        match in_string {
+            Some(quote) => {
+                if ch == quote {
+                    in_string = None;
+                }
             }
-            _ => {}
+            None => match ch {
+                '\'' | '"' => in_string = Some(ch),
+                '[' | '(' | '{' => depth += 1,
+                ']' | ')' | '}' => depth = depth.saturating_sub(1),
+                ',' if depth == 0 => {
+                    parts.push(&s[start..idx]);
+                    start = idx + 1;
+                }
+                _ => {}
+            },
         }
     }
     parts.push(&s[start..]);
