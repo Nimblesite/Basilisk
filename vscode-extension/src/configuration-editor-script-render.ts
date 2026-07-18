@@ -186,10 +186,98 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       showRule(code);
       announce('Focused rule ' + code);
     }
+    // Overview/Adoption/Project/Path Overrides render exact server-computed
+    // snapshot state (snapshot.debt / .source / .problems / .pathOverrides) —
+    // never client arithmetic dressed up as a score ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+    function renderSeverityStrip() {
+      const strip = byId('severity-strip');
+      clear(strip);
+      const debt = snapshot.debt;
+      [['Error', debt.errorDiagnostics], ['Warning', debt.warningDiagnostics], ['Info', debt.infoDiagnostics], ['Total', debt.remainingDiagnostics]]
+        .forEach(([label, value]) => {
+          const cell = document.createElement('div');
+          cell.append(textNode('strong', formatNumber(value)), textNode('span', label));
+          strip.append(cell);
+        });
+    }
+    function renderOverview() {
+      renderSeverityStrip();
+      byId('overview-diagnostics').textContent = formatNumber(snapshot.debt.remainingDiagnostics);
+      byId('overview-adopted').textContent = formatNumber(snapshot.debt.adoptedRules);
+      byId('overview-disabled').textContent = formatNumber(snapshot.debt.disabledRules);
+    }
+    function renderAdoption() {
+      const openRules = snapshot.rules.filter((rule) => rule.diagnosticCount > 0).length;
+      byId('adoption-open-rules').textContent = formatNumber(openRules);
+      byId('adoption-open-diagnostics').textContent = formatNumber(snapshot.debt.remainingDiagnostics);
+    }
+    function pathSettingRow(label, severity) {
+      const item = document.createElement('li');
+      item.append(textNode('code', label), textNode('span', kind(severity, 'Error')));
+      return item;
+    }
+    function renderPaths() {
+      const list = byId('path-override-list');
+      clear(list);
+      const overrides = snapshot.pathOverrides || [];
+      if (overrides.length === 0) {
+        list.append(textNode('p', 'No path overrides. Project policy applies everywhere. Add a nested pyproject.toml [tool.basilisk] table to scope rules to a subtree.', 'empty-state'));
+        return;
+      }
+      overrides.forEach((entry) => {
+        const card = document.createElement('article');
+        card.className = 'path-override-card';
+        const header = document.createElement('div');
+        header.className = 'path-override-head';
+        header.append(textNode('h3', entry.path || '.'));
+        const open = textNode('button', 'Open configuration file', 'secondary');
+        open.type = 'button';
+        open.dataset.openConfig = entry.configUri;
+        header.append(open);
+        card.append(header);
+        const rows = document.createElement('ul');
+        entry.rules.forEach((rule) => rows.append(pathSettingRow(rule.code, rule.severity)));
+        entry.tags.forEach((tag) => rows.append(pathSettingRow('tag:' + tag.tag, tag.severity)));
+        card.append(rows);
+        list.append(card);
+      });
+    }
+    function renderProject() {
+      const dl = byId('source-details');
+      clear(dl);
+      const source = snapshot.source;
+      const facts = [
+        ['Root', compactUri(snapshot.rootUri)],
+        ['Source', compactUri(source.uri)],
+        ['Revision', snapshot.revision],
+        ['On disk', source.exists ? 'Yes' : 'Created on first change'],
+        ['Writable', source.readOnly ? 'Read-only' : 'Writable'],
+      ];
+      facts.forEach(([name, value]) => dl.append(textNode('dt', name), textNode('dd', value)));
+      const problemList = byId('problem-list');
+      clear(problemList);
+      const problems = snapshot.problems || [];
+      if (problems.length === 0) {
+        problemList.className = 'empty-state';
+        problemList.textContent = 'No configuration problems.';
+        return;
+      }
+      problemList.className = '';
+      problems.forEach((problem) => {
+        const item = document.createElement('p');
+        item.className = 'problem-row';
+        item.append(textNode('strong', problem.code), document.createTextNode(' ' + problem.message));
+        problemList.append(item);
+      });
+    }
     function renderSnapshot() {
       if (!snapshot) return;
       saveFocus();
       renderSource();
+      renderOverview();
+      renderAdoption();
+      renderPaths();
+      renderProject();
       renderTags();
       applyFilter();
       consumeFocusRule();
@@ -242,7 +330,9 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       document.querySelector('main').setAttribute('aria-busy', String(blocking));
       if (!blocking) {
         if (overlayWasBlocking) {
-          const recovery = byId('rule-search');
+          const recovery = activeSection === 'rules'
+            ? byId('rule-search')
+            : document.querySelector('[data-section="' + activeSection + '"] h2');
           if (recovery) window.requestAnimationFrame(() => recovery.focus());
         }
         overlayWasBlocking = false;

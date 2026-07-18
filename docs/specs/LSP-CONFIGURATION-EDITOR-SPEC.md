@@ -10,7 +10,7 @@ This contract composes:
 
 The LSP owns the rule catalog, configuration parsing, impact analysis, and mutation. Clients render server data, request server operations, and apply the returned edit. They do not maintain another rule catalog or write project configuration directly.
 
-The editor is a veneer over the configuration model, never an extension of it. A config file can express exactly two kinds of line — a rule entry and a tag entry — so the editor can request exactly four things: set or remove one of each. Every other editor concept (snapshots, previews, occurrence pages) exists only on the wire.
+The editor is a veneer over the configuration model, never an extension of it. Its rule table requests exactly four mutations: set/remove a rule or tag entry. The separate Typeshed panel uses allowlisted set/remove-setting mutations for the keys in [STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG). The five navigation views (Overview, Rules, Adoption, Path Overrides, Project) never widen that vocabulary: each renders server-computed state and drives only those mutations, allowlisted Typeshed actions, or standalone adopt/safe-fix commands, so every editor concept beyond a rule entry, a tag entry, and an allowlisted Typeshed setting — snapshots, previews, occurrence pages, the debt summary, the path inventory — exists only on the wire, never as a new kind of config line.
 
 ## Rule catalog and tags {#CONFIGEDITOR-TAGS}
 
@@ -22,18 +22,19 @@ Tags serve two roles, both explicit. As *facets*, they group the catalog for nav
 
 All configuration-editor requests require an explicit active-workspace `rootUri`:
 
-- `basilisk/configurationSnapshot` returns the root config document URI, its content revision, the catalog with per-rule entries, effective severities, and diagnostic counts, and tag states with their entries.
+- `basilisk/configurationSnapshot` returns the root config document URI and revision, the active source (URI/exists/read-only), rule/tag states, the discovered per-folder path overrides, a server-computed debt summary, the real configuration problems, and the server-described Typeshed settings and active status.
 - `basilisk/previewConfigurationChange` validates the base revision, builds a validated in-memory patch from the requested mutations, and reruns checking against that hypothetical config, returning the resolved per-rule effective-severity changes and before/after impact.
 - `basilisk/applyConfigurationChange` consumes a cached preview identified by root and preview ID; the server rejects it if the preview's pinned base revision no longer matches the current document. It asks the client to apply one configuration edit, reloads and rechecks the root, republishes diagnostics, emits `basilisk/configurationChanged`, and returns a fresh snapshot.
 - `basilisk/ruleOccurrences` returns URI/range/code-ordered pages selected by the all/codes/tags selectors. The opaque cursor resumes the stable result and the server accepts limits from 1 to 1000.
+- `basilisk/typeshedAction` accepts only `PinCurrent`, `AcquireFresh`, or `ViewLicense`; it returns an ordinary config preview, refreshed snapshot, or safe read-only license document respectively.
 
-A mutation is `SetRule`, `RemoveRule`, `SetTag`, or `RemoveTag` — nothing else. Requesting `disabled` for a `pep`-tagged rule (directly, or via a tag entry that would resolve one to `disabled`) is a request error: PEP rules are graded, never disabled ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
+A mutation is `SetRule`, `RemoveRule`, `SetTag`, `RemoveTag`, `SetTypeshedSetting`, or `RemoveTypeshedSetting`; the latter two accept only the typed keys in [§LSPCFGED-TYPESHED](#LSPCFGED-TYPESHED). Requesting `disabled` for a `pep`-tagged rule is an error: PEP rules are graded, never disabled ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 
 Snapshot, preview, and occurrence inventory cover the complete selected root, even when analysis is configured to publish only open files. Open buffers stay authoritative; eligible closed files are loaded from disk into the server index without publishing additional diagnostics.
 
 The `basilisk.disableRule` command writes an explicit `disabled` rule entry through the same validated, root-aware mutation service, and is rejected for `pep`-tagged rules. Configuration watching is server-owned ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)).
 
-Unknown roots, rule codes, tags, severities, and selectors, pep-disable requests, stale revisions, malformed configuration, expired previews, and client-rejected edits are request errors ([LSPARCH-CONFIG-EDITOR-ERRORS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR-ERRORS)).
+Unknown roots, rule codes, tags, severities, selectors, or Typeshed keys/values/combinations, plus pep-disable requests, stale revisions, malformed configuration, expired previews, and client-rejected edits are request errors ([LSPARCH-CONFIG-EDITOR-ERRORS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR-ERRORS)).
 
 ## Wire model {#CONFIGEDITOR-MODEL}
 
@@ -41,12 +42,13 @@ The editor protocol's design source is [`models/configuration_editor.td`](../../
 
 The protocol is deliberately small:
 
-- a snapshot is the root, the config document URI, a content revision, rule states (descriptor + optional entry + effective severity + diagnostic count), and tag states (facet + optional entry + counts);
-- an `EditorMutation` is `SetRule` / `RemoveRule` / `SetTag` / `RemoveTag`;
+- a snapshot is the root, config URI/revision, the active source (URI/exists/read-only), rule/tag states, the discovered per-folder path overrides, a server-computed debt summary (the errors/warnings/infos partition plus adopted/disabled rule counts), the real configuration problems, and server-described Typeshed settings/status;
+- `EditorMutation` adds allowlisted `SetTypeshedSetting` / `RemoveTypeshedSetting` to the four rule/tag variants;
+- `TypeshedAction` is the closed `PinCurrent` / `AcquireFresh` / `ViewLicense` union;
 - a preview is the resolved per-rule effective-severity changes (`Disabled` = does not run, never present on a `pep` rule) plus a complete errors/warnings/infos before/after partition; and
 - occurrences are paged locations with the severity that produced them.
 
-There is no format enum, no problems list, no debt summary, no preset list, no path inventory, and no provenance flags.
+There is no format enum, no preset list, and no mutation intents. The debt summary, path inventory, configuration problems, and adoption state a view renders are read-only server projections of the snapshot — never client-computed and never a new kind of config line.
 
 ## Configuration sources and writes {#CONFIGEDITOR-SOURCES}
 
@@ -68,9 +70,17 @@ The four suppression-audit rules (`BSK-0060`–`BSK-0063`) are ordinary analyze-
 
 ## VS Code experience {#CONFIGEDITOR-VSIX-EXPERIENCE}
 
-The capability-gated **Basilisk: Open Configuration Editor** command opens one full-width singleton webview using the shared Signals store and typed LSP transport.
+The capability-gated **Basilisk: Open Configuration Editor** command opens one full-width singleton webview using the shared Signals store and typed LSP transport. A left navigation rail selects among five views — **Overview**, **Rules**, **Adoption**, **Path Overrides**, and **Project** — and every view renders exact server-computed state; none is a synthetic score. Rules is the default view.
+
+The **Overview** view is a read-only effective-state dashboard: the root's error/warning/info debt partition and total diagnostic count, and the counts of adopted (graded-down `pep`) and disabled rules — all folded by the server into the snapshot's debt summary, never computed on the client.
 
 The Rules view is tag-first, grouping source, PEP-category, and policy facets. Tag groups expose the tag's entry control; rows expose per-rule entry controls. Every control lists concrete severities only — there is no separate "no entry" choice, because an analyze rule or tag with no entry already resolves to disabled ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL) resolution step 3), so the two choices were one. A control with no underlying entry displays what no entry resolves to (the rule's effective severity; `error` for pep-affecting tags, `disabled` otherwise), and choosing a value always writes an explicit entry (`SetRule` / `SetTag` — an explicit `disabled` beats any tag entry, so Disabled always disables; `RemoveRule` / `RemoveTag` stay wire-only). `pep`-affecting controls — pep rows, the `pep` source tag, and PEP-category tags — offer `error` / `warning` / `info` with no disable control, because no disable exists for pep rules; analyze rows and non-pep tags additionally offer `disabled`. The view supports search, virtualized rows, exact impact preview/apply, paged occurrence navigation, and conflict refresh.
+
+The **Adoption** view renders the server's effective adoption state read-only — the rules with open diagnostics and the remaining debt to pay down — and offers the **Adopt workspace debt** and **Apply safe fixes** actions. Those invoke the standalone adopt and mass-fix commands ([AUTOFIX-ADOPTION](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-ADOPTION), [AUTOFIX](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX)); they are not configuration-editor mutations, and the view computes no debt of its own.
+
+The **Path Overrides** view surfaces the nested `pyproject.toml` `[tool.basilisk]` tables the server discovered under the root ([CHKARCH-CONFIG-DISCOVERY](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY)): each is shown with its folder, its rule and tag entries, and a link that opens that folder's configuration file for editing. The checker honors the nearest deciding table per rule; the view exposes only folder-scoped tables — glob-path and per-module override tables stay excluded.
+
+The **Project** view shows the active configuration source resolved by the server — its `pyproject.toml` URI, whether it exists on disk, whether it is writable, and the content revision — plus any real configuration problems (an entry naming an unknown rule code) and the Typeshed settings ([LSPCFGED-TYPESHED](#LSPCFGED-TYPESHED)). The extension never reads or writes configuration files itself.
 
 Multi-root selection is explicit: the active editor's root wins, otherwise the user chooses a workspace. Responses and navigation are checked against that root. The extension does not read or write configuration files itself. The analyze opt-out is an ordinary editor setting relayed as an initialization option ([LSPARCH-DIAGNOSTIC-SCOPE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE)), not part of this editor.
 
@@ -81,122 +91,63 @@ A non-PEP diagnostic's hover carries a **Configure Severity** deep link ([LSPARC
 The standard-library source implements the pinned typing specification's custom
 "canonical source" option
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-With no override Basilisk downloads the latest `python/typeshed@main` commit and
-falls back to the bundled ZIP snapshot offline
-([CHECKER-STUB-RESOLUTION §STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)).
-The guiding principle is **freshness by default, determinism one control away**:
-the default tracks the freshest upstream types, and a single **Source** choice
-opts into a reproducible pin or a hand-maintained tree. Every typeshed knob is
-editable here — none is CLI-only.
-
-**Source selector (mutually exclusive).** One top-level control decides the step-3
-source so the pin and the custom-tree fields can never conflict. Picking a mode
-enables that mode's fields and disables the rest:
+Freshness is the default; determinism is one control away. Every key in
+[STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)
+is editable here.
 
 | Source mode | Enables | Writes | Step-3 effect |
 |---|---|---|---|
 | **Latest** *(default)* | — | clears `typeshed-commit` + `typeshed-path` | resolves & downloads the newest `main` SHA |
-| **Exact commit** | commit field + **Pin current** action | `typeshed-commit` = 40-char SHA | downloads that immutable commit; deterministic type results |
-| **Custom folder** | folder-picker | `typeshed-path` = directory | that tree is canonical; download + bundled ZIP disabled |
+| **Exact commit** | commit + **Pin current** | full `typeshed-commit` | selected SHA; verified unless disabled; failure closes unless bundle matches |
+| **Custom folder** | folder-picker | `typeshed-path` | canonical user-managed tree; no download/bundle |
 
-**Pin current** captures the SHA the server just resolved for `main` and writes it
-into `typeshed-commit` — freezing today's freshest types for reproducible CI in one
-click, with no SHA to type.
-
-The remaining controls apply across the download modes (a custom folder ignores
-the transport ones):
-
-| Control | `[tool.basilisk]` key / flag | Widget |
+| Control | Key/action | Widget |
 |---|---|---|
 | Alternate archive URL | `typeshed-url` | text (`{sha}` template) |
-| Download cache location | `typeshed-cache-path` | **folder-picker** |
-| Verify against the tree SHA | `typeshed-verify` | toggle (default on) |
-| Bypass cache for one run | `--no-typeshed-cache` | action button (download, verify, discard) |
+| Cache folder | `typeshed-cache-path` | folder-picker |
+| Reuse downloads | `typeshed-cache` | toggle + one-run fresh-download action |
+| Verify content | `typeshed-verify` | toggle; disabling requires confirmation |
+| License | active source | **View License**, or `not supplied` for custom |
 
-**Alternate URL is archive-only.** `typeshed-url` substitutes the download of a
-**known SHA**; it cannot resolve *Latest* on its own. The field's help says so:
-with **Latest** selected and GitHub commit metadata unreachable, Basilisk cannot
-learn the newest SHA and falls back to the bundled ZIP — a mirror helps only once a
-SHA is known (a pin, or a previously resolved `main`).
-
-**Turning verification off requires confirmation.** Clearing `typeshed-verify` (or
-a one-run `--no-typeshed-verification`) opens a confirm dialog explaining stubs
-will be trusted without a content-hash check; on confirm, the editor shows a
-**persistent `UNVERIFIED` badge** on the typeshed section and the Service Info row
-until verification is restored. Extraction safety stays on regardless
-([§STUBRES-TYPESHED-ACQUIRE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
-
-**Not-pinned advisory.** In **Latest** mode the section shows a warning-level
-*not pinned* advisory whose call to action is **Pin current** — and it shows even
-when Basilisk is running on the bundled snapshot it shipped with, because a
-build-time snapshot is not a user-chosen commit
-([§STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
-**View License** sits beside the active source, opening the resolved tree's
-`LICENSE` (typeshed's composite Apache-2.0/MIT file) so provenance is one click
-away ([§STUBRES-TYPESHED-LICENSE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-LICENSE)).
+The URL downloads only a known SHA; Latest still needs official metadata. Cache
+off downloads, validates, and discards—it is not labelled hermetic. Verification
+off leaves safety, shape, and license gates active and displays `UNVERIFIED`.
+Only Exact commit suppresses `UNPINNED`; Latest/bundled offer **Pin current**,
+while Custom says its folder can change and directs reproducible use to Exact.
+Custom shows user-managed terms, never the typeshed composite license
+([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
+`PinCurrent` returns a preview that writes the active SHA; `AcquireFresh` performs
+one cache-bypassing acquisition; `ViewLicense` returns the active immutable
+license document, or `not supplied` for custom. Clients execute none locally.
 
 The two directory keys render with a native folder-picker rather than free text;
 they are the only path-typed settings the editor exposes, distinct from the
 glob-path and per-module rule overrides it deliberately excludes
 ([§CONFIGEDITOR-ACCEPTANCE](#CONFIGEDITOR-ACCEPTANCE)).
 
-The server owns the setting metadata. The LSP advertises each typeshed setting as
-an editor field carrying its `[tool.basilisk]` key, its server-resolved current
-value, a widget discriminator — `directory` (folder chooser), `text`, `boolean`,
-`enum` (the Source selector), or `action` (**Pin current**, bypass-cache) — and a
-server-computed `enabled` flag so the client greys out the fields the chosen
-Source mode does not apply instead of guessing which combinations are legal.
-Values are resolved exactly like every other snapshot field: a relative path is
-shown against the workspace root, and an unset key shows its resolved default (the
-Source selector at **Latest**; the OS cache directory for `typeshed-cache-path`;
-latest-`main` for an empty `typeshed-commit`; no selected directory for
-`typeshed-path`). The client renders only what the server advertises and never
-fabricates a setting the server did not describe.
-
-Choosing a folder is a client affordance, not a new command. The VS Code shell opens
-`vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false })`,
-and the selected directory is written back through the ordinary validated,
-root-aware mutation path to the active `pyproject.toml` `[tool.basilisk]` table
-([§CONFIGEDITOR-SOURCES](#CONFIGEDITOR-SOURCES)), targeting the advertised key via
-`workspace/applyEdit`. The extension registers **no command the LSP does not
-advertise** ([EXTENSION-ACTIVITY-PANEL §EXTACT-INFO-ACTION-WIRING](EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-ACTION-WIRING)):
-the folder dialog is pure client UI feeding the same mutation service every other
-control uses, so the extension never writes the configuration file directly.
-Cancelling the dialog writes nothing.
+The server advertises each key, resolved value, `directory`/`text`/`boolean`/
+`enum`/`action` widget, and enabled state; the client never invents combinations.
+Folder selection feeds the ordinary validated transaction in
+[§CONFIGEDITOR-SOURCES](#CONFIGEDITOR-SOURCES); cancellation writes nothing.
 
 ### Service Info tree {#LSPCFGED-TYPESHED-SERVICE-INFO}
 
-The Basilisk information view's read-only Server Info section — the Service Info tree
-([EXTENSION-ACTIVITY-PANEL §EXTACT-INFO-SERVER-INFO](EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-SERVER-INFO)) —
-surfaces the live typeshed acquisition state as a read-only row:
+Service Info mirrors the server's active source/full SHA and composable warnings
+from [STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN):
 
-- **while acquiring** — a spinner (`$(sync~spin)`) with an *acquiring typeshed…*
-  label, shown from `initialized` acquisition until the stdlib source is
-  ready ([§STUBRES-TYPESHED-ACQUIRE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE));
-- **once ready** — the selected source and path: custom tree, pinned SHA, or
-  latest verified `main` SHA;
-- **not pinned** — a warning-level advisory (`$(warning)`) whenever the Source is
-  **Latest** (no explicit `typeshed-commit`), *including* when the bundled ZIP
-  supplied the stubs; the editor's **Pin current** action (above) freezes the
-  resolved SHA;
-- **bundled-ZIP fallback** — a **persistent high-severity row** (`$(warning)`),
-  never auto-dismissed, stating the download was unavailable and the bundled
-  snapshot `<short-sha>` may be behind upstream
-  ([§STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN));
-- **`UNVERIFIED`** — an orthogonal standing high-severity badge whenever the
-  content-hash check was waived (`typeshed-verify = false` /
-  `--no-typeshed-verification`), on any source, until verification is restored.
+| State | Row |
+|---|---|
+| acquiring | spinner until the source is ready |
+| exact pin unavailable or rejected | persistent `BLOCKED`; no substitute source |
+| no explicit commit | persistent `UNPINNED`, including Custom and bundled |
+| automatic fallback | persistent high-severity bundled-SHA warning |
+| license drift | persistent `LICENSE CHANGED`; activation blocked |
+| verification waived | persistent `UNVERIFIED` |
+| custom | persistent `USER-MANAGED SOURCE` |
 
-The three status signals are independent — not pinned (did the user pin?),
-fallback (did the download succeed?), and `UNVERIFIED` (did the hash check run?) —
-and may appear together; the row mirrors server state read-only, while every fix
-(**Pin current**, **View License**, the verify toggle) lives in the editable
-section above.
-
-The row carries no command and no inline control and refreshes from the same LSP
-lifecycle and configuration signals as the rest of the tree; the server is the sole
-source of that state, so the panel never polls. The labels describe Basilisk's
-transport for pinned typing step 3
+Rows may coexist, never poll, and carry no command; fixes remain in the editable
+section. They describe Basilisk transport around pinned typing step 3, not extra
+typing diagnostics
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 
 ## Accessibility and security {#CONFIGEDITOR-ACCESSIBILITY-SECURITY}
@@ -207,6 +158,6 @@ Automated tests cover the CSP/data boundary, intent decoding, semantic labels, r
 
 ## Acceptance {#CONFIGEDITOR-ACCEPTANCE}
 
-The acceptance surface is: the four LSP operations over the core configuration model (rule entries + tag entries, pep-disable rejected), the thin tag-first VS Code client, and unsaved-buffer/apply-race safety. The partition, seeding, and diagnostic scope are accepted where they are specified ([CHKARCH-COMMANDS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS), [LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING), [LSPARCH-DIAGNOSTIC-SCOPE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE)).
+The acceptance surface is: the five LSP operations over rule/tag entries and allowlisted Typeshed settings/actions, the five-view VS Code client (Overview, Rules, Adoption, Path Overrides, Project) rendering only server-computed state, and unsaved-buffer/apply-race safety. The partition, seeding, and diagnostic scope are accepted where they are specified ([CHKARCH-COMMANDS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS), [LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING), [LSPARCH-DIAGNOSTIC-SCOPE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE)).
 
-The contract deliberately excludes — and tests assert the absence of — selector-based mutations, `Inherit`/`Native` intents, native/default severities, presets, glob path and per-module overrides (folder configs cover scoped grading), per-file adoption state, fixability selectors and per-occurrence fix-safety metadata (mass fixes are the standalone [AUTOFIX](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX) command), configuration-format enums, shadowed-source reporting, and problem lists (malformed configuration is a structured request error).
+The contract deliberately excludes — and tests assert the absence of — selector-based mutations, `Inherit`/`Native` intents, native/default severities, presets, mutation intents and rule-family booleans, glob path and per-module override tables (folder configs cover scoped grading and back the Path Overrides view), fixability selectors and per-occurrence fix-safety metadata (mass fixes and adopt/un-adopt are the standalone [AUTOFIX](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX) commands), configuration-format enums, and shadowed-source reporting. Malformed configuration surfaces as a structured request error, distinct from the real configuration-problem inventory the Project view renders.

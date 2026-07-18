@@ -30,6 +30,9 @@ const SNAPSHOT_METHOD = "basilisk/configurationSnapshot";
 const PREVIEW_METHOD = "basilisk/previewConfigurationChange";
 const APPLY_METHOD = "basilisk/applyConfigurationChange";
 const OCCURRENCES_METHOD = "basilisk/ruleOccurrences";
+const EXECUTE_COMMAND_METHOD = "workspace/executeCommand";
+const ADOPT_WORKSPACE_COMMAND = "basilisk.adoptWorkspace";
+const FIX_WORKSPACE_COMMAND = "basilisk.fixWorkspace";
 const CONFIGURATION_VIEW_TYPE = "basilisk.configurationEditor";
 const CONFLICT_WORDS = ["stale", "conflict", "revision", "changed since preview"] as const;
 
@@ -39,6 +42,7 @@ export interface ConfigurationEditorTransport {
   preview(request: PreviewConfigurationRequest): Promise<ConfigurationPreview>;
   apply(request: ApplyConfigurationRequest): Promise<ConfigurationSnapshot>;
   occurrences(request: RuleOccurrencesRequest): Promise<RuleOccurrencesResponse>;
+  executeCommand(command: string, args: readonly unknown[]): Promise<void>;
 }
 
 interface ExperimentalCapabilities {
@@ -82,6 +86,9 @@ function clientTransport(store: Store): ConfigurationEditorTransport {
     },
     async occurrences(request: RuleOccurrencesRequest): Promise<RuleOccurrencesResponse> {
       return runningClient().sendRequest<RuleOccurrencesResponse>(OCCURRENCES_METHOD, request);
+    },
+    async executeCommand(command: string, args: readonly unknown[]): Promise<void> {
+      await runningClient().sendRequest(EXECUTE_COMMAND_METHOD, { command, arguments: args });
     },
   };
 }
@@ -230,6 +237,9 @@ export class ConfigurationEditorController implements vscode.Disposable {
       case "refresh": await this.refresh(); return;
       case "preview": await this.preview(intent); return;
       case "apply": await this.apply(); return;
+      case "adopt": await this.runWorkspaceCommand(ADOPT_WORKSPACE_COMMAND, false); return;
+      case "fixSafe": await this.runWorkspaceCommand(FIX_WORKSPACE_COMMAND, true); return;
+      case "openConfigFile": await this.openConfigFile(intent.uri); return;
       case "occurrences": await this.loadOccurrences(intent.request); return;
       case "openRaw": await this.openRawConfiguration(); return;
       case "openDocs": await this.openRuleDocs(intent.uri); return;
@@ -339,6 +349,42 @@ export class ConfigurationEditorController implements vscode.Disposable {
       const details = errorDetails(error, snapshot.rootUri);
       this.store.failConfigurationEditor(details.message, details.conflict, details.repairUri);
     }
+  }
+
+  /**
+   * Run a workspace-scoped server command (adopt current debt, apply safe
+   * fixes) and reload. Both are the real, already-registered commands that
+   * rewrite configuration via `workspace/applyEdit`; the editor only forwards
+   * and re-snapshots — it never computes debt or edits config text itself.
+   */
+  private async runWorkspaceCommand(command: string, includeRoot: boolean): Promise<void> {
+    const rootUri = this.store.configurationEditor.value.snapshot?.rootUri;
+    if (rootUri === undefined || this.store.configurationEditor.value.phase === "applying") { return; }
+    const generation = this.loadGeneration;
+    this.previewGeneration += 1;
+    this.store.beginConfigurationApply();
+    try {
+      await this.transport.executeCommand(command, includeRoot ? [{ rootUri }] : []);
+      if (this.requestIsStale(generation, rootUri)) { return; }
+      await this.load(rootUri);
+    } catch (error: unknown) {
+      if (this.requestIsStale(generation, rootUri)) { return; }
+      const details = errorDetails(error, rootUri);
+      this.store.failConfigurationEditor(details.message, details.conflict, details.repairUri);
+    }
+  }
+
+  /**
+   * Open a nested path-override configuration file. Untrusted input: only a URI
+   * the current snapshot listed as a path override, and only inside the root.
+   */
+  private async openConfigFile(uri: string): Promise<void> {
+    const overrides = this.store.configurationEditor.value.snapshot?.pathOverrides ?? [];
+    if (!overrides.some((entry) => entry.configUri === uri)) { return; }
+    const target = vscode.Uri.parse(uri);
+    const rootUri = this.store.configurationEditor.value.rootUri;
+    if (target.scheme !== "file" || !fileIsWithinRoot(target, rootUri)) { return; }
+    await vscode.window.showTextDocument(target, { preview: false });
   }
 
   private async loadOccurrences(request: Omit<RuleOccurrencesRequest, "rootUri">): Promise<void> {

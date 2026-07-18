@@ -15,7 +15,7 @@ linked to an active plan.
 |---|---|
 | [Checker architecture](specs/CHECKER-ARCHITECTURE-SPEC.md) | Configuration, rules, diagnostics, analysis pipeline, CLI, and quality gates. |
 | [Type inference](specs/CHECKER-TYPE-INFERENCE-SPEC.md) | Expression/type inference and narrowing contracts, plus the target bidirectional/constraint architecture and its research grounding. |
-| [Stub resolution](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | Pinned typing-spec import order, custom typeshed, verified archive acquisition, bundled stdlib ZIP, provenance, and generation. |
+| [Stub resolution](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | Pinned typing-spec import order, custom typeshed, archive acquisition, bundled stdlib ZIP, provenance, and generation. |
 | [Checker cache](specs/CHECKER-CACHE-SPEC.md) | Opt-in content-addressed CLI result cache. |
 | [Rule tagging](specs/CHECKER-RULE-TAGGING-SPEC.md) | Rule provenance/category/free-form tags and conflict rules. |
 | [Compiler prototype](specs/COMPILER-ARCHITECTURE-SPEC.md) | Current checker-gated AST interpreter and fixture contract. |

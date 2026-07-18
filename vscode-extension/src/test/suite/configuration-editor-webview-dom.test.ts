@@ -42,6 +42,18 @@ interface DomTestResult {
   readonly disabledRuleHasDisabledOption?: boolean;
   readonly pepTagSelect?: string;
   readonly basiliskTagSelect?: string;
+  readonly navLabels?: string[];
+  readonly hasOverview?: boolean;
+  readonly hasAdoption?: boolean;
+  readonly hasPaths?: boolean;
+  readonly hasProject?: boolean;
+  readonly hasPresets?: boolean;
+  readonly overviewVisible?: boolean;
+  readonly rulesHiddenOnOverview?: boolean;
+  readonly remainingDebt?: string;
+  readonly pathHeads?: string[];
+  readonly openConfigButtons?: number;
+  readonly sourceRows?: number;
 }
 
 /** A realistic snapshot: pep rules first, basilisk rules at the bottom. */
@@ -82,6 +94,24 @@ function fixtureSnapshot(): unknown {
       { name: "basilisk", kind: { kind: "Provenance" }, entry: undefined, ruleCount: BASILISK_RULE_COUNT, diagnosticCount: 15 },
       { name: "pep", kind: { kind: "Provenance" }, entry: undefined, ruleCount: PEP_RULE_COUNT, diagnosticCount: 780 },
     ],
+    source: { uri: "file:///workspace/project/pyproject.toml", exists: true, readOnly: false },
+    pathOverrides: [
+      {
+        path: "legacy",
+        configUri: "file:///workspace/project/legacy/pyproject.toml",
+        rules: [{ code: "BSK-0001", severity: { kind: "Warning" } }],
+        tags: [],
+      },
+    ],
+    debt: {
+      remainingDiagnostics: 795,
+      errorDiagnostics: 780,
+      warningDiagnostics: 15,
+      infoDiagnostics: 0,
+      adoptedRules: 0,
+      disabledRules: 1,
+    },
+    problems: [],
   };
 }
 
@@ -321,6 +351,62 @@ function selectValueDriverScript(): string {
 }
 
 /** Inject the shim before and the driver after the real runtime, same nonce. */
+/**
+ * [CONFIGEDITOR-VSIX-EXPERIENCE]: the editor ships FIVE navigation views —
+ * Overview, Rules, Adoption, Path Overrides, Project — and no Presets tab.
+ * Every dashboard view renders exact server-computed snapshot state; this
+ * driver switches views and reads back the real values it painted.
+ */
+function navPresenceDriverScript(): string {
+  return `
+    (async () => {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const report = (result) => window.__realApi.postMessage(Object.assign({ type: 'domTestResult' }, result));
+      const sectionOf = (name) => document.querySelector('[data-section="' + name + '"]');
+      try {
+        let waited = 0;
+        while (!document.querySelector('[data-rule-code]') && waited < 200) { await sleep(25); waited += 1; }
+        await sleep(100);
+        const navLabels = Array.from(document.querySelectorAll('#section-nav [data-section-target]'))
+          .map((button) => (button.textContent || '').trim());
+        // Overview: switch to it and read the exact server debt total it renders.
+        document.querySelector('[data-section-target="overview"]').click();
+        await sleep(60);
+        const overviewVisible = !sectionOf('overview').hidden;
+        const rulesHiddenOnOverview = sectionOf('rules').hidden;
+        const remainingDebt = document.getElementById('overview-diagnostics').textContent;
+        // Path Overrides: read the discovered nested-config list + open action.
+        document.querySelector('[data-section-target="paths"]').click();
+        await sleep(60);
+        const pathHeads = Array.from(document.querySelectorAll('#path-override-list .path-override-card h3'))
+          .map((node) => node.textContent);
+        const openConfigButtons = document.querySelectorAll('#path-override-list [data-open-config]').length;
+        // Project: real source detail rows.
+        document.querySelector('[data-section-target="project"]').click();
+        await sleep(60);
+        const sourceRows = document.querySelectorAll('#source-details dt').length;
+        report({
+          ok: true,
+          navLabels,
+          hasOverview: !!sectionOf('overview'),
+          hasAdoption: !!sectionOf('adoption'),
+          hasPaths: !!sectionOf('paths'),
+          hasProject: !!sectionOf('project'),
+          hasPresets: !!sectionOf('presets'),
+          overviewVisible,
+          rulesHiddenOnOverview,
+          remainingDebt,
+          pathHeads,
+          openConfigButtons,
+          sourceRows,
+        });
+      } catch (error) {
+        report({ ok: false, reason: String(error) });
+      }
+    })();
+  `;
+}
+
 function harnessDocument(driver: string, focusRule: string | null = null): string {
   const html = buildConfigurationEditorDocument();
   const openTag = /<script nonce="[^"]+">/.exec(html);
@@ -483,5 +569,32 @@ suite("Configuration editor — rule detail panel in a real webview DOM", () => 
       "Disabled",
       `an untouched non-pep tag does not run and its select must say so (got "${result.basiliskTagSelect}")`,
     );
+  });
+});
+
+suite("Configuration editor — restored navigation views in a real webview DOM", () => {
+  // The reported regression: the config editor lost every view except Rules.
+  // The nav rail must offer all five views, each dashboard view must render
+  // exact server-computed snapshot state, and there must be NO Presets tab.
+  test("renders the five navigation views with real server data and no presets tab", async function () {
+    this.timeout(RESULT_TIMEOUT_MS + 15_000);
+    const result = await runWebviewScenario(harnessDocument(navPresenceDriverScript()));
+    assert.strictEqual(result.ok, true, `webview driver failed: ${result.reason ?? "unknown"}`);
+    assert.deepStrictEqual(
+      result.navLabels,
+      ["Overview", "Rules", "Adoption", "Path Overrides", "Project"],
+      "the nav rail must offer exactly the five restored views in order",
+    );
+    assert.ok(
+      result.hasOverview && result.hasAdoption && result.hasPaths && result.hasProject,
+      "all four restored view sections must exist in the DOM",
+    );
+    assert.strictEqual(result.hasPresets, false, "there is no Presets tab ([CHKARCH-CONFIGURATION-ONLY])");
+    assert.strictEqual(result.overviewVisible, true, "selecting Overview must reveal its section");
+    assert.strictEqual(result.rulesHiddenOnOverview, true, "selecting Overview must hide the Rules section");
+    assert.strictEqual(result.remainingDebt, "795", "Overview renders the exact server debt total, not a synthetic score");
+    assert.deepStrictEqual(result.pathHeads, ["legacy"], "Path Overrides lists the discovered nested config");
+    assert.strictEqual(result.openConfigButtons, 1, "each path override exposes a real open-file action");
+    assert.ok((result.sourceRows ?? 0) >= 3, "the Project view renders the real source details");
   });
 });

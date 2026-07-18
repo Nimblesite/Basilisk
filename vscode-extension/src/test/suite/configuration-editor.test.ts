@@ -26,6 +26,7 @@ import {
   decodeConfigurationChanged,
   IDLE_CONFIGURATION_EDITOR,
 } from "../../configuration-editor-state";
+import { decodeConfigurationEditorIntent } from "../../configuration-editor-intents";
 import { readBasiliskSettings } from "../../lsp-client";
 import { createStore } from "../../store";
 import { removeTestDir } from './test-helpers';
@@ -79,6 +80,26 @@ function configurationSnapshot(revision = "revision-1"): ConfigurationSnapshot {
       ruleCount: 1,
       diagnosticCount: 3,
     }],
+    source: {
+      uri: `${ROOT_URI}/pyproject.toml`,
+      exists: true,
+      readOnly: false,
+    },
+    pathOverrides: [{
+      path: "legacy",
+      configUri: `${ROOT_URI}/legacy/pyproject.toml`,
+      rules: [{ code: PEP_CODE, severity: { kind: "Warning" } }],
+      tags: [],
+    }],
+    debt: {
+      remainingDiagnostics: 4,
+      errorDiagnostics: 3,
+      warningDiagnostics: 1,
+      infoDiagnostics: 0,
+      adoptedRules: 0,
+      disabledRules: 0,
+    },
+    problems: [],
   };
 }
 
@@ -142,6 +163,12 @@ class RecordingTransport implements ConfigurationEditorTransport {
     this.occurrenceRequests.push(request);
     if (this.occurrenceHandler !== undefined) { return this.occurrenceHandler(request); }
     return this.occurrenceResult;
+  }
+
+  public readonly executeCommandRequests: { readonly command: string; readonly args: readonly unknown[] }[] = [];
+
+  public async executeCommand(command: string, args: readonly unknown[]): Promise<void> {
+    this.executeCommandRequests.push({ command, args });
   }
 }
 
@@ -244,6 +271,63 @@ suite("Configuration editor — typed mutation routing", () => {
         controller.dispose();
       }
     }
+  });
+
+  // [CONFIGEDITOR-VSIX-EXPERIENCE]: the Adoption view forwards the real,
+  // already-registered adopt command (all-roots; no args) then reloads.
+  test("the Adoption view forwards basilisk.adoptWorkspace and reloads", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      const snapshotsBefore = transport.snapshotRequests.length;
+      await controller.receive({ type: "adopt", scope: "workspace" });
+      assert.deepStrictEqual(transport.executeCommandRequests, [{ command: "basilisk.adoptWorkspace", args: [] }]);
+      assert.ok(transport.snapshotRequests.length > snapshotsBefore, "adopt must reload the snapshot");
+    } finally {
+      controller.dispose();
+    }
+  });
+
+  // [CONFIGEDITOR-VSIX-EXPERIENCE]: "Apply safe fixes" forwards the real fix
+  // command, which requires the root URI, then reloads.
+  test("the Adoption view forwards basilisk.fixWorkspace with the root uri and reloads", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      const snapshotsBefore = transport.snapshotRequests.length;
+      await controller.receive({ type: "fixSafe" });
+      assert.deepStrictEqual(
+        transport.executeCommandRequests,
+        [{ command: "basilisk.fixWorkspace", args: [{ rootUri: ROOT_URI }] }],
+      );
+      assert.ok(transport.snapshotRequests.length > snapshotsBefore, "a safe fix must reload the snapshot");
+    } finally {
+      controller.dispose();
+    }
+  });
+
+  // Untrusted webview input hardening for the restored view intents: the
+  // decoder accepts exactly the shapes the views emit and rejects the rest.
+  test("decodes the restored view intents and rejects malformed ones", () => {
+    assert.deepStrictEqual(
+      decodeConfigurationEditorIntent({ type: "adopt", scope: "workspace" }),
+      { type: "adopt", scope: "workspace" },
+    );
+    assert.strictEqual(decodeConfigurationEditorIntent({ type: "adopt", scope: "file" }), undefined);
+    assert.strictEqual(decodeConfigurationEditorIntent({ type: "adopt" }), undefined);
+    assert.deepStrictEqual(decodeConfigurationEditorIntent({ type: "fixSafe" }), { type: "fixSafe" });
+    assert.deepStrictEqual(
+      decodeConfigurationEditorIntent({ type: "openConfigFile", uri: `${ROOT_URI}/legacy/pyproject.toml` }),
+      { type: "openConfigFile", uri: `${ROOT_URI}/legacy/pyproject.toml` },
+    );
+    assert.strictEqual(decodeConfigurationEditorIntent({ type: "openConfigFile" }), undefined);
+    assert.strictEqual(decodeConfigurationEditorIntent({ type: "openConfigFile", uri: "" }), undefined);
   });
 
   // [CONFIGEDITOR-OPERATIONS]: rootUri + previewId fully identify the cached

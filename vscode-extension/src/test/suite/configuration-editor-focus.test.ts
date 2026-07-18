@@ -44,6 +44,17 @@ function snapshotWithRule(): ConfigurationSnapshot {
       diagnosticCount: 1,
     }],
     tags: [],
+    source: { uri: `${ROOT_URI}/pyproject.toml`, exists: true, readOnly: false },
+    pathOverrides: [],
+    debt: {
+      remainingDiagnostics: 1,
+      errorDiagnostics: 1,
+      warningDiagnostics: 0,
+      infoDiagnostics: 0,
+      adoptedRules: 0,
+      disabledRules: 0,
+    },
+    problems: [],
   };
 }
 
@@ -61,6 +72,9 @@ function snapshotTransport(): ConfigurationEditorTransport {
     },
     async occurrences(_request: RuleOccurrencesRequest): Promise<RuleOccurrencesResponse> {
       throw new Error("occurrences is not under test");
+    },
+    async executeCommand(_command: string, _args: readonly unknown[]): Promise<void> {
+      throw new Error("executeCommand is not under test");
     },
   };
 }

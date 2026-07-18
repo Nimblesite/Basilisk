@@ -20,6 +20,9 @@ export type ConfigurationEditorIntent =
   | { readonly type: "openRaw" }
   | { readonly type: "apply" }
   | { readonly type: "preview"; readonly mutations: EditorMutation[] }
+  | { readonly type: "adopt"; readonly scope: "workspace" }
+  | { readonly type: "fixSafe" }
+  | { readonly type: "openConfigFile"; readonly uri: string }
   | { readonly type: "occurrences"; readonly request: Omit<RuleOccurrencesRequest, "rootUri"> }
   | { readonly type: "openDocs"; readonly uri: string }
   | { readonly type: "openOccurrence"; readonly uri: string; readonly line: number; readonly character: number };
@@ -149,6 +152,12 @@ export function decodeConfigurationEditorIntent(value: unknown): ConfigurationEd
     case "openRaw": return { type: "openRaw" };
     case "apply": return { type: "apply" };
     case "preview": return decodePreview(value);
+    case "adopt": return value.scope === "workspace" ? { type: "adopt", scope: "workspace" } : undefined;
+    case "fixSafe": return { type: "fixSafe" };
+    case "openConfigFile": {
+      const uri = boundedString(value.uri);
+      return uri === undefined ? undefined : { type: "openConfigFile", uri };
+    }
     case "occurrences": return decodeOccurrences(value);
     default: return decodeNavigationIntent(value);
   }

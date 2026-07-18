@@ -12,8 +12,9 @@ use tower_lsp::lsp_types::Url;
 
 use super::catalog::{descriptors, effective_severity, tag_kind, wire_severity};
 use super::model::{
-    ConfigurationSnapshot, RuleOccurrence, RuleOccurrencesResponse, RuleState, SourcePosition,
-    SourceRange, TagState,
+    ConfigurationProblem, ConfigurationSnapshot, ConfigurationSource, DebtSummary,
+    PathOverrideState, PathRuleSetting, PathTagSetting, RuleDescriptor, RuleOccurrence,
+    RuleOccurrencesResponse, RuleSeverity, RuleState, SourcePosition, SourceRange, TagState,
 };
 use crate::workspace::WorkspaceIndex;
 
@@ -51,7 +52,6 @@ impl Inventory {
     }
 
     /// Total emitted diagnostics — the sum of the three severity partitions.
-    #[cfg(test)]
     pub(super) fn total(&self) -> usize {
         self.errors + self.warnings + self.infos
     }
@@ -111,13 +111,169 @@ pub(super) fn build_snapshot(
             diagnostic_count: count_i64(*inventory.counts.get(&descriptor.code).unwrap_or(&0)),
         })
         .collect();
+    let tags = tag_states(&rules, entries);
+    let debt = debt_summary(&rules, &inventory);
+    let problems = configuration_problems(entries, &catalog, &path_uri(&document.path));
     ConfigurationSnapshot {
         root_uri: path_uri(root),
         config_uri: path_uri(&document.path),
         revision: document.revision.clone(),
-        tags: tag_states(&rules, entries),
+        source: ConfigurationSource {
+            uri: path_uri(&document.path),
+            exists: document.exists,
+            read_only: document.read_only,
+        },
+        tags,
         rules,
+        path_overrides: path_override_states(document),
+        debt,
+        problems,
     }
+}
+
+/// Fold the resolved rule states and diagnostic inventory into the Overview /
+/// Adoption counters. Every value is a real count of live checker state — the
+/// exact effective state, never a synthetic score ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+fn debt_summary(rules: &[RuleState], inventory: &Inventory) -> DebtSummary {
+    let disabled_rules = rules
+        .iter()
+        .filter(|state| state.effective_severity == RuleSeverity::Disabled)
+        .count();
+    // A `pep` rule graded below `error` is the adoption signature: pep rules
+    // always run, so a warning/info entry is a deliberately-adopted exception.
+    let adopted_rules = rules
+        .iter()
+        .filter(|state| {
+            state.descriptor.tags.iter().any(|tag| tag == "pep")
+                && matches!(
+                    state.effective_severity,
+                    RuleSeverity::Warning | RuleSeverity::Info
+                )
+        })
+        .count();
+    DebtSummary {
+        remaining_diagnostics: count_i64(inventory.total()),
+        error_diagnostics: count_i64(inventory.errors),
+        warning_diagnostics: count_i64(inventory.warnings),
+        info_diagnostics: count_i64(inventory.infos),
+        adopted_rules: count_i64(adopted_rules),
+        disabled_rules: count_i64(disabled_rules),
+    }
+}
+
+/// Real configuration problems for the Project view: entries in the active
+/// `[tool.basilisk.rules]` table naming a rule code the catalog does not know.
+fn configuration_problems(
+    entries: Option<&RuleTables>,
+    catalog: &[RuleDescriptor],
+    uri: &str,
+) -> Vec<ConfigurationProblem> {
+    let known: HashSet<&str> = catalog
+        .iter()
+        .map(|descriptor| descriptor.code.as_str())
+        .collect();
+    let Some(tables) = entries else {
+        return Vec::new();
+    };
+    let mut problems: Vec<ConfigurationProblem> = tables
+        .rules
+        .keys()
+        .filter(|code| !known.contains(code.as_str()))
+        .map(|code| ConfigurationProblem {
+            code: code.clone(),
+            message: format!("`{code}` is not a known rule code"),
+            uri: uri.to_owned(),
+            line: 0,
+            character: 0,
+        })
+        .collect();
+    problems.sort_by(|left, right| left.code.cmp(&right.code));
+    problems
+}
+
+/// Enumerate nested per-directory `[tool.basilisk]` tables under the root — the
+/// path-scoped config the checker honors for subtrees via nearest-first
+/// discovery ([CHKARCH-CONFIG-DISCOVERY]). Excludes the root's own active
+/// document. Built only when the editor requests a snapshot (never on the check
+/// hot path), so the bounded filesystem walk is off the benchmark path.
+fn path_override_states(document: &ConfigDocument) -> Vec<PathOverrideState> {
+    let root = document.root.as_path();
+    let mut overrides: Vec<PathOverrideState> = nested_config_dirs(root)
+        .into_iter()
+        .filter_map(|dir| {
+            let nested = basilisk_config::discover_config_document(&dir).ok()?;
+            if !nested.exists {
+                return None;
+            }
+            let tables = nested.config.nearest_tables()?;
+            if tables.is_empty() {
+                return None;
+            }
+            let mut rules: Vec<PathRuleSetting> = tables
+                .rules
+                .iter()
+                .map(|(code, severity)| PathRuleSetting {
+                    code: code.clone(),
+                    severity: super::catalog::config_to_wire(*severity),
+                })
+                .collect();
+            rules.sort_by(|left, right| left.code.cmp(&right.code));
+            let mut tags: Vec<PathTagSetting> = tables
+                .rule_tags
+                .iter()
+                .map(|(tag, severity)| PathTagSetting {
+                    tag: tag.clone(),
+                    severity: super::catalog::config_to_wire(*severity),
+                })
+                .collect();
+            tags.sort_by(|left, right| left.tag.cmp(&right.tag));
+            let path = dir
+                .strip_prefix(root)
+                .unwrap_or(&dir)
+                .to_string_lossy()
+                .replace('\\', "/");
+            Some(PathOverrideState {
+                path,
+                config_uri: path_uri(&nested.path),
+                rules,
+                tags,
+            })
+        })
+        .collect();
+    overrides.sort_by(|left, right| left.path.cmp(&right.path));
+    overrides
+}
+
+/// Directories strictly below `root` that hold a `pyproject.toml`, skipping the
+/// root itself, dot-directories, and default-excluded dirs (venv, caches, …).
+fn nested_config_dirs(root: &Path) -> Vec<std::path::PathBuf> {
+    fn excluded(name: &std::ffi::OsStr) -> bool {
+        name.to_str().is_none_or(|name| {
+            name.starts_with('.') || basilisk_config::DEFAULT_EXCLUDES.contains(&name)
+        })
+    }
+    let mut found = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        let mut has_config = false;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if !excluded(&entry.file_name()) {
+                    stack.push(path);
+                }
+            } else if entry.file_name() == "pyproject.toml" {
+                has_config = true;
+            }
+        }
+        if has_config && dir != root {
+            found.push(dir);
+        }
+    }
+    found
 }
 
 /// Fold rule states into per-tag facets with their explicit tag entries.

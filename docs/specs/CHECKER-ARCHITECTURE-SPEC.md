@@ -37,7 +37,7 @@ Depend on established open-source tools rather than reimplementing them.
 | Tool | Interop Strategy |
 |---|---|
 | **Ruff** | Basilisk **embeds** the `ruff_python_formatter` crate in-process for formatting and reimplements import hygiene natively — the `ruff` CLI is never spawned ([LSPFMT-DECISION](LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)). Configuration unified in `pyproject.toml` (`[tool.ruff.format]`). |
-| **typeshed** | Step 3 selects a custom `typeshed-path`, an exact-SHA archive (explicit pin or current `main`), or the bundled stdlib ZIP. The custom path is canonical as required by pinned typing step 3; step-3 sources never mix ([STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561), [`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). |
+| **typeshed** | Step 3 selects a custom `typeshed-path`, an exact-SHA archive (explicit pin or current `main`), or the bundled stdlib ZIP. Basilisk adopts the pinned typing step-3 canonical-path SHOULD; step-3 sources never mix ([STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561), [`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). |
 | **PEP 561** | Full support for `py.typed` packages, inline type annotations, and stub-only packages. |
 
 ---

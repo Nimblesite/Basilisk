@@ -60,6 +60,14 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
       else if (action === 'load-more-occurrences') loadMoreOccurrences();
       else if (action === 'close-preview') byId('preview-dialog').close();
       else if (action === 'apply-preview' && editorState.phase === 'preview') vscode.postMessage({ type: 'apply' });
+      else if (action === 'adopt-workspace') vscode.postMessage({ type: 'adopt', scope: 'workspace' });
+      else if (action === 'fix-safe') vscode.postMessage({ type: 'fixSafe' });
+      else if (action === 'show-current') {
+        showSection('rules');
+        byId('rule-search').value = 'has:diagnostics';
+        applyFilter();
+        byId('rule-search').focus();
+      }
     }
     function occurrenceMessage(target) {
       return {
@@ -72,8 +80,12 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
     document.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target.closest('button') : undefined;
       if (!target) return;
+      const section = target.dataset.sectionTarget;
+      if (section) { showSection(section); return; }
       const action = target.dataset.action;
       if (action) { handleAction(action); return; }
+      const openConfigUri = target.dataset.openConfig;
+      if (openConfigUri) { vscode.postMessage({ type: 'openConfigFile', uri: openConfigUri }); return; }
       const tag = target.dataset.tag;
       if (tag) { selectTag(tag); return; }
       const code = target.dataset.showRule;
@@ -107,10 +119,12 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
       const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement;
       if (event.key === '/' && !typing) {
         event.preventDefault();
+        showSection('rules');
         byId('rule-search').focus();
       }
       if (event.key === 'Escape' && byId('preview-dialog').open) byId('preview-dialog').close();
     });
+    showSection(activeSection);
     vscode.postMessage({ type: 'ready' });
   })();
 `;

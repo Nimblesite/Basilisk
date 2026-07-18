@@ -30,24 +30,19 @@ it never replaces it.
 
 ```toml
 [tool.basilisk]
+python-version = "3.12"
 ```
 
-That's all you need. Basilisk finds Python files from the current directory and
-applies the **core PEP conformance rules**. It has no fixed Python-version
-default; version-dependent behavior follows the project's evidence and the
-pinned typing directives
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)).
+That's all you need. Basilisk finds Python files from the current directory and applies its default rule set — the **core PEP conformance rules**. Extra Basilisk rules that go beyond the spec are opt-in; enable them when you want stricter-than-spec checking.
 
 ## Full configuration example
 
 ```toml
 [tool.basilisk]
+python-version = "3.12"
 python-platform = "All"
 stub-paths = ["stubs/"]
-# Unpinned acquisition verifies python/typeshed@main:
-# typeshed-commit = "<full commit SHA>"     # optional explicit immutable source
-typeshed-cache-path = ".cache/typeshed"     # optional automatic storage path
-# typeshed-path = "typeshed-micropython"    # optional canonical custom tree
+typeshed-path = "typeshed-micropython"   # optional: replace the bundled stdlib typeshed
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
 
@@ -68,13 +63,10 @@ rules."imports_unresolved" = "warning"
 ### `python-version`
 
 **Type:** `string`
-**Default:** inferred from project/interpreter evidence; unset when none exists
+**Default:** auto-detected from the interpreter on PATH, or `"3.12"` if not found
+**Example:** `"3.12"`
 
-An optional explicit target for type checking. Basilisk applies it to typeshed's
-`stdlib/VERSIONS` and the simple `sys.version_info` / `sys.platform` checks the
-pinned typing specification expects checkers to understand
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)).
-It selects within one typeshed snapshot; it never selects a commit.
+The Python version to target for type checking. Affects which PEPs and typing features are available. Supports versions `"3.9"` through `"3.14"`.
 
 ### `python-platform`
 
@@ -91,57 +83,20 @@ Target platform. Affects platform-specific type stubs and conditional imports.
 
 Additional directories to search for `.pyi` stub files. These sit at the **head** of the import search path — step 1 of the [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering) — so they can patch or shadow any later module, standard-library or third-party. Useful for custom stubs for internal libraries.
 
-### Standard-library typeshed
-
-**Spec:** [`STUBRES-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)
-
-Pinned typing step 3 calls for "Typeshed stubs for the standard library" and
-makes a supplied custom tree canonical
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-Without a custom path, Basilisk uses an explicit `typeshed-commit` or verifies
-`python/typeshed@main` before the first CLI/LSP analysis. The selected SHA
-supplies `.pyi` bodies, `stdlib/VERSIONS`, and the distribution map as one
-generation.
-
-If acquisition is unavailable, a bundled baseline supplies names and the
-distribution map only—never `.pyi` bodies—and Basilisk reports
-`typeshed download unavailable; using bundled names only`. An unpinned failure
-never reuses an earlier checkout. Downloaded or custom data wholly bypasses
-bundled and compiled lookups.
-
-#### `typeshed-commit`
-
-**Type:** `string`
-**Default:** _(unset — acquisition verifies `python/typeshed@main`)_
-**Example:** a full 40-character commit SHA
-
-Select an exact immutable upstream commit. This is deliberate user-controlled
-determinism, not an automatic Python-version mapping or a stale fallback.
-
-#### `typeshed-cache-path`
-
-**Type:** `string`
-**Default:** _(the OS cache directory)_
-**Example:** `".cache/typeshed"`
-
-Relocate **where the automatic clone is stored**. It only moves the auto-clone — it does not turn cloning off (that is `typeshed-path`). The visual configuration editor exposes this as a **folder picker**.
-
 ### `typeshed-path`
 
 **Type:** `string`
-**Default:** _(unset — use the explicit-pin/main/baseline selection)_
+**Default:** _(unset — the bundled typeshed is used)_
 **Example:** `"typeshed-micropython"`
 **Spec:** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
 
-Path to a custom or modified typeshed tree. Pinned step 3 says checkers should
-use it as the "canonical source for standard-library types in this step"
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-It is the sole step-3 source and disables automatic, bundled, and compiled
-lookups. A missing module proceeds to step 4 rather than another typeshed.
+Path to a directory containing a custom or modified version of typeshed's standard-library stubs. When set, this directory becomes the **canonical source for standard-library types** — step 3 of the [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering), which states that type checkers "SHOULD use this as the canonical source for standard-library types in this step." Basilisk resolves stdlib modules against it in preference to the bundled typeshed; a stdlib module absent from the directory falls through to the remaining resolution steps.
 
-The tree must contain `stdlib/<module>.pyi`; relative paths resolve from the
-project root. Use it for a fork or an alternative standard library such as
-MicroPython. Hover reports `(custom typeshed)` so the winning source is visible.
+The directory must follow typeshed's layout — standard-library stubs live under a top-level `stdlib/` subdirectory, so Basilisk resolves each module as `<typeshed-path>/stdlib/<module>.pyi`. A clone of the [python/typeshed](https://github.com/python/typeshed) repository, or any directory you already use as Pyright's [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) or mypy's [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html), works unchanged. Relative paths resolve against the project root.
+
+Use this to type-check against an alternative standard library — for example MicroPython's [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs), whose `os`, `time`, and `machine` signatures differ from CPython. Symbols resolved from the custom typeshed hover with a `(custom typeshed)` tag — distinct from the bundled typeshed's `(typeshed)` — so you can confirm the override is active and know a MicroPython signature is never misreported as CPython's.
+
+`stub-paths` *prepends* extra stub directories; `typeshed-path` *replaces* the vendored standard library wholesale. They are independent and can be combined. See [How to use a custom typeshed](#how-to-use-a-custom-typeshed) below for a step-by-step walkthrough.
 
 ### `include`
 
@@ -187,16 +142,23 @@ The same patterns are honoured everywhere Basilisk discovers files: the LSP work
 
 ## How to use a custom typeshed
 
-This walkthrough applies pinned step 3's **“canonical source for standard-library
-types in this step”** clause
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+`typeshed-path` swaps the standard-library stubs Basilisk bundles for your own copy. Reach for it when you target an alternative Python whose standard library differs from CPython (MicroPython, a patched CPython, a vendor SDK), or when you need a newer or forked typeshed than the one baked into your Basilisk release.
 
 ### 1. Lay the directory out like typeshed
 
-Point `typeshed-path` at a root containing `stdlib/`; modules resolve as
-`<typeshed-path>/stdlib/<module>.pyi`.
+Point `typeshed-path` at the **root** of a typeshed-layout directory. Standard-library stubs must sit under a top-level `stdlib/` subdirectory, exactly as in the [python/typeshed](https://github.com/python/typeshed) repository — Basilisk resolves each module as `<typeshed-path>/stdlib/<module>.pyi`:
 
-### 2a. Point at a forked or hand-patched typeshed
+```
+vendor/typeshed/
+└── stdlib/
+    ├── os.pyi
+    ├── time.pyi
+    └── ...
+```
+
+Any directory you already use as Pyright's [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) or mypy's [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html) consumes this same layout, so it works with Basilisk unchanged.
+
+### 2a. Point at a forked or newer typeshed
 
 Clone the typeshed repo (or your fork of it), then point `typeshed-path` at the clone and patch the `.pyi` files you need:
 
@@ -209,9 +171,7 @@ git clone https://github.com/python/typeshed vendor/typeshed
 typeshed-path = "vendor/typeshed"
 ```
 
-Basilisk now uses `vendor/typeshed/stdlib/` as the sole step-3 source; this
-checkout is yours to maintain. Leave `typeshed-path` unset to verify upstream
-`main`, or select an exact upstream SHA with `typeshed-commit`.
+Basilisk now type-checks the standard library against `vendor/typeshed/stdlib/` instead of its bundled copy.
 
 ### 2b. Point at MicroPython's standard library
 
@@ -219,10 +179,24 @@ MicroPython's stdlib diverges from CPython — `os`, `time`, and `machine` carry
 
 ```toml
 [tool.basilisk]
-typeshed-path = "vendor/micropython_stdlib_stubs"
+python-version = "3.12"
+typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 ```
 
-Because `micropython-stdlib-stubs` is a **partial** stdlib, a module it does not ship (e.g. `tkinter`, which does not exist on a board) is **not** rescued by the auto-cloned CPython typeshed — setting `typeshed-path` disables the auto-clone, and your custom typeshed is the canonical source for step 3, so the import is reported as unresolved. That is the honest answer for an embedded target.
+Because `micropython-stdlib-stubs` is a **partial** stdlib, a module it does not ship (e.g. `tkinter`, which does not exist on a board) is **not** rescued by the bundled CPython stub — the custom typeshed is the canonical source for step 3, so the import is reported as unresolved. That is the honest answer for an embedded target.
+
+### 3. Configure it in the active project file
+
+`typeshed-path` lives in `[tool.basilisk]` like every other setting — there is
+no second spelling and no second file. Set it in the `pyproject.toml` that
+governs the files you are checking (the nearest ancestor with a
+`[tool.basilisk]` table). Editors do not carry a second copy; that project
+config file is authoritative. If you are migrating a legacy `basilisk.json`,
+its camelCase `typeshedPath` key becomes `typeshed-path` here.
+
+### 4. Confirm it took effect — hover provenance
+
+Symbols resolved from a custom typeshed hover with a `(custom typeshed)` tag, distinct from the bundled typeshed's `(typeshed)` tag. Hover over an imported stdlib symbol: seeing `(custom typeshed)` confirms the override is active and that the signature came from your directory — a MicroPython `os.uname` is never misreported as CPython's.
 
 ### `typeshed-path` vs `stub-paths`
 
@@ -230,9 +204,9 @@ They solve different problems and can be combined:
 
 | | `stub-paths` (step 1) | `typeshed-path` (step 3) |
 | --- | --- | --- |
-| Role | *Prepends* extra `.pyi` directories at the head of the search path | *Replaces* the auto-cloned standard-library typeshed wholesale, and disables cloning |
+| Role | *Prepends* extra `.pyi` directories at the head of the search path | *Replaces* the bundled standard-library typeshed wholesale |
 | Scope | Can shadow any single module, stdlib or third-party | Canonical source for the entire standard library |
-| Typical use | Patch one broken stub; stubs for an internal library | Target an alternative or forked stdlib (MicroPython, a patched fork), or reuse a typeshed tree already on disk |
+| Typical use | Patch one broken stub; stubs for an internal library | Target an alternative or forked stdlib (MicroPython, a newer typeshed) |
 | Precedence | Wins — a `stub-paths` module still shadows the custom typeshed | Sits below `stub-paths`, above installed packages |
 
 ---
@@ -363,9 +337,7 @@ The legacy root-level `basilisk.json` is **never** read. If one is still
 present, the configuration editor reports it as an ignored shadowed source;
 translate its keys into `[tool.basilisk]` and delete the file.
 
-If no ancestor `pyproject.toml` carries a `[tool.basilisk]` table, Basilisk
-enables the core PEP conformance rules and checks the current directory. It does
-not manufacture a Python-version default.
+If no ancestor `pyproject.toml` carries a `[tool.basilisk]` table, Basilisk uses defaults: the **core PEP conformance rule set** enabled (extra Basilisk rules stay opt-in), `python-version = "3.12"`, check the current directory.
 
 ---
 

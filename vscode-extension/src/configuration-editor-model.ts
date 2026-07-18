@@ -73,12 +73,56 @@ export interface TagState {
   diagnosticCount: number;
 }
 
+export interface ConfigurationSource {
+  uri: Uri;
+  exists: boolean;
+  readOnly: boolean;
+}
+
+export interface ConfigurationProblem {
+  code: RuleCode;
+  message: string;
+  uri: Uri;
+  line: number;
+  character: number;
+}
+
+export interface DebtSummary {
+  remainingDiagnostics: number;
+  errorDiagnostics: number;
+  warningDiagnostics: number;
+  infoDiagnostics: number;
+  adoptedRules: number;
+  disabledRules: number;
+}
+
+export interface PathRuleSetting {
+  code: RuleCode;
+  severity: RuleSeverity;
+}
+
+export interface PathTagSetting {
+  tag: RuleTag;
+  severity: RuleSeverity;
+}
+
+export interface PathOverrideState {
+  path: string;
+  configUri: Uri;
+  rules: PathRuleSetting[];
+  tags: PathTagSetting[];
+}
+
 export interface ConfigurationSnapshot {
   rootUri: Uri;
   configUri: Uri;
   revision: Revision;
+  source: ConfigurationSource;
   rules: RuleState[];
   tags: TagState[];
+  pathOverrides: PathOverrideState[];
+  debt: DebtSummary;
+  problems: ConfigurationProblem[];
 }
 
 export interface PreviewConfigurationRequest {

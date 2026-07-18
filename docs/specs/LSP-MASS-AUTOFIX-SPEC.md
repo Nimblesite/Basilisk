@@ -125,5 +125,8 @@ sidecar state. The panel never reads or polls config files itself: adoption
 writes land in `pyproject.toml`, the server-owned watcher picks them up, and
 the shared refresh tail's pushed updates re-render the panel
 ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)).
-Adoption is not part of the configuration-editor contract
-([CONFIGEDITOR-ACCEPTANCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-ACCEPTANCE)).
+The adopt / un-adopt operations are autofix commands, not configuration-editor
+mutations. The configuration editor's Adoption view renders this same
+server-computed adoption state read-only and can invoke these commands, but it
+computes no debt of its own
+([CONFIGEDITOR-VSIX-EXPERIENCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-VSIX-EXPERIENCE)).

@@ -18,9 +18,9 @@ selection contract is
 - **Runtime typeshed acquisition** — an explicit `typeshed-commit` or the latest
   verified `main` supplies real `.pyi` bodies, `stdlib/VERSIONS`, and the
   distribution map from one SHA. The source archive is **downloaded over HTTPS
-  (never `git clone`)**, extracted under always-on safety guards, and verified
-  against the commit's tree SHA. An unpinned failed acquisition never reuses an
-  old checkout
+  (never `git clone`)**, streamed through safety/shape/license/tree gates, cached
+  as an immutable ZIP, and read through the same archive VFS. An unpinned failed
+  acquisition never reuses old content
   ([STUBRES-TYPESHED-ACQUIRE](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
 - **Bundled ZIP snapshot** — a complete typeshed `stdlib/` tree with **real
   `.pyi` bodies** plus its composite `LICENSE`, pinned to one SHA and refreshed
@@ -31,7 +31,7 @@ selection contract is
 - **No mixed source** — custom or downloaded content wholly bypasses the bundled
   snapshot and its compiled lookups.
 - **Custom typeshed** — `typeshed-path` is the sole step-3 source when set, as
-  required by the pinned "canonical source" clause; a miss proceeds to step 4
+  Basilisk's implementation of the pinned "canonical source" SHOULD; a miss proceeds to step 4
   ([STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
 - **Resolution priority** — manual stubs, user code, selected stdlib source,
   stub packages, inline `py.typed` packages, then optional vendored third-party

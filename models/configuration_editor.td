@@ -72,12 +72,70 @@ type TagState {
   diagnosticCount: Int
 }
 
+# The active configuration source behind a snapshot (Project view). uri/exists/
+# readOnly are real filesystem metadata from the loaded ConfigDocument; there is
+# exactly one format (the root pyproject.toml), so no format discriminator.
+type ConfigurationSource {
+  uri: Uri
+  exists: Bool
+  readOnly: Bool
+}
+
+# One real configuration problem for the Project view - e.g. an entry naming a
+# rule code that is not in the catalog. Never a synthetic warning.
+type ConfigurationProblem {
+  code: RuleCode
+  message: String
+  uri: Uri
+  line: Int
+  character: Int
+}
+
+# Server-computed effective-state counters for the Overview and Adoption views.
+# Every field is a real count folded from the live diagnostic inventory and the
+# resolved rule severities - the exact effective state, never a synthetic score.
+type DebtSummary {
+  remainingDiagnostics: Int
+  errorDiagnostics: Int
+  warningDiagnostics: Int
+  infoDiagnostics: Int
+  adoptedRules: Int
+  disabledRules: Int
+}
+
+# One per-rule entry inside a nested [tool.basilisk.rules] table.
+type PathRuleSetting {
+  code: RuleCode
+  severity: RuleSeverity
+}
+
+# One per-tag entry inside a nested [tool.basilisk.rule-tags] table.
+type PathTagSetting {
+  tag: RuleTag
+  severity: RuleSeverity
+}
+
+# One nested per-directory [tool.basilisk] table discovered under the root
+# ([CHKARCH-CONFIG-DISCOVERY]) for the Path Overrides view. path is the
+# directory (root-relative) whose pyproject.toml holds the table; the checker
+# honors these entries for code beneath that directory via the ancestor walk.
+type PathOverrideState {
+  path: String
+  configUri: Uri
+  rules: List<PathRuleSetting>
+  tags: List<PathTagSetting>
+}
+
 type ConfigurationSnapshot {
   rootUri: Uri
   configUri: Uri
   revision: Revision
+  source: ConfigurationSource
   rules: List<RuleState>
   tags: List<TagState>
+  pathOverrides: List<PathOverrideState>
+  debt: DebtSummary
+  problems: List<ConfigurationProblem>
 }
 
 type PreviewConfigurationRequest {
