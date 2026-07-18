@@ -323,40 +323,35 @@ or maintain a Python-version-to-commit map.
 
 ### .pyi File Parsing {#STUBRES-PYI}
 
-`ruff_python_parser` handles `.pyi` files too:
-
-- Only signatures matter (function defs, class defs, variable annotations)
-- Bodies (`...`/`pass`) ignored; no runtime analysis
-- `@overload` is significant
+The pinned specification says checkers should parse supported stub constructs
+without contradiction and "fully support" typing features, imports, aliases,
+and simple version/platform checks
+([`python/typing@6ef9f77`, stub files](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+The `.pyi` index therefore retains declarations, overloads, decorators, class
+bases, methods, variables, imports, aliases, and guards; bodies are ignored.
+Class hover uses the indexed `__init__` signature (#289), and method hover uses
+the indexed method signature (#288).
 
 #### Re-exports {#STUBRES-PYI-REEXPORTS}
 
-A stub's public interface is not just the names it defines. Per the typing
-spec's [import conventions](https://typing.python.org/en/latest/spec/distributing.html#import-conventions),
-it also includes names the stub re-exports (GitHub #312):
+A stub's public interface includes the re-exports required by the pinned typing
+specification's import conventions
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)):
 
 - **Redundant aliases** — `from y import x as x` and `import x as x` re-export
   `x`.
-- **`__all__`** — names listed in `__all__` (list or tuple of string literals,
-  including `+=` extensions) are exported.
+- **`__all__`** — assignment from a list/tuple plus `+=`, `extend`, `append`, and
+  `remove`, including references to a submodule's `__all__`.
 - **Star imports** — `from .sub import *` re-exports the target stub's export
   set: its `__all__` when it defines one (authoritative, exactly like runtime
   `import *`), otherwise its public (non-underscore) top-level names and
-  re-exports, followed recursively. Targets resolve relative to the stub file;
-  absolute star imports are not followed (intra-package re-exports in stubs
-  are conventionally relative — typeshed style).
+  re-exports, followed recursively through relative or absolute imports and
+  import cycles.
 
-Version/platform-gated branches (`if sys.version_info >= …:`) are **unioned**
-for `__all__` and re-export imports: for attribute existence an
-over-approximation can only suppress false positives, never create one. The
-extractor (`crates/basilisk-stubs/src/pyi_parser.rs`) records these on
-`StubModule`; `crates/basilisk-stubs/src/reexports.rs` resolves star-import
-chains; and the user-stub member API consumed by `imports_module_attribute`
-([CHKARCH-DIAG-STUB-MEMBER](CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-stub-member))
-folds the result into `member_names`
-(`crates/basilisk-checker/src/imports/apply.rs`), so a package `__init__.pyi`
-built from re-exports (e.g. `asyncio` in micropython-stdlib-stubs) surfaces
-`sleep`/`Task`/`run` as attributes of the package.
+Simple `sys.version_info` / `sys.platform` guards select the target branch; they
+are never unioned. This follows the pinned directive that checkers are expected
+to understand those checks
+([`python/typing@6ef9f77`, directives](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)).
 
 ---
 
