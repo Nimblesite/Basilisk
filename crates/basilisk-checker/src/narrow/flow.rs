@@ -369,6 +369,7 @@ fn variable_of_kind(kind: &basilisk_resolver::NarrowingGuardKind) -> &str {
         | K::EqualsLiteral { variable, .. }
         | K::InLiterals { variable, .. }
         | K::HasAttr { variable, .. }
+        | K::TypeOfIs { variable, .. }
         | K::KeyInDict { variable, .. } => variable,
         K::Assert { inner } => variable_of_kind(inner),
     }

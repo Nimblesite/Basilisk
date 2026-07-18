@@ -453,8 +453,19 @@ reproducible, write-always, ratcheted:
   `crates/basilisk-config/src/parse.rs`).
 - [ ] Replace pattern-matched reachability idioms with inference-driven
   reachability.
-- [ ] Measure narrowing richness against the utahplt/ifT-benchmark
+- [x] Measure narrowing richness against the utahplt/ifT-benchmark
   (<https://github.com/utahplt/ift-benchmark>).
+  — Harness: `crates/basilisk-checker/examples/ift_measure.rs` over a fresh
+  clone's `Pyright/main.py` (benchmark commit `cfb31ef` at measurement
+  time). Self-measured baseline, methodology stated in the harness header:
+  **11/37 functions (29%) produce a flow-narrowing signal** (the
+  `type(x) is C` positive/negative/`@final` families). The silent families
+  each map to a known pending guard form — boolean connectives in tests,
+  nested conditions, cross-function `TypeGuard` calls, attribute
+  narrowing ([TYPEINF-NARROWING-ATTR-CALLS]), and tuple element/length
+  narrowing — so this number is the ratchet floor, not a claim of
+  benchmark conformance (that needs the full diagnostics pipeline at the
+  Integration stage).
 
 ### Stage 2 — expression inference
 

@@ -237,6 +237,11 @@ fn extract_compare_guard(
     let right = cmp.comparators.first()?;
     match op {
         CmpOp::Is | CmpOp::IsNot => {
+            // Implements [TYPEINF-NARROWING-TYPEOF]: `type(x) is C`.
+            if let Some(guard) = extract_type_of_guard(cmp, op, right, if_body_span, else_body_span)
+            {
+                return Some(guard);
+            }
             extract_none_guard(cmp, op, right, if_body_span, else_body_span)
         }
         // Implements [TYPEINF-NARROWING-EQ-LITERAL].
@@ -256,6 +261,31 @@ fn extract_compare_guard(
         }
         _ => None,
     }
+}
+
+/// `type(x) is C` / `type(x) is not C` — exact-class comparison.
+fn extract_type_of_guard(
+    cmp: &ruff_python_ast::ExprCompare,
+    op: CmpOp,
+    right: &Expr,
+    if_body_span: Span,
+    else_body_span: Option<Span>,
+) -> Option<NarrowingGuardKind> {
+    let Expr::Call(call) = cmp.left.as_ref() else {
+        return None;
+    };
+    if expr_simple_name(&call.func)? != "type" || call.arguments.args.len() != 1 {
+        return None;
+    }
+    let variable = expr_simple_name(call.arguments.args.first()?)?;
+    let type_name = expr_simple_name(right)?;
+    Some(NarrowingGuardKind::TypeOfIs {
+        variable,
+        type_name,
+        is_positive: matches!(op, CmpOp::Is),
+        if_body_span,
+        else_body_span,
+    })
 }
 
 /// The original `is None` / `is not None` extraction (both operand orders).

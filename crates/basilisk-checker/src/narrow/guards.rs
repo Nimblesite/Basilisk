@@ -28,6 +28,9 @@ pub struct TypedDictKeys {
 pub struct NarrowContext {
     /// `TypedDict` name → key sets.
     pub typeddict_keys: HashMap<String, TypedDictKeys>,
+    /// `@final` class names — the classes whose `type(x) is not C` branch
+    /// may soundly exclude `C` ([TYPEINF-NARROWING-TYPEOF]).
+    pub final_classes: std::collections::HashSet<String>,
 }
 
 /// What one guard does to one variable in each branch.
@@ -199,6 +202,34 @@ fn extended_outcome_for_kind(
             whole_scope,
             ctx,
         )),
+        // Implements [TYPEINF-NARROWING-TYPEOF]: `type(x) is C` implies
+        // `isinstance(x, C)` positively; the negative branch excludes `C`
+        // only when `C` is `@final` (a subclass may still be `is not C`).
+        NarrowingGuardKind::TypeOfIs {
+            variable,
+            type_name,
+            is_positive,
+            ..
+        } => {
+            let class_type = InferredType::from_annotation(type_name);
+            let matched = intersect(current, &class_type);
+            let excluded = if ctx.final_classes.contains(&type_name.to_ascii_lowercase()) {
+                subtract(current, &class_type)
+            } else {
+                current.clone()
+            };
+            let (positive, negative) = if *is_positive {
+                (matched, excluded)
+            } else {
+                (excluded, matched)
+            };
+            Some(GuardOutcome {
+                variable: variable.clone(),
+                positive,
+                negative,
+                whole_scope,
+            })
+        }
         // [TYPEINF-NARROWING-ISSUBCLASS] / [TYPEINF-NARROWING-HASATTR]:
         // extraction is live; interpretation is deliberately IDENTITY until
         // `type[...]` object modelling and synthetic-protocol intersections
