@@ -506,8 +506,16 @@ reproducible, write-always, ratcheted:
   guess). Wiring into the `BSK-0001` exemption happens at the Integration
   stage, where the [TYPEINF-EXCEEDS-REQUIRED] predicate widens in
   lockstep with this inference.
-- [ ] Build the curated container/comprehension/lambda benchmark and the
+- [x] Build the curated container/comprehension/lambda benchmark and the
   targeted higher-order (`map`/`filter`/decorators/`ParamSpec`) benchmark.
+  — `crates/basilisk-checker/tests/inference_corpus_tests.rs`: a ratcheted
+  precision corpus over the definition-level queries. Equivalence is
+  mutual assignability PLUS a gradual-honesty check (an `Unknown` answer
+  never silently matches a concrete expectation — the naive scorer
+  inflated 23/24; the honest score is **18/24**, `PRECISION_FLOOR = 18`,
+  up-only). The six misses are the documented gaps: nested-union
+  normalization, lambda parameter display, and the higher-order family
+  (`map`/`filter`/decorators) that the generic-constraints stage closes.
 
 ### Stage 2 — generic constraints
 
