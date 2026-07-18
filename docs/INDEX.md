@@ -15,7 +15,7 @@ linked to an active plan.
 |---|---|
 | [Checker architecture](specs/CHECKER-ARCHITECTURE-SPEC.md) | Configuration, rules, diagnostics, analysis pipeline, CLI, and quality gates. |
 | [Type inference](specs/CHECKER-TYPE-INFERENCE-SPEC.md) | Expression/type inference and narrowing contracts, plus the target bidirectional/constraint architecture and its research grounding. |
-| [Stub resolution](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | Static import/stub order, the runtime `python/typeshed` clone-and-cache with an offline bundled baseline, custom typeshed, provenance, and generation. |
+| [Stub resolution](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | Pinned typing-spec import order, custom typeshed, verified runtime acquisition, bundled names-only fallback, provenance, and generation. |
 | [Checker cache](specs/CHECKER-CACHE-SPEC.md) | Opt-in content-addressed CLI result cache. |
 | [Rule tagging](specs/CHECKER-RULE-TAGGING-SPEC.md) | Rule provenance/category/free-form tags and conflict rules. |
 | [Compiler prototype](specs/COMPILER-ARCHITECTURE-SPEC.md) | Current checker-gated AST interpreter and fixture contract. |
@@ -53,7 +53,7 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [AI-assisted LSP](plans/LSP-AI-PLAN.md) | First opt-in provider slice and privacy/safety gate. |
 | [Activity panel](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Settings wiring and remaining cross-editor/test quality. |
 | [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Bidirectional/constraint-based inference engine, flow analysis, shared subtyping, and PEP 827 readiness. |
-| [Runtime typeshed clone](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Replace the compile-time index with a runtime `python/typeshed` clone/cache, loose offline baseline, `gix` git client, config keys, startup gating, and freshness reporting. |
+| [Runtime typeshed acquisition](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Replace the compile-time index with real `.pyi` acquisition, exact source precedence, startup gating, and #288/#289 acceptance tests. |
 | [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Replace remaining raw-source rule scans with AST data. |
 | [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Mojo checks, plugin host, migration, and CI helpers. |
 | [Native compiler](plans/COMPILER-ARCHITECTURE-PLAN.md) | HIR, backend, runtime, interop, CLI, and native acceptance. |

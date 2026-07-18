@@ -1,119 +1,83 @@
 # Runtime typeshed acquisition — Implementation Plan {#TYPESHEDRT}
 
 > **Normative spec**: [STUBRES-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)
-> **Typing authority**: [`python/typing@6ef9f77`, distributing step 3](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)
+> **Pinned typing authority**: [`python/typing@6ef9f7719ecfff09dad8724ef42b621fd994fb5e`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)
 
-This plan supplies the real standard-library `.pyi` data missing in
-[#324](https://github.com/Nimblesite/Basilisk/issues/324), enabling the hover
-information requested by [#289](https://github.com/Nimblesite/Basilisk/issues/289)
-and [#288](https://github.com/Nimblesite/Basilisk/issues/288). It does not change
-the typing specification's six-step resolution order.
+This supplies the real standard-library `.pyi` data missing in [#324](https://github.com/Nimblesite/Basilisk/issues/324), so [#289](https://github.com/Nimblesite/Basilisk/issues/289) and [#288](https://github.com/Nimblesite/Basilisk/issues/288) can be fixed without changing the typing specification's resolution order.
 
-## Model {#TYPESHEDRT-MODEL}
+## Contract {#TYPESHEDRT-MODEL}
 
-The pinned typing specification names "Typeshed stubs for the standard library",
-notes they are "usually" vendored, and makes a configured custom tree canonical
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-Implement one selected step-3 source:
+Pinned step 3 says **“Typeshed stubs for the standard library”**, says those stubs are **“usually”** vendored, and says a provided custom path **“SHOULD [be used] as the canonical source for standard-library types in this step”** ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). “Usually” does not mandate bundling or any Git policy.
 
-1. custom `typeshed-path`;
-2. `python/typeshed@main`, fetched and verified for this CLI run or LSP session;
-3. the bundled names-only baseline when acquisition is unavailable.
+Basilisk therefore activates exactly one step-3 source: `typeshed-path`; otherwise an exact user `typeshed-commit` or `python/typeshed@main` verified for this run/session; otherwise the names-only bundled baseline. Custom or downloaded data wholly bypasses bundled and compiled lookups. There is no refresh TTL, automatic stale-checkout fallback, fixed Python default, or Python-version-to-commit map. An explicit commit is deliberate immutable user selection, not automatic staleness.
 
-Downloaded data replaces bundled or compiled data wholesale. There is no TTL,
-historical pin, last-known-good fallback, stale state, or
-Python-version-to-commit map.
+## Work {#TYPESHEDRT-WORK}
 
-## Git client {#TYPESHEDRT-GIT}
+The pinned order puts standard-library typeshed at step 3, stub packages at step 4, inline `py.typed` packages at step 5, and optional vendored third-party stubs last ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). Implement only what is needed to preserve that order:
 
-The pinned typing specification leaves the transport unspecified
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-Use `gix` behind a small `TypeshedGit` trait so Basilisk remains one native
-binary and network/git behavior has one test seam.
-
-## Work breakdown {#TYPESHEDRT-WORK}
-
-All work preserves the pinned order that says stub packages precede inline
-`py.typed` packages and optional vendored third-party stubs come last
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-
-### 1. Replace the compile-time index {#TYPESHEDRT-TEARDOWN}
-
-Step 3 requires typeshed stubs, not merely a module-name classification
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-
-- Resolve downloaded stdlib modules to real `stdlib/*.pyi` paths and load
-  `stdlib/VERSIONS` plus `stubs/<DIST>/METADATA.toml` from the same commit.
-- Keep the packaged baseline names-only and loose. A compiled copy is permitted
-  only as an exact acceleration of that baseline and is bypassed whenever a
-  custom or downloaded source is active.
-- Remove the compile-time table as an authoritative source. Preserve public
-  lookup signatures while moving them behind the selected source.
-
-### 2. Acquire one source {#TYPESHEDRT-CACHE}
-
-This implements the pinned step-3 typeshed source without changing resolution
-semantics
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-
-`acquire(config) -> Custom | Downloaded | Baseline`:
-
-1. Return `Custom` immediately when `typeshed-path` is configured.
-2. Lock the cache directory and fetch `python/typeshed@main` into a temporary
-   checkout. Existing git objects may seed the fetch but are never activated
-   without successful upstream verification.
-3. Validate the tree and resolved SHA, then atomically promote it and return
-   `Downloaded { path, commit, committed_at }`.
-4. On any acquisition or validation failure, return `Baseline`; never return a
-   previous checkout. `stale` is not a source state.
-
-The activated source is immutable for that CLI run or LSP session. The next
-acquisition verifies upstream again. Atomic promotion and the process lock affect
-timing only, never which source wins.
-
-### 3. Configuration {#TYPESHEDRT-CONFIG}
-
-The only setting the pinned typing specification calls for is a custom canonical
-typeshed path
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-
-- Keep `typeshed-path` as the canonical custom source.
-- Add `typeshed-cache-path` only to relocate automatic storage.
-- Do not add `typeshed-commit` or `typeshed-refresh-interval`.
-
-### 4. Startup and reporting {#TYPESHEDRT-STARTUP}
-
-Acquisition supplies step 3 of the pinned order before resolution begins
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-
-- Gate the first CLI/LSP analysis on `acquire`; never publish transient
-  unresolved-stdlib diagnostics.
-- Build `ImportSearchPaths` from the selected source and include its identity in
-  the checker-cache fingerprint.
-- Report either `typeshed <sha> · <date>` or
-  `typeshed download unavailable; using bundled names only`. There is no stale
-  status.
-- Expose folder pickers for `typeshed-path` and `typeshed-cache-path`.
+1. Replace authoritative compile-time name lookup with one selected source that supplies module names, real `stdlib/*.pyi` bodies, `stdlib/VERSIONS`, and the distribution map from one identity. A compiled copy may only accelerate the names-only baseline.
+2. `acquire(config) -> Custom | Downloaded | Baseline`: return `Custom` immediately; otherwise validate/fetch an exact pin or fetch and verify `main` into a temporary tree; atomically activate one validated SHA; on unpinned failure return `Baseline`, never an older checkout. A validated tree matching an explicit pin remains eligible.
+3. Keep only `typeshed-path`, `typeshed-commit`, and `typeshed-cache-path`. A custom-path miss leaves step 3 and proceeds to step 4.
+4. Gate first analysis on acquisition, fingerprint checker caches with source identity, and report only verified download (`pinned` when explicit) or warned names-only baseline.
 
 ## Acceptance criteria {#TYPESHEDRT-ACCEPTANCE}
 
-The tests below enforce the pinned typing-spec source and resolution order
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+Each checkbox is an independent automated test. The pinned specification says type checkers **“SHOULD resolve modules containing type information”** in its listed order ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)); the acquisition mechanics below are Basilisk policy where that specification is silent.
 
-- [ ] Online acquisition verifies current `python/typeshed@main` and resolves
-      stdlib imports to `.pyi` files from one exact SHA.
-- [ ] A failed update never reuses an earlier checkout; only the bundled
-      names-only baseline is eligible.
-- [ ] Downloaded or custom data wholly disables bundled and compiled lookups.
-- [ ] `typeshed-path` is the sole step-3 source when configured; a miss proceeds
-      to step 4.
-- [ ] No Python version selects or guesses a typeshed commit. A known target only
-      evaluates `VERSIONS` and version/platform guards.
-- [ ] Hovering `unittest.mock.Mock` exposes class and constructor information
-      from typeshed, covering #289.
-- [ ] Hovering a built-in method such as `str.join` exposes its typeshed
-      signature, covering #288 without a hand-maintained signature table.
-- [ ] The six-step resolution diagram is exercised in order, including separate
-      stub-package and inline-`py.typed` cases.
-- [ ] The upstream conformance harness remains at 100%, and documentation checks
-      contain no stale/TTL/pin/default-Python contradictions.
+### Source acquisition and identity {#TYPESHEDRT-ACCEPTANCE-SOURCE}
+
+Step 3 requires **“Typeshed stubs for the standard library”**, while the same pinned text does not prescribe transport, cache age, or commit selection ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+
+- [ ] **Current unpinned `main`:** seed cached SHA `A`, advertise remote SHA `B`, acquire, and assert the reported SHA, `.pyi` path, `stdlib/VERSIONS`, module names, and distribution map all come from `B`.
+- [ ] **One generation:** give `A`, `B`, loose baseline, and compiled baseline conflicting sentinels; after activating `B`, assert every name/body/distribution lookup reads `B` and no fallback lookup occurs.
+- [ ] **Failed update:** seed `A`, fail remote verification, and assert the names-only baseline and exact warning are selected; `A` is never activated and no `.pyi` body is fabricated.
+- [ ] **Invalid checkout:** interrupt before promotion and separately corrupt metadata/tree; assert neither partial tree activates, then assert a successful retry atomically activates one complete SHA.
+- [ ] **Concurrent callers:** acquire from CLI- and LSP-shaped callers against one cache; assert one complete source identity, one promotion, and no observation of a temporary tree.
+- [ ] **Cache fingerprint:** different SHAs, custom-tree identities, and baseline identities miss the checker cache; identical identities hit it.
+
+### Explicit user sources {#TYPESHEDRT-ACCEPTANCE-OVERRIDES}
+
+Pinned step 3 says a supplied custom typeshed **“SHOULD [be used] as the canonical source for standard-library types in this step”** ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+
+- [ ] **Exact commit:** configure SHA `A`; assert the active tree is byte-identical to `A`, local mutation fails validation, later movement of `main` changes nothing, and target Python never rewrites the pin.
+- [ ] **Pinned reuse:** validate `A`, remove the network, and assert that exact immutable checkout remains eligible and reports `pinned`, never `stale`.
+- [ ] **Custom tree:** configure conflicting custom, clone, baseline, and compiled signatures; assert the resolved custom path is used verbatim, custom wins, and acquisition plus all other step-3 lookups are bypassed.
+- [ ] **Custom miss:** omit `X` only from custom while putting it in clone/baseline; assert resolution goes directly to step 4 and never rescues `X` from another step-3 source.
+- [ ] **Path validation:** cover absolute/workspace-relative paths, required top-level `stdlib/`, nonexistent paths, malformed trees, and deterministic diagnostics.
+
+### Python target semantics {#TYPESHEDRT-ACCEPTANCE-TARGET}
+
+The pinned stub specification says checkers should fully support **“Simple version and platform checks”**; its directives say checkers are **“expected to understand simple version and platform checks”** using `sys.version_info` and `sys.platform` ([distributing](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst), [directives](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst), both `python/typing@6ef9f77`).
+
+- [ ] **Same SHA, different targets:** run two target versions against one SHA; assert acquisition identity is unchanged while `stdlib/VERSIONS` admits the fixture's target-specific modules.
+- [ ] **Guard selection:** put incompatible declarations behind simple version/platform guards; assert only the matching branch reaches symbols, hover, completion, and diagnostics—never a union of branches.
+- [ ] **No commit inference:** instrument Git and change only `python-version`/`python-platform`; assert no different SHA is selected, guessed, or fetched.
+- [ ] **No manufactured target:** assert configuration, generated data, and bundled data contain no Python-version-to-SHA map and no fixed Python target appears without project/interpreter evidence.
+
+### Resolution and stub semantics {#TYPESHEDRT-ACCEPTANCE-RESOLUTION}
+
+The pinned specification orders manual stubs, user code, stdlib typeshed, stub packages, inline `py.typed`, and optional vendored third-party stubs; it also says checkers **“MUST maintain the normal resolution order of checking `*.pyi` before `*.py` files”** ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+
+- [ ] **Six steps:** collide module `X` at every step, remove each winner in turn, and assert `1 → 2 → 3 → 4 → 5 → 6 → unresolved`, matching the retained diagram.
+- [ ] **Stub package versus inline:** install `foopkg-stubs` beside inline `py.typed` `foopkg`; assert step 4 wins over step 5.
+- [ ] **Partial stub package:** add `partial\n` to `foopkg-stubs/py.typed`; assert missing modules merge/fall through to steps 5/6 exactly as the pinned partial-stub clauses require.
+- [ ] **`.pyi` precedence:** place `.pyi` and `.py` for one module at the winning location; assert only `.pyi` supplies the public interface.
+- [ ] **Public interface:** cover redundant aliases, all specified `__all__` mutations, relative and absolute star imports, import cycles, and target-selected re-exports.
+
+### #288 and #289 behavior {#TYPESHEDRT-ACCEPTANCE-HOVER}
+
+Pinned stub rules require class methods, function/method definitions, imports, aliases, typing features, decorators, and cycles to be understood ([`python/typing@6ef9f77`, “Supported Constructs”, “Classes”, “Functions and Methods”](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+
+- [ ] **#289:** resolve `unittest.mock.Mock` from the active SHA; assert hover reaches the class and selected constructor/`__init__` signature with typeshed provenance, not merely import text.
+- [ ] **#288:** resolve `str.join` from `stdlib/builtins.pyi`; assert bound-method hover shows that file's parameters/return type; mutate only the fixture signature and assert hover changes, proving no hand-maintained table won.
+- [ ] **Override behavior:** repeat both with conflicting custom stubs and assert custom signatures/provenance; repeat on names-only baseline and assert no signature is invented.
+- [ ] **Shared declaration:** assert hover, signature help, completion, and go-to-definition use the same indexed declaration and source identity.
+
+### Release gates {#TYPESHEDRT-ACCEPTANCE-GATES}
+
+The full pinned quotation and retained diagram in [STUBRES-PEP561](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561) remain the local audit surface; the maintained typing specification and conformance suite remain the upstream authority.
+
+- [ ] Run a freshly cloned, unmodified `python/typing@main` conformance harness against the clean release binary; require 100% and zero false positives.
+- [ ] Validate Mermaid rendering, anchors, links, and the full `6ef9f7719ecfff09dad8724ef42b621fd994fb5e` pin in every touched typeshed section.
+- [ ] Reject documentation containing a refresh TTL, automatic stale-checkout fallback, Python-version-to-SHA map, or fixed Python default; permit the explicit user commit pin and custom path.
+- [ ] Require the final documentation patch to delete more prose than it adds while retaining the full import-order quotation and resolution diagram.

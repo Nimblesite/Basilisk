@@ -8,12 +8,12 @@ in the linked specs and editor-specific UI belongs in the VS Code, Zed, and Neov
 `basilisk lsp` runs the parser, resolver, checker, formatter, and language features in one
 process. VS Code, Zed, and Neovim communicate with it over LSP. External processes are
 limited to features that require them, notably `debugpy`, `uv`, test runners, and profiling
-helpers. On startup the server additionally acquires and refreshes an on-disk clone of
-`python/typeshed` for standard-library types
-([STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)). That acquisition
-is a **network** operation — it fetches from GitHub — but it runs **in-process** through the
-pure-Rust `gix` git library, so it spawns no `git` subprocess and adds no external process
-to the list above; it only adds network access.
+helpers. On startup the server acquires the step-3 typeshed source required by
+the pinned typing order
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst),
+[STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)). Automatic
+acquisition is an in-process `gix` network operation; an explicit custom path
+requires none.
 
 The analysis path is parser → resolver → checker. Workspace state, import graphs, and
 resolved modules are retained by the server so feature handlers do not reparse every
@@ -41,10 +41,13 @@ The server configuration model is `crates/basilisk-lsp/src/config.rs`. Editor ma
 settings must map to that model rather than maintaining a second semantic configuration.
 The stable shared surface includes the executable and Python paths, analysis mode, stub
 paths, the typeshed acquisition settings (`typeshed-path`, `typeshed-cache-path`,
-`typeshed-commit`, `typeshed-refresh-interval` —
+`typeshed-commit` —
 [STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)),
 formatter selection, inlay-hint switches, debugger settings, and the uv, test, profiling,
-and memory namespaces. Detailed contracts live in their feature specs.
+and memory namespaces. The custom path implements the pinned typing specification's
+step-3 "canonical source" option
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+Detailed contracts live in their feature specs.
 
 There is ONE project configuration
 ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)), shared by

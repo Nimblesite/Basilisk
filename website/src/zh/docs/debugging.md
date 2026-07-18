@@ -31,7 +31,9 @@ Basilisk 包含一个完全集成的 Python 调试器。设置断点、单步执
 pip install debugpy
 ```
 
-Basilisk 目标是 **Python 3.12**。请确保您的环境使用 Python 3.12 或更高版本。
+Basilisk 使用所选项目解释器，没有固定的 Python 目标。版本相关分析遵循固定
+提交的 typing 指令规范
+（[`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)）。
 
 ## 快速开始
 
@@ -188,7 +190,7 @@ Basilisk Debug: No Python interpreter found.
 ```json
 // .vscode/settings.json
 {
-  "basilisk.python": "/path/to/python3.12"
+  "basilisk.python": "/path/to/python"
 }
 ```
 

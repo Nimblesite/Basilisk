@@ -46,7 +46,8 @@ it must not reuse an unstructured prompt as an implicit API.
 - [ ] Every AI result is visibly provider-originated and unsafe until reviewed.
 - [ ] No **AI-provider** network request occurs unless a user enables a provider — no provider is
   contacted in the default configuration or in deterministic test suites. (The default typeshed
-  clone is a separate, expected default network operation; tests pin it via `typeshed-commit` or
+  clone is a separate, expected default network operation; tests select an explicit `typeshed-commit` or
   run against the offline bundled baseline —
-  [CHECKER-STUB-RESOLUTION-SPEC §STUBRES-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED).)
+  [CHECKER-STUB-RESOLUTION-SPEC §STUBRES-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED),
+  applying pinned typing step 3 at [`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst).)
 - [ ] Cancellation prevents stale edits from being offered after the document changes.

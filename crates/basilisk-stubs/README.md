@@ -1,59 +1,35 @@
 # basilisk-stubs
 
-Standard-library type resolution for Basilisk: the runtime `python/typeshed`
-clone and on-disk cache, plus a loose bundled baseline for the offline day-one
-fallback.
+Standard-library type resolution for Basilisk: a custom or runtime
+`python/typeshed` tree plus a bundled names-only fallback.
 
 ## Role in Basilisk
 
-This crate owns **where standard-library and third-party type information comes
-from**. Its canonical source is a real on-disk clone of
-[`python/typeshed`](https://github.com/python/typeshed) that Basilisk acquires
-and keeps current at runtime — resolved against the clone's actual
-`stdlib/*.pyi` bodies, its `stdlib/VERSIONS` module-name set, and its
-`stubs/<DIST>/` trees for the `types-<distribution>` map. A small bundled
-baseline backs it up so the checker still works on the very first run with no
-network. The checker asks this crate to resolve an imported module and gets back
-a `StubResolution` tagged with where the types came from and how much to trust
-them. See
+This crate supplies step 3—"Typeshed stubs for the standard library"—of the
+pinned typing resolution order
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+It returns a `StubResolution` with source and trust provenance; the normative
+selection contract is
 [STUBRES-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED).
 
 ## Key concepts
 
-- **Runtime typeshed clone (canonical)** — on LSP startup, and before the first
-  CLI check, Basilisk clones `python/typeshed` into an on-disk cache and
-  resolves the standard library against its real `.pyi` bodies. The clone is the
-  authoritative source: types, signatures, hover, and `__init__` hints all come
-  from it. Cloning is done with the pure-Rust `gix` library — no system `git`
-  binary and no Python runtime — so the single-native-binary promise holds
+- **Runtime typeshed clone** — an explicit `typeshed-commit` or freshly verified
+  `main` supplies real `.pyi` bodies, `stdlib/VERSIONS`, and the distribution
+  map from one SHA. An unpinned failed acquisition never reuses an old checkout
   ([STUBRES-TYPESHED-CLONE](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CLONE)).
-- **Bundled baseline (offline day-one fallback)** — a small, loose, replaceable
-  set of data files shipped in the package: the stdlib module-name set (in
-  typeshed `VERSIONS` format) and the `types-<distribution>` map
-  (`data/typeshed_stub_distributions.tsv`). It carries **names and the
-  distribution map only — never stdlib `.pyi` bodies** and is **not** compiled in
-  as an authoritative index. It is consulted **only** while no clone is
-  available (offline, clone failed, or the first check before the clone
-  finishes), and any run that falls back to it raises a CLI warning
+- **Bundled baseline** — loose `VERSIONS`-format names and the distribution map,
+  never `.pyi` bodies. A compiled copy may accelerate that same fallback only
   ([STUBRES-TYPESHED-BASELINE](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-BASELINE),
   [STUBRES-TYPESHED-WARN](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
-- **Clone wholesale overrides the baseline** — once a clone is available, both
-  the stdlib name-set and the distribution map are read from the clone and the
-  baseline is not consulted. The baseline is never authoritative; it is the
-  fallback only.
-- **Custom typeshed override** — the `typeshed-path` config points Basilisk at
-  your own typeshed tree whose `stdlib/` becomes the canonical standard-library
-  source (resolution step 3) and **disables the runtime clone entirely**. Its
-  stubs carry `CustomTypeshed` provenance, so hover reads `(custom typeshed)` —
-  distinct from the `(typeshed)` label used for both the clone and the baseline —
-  and a MicroPython signature is never misreported as CPython's
+- **No mixed source** — custom or downloaded content wholly bypasses baseline
+  and compiled lookups.
+- **Custom typeshed** — `typeshed-path` is the sole step-3 source when set, as
+  required by the pinned "canonical source" clause; a miss proceeds to step 4
   ([STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
-- **Resolution priority** — for a module that carries type information the order
-  is: user `.pyi` stubs (`stub-paths`, step 1) > workspace user code (step 2) >
-  the step-3 stdlib source — `typeshed-path` custom tree, else the runtime
-  typeshed clone, else the bundled baseline. Later steps (installed
-  `foopkg-stubs` / `types-*` packages, then `py.typed` packages) follow for
-  third-party modules
+- **Resolution priority** — manual stubs, user code, selected stdlib source,
+  stub packages, inline `py.typed` packages, then optional vendored third-party
+  stubs, exactly as quoted in the pinned specification
   ([STUBRES-PEP561](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561)).
 
 ## Dependencies
@@ -68,8 +44,8 @@ them. See
 
 The `typeshed-path` custom-tree override and the bundled baseline (stdlib
 name-set + `types-<distribution>` map) are shipped and consumed by
-`basilisk-checker`. The runtime `python/typeshed` clone/cache is the canonical
-path defined by
+`basilisk-checker`. Runtime `python/typeshed` acquisition is the default path
+defined by
 [STUBRES-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED);
-its `gix`-backed acquisition, TTL refresh, and freshness reporting are tracked
+its `gix`-backed acquisition and source reporting are tracked
 against that spec.

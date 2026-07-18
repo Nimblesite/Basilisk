@@ -26,22 +26,23 @@ Inputs that can affect the diagnostics for `basilisk check <file>`:
    per-path/per-module overrides, excludes, stub paths, auto-stub mode, …)
    (`CHKCACHE-INPUT-CONFIG`).
 4. **Resolution environment** — import search roots, site-packages dirs, the
-   resolved standard-library typeshed cache path, and `uv.lock` contents when
+   selected standard-library source path, and `uv.lock` contents when
    present; a change can change *which* files an import resolves to
    (`CHKCACHE-INPUT-ENV`).
 5. **Checker version** — `CARGO_PKG_VERSION`; a new binary may change rule logic,
    so it invalidates every entry (`CHKCACHE-INPUT-VERSION`).
-6. **Standard-library typeshed identity** — the resolved
-   [`python/typeshed`](https://github.com/python/typeshed) commit SHA of the
-   runtime clone, or the bundled-baseline identity when no clone is available
+6. **Standard-library typeshed identity** — the exact
+   [`python/typeshed`](https://github.com/python/typeshed) commit SHA, custom-tree
+   content identity, or bundled-baseline identity
    ([`STUBRES-TYPESHED-CLONE`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CLONE),
    [`STUBRES-TYPESHED-BASELINE`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-BASELINE)).
-   The clone's commit moves **independently of the binary**: a TTL refresh or a
-   `typeshed-commit` change swaps the stdlib `.pyi` bodies under a fixed
+   The selected identity moves **independently of the binary**: a fresh unpinned
+   acquisition or a `typeshed-commit` change swaps the stdlib `.pyi` bodies under a fixed
    `CARGO_PKG_VERSION`, so keying only on the checker version would serve a stale
    entry across a typeshed update. The fingerprint MUST therefore key on the
-   resolved typeshed commit (or baseline identity) as well
-   (`CHKCACHE-INPUT-TYPESHED`).
+   exact selected source identity as well
+   (`CHKCACHE-INPUT-TYPESHED`). This preserves step 3 of the pinned typing order
+   ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 
 A hit requires **all six** to match. If any differ, or anything cannot be
 determined (a recorded dependency missing/unreadable, the entry unparseable, the
@@ -54,7 +55,7 @@ configuration and `uv.lock`. Installing or removing packages **directly into a
 virtualenv's site-packages without a `uv.lock` change** is not auto-detected in
 v1. This is why the cache is **opt-in**: clear the cache (or omit `--cache`)
 after mutating the environment outside the lockfile. Source, config, lockfile,
-typeshed-commit, and version changes are always detected. This boundary is the
+resolved typeshed identity, and version changes are always detected. This boundary is the
 reason v1 ships behind a flag rather than on by default.
 
 ### `CHKCACHE-POSITIONING` — When this cache helps, and the Salsa endgame {#CHKCACHE-POSITIONING}

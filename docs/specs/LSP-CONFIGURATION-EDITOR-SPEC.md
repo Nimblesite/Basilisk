@@ -78,11 +78,14 @@ A non-PEP diagnostic's hover carries a **Configure Severity** deep link ([LSPARC
 
 ## Typeshed path settings {#LSPCFGED-TYPESHED}
 
-The standard-library typeshed source is a `python/typeshed` clone Basilisk acquires
-and refreshes at runtime ([CHECKER-STUB-RESOLUTION §STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)).
+The standard-library source implements the pinned typing specification's custom
+"canonical source" option
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+Basilisk otherwise acquires an explicit `typeshed-commit` or verifies `main` at
+runtime ([CHECKER-STUB-RESOLUTION §STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)).
 Two of its `[tool.basilisk]` keys name a directory on disk — `typeshed-cache-path`
-(where the automatic clone is stored) and `typeshed-path` (your own tree, which
-disables cloning) — so the editor surfaces them as **path-typed settings** rendered
+(where automatic data is stored) and `typeshed-path` (your sole step-3 tree,
+which disables every other step-3 source) — so the editor surfaces them as **path-typed settings** rendered
 with a native **folder-picker** rather than a free-text field. These are the only
 path-typed settings the editor exposes; they are scalar directory keys, distinct
 from the glob-path and per-module rule overrides the editor deliberately excludes
@@ -94,7 +97,7 @@ and a `directory` path type — the discriminator that tells the client to offer
 folder chooser instead of a text control. Values are resolved exactly like every
 other snapshot field: a relative path is shown against the workspace root, and an
 unset key shows its resolved default (the OS cache directory for
-`typeshed-cache-path`, the auto-clone for `typeshed-path`). The client renders only
+`typeshed-cache-path`; no selected directory for `typeshed-path`). The client renders only
 what the server advertises and never fabricates a setting the server did not
 describe.
 
@@ -116,16 +119,17 @@ The Basilisk information view's read-only Server Info section — the Service In
 surfaces the live typeshed acquisition state as a read-only row:
 
 - **while acquiring** — a spinner (`$(sync~spin)`) with an *acquiring typeshed…*
-  label, shown from the `initialized` acquire/refresh until the stdlib source is
+  label, shown from `initialized` acquisition until the stdlib source is
   ready ([§STUBRES-TYPESHED-CLONE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CLONE));
-- **once ready** — the resolved cache path plus its freshness, mirroring the CLI
-  freshness report: the clone's short SHA and commit date when cloned and current,
-  or the bundled-baseline notice when the run fell back to shipped data
+- **once ready** — the selected source and path: custom, explicit pinned SHA,
+  freshly verified `main` SHA, or the bundled names-only fallback
   ([§STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 
 The row carries no command and no inline control and refreshes from the same LSP
 lifecycle and configuration signals as the rest of the tree; the server is the sole
-source of the resolved path and freshness state, so the panel never polls.
+source of that state, so the panel never polls. The labels describe Basilisk's
+transport for pinned typing step 3
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 
 ## Accessibility and security {#CONFIGEDITOR-ACCESSIBILITY-SECURITY}
 

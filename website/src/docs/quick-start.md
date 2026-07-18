@@ -189,12 +189,15 @@ Create a `[tool.basilisk]` section in your `pyproject.toml`:
 
 ```toml
 [tool.basilisk]
-python-version = "3.12"
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]
 ```
 
-With a config file present, running `basilisk check` uses these settings automatically.
+With a config file present, running `basilisk check` uses these settings
+automatically. Basilisk has no fixed Python-version default; set one only when
+you intend to override project/interpreter evidence. Version checks follow the
+pinned typing directives
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)).
 
 ## Step 6 — Understand a diagnostic
 

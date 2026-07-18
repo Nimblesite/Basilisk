@@ -24,23 +24,23 @@ dateModified: 2026-07-14
 
 ```toml
 [tool.basilisk]
-python-version = "3.12"
 ```
 
-这就是您所需要的全部。Basilisk 从当前目录查找 Python 文件并应用其默认规则集——**核心 PEP 符合性规则**。超出规范的额外 Basilisk 规则是可选的；当你想要比规范更严格的检查时再启用它们。
+这就是所需的全部配置。Basilisk 从当前目录查找 Python 文件并应用**核心 PEP
+符合性规则**。Basilisk 没有固定的 Python 版本默认值；版本相关行为遵循项目
+证据和固定提交的 typing 指令规范
+（[`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)）。
 
 ## 完整配置示例
 
 ```toml
 [tool.basilisk]
-python-version = "3.12"
 python-platform = "All"
 stub-paths = ["stubs/"]
-# 标准库 typeshed 会自动克隆并刷新；如需调整：
-typeshed-commit = "83c2518a9e6abbda0c44592c3483de459198f887"  # 可选：固定并冻结某个提交
-typeshed-cache-path = ".cache/typeshed"                       # 可选：克隆存放位置
-typeshed-refresh-interval = "24h"                             # 可选：未固定时的刷新 TTL（默认）
-# typeshed-path = "typeshed-micropython"                      # 可选：提供你自己的树，禁用自动克隆
+# 未固定时会验证 python/typeshed@main：
+# typeshed-commit = "<完整提交 SHA>"        # 可选：明确选择不可变来源
+typeshed-cache-path = ".cache/typeshed"     # 可选：自动存储位置
+# typeshed-path = "typeshed-micropython"    # 可选：规范的自定义树
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
 
@@ -56,10 +56,13 @@ rules."imports_unresolved" = "warning"
 ### `python-version`
 
 **类型：** `string`
-**默认值：** 从 PATH 上的解释器自动检测，如果未找到则为 `"3.12"`
-**示例：** `"3.12"`
+**默认值：** 从项目或解释器证据推断；没有证据时保持未设置
 
-用于类型检查的目标 Python 版本（例如 `"3.11"`）。Basilisk 将其作为求值输入——应用于 typeshed 的 `stdlib/VERSIONS`，以及类型规范要求检查器理解的 `sys.version_info` / `sys.platform` 条件判断（[规范：版本与平台检查，`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)）。它在单个 typeshed 快照*内*进行选择，绝不选择某个 typeshed 提交。
+可选的类型检查目标。Basilisk 将其应用于 typeshed 的 `stdlib/VERSIONS`，以及
+固定提交的 typing 规范要求检查器理解的简单 `sys.version_info` /
+`sys.platform` 判断
+（[`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)）。
+它只在一个 typeshed 快照内进行选择，绝不选择提交。
 
 ### `python-platform`
 
@@ -76,23 +79,29 @@ rules."imports_unresolved" = "warning"
 
 用于搜索 `.pyi` 存根文件的额外目录。它们位于导入搜索路径的**最前端**——[typing 规范的导入解析顺序](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)中的第 1 步——因此可以修补或遮蔽任何后续模块，无论是标准库还是第三方。对于内部库的自定义存根很有用。
 
-### 标准库 typeshed 的自动获取
+### 标准库 typeshed
 
 **规范：** [`STUBRES-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)
 
-默认情况下，Basilisk 针对磁盘上 [python/typeshed](https://github.com/python/typeshed) 的**实时克隆**解析标准库。LSP 在启动时于后台获取它，CLI 则在首次检查之前获取它，二者都存入操作系统缓存目录；随后标准库模块针对其真实的 `stdlib/*.pyi` 及其版本门控的 `stdlib/VERSIONS` 模块集解析，`types-<distribution>` 映射则从其 `stubs/<DIST>/` 树读取。无需任何配置——自动克隆即开箱即用的默认行为。
+固定提交的 typing 规范第 3 步要求标准库 typeshed 存根，并规定用户提供的
+自定义树是规范来源
+（[`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)）。
+没有自定义路径时，Basilisk 使用明确的 `typeshed-commit`，或在首次 CLI/LSP
+分析前验证 `python/typeshed@main`。所选 SHA 作为同一代数据提供 `.pyi` 主体、
+`stdlib/VERSIONS` 和分发映射。
 
-包中随附一份小巧的**捆绑基线**，作为离线首日兜底。它仅携带标准库模块名称集（typeshed 的 `VERSIONS` 格式）与 `types-<distribution>` 映射——绝不含标准库 `.pyi` 主体——因此在克隆落地之前 `import os` 绝不会闪现为无法解析。克隆成功后会**整体覆盖**基线；基线**仅**在从未获取过任何克隆时（离线首次运行，或初次克隆失败）才被参考。新鲜度在每次运行时都会报告，暗淡而低调：已克隆且为最新的缓存打印暗绿色 `typeshed <short-sha> · <date>`；已存在但无法刷新（失败或离线，早于 TTL）的克隆打印暗琥珀色 `typeshed <short-sha> · <date> — stale (refresh failed/offline); connect to refresh`；而真正回退到捆绑基线的运行则打印暗琥珀色 `typeshed: bundled baseline <date> — not updated; connect to refresh`。克隆或刷新失败绝不致命：Basilisk 保留上一次成功的缓存并针对它静默解析（即上面的 *stale* 行），仅当没有任何缓存时才回退到基线并发出警告。LSP 在其**服务信息树**中呈现同一状态——获取期间显示旋转指示，随后是已解析的缓存路径与新鲜度。
-
-**确定性。** 设置了 `typeshed-commit` 时，缓存会检出到该精确的 SHA 并冻结——绝不运行任何更新检查。未固定时，缓存跟踪 `python/typeshed@main`，并每隔 `typeshed-refresh-interval`（默认 `24h`）重新检查一次。每次获取与每次刷新都以 `git fetch`、`git clean -x -f -d` 和 `git reset --hard` 收尾，因此工作树与上游提交逐字节一致，任何本地修改的文件都不会残留。克隆由纯 Rust 的 `gix` 库驱动，因此 Basilisk 始终是单一原生二进制，既无外部 `git` 二进制，也无 Python 运行时依赖。
+若无法获取，捆绑基线只提供名称和分发映射，绝不提供 `.pyi` 主体；Basilisk
+报告 `typeshed download unavailable; using bundled names only`。未固定的获取失败
+绝不会复用旧检出。下载或自定义数据会整体绕过捆绑及编译数据。
 
 #### `typeshed-commit`
 
 **类型：** `string`
-**默认值：** _（未设置——克隆跟踪 `python/typeshed@main`）_
-**示例：** `"83c2518a9e6abbda0c44592c3483de459198f887"`
+**默认值：** _（未设置——获取时验证 `python/typeshed@main`）_
+**示例：** 完整的 40 字符提交 SHA
 
-将自动克隆固定到某个精确的提交 SHA 并**冻结**它：绝不运行任何 TTL 轮询，因此每次检出都完全可复现。
+明确选择一个不可变的上游提交。这是用户控制的确定性，不是自动的 Python
+版本映射，也不是旧数据回退。
 
 #### `typeshed-cache-path`
 
@@ -102,28 +111,21 @@ rules."imports_unresolved" = "warning"
 
 重定位**自动克隆的存放位置**。它只移动自动克隆——并不关闭克隆（那是 `typeshed-path` 的作用）。可视化配置编辑器将其呈现为**文件夹选择器**。
 
-#### `typeshed-refresh-interval`
-
-**类型：** `string`
-**默认值：** `"24h"`
-**示例：** `"6h"`
-
-未固定的克隆每隔多久重新检查 `python/typeshed@main` 是否有更新。当 `typeshed-commit` 固定了检出时此项被忽略。
-
 ### `typeshed-path`
 
 **类型：** `string`
-**默认值：** _（未设置——标准库针对自动克隆的 typeshed 缓存解析）_
+**默认值：** _（未设置——使用明确固定/main/基线来源选择）_
 **示例：** `"typeshed-micropython"`
 **规范：** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
 
-指向包含 typeshed 标准库存根的自定义或修改版本的目录路径。设置后，该目录将成为**标准库类型的规范来源**——[typing 规范的导入解析顺序](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)中的第 3 步，该规范指出类型检查器"SHOULD use this as the canonical source for standard-library types in this step"（应将其用作此步骤中标准库类型的规范来源）。设置它会**完全禁用自动克隆**：Basilisk 针对你的目录解析标准库模块，对于该目录提供的模块绝不再参考运行时克隆或捆绑基线。目录中缺失的标准库模块将继续进入后续的解析步骤。这也是让 Basilisk 指向磁盘上已有的 typeshed 树、而非让它自行克隆的方式。
+指向自定义或修改后的 typeshed 树。固定提交的规范第 3 步要求将其作为
+“此步骤中标准库类型的规范来源”
+（[`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)）。
+它是唯一的第 3 步来源，并禁用自动、捆绑和编译查找。缺失模块直接进入第 4
+步，而不会尝试另一个 typeshed。
 
-该目录必须遵循 typeshed 的布局——标准库存根位于顶层 `stdlib/` 子目录下，因此 Basilisk 将每个模块解析为 `<typeshed-path>/stdlib/<module>.pyi`。[python/typeshed](https://github.com/python/typeshed) 仓库的克隆，或任何你已用作 Pyright 的 [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) 或 mypy 的 [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html) 的目录，都可原样使用。相对路径相对于项目根目录解析。可视化配置编辑器将其呈现为**文件夹选择器**。
-
-使用此选项可针对替代标准库进行类型检查——例如 MicroPython 的 [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs)，其 `os`、`time` 和 `machine` 签名与 CPython 不同。从你的目录解析的符号在悬停时会带有 `(custom typeshed)` 标记——区别于自动克隆 typeshed 的 `(typeshed)`——因此你可以确认覆盖已生效，并知晓 MicroPython 的签名绝不会被误报为 CPython 的。
-
-`typeshed-path` 与 `typeshed-cache-path` 不同：`typeshed-cache-path` 只重定位*自动克隆的存放位置*；`typeshed-path` 提供你*自己的*树并关闭克隆。而 `stub-paths` *前置*额外的存根目录，`typeshed-path` 则*整体替换*自动克隆的标准库 typeshed——二者相互独立，可以组合使用。有关分步演练，请参见下方的"如何使用自定义 typeshed"一节。
+树必须包含 `stdlib/<module>.pyi`；相对路径从项目根目录解析。它适用于分叉或
+MicroPython 等替代标准库。悬停显示 `(custom typeshed)`，使实际来源可见。
 
 ### `include`
 
@@ -169,21 +171,13 @@ Basilisk 在发现文件的所有场景中都遵循相同的模式：LSP 工作�
 
 ## 如何使用自定义 typeshed
 
-`typeshed-path` 会将自动克隆的标准库 typeshed 替换为你自己的副本，并关闭克隆。当你面向标准库与 CPython 不同的替代 Python（MicroPython、打过补丁的 CPython、厂商 SDK），当你想要一个分叉或手动修补的 typeshed 而非上游 `python/typeshed` 检出，或当你必须让 Basilisk 指向磁盘上已有的 typeshed 树而非让它自行克隆时，就可以使用它。（若只需在上游 typeshed 上保持更新鲜或固定它，请改用自动克隆的键 `typeshed-commit` / `typeshed-refresh-interval`——无需 `typeshed-path`。）
+本演练应用固定规范第 3 步的“此步骤中标准库类型的规范来源”条款
+（[`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)）。
 
 ### 1. 按 typeshed 的方式组织目录
 
-将 `typeshed-path` 指向 typeshed 布局目录的**根**。标准库存根必须位于顶层 `stdlib/` 子目录下，与 [python/typeshed](https://github.com/python/typeshed) 仓库完全一致——Basilisk 将每个模块解析为 `<typeshed-path>/stdlib/<module>.pyi`：
-
-```
-vendor/typeshed/
-└── stdlib/
-    ├── os.pyi
-    ├── time.pyi
-    └── ...
-```
-
-任何你已用作 Pyright 的 [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) 或 mypy 的 [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html) 的目录都采用同样的布局，因此可与 Basilisk 原样配合使用。
+将 `typeshed-path` 指向包含 `stdlib/` 的根目录；模块解析为
+`<typeshed-path>/stdlib/<module>.pyi`。
 
 ### 2a. 指向分叉或手动修补的 typeshed
 
@@ -198,7 +192,9 @@ git clone https://github.com/python/typeshed vendor/typeshed
 typeshed-path = "vendor/typeshed"
 ```
 
-现在 Basilisk 会针对 `vendor/typeshed/stdlib/` 而不是自动克隆的缓存对标准库进行类型检查，并停止管理自己的自动克隆——这份检出由你来更新。（若只需更新鲜的上游 typeshed 而非分叉，请不要设置 `typeshed-path`，让自动克隆跟踪 `main`，或用 `typeshed-commit` 固定它。）
+现在 `vendor/typeshed/stdlib/` 是唯一的第 3 步来源，由你维护。若要验证上游
+`main`，请不要设置 `typeshed-path`；若要精确的上游 SHA，请设置
+`typeshed-commit`。
 
 ### 2b. 指向 MicroPython 的标准库
 
@@ -206,23 +202,10 @@ MicroPython 的标准库与 CPython 存在差异——`os`、`time` 和 `machine
 
 ```toml
 [tool.basilisk]
-python-version = "3.12"
-typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
+typeshed-path = "vendor/micropython_stdlib_stubs"
 ```
 
 由于 `micropython-stdlib-stubs` 是**部分**标准库，它未包含的模块（例如开发板上并不存在的 `tkinter`）**不会**由自动克隆的 CPython typeshed 来兜底——设置 `typeshed-path` 已关闭克隆，而自定义 typeshed 是第 3 步的规范来源，因此该导入会被报告为无法解析。对于嵌入式目标而言，这才是诚实的结果。
-
-### 3. 在活动项目文件中配置
-
-`typeshed-path` 与所有其他设置一样位于 `[tool.basilisk]` 中——不存在第二种
-拼写，也不存在第二个文件。请在管辖被检查文件的 `pyproject.toml`（带有
-`[tool.basilisk]` 表的最近祖先）中设置它。编辑器不会保存第二份副本；
-该项目配置文件始终是唯一来源。若你正在迁移旧版 `basilisk.json`，其驼峰式
-键 `typeshedPath` 在这里写作 `typeshed-path`。
-
-### 4. 确认已生效——悬停溯源
-
-从自定义 typeshed 解析的符号在悬停时会带有 `(custom typeshed)` 标记，区别于自动克隆 typeshed 的 `(typeshed)` 标记。将鼠标悬停在导入的标准库符号上：看到 `(custom typeshed)` 即可确认覆盖已生效，且该签名来自你的目录——MicroPython 的 `os.uname` 绝不会被误报为 CPython 的。
 
 ### `typeshed-path` 与 `stub-paths` 的区别
 
@@ -340,7 +323,8 @@ Basilisk 按被检查的文件逐一发现配置：从该文件所在目录**向
 会将其报告为被忽略的遮蔽来源；请将其键翻译为 `[tool.basilisk]` 后删除该
 文件。
 
-如果没有任何祖先 `pyproject.toml` 带有 `[tool.basilisk]` 表，Basilisk 使用默认值：启用**核心 PEP 符合性规则集**（额外的 Basilisk 规则保持可选），`python-version = "3.12"`，检查当前目录。
+如果没有任何祖先 `pyproject.toml` 带有 `[tool.basilisk]` 表，Basilisk 会启用
+核心 PEP 符合性规则并检查当前目录；它不会自行制造 Python 版本默认值。
 
 ---
 

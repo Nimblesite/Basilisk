@@ -22,12 +22,14 @@ crate.
   `info`, or `disabled`.
 - **Import-resolution overrides** — `stub-paths` prepends user stub directories
   (resolution step 1); `typeshed-path` supplies your own typeshed tree, becoming
-  the canonical step-3 source for standard-library types and **disabling the
-  runtime clone** that is the default
-  ([STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
-  The runtime clone itself is tuned by `typeshed-commit` (pin an exact SHA and
-  freeze it), `typeshed-cache-path` (where the clone is stored), and
-  `typeshed-refresh-interval` (update-check TTL when unpinned)
+  the canonical step-3 source for standard-library types and disabling every
+  other step-3 source, matching the pinned typing specification's "canonical source"
+  clause
+  ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst),
+  [STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
+  `typeshed-commit` selects an exact immutable SHA; `typeshed-cache-path`
+  relocates automatic storage. Unpinned acquisition verifies `main` each run or
+  session; it has no TTL or old-checkout fallback
   ([STUBRES-TYPESHED-CONFIG](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)).
 - **Adoption target** — exact-file `per-path-overrides` entries in the active
   config carry generated demotions. All rule configuration stays in that one
