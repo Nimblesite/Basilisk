@@ -85,7 +85,6 @@ fn search_paths(snapshot: Arc<Snapshot>) -> ImportSearchPaths {
         workspace_members: Vec::new(),
         site_packages: None,
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: Some(ActiveTypeshed::new(
             snapshot,
             Some(StubTarget {
@@ -230,11 +229,7 @@ fn distribution_suggestions_come_from_the_active_generation() {
 }
 
 #[test]
-fn active_snapshot_miss_is_not_rescued_by_the_compiled_stdlib_names() {
-    assert!(
-        basilisk_stubs::is_stdlib_module("fractions"),
-        "fixture must be a name recognised by the compiled baseline"
-    );
+fn active_snapshot_miss_does_not_mix_in_another_stdlib_source() {
     let paths = search_paths(micropython_snapshot());
     let parsed =
         basilisk_parser::parse_source("import fractions\n".to_owned(), "main.py".to_owned())
@@ -251,7 +246,7 @@ fn active_snapshot_miss_is_not_rescued_by_the_compiled_stdlib_names() {
         diagnostics
             .iter()
             .any(|diagnostic| diagnostic.code.code == "imports_unresolved"),
-        "an active-generation miss must not mix in the compiled baseline"
+        "an active-generation miss must not mix in another step-3 source"
     );
 }
 

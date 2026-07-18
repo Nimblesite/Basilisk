@@ -235,7 +235,11 @@ def check():
     x = dead
     y = live
 "#;
-    let diagnostics = run(source)?;
+    let config = basilisk_config::BasiliskConfig {
+        python_version: Some("3.12".to_owned()),
+        ..Default::default()
+    };
+    let diagnostics = run_with_config(source, &config)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")
@@ -268,7 +272,11 @@ def check():
 
     x = bogus_var
 "#;
-    let diagnostics = run(source)?;
+    let config = basilisk_config::BasiliskConfig {
+        python_platform: Some("linux".to_owned()),
+        ..Default::default()
+    };
+    let diagnostics = run_with_config(source, &config)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")

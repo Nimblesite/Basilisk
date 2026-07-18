@@ -11,13 +11,23 @@ const repoRoot = resolve(extensionRoot, "..");
 const manifestPath = join(repoRoot, "shipwright.json");
 const manifestSchemaPath = join(repoRoot, "schemas", "shipwright.schema.json");
 const versionSchemaPath = join(repoRoot, "schemas", "version-manifest.schema.json");
-const attributionFiles = ["LICENSE", "NOTICES", "THIRD-PARTY-LICENSES"];
+const attributionFiles = [
+  "LICENSE.txt",
+  "NOTICES",
+  "THIRD-PARTY-LICENSES",
+  "RUST-DEPENDENCY-LICENSES",
+  "VSCODE-DEPENDENCY-LICENSES",
+];
+
+function attributionSource(file) {
+  return file === "LICENSE.txt" ? "VSCODE-DISTRIBUTION-LICENSE" : file;
+}
 
 function stageAttribution() {
   for (const file of attributionFiles) {
-    copyFileSync(join(repoRoot, file), join(extensionRoot, file));
+    copyFileSync(join(repoRoot, attributionSource(file)), join(extensionRoot, file));
   }
-  console.log("Exact root attribution staged for VSIX packaging");
+  console.log("Exact composite attribution staged for VSIX packaging");
 }
 
 function readJson(file) {
@@ -108,6 +118,7 @@ function verifyVsix(vsix, platform) {
     throw new Error(`${vsix} contains a shipwright.json that differs from the repo manifest`);
   }
   verifyAttribution(vsix, entries);
+  verifyDebugpyAttribution(vsix, entries, manifest);
   // Every component declared `bundled` for this platform MUST be present in the
   // VSIX — including optional (`required: false`) ones such as the profiler
   // helper. `required` governs runtime fallback, NOT whether we ship the
@@ -135,19 +146,69 @@ function verifyVsix(vsix, platform) {
 // the exact Basilisk and third-party legal files used to build it. Presence is
 // insufficient: stale attribution must fail the release gate too.
 function verifyAttribution(vsix, entries) {
-  // `vsce` deliberately normalizes the extension's root LICENSE to
-  // `LICENSE.txt`. Keep the source-to-package mapping explicit so release
-  // verification checks the path that actually ships as well as exact bytes.
+  // The manifest points directly at the packaged root LICENSE. Keep the
+  // source-to-package mapping explicit so exact bytes are verified.
   for (const sourceFile of attributionFiles) {
-    const packagedFile = sourceFile === "LICENSE" ? "LICENSE.txt" : sourceFile;
-    const entry = `extension/${packagedFile}`;
+    const entry = `extension/${sourceFile}`;
     if (!entries.includes(entry)) {
       throw new Error(`${vsix} is missing attribution file: ${entry}`);
     }
     const packaged = execFileSync("unzip", ["-p", vsix, entry]);
-    const source = readFileSync(join(repoRoot, sourceFile));
+    const source = readFileSync(join(repoRoot, attributionSource(sourceFile)));
     if (!packaged.equals(source)) {
       throw new Error(`${vsix} contains a stale or modified attribution file: ${entry}`);
+    }
+  }
+}
+
+// debugpy ships its own MIT license plus complete third-party notices. Prove
+// that the exact freshly-vendored files survive VSIX packaging.
+function verifyDebugpyAttribution(vsix, entries, manifest) {
+  const component = manifest.components.find((entry) => entry.id === "debugpy");
+  const match = /^pip:debugpy==(\d+(?:\.\d+)+)$/.exec(component?.asset?.source ?? "");
+  if (
+    !component?.bundled?.bundlePath ||
+    !match ||
+    component.asset?.contentHash !== true ||
+    !/^[0-9a-f]{64}$/.test(component.asset?.sha256 ?? "")
+  ) {
+    throw new Error("shipwright debugpy component lacks an exact version, SHA-256, and bundle path");
+  }
+  const version = match[1];
+  const base = component.bundled.bundlePath;
+  const required = [
+    `${base}/debugpy/ThirdPartyNotices.txt`,
+    `${base}/debugpy-${version}.dist-info/licenses/LICENSE`,
+    `${base}/debugpy-${version}.dist-info/METADATA`,
+    `${base}/debugpy-${version}.dist-info/WHEEL`,
+  ];
+  for (const relativePath of required) {
+    const entry = `extension/${relativePath}`;
+    if (!entries.includes(entry)) {
+      throw new Error(`${vsix} is missing debugpy attribution: ${entry}`);
+    }
+    const packaged = execFileSync("unzip", ["-p", vsix, entry]);
+    const source = readFileSync(join(extensionRoot, relativePath));
+    if (!packaged.equals(source)) {
+      throw new Error(`${vsix} contains stale debugpy attribution: ${entry}`);
+    }
+  }
+  const metadata = readFileSync(join(extensionRoot, base, `debugpy-${version}.dist-info`, "METADATA"), "utf8");
+  for (const marker of [`Name: debugpy`, `Version: ${version}`, "License: MIT", "License-File: LICENSE"]) {
+    if (!metadata.includes(marker)) {
+      throw new Error(`debugpy METADATA is missing ${marker}`);
+    }
+  }
+  const notices = readFileSync(join(extensionRoot, base, "debugpy", "ThirdPartyNotices.txt"), "utf8");
+  for (const marker of ["Eclipse Public License, Version 1.0", "PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2"]) {
+    if (!notices.includes(marker)) {
+      throw new Error(`debugpy third-party notices are missing ${marker}`);
+    }
+  }
+  const wheel = readFileSync(join(extensionRoot, base, `debugpy-${version}.dist-info`, "WHEEL"), "utf8");
+  for (const marker of ["Root-Is-Purelib: true", "Tag: py2-none-any", "Tag: py3-none-any"]) {
+    if (!wheel.includes(marker)) {
+      throw new Error(`debugpy wheel metadata is missing ${marker}`);
     }
   }
 }

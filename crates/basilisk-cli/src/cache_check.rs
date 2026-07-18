@@ -70,7 +70,7 @@ pub fn build_context(
         version: env!("CARGO_PKG_VERSION").to_owned(),
         config_hash: hash_dir_configs(dir_configs),
         env_hash: hash_env(search_paths, project_root),
-        typeshed_id: typeshed_snapshot_identity(dir_configs, search_paths),
+        typeshed_id: typeshed_snapshot_identity(search_paths),
     };
     Some(CacheContext {
         cache: CheckCache::new(dir),
@@ -86,28 +86,13 @@ fn default_cache_dir(project_root: &Path) -> PathBuf {
 /// Identity of the active step-3 typeshed snapshot for the fingerprint
 /// ([STUBRES-TYPESHED], [CHKCACHE-FINGERPRINT]).
 ///
-/// A gate-accepted active snapshot always wins: its opaque URI component is
-/// derived from the exact commit, bundled commit, or consumed custom-tree
-/// digest. Config values are only a pre-acquisition compatibility fallback.
-/// Thus moved `main`, bundled fallback, and custom content changes invalidate
-/// the checker cache even under byte-identical configuration.
-fn typeshed_snapshot_identity(
-    dir_configs: &std::collections::BTreeMap<PathBuf, std::sync::Arc<BasiliskConfig>>,
-    search_paths: &ImportSearchPaths,
-) -> String {
-    if let Some(active) = &search_paths.typeshed_snapshot {
-        return active.identity_fingerprint();
-    }
-    if let Some(commit) = dir_configs
-        .values()
-        .find_map(|cfg| cfg.typeshed_commit.as_deref())
-    {
-        return format!("commit:{commit}");
-    }
-    if let Some(path) = search_paths.typeshed_path.as_ref() {
-        return format!("custom:{}", path.display());
-    }
-    "unpinned".to_owned()
+/// The gate-accepted snapshot is the only step-3 identity. Configuration
+/// values cannot substitute for bytes the checker actually consumed.
+fn typeshed_snapshot_identity(search_paths: &ImportSearchPaths) -> String {
+    search_paths.typeshed_snapshot.as_ref().map_or_else(
+        || "unavailable".to_owned(),
+        basilisk_checker::imports::ActiveTypeshed::identity_fingerprint,
+    )
 }
 
 /// Hash the *effective* per-directory configs. Canonicalised through
@@ -294,7 +279,7 @@ mod tests {
     fn fingerprint(snapshot: Arc<Snapshot>) -> String {
         let mut paths = crate::import_search::roots_only(Vec::new());
         paths.typeshed_snapshot = Some(ActiveTypeshed::new(snapshot, None));
-        typeshed_snapshot_identity(&BTreeMap::new(), &paths)
+        typeshed_snapshot_identity(&paths)
     }
 
     fn cache_context(cache_dir: &std::path::Path, snapshot: Arc<Snapshot>) -> CacheContext {

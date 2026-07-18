@@ -127,6 +127,39 @@ r9([\"\"], [\"\"])
 }
 
 #[test]
+fn instance_returning_passthrough_new_does_not_hide_init_signature(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let messages = check(
+        "\
+class Class3:
+    def __new__(cls, *args, **kwargs) -> Self:
+        raise NotImplementedError
+
+    def __init__(self, x: int) -> None:
+        pass
+
+
+r3 = accepts_callable(Class3)
+r3()
+r3(y=1)
+r3(1, 2)
+",
+    )?;
+
+    assert_eq!(messages.len(), 3, "{messages:#?}");
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("missing required")));
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("Unexpected keyword")));
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("too many positional")));
+    Ok(())
+}
+
+#[test]
 fn metaclass_call_accepts_any_arguments() -> Result<(), Box<dyn std::error::Error>> {
     // A metaclass `__call__` taking `*args, **kwargs` accepts any call, so no
     // E0153 should fire regardless of the class's own `__new__`/`__init__`.
@@ -343,7 +376,8 @@ ordinary()  # instance-producing metaclass call must not hide __init__
 
 /// [STUBRES-PYI] #289: inherited constructor methods are selected over the
 /// Python C3 MRO, not a depth-first base walk. The applicable `__new__` and
-/// `__init__` bound signatures form a union.
+/// `__init__` bound signatures form a callable union, so a call must be valid
+/// for every member.
 #[test]
 fn inherited_constructor_signatures_follow_c3_and_form_union(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -375,8 +409,16 @@ converted(from_root=1)       # Root.__init__ must not win the C3 lookup
 ",
     )?;
 
-    assert_eq!(messages.len(), 1, "{messages:#?}");
-    assert!(messages[0].contains("`from_root`"), "{messages:#?}");
+    assert_eq!(messages.len(), 3, "{messages:#?}");
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("`from_new`")));
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("`from_right`")));
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("`from_root`")));
     Ok(())
 }
 

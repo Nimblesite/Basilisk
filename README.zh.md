@@ -102,12 +102,14 @@ Basilisk 建立在开源社区之上 —— 特别感谢：
 - **[debugpy](https://github.com/microsoft/debugpy)** —— 调试适配器（捆绑于 VS Code 扩展）。
 - [`python/typing`](https://github.com/python/typing) 一致性测试套件。
 
-完整的组件与许可证列表见 [NOTICES](NOTICES)。所有依赖均采用宽松许可证。
+完整的组件、所选许可证与必要声明见 [NOTICES](NOTICES) 和
+[RUST-DEPENDENCY-LICENSES](RUST-DEPENDENCY-LICENSES)。
 
 ---
 
 ## 许可证
 
-MIT。
+Basilisk 源代码采用 MIT 许可证。二进制发行物还包含第三方组件；其许可证
+随每个发行物一并提供。
 
 由 [NIMBLESITE PTY LTD](https://www.nimblesite.co) 构建。

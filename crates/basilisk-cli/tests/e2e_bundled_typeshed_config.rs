@@ -33,8 +33,8 @@ fn check_app(dir: &Path) -> Output {
 }
 
 #[test]
-fn cli_without_typeshed_path_keeps_bundled_stdlib_rescue() {
-    let dir = unique_dir("stdlib_rescue");
+fn cli_without_typeshed_path_uses_the_bundled_snapshot() {
+    let dir = unique_dir("bundled_snapshot");
     std::fs::write(
         dir.join("pyproject.toml"),
         "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\n",
@@ -52,7 +52,7 @@ fn cli_without_typeshed_path_keeps_bundled_stdlib_rescue() {
 
     assert!(
         !stdout.contains("imports_unresolved"),
-        "bundled stdlib rescue must suppress unresolved diagnostics, stdout: {stdout}, stderr: {stderr}"
+        "the bundled snapshot must suppress unresolved diagnostics, stdout: {stdout}, stderr: {stderr}"
     );
     assert!(
         !stdout.contains("fractions"),
@@ -61,7 +61,7 @@ fn cli_without_typeshed_path_keeps_bundled_stdlib_rescue() {
     assert_eq!(
         output.status.code(),
         Some(0),
-        "bundled stdlib rescue must let the CLI check pass, stdout: {stdout}, stderr: {stderr}"
+        "the bundled snapshot must let the CLI check pass, stdout: {stdout}, stderr: {stderr}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);

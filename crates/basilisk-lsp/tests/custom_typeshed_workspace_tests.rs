@@ -26,6 +26,31 @@ fn has_imports_unresolved(diags: &[tower_lsp::lsp_types::Diagnostic]) -> bool {
 }
 
 #[test]
+fn configured_custom_path_cannot_bypass_snapshot_acquisition() {
+    let root = unique_tmp("bsk_lsp_custom_typeshed_gate");
+    let stdlib = root.join("typeshed-mp").join("stdlib");
+    std::fs::create_dir_all(&stdlib).unwrap();
+    std::fs::write(stdlib.join("os.pyi"), "def uname() -> str: ...\n").unwrap();
+    std::fs::write(
+        root.join("pyproject.toml"),
+        "[tool.basilisk]\ntypeshed-path = \"typeshed-mp\"\n",
+    )
+    .unwrap();
+
+    let roots = vec![root.clone()];
+    let config = basilisk_lsp::config::load_config(&root);
+    let search_paths =
+        basilisk_lsp::import_resolver::search_paths_from_config(&roots, &config, None);
+
+    assert!(
+        basilisk_lsp::import_resolver::resolve_module("os", &search_paths).is_none(),
+        "config must not bypass the acquisition gate by reading typeshed-path directly"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn lsp_threads_custom_typeshed_into_imported_symbols() {
     let root = unique_tmp("bsk_lsp_custom_typeshed_symbols");
     let typeshed = root.join("typeshed-mp");
@@ -53,13 +78,16 @@ fn lsp_threads_custom_typeshed_into_imported_symbols() {
         AnalysisMode::CrossModule,
         basilisk_config::BasiliskConfig::default(),
     );
-    let search_paths =
+    let mut search_paths =
         basilisk_lsp::import_resolver::search_paths_from_config(&roots, &config, None);
-    assert_eq!(
-        search_paths.typeshed_path,
-        Some(typeshed.clone()),
-        "LSP config must resolve relative typeshed-path against the workspace root"
-    );
+    let request = basilisk_lsp::config::typeshed_request(&config).expect("custom request");
+    let manager = basilisk_stubs::typeshed::runtime::production_manager(request, None)
+        .expect("custom manager");
+    let snapshot = manager.snapshot().expect("custom snapshot");
+    search_paths.typeshed_snapshot = Some(basilisk_lsp::import_resolver::ActiveTypeshed::new(
+        snapshot,
+        basilisk_lsp::import_resolver::stub_target_from_config(&config),
+    ));
     idx.set_search_paths(search_paths);
 
     let uri = Url::from_file_path(&main_path).unwrap();
@@ -84,8 +112,11 @@ fn lsp_threads_custom_typeshed_into_imported_symbols() {
         "LSP cross-module symbol population must preserve custom-typeshed provenance"
     );
     assert!(
-        uname.source_path.starts_with(stdlib),
-        "imported symbol should come from the custom typeshed stdlib stub, got {:?}",
+        uname
+            .source_path
+            .to_string_lossy()
+            .starts_with("typeshed:custom-"),
+        "imported symbol should come from the custom Typeshed VFS, got {:?}",
         uname.source_path
     );
 

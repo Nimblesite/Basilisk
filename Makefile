@@ -282,7 +282,9 @@ _clean_rust:
 _clean_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Cleaning VSIX artifacts\033[0m' && \
 	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix ./*.vsix \
-		$(_EXTENSION_DIR)/NOTICES $(_EXTENSION_DIR)/THIRD-PARTY-LICENSES && \
+		$(_EXTENSION_DIR)/NOTICES $(_EXTENSION_DIR)/THIRD-PARTY-LICENSES \
+		$(_EXTENSION_DIR)/RUST-DEPENDENCY-LICENSES \
+		$(_EXTENSION_DIR)/VSCODE-DEPENDENCY-LICENSES && \
 	echo -e '\033[0;32m✓ VSIX clean complete\033[0m'
 
 _uninstall_binaries:
@@ -354,9 +356,12 @@ _release_vsix:
 	cp shipwright.json $(_EXTENSION_DIR)/shipwright.json; \
 	# [STUBRES-TYPESHED-LICENSE] Every binary-bearing package carries the \
 	# Basilisk license and the exact third-party attribution files. \
-	cp LICENSE NOTICES THIRD-PARTY-LICENSES $(_EXTENSION_DIR)/; \
+	cp VSCODE-DISTRIBUTION-LICENSE $(_EXTENSION_DIR)/LICENSE.txt; \
+	cp NOTICES THIRD-PARTY-LICENSES RUST-DEPENDENCY-LICENSES \
+		VSCODE-DEPENDENCY-LICENSES $(_EXTENSION_DIR)/; \
 	repo_root="$$(pwd)"; \
-	cd $(_EXTENSION_DIR) && npm ci && npm run compile && npm run sync:shipwright; \
+	cd $(_EXTENSION_DIR) && npm ci && npm run licenses:check && \
+		npm run compile && npm run sync:shipwright; \
 	echo -e "\033[1m\033[0;36m▶ Validating Shipwright manifest\033[0m"; \
 	node scripts/verify-shipwright.mjs manifest; \
 	echo -e "\033[1m\033[0;36m▶ Vendoring debugpy into the VSIX bundle\033[0m"; \

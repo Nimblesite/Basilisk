@@ -29,8 +29,8 @@ mod resolve_tests;
 
 pub use apply::{is_user_stub_import, recapture_user_stub_from_source, resolve_module_imports};
 pub use resolve::{
-    bundled_stdlib_recognized, classify_unresolved, has_stub_package, is_inline_typed_package,
-    resolve_module, resolve_module_with_importer, resolve_relative_import,
+    classify_unresolved, has_stub_package, is_inline_typed_package, resolve_module,
+    resolve_module_with_importer, resolve_relative_import,
 };
 
 /// Result of resolving a single import to a filesystem path.
@@ -225,14 +225,9 @@ pub struct ImportSearchPaths {
     pub site_packages: Option<PathBuf>,
     /// Package registry from uv lock file, if available.
     pub registry: Option<Arc<PackageRegistry>>,
-    /// Custom typeshed directory (`typeshed-path` config). When set, its
-    /// `stdlib/` subtree is the **canonical source for standard-library types**
-    /// — typing-spec import-resolution step 3
-    /// ([STUBRES-CUSTOM-TYPESHED](../../../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
-    /// `None` keeps the name-only bundled-stdlib recognition.
-    pub typeshed_path: Option<PathBuf>,
     /// Gate-accepted runtime Typeshed generation. When present, every step-3
-    /// name/body/index lookup comes from this exact identity and the legacy
-    /// name-only baseline is bypassed.
+    /// name/body/index lookup comes from this exact identity. Configuration
+    /// paths never enter the checker directly; acquisition first promotes them
+    /// to this immutable snapshot.
     pub typeshed_snapshot: Option<ActiveTypeshed>,
 }

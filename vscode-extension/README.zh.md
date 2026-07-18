@@ -72,10 +72,11 @@ Basilisk 二进制文件已随本扩展捆绑，覆盖 macOS（Apple Silicon）�
 
 ## 致谢
 
-基于 [Astral](https://astral.sh/) 的 [Ruff](https://github.com/astral-sh/ruff)（MIT）与 [typeshed](https://github.com/python/typeshed)（Apache-2.0，部分内容采用 MIT 许可证）构建；捆绑了 [debugpy](https://github.com/microsoft/debugpy)（Microsoft，MIT）。完整声明见 [NOTICES](https://github.com/Nimblesite/Basilisk/blob/main/NOTICES)。
+基于 [Astral](https://astral.sh/) 的 [Ruff](https://github.com/astral-sh/ruff)（MIT）与 [typeshed](https://github.com/python/typeshed)（Apache-2.0，部分内容采用 MIT 许可证）构建；捆绑了 [debugpy](https://github.com/microsoft/debugpy)（Microsoft，MIT）。VSIX 在 `RUST-DEPENDENCY-LICENSES` 中提供 Rust 声明，在 `VSCODE-DEPENDENCY-LICENSES` 中提供 npm 声明，并在 `bundled/debugpy` 内保留 debugpy 自身的许可证与 `ThirdPartyNotices.txt`。
 
 ## 许可证
 
-MIT。
+Basilisk 源代码采用 MIT 许可证。VSIX 还包含第三方组件；其许可证与声明均随
+扩展一并提供。
 
 由 [NIMBLESITE PTY LTD](https://www.nimblesite.co) 构建。

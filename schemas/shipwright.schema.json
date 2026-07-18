@@ -142,6 +142,7 @@
             "target": { "type": "string" },
             "bundle": { "type": "boolean" },
             "contentHash": { "type": "boolean" },
+            "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
             "downloadOnFirstUse": { "type": "boolean" }
           }
         }

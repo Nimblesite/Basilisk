@@ -4,9 +4,9 @@
 //! Resolves, from a set of parsed `.pyi` classes, which class in a target
 //! class's method-resolution order supplies each step of the pinned constructor
 //! conversion: the first inherited non-`object` `__new__` and the first
-//! `__init__`. This is the real-`.pyi` model that replaces the hardcoded
-//! `BUILTINS_WITH_INIT` list for stdlib classes such as `unittest.mock.Mock`
-//! (GitHub #289): given `mock.pyi`, `Mock`'s constructor takes `__new__` from
+//! `__init__`. This real-`.pyi` model avoids hand-authored stdlib constructor
+//! tables for classes such as `unittest.mock.Mock` (GitHub #289): given
+//! `mock.pyi`, `Mock`'s constructor takes `__new__` from
 //! `NonCallableMock` and `__init__` from `CallableMixin`, so it accepts
 //! arbitrary arguments and must never draw an "unexpected argument" diagnostic.
 

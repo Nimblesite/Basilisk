@@ -17,18 +17,24 @@ pub(super) struct CallableVariant<'a> {
     pub(super) has_var_keyword: bool,
 }
 
+/// Overload alternatives contributed by one callable-union member.
+pub(super) struct CallableGroup<'a> {
+    pub(super) variants: Vec<CallableVariant<'a>>,
+}
+
 /// Synthesize every applicable bound constructor signature.
 ///
-/// A special metaclass `__call__` terminates conversion. Otherwise the result
-/// is the union of inherited non-`object` `__new__` and `__init__` signatures;
-/// a non-instance `__new__` return terminates before `__init__`. Classes with
-/// neither method use the zero-argument `object` fallback.
+/// A special metaclass `__call__` terminates conversion. Otherwise inherited
+/// non-`object` `__new__` and `__init__` signatures form callable-union members;
+/// a non-instance `__new__` return terminates before `__init__`. Overloads stay
+/// alternatives within their originating union member. Classes with neither
+/// method use the zero-argument `object` fallback.
 pub(super) fn build_converted_callables<'a>(
     class_name: &str,
     class_map: &HashMap<&'a str, &'a ClassInfo>,
     method_map: &MethodMap<'a>,
     source: &str,
-) -> Vec<CallableVariant<'a>> {
+) -> Vec<CallableGroup<'a>> {
     if let Some(metaclass) = class_map
         .get(class_name)
         .and_then(|class| class.metaclass_name.as_deref())
@@ -38,7 +44,7 @@ pub(super) fn build_converted_callables<'a>(
             .iter()
             .any(|method| return_is_non_instance(method, class_name, class_map, source))
         {
-            return calls.into_iter().map(bound_variant).collect();
+            return vec![method_group(calls)];
         }
     }
 
@@ -46,24 +52,34 @@ pub(super) fn build_converted_callables<'a>(
     let new_terminates = news
         .iter()
         .any(|method| return_is_non_instance(method, class_name, class_map, source));
-    let mut variants: Vec<_> = news.into_iter().map(bound_variant).collect();
     if new_terminates {
-        return variants;
+        return vec![method_group(news)];
     }
 
-    variants.extend(
-        inherited_methods(class_name, "__init__", class_map, method_map)
-            .into_iter()
-            .map(bound_variant),
-    );
-    if variants.is_empty() {
-        variants.push(CallableVariant {
-            params: Vec::new(),
-            has_var_positional: false,
-            has_var_keyword: false,
+    let initializers = inherited_methods(class_name, "__init__", class_map, method_map);
+    let mut groups = Vec::new();
+    if !news.is_empty() {
+        groups.push(method_group(news));
+    }
+    if !initializers.is_empty() {
+        groups.push(method_group(initializers));
+    }
+    if groups.is_empty() {
+        groups.push(CallableGroup {
+            variants: vec![CallableVariant {
+                params: Vec::new(),
+                has_var_positional: false,
+                has_var_keyword: false,
+            }],
         });
     }
-    variants
+    groups
+}
+
+fn method_group(methods: Vec<&FunctionInfo>) -> CallableGroup<'_> {
+    CallableGroup {
+        variants: methods.into_iter().map(bound_variant).collect(),
+    }
 }
 
 /// Find the first class in the C3 MRO defining `method`, preserving all of its

@@ -39,7 +39,9 @@ class TypeshedDocumentationTests(unittest.TestCase):
                     self.assertTrue(target_path.is_file(), f"{document}: {target}")
                 if anchor:
                     target_text = target_path.read_text()
-                    self.assertIn(f"{{#{anchor}}}", target_text, f"{document}: {target}")
+                    self.assertIn(
+                        f"{{#{anchor}}}", target_text, f"{document}: {target}"
+                    )
 
     def test_six_step_mermaid_flow_is_retained_in_order(self) -> None:
         spec = DOCUMENTS[1].read_text()
@@ -48,7 +50,7 @@ class TypeshedDocumentationTests(unittest.TestCase):
         flow = blocks[0]
         self.assertRegex(flow, r"^flowchart (?:TD|LR)\n")
         for step in range(1, 7):
-            self.assertIn(f'{step} ·', flow)
+            self.assertIn(f"{step} ·", flow)
         for edge in (
             "S1 -- miss --> S2",
             "S2 -- miss --> S3",
@@ -68,17 +70,19 @@ class TypeshedDocumentationTests(unittest.TestCase):
         combined = "\n".join(document.read_text() for document in DOCUMENTS)
         normalized = re.sub(r"\s+", " ", combined).lower()
         for forbidden in (
-            "downloaded cached zip bytes expire after 24 hours",
-            "downloaded cached bytes are reused for 24 hours",
-            "after 24 hours",
+            "without a refresh ttl",
+            "no time-based expiry",
+            "cached indefinitely",
             "uses a python-version-to-sha map",
             "selects a commit from python-version",
             "default 3.12",
         ):
             self.assertNotIn(forbidden, normalized)
-        self.assertIn("without a refresh ttl", normalized)
-        self.assertIn("no time-based expiry", normalized)
-        self.assertIn("refresh ttls", normalized)
+        self.assertIn("downloaded cached zip bytes expire after 24 hours", normalized)
+        self.assertIn("downloaded cached zip bytes are reused for 24 hours", normalized)
+        self.assertIn("after 24 hours", normalized)
+        self.assertIn("pin identity itself never expires", normalized)
+        self.assertIn("exact commit identity never expires", normalized)
 
 
 if __name__ == "__main__":

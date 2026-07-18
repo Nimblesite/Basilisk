@@ -1,0 +1,28 @@
+Basilisk — Rust Runtime Dependency Licenses
+============================================
+
+Generated from Cargo.lock with cargo-about for the complete dependency union of
+the five supported release targets. Regenerate with:
+
+  cargo about generate scripts/runtime-licenses.hbs --locked --fail \
+    --manifest-path crates/basilisk-cli/Cargo.toml \
+    --output-file RUST-DEPENDENCY-LICENSES
+
+Components
+----------
+{{#each crates}}
+{{#if package.source}}
+{{package.name}} {{package.version}}
+  Source: {{#if package.repository}}{{package.repository}}{{else}}https://crates.io/crates/{{package.name}}{{/if}}
+  License: {{license}}
+{{/if}}
+{{/each}}
+
+License texts and notices
+-------------------------
+{{#each overview}}
+===============================================================================
+{{{name}}}
+===============================================================================
+{{{text}}}
+{{/each}}

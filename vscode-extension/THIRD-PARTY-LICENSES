@@ -24,8 +24,9 @@ These pull in further crates from the same Ruff workspace transitively
 ruff_db, ruff_diagnostics, ruff_macros, ruff_memory_usage, ruff_notebook) —
 15 `ruff_*` crates in total, all from the one rev above and all under the same
 MIT license. No Ruff source is copied into this repository; the crates are
-consumed only as Cargo dependencies. The complete third-party notice list,
-including non-Ruff components, lives in the top-level `NOTICES` file.
+consumed only as Cargo dependencies. The complete Rust dependency inventory
+and license texts live in `RUST-DEPENDENCY-LICENSES`; curated project notices
+remain in `NOTICES`.
 
 Ruff is distributed under the MIT license:
 

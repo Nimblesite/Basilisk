@@ -81,9 +81,8 @@ The two immediately following clauses are also part of this contract, verbatim:
 > the path.
 
 **Stub files, `py.typed`, the `-stubs` naming scheme, partial stubs, and `.pyi`
-precedence** — the remaining normative clauses this spec relies on, verbatim from
-the same source (bracketed `[…]` marks where non-normative prose between
-sentences is omitted; no normative sentence is cut):
+precedence** — the applicable normative clauses, in source order, from the same
+pinned document (linked examples and packaging guidance are not restated):
 
 > Package maintainers who wish to support type checking of their code MUST add a
 > marker file named `py.typed` to their package supporting typing. This marker
@@ -95,14 +94,25 @@ sentences is omitted; no normative sentence is cut):
 > `py.typed` marker is not needed since the name `*-stubs` is enough to indicate
 > it is a source of typing information.
 
-> If a stub package distribution is partial it MUST include `partial\n` in a
-> `py.typed` file. […] Type checkers should treat namespace packages within
-> stub-packages as incomplete since multiple distributions may populate them.
-> Regular packages within namespace packages in stub-package distributions are
-> considered complete unless a `py.typed` with `partial\n` is included.
-
-> Type checkers MUST maintain the normal resolution order of checking `*.pyi`
-> before `*.py` files.
+> For the benefit of type checking and code editors, packages can be "partial".
+> This means modules not found in the stub package SHOULD be searched for in
+> parts five and six of the module resolution order below, namely inline
+> packages and any third-party stubs the type checker chooses to vendor. Type
+> checkers should merge the stub package and runtime package directories.
+>
+> This can be thought of as the functional equivalent of copying the stub
+> package into the same directory as the corresponding runtime package and type
+> checking the combined directory structure. Thus type checkers MUST maintain
+> the normal resolution order of checking `*.pyi` before `*.py` files. If a stub
+> package distribution is partial it MUST include `partial\n` in a `py.typed`
+> file.
+>
+> For stub-packages distributing within a namespace package, the `py.typed` file
+> should be in the submodules of the namespace. Type checkers should treat
+> namespace packages within stub-packages as incomplete since multiple
+> distributions may populate them. Regular packages within namespace packages
+> in stub-package distributions are considered complete unless a `py.typed`
+> with `partial\n` is included.
 
 Every row below applies the complete pinned quotation above from
 [`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst).
@@ -170,15 +180,11 @@ flowchart LR
     S4 -- package miss --> P4{"partial or namespace?"}
     P4 -- yes --> S5
     P4 -- no --> U
-    S5 -- hit --> R5["InlineTyped"]
+    S5 -- py.typed hit --> R5["InlineTyped"]
+    S5 -- untyped .py hit --> R5U["UntypedImport"]
     S5 -- miss --> S6["6 · vendored third-party stubs: none"]
     S6 --> U["Unknown → imports_unresolved"]
 ```
-
-Step 3 selects `typeshed-path`; otherwise the downloaded archive for the explicit
-`typeshed-commit` or the latest `main` commit; otherwise the bundled full-snapshot
-ZIP. A custom-source miss proceeds to step 4. A downloaded archive replaces the
-bundled ZIP wholesale.
 
 ---
 
@@ -247,9 +253,9 @@ First acquisition records the accepted ZIP's SHA-256. Reuse hashes the cached
 ZIP, detecting mutation without extraction; `.pyi` is read from that same ZIP.
 Cache metadata records whether content verification ran; enabling it later MUST
 rerun the content gate before the archive can be reported as verified.
-Exact commit identities and accepted immutable cached ZIP bytes have no
-time-based expiry. Explicit eviction or `typeshed-cache = false` reacquires and
-reruns all gates without changing an explicit SHA. Disabling verification reports
+The exact commit identity never expires. Downloaded cached ZIP bytes expire
+after 24 hours and are re-hashed on every reuse. Expiry, explicit eviction, or
+`typeshed-cache = false` reacquires the same selected SHA and reruns all gates. Disabling verification reports
 `UNVERIFIED` and never disables safety, shape, or license review. A fresh
 unpinned download is not hermetic.
 
@@ -258,11 +264,8 @@ unpinned download is not hermetic.
 Basilisk ships a release-pinned ZIP containing every `stdlib/` `.pyi`,
 `stdlib/VERSIONS`, the composite root `LICENSE`, root `NOTICE` iff present, and
 pertinent nested license/notice files. It is a complete offline step-3 source,
-not a names-only baseline; it supplies the bodies needed by #289/#288 offline.
-A compiled name or
-distribution index MAY accelerate this exact ZIP but MUST NOT override it or any
-custom/downloaded source
-([CHKARCH-TESTING-BENCH-RATCHET](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET)).
+not a names-only baseline; it supplies the bodies and snapshot-derived indexes
+needed by #289/#288 offline.
 
 #### License and attribution {#STUBRES-TYPESHED-LICENSE}
 
@@ -321,7 +324,7 @@ leaves open. Every one is exposed as a control in the configuration UI
 | `typeshed-commit` | full SHA | unset | Exact commit; unset selects Latest. |
 | `typeshed-url` | URL template | GitHub codeload | Codeload-compatible archive mirror containing `{sha}` and one common top-level directory; does not resolve Latest. |
 | `typeshed-cache-path` | path | OS cache | Cached gate-accepted ZIPs. |
-| `typeshed-cache` | bool | `true` | Reuse a gate-accepted immutable ZIP; false downloads, validates, and discards. |
+| `typeshed-cache` | bool | `true` | Reuse a re-hashed accepted downloaded ZIP for 24 hours; false downloads, validates, and discards. |
 | `typeshed-path` | `string` | _(unset)_ | Supply the canonical custom step-3 tree; disables download and the bundled ZIP. |
 | `typeshed-verify` | bool | `true` | Content attestation; false reports `UNVERIFIED`. |
 | `--no-typeshed-cache` | flag | off | One-run `typeshed-cache = false`. |
@@ -363,19 +366,16 @@ and drives call checking from the same declaration—never a hand table.
 
 #### Re-exports {#STUBRES-PYI-REEXPORTS}
 
-A stub's public interface includes the re-exports required by the pinned typing
-specification's import conventions
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)):
+The pinned interface rules say imported symbols are **“private by default”**,
+that `__all__` **“overrides all other rules above”**, and that the redundant
+aliases plus `from Y import *` re-export forms below are public
+([`python/typing@6ef9f77`, library interface and import conventions](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)):
 
-- **Redundant aliases** — `from y import x as x` and `import x as x` re-export
-  `x`.
-- **`__all__`** — assignment from a list/tuple plus `+=`, `extend`, `append`, and
-  `remove`, including references to a submodule's `__all__`.
-- **Star imports** — `from .sub import *` re-exports the target stub's export
-  set: its `__all__` when it defines one (authoritative, exactly like runtime
-  `import *`), otherwise its public (non-underscore) top-level names and
-  re-exports, followed recursively through relative or absolute imports and
-  import cycles.
+> - `import X as X` (a redundant module alias): re-exports `X`.
+> - `from Y import X as X` (a redundant symbol alias): re-exports `X`.
+> - `from Y import *`: if `Y` defines a module-level `__all__` list, re-exports
+>   all names in `__all__`; otherwise, re-exports all public symbols in `Y`'s
+>   global scope.
 
 Simple `sys.version_info` / `sys.platform` guards select one concrete target
 branch; `All` requires validity in every platform alternative and never exposes a
@@ -387,7 +387,7 @@ expected to understand those checks
 
 ## Type Provenance {#STUBRES-PROVENANCE}
 
-`TypeProvenance` records source annotations, built-in/custom typeshed,
+`TypeProvenance` records source annotations, user stubs, built-in/custom typeshed,
 community/generated stubs, or untyped imports; there is no `TrackedType` wrapper.
 
 ### Diagnostic Behaviour by Provenance {#STUBRES-PROVENANCE-DIAG}
@@ -395,6 +395,7 @@ community/generated stubs, or untyped imports; there is no `TrackedType` wrapper
 | Resolution/provenance | Import-site diagnostic | Downstream type errors | LSP hover | Code Action |
 |------------|-----------|----------------------|-----------|-------------|
 | Source | none | normal errors | shows inferred type | — |
+| StubUser | none | normal errors | shows stub type | — |
 | StubTier1 | none | normal errors | shows stub type + "(typeshed)" | — |
 | StubCustomTypeshed | none | normal errors | shows stub type + "(custom typeshed)" | — |
 | StubTier2 | none | normal errors | shows type + "(community stub)" | — |

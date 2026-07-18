@@ -86,7 +86,6 @@ fn resolve(source: &str) -> Arc<basilisk_resolver::ResolvedModule> {
         workspace_members: Vec::new(),
         site_packages: None,
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: Some(ActiveTypeshed::new(
             metaclass_snapshot(),
             Some(StubTarget {

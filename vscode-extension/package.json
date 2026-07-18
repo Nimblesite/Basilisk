@@ -4,7 +4,7 @@
   "description": "The only Python type checker scoring 100% on the official python/typing conformance suite — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default.",
   "version": "0.0.0-PLACEHOLDER",
   "publisher": "Nimblesite",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "icon": "images/basilisk-logo.png",
   "galleryBanner": {
     "color": "#0a0c12",
@@ -1008,6 +1008,8 @@
     ]
   },
   "scripts": {
+    "licenses:update": "node scripts/update-dependency-licenses.mjs",
+    "licenses:check": "node scripts/update-dependency-licenses.mjs --check",
     "sync:shipwright": "node scripts/sync-shipwright-manifest.mjs",
     "stage:attribution": "node scripts/verify-shipwright.mjs stage-attribution",
     "compile": "tsc -p ./ && node -e \"const fs=require('fs');fs.mkdirSync('out/src/test/fixtures',{recursive:true});fs.readdirSync('src/test/fixtures').forEach(f=>fs.copyFileSync('src/test/fixtures/'+f,'out/src/test/fixtures/'+f));\"",
@@ -1017,7 +1019,7 @@
     "pretest": "node scripts/fetch-real-world-repos.mjs",
     "test": "vscode-test --bail",
     "test:real-world": "npm run compile && node scripts/fetch-real-world-repos.mjs && vscode-test --bail --label real-world-flask --label real-world-rich --label real-world-fastapi",
-    "test:shipwright": "node scripts/verify-shipwright.mjs manifest",
+    "test:shipwright": "node scripts/verify-shipwright.mjs manifest && npm run licenses:check",
     "vscode:prepublish": "npm run stage:attribution && npm run sync:shipwright && npm run compile",
     "package": "cd .. && make _release_vsix",
     "screenshots:editor": "node scripts/capture-screenshots.mjs"

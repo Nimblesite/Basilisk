@@ -1,6 +1,6 @@
 [package]
 name        = "basilisk-stubs"
-description = "Runtime python/typeshed archive acquisition + cache and the offline baseline for Basilisk"
+description = "Runtime python/typeshed archive acquisition, cache, and bundled snapshot for Basilisk"
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
@@ -13,7 +13,6 @@ publish = false
 [dependencies]
 basilisk-common = { path = "../basilisk-common" }
 basilisk-parser.workspace = true
-phf.workspace = true
 ruff_python_ast.workspace = true
 ruff_text_size.workspace = true
 serde.workspace = true
@@ -33,10 +32,6 @@ tracing.workspace = true
 # Production authenticated-HTTPS adapter for GitHub metadata/codeload and
 # configured archive mirrors. `https_only` is also enforced by the adapter.
 ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
-
-[build-dependencies]
-phf_codegen = "0.14"
-zip = { version = "5.1.1", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 serde_json.workspace = true

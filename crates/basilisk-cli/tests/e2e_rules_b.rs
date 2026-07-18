@@ -15,7 +15,9 @@
 mod common;
 
 use basilisk_test_utils::{assert_diagnostics, Expected};
-use common::{annotation_rules_config, fixture, run, run_with_config};
+use common::{
+    annotation_rules_config, annotation_rules_config_for_python, fixture, run, run_with_config,
+};
 
 // ---------------------------------------------------------------------------
 // import from untyped module
@@ -284,7 +286,7 @@ fn numeric_literal_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error
 fn override_without_decorator() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config(
         "errors/e0025_missing_override.py",
-        &annotation_rules_config(),
+        &annotation_rules_config_for_python("3.12"),
     )?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(

@@ -10,6 +10,14 @@ use basilisk_resolver::Span;
 use std::fs;
 use std::path::PathBuf;
 
+fn bundled_stub_distribution(module: &str) -> Option<String> {
+    basilisk_stubs::typeshed::bundle::bundled_snapshot()
+        .ok()?
+        .distribution_index
+        .distribution(module)
+        .map(str::to_owned)
+}
+
 fn make_module(imports: Vec<ImportInfo>) -> ResolvedModule {
     ResolvedModule {
         path: "test.py".to_owned(),
@@ -37,8 +45,7 @@ fn make_import(
         package_dep_kind: None,
         package_version: None,
         package_name: None,
-        stub_distribution: basilisk_stubs::typeshed_stub_distribution(module)
-            .map(ToOwned::to_owned),
+        stub_distribution: bundled_stub_distribution(module),
         unresolved_reason: None,
     }
 }

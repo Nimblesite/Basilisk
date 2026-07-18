@@ -253,7 +253,7 @@ impl InferredType {
             )
             | (InferredType::Literal(LiteralValue::Bytes(_)), InferredType::Bytes)
             | (
-                InferredType::Str | InferredType::Literal(LiteralValue::Str(_)),
+                InferredType::Literal(LiteralValue::Str(_)),
                 InferredType::LiteralString,
             )
             // None is always assignable to Optional[T]
@@ -355,8 +355,10 @@ impl InferredType {
                     return true;
                 }
 
-                // Check parameter count
-                if a.param_types.len() != b.param_types.len() {
+                // Required parameter positions are contravariant. A source may
+                // require fewer parameters than the target because its trailing
+                // positions can be satisfied by defaults; it may not require more.
+                if a.param_types.len() > b.param_types.len() {
                     return false;
                 }
 

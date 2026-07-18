@@ -18,7 +18,9 @@
 mod common;
 
 use basilisk_test_utils::{assert_diagnostics, Expected};
-use common::{annotation_rules_config, fixture, run_with_config};
+use common::{
+    annotation_rules_config, annotation_rules_config_for_python, fixture, run_with_config,
+};
 
 // Every test in this file exercises the annotation house rules
 // (`BSK-0001`..`BSK-0005`), which are OFF by default — the default config is
@@ -327,7 +329,10 @@ fn function_in_else_branch_of_version_guard() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn and_e0002_subclass_override_missing_annotations() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("errors/e0001_and_e0002_inheritance.py")?;
+    let diags = run_with_config(
+        "errors/e0001_and_e0002_inheritance.py",
+        &annotation_rules_config_for_python("3.12"),
+    )?;
     let src = std::fs::read_to_string(fixture("errors/e0001_and_e0002_inheritance.py"))?;
     assert_diagnostics(
         &src,

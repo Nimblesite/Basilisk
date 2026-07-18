@@ -124,21 +124,19 @@ pub fn extract_exports(
 /// `source` records **where** the stub came from so provenance stays honest: a
 /// stub resolved from a custom typeshed (`typeshed-path`) carries
 /// [`TypeProvenance::StubCustomTypeshed`] and hover reads `(custom typeshed)`,
-/// while `*-stubs`/user stubs stay [`TypeProvenance::StubTier1`]
-/// ([STUBRES-CUSTOM-TYPESHED]). All `.pyi` stubs are hand-written, verified
-/// types — Tier1 — so the tier is fixed and only the source varies.
+/// while user stubs stay [`TypeProvenance::StubUser`]
+/// ([STUBRES-CUSTOM-TYPESHED]). Generated user stubs carry their stable header
+/// marker and remain Tier3 through both disk and unsaved-source paths.
 #[must_use]
 pub fn extract_stub_exports(
     stub_path: &Path,
     module_name: &str,
     source: StubSource,
 ) -> Vec<(String, ExternalSymbol)> {
-    let Ok(stub) = basilisk_stubs::parse_pyi_file(stub_path, module_name, source, StubTier::Tier1)
-    else {
+    let Ok(source_text) = std::fs::read_to_string(stub_path) else {
         return Vec::new();
     };
-
-    stub_module_exports(&stub, stub_path, source)
+    extract_stub_exports_from_source(&source_text, stub_path, module_name, source, None)
 }
 
 /// Extract exports from immutable VFS source using the same declaration model
@@ -152,11 +150,21 @@ pub fn extract_stub_exports_from_source(
     source: StubSource,
     target: Option<&StubTarget>,
 ) -> Vec<(String, ExternalSymbol)> {
-    let Some(stub) = parse_stub_source(source_text, logical_path, module_name, source, target)
+    let tier = stub_tier(source_text, source);
+    let Some(stub) =
+        parse_stub_source(source_text, logical_path, module_name, source, tier, target)
     else {
         return Vec::new();
     };
-    stub_module_exports(&stub, logical_path, source)
+    stub_module_exports(&stub, logical_path, source, tier)
+}
+
+fn stub_tier(source_text: &str, source: StubSource) -> StubTier {
+    if source == StubSource::UserStub {
+        basilisk_stubs::user_stub_tier(source_text)
+    } else {
+        StubTier::Tier1
+    }
 }
 
 fn parse_stub_source(
@@ -164,6 +172,7 @@ fn parse_stub_source(
     logical_path: &Path,
     module_name: &str,
     source: StubSource,
+    tier: StubTier,
     target: Option<&StubTarget>,
 ) -> Option<StubModule> {
     match target {
@@ -172,16 +181,12 @@ fn parse_stub_source(
             logical_path,
             module_name,
             source,
-            StubTier::Tier1,
+            tier,
             target,
         ),
-        None => basilisk_stubs::parse_pyi_source(
-            source_text,
-            logical_path,
-            module_name,
-            source,
-            StubTier::Tier1,
-        ),
+        None => {
+            basilisk_stubs::parse_pyi_source(source_text, logical_path, module_name, source, tier)
+        }
     }
     .ok()
 }
@@ -190,8 +195,9 @@ fn stub_module_exports(
     stub: &StubModule,
     stub_path: &Path,
     source: StubSource,
+    tier: StubTier,
 ) -> Vec<(String, ExternalSymbol)> {
-    let provenance = Some(TypeProvenance::from((&source, &StubTier::Tier1)));
+    let provenance = Some(TypeProvenance::from((&source, &tier)));
     let mut exports = Vec::new();
 
     for func in stub.functions.values() {
@@ -368,14 +374,21 @@ pub fn load_external_module_from_source_with_loader(
     else {
         return std::sync::Arc::new(ExternalModule::default());
     };
-    let Some(stub) = parse_stub_source(source_text, logical_path, module_name, *source, target)
-    else {
+    let tier = stub_tier(source_text, *source);
+    let Some(stub) = parse_stub_source(
+        source_text,
+        logical_path,
+        module_name,
+        *source,
+        tier,
+        target,
+    ) else {
         return std::sync::Arc::new(ExternalModule::default());
     };
-    let mut exports = stub_module_exports(&stub, logical_path, *source);
+    let mut exports = stub_module_exports(&stub, logical_path, *source, tier);
     let reexported =
         basilisk_stubs::reexports::reexported_member_names_with_loader(&stub, &mut loader);
-    let provenance = Some(TypeProvenance::from((source, &StubTier::Tier1)));
+    let provenance = Some(TypeProvenance::from((source, &tier)));
     for name in reexported {
         if exports.iter().any(|(existing, _)| existing == &name) {
             continue;
@@ -625,11 +638,11 @@ fn build_function_signature(func: &basilisk_resolver::scope::FunctionInfo, sourc
 
 /// Classify an external `.pyi` stub's [`StubSource`] from its on-disk location.
 ///
-/// A stub under the configured custom typeshed's `stdlib/` subtree is
-/// [`StubSource::CustomTypeshed`] ([STUBRES-CUSTOM-TYPESHED]); every other stub
-/// (`*-stubs` packages, on-demand typeshed) is [`StubSource::StubPackage`].
+/// A logical custom-snapshot URI is [`StubSource::CustomTypeshed`]
+/// ([STUBRES-CUSTOM-TYPESHED]); a stub under a configured `stub-paths` root is
+/// [`StubSource::UserStub`]; every other stub is [`StubSource::StubPackage`].
 /// Provenance flows from here to hover via [`TypeProvenance`].
-fn stub_source_for(resolved_path: &Path, custom_typeshed: Option<&Path>) -> StubSource {
+fn stub_source_for(resolved_path: &Path, stub_paths: &[PathBuf]) -> StubSource {
     let logical = resolved_path.to_string_lossy();
     if logical.starts_with("typeshed:custom-") {
         return StubSource::CustomTypeshed;
@@ -637,12 +650,13 @@ fn stub_source_for(resolved_path: &Path, custom_typeshed: Option<&Path>) -> Stub
     if logical.starts_with("typeshed:") {
         return StubSource::Typeshed;
     }
-    match custom_typeshed {
-        Some(typeshed) if resolved_path.starts_with(typeshed.join("stdlib")) => {
-            StubSource::CustomTypeshed
-        }
-        _ => StubSource::StubPackage,
+    if stub_paths
+        .iter()
+        .any(|root| resolved_path.starts_with(root))
+    {
+        return StubSource::UserStub;
     }
+    StubSource::StubPackage
 }
 
 /// Repopulate `resolved.imported_symbols` from its resolved imports.
@@ -663,16 +677,14 @@ fn stub_source_for(resolved_path: &Path, custom_typeshed: Option<&Path>) -> Stub
 /// now-undefined references, leaving dependents green after an export edit
 /// (GitHub #56).
 ///
-/// `custom_typeshed` is the configured `typeshed-path`, if any: a
-/// stub resolved from its `stdlib/` subtree is tagged
-/// [`StubSource::CustomTypeshed`] so hover reads `(custom typeshed)` and a
-/// `MicroPython` signature is never reported as the bundled `CPython` one
-/// ([STUBRES-CUSTOM-TYPESHED]). Pass `None` for the default bundled typeshed.
+/// `stub_paths` are the configured user-stub roots. Custom Typeshed provenance
+/// is carried by the active snapshot's logical URI rather than by re-reading a
+/// mutable configuration path.
 pub fn populate_imported_symbols<'a, F, E>(
     resolved: &mut basilisk_resolver::ResolvedModule,
     mut workspace_exports: F,
     mut external_module: E,
-    custom_typeshed: Option<&Path>,
+    stub_paths: &[PathBuf],
 ) where
     F: FnMut(&Path) -> Option<&'a [(String, ExternalSymbol)]>,
     E: FnMut(&Path, &ExternalModuleRequest) -> SharedExternalModule,
@@ -697,10 +709,7 @@ pub fn populate_imported_symbols<'a, F, E>(
             if let Some(exports) = workspace_exports(resolved_path) {
                 exports
             } else if resolved_path.extension().is_some_and(|ext| ext == "pyi") {
-                // Classify the stub's provenance: a `.pyi` under the configured
-                // custom typeshed's `stdlib/` is CustomTypeshed
-                // ([STUBRES-CUSTOM-TYPESHED]); every other stub is StubPackage/Tier1.
-                let source = stub_source_for(resolved_path, custom_typeshed);
+                let source = stub_source_for(resolved_path, stub_paths);
                 authoritative_stub =
                     matches!(source, StubSource::Typeshed | StubSource::CustomTypeshed);
                 let request = ExternalModuleRequest::Stub {

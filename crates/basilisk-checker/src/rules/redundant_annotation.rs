@@ -175,7 +175,7 @@ fn extract_annotation(source: &str, name_span: basilisk_resolver::Span) -> Optio
 
 /// Check if types match for BSK-0050 purposes (base type comparison)
 fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bool {
-    use InferredType::{Bool, Bytes, Float, Int, None_, Str};
+    use InferredType::{Bool, Bytes, Float, Int, LiteralString, None_, Str};
 
     // Only fire BSK-0050 for simple scalar types that are exactly equal
     // Collection types and other complex types should not trigger BSK-0050
@@ -183,7 +183,7 @@ fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bo
     match (inferred, declared) {
         // Basic scalar types (exact match)
         (Int, Int)
-        | (Str, Str)
+        | (Str | LiteralString, Str)
         | (Float, Float)
         | (Bool, Bool)
         | (Bytes, Bytes)

@@ -39,7 +39,6 @@ fn resolve_with_snapshot(
         workspace_members: Vec::new(),
         site_packages: None,
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: Some(ActiveTypeshed::new(
             snapshot,
             Some(StubTarget {

@@ -24,12 +24,11 @@ selection contract is
   ([STUBRES-TYPESHED-ACQUIRE](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
 - **Bundled ZIP snapshot** — a complete typeshed `stdlib/` tree with **real
   `.pyi` bodies** plus its composite `LICENSE`, pinned to one SHA and refreshed
-  per release. It is the offline floor, so #288/#289 hovers work with no network;
-  a compiled name index accelerates lookups over it
+  per release. It is the offline floor, so #288/#289 hovers work with no network
   ([STUBRES-TYPESHED-BASELINE](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-BASELINE),
   [STUBRES-TYPESHED-WARN](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 - **No mixed source** — custom or downloaded content wholly bypasses the bundled
-  snapshot and its compiled lookups.
+  snapshot.
 - **Custom typeshed** — `typeshed-path` is the sole step-3 source when set, as
   Basilisk's implementation of the pinned "canonical source" SHOULD; a miss proceeds to step 4
   ([STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
@@ -42,17 +41,15 @@ selection contract is
 
 | Crate | Purpose |
 |-------|---------|
-| `phf` | Compile-time perfect-hash index over the bundled snapshot's module and `types-<distribution>` names (a lookup accelerator, not a substitute for the `.pyi` bodies) |
 | `basilisk-parser` / `ruff_python_ast` | Parse `.pyi` files for signatures and re-exports |
 | `serde` / `serde_json` | (De)serialize resolution and cache metadata |
 
 ## Status
 
-The `typeshed-path` custom-tree override and the compiled name tables (stdlib
-name-set + `types-<distribution>` map, from `build.rs`) are shipped and consumed
-by `basilisk-checker`. Runtime `python/typeshed` archive acquisition and the
-bundled full-`stdlib/` ZIP snapshot (real `.pyi` bodies) are the default path
-defined by
+The `typeshed-path` custom-tree override, runtime `python/typeshed` archive
+acquisition, and bundled full-`stdlib/` ZIP snapshot all produce the sole active
+step-3 snapshot consumed by `basilisk-checker`. Its real `.pyi` bodies and
+derived indexes remain one indivisible source, as defined by
 [STUBRES-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED);
 the HTTPS archive download (never `git clone`), tree-SHA verification, and
 source reporting are tracked against that spec.

@@ -37,7 +37,7 @@ use super::Rule;
 
 mod conversion;
 
-use conversion::{build_converted_callables, CallableVariant};
+use conversion::{build_converted_callables, CallableGroup, CallableVariant};
 
 const CODE: ErrorCode = ErrorCode {
     code: "constructors_callable",
@@ -183,7 +183,7 @@ fn wrapped_class<'a>(
 fn validate_call(
     call: &ExprCall,
     class_name: &str,
-    signatures: &[CallableVariant<'_>],
+    signatures: &[CallableGroup<'_>],
     typevars: &[&str],
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
@@ -208,22 +208,35 @@ fn validate_call(
         .filter_map(|k| k.arg.as_ref().map(ruff_python_ast::Identifier::as_str))
         .collect();
 
-    let mut first_failure = None;
-    for signature in signatures {
-        let failure = check_keywords(call, class_name, signature, &kw_names, path)
-            .or_else(|| check_too_many(call, class_name, signature, positional, path))
-            .or_else(|| check_missing(call, class_name, signature, positional, &kw_names, path))
-            .or_else(|| check_typevar_conflict(call, class_name, signature, typevars, path));
-        if failure.is_none() {
-            return;
-        }
-        if first_failure.is_none() {
-            first_failure = failure;
-        }
-    }
-    if let Some(failure) = first_failure {
+    let failure = signatures.iter().find_map(|group| {
+        group_failure(
+            call, class_name, group, positional, &kw_names, typevars, path,
+        )
+    });
+    if let Some(failure) = failure {
         diagnostics.push(failure);
     }
+}
+
+fn group_failure(
+    call: &ExprCall,
+    class_name: &str,
+    group: &CallableGroup<'_>,
+    positional: usize,
+    kw_names: &[&str],
+    typevars: &[&str],
+    path: &str,
+) -> Option<Diagnostic> {
+    let mut first_failure = None;
+    for signature in &group.variants {
+        let failure = check_keywords(call, class_name, signature, kw_names, path)
+            .or_else(|| check_too_many(call, class_name, signature, positional, path))
+            .or_else(|| check_missing(call, class_name, signature, positional, kw_names, path))
+            .or_else(|| check_typevar_conflict(call, class_name, signature, typevars, path));
+        let _diagnostic = failure.as_ref()?;
+        first_failure = first_failure.or(failure);
+    }
+    first_failure
 }
 
 /// Flag the first keyword that names no parameter (when no `**kwargs`).

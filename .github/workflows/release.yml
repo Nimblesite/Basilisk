@@ -99,7 +99,7 @@ jobs:
           cp "$reldir/basilisk-profiler-helper" "$staging/"
           # [STUBRES-TYPESHED-LICENSE] The embedded Typeshed snapshot makes
           # attribution part of every binary-bearing release artifact.
-          cp LICENSE NOTICES THIRD-PARTY-LICENSES "$staging/"
+          cp LICENSE NOTICES THIRD-PARTY-LICENSES RUST-DEPENDENCY-LICENSES "$staging/"
           ditto -c -k --keepParent "$staging" "${{ matrix.archive }}"
 
       - name: Package Linux archive
@@ -109,7 +109,7 @@ jobs:
           reldir="target/${{ matrix.target }}/release"
           tar czf "${{ matrix.archive }}" \
             -C "$reldir" "${{ matrix.binary }}" \
-            -C "$GITHUB_WORKSPACE" LICENSE NOTICES THIRD-PARTY-LICENSES
+            -C "$GITHUB_WORKSPACE" LICENSE NOTICES THIRD-PARTY-LICENSES RUST-DEPENDENCY-LICENSES
 
       - name: Package Windows archive
         if: startsWith(matrix.platform, 'win32-')
@@ -119,7 +119,8 @@ jobs:
             "target/${{ matrix.target }}/release/${{ matrix.binary }}",
             "LICENSE",
             "NOTICES",
-            "THIRD-PARTY-LICENSES"
+            "THIRD-PARTY-LICENSES",
+            "RUST-DEPENDENCY-LICENSES"
           )
           Compress-Archive -Path $files -DestinationPath "${{ matrix.archive }}"
 
@@ -365,7 +366,9 @@ jobs:
           # [VSIX-PACKAGING-PARITY].
           node vscode-extension/scripts/stage-runtime.mjs runtime-bin "${{ env.target }}"
           cp shipwright.json vscode-extension/shipwright.json
-          cp LICENSE NOTICES THIRD-PARTY-LICENSES vscode-extension/
+          cp VSCODE-DISTRIBUTION-LICENSE vscode-extension/LICENSE.txt
+          cp NOTICES THIRD-PARTY-LICENSES RUST-DEPENDENCY-LICENSES \
+            VSCODE-DEPENDENCY-LICENSES vscode-extension/
 
       # Skip on cross-compiled targets: the runner's CPU arch can't execute
       # the produced binary (x64 host -> aarch64 target). The VSIX contents
@@ -412,10 +415,11 @@ jobs:
           if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
           unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "bin/${{ env.target }}/basilisk${exe}"
           unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "shipwright.json"
-          # `vsce` normalizes the extension root license to LICENSE.txt.
           unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/LICENSE.txt"
           unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/NOTICES"
           unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/THIRD-PARTY-LICENSES"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/RUST-DEPENDENCY-LICENSES"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/VSCODE-DEPENDENCY-LICENSES"
           if [ "${{ matrix.platform }}" = "darwin" ]; then
             unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "bin/${{ env.target }}/basilisk-profiler-helper"
           fi
@@ -892,11 +896,19 @@ jobs:
         shell: bash
         run: scripts/stamp-version.sh
 
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.x"
+
       # `bindings = "bin"` packages the compiled `basilisk` executable into a
       # binary-only wheel (no Python extension module). Linux builds inside a
       # manylinux container for broad glibc compatibility; macOS/Windows build
       # natively or cross-compile for arm64.
-      - name: Build wheel
+      - name: Select wheel license expression
+        shell: bash
+        run: python3 scripts/set_wheel_license_expression.py --target "${{ matrix.target }}"
+
+      - name: Package wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           target: ${{ matrix.target }}
@@ -910,7 +922,7 @@ jobs:
           set -euo pipefail
           if command -v python3 >/dev/null 2>&1; then py=python3; else py=python; fi
           for wheel in dist/*.whl; do
-            "$py" scripts/verify_release_attribution.py "$wheel" --kind wheel
+            "$py" scripts/verify_release_attribution.py "$wheel" --kind wheel --target "${{ matrix.target }}"
           done
 
       # Transient in-run hand-off to publish-pypi (PyPI is the permanent store).

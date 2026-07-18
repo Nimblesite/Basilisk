@@ -21,9 +21,6 @@ pub fn resolve_module_imports(
     resolved: &mut basilisk_resolver::ResolvedModule,
     search_paths: &ImportSearchPaths,
 ) {
-    resolved.authoritative_typeshed =
-        search_paths.typeshed_snapshot.is_some() || search_paths.typeshed_path.is_some();
-
     // The file's own path, used to search its directory for sibling modules.
     let importing_file = PathBuf::from(&resolved.path);
     populate_builtin_classes(resolved, search_paths, &importing_file);
@@ -51,13 +48,8 @@ pub fn resolve_module_imports(
         if let Some(r) = result {
             import.resolution = r.resolution;
             import.resolved_path = Some(r.path);
-        } else if resolved.authoritative_typeshed
-            || !super::bundled_stdlib_recognized(&import.module, false)
-        {
+        } else {
             // Classify why the import is unresolved for actionable diagnostics.
-            // When a custom typeshed is configured it is canonical for step 3, so
-            // the bundled name-set no longer rescues a module absent from it —
-            // the import falls through to an unresolved reason ([STUBRES-CUSTOM-TYPESHED]).
             import.unresolved_reason = Some(classify_unresolved(&import.module, search_paths));
         }
 
@@ -163,11 +155,14 @@ fn capture_user_stub_api(
     search_paths: &ImportSearchPaths,
 ) -> Option<(String, ImportedModuleApi)> {
     let stub_path = user_stub_path(import, search_paths)?;
-    let stub = basilisk_stubs::parse_pyi_file(
+    let source_text = std::fs::read_to_string(stub_path).ok()?;
+    let tier = basilisk_stubs::user_stub_tier(&source_text);
+    let stub = basilisk_stubs::parse_pyi_source(
+        &source_text,
         stub_path,
         &import.module,
         basilisk_stubs::StubSource::UserStub,
-        basilisk_stubs::StubTier::Tier1,
+        tier,
     )
     .ok()?;
     Some((import.module.clone(), build_stub_api(&stub, stub_path)))
@@ -187,12 +182,13 @@ pub fn recapture_user_stub_from_source(
     stub_source: &str,
 ) -> Option<(String, ImportedModuleApi)> {
     let stub_path = user_stub_path(import, search_paths)?;
+    let tier = basilisk_stubs::user_stub_tier(stub_source);
     let stub = basilisk_stubs::parse_pyi_source(
         stub_source,
         stub_path,
         &import.module,
         basilisk_stubs::StubSource::UserStub,
-        basilisk_stubs::StubTier::Tier1,
+        tier,
     )
     .ok()?;
     Some((import.module.clone(), build_stub_api(&stub, stub_path)))
@@ -304,10 +300,7 @@ fn stub_distribution(
             .distribution_for_importer(importing_file, module_name)
             .map(ToOwned::to_owned);
     }
-    if search_paths.typeshed_path.is_some() {
-        return None;
-    }
-    basilisk_stubs::typeshed_stub_distribution(module_name).map(ToOwned::to_owned)
+    None
 }
 
 fn is_standard_library_import(
@@ -320,8 +313,5 @@ fn is_standard_library_import(
     if search_paths.typeshed_snapshot.is_some() {
         return path.to_string_lossy().starts_with("typeshed:");
     }
-    if let Some(custom) = &search_paths.typeshed_path {
-        return path.starts_with(custom.join("stdlib"));
-    }
-    basilisk_stubs::is_stdlib_module(&import.module)
+    false
 }

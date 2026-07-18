@@ -1799,7 +1799,6 @@ mod tests {
             workspace_members: vec![],
             site_packages: None,
             registry: None,
-            typeshed_path: None,
             typeshed_snapshot: None,
         });
 
@@ -1837,7 +1836,6 @@ mod tests {
             workspace_members: vec![],
             site_packages: None,
             registry: None,
-            typeshed_path: None,
             typeshed_snapshot: None,
         });
 
@@ -1889,7 +1887,6 @@ mod tests {
             workspace_members: vec![],
             site_packages: None,
             registry: None,
-            typeshed_path: None,
             typeshed_snapshot: None,
         });
         let _ = idx.scan();
@@ -2347,7 +2344,6 @@ mod tests {
             stub_paths: vec![],
             workspace_members: vec![],
             site_packages: Some(site_packages.clone()),
-            typeshed_path: None,
             typeshed_snapshot: None,
             registry: None,
         });
@@ -2394,15 +2390,9 @@ mod tests {
         // Verify that the change is detected and a different value is returned.
         assert_ne!(ver1, ver2, "python version should change after file update");
 
-        // Verify stdlib module availability doesn't regress — `tomllib` was
-        // added in 3.11 so it should be available in both versions.
-        assert!(
-            basilisk_stubs::is_stdlib_module("tomllib"),
-            "tomllib should be a stdlib module"
-        );
-
-        // `os` should always be available regardless of version.
-        assert!(basilisk_stubs::is_stdlib_module("os"));
+        let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot().unwrap();
+        assert!(snapshot.read_stub("tomllib").is_some());
+        assert!(snapshot.read_stub("os").is_some());
 
         let _ = std::fs::remove_dir_all(&dir);
     }

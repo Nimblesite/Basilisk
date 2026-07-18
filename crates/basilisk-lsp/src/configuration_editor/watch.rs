@@ -251,7 +251,6 @@ pub(super) async fn refresh_search_paths_with_typeshed(
         })
         .collect();
     let generations = handles.typeshed_generations.read().await;
-    let generations_are_authoritative = !generations.is_empty();
     let bindings = configs
         .iter()
         .filter_map(|(root, root_config)| {
@@ -270,18 +269,13 @@ pub(super) async fn refresh_search_paths_with_typeshed(
     let search_paths = configs
         .into_iter()
         .map(|(root, config)| {
-            let mut search_paths = crate::server::init::build_root_search_paths(
+            let search_paths = crate::server::init::build_root_search_paths(
                 roots,
                 &root,
                 config,
                 interpreter.as_deref(),
                 active_typeshed.clone(),
             );
-            if generations_are_authoritative {
-                // The runtime generation map is authoritative once initialized.
-                // Acquiring/Blocked roots never probe a legacy custom path.
-                search_paths.typeshed_path = None;
-            }
             (root, Arc::new(search_paths))
         })
         .collect();

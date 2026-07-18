@@ -110,8 +110,8 @@ is editable here.
 | License | active source | **View License**, or `not supplied` for custom |
 
 The URL downloads only a known SHA; Latest still needs official metadata.
-Accepted immutable cached bytes are reused without a refresh TTL; explicit
-eviction reacquires the same selected SHA without changing an exact pin.
+Downloaded cached ZIP bytes are reused for 24 hours and re-hashed every time;
+after 24 hours they are reacquired without changing an exact pin.
 Cache off downloads, validates, and discards—it is not labelled hermetic.
 Verification off leaves safety, shape, and license gates active and displays `UNVERIFIED`.
 Only Exact commit suppresses `UNPINNED`; Latest/bundled offer **Pin current**,

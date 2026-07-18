@@ -59,7 +59,8 @@
         "source": "pip:debugpy==1.8.20",
         "target": "bundled/debugpy",
         "bundle": true,
-        "contentHash": false,
+      "contentHash": true,
+      "sha256": "5be9bed9ae3be00665a06acaa48f8329d2b9632f15fd09f6a9a8c8d9907e54d7",
         "downloadOnFirstUse": false
       },
       "verifyStartup": false,

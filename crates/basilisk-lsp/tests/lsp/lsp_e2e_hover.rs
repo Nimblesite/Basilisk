@@ -150,7 +150,8 @@ fn test_lsp_hover_unannotated_function_shows_inferred_types() -> TestResult<()> 
     let _ = fixture.initialize()?;
 
     // Repro from #253 (mutation_testing/mutants_report.py:78): every dict
-    // value and the `.get` default are `str`, so the return type is `str`.
+    // value and the `.get` default are literal strings, so the return type
+    // retains its PEP 675 `LiteralString` precision.
     let code = "def extracted_function(missed, caught, unviable, timeout, summary):\n    return {\n        \"MissedMutant\": \"missed\",\n        \"CaughtMutant\": \"caught\",\n        \"Unviable\": \"unviable\",\n        \"Timeout\": \"timeout\",\n        \"Success\": \"success\",\n    }.get(summary, \"unknown\")\n";
     fixture.did_open("file:///hover_unannotated.py", code)?;
     let _ = fixture.wait_for_diagnostics();
@@ -180,8 +181,8 @@ fn test_lsp_hover_unannotated_function_shows_inferred_types() -> TestResult<()> 
         "unannotated parameter should render an inferred/Unknown type, not blank: {resp}"
     );
     assert!(
-        resp.contains("-> str"),
-        "hover should show the inferred return type '-> str': {resp}"
+        resp.contains("-> LiteralString"),
+        "hover should show the inferred return type '-> LiteralString': {resp}"
     );
     Ok(())
 }

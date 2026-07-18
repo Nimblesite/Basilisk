@@ -41,8 +41,8 @@ pub enum StubSource {
     /// Installed package with `py.typed` marker, PEP 561 inline types
     /// (typing-spec import-resolution step 5).
     InlineTyped,
-    /// typeshed resolved from a runtime `python/typeshed` archive, or from the
-    /// bundled offline baseline when no clone is available — typing-spec
+    /// Typeshed resolved from a runtime `python/typeshed` archive, or from the
+    /// bundled offline snapshot when download is unavailable — typing-spec
     /// import-resolution step 3, the default standard-library source. See
     /// [STUBRES-TYPESHED].
     Typeshed,
@@ -107,7 +107,7 @@ pub enum TypeProvenance {
     /// From a custom/modified typeshed (`typeshed-path`) — Tier-1 trust, but
     /// distinct provenance so hover reads `(custom typeshed)` and a `MicroPython`
     /// signature is never misreported as the default `CPython` one (resolved from
-    /// the runtime clone or the offline baseline).
+    /// the selected archive or bundled snapshot).
     /// See [STUBRES-CUSTOM-TYPESHED].
     StubCustomTypeshed,
     /// From auto-generated, community-reviewed stubs.
@@ -122,8 +122,8 @@ impl From<(&StubSource, &StubTier)> for TypeProvenance {
     fn from((source, tier): (&StubSource, &StubTier)) -> Self {
         match (source, tier) {
             // A custom typeshed keeps Tier-1 trust but its own provenance, so
-            // hover can distinguish it from the default typeshed (runtime clone
-            // or offline baseline) ([STUBRES-CUSTOM-TYPESHED]).
+            // hover can distinguish it from the default Typeshed snapshot
+            // ([STUBRES-CUSTOM-TYPESHED]).
             (&StubSource::CustomTypeshed, &StubTier::Tier1) => Self::StubCustomTypeshed,
             (&StubSource::UserStub, &StubTier::Tier1) => Self::StubUser,
             (_, &StubTier::Tier1) => Self::StubTier1,
@@ -141,9 +141,8 @@ impl TypeProvenance {
     #[must_use]
     pub fn hover_label(self) -> Option<&'static str> {
         match self {
-            Self::Source => None,
+            Self::Source | Self::StubUser => None,
             Self::StubTier1 => Some("(typeshed)"),
-            Self::StubUser => None,
             Self::StubCustomTypeshed => Some("(custom typeshed)"),
             Self::StubTier2 => Some("(community stub)"),
             Self::StubTier3 => Some("(best-effort stub, may be inaccurate)"),

@@ -168,7 +168,7 @@ fn target_changes_never_infer_or_fetch_a_different_commit() {
 }
 
 #[test]
-fn generated_and_bundled_policy_manufactures_no_python_target() {
+fn runtime_and_bundled_policy_manufactures_no_python_target() {
     let ordinary_fixture = fixture(A_SHA, "NO_TARGET");
     let transport_fixture = untrusted_fixture(A_SHA, &[]);
     assert_eq!(
@@ -176,7 +176,13 @@ fn generated_and_bundled_policy_manufactures_no_python_target() {
         transport_fixture.metadata.commit
     );
 
-    let build_script = include_str!("../build.rs");
+    let policy_sources = [
+        include_str!("../src/lib.rs"),
+        include_str!("../src/typeshed/bundle.rs"),
+    ];
+    assert!(!std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("build.rs")
+        .exists());
     for forbidden in [
         "python_version",
         "python-version",
@@ -188,14 +194,18 @@ fn generated_and_bundled_policy_manufactures_no_python_target() {
         "version-to-commit",
     ] {
         assert!(
-            !build_script.contains(forbidden),
-            "build-generated data must not contain target policy: {forbidden}"
+            policy_sources
+                .iter()
+                .all(|source| !source.contains(forbidden)),
+            "runtime and bundled policy must not contain target policy: {forbidden}"
         );
     }
     for minor in 0..=30 {
         assert!(
-            !build_script.contains(&format!("3.{minor}")),
-            "build script must not manufacture a fixed Python 3.{minor} target"
+            policy_sources
+                .iter()
+                .all(|source| !source.contains(&format!("3.{minor}"))),
+            "runtime and bundled policy must not manufacture Python 3.{minor}"
         );
     }
 

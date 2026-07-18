@@ -310,6 +310,53 @@ fn exact_pin_reuses_cache_offline_and_remains_pinned() {
 }
 
 #[test]
+fn expired_cached_bytes_reacquire_the_same_exact_pin() {
+    let cache_dir = tempfile::tempdir().expect("cache dir");
+    let cache = DiskCache::new(cache_dir.path());
+    let a = fixture(A_SHA, "A");
+    let exact = SourceSelection::ExactCommit {
+        commit: a.metadata.commit,
+    };
+    let seed = Arc::new(FakeTransport::new(
+        None,
+        std::slice::from_ref(&a),
+        SourceTransport::Codeload,
+    ));
+    let _ = manager(request(exact.clone(), true), seed, Some(cache.clone()))
+        .snapshot()
+        .expect("seed exact cache");
+
+    let meta = cache_dir
+        .path()
+        .join(A_SHA)
+        .join("generations")
+        .join(sha256_hex(&a.zip))
+        .join("meta.json");
+    let mut record: CacheRecord =
+        serde_json::from_slice(&std::fs::read(&meta).expect("cache metadata"))
+            .expect("valid metadata");
+    record.acquired_at_unix_seconds = 0;
+    std::fs::write(
+        &meta,
+        serde_json::to_vec_pretty(&record).expect("serialize metadata"),
+    )
+    .expect("expire cached bytes");
+
+    let retry = Arc::new(FakeTransport::new(
+        None,
+        std::slice::from_ref(&a),
+        SourceTransport::Codeload,
+    ));
+    let snapshot = manager(request(exact, true), Arc::clone(&retry), Some(cache))
+        .snapshot()
+        .expect("reacquire expired exact pin");
+    assert_eq!(snapshot.status.commit, Some(a.metadata.commit));
+    assert_eq!(retry.commit_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(retry.tree_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(retry.archive_calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
 fn exact_bundle_commit_restarts_offline_without_a_download_cache() {
     let commit = oid(bundled_commit_sha());
     let offline = Arc::new(FakeTransport::offline());

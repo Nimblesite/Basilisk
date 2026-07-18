@@ -15,16 +15,6 @@ pub struct CheckContext {
     pub target_version: Option<(u32, u32)>,
     /// Target platform (`"linux"`, `"darwin"`, `"win32"`), if configured.
     pub target_platform: Option<String>,
-    /// Whether one complete step-3 Typeshed source is authoritative.
-    ///
-    /// When set, that directory is the canonical source for standard-library
-    /// types ([STUBRES-CUSTOM-TYPESHED]): the bundled name-only stdlib set no
-    /// longer rescues a module absent from it, so rules that suppress on stdlib
-    /// membership must gate on
-    /// [`crate::imports::bundled_stdlib_recognized`] instead of calling
-    /// `is_stdlib_module` directly. Threaded here so every rule reads the same
-    /// canonicality decision the resolver already applied.
-    pub authoritative_typeshed_configured: bool,
     /// Line-start index over the module source, built once per check.
     ///
     /// Rules that need to map a byte offset to a line — or locate a function
@@ -53,7 +43,6 @@ impl CheckContext {
                 .as_deref()
                 .and_then(parse_target_version),
             target_platform: config.python_platform.clone(),
-            authoritative_typeshed_configured: config.typeshed_path.is_some(),
             line_index: basilisk_common::text::LineIndex::default(),
         }
     }
@@ -94,7 +83,6 @@ mod tests {
             "an unconfigured project must have no manufactured Python target"
         );
         assert_eq!(ctx.target_platform, None);
-        assert!(!ctx.authoritative_typeshed_configured);
     }
 
     /// An explicitly configured version IS honoured (evidence exists).

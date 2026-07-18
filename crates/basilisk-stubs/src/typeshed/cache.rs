@@ -6,9 +6,8 @@
 //! beside a small metadata record. Reuse **re-hashes the cached ZIP** and
 //! compares it to the recorded SHA-256, so on-disk mutation is detected without
 //! extraction — the checker never trusts a mutable extracted tree
-//! ([STUBRES-TYPESHED-ACQUIRE]). Accepted immutable bytes have no time-based
-//! expiry; explicit eviction or cache-off forces reacquisition through every
-//! activation gate.
+//! ([STUBRES-TYPESHED-ACQUIRE]). Downloaded bytes expire after 24 hours; an
+//! exact commit pin does not, so expiry reacquires that same immutable commit.
 
 use std::fs::{self, File};
 use std::io::Write as _;
@@ -20,6 +19,10 @@ use serde::{Deserialize, Serialize};
 use super::gate::manifest::sha256_hex;
 
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+/// Maximum age of downloaded cached ZIP bytes. Commit selection is independent:
+/// an explicit pin remains the same identity when its bytes must be reacquired.
+pub const CACHE_MAX_AGE_SECONDS: u64 = 24 * 60 * 60;
 
 /// A cache key derived from a source identity's opaque URI component.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,6 +68,10 @@ pub struct CacheRecord {
     /// so reuse cannot be relabelled by a later configuration change.
     #[serde(default)]
     pub transport: Option<String>,
+    /// Unix timestamp when these downloaded bytes passed the activation gates.
+    /// Legacy records default to zero and are therefore never reused.
+    #[serde(default)]
+    pub acquired_at_unix_seconds: u64,
     /// Trusted recursive Git file metadata retained so offline cache reuse can
     /// restore modes that codeload ZIPs do not preserve.
     #[serde(default)]
@@ -179,7 +186,8 @@ impl DiskCache {
         }
     }
 
-    /// Load the cached entry for `key`, re-hashing the ZIP to detect mutation.
+    /// Load the freshest cached encoding for `key`, re-hashing every ZIP before
+    /// reuse. Multiple encodings can exist for one immutable commit.
     ///
     /// Returns `Ok(None)` when the entry is absent.
     ///
@@ -187,7 +195,11 @@ impl DiskCache {
     ///
     /// Returns [`CacheError::Mutation`] if the stored ZIP no longer matches its
     /// recorded hash, or an I/O/metadata error otherwise.
-    pub fn load(&self, key: &CacheKey) -> Result<Option<CachedArchive>, CacheError> {
+    pub fn load_fresh(
+        &self,
+        key: &CacheKey,
+        now_unix_seconds: u64,
+    ) -> Result<Option<CachedArchive>, CacheError> {
         let dir = self.entry_dir(key);
         let generations = dir.join("generations");
         if !generations.is_dir() {
@@ -201,26 +213,56 @@ impl DiskCache {
             entry.file_type().is_ok_and(|kind| kind.is_dir())
                 && !entry.file_name().to_string_lossy().starts_with('.')
         });
-        promoted.sort_by_key(std::fs::DirEntry::file_name);
-        let Some(generation) = promoted.first().map(std::fs::DirEntry::path) else {
-            return Ok(None);
-        };
-        let zip_path = generation.join("archive.zip");
-        let meta_path = generation.join("meta.json");
-        let zip = fs::read(&zip_path).map_err(|err| CacheError::Io(err.to_string()))?;
-        let meta = fs::read(&meta_path).map_err(|err| CacheError::Io(err.to_string()))?;
-        let record: CacheRecord =
-            serde_json::from_slice(&meta).map_err(|err| CacheError::Metadata(err.to_string()))?;
-        let actual = sha256_hex(&zip);
-        if actual != record.zip_sha256 {
-            quarantine_generation(&generations, &generation)?;
-            return Err(CacheError::Mutation {
-                expected: record.zip_sha256,
-                actual,
-            });
+        let mut freshest: Option<CachedArchive> = None;
+        for entry in promoted {
+            let candidate = load_generation(&generations, &entry.path())?;
+            if !record_is_fresh(&candidate.record, now_unix_seconds) {
+                continue;
+            }
+            let replace = match &freshest {
+                None => true,
+                Some(current) => {
+                    let candidate_key = (
+                        candidate.record.acquired_at_unix_seconds,
+                        candidate.record.zip_sha256.as_str(),
+                    );
+                    let current_key = (
+                        current.record.acquired_at_unix_seconds,
+                        current.record.zip_sha256.as_str(),
+                    );
+                    candidate_key > current_key
+                }
+            };
+            if replace {
+                freshest = Some(candidate);
+            }
         }
-        Ok(Some(CachedArchive { zip, record }))
+        Ok(freshest)
     }
+}
+
+fn load_generation(generations: &Path, generation: &Path) -> Result<CachedArchive, CacheError> {
+    let zip =
+        fs::read(generation.join("archive.zip")).map_err(|err| CacheError::Io(err.to_string()))?;
+    let meta =
+        fs::read(generation.join("meta.json")).map_err(|err| CacheError::Io(err.to_string()))?;
+    let record: CacheRecord =
+        serde_json::from_slice(&meta).map_err(|err| CacheError::Metadata(err.to_string()))?;
+    let actual = sha256_hex(&zip);
+    if actual != record.zip_sha256 {
+        quarantine_generation(generations, generation)?;
+        return Err(CacheError::Mutation {
+            expected: record.zip_sha256,
+            actual,
+        });
+    }
+    Ok(CachedArchive { zip, record })
+}
+
+fn record_is_fresh(record: &CacheRecord, now_unix_seconds: u64) -> bool {
+    record.acquired_at_unix_seconds != 0
+        && now_unix_seconds >= record.acquired_at_unix_seconds
+        && now_unix_seconds - record.acquired_at_unix_seconds < CACHE_MAX_AGE_SECONDS
 }
 
 fn stored_generation_matches(generation: &Path, expected: &CacheRecord) -> bool {
@@ -272,6 +314,9 @@ fn sync_dir(_path: &Path) -> Result<(), CacheError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const NOW: u64 = 1_000_000;
+
     fn record(zip: &[u8]) -> CacheRecord {
         CacheRecord {
             commit: Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
@@ -279,6 +324,7 @@ mod tests {
             zip_sha256: sha256_hex(zip),
             verified: true,
             transport: Some("codeload".to_owned()),
+            acquired_at_unix_seconds: NOW,
             tree_files: Vec::new(),
         }
     }
@@ -292,7 +338,7 @@ mod tests {
         let key = CacheKey::from_identity("83c2518a9e6abbda0c44592c3483de459198f887");
         let zip = b"PK\x03\x04 fake zip bytes";
         assert!(cache.store(&key, zip, &record(zip)).is_ok());
-        let loaded = cache.load(&key);
+        let loaded = cache.load_fresh(&key, NOW);
         assert!(matches!(&loaded, Ok(Some(entry)) if entry.zip == zip));
     }
 
@@ -303,7 +349,7 @@ mod tests {
         };
         let cache = DiskCache::new(dir.path());
         let key = CacheKey::from_identity("deadbeef");
-        assert!(matches!(cache.load(&key), Ok(None)));
+        assert!(matches!(cache.load_fresh(&key, NOW), Ok(None)));
     }
 
     #[test]
@@ -323,7 +369,10 @@ mod tests {
             .join(sha256_hex(zip))
             .join("archive.zip");
         assert!(fs::write(&tampered, b"tampered bytes").is_ok());
-        assert!(matches!(cache.load(&key), Err(CacheError::Mutation { .. })));
+        assert!(matches!(
+            cache.load_fresh(&key, NOW),
+            Err(CacheError::Mutation { .. })
+        ));
     }
 
     #[test]
@@ -340,11 +389,11 @@ mod tests {
             .join(".stage-interrupted");
         assert!(fs::create_dir_all(&staging).is_ok());
         assert!(fs::write(staging.join("archive.zip"), b"partial").is_ok());
-        assert!(matches!(cache.load(&key), Ok(None)));
+        assert!(matches!(cache.load_fresh(&key, NOW), Ok(None)));
 
         let zip = b"complete generation";
         assert!(cache.store(&key, zip, &record(zip)).is_ok());
-        assert!(matches!(cache.load(&key), Ok(Some(entry)) if entry.zip == zip));
+        assert!(matches!(cache.load_fresh(&key, NOW), Ok(Some(entry)) if entry.zip == zip));
     }
 
     #[test]
@@ -361,7 +410,69 @@ mod tests {
                 let _ = scope.spawn(move || cache.store(&key, zip, &record(zip)));
             }
         });
-        assert!(matches!(cache.load(&key), Ok(Some(_))));
+        assert!(matches!(cache.load_fresh(&key, NOW), Ok(Some(_))));
+    }
+
+    #[test]
+    fn bytes_expire_at_twenty_four_hour_boundary() {
+        let Ok(dir) = tempfile::tempdir() else {
+            return;
+        };
+        let cache = DiskCache::new(dir.path());
+        let key = CacheKey::from_identity("expiry");
+        let zip = b"immutable bytes";
+        assert!(cache.store(&key, zip, &record(zip)).is_ok());
+        assert!(matches!(
+            cache.load_fresh(&key, NOW + CACHE_MAX_AGE_SECONDS - 1),
+            Ok(Some(_))
+        ));
+        assert!(matches!(
+            cache.load_fresh(&key, NOW + CACHE_MAX_AGE_SECONDS),
+            Ok(None)
+        ));
+    }
+
+    #[test]
+    fn future_or_legacy_timestamp_is_not_reused() {
+        let Ok(dir) = tempfile::tempdir() else {
+            return;
+        };
+        let cache = DiskCache::new(dir.path());
+        let key = CacheKey::from_identity("clock");
+        let zip = b"clock bytes";
+        let mut future = record(zip);
+        future.acquired_at_unix_seconds = NOW + 1;
+        assert!(cache.store(&key, zip, &future).is_ok());
+        assert!(matches!(cache.load_fresh(&key, NOW), Ok(None)));
+
+        let legacy_key = CacheKey::from_identity("legacy");
+        let mut legacy = record(zip);
+        legacy.acquired_at_unix_seconds = 0;
+        assert!(cache.store(&legacy_key, zip, &legacy).is_ok());
+        assert!(matches!(cache.load_fresh(&legacy_key, NOW), Ok(None)));
+    }
+
+    #[test]
+    fn newer_fresh_encoding_wins_over_an_expired_lower_digest() {
+        let Ok(dir) = tempfile::tempdir() else {
+            return;
+        };
+        let cache = DiskCache::new(dir.path());
+        let key = CacheKey::from_identity("same-commit");
+        let first = b"first archive encoding";
+        let second = b"second archive encoding";
+        let (expired_zip, fresh_zip) = if sha256_hex(first) < sha256_hex(second) {
+            (first.as_slice(), second.as_slice())
+        } else {
+            (second.as_slice(), first.as_slice())
+        };
+        let mut expired = record(expired_zip);
+        expired.acquired_at_unix_seconds = NOW - CACHE_MAX_AGE_SECONDS;
+        assert!(cache.store(&key, expired_zip, &expired).is_ok());
+        assert!(cache.store(&key, fresh_zip, &record(fresh_zip)).is_ok());
+
+        let loaded = cache.load_fresh(&key, NOW);
+        assert!(matches!(loaded, Ok(Some(entry)) if entry.zip == fresh_zip));
     }
 
     #[test]

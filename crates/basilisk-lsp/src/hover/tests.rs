@@ -166,7 +166,7 @@ fn test_hover_on_method_inherited_from_external_stub_base_shows_signature() {
         &mut resolved,
         |_| None,
         basilisk_checker::exports::load_external_module,
-        None,
+        &[],
     );
     assert!(
         resolved.imported_symbols.contains_key("BaseModel"),
@@ -228,7 +228,7 @@ fn test_hover_on_method_reexported_through_py_typed_package_init() {
         &mut resolved,
         |_| None,
         basilisk_checker::exports::load_external_module,
-        None,
+        &[],
     );
     assert!(
         resolved.imported_symbols.contains_key("BaseModel"),
@@ -298,7 +298,6 @@ fn test_hover_on_str_literal_method_shows_signature() {
         workspace_members: Vec::new(),
         site_packages: None,
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: Some(basilisk_checker::imports::ActiveTypeshed::new(
             std::sync::Arc::new(snapshot),
             None,
@@ -549,7 +548,8 @@ fn test_hover_on_source_py_import_shows_no_stubs_annotation() {
 
 // Regression for GitHub #290: hovering a variable bound to a dict literal
 // showed the bare container name (`dict`) instead of the parameterized
-// generic inferred from its elements (`dict[str, str]`).
+// generic inferred from its elements. String-literal elements retain their
+// PEP 675 precision as `LiteralString`.
 #[test]
 fn test_hover_infers_generic_type_args_for_dict_literal() {
     let source = "language_timezone_mapping = {\"en\": \"UTC\", \"fr\": \"Europe/Paris\"}\n";
@@ -565,8 +565,8 @@ fn test_hover_infers_generic_type_args_for_dict_literal() {
     assert!(
         markup
             .value
-            .contains("language_timezone_mapping: dict[str, str]"),
-        "hover should show the parameterized generic dict[str, str]: {}",
+            .contains("language_timezone_mapping: dict[LiteralString, LiteralString]"),
+        "hover should show the precise parameterized generic: {}",
         markup.value
     );
 }

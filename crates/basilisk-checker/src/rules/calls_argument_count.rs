@@ -145,6 +145,13 @@ fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Dia
     }
 
     for call in &module.calls {
+        // Attribute calls are bound methods, not calls to a same-named
+        // module-level function. Their receiver-aware declarations are checked
+        // separately below; comparing `value.find(x)` with `def find(a, b)`
+        // creates a false missing-argument diagnostic.
+        if call.receiver.is_some() {
+            continue;
+        }
         let Some(funcs) = func_groups.get(call.callee.as_str()) else {
             continue;
         };

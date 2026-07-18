@@ -5,6 +5,7 @@ mod custom;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::archive::{Archive, ArchiveEntry};
 use super::bundle::{approved_license_manifest, bundled_snapshot};
@@ -117,7 +118,7 @@ impl RuntimeBackend {
         let Some(cache) = &self.cache else {
             return None;
         };
-        match cache.load(&cache_key(commit)) {
+        match cache.load_fresh(&cache_key(commit), unix_seconds_now()) {
             Ok(cached) => cached,
             Err(_error) => {
                 // A cache is an optimization, never an alternate trust root.
@@ -149,6 +150,7 @@ impl RuntimeBackend {
             zip_sha256: sha256_hex(zip),
             verified: request.verify_content,
             transport: Some(transport_label(source_transport).to_owned()),
+            acquired_at_unix_seconds: unix_seconds_now(),
             tree_files: trusted
                 .files
                 .values()
@@ -423,6 +425,12 @@ fn trusted_from_entries(root: Oid, entries: Vec<TreeEntry>) -> Result<TrustedTre
 
 fn cache_key(commit: Oid) -> CacheKey {
     CacheKey::from_identity(&commit.to_hex())
+}
+
+fn unix_seconds_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_secs())
 }
 
 fn cached_transport(cached: &CachedArchive) -> Result<SourceTransport, BackendError> {

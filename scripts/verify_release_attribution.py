@@ -12,7 +12,12 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 
-LEGAL_FILES = ("LICENSE", "NOTICES", "THIRD-PARTY-LICENSES")
+LEGAL_FILES = (
+    "LICENSE",
+    "NOTICES",
+    "THIRD-PARTY-LICENSES",
+    "RUST-DEPENDENCY-LICENSES",
+)
 TYPESHED_RUNTIME_LICENSE_PACKAGES = {
     "ring": "0.17.14",
     "rustls": "0.23.42",
@@ -43,6 +48,16 @@ TYPESHED_RUNTIME_LICENSE_SECTIONS = {
 
 def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def _cargo_dependency_graph_sha256(path: Path) -> str:
+    lock = tomllib.loads(path.read_text())
+    packages = [package for package in lock["package"] if "source" in package]
+    packages.sort(
+        key=lambda package: (package["name"], package["version"], package["source"])
+    )
+    payload = json.dumps(packages, sort_keys=True, separators=(",", ":")).encode()
+    return _sha256(payload)
 
 
 def _require_text(haystack: str, needle: str, label: str) -> None:
@@ -123,6 +138,46 @@ def _verify_typeshed_policy_metadata(repo_root: Path) -> None:
             )
 
 
+def _verify_release_package_metadata(repo_root: Path) -> None:
+    runtime_manifest = json.loads(
+        (repo_root / "runtime-license-manifest.json").read_text()
+    )
+    if (
+        _cargo_dependency_graph_sha256(repo_root / "Cargo.lock")
+        != runtime_manifest["cargo_dependency_graph_sha256"]
+    ):
+        raise ValueError(
+            "locked third-party Cargo graph changed without regenerating runtime licenses"
+        )
+    runtime_licenses = (repo_root / "RUST-DEPENDENCY-LICENSES").read_bytes()
+    if _sha256(runtime_licenses) != runtime_manifest["licenses_sha256"]:
+        raise ValueError("RUST-DEPENDENCY-LICENSES differs from its manifest")
+    runtime_text = runtime_licenses.decode()
+    if "basilisk-cli 0.0.0-PLACEHOLDER" in runtime_text:
+        raise ValueError(
+            "first-party workspace crates leaked into the dependency carrier"
+        )
+    for required_notice in (
+        "Copyright (c) 2015, Nick Fitzgerald",
+        "Copyright (c) 2013, Julien Schmidt",
+        "UNICODE LICENSE V3",
+        "COMMON DEVELOPMENT AND DISTRIBUTION LICENSE Version 1.0",
+        "Mozilla Public License Version 2.0",
+        "(C) 2024 Trifecta Tech Foundation",
+    ):
+        _require_text(runtime_text, required_notice, "RUST-DEPENDENCY-LICENSES")
+
+    pyproject = tomllib.loads((repo_root / "pyproject.toml").read_text())
+    expressions = set(runtime_manifest["wheel_license_expressions"].values())
+    if pyproject["project"]["license"] not in expressions:
+        raise ValueError(
+            "pyproject.toml License-Expression does not cover the shipped binary"
+        )
+    extension = json.loads((repo_root / "vscode-extension/package.json").read_text())
+    if extension["license"] != "SEE LICENSE IN LICENSE.txt":
+        raise ValueError("VSIX manifest does not reference its packaged LICENSE.txt")
+
+
 def _legal_sources(repo_root: Path) -> dict[str, bytes]:
     return {name: (repo_root / name).read_bytes() for name in LEGAL_FILES}
 
@@ -132,6 +187,36 @@ def _safe_parts(name: str) -> tuple[str, ...]:
     if path.is_absolute() or "\\" in name or ".." in path.parts:
         raise ValueError(f"unsafe archive path: {name}")
     return path.parts
+
+
+def _verify_wheel_license_expression(
+    package: zipfile.ZipFile, expected_expression: str
+) -> None:
+    metadata = [
+        info
+        for info in package.infolist()
+        if not info.is_dir()
+        and len(_safe_parts(info.filename)) >= 2
+        and _safe_parts(info.filename)[-1] == "METADATA"
+        and _safe_parts(info.filename)[-2].endswith(".dist-info")
+    ]
+    if len(metadata) != 1:
+        raise ValueError(f"expected one wheel METADATA file, found {len(metadata)}")
+    text = package.read(metadata[0]).decode("utf-8")
+    expressions = [
+        line.partition(":")[2].strip()
+        for line in text.splitlines()
+        if line.startswith("License-Expression:")
+    ]
+    if expressions != [expected_expression]:
+        raise ValueError("wheel License-Expression does not cover the shipped binary")
+    license_files = [
+        line.partition(":")[2].strip()
+        for line in text.splitlines()
+        if line.startswith("License-File:")
+    ]
+    if len(license_files) != len(LEGAL_FILES) or set(license_files) != set(LEGAL_FILES):
+        raise ValueError("wheel METADATA does not name every packaged License-File")
 
 
 def _verify_entries(
@@ -167,10 +252,20 @@ def _verify_entries(
         raise ValueError("packaged attribution files do not share one directory")
 
 
-def verify_zip(archive: Path, repo_root: Path, *, wheel: bool) -> None:
+def verify_zip(
+    archive: Path,
+    repo_root: Path,
+    *,
+    wheel: bool,
+    wheel_license_expression: str | None,
+) -> None:
     expected = _legal_sources(repo_root)
     entries: list[tuple[str, int, bytes]] = []
     with zipfile.ZipFile(archive) as package:
+        if wheel:
+            if wheel_license_expression is None:
+                raise ValueError("wheel verification requires a license expression")
+            _verify_wheel_license_expression(package, wheel_license_expression)
         for info in package.infolist():
             if info.is_dir() or PurePosixPath(info.filename).name not in LEGAL_FILES:
                 continue
@@ -200,19 +295,34 @@ def verify_tar(archive: Path, repo_root: Path) -> None:
     _verify_entries(entries, expected, wheel=False)
 
 
-def verify(archive: Path, repo_root: Path, kind: str) -> None:
+def verify(
+    archive: Path, repo_root: Path, kind: str, *, target: str | None = None
+) -> None:
     if kind == "wheel" or archive.suffix == ".whl":
-        verify_zip(archive, repo_root, wheel=True)
+        if target is None:
+            raise ValueError("wheel verification requires an exact release target")
+        manifest = json.loads((repo_root / "runtime-license-manifest.json").read_text())
+        try:
+            expected = manifest["wheel_license_expressions"][target]
+        except KeyError as error:
+            raise ValueError(f"unsupported wheel target: {target}") from error
+        verify_zip(
+            archive,
+            repo_root,
+            wheel=True,
+            wheel_license_expression=expected,
+        )
     elif archive.name.endswith((".tar.gz", ".tgz")):
         verify_tar(archive, repo_root)
     else:
-        verify_zip(archive, repo_root, wheel=False)
+        verify_zip(archive, repo_root, wheel=False, wheel_license_expression=None)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("archive", type=Path, nargs="?")
     parser.add_argument("--kind", choices=("binary", "wheel"), default="binary")
+    parser.add_argument("--target")
     parser.add_argument(
         "--policy-only",
         action="store_true",
@@ -223,12 +333,13 @@ def main() -> None:
     )
     args = parser.parse_args()
     _verify_typeshed_policy_metadata(args.repo_root)
+    _verify_release_package_metadata(args.repo_root)
     if args.policy_only:
-        print("Typeshed release policy metadata verified")
+        print("Release attribution policy metadata verified")
         return
     if args.archive is None:
         parser.error("archive is required unless --policy-only is used")
-    verify(args.archive, args.repo_root, args.kind)
+    verify(args.archive, args.repo_root, args.kind, target=args.target)
     print(f"{args.archive}: exact attribution files verified")
 
 

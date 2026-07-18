@@ -2,7 +2,8 @@
 //! Coverage boost tests batch 33: disk-based integration tests for file-dependent rules
 //! and comprehensive assertion-heavy tests.
 
-use basilisk_checker::check;
+use basilisk_checker::{check, check_with_config};
+use basilisk_config::BasiliskConfig;
 use basilisk_parser::parse_source;
 use basilisk_resolver::resolve;
 use basilisk_test_macros::mutation_safe;
@@ -12,6 +13,19 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
     let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     Ok(check(&resolved))
+}
+
+fn run_for_target(
+    source: &str,
+) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
+    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let config = BasiliskConfig {
+        python_version: Some("3.12".to_owned()),
+        python_platform: Some("linux".to_owned()),
+        ..BasiliskConfig::default()
+    };
+    Ok(check_with_config(&resolved, &config))
 }
 
 /// Run checker against a real file on disk so rules that load sibling modules work.
@@ -242,7 +256,7 @@ def check():
     x = dead
     y = live
 "#;
-    let diagnostics = run(source)?;
+    let diagnostics = run_for_target(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")
@@ -275,7 +289,7 @@ def check():
 
     x = bogus_var
 "#;
-    let diagnostics = run(source)?;
+    let diagnostics = run_for_target(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")

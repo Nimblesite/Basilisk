@@ -10,7 +10,10 @@ pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
     match rhs {
         RhsKind::IntLiteral => InferredType::Int,
         RhsKind::FloatLiteral => InferredType::Float,
-        RhsKind::StrLiteral => InferredType::Str,
+        // PEP 675: a literal expression is provably a LiteralString. Plain
+        // `str` remains reserved for dynamic string values, preserving that
+        // distinction through container inference.
+        RhsKind::StrLiteral => InferredType::LiteralString,
         RhsKind::BoolLiteral => InferredType::Bool,
         RhsKind::BytesLiteral => InferredType::Bytes,
         RhsKind::NoneValue => InferredType::None_,

@@ -5,8 +5,10 @@ const CACHE: &str = include_str!("../src/typeshed/cache.rs");
 const RUNTIME: &str = include_str!("../src/typeshed/runtime.rs");
 const SOURCE: &str = include_str!("../src/typeshed/source.rs");
 const TRANSPORT: &str = include_str!("../src/typeshed/transport.rs");
-const BUILD: &str = include_str!("../build.rs");
+const STUBS_LIB: &str = include_str!("../src/lib.rs");
 const CHECK_CONTEXT: &str = include_str!("../../basilisk-checker/src/context.rs");
+const CONSTRUCTOR_HELPERS: &str =
+    include_str!("../../basilisk-checker/src/rules/constructors_call_init/helpers.rs");
 
 #[test]
 fn production_sources_reject_forbidden_typeshed_policy() {
@@ -21,11 +23,6 @@ fn production_sources_reject_forbidden_typeshed_policy() {
         "Command::new",
         "git2::",
         "gix::",
-        "CACHE_MAX_AGE_SECONDS",
-        "load_fresh",
-        "acquired_at_unix_seconds",
-        "SystemTime",
-        "UNIX_EPOCH",
         "python_version_to_commit",
         "python-version-to-sha",
         "stale_checkout",
@@ -39,11 +36,18 @@ fn production_sources_reject_forbidden_typeshed_policy() {
             );
         }
     }
+    assert!(!std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("build.rs")
+        .exists());
+    for forbidden in ["STDLIB_MODULES", "STUB_DISTRIBUTIONS", "lookup_builtin"] {
+        assert!(
+            !STUBS_LIB.contains(forbidden),
+            "compiled legacy Typeshed token `{forbidden}` was restored"
+        );
+    }
     assert!(
-        !BUILD.contains("python_version_to_commit")
-            && !BUILD.contains("python-version-to-sha")
-            && !BUILD.contains("DEFAULT_PYTHON_VERSION"),
-        "generated indexes must not choose a Typeshed commit or manufacture a Python target"
+        !CONSTRUCTOR_HELPERS.contains("BUILTINS_WITH_INIT"),
+        "the obsolete constructor hand table was restored"
     );
     assert!(
         CHECK_CONTEXT.contains("target_version: config")
@@ -61,15 +65,18 @@ fn immutable_pins_cache_and_custom_paths_remain_supported() {
         );
     }
     assert!(
-        RUNTIME.contains("cache.load(&cache_key(commit))"),
-        "accepted immutable cache bytes must be reused without a time-based expiry"
+        RUNTIME.contains("cache.load_fresh(&cache_key(commit), unix_seconds_now())"),
+        "downloaded cached bytes must use the freshness gate"
     );
     assert!(
-        CACHE.contains("sha256_hex(&zip)") && CACHE.contains("CacheError::Mutation"),
-        "cached ZIP reuse must remain mutation checked"
+        CACHE.contains("CACHE_MAX_AGE_SECONDS")
+            && CACHE.contains("acquired_at_unix_seconds")
+            && CACHE.contains("sha256_hex(&zip)")
+            && CACHE.contains("CacheError::Mutation"),
+        "cached ZIP reuse must remain 24-hour limited and mutation checked"
     );
     assert!(
-        CHECK_CONTEXT.contains("config.typeshed_path.is_some()"),
-        "custom Typeshed canonicality must remain represented in checker context"
+        !CHECK_CONTEXT.contains("typeshed_path"),
+        "the checker must consume the selected snapshot, not run a legacy path lookup"
     );
 }

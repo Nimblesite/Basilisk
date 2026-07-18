@@ -76,37 +76,23 @@ fn no_diagnostics_for_fully_annotated_function() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-/// [STUBRES-CUSTOM-TYPESHED] checker-crate kill-test for the config→context flag
-/// mapping (`context.rs`: `custom_typeshed_configured = config.typeshed_path.is_some()`).
-///
-/// `resolve` leaves imports `Unresolved` (path resolution is a separate step),
-/// so a stdlib import like `fractions` is surfaced by `imports_unresolved` iff
-/// the bundled name-set no longer rescues it — which is exactly when a custom
-/// typeshed is configured. Driving `check_with_config` with vs. without
-/// `typeshed_path` pins that `config.typeshed_path.is_some()` reaches the rule:
-/// a mutant flipping it (`is_none` / `true` / `false`) breaks one of the two
-/// assertions. The `imports_unresolved` unit tests set the flag directly and the
-/// other checker-crate typeshed tests set `typeshed_path` on `ImportSearchPaths`
-/// — none exercise this `BasiliskConfig`→context mapping through the rule.
+/// [STUBRES-CUSTOM-TYPESHED] Configuration alone cannot claim that unresolved
+/// imports are typed. Only the acquisition-promoted snapshot can resolve step 3.
 #[test]
-fn custom_typeshed_config_flag_reaches_imports_unresolved() -> Result<(), Box<dyn std::error::Error>>
+fn typeshed_config_alone_cannot_rescue_unresolved_imports() -> Result<(), Box<dyn std::error::Error>>
 {
     let src = "from fractions import Fraction\n\nvalue = Fraction(1, 2)\n";
 
-    // No typeshed-path: the bundled name-set rescues the stdlib module, so the
-    // import is NOT flagged.
+    // `resolve` leaves the import unresolved; no compiled name set may rescue it.
     let default_diags = run(src)?;
     assert!(
-        !default_diags
+        default_diags
             .iter()
             .any(|d| d.code.code == "imports_unresolved"),
-        "without typeshed-path, a bundled stdlib import must not be flagged: {default_diags:?}"
+        "without an active snapshot the import must be flagged: {default_diags:?}"
     );
 
-    // With typeshed-path configured, the custom typeshed is canonical for step 3;
-    // `fractions` (left Unresolved by `resolve`) is no longer rescued, so
-    // `imports_unresolved` fires. The path need not exist — the flag is
-    // `typeshed_path.is_some()`, evaluated without touching disk.
+    // A config path still cannot substitute for an activated snapshot.
     let typeshed_config = BasiliskConfig {
         typeshed_path: Some(std::path::PathBuf::from("/nonexistent/custom-typeshed")),
         ..BasiliskConfig::default()

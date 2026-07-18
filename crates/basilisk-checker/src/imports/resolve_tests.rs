@@ -5,9 +5,18 @@
     reason = "test-only filesystem setup uses expect for clear failures"
 )]
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use super::{resolve_module, resolve_module_with_importer, ImportSearchPaths};
+use basilisk_stubs::typeshed::archive::{Archive, ArchiveEntry, ArchiveVfs};
+use basilisk_stubs::typeshed::gittree::FileMode;
+use basilisk_stubs::typeshed::snapshot::Snapshot;
+use basilisk_stubs::typeshed::source::{
+    LicenseStatus, Provenance, SourceIdentity, SourceKind, Transport, TypeshedStatus,
+};
+
+use super::{resolve_module, resolve_module_with_importer, ActiveTypeshed, ImportSearchPaths};
 
 fn search_paths(site_packages: &Path) -> ImportSearchPaths {
     ImportSearchPaths {
@@ -17,7 +26,6 @@ fn search_paths(site_packages: &Path) -> ImportSearchPaths {
         workspace_members: Vec::new(),
         site_packages: Some(site_packages.to_path_buf()),
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: None,
     }
 }
@@ -29,14 +37,66 @@ fn write_module(directory: &Path, name: &str, extension: &str) -> PathBuf {
     path
 }
 
+fn custom_snapshot(modules: &[(&str, &str)]) -> ActiveTypeshed {
+    let identity = SourceIdentity::Custom {
+        digest: "resolve-tests".to_owned(),
+    };
+    let versions = modules
+        .iter()
+        .fold(String::new(), |mut versions, (module, _)| {
+            assert!(writeln!(&mut versions, "{module}: 3.0-").is_ok());
+            versions
+        });
+    let mut entries = if versions.is_empty() {
+        Vec::new()
+    } else {
+        vec![ArchiveEntry {
+            path: "stdlib/VERSIONS".to_owned(),
+            mode: FileMode::Regular,
+            data: versions.into_bytes(),
+        }]
+    };
+    entries.extend(modules.iter().map(|(module, body)| ArchiveEntry {
+        path: format!("stdlib/{module}.pyi"),
+        mode: FileMode::Regular,
+        data: body.as_bytes().to_vec(),
+    }));
+    let status = TypeshedStatus {
+        active_source: SourceKind::Custom,
+        commit: None,
+        tree: None,
+        transport: Transport::CustomPath,
+        license_status: LicenseStatus::NotSupplied,
+        license_reference: None,
+        provenance: Provenance::UserManaged,
+        signed_release: false,
+        warnings: Vec::new(),
+    };
+    let snapshot = Snapshot::build(
+        identity,
+        status,
+        ArchiveVfs::new("custom-resolve-tests", Archive::new(entries)),
+        None,
+    )
+    .expect("valid custom snapshot");
+    ActiveTypeshed::new(Arc::new(snapshot), None)
+}
+
 #[test]
-fn bundled_stdlib_is_terminal_before_site_packages() {
+fn active_stdlib_is_terminal_before_site_packages() {
     let temp = tempfile::tempdir().expect("tempdir");
     let site_packages = temp.path().join("site-packages");
     let _shadow = write_module(&site_packages, "typing", "py");
 
     assert!(
-        resolve_module("typing", &search_paths(&site_packages)).is_none(),
+        resolve_module(
+            "typing",
+            &ImportSearchPaths {
+                typeshed_snapshot: Some(custom_snapshot(&[("typing", "value: int\n")])),
+                ..search_paths(&site_packages)
+            }
+        )
+        .is_some_and(|resolved| resolved.path.to_string_lossy().starts_with("typeshed:")),
         "site-packages must not shadow the standard library"
     );
 }
@@ -96,47 +156,41 @@ fn importer_directory_still_shadows_bundled_stdlib() {
 }
 
 #[test]
-fn custom_typeshed_missing_stdlib_is_canonical() {
+fn custom_typeshed_miss_proceeds_to_installed_source() {
     let temp = tempfile::tempdir().expect("tempdir");
     let site_packages = temp.path().join("site-packages");
-    let typeshed = temp.path().join("typeshed");
-    let _shadow = write_module(&site_packages, "typing", "py");
-    std::fs::create_dir_all(typeshed.join("stdlib")).expect("create typeshed");
+    let installed = write_module(&site_packages, "typing", "py");
     let mut paths = search_paths(&site_packages);
-    paths.typeshed_path = Some(typeshed);
+    paths.typeshed_snapshot = Some(custom_snapshot(&[]));
 
-    assert!(
-        resolve_module("typing", &paths).is_none(),
-        "a missing custom-typeshed stdlib module must stay unresolved"
-    );
+    let resolved = resolve_module("typing", &paths)
+        .expect("a step-3 custom-typeshed miss must continue through later steps");
+    assert_eq!(resolved.path, installed);
 }
 
 #[test]
 fn custom_typeshed_stdlib_stub_resolves_before_terminal_step() {
     let temp = tempfile::tempdir().expect("tempdir");
     let site_packages = temp.path().join("site-packages");
-    let typeshed = temp.path().join("typeshed");
-    let expected = write_module(&typeshed.join("stdlib"), "typing", "pyi");
     let _shadow = write_module(&site_packages, "typing", "py");
     let mut paths = search_paths(&site_packages);
-    paths.typeshed_path = Some(typeshed);
+    paths.typeshed_snapshot = Some(custom_snapshot(&[("typing", "value: int\n")]));
 
     let resolved = resolve_module("typing", &paths).expect("typeshed stub must resolve");
-    assert_eq!(resolved.path, expected);
+    assert!(resolved.path.to_string_lossy().starts_with("typeshed:"));
 }
 
 #[test]
 fn custom_versions_admits_a_non_cpython_stdlib_module() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let typeshed = temp.path().join("micropython-typeshed");
-    let stdlib = typeshed.join("stdlib");
-    let expected = write_module(&stdlib, "uasyncio", "pyi");
-    std::fs::write(stdlib.join("VERSIONS"), "uasyncio: 3.4-\n").expect("write VERSIONS");
     let mut paths = search_paths(&temp.path().join("site-packages"));
-    paths.typeshed_path = Some(typeshed);
+    paths.typeshed_snapshot = Some(custom_snapshot(&[("uasyncio", "value: int\n")]));
 
     let resolved = resolve_module("uasyncio", &paths).expect("custom VERSIONS admits module");
-    assert_eq!(resolved.path, expected);
+    assert!(resolved
+        .path
+        .to_string_lossy()
+        .ends_with("stdlib/uasyncio.pyi"));
 }
 
 #[test]
@@ -159,14 +213,13 @@ fn six_step_order_removes_each_winner_in_turn() {
     let temp = tempfile::tempdir().expect("tempdir");
     let manual = temp.path().join("manual");
     let root = temp.path().join("root");
-    let typeshed = temp.path().join("typeshed");
     let site_packages = temp.path().join("site-packages");
     let stub_package = site_packages.join("typing-stubs");
     let inline_package = site_packages.join("typing");
 
     let step_1 = write_module(&manual, "typing", "pyi");
     let step_2 = write_module(&root, "typing", "py");
-    let step_3 = write_module(&typeshed.join("stdlib"), "typing", "pyi");
+    let step_3 = PathBuf::from("typeshed:custom-resolve-tests/stdlib/typing.pyi");
     std::fs::create_dir_all(&stub_package).expect("create stub package");
     let step_4 = stub_package.join("__init__.pyi");
     std::fs::write(&step_4, "step: int\n").expect("write stub package");
@@ -175,26 +228,38 @@ fn six_step_order_removes_each_winner_in_turn() {
     let step_5 = inline_package.join("__init__.pyi");
     std::fs::write(&step_5, "step: int\n").expect("write inline package");
 
-    let paths = ImportSearchPaths {
+    let mut paths = ImportSearchPaths {
         roots: vec![root],
         extra_paths: Vec::new(),
         stub_paths: vec![manual],
         workspace_members: Vec::new(),
         site_packages: Some(site_packages),
         registry: None,
-        typeshed_path: Some(typeshed),
-        typeshed_snapshot: None,
+        typeshed_snapshot: Some(custom_snapshot(&[("typing", "step: int\n")])),
     };
 
-    for expected in [&step_1, &step_2, &step_3, &step_4, &step_5] {
+    for expected in [&step_1, &step_2] {
         let actual = resolve_module("typing", &paths).expect("current step must resolve");
         assert_eq!(&actual.path, expected);
         std::fs::remove_file(expected).expect("remove current winner");
-        if expected == &step_4 {
-            std::fs::remove_dir(step_4.parent().expect("stub parent"))
-                .expect("remove empty stub distribution");
-        }
     }
+    assert_eq!(
+        resolve_module("typing", &paths).map(|resolved| resolved.path),
+        Some(step_3)
+    );
+    paths.typeshed_snapshot = Some(custom_snapshot(&[]));
+    assert_eq!(
+        resolve_module("typing", &paths).map(|resolved| resolved.path),
+        Some(step_4.clone())
+    );
+    std::fs::remove_file(&step_4).expect("remove stub-package winner");
+    std::fs::remove_dir(step_4.parent().expect("stub parent"))
+        .expect("remove empty stub distribution");
+    assert_eq!(
+        resolve_module("typing", &paths).map(|resolved| resolved.path),
+        Some(step_5.clone())
+    );
+    std::fs::remove_file(step_5).expect("remove inline winner");
     assert!(
         resolve_module("typing", &paths).is_none(),
         "step 6 vendors none"
@@ -262,12 +327,14 @@ fn namespace_subpackage_marker_enables_step_five() {
 }
 
 #[test]
-fn step_five_requires_py_typed_and_prefers_pyi() {
+fn step_five_resolves_untyped_source_and_prefers_pyi() {
     let temp = tempfile::tempdir().expect("tempdir");
     let site_packages = temp.path();
     let package = site_packages.join("foopkg");
     let py = write_module(&package, "api", "py");
-    assert!(resolve_module("foopkg.api", &search_paths(site_packages)).is_none());
+    let untyped = resolve_module("foopkg.api", &search_paths(site_packages))
+        .expect("an installed untyped module still resolves");
+    assert_eq!(untyped.path, py);
 
     std::fs::write(package.join("py.typed"), "").expect("write marker");
     let pyi = write_module(&package, "api", "pyi");

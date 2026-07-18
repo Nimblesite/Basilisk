@@ -108,7 +108,8 @@ Basilisk builds on the open-source community — with thanks to:
 - **[debugpy](https://github.com/microsoft/debugpy)** — debug adapter (bundled in the VS Code extension).
 - The [`python/typing`](https://github.com/python/typing) conformance suite.
 
-Full component list and licenses: [NOTICES](NOTICES). All dependencies are permissively licensed.
+Full component list, selected licenses, and required notices: [NOTICES](NOTICES)
+and [RUST-DEPENDENCY-LICENSES](RUST-DEPENDENCY-LICENSES).
 
 
 
@@ -116,6 +117,7 @@ Full component list and licenses: [NOTICES](NOTICES). All dependencies are permi
 
 ## License
 
-MIT.
+Basilisk source code is MIT licensed. Binary distributions also contain
+third-party components under the licenses shipped beside each artifact.
 
 Built by [NIMBLESITE PTY LTD](https://www.nimblesite.co).

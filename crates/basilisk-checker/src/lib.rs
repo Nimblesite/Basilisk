@@ -102,12 +102,11 @@ pub fn check_with_config(
     // Only starred-tuple analysis and inline suppression need byte→line
     // lookups. Avoid allocating and populating an O(lines) index for the common
     // case where neither feature appears.
-    let mut ctx = if has_inline_overrides || source.contains("*tuple[") {
+    let ctx = if has_inline_overrides || source.contains("*tuple[") {
         context::CheckContext::from_config_with_source(config, source)
     } else {
         context::CheckContext::from_config(config)
     };
-    ctx.authoritative_typeshed_configured |= module.authoritative_typeshed;
     let raw = rules::run_all(module, &ctx);
 
     // Build the set of symbol names imported from unresolved modules.
@@ -120,17 +119,7 @@ pub fn check_with_config(
         module
             .imports
             .iter()
-            .filter(|i| {
-                // A configured custom typeshed is canonical for step 3, so the
-                // bundled name-set no longer treats an absent stdlib module as typed
-                // ([STUBRES-CUSTOM-TYPESHED]); its imported names then participate in
-                // cascade suppression like any other unresolved import.
-                i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved
-                    && !crate::imports::bundled_stdlib_recognized(
-                        &i.module,
-                        ctx.authoritative_typeshed_configured,
-                    )
-            })
+            .filter(|i| i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved)
             .flat_map(|i| i.names.iter().cloned())
             .collect()
     } else {
@@ -650,7 +639,21 @@ mod tests {
         let source = "from os import path\nx = path.join('a', 'b')\n";
         let parsed =
             basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned()).unwrap();
-        let module = basilisk_resolver::resolve(&parsed).unwrap();
+        let mut module = basilisk_resolver::resolve(&parsed).unwrap();
+        let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot().unwrap();
+        let paths = imports::ImportSearchPaths {
+            roots: Vec::new(),
+            extra_paths: Vec::new(),
+            stub_paths: Vec::new(),
+            workspace_members: Vec::new(),
+            site_packages: None,
+            registry: None,
+            typeshed_snapshot: Some(imports::ActiveTypeshed::new(
+                std::sync::Arc::new(snapshot),
+                None,
+            )),
+        };
+        imports::resolve_module_imports(&mut module, &paths);
 
         let config = basilisk_config::BasiliskConfig::default();
         let diagnostics = check_with_config(&module, &config);

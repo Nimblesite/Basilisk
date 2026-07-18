@@ -62,8 +62,8 @@ async fn test_ws_inlay_hints_variable_types() -> TestResult<()> {
         "should contain int hint: {all_labels}"
     );
     assert!(
-        all_labels.contains("str"),
-        "should contain str hint: {all_labels}"
+        all_labels.contains("LiteralString"),
+        "should contain LiteralString hint: {all_labels}"
     );
     assert!(
         all_labels.contains("bool"),
@@ -255,8 +255,8 @@ async fn test_ws_inlay_hint_no_hints_for_annotated_vars() -> TestResult<()> {
         .join(" ");
 
     assert!(
-        all_labels.contains("str"),
-        "should contain 'str' hint for unannotated y: {all_labels}"
+        all_labels.contains("LiteralString"),
+        "should contain 'LiteralString' hint for unannotated y: {all_labels}"
     );
     assert!(
         all_labels.contains("float"),
@@ -314,8 +314,8 @@ async fn test_ws_inlay_hint_function_local_unannotated_vars() -> TestResult<()> 
         "local `n = 0` should produce a ': int' hint: {all_labels}"
     );
     assert!(
-        all_labels.contains(": str"),
-        "local `s = \"hi\"` should produce a ': str' hint: {all_labels}"
+        all_labels.contains(": LiteralString"),
+        "local `s = \"hi\"` should produce a ': LiteralString' hint: {all_labels}"
     );
 
     Ok(())

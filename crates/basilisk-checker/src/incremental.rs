@@ -313,10 +313,9 @@ pub fn cross_resolved_module(
     };
     let mut resolved = (**module).clone();
     let registry = workspace.files(db);
-    // Reading `search_paths.value(db)` registers the salsa dependency edge, so a
-    // changed `typeshed-path` re-runs this query and re-tags stub provenance.
+    // Reading `search_paths.value(db)` registers the salsa dependency edge, so
+    // a changed active snapshot re-runs this query and re-tags stub provenance.
     let paths = search_paths.value(db);
-    let custom_typeshed = paths.typeshed_path.as_deref();
     let typeshed_target = paths
         .typeshed_snapshot
         .as_ref()
@@ -339,7 +338,7 @@ pub fn cross_resolved_module(
             );
             std::sync::Arc::clone(external_module(db, key, search_paths))
         },
-        custom_typeshed,
+        &paths.stub_paths,
     );
     ResolvedFile::Resolved(std::sync::Arc::new(resolved))
 }

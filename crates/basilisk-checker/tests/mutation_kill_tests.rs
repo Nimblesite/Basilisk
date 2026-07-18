@@ -1,61 +1,24 @@
 //! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
+#![allow(clippy::allow_attributes, dead_code)]
 //! Mutation-killing tests: assertion-heavy tests designed to catch specific
 //! mutants identified by cargo-mutants. Each test asserts BOTH that violations
 //! ARE caught and that correct code is NOT flagged.
 
-use basilisk_checker::check_with_config;
 use basilisk_config::BasiliskConfig;
-use basilisk_parser::parse_source;
-use basilisk_resolver::resolve;
 use basilisk_test_macros::mutation_safe;
 
-// Basilisk has no modes — config in, diagnostics out. `run` uses the default
-// config (every PEP rule, no house rules); `run_with_config` honors an explicit
-// config; `annotation_rules_config` is the config a project writes to opt into
-// the annotation house rules (E0001..E0005, E0025, W0014, W0040, W0050). See
-// [CHKARCH-CONFIGURATION-ONLY].
-fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
-    run_with_config(source, &BasiliskConfig::default())
-}
+mod common;
+use common::{annotation_rules_config, run, run_with_config};
 
-fn run_with_config(
-    source: &str,
-    config: &BasiliskConfig,
-) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
-    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
-    let resolved = resolve(&parsed)?;
-    Ok(check_with_config(&resolved, config))
-}
-
-fn run_with_python_3_12(
+fn run_with_target_3_12_linux(
     source: &str,
 ) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
     let config = BasiliskConfig {
         python_version: Some("3.12".to_owned()),
+        python_platform: Some("linux".to_owned()),
         ..Default::default()
     };
     run_with_config(source, &config)
-}
-
-fn annotation_rules_config() -> BasiliskConfig {
-    use basilisk_config::RuleSeverity::{Error, Warning};
-
-    BasiliskConfig::with_rule_entries(
-        [
-            ("BSK-0001", Error),
-            ("BSK-0002", Error),
-            ("BSK-0003", Error),
-            ("BSK-0004", Error),
-            ("BSK-0005", Error),
-            ("BSK-0025", Error),
-            ("BSK-0014", Warning),
-            ("BSK-0040", Warning),
-            ("BSK-0050", Warning),
-        ]
-        .into_iter()
-        .map(|(code, severity)| (code.to_owned(), severity))
-        .collect(),
-    )
 }
 
 fn assignment_compatibility_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
@@ -359,7 +322,7 @@ def check():
     x = dead
     y = live
 "#;
-    let diagnostics = run_with_python_3_12(source)?;
+    let diagnostics = run_with_target_3_12_linux(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")
@@ -390,7 +353,7 @@ def check():
     x = dead
     y = live
 "#;
-    let diagnostics = run_with_python_3_12(source)?;
+    let diagnostics = run_with_target_3_12_linux(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")
@@ -419,7 +382,7 @@ def check():
         live = "live"
     x = dead
 "#;
-    let diagnostics = run_with_python_3_12(source)?;
+    let diagnostics = run_with_target_3_12_linux(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")
@@ -443,7 +406,7 @@ def check():
         dead = "dead"
     x = dead
 "#;
-    let diagnostics = run_with_python_3_12(source)?;
+    let diagnostics = run_with_target_3_12_linux(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")

@@ -43,7 +43,6 @@ pub(crate) fn roots_only(roots: Vec<PathBuf>) -> ImportSearchPaths {
         workspace_members: Vec::new(),
         site_packages: None,
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: None,
     }
 }
@@ -88,6 +87,6 @@ mod tests {
         assert!(paths.workspace_members.is_empty());
         assert!(paths.site_packages.is_none());
         assert!(paths.registry.is_none());
-        assert!(paths.typeshed_path.is_none());
+        assert!(paths.typeshed_snapshot.is_none());
     }
 }

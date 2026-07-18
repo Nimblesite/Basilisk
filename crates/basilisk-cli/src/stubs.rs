@@ -167,7 +167,7 @@ fn collect_file_targets(
     site_packages: &Path,
     targets: &mut BTreeMap<String, PathBuf>,
 ) -> Result<(), String> {
-    let (resolved, _) = crate::pipeline::resolve_file_imports(file, search_paths)?;
+    let (resolved, _) = crate::pipeline::resolve_file_imports(file, search_paths, None)?;
     resolved
         .imports
         .iter()
@@ -186,7 +186,6 @@ fn collect_file_targets(
 
 fn is_untyped_third_party_import(import: &ImportInfo, site_packages: &Path) -> bool {
     import.resolution == ImportResolution::SourcePy
-        && !basilisk_stubs::is_stdlib_module(&import.module)
         && import.resolved_path.as_ref().is_some_and(|path| {
             path.starts_with(site_packages) && !basilisk_stubs::has_py_typed_marker(path)
         })

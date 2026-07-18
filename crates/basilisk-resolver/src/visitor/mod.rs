@@ -253,7 +253,6 @@ fn build_resolved_module(
         imported_symbols: std::collections::HashMap::new(),
         builtin_classes: std::collections::HashMap::new(),
         imported_modules: std::collections::HashMap::new(),
-        authoritative_typeshed: false,
         pep695_scoping: pep695_scoping::collect_pep695_scoping(stmts, &module.source),
         path: module.path.clone(),
         source: module.source.clone(),

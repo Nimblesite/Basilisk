@@ -8,6 +8,7 @@ import json
 import shutil
 import tarfile
 import tempfile
+import tomllib
 import unittest
 import zipfile
 from pathlib import Path
@@ -29,16 +30,49 @@ class ReleaseAttributionTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         for name in MODULE.LEGAL_FILES:
             (self.root / name).write_bytes(f"exact {name}\n".encode())
+        self.wheel_license_expression = "Apache-2.0 AND MIT"
+        (self.root / "runtime-license-manifest.json").write_text(
+            json.dumps(
+                {
+                    "wheel_license_expressions": {
+                        "test-target": self.wheel_license_expression
+                    }
+                }
+            )
+        )
 
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def _zip(self, name: str, prefix: str = "") -> Path:
+    def _zip(
+        self,
+        name: str,
+        prefix: str = "",
+        *,
+        wheel_license: str | None = None,
+        include_license_files: bool = True,
+    ) -> Path:
         archive = self.root / name
         with zipfile.ZipFile(archive, "w") as package:
             for legal_name in MODULE.LEGAL_FILES:
                 package.writestr(
                     f"{prefix}{legal_name}", (self.root / legal_name).read_bytes()
+                )
+            if name.endswith(".whl"):
+                expression = wheel_license or self.wheel_license_expression
+                package.writestr(
+                    "basilisk-1.0.dist-info/METADATA",
+                    "Metadata-Version: 2.4\n"
+                    "Name: basilisk-python\n"
+                    f"License-Expression: {expression}\n"
+                    + (
+                        "".join(
+                            f"License-File: {legal_name}\n"
+                            for legal_name in MODULE.LEGAL_FILES
+                        )
+                        if include_license_files
+                        else ""
+                    ),
                 )
         return archive
 
@@ -47,7 +81,25 @@ class ReleaseAttributionTests(unittest.TestCase):
 
     def test_wheel_accepts_dist_info_license_directory(self) -> None:
         wheel = self._zip("release.whl", "basilisk-1.0.dist-info/licenses/")
-        MODULE.verify(wheel, self.root, "wheel")
+        MODULE.verify(wheel, self.root, "wheel", target="test-target")
+
+    def test_wheel_rejects_mit_only_license_metadata(self) -> None:
+        wheel = self._zip(
+            "mit-only.whl",
+            "basilisk-1.0.dist-info/licenses/",
+            wheel_license="MIT",
+        )
+        with self.assertRaisesRegex(ValueError, "License-Expression"):
+            MODULE.verify(wheel, self.root, "wheel", target="test-target")
+
+    def test_wheel_rejects_missing_license_file_metadata(self) -> None:
+        wheel = self._zip(
+            "missing-metadata.whl",
+            "basilisk-1.0.dist-info/licenses/",
+            include_license_files=False,
+        )
+        with self.assertRaisesRegex(ValueError, "License-File"):
+            MODULE.verify(wheel, self.root, "wheel", target="test-target")
 
     def test_tar_accepts_exact_legal_files(self) -> None:
         archive = self.root / "release.tar.gz"
@@ -163,6 +215,44 @@ class ReleaseAttributionTests(unittest.TestCase):
                     "Apache-2.0，部分内容采用 MIT 许可证",
                     (REPO_ROOT / relative).read_text(),
                 )
+
+    def test_package_metadata_names_every_license_in_shipped_binaries(self) -> None:
+        # PEP 639 License-Expression covers the containing distribution, so the
+        # wheel must name the licenses of its embedded Typeshed snapshot and
+        # statically linked runtime, not just Basilisk's own MIT source license.
+        pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+        manifest = json.loads((REPO_ROOT / "runtime-license-manifest.json").read_text())
+        self.assertEqual(
+            pyproject["project"]["license"],
+            manifest["wheel_license_expressions"]["aarch64-apple-darwin"],
+        )
+        self.assertEqual(
+            set(manifest["targets"]), set(manifest["wheel_license_expressions"])
+        )
+        self.assertEqual(len(set(manifest["wheel_license_expressions"].values())), 2)
+
+        # VS Code's manifest specification requires a packaged root license to
+        # be referenced by filename. `vsce` maps source LICENSE to LICENSE.txt.
+        extension = json.loads(
+            (REPO_ROOT / "vscode-extension" / "package.json").read_text()
+        )
+        self.assertEqual(extension["license"], "SEE LICENSE IN LICENSE.txt")
+
+    def test_workspace_version_stamp_does_not_stale_runtime_license_graph(self) -> None:
+        lock = self.root / "Cargo.lock"
+        lock.write_text(
+            "version = 4\n\n"
+            '[[package]]\nname = "basilisk-cli"\nversion = "0.0.0-PLACEHOLDER"\n\n'
+            '[[package]]\nname = "third-party"\nversion = "1.0.0"\n'
+            'source = "registry+https://example.invalid"\nchecksum = "abc"\n'
+        )
+        original = MODULE._cargo_dependency_graph_sha256(lock)
+        lock.write_text(lock.read_text().replace("0.0.0-PLACEHOLDER", "9.8.7"))
+        self.assertEqual(MODULE._cargo_dependency_graph_sha256(lock), original)
+        lock.write_text(
+            lock.read_text().replace('version = "1.0.0"', 'version = "1.0.1"')
+        )
+        self.assertNotEqual(MODULE._cargo_dependency_graph_sha256(lock), original)
 
 
 if __name__ == "__main__":

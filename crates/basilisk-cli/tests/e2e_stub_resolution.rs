@@ -16,9 +16,10 @@ mod common;
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use basilisk_lsp::import_resolver::{
-    has_stub_package, is_inline_typed_package, resolve_module, ImportSearchPaths,
+    has_stub_package, is_inline_typed_package, resolve_module, ActiveTypeshed, ImportSearchPaths,
 };
 use basilisk_resolver::scope::ImportResolution;
 use basilisk_stubs::types::{StubSource, StubTier, TypeProvenance};
@@ -44,7 +45,6 @@ fn search_paths(
         workspace_members: vec![],
         site_packages,
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: None,
     }
 }
@@ -102,6 +102,21 @@ fn custom_typeshed_overrides_stdlib_and_parses() {
     )
     .unwrap();
 
+    let config = basilisk_lsp::config::WorkspaceConfig {
+        typeshed_path: Some(ts.clone()),
+        typeshed_cache: false,
+        ..Default::default()
+    };
+    let request = basilisk_lsp::config::typeshed_request(&config).unwrap();
+    let snapshot = basilisk_stubs::typeshed::runtime::production_manager(request, None)
+        .unwrap()
+        .snapshot()
+        .unwrap();
+    assert_eq!(
+        snapshot.status.active_source,
+        basilisk_stubs::typeshed::source::SourceKind::Custom
+    );
+
     let paths = ImportSearchPaths {
         roots: vec![],
         extra_paths: vec![],
@@ -109,11 +124,8 @@ fn custom_typeshed_overrides_stdlib_and_parses() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
-        typeshed_path: Some(ts.clone()),
-        typeshed_snapshot: None,
+        typeshed_snapshot: Some(ActiveTypeshed::new(Arc::clone(&snapshot), None)),
     };
-
-    assert_eq!(paths.typeshed_path.as_deref(), Some(ts.as_path()));
     assert!(
         stdlib.join("os.pyi").is_file(),
         "precondition: custom typeshed supplies os.pyi"
@@ -122,16 +134,17 @@ fn custom_typeshed_overrides_stdlib_and_parses() {
         !stdlib.join("fractions.pyi").exists(),
         "precondition: custom typeshed deliberately omits fractions.pyi"
     );
-    assert!(
-        basilisk_stubs::is_stdlib_module("fractions"),
-        "precondition: fractions is a stdlib module, not an arbitrary miss"
-    );
-
     let result = resolve_module("os", &paths).expect("custom typeshed resolves `os`");
     assert_eq!(result.resolution, ImportResolution::StubPyi);
-    assert!(result.path.starts_with(&stdlib));
+    let logical_uri = result.path.to_string_lossy();
+    assert!(logical_uri.starts_with("typeshed:custom-"));
+    let source = snapshot
+        .vfs
+        .read_uri(&logical_uri)
+        .expect("resolved URI belongs to active snapshot");
 
-    let module = parse_pyi_file(
+    let module = parse_pyi_source(
+        source,
         &result.path,
         "os",
         StubSource::CustomTypeshed,
@@ -162,7 +175,7 @@ fn custom_typeshed_overrides_stdlib_and_parses() {
     .unwrap();
     assert!(
         resolve_module("requests", &paths).is_none(),
-        "typeshed-path must not resolve non-stdlib modules"
+        "the immutable snapshot must not observe later filesystem mutation"
     );
 
     let shadow = unique_tmp("e2e_typeshed_shadow_stubs");

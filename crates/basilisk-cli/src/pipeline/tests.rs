@@ -139,6 +139,99 @@ fn one_run_typeshed_overrides_reach_activation_without_mutating_config(
     Ok(())
 }
 
+/// Project-level target evidence applies when the checked file is nested
+/// below the project root. The official python/typing suite has exactly this
+/// layout: `conformance/pyproject.toml` declares Python 3.12 and fixtures live
+/// in `conformance/tests/`.
+#[test]
+fn nested_file_inherits_project_python_target_for_analysis(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = unique_project_dir("basilisk_cli_nested_python_target");
+    let tests = project.join("tests");
+    std::fs::create_dir_all(&tests)?;
+    std::fs::write(
+        project.join("pyproject.toml"),
+        "[project]\nname = \"fixture\"\nversion = \"0.0.0\"\nrequires-python = \"==3.12.*\"\n",
+    )?;
+    let source = tests.join("fixture.py");
+    std::fs::write(&source, "value: int = 1\n")?;
+
+    let result = collect_and_check_with_typeshed(
+        &[source.to_string_lossy().into_owned()],
+        &no_cache(),
+        &mut cache_check::CacheStats::default(),
+        DiagnosticScope::Check,
+        TypeshedOverrides::default(),
+        |_search_paths, config| {
+            assert_eq!(config.python_version.as_deref(), Some("3.12"));
+            Ok(())
+        },
+    );
+    let _ = std::fs::remove_dir_all(project);
+    assert!(result.is_ok());
+    Ok(())
+}
+
+#[test]
+fn bare_filename_anchors_project_discovery_at_current_directory() {
+    assert_eq!(
+        first_path_dir(&["fixture.py".to_owned()]),
+        std::path::PathBuf::from(".")
+    );
+}
+
+#[test]
+fn bare_filename_adds_current_directory_to_import_roots() -> Result<(), Box<dyn std::error::Error>>
+{
+    let roots = analysis_roots(&["fixture.py".to_owned()], std::path::Path::new(".."));
+    let current = std::fs::canonicalize(".")?;
+    assert!(roots.contains(&current), "{roots:#?}");
+    Ok(())
+}
+
+#[test]
+fn configured_target_prunes_inactive_conditional_constructor_fields(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = unique_project_dir("basilisk_cli_conditional_constructor_fields");
+    std::fs::create_dir_all(&project)?;
+    let source = project.join("fixture.py");
+    std::fs::write(
+        &source,
+        concat!(
+            "from typing import NamedTuple\n",
+            "import sys\n\n",
+            "class ConditionalField(NamedTuple):\n",
+            "    x: int\n",
+            "    if sys.version_info >= (3, 12):\n",
+            "        y: int\n",
+            "    if sys.version_info >= (4, 0):\n",
+            "        z: int\n\n",
+            "ConditionalField(1, 2)\n",
+            "ConditionalField(1, 2, 3)\n",
+        ),
+    )?;
+    let search_paths = crate::import_search::roots_only(vec![project.clone()]);
+    let config = basilisk_config::BasiliskConfig {
+        python_version: Some("3.12".to_owned()),
+        ..basilisk_config::BasiliskConfig::default()
+    };
+    let (diagnostics, _) = process_file(&source.to_string_lossy(), &search_paths, &config)?;
+    let constructor_messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == "constructors_call_init")
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(constructor_messages.len(), 1, "{diagnostics:#?}");
+    assert!(
+        constructor_messages
+            .first()
+            .is_some_and(|message| message.contains("accepts at most 2 positional arguments")),
+        "{diagnostics:#?}"
+    );
+    let _ = std::fs::remove_dir_all(project);
+    Ok(())
+}
+
 // ── DiagnosticScope ([CHKARCH-COMMANDS]) ──────────────────────────────────
 
 /// [CHKARCH-COMMANDS]: the partition is exact — `check` keeps only

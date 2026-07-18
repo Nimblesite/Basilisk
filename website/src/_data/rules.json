@@ -2672,7 +2672,7 @@
     "body": [
       {
         "type": "text",
-        "html": "When <code>import X</code> resolves to a **user/local stub** (a <code>.pyi</code> under a configured <code>stub-paths</code> dir, including the auto-discovered <code>.basilisk/stubs</code>), that stub is authoritative: Basilisk only knows the names it declares. So <code>X.attr</code> where <code>attr</code> is not declared is a hard error \u2014 the counterpart that makes a hand-written or quick-fix-generated stub <em>mean something</em>."
+        "html": "When <code>import X</code> resolves to an authoritative user/local or selected Typeshed stub, Basilisk sees the declarations and re-exports in that stub. <code>X.attr</code> where <code>attr</code> is not declared is an error."
       },
       {
         "type": "text",
@@ -2685,7 +2685,7 @@
       },
       {
         "type": "text",
-        "html": "Scope (Phase 1): only plain, single-segment <code>import X</code> backed by a user stub. <code>imported_modules</code> is populated <em>only</em> for those, so this rule is a complete no-op for code without local stubs (the conformance suite, first-party code), keeping the false-positive surface at zero."
+        "html": "Scope: plain imports backed by a user stub or the active step-3 Typeshed source. Untyped and inline third-party imports remain outside this rule."
       }
     ],
     "group": "Type System",

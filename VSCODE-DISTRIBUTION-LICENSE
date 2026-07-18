@@ -1,3 +1,13 @@
+Basilisk VSIX Distribution License Notice
+==========================================
+
+Basilisk's original source code is licensed under the MIT License reproduced
+below. This binary distribution also incorporates third-party components under
+the licenses and notices reproduced in NOTICES, THIRD-PARTY-LICENSES,
+RUST-DEPENDENCY-LICENSES, and VSCODE-DEPENDENCY-LICENSES, which are shipped
+beside this file in the VSIX. Bundled debugpy also retains its own MIT license
+and complete ThirdPartyNotices.txt inside `bundled/debugpy`.
+
 MIT License
 
 Copyright (c) 2026 NIMBLESITE PTY LTD

@@ -144,7 +144,6 @@ fn test_extra_paths_searched() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: None,
     };
     let result = resolve_module("libmod", &paths).unwrap();
@@ -170,7 +169,6 @@ fn test_site_packages_searched() {
         workspace_members: vec![],
         site_packages: Some(sp.clone()),
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: None,
     };
     let result = resolve_module("requests", &paths).unwrap();
@@ -181,7 +179,7 @@ fn test_site_packages_searched() {
 }
 
 #[test]
-fn test_workspace_root_takes_priority() {
+fn test_manual_extra_path_takes_priority() {
     let root = make_tmp_dir("bsk_ir_prio_root");
     let extra = make_tmp_dir("bsk_ir_prio_extra");
     fs::write(root.join("dup.py"), "root\n").unwrap();
@@ -194,11 +192,10 @@ fn test_workspace_root_takes_priority() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: None,
     };
     let result = resolve_module("dup", &paths).unwrap();
-    assert!(result.path.starts_with(&root));
+    assert!(result.path.starts_with(&extra));
 
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&extra);
@@ -316,7 +313,6 @@ fn test_stub_paths_searched_before_roots() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: None,
     };
     let result = resolve_module("mymod", &paths).unwrap();
@@ -341,7 +337,6 @@ fn test_stub_paths_only_pyi() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: None,
     };
     let result = resolve_module("mymod", &paths);
@@ -368,7 +363,6 @@ fn test_stub_package_resolution() {
         workspace_members: vec![],
         site_packages: Some(sp.clone()),
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: None,
     };
     let result = resolve_module("requests", &paths).unwrap();
@@ -392,7 +386,6 @@ fn test_stub_package_submodule() {
         workspace_members: vec![],
         site_packages: Some(sp.clone()),
         registry: None,
-        typeshed_path: None,
         typeshed_snapshot: None,
     };
     let result = resolve_module("requests.api", &paths).unwrap();

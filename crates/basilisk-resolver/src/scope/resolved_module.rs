@@ -288,13 +288,6 @@ pub struct ResolvedModule {
     /// only). Consumed by `imports_module_attribute` to flag access to attributes a stub does
     /// not declare. Empty unless populated.
     pub imported_modules: std::collections::HashMap<String, super::ImportedModuleApi>,
-    /// Whether import resolution selected a complete authoritative step-3
-    /// Typeshed source for this module.
-    ///
-    /// When true, an absent name must stay absent: checker rules may not rescue
-    /// the miss from a compiled name or distribution table belonging to a
-    /// different generation ([STUBRES-TYPESHED]).
-    pub authoritative_typeshed: bool,
     /// AST-derived PEP 695 scoping facts used by `generics_syntax_scoping`.
     ///
     /// Populated from `ruff_python_ast` nodes (never from raw line scanning) so

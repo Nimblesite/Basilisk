@@ -44,39 +44,17 @@ pub fn classify_unresolved(
     UnresolvedReason::NotInstalled
 }
 
-/// Whether the **bundled** (name-only) stdlib recognition should rescue an
-/// otherwise-unresolved import — typing-spec import-resolution step 3.
-///
-/// When a custom typeshed is configured (`typeshed-path`) that
-/// directory is *the canonical source for standard-library types*
-/// ([STUBRES-CUSTOM-TYPESHED]): a stdlib module absent from its `stdlib/` subtree
-/// must fall through to `imports_unresolved` rather than be silently rescued by
-/// the vendored `phf` name-set. Callers therefore gate every bundled-stdlib
-/// suppression on this helper instead of calling `is_stdlib_module` directly, so
-/// canonicality is enforced in exactly one place.
-///
-/// With no custom typeshed this is identical to
-/// [`basilisk_stubs::is_stdlib_module`], so the conformance path (which never
-/// sets `typeshed-path`) is unaffected — the branch is purely additive.
-#[must_use]
-pub fn bundled_stdlib_recognized(
-    module_name: &str,
-    authoritative_typeshed_configured: bool,
-) -> bool {
-    !authoritative_typeshed_configured && basilisk_stubs::is_stdlib_module(module_name)
-}
-
 /// Resolve an absolute import following the typing spec's import-resolution
 /// ordering ([STUBRES-PEP561-NORMATIVE], [STUBRES-PEP561-MAPPING],
 /// [STUBRES-RESOLUTION-FLOW], [STUBRES-PEP561]). Steps, in order:
 ///
 /// 1. **Manual stubs** — `.pyi` files in `stub-paths` directories (head of path)
 /// 2. **User source** — `.py`/`.pyi` files in workspace roots and `extraPaths`
-/// 3. **Standard-library typeshed** — a custom `typeshed-path/stdlib/` tree when
-///    configured ([STUBRES-CUSTOM-TYPESHED]); otherwise stdlib names are
-///    recognised downstream via `basilisk_stubs::is_stdlib_module()`
+/// 3. **Standard-library typeshed** — exactly one acquisition-promoted snapshot
+///    (custom, downloaded, or bundled) ([STUBRES-CUSTOM-TYPESHED])
 /// 4. **Stub-only packages** — installed `foopkg-stubs` in site-packages
-/// 5. **Inline-typed packages** — installed packages with a `py.typed` marker
+/// 5. **Installed packages** — stub-only packages first, then source packages;
+///    `py.typed` controls provenance/type completeness rather than existence
 #[must_use]
 pub fn resolve_module(
     module_name: &str,
@@ -136,10 +114,8 @@ fn resolve_module_cached_with_importer(
     }
 
     // 3. Standard-library typeshed — typing-spec import-resolution step 3.
-    //    A configured custom typeshed directory is the canonical source for
-    //    standard-library types: resolve stdlib modules against its `stdlib/`
-    //    subtree in preference to the bundled (name-only) recognition applied
-    //    downstream. [STUBRES-CUSTOM-TYPESHED]
+    //    The acquisition gate supplies exactly one canonical snapshot: custom,
+    //    downloaded, or bundled. [STUBRES-CUSTOM-TYPESHED]
     if let Some(active) = &search_paths.typeshed_snapshot {
         if let Some((snapshot, target)) = active.for_importer(importer_dir) {
             let located = match target {
@@ -153,30 +129,12 @@ fn resolve_module_cached_with_importer(
                 });
             }
         }
-    } else if let Some(typeshed) = &search_paths.typeshed_path {
-        let stdlib_dir = typeshed.join("stdlib");
-        if let Some(resolved) = try_resolve_stub_only(module_name, &stdlib_dir, fs) {
-            return Some(resolved);
-        }
     }
 
-    // A standard-library name that was not shadowed by an earlier, explicitly
-    // configured source is terminal at typing-spec step 3. Do not continue into
-    // site-packages: besides reversing the documented PEP 561 order, doing so
-    // reads what is often the largest directory on the search path for every
-    // ordinary `typing`, `dataclasses`, or `collections` import. The caller
-    // applies bundled name recognition when no custom typeshed is configured;
-    // with a custom typeshed, a missing module deliberately remains unresolved
-    // because that tree is canonical.
-    if search_paths.typeshed_snapshot.is_none()
-        && search_paths.typeshed_path.is_none()
-        && basilisk_stubs::is_stdlib_module(module_name)
-    {
-        return None;
-    }
-
-    // 4+5. Site-packages: stub-only packages (-stubs), then *only* packages
-    // that opted in with py.typed. Basilisk vendors no third-party step 6.
+    // 4+5. Site-packages: stub-only packages (-stubs), then installed source.
+    // A `py.typed` marker controls the downstream provenance/completeness
+    // classification; its absence does not turn an installed module into an
+    // unresolved import ([STUBRES-TYPING-STATUS]).
     if let Some(sp) = &search_paths.site_packages {
         // 4. Check for `<module>-stubs` package first. A miss in a complete
         // stub distribution is terminal; partial/namespace misses continue.
@@ -189,13 +147,10 @@ fn resolve_module_cached_with_importer(
         {
             return None;
         }
-        // 5. Resolve the candidate first, then walk toward site-packages for a
-        // marker. Namespace subpackages may independently opt in, so checking
-        // only `<root>/py.typed` would incorrectly reject them.
+        // 5. Resolve installed source. Typed and untyped packages remain
+        // distinct downstream states, but both are terminal resolutions.
         if let Some(resolved) = try_resolve_in_dir(module_name, sp, fs) {
-            if basilisk_stubs::has_py_typed_marker(&resolved.path) {
-                return Some(resolved);
-            }
+            return Some(resolved);
         }
     }
 
