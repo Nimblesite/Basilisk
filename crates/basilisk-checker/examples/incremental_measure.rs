@@ -131,7 +131,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         // Simulate a keystroke: mutate one arithmetic constant in the text.
         let edited = original.replacen("offset * factor", "offset * factor + 1", 1);
-        let next_text = if round % 2 == 0 { edited } else { original.clone() };
+        let next_text = if round % 2 == 0 {
+            edited
+        } else {
+            original.clone()
+        };
 
         let start = Instant::now();
         let _ = file.set_text(&mut db).to(next_text);
