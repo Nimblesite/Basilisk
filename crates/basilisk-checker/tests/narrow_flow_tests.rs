@@ -246,3 +246,24 @@ def f(x: int | str) -> None:
         );
     }
 }
+
+/// Unreachable branch: a guard impossible for the declared type narrows the
+/// variable to `Never` inside that branch — the inference-driven
+/// reachability signal.
+#[test]
+fn impossible_guard_narrows_to_never_in_branch() {
+    let result = analyse(
+        r"
+def f(x: int) -> None:
+    if isinstance(x, str):
+        y = x
+    z = x
+",
+    );
+    assert_eq!(
+        last_use(&result, "x"),
+        Some(InferredType::Never),
+        "inside `isinstance(x, str)` with x: int the branch is unreachable: {:?}",
+        result.narrowed_uses
+    );
+}

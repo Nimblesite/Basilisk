@@ -415,8 +415,12 @@ reproducible, write-always, ratcheted:
   validation anchor); `x = expr` narrows only the flow layer via the
   bidirectional engine's synthesized type (tests in
   `tests/narrow_flow_tests.rs` and `narrow/env.rs`).
-- [ ] Test positive/complement branches, loops, early exits, closures, and
+- [x] Test positive/complement branches, loops, early exits, closures, and
   unreachable branches through public checker behavior.
+  — `tests/narrow_flow_tests.rs` runs the real parse → resolve →
+  `analyse_function` pipeline over all six cases (unreachable branches via
+  the `Never` narrowing signal). Diagnostic-level surfacing of these
+  results lands with the Integration-stage rule migration.
 - [ ] Reformulate narrowing as intersection-and-negation types over a
   Salsa-backed use-def map with `phi`/join at control-flow merges.
 - [ ] Extend guard support: `issubclass`, `==`/`in` against literals,
