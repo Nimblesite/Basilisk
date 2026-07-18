@@ -249,3 +249,30 @@ def apply(f: Callable[[int], str]) -> str:
     let _diags = run(source)?;
     Ok(())
 }
+
+// Exercises [TYPEINF-SUBTYPING-NOMINAL] — plain `bool` widens through the
+// builtin tower (`bool <: int <: float`, PEP 484), and never the reverse.
+// Guards the `(Bool, Int | Float)` arm in `is_assignable_to`.
+#[test]
+fn bool_widens_through_numeric_tower() {
+    use basilisk_checker::types::InferredType;
+    assert!(InferredType::Bool.is_assignable_to(&InferredType::Int));
+    assert!(InferredType::Bool.is_assignable_to(&InferredType::Float));
+    assert!(!InferredType::Int.is_assignable_to(&InferredType::Bool));
+    assert!(!InferredType::Float.is_assignable_to(&InferredType::Bool));
+}
+
+// Exercises [TYPEINF-SUBTYPING-UNION] — a union containing `None` satisfies an
+// `Optional` target: union-LEFT decomposition must run before Optional-target
+// unwrapping, else the `None` variant is checked against the unwrapped inner
+// type and wrongly fails. Guards the match-arm ordering in `is_assignable_to`.
+#[test]
+fn union_with_none_satisfies_optional_target() {
+    use basilisk_checker::types::InferredType;
+    let int_or_none = InferredType::Union(vec![InferredType::Int, InferredType::None_]);
+    let optional_int = InferredType::Optional(Box::new(InferredType::Int));
+    assert!(int_or_none.is_assignable_to(&optional_int));
+
+    let str_or_none = InferredType::Union(vec![InferredType::Str, InferredType::None_]);
+    assert!(!str_or_none.is_assignable_to(&optional_int));
+}

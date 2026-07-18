@@ -1,0 +1,181 @@
+//! Tests for [TYPEINF-TARGET-INCREMENTAL] Stage 1. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-INCREMENTAL and
+//! docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-CHECKLIST.
+//!
+//! Exercises the definition-level and expression-level Salsa queries in
+//! `crates/basilisk-checker/src/incremental_defs.rs`: definition extraction,
+//! per-definition inference, the fixpoint cycle sentinel, the interface
+//! boundary, and — via [`basilisk_test_utils::EventDb`]'s `WillExecute` log —
+//! the definition-level **early cutoff** itself.
+#![expect(
+    clippy::expect_used,
+    reason = "test-only lookups over fixed fixture definitions"
+)]
+
+use basilisk_checker::incremental_defs::{
+    definition_type, definitions, expression_types, module_interface, DefKind,
+};
+use basilisk_checker::types::{CallableInfo, InferredType, LiteralValue};
+use basilisk_db::SourceFile;
+use basilisk_test_utils::EventDb;
+use salsa::Setter as _;
+
+const MODULE: &str = r#"def alpha(a: int) -> str:
+    return "x"
+
+BETA = [1]
+
+class Gamma:
+    pass
+"#;
+
+/// Top-level definitions are extracted with their kinds and names.
+#[test]
+fn definitions_are_extracted_with_kinds() {
+    let db = EventDb::default();
+    let file = SourceFile::new(&db, "m.py".to_owned(), MODULE.to_owned());
+    let defs = definitions(&db, file);
+    let summary: Vec<(&str, DefKind)> = defs
+        .iter()
+        .map(|def| (def.name(&db).as_str(), def.kind(&db)))
+        .collect();
+    assert_eq!(
+        summary,
+        vec![
+            ("alpha", DefKind::Function),
+            ("BETA", DefKind::Variable),
+            ("Gamma", DefKind::Class),
+        ]
+    );
+}
+
+/// A function definition's type is its declared `Callable` surface.
+#[test]
+fn function_definition_type_reads_annotations() {
+    let db = EventDb::default();
+    let file = SourceFile::new(&db, "m.py".to_owned(), MODULE.to_owned());
+    let defs = definitions(&db, file);
+    let alpha = defs.first().copied().expect("alpha exists");
+    assert_eq!(
+        definition_type(&db, alpha),
+        InferredType::Callable(CallableInfo {
+            param_types: vec![InferredType::Int],
+            return_type: Box::new(InferredType::Str),
+        })
+    );
+}
+
+/// A variable definition synthesizes through the bidirectional engine —
+/// deferred generalization keeps `[1]` as `list[Literal[1]]`
+/// ([TYPEINF-TARGET-CONSTRAINTS]).
+#[test]
+fn variable_definition_type_keeps_literal_precision() {
+    let db = EventDb::default();
+    let file = SourceFile::new(&db, "m.py".to_owned(), MODULE.to_owned());
+    let defs = definitions(&db, file);
+    let beta = defs.get(1).copied().expect("BETA exists");
+    assert_eq!(
+        definition_type(&db, beta),
+        InferredType::List(Box::new(InferredType::Literal(LiteralValue::Int(1))))
+    );
+}
+
+/// A bare-name alias resolves through its sibling definition.
+#[test]
+fn alias_chain_resolves_through_siblings() {
+    let db = EventDb::default();
+    let source = "x = 1\ny = x\n";
+    let file = SourceFile::new(&db, "m.py".to_owned(), source.to_owned());
+    let defs = definitions(&db, file);
+    let y = defs.get(1).copied().expect("y exists");
+    assert_eq!(
+        definition_type(&db, y),
+        InferredType::Literal(LiteralValue::Int(1))
+    );
+}
+
+/// Mutually-referential definitions terminate via fixpoint iteration and
+/// settle on the divergent/bottom sentinel (`Unknown`) — never a hang, never
+/// an invented type ([TYPEINF-TARGET-INCREMENTAL] cycle handling).
+#[test]
+fn definition_cycles_settle_on_the_divergent_sentinel() {
+    let db = EventDb::default();
+    let source = "a = b\nb = a\n";
+    let file = SourceFile::new(&db, "m.py".to_owned(), source.to_owned());
+    let defs = definitions(&db, file);
+    for def in defs {
+        assert_eq!(definition_type(&db, *def), InferredType::Unknown);
+    }
+}
+
+/// Expression-level query: assignment RHS and return values get types,
+/// slice-relative.
+#[test]
+fn expression_types_cover_assignments_and_returns() {
+    let db = EventDb::default();
+    let file = SourceFile::new(&db, "m.py".to_owned(), MODULE.to_owned());
+    let defs = definitions(&db, file);
+    let alpha = defs.first().copied().expect("alpha exists");
+    let types = expression_types(&db, alpha);
+    assert_eq!(types.len(), 1, "one return expression in alpha");
+    let ret = types.first().expect("return expr typed");
+    assert_eq!(
+        ret.inferred,
+        InferredType::Literal(LiteralValue::Str("x".to_owned()))
+    );
+}
+
+/// The module interface is the compact `(name, type)` boundary.
+#[test]
+fn module_interface_lists_definition_types() {
+    let db = EventDb::default();
+    let file = SourceFile::new(&db, "m.py".to_owned(), MODULE.to_owned());
+    let interface = module_interface(&db, file);
+    let names: Vec<&str> = interface.0.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(names, vec!["alpha", "BETA", "Gamma"]);
+}
+
+/// **Definition-level early cutoff**: editing one definition's body re-runs
+/// `definition_type` ONLY for that definition — the untouched sibling's memo
+/// survives, proven by salsa's `WillExecute` log.
+#[test]
+fn editing_one_definition_recomputes_only_that_definition() {
+    let mut db = EventDb::default();
+    let file = SourceFile::new(&db, "m.py".to_owned(), MODULE.to_owned());
+    for def in definitions(&db, file) {
+        let _ = definition_type(&db, *def);
+    }
+    // Drain setup events.
+    let _ = db.executions_of("definition_type");
+
+    // Edit ONLY alpha's body (BETA's and Gamma's slices are unchanged).
+    let edited = MODULE.replace("return \"x\"", "return \"xy\"");
+    assert_ne!(edited, MODULE);
+    let _ = file.set_text(&mut db).to(edited);
+    for def in definitions(&db, file) {
+        let _ = definition_type(&db, *def);
+    }
+    assert_eq!(
+        db.executions_of("definition_type"),
+        1,
+        "only the edited definition's type may recompute"
+    );
+}
+
+/// **Interface backdating**: a body-only edit leaves the module interface
+/// value unchanged, so a consumer query reading it is never re-executed —
+/// the cross-file early-cutoff boundary.
+#[test]
+fn body_only_edit_backdates_the_module_interface() {
+    let mut db = EventDb::default();
+    let file = SourceFile::new(&db, "m.py".to_owned(), MODULE.to_owned());
+    let before = module_interface(&db, file).clone();
+
+    let edited = MODULE.replace("return \"x\"", "return \"different body\"");
+    let _ = file.set_text(&mut db).to(edited);
+    let after = module_interface(&db, file).clone();
+    assert_eq!(
+        before, after,
+        "a body-only edit must not change the interface value"
+    );
+}

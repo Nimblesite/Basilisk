@@ -119,7 +119,10 @@ fn signatures_incompatible(child: &FunctionInfo, base: &FunctionInfo, source: &s
 
     // Compare non-self parameter annotation texts.
     let params_differ = child_params.iter().zip(base_params.iter()).any(|(cp, bp)| {
-        annotation_text(source, cp.annotation_span) != annotation_text(source, bp.annotation_span)
+        annotations_conflict(
+            annotation_text(source, cp.annotation_span),
+            annotation_text(source, bp.annotation_span),
+        )
     });
 
     if params_differ {
@@ -127,9 +130,22 @@ fn signatures_incompatible(child: &FunctionInfo, base: &FunctionInfo, source: &s
     }
 
     // Compare return annotation texts.
-    let child_ret = annotation_text(source, child.return_annotation_span);
-    let base_ret = annotation_text(source, base.return_annotation_span);
-    child_ret != base_ret
+    annotations_conflict(
+        annotation_text(source, child.return_annotation_span),
+        annotation_text(source, base.return_annotation_span),
+    )
+}
+
+/// Two annotation positions conflict only when BOTH are present and differ.
+///
+/// An unannotated side is implicitly `Any` — consistent with anything, so its
+/// absence can never prove incompatibility ([TYPEINF-TARGET-GRADUAL]:
+/// removing an annotation must never introduce a new error).
+fn annotations_conflict(child: Option<&str>, base: Option<&str>) -> bool {
+    match (child, base) {
+        (None, _) | (_, None) => false,
+        (Some(child_text), Some(base_text)) => child_text != base_text,
+    }
 }
 
 /// Returns a slice of parameters with the leading `self`/`cls` removed (if present).

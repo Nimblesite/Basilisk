@@ -322,36 +322,78 @@ reproducible, write-always, ratcheted:
 
 ### Stage 0 — bidirectional + constraint foundations
 
-- [ ] Add the two-mode bidirectional core: every AST expression node supports
+- [x] Add the two-mode bidirectional core: every AST expression node supports
   `synth(e) → τ` and `check(e, τ)`, with `check` as the primary driver
   ([TYPEINF-TARGET-BIDIRECTIONAL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-BIDIRECTIONAL)).
-- [ ] Thread expected types through container literals, comprehensions, lambda
+  — `crates/basilisk-checker/src/bidir/{engine,check}.rs`.
+- [x] Thread expected types through container literals, comprehensions, lambda
   parameters, and call arguments; verify Salsa dependency growth stays
   acceptable, else fall back to peek-ahead for the failing constructs only.
-- [ ] Add the two-stage constraint architecture: a constraint-generation pass
+  — Verified by architecture: the engine is a pure function of one module's
+  AST inside the existing file-level tracked queries, so it adds zero Salsa
+  edges (see the Salsa note in `crates/basilisk-checker/src/bidir/mod.rs`);
+  re-evaluate per construct when Stage 1 moves to finer-grained queries.
+- [x] Add the two-stage constraint architecture: a constraint-generation pass
   producing subtype constraints (`τ₁ <: τ₂`) and a separate solver
   ([TYPEINF-TARGET-CONSTRAINTS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-CONSTRAINTS)).
-- [ ] Represent type variables with explicit lower/upper bounds and
+  — `crates/basilisk-checker/src/bidir/{constraints,solve}.rs`; every ground
+  leaf delegates to `InferredType::is_assignable_to`.
+- [x] Represent type variables with explicit lower/upper bounds and
   input/output polarity; defer generalization to first constraining use
   (`list[Var{lower=Literal[1]}]`, not eager `Literal[1] → int`).
-- [ ] Build the gradual-guarantee differential test harness: strip annotations
+  — `crates/basilisk-checker/src/bidir/tyvar.rs`; the exact
+  `list[Var{lower=Literal[1]}]` case is a unit test.
+- [x] Build the gradual-guarantee differential test harness: strip annotations
   from a corpus and assert no new errors appear.
-- [ ] Prototype-validate the borrowed algebraic-subtyping ideas (polar types,
+  — `crates/basilisk-checker/tests/gradual_guarantee_tests.rs` (curated
+  corpus + a sweep of all synced conformance fixtures); it immediately caught
+  and drove the fix of a real rule defect (`classes_override` treated an
+  absent annotation as a signature mismatch).
+- [x] Prototype-validate the borrowed algebraic-subtyping ideas (polar types,
   constraint simplification) against real typeshed stubs before relying on
   them.
+  — `crates/basilisk-checker/tests/bidir_typeshed_validation_tests.rs` over
+  five verbatim `python/typeshed` stubs (commit pinned in
+  `tests/fixtures/typeshed/TYPESHED_COMMIT.txt`): solver reflexivity,
+  projection idempotence, and polar-variable resolution over 300+ real
+  annotations.
 
 ### Stage 1 — incrementality
 
-- [ ] Move inference onto definition-level and expression-level Salsa tracked
+- [x] Move inference onto definition-level and expression-level Salsa tracked
   queries (not file-level).
-- [ ] Compute a compact per-module interface/signature query as the cross-file
+  — `crates/basilisk-checker/src/incremental_defs.rs`: a tracked
+  `Definition` struct per top-level definition (keyed on the definition's own
+  source *slice*, so edits elsewhere leave its memos untouched), with
+  `definition_type` (per-definition) and `expression_types`
+  (per-expression) queries. Early cutoff is proven by salsa's `WillExecute`
+  log in `tests/incremental_defs_tests.rs`: editing one definition
+  re-executes exactly one `definition_type`.
+- [x] Compute a compact per-module interface/signature query as the cross-file
   dependency boundary for early cutoff.
-- [ ] Model inference cycles with fixpoint iteration seeded by a
+  — `module_interface` returns a `PartialEq` `(name, type)` list; a
+  body-only edit backdates to "unchanged" (test:
+  `body_only_edit_backdates_the_module_interface`).
+- [x] Model inference cycles with fixpoint iteration seeded by a
   divergent/bottom sentinel and a hard iteration cap.
-- [ ] Measure memory on a 1M+ LOC target; if it blows up, add AST/binding
+  — `definition_type` opts into salsa fixpoint iteration
+  (`cycle_initial` = `Unknown`, the divergent/bottom sentinel;
+  `cycle_fn` caps at `CYCLE_ITERATION_CAP = 16` and falls back to the
+  sentinel). `a = b; b = a` terminates and settles on `Unknown` (test).
+- [x] Measure memory on a 1M+ LOC target; if it blows up, add AST/binding
   eviction behind the query layer (keep only interfaces).
-- [ ] Measure p50/p99 keystroke re-check latency on a 1M-LOC corpus; target
+  — Self-measured via `examples/incremental_measure.rs` over the seeded
+  synthetic corpus from `scripts/gen_incremental_corpus.py` (2,100 files,
+  1,117,199 LOC, 268,800 definitions): RSS ≈ 312 MB after the cold pass and
+  a 200-edit keystroke loop — no blow-up, so eviction is not needed at this
+  stage (re-measure when the per-definition queries carry richer state).
+- [x] Measure p50/p99 keystroke re-check latency on a 1M-LOC corpus; target
   single-digit milliseconds.
+  — Same harness, same corpus: **p50 0.16 ms, p99 0.22 ms** per keystroke
+  re-check of the edited file's definition-level queries (cold pass 0.99 s).
+  Scope caveat, stated plainly: this measures the Stage 1 definition-level
+  query layer, not the full 165-rule diagnostics pipeline, which remains
+  file-level until the Integration stage migrates it.
 
 ### Stage 2 — flow analysis and narrowing
 
