@@ -315,7 +315,13 @@ pub fn cross_resolved_module(
     let registry = workspace.files(db);
     // Reading `search_paths.value(db)` registers the salsa dependency edge, so a
     // changed `typeshed-path` re-runs this query and re-tags stub provenance.
-    let custom_typeshed = search_paths.value(db).typeshed_path.as_deref();
+    let paths = search_paths.value(db);
+    let custom_typeshed = paths.typeshed_path.as_deref();
+    let typeshed_target = paths
+        .typeshed_snapshot
+        .as_ref()
+        .and_then(|active| active.for_importer(Some(std::path::Path::new(file.path(db)))))
+        .and_then(|(_, target)| target.cloned());
     crate::exports::populate_imported_symbols(
         &mut resolved,
         |path| {
@@ -325,8 +331,12 @@ pub fn cross_resolved_module(
                 .map(|imported| module_exports(db, *imported).0.as_slice())
         },
         |path, request| {
-            let key =
-                ExternalModuleKey::new(db, path.to_string_lossy().into_owned(), request.clone());
+            let key = ExternalModuleKey::new(
+                db,
+                path.to_string_lossy().into_owned(),
+                request.clone(),
+                typeshed_target.clone(),
+            );
             std::sync::Arc::clone(external_module(db, key, search_paths))
         },
         custom_typeshed,
@@ -344,6 +354,11 @@ pub struct ExternalModuleKey<'db> {
     /// What to load: `py.typed` module or `.pyi` stub (with provenance).
     #[returns(ref)]
     pub request: crate::exports::ExternalModuleRequest,
+    /// Python/platform evidence selecting guarded declarations. This is part
+    /// of the memo key because two workspace roots may share snapshot bytes
+    /// while targeting different interpreters.
+    #[returns(ref)]
+    pub target: Option<basilisk_stubs::types::StubTarget>,
 }
 
 /// Tracked query: the parsed view of one **external** module — its exports
@@ -363,8 +378,58 @@ pub fn external_module<'db>(
     key: ExternalModuleKey<'db>,
     search_paths: SearchPathsInput,
 ) -> crate::exports::SharedExternalModule {
-    let _ = search_paths.value(db);
-    crate::exports::load_external_module(std::path::Path::new(key.path(db)), key.request(db))
+    let paths = search_paths.value(db);
+    let path = std::path::Path::new(key.path(db));
+    if let Some(active) = &paths.typeshed_snapshot {
+        if let Some((snapshot, target, source)) =
+            active.source_for_uri(key.path(db), key.target(db).as_ref())
+        {
+            let request = key.request(db);
+            let stub_source = match request {
+                crate::exports::ExternalModuleRequest::Stub { source, .. } => *source,
+                crate::exports::ExternalModuleRequest::PyTyped => {
+                    return crate::exports::load_external_module_from_source(
+                        path, source, request, target,
+                    );
+                }
+            };
+            return crate::exports::load_external_module_from_source_with_loader(
+                path,
+                source,
+                request,
+                target,
+                |module_name| {
+                    let located = match target {
+                        Some(target) => {
+                            snapshot.read_stub_for_target(module_name, target.python_version)
+                        }
+                        None => snapshot.read_stub(module_name),
+                    }?;
+                    let (logical_uri, body) = located;
+                    match target {
+                        Some(target) => basilisk_stubs::pyi_parser::parse_pyi_source_for_target(
+                            body,
+                            std::path::Path::new(&logical_uri),
+                            module_name,
+                            stub_source,
+                            basilisk_stubs::StubTier::Tier1,
+                            target,
+                        )
+                        .ok(),
+                        None => basilisk_stubs::parse_pyi_source(
+                            body,
+                            std::path::Path::new(&logical_uri),
+                            module_name,
+                            stub_source,
+                            basilisk_stubs::StubTier::Tier1,
+                        )
+                        .ok(),
+                    }
+                },
+            );
+        }
+    }
+    crate::exports::load_external_module(path, key.request(db))
 }
 
 /// Tracked query: the **cross-module** diagnostics for one file — a thin

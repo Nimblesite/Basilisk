@@ -1009,6 +1009,7 @@
   },
   "scripts": {
     "sync:shipwright": "node scripts/sync-shipwright-manifest.mjs",
+    "stage:attribution": "node scripts/verify-shipwright.mjs stage-attribution",
     "compile": "tsc -p ./ && node -e \"const fs=require('fs');fs.mkdirSync('out/src/test/fixtures',{recursive:true});fs.readdirSync('src/test/fixtures').forEach(f=>fs.copyFileSync('src/test/fixtures/'+f,'out/src/test/fixtures/'+f));\"",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src/",
@@ -1017,8 +1018,8 @@
     "test": "vscode-test --bail",
     "test:real-world": "npm run compile && node scripts/fetch-real-world-repos.mjs && vscode-test --bail --label real-world-flask --label real-world-rich --label real-world-fastapi",
     "test:shipwright": "node scripts/verify-shipwright.mjs manifest",
-    "vscode:prepublish": "npm run sync:shipwright && npm run compile",
-    "package": "npm run sync:shipwright && vsce package",
+    "vscode:prepublish": "npm run stage:attribution && npm run sync:shipwright && npm run compile",
+    "package": "cd .. && make _release_vsix",
     "screenshots:editor": "node scripts/capture-screenshots.mjs"
   },
   "dependencies": {

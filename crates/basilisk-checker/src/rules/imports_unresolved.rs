@@ -60,7 +60,7 @@ impl Rule for ImportFromUntypedModule {
             .filter(|import| {
                 !crate::imports::bundled_stdlib_recognized(
                     &import.module,
-                    ctx.custom_typeshed_configured,
+                    ctx.authoritative_typeshed_configured,
                 )
             })
             // Terminal state of the static search ([STUBRES-STATIC-MODEL]):
@@ -170,6 +170,7 @@ mod tests {
             package_dep_kind: None,
             package_version: None,
             package_name: None,
+            stub_distribution: None,
             unresolved_reason: reason,
         }
     }
@@ -260,7 +261,7 @@ mod tests {
     fn run_check_custom_typeshed(import: ImportInfo) -> Vec<crate::Diagnostic> {
         let module = make_module(vec![import]);
         let ctx = crate::context::CheckContext {
-            custom_typeshed_configured: true,
+            authoritative_typeshed_configured: true,
             ..crate::context::CheckContext::default()
         };
         let mut diagnostics = Vec::new();

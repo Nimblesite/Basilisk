@@ -1,5 +1,5 @@
 //! TEMPORARY verification harness for the claimed rebinding-invalidation
-//! defect in narrow/flow.rs walk_assign — delete after use. Not part of the
+//! defect in `narrow/flow.rs` `walk_assign` — delete after use. Not part of the
 //! suite.
 #![expect(
     clippy::expect_used,
@@ -113,8 +113,7 @@ def f(x: int | None) -> None:
     let last = result
         .narrowed_uses
         .iter()
-        .filter(|u| u.name == "x")
-        .next_back()
+        .rfind(|u| u.name == "x")
         .map(|u| &u.narrowed);
     assert_ne!(
         last,

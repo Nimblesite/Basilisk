@@ -45,10 +45,10 @@ impl Rule for MissingTypeStubs {
         })
     }
 
-    // Implements [STUBRES-PEP561] step 6 (no stubs found) — fires the BSK-0152
+    // Implements [STUBRES-PEP561] after step 6 is exhausted — fires BSK-0152
     // import-site diagnostic only for a site-packages `.py` import that is not
     // stdlib and carries no PEP 561 `py.typed` marker (i.e. resolution exhausted
-    // steps 1-5 without type information).
+    // all six steps without type information).
     fn check(
         &self,
         module: &ResolvedModule,
@@ -59,7 +59,6 @@ impl Rule for MissingTypeStubs {
             .imports
             .iter()
             .filter(|import| import.resolution == ImportResolution::SourcePy)
-            .filter(|import| !basilisk_stubs::is_stdlib_module(&import.module))
             .filter(|import| is_site_packages_import(import))
             .filter(|import| !has_py_typed_marker(import))
             .for_each(|import| diagnostics.push(make_diagnostic(import, &module.path)));
@@ -109,7 +108,7 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
         message: format!("Package `{root_module}` is installed but has no type stubs available"),
         span: import.span,
         path: path.to_owned(),
-        help: Some(stub_help_text(root_module).into()),
+        help: Some(stub_help_text(root_module, import.stub_distribution.as_deref()).into()),
         note: Some(
             "Packages without type stubs or a PEP 561 `py.typed` marker provide no type \
              information — https://peps.python.org/pep-0561/"
@@ -133,8 +132,8 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
 /// Implements [LSPUV-DIAGNOSTICS-MISSING-STUBS]: the typeshed branch is gated
 /// on the bundled typeshed index — stub names are never guessed by
 /// concatenation.
-fn stub_help_text(root_module: &str) -> String {
-    match basilisk_stubs::typeshed_stub_distribution(root_module) {
+fn stub_help_text(root_module: &str, distribution: Option<&str>) -> String {
+    match distribution {
         Some(distribution) => {
             format!("Type stubs available as `{distribution}` — use quick fix to install")
         }

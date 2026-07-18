@@ -307,6 +307,17 @@ export const CONFIGURATION_EDITOR_STYLES = `
   #state-card h2 { margin: 0 0 5px; }
   #state-card p { margin: 0 0 14px; color: var(--muted); }
   .overlay-actions { justify-content: center; }
+  #typeshed-status dl { display: grid; grid-template-columns: minmax(100px, auto) minmax(0, 1fr); gap: 4px 12px; }
+  #typeshed-status dt { color: var(--muted); }
+  #typeshed-status dd { margin: 0; overflow-wrap: anywhere; }
+  .typeshed-warning { padding: 8px 10px; border-left: 3px solid var(--bsk-orange); background: var(--bsk-orange-soft); }
+  .typeshed-warning[data-severity="high"] { border-left-color: var(--vscode-errorForeground); }
+  #typeshed-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 16px 0; }
+  .typeshed-control { display: grid; gap: 5px; align-content: start; }
+  .typeshed-control > span { font-weight: 600; }
+  .typeshed-control > small { min-height: 30px; color: var(--muted); }
+  .typeshed-control input[type="text"], .typeshed-control select { width: 100%; min-width: 0; }
+  .path-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
 
   @keyframes breathe { 50% { opacity: .25; transform: scale(.75); } }
   @media (prefers-reduced-motion: reduce) {

@@ -193,6 +193,12 @@ pub mod configuration_editor {
     pub const APPLY: &str = "basilisk/applyConfigurationChange";
     /// Page through diagnostics selected by the all/codes/tags selectors.
     pub const OCCURRENCES: &str = "basilisk/ruleOccurrences";
+    /// Pin, refresh, or view the active Typeshed source.
+    pub const TYPESHED_ACTION: &str = "basilisk/typeshedAction";
+    /// Read one immutable document from the active Typeshed VFS.
+    pub const TYPESHED_DOCUMENT: &str = "basilisk/typeshedDocument";
+    /// Notify clients that a root activated a new terminal Typeshed status.
+    pub const TYPESHED_STATUS_CHANGED: &str = "basilisk/typeshedStatusChanged";
     /// Notify clients that a root's effective configuration changed.
     pub const CHANGED: &str = "basilisk/configurationChanged";
 }

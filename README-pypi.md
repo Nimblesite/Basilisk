@@ -43,7 +43,7 @@ basilisk check path/to/your_code.py --output json --color never
 
 The bundled binary is built on [Ruff](https://github.com/astral-sh/ruff) by
 [Astral](https://astral.sh/) (MIT) and [typeshed](https://github.com/python/typeshed)
-(Apache-2.0), among other open-source projects. Full third-party notices:
+(Apache-2.0, with MIT-licensed parts), among other open-source projects. Full third-party notices:
 <https://github.com/Nimblesite/Basilisk/blob/main/NOTICES>.
 
 ## License

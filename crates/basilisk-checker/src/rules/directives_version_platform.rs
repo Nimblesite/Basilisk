@@ -50,13 +50,11 @@ impl Rule for DeadBranchVariable {
         let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
+        let Some(target_version) = ctx.target_version else {
+            return;
+        };
 
-        check_stmts_for_dead_branches(
-            &parsed.ast.body,
-            ctx.target_version,
-            &module.path,
-            diagnostics,
-        );
+        check_stmts_for_dead_branches(&parsed.ast.body, target_version, &module.path, diagnostics);
     }
 }
 

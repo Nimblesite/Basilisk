@@ -15,6 +15,9 @@ import type {
   PreviewConfigurationRequest,
   RuleOccurrencesRequest,
   RuleOccurrencesResponse,
+  TypeshedActionRequest,
+  TypeshedActionResult,
+  TypeshedConfigurationState,
 } from "../../configuration-editor-model";
 import {
   ConfigurationEditorController,
@@ -34,6 +37,36 @@ import { removeTestDir } from './test-helpers';
 const ROOT_URI = "file:///workspace";
 const PEP_CODE = "BSK-0001";
 const ANALYZE_CODE = "BSK-0060";
+
+function typeshedState(): TypeshedConfigurationState {
+  return {
+    sourceMode: { kind: "Latest" },
+    sourceOptions: [
+      { mode: { kind: "Latest" }, label: "Latest", enabled: true },
+      { mode: { kind: "ExactCommit" }, label: "Exact commit", enabled: true },
+      { mode: { kind: "CustomFolder" }, label: "Custom folder", enabled: true },
+    ],
+    settings: [],
+    actions: [
+      { action: { kind: "PinCurrent" }, label: "Pin current", enabled: true },
+      { action: { kind: "AcquireFresh" }, label: "Acquire fresh", enabled: true },
+      { action: { kind: "ViewLicense" }, label: "View License", enabled: true },
+    ],
+    status: {
+      lifecycle: { kind: "Ready" },
+      blockedReason: undefined,
+      activeSource: { kind: "Bundled" },
+      commitIdentity: "83c2518a9e6abbda0c44592c3483de459198f887",
+      treeIdentity: undefined,
+      transport: { kind: "EmbeddedZip" },
+      licenseStatus: { kind: "Approved" },
+      licenseReference: "https://example.test/LICENSE",
+      provenance: { kind: "BundleVetted" },
+      signedRelease: false,
+      warnings: [],
+    },
+  };
+}
 
 /**
  * [CONFIGEDITOR-MODEL]: one pep rule (check scope, never disabled) and one
@@ -100,6 +133,7 @@ function configurationSnapshot(revision = "revision-1"): ConfigurationSnapshot {
       disabledRules: 0,
     },
     problems: [],
+    typeshed: typeshedState(),
   };
 }
 
@@ -112,6 +146,7 @@ function configurationPreview(baseRevision = "revision-1"): ConfigurationPreview
       before: { kind: "Error" },
       after: { kind: "Warning" },
     }],
+    typeshedChanges: [],
     impact: {
       errorsBefore: 3,
       errorsAfter: 0,
@@ -128,16 +163,22 @@ class RecordingTransport implements ConfigurationEditorTransport {
   public previewResult = configurationPreview();
   public applyResult = configurationSnapshot("revision-2");
   public occurrenceResult: RuleOccurrencesResponse = { items: [], nextCursor: undefined };
+  public typeshedActionResult: TypeshedActionResult = {
+    kind: "Snapshot",
+    snapshot: configurationSnapshot("revision-typeshed"),
+  };
   public readonly snapshotRequests: string[] = [];
   public readonly previewRequests: PreviewConfigurationRequest[] = [];
   public readonly applyRequests: ApplyConfigurationRequest[] = [];
   public readonly occurrenceRequests: RuleOccurrencesRequest[] = [];
+  public readonly typeshedActionRequests: TypeshedActionRequest[] = [];
   public previewError: Error | undefined;
   public snapshotError: Error | undefined;
   public snapshotHandler: ((rootUri: string) => Promise<ConfigurationSnapshot>) | undefined;
   public previewHandler: ((request: PreviewConfigurationRequest) => Promise<ConfigurationPreview>) | undefined;
   public applyHandler: (() => Promise<ConfigurationSnapshot>) | undefined;
   public occurrenceHandler: ((request: RuleOccurrencesRequest) => Promise<RuleOccurrencesResponse>) | undefined;
+  public typeshedActionHandler: ((request: TypeshedActionRequest) => Promise<TypeshedActionResult>) | undefined;
 
   public async snapshot(rootUri: string): Promise<ConfigurationSnapshot> {
     this.snapshotRequests.push(rootUri);
@@ -163,6 +204,12 @@ class RecordingTransport implements ConfigurationEditorTransport {
     this.occurrenceRequests.push(request);
     if (this.occurrenceHandler !== undefined) { return this.occurrenceHandler(request); }
     return this.occurrenceResult;
+  }
+
+  public async typeshedAction(request: TypeshedActionRequest): Promise<TypeshedActionResult> {
+    this.typeshedActionRequests.push(request);
+    if (this.typeshedActionHandler !== undefined) { return this.typeshedActionHandler(request); }
+    return this.typeshedActionResult;
   }
 
   public readonly executeCommandRequests: { readonly command: string; readonly args: readonly unknown[] }[] = [];
@@ -244,14 +291,21 @@ suite("Configuration editor — generated contract and central state", () => {
 
 suite("Configuration editor — typed mutation routing", () => {
   // [CONFIGEDITOR-OPERATIONS] / [CHKARCH-CONFIG-MODEL]: the editor can request
-  // exactly four things — set/remove one rule entry or one tag entry. Each is
+  // exactly six things — rule/tag set/remove plus allowlisted Typeshed setting
+  // set/remove. Each is
   // relayed verbatim through preview, and apply sends only root + preview id.
-  test("relays each of the four EditorMutation kinds verbatim through preview", async () => {
+  test("relays each of the six EditorMutation kinds verbatim through preview", async () => {
     const mutations: EditorMutation[] = [
       { kind: "SetRule", code: PEP_CODE, severity: { kind: "Warning" } },
       { kind: "RemoveRule", code: ANALYZE_CODE },
       { kind: "SetTag", tag: "basilisk", severity: { kind: "Info" } },
       { kind: "RemoveTag", tag: "basilisk" },
+      {
+        kind: "SetTypeshedSetting",
+        key: { kind: "TypeshedCache" },
+        value: { kind: "Boolean", value: true },
+      },
+      { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedUrl" } },
     ];
     for (const mutation of mutations) {
       const store = createStore();
@@ -273,6 +327,48 @@ suite("Configuration editor — typed mutation routing", () => {
     }
   });
 
+  test("routes Typeshed actions with the snapshot revision", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      await controller.receive({ type: "typeshedAction", action: "AcquireFresh" });
+      assert.deepStrictEqual(transport.typeshedActionRequests, [{
+        rootUri: ROOT_URI,
+        baseRevision: "revision-1",
+        action: { kind: "AcquireFresh" },
+      }]);
+      assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-typeshed");
+    } finally {
+      controller.dispose();
+    }
+  });
+
+  test("drops a Typeshed action response made stale by a newer root load generation", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    let finishAction: ((result: TypeshedActionResult) => void) | undefined;
+    transport.typeshedActionHandler = async () => new Promise((resolve) => { finishAction = resolve; });
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      const action = controller.receive({ type: "typeshedAction", action: "AcquireFresh" });
+      await pollUntil(() => transport.typeshedActionRequests.length === 1);
+      transport.snapshotResult = configurationSnapshot("revision-newer");
+      await controller.receive({ type: "refresh" });
+      finishAction?.({ kind: "Snapshot", snapshot: configurationSnapshot("revision-stale-action") });
+      await action;
+      assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-newer");
+    } finally {
+      controller.dispose();
+    }
+  });
+});
+
+suite("Configuration editor — project action routing", () => {
   // [CONFIGEDITOR-VSIX-EXPERIENCE]: the Adoption view forwards the real,
   // already-registered adopt command (all-roots; no args) then reloads.
   test("the Adoption view forwards basilisk.adoptWorkspace and reloads", async () => {

@@ -1,4 +1,5 @@
-//! Implements [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
+//! Implements [STUBRES-TYPE-MODEL] and [STUBRES-ENGINE]. See
+//! docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPE-MODEL
 //! Stub resolution data model.
 //!
 //! These types represent how a module's type information was discovered
@@ -40,7 +41,7 @@ pub enum StubSource {
     /// Installed package with `py.typed` marker, PEP 561 inline types
     /// (typing-spec import-resolution step 5).
     InlineTyped,
-    /// typeshed resolved from the runtime `python/typeshed` clone, or from the
+    /// typeshed resolved from a runtime `python/typeshed` archive, or from the
     /// bundled offline baseline when no clone is available — typing-spec
     /// import-resolution step 3, the default standard-library source. See
     /// [STUBRES-TYPESHED].
@@ -67,6 +68,27 @@ pub enum StubTier {
     Tier3,
 }
 
+/// Stable prefix written as the first line of every `basilisk stubs generate`
+/// result. Removing it deliberately promotes the file to a user-maintained
+/// step-1 stub; adding it deliberately marks the file best-effort.
+pub const GENERATED_STUB_HEADER_PREFIX: &str = "# Auto-generated stub for `";
+
+/// Classify user-stub source without relying on its path. This keeps disk and
+/// unsaved-buffer parsing identical and lets create-local files in the same
+/// `.basilisk/stubs` directory remain trusted user stubs.
+#[must_use]
+pub fn user_stub_tier(source_text: &str) -> StubTier {
+    if source_text
+        .lines()
+        .next()
+        .is_some_and(|line| line.starts_with(GENERATED_STUB_HEADER_PREFIX))
+    {
+        StubTier::Tier3
+    } else {
+        StubTier::Tier1
+    }
+}
+
 /// Where a type's information originated, from the perspective of the type
 /// checker.  Used for cascade suppression (suppress downstream errors from
 /// untyped imports) and hover annotations.
@@ -79,6 +101,9 @@ pub enum TypeProvenance {
     Source,
     /// From typeshed or hand-written, verified stubs.
     StubTier1,
+    /// From a user-authored step-1 stub. It is trusted but not labelled as
+    /// typeshed in hover.
+    StubUser,
     /// From a custom/modified typeshed (`typeshed-path`) — Tier-1 trust, but
     /// distinct provenance so hover reads `(custom typeshed)` and a `MicroPython`
     /// signature is never misreported as the default `CPython` one (resolved from
@@ -100,6 +125,7 @@ impl From<(&StubSource, &StubTier)> for TypeProvenance {
             // hover can distinguish it from the default typeshed (runtime clone
             // or offline baseline) ([STUBRES-CUSTOM-TYPESHED]).
             (&StubSource::CustomTypeshed, &StubTier::Tier1) => Self::StubCustomTypeshed,
+            (&StubSource::UserStub, &StubTier::Tier1) => Self::StubUser,
             (_, &StubTier::Tier1) => Self::StubTier1,
             (_, &StubTier::Tier2) => Self::StubTier2,
             (_, &StubTier::Tier3) => Self::StubTier3,
@@ -117,6 +143,7 @@ impl TypeProvenance {
         match self {
             Self::Source => None,
             Self::StubTier1 => Some("(typeshed)"),
+            Self::StubUser => None,
             Self::StubCustomTypeshed => Some("(custom typeshed)"),
             Self::StubTier2 => Some("(community stub)"),
             Self::StubTier3 => Some("(best-effort stub, may be inaccurate)"),
@@ -157,6 +184,15 @@ pub enum StubParamKind {
     PositionalOnly,
 }
 
+/// Byte range of a declaration in the immutable stub source that supplied it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StubSpan {
+    /// Inclusive byte offset of the declaration name.
+    pub start: u32,
+    /// Exclusive byte offset of the declaration name.
+    pub end: u32,
+}
+
 /// A single function signature extracted from a `.pyi` file.
 ///
 /// When `@overload` is used, each overload is a separate `StubFunction`.
@@ -165,7 +201,10 @@ pub enum StubParamKind {
 pub struct StubFunction {
     /// Function name.
     pub name: String,
-    /// Parameters (excluding `self`/`cls`).
+    /// Bound `self`/`cls` receiver for methods, including its annotation.
+    /// Static methods and module-level functions have no receiver.
+    pub receiver: Option<StubParam>,
+    /// Call-visible parameters after receiver binding.
     pub params: Vec<StubParam>,
     /// Return type annotation text.
     pub return_type: Option<String>,
@@ -177,6 +216,61 @@ pub struct StubFunction {
     pub decorators: Vec<String>,
     /// Containing class name, if this is a method.
     pub class_name: Option<String>,
+    /// Location of the function name in the exact `.pyi` body.
+    pub source_span: StubSpan,
+}
+
+/// Render a call-visible stub declaration without its already-bound receiver.
+///
+/// Parameter kinds and defaults are semantic data, so this renderer preserves
+/// positional-only `/`, keyword-only `*`, variadics, annotations, and the
+/// declared return type. Hover and signature help use this same declaration
+/// object that call checking consumes.
+#[must_use]
+pub fn render_stub_signature(function: &StubFunction) -> String {
+    let mut rendered = format!("def {}(", function.name);
+    rendered.push_str(&render_stub_params(&function.params));
+    rendered.push(')');
+    if let Some(return_type) = &function.return_type {
+        rendered.push_str(" -> ");
+        rendered.push_str(return_type);
+    }
+    rendered
+}
+
+fn render_stub_params(params: &[StubParam]) -> String {
+    let last_positional_only = params
+        .iter()
+        .rposition(|parameter| parameter.kind == StubParamKind::PositionalOnly);
+    let mut parts = Vec::new();
+    let mut star_emitted = false;
+    for (index, parameter) in params.iter().enumerate() {
+        if parameter.kind == StubParamKind::KeywordOnly && !star_emitted {
+            parts.push("*".to_owned());
+            star_emitted = true;
+        }
+        let prefix = match parameter.kind {
+            StubParamKind::Vararg => "*",
+            StubParamKind::Kwarg => "**",
+            _ => "",
+        };
+        let mut part = format!("{prefix}{}", parameter.name);
+        if let Some(annotation) = &parameter.annotation {
+            part.push_str(": ");
+            part.push_str(annotation);
+        }
+        if parameter.has_default {
+            part.push_str(" = ...");
+        }
+        parts.push(part);
+        if parameter.kind == StubParamKind::Vararg {
+            star_emitted = true;
+        }
+        if Some(index) == last_positional_only {
+            parts.push("/".to_owned());
+        }
+    }
+    parts.join(", ")
 }
 
 /// A class definition extracted from a `.pyi` file.
@@ -186,6 +280,8 @@ pub struct StubClass {
     pub name: String,
     /// Base class names (text form).
     pub bases: Vec<String>,
+    /// Explicit `metaclass=...` expression, kept separate from the base MRO.
+    pub metaclass: Option<String>,
     /// Methods defined on this class.
     pub methods: Vec<StubFunction>,
     /// Class-level variable annotations (e.g. `x: int`).
@@ -213,6 +309,50 @@ pub struct StarReexport {
     pub level: u32,
 }
 
+/// Python/platform evidence used to select guarded declarations in a stub.
+///
+/// A target is deliberately explicit: callers that have no target evidence use
+/// the legacy parser entry points, which retain only declarations valid across
+/// every feasible guarded branch ([STUBRES-TYPESHED-VERSION]).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StubTarget {
+    /// Concrete target Python `(major, minor)` version.
+    pub python_version: (u32, u32),
+    /// Concrete target platform or the cross-platform intersection.
+    pub platform: StubTargetPlatform,
+}
+
+/// Platform evidence for guarded `.pyi` declarations.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum StubTargetPlatform {
+    /// Require the declaration/export to be valid on every platform branch.
+    All,
+    /// Select guards for the exact `sys.platform` value.
+    Concrete(String),
+}
+
+/// One source contributing names to a `__all__` mutation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DunderAllItem {
+    /// A literal string name.
+    Name(String),
+    /// A referenced module's authoritative `__all__`.
+    ModuleAll(StarReexport),
+}
+
+/// One ordered mutation of a module's `__all__` list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DunderAllMutation {
+    /// `__all__ = value` replaces the prior list.
+    Assign(Vec<DunderAllItem>),
+    /// `__all__ += value` or `__all__.extend(value)` appends many entries.
+    Extend(Vec<DunderAllItem>),
+    /// `__all__.append("name")` appends one entry.
+    Append(String),
+    /// `__all__.remove("name")` removes its first matching entry.
+    Remove(String),
+}
+
 /// All type information extracted from a single `.pyi` file.
 ///
 /// Designed for efficient lookup by symbol name. Overloaded functions
@@ -228,6 +368,8 @@ pub struct StubModule {
     pub source: StubSource,
     /// Quality tier of the type information.
     pub tier: StubTier,
+    /// Target evidence used to select guarded branches, if supplied.
+    pub target: Option<StubTarget>,
     /// Top-level function stubs (non-overloaded or the implementation signature).
     pub functions: HashMap<String, StubFunction>,
     /// Overload groups: function name → ordered list of `@overload` variants.
@@ -236,10 +378,13 @@ pub struct StubModule {
     pub classes: HashMap<String, StubClass>,
     /// Module-level variable annotations.
     pub variables: HashMap<String, StubVariable>,
-    /// Union of every `__all__` assignment's string entries, including
-    /// version/platform-gated branches (`if sys.version_info >= …:`).
-    /// `None` when the stub never assigns `__all__` ([STUBRES-PYI-REEXPORTS]).
+    /// Effective literal `__all__` entries after ordered mutations and guarded
+    /// branch intersection. References are resolved by the re-export walker.
+    /// `None` when no feasible branch mutates `__all__`.
     pub dunder_all: Option<Vec<String>>,
+    /// Ordered `__all__` mutation sequences. Multiple entries are feasible
+    /// target branches and are intersected after module references resolve.
+    pub dunder_all_variants: Vec<Vec<DunderAllMutation>>,
     /// Names re-exported via the typing spec's redundant-alias convention:
     /// `from y import x as x` / `import x as x` ([STUBRES-PYI-REEXPORTS]).
     pub reexported_names: Vec<String>,

@@ -44,6 +44,7 @@ pub(crate) fn roots_only(roots: Vec<PathBuf>) -> ImportSearchPaths {
         site_packages: None,
         registry: None,
         typeshed_path: None,
+        typeshed_snapshot: None,
     }
 }
 

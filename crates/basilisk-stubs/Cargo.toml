@@ -1,9 +1,14 @@
 [package]
 name        = "basilisk-stubs"
-description = "Runtime python/typeshed clone + cache and the offline baseline for Basilisk"
+description = "Runtime python/typeshed archive acquisition + cache and the offline baseline for Basilisk"
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
+# This internal crate embeds the composite Apache-2.0/MIT Typeshed snapshot.
+# Release binaries carry the exact composite license and notices; publishing
+# this implementation crate with only the workspace MIT package metadata would
+# misrepresent that embedded payload.
+publish = false
 
 [dependencies]
 basilisk-common = { path = "../basilisk-common" }
@@ -13,13 +18,28 @@ ruff_python_ast.workspace = true
 ruff_text_size.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# Content attestation for the typeshed acquisition core ([STUBRES-TYPESHED-ACQUIRE]):
+# `sha1` reconstructs Git blob/tree object IDs to bind analysed bytes to the
+# trusted root-tree SHA; `sha2` fingerprints the cached immutable ZIP. Both are
+# pure-Rust RustCrypto crates with no system dependencies (no Dockerfile/CI change).
+sha1 = "0.10"
+sha2 = "0.10"
+# Decode the bundled stdlib ZIP and the downloaded GitHub zipball into the
+# in-memory archive model ([STUBRES-TYPESHED-ACQUIRE]). Deflate read only — no
+# bzip2/zstd/aes surface, and never a `git` transport.
+zip = { version = "5.1.1", default-features = false, features = ["deflate"] }
 thiserror.workspace = true
 tracing.workspace = true
+# Production authenticated-HTTPS adapter for GitHub metadata/codeload and
+# configured archive mirrors. `https_only` is also enforced by the adapter.
+ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
 
 [build-dependencies]
 phf_codegen = "0.14"
+zip = { version = "5.1.1", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
+serde_json.workspace = true
 tempfile = "3"
 
 [lints]

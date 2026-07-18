@@ -35,6 +35,9 @@ pub(super) async fn did_open(server: &LspServer, params: DidOpenTextDocumentPara
     if crate::configuration_editor::ConfigurationEditorState::is_configuration_candidate(&uri) {
         return;
     }
+    if defer_analysis_until_typeshed_ready(server, &uri, &text, version).await {
+        return;
+    }
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else { return };
     let diags = index.set_open(&uri, &text, version);
@@ -71,6 +74,10 @@ pub(super) async fn did_change(server: &LspServer, params: DidChangeTextDocument
 
     let text = apply_content_changes(text, params.content_changes);
 
+    if defer_analysis_until_typeshed_ready(server, &uri, &text, version).await {
+        return;
+    }
+
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else { return };
     // In cross-module mode an export-changing edit must refresh dependents live,
@@ -102,6 +109,12 @@ pub(super) async fn did_save(server: &LspServer, params: DidSaveTextDocumentPara
     let Some(text) = index.get_text(&uri) else {
         return;
     };
+    drop(guard);
+    if defer_analysis_until_typeshed_ready(server, &uri, &text, 0).await {
+        return;
+    }
+    let guard = server.index.read().await;
+    let Some(index) = guard.as_ref() else { return };
     let results = index.set_open_refresh_dependents(&uri, &text, 0);
     drop(guard);
     for (target, diags) in results {
@@ -130,6 +143,27 @@ pub(super) async fn did_save(server: &LspServer, params: DidSaveTextDocumentPara
             }
         }
     }
+}
+
+async fn defer_analysis_until_typeshed_ready(
+    server: &LspServer,
+    uri: &Url,
+    text: &str,
+    version: i32,
+) -> bool {
+    if super::init::typeshed_ready_for_uri(server, uri).await {
+        return false;
+    }
+    let guard = server.index.read().await;
+    let Some(index) = guard.as_ref() else {
+        return true;
+    };
+    index.set_open_without_analysis(uri, text, version);
+    drop(guard);
+    server
+        .publish_diagnostics_if_enabled(uri.clone(), Vec::new())
+        .await;
+    true
 }
 
 /// Check if a path is a test file (`test_*.py` or `*_test.py`).
@@ -282,6 +316,9 @@ pub(super) async fn did_change_watched_files(
             .extension()
             .is_some_and(|ext| ext == "py" || ext == "pyi")
         {
+            continue;
+        }
+        if !super::init::typeshed_ready_for_uri(server, uri).await {
             continue;
         }
         match change.typ {

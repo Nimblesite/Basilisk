@@ -22,6 +22,8 @@ pub(super) mod refactor_commands;
 pub(super) mod resolved_env;
 pub(super) mod stub_handlers;
 pub(super) mod test_handlers;
+pub(super) mod typeshed_document;
+pub(super) mod typeshed_status;
 pub(super) mod uv_handlers;
 
 macro_rules! diaglog {
@@ -129,6 +131,16 @@ pub struct LspServer {
     /// `Arc` so the server-owned configuration watcher ([LSPARCH-CONFIG])
     /// follows root changes after the handler returns.
     pub(super) workspace_roots: Arc<RwLock<Vec<std::path::PathBuf>>>,
+    /// Root-keyed runtime Typeshed generations shared by analysis and editor
+    /// surfaces. Acquisition populates each root before its analysis starts;
+    /// refreshes replace one entry only after every activation gate passes.
+    pub(super) typeshed_generations: Arc<
+        RwLock<std::collections::BTreeMap<std::path::PathBuf, typeshed_status::TypeshedGeneration>>,
+    >,
+    /// Editor-selected Python binary. This is kept separately from project
+    /// configuration because `initializationOptions.basilisk.python` has
+    /// higher precedence and must survive every search-path rebuild.
+    pub(super) python_interpreter: Arc<RwLock<Option<std::path::PathBuf>>>,
     // Implements [LSPDEBUG-WIRE] (DebugSessionManager added to LspServer)
     /// Debug session manager — spawns debugpy and tracks active sessions.
     pub(super) debug_manager: crate::debug::DebugSessionManager,
@@ -196,6 +208,8 @@ impl LspServer {
             client,
             index: Arc::new(RwLock::new(None)),
             workspace_roots: Arc::new(RwLock::new(Vec::new())),
+            typeshed_generations: Arc::new(RwLock::new(std::collections::BTreeMap::new())),
+            python_interpreter: Arc::new(RwLock::new(None)),
             debug_manager: crate::debug::DebugSessionManager::new(),
             profiler_manager: crate::profiler::ProfileSessionManager::new(),
             memory_manager: crate::profiler::memory::session::MemorySessionManager::new(),
@@ -232,6 +246,10 @@ impl LspServer {
             client: self.client.clone(),
             type_checking_enabled: Arc::clone(&self.type_checking_enabled),
             analyze_enabled: Arc::clone(&self.analyze_enabled),
+            workspace_roots: Arc::clone(&self.workspace_roots),
+            python_interpreter: Arc::clone(&self.python_interpreter),
+            typeshed_generations: Arc::clone(&self.typeshed_generations),
+            initial_scan_complete: Arc::clone(&self.initial_scan_complete),
             configuration_editor: Arc::clone(&self.configuration_editor),
         }
     }
@@ -645,6 +663,14 @@ pub fn run_server() -> std::io::Result<()> {
             .custom_method(
                 basilisk_common::configuration_editor::OCCURRENCES,
                 LspServer::rule_occurrences,
+            )
+            .custom_method(
+                basilisk_common::configuration_editor::TYPESHED_ACTION,
+                LspServer::typeshed_action,
+            )
+            .custom_method(
+                basilisk_common::configuration_editor::TYPESHED_DOCUMENT,
+                LspServer::typeshed_document,
             )
             .finish();
         Server::new(stdin, stdout, socket).serve(service).await;

@@ -3,8 +3,8 @@
 //! In-session Salsa analysis engine for the LSP.
 //!
 //! Holds a persistent [`basilisk_checker::BasiliskDatabase`] plus the salsa
-//! **input** handles (one [`SourceFile`] per file, one [`ConfigInput`] per root,
-//! one [`SearchPathsInput`] for the workspace). On each analysis it syncs those
+//! **input** handles (one [`SourceFile`] per file, one [`ConfigInput`] per config
+//! scope, one [`SearchPathsInput`] per workspace root). On each analysis it syncs those
 //! inputs to the current values and reads the memoized queries
 //! ([`cross_resolved_module`] for navigation, [`file_diagnostics_resolved`] for
 //! diagnostics), so re-analysing an unchanged file is served from the memo and a
@@ -40,16 +40,27 @@ pub(crate) struct EngineAnalysis {
     pub parse_error: Option<String>,
 }
 
+/// Root/config-scoped inputs that accompany one source analysis.
+#[derive(Clone, Copy)]
+pub(crate) struct AnalysisInputs<'a> {
+    pub config: &'a BasiliskConfig,
+    pub config_key: &'a Path,
+    pub search_paths_root: &'a Path,
+    pub search_paths: &'a ImportSearchPaths,
+}
+
 /// Persistent Salsa database + input handles backing the LSP's incremental
 /// single-file analysis.
 pub(crate) struct SalsaAnalysisEngine {
     db: Mutex<BasiliskDatabase>,
     /// Per-file source-text inputs, keyed by absolute path.
     sources: DashMap<PathBuf, SourceFile>,
-    /// Per-root configuration inputs, keyed by the file's owning root.
+    /// Per-directory configuration inputs, keyed by the file's config scope.
     config_inputs: DashMap<PathBuf, ConfigInput>,
-    /// The single workspace-wide import search-paths input.
-    search_paths_input: Mutex<Option<SearchPathsInput>>,
+    /// Per-root import search-path inputs. Distinct target interpreters must
+    /// keep distinct Salsa identities or alternating roots would invalidate
+    /// and overwrite a shared input.
+    search_paths_inputs: DashMap<PathBuf, SearchPathsInput>,
     /// The workspace file registry input for content-precise cross-file
     /// invalidation — a path → `SourceFile` map so a query can depend on the
     /// content of the files it imports (e.g. an edited user-stub `.pyi` updates
@@ -66,7 +77,7 @@ impl Default for SalsaAnalysisEngine {
             db: Mutex::new(BasiliskDatabase::default()),
             sources: DashMap::new(),
             config_inputs: DashMap::new(),
-            search_paths_input: Mutex::new(None),
+            search_paths_inputs: DashMap::new(),
             workspace_files: Mutex::new(None),
             registry_dirty: AtomicBool::new(false),
         }
@@ -85,7 +96,8 @@ impl SalsaAnalysisEngine {
     /// Analyse one file through the memoized salsa queries, resolving imports
     /// against `search_paths`.
     ///
-    /// `root_key` is the file's owning workspace root (the config-input key).
+    /// `config_key` identifies the file's merged configuration scope, while
+    /// `search_paths_root` identifies its owning workspace target environment.
     /// The resolved module always comes from [`cross_resolved_module`] and so
     /// always carries `imported_symbols` — external stub/py.typed enrichment
     /// drives hover, completion, and navigation in every mode (GitHub #287).
@@ -98,9 +110,7 @@ impl SalsaAnalysisEngine {
         &self,
         path: &Path,
         text: &str,
-        config: &BasiliskConfig,
-        root_key: &Path,
-        search_paths: &ImportSearchPaths,
+        inputs: AnalysisInputs<'_>,
         cross_module: bool,
     ) -> EngineAnalysis {
         let path_str = path.to_string_lossy().into_owned();
@@ -111,8 +121,9 @@ impl SalsaAnalysisEngine {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let source = self.source_for(&mut db, path, &path_str, text);
-        let config_input = self.config_for(&mut db, root_key, config);
-        let search_paths_input = self.search_paths_for(&mut db, search_paths);
+        let config_input = self.config_for(&mut db, inputs.config_key, inputs.config);
+        let search_paths_input =
+            self.search_paths_for(&mut db, inputs.search_paths_root, inputs.search_paths);
         let workspace = self.workspace_files_for(&mut db);
 
         // One memoized parse+resolve, whose outcome distinguishes a parse error
@@ -289,27 +300,26 @@ impl SalsaAnalysisEngine {
         }
     }
 
-    /// Get-or-create the workspace [`SearchPathsInput`], synced to `search_paths`.
+    /// Get-or-create one root's [`SearchPathsInput`], synced to `search_paths`.
     ///
     /// Compare-before-set: re-setting unchanged search paths would re-resolve
     /// every file's imports on every analysis (see [`Self::source_for`]).
     fn search_paths_for(
         &self,
         db: &mut BasiliskDatabase,
+        root: &Path,
         search_paths: &ImportSearchPaths,
     ) -> SearchPathsInput {
-        let mut guard = self
-            .search_paths_input
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(input) = *guard {
+        if let Some(existing) = self.search_paths_inputs.get(root) {
+            let input = *existing;
+            drop(existing);
             if input.value(&*db) != search_paths {
                 let _ = input.set_value(db).to(search_paths.clone());
             }
             input
         } else {
             let input = SearchPathsInput::new(&*db, search_paths.clone());
-            *guard = Some(input);
+            let _ = self.search_paths_inputs.insert(root.to_path_buf(), input);
             input
         }
     }
@@ -332,6 +342,7 @@ mod tests {
             site_packages: None,
             registry: None,
             typeshed_path: None,
+            typeshed_snapshot: None,
         }
     }
 
@@ -371,7 +382,17 @@ mod tests {
         search_paths.site_packages = Some(site);
         search_paths.roots = vec![workspace.clone()];
 
-        let analysis = engine.analyse(&file, text, &config, &workspace, &search_paths, false);
+        let analysis = engine.analyse(
+            &file,
+            text,
+            AnalysisInputs {
+                config: &config,
+                config_key: &workspace,
+                search_paths_root: &workspace,
+                search_paths: &search_paths,
+            },
+            false,
+        );
         let resolved = analysis.resolved.expect("module should resolve");
         let base = resolved
             .imported_symbols
@@ -393,7 +414,17 @@ mod tests {
         let path = Path::new("/tmp/bsk_engine_remove/a.py");
         let root = Path::new("/tmp/bsk_engine_remove");
 
-        let _ = engine.analyse(path, "x = 1\n", &config, root, &sp, false);
+        let _ = engine.analyse(
+            path,
+            "x = 1\n",
+            AnalysisInputs {
+                config: &config,
+                config_key: root,
+                search_paths_root: root,
+                search_paths: &sp,
+            },
+            false,
+        );
         assert_eq!(
             engine.tracked_source_count(),
             1,

@@ -21,8 +21,12 @@ pub fn resolve_module_imports(
     resolved: &mut basilisk_resolver::ResolvedModule,
     search_paths: &ImportSearchPaths,
 ) {
+    resolved.authoritative_typeshed =
+        search_paths.typeshed_snapshot.is_some() || search_paths.typeshed_path.is_some();
+
     // The file's own path, used to search its directory for sibling modules.
     let importing_file = PathBuf::from(&resolved.path);
+    populate_builtin_classes(resolved, search_paths, &importing_file);
 
     // One directory-listing cache for the whole loop: every import of this
     // file probes the same search directories, so read each dir once instead
@@ -47,10 +51,9 @@ pub fn resolve_module_imports(
         if let Some(r) = result {
             import.resolution = r.resolution;
             import.resolved_path = Some(r.path);
-        } else if !super::bundled_stdlib_recognized(
-            &import.module,
-            search_paths.typeshed_path.is_some(),
-        ) {
+        } else if resolved.authoritative_typeshed
+            || !super::bundled_stdlib_recognized(&import.module, false)
+        {
             // Classify why the import is unresolved for actionable diagnostics.
             // When a custom typeshed is configured it is canonical for step 3, so
             // the bundled name-set no longer rescues a module absent from it —
@@ -66,6 +69,9 @@ pub fn resolve_module_imports(
             captured.push((binding, api));
         }
 
+        import.stub_distribution =
+            stub_distribution(&import.module, search_paths, Some(importing_file.as_path()));
+
         // Annotate with package metadata from the uv registry.
         enrich_package_metadata(import, search_paths);
     }
@@ -73,6 +79,80 @@ pub fn resolve_module_imports(
     for (binding, api) in captured {
         let _ = resolved.imported_modules.insert(binding, api);
     }
+}
+
+/// Index `builtins.pyi` from the exact root-owned active generation.
+///
+/// This deliberately has no compiled-table fallback: production CLI/LSP paths
+/// activate a Snapshot before analysis, and a custom source is canonical. A
+/// missing/malformed body therefore leaves the index empty instead of mixing a
+/// second step-3 generation into editor or checker results.
+fn populate_builtin_classes(
+    resolved: &mut basilisk_resolver::ResolvedModule,
+    search_paths: &ImportSearchPaths,
+    importing_file: &std::path::Path,
+) {
+    resolved.builtin_classes.clear();
+    let Some(active) = search_paths.typeshed_snapshot.as_ref() else {
+        return;
+    };
+    let Some((snapshot, target)) = active.for_importer(Some(importing_file)) else {
+        return;
+    };
+    let located = target.map_or_else(
+        || snapshot.read_stub("builtins"),
+        |target| snapshot.read_stub_for_target("builtins", target.python_version),
+    );
+    let Some((logical_uri, source_text)) = located else {
+        return;
+    };
+    let stub_source = if matches!(
+        snapshot.identity,
+        basilisk_stubs::typeshed::source::SourceIdentity::Custom { .. }
+    ) {
+        basilisk_stubs::StubSource::CustomTypeshed
+    } else {
+        basilisk_stubs::StubSource::Typeshed
+    };
+    let parsed = match target {
+        Some(target) => basilisk_stubs::pyi_parser::parse_pyi_source_for_target(
+            source_text,
+            std::path::Path::new(&logical_uri),
+            "builtins",
+            stub_source,
+            basilisk_stubs::StubTier::Tier1,
+            target,
+        ),
+        None => basilisk_stubs::parse_pyi_source(
+            source_text,
+            std::path::Path::new(&logical_uri),
+            "builtins",
+            stub_source,
+            basilisk_stubs::StubTier::Tier1,
+        ),
+    };
+    let Ok(module) = parsed else {
+        return;
+    };
+    let source_path = std::path::PathBuf::from(logical_uri);
+    let source_identity = snapshot.identity.uri_component();
+    let source_text: std::sync::Arc<str> = std::sync::Arc::from(source_text);
+    let provenance =
+        basilisk_stubs::TypeProvenance::from((&stub_source, &basilisk_stubs::StubTier::Tier1));
+    resolved
+        .builtin_classes
+        .extend(module.classes.into_iter().map(|(name, declaration)| {
+            (
+                name,
+                basilisk_resolver::scope::IndexedStubClass {
+                    declaration,
+                    source_path: source_path.clone(),
+                    source_identity: source_identity.clone(),
+                    source_text: std::sync::Arc::clone(&source_text),
+                    provenance,
+                },
+            )
+        }));
 }
 
 /// Build the [`ImportedModuleApi`] for a plain `import X` backed by a user stub,
@@ -188,8 +268,10 @@ fn enrich_package_metadata(
         return;
     };
 
-    // Skip stdlib modules — they have no package metadata.
-    if basilisk_stubs::is_stdlib_module(&import.module) {
+    // Skip modules that actually resolved from the selected step-3 source.
+    // Name-only recognition is used only for the matching embedded bundle;
+    // active/custom generations are identified by their resolved path.
+    if is_standard_library_import(import, search_paths) {
         return;
     }
 
@@ -210,4 +292,36 @@ fn enrich_package_metadata(
     });
     import.package_version = info.version.clone();
     import.package_name = Some(info.name.clone());
+}
+
+fn stub_distribution(
+    module_name: &str,
+    search_paths: &ImportSearchPaths,
+    importing_file: Option<&std::path::Path>,
+) -> Option<String> {
+    if let Some(active) = &search_paths.typeshed_snapshot {
+        return active
+            .distribution_for_importer(importing_file, module_name)
+            .map(ToOwned::to_owned);
+    }
+    if search_paths.typeshed_path.is_some() {
+        return None;
+    }
+    basilisk_stubs::typeshed_stub_distribution(module_name).map(ToOwned::to_owned)
+}
+
+fn is_standard_library_import(
+    import: &basilisk_resolver::ImportInfo,
+    search_paths: &ImportSearchPaths,
+) -> bool {
+    let Some(path) = import.resolved_path.as_deref() else {
+        return false;
+    };
+    if search_paths.typeshed_snapshot.is_some() {
+        return path.to_string_lossy().starts_with("typeshed:");
+    }
+    if let Some(custom) = &search_paths.typeshed_path {
+        return path.starts_with(custom.join("stdlib"));
+    }
+    basilisk_stubs::is_stdlib_module(&import.module)
 }

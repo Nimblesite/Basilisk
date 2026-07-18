@@ -7,6 +7,7 @@ import type {
   ConfigurationPreview,
   ConfigurationSnapshot,
   RuleOccurrencesResponse,
+  TypeshedStatusChanged,
 } from "./configuration-editor-model";
 
 export type ConfigurationEditorPhase =
@@ -84,6 +85,62 @@ export function decodeConfigurationChanged(value: unknown): ConfigurationChanged
     : undefined;
 }
 
+function hasKind(value: unknown, allowed: readonly string[]): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) { return false; }
+  const kind = (value as Record<string, unknown>).kind;
+  return typeof kind === "string" && allowed.includes(kind);
+}
+
+function hasOptionalKind(value: unknown, allowed: readonly string[]): boolean {
+  return value === undefined || hasKind(value, allowed);
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isTypeshedWarning(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) { return false; }
+  const fields = value as Record<string, unknown>;
+  return typeof fields.code === "string" && typeof fields.message === "string"
+    && hasKind(fields.severity, ["Advisory", "High"]);
+}
+
+function hasTypeshedStateKinds(fields: Record<string, unknown>): boolean {
+  return hasKind(fields.lifecycle, ["Acquiring", "Ready", "Blocked"])
+    && hasKind(fields.licenseStatus, ["Acquiring", "Unavailable", "Approved", "Changed", "NotSupplied"])
+    && hasKind(fields.provenance, ["Pending", "GithubTlsAttested", "Unverified", "BundleVetted", "UserManaged"])
+    && hasOptionalKind(fields.activeSource, ["Custom", "ExactCommit", "Latest", "Bundled"])
+    && hasOptionalKind(fields.transport, ["CustomPath", "EmbeddedZip", "Codeload", "Mirror"]);
+}
+
+function hasTypeshedIdentityFields(fields: Record<string, unknown>): boolean {
+  return isOptionalString(fields.blockedReason)
+    && isOptionalString(fields.commitIdentity)
+    && isOptionalString(fields.treeIdentity)
+    && isOptionalString(fields.licenseReference);
+}
+
+function isTypeshedStatus(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) { return false; }
+  const fields = value as Record<string, unknown>;
+  return hasTypeshedStateKinds(fields)
+    && hasTypeshedIdentityFields(fields)
+    && typeof fields.signedRelease === "boolean"
+    && Array.isArray(fields.warnings)
+    && fields.warnings.every(isTypeshedWarning);
+}
+
+/** Validate the typed Typeshed lifecycle notification before using it as an invalidation. */
+export function decodeTypeshedStatusChanged(value: unknown): TypeshedStatusChanged | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) { return undefined; }
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.rootUri !== "string" || !isTypeshedStatus(candidate.status)) {
+    return undefined;
+  }
+  return candidate as unknown as TypeshedStatusChanged;
+}
+
 /** Mark an open root stale without replacing the snapshot beneath an active preview. */
 export function requestConfigurationRefresh(
   state: Signal<ConfigurationEditorState>,
@@ -94,6 +151,19 @@ export function requestConfigurationRefresh(
   state.value = {
     ...state.value,
     message: "The project configuration changed; refreshing…",
+    refreshRequested: true,
+  };
+}
+
+/** A status generation can change while the TOML revision remains identical. */
+export function requestTypeshedStatusRefresh(
+  state: Signal<ConfigurationEditorState>,
+  change: TypeshedStatusChanged,
+): void {
+  if (state.value.rootUri !== change.rootUri) { return; }
+  state.value = {
+    ...state.value,
+    message: "Typeshed source status changed; refreshing…",
     refreshRequested: true,
   };
 }

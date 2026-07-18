@@ -14,6 +14,13 @@ use tracing::{info, warn};
 use crate::cache_check;
 use crate::output::FileSource;
 
+mod typeshed;
+
+pub(crate) use typeshed::build_import_search_paths;
+use typeshed::{
+    activate_production_typeshed, build_import_search_paths_with_config, load_cli_workspace_config,
+};
+
 /// Which command's diagnostics to keep at the CLI edge.
 ///
 /// Implements [CHKARCH-COMMANDS]: one rule universe, partitioned exactly once
@@ -137,6 +144,47 @@ pub(crate) fn collect_and_check(
     stats: &mut cache_check::CacheStats,
     scope: DiagnosticScope,
 ) -> Result<CheckOutcome, PipelineError> {
+    collect_and_check_with_overrides(paths, cache, stats, scope, TypeshedOverrides::default())
+}
+
+/// One-run command-line overrides for Typeshed acquisition policy.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct TypeshedOverrides {
+    pub(crate) no_cache: bool,
+    pub(crate) no_verification: bool,
+}
+
+pub(crate) fn collect_and_check_with_overrides(
+    paths: &[String],
+    cache: &cache_check::CacheOptions,
+    stats: &mut cache_check::CacheStats,
+    scope: DiagnosticScope,
+    overrides: TypeshedOverrides,
+) -> Result<CheckOutcome, PipelineError> {
+    collect_and_check_with_typeshed(
+        paths,
+        cache,
+        stats,
+        scope,
+        overrides,
+        activate_production_typeshed,
+    )
+}
+
+fn collect_and_check_with_typeshed<F>(
+    paths: &[String],
+    cache: &cache_check::CacheOptions,
+    stats: &mut cache_check::CacheStats,
+    scope: DiagnosticScope,
+    overrides: TypeshedOverrides,
+    activate_typeshed: F,
+) -> Result<CheckOutcome, PipelineError>
+where
+    F: Fn(
+        &mut basilisk_lsp::import_resolver::ImportSearchPaths,
+        &basilisk_lsp::config::WorkspaceConfig,
+    ) -> Result<(), PipelineError>,
+{
     // [CHKARCH-CONFIG-DISCOVERY] The first path only anchors project-level
     // concerns (include expansion, version detection, cache location); rule
     // config is resolved per checked file below, so diagnostics never depend
@@ -162,11 +210,20 @@ pub(crate) fn collect_and_check(
     // live at the project root, not necessarily in the checked path.
     let project_root = find_project_root(&config_root);
     let roots = analysis_roots(paths, &project_root);
-    let search_paths = if crate::import_search::files_might_import(&python_files) {
-        build_import_search_paths(roots, &project_root)
+    let mut workspace_config =
+        load_cli_workspace_config(&project_root, config.python_version.as_deref());
+    if overrides.no_cache {
+        workspace_config.typeshed_cache = false;
+    }
+    if overrides.no_verification {
+        workspace_config.typeshed_verify = false;
+    }
+    let mut search_paths = if crate::import_search::files_might_import(&python_files) {
+        build_import_search_paths_with_config(roots, &workspace_config)
     } else {
         crate::import_search::roots_only(roots)
     };
+    activate_typeshed(&mut search_paths, &workspace_config)?;
 
     // Per-file rule config, memoized per directory ([CHKARCH-CONFIG-DISCOVERY]).
     // The cache fingerprint covers every directory's config so a child config
@@ -231,65 +288,6 @@ pub(crate) fn analysis_roots(
         }
         roots
     })
-}
-
-/// Build the shared CLI/LSP import search path model for a project.
-pub(crate) fn build_import_search_paths(
-    roots: Vec<std::path::PathBuf>,
-    project_root: &std::path::Path,
-) -> basilisk_lsp::import_resolver::ImportSearchPaths {
-    let config = basilisk_lsp::config::load_analysis_config(project_root);
-    let registry = build_uv_registry(&roots);
-    let mut search_paths =
-        basilisk_lsp::import_resolver::search_paths_from_config(&roots, &config, registry);
-    search_paths.roots = roots;
-    info!(
-        site_packages = ?search_paths.site_packages,
-        has_registry = search_paths.registry.is_some(),
-        "built import search paths"
-    );
-    search_paths
-}
-
-/// Build a uv package registry from workspace roots, if this is a uv project.
-fn build_uv_registry(
-    roots: &[std::path::PathBuf],
-) -> Option<std::sync::Arc<basilisk_uv::PackageRegistry>> {
-    let uv_info = basilisk_uv::detect_uv_project(roots)?;
-
-    if !uv_info.has_lockfile {
-        info!(
-            root = %uv_info.root.display(),
-            "uv project detected but no uv.lock — skipping registry"
-        );
-        return None;
-    }
-
-    let lock_path = uv_info.root.join("uv.lock");
-    let lock_file = match basilisk_uv::parse_lock_file(&lock_path) {
-        Ok(lock) => lock,
-        Err(err) => {
-            warn!(
-                path = %lock_path.display(),
-                %err,
-                "failed to parse uv.lock — package registry unavailable"
-            );
-            return None;
-        }
-    };
-
-    let deps = basilisk_uv::extract_pyproject_deps(&uv_info.root);
-    let registry = basilisk_uv::PackageRegistry::from_lock_file(&lock_file, &deps);
-
-    let pkg_count = registry.all_packages().count();
-    info!(
-        root = %uv_info.root.display(),
-        packages = pkg_count,
-        direct_deps = deps.len(),
-        "built uv package registry"
-    );
-
-    Some(std::sync::Arc::new(registry))
 }
 
 fn process_file(

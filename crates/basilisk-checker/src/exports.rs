@@ -12,9 +12,11 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use basilisk_resolver::scope::{ExternalMethod, ExternalSymbol, ExternalSymbolKind, ImportKind};
+use basilisk_resolver::scope::{
+    ExternalMethod, ExternalSymbol, ExternalSymbolKind, ImportKind, ImportedModuleApi,
+};
 use basilisk_resolver::Span;
-use basilisk_stubs::types::{StubFunction, StubSource, StubTier};
+use basilisk_stubs::types::{StubClass, StubModule, StubSource, StubTarget, StubTier};
 use basilisk_stubs::TypeProvenance;
 
 /// Extract exported symbols from a `ResolvedModule`.
@@ -46,6 +48,9 @@ pub fn extract_exports(
                 signature: Some(signature),
                 provenance: Some(TypeProvenance::Source),
                 methods: Vec::new(),
+                bases: Vec::new(),
+                metaclass: None,
+                metaclass_calls: Vec::new(),
             },
         ));
     }
@@ -74,6 +79,9 @@ pub fn extract_exports(
                 signature: Some(format!("class {}", class.name)),
                 provenance: Some(TypeProvenance::Source),
                 methods,
+                bases: class.bases.clone(),
+                metaclass: class.metaclass_name.clone(),
+                metaclass_calls: Vec::new(),
             },
         ));
     }
@@ -95,6 +103,9 @@ pub fn extract_exports(
                 signature: None,
                 provenance: Some(TypeProvenance::Source),
                 methods: Vec::new(),
+                bases: Vec::new(),
+                metaclass: None,
+                metaclass_calls: Vec::new(),
             },
         ));
     }
@@ -127,6 +138,59 @@ pub fn extract_stub_exports(
         return Vec::new();
     };
 
+    stub_module_exports(&stub, stub_path, source)
+}
+
+/// Extract exports from immutable VFS source using the same declaration model
+/// as disk-backed stubs. A concrete target selects guarded declarations; absent
+/// evidence keeps only declarations valid across feasible branches.
+#[must_use]
+pub fn extract_stub_exports_from_source(
+    source_text: &str,
+    logical_path: &Path,
+    module_name: &str,
+    source: StubSource,
+    target: Option<&StubTarget>,
+) -> Vec<(String, ExternalSymbol)> {
+    let Some(stub) = parse_stub_source(source_text, logical_path, module_name, source, target)
+    else {
+        return Vec::new();
+    };
+    stub_module_exports(&stub, logical_path, source)
+}
+
+fn parse_stub_source(
+    source_text: &str,
+    logical_path: &Path,
+    module_name: &str,
+    source: StubSource,
+    target: Option<&StubTarget>,
+) -> Option<StubModule> {
+    match target {
+        Some(target) => basilisk_stubs::pyi_parser::parse_pyi_source_for_target(
+            source_text,
+            logical_path,
+            module_name,
+            source,
+            StubTier::Tier1,
+            target,
+        ),
+        None => basilisk_stubs::parse_pyi_source(
+            source_text,
+            logical_path,
+            module_name,
+            source,
+            StubTier::Tier1,
+        ),
+    }
+    .ok()
+}
+
+fn stub_module_exports(
+    stub: &StubModule,
+    stub_path: &Path,
+    source: StubSource,
+) -> Vec<(String, ExternalSymbol)> {
     let provenance = Some(TypeProvenance::from((&source, &StubTier::Tier1)));
     let mut exports = Vec::new();
 
@@ -139,9 +203,12 @@ pub fn extract_stub_exports(
                 type_annotation: func.return_type.clone(),
                 source_path: stub_path.to_path_buf(),
                 source_span: Span::new(0, 0),
-                signature: Some(build_stub_signature(func)),
+                signature: Some(basilisk_stubs::render_stub_signature(func)),
                 provenance,
                 methods: Vec::new(),
+                bases: Vec::new(),
+                metaclass: None,
+                metaclass_calls: Vec::new(),
             },
         ));
     }
@@ -154,7 +221,7 @@ pub fn extract_stub_exports(
             .iter()
             .map(|method| ExternalMethod {
                 name: method.name.clone(),
-                signature: build_stub_signature(method),
+                signature: basilisk_stubs::render_stub_signature(method),
             })
             .collect();
         exports.push((
@@ -168,6 +235,9 @@ pub fn extract_stub_exports(
                 signature: Some(format!("class {}", class.name)),
                 provenance,
                 methods,
+                bases: class.bases.clone(),
+                metaclass: class.metaclass.clone(),
+                metaclass_calls: Vec::new(),
             },
         ));
     }
@@ -184,6 +254,9 @@ pub fn extract_stub_exports(
                 signature: None,
                 provenance,
                 methods: Vec::new(),
+                bases: Vec::new(),
+                metaclass: None,
+                metaclass_calls: Vec::new(),
             },
         ));
     }
@@ -258,6 +331,76 @@ pub fn load_external_module(path: &Path, request: &ExternalModuleRequest) -> Sha
         }),
         ExternalModuleRequest::PyTyped => std::sync::Arc::new(load_py_typed_module(path)),
     }
+}
+
+/// Load a `.pyi` external module from immutable VFS text rather than disk.
+/// Non-stub requests are rejected because `py.typed` modules remain filesystem
+/// sources at resolution step 5.
+#[must_use]
+pub fn load_external_module_from_source(
+    logical_path: &Path,
+    source_text: &str,
+    request: &ExternalModuleRequest,
+    target: Option<&StubTarget>,
+) -> SharedExternalModule {
+    load_external_module_from_source_with_loader(logical_path, source_text, request, target, |_| {
+        None
+    })
+}
+
+/// Load one VFS-backed stub and follow its re-export graph through the same
+/// active snapshot. Re-exported names that have no local declaration are
+/// represented as honest, signature-free symbols: this keeps typing-spec
+/// imports resolvable without manufacturing a declaration that the stub did
+/// not contain.
+#[must_use]
+pub fn load_external_module_from_source_with_loader(
+    logical_path: &Path,
+    source_text: &str,
+    request: &ExternalModuleRequest,
+    target: Option<&StubTarget>,
+    mut loader: impl FnMut(&str) -> Option<StubModule>,
+) -> SharedExternalModule {
+    let ExternalModuleRequest::Stub {
+        module_name,
+        source,
+    } = request
+    else {
+        return std::sync::Arc::new(ExternalModule::default());
+    };
+    let Some(stub) = parse_stub_source(source_text, logical_path, module_name, *source, target)
+    else {
+        return std::sync::Arc::new(ExternalModule::default());
+    };
+    let mut exports = stub_module_exports(&stub, logical_path, *source);
+    let reexported =
+        basilisk_stubs::reexports::reexported_member_names_with_loader(&stub, &mut loader);
+    let provenance = Some(TypeProvenance::from((source, &StubTier::Tier1)));
+    for name in reexported {
+        if exports.iter().any(|(existing, _)| existing == &name) {
+            continue;
+        }
+        exports.push((
+            name.clone(),
+            ExternalSymbol {
+                name,
+                kind: ExternalSymbolKind::Variable,
+                type_annotation: None,
+                source_path: logical_path.to_path_buf(),
+                source_span: Span::new(0, 0),
+                signature: None,
+                provenance,
+                methods: Vec::new(),
+                bases: Vec::new(),
+                metaclass: None,
+                metaclass_calls: Vec::new(),
+            },
+        ));
+    }
+    std::sync::Arc::new(ExternalModule {
+        exports,
+        reexports: Vec::new(),
+    })
 }
 
 /// Load a `py.typed` module: exports plus chase edges, from one parse.
@@ -365,24 +508,94 @@ fn sibling_module_file(dir: &Path, module: &str) -> Option<PathBuf> {
 }
 
 /// Build a function signature string from a parsed stub function.
-fn build_stub_signature(func: &StubFunction) -> String {
-    let mut sig = format!("def {}(", func.name);
-    for (idx, param) in func.params.iter().enumerate() {
-        if idx > 0 {
-            sig.push_str(", ");
+///
+/// Parameter-kind markers are rendered faithfully — positional-only `/`,
+/// keyword-only `*`, `*args`, and `**kwargs` — so a `.pyi` signature such as
+/// Call-visible signatures of a bound method, one per `@overload` variant,
+/// in declaration order ([STUBRES-PYI], GitHub #288).
+///
+/// Each overload's `self`/`cls` receiver is removed (it lives in
+/// [`StubFunction::receiver`], where its annotation — e.g. `LiteralString` for
+/// `str.join` — drives specialization at the call site), while positional-only
+/// `/` and the exact return type are preserved. This is the real-`.pyi`
+/// replacement for the curated builtin-method table: hover and call checking
+/// read the same parsed declaration, never a hand-maintained string. An empty
+/// result means the class declares no method with that name.
+#[must_use]
+pub fn bound_method_signatures(class: &StubClass, method: &str) -> Vec<String> {
+    class
+        .methods
+        .iter()
+        .filter(|func| func.name == method)
+        .map(basilisk_stubs::render_stub_signature)
+        .collect()
+}
+
+/// Flatten an imported class's inherited methods over its module's C3 MRO
+/// ([STUBRES-PYI] #289, GitHub #287).
+///
+/// A `from … import Class` binding carries only the named class, not its bases
+/// (`from unittest.mock import Mock` binds `Mock` but not `NonCallableMock` /
+/// `CallableMixin`). Without flattening, hover on `Mock`'s constructor cannot
+/// reach the inherited `__new__`/`__init__`. Method names are resolved in MRO
+/// order — the first defining class wins, and all its overloads are kept — so a
+/// subclass override shadows a base definition exactly as Python does.
+///
+/// This enriches ONLY the hover-consumed `methods` (no diagnostic rule reads
+/// `ExternalSymbol::methods`), and callers apply it solely to the bounded set of
+/// named `From` imports, so lazy extraction and the benchmark stay unaffected.
+#[must_use]
+pub fn flattened_class_methods(
+    class_name: &str,
+    module_exports: &[(String, ExternalSymbol)],
+) -> Vec<ExternalMethod> {
+    let by_name: std::collections::HashMap<&str, &ExternalSymbol> = module_exports
+        .iter()
+        .map(|(name, symbol)| (name.as_str(), symbol))
+        .collect();
+    let mro = crate::stub_constructor::mro_over(class_name, &|name| {
+        by_name.get(name).map_or_else(Vec::new, |symbol| {
+            symbol
+                .bases
+                .iter()
+                .map(|base| crate::stub_constructor::base_head(base).to_owned())
+                .filter(|head| head != "object" && head != "Any")
+                .collect()
+        })
+    });
+    let mut methods = Vec::new();
+    let mut claimed: HashSet<String> = HashSet::new();
+    for class in &mro {
+        let Some(symbol) = by_name.get(class.as_str()) else {
+            continue;
+        };
+        for method in &symbol.methods {
+            if !claimed.contains(&method.name) {
+                methods.push(method.clone());
+            }
         }
-        sig.push_str(&param.name);
-        if let Some(annotation) = &param.annotation {
-            sig.push_str(": ");
-            sig.push_str(annotation);
+        for method in &symbol.methods {
+            let _ = claimed.insert(method.name.clone());
         }
     }
-    sig.push(')');
-    if let Some(return_type) = &func.return_type {
-        sig.push_str(" -> ");
-        sig.push_str(return_type);
-    }
-    sig
+    methods
+}
+
+/// Resolve the bound `__call__` overloads declared by an external class's
+/// metaclass, including an inherited definition over the metaclass C3 MRO.
+fn flattened_metaclass_calls(
+    symbol: &ExternalSymbol,
+    module_exports: &[(String, ExternalSymbol)],
+) -> Vec<ExternalMethod> {
+    let Some(metaclass) = symbol.metaclass.as_deref() else {
+        return Vec::new();
+    };
+    let head = crate::stub_constructor::base_head(metaclass);
+    let simple_name = head.rsplit('.').next().unwrap_or(head);
+    flattened_class_methods(simple_name, module_exports)
+        .into_iter()
+        .filter(|method| method.name == "__call__")
+        .collect()
 }
 
 /// Build a function signature string for hover display.
@@ -417,6 +630,13 @@ fn build_function_signature(func: &basilisk_resolver::scope::FunctionInfo, sourc
 /// (`*-stubs` packages, on-demand typeshed) is [`StubSource::StubPackage`].
 /// Provenance flows from here to hover via [`TypeProvenance`].
 fn stub_source_for(resolved_path: &Path, custom_typeshed: Option<&Path>) -> StubSource {
+    let logical = resolved_path.to_string_lossy();
+    if logical.starts_with("typeshed:custom-") {
+        return StubSource::CustomTypeshed;
+    }
+    if logical.starts_with("typeshed:") {
+        return StubSource::Typeshed;
+    }
     match custom_typeshed {
         Some(typeshed) if resolved_path.starts_with(typeshed.join("stdlib")) => {
             StubSource::CustomTypeshed
@@ -459,6 +679,7 @@ pub fn populate_imported_symbols<'a, F, E>(
 {
     let imports = &resolved.imports;
     let imported_symbols = &mut resolved.imported_symbols;
+    let imported_modules = &mut resolved.imported_modules;
     imported_symbols.clear();
 
     for import in imports {
@@ -470,6 +691,7 @@ pub fn populate_imported_symbols<'a, F, E>(
         // or inline-typed `py.typed` package (PEP 561 opt-in only) through the
         // shared lookup.
         let mut py_typed_source = false;
+        let mut authoritative_stub = false;
         let external;
         let target_exports: &[(String, ExternalSymbol)] =
             if let Some(exports) = workspace_exports(resolved_path) {
@@ -478,9 +700,12 @@ pub fn populate_imported_symbols<'a, F, E>(
                 // Classify the stub's provenance: a `.pyi` under the configured
                 // custom typeshed's `stdlib/` is CustomTypeshed
                 // ([STUBRES-CUSTOM-TYPESHED]); every other stub is StubPackage/Tier1.
+                let source = stub_source_for(resolved_path, custom_typeshed);
+                authoritative_stub =
+                    matches!(source, StubSource::Typeshed | StubSource::CustomTypeshed);
                 let request = ExternalModuleRequest::Stub {
                     module_name: import.module.clone(),
-                    source: stub_source_for(resolved_path, custom_typeshed),
+                    source,
                 };
                 external = external_module(resolved_path, &request);
                 &external.exports
@@ -493,6 +718,29 @@ pub fn populate_imported_symbols<'a, F, E>(
             } else {
                 continue;
             };
+
+        if import.kind == ImportKind::Plain && authoritative_stub {
+            let binding = import.names.first().cloned().unwrap_or_else(|| {
+                import
+                    .module
+                    .split('.')
+                    .next()
+                    .unwrap_or(&import.module)
+                    .to_owned()
+            });
+            let member_names = target_exports
+                .iter()
+                .map(|(name, _)| name.clone())
+                .collect();
+            let _ = imported_modules.insert(
+                binding,
+                ImportedModuleApi {
+                    has_getattr: target_exports.iter().any(|(name, _)| name == "__getattr__"),
+                    member_names,
+                    stub_path: resolved_path.clone(),
+                },
+            );
+        }
 
         // Discriminate on `kind`, not `names.is_empty()`: a plain `import foo
         // as f` carries its alias in `names`, but the alias binds the module
@@ -518,7 +766,18 @@ pub fn populate_imported_symbols<'a, F, E>(
                         })
                         .flatten()
                 });
-                if let Some(symbol) = symbol {
+                if let Some(mut symbol) = symbol {
+                    // [STUBRES-PYI] #289: give a named-imported class its
+                    // inherited methods (over the module's C3 MRO) so hover can
+                    // reach an inherited constructor. Only when the class is in
+                    // this module's own exports, so a re-export keeps its
+                    // already-resolved methods.
+                    if symbol.kind == ExternalSymbolKind::Class
+                        && target_exports.iter().any(|(name, _)| name == &symbol.name)
+                    {
+                        symbol.metaclass_calls = flattened_metaclass_calls(&symbol, target_exports);
+                        symbol.methods = flattened_class_methods(&symbol.name, target_exports);
+                    }
                     let _ = imported_symbols.insert(import_name.clone(), symbol);
                 }
             }

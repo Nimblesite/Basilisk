@@ -39,11 +39,125 @@ export type TagKind =
   | { kind: "PepCategory" }
   | { kind: "Descriptive" };
 
+export type TypeshedSettingKey =
+  | { kind: "TypeshedPath" }
+  | { kind: "TypeshedCommit" }
+  | { kind: "TypeshedUrl" }
+  | { kind: "TypeshedCachePath" }
+  | { kind: "TypeshedCache" }
+  | { kind: "TypeshedVerify" };
+
+export type TypeshedSettingValue =
+  | { kind: "Text"; value: string }
+  | { kind: "Boolean"; value: boolean };
+
 export type EditorMutation =
   | { kind: "SetRule"; code: RuleCode; severity: RuleSeverity }
   | { kind: "RemoveRule"; code: RuleCode }
   | { kind: "SetTag"; tag: RuleTag; severity: RuleSeverity }
-  | { kind: "RemoveTag"; tag: RuleTag };
+  | { kind: "RemoveTag"; tag: RuleTag }
+  | { kind: "SetTypeshedSetting"; key: TypeshedSettingKey; value: TypeshedSettingValue }
+  | { kind: "RemoveTypeshedSetting"; key: TypeshedSettingKey };
+
+export type TypeshedSourceMode =
+  | { kind: "Latest" }
+  | { kind: "ExactCommit" }
+  | { kind: "CustomFolder" };
+
+export type TypeshedWidget =
+  | { kind: "Directory" }
+  | { kind: "Text" }
+  | { kind: "Boolean" };
+
+export type TypeshedLifecycle =
+  | { kind: "Acquiring" }
+  | { kind: "Ready" }
+  | { kind: "Blocked" };
+
+export type TypeshedAction =
+  | { kind: "PinCurrent" }
+  | { kind: "AcquireFresh" }
+  | { kind: "ViewLicense" };
+
+export type TypeshedActiveSource =
+  | { kind: "Custom" }
+  | { kind: "ExactCommit" }
+  | { kind: "Latest" }
+  | { kind: "Bundled" };
+
+export type TypeshedTransport =
+  | { kind: "CustomPath" }
+  | { kind: "EmbeddedZip" }
+  | { kind: "Codeload" }
+  | { kind: "Mirror" };
+
+export type TypeshedLicenseStatus =
+  | { kind: "Acquiring" }
+  | { kind: "Unavailable" }
+  | { kind: "Approved" }
+  | { kind: "Changed" }
+  | { kind: "NotSupplied" };
+
+export type TypeshedProvenance =
+  | { kind: "Pending" }
+  | { kind: "GithubTlsAttested" }
+  | { kind: "Unverified" }
+  | { kind: "BundleVetted" }
+  | { kind: "UserManaged" };
+
+export type TypeshedWarningSeverity =
+  | { kind: "Advisory" }
+  | { kind: "High" };
+
+export interface TypeshedSourceOption {
+  mode: TypeshedSourceMode;
+  label: string;
+  enabled: boolean;
+}
+
+export interface TypeshedSettingState {
+  key: TypeshedSettingKey;
+  label: string;
+  description: string;
+  value: TypeshedSettingValue | undefined;
+  defaultValue: TypeshedSettingValue | undefined;
+  widget: TypeshedWidget;
+  enabled: boolean;
+}
+
+export interface TypeshedActionState {
+  action: TypeshedAction;
+  label: string;
+  enabled: boolean;
+}
+
+export interface TypeshedWarningState {
+  code: string;
+  message: string;
+  severity: TypeshedWarningSeverity;
+}
+
+export interface TypeshedStatusState {
+  lifecycle: TypeshedLifecycle;
+  blockedReason: string | undefined;
+  activeSource: TypeshedActiveSource | undefined;
+  commitIdentity: string | undefined;
+  treeIdentity: string | undefined;
+  transport: TypeshedTransport | undefined;
+  licenseStatus: TypeshedLicenseStatus;
+  licenseReference: string | undefined;
+  provenance: TypeshedProvenance;
+  signedRelease: boolean;
+  warnings: TypeshedWarningState[];
+}
+
+export interface TypeshedConfigurationState {
+  sourceMode: TypeshedSourceMode;
+  sourceOptions: TypeshedSourceOption[];
+  settings: TypeshedSettingState[];
+  actions: TypeshedActionState[];
+  status: TypeshedStatusState;
+}
 
 export type RuleSelector =
   | { kind: "All" }
@@ -123,6 +237,7 @@ export interface ConfigurationSnapshot {
   pathOverrides: PathOverrideState[];
   debt: DebtSummary;
   problems: ConfigurationProblem[];
+  typeshed: TypeshedConfigurationState;
 }
 
 export interface PreviewConfigurationRequest {
@@ -150,7 +265,14 @@ export interface ConfigurationPreview {
   previewId: PreviewId;
   baseRevision: Revision;
   changes: ResolvedRuleChange[];
+  typeshedChanges: TypeshedSettingChange[];
   impact: ConfigurationImpact;
+}
+
+export interface TypeshedSettingChange {
+  key: TypeshedSettingKey;
+  before: TypeshedSettingValue | undefined;
+  after: TypeshedSettingValue | undefined;
 }
 
 export interface ApplyConfigurationRequest {
@@ -190,4 +312,27 @@ export interface RuleOccurrencesResponse {
 export interface ConfigurationChanged {
   rootUri: Uri;
   revision: Revision;
+}
+
+export interface TypeshedActionRequest {
+  rootUri: Uri;
+  baseRevision: Revision;
+  action: TypeshedAction;
+}
+
+export interface TypeshedLicenseDocument {
+  title: string;
+  uri: Uri | undefined;
+  content: string;
+  readOnly: boolean;
+}
+
+export type TypeshedActionResult =
+  | { kind: "Preview"; preview: ConfigurationPreview }
+  | { kind: "Snapshot"; snapshot: ConfigurationSnapshot }
+  | { kind: "License"; license: TypeshedLicenseDocument };
+
+export interface TypeshedStatusChanged {
+  rootUri: Uri;
+  status: TypeshedStatusState;
 }

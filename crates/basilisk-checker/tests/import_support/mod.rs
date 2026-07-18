@@ -50,6 +50,7 @@ pub fn make_search_paths(roots: Vec<PathBuf>) -> ImportSearchPaths {
         site_packages: None,
         registry: None,
         typeshed_path: None,
+        typeshed_snapshot: None,
     }
 }
 
@@ -75,6 +76,7 @@ pub fn module_with_plain_imports(modules: &[&str]) -> basilisk_resolver::Resolve
                 package_dep_kind: None,
                 package_version: None,
                 package_name: None,
+                stub_distribution: None,
                 unresolved_reason: None,
             })
             .collect(),

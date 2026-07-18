@@ -29,6 +29,61 @@ pub struct RuleConfigUpdate {
     pub rule_tags: BTreeMap<String, Option<RuleSeverity>>,
 }
 
+/// Closed persistence allowlist for Typeshed acquisition settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TypeshedConfigKey {
+    /// Custom canonical step-3 folder.
+    TypeshedPath,
+    /// Exact full commit SHA.
+    TypeshedCommit,
+    /// Known-SHA archive mirror template.
+    TypeshedUrl,
+    /// Immutable ZIP cache directory.
+    TypeshedCachePath,
+    /// Whether accepted downloads are reused.
+    TypeshedCache,
+    /// Whether the content gate is enabled.
+    TypeshedVerify,
+}
+
+impl TypeshedConfigKey {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::TypeshedPath => "typeshed-path",
+            Self::TypeshedCommit => "typeshed-commit",
+            Self::TypeshedUrl => "typeshed-url",
+            Self::TypeshedCachePath => "typeshed-cache-path",
+            Self::TypeshedCache => "typeshed-cache",
+            Self::TypeshedVerify => "typeshed-verify",
+        }
+    }
+}
+
+/// A TOML scalar accepted by a Typeshed setting update.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeshedConfigValue {
+    /// A path, URL template, or full SHA.
+    Text(String),
+    /// A cache or verification toggle.
+    Boolean(bool),
+}
+
+/// Atomic Typeshed setting updates. `None` removes the explicit key.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TypeshedConfigUpdate {
+    /// Key to replacement scalar, or `None` to remove the explicit key.
+    pub entries: BTreeMap<TypeshedConfigKey, Option<TypeshedConfigValue>>,
+}
+
+/// One atomic configuration-editor transaction.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConfigurationUpdate {
+    /// Rule and tag entry updates.
+    pub rules: RuleConfigUpdate,
+    /// Typeshed acquisition-setting updates.
+    pub typeshed: TypeshedConfigUpdate,
+}
+
 /// Build and validate a complete replacement without writing it.
 ///
 /// # Errors
@@ -38,6 +93,25 @@ pub struct RuleConfigUpdate {
 pub fn build_rule_patch(
     document: &ConfigDocument,
     update: &RuleConfigUpdate,
+) -> Result<ConfigPatch, ConfigDocumentError> {
+    build_configuration_patch(
+        document,
+        &ConfigurationUpdate {
+            rules: update.clone(),
+            typeshed: TypeshedConfigUpdate::default(),
+        },
+    )
+}
+
+/// Build one validated replacement containing rule/tag and Typeshed updates.
+///
+/// # Errors
+///
+/// Returns [`ConfigDocumentError`] under the same conditions as
+/// [`build_rule_patch`].
+pub fn build_configuration_patch(
+    document: &ConfigDocument,
+    update: &ConfigurationUpdate,
 ) -> Result<ConfigPatch, ConfigDocumentError> {
     if document.read_only {
         return Err(ConfigDocumentError::ReadOnly {
@@ -59,7 +133,7 @@ pub fn build_rule_patch(
 
 fn patch_toml(
     content: &str,
-    update: &RuleConfigUpdate,
+    update: &ConfigurationUpdate,
     path: &std::path::Path,
 ) -> Result<String, ConfigDocumentError> {
     let mut document =
@@ -69,27 +143,46 @@ fn patch_toml(
                 path: path.to_path_buf(),
                 message: error.to_string(),
             })?;
-    if !update.rules.is_empty() {
+    if !update.rules.rules.is_empty() {
         let rules = nested_table_mut(
             document.as_table_mut(),
             &["tool", "basilisk", "rules"],
             path,
         )?;
-        apply_table_updates(rules, &update.rules);
+        apply_table_updates(rules, &update.rules.rules);
     }
-    if !update.rule_tags.is_empty() {
+    if !update.rules.rule_tags.is_empty() {
         let tags = nested_table_mut(
             document.as_table_mut(),
             &["tool", "basilisk", "rule-tags"],
             path,
         )?;
-        apply_table_updates(tags, &update.rule_tags);
+        apply_table_updates(tags, &update.rules.rule_tags);
+    }
+    if !update.typeshed.entries.is_empty() {
+        let basilisk = nested_table_mut(document.as_table_mut(), &["tool", "basilisk"], path)?;
+        apply_typeshed_updates(basilisk, &update.typeshed.entries);
     }
     let rendered = document.to_string();
     Ok(match newline_style(content) {
         "\r\n" => rendered.replace("\r\n", "\n").replace('\n', "\r\n"),
         _ => rendered,
     })
+}
+
+fn apply_typeshed_updates(
+    table: &mut Table,
+    entries: &BTreeMap<TypeshedConfigKey, Option<TypeshedConfigValue>>,
+) {
+    for (key, setting) in entries {
+        match setting {
+            Some(TypeshedConfigValue::Text(text)) => table[key.as_str()] = value(text.as_str()),
+            Some(TypeshedConfigValue::Boolean(enabled)) => table[key.as_str()] = value(*enabled),
+            None => {
+                let _ = table.remove(key.as_str());
+            }
+        }
+    }
 }
 
 fn nested_table_mut<'a>(

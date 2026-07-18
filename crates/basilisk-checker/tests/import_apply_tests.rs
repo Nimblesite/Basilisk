@@ -509,3 +509,45 @@ fn custom_typeshed_does_not_taint_user_stubs_outside_its_stdlib() {
     let _ = fs::remove_dir_all(&typeshed);
     let _ = fs::remove_dir_all(&stub_dir);
 }
+
+#[test]
+fn user_and_generated_stub_exports_keep_honest_provenance_on_disk_and_source() {
+    use basilisk_checker::exports::{extract_stub_exports, extract_stub_exports_from_source};
+    use basilisk_stubs::{StubSource, TypeProvenance};
+
+    let dir = make_tmp_dir("bsk_user_generated_provenance");
+    let manual_source = "def manual() -> int: ...\n";
+    let generated_source =
+        "# Auto-generated stub for `demo` (AST analysis)\ndef generated() -> int: ...\n";
+
+    for (name, source, expected) in [
+        ("manual", manual_source, None),
+        (
+            "generated",
+            generated_source,
+            Some(TypeProvenance::StubTier3),
+        ),
+    ] {
+        let path = dir.join(format!("{name}.pyi"));
+        fs::write(&path, source).unwrap();
+        for exports in [
+            extract_stub_exports(&path, name, StubSource::UserStub),
+            extract_stub_exports_from_source(source, &path, name, StubSource::UserStub, None),
+        ] {
+            let provenance = exports
+                .first()
+                .and_then(|(_, symbol)| symbol.provenance)
+                .expect("stub export provenance");
+            match expected {
+                Some(expected) => assert_eq!(provenance, expected),
+                None => assert_eq!(
+                    provenance.hover_label(),
+                    None,
+                    "a manual/create-local user stub must not be branded typeshed"
+                ),
+            }
+        }
+    }
+
+    let _ = fs::remove_dir_all(&dir);
+}

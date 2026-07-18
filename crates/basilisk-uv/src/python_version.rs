@@ -29,16 +29,13 @@ pub fn read_python_version(root: &Path) -> Option<String> {
 /// 2. `[project].requires-python` lower bound in `pyproject.toml`
 /// 3. `uv.lock` top-level `requires-python` lower bound
 ///
-/// Returns `None` when nothing pins a version — callers fall back to the
-/// checker's centralized default ([CHKARCH-VERSION-TARGET], issue #93).
+/// Returns `None` when nothing supplies version evidence; callers preserve an
+/// unknown target instead of manufacturing a Python version.
 //
-// Implements [LSPUV-PYTHON-VERSION-RESOLUTION-ORDER] steps 2–4 of the spec's
-// 5-step cascade. Step 1 (explicit `python-version` in project config) and
-// step 5 (default 3.12) are owned by the consumers
-// (`basilisk_lsp::workspace`, CLI `main.rs`, and the checker's centralized
-// default). Venv probing (`python3 --version`) is deliberately out of scope
-// per the spec: resolution reads declared project metadata only, so the
-// target stays deterministic across machines and adds no subprocess spawn.
+// Explicit `python-version` in project config is handled by consumers before
+// this metadata cascade. Venv probing (`python3 --version`) is deliberately
+// out of scope: resolution reads declared project metadata only, so the target
+// stays deterministic across machines and adds no subprocess spawn.
 #[must_use]
 pub fn resolve_target_python_version(root: &Path) -> Option<String> {
     read_python_version(root)

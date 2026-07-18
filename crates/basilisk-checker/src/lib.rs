@@ -44,6 +44,7 @@ pub mod rule_catalog;
 pub mod rule_tags;
 pub mod rules;
 pub mod span_util;
+pub mod stub_constructor;
 pub mod suppression;
 mod suppression_audit;
 pub mod types;
@@ -101,11 +102,12 @@ pub fn check_with_config(
     // Only starred-tuple analysis and inline suppression need byte→line
     // lookups. Avoid allocating and populating an O(lines) index for the common
     // case where neither feature appears.
-    let ctx = if has_inline_overrides || source.contains("*tuple[") {
+    let mut ctx = if has_inline_overrides || source.contains("*tuple[") {
         context::CheckContext::from_config_with_source(config, source)
     } else {
         context::CheckContext::from_config(config)
     };
+    ctx.authoritative_typeshed_configured |= module.authoritative_typeshed;
     let raw = rules::run_all(module, &ctx);
 
     // Build the set of symbol names imported from unresolved modules.
@@ -126,7 +128,7 @@ pub fn check_with_config(
                 i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved
                     && !crate::imports::bundled_stdlib_recognized(
                         &i.module,
-                        config.typeshed_path.is_some(),
+                        ctx.authoritative_typeshed_configured,
                     )
             })
             .flat_map(|i| i.names.iter().cloned())

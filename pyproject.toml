@@ -25,11 +25,12 @@ description = "Basilisk — the only Python type checker scoring 100% on the off
 readme = "README-pypi.md"
 requires-python = ">=3.8"
 license = "MIT"
-# The wheel bundles the native binary, which statically links MIT-licensed
-# third-party code (notably the Ruff crates by Astral — "Copyright (c) 2022
-# Charles Marsh"). Their copyright notices MUST travel with every copy, so the
-# notice files are packaged into the wheel's `.dist-info/licenses/` explicitly
-# rather than relying on the default license-file glob.
+# Basilisk's own code is MIT. The bundled native binary also embeds the
+# Apache-2.0/MIT Typeshed snapshot and links dependencies under the permissive
+# licenses recorded in NOTICES (including the Ureq/Rustls HTTPS stack). Those
+# license texts and copyright notices MUST travel with every copy, so the legal
+# files are packaged into `.dist-info/licenses/` explicitly instead of relying
+# on the default license-file glob.
 license-files = ["LICENSE", "NOTICES", "THIRD-PARTY-LICENSES"]
 authors = [{ name = "Nimblesite", email = "cftools@nimblesite.co" }]
 dynamic = ["version"]

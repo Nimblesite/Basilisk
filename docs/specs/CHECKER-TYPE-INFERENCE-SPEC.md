@@ -654,7 +654,9 @@ class Dog(Animal): ...
 x: Animal = Dog()  # OK — Dog is a nominal subtype of Animal
 ```
 
-**MRO resolution** is simplified: rules walk `ClassInfo.bases` transitively per class (no C3 linearization engine and no MRO cache in `ResolvedModule`); consolidation is tracked by [NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING).
+Nominal-subtyping rules may walk `ClassInfo.bases` transitively; the shared MRO
+model remains tracked by
+[NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING).
 
 **Builtin numeric tower.** The typing-spec promotions ([Special cases for float and complex](https://typing.python.org/en/latest/spec/special-types.html#special-cases-for-float-and-complex)) hold: `bool`/`int` are accepted where `float` is expected, and `bool`/`int`/`float` where `complex` is expected. Two layers implement this:
 

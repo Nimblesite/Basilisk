@@ -17,7 +17,7 @@ mod variable_types;
 mod violations;
 
 pub use class_types::{BaseSubscriptEntry, ClassInfo, GenericParamInfo, TypeArg};
-pub use external_symbol::{ExternalMethod, ExternalSymbol, ExternalSymbolKind};
+pub use external_symbol::{ExternalMethod, ExternalSymbol, ExternalSymbolKind, IndexedStubClass};
 pub use function_types::{
     FunctionInfo, ParameterInfo, ReturnAnnotationKind, ReturnStmtInfo, YieldExprInfo,
 };
@@ -25,13 +25,13 @@ pub use import_types::{
     ImportInfo, ImportKind, ImportResolution, ImportedModuleApi, PackageDepKind, UnresolvedReason,
 };
 pub use module_types::{
-    AnnotatedTooFewArgs, AssertTypeCallInfo, CallSite, CompareOp, FloatParamIntAttrAccess,
-    GenericSubscriptSite, LiteralStringEnumMismatch, MatchStmtInfo, ModuleAttrAccessInfo,
-    ModuleAttrAssignment, ModuleBareAssignment, ModuleOrderComparisonInfo, NamedTupleDefInfo,
-    NewTypeCallInfo, RevealTypeCallInfo, RhsStringRef, TypeAliasDefInfo, TypeAliasTypeCallInfo,
-    TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation,
-    TypedDictKeyViolationKind, TypedDictSecondArgKind, UnhashableHashCallViolation,
-    UnhashableKeyRef,
+    AnnotatedTooFewArgs, AssertTypeCallInfo, CallReceiver, CallSite, CompareOp,
+    FloatParamIntAttrAccess, GenericSubscriptSite, LiteralStringEnumMismatch, MatchStmtInfo,
+    ModuleAttrAccessInfo, ModuleAttrAssignment, ModuleBareAssignment, ModuleOrderComparisonInfo,
+    NamedTupleDefInfo, NewTypeCallInfo, RevealTypeCallInfo, RhsStringRef, TypeAliasDefInfo,
+    TypeAliasTypeCallInfo, TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo,
+    TypedDictKeyViolation, TypedDictKeyViolationKind, TypedDictSecondArgKind,
+    UnhashableHashCallViolation, UnhashableKeyRef,
 };
 pub use named::{
     collect_name_set, collect_name_set_where, collect_names, collect_names_where, name_lookup,

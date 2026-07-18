@@ -95,6 +95,7 @@ pub(super) fn build_snapshot(
     index: &WorkspaceIndex,
     root: &Path,
     document: &ConfigDocument,
+    typeshed_generation: Option<&crate::server::typeshed_status::TypeshedGeneration>,
 ) -> ConfigurationSnapshot {
     let catalog = descriptors();
     let inventory = inventory(index, root);
@@ -128,6 +129,10 @@ pub(super) fn build_snapshot(
         path_overrides: path_override_states(document),
         debt,
         problems,
+        typeshed: super::snapshot_typeshed::typeshed_configuration(
+            &document.config,
+            typeshed_generation,
+        ),
     }
 }
 

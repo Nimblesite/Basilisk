@@ -103,6 +103,19 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     function tagMutation(tag, value) {
       return { kind: 'SetTag', tag, severity: { kind: value } };
     }
+    function typeshedKey(name) { return { kind: name }; }
+    function typeshedRemove(name) {
+      return { kind: 'RemoveTypeshedSetting', key: typeshedKey(name) };
+    }
+    function typeshedSetText(name, value) {
+      return { kind: 'SetTypeshedSetting', key: typeshedKey(name), value: { kind: 'Text', value } };
+    }
+    function typeshedSetBoolean(name, value) {
+      return { kind: 'SetTypeshedSetting', key: typeshedKey(name), value: { kind: 'Boolean', value } };
+    }
+    function typeshedSetting(name) {
+      return snapshot && snapshot.typeshed.settings.find((setting) => kind(setting.key, '') === name);
+    }
     function selectedRule() {
       return snapshot && snapshot.rules.find((rule) => rule.descriptor.code === selectedRuleCode);
     }

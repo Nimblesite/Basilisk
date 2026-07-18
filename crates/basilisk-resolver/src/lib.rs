@@ -62,12 +62,8 @@ pub enum ResolveError {
 /// Currently infallible in Phase 1; future phases may add import resolution
 /// errors.
 pub fn resolve(module: &ParsedModule) -> Result<ResolvedModule, ResolveError> {
-    resolve_with_target(module, DEFAULT_TARGET_VERSION)
+    Ok(visitor::collect(module))
 }
-
-/// Default target Python version when no configuration is supplied. Mirrors the
-/// checker's `DEFAULT_TARGET_VERSION`; the conformance suite runs at this target.
-pub const DEFAULT_TARGET_VERSION: (u32, u32) = (3, 12);
 
 /// Resolve a module at a specific target Python version.
 ///

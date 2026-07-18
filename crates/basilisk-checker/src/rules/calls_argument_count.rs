@@ -46,9 +46,89 @@ impl Rule for TooFewArguments {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         check_plain_function_calls(module, diagnostics);
+        check_builtin_method_calls(module, diagnostics);
         check_constructor_calls(module, diagnostics);
         check_namedtuple_calls(module, diagnostics);
     }
+}
+
+/// Validate bound built-in method arity against the structured declarations
+/// indexed from the active `builtins.pyi` generation ([STUBRES-PYI] #288).
+fn check_builtin_method_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    for call in &module.calls {
+        let declarations = module.builtin_methods_for_call(call);
+        if declarations.is_empty() || !call.keywords.is_empty() || call.has_unpacked_kwargs {
+            continue;
+        }
+        let provided = call.args.len();
+        if declarations
+            .iter()
+            .any(|declaration| stub_arity_accepts(declaration, provided))
+        {
+            continue;
+        }
+        let minimum = declarations
+            .iter()
+            .map(|declaration| {
+                declaration
+                    .params
+                    .iter()
+                    .filter(|parameter| {
+                        !parameter.has_default
+                            && !matches!(
+                                parameter.kind,
+                                basilisk_stubs::StubParamKind::Vararg
+                                    | basilisk_stubs::StubParamKind::Kwarg
+                            )
+                    })
+                    .count()
+            })
+            .min()
+            .unwrap_or(0);
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
+                "Call to bound built-in method `{}` has {provided} positional argument(s); no active Typeshed overload matches (minimum {minimum})",
+                call.callee
+            ),
+            call.span,
+            &module.path,
+            None,
+            None,
+        ));
+    }
+}
+
+pub(super) fn stub_arity_accepts(
+    declaration: &basilisk_stubs::StubFunction,
+    provided: usize,
+) -> bool {
+    let minimum = declaration
+        .params
+        .iter()
+        .filter(|parameter| {
+            !parameter.has_default
+                && !matches!(
+                    parameter.kind,
+                    basilisk_stubs::StubParamKind::Vararg | basilisk_stubs::StubParamKind::Kwarg
+                )
+        })
+        .count();
+    let variadic = declaration
+        .params
+        .iter()
+        .any(|parameter| parameter.kind == basilisk_stubs::StubParamKind::Vararg);
+    let maximum = declaration
+        .params
+        .iter()
+        .filter(|parameter| {
+            !matches!(
+                parameter.kind,
+                basilisk_stubs::StubParamKind::Vararg | basilisk_stubs::StubParamKind::Kwarg
+            )
+        })
+        .count();
+    provided >= minimum && (variadic || provided <= maximum)
 }
 
 /// Check plain (non-constructor) function calls for too few arguments.

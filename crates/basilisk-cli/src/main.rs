@@ -18,13 +18,16 @@ use shipwright_manifest::{ExecutableKind, Language};
 use tracing::error;
 
 use crate::output::{render_diagnostics, render_diagnostics_json, ColorMode, OutputFormat};
-use crate::pipeline::{collect_and_check, pluralise, DiagnosticScope, PipelineError};
+use crate::pipeline::{
+    collect_and_check_with_overrides, pluralise, DiagnosticScope, PipelineError, TypeshedOverrides,
+};
 
 mod adopt;
 mod cache_check;
 mod fix;
 mod format;
 mod import_search;
+mod mcp;
 mod output;
 mod pipeline;
 mod stubs;
@@ -77,6 +80,19 @@ struct CheckArgs {
     /// Print cache hit/miss counts to stderr after checking.
     #[arg(long)]
     cache_stats: bool,
+    #[command(flatten)]
+    typeshed: TypeshedArgs,
+}
+
+#[derive(clap::Args, Default)]
+struct TypeshedArgs {
+    /// Download and validate Typeshed afresh for this run, then discard it.
+    #[arg(long)]
+    no_typeshed_cache: bool,
+    /// Waive Git-tree content attestation for this run. Safety, shape, and
+    /// license gates still run and the source is reported as UNVERIFIED.
+    #[arg(long)]
+    no_typeshed_verification: bool,
 }
 
 // Implements [CHKARCH-CLI-COMMANDS]: the `check`/`analyze` core commands
@@ -145,6 +161,12 @@ enum Command {
         #[arg(long, default_value_t = 8765)]
         port: u16,
     },
+    /// Serve read-only Basilisk status tools over Model Context Protocol stdio.
+    Mcp {
+        /// Workspace whose project configuration selects the typeshed source.
+        #[arg(long, default_value = ".", value_name = "DIR")]
+        workspace: std::path::PathBuf,
+    },
     /// Manage type stubs for untyped packages.
     Stubs {
         #[command(subcommand)]
@@ -166,7 +188,7 @@ fn handle_version(args: &[String]) -> bool {
         kind: ExecutableKind::Lsp,
         language: Language::Rust,
         product: Some("basilisk"),
-        capabilities: &["cli", "lsp", "dap", "profiler", "test-explorer"],
+        capabilities: &["cli", "lsp", "mcp", "dap", "profiler", "test-explorer"],
         build: BuildInfo {
             git_sha: option_env!("SHIPWRIGHT_GIT_SHA"),
             git_dirty: option_env!("SHIPWRIGHT_GIT_DIRTY").map(|s| s == "true"),
@@ -289,6 +311,13 @@ fn run_command(command: Command) -> u8 {
                 }
             },
         },
+        Command::Mcp { workspace } => match mcp::run(&workspace) {
+            Ok(()) => 0,
+            Err(err) => {
+                error!(%err, "MCP server failed");
+                1
+            }
+        },
         Command::Stubs { action } => stubs::run(action),
         Command::CreateStub(args) => stubs::run_create_stub(args),
     }
@@ -310,7 +339,16 @@ fn run_scoped_check(args: &CheckArgs, scope: DiagnosticScope) -> u8 {
         stats: args.cache_stats,
     };
     let mut stats = cache_check::CacheStats::default();
-    let result = collect_and_check(&args.paths, &cache, &mut stats, scope);
+    let result = collect_and_check_with_overrides(
+        &args.paths,
+        &cache,
+        &mut stats,
+        scope,
+        TypeshedOverrides {
+            no_cache: args.typeshed.no_typeshed_cache,
+            no_verification: args.typeshed.no_typeshed_verification,
+        },
+    );
     if cache.stats {
         stats.report();
     }
@@ -380,6 +418,11 @@ fn render_outcome(outcome: &pipeline::CheckOutcome, format: OutputFormat) -> u8 
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test-only CLI contract assertions fail loudly with explicit messages"
+)]
 mod tests {
     use super::*;
 
@@ -400,7 +443,25 @@ mod tests {
             cache: false,
             cache_dir: None,
             cache_stats: false,
+            typeshed: TypeshedArgs::default(),
         }
+    }
+
+    #[test]
+    fn check_cli_accepts_one_run_typeshed_cache_and_verification_overrides() {
+        let cli = Cli::try_parse_from([
+            "basilisk",
+            "check",
+            "example.py",
+            "--no-typeshed-cache",
+            "--no-typeshed-verification",
+        ])
+        .expect("documented Typeshed flags must parse");
+        let Command::Check { args } = cli.command else {
+            panic!("expected check command");
+        };
+        assert!(args.typeshed.no_typeshed_cache);
+        assert!(args.typeshed.no_typeshed_verification);
     }
 
     /// An isolated project that opts the annotation house rule in, holding
@@ -764,6 +825,7 @@ mod tests {
                 cache: false,
                 cache_dir: None,
                 cache_stats: false,
+                typeshed: TypeshedArgs::default(),
             },
         });
         let _ = std::fs::remove_dir_all(&dir);
@@ -786,6 +848,7 @@ mod tests {
                 cache: true,
                 cache_dir: Some(cache_dir),
                 cache_stats: true,
+                typeshed: TypeshedArgs::default(),
             },
         });
         let _ = std::fs::remove_dir_all(&dir);

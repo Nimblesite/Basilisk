@@ -12,14 +12,16 @@ import type {
   PreviewConfigurationRequest,
   RuleOccurrencesRequest,
   RuleOccurrencesResponse,
+  TypeshedActionRequest,
+  TypeshedActionResult,
 } from "../../configuration-editor-model";
 import {
   ConfigurationEditorController,
   CONFIGURATION_EDITOR_COMMAND,
-  configurationEditorFocusRule,
   EDIT_CONFIG_COMMAND,
   type ConfigurationEditorTransport,
 } from "../../configuration-editor";
+import { configurationEditorFocusRule } from "../../configuration-editor-registration";
 import { buildClientOptions, trustConfigureSeverityLinks } from "../../lsp-client";
 import { createStore } from "../../store";
 
@@ -55,6 +57,25 @@ function snapshotWithRule(): ConfigurationSnapshot {
       disabledRules: 0,
     },
     problems: [],
+    typeshed: {
+      sourceMode: { kind: "Latest" },
+      sourceOptions: [],
+      settings: [],
+      actions: [],
+      status: {
+        lifecycle: { kind: "Acquiring" },
+        blockedReason: undefined,
+        activeSource: undefined,
+        commitIdentity: undefined,
+        treeIdentity: undefined,
+        transport: undefined,
+        licenseStatus: { kind: "Acquiring" },
+        licenseReference: undefined,
+        provenance: { kind: "Pending" },
+        signedRelease: false,
+        warnings: [],
+      },
+    },
   };
 }
 
@@ -72,6 +93,9 @@ function snapshotTransport(): ConfigurationEditorTransport {
     },
     async occurrences(_request: RuleOccurrencesRequest): Promise<RuleOccurrencesResponse> {
       throw new Error("occurrences is not under test");
+    },
+    async typeshedAction(_request: TypeshedActionRequest): Promise<TypeshedActionResult> {
+      throw new Error("Typeshed actions are not under test");
     },
     async executeCommand(_command: string, _args: readonly unknown[]): Promise<void> {
       throw new Error("executeCommand is not under test");

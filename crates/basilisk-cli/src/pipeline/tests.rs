@@ -26,12 +26,28 @@ fn collect_uncached(
     paths: &[String],
     scope: DiagnosticScope,
 ) -> Result<CheckOutcome, PipelineError> {
-    collect_and_check(
+    collect_and_check_with_typeshed(
         paths,
         &no_cache(),
         &mut cache_check::CacheStats::default(),
         scope,
+        TypeshedOverrides::default(),
+        activate_bundled_typeshed,
     )
+}
+
+fn activate_bundled_typeshed(
+    search_paths: &mut basilisk_lsp::import_resolver::ImportSearchPaths,
+    config: &basilisk_lsp::config::WorkspaceConfig,
+) -> Result<(), PipelineError> {
+    let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot()
+        .map(std::sync::Arc::new)
+        .map_err(|error| PipelineError::Internal(error.to_string()))?;
+    search_paths.typeshed_snapshot = Some(basilisk_checker::imports::ActiveTypeshed::new(
+        snapshot,
+        basilisk_lsp::import_resolver::stub_target_from_config(config),
+    ));
+    Ok(())
 }
 
 /// Unique temp dir for tests that need an isolated project root.
@@ -40,6 +56,87 @@ fn unique_project_dir(prefix: &str) -> std::path::PathBuf {
     static CTR: AtomicU64 = AtomicU64::new(0);
     let n = CTR.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!("{prefix}_{}_{n}", std::process::id()))
+}
+
+/// [STUBRES-TYPESHED-WARN]: ordinary CLI analysis activates the configured
+/// production source once and attaches its exact status/target to resolution.
+#[test]
+fn cli_activation_uses_custom_snapshot_and_target() -> Result<(), Box<dyn std::error::Error>> {
+    let project = unique_project_dir("basilisk_cli_custom_typeshed");
+    let stdlib = project.join("typeshed").join("stdlib");
+    std::fs::create_dir_all(&stdlib)?;
+    std::fs::write(stdlib.join("VERSIONS"), "sentinel: 3.8-\n")?;
+    std::fs::write(stdlib.join("sentinel.pyi"), "VALUE: str\n")?;
+    let config = basilisk_lsp::config::WorkspaceConfig {
+        typeshed_path: Some(project.join("typeshed")),
+        typeshed_cache: false,
+        python_version: Some("3.12".to_owned()),
+        python_platform: Some("Linux".to_owned()),
+        ..basilisk_lsp::config::WorkspaceConfig::default()
+    };
+    let mut search_paths = crate::import_search::roots_only(vec![project.clone()]);
+    super::typeshed::activate_production_typeshed(&mut search_paths, &config)
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    let active = search_paths
+        .typeshed_snapshot
+        .as_ref()
+        .ok_or("active Typeshed missing")?;
+    assert_eq!(
+        active.snapshot().status.active_source,
+        basilisk_stubs::typeshed::source::SourceKind::Custom
+    );
+    assert_eq!(
+        active
+            .snapshot()
+            .status
+            .warnings
+            .iter()
+            .map(|warning| warning.code.as_str())
+            .collect::<Vec<_>>(),
+        vec!["UNPINNED", "USER-MANAGED SOURCE"]
+    );
+    assert_eq!(
+        active.target().map(|target| target.python_version),
+        Some((3, 12))
+    );
+    let _ = std::fs::remove_dir_all(project);
+    Ok(())
+}
+
+#[test]
+fn one_run_typeshed_overrides_reach_activation_without_mutating_config(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = unique_project_dir("basilisk_cli_typeshed_overrides");
+    std::fs::create_dir_all(&project)?;
+    std::fs::write(
+        project.join("pyproject.toml"),
+        "[tool.basilisk]\ntypeshed-cache = true\ntypeshed-verify = true\n",
+    )?;
+    let source = project.join("clean.py");
+    std::fs::write(&source, "value: int = 1\n")?;
+    let path = source.to_string_lossy().into_owned();
+
+    let result = collect_and_check_with_typeshed(
+        &[path],
+        &no_cache(),
+        &mut cache_check::CacheStats::default(),
+        DiagnosticScope::Check,
+        TypeshedOverrides {
+            no_cache: true,
+            no_verification: true,
+        },
+        |_search_paths, config| {
+            assert!(!config.typeshed_cache);
+            assert!(!config.typeshed_verify);
+            Ok(())
+        },
+    );
+    let persisted = std::fs::read_to_string(project.join("pyproject.toml"))?;
+    let _ = std::fs::remove_dir_all(project);
+    assert!(result.is_ok());
+    assert!(persisted.contains("typeshed-cache = true"));
+    assert!(persisted.contains("typeshed-verify = true"));
+    Ok(())
 }
 
 // ── DiagnosticScope ([CHKARCH-COMMANDS]) ──────────────────────────────────

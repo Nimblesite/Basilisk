@@ -9,11 +9,12 @@
 //! Re-export extraction (`__all__`, redundant aliases, `from … import *`) and
 //! star-import resolution relative to the stub file (GitHub #312).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use basilisk_stubs::reexports::reexported_member_names_with_loader;
 use basilisk_stubs::types::{StubSource, StubTier};
 use basilisk_stubs::{parse_pyi_file, parse_pyi_source, reexported_member_names, StubModule};
 
@@ -33,6 +34,17 @@ fn parse_stub(source: &str) -> StubModule {
         Path::new("test.pyi"),
         "test",
         StubSource::UserStub,
+        StubTier::Tier1,
+    )
+    .expect("stub should parse")
+}
+
+fn parse_named_stub(source: &str, path: &str, module_name: &str) -> StubModule {
+    parse_pyi_source(
+        source,
+        Path::new(path),
+        module_name,
+        StubSource::Typeshed,
         StubTier::Tier1,
     )
     .expect("stub should parse")
@@ -82,25 +94,32 @@ fn dunder_all_list_tuple_and_augmented_entries_union() {
 }
 
 #[test]
-fn dunder_all_in_version_gated_branches_is_unioned() {
-    // typeshed style: `__all__` differs per version/platform; branches union.
+fn dunder_all_mutation_methods_apply_in_source_order() {
     let stub = parse_stub(
-        "import sys\nif sys.version_info >= (3, 11):\n    __all__ = (\"Runner\", \"run\")\nelif sys.version_info >= (3, 9):\n    __all__ = (\"run\",)\nelse:\n    if sys.platform == \"win32\":\n        __all__ = (\"legacy\",)\n",
+        "__all__ = [\"discarded\"]\n__all__ = [\"base\"]\n__all__.append(\"appended\")\n__all__.extend((\"extended\", \"removed\"))\n__all__.remove(\"removed\")\n",
     );
     let exported = names(&stub);
-    for name in ["Runner", "run", "legacy"] {
-        assert!(exported.contains(name), "missing `{name}`: {exported:?}");
-    }
+    assert_eq!(
+        exported,
+        HashSet::from([
+            "base".to_owned(),
+            "appended".to_owned(),
+            "extended".to_owned(),
+        ]),
+        "assignment replaces the prior list and append/extend/remove mutate it"
+    );
 }
 
 #[test]
-fn conditional_reexport_imports_are_collected() {
+fn unknown_platform_intersects_guarded_dunder_all_branches() {
     let stub = parse_stub(
-        "import sys\nif sys.platform == \"win32\":\n    from ._win import Handle as Handle\nelse:\n    import fcntl as fcntl\n",
+        "import sys\nif sys.platform == \"win32\":\n    __all__ = (\"common\", \"windows_only\")\nelse:\n    __all__ = (\"common\", \"posix_only\")\n",
     );
-    let exported = names(&stub);
-    assert!(exported.contains("Handle"));
-    assert!(exported.contains("fcntl"));
+    assert_eq!(
+        names(&stub),
+        HashSet::from(["common".to_owned()]),
+        "without concrete platform evidence only names valid in every branch are exposed"
+    );
 }
 
 #[test]
@@ -147,6 +166,29 @@ fn star_target_with_dunder_all_exports_exactly_dunder_all() {
     assert!(
         !exported.contains("extra"),
         "with __all__ defined, star import brings exactly __all__"
+    );
+
+    let _ = fs::remove_dir_all(pkg.parent().unwrap());
+}
+
+#[test]
+fn dunder_all_can_copy_and_mutate_a_submodule_dunder_all() {
+    let pkg = make_tmp_dir("bsk_rx_module_all").join("pkg");
+    fs::create_dir_all(&pkg).unwrap();
+    fs::write(
+        pkg.join("__init__.pyi"),
+        "from . import exports\n__all__ = exports.__all__\n__all__.append(\"local\")\n__all__.remove(\"removed\")\n",
+    )
+    .unwrap();
+    fs::write(
+        pkg.join("exports.pyi"),
+        "__all__ = (\"copied\", \"removed\")\n",
+    )
+    .unwrap();
+
+    assert_eq!(
+        names(&parse_file(&pkg.join("__init__.pyi"))),
+        HashSet::from(["copied".to_owned(), "local".to_owned()])
     );
 
     let _ = fs::remove_dir_all(pkg.parent().unwrap());
@@ -222,25 +264,32 @@ fn dotted_and_parent_level_star_targets_resolve() {
 }
 
 #[test]
-fn absolute_missing_and_self_star_targets_are_ignored() {
-    let pkg = make_tmp_dir("bsk_rx_skip").join("pkg");
+fn absolute_and_relative_star_targets_are_followed() {
+    let root = make_tmp_dir("bsk_rx_absolute");
+    let pkg = root.join("pkg");
     fs::create_dir_all(&pkg).unwrap();
-    // Absolute star import (level 0), a target that doesn't exist on disk, and
-    // `from . import *` (resolves to this same __init__.pyi — already visited).
     fs::write(
         pkg.join("__init__.pyi"),
-        "from os.path import *\nfrom .missing import *\nfrom . import *\n\ndef own() -> None: ...\n",
+        "from shared import *\nfrom .relative import *\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("shared.pyi"),
+        "def absolute_name() -> None: ...\n",
+    )
+    .unwrap();
+    fs::write(
+        pkg.join("relative.pyi"),
+        "def relative_name() -> None: ...\n",
     )
     .unwrap();
 
     let stub = parse_file(&pkg.join("__init__.pyi"));
     let exported = names(&stub);
-    assert!(
-        exported.is_empty(),
-        "no followable star target contributes names, got {exported:?}"
-    );
+    assert!(exported.contains("absolute_name"), "{exported:?}");
+    assert!(exported.contains("relative_name"), "{exported:?}");
 
-    let _ = fs::remove_dir_all(pkg.parent().unwrap());
+    let _ = fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -267,11 +316,11 @@ fn star_import_cycles_terminate_and_union_names() {
 }
 
 #[test]
-fn star_import_depth_is_capped() {
+fn star_import_chain_has_no_arbitrary_depth_cap() {
     let pkg = make_tmp_dir("bsk_rx_depth").join("pkg");
     fs::create_dir_all(&pkg).unwrap();
-    // A chain deeper than the cap: __init__ → m1 → m2 → … → m20. Each stub
-    // defines its own marker; the walk must terminate and drop the deep tail.
+    // Regression: the old implementation silently stopped after sixteen hops.
+    // Cycles are bounded by the visited set, so a valid finite chain is complete.
     fs::write(pkg.join("__init__.pyi"), "from .m1 import *\n").unwrap();
     for i in 1..=20 {
         let next = if i < 20 {
@@ -289,11 +338,42 @@ fn star_import_depth_is_capped() {
     let exported = names(&parse_file(&pkg.join("__init__.pyi")));
     assert!(exported.contains("marker_1"));
     assert!(
-        !exported.contains("marker_20"),
-        "a 20-deep star chain must be cut by the depth cap, got {exported:?}"
+        exported.contains("marker_20"),
+        "a valid 20-deep star chain must be followed completely, got {exported:?}"
     );
 
     let _ = fs::remove_dir_all(pkg.parent().unwrap());
+}
+
+#[test]
+fn archive_style_loader_follows_names_without_filesystem_paths() {
+    let root = parse_named_stub(
+        "from .a import *\n",
+        "typeshed:snapshot/stdlib/pkg/__init__.pyi",
+        "pkg",
+    );
+    let a = parse_named_stub(
+        "from pkg.b import *\ndef from_a() -> None: ...\n",
+        "typeshed:snapshot/stdlib/pkg/a.pyi",
+        "pkg.a",
+    );
+    let b = parse_named_stub(
+        "from pkg.a import *\ndef from_b() -> None: ...\n",
+        "typeshed:snapshot/stdlib/pkg/b.pyi",
+        "pkg.b",
+    );
+    let modules = HashMap::from([("pkg.a".to_owned(), a), ("pkg.b".to_owned(), b)]);
+    let mut requested_modules = Vec::new();
+    let mut module_loader = |module_name: &str| {
+        requested_modules.push(module_name.to_owned());
+        modules.get(module_name).cloned()
+    };
+
+    let exported = reexported_member_names_with_loader(&root, &mut module_loader);
+    assert!(exported.contains("from_a"), "{exported:?}");
+    assert!(exported.contains("from_b"), "{exported:?}");
+    assert!(requested_modules.contains(&"pkg.a".to_owned()));
+    assert!(requested_modules.contains(&"pkg.b".to_owned()));
 }
 
 #[test]

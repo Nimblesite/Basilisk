@@ -222,16 +222,15 @@ fn format_assign(assign: &ast::StmtAssign) -> Option<String> {
 }
 
 /// Extract source text for an expression node using its text range.
+///
+/// `str::get` is used instead of `source[start..end]` so an out-of-range or
+/// non-char-boundary span yields `None` rather than panicking.
 fn slice_expr(expr: &ast::Expr, source: &str) -> Option<String> {
     use ruff_text_size::Ranged;
     let range = expr.range();
     let start: usize = range.start().into();
     let end: usize = range.end().into();
-    if start < source.len() && end <= source.len() && start < end {
-        Some(source[start..end].to_owned())
-    } else {
-        None
-    }
+    source.get(start..end).map(str::to_owned)
 }
 
 #[cfg(test)]

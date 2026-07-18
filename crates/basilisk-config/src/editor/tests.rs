@@ -8,9 +8,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use super::{
-    active_config_path, apply_config_patch, build_rule_patch, content_revision,
-    discover_config_document, discover_config_document_with_content, ConfigDocument,
-    ConfigDocumentError, ConfigPatch, RuleConfigUpdate,
+    active_config_path, apply_config_patch, build_configuration_patch, build_rule_patch,
+    content_revision, discover_config_document, discover_config_document_with_content,
+    ConfigDocument, ConfigDocumentError, ConfigPatch, ConfigurationUpdate, RuleConfigUpdate,
+    TypeshedConfigKey, TypeshedConfigUpdate, TypeshedConfigValue,
 };
 use crate::{BasiliskConfig, RuleSeverity};
 
@@ -86,6 +87,27 @@ fn malformed_severity_is_invalid() {
         "[tool.basilisk.rule-tags]\n\"basilisk\" = 3\n".to_owned(),
     );
     assert!(matches!(result, Err(ConfigDocumentError::Invalid { .. })));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// [LSPCFGED-TYPESHED]: malformed acquisition settings fail before a snapshot
+/// can silently reinterpret them as defaults or a different source mode.
+#[test]
+fn malformed_typeshed_settings_are_invalid() {
+    let root = temp_root("bad_typeshed_settings");
+    for content in [
+        "[tool.basilisk]\ntypeshed-commit = 42\n",
+        "[tool.basilisk]\ntypeshed-cache = \"false\"\n",
+        "[tool.basilisk]\ntypeshed-commit = \"short\"\n",
+        "[tool.basilisk]\ntypeshed-url = \"http://mirror/{sha}.zip\"\n",
+        "[tool.basilisk]\ntypeshed-path = \"custom\"\ntypeshed-commit = \"83c2518a9e6abbda0c44592c3483de459198f887\"\n",
+    ] {
+        let result = discover_config_document_with_content(&root, content.to_owned());
+        assert!(
+            matches!(result, Err(ConfigDocumentError::Invalid { .. })),
+            "must reject {content}"
+        );
+    }
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -348,6 +370,70 @@ fn wrong_shaped_mutation_targets_fail_to_patch() {
     let tags_document = manual_document(&root, "[tool.basilisk]\nrule-tags = 3\n", false);
     let result = build_rule_patch(&tags_document, &set_tag("basilisk", RuleSeverity::Error));
     assert!(matches!(result, Err(ConfigDocumentError::Invalid { .. })));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// [LSPCFGED-TYPESHED]: Typeshed keys participate in the same atomic,
+/// structure-preserving transaction as rule/tag entries.
+#[test]
+fn typeshed_settings_patch_atomically_and_preserve_project_content() {
+    let root = temp_root("typeshed_patch");
+    let document = document_for(
+        &root,
+        "# keep\n[project]\nname = \"demo\"\n\n[tool.basilisk]\ntypeshed-cache = true\n",
+    );
+    let update = ConfigurationUpdate {
+        rules: set_rule("BSK-0001", RuleSeverity::Warning),
+        typeshed: TypeshedConfigUpdate {
+            entries: BTreeMap::from([
+                (
+                    TypeshedConfigKey::TypeshedCommit,
+                    Some(TypeshedConfigValue::Text(
+                        "83c2518a9e6abbda0c44592c3483de459198f887".to_owned(),
+                    )),
+                ),
+                (
+                    TypeshedConfigKey::TypeshedCache,
+                    Some(TypeshedConfigValue::Boolean(false)),
+                ),
+            ]),
+        },
+    };
+    let patch = build_configuration_patch(&document, &update).unwrap();
+    assert!(patch.content.contains("# keep"));
+    assert!(patch.content.contains("name = \"demo\""));
+    assert!(patch
+        .content
+        .contains("typeshed-commit = \"83c2518a9e6abbda0c44592c3483de459198f887\""));
+    assert!(patch.content.contains("typeshed-cache = false"));
+    assert_eq!(patch.config.typeshed_cache, Some(false));
+    assert_eq!(
+        patch.config.typeshed_commit.as_deref(),
+        Some("83c2518a9e6abbda0c44592c3483de459198f887")
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// [LSPCFGED-TYPESHED]: removing an explicit setting leaves unrelated
+/// acquisition settings and comments untouched.
+#[test]
+fn typeshed_setting_removal_is_allowlisted_and_narrow() {
+    let root = temp_root("typeshed_remove");
+    let document = document_for(
+        &root,
+        "[tool.basilisk]\n# keep mirror\ntypeshed-url = \"https://mirror.invalid/{sha}.zip\"\ntypeshed-verify = false\n",
+    );
+    let update = ConfigurationUpdate {
+        rules: RuleConfigUpdate::default(),
+        typeshed: TypeshedConfigUpdate {
+            entries: BTreeMap::from([(TypeshedConfigKey::TypeshedVerify, None)]),
+        },
+    };
+    let patch = build_configuration_patch(&document, &update).unwrap();
+    assert!(!patch.content.contains("typeshed-verify"));
+    assert!(patch.content.contains("# keep mirror"));
+    assert!(patch.content.contains("typeshed-url"));
+    assert!(patch.config.typeshed_verify.is_none());
     let _ = std::fs::remove_dir_all(&root);
 }
 

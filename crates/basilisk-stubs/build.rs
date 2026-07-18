@@ -4,338 +4,91 @@
     reason = "build scripts have no recovery path — panic is correct"
 )]
 
-//! Build script for basilisk-stubs.
-//!
-//! Generates compile-time perfect-hash tables for the **offline baseline
-//! only** — the small, loose, replaceable day-one fallback data. At runtime the
-//! `python/typeshed` clone acquired and refreshed on the fly wholesale overrides
-//! this baseline; these tables are consulted solely when no clone is available
-//! (offline, clone failed, or pre-clone). See
-//! `docs/plans/CHECKER-TYPESHED-RUNTIME-PLAN.md` and [STUBRES-TYPESHED-BASELINE].
-//! Whether the baseline stays a compiled PHF table (as here) or moves to a loose
-//! data file loaded at runtime is governed by the benchmark ratchet, not by this
-//! script — see [CHKARCH-TESTING-BENCH-RATCHET].
-//!
-//! The generated tables:
-//! * a `phf::Set` of all `CPython` 3.12 stdlib top-level module names from the
-//!   typeshed VERSIONS data (replaces the hand-maintained `STDLIB_ROOTS` list
-//!   in `e0010.rs`), and
-//! * a `phf::Map` from third-party import roots to their typeshed stub
-//!   distribution (`types-<dist>`), read from `data/typeshed_stub_distributions.tsv`.
+//! Generate the replaceable, compile-time indexes that exactly accompany the
+//! embedded Typeshed bundle. Runtime snapshots supersede these accelerators;
+//! this script never chooses a Python target and never maps versions to commits.
 
+use std::collections::BTreeSet;
 use std::env;
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};
-use std::path::Path;
-
-/// Complete `CPython` 3.12 stdlib top-level module names.
-///
-/// Derived from typeshed's `stdlib/VERSIONS` file. Includes public modules,
-/// standard internal modules, and deprecated-but-still-present modules.
-/// Modules removed in 3.13+ are included since we target 3.12.
-const STDLIB_MODULES: &[&str] = &[
-    // ── Special modules ─────────────────────────────────────────────────
-    "__future__",
-    "__main__",
-    "_thread",
-    // ── A ────────────────────────────────────────────────────────────────
-    "abc",
-    "aifc",
-    "argparse",
-    "array",
-    "ast",
-    "asyncio",
-    "atexit",
-    "audioop",
-    // ── B ────────────────────────────────────────────────────────────────
-    "base64",
-    "bdb",
-    "binascii",
-    "bisect",
-    "builtins",
-    "bz2",
-    // ── C ────────────────────────────────────────────────────────────────
-    "calendar",
-    "cgi",
-    "cgitb",
-    "chunk",
-    "cmath",
-    "cmd",
-    "code",
-    "codecs",
-    "codeop",
-    "collections",
-    "colorsys",
-    "compileall",
-    "concurrent",
-    "configparser",
-    "contextlib",
-    "contextvars",
-    "copy",
-    "copyreg",
-    "cProfile",
-    "crypt",
-    "csv",
-    "ctypes",
-    "curses",
-    // ── D ────────────────────────────────────────────────────────────────
-    "dataclasses",
-    "datetime",
-    "dbm",
-    "decimal",
-    "difflib",
-    "dis",
-    "distutils",
-    "doctest",
-    // ── E ────────────────────────────────────────────────────────────────
-    "email",
-    "encodings",
-    "ensurepip",
-    "enum",
-    "errno",
-    // ── F ────────────────────────────────────────────────────────────────
-    "faulthandler",
-    "fcntl",
-    "filecmp",
-    "fileinput",
-    "fnmatch",
-    "fractions",
-    "ftplib",
-    "functools",
-    // ── G ────────────────────────────────────────────────────────────────
-    "gc",
-    "getopt",
-    "getpass",
-    "gettext",
-    "glob",
-    "graphlib",
-    "grp",
-    "gzip",
-    // ── H ────────────────────────────────────────────────────────────────
-    "hashlib",
-    "heapq",
-    "hmac",
-    "html",
-    "http",
-    // ── I ────────────────────────────────────────────────────────────────
-    "idlelib",
-    "imaplib",
-    "imghdr",
-    "importlib",
-    "inspect",
-    "io",
-    "ipaddress",
-    "itertools",
-    // ── J ────────────────────────────────────────────────────────────────
-    "json",
-    // ── K ────────────────────────────────────────────────────────────────
-    "keyword",
-    // ── L ────────────────────────────────────────────────────────────────
-    "lib2to3",
-    "linecache",
-    "locale",
-    "logging",
-    "lzma",
-    // ── M ────────────────────────────────────────────────────────────────
-    "mailbox",
-    "mailcap",
-    "marshal",
-    "math",
-    "mimetypes",
-    "mmap",
-    "modulefinder",
-    "multiprocessing",
-    // ── N ────────────────────────────────────────────────────────────────
-    "netrc",
-    "nis",
-    "nntplib",
-    "numbers",
-    // ── O ────────────────────────────────────────────────────────────────
-    "operator",
-    "optparse",
-    "os",
-    "ossaudiodev",
-    // ── P ────────────────────────────────────────────────────────────────
-    "pathlib",
-    "pdb",
-    "pickle",
-    "pickletools",
-    "pipes",
-    "pkgutil",
-    "platform",
-    "plistlib",
-    "poplib",
-    "posix",
-    "posixpath",
-    "pprint",
-    "profile",
-    "pstats",
-    "pty",
-    "pwd",
-    "py_compile",
-    "pyclbr",
-    "pydoc",
-    // ── Q ────────────────────────────────────────────────────────────────
-    "queue",
-    "quopri",
-    // ── R ────────────────────────────────────────────────────────────────
-    "random",
-    "re",
-    "readline",
-    "reprlib",
-    "resource",
-    "rlcompleter",
-    "runpy",
-    // ── S ────────────────────────────────────────────────────────────────
-    "sched",
-    "secrets",
-    "select",
-    "selectors",
-    "shelve",
-    "shlex",
-    "shutil",
-    "signal",
-    "site",
-    "smtpd",
-    "smtplib",
-    "sndhdr",
-    "socket",
-    "socketserver",
-    "spwd",
-    "sqlite3",
-    "sre_compile",
-    "sre_constants",
-    "sre_parse",
-    "ssl",
-    "stat",
-    "statistics",
-    "string",
-    "stringprep",
-    "struct",
-    "subprocess",
-    "sunau",
-    "symtable",
-    "sys",
-    "sysconfig",
-    "syslog",
-    // ── T ────────────────────────────────────────────────────────────────
-    "tabnanny",
-    "tarfile",
-    "telnetlib",
-    "tempfile",
-    "termios",
-    "test",
-    "textwrap",
-    "threading",
-    "time",
-    "timeit",
-    "tkinter",
-    "token",
-    "tokenize",
-    "tomllib",
-    "trace",
-    "traceback",
-    "tracemalloc",
-    "tty",
-    "turtle",
-    "turtledemo",
-    "types",
-    "typing",
-    "typing_extensions",
-    // ── U ────────────────────────────────────────────────────────────────
-    "unicodedata",
-    "unittest",
-    "urllib",
-    "uu",
-    "uuid",
-    // ── V ────────────────────────────────────────────────────────────────
-    "venv",
-    // ── W ────────────────────────────────────────────────────────────────
-    "warnings",
-    "wave",
-    "weakref",
-    "webbrowser",
-    "winreg",
-    "winsound",
-    "wsgiref",
-    // ── X ────────────────────────────────────────────────────────────────
-    "xdrlib",
-    "xml",
-    "xmlrpc",
-    // ── Z ────────────────────────────────────────────────────────────────
-    "zipapp",
-    "zipfile",
-    "zipimport",
-    "zlib",
-    "zoneinfo",
-    // ── Internal modules commonly imported ───────────────────────────────
-    "_abc",
-    "_bisect",
-    "_codecs",
-    "_collections_abc",
-    "_csv",
-    "_datetime",
-    "_decimal",
-    "_heapq",
-    "_io",
-    "_json",
-    "_operator",
-    "_signal",
-    "_socket",
-    "_struct",
-    "_typing",
-    "_contextvars",
-    "_random",
-    "_warnings",
-    "_weakref",
-    // ── Project module (always considered typed) ─────────────────────────
-    "basilisk",
-];
+use std::path::{Path, PathBuf};
 
 fn main() {
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR not set");
-    generate_stdlib_set(&out_dir);
-    generate_stub_map(&out_dir);
+    let manifest_dir =
+        PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"));
+    generate_stdlib_set(&out_dir, &manifest_dir);
+    generate_stub_map(&out_dir, &manifest_dir);
 }
 
-/// Generate the `STDLIB_MODULES` perfect-hash set from the in-source list.
-fn generate_stdlib_set(out_dir: &str) {
+/// Generate the baseline module-root set directly from the exact bundled ZIP.
+/// Keeping no hand table or target filter here prevents the accelerator from
+/// diverging from the bundle identity it describes.
+fn generate_stdlib_set(out_dir: &str, manifest_dir: &Path) {
+    let bundle_path = manifest_dir.join("data/typeshed/stdlib.zip");
+    println!("cargo:rerun-if-changed={}", bundle_path.display());
+    let modules = bundled_stdlib_roots(&bundle_path);
+
     let dest = Path::new(out_dir).join("stdlib_set.rs");
     let file = File::create(&dest).expect("failed to create stdlib_set.rs");
     let mut writer = BufWriter::new(file);
-
     write!(
         writer,
-        "// Generated by build.rs — do not edit.\n\
+        "// Generated from data/typeshed/stdlib.zip — do not edit.\n\
          #[expect(clippy::unreadable_literal, reason = \"generated by phf_codegen\")]\n\
-         /// Compile-time perfect hash set of `CPython` 3.12 stdlib top-level module names.\n\
+         /// Perfect-hash accelerator for the matching embedded Typeshed bundle.\n\
          static STDLIB_MODULES: phf::Set<&'static str> = "
     )
     .expect("write failed");
 
     let mut builder = phf_codegen::Set::new();
-    for module in STDLIB_MODULES {
-        let _ = builder.entry(*module);
+    for module in &modules {
+        let _ = builder.entry(module.as_str());
     }
     let built = builder.build();
     write!(writer, "{built}").expect("write failed");
     writeln!(writer, ";").expect("write failed");
 }
 
-/// Generate the `STUB_DISTRIBUTIONS` map (import root → `types-<dist>`) from the
-/// committed typeshed data file.
-fn generate_stub_map(out_dir: &str) {
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
-    let data_path = Path::new(&manifest_dir)
-        .join("data")
-        .join("typeshed_stub_distributions.tsv");
+fn bundled_stdlib_roots(bundle_path: &Path) -> BTreeSet<String> {
+    let file = File::open(bundle_path).expect("failed to open bundled stdlib ZIP");
+    let mut archive = zip::ZipArchive::new(file).expect("invalid bundled stdlib ZIP");
+    let mut modules = BTreeSet::new();
+    for index in 0..archive.len() {
+        let entry = archive
+            .by_index(index)
+            .expect("invalid bundled stdlib ZIP entry");
+        let Some(relative) = entry.name().strip_prefix("stdlib/") else {
+            continue;
+        };
+        if !relative.to_ascii_lowercase().ends_with(".pyi") {
+            continue;
+        }
+        let Some(root) = relative.split('/').next() else {
+            continue;
+        };
+        let root = root.strip_suffix(".pyi").unwrap_or(root);
+        if !root.is_empty() {
+            let _ = modules.insert(root.to_owned());
+        }
+    }
+    assert!(
+        !modules.is_empty(),
+        "bundled stdlib ZIP contained no .pyi module roots"
+    );
+    modules
+}
+
+/// Generate the bundled import-root → installable stub-distribution index.
+fn generate_stub_map(out_dir: &str, manifest_dir: &Path) {
+    let data_path = manifest_dir.join("data/typeshed_stub_distributions.tsv");
     println!("cargo:rerun-if-changed={}", data_path.display());
     let data = fs::read_to_string(&data_path).expect("failed to read stub distribution data");
 
     let dest = Path::new(out_dir).join("stub_map.rs");
     let file = File::create(&dest).expect("failed to create stub_map.rs");
     let mut writer = BufWriter::new(file);
-
     write!(
         writer,
         "// Generated by build.rs — do not edit.\n\
@@ -347,8 +100,6 @@ fn generate_stub_map(out_dir: &str) {
     .expect("write failed");
 
     let mut builder = phf_codegen::Map::new();
-    // phf_codegen 0.13's `entry` borrows the value string for the builder's
-    // lifetime, so the formatted distribution literals must outlive `build()`.
     let entries: Vec<(&str, String)> = data
         .lines()
         .map(str::trim)

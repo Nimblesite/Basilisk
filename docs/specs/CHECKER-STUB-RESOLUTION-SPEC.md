@@ -1,4 +1,4 @@
-# Stub Resolution & Type Provenance — Specification {#STUBRES}
+# Stub Resolution & Type Provenance — Specification {#STUBRES-OVERVIEW}
 
 > **Crate**: `basilisk-stubs` (resolution, the downloaded `python/typeshed` archive + on-disk cache, and the bundled full-snapshot ZIP), `basilisk-config` (overrides)
 > **Related**: [LSP-UV-INTEGRATION-SPEC.md §LSPUV-LOCK-REGISTRY](LSP-UV-INTEGRATION-SPEC.md#LSPUV-LOCK-REGISTRY) — `PackageRegistry` accelerates stub discovery
@@ -113,8 +113,8 @@ reorder a resolution step.
 
 | Spec step | Basilisk mechanism | Config key |
 |---|---|---|
-| 1 — manual stubs at head of path | User `.pyi` stubs in `stub-paths` directories, plus the auto-discovered `.basilisk/stubs/` cache ([§STUBRES-CREATE-LOCAL](#STUBRES-CREATE-LOCAL)). They sit at the head of the path and MAY shadow any later module, stdlib or third-party. | `stub-paths` |
-| 2 — user code | Workspace `.py` source under the configured roots / `include`. | roots, `include` |
+| 1 — manual path head | User `.pyi` in `stub-paths`, generated `.basilisk/stubs/`, and `.pyi` or Python source in manual `extra-paths`; `.pyi` precedes `.py` at each location. These MAY shadow every later step. | `stub-paths`, `extra-paths` |
+| 2 — user code | Workspace `.pyi`/`.py` under roots / `include`, with `.pyi` first. | roots, `include` |
 | 3 — stdlib typeshed | One selected source: a custom `typeshed-path`; otherwise the pinned or latest commit downloaded as an archive; otherwise the bundled full-snapshot ZIP ([§STUBRES-TYPESHED](#STUBRES-TYPESHED)). | `typeshed-path`, `typeshed-commit`, `typeshed-cache-path` |
 | 4 — stub-only packages | Installed `foopkg-stubs` / typeshed `types-foopkg` distributions, discovered in site-packages. They supersede an inline-typed install of the same package. | (auto) |
 | 5 — `py.typed` packages | Installed packages shipping a `py.typed` marker (stubs in `.pyi` or inline in `.py`). | (auto) |
@@ -188,39 +188,9 @@ bundled ZIP wholesale.
 
 ### Type model {#STUBRES-TYPE-MODEL}
 
-`StubSource` records the pinned resolution step; `StubTier` records trust
-([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-[`models/stub_resolution.td`](../../models/stub_resolution.td) generates the Rust
-ADTs:
-
-```typeDiagram
-alias PathBuf = String
-
-type StubResolution {
-  module: String
-  source: StubSource
-  pyi_path: Option<PathBuf>
-  tier: StubTier
-}
-
-union StubSource {
-  UserStub
-  StubPackage
-  InlineTyped
-  Typeshed
-  CustomTypeshed
-}
-
-union StubTier {
-  Tier1
-  Tier2
-  Tier3
-}
-```
-
-The variants map to steps 1 (`UserStub`), 3 (`Typeshed`/`CustomTypeshed`), 4
-(`StubPackage`), and 5 (`InlineTyped`). Custom typeshed is Tier1 and visibly
-labelled so an alternative stdlib is never reported as CPython.
+[`models/stub_resolution.td`](../../models/stub_resolution.td) defines
+`StubResolution`, `StubSource`, and `StubTier`. Its variants record steps 1,
+3–5; Custom typeshed is Tier1 and never reported as CPython.
 
 ### Standard-library typeshed source {#STUBRES-TYPESHED}
 
@@ -228,12 +198,13 @@ The pinned typing specification names "Typeshed stubs for the standard library",
 says they are "usually" vendored, and makes a configured custom tree canonical
 ([step 3, `python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 The specification does not prescribe transport, caching, commits, or freshness.
-For precedent, mypy says all users need its bundled stdlib stubs, while ty
-documents a vendored stdlib ZIP and custom-tree option
-([mypy](https://mypy-lang.blogspot.com/2021/05/the-upcoming-switch-to-modular-typeshed.html),
-[ty](https://docs.astral.sh/ty/reference/configuration/)). Basilisk uses one
-complete source; names, `VERSIONS`, `.pyi` bodies, and derived indexes MUST NOT
-mix across sources.
+Independent precedent is bundle plus whole-source override: ty uses stubs
+“bundled as a zip file in the binary” ([`astral-sh/ruff@035ebc3`](https://github.com/astral-sh/ruff/blob/035ebc332af34b7e301606dcc74d997092be2316/crates/ty_project/src/metadata/options.rs#L842-L844));
+mypy uses a custom directory “instead of the typeshed that ships with mypy”
+([`python/mypy@d091daa`](https://github.com/python/mypy/blob/d091daa83f95ad0b505cc4f783a5273c0dced5d1/docs/source/config_file.rst#L1067-L1070));
+Pyright “ships with a bundled copy of typeshed type stubs”
+([`microsoft/pyright@1bec65c`](https://github.com/microsoft/pyright/blob/1bec65c15fba26016281d44d977bf667b89b9d30/docs/configuration.md#L23)).
+Basilisk likewise never mixes a source's names, bodies, `VERSIONS`, or indexes.
 
 | Mode | Active source | Failure rule |
 |---|---|---|
@@ -241,9 +212,9 @@ mix across sources.
 | Exact commit | selected archive (content-attested unless waived), or bundle only at that SHA | otherwise fail closed |
 | Latest (default) | current `python/typeshed@main`, once per run/session | never reuse old unpinned data; warn and use bundled ZIP |
 
-Freshness is the default; determinism is one **Pin current** action away. Every
-mode without an explicit commit, including Custom folder and bundled, warns that
-the project is unpinned ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)).
+Latest defaults to freshness and is one **Pin current** action from determinism.
+Custom and bundled are also reported unpinned
+([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)).
 
 #### Archive acquisition {#STUBRES-TYPESHED-ACQUIRE}
 
@@ -253,22 +224,22 @@ authenticated HTTPS, then downloads that SHA from GitHub codeload or a
 metadata is unavailable and no pin exists, Latest warns and uses the bundled ZIP.
 URLs are redacted in logs.
 
-**Security boundary.** A reported SHA alone proves nothing about bytes used by
-the checker. Trusted GitHub metadata binds a commit to its tree; reconstructing
-Git hashes and reading those same bytes binds analysis to that tree. An explicit
-pin selects the commit but never replaces the trusted commit→tree mapping. Pin +
-mapping + verification provides reproducible attestation; Latest verifies a
-runtime-selected tree but remains unpinned. No typeshed release signature is
-validated, so official provenance ultimately trusts GitHub/TLS. Custom and
-verification-disabled sources MUST NOT be labelled official.
+**Security boundary.** A pin is not an archive checksum or provenance proof:
+Git defines a commit from a tree object ([Git `commit-tree`](https://git-scm.com/docs/git-commit-tree)),
+and GitHub reports commit and tree SHAs separately ([GitHub Git-commit API](https://docs.github.com/en/rest/git/commits)).
+Initial verification therefore authenticates GitHub commit→tree metadata and
+reconstructs that tree from the consumed bytes. Cache rehashing proves only
+local consistency; a hostile cache can replace ZIP and metadata, and typeshed
+has no signed release. Custom or verification-disabled sources are `UNVERIFIED`,
+never represented as official.
 
-The archive is streamed once through four activation gates, cached as an
-immutable ZIP, and read through an archive VFS:
+Decompression enforces entry and size caps before four activation gates run.
+Accepted bytes are cached as an immutable ZIP and read through an archive VFS:
 
 | Gate | Rule |
 |---|---|
 | Safety | reject absolute/`..` paths, escaping links, duplicate entries, and entry/decompressed-size limits |
-| Shape | require one coherent stdlib tree, parseable `.pyi`, `VERSIONS`, and license metadata |
+| Shape | require one coherent stdlib tree, `VERSIONS`, and license metadata |
 | License | path+SHA-256 manifest for relevant root/nested `LICENSE*`/`NOTICE*` must match a build-approved identity; drift blocks activation for review |
 | Content | reconstruct Git trees and match the trusted root-tree SHA; only this gate may be waived |
 
@@ -276,10 +247,10 @@ First acquisition records the accepted ZIP's SHA-256. Reuse hashes the cached
 ZIP, detecting mutation without extraction; `.pyi` is read from that same ZIP.
 Cache metadata records whether content verification ran; enabling it later MUST
 rerun the content gate before the archive can be reported as verified.
-Eviction or `typeshed-cache = false` re-downloads and reruns all gates, then
-discards it. Archive bytes may change, but verified tree contents for one commit
-do not. A pin never expires; a cache entry may. Disabling content verification
-reports `UNVERIFIED` and never disables safety, shape, or license review. A fresh
+Exact commit identities and accepted immutable cached ZIP bytes have no
+time-based expiry. Explicit eviction or `typeshed-cache = false` reacquires and
+reruns all gates without changing an explicit SHA. Disabling verification reports
+`UNVERIFIED` and never disables safety, shape, or license review. A fresh
 unpinned download is not hermetic.
 
 #### Bundled ZIP snapshot {#STUBRES-TYPESHED-BASELINE}
@@ -287,7 +258,8 @@ unpinned download is not hermetic.
 Basilisk ships a release-pinned ZIP containing every `stdlib/` `.pyi`,
 `stdlib/VERSIONS`, the composite root `LICENSE`, root `NOTICE` iff present, and
 pertinent nested license/notice files. It is a complete offline step-3 source,
-not a names-only baseline; #289/#288 therefore work offline. A compiled name or
+not a names-only baseline; it supplies the bodies needed by #289/#288 offline.
+A compiled name or
 distribution index MAY accelerate this exact ZIP but MUST NOT override it or any
 custom/downloaded source
 ([CHKARCH-TESTING-BENCH-RATCHET](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET)).
@@ -303,12 +275,12 @@ MIT-only.
 For every bundled artifact, [Apache-2.0 §4](https://www.apache.org/licenses/LICENSE-2.0.html#redistribution)
 requires license delivery, pertinent-notice retention, readable `NOTICE`
 attribution when present, and marks on modified upstream files; the composite
-also carries the MIT copyright and permission notice. Basilisk policy implements
+also carries the MIT copyright and permission notice. Basilisk policy requires
 this with exact copies, SHA comparison, human review on drift, and
 `THIRD-PARTY-LICENSES`/`NOTICES` records for source URL, SHA, and repackaging.
-Basilisk additionally preserves license metadata in runtime caches, attributes
-derived indexes with their source SHA, and exposes source/SHA/View License in
-CLI, UI, and MCP. These are provenance policy, not extra Apache mandates. A
+Basilisk retains legal files in cached ZIPs and attributes derived indexes with
+their source SHA. CLI/MCP expose source, SHA, and license reference; the UI adds
+View License. These are provenance policy, not extra Apache mandates. A
 custom path is user-managed and MUST NOT be assigned typeshed's terms. Direct
 runtime downloads are not Basilisk release artifacts.
 
@@ -321,7 +293,7 @@ Basilisk reports `active_source` plus an ordered `warnings[]`; warnings compose.
 | Condition | Persistent status |
 |---|---|
 | Latest or bundled without explicit commit | `UNPINNED — Pin current to make this reproducible` |
-| Custom folder | `UNPINNED — folder contents can change; use Exact commit for reproducibility` |
+| Custom folder | `UNPINNED — folder contents can change; version or content-address the folder externally` |
 | Latest could not resolve, download, or validate | `DOWNLOAD FAILED — using bundled <sha>; may be behind upstream` |
 | approved license/NOTICE identity changed | `LICENSE CHANGED — Basilisk update/review required` |
 | content verification disabled | `UNVERIFIED — contents were not checked against the selected tree` |
@@ -331,9 +303,9 @@ CLI uses a stderr status banner without contaminating machine diagnostics; LSP
 uses `window/showMessage` plus persistent Service Info, never
 `publishDiagnostics`; MCP returns structured status. These warnings therefore
 cannot create conformance false positives. All surfaces show the full SHA when
-known and a safe View License action. MCP fields are `active_source`, commit/tree
-identity, transport, `license_status`, immutable license reference (or custom
-`not supplied`), and ordered `warnings[]`. There is no stale state.
+known; the UI also provides a safe View License action. MCP fields are
+`active_source`, commit/tree identity, transport, provenance, `license_status`,
+immutable license reference (or custom `not supplied`), and ordered `warnings[]`.
 
 #### Config keys {#STUBRES-TYPESHED-CONFIG}
 
@@ -347,9 +319,9 @@ leaves open. Every one is exposed as a control in the configuration UI
 | Config key / flag | Type | Default | Meaning |
 |---|---|---|---|
 | `typeshed-commit` | full SHA | unset | Exact commit; unset selects Latest. |
-| `typeshed-url` | URL template | GitHub codeload | Archive mirror containing `{sha}`; does not resolve Latest. |
+| `typeshed-url` | URL template | GitHub codeload | Codeload-compatible archive mirror containing `{sha}` and one common top-level directory; does not resolve Latest. |
 | `typeshed-cache-path` | path | OS cache | Cached gate-accepted ZIPs. |
-| `typeshed-cache` | bool | `true` | Reuse gate-accepted ZIPs; false downloads, validates, and discards. |
+| `typeshed-cache` | bool | `true` | Reuse a gate-accepted immutable ZIP; false downloads, validates, and discards. |
 | `typeshed-path` | `string` | _(unset)_ | Supply the canonical custom step-3 tree; disables download and the bundled ZIP. |
 | `typeshed-verify` | bool | `true` | Content attestation; false reports `UNVERIFIED`. |
 | `--no-typeshed-cache` | flag | off | One-run `typeshed-cache = false`. |
@@ -362,6 +334,11 @@ and platform checks"
 ([`python/typing@6ef9f77`, directives](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)).
 Accordingly, a concrete target filters `stdlib/VERSIONS`, selects version/platform
 guards, and supplies the target interpreter's site-packages as required above.
+The selected snapshot's exact
+[`stdlib/VERSIONS`](https://github.com/python/typeshed/blob/83c2518a9e6abbda0c44592c3483de459198f887/stdlib/VERSIONS)
+defines inclusive `X.Y-A.B` or open-ended `X.Y-` lifetimes; a submodule without
+its own row inherits the closest listed parent module's lifetime. Both the text
+and parsed admission index come from the active snapshot identity.
 Platform `All` requires validity across alternatives and MUST NOT expose a name
 merely because one branch has it. Python version never selects or guesses a
 typeshed commit; no fixed Python default or Python→commit map exists.
@@ -415,18 +392,20 @@ community/generated stubs, or untyped imports; there is no `TrackedType` wrapper
 
 ### Diagnostic Behaviour by Provenance {#STUBRES-PROVENANCE-DIAG}
 
-| Provenance | imports_unresolved | Downstream type errors | LSP hover | Code Action |
+| Resolution/provenance | Import-site diagnostic | Downstream type errors | LSP hover | Code Action |
 |------------|-----------|----------------------|-----------|-------------|
-| Source | not fired | normal errors | shows inferred type | — |
-| StubTier1 | not fired | normal errors | shows stub type + "(typeshed)" | — |
-| StubCustomTypeshed | not fired | normal errors | shows stub type + "(custom typeshed)" | — |
-| StubTier2 | not fired | normal errors | shows type + "(community stub)" | — |
-| StubTier3 | downgraded to info | warnings only | shows type + "(best-effort stub, may be inaccurate)" | — |
-| Untyped | error (default) | **suppressed** | shows type + "(no type stubs available)" | one-click install (typeshed) or create-local stub via LSP |
+| Source | none | normal errors | shows inferred type | — |
+| StubTier1 | none | normal errors | shows stub type + "(typeshed)" | — |
+| StubCustomTypeshed | none | normal errors | shows stub type + "(custom typeshed)" | — |
+| StubTier2 | none | normal errors | shows type + "(community stub)" | — |
+| StubTier3 | none | diagnostics carrying this provenance become info | shows type + "(best-effort stub, may be inaccurate)" | — |
+| Unresolved (`Untyped`) | `imports_unresolved` error by default | dependent cascades suppressed | no type information available | add dependency or sync |
+| Installed untyped (`Untyped`) | opt-in `BSK-0152`; off by default | normal resolved-source analysis | "(no type stubs available)" | install a published stub package or create a local stub |
 
-For `Untyped`, `imports_unresolved` fires once, the symbol becomes
-`Unknown(Untyped)`, downstream cascades are suppressed, and the LSP offers the
-appropriate one-click action.
+The two untyped states do not share a diagnostic. A terminal unresolved import
+emits `imports_unresolved` once and suppresses dependent cascades. An installed
+site-packages `.py` without `py.typed` is resolved, never emits
+`imports_unresolved`, and emits `BSK-0152` only when the project opts in.
 
 ### Code Actions for Unresolved Imports {#STUBRES-CODEACTIONS}
 
@@ -442,8 +421,9 @@ are pinned step-1 stubs
 | BSK-0152 | Package installed, typeshed stub exists | "Install type stubs: `types-{pkg}`" | `basilisk.uv.addDev` |
 | BSK-0152 | Package installed, **no** typeshed stub | "Create local type stub for `{pkg}`" | `basilisk.stubs.createLocal` |
 
-`workspace/executeCommand` reports progress and re-resolves; every BSK-0152 also
-offers create-local. See [LSPUV-ACTIONS](LSP-UV-INTEGRATION-SPEC.md#LSPUV-ACTIONS).
+Commands execute the action and re-resolve; uv dependency commands also report
+progress. Every BSK-0152 offers create-local. See
+[LSPUV-ACTIONS](LSP-UV-INTEGRATION-SPEC.md#LSPUV-ACTIONS).
 
 #### Create Local Stub {#STUBRES-CREATE-LOCAL}
 

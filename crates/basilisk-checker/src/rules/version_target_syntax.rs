@@ -39,11 +39,12 @@ impl Rule for Pep695BelowTargetViolation {
         ctx: &CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        if ctx.target_version >= PEP695_MIN_VERSION {
+        let Some(target) = ctx.target_version else {
+            return;
+        };
+        if target >= PEP695_MIN_VERSION {
             return;
         }
-
-        let target = ctx.target_version;
         for alias in &module.pep695_scoping.aliases {
             diagnostics.push(make_diagnostic(
                 &format!(

@@ -104,14 +104,16 @@ pub struct WorkspaceIndex {
     /// in `basilisk check` (GitHub #311). Cleared by `reload_root_configs`.
     dir_configs: std::sync::RwLock<std::collections::HashMap<PathBuf, Arc<BasiliskConfig>>>,
     /// Import search paths (venv site-packages, workspace members, stub paths,
-    /// uv registry) cached from the last full workspace scan.
+    /// uv registry) cached per owning workspace root from the last full scan.
     ///
     /// Reused by the incremental single-file analysis path (`didOpen` /
     /// `didChange` / disk reload) so third-party import resolution matches the
     /// full scan and the editor does not resurrect false `imports_unresolved`.
     /// Implements [ANALYSIS-INCR-IMPORTS]. See
     /// docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-INCR-IMPORTS
-    pub search_paths: std::sync::RwLock<Option<Arc<crate::import_resolver::ImportSearchPaths>>>,
+    pub search_paths_by_root: std::sync::RwLock<
+        std::collections::HashMap<PathBuf, Arc<crate::import_resolver::ImportSearchPaths>>,
+    >,
     /// In-session Salsa engine backing the incremental single-file analysis path
     /// once the search paths are known. Memoizes `parse → resolve →
     /// resolve_module_imports → check` per file. Implements
@@ -184,7 +186,7 @@ impl WorkspaceIndex {
             root_configs,
             checker_config,
             dir_configs: std::sync::RwLock::new(std::collections::HashMap::new()),
-            search_paths: std::sync::RwLock::new(None),
+            search_paths_by_root: std::sync::RwLock::new(std::collections::HashMap::new()),
             salsa_engine: crate::salsa_engine::SalsaAnalysisEngine::default(),
         }
     }
@@ -277,18 +279,107 @@ impl WorkspaceIndex {
     /// resolve imports against these so the editor's diagnostics match the
     /// full-scan diagnostics. Implements [ANALYSIS-INCR-IMPORTS].
     pub fn set_search_paths(&self, search_paths: crate::import_resolver::ImportSearchPaths) {
-        if let Ok(mut guard) = self.search_paths.write() {
-            *guard = Some(Arc::new(search_paths));
+        let search_paths = Arc::new(search_paths);
+        let mut by_root = std::collections::HashMap::new();
+        let roots = if self.roots.is_empty() {
+            search_paths.roots.clone()
+        } else {
+            self.roots.clone()
+        };
+        if roots.is_empty() {
+            let _ = by_root.insert(PathBuf::new(), Arc::clone(&search_paths));
+        } else {
+            for root in roots {
+                let _ = by_root.insert(root, Arc::clone(&search_paths));
+            }
+        }
+        self.set_search_paths_by_root(by_root);
+    }
+
+    /// Atomically replace all per-root import environments.
+    pub fn set_search_paths_by_root(
+        &self,
+        search_paths: std::collections::HashMap<
+            PathBuf,
+            Arc<crate::import_resolver::ImportSearchPaths>,
+        >,
+    ) {
+        if let Ok(mut guard) = self.search_paths_by_root.write() {
+            *guard = search_paths;
         }
     }
 
-    /// Snapshot the cached import search paths, if a scan has built them.
+    /// Cache one root's import environment without disturbing other roots.
+    fn set_root_search_paths(
+        &self,
+        root: PathBuf,
+        search_paths: crate::import_resolver::ImportSearchPaths,
+    ) {
+        if let Ok(mut guard) = self.search_paths_by_root.write() {
+            let _ = guard.insert(root, Arc::new(search_paths));
+        }
+    }
+
+    /// Whether at least one scan has installed import search paths.
     #[must_use]
-    fn search_paths_snapshot(&self) -> Option<Arc<crate::import_resolver::ImportSearchPaths>> {
-        self.search_paths
+    fn has_search_paths(&self) -> bool {
+        self.search_paths_by_root
             .read()
-            .ok()
-            .and_then(|guard| guard.clone())
+            .is_ok_and(|guard| !guard.is_empty())
+    }
+
+    /// Snapshot the import environment for `path` using the longest owning
+    /// workspace-root prefix. Nested workspace folders therefore select the
+    /// most specific target and never inherit a sibling root's interpreter.
+    #[must_use]
+    pub(crate) fn search_paths_for_file(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<(PathBuf, Arc<crate::import_resolver::ImportSearchPaths>)> {
+        let guard = self.search_paths_by_root.read().ok()?;
+        let selected = guard
+            .keys()
+            .filter(|root| !root.as_os_str().is_empty() && path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+            .cloned()
+            .or_else(|| {
+                guard
+                    .contains_key(std::path::Path::new(""))
+                    .then(PathBuf::new)
+            })
+            .or_else(|| {
+                (guard.len() == 1)
+                    .then(|| guard.keys().next().cloned())
+                    .flatten()
+            })?;
+        guard
+            .get(&selected)
+            .map(|search_paths| (selected, Arc::clone(search_paths)))
+    }
+
+    /// Return the longest workspace-root prefix that owns `path`.
+    #[must_use]
+    fn owning_root_for_path(&self, path: &std::path::Path) -> Option<&PathBuf> {
+        self.roots
+            .iter()
+            .filter(|root| !root.as_os_str().is_empty() && path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+    }
+
+    /// Whether `root` is the longest-prefix owner of `path`.
+    #[must_use]
+    pub(crate) fn path_is_owned_by_root(
+        &self,
+        path: &std::path::Path,
+        root: &std::path::Path,
+    ) -> bool {
+        self.owning_root_for_path(path)
+            .is_some_and(|owner| owner == root)
+    }
+
+    fn path_is_owned_by_any_root(&self, path: &std::path::Path, roots: &[PathBuf]) -> bool {
+        self.owning_root_for_path(path)
+            .is_some_and(|owner| roots.iter().any(|root| root == owner))
     }
 
     /// Run the analysis pipeline for one file, then resolve its imports against
@@ -311,7 +402,7 @@ impl WorkspaceIndex {
         // Before the first scan populates the search paths, keep the import-free
         // path (no salsa engine): it matches the pre-scan behaviour exactly and
         // avoids marking every third-party import unresolved.
-        let Some(search_paths) = self.search_paths_snapshot() else {
+        let Some((search_paths_root, search_paths)) = self.search_paths_for_file(path) else {
             let (mut entry, lsp_diags) = analyse_with_config(text, path, &config);
             if self.is_path_excluded(path) || self.is_outside_include_roots(path) {
                 entry.diagnostics.clear();
@@ -328,9 +419,17 @@ impl WorkspaceIndex {
         // Implements [ANALYSIS-INCR-IMPORTS] via [CHKARCH-INCREMENTAL-SALSA].
         let root_key = Self::config_root_key(path);
         let cross_module = matches!(self.mode(), AnalysisMode::CrossModule);
-        let analysis =
-            self.salsa_engine
-                .analyse(path, text, &config, &root_key, &search_paths, cross_module);
+        let analysis = self.salsa_engine.analyse(
+            path,
+            text,
+            crate::salsa_engine::AnalysisInputs {
+                config: &config,
+                config_key: &root_key,
+                search_paths_root: &search_paths_root,
+                search_paths: &search_paths,
+            },
+            cross_module,
+        );
         let hash = fnv1a(text);
 
         // Parse failure: surface BSK-PARSE, no navigable module (matches the
@@ -550,6 +649,26 @@ impl WorkspaceIndex {
         lsp_diags
     }
 
+    /// Track an open buffer without parsing or checking it.
+    ///
+    /// Used while the owning root has no gate-accepted Typeshed generation.
+    /// The text remains authoritative and is analysed when that root becomes
+    /// Ready; no fallback generation is allowed to produce interim results.
+    pub(crate) fn set_open_without_analysis(&self, uri: &Url, text: &str, version: i32) {
+        let path = uri.to_file_path().unwrap_or_default();
+        let _ = self.files.insert(
+            path,
+            FileEntry {
+                source_hash: fnv1a(text),
+                text: text.to_owned(),
+                resolved: None,
+                diagnostics: Vec::new(),
+                version,
+                is_open: true,
+            },
+        );
+    }
+
     /// Mirror client-accepted LSP edits into the analysis index and reanalyse.
     ///
     /// Open-buffer text and its version remain authoritative if a newer
@@ -748,7 +867,7 @@ impl WorkspaceIndex {
     pub fn reresolve_imports_and_recheck(
         &self,
     ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
-        if self.search_paths_snapshot().is_none() {
+        if !self.has_search_paths() {
             return self.recheck_all_files();
         }
         self.salsa_engine.prime(
@@ -865,9 +984,25 @@ impl WorkspaceIndex {
         usize,
         usize,
     ) {
+        self.scan_roots(&self.roots)
+    }
+
+    /// Scan only files whose longest-prefix owning root is in `roots`.
+    ///
+    /// This keeps a blocked nested root out of a healthy parent-root scan while
+    /// allowing the healthy root to continue independently.
+    #[must_use]
+    pub(crate) fn scan_roots(
+        &self,
+        roots: &[PathBuf],
+    ) -> (
+        Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)>,
+        usize,
+        usize,
+    ) {
         let mut all_files: Vec<PathBuf> = Vec::new();
 
-        for root in &self.roots {
+        for root in roots {
             let cfg = crate::config::load_config(root);
             for scan_dir in self.scan_dirs_for(root) {
                 collect_python_files(&scan_dir, &mut all_files, &cfg.exclude, root);
@@ -875,7 +1010,10 @@ impl WorkspaceIndex {
         }
 
         // Prefer .pyi over .py when both exist for the same stem.
-        let deduped = deduplicate_by_stem(all_files);
+        let deduped = deduplicate_by_stem(all_files)
+            .into_iter()
+            .filter(|path| self.path_is_owned_by_any_root(path, roots))
+            .collect::<Vec<_>>();
         let file_count = deduped.len();
 
         // Read every closed file's text before analysing anything, so the
@@ -892,7 +1030,7 @@ impl WorkspaceIndex {
             })
             .collect();
 
-        if self.search_paths_snapshot().is_some() {
+        if self.has_search_paths() {
             self.salsa_engine.prime(
                 to_analyse
                     .iter()
@@ -943,7 +1081,7 @@ impl WorkspaceIndex {
         let files = deduplicate_by_stem(files);
         self.remove_stale_configuration_entries(root, &files);
         let sources = self.closed_sources(files);
-        if self.search_paths_snapshot().is_some() {
+        if self.has_search_paths() {
             self.salsa_engine.prime(
                 sources
                     .iter()
@@ -961,15 +1099,18 @@ impl WorkspaceIndex {
     }
 
     fn ensure_configuration_search_paths(&self, root: &std::path::Path) {
-        if self.search_paths_snapshot().is_some() {
+        if self
+            .search_paths_by_root
+            .read()
+            .is_ok_and(|paths| paths.contains_key(root))
+        {
             return;
         }
         let roots = self.roots.clone();
         let config = crate::config::load_config(root);
-        let registry = crate::server::init::build_uv_registry(&roots);
-        self.set_search_paths(crate::import_resolver::search_paths_from_config(
-            &roots, &config, registry,
-        ));
+        let search_paths =
+            crate::server::init::build_root_search_paths(&roots, root, config, None, None);
+        self.set_root_search_paths(root.to_path_buf(), search_paths);
     }
 
     fn remove_stale_configuration_entries(&self, root: &std::path::Path, files: &[PathBuf]) {
@@ -1003,10 +1144,21 @@ impl WorkspaceIndex {
     /// rescans so open editors converge with the workspace.
     #[must_use]
     pub fn refresh_open_files(&self) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+        self.refresh_open_files_for_roots(&self.roots)
+    }
+
+    /// Re-analyse open files owned by one of `roots`.
+    #[must_use]
+    pub(crate) fn refresh_open_files_for_roots(
+        &self,
+        roots: &[PathBuf],
+    ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
         let open_paths: Vec<PathBuf> = self
             .files
             .iter()
-            .filter(|entry| entry.value().is_open)
+            .filter(|entry| {
+                entry.value().is_open && self.path_is_owned_by_any_root(entry.key(), roots)
+            })
             .map(|entry| entry.key().clone())
             .collect();
         self.reanalyse_paths(open_paths, PublishPolicy::Always)
@@ -1263,6 +1415,22 @@ mod tests {
         );
     }
 
+    #[test]
+    fn blocked_open_tracks_text_without_running_analysis() {
+        let index = make_index_with_config(annotations_on());
+        let uri = make_uri("/tmp/blocked.py");
+        let source = "def missing_annotations(value):\n    return value\n";
+        index.set_open_without_analysis(&uri, source, 7);
+
+        assert_eq!(index.get_text(&uri).as_deref(), Some(source));
+        let path = uri.to_file_path().unwrap();
+        let entry = index.files.get(&path).unwrap();
+        assert!(entry.is_open);
+        assert_eq!(entry.version, 7);
+        assert!(entry.resolved.is_none());
+        assert!(entry.diagnostics.is_empty());
+    }
+
     // ── Issue #80 (editor): opening a vendored/excluded file must NOT publish
     //    diagnostics. Fix #80 excluded `bundled`/`_vendored` from the workspace
     //    *scan*, but the per-file path (didOpen/didChange -> set_open ->
@@ -1454,6 +1622,40 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[test]
+    fn selected_root_scan_excludes_files_owned_by_nested_blocked_root() {
+        let parent = unique_tmp("bsk_partial_ready_parent");
+        let child = parent.join("nested");
+        std::fs::create_dir_all(&child).unwrap();
+        let parent_file = parent.join("healthy.py");
+        let child_file = child.join("blocked.py");
+        std::fs::write(&parent_file, "healthy: int = 1\n").unwrap();
+        std::fs::write(&child_file, "blocked: int = 2\n").unwrap();
+
+        let index = WorkspaceIndex::new(
+            vec![parent.clone(), child.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let (results, file_count, _) = index.scan_roots(std::slice::from_ref(&parent));
+        assert_eq!(file_count, 1);
+        assert_eq!(results.len(), 1);
+        assert!(results
+            .first()
+            .is_some_and(|(uri, _)| uri.to_file_path().ok().as_ref() == Some(&parent_file)));
+        assert!(index.path_is_owned_by_root(&parent_file, &parent));
+        assert!(!index.path_is_owned_by_root(&child_file, &parent));
+        assert!(index.path_is_owned_by_root(&child_file, &child));
+
+        let (inverse, inverse_count, _) = index.scan_roots(std::slice::from_ref(&child));
+        assert_eq!(inverse_count, 1);
+        assert!(inverse
+            .first()
+            .is_some_and(|(uri, _)| uri.to_file_path().ok().as_ref() == Some(&child_file)));
+
+        let _ = std::fs::remove_dir_all(parent);
+    }
+
     // ── Issue #80: vendored / bundled third-party code must not be scanned ───
     //
     // The extension vendors third-party Python under `vscode-extension/bundled/`
@@ -1598,6 +1800,7 @@ mod tests {
             site_packages: None,
             registry: None,
             typeshed_path: None,
+            typeshed_snapshot: None,
         });
 
         let (results, file_count, _) = idx.scan();
@@ -1635,6 +1838,7 @@ mod tests {
             site_packages: None,
             registry: None,
             typeshed_path: None,
+            typeshed_snapshot: None,
         });
 
         // Open a file with a diagnostic; its fresh state is now stored.
@@ -1686,6 +1890,7 @@ mod tests {
             site_packages: None,
             registry: None,
             typeshed_path: None,
+            typeshed_snapshot: None,
         });
         let _ = idx.scan();
 
@@ -2143,6 +2348,7 @@ mod tests {
             workspace_members: vec![],
             site_packages: Some(site_packages.clone()),
             typeshed_path: None,
+            typeshed_snapshot: None,
             registry: None,
         });
 

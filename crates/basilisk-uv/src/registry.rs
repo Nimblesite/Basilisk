@@ -104,7 +104,7 @@ impl PackageRegistry {
     /// ([LSPUV-DIAGNOSTICS-MISSING-STUBS]) instead uses the bundled typeshed
     /// index (`basilisk_stubs::typeshed_stub_distribution`), and installed
     /// `{name}-stubs` packages are honoured at import-resolution time
-    /// ([STUBRES-PEP561] step 3) — never by name guessing here.
+    /// ([STUBRES-PEP561] step 4) — never by name guessing here.
     #[must_use]
     pub fn find_stub_package(&self, name: &str) -> Option<String> {
         let stub_import = format!("types_{name}");

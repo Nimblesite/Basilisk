@@ -57,6 +57,15 @@ fn annotation_rules_config() -> BasiliskConfig {
     )
 }
 
+/// Annotation-rule configuration for checks whose semantics depend on a
+/// concrete Python target.
+fn annotation_rules_config_for_python(version: &str) -> BasiliskConfig {
+    BasiliskConfig {
+        python_version: Some(version.to_owned()),
+        ..annotation_rules_config()
+    }
+}
+
 #[test]
 fn no_diagnostics_for_fully_annotated_function() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("def greet(name: str) -> str:\n    return name\n")?;
@@ -1668,7 +1677,7 @@ fn override_on_different_method_does_not_suppress_other() -> Result<(), Box<dyn 
         "    def a(self) -> int: return 1\n",
         "    def b(self) -> int: return 1\n", // no @override — should fire BSK-0025
     );
-    let diags = run_with_config(src, &annotation_rules_config())?;
+    let diags = run_with_config(src, &annotation_rules_config_for_python("3.12"))?;
     let e25: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0025").collect();
     assert!(
         !e25.is_empty(),
@@ -1713,7 +1722,7 @@ fn unrelated_decorator_does_not_suppress() -> Result<(), Box<dyn std::error::Err
         "class Child(Base):\n",
         "    def go(self) -> None: pass\n", // no @override at all
     );
-    let diags = run_with_config(src, &annotation_rules_config())?;
+    let diags = run_with_config(src, &annotation_rules_config_for_python("3.12"))?;
     let e25: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0025").collect();
     assert!(
         !e25.is_empty(),

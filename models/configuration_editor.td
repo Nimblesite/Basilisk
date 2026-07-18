@@ -26,15 +26,141 @@ union TagKind {
   Descriptive
 }
 
-# The only four things the editor can ask for - exactly the four things a
-# config file can express: a rule entry, a tag entry, or the absence of
-# either ([CHKARCH-CONFIG-MODEL]). Setting Disabled on a pep-tagged rule is a
-# request error.
+# The Typeshed acquisition keys are a closed allowlist. The wire never accepts
+# an arbitrary TOML key or an untyped value ([LSPCFGED-TYPESHED]).
+union TypeshedSettingKey {
+  TypeshedPath
+  TypeshedCommit
+  TypeshedUrl
+  TypeshedCachePath
+  TypeshedCache
+  TypeshedVerify
+}
+
+union TypeshedSettingValue {
+  Text { value: String }
+  Boolean { value: Bool }
+}
+
+# The only six things the editor can ask for: four rule/tag mutations plus
+# allowlisted Typeshed setting set/remove operations. Setting Disabled on a
+# pep-tagged rule is a request error.
 union EditorMutation {
   SetRule { code: RuleCode, severity: RuleSeverity }
   RemoveRule { code: RuleCode }
   SetTag { tag: RuleTag, severity: RuleSeverity }
   RemoveTag { tag: RuleTag }
+  SetTypeshedSetting { key: TypeshedSettingKey, value: TypeshedSettingValue }
+  RemoveTypeshedSetting { key: TypeshedSettingKey }
+}
+
+union TypeshedSourceMode {
+  Latest
+  ExactCommit
+  CustomFolder
+}
+
+union TypeshedWidget {
+  Directory
+  Text
+  Boolean
+}
+
+union TypeshedLifecycle {
+  Acquiring
+  Ready
+  Blocked
+}
+
+union TypeshedAction {
+  PinCurrent
+  AcquireFresh
+  ViewLicense
+}
+
+union TypeshedActiveSource {
+  Custom
+  ExactCommit
+  Latest
+  Bundled
+}
+
+union TypeshedTransport {
+  CustomPath
+  EmbeddedZip
+  Codeload
+  Mirror
+}
+
+union TypeshedLicenseStatus {
+  Acquiring
+  Unavailable
+  Approved
+  Changed
+  NotSupplied
+}
+
+union TypeshedProvenance {
+  Pending
+  GithubTlsAttested
+  Unverified
+  BundleVetted
+  UserManaged
+}
+
+union TypeshedWarningSeverity {
+  Advisory
+  High
+}
+
+type TypeshedSourceOption {
+  mode: TypeshedSourceMode
+  label: String
+  enabled: Bool
+}
+
+type TypeshedSettingState {
+  key: TypeshedSettingKey
+  label: String
+  description: String
+  value: Option<TypeshedSettingValue>
+  defaultValue: Option<TypeshedSettingValue>
+  widget: TypeshedWidget
+  enabled: Bool
+}
+
+type TypeshedActionState {
+  action: TypeshedAction
+  label: String
+  enabled: Bool
+}
+
+type TypeshedWarningState {
+  code: String
+  message: String
+  severity: TypeshedWarningSeverity
+}
+
+type TypeshedStatusState {
+  lifecycle: TypeshedLifecycle
+  blockedReason: Option<String>
+  activeSource: Option<TypeshedActiveSource>
+  commitIdentity: Option<String>
+  treeIdentity: Option<String>
+  transport: Option<TypeshedTransport>
+  licenseStatus: TypeshedLicenseStatus
+  licenseReference: Option<String>
+  provenance: TypeshedProvenance
+  signedRelease: Bool
+  warnings: List<TypeshedWarningState>
+}
+
+type TypeshedConfigurationState {
+  sourceMode: TypeshedSourceMode
+  sourceOptions: List<TypeshedSourceOption>
+  settings: List<TypeshedSettingState>
+  actions: List<TypeshedActionState>
+  status: TypeshedStatusState
 }
 
 # Read-side bulk selection for occurrence queries only; mutations never take
@@ -136,6 +262,7 @@ type ConfigurationSnapshot {
   pathOverrides: List<PathOverrideState>
   debt: DebtSummary
   problems: List<ConfigurationProblem>
+  typeshed: TypeshedConfigurationState
 }
 
 type PreviewConfigurationRequest {
@@ -167,7 +294,14 @@ type ConfigurationPreview {
   previewId: PreviewId
   baseRevision: Revision
   changes: List<ResolvedRuleChange>
+  typeshedChanges: List<TypeshedSettingChange>
   impact: ConfigurationImpact
+}
+
+type TypeshedSettingChange {
+  key: TypeshedSettingKey
+  before: Option<TypeshedSettingValue>
+  after: Option<TypeshedSettingValue>
 }
 
 # rootUri + previewId fully identify the cached preview, which already pins
@@ -210,4 +344,28 @@ type RuleOccurrencesResponse {
 type ConfigurationChanged {
   rootUri: Uri
   revision: Revision
+}
+
+type TypeshedActionRequest {
+  rootUri: Uri
+  baseRevision: Revision
+  action: TypeshedAction
+}
+
+type TypeshedLicenseDocument {
+  title: String
+  uri: Option<Uri>
+  content: String
+  readOnly: Bool
+}
+
+union TypeshedActionResult {
+  Preview { preview: ConfigurationPreview }
+  Snapshot { snapshot: ConfigurationSnapshot }
+  License { license: TypeshedLicenseDocument }
+}
+
+type TypeshedStatusChanged {
+  rootUri: Uri
+  status: TypeshedStatusState
 }

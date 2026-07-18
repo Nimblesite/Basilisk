@@ -19,7 +19,6 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import * as vscode from 'vscode';
 import { getStore } from '../../extension';
 import {
@@ -171,7 +170,12 @@ suite('Type Checking Toggle (basilisk.enabled)', function () {
     let tmpDir: string;
 
     suiteSetup(() => {
-        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bsk-enabled-test-'));
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        assert.ok(workspaceRoot, 'toggle integration tests require the fixture workspace');
+        // BSK-0001 is intentionally opt-in. Keep the fixture under the real
+        // workspace so its pyproject.toml enables the diagnostic this suite
+        // toggles; an OS-temp file correctly receives the default rule policy.
+        tmpDir = fs.mkdtempSync(path.join(workspaceRoot, '.bsk-enabled-test-'));
     });
 
     suiteTeardown(async () => {

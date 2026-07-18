@@ -109,24 +109,28 @@ is editable here.
 | Verify content | `typeshed-verify` | toggle; disabling requires confirmation |
 | License | active source | **View License**, or `not supplied` for custom |
 
-The URL downloads only a known SHA; Latest still needs official metadata. Cache
-off downloads, validates, and discards—it is not labelled hermetic. Verification
-off leaves safety, shape, and license gates active and displays `UNVERIFIED`.
+The URL downloads only a known SHA; Latest still needs official metadata.
+Accepted immutable cached bytes are reused without a refresh TTL; explicit
+eviction reacquires the same selected SHA without changing an exact pin.
+Cache off downloads, validates, and discards—it is not labelled hermetic.
+Verification off leaves safety, shape, and license gates active and displays `UNVERIFIED`.
 Only Exact commit suppresses `UNPINNED`; Latest/bundled offer **Pin current**,
-while Custom says its folder can change and directs reproducible use to Exact.
+while Custom says its folder can change and should be versioned or content-addressed externally.
 Custom shows user-managed terms, never the typeshed composite license
 ([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 `PinCurrent` returns a preview that writes the active SHA; `AcquireFresh` performs
-one cache-bypassing acquisition; `ViewLicense` returns the active immutable
-license document, or `not supplied` for custom. Clients execute none locally.
+one cache-bypassing acquisition, or re-snapshots the selected custom tree;
+`ViewLicense` returns the active immutable license document, or `not supplied`
+for custom. Clients execute none locally.
 
 The two directory keys render with a native folder-picker rather than free text;
 they are the only path-typed settings the editor exposes, distinct from the
 glob-path and per-module rule overrides it deliberately excludes
 ([§CONFIGEDITOR-ACCEPTANCE](#CONFIGEDITOR-ACCEPTANCE)).
 
-The server advertises each key, resolved value, `directory`/`text`/`boolean`/
-`enum`/`action` widget, and enabled state; the client never invents combinations.
+The server advertises each setting key, resolved value,
+`directory`/`text`/`boolean` widget, and enabled state, plus separate closed
+source-mode and action descriptors; the client never invents combinations.
 Folder selection feeds the ordinary validated transaction in
 [§CONFIGEDITOR-SOURCES](#CONFIGEDITOR-SOURCES); cancellation writes nothing.
 

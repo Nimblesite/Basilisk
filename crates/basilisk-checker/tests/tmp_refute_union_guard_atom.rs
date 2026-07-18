@@ -57,7 +57,7 @@ fn direct_intersect_atom_with_union_guard() {
     assert_eq!(narrowed, InferredType::Never, "claim refuted if this fails");
 }
 
-/// Direct set-op check for the InLiterals shape: int ∧ (Literal[1] | Literal["a"]).
+/// Direct set-op check for the `InLiterals` shape: `int ∧ (Literal[1] | Literal["a"])`.
 #[test]
 fn direct_intersect_atom_with_literal_union_guard() {
     let guard = InferredType::Union(vec![
@@ -73,11 +73,11 @@ fn direct_intersect_atom_with_literal_union_guard() {
 #[test]
 fn e2e_isinstance_union_guard_over_atomic_declared() {
     let result = analyse(
-        r#"
+        r"
 def f(x: int):
     if isinstance(x, (bool, str)):
         y = x
-"#,
+",
     );
     eprintln!("narrowed_uses = {:?}", result.narrowed_uses);
     eprintln!("unreachable_ranges = {:?}", result.unreachable_ranges);
@@ -90,7 +90,7 @@ def f(x: int):
     eprintln!("x narrowed uses = {x_uses:?}");
 }
 
-/// End-to-end: the claim's InLiterals snippet.
+/// End-to-end: the claim's `InLiterals` snippet.
 #[test]
 fn e2e_in_literals_union_guard_over_atomic_declared() {
     let result = analyse(

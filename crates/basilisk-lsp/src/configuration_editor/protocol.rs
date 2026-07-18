@@ -5,19 +5,22 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use basilisk_config::{build_rule_patch, ConfigDocument, ConfigDocumentError};
+use basilisk_config::{build_configuration_patch, ConfigDocument, ConfigDocumentError};
 use serde::Deserialize;
 use tower_lsp::jsonrpc::{Error, ErrorCode, Result as LspResult};
 use tower_lsp::lsp_types::Url;
 
 use super::catalog::{descriptors, expand_selector};
 use super::model::{
-    ApplyConfigurationRequest, ConfigurationPreview, ConfigurationSnapshot,
-    PreviewConfigurationRequest, RuleOccurrencesRequest, RuleOccurrencesResponse,
+    ApplyConfigurationRequest, ConfigurationPreview, ConfigurationSnapshot, EditorMutation,
+    PreviewConfigurationRequest, RuleOccurrencesRequest, RuleOccurrencesResponse, TypeshedAction,
+    TypeshedActionRequest, TypeshedActionResult, TypeshedLicenseDocument, TypeshedSettingKey,
+    TypeshedSettingValue,
 };
 use super::mutation::{
     build_impact, build_update, require_mutations, require_no_pep_disable, require_revision,
-    resolved_changes, selection_error, validate_document_rules,
+    require_valid_typeshed_configuration, resolved_changes, resolved_typeshed_changes,
+    selection_error, validate_document_rules,
 };
 use super::snapshot::{
     build_snapshot, hypothetical_inventory, inventory, occurrences as build_occurrences,
@@ -58,8 +61,9 @@ impl LspServer {
         require_mutations(&request.mutations)?;
         let catalog = descriptors();
         let update = build_update(&request.mutations, &catalog)?;
-        let patch = build_rule_patch(&document, &update).map_err(config_error)?;
+        let patch = build_configuration_patch(&document, &update).map_err(config_error)?;
         require_no_pep_disable(&patch.config)?;
+        require_valid_typeshed_configuration(&patch.config)?;
         let disk_revision = self
             .configuration_editor
             .disk_revision_for(&root, &document.revision);
@@ -72,6 +76,7 @@ impl LspServer {
         let after = hypothetical_inventory(index, &root, &patch.config);
         drop(guard);
         let changes = resolved_changes(&catalog, &document.config, &patch.config);
+        let typeshed_changes = resolved_typeshed_changes(&document.config, &patch.config);
         let impact = build_impact(&before, &after);
         let prepared = PreparedPreview {
             root,
@@ -83,6 +88,7 @@ impl LspServer {
             preview_id,
             base_revision: request.base_revision,
             changes,
+            typeshed_changes,
             impact,
         })
     }
@@ -168,6 +174,191 @@ impl LspServer {
             limit,
         ))
     }
+
+    /// Handle the closed Typeshed action union ([LSPCFGED-TYPESHED]).
+    pub(crate) async fn typeshed_action(
+        &self,
+        request: TypeshedActionRequest,
+    ) -> LspResult<TypeshedActionResult> {
+        let root = resolve_root(self, &request.root_uri).await?;
+        let document = self
+            .configuration_editor
+            .effective_document(&root)
+            .map_err(config_error)?;
+        require_revision(&document, &request.base_revision)?;
+        match request.action {
+            TypeshedAction::PinCurrent => self.pin_current_action(&root, &document, request).await,
+            TypeshedAction::AcquireFresh => self.acquire_fresh_action(&root, &document).await,
+            TypeshedAction::ViewLicense => self.view_license_action(&root, &document).await,
+        }
+    }
+
+    async fn pin_current_action(
+        &self,
+        root: &Path,
+        document: &ConfigDocument,
+        request: TypeshedActionRequest,
+    ) -> LspResult<TypeshedActionResult> {
+        if document.config.typeshed_path.is_some() {
+            return Err(rpc_error(
+                "typeshedActionUnavailable",
+                "a custom Typeshed folder has no upstream commit to pin",
+            ));
+        }
+        let commit = self
+            .typeshed_generations
+            .read()
+            .await
+            .get(root)
+            .and_then(crate::server::typeshed_status::TypeshedGeneration::ready_snapshot)
+            .filter(|snapshot| snapshot_matches_document(snapshot, document))
+            .and_then(|snapshot| snapshot.status.commit)
+            .ok_or_else(|| {
+                rpc_error(
+                    "typeshedActionUnavailable",
+                    "the active Typeshed source has no commit to pin",
+                )
+            })?
+            .to_hex();
+        let preview = self
+            .preview_configuration_change(PreviewConfigurationRequest {
+                root_uri: request.root_uri,
+                base_revision: request.base_revision,
+                mutations: vec![
+                    EditorMutation::SetTypeshedSetting {
+                        key: TypeshedSettingKey::TypeshedCommit,
+                        value: TypeshedSettingValue::Text { value: commit },
+                    },
+                    EditorMutation::RemoveTypeshedSetting {
+                        key: TypeshedSettingKey::TypeshedPath,
+                    },
+                ],
+            })
+            .await?;
+        Ok(TypeshedActionResult::Preview { preview })
+    }
+
+    async fn acquire_fresh_action(
+        &self,
+        root: &Path,
+        document: &ConfigDocument,
+    ) -> LspResult<TypeshedActionResult> {
+        let staged = match super::typeshed_acquisition::acquire_fresh(self, root, &document.config)
+            .await
+        {
+            Ok(staged) => staged,
+            Err(error) => {
+                let rpc_error = error.rpc_error();
+                let Some(failure) = error.into_failure() else {
+                    return Err(rpc_error);
+                };
+                let handles = self.refresh_handles();
+                let refresh = super::transaction::refresh_with_document(
+                    &handles,
+                    root,
+                    "typeshedAcquireFreshFailed",
+                    document,
+                )
+                .await;
+                super::typeshed_acquisition::publish_failure(&handles, root, failure).await;
+                if let Err(error) = refresh {
+                    tracing::warn!(root = %root.display(), error = %error, "failed to clear analysis after Typeshed refresh failure");
+                }
+                return Err(rpc_error);
+            }
+        };
+        let handles = self.refresh_handles();
+        let refresh = super::transaction::refresh_with_document_and_typeshed(
+            &handles,
+            root,
+            "typeshedAcquireFresh",
+            document,
+            Some(staged.candidate()),
+        )
+        .await;
+        if let Err(error) = refresh {
+            let cleanup = super::transaction::refresh_with_document(
+                &handles,
+                root,
+                "typeshedAcquireFreshBlocked",
+                document,
+            )
+            .await;
+            staged
+                .block(self, root, "configuration refresh failed")
+                .await;
+            if let Err(cleanup_error) = cleanup {
+                tracing::warn!(root = %root.display(), error = %cleanup_error, "failed to clear analysis after Typeshed activation failure");
+            }
+            return Err(error);
+        }
+        staged.activate(self, root).await;
+        Ok(TypeshedActionResult::Snapshot {
+            snapshot: snapshot_with_document(self, root, document).await?,
+        })
+    }
+
+    async fn view_license_action(
+        &self,
+        root: &Path,
+        document: &ConfigDocument,
+    ) -> LspResult<TypeshedActionResult> {
+        if document.config.typeshed_path.is_some() {
+            return Ok(TypeshedActionResult::License {
+                license: TypeshedLicenseDocument {
+                    title: "User-managed Typeshed terms — not supplied".to_owned(),
+                    uri: None,
+                    content: "not supplied".to_owned(),
+                    read_only: true,
+                },
+            });
+        }
+        let generations = self.typeshed_generations.read().await;
+        let snapshot = generations
+            .get(root)
+            .and_then(crate::server::typeshed_status::TypeshedGeneration::ready_snapshot)
+            .filter(|snapshot| snapshot_matches_document(snapshot, document))
+            .ok_or_else(|| {
+                rpc_error(
+                    "typeshedActionUnavailable",
+                    "Typeshed acquisition for this workspace has not reached a terminal source",
+                )
+            })?;
+        let content = snapshot
+            .vfs
+            .read_str("LICENSE")
+            .unwrap_or("not supplied")
+            .to_owned();
+        Ok(TypeshedActionResult::License {
+            license: TypeshedLicenseDocument {
+                title: "Typeshed License".to_owned(),
+                uri: snapshot.status.license_reference.clone(),
+                content,
+                read_only: true,
+            },
+        })
+    }
+}
+
+fn snapshot_matches_document(
+    snapshot: &basilisk_stubs::typeshed::snapshot::Snapshot,
+    document: &ConfigDocument,
+) -> bool {
+    if document.config.typeshed_path.is_some() {
+        return snapshot.status.active_source
+            == basilisk_stubs::typeshed::source::SourceKind::Custom;
+    }
+    match document.config.typeshed_commit.as_deref() {
+        Some(commit) => snapshot
+            .status
+            .commit
+            .is_some_and(|oid| oid.to_hex() == commit),
+        None => matches!(
+            snapshot.status.active_source,
+            basilisk_stubs::typeshed::source::SourceKind::Latest
+                | basilisk_stubs::typeshed::source::SourceKind::Bundled
+        ),
+    }
 }
 
 async fn snapshot_for_root(server: &LspServer, root: &Path) -> LspResult<ConfigurationSnapshot> {
@@ -184,12 +375,18 @@ async fn snapshot_with_document(
     document: &ConfigDocument,
 ) -> LspResult<ConfigurationSnapshot> {
     validate_document_rules(document)?;
+    let typeshed_generation = server.typeshed_generations.read().await.get(root).cloned();
     let guard = server.index.read().await;
     let index = guard
         .as_ref()
         .ok_or_else(|| rpc_error("invalidMutation", "workspace index is not ready"))?;
     let _ = index.preload_root_for_configuration(root);
-    Ok(build_snapshot(index, root, document))
+    Ok(build_snapshot(
+        index,
+        root,
+        document,
+        typeshed_generation.as_ref(),
+    ))
 }
 
 async fn resolve_root(server: &LspServer, root_uri: &str) -> LspResult<PathBuf> {
@@ -254,24 +451,5 @@ pub(super) fn path_uri(path: &Path) -> String {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::unwrap_used,
-    reason = "isolated filesystem fixture failures should abort the test"
-)]
-mod tests {
-    use super::config_error;
-
-    #[test]
-    fn invalid_configuration_error_identifies_its_repair_source() {
-        let source = std::path::PathBuf::from("/workspace/pyproject.toml");
-        let error = config_error(basilisk_config::ConfigDocumentError::Invalid {
-            path: source,
-            message: "rules must be a table".to_owned(),
-        });
-        let data = error.data.unwrap();
-        assert_eq!(
-            data.pointer("/context/sourceUri"),
-            Some(&serde_json::json!("file:///workspace/pyproject.toml"))
-        );
-    }
-}
+#[path = "protocol_tests.rs"]
+mod tests;

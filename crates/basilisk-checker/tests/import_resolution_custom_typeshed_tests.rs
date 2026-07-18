@@ -35,6 +35,7 @@ fn test_typeshed_path_overrides_stdlib_module() {
         site_packages: None,
         registry: None,
         typeshed_path: Some(typeshed.clone()),
+        typeshed_snapshot: None,
     };
     let result = resolve_module("os", &paths).expect("custom typeshed should resolve `os`");
     assert_eq!(result.resolution, ImportResolution::StubPyi);
@@ -63,6 +64,7 @@ fn test_typeshed_path_resolves_stdlib_package() {
         site_packages: None,
         registry: None,
         typeshed_path: Some(typeshed.clone()),
+        typeshed_snapshot: None,
     };
     let result = resolve_module("os", &paths).expect("custom typeshed should resolve `os` package");
     assert_eq!(result.resolution, ImportResolution::StubPyi);
@@ -83,14 +85,15 @@ fn test_no_typeshed_path_leaves_stdlib_unresolved_to_file() {
         site_packages: None,
         registry: None,
         typeshed_path: None,
+        typeshed_snapshot: None,
     };
     assert!(resolve_module("os", &paths).is_none());
 }
 
 #[test]
-fn test_typeshed_path_ignores_non_stdlib_modules() {
-    // `typeshed-path` is the canonical *standard-library* source only; a
-    // non-stdlib name present in the dir must not resolve through it.
+fn test_typeshed_path_uses_custom_stdlib_verbatim() {
+    // A custom tree defines its own standard-library universe. It must not be
+    // filtered through Basilisk's compiled CPython baseline.
     let typeshed = make_tmp_dir("bsk_ir_typeshed_nonstd");
     let stdlib = typeshed.join("stdlib");
     fs::create_dir_all(&stdlib).unwrap();
@@ -104,11 +107,10 @@ fn test_typeshed_path_ignores_non_stdlib_modules() {
         site_packages: None,
         registry: None,
         typeshed_path: Some(typeshed.clone()),
+        typeshed_snapshot: None,
     };
-    assert!(
-        resolve_module("requests", &paths).is_none(),
-        "typeshed-path must not resolve non-stdlib modules"
-    );
+    let resolved = resolve_module("requests", &paths).expect("custom tree is canonical");
+    assert_eq!(resolved.path, stdlib.join("requests.pyi"));
 
     let _ = fs::remove_dir_all(&typeshed);
 }
@@ -132,6 +134,7 @@ fn test_stub_paths_shadow_custom_typeshed() {
         site_packages: None,
         registry: None,
         typeshed_path: Some(typeshed.clone()),
+        typeshed_snapshot: None,
     };
     let result = resolve_module("os", &paths).unwrap();
     assert!(

@@ -71,6 +71,31 @@ pub struct BasiliskConfig {
     /// standard-library stubs ([STUBRES-CUSTOM-TYPESHED]).
     pub typeshed_path: Option<PathBuf>,
 
+    /// Exact `python/typeshed` commit to acquire at step 3
+    /// ([STUBRES-TYPESHED-CONFIG]). A full SHA. Unset selects Latest `main`.
+    /// A set pin fails closed — it never silently substitutes another SHA.
+    pub typeshed_commit: Option<String>,
+
+    /// Archive-mirror URL template containing `{sha}`
+    /// ([STUBRES-TYPESHED-CONFIG]). Unset uses GitHub codeload. A mirror cannot
+    /// resolve Latest — it only serves an already-known SHA.
+    pub typeshed_url: Option<String>,
+
+    /// Directory holding gate-accepted, content-addressed typeshed ZIPs
+    /// ([STUBRES-TYPESHED-CONFIG]). Unset uses the OS cache directory.
+    pub typeshed_cache_path: Option<PathBuf>,
+
+    /// Whether to reuse gate-accepted cached ZIPs ([STUBRES-TYPESHED-CONFIG]).
+    /// `None` means the spec default `true`; `false` downloads, validates, and
+    /// discards. This forces a fresh acquisition but is not hermetic.
+    pub typeshed_cache: Option<bool>,
+
+    /// Whether to content-attest the archive against the trusted git tree
+    /// ([STUBRES-TYPESHED-CONFIG]). `None` means the spec default `true`;
+    /// `false` reports `UNVERIFIED` and never bypasses the safety, shape, or
+    /// license gates.
+    pub typeshed_verify: Option<bool>,
+
     /// Nearest-first chain of `[tool.basilisk]` rule tables on the ancestor
     /// walk ([CHKARCH-CONFIG-DISCOVERY]). Rules are never merged: resolution
     /// walks this chain and the nearest table that decides a rule wins
@@ -111,6 +136,11 @@ impl Default for BasiliskConfig {
             include: Vec::new(),
             stub_paths: Vec::new(),
             typeshed_path: None,
+            typeshed_commit: None,
+            typeshed_url: None,
+            typeshed_cache_path: None,
+            typeshed_cache: None,
+            typeshed_verify: None,
             rule_chain: Vec::new(),
             auto_stub_mode: "hybrid".to_owned(),
             auto_stub_path: PathBuf::from(".basilisk/stubs"),
@@ -200,7 +230,35 @@ impl BasiliskConfig {
         if child.auto_stub_path != defaults.auto_stub_path {
             self.auto_stub_path = child.auto_stub_path;
         }
-        self.typeshed_path = child.typeshed_path.or(self.typeshed_path);
+        // `typeshed-path` and `typeshed-commit` are one source selection. A
+        // nearer directory that chooses either replaces the inherited choice
+        // as a unit; merging the two fields independently could manufacture
+        // an invalid path+pin combination that appeared in no source file.
+        match (
+            child.typeshed_path.is_some(),
+            child.typeshed_commit.is_some(),
+        ) {
+            (true, false) => {
+                self.typeshed_path = child.typeshed_path;
+                self.typeshed_commit = None;
+            }
+            (false, true) => {
+                self.typeshed_path = None;
+                self.typeshed_commit = child.typeshed_commit;
+            }
+            // Neither choice inherits the ancestor. Both choices in one table
+            // remain visible so validation fails closed instead of repairing
+            // malformed user configuration silently.
+            (false, false) => {}
+            (true, true) => {
+                self.typeshed_path = child.typeshed_path;
+                self.typeshed_commit = child.typeshed_commit;
+            }
+        }
+        self.typeshed_url = child.typeshed_url.or(self.typeshed_url);
+        self.typeshed_cache_path = child.typeshed_cache_path.or(self.typeshed_cache_path);
+        self.typeshed_cache = child.typeshed_cache.or(self.typeshed_cache);
+        self.typeshed_verify = child.typeshed_verify.or(self.typeshed_verify);
         self.python_version = child.python_version.or(self.python_version);
         self.python_platform = child.python_platform.or(self.python_platform);
         self.narrow_attributes_across_calls = child
@@ -259,6 +317,32 @@ pub(crate) fn parse_pyproject_content(content: &str) -> Option<BasiliskConfig> {
         cfg.typeshed_path = Some(PathBuf::from(val));
     }
 
+    // [STUBRES-TYPESHED-CONFIG]: runtime-acquisition keys. `typeshed-commit`
+    // pins an exact SHA (unset => Latest); `typeshed-url` is a `{sha}` mirror
+    // template; `typeshed-cache-path` relocates cached ZIPs; `typeshed-cache`
+    // and `typeshed-verify` are tri-state (`None` => spec default `true`).
+    if let Some(val) = basilisk.get("typeshed-commit").and_then(|v| v.as_str()) {
+        cfg.typeshed_commit = Some(val.to_owned());
+    }
+    if let Some(val) = basilisk.get("typeshed-url").and_then(|v| v.as_str()) {
+        cfg.typeshed_url = Some(val.to_owned());
+    }
+    if let Some(val) = basilisk.get("typeshed-cache-path").and_then(|v| v.as_str()) {
+        cfg.typeshed_cache_path = Some(PathBuf::from(val));
+    }
+    if let Some(val) = basilisk
+        .get("typeshed-cache")
+        .and_then(toml::Value::as_bool)
+    {
+        cfg.typeshed_cache = Some(val);
+    }
+    if let Some(val) = basilisk
+        .get("typeshed-verify")
+        .and_then(toml::Value::as_bool)
+    {
+        cfg.typeshed_verify = Some(val);
+    }
+
     // [CHKARCH-CONFIG-MODEL]: this file's one rule table. An empty or absent
     // pair of maps still contributes a (deciding-nothing) table to the chain —
     // the table's existence is what the LSP seed checks.
@@ -295,6 +379,11 @@ pub(crate) fn parse_pyproject_content(content: &str) -> Option<BasiliskConfig> {
         cfg.narrow_attributes_across_calls = Some(val);
     }
 
+    // [STUBRES-TYPESHED-CONFIG]: surface (never drop) malformed acquisition
+    // values so a bad pin fails closed downstream instead of silently
+    // resolving to a different commit.
+    warn_on_malformed_typeshed_values(&cfg);
+
     Some(cfg)
 }
 
@@ -304,5 +393,164 @@ fn parse_severity_map(table: &toml::Table, target: &mut HashMap<String, RuleSeve
         if let Some(severity) = severity_val.as_str().and_then(RuleSeverity::parse) {
             let _ = target.insert(key.clone(), severity);
         }
+    }
+}
+
+/// Whether `sha` is a full 40-character hex git commit SHA — the only accepted
+/// `typeshed-commit` form ([STUBRES-TYPESHED-CONFIG]).
+///
+/// Abbreviated or non-hex values are rejected so an exact pin is unambiguous
+/// and can *fail closed* (D1) instead of silently resolving to a different
+/// commit. Case is accepted on either side; git's canonical lower-case and a
+/// pasted upper-case SHA identify the same immutable commit.
+#[must_use]
+pub fn is_full_commit_sha(sha: &str) -> bool {
+    sha.len() == 40 && sha.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// Whether `template` is a usable `typeshed-url` archive-mirror template
+/// ([STUBRES-TYPESHED-CONFIG], [STUBRES-TYPESHED-ACQUIRE]).
+///
+/// Two requirements, both load-bearing for a secure, deterministic mirror:
+/// - **HTTPS scheme** — acquisition is over authenticated HTTPS only; a plain
+///   `http`/`file` mirror is rejected so bytes can never arrive over an
+///   unauthenticated transport.
+/// - **Exactly one `{sha}` placeholder** — a mirror cannot resolve Latest, so
+///   without a `{sha}` slot it could only serve one hard-coded commit; and more
+///   than one slot makes the substituted URL ambiguous.
+#[must_use]
+pub fn is_valid_typeshed_url_template(template: &str) -> bool {
+    template.starts_with("https://") && template.matches("{sha}").count() == 1
+}
+
+/// Emit structured warnings for malformed typeshed-acquisition values
+/// ([STUBRES-TYPESHED-CONFIG]). Values are kept verbatim on the config so the
+/// acquisition core can fail closed on a bad pin rather than silently drop it;
+/// this only surfaces the problem. Raw values are never logged — a mirror URL
+/// may embed a token, so only the reason is recorded (URLs are redacted in
+/// logs, [STUBRES-TYPESHED-ACQUIRE]).
+fn warn_on_malformed_typeshed_values(cfg: &BasiliskConfig) {
+    if let Some(sha) = cfg.typeshed_commit.as_deref() {
+        if !is_full_commit_sha(sha) {
+            tracing::warn!(
+                len = sha.len(),
+                "typeshed-commit is not a full 40-char hex SHA; the exact pin will fail closed"
+            );
+        }
+    }
+    if let Some(url) = cfg.typeshed_url.as_deref() {
+        if !is_valid_typeshed_url_template(url) {
+            tracing::warn!(
+                "typeshed-url is not a valid HTTPS template with exactly one {{sha}} placeholder"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod validation_tests {
+    use std::path::PathBuf;
+
+    use super::{is_full_commit_sha, is_valid_typeshed_url_template, BasiliskConfig};
+
+    /// [STUBRES-TYPESHED-CONFIG]: only a full 40-char hex SHA is a valid pin.
+    #[test]
+    fn full_sha_is_accepted_short_and_nonhex_rejected() {
+        // The pinned typing-authority SHA from the plan — exactly 40 hex chars.
+        assert!(is_full_commit_sha(
+            "6ef9f7719ecfff09dad8724ef42b621fd994fb5e"
+        ));
+        // Upper-case identifies the same immutable commit.
+        assert!(is_full_commit_sha(
+            "6EF9F7719ECFFF09DAD8724EF42B621FD994FB5E"
+        ));
+        // Abbreviated (7-char) SHA — ambiguous, rejected so a pin fails closed.
+        assert!(!is_full_commit_sha("6ef9f77"));
+        // 39 and 41 chars — off-by-one lengths rejected.
+        assert!(!is_full_commit_sha(
+            "6ef9f7719ecfff09dad8724ef42b621fd994fb5"
+        ));
+        assert!(!is_full_commit_sha(
+            "6ef9f7719ecfff09dad8724ef42b621fd994fb5ee"
+        ));
+        // Non-hex character (`g`) at full length — rejected.
+        assert!(!is_full_commit_sha(
+            "6ef9f7719ecfff09dad8724ef42b621fd994fb5g"
+        ));
+        // Empty — rejected.
+        assert!(!is_full_commit_sha(""));
+    }
+
+    /// [STUBRES-TYPESHED-CONFIG]/[STUBRES-TYPESHED-ACQUIRE]: a mirror template
+    /// MUST be HTTPS and carry exactly one `{sha}`.
+    #[test]
+    fn url_template_requires_https_and_exactly_one_sha() {
+        assert!(is_valid_typeshed_url_template(
+            "https://mirror.example/typeshed/{sha}.zip"
+        ));
+        assert!(is_valid_typeshed_url_template(
+            "https://host/{sha}/archive.zip"
+        ));
+        // No placeholder — a mirror that can only serve one commit is invalid.
+        assert!(!is_valid_typeshed_url_template(
+            "https://mirror.example/typeshed/latest.zip"
+        ));
+        // A near-miss placeholder name does not count.
+        assert!(!is_valid_typeshed_url_template("https://host/{commit}.zip"));
+        // More than one `{sha}` is ambiguous — rejected.
+        assert!(!is_valid_typeshed_url_template(
+            "https://host/{sha}/{sha}.zip"
+        ));
+        // Non-HTTPS transports are rejected even with a valid placeholder.
+        assert!(!is_valid_typeshed_url_template(
+            "http://mirror.example/typeshed/{sha}.zip"
+        ));
+        assert!(!is_valid_typeshed_url_template("file:///local/{sha}.zip"));
+        assert!(!is_valid_typeshed_url_template(""));
+    }
+
+    #[test]
+    fn nearer_typeshed_selection_replaces_inherited_selection_atomically() {
+        let ancestor_pin = BasiliskConfig {
+            typeshed_commit: Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
+            ..Default::default()
+        };
+        let child_path = BasiliskConfig {
+            typeshed_path: Some(PathBuf::from("custom-typeshed")),
+            ..Default::default()
+        };
+        let path_result = ancestor_pin.merged_with(child_path);
+        assert_eq!(
+            path_result.typeshed_path,
+            Some(PathBuf::from("custom-typeshed"))
+        );
+        assert!(path_result.typeshed_commit.is_none());
+
+        let ancestor_path = BasiliskConfig {
+            typeshed_path: Some(PathBuf::from("parent-typeshed")),
+            ..Default::default()
+        };
+        let child_pin = BasiliskConfig {
+            typeshed_commit: Some("0123456789abcdef0123456789abcdef01234567".to_owned()),
+            ..Default::default()
+        };
+        let pin_result = ancestor_path.merged_with(child_pin);
+        assert!(pin_result.typeshed_path.is_none());
+        assert_eq!(
+            pin_result.typeshed_commit.as_deref(),
+            Some("0123456789abcdef0123456789abcdef01234567")
+        );
+    }
+
+    #[test]
+    fn malformed_same_table_path_and_pin_remain_visible_to_fail_closed() {
+        let child = BasiliskConfig {
+            typeshed_path: Some(PathBuf::from("custom-typeshed")),
+            typeshed_commit: Some("0123456789abcdef0123456789abcdef01234567".to_owned()),
+            ..Default::default()
+        };
+        let merged = BasiliskConfig::default().merged_with(child);
+        assert!(merged.typeshed_path.is_some());
+        assert!(merged.typeshed_commit.is_some());
     }
 }

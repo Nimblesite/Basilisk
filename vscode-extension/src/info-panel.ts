@@ -17,6 +17,7 @@ import * as vscode from "vscode";
 import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { type Store } from "./store";
+import type { TypeshedStatusState } from "./configuration-editor-model";
 
 // ── Tree node types ──────────────────────────────────────────────────────
 
@@ -214,6 +215,81 @@ function buildUvInfoItem(
   return item;
 }
 
+function statusKind(value: { readonly kind: string } | undefined): string {
+  return value?.kind ?? "Pending";
+}
+
+function typeshedLifecycleIcon(status: TypeshedStatusState): string {
+  if (status.lifecycle.kind === "Acquiring") { return "loading~spin"; }
+  if (status.lifecycle.kind === "Blocked") { return "error"; }
+  return "database";
+}
+
+function rootLabel(rootUri: string): string {
+  try {
+    const parts = new URL(rootUri).pathname.split("/").filter((part) => part !== "");
+    return decodeURIComponent(parts[parts.length - 1] ?? rootUri);
+  } catch {
+    return rootUri;
+  }
+}
+
+function typeshedTooltip(rootUri: string, status: TypeshedStatusState): string {
+  return [
+    `Root: ${rootUri}`,
+    `State: ${statusKind(status.lifecycle)}`,
+    `Source: ${statusKind(status.activeSource)}`,
+    `Commit: ${status.commitIdentity ?? "not available"}`,
+    `Tree: ${status.treeIdentity ?? "not available"}`,
+    `Transport: ${statusKind(status.transport)}`,
+    `Provenance: ${statusKind(status.provenance)}`,
+    `Signed release: ${status.signedRelease ? "yes" : "no"}`,
+    `License: ${statusKind(status.licenseStatus)}`,
+    `License reference: ${status.licenseReference ?? "not supplied"}`,
+  ].join("\n");
+}
+
+function typeshedSourceItem(
+  prefix: string,
+  rootUri: string,
+  status: TypeshedStatusState,
+): InfoTextItem {
+  const commit = status.commitIdentity === undefined ? "" : ` · ${status.commitIdentity}`;
+  const item = new InfoTextItem(
+    `${prefix} Source`,
+    `${statusKind(status.activeSource)}${commit}`,
+    "repo",
+  );
+  item.tooltip = typeshedTooltip(rootUri, status);
+  return item;
+}
+
+function typeshedInfoItems(
+  statuses: ReadonlyMap<string, TypeshedStatusState>,
+): InfoTextItem[] {
+  const entries = [...statuses.entries()].sort(([left], [right]) => left.localeCompare(right));
+  return entries.flatMap(([rootUri, status]) => {
+    const prefix = entries.length === 1 ? "Typeshed" : `Typeshed (${rootLabel(rootUri)})`;
+    const rows = [
+      new InfoTextItem(
+        `${prefix} State`,
+        statusKind(status.lifecycle),
+        typeshedLifecycleIcon(status),
+      ),
+      typeshedSourceItem(prefix, rootUri, status),
+      ...(status.blockedReason === undefined
+        ? []
+        : [new InfoTextItem(`${prefix} Blocked`, status.blockedReason, "error")]),
+      ...status.warnings.map((warning) => new InfoTextItem(
+        `${prefix} ${warning.code}`,
+        warning.message,
+        statusKind(warning.severity) === "High" ? "warning" : "info",
+      )),
+    ];
+    return rows;
+  });
+}
+
 export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<InfoItem | undefined>();
   public readonly onDidChangeTreeData = this.emitter.event;
@@ -238,6 +314,7 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
       // buildServerInfoSection on the re-render this triggers.
       void this.store.lspState.value;
       void this.store.client.value;
+      void this.store.typeshedStatuses.value;
       this.emitter.fire(undefined);
     });
     this.disposables.push({ dispose: disposeEffect });
@@ -300,6 +377,7 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
       ...(binary !== undefined && binary !== null
         ? [new InfoTextItem("Binary", formatResolvedTool(binary), "file-binary")]
         : []),
+      ...typeshedInfoItems(this.store.typeshedStatuses.value),
     ];
 
     return new SectionItem("Server Info", items);

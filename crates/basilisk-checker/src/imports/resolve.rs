@@ -59,12 +59,16 @@ pub fn classify_unresolved(
 /// [`basilisk_stubs::is_stdlib_module`], so the conformance path (which never
 /// sets `typeshed-path`) is unaffected — the branch is purely additive.
 #[must_use]
-pub fn bundled_stdlib_recognized(module_name: &str, custom_typeshed_configured: bool) -> bool {
-    !custom_typeshed_configured && basilisk_stubs::is_stdlib_module(module_name)
+pub fn bundled_stdlib_recognized(
+    module_name: &str,
+    authoritative_typeshed_configured: bool,
+) -> bool {
+    !authoritative_typeshed_configured && basilisk_stubs::is_stdlib_module(module_name)
 }
 
 /// Resolve an absolute import following the typing spec's import-resolution
-/// ordering ([STUBRES-PEP561]). Steps, in order:
+/// ordering ([STUBRES-PEP561-NORMATIVE], [STUBRES-PEP561-MAPPING],
+/// [STUBRES-RESOLUTION-FLOW], [STUBRES-PEP561]). Steps, in order:
 ///
 /// 1. **Manual stubs** — `.pyi` files in `stub-paths` directories (head of path)
 /// 2. **User source** — `.py`/`.pyi` files in workspace roots and `extraPaths`
@@ -88,20 +92,44 @@ pub(crate) fn resolve_module_cached(
     search_paths: &ImportSearchPaths,
     fs: &FsCache,
 ) -> Option<ResolvedImport> {
-    // 1. User stubs (stub-paths: only .pyi files)
+    resolve_module_cached_with_importer(module_name, search_paths, None, fs)
+}
+
+/// Execute the six-step resolver, optionally treating the importing file's
+/// directory as step-2 user code (`sys.path[0]`).
+fn resolve_module_cached_with_importer(
+    module_name: &str,
+    search_paths: &ImportSearchPaths,
+    importer_dir: Option<&Path>,
+    fs: &FsCache,
+) -> Option<ResolvedImport> {
+    // 1. Manually supplied path entries. The typing specification places both
+    //    manual stubs and Python source at the beginning of the path. Basilisk
+    //    models those as `stub_paths` (`.pyi` only) plus `extra_paths`
+    //    (`.pyi` before `.py`).
     for stub_dir in &search_paths.stub_paths {
         if let Some(resolved) = try_resolve_stub_only(module_name, stub_dir, fs) {
             return Some(resolved);
         }
     }
+    for dir in &search_paths.extra_paths {
+        if let Some(resolved) = try_resolve_in_dir(module_name, dir, fs) {
+            return Some(resolved);
+        }
+    }
 
-    // 2. User source (workspace roots + workspace members + extraPaths: .pyi preferred over .py)
+    // 2. User source discovered from the project/workspace (`.pyi` before
+    //    `.py`), followed by the importing script's directory.
     for dir in search_paths
         .roots
         .iter()
         .chain(search_paths.workspace_members.iter())
-        .chain(search_paths.extra_paths.iter())
     {
+        if let Some(resolved) = try_resolve_in_dir(module_name, dir, fs) {
+            return Some(resolved);
+        }
+    }
+    if let Some(dir) = importer_dir {
         if let Some(resolved) = try_resolve_in_dir(module_name, dir, fs) {
             return Some(resolved);
         }
@@ -112,12 +140,23 @@ pub(crate) fn resolve_module_cached(
     //    standard-library types: resolve stdlib modules against its `stdlib/`
     //    subtree in preference to the bundled (name-only) recognition applied
     //    downstream. [STUBRES-CUSTOM-TYPESHED]
-    if let Some(typeshed) = &search_paths.typeshed_path {
-        if basilisk_stubs::is_stdlib_module(module_name) {
-            let stdlib_dir = typeshed.join("stdlib");
-            if let Some(resolved) = try_resolve_stub_only(module_name, &stdlib_dir, fs) {
-                return Some(resolved);
+    if let Some(active) = &search_paths.typeshed_snapshot {
+        if let Some((snapshot, target)) = active.for_importer(importer_dir) {
+            let located = match target {
+                Some(target) => snapshot.read_stub_for_target(module_name, target.python_version),
+                None => snapshot.read_stub(module_name),
+            };
+            if let Some((logical_uri, _)) = located {
+                return Some(ResolvedImport {
+                    path: logical_uri.into(),
+                    resolution: ImportResolution::StubPyi,
+                });
             }
+        }
+    } else if let Some(typeshed) = &search_paths.typeshed_path {
+        let stdlib_dir = typeshed.join("stdlib");
+        if let Some(resolved) = try_resolve_stub_only(module_name, &stdlib_dir, fs) {
+            return Some(resolved);
         }
     }
 
@@ -129,19 +168,34 @@ pub(crate) fn resolve_module_cached(
     // applies bundled name recognition when no custom typeshed is configured;
     // with a custom typeshed, a missing module deliberately remains unresolved
     // because that tree is canonical.
-    if basilisk_stubs::is_stdlib_module(module_name) {
+    if search_paths.typeshed_snapshot.is_none()
+        && search_paths.typeshed_path.is_none()
+        && basilisk_stubs::is_stdlib_module(module_name)
+    {
         return None;
     }
 
-    // 4+5. Site-packages: stub-only packages (-stubs), then inline-typed (py.typed), then plain
+    // 4+5. Site-packages: stub-only packages (-stubs), then *only* packages
+    // that opted in with py.typed. Basilisk vendors no third-party step 6.
     if let Some(sp) = &search_paths.site_packages {
-        // 4. Check for `<module>-stubs` package first
+        // 4. Check for `<module>-stubs` package first. A miss in a complete
+        // stub distribution is terminal; partial/namespace misses continue.
         if let Some(resolved) = try_resolve_stub_package(module_name, sp, fs) {
             return Some(resolved);
         }
-        // 5. Check for inline-typed packages (py.typed marker) and plain packages
+        let root = module_name.split('.').next().unwrap_or(module_name);
+        let stubs_dir = sp.join(format!("{root}-stubs"));
+        if fs.is_dir(&stubs_dir) && !stub_package_miss_allows_fallback(module_name, &stubs_dir, fs)
+        {
+            return None;
+        }
+        // 5. Resolve the candidate first, then walk toward site-packages for a
+        // marker. Namespace subpackages may independently opt in, so checking
+        // only `<root>/py.typed` would incorrectly reject them.
         if let Some(resolved) = try_resolve_in_dir(module_name, sp, fs) {
-            return Some(resolved);
+            if basilisk_stubs::has_py_typed_marker(&resolved.path) {
+                return Some(resolved);
+            }
         }
     }
 
@@ -176,13 +230,12 @@ pub(crate) fn resolve_module_with_importer_cached(
     importing_file: Option<&Path>,
     fs: &FsCache,
 ) -> Option<ResolvedImport> {
-    // Standard PEP 561 search first.
-    if let Some(resolved) = resolve_module_cached(module_name, search_paths, fs) {
-        return Some(resolved);
-    }
-    // Fall back to the importer's own directory — mirrors Python's sys.path[0].
-    let importer_dir = importing_file?.parent()?;
-    try_resolve_in_dir(module_name, importer_dir, fs)
+    resolve_module_cached_with_importer(
+        module_name,
+        search_paths,
+        importing_file.and_then(Path::parent),
+        fs,
+    )
 }
 
 /// Try resolving a module in a stub-only directory (only `.pyi` files).
@@ -265,6 +318,47 @@ fn try_resolve_stub_package(
             try_resolve_stub_only(sub_name, &stubs_dir, fs)
         }
     }
+}
+
+/// Whether a module miss in an existing step-4 stub distribution may proceed
+/// to the inline package at step 5.
+///
+/// PEP 561 permits fallback only for an explicit `partial\n` marker or for a
+/// stub-only namespace package (identified by the absence of `__init__.pyi`).
+/// A regular package nested inside a namespace is complete again unless it has
+/// its own partial marker.
+fn stub_package_miss_allows_fallback(module_name: &str, stubs_dir: &Path, fs: &FsCache) -> bool {
+    if has_partial_marker(stubs_dir) {
+        return true;
+    }
+    if fs.is_file(&stubs_dir.join("__init__.pyi")) {
+        return false;
+    }
+
+    let mut current = stubs_dir.to_path_buf();
+    let mut components = module_name.split('.');
+    let _root = components.next();
+    let mut remainder = components.peekable();
+    while let Some(component) = remainder.next() {
+        // The final segment is the desired module, not an enclosing package.
+        if remainder.peek().is_none() {
+            break;
+        }
+        current.push(component);
+        if has_partial_marker(&current) {
+            return true;
+        }
+        if fs.is_file(&current.join("__init__.pyi")) {
+            return false;
+        }
+    }
+    true
+}
+
+/// PEP 561's exact partial-stub marker is the line `partial\n`.
+fn has_partial_marker(directory: &Path) -> bool {
+    std::fs::read_to_string(directory.join("py.typed"))
+        .is_ok_and(|contents| contents.lines().any(|line| line.trim() == "partial"))
 }
 
 /// Resolve a relative import (`from . import X`, `from ..utils import Y`).

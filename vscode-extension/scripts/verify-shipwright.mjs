@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
@@ -11,6 +11,14 @@ const repoRoot = resolve(extensionRoot, "..");
 const manifestPath = join(repoRoot, "shipwright.json");
 const manifestSchemaPath = join(repoRoot, "schemas", "shipwright.schema.json");
 const versionSchemaPath = join(repoRoot, "schemas", "version-manifest.schema.json");
+const attributionFiles = ["LICENSE", "NOTICES", "THIRD-PARTY-LICENSES"];
+
+function stageAttribution() {
+  for (const file of attributionFiles) {
+    copyFileSync(join(repoRoot, file), join(extensionRoot, file));
+  }
+  console.log("Exact root attribution staged for VSIX packaging");
+}
 
 function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
@@ -99,6 +107,7 @@ function verifyVsix(vsix, platform) {
   if (JSON.stringify(packagedManifest) !== JSON.stringify(manifest)) {
     throw new Error(`${vsix} contains a shipwright.json that differs from the repo manifest`);
   }
+  verifyAttribution(vsix, entries);
   // Every component declared `bundled` for this platform MUST be present in the
   // VSIX — including optional (`required: false`) ones such as the profiler
   // helper. `required` governs runtime fallback, NOT whether we ship the
@@ -120,6 +129,27 @@ function verifyVsix(vsix, platform) {
   rejectOtherPlatformBins(vsix, entries, platform);
   rejectUnmanifestedTargetBins(vsix, entries, manifest, platform);
   console.log(`${vsix}: package contents valid for ${platform}`);
+}
+
+// [STUBRES-TYPESHED-LICENSE] A package that embeds Typeshed content must ship
+// the exact Basilisk and third-party legal files used to build it. Presence is
+// insufficient: stale attribution must fail the release gate too.
+function verifyAttribution(vsix, entries) {
+  // `vsce` deliberately normalizes the extension's root LICENSE to
+  // `LICENSE.txt`. Keep the source-to-package mapping explicit so release
+  // verification checks the path that actually ships as well as exact bytes.
+  for (const sourceFile of attributionFiles) {
+    const packagedFile = sourceFile === "LICENSE" ? "LICENSE.txt" : sourceFile;
+    const entry = `extension/${packagedFile}`;
+    if (!entries.includes(entry)) {
+      throw new Error(`${vsix} is missing attribution file: ${entry}`);
+    }
+    const packaged = execFileSync("unzip", ["-p", vsix, entry]);
+    const source = readFileSync(join(repoRoot, sourceFile));
+    if (!packaged.equals(source)) {
+      throw new Error(`${vsix} contains a stale or modified attribution file: ${entry}`);
+    }
+  }
 }
 
 /// Packaged-path prefixes for `asset` components bundled on this platform.
@@ -181,11 +211,13 @@ function rejectUnmanifestedTargetBins(vsix, entries, manifest, platform) {
 const command = process.argv[2];
 if (command === "manifest") {
   verifyManifest();
+} else if (command === "stage-attribution") {
+  stageAttribution();
 } else if (command === "versions") {
   verifyVersions(...process.argv.slice(3));
 } else if (command === "vsix") {
   verifyVsix(resolve(process.argv[3] ?? ""), process.argv[4] ?? "");
 } else {
-  console.error("Usage: node scripts/verify-shipwright.mjs manifest|versions <binaries...>|vsix <file> <platform>");
+  console.error("Usage: node scripts/verify-shipwright.mjs manifest|stage-attribution|versions <binaries...>|vsix <file> <platform>");
   process.exit(2);
 }

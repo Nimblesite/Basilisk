@@ -9,14 +9,20 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use basilisk_config::{build_rule_patch, BasiliskConfig, ConfigDocument, RuleSeverity};
+use basilisk_config::{
+    build_configuration_patch, BasiliskConfig, ConfigDocument, RuleSeverity, TypeshedConfigKey,
+    TypeshedConfigValue,
+};
 
 use super::{
     build_impact, build_update, require_mutations, require_no_pep_disable, require_revision,
-    resolved_changes, selection_error, validate_document_rules,
+    require_valid_typeshed_configuration, resolved_changes, resolved_typeshed_changes,
+    selection_error, validate_document_rules,
 };
 use crate::configuration_editor::catalog::{descriptors, SelectionError};
-use crate::configuration_editor::model::{EditorMutation, RuleSeverity as WireSeverity};
+use crate::configuration_editor::model::{
+    EditorMutation, RuleSeverity as WireSeverity, TypeshedSettingKey, TypeshedSettingValue,
+};
 use crate::configuration_editor::snapshot::Inventory;
 
 fn error_kind(error: &tower_lsp::jsonrpc::Error) -> Option<serde_json::Value> {
@@ -61,10 +67,9 @@ fn empty_mutation_lists_are_rejected() {
     .is_ok());
 }
 
-/// [CONFIGEDITOR-OPERATIONS]: the four mutations fold into one entry update —
-/// set/remove rule entries and set/remove tag entries, nothing else.
+/// [CONFIGEDITOR-OPERATIONS]: all six mutation kinds fold into one update.
 #[test]
-fn build_update_folds_all_four_mutations_into_entry_updates() {
+fn build_update_folds_all_six_mutations_into_entry_updates() {
     let catalog = descriptors();
     let (_, analyze) = partitioned_codes();
     let update = build_update(
@@ -83,6 +88,13 @@ fn build_update_folds_all_four_mutations_into_entry_updates() {
             EditorMutation::RemoveTag {
                 tag: "suppressions".to_owned(),
             },
+            EditorMutation::SetTypeshedSetting {
+                key: TypeshedSettingKey::TypeshedCache,
+                value: TypeshedSettingValue::Boolean { value: false },
+            },
+            EditorMutation::RemoveTypeshedSetting {
+                key: TypeshedSettingKey::TypeshedUrl,
+            },
         ],
         &catalog,
     );
@@ -90,15 +102,26 @@ fn build_update_folds_all_four_mutations_into_entry_updates() {
         panic!("valid mutations must build an update");
     };
     assert_eq!(
-        update.rules.get(&analyze),
+        update.rules.rules.get(&analyze),
         Some(&Some(RuleSeverity::Warning))
     );
-    assert_eq!(update.rules.get("BSK-0001"), Some(&None));
+    assert_eq!(update.rules.rules.get("BSK-0001"), Some(&None));
     assert_eq!(
-        update.rule_tags.get("basilisk"),
+        update.rules.rule_tags.get("basilisk"),
         Some(&Some(RuleSeverity::Error))
     );
-    assert_eq!(update.rule_tags.get("suppressions"), Some(&None));
+    assert_eq!(update.rules.rule_tags.get("suppressions"), Some(&None));
+    assert_eq!(
+        update
+            .typeshed
+            .entries
+            .get(&TypeshedConfigKey::TypeshedCache),
+        Some(&Some(TypeshedConfigValue::Boolean(false)))
+    );
+    assert_eq!(
+        update.typeshed.entries.get(&TypeshedConfigKey::TypeshedUrl),
+        Some(&None)
+    );
 }
 
 /// [CONFIGEDITOR-OPERATIONS]: unknown rule codes and tags are request errors.
@@ -179,7 +202,7 @@ fn pep_disable_mutations_are_rejected() {
         let Ok(update) = update else {
             panic!("tag mutation itself is well-formed");
         };
-        let Ok(patch) = build_rule_patch(&document, &update) else {
+        let Ok(patch) = build_configuration_patch(&document, &update) else {
             panic!("patch must render");
         };
         require_no_pep_disable(&patch.config)
@@ -191,6 +214,70 @@ fn pep_disable_mutations_are_rejected() {
         error_kind(&error),
         Some(serde_json::json!("pepRuleDisable"))
     );
+}
+
+/// [LSPCFGED-TYPESHED]: Typeshed settings reject wrong scalar types,
+/// malformed pins, and non-HTTPS/multi-placeholder mirrors.
+#[test]
+fn typeshed_setting_values_are_strictly_validated() {
+    let catalog = descriptors();
+    for mutation in [
+        EditorMutation::SetTypeshedSetting {
+            key: TypeshedSettingKey::TypeshedCommit,
+            value: TypeshedSettingValue::Text {
+                value: "short".to_owned(),
+            },
+        },
+        EditorMutation::SetTypeshedSetting {
+            key: TypeshedSettingKey::TypeshedUrl,
+            value: TypeshedSettingValue::Text {
+                value: "http://mirror.invalid/{sha}/{sha}.zip".to_owned(),
+            },
+        },
+        EditorMutation::SetTypeshedSetting {
+            key: TypeshedSettingKey::TypeshedVerify,
+            value: TypeshedSettingValue::Text {
+                value: "false".to_owned(),
+            },
+        },
+    ] {
+        let result = build_update(&[mutation], &catalog);
+        assert!(result.is_err(), "invalid value must fail");
+        let Some(error) = result.err() else { continue };
+        assert_eq!(
+            error_kind(&error),
+            Some(serde_json::json!("invalidTypeshedSetting"))
+        );
+    }
+}
+
+/// [LSPCFGED-TYPESHED]: custom and exact sources cannot coexist, and custom
+/// trees must contain the canonical top-level `stdlib/` directory.
+#[test]
+fn typeshed_source_combination_and_shape_are_validated() {
+    let root = std::env::temp_dir().join(format!("bsk_typeshed_ui_{}", std::process::id()));
+    let setup = std::fs::create_dir_all(&root);
+    assert!(setup.is_ok(), "fixture root: {setup:?}");
+    if setup.is_err() {
+        return;
+    }
+    let mut config = BasiliskConfig {
+        project_root: Some(root.clone()),
+        typeshed_path: Some(PathBuf::from("custom")),
+        typeshed_commit: Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
+        ..BasiliskConfig::default()
+    };
+    assert!(require_valid_typeshed_configuration(&config).is_err());
+    config.typeshed_commit = None;
+    assert!(require_valid_typeshed_configuration(&config).is_err());
+    let stdlib = std::fs::create_dir_all(root.join("custom/stdlib"));
+    assert!(stdlib.is_ok(), "stdlib fixture: {stdlib:?}");
+    if stdlib.is_err() {
+        let _ = std::fs::remove_dir_all(root);
+        return;
+    }
+    assert!(require_valid_typeshed_configuration(&config).is_ok());
+    let _ = std::fs::remove_dir_all(root);
 }
 
 /// [CONFIGEDITOR-MODEL]: a preview reports fully resolved effective-severity
@@ -220,6 +307,38 @@ fn resolved_changes_are_effective_and_omit_noops() {
     assert_eq!(analyze_change.after, WireSeverity::Warning);
     // Everything else resolved identically on both sides and is omitted.
     assert_eq!(changes.len(), 2);
+}
+
+/// [LSPCFGED-TYPESHED]: previews describe the exact persisted before/after
+/// value for every allowlisted setting and omit unchanged settings.
+#[test]
+fn resolved_typeshed_changes_cover_the_closed_setting_allowlist() {
+    let before = BasiliskConfig::default();
+    let after = BasiliskConfig {
+        typeshed_path: Some(PathBuf::from("custom-typeshed")),
+        typeshed_commit: Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
+        typeshed_url: Some("https://mirror.example/{sha}.zip".to_owned()),
+        typeshed_cache_path: Some(PathBuf::from(".typeshed-cache")),
+        typeshed_cache: Some(false),
+        typeshed_verify: Some(false),
+        ..BasiliskConfig::default()
+    };
+
+    let changes = resolved_typeshed_changes(&before, &after);
+    let keys = changes.iter().map(|change| change.key).collect::<Vec<_>>();
+    assert_eq!(
+        keys,
+        vec![
+            TypeshedSettingKey::TypeshedPath,
+            TypeshedSettingKey::TypeshedCommit,
+            TypeshedSettingKey::TypeshedUrl,
+            TypeshedSettingKey::TypeshedCachePath,
+            TypeshedSettingKey::TypeshedCache,
+            TypeshedSettingKey::TypeshedVerify,
+        ]
+    );
+    assert!(changes.iter().all(|change| change.before.is_none()));
+    assert!(resolved_typeshed_changes(&after, &after).is_empty());
 }
 
 #[test]

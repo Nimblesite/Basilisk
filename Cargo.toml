@@ -145,7 +145,6 @@ exit                 = "deny"
 rest_pat_in_fully_bound_structs = "deny"
 # Require Arc::clone(&x) syntax — make ref-counted pointer cloning visually distinct
 clone_on_ref_ptr     = "deny"
-
 # Release artifacts are latency-sensitive CLI/LSP binaries. Fat LTO plus one
 # codegen unit lets LLVM optimize across crate boundaries and keeps benchmark
 # baselines moving down; development and CI test profiles remain fast below.

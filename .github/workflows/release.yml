@@ -97,19 +97,38 @@ jobs:
           mkdir -p "$staging"
           cp "$reldir/${{ matrix.binary }}" "$staging/"
           cp "$reldir/basilisk-profiler-helper" "$staging/"
+          # [STUBRES-TYPESHED-LICENSE] The embedded Typeshed snapshot makes
+          # attribution part of every binary-bearing release artifact.
+          cp LICENSE NOTICES THIRD-PARTY-LICENSES "$staging/"
           ditto -c -k --keepParent "$staging" "${{ matrix.archive }}"
 
       - name: Package Linux archive
         if: startsWith(matrix.platform, 'linux-')
         run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ../../../${{ matrix.archive }} ${{ matrix.binary }}
+          set -euo pipefail
+          reldir="target/${{ matrix.target }}/release"
+          tar czf "${{ matrix.archive }}" \
+            -C "$reldir" "${{ matrix.binary }}" \
+            -C "$GITHUB_WORKSPACE" LICENSE NOTICES THIRD-PARTY-LICENSES
 
       - name: Package Windows archive
         if: startsWith(matrix.platform, 'win32-')
         shell: pwsh
         run: |
-          Compress-Archive -Path "target/${{ matrix.target }}/release/${{ matrix.binary }}" -DestinationPath "${{ matrix.archive }}"
+          $files = @(
+            "target/${{ matrix.target }}/release/${{ matrix.binary }}",
+            "LICENSE",
+            "NOTICES",
+            "THIRD-PARTY-LICENSES"
+          )
+          Compress-Archive -Path $files -DestinationPath "${{ matrix.archive }}"
+
+      - name: Verify binary archive attribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v python3 >/dev/null 2>&1; then py=python3; else py=python; fi
+          "$py" scripts/verify_release_attribution.py "${{ matrix.archive }}" --kind binary
 
       # Transient in-run hand-off to the `release` job, which attaches these to
       # the GitHub Release (the only permanent, free, unlimited store). Pinned to
@@ -346,7 +365,7 @@ jobs:
           # [VSIX-PACKAGING-PARITY].
           node vscode-extension/scripts/stage-runtime.mjs runtime-bin "${{ env.target }}"
           cp shipwright.json vscode-extension/shipwright.json
-          cp NOTICES vscode-extension/NOTICES
+          cp LICENSE NOTICES THIRD-PARTY-LICENSES vscode-extension/
 
       # Skip on cross-compiled targets: the runner's CPU arch can't execute
       # the produced binary (x64 host -> aarch64 target). The VSIX contents
@@ -393,6 +412,10 @@ jobs:
           if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
           unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "bin/${{ env.target }}/basilisk${exe}"
           unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "shipwright.json"
+          # `vsce` normalizes the extension root license to LICENSE.txt.
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/LICENSE.txt"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/NOTICES"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/THIRD-PARTY-LICENSES"
           if [ "${{ matrix.platform }}" = "darwin" ]; then
             unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "bin/${{ env.target }}/basilisk-profiler-helper"
           fi
@@ -880,6 +903,15 @@ jobs:
           manylinux: ${{ matrix.manylinux }}
           args: --release --out dist
           sccache: "true"
+
+      - name: Verify wheel attribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v python3 >/dev/null 2>&1; then py=python3; else py=python; fi
+          for wheel in dist/*.whl; do
+            "$py" scripts/verify_release_attribution.py "$wheel" --kind wheel
+          done
 
       # Transient in-run hand-off to publish-pypi (PyPI is the permanent store).
       # retention-days: 1 (the floor) keeps wheels out of billed storage

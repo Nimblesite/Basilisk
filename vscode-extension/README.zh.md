@@ -72,7 +72,7 @@ Basilisk 二进制文件已随本扩展捆绑，覆盖 macOS（Apple Silicon）�
 
 ## 致谢
 
-基于 [Astral](https://astral.sh/) 的 [Ruff](https://github.com/astral-sh/ruff)（MIT）与 [typeshed](https://github.com/python/typeshed)（Apache-2.0）构建；捆绑了 [debugpy](https://github.com/microsoft/debugpy)（Microsoft，MIT）。完整声明见 [NOTICES](https://github.com/Nimblesite/Basilisk/blob/main/NOTICES)。
+基于 [Astral](https://astral.sh/) 的 [Ruff](https://github.com/astral-sh/ruff)（MIT）与 [typeshed](https://github.com/python/typeshed)（Apache-2.0，部分内容采用 MIT 许可证）构建；捆绑了 [debugpy](https://github.com/microsoft/debugpy)（Microsoft，MIT）。完整声明见 [NOTICES](https://github.com/Nimblesite/Basilisk/blob/main/NOTICES)。
 
 ## 许可证
 

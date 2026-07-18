@@ -4,7 +4,9 @@
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
-use crate::scope::{AssertTypeCallInfo, CallSite, RevealTypeCallInfo, RhsKind, Span, TypeArg};
+use crate::scope::{
+    AssertTypeCallInfo, CallReceiver, CallSite, RevealTypeCallInfo, RhsKind, Span, TypeArg,
+};
 
 use super::class_info_ext::expr_simple_name;
 use super::core::{classify_rhs, source_slice_range, text_range_to_span, types_match};
@@ -99,7 +101,19 @@ pub(super) fn collect_reveal_type_calls_from_stmts(
 /// Returns `(type_params, non_typevar_arg_spans)`.
 pub(super) fn call_site_from_expr(expr: &Expr) -> Option<CallSite> {
     let Expr::Call(call) = expr else { return None };
-    let callee = expr_simple_name(&call.func)?;
+    let (callee, receiver) = match call.func.as_ref() {
+        Expr::Name(name) => (name.id.to_string(), None),
+        Expr::Attribute(attribute) => {
+            let receiver = match attribute.value.as_ref() {
+                Expr::StringLiteral(_) => CallReceiver::StringLiteral,
+                Expr::BytesLiteral(_) => CallReceiver::BytesLiteral,
+                Expr::Name(name) => CallReceiver::Name(name.id.to_string()),
+                _ => return None,
+            };
+            (attribute.attr.to_string(), Some(receiver))
+        }
+        _ => return None,
+    };
     let args: Vec<(RhsKind, Span)> = call
         .arguments
         .args
@@ -121,6 +135,7 @@ pub(super) fn call_site_from_expr(expr: &Expr) -> Option<CallSite> {
     let has_unpacked_kwargs = call.arguments.keywords.iter().any(|kw| kw.arg.is_none());
     Some(CallSite {
         callee,
+        receiver,
         args,
         keywords,
         has_unpacked_kwargs,

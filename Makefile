@@ -281,7 +281,8 @@ _clean_rust:
 
 _clean_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Cleaning VSIX artifacts\033[0m' && \
-	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix ./*.vsix $(_EXTENSION_DIR)/NOTICES && \
+	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix ./*.vsix \
+		$(_EXTENSION_DIR)/NOTICES $(_EXTENSION_DIR)/THIRD-PARTY-LICENSES && \
 	echo -e '\033[0;32m✓ VSIX clean complete\033[0m'
 
 _uninstall_binaries:
@@ -314,6 +315,7 @@ _build_vsix:
 # uname. Implements [VSIX-PACKAGING-PARITY].
 _release_vsix:
 	@set -e; \
+	python3 scripts/verify_release_attribution.py --policy-only; \
 	if [ -n "$${BSK_VSIX_TARGET:-}" ]; then \
 		target="$$BSK_VSIX_TARGET"; \
 		plat="$${target%-*}"; arch="$${target##*-}"; \
@@ -350,7 +352,9 @@ _release_vsix:
 	fi; \
 	node $(_EXTENSION_DIR)/scripts/stage-runtime.mjs "target/$$rust_target/release" "$$target"; \
 	cp shipwright.json $(_EXTENSION_DIR)/shipwright.json; \
-	cp NOTICES $(_EXTENSION_DIR)/NOTICES; \
+	# [STUBRES-TYPESHED-LICENSE] Every binary-bearing package carries the \
+	# Basilisk license and the exact third-party attribution files. \
+	cp LICENSE NOTICES THIRD-PARTY-LICENSES $(_EXTENSION_DIR)/; \
 	repo_root="$$(pwd)"; \
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile && npm run sync:shipwright; \
 	echo -e "\033[1m\033[0;36m▶ Validating Shipwright manifest\033[0m"; \

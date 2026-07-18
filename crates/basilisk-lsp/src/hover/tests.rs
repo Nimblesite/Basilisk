@@ -72,6 +72,9 @@ fn test_hover_on_imported_stub_symbol_shows_signature() {
             signature: Some("def fetch(url: str) -> bytes".to_owned()),
             provenance: Some(basilisk_stubs::TypeProvenance::StubTier1),
             methods: Vec::new(),
+            bases: Vec::new(),
+            metaclass: None,
+            metaclass_calls: Vec::new(),
         },
     );
 
@@ -86,6 +89,53 @@ fn test_hover_on_imported_stub_symbol_shows_signature() {
     assert!(
         markup.value.contains("def fetch(url: str) -> bytes"),
         "hover should show the stub signature: {}",
+        markup.value
+    );
+}
+
+/// [STUBRES-PYI] #289: hovering an imported class shows its constructor,
+/// resolved from the real flattened `.pyi` methods — its inherited `__init__`
+/// (e.g. `unittest.mock.Mock`'s from `CallableMixin`) — never a hand table.
+#[test]
+fn test_hover_on_imported_class_shows_inherited_constructor() {
+    use basilisk_resolver::scope::{ExternalMethod, ExternalSymbol, ExternalSymbolKind};
+    use basilisk_resolver::Span;
+
+    let source = "from unittest.mock import Mock\n\nm = Mock()\n";
+    let mut resolved = parse_and_resolve(source);
+
+    // As `populate_imported_symbols` would produce it: the bound `Mock` carries
+    // its inherited constructor flattened over the module's C3 MRO.
+    let _ = resolved.imported_symbols.insert(
+        "Mock".to_owned(),
+        ExternalSymbol {
+            name: "Mock".to_owned(),
+            kind: ExternalSymbolKind::Class,
+            type_annotation: None,
+            source_path: std::path::PathBuf::from("/typeshed/stdlib/unittest/mock.pyi"),
+            source_span: Span::new(0, 0),
+            signature: Some("class Mock".to_owned()),
+            provenance: Some(basilisk_stubs::TypeProvenance::StubTier1),
+            methods: vec![ExternalMethod {
+                name: "__init__".to_owned(),
+                signature: "def __init__(spec: Any, side_effect: Any) -> None".to_owned(),
+            }],
+            bases: vec!["CallableMixin".to_owned(), "NonCallableMock".to_owned()],
+            metaclass: None,
+            metaclass_calls: Vec::new(),
+        },
+    );
+
+    let offset = source.rfind("Mock").expect("usage present") + 1;
+    let hover = hover_at(&resolved, source, offset, &[]).expect("hover should be Some");
+    let HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected Markup hover contents");
+    };
+    assert!(
+        markup
+            .value
+            .contains("def Mock.__init__(spec: Any, side_effect: Any) -> None"),
+        "hover on an imported class must show its inherited constructor: {}",
         markup.value
     );
 }
@@ -238,7 +288,23 @@ fn test_hover_on_class_shows_init_signature() {
 #[test]
 fn test_hover_on_str_literal_method_shows_signature() {
     let source = "words = [\"a\", \"b\"]\nx = \" \".join(words)\n";
-    let resolved = parse_and_resolve(source);
+    let mut resolved = parse_and_resolve(source);
+    let snapshot =
+        basilisk_stubs::typeshed::bundle::bundled_snapshot().expect("release bundle activates");
+    let paths = basilisk_checker::imports::ImportSearchPaths {
+        roots: vec![std::path::PathBuf::from("/workspace")],
+        extra_paths: Vec::new(),
+        stub_paths: Vec::new(),
+        workspace_members: Vec::new(),
+        site_packages: None,
+        registry: None,
+        typeshed_path: None,
+        typeshed_snapshot: Some(basilisk_checker::imports::ActiveTypeshed::new(
+            std::sync::Arc::new(snapshot),
+            None,
+        )),
+    };
+    basilisk_checker::imports::resolve_module_imports(&mut resolved, &paths);
 
     let offset = source.rfind("join").expect("usage present") + 1;
     let hover = hover_at(&resolved, source, offset, &[]);
@@ -252,6 +318,11 @@ fn test_hover_on_str_literal_method_shows_signature() {
         "hover should show the builtin method's signature: {}",
         markup.value
     );
+    assert!(markup.value.contains("Iterable[LiteralString]"));
+    assert!(markup.value.contains("LiteralString"));
+    assert!(markup.value.contains("Iterable[str]"));
+    assert!(markup.value.contains('/'));
+    assert!(markup.value.contains("bundled-"));
 }
 
 /// Regression for #200 (intermittent hover): hovering a *usage* of an

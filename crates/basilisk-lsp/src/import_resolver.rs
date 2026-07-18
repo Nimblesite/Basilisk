@@ -24,9 +24,39 @@ mod ambient;
 // callers (`basilisk_lsp::import_resolver::X`) keep resolving unchanged.
 pub use basilisk_checker::imports::{
     classify_unresolved, has_stub_package, is_inline_typed_package, resolve_module,
-    resolve_module_imports, resolve_module_with_importer, resolve_relative_import,
+    resolve_module_imports, resolve_module_with_importer, resolve_relative_import, ActiveTypeshed,
     ImportSearchPaths, ResolvedImport,
 };
+
+/// Convert explicit/discovered project evidence into the target used by
+/// `VERSIONS` and `.pyi` guards. No version evidence means no target; there is
+/// deliberately no host or fixed-version default.
+#[must_use]
+pub fn stub_target_from_config(
+    config: &crate::config::WorkspaceConfig,
+) -> Option<basilisk_stubs::types::StubTarget> {
+    let version = config.python_version.as_deref()?;
+    let python_version = parsed_major_minor(version)?;
+    let platform = match config.python_platform.as_deref() {
+        None | Some("All" | "all") => basilisk_stubs::types::StubTargetPlatform::All,
+        Some(platform) => basilisk_stubs::types::StubTargetPlatform::Concrete(
+            normalized_sys_platform(platform).to_owned(),
+        ),
+    };
+    Some(basilisk_stubs::types::StubTarget {
+        python_version,
+        platform,
+    })
+}
+
+fn normalized_sys_platform(platform: &str) -> &str {
+    match platform {
+        "Windows" | "windows" => "win32",
+        "Linux" | "Linux-64" => "linux",
+        "Darwin" | "macOS" | "MacOS" => "darwin",
+        other => other,
+    }
+}
 
 /// Build search paths from workspace config.
 ///
@@ -60,6 +90,7 @@ pub fn search_paths_from_config(
         site_packages,
         registry,
         typeshed_path: config.typeshed_path.clone(),
+        typeshed_snapshot: None,
     }
 }
 
@@ -67,10 +98,11 @@ pub fn search_paths_from_config(
 /// projects only — fall back to `python3 -c "import sys; ..."` subprocess
 /// discovery of the ambient interpreter.
 ///
-/// Reads the `VIRTUAL_ENV` environment variable as the highest-priority
-/// override — `source .venv/bin/activate` (and CI scripts that install
-/// dependencies into a venv outside the workspace tree) set this to the
-/// active venv root.
+/// An explicit interpreter is authoritative. Otherwise `VIRTUAL_ENV` — set by
+/// `source .venv/bin/activate` and many CI scripts — precedes workspace venv
+/// discovery. When a Python version is configured, conventional layouts must
+/// match that version rather than silently reading another interpreter's
+/// packages.
 ///
 /// `uv_locked` implements the [LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND] resolution
 /// contract (issue #252): a uv-locked project resolves third-party imports
@@ -96,21 +128,42 @@ fn resolve_site_packages_with_env(
     virtual_env: Option<&Path>,
     uv_locked: bool,
 ) -> Option<PathBuf> {
-    // 1. Honour an active venv signalled by `VIRTUAL_ENV` — the standard
-    //    Python convention. Issue #25. This is explicit user intent, so it
-    //    applies to locked and unlocked projects alike.
+    // 1. Explicit interpreter override (VS Code `basilisk.python` /
+    //    `--python`) wins even over an activated, different VIRTUAL_ENV.
+    //    Cross-version checking must use the selected target interpreter.
+    if let Some(interpreter) = &config.python_interpreter {
+        if let Some(sp) =
+            ambient::detect_for_interpreter(interpreter, config.python_version.as_deref())
+        {
+            return Some(sp);
+        }
+    }
+
+    // 2. Honour an active venv signalled by `VIRTUAL_ENV`. If target version
+    //    evidence exists, accept only that version's conventional directory.
     if let Some(venv) = virtual_env {
         if venv.is_dir() {
-            if let Some(sp) = site_packages_in_dir(venv) {
+            if let Some(sp) =
+                site_packages_in_dir_for_version(venv, config.python_version.as_deref())
+            {
                 return Some(sp);
             }
         }
     }
-    // 2. Try venv-based discovery from workspace roots / explicit config.
+
+    // 3. Try venv-based discovery from workspace roots / explicit config.
     if let Some(sp) = resolve_venv_site_packages(roots, config) {
         return Some(sp);
     }
-    // 3. Fall back to ambient-interpreter discovery — but never for a
+
+    // 4. A configured version without an explicit path may use that named
+    //    interpreter. It never falls through to an unrelated ambient python3.
+    if let Some(version) = config.python_version.as_deref() {
+        let interpreter = PathBuf::from(format!("python{}", major_minor(version)?));
+        return ambient::detect_for_interpreter(&interpreter, Some(version));
+    }
+
+    // 5. Fall back to ambient-interpreter discovery — but never for a
     //    uv-locked project ([LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND], issue #252):
     //    the lock is the source of truth, and inheriting the host
     //    interpreter's site-packages makes import resolution non-deterministic
@@ -127,23 +180,31 @@ fn resolve_venv_site_packages(
     config: &crate::config::WorkspaceConfig,
 ) -> Option<PathBuf> {
     let venv_dir = find_venv_dir(roots, config)?;
-    site_packages_in_dir(&venv_dir)
+    site_packages_in_dir_for_version(&venv_dir, config.python_version.as_deref())
 }
 
-/// Search a Python installation directory for its site-packages path.
-fn site_packages_in_dir(base: &Path) -> Option<PathBuf> {
-    // Unix: lib/pythonX.Y/site-packages
+fn site_packages_in_dir_for_version(base: &Path, version: Option<&str>) -> Option<PathBuf> {
+    // Unix: lib/pythonX.Y/{site,dist}-packages. Sort unconstrained layouts so
+    // directory iteration order cannot select a different interpreter.
     let lib = base.join("lib");
     if lib.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&lib) {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if name_str.starts_with("python") {
-                    let sp = entry.path().join("site-packages");
-                    if sp.is_dir() {
-                        return Some(sp);
-                    }
+        let python_dirs = if let Some(version) = version {
+            vec![lib.join(format!("python{}", major_minor(version)?))]
+        } else {
+            let mut dirs: Vec<PathBuf> = std::fs::read_dir(&lib)
+                .ok()?
+                .flatten()
+                .filter(|entry| entry.file_name().to_string_lossy().starts_with("python"))
+                .map(|entry| entry.path())
+                .collect();
+            dirs.sort();
+            dirs
+        };
+        for python_dir in python_dirs {
+            for packages in ["site-packages", "dist-packages"] {
+                let candidate = python_dir.join(packages);
+                if candidate.is_dir() {
+                    return Some(candidate);
                 }
             }
         }
@@ -156,12 +217,26 @@ fn site_packages_in_dir(base: &Path) -> Option<PathBuf> {
     None
 }
 
+fn major_minor(version: &str) -> Option<String> {
+    let (major, minor) = parsed_major_minor(version)?;
+    Some(format!("{major}.{minor}"))
+}
+
+fn parsed_major_minor(version: &str) -> Option<(u32, u32)> {
+    let mut parts = version.trim().split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    Some((major, minor))
+}
+
 /// Detect site-packages by running `python3 -c "import sys; ..."`.
 ///
 /// Searches `sys.path` entries for directories ending in `site-packages`.
 /// Returns the first valid site-packages directory found.
 fn detect_python_site_packages() -> Option<PathBuf> {
-    ambient::detect_python_site_packages()
+    // An explicit interpreter is already honoured earlier in
+    // `resolve_site_packages`; this ambient fallback is the no-interpreter case.
+    ambient::detect_python_site_packages(None)
 }
 
 // Implements [LSPUV-DETECTION-FALLBACK] — the existing venv-discovery path used
@@ -193,8 +268,9 @@ fn find_venv_dir(roots: &[PathBuf], config: &crate::config::WorkspaceConfig) -> 
 
 #[cfg(test)]
 #[expect(
+    clippy::expect_used,
     clippy::unwrap_used,
-    reason = "test-only code: unwrap acceptable in unit tests"
+    reason = "test-only resolver fixtures use explicit assertion messages"
 )]
 mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -311,6 +387,50 @@ mod tests {
         let _ = fs::remove_dir_all(&workspace);
     }
 
+    #[test]
+    fn explicit_interpreter_beats_mismatched_virtual_env() {
+        let activated = unique_tmp("bsk_ir_activated_py311");
+        let activated_sp = activated.join("lib/python3.11/site-packages");
+        fs::create_dir_all(&activated_sp).unwrap();
+
+        let target = unique_tmp("bsk_ir_explicit_py312");
+        let target_sp = target.join("lib/python3.12/site-packages");
+        fs::create_dir_all(&target_sp).unwrap();
+        let interpreter = target.join("bin/python3.12");
+        fs::create_dir_all(interpreter.parent().unwrap()).unwrap();
+        fs::write(&interpreter, []).unwrap();
+
+        let config = crate::config::WorkspaceConfig {
+            python_version: Some("3.12".to_owned()),
+            python_interpreter: Some(interpreter),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_site_packages_with_env(&[], &config, Some(&activated), true),
+            Some(target_sp),
+            "the explicit target interpreter must win over VIRTUAL_ENV"
+        );
+
+        let _ = fs::remove_dir_all(activated);
+        let _ = fs::remove_dir_all(target);
+    }
+
+    #[test]
+    fn target_version_selects_dist_packages_without_cross_version_fallback() {
+        let venv = unique_tmp("bsk_ir_target_dist_packages");
+        let wrong = venv.join("lib/python3.11/site-packages");
+        let expected = venv.join("lib/python3.12/dist-packages");
+        fs::create_dir_all(&wrong).unwrap();
+        fs::create_dir_all(&expected).unwrap();
+
+        assert_eq!(
+            site_packages_in_dir_for_version(&venv, Some("3.12.4")),
+            Some(expected)
+        );
+
+        let _ = fs::remove_dir_all(venv);
+    }
+
     /// `VIRTUAL_ENV` pointing at a non-existent path must not crash and must
     /// fall through to the normal workspace-root scan.
     #[test]
@@ -343,5 +463,45 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn stub_target_requires_version_evidence_and_normalizes_platform() {
+        assert!(stub_target_from_config(&crate::config::WorkspaceConfig::default()).is_none());
+        let config = crate::config::WorkspaceConfig {
+            python_version: Some("3.12".to_owned()),
+            python_platform: Some("Windows".to_owned()),
+            ..Default::default()
+        };
+        let target = stub_target_from_config(&config).expect("explicit target");
+        assert_eq!(target.python_version, (3, 12));
+        assert_eq!(
+            target.platform,
+            basilisk_stubs::types::StubTargetPlatform::Concrete("win32".to_owned())
+        );
+    }
+
+    #[test]
+    fn stub_target_accepts_patch_qualified_python_version() {
+        let config = crate::config::WorkspaceConfig {
+            python_version: Some("3.12.7".to_owned()),
+            ..Default::default()
+        };
+        assert_eq!(
+            stub_target_from_config(&config).map(|target| target.python_version),
+            Some((3, 12))
+        );
+    }
+
+    #[test]
+    fn version_without_platform_uses_cross_platform_intersection() {
+        let config = crate::config::WorkspaceConfig {
+            python_version: Some("3.13".to_owned()),
+            ..Default::default()
+        };
+        assert_eq!(
+            stub_target_from_config(&config).map(|target| target.platform),
+            Some(basilisk_stubs::types::StubTargetPlatform::All)
+        );
     }
 }

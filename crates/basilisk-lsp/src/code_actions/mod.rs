@@ -381,9 +381,9 @@ fn make_uv_add_dev_pytest_action(diag: &Diagnostic) -> CodeAction {
 /// fail to resolve on `PyPI` (e.g. the nonexistent `pydantic_ai-stubs`).
 ///
 /// Implements [LSPUV-DIAGNOSTICS-MISSING-STUBS] — the `basilisk.uv.addDev`
-/// quick fix, gated on the bundled typeshed index.
+/// quick fix, gated only on the mapping carried from the active generation.
 fn make_uv_add_stubs_action(diag: &Diagnostic, module: &str) -> Option<CodeAction> {
-    let stubs_package = basilisk_stubs::typeshed_stub_distribution(module)?;
+    let stubs_package = extract_stub_distribution(&diag.message)?;
     Some(CodeAction {
         title: format!("Install type stubs for '{module}' (uv add --dev)"),
         kind: Some(CodeActionKind::QUICKFIX),
@@ -391,10 +391,17 @@ fn make_uv_add_stubs_action(diag: &Diagnostic, module: &str) -> Option<CodeActio
         command: Some(Command {
             title: format!("uv add --dev {stubs_package}"),
             command: basilisk_common::commands::UV_ADD_DEV.to_owned(),
-            arguments: Some(vec![serde_json::Value::String(stubs_package.to_owned())]),
+            arguments: Some(vec![serde_json::Value::String(stubs_package)]),
         }),
         ..CodeAction::default()
     })
+}
+
+fn extract_stub_distribution(message: &str) -> Option<String> {
+    let marker = "Type stubs available as `";
+    let rest = message.split_once(marker)?.1;
+    let distribution = rest.split_once('`')?.0;
+    (!distribution.is_empty()).then(|| distribution.to_owned())
 }
 
 #[cfg(test)]
@@ -534,6 +541,38 @@ mod tests {
         assert_eq!(extract_module_from_diagnostic(msg), None);
     }
 
+    #[test]
+    fn missing_stub_action_uses_distribution_carried_by_diagnostic() {
+        let diag = make_diagnostic(
+            DiagnosticSeverity::ERROR,
+            "BSK-0152",
+            "Package `yaml` is installed but has no type stubs available\nhelp: Type stubs available as `custom-types-PyYAML` — use quick fix to install",
+            range_at((0, 0), (0, 4)),
+        );
+        let action = make_uv_add_stubs_action(&diag, "yaml").expect("published mapping");
+        assert_eq!(
+            action
+                .command
+                .and_then(|command| command.arguments)
+                .and_then(|arguments| arguments.into_iter().next()),
+            Some(serde_json::Value::String("custom-types-PyYAML".to_owned()))
+        );
+    }
+
+    #[test]
+    fn missing_stub_action_never_falls_back_to_a_compiled_distribution() {
+        let diag = make_diagnostic(
+            DiagnosticSeverity::ERROR,
+            "BSK-0152",
+            "Package `requests` is installed but has no type stubs available",
+            range_at((0, 0), (0, 8)),
+        );
+        assert!(
+            make_uv_add_stubs_action(&diag, "requests").is_none(),
+            "only the active generation may supply a distribution mapping"
+        );
+    }
+
     fn assert_uv_add_action(
         actions: &[CodeActionOrCommand],
         title_substring: &str,
@@ -626,7 +665,7 @@ mod tests {
         let diag = make_diagnostic(
             DiagnosticSeverity::ERROR,
             "BSK-0152",
-            "Package `requests` is installed but has no type stubs available",
+            "Package `requests` is installed but has no type stubs available\nhelp: Type stubs available as `types-requests` — use quick fix to install",
             range_at((0, 0), (0, 8)),
         );
         let uri = Url::parse("file:///test.py").unwrap();
@@ -675,7 +714,7 @@ mod tests {
         let diag = make_diagnostic(
             DiagnosticSeverity::ERROR,
             "BSK-0152",
-            "Package `requests` is installed but has no type stubs available",
+            "Package `requests` is installed but has no type stubs available\nhelp: Type stubs available as `types-requests` — use quick fix to install",
             range_at((0, 0), (0, 8)),
         );
         let uri = Url::parse("file:///test.py").unwrap();

@@ -45,6 +45,7 @@ fn search_paths(
         site_packages,
         registry: None,
         typeshed_path: None,
+        typeshed_snapshot: None,
     }
 }
 
@@ -109,6 +110,7 @@ fn custom_typeshed_overrides_stdlib_and_parses() {
         site_packages: None,
         registry: None,
         typeshed_path: Some(ts.clone()),
+        typeshed_snapshot: None,
     };
 
     assert_eq!(paths.typeshed_path.as_deref(), Some(ts.as_path()));

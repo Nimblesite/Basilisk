@@ -1,0 +1,161 @@
+//! End-to-end tests for [MCP-STDIO] / [MCP-TYPESHED-STATUS].
+//! See docs/specs/CHECKER-MCP-SPEC.md.
+
+use std::io::Write as _;
+use std::process::{Command, Stdio};
+
+use serde_json::{json, Value};
+
+const PROTOCOL_VERSION: &str = "2025-11-25";
+
+fn custom_typeshed_workspace() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let workspace = tempfile::tempdir()?;
+    let stdlib = workspace.path().join("typeshed").join("stdlib");
+    std::fs::create_dir_all(&stdlib)?;
+    std::fs::write(stdlib.join("VERSIONS"), "os: 3.8-\n")?;
+    std::fs::write(stdlib.join("os.pyi"), "def getcwd() -> str: ...\n")?;
+    std::fs::write(
+        workspace.path().join("pyproject.toml"),
+        "[tool.basilisk]\ntypeshed-path = \"typeshed\"\n",
+    )?;
+    Ok(workspace)
+}
+
+fn run_session(workspace: &std::path::Path) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_basilisk"))
+        .arg("mcp")
+        .arg("--workspace")
+        .arg(workspace)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let requests = [
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":PROTOCOL_VERSION,"capabilities":{},"clientInfo":{"name":"e2e","version":"1"}}}),
+        json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+        json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}),
+        json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"basilisk_typeshed_status","arguments":{}}}),
+    ];
+    let mut stdin = child.stdin.take().ok_or("MCP stdin was not piped")?;
+    for request in requests {
+        serde_json::to_writer(&mut stdin, &request)?;
+        stdin.write_all(b"\n")?;
+    }
+    drop(stdin);
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "MCP exited {:?}: {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    String::from_utf8(output.stdout)?
+        .lines()
+        .map(|line| serde_json::from_str(line).map_err(Into::into))
+        .collect()
+}
+
+#[test]
+fn stdio_server_lists_and_returns_ordered_structured_status(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let workspace = custom_typeshed_workspace()?;
+    let responses = run_session(workspace.path())?;
+    assert_eq!(
+        responses.len(),
+        3,
+        "notifications must not receive responses"
+    );
+    let initialize = responses.first().ok_or("initialize response missing")?;
+    let list = responses.get(1).ok_or("tools/list response missing")?;
+    let call = responses.get(2).ok_or("tools/call response missing")?;
+    assert_eq!(
+        initialize
+            .pointer("/result/protocolVersion")
+            .and_then(Value::as_str),
+        Some(PROTOCOL_VERSION)
+    );
+    assert_eq!(
+        list.pointer("/result/tools/0/name").and_then(Value::as_str),
+        Some("basilisk_typeshed_status")
+    );
+    let status = call
+        .pointer("/result/structuredContent")
+        .ok_or("structuredContent missing")?;
+    assert_eq!(
+        status.get("active_source").and_then(Value::as_str),
+        Some("custom")
+    );
+    assert_eq!(
+        status.get("license_status").and_then(Value::as_str),
+        Some("not supplied")
+    );
+    assert_eq!(
+        status.get("provenance").and_then(Value::as_str),
+        Some("user-managed")
+    );
+    assert_eq!(
+        status.get("signed_release").and_then(Value::as_bool),
+        Some(false)
+    );
+    let warnings = status
+        .get("warnings")
+        .and_then(Value::as_array)
+        .ok_or("ordered warnings missing")?;
+    assert_eq!(
+        warnings
+            .first()
+            .and_then(|warning| warning.get("code"))
+            .and_then(Value::as_str),
+        Some("UNPINNED")
+    );
+    assert!(
+        warnings.iter().any(|warning| {
+            warning.get("code").and_then(Value::as_str) == Some("USER-MANAGED SOURCE")
+        }),
+        "custom status must disclose user-managed contents and terms: {warnings:?}"
+    );
+    assert_eq!(
+        call.pointer("/result/isError").and_then(Value::as_bool),
+        Some(false)
+    );
+    Ok(())
+}
+
+#[test]
+fn stdio_server_emits_only_json_rpc_on_stdout() -> Result<(), Box<dyn std::error::Error>> {
+    let workspace = custom_typeshed_workspace()?;
+    for response in run_session(workspace.path())? {
+        assert_eq!(response.get("jsonrpc").and_then(Value::as_str), Some("2.0"));
+        assert!(response.get("id").is_some());
+    }
+    Ok(())
+}
+
+#[test]
+fn packaged_binary_advertises_mcp_capability() -> Result<(), Box<dyn std::error::Error>> {
+    let output = Command::new(env!("CARGO_BIN_EXE_basilisk"))
+        .args(["--version", "--json"])
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "version command exited {:?}: {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    let version: Value = serde_json::from_slice(&output.stdout)?;
+    let capabilities = version
+        .get("capabilities")
+        .and_then(Value::as_array)
+        .ok_or("Shipwright capabilities missing")?;
+    assert!(
+        capabilities
+            .iter()
+            .any(|entry| entry.as_str() == Some("mcp")),
+        "packaged basilisk binary must advertise MCP: {version}"
+    );
+    Ok(())
+}

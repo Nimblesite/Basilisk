@@ -34,6 +34,9 @@ fn hover_on_custom_typeshed_symbol_shows_custom_annotation() -> Result<(), Strin
             signature: Some("def uname() -> str".to_owned()),
             provenance: Some(basilisk_stubs::TypeProvenance::StubCustomTypeshed),
             methods: Vec::new(),
+            bases: Vec::new(),
+            metaclass: None,
+            metaclass_calls: Vec::new(),
         },
     );
 

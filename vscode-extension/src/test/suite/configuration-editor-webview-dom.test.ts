@@ -54,10 +54,15 @@ interface DomTestResult {
   readonly pathHeads?: string[];
   readonly openConfigButtons?: number;
   readonly sourceRows?: number;
+  readonly typeshedSourceDisabled?: boolean;
+  readonly typeshedSettingCount?: number;
+  readonly disabledTypeshedSettingCount?: number;
+  readonly typeshedActionCount?: number;
+  readonly disabledTypeshedActionCount?: number;
 }
 
 /** A realistic snapshot: pep rules first, basilisk rules at the bottom. */
-function fixtureSnapshot(): unknown {
+function fixtureSnapshot(typeshedAcquiring = false): unknown {
   const pepRules = Array.from({ length: PEP_RULE_COUNT }, (_ignored, index) => ({
     descriptor: {
       code: `pep_rule_${String(index).padStart(3, "0")}`,
@@ -112,6 +117,40 @@ function fixtureSnapshot(): unknown {
       disabledRules: 1,
     },
     problems: [],
+    typeshed: {
+      sourceMode: { kind: "Latest" },
+      sourceOptions: [
+        { mode: { kind: "Latest" }, label: "Latest", enabled: !typeshedAcquiring },
+        { mode: { kind: "ExactCommit" }, label: "Exact commit", enabled: !typeshedAcquiring },
+        { mode: { kind: "CustomFolder" }, label: "Custom folder", enabled: !typeshedAcquiring },
+      ],
+      settings: [
+        { key: { kind: "TypeshedPath" }, label: "Custom folder", description: "Custom Typeshed path", widget: { kind: "Directory" }, enabled: !typeshedAcquiring },
+        { key: { kind: "TypeshedCommit" }, label: "Exact commit", description: "Exact Typeshed commit", widget: { kind: "Text" }, enabled: !typeshedAcquiring },
+        { key: { kind: "TypeshedUrl" }, label: "Alternate archive URL", description: "Typeshed archive mirror", widget: { kind: "Text" }, enabled: !typeshedAcquiring },
+        { key: { kind: "TypeshedCachePath" }, label: "Cache folder", description: "Typeshed cache path", widget: { kind: "Directory" }, enabled: !typeshedAcquiring },
+        { key: { kind: "TypeshedCache" }, label: "Reuse downloads", description: "Reuse cached Typeshed", defaultValue: { kind: "Boolean", value: true }, widget: { kind: "Boolean" }, enabled: !typeshedAcquiring },
+        { key: { kind: "TypeshedVerify" }, label: "Verify content", description: "Verify downloaded Typeshed", defaultValue: { kind: "Boolean", value: true }, widget: { kind: "Boolean" }, enabled: !typeshedAcquiring },
+      ],
+      actions: [
+        { action: { kind: "PinCurrent" }, label: "Pin current", enabled: !typeshedAcquiring },
+        { action: { kind: "AcquireFresh" }, label: "Acquire fresh", enabled: !typeshedAcquiring },
+        { action: { kind: "ViewLicense" }, label: "View License", enabled: !typeshedAcquiring },
+      ],
+      status: {
+        lifecycle: { kind: typeshedAcquiring ? "Acquiring" : "Ready" },
+        blockedReason: undefined,
+        activeSource: { kind: "Bundled" },
+        commitIdentity: "83c2518a9e6abbda0c44592c3483de459198f887",
+        treeIdentity: undefined,
+        transport: { kind: "EmbeddedZip" },
+        licenseStatus: { kind: "Approved" },
+        licenseReference: "https://example.test/LICENSE",
+        provenance: { kind: "BundleVetted" },
+        signedRelease: false,
+        warnings: [],
+      },
+    },
   };
 }
 
@@ -121,7 +160,7 @@ function fixtureSnapshot(): unknown {
  * real host produces, and keeps the REAL acquireVsCodeApi handle for the
  * driver to report results back to the extension host.
  */
-function hostShimScript(focusRule: string | null = null): string {
+function hostShimScript(focusRule: string | null = null, typeshedAcquiring = false): string {
   return `
     const __realApi = acquireVsCodeApi();
     window.__realApi = __realApi;
@@ -132,7 +171,7 @@ function hostShimScript(focusRule: string | null = null): string {
     window.addEventListener('error', (event) => {
       __realApi.postMessage({ type: 'domTestResult', ok: false, reason: 'page error: ' + event.message });
     });
-    const __snapshot = ${embedJson(fixtureSnapshot())};
+    const __snapshot = ${embedJson(fixtureSnapshot(typeshedAcquiring))};
     let __state = {
       phase: 'ready', rootUri: __snapshot.rootUri, snapshot: __snapshot,
       preview: undefined, occurrences: undefined, occurrencesLoading: false,
@@ -368,7 +407,7 @@ function navPresenceDriverScript(): string {
         while (!document.querySelector('[data-rule-code]') && waited < 200) { await sleep(25); waited += 1; }
         await sleep(100);
         const navLabels = Array.from(document.querySelectorAll('#section-nav [data-section-target]'))
-          .map((button) => (button.textContent || '').trim());
+          .map((button) => (button.querySelector('span:last-child')?.textContent || '').trim());
         // Overview: switch to it and read the exact server debt total it renders.
         document.querySelector('[data-section-target="overview"]').click();
         await sleep(60);
@@ -407,12 +446,45 @@ function navPresenceDriverScript(): string {
   `;
 }
 
-function harnessDocument(driver: string, focusRule: string | null = null): string {
+/** [LSPCFGED-TYPESHED]: every Typeshed control is inert during acquisition. */
+function typeshedAcquiringDriverScript(): string {
+  return `
+    (async () => {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const report = (result) => window.__realApi.postMessage(Object.assign({ type: 'domTestResult' }, result));
+      try {
+        let waited = 0;
+        while (!document.getElementById('typeshed-source-mode') && waited < 200) { await sleep(25); waited += 1; }
+        const source = document.getElementById('typeshed-source-mode');
+        const settings = Array.from(document.querySelectorAll(
+          '[data-typeshed-text], [data-typeshed-boolean], [data-pick-typeshed-folder]'
+        ));
+        const actions = Array.from(document.querySelectorAll('[data-typeshed-action]'));
+        report({
+          ok: true,
+          typeshedSourceDisabled: source ? source.disabled : false,
+          typeshedSettingCount: settings.length,
+          disabledTypeshedSettingCount: settings.filter((control) => control.disabled).length,
+          typeshedActionCount: actions.length,
+          disabledTypeshedActionCount: actions.filter((control) => control.disabled).length,
+        });
+      } catch (error) {
+        report({ ok: false, reason: String(error) });
+      }
+    })();
+  `;
+}
+
+function harnessDocument(
+  driver: string,
+  focusRule: string | null = null,
+  typeshedAcquiring = false,
+): string {
   const html = buildConfigurationEditorDocument();
   const openTag = /<script nonce="[^"]+">/.exec(html);
   assert.ok(openTag, "the configuration editor document must carry one nonce-gated script");
   return html
-    .replace(openTag[0], `${openTag[0]}${hostShimScript(focusRule)}\n;`)
+    .replace(openTag[0], `${openTag[0]}${hostShimScript(focusRule, typeshedAcquiring)}\n;`)
     .replace("</script>\n</body>", `;\n${driver}</script>\n</body>`);
 }
 
@@ -596,5 +668,28 @@ suite("Configuration editor — restored navigation views in a real webview DOM"
     assert.deepStrictEqual(result.pathHeads, ["legacy"], "Path Overrides lists the discovered nested config");
     assert.strictEqual(result.openConfigButtons, 1, "each path override exposes a real open-file action");
     assert.ok((result.sourceRows ?? 0) >= 3, "the Project view renders the real source details");
+  });
+});
+
+suite("Configuration editor — Typeshed acquisition in a real webview DOM", () => {
+  test("disables the source selector, all six settings, and every action while acquiring", async function () {
+    this.timeout(RESULT_TIMEOUT_MS + 15_000);
+    const result = await runWebviewScenario(
+      harnessDocument(typeshedAcquiringDriverScript(), null, true),
+    );
+    assert.strictEqual(result.ok, true, `webview driver failed: ${result.reason ?? "unknown"}`);
+    assert.strictEqual(result.typeshedSourceDisabled, true, "the source selector must be disabled");
+    assert.strictEqual(result.typeshedSettingCount, 6, "the fixture must render all six settings");
+    assert.strictEqual(
+      result.disabledTypeshedSettingCount,
+      result.typeshedSettingCount,
+      "every Typeshed setting must be disabled",
+    );
+    assert.strictEqual(result.typeshedActionCount, 3, "the fixture must render all three actions");
+    assert.strictEqual(
+      result.disabledTypeshedActionCount,
+      result.typeshedActionCount,
+      "every Typeshed action must be disabled",
+    );
   });
 });

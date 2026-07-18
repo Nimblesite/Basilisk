@@ -82,6 +82,12 @@ pub struct WorkspaceConfig {
     pub python_version: Option<String>,
     /// Python platform target (e.g. "Linux", "Darwin", "Windows").
     pub python_platform: Option<String>,
+    /// Explicit Python interpreter binary (VS Code's `basilisk.python` via
+    /// `initializationOptions`, or `--python`). When set, import resolution
+    /// uses **this** interpreter's `site-packages`/`dist-packages` — the
+    /// cross-version target-environment override
+    /// ([TYPESHEDRT-ACCEPTANCE-TARGET]). `None` uses ambient discovery.
+    pub python_interpreter: Option<PathBuf>,
     /// Paths to include in analysis (relative to workspace root).
     pub include: Vec<PathBuf>,
     /// Gitignore-style glob patterns to exclude from analysis, matched relative
@@ -104,6 +110,19 @@ pub struct WorkspaceConfig {
     /// [STUBRES-CUSTOM-TYPESHED](../../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
     /// `None` uses the bundled typeshed.
     pub typeshed_path: Option<PathBuf>,
+    /// Exact full `python/typeshed` commit; unset selects Latest.
+    pub typeshed_commit: Option<String>,
+    /// Optional `{sha}` archive mirror used only after a SHA is known.
+    pub typeshed_url: Option<String>,
+    /// Optional directory for gate-accepted immutable archive cache entries.
+    pub typeshed_cache_path: Option<PathBuf>,
+    /// Whether accepted archives may be reused during this run.
+    pub typeshed_cache: bool,
+    /// Whether consumed bytes must be bound to the selected Git tree.
+    pub typeshed_verify: bool,
+    /// Redacted parse error for an explicitly malformed Typeshed key.
+    /// Acquisition fails closed instead of silently applying a default.
+    pub typeshed_configuration_error: Option<String>,
     /// Formatter engine ([LSPFMT-CONFIG]). Editor settings (VS Code's
     /// `basilisk.formatter` via initializationOptions) override this.
     pub formatter: FormatterEngine,
@@ -114,8 +133,9 @@ pub struct WorkspaceConfig {
 impl Default for WorkspaceConfig {
     fn default() -> Self {
         Self {
-            python_version: Some("3.12".to_owned()),
+            python_version: None,
             python_platform: None,
+            python_interpreter: None,
             include: Vec::new(),
             exclude: Vec::new(),
             extra_paths: Vec::new(),
@@ -124,10 +144,68 @@ impl Default for WorkspaceConfig {
             analysis_mode: AnalysisMode::WholeModule,
             stub_paths: Vec::new(),
             typeshed_path: None,
+            typeshed_commit: None,
+            typeshed_url: None,
+            typeshed_cache_path: None,
+            typeshed_cache: true,
+            typeshed_verify: true,
+            typeshed_configuration_error: None,
             formatter: FormatterEngine::Ruff,
             format_style: FormatStyle::default(),
         }
     }
+}
+
+/// Build the config-free acquisition request shared by CLI, LSP, and MCP.
+/// Invalid or mutually exclusive raw settings fail closed here, including when
+/// a file bypassed the configuration editor's stronger source validation.
+///
+/// # Errors
+///
+/// Returns a redacted, user-facing reason for an invalid source, pin, or
+/// mirror template. The configured mirror value itself is never echoed.
+pub fn typeshed_request(
+    config: &WorkspaceConfig,
+) -> Result<basilisk_stubs::typeshed::source::TypeshedRequest, String> {
+    use basilisk_stubs::typeshed::gittree::Oid;
+    use basilisk_stubs::typeshed::source::{SourceSelection, TypeshedRequest};
+
+    if let Some(error) = config.typeshed_configuration_error.as_ref() {
+        return Err(error.clone());
+    }
+
+    if config.typeshed_path.is_some() && config.typeshed_commit.is_some() {
+        return Err("typeshed-path and typeshed-commit are mutually exclusive".to_owned());
+    }
+    if config
+        .typeshed_url
+        .as_deref()
+        .is_some_and(|url| !basilisk_config::is_valid_typeshed_url_template(url))
+    {
+        return Err("typeshed-url must be HTTPS with exactly one {sha} placeholder".to_owned());
+    }
+    let selection = if let Some(path) = config.typeshed_path.as_deref() {
+        SourceSelection::Custom {
+            path: path
+                .to_str()
+                .ok_or_else(|| "typeshed-path is not valid UTF-8".to_owned())?
+                .to_owned(),
+        }
+    } else if let Some(commit) = config.typeshed_commit.as_deref() {
+        SourceSelection::ExactCommit {
+            commit: Oid::from_hex(commit).map_err(|_invalid_oid| {
+                "typeshed-commit must be a full 40-character hex SHA".to_owned()
+            })?,
+        }
+    } else {
+        SourceSelection::Latest
+    };
+    Ok(TypeshedRequest {
+        selection,
+        verify_content: config.typeshed_verify,
+        use_cache: config.typeshed_cache,
+        url_template: config.typeshed_url.clone(),
+    })
 }
 
 /// Load workspace configuration from the given root directory.
@@ -166,6 +244,9 @@ pub fn load_analysis_config(root: &Path) -> WorkspaceConfig {
     cfg.typeshed_path = cfg
         .typeshed_path
         .map(|p| if p.is_absolute() { p } else { root.join(p) });
+    cfg.typeshed_cache_path =
+        cfg.typeshed_cache_path
+            .map(|p| if p.is_absolute() { p } else { root.join(p) });
     cfg
 }
 
@@ -242,7 +323,10 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
     let json: serde_json::Value = serde_json::from_str(&content).ok()?;
     let obj = json.as_object()?;
 
-    let mut cfg = WorkspaceConfig::default();
+    let mut cfg = WorkspaceConfig {
+        typeshed_configuration_error: json_typeshed_type_error(obj),
+        ..WorkspaceConfig::default()
+    };
 
     if let Some(v) = obj.get("pythonVersion").and_then(|v| v.as_str()) {
         cfg.python_version = Some(v.to_owned());
@@ -285,6 +369,41 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
     {
         cfg.typeshed_path = Some(PathBuf::from(v));
     }
+    if let Some(v) = obj
+        .get("typeshedCommit")
+        .or_else(|| obj.get("typeshed-commit"))
+        .and_then(|v| v.as_str())
+    {
+        cfg.typeshed_commit = Some(v.to_owned());
+    }
+    if let Some(v) = obj
+        .get("typeshedUrl")
+        .or_else(|| obj.get("typeshed-url"))
+        .and_then(|v| v.as_str())
+    {
+        cfg.typeshed_url = Some(v.to_owned());
+    }
+    if let Some(v) = obj
+        .get("typeshedCachePath")
+        .or_else(|| obj.get("typeshed-cache-path"))
+        .and_then(|v| v.as_str())
+    {
+        cfg.typeshed_cache_path = Some(PathBuf::from(v));
+    }
+    if let Some(v) = obj
+        .get("typeshedCache")
+        .or_else(|| obj.get("typeshed-cache"))
+        .and_then(serde_json::Value::as_bool)
+    {
+        cfg.typeshed_cache = v;
+    }
+    if let Some(v) = obj
+        .get("typeshedVerify")
+        .or_else(|| obj.get("typeshed-verify"))
+        .and_then(serde_json::Value::as_bool)
+    {
+        cfg.typeshed_verify = v;
+    }
 
     Some(cfg)
 }
@@ -310,12 +429,20 @@ fn load_pyproject_config(path: &Path) -> Option<WorkspaceConfig> {
 ///
 /// Accepts Basilisk's kebab-case spellings and pyright's camelCase equivalents.
 fn workspace_config_from_toml(section: &toml::Table) -> WorkspaceConfig {
-    let mut cfg = WorkspaceConfig::default();
+    let mut cfg = WorkspaceConfig {
+        typeshed_configuration_error: toml_typeshed_type_error(section),
+        ..WorkspaceConfig::default()
+    };
     if let Some(v) = toml_str(section, &["python-version", "pythonVersion"]) {
         cfg.python_version = Some(v.to_owned());
     }
     if let Some(v) = toml_str(section, &["python-platform", "pythonPlatform"]) {
         cfg.python_platform = Some(v.to_owned());
+    }
+    // Explicit interpreter binary — VS Code's `basilisk.python`, or a
+    // `python`/`python-path` config key ([TYPESHEDRT-ACCEPTANCE-TARGET]).
+    if let Some(v) = toml_str(section, &["python", "python-path", "pythonPath"]) {
+        cfg.python_interpreter = Some(PathBuf::from(v));
     }
     if let Some(paths) = toml_paths(section, &["include"]) {
         cfg.include = paths;
@@ -344,6 +471,21 @@ fn workspace_config_from_toml(section: &toml::Table) -> WorkspaceConfig {
     if let Some(v) = toml_str(section, &["typeshed-path", "typeshedPath"]) {
         cfg.typeshed_path = Some(PathBuf::from(v));
     }
+    if let Some(v) = toml_str(section, &["typeshed-commit", "typeshedCommit"]) {
+        cfg.typeshed_commit = Some(v.to_owned());
+    }
+    if let Some(v) = toml_str(section, &["typeshed-url", "typeshedUrl"]) {
+        cfg.typeshed_url = Some(v.to_owned());
+    }
+    if let Some(v) = toml_str(section, &["typeshed-cache-path", "typeshedCachePath"]) {
+        cfg.typeshed_cache_path = Some(PathBuf::from(v));
+    }
+    if let Some(v) = toml_bool(section, &["typeshed-cache", "typeshedCache"]) {
+        cfg.typeshed_cache = v;
+    }
+    if let Some(v) = toml_bool(section, &["typeshed-verify", "typeshedVerify"]) {
+        cfg.typeshed_verify = v;
+    }
     cfg
 }
 
@@ -351,6 +493,68 @@ fn workspace_config_from_toml(section: &toml::Table) -> WorkspaceConfig {
 fn toml_str<'a>(table: &'a toml::Table, keys: &[&str]) -> Option<&'a str> {
     keys.iter()
         .find_map(|key| table.get(*key).and_then(toml::Value::as_str))
+}
+
+/// First boolean value found among the given key spellings.
+fn toml_bool(table: &toml::Table, keys: &[&str]) -> Option<bool> {
+    keys.iter()
+        .find_map(|key| table.get(*key).and_then(toml::Value::as_bool))
+}
+
+fn toml_typeshed_type_error(table: &toml::Table) -> Option<String> {
+    for key in [
+        "typeshed-path",
+        "typeshedPath",
+        "typeshed-commit",
+        "typeshedCommit",
+        "typeshed-url",
+        "typeshedUrl",
+        "typeshed-cache-path",
+        "typeshedCachePath",
+    ] {
+        if table.get(key).is_some_and(|value| !value.is_str()) {
+            return Some(format!("{key} must be a string"));
+        }
+    }
+    for key in [
+        "typeshed-cache",
+        "typeshedCache",
+        "typeshed-verify",
+        "typeshedVerify",
+    ] {
+        if table.get(key).is_some_and(|value| !value.is_bool()) {
+            return Some(format!("{key} must be a boolean"));
+        }
+    }
+    None
+}
+
+fn json_typeshed_type_error(object: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
+    for key in [
+        "typeshed-path",
+        "typeshedPath",
+        "typeshed-commit",
+        "typeshedCommit",
+        "typeshed-url",
+        "typeshedUrl",
+        "typeshed-cache-path",
+        "typeshedCachePath",
+    ] {
+        if object.get(key).is_some_and(|value| !value.is_string()) {
+            return Some(format!("{key} must be a string"));
+        }
+    }
+    for key in [
+        "typeshed-cache",
+        "typeshedCache",
+        "typeshed-verify",
+        "typeshedVerify",
+    ] {
+        if object.get(key).is_some_and(|value| !value.is_boolean()) {
+            return Some(format!("{key} must be a boolean"));
+        }
+    }
+    None
 }
 
 /// First array value found among the given key spellings, as `PathBuf`s.
@@ -367,8 +571,9 @@ fn toml_paths(table: &toml::Table, keys: &[&str]) -> Option<Vec<PathBuf>> {
 
 #[cfg(test)]
 #[expect(
+    clippy::expect_used,
     clippy::unwrap_used,
-    reason = "test-only code: unwrap acceptable in unit tests"
+    reason = "test-only configuration fixtures use explicit assertion messages"
 )]
 mod tests {
     use super::*;
@@ -376,10 +581,49 @@ mod tests {
     #[test]
     fn test_default_config() {
         let cfg = WorkspaceConfig::default();
-        assert_eq!(cfg.python_version.as_deref(), Some("3.12"));
+        assert_eq!(
+            cfg.python_version, None,
+            "[STUBRES-TYPESHED-VERSION] no Python target is manufactured"
+        );
         assert!(cfg.include.is_empty());
         assert!(cfg.exclude.is_empty());
         assert!(cfg.typeshed_path.is_none());
+    }
+
+    /// [STUBRES-TYPESHED-CONFIG]: the LSP consumes the same complete source
+    /// policy as the CLI/config crate; path fields are rooted at the workspace.
+    #[test]
+    fn test_load_runtime_typeshed_policy_from_pyproject() {
+        let dir = std::env::temp_dir().join("basilisk_cfg_typeshed_runtime");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            concat!(
+                "[tool.basilisk]\n",
+                "typeshed-commit = \"83c2518a9e6abbda0c44592c3483de459198f887\"\n",
+                "typeshed-url = \"https://mirror.invalid/{sha}.zip\"\n",
+                "typeshed-cache-path = \".cache/typeshed\"\n",
+                "typeshed-cache = false\n",
+                "typeshed-verify = false\n",
+            ),
+        )
+        .unwrap();
+
+        let cfg = load_analysis_config(&dir);
+        assert_eq!(
+            cfg.typeshed_commit.as_deref(),
+            Some("83c2518a9e6abbda0c44592c3483de459198f887")
+        );
+        assert_eq!(
+            cfg.typeshed_url.as_deref(),
+            Some("https://mirror.invalid/{sha}.zip")
+        );
+        assert_eq!(cfg.typeshed_cache_path, Some(dir.join(".cache/typeshed")));
+        assert!(!cfg.typeshed_cache);
+        assert!(!cfg.typeshed_verify);
+        assert_eq!(cfg.python_version, None);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -415,7 +659,7 @@ mod tests {
         let dir = std::env::temp_dir().join("basilisk_cfg_empty");
         std::fs::create_dir_all(&dir).unwrap();
         let cfg = load_config(&dir);
-        assert_eq!(cfg.python_version.as_deref(), Some("3.12"));
+        assert_eq!(cfg.python_version, None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -531,5 +775,83 @@ mod tests {
         assert_eq!(cfg.extra_paths, vec![PathBuf::from("vendor")]);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn typeshed_request_rejects_raw_source_conflict_and_bad_mirror() {
+        let conflict = WorkspaceConfig {
+            typeshed_path: Some(PathBuf::from("custom")),
+            typeshed_commit: Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
+            ..WorkspaceConfig::default()
+        };
+        assert!(typeshed_request(&conflict)
+            .expect_err("conflicting source settings must fail closed")
+            .contains("mutually exclusive"));
+
+        let mirror = WorkspaceConfig {
+            typeshed_url: Some("http://secret.invalid/{sha}.zip".to_owned()),
+            ..WorkspaceConfig::default()
+        };
+        let error = typeshed_request(&mirror).expect_err("HTTP mirror must fail closed");
+        assert!(error.contains("HTTPS"));
+        assert!(
+            !error.contains("secret.invalid"),
+            "mirror URL must be redacted"
+        );
+    }
+
+    /// [STUBRES-TYPESHED-CONFIG]: an explicitly malformed acquisition key
+    /// cannot disappear into a default Latest/verified/cache-on request.
+    #[test]
+    fn malformed_typeshed_setting_types_fail_closed() {
+        for source in [
+            "typeshed-commit = 42",
+            "typeshed-path = false",
+            "typeshed-cache = \"false\"",
+            "typeshed-verify = \"true\"",
+        ] {
+            let table: toml::Table = source.parse().expect("fixture TOML");
+            let config = workspace_config_from_toml(&table);
+            assert!(
+                typeshed_request(&config).is_err(),
+                "malformed value must fail closed: {source}"
+            );
+        }
+
+        for (key, value) in [
+            ("typeshedCommit", serde_json::json!(42)),
+            ("typeshedPath", serde_json::json!(false)),
+            ("typeshedCache", serde_json::json!("false")),
+            ("typeshedVerify", serde_json::json!("true")),
+        ] {
+            let mut object = serde_json::Map::new();
+            let _ = object.insert(key.to_owned(), value);
+            let config = WorkspaceConfig {
+                typeshed_configuration_error: json_typeshed_type_error(&object),
+                ..WorkspaceConfig::default()
+            };
+            assert!(
+                typeshed_request(&config).is_err(),
+                "malformed JSON value must fail closed: {key}"
+            );
+        }
+    }
+
+    #[test]
+    fn typeshed_request_preserves_exact_policy_controls() {
+        let config = WorkspaceConfig {
+            typeshed_commit: Some("83C2518A9E6ABBDA0C44592C3483DE459198F887".to_owned()),
+            typeshed_url: Some("https://mirror.invalid/{sha}.zip".to_owned()),
+            typeshed_cache: false,
+            typeshed_verify: false,
+            ..WorkspaceConfig::default()
+        };
+        let request = typeshed_request(&config).expect("valid exact request");
+        assert!(matches!(
+            request.selection,
+            basilisk_stubs::typeshed::source::SourceSelection::ExactCommit { .. }
+        ));
+        assert!(!request.use_cache);
+        assert!(!request.verify_content);
     }
 }

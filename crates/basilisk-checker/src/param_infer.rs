@@ -298,6 +298,9 @@ mod imported_globals_tests {
             signature: None,
             provenance: None,
             methods: Vec::new(),
+            bases: Vec::new(),
+            metaclass: None,
+            metaclass_calls: Vec::new(),
         }
     }
 

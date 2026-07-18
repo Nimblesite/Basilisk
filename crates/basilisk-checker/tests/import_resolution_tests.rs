@@ -145,6 +145,7 @@ fn test_extra_paths_searched() {
         site_packages: None,
         registry: None,
         typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("libmod", &paths).unwrap();
     assert!(result.path.ends_with("libmod.py"));
@@ -157,7 +158,10 @@ fn test_extra_paths_searched() {
 fn test_site_packages_searched() {
     let root = make_tmp_dir("bsk_ir_sp_root");
     let sp = make_tmp_dir("bsk_ir_sp_pkgs");
-    fs::write(sp.join("requests.py"), "").unwrap();
+    let requests = sp.join("requests");
+    fs::create_dir_all(&requests).unwrap();
+    fs::write(requests.join("py.typed"), "").unwrap();
+    fs::write(requests.join("__init__.py"), "").unwrap();
 
     let paths = ImportSearchPaths {
         roots: vec![root.clone()],
@@ -167,9 +171,10 @@ fn test_site_packages_searched() {
         site_packages: Some(sp.clone()),
         registry: None,
         typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("requests", &paths).unwrap();
-    assert!(result.path.ends_with("requests.py"));
+    assert!(result.path.ends_with("requests/__init__.py"));
 
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&sp);
@@ -190,6 +195,7 @@ fn test_workspace_root_takes_priority() {
         site_packages: None,
         registry: None,
         typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("dup", &paths).unwrap();
     assert!(result.path.starts_with(&root));
@@ -311,6 +317,7 @@ fn test_stub_paths_searched_before_roots() {
         site_packages: None,
         registry: None,
         typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("mymod", &paths).unwrap();
     // Stub-path .pyi should win over root .py
@@ -335,6 +342,7 @@ fn test_stub_paths_only_pyi() {
         site_packages: None,
         registry: None,
         typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("mymod", &paths);
     assert!(
@@ -361,6 +369,7 @@ fn test_stub_package_resolution() {
         site_packages: Some(sp.clone()),
         registry: None,
         typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("requests", &paths).unwrap();
     assert_eq!(result.resolution, ImportResolution::StubPyi);
@@ -384,6 +393,7 @@ fn test_stub_package_submodule() {
         site_packages: Some(sp.clone()),
         registry: None,
         typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("requests.api", &paths).unwrap();
     assert_eq!(result.resolution, ImportResolution::StubPyi);

@@ -110,8 +110,7 @@ fn resolve_member_patterns(root: &Path, patterns: &[String]) -> Vec<PathBuf> {
     let mut result = Vec::new();
 
     for pattern in patterns {
-        if pattern.ends_with("/*") {
-            let prefix = &pattern[..pattern.len() - 2];
+        if let Some(prefix) = pattern.strip_suffix("/*") {
             let parent = root.join(prefix);
             if let Ok(entries) = std::fs::read_dir(&parent) {
                 for entry in entries.filter_map(Result::ok) {

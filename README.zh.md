@@ -95,7 +95,7 @@ Basilisk 由人类与 AI 的协作打造，并有意地划分了各自的工作�
 Basilisk 建立在开源社区之上 —— 特别感谢：
 
 - **[Astral](https://astral.sh/)** —— [Ruff](https://github.com/astral-sh/ruff)，Basilisk 嵌入了其解析器、AST 与格式化器 crate（MIT）。我们最倚重的基础。
-- **[typeshed](https://github.com/python/typeshed)** —— 标准库类型存根（Apache-2.0）。
+- **[typeshed](https://github.com/python/typeshed)** —— 标准库类型存根（Apache-2.0，部分内容采用 MIT 许可证）。
 - **[Salsa](https://github.com/salsa-rs/salsa)** —— 增量查询引擎。
 - **[Rayon](https://github.com/rayon-rs/rayon)** —— 数据并行。
 - **[tower-lsp](https://github.com/ebkalderon/tower-lsp)** —— LSP 脚手架。

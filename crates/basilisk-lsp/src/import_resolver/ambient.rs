@@ -40,9 +40,44 @@ impl AmbientPythonEnvironment {
     }
 }
 
-pub(super) fn detect_python_site_packages() -> Option<PathBuf> {
+/// Discover ambient `site-packages`.
+///
+/// When an explicit interpreter is configured (VS Code's `basilisk.python` /
+/// `--python`), resolve against **that** interpreter's `site-packages` —
+/// including for cross-version checking ([TYPESHEDRT-ACCEPTANCE-TARGET]).
+/// Otherwise fall back to conventional direct discovery and a `python3` probe.
+pub(super) fn detect_python_site_packages(explicit_interpreter: Option<&Path>) -> Option<PathBuf> {
+    if let Some(interpreter) = explicit_interpreter {
+        return detect_for_interpreter(interpreter, None);
+    }
     let environment = AmbientPythonEnvironment::current();
-    detect_direct(&environment).or_else(detect_with_interpreter)
+    detect_direct(&environment).or_else(|| detect_with_interpreter(Path::new("python3")))
+}
+
+/// `site-packages` for an explicitly configured interpreter binary
+/// ([ANALYSIS-CROSSLSP-IMPORT], [TYPESHEDRT-ACCEPTANCE-TARGET]).
+///
+/// The interpreter's installation prefix is inspected first — no process spawn,
+/// so it is deterministic and covers the venv / cross-version case; a `sys.path`
+/// probe of the binary itself is the fallback for custom layouts.
+pub(super) fn detect_for_interpreter(
+    interpreter: &Path,
+    target_version: Option<&str>,
+) -> Option<PathBuf> {
+    interpreter_prefix(interpreter)
+        .and_then(|prefix| super::site_packages_in_dir_for_version(&prefix, target_version))
+        .or_else(|| detect_with_interpreter(interpreter))
+}
+
+/// Installation prefix of an interpreter binary: strip a trailing `bin`/
+/// `Scripts` directory (`<prefix>/bin/python` → `<prefix>`), otherwise the
+/// binary's own directory (`<prefix>/python.exe` → `<prefix>`).
+fn interpreter_prefix(interpreter: &Path) -> Option<PathBuf> {
+    let parent = interpreter.parent()?;
+    match parent.file_name().and_then(std::ffi::OsStr::to_str) {
+        Some("bin" | "Scripts") => parent.parent().map(Path::to_path_buf),
+        _ => Some(parent.to_path_buf()),
+    }
 }
 
 /// Resolve the same conventional entries Python's `site` module adds, without
@@ -197,8 +232,8 @@ fn existing_directory(path: PathBuf) -> Option<PathBuf> {
 /// Custom Python builds can rewrite `sys.path` arbitrarily. Preserve the prior
 /// interpreter-backed discovery when conventional direct lookup cannot prove a
 /// valid directory.
-fn detect_with_interpreter() -> Option<PathBuf> {
-    let output = std::process::Command::new("python3")
+fn detect_with_interpreter(interpreter: &Path) -> Option<PathBuf> {
+    let output = std::process::Command::new(interpreter)
         .args(["-c", "import sys; print('\\n'.join(sys.path))"])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
@@ -252,6 +287,52 @@ mod tests {
             Some("3.14".to_owned())
         );
         assert_eq!(parse_python_version_component("python3"), None);
+    }
+
+    /// [TYPESHEDRT-ACCEPTANCE-TARGET] explicit Python-binary override: an
+    /// explicitly configured interpreter resolves against *its own*
+    /// `site-packages` from the prefix layout, with no process spawn — the
+    /// deterministic cross-version case.
+    #[test]
+    fn detect_for_interpreter_resolves_explicit_binary_site_packages(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let root = tempfile::tempdir()?;
+        let prefix = root.path().join("venv");
+        // Creates <prefix>/bin/python3 + <prefix>/lib/python3.11/site-packages.
+        let interpreter = fake_python(&prefix, "3.11")?;
+        let expected = prefix.join("lib/python3.11/site-packages");
+        assert_eq!(detect_for_interpreter(&interpreter, None), Some(expected));
+        Ok(())
+    }
+
+    /// A different interpreter version selects that version's `site-packages`,
+    /// proving cross-version resolution follows the explicit binary
+    /// ([TYPESHEDRT-ACCEPTANCE-TARGET]).
+    #[test]
+    fn detect_for_interpreter_is_version_specific() -> Result<(), Box<dyn std::error::Error>> {
+        let root = tempfile::tempdir()?;
+        let prefix = root.path().join("venv");
+        let interpreter = fake_python(&prefix, "3.9")?;
+        assert_eq!(
+            detect_for_interpreter(&interpreter, Some("3.9")),
+            Some(prefix.join("lib/python3.9/site-packages"))
+        );
+        Ok(())
+    }
+
+    /// An interpreter with neither a prefix `site-packages` layout nor a
+    /// runnable binary yields `None` rather than a manufactured path
+    /// ([TYPESHEDRT-ACCEPTANCE-TARGET]).
+    #[test]
+    fn detect_for_interpreter_without_layout_returns_none() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let root = tempfile::tempdir()?;
+        let bin = root.path().join("bin");
+        std::fs::create_dir_all(&bin)?;
+        let interpreter = bin.join(format!("python3{}", std::env::consts::EXE_SUFFIX));
+        std::fs::write(&interpreter, [])?;
+        assert_eq!(detect_for_interpreter(&interpreter, None), None);
+        Ok(())
     }
 
     #[test]

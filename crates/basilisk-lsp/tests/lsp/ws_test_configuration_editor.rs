@@ -179,7 +179,9 @@ async fn configuration_snapshot_reflects_live_diagnostics() -> TestResult<()> {
         .and_then(serde_json::Value::as_i64)
         .is_some_and(|total| total >= 1));
     // Project source reflects the real active document.
-    let source = snapshot.get("source").ok_or("source missing from snapshot")?;
+    let source = snapshot
+        .get("source")
+        .ok_or("source missing from snapshot")?;
     assert!(source
         .get("uri")
         .and_then(serde_json::Value::as_str)
