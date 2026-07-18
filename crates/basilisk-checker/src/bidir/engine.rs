@@ -47,6 +47,24 @@ impl BidirEngine {
         solve(self.vars, self.constraints.into_vec())
     }
 
+    /// Allocate a fresh variable — the parameter-inference entry point
+    /// (issue #317, [`crate::param_infer`]).
+    pub fn fresh_param_var(&mut self, polarity: Polarity) -> super::tyvar::TyVarId {
+        self.vars.fresh(polarity)
+    }
+
+    /// Bind a name in the OUTERMOST scope (module globals / parameters).
+    pub fn bind_global(&mut self, name: &str, ty: Ty) {
+        if let Some(scope) = self.scopes.first_mut() {
+            let _ = scope.insert(name.to_owned(), ty);
+        }
+    }
+
+    /// Record call-site evidence: a lower bound directly on a variable.
+    pub fn add_var_lower_bound(&mut self, var: super::tyvar::TyVarId, ty: Ty) {
+        self.vars.add_lower(var, ty);
+    }
+
     /// Look a name up through the scope stack, innermost first.
     pub(super) fn lookup(&self, name: &str) -> Option<Ty> {
         self.scopes

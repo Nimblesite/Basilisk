@@ -481,9 +481,17 @@ reproducible, write-always, ratcheted:
   onto it at the Integration stage.
 - [ ] Reuse the same inference results for diagnostics, hover, completions, and
   inlay hints.
-- [ ] Infer unannotated parameter types from body constraints and call sites
+- [x] Infer unannotated parameter types from body constraints and call sites
   so `BSK-0001` becomes unnecessary where types are recoverable (issue
   [#317](https://github.com/MelbourneDeveloper/Basilisk/issues/317)).
+  — Pure core in `crates/basilisk-checker/src/param_infer.rs`: parameters
+  bind to input-polarity variables; BODY constraints (passing `p` to a
+  callee with a declared parameter type) accumulate demands, same-module
+  CALL SITES accumulate lower bounds, and resolution follows input
+  polarity (demand wins, else union of flows, else `Unknown` — never a
+  guess). Wiring into the `BSK-0001` exemption happens at the Integration
+  stage, where the [TYPEINF-EXCEEDS-REQUIRED] predicate widens in
+  lockstep with this inference.
 - [ ] Build the curated container/comprehension/lambda benchmark and the
   targeted higher-order (`map`/`filter`/decorators/`ParamSpec`) benchmark.
 
