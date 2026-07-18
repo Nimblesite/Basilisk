@@ -21,6 +21,7 @@
 //! until Stage 1 introduces finer-grained queries, where the checklist's
 //! peek-ahead fallback would be reconsidered per construct.
 
+pub mod builtins;
 pub mod check;
 pub mod constraints;
 pub mod engine;
@@ -286,5 +287,124 @@ mod tests {
 
         let bad = check_and_solve("(1, \"x\")", &expected);
         assert_eq!(bad.errors.len(), 1, "{:?}", bad.errors);
+    }
+}
+
+#[cfg(test)]
+mod expression_inference_tests {
+    #![expect(
+        clippy::expect_used,
+        reason = "test-only parsing of fixed, known-valid expression fixtures"
+    )]
+
+    use std::collections::HashMap;
+
+    use crate::types::{InferredType, LiteralValue};
+
+    use super::{BidirEngine, Ty};
+
+    fn synth(source: &str, globals: HashMap<String, Ty>) -> InferredType {
+        let module = ruff_python_parser::parse_expression(source)
+            .map(ruff_python_parser::Parsed::into_syntax)
+            .expect("test expression must parse");
+        let mut engine = BidirEngine::new(globals);
+        let ty = engine.synth(&module.body);
+        let solution = engine.finish();
+        ty.to_inferred(&solution.vars)
+    }
+
+    /// Builtin calls answer from the centralized table
+    /// ([NARROWPLAN-CHECKLIST]: no rule-local string tables).
+    #[test]
+    fn builtin_calls_use_the_central_table() {
+        assert_eq!(synth("len(x)", HashMap::new()), InferredType::Int);
+        assert_eq!(synth("str(3)", HashMap::new()), InferredType::Str);
+        assert_eq!(
+            synth("isinstance(x, int)", HashMap::new()),
+            InferredType::Bool
+        );
+        assert_eq!(
+            synth("sorted(items)", HashMap::new()),
+            InferredType::List(Box::new(InferredType::Unknown))
+        );
+    }
+
+    /// Builtin method calls infer from the receiver's synthesized type.
+    #[test]
+    fn builtin_methods_infer_from_receiver() {
+        assert_eq!(
+            synth("\"a b\".split()", HashMap::new()),
+            InferredType::List(Box::new(InferredType::Str))
+        );
+        assert_eq!(synth("\"x\".upper()", HashMap::new()), InferredType::Str);
+        assert_eq!(synth("[1, 2].count(1)", HashMap::new()), InferredType::Int);
+        let globals: HashMap<String, Ty> = [(
+            "table".to_owned(),
+            Ty::from_inferred(&InferredType::Dict(
+                Box::new(InferredType::Str),
+                Box::new(InferredType::Int),
+            )),
+        )]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            synth("table.get(key)", globals),
+            InferredType::Optional(Box::new(InferredType::Int))
+        );
+    }
+
+    /// Constructor calls on user classes yield the class instance type.
+    #[test]
+    fn constructor_calls_yield_instances() {
+        let globals: HashMap<String, Ty> = [(
+            "Point".to_owned(),
+            Ty::Ground(InferredType::Named("point".to_owned())),
+        )]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            synth("Point(1, 2)", globals),
+            InferredType::Named("point".to_owned())
+        );
+    }
+
+    /// Subscript inference: list element, dict value, tuple position, str.
+    #[test]
+    fn subscripts_extract_element_types() {
+        let globals: HashMap<String, Ty> = [
+            (
+                "xs".to_owned(),
+                Ty::from_inferred(&InferredType::List(Box::new(InferredType::Int))),
+            ),
+            (
+                "d".to_owned(),
+                Ty::from_inferred(&InferredType::Dict(
+                    Box::new(InferredType::Str),
+                    Box::new(InferredType::Float),
+                )),
+            ),
+            (
+                "pair".to_owned(),
+                Ty::from_inferred(&InferredType::Tuple(vec![
+                    InferredType::Int,
+                    InferredType::Str,
+                ])),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(synth("xs[0]", globals.clone()), InferredType::Int);
+        assert_eq!(synth("d[k]", globals.clone()), InferredType::Float);
+        assert_eq!(synth("pair[1]", globals.clone()), InferredType::Str);
+        assert_eq!(
+            synth("xs[1:2]", globals),
+            InferredType::List(Box::new(InferredType::Int)),
+            "slicing a list yields the list type"
+        );
+        assert_eq!(
+            synth("[1][0]", HashMap::new()),
+            InferredType::Literal(LiteralValue::Int(1)),
+            "literal list subscript keeps deferred-generalization precision"
+        );
     }
 }

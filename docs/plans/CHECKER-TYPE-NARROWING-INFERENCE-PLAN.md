@@ -472,8 +472,13 @@ reproducible, write-always, ratcheted:
 - [ ] Infer same-module and imported function/method return types.
 - [ ] Infer constructor, attribute, subscript, binary/unary, conditional, and
   walrus expressions from structured AST data.
-- [ ] Centralize builtin constructor/method signatures instead of adding
+- [x] Centralize builtin constructor/method signatures instead of adding
   rule-local string tables.
+  — `crates/basilisk-checker/src/bidir/builtins.rs`: one table for builtin
+  call returns and `str`/`list`/`dict`/`set` method returns, consumed by
+  the engine's call synthesis; argument-dependent builtins deliberately
+  stay `Unknown` rather than guessed. Existing rule-local tables migrate
+  onto it at the Integration stage.
 - [ ] Reuse the same inference results for diagnostics, hover, completions, and
   inlay hints.
 - [ ] Infer unannotated parameter types from body constraints and call sites

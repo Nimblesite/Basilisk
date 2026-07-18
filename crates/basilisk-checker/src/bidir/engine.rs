@@ -101,6 +101,7 @@ impl BidirEngine {
             Expr::ListComp(comp) => self.synth_comprehension(&comp.generators, &comp.elt, Ty::List),
             Expr::SetComp(comp) => self.synth_comprehension(&comp.generators, &comp.elt, Ty::Set),
             Expr::DictComp(comp) => self.synth_dict_comprehension(comp),
+            Expr::Subscript(subscript) => self.synth_subscript(subscript),
             _ => Ty::unknown(),
         }
     }
@@ -227,7 +228,7 @@ impl BidirEngine {
             for arg in &call.arguments.args {
                 let _ = self.synth(arg);
             }
-            return Ty::unknown();
+            return self.non_callable_call_result(call, &callee);
         };
         for (arg, param) in call.arguments.args.iter().zip(&params) {
             self.check_with_reason(arg, param, ConstraintReason::CallArgument);
@@ -236,6 +237,52 @@ impl BidirEngine {
             let _ = self.synth(arg);
         }
         *ret
+    }
+
+    /// A call whose callee did not synthesize to a `Callable`: builtin
+    /// functions/constructors (via the centralized table in
+    /// [`super::builtins`]), builtin METHOD calls on known receivers, and
+    /// user-class constructors (`Named` callee → `Named` instance).
+    fn non_callable_call_result(&mut self, call: &ruff_python_ast::ExprCall, callee: &Ty) -> Ty {
+        // Constructor: a class object used as a callee yields an instance.
+        // (`Named` deliberately conflates class/instance at Stage 2 — the
+        // display value is right and no rule enforces it yet.)
+        if let Ty::Ground(InferredType::Named(name)) = callee {
+            return Ty::Ground(InferredType::Named(name.clone()));
+        }
+        match call.func.as_ref() {
+            Expr::Name(name) => super::builtins::builtin_call_return(name.id.as_str())
+                .map_or_else(Ty::unknown, Ty::Ground),
+            Expr::Attribute(attribute) => {
+                let receiver = self.synth(&attribute.value).to_inferred(&self.vars);
+                super::builtins::builtin_method_return(&receiver, attribute.attr.as_str())
+                    .map_or_else(Ty::unknown, Ty::Ground)
+            }
+            _ => Ty::unknown(),
+        }
+    }
+
+    /// `x[i]`: element extraction for known container shapes.
+    fn synth_subscript(&mut self, subscript: &ruff_python_ast::ExprSubscript) -> Ty {
+        let receiver = self.synth(&subscript.value);
+        let index = self.synth(&subscript.slice);
+        match (&receiver, &index) {
+            (Ty::List(elem), _) if !matches!(subscript.slice.as_ref(), Expr::Slice(_)) => {
+                (**elem).clone()
+            }
+            (Ty::List(_), _) => receiver.clone(),
+            (Ty::Dict(_, value), _) => (**value).clone(),
+            (Ty::Tuple(elems), Ty::Ground(InferredType::Literal(LiteralValue::Int(position)))) => {
+                usize::try_from(*position)
+                    .ok()
+                    .and_then(|index| elems.get(index).cloned())
+                    .unwrap_or_else(Ty::unknown)
+            }
+            (Ty::Ground(InferredType::Str | InferredType::LiteralString), _) => {
+                Ty::Ground(InferredType::Str)
+            }
+            _ => Ty::unknown(),
+        }
     }
 
     /// `a or b`, `a and b`: the union of operand types (truthiness-based
