@@ -19,9 +19,7 @@ class BookContractTests(unittest.TestCase):
         """The book must not declare one Python release as canonical."""
         book = json.loads((BOOK_ROOT / "book.json").read_text(encoding="utf-8"))
         metadata = (BOOK_ROOT / "metadata.yaml").read_text(encoding="utf-8")
-        editorial_brief = (BOOK_ROOT / "EDITORIAL-BRIEF.md").read_text(
-            encoding="utf-8"
-        )
+        editorial_brief = (BOOK_ROOT / "EDITORIAL-BRIEF.md").read_text(encoding="utf-8")
         outline = (BOOK_ROOT / "OUTLINE.md").read_text(encoding="utf-8")
         repository_instructions = (REPOSITORY_ROOT / "CLAUDE.md").read_text(
             encoding="utf-8"
