@@ -294,3 +294,20 @@ synthesized = synth_only()
         "the callee's SYNTHESIZED return flows into the variable"
     );
 }
+
+/// Plain attribute loads on user-class instances answer from the class's
+/// annotated attribute schema (constructor + attribute inference composed).
+#[test]
+fn attribute_loads_answer_from_class_schemas() {
+    let db = EventDb::default();
+    let source = r"class Point:
+    x: float
+    y: float
+
+origin_x = Point().x
+";
+    let file = SourceFile::new(&db, "m.py".to_owned(), source.to_owned());
+    let defs = definitions(&db, file);
+    let origin_x = defs.get(1).copied().expect("origin_x");
+    assert_eq!(definition_type(&db, origin_x), InferredType::Float);
+}

@@ -320,9 +320,65 @@ fn synth_expression<'db>(db: &'db dyn Db, def: Definition<'db>, expr: &Expr) -> 
             .map(|(name, ty)| (name.clone(), crate::bidir::Ty::from_inferred(ty)))
             .collect();
     let mut engine = BidirEngine::new(globals);
+    engine.set_class_attributes(
+        class_attribute_interface(db, def.file(db))
+            .0
+            .iter()
+            .map(|(class, attrs)| (class.clone(), attrs.iter().cloned().collect()))
+            .collect(),
+    );
     let ty = engine.synth(expr);
     let solution = engine.finish();
     ty.to_inferred(&solution.vars)
+}
+
+/// A module's class-attribute schemas — the value of
+/// [`class_attribute_interface`]. `PartialEq` gives backdating: attribute
+/// edits that leave the schema unchanged never invalidate consumers.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ClassAttributeInterface(pub Vec<(String, Vec<(String, InferredType)>)>);
+
+/// Tracked query: lowercased class name → annotated class-level attributes,
+/// from each class definition's slice (plain attribute-load inference,
+/// [NARROWPLAN-CHECKLIST] expression inference). `self.attr` assignments in
+/// `__init__` are a follow-up; class-level `AnnAssign` covers the declared
+/// schema surface.
+#[salsa::tracked(returns(ref))]
+pub fn class_attribute_interface(db: &dyn Db, file: SourceFile) -> ClassAttributeInterface {
+    ClassAttributeInterface(
+        definitions(db, file)
+            .iter()
+            .filter(|def| def.kind(db) == DefKind::Class)
+            .filter_map(|def| {
+                let slice = def.source(db);
+                let attrs = class_level_attributes(slice)?;
+                Some((def.name(db).to_ascii_lowercase(), attrs))
+            })
+            .collect(),
+    )
+}
+
+/// Parse a class slice and collect its class-level annotated attributes.
+fn class_level_attributes(slice: &str) -> Option<Vec<(String, InferredType)>> {
+    let parsed = ruff_python_parser::parse_module(slice).ok()?;
+    let Some(Stmt::ClassDef(class)) = parsed.syntax().body.first() else {
+        return None;
+    };
+    let attrs: Vec<(String, InferredType)> = class
+        .body
+        .iter()
+        .filter_map(|stmt| match stmt {
+            Stmt::AnnAssign(assign) => match assign.target.as_ref() {
+                Expr::Name(name) => Some((
+                    name.id.to_string(),
+                    annotation_type(slice, Some(&assign.annotation)),
+                )),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    Some(attrs)
 }
 
 /// Tracked query: the `(name, type)` interface of the module's FUNCTIONS and

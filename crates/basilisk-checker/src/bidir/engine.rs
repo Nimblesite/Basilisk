@@ -27,6 +27,10 @@ pub struct BidirEngine {
     pub(super) vars: TyVarStore,
     pub(super) constraints: ConstraintSet,
     scopes: Vec<HashMap<String, Ty>>,
+    /// Lowercased class name → (attribute → type), for plain attribute-load
+    /// synthesis on user classes (`Point().x`). Empty unless the caller
+    /// provides module class schemas via [`BidirEngine::set_class_attributes`].
+    class_attributes: HashMap<String, HashMap<String, InferredType>>,
 }
 
 impl BidirEngine {
@@ -38,7 +42,14 @@ impl BidirEngine {
             vars: TyVarStore::default(),
             constraints: ConstraintSet::default(),
             scopes: vec![globals],
+            class_attributes: HashMap::new(),
         }
+    }
+
+    /// Provide the module's class-attribute schemas for plain attribute-load
+    /// synthesis (`instance.attr`).
+    pub fn set_class_attributes(&mut self, table: HashMap<String, HashMap<String, InferredType>>) {
+        self.class_attributes = table;
     }
 
     /// Solve everything recorded so far and return the outcome.
@@ -120,6 +131,7 @@ impl BidirEngine {
             Expr::SetComp(comp) => self.synth_comprehension(&comp.generators, &comp.elt, Ty::Set),
             Expr::DictComp(comp) => self.synth_dict_comprehension(comp),
             Expr::Subscript(subscript) => self.synth_subscript(subscript),
+            Expr::Attribute(attribute) => self.synth_attribute(attribute),
             _ => Ty::unknown(),
         }
     }
@@ -278,6 +290,20 @@ impl BidirEngine {
             }
             _ => Ty::unknown(),
         }
+    }
+
+    /// `obj.attr`: a plain attribute LOAD — user-class attributes answer
+    /// from the provided class schemas; anything else stays `Unknown`
+    /// (method CALLS resolve separately through the builtin table).
+    fn synth_attribute(&mut self, attribute: &ruff_python_ast::ExprAttribute) -> Ty {
+        let receiver = self.synth(&attribute.value).to_inferred(&self.vars);
+        let InferredType::Named(class_name) = receiver else {
+            return Ty::unknown();
+        };
+        self.class_attributes
+            .get(&class_name)
+            .and_then(|attributes| attributes.get(attribute.attr.as_str()))
+            .map_or_else(Ty::unknown, |ty| Ty::Ground(ty.clone()))
     }
 
     /// `x[i]`: element extraction for known container shapes.

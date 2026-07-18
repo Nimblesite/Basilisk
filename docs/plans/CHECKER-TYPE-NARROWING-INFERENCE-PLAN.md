@@ -478,8 +478,14 @@ reproducible, write-always, ratcheted:
   `Callable[..., R]` from their return annotation, classes → instance form,
   variables → their annotation) into engine scope. Builtin METHOD returns
   come from the centralized table.
-- [ ] Infer constructor, attribute, subscript, binary/unary, conditional, and
+- [x] Infer constructor, attribute, subscript, binary/unary, conditional, and
   walrus expressions from structured AST data.
+  — All in the bidirectional engine over the ruff AST: constructors
+  (`Named` callee → instance), plain attribute loads via per-module class
+  schemas (`class_attribute_interface`, backdated; `Point().x` → `float`),
+  subscripts (list/dict/tuple-position/str with literal-index precision),
+  the binary/unary tables, conditional unions, and walrus binding.
+  `self.attr` assignments in `__init__` extend the schema as a follow-up.
 - [x] Centralize builtin constructor/method signatures instead of adding
   rule-local string tables.
   — `crates/basilisk-checker/src/bidir/builtins.rs`: one table for builtin
