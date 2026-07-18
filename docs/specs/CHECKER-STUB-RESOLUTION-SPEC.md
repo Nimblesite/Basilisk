@@ -57,7 +57,81 @@ mandated by the Python typing specification —
 [Distributing type information → Import resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)
 (the normative successor to [PEP 561](https://peps.python.org/pep-0561/)).
 The table maps that upstream order to Basilisk; the linked typing specification
-is authoritative for the general rule.
+is authoritative for the general rule. Its full normative text is reproduced
+verbatim in [§STUBRES-PEP561-NORMATIVE](#STUBRES-PEP561-NORMATIVE) so the mapping
+can be checked against the source directly, not paraphrased.
+
+### Normative text, verbatim {#STUBRES-PEP561-NORMATIVE}
+
+Quoted in full (no elision of any step) so Basilisk's behaviour can be audited
+against the letter of the specification. Source pinned to
+[`python/typing@6ef9f77` · `docs/spec/distributing.rst`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)
+(rendered: [Distributing type information → Import resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)).
+Verify the pin before relying on it: the SHA is a fixed point in history, and
+`main` may have advanced.
+
+**Import resolution ordering** — the complete ordered list, verbatim:
+
+> The following is the order in which type checkers supporting this specification
+> SHOULD resolve modules containing type information:
+>
+> 1. Stubs or Python source manually put in the beginning of the path. Type
+>    checkers SHOULD provide this to allow the user complete control of which
+>    stubs to use, and to patch broken stubs or inline types from packages. In
+>    mypy the `$MYPYPATH` environment variable can be used for this.
+> 2. User code - the files the type checker is running on.
+> 3. Typeshed stubs for the standard library. These will usually be vendored by
+>    type checkers, but type checkers SHOULD provide an option for users to
+>    provide a path to a directory containing a custom or modified version of
+>    typeshed; if this option is provided, type checkers SHOULD use this as the
+>    canonical source for standard-library types in this step.
+> 4. Stub packages - these packages SHOULD supersede any installed inline
+>    package. They can be found in directories named `foopkg-stubs` for package
+>    `foopkg`.
+> 5. Packages with a `py.typed` marker file - if there is nothing overriding the
+>    installed package, *and* it opts into type checking, the types bundled with
+>    the package SHOULD be used (be they in `.pyi` type stub files or inline in
+>    `.py` files).
+> 6. If the type checker chooses to additionally vendor any third-party stubs
+>    (from typeshed or elsewhere), these SHOULD come last in the module
+>    resolution order.
+
+**Stub files, `py.typed`, the `-stubs` naming scheme, partial stubs, and `.pyi`
+precedence** — the remaining normative clauses this spec relies on, verbatim from
+the same source (bracketed `[…]` marks where non-normative prose between
+sentences is omitted; no normative sentence is cut):
+
+> Package maintainers who wish to support type checking of their code MUST add a
+> marker file named `py.typed` to their package supporting typing. This marker
+> applies recursively: if a top-level package includes it, all its sub-packages
+> MUST support type checking as well.
+
+> The name of the stub package MUST follow the scheme `foopkg-stubs` for type
+> stubs for the package named `foopkg`. […] For stub-only packages adding a
+> `py.typed` marker is not needed since the name `*-stubs` is enough to indicate
+> it is a source of typing information.
+
+> If a stub package distribution is partial it MUST include `partial\n` in a
+> `py.typed` file. […] Type checkers should treat namespace packages within
+> stub-packages as incomplete since multiple distributions may populate them.
+> Regular packages within namespace packages in stub-package distributions are
+> considered complete unless a `py.typed` with `partial\n` is included.
+
+> Type checkers MUST maintain the normal resolution order of checking `*.pyi`
+> before `*.py` files.
+
+Every row of the mapping below corresponds to one numbered step above. Where
+Basilisk adds behaviour — the **runtime clone** for step 3, the **"install
+stubs" quick fix** driven by the step-6 distribution map — it does so strictly
+within the `SHOULD`/`MAY` latitude the text grants ("**usually** be vendored",
+"**if** the type checker chooses to additionally vendor"), and never in conflict
+with a `MUST`. The step-3 custom-typeshed `SHOULD` is honoured by `typeshed-path`
+([§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)); the `.pyi`-before-`.py`
+`MUST` and the `-stubs` / `py.typed` / `partial\n` `MUST`s are honoured by the
+discovery engine ([§STUBRES-ENGINE](#STUBRES-ENGINE)) and the parser
+([§STUBRES-PYI](#STUBRES-PYI)).
+
+### Basilisk mapping {#STUBRES-PEP561-MAPPING}
 
 | Spec step | Basilisk mechanism | Config key |
 |---|---|---|
@@ -316,6 +390,33 @@ raises the CLI warning ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)).
 Precedence among the path keys is unambiguous: `typeshed-path` (your tree, no
 clone) wins; otherwise the clone is stored at `typeshed-cache-path` and pinned/
 refreshed per `typeshed-commit` / `typeshed-refresh-interval`.
+
+#### Target Python version {#STUBRES-TYPESHED-VERSION}
+
+The typeshed commit and the target Python version (`python-version`,
+[CHKARCH-VERSION-TARGET](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET),
+default `3.12`) are orthogonal: one typeshed tree serves a *range* of versions and
+the target selects within it — typeshed is never branched per version. Two
+evaluations the typing spec requires, and that the checker already performs, apply
+unchanged:
+
+- **Availability** — a stdlib module resolves only when `python-version` is inside
+  its `stdlib/VERSIONS` range (typeshed: *"the versions of Python where the module
+  is available"*); outside it, `imports_unresolved` fires with the
+  `WrongPythonVersion` reason (`rules/imports_unresolved.rs`).
+- **Guards** — `sys.version_info` / `sys.platform` branches are evaluated for the
+  target, **not** unioned, per the typing spec's requirement that checkers
+  *"understand simple version and platform checks"*
+  ([directives](https://typing.python.org/en/latest/spec/directives.html#version-and-platform-checking));
+  `rules/directives_version_platform.rs` does this. (The branch-unioning in
+  [§STUBRES-PYI-REEXPORTS](#STUBRES-PYI-REEXPORTS) is a separate, narrow
+  attribute-existence over-approximation, never availability or type.)
+
+Consequence: the **resolved typeshed's support window bounds accurate stdlib
+coverage.** `main` is currently 3.10–3.14 ([typeshed README](https://github.com/python/typeshed/blob/main/README.md)),
+so targeting an older version (e.g. `3.9`) requires pinning `typeshed-commit`
+([§STUBRES-TYPESHED-CLONE](#STUBRES-TYPESHED-CLONE)) to a commit that still carried
+it. Basilisk MUST NOT advertise accurate stdlib coverage outside that window.
 
 ### .pyi File Parsing {#STUBRES-PYI}
 

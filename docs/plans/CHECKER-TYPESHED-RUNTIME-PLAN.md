@@ -53,23 +53,46 @@ checkout-at-SHA, hard-reset, and clean in-process. Keep it isolated behind a
   ([CHKARCH-TESTING-BENCH-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET))
   decides.
 
-### 2. Cache manager (`basilisk-stubs`) {#TYPESHEDRT-CACHE}
-- `TypeshedCache::acquire(config)`:
-  1. If `typeshed-path` set → use it verbatim, no clone (custom source).
+### 2. Acquire step — one function, NO manager (`basilisk-stubs`) {#TYPESHEDRT-CACHE}
+
+The "cache" is **nothing but the cloned `python/typeshed` folder on disk**. It has
+exactly three states, and acquisition is a **single function over that
+trichotomy** — there is **no** stateful cache manager / `Store` subsystem, no
+eviction, no LRU, no bookkeeping.
+
+- `acquire(config) -> TypeshedSource`:
+  1. If `typeshed-path` set → use it verbatim, no clone. This is the typing spec's
+     custom **"canonical source"** override ([distributing §Import resolution
+     ordering, step 3](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
   2. Else resolve cache dir (`typeshed-cache-path` or OS cache default).
-  3. If absent → clone `python/typeshed`. If present and unpinned and older than
-     `typeshed-refresh-interval` → fetch + reset. If pinned → checkout SHA once,
-     never poll.
+  3. **MISSING** (absent, or a half-cloned/corrupt tree) → clone. **OUT-OF-DATE**
+     (present, unpinned, older than `typeshed-refresh-interval`) → fetch + reset.
+     **CURRENT** (pinned, or within TTL) → use as-is, no network.
   4. Always finish with `clean -x -f -d` + `reset --hard <target>`.
-  5. On acquire/refresh failure, return the existing on-disk clone if one is
-     present — a `Clone` source with `stale: true`, resolved silently, **no**
-     baseline warning; return `Baseline { reason }` **only** when no clone has
-     ever been acquired. Never error out
+  5. On clone/fetch failure, return the existing on-disk clone if present — a
+     `Clone` with `stale: true`, resolved silently, **no** baseline warning;
+     return `Baseline` **only** when no clone was ever acquired. Never error out
      ([§STUBRES-TYPESHED-CLONE](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CLONE) is authoritative).
-- Returns a `TypeshedSource { Clone { path, commit, committed_at, stale } | Baseline { baseline_date } }`
-  consumed by the resolver and surfaced by the freshness reporter — `stale`
-  drives the dim-amber *cloned but stale* line, distinct from the baseline
-  warning ([§STUBRES-TYPESHED-WARN](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
+- Returns `TypeshedSource { Clone { path, commit, committed_at, stale } | Baseline { baseline_date } }`.
+  `Clone` carries real `.pyi` bodies; `Baseline` is **names-only module
+  recognition** (typeshed `VERSIONS` format, no bodies) so no consumer trusts
+  absent stub data. `stale` drives the dim-amber *cloned but stale* line, distinct
+  from the baseline warning ([§STUBRES-TYPESHED-WARN](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
+
+**Concurrency is LSP-only and conformance-invisible.** A long-running LSP that
+shares the cache dir with a CLI run needs exactly two mechanics, and both live
+*inside* `acquire()` — neither promotes it to a subsystem:
+
+- **Atomic promotion** — clone/update into a temp dir, then atomic-rename into
+  place, so a concurrent reader never sees a half-`reset --hard` tree.
+- **Advisory process lockfile** — so the LSP and a CLI invocation never `git
+  fetch` the same folder at once; the loser waits and reads the result.
+
+Both MUST be **resolution-neutral**: they change *timing*, never *which types
+resolve*. The conformance harness is a single `src/main.py` invocation over static
+fixtures — one process, one shot, no concurrent readers, no mid-run reset — so
+neither mechanic is ever exercised by it and neither can move the score
+([CHKARCH-CONFORMANCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
 
 ### 3. Config keys (`basilisk-config`, `basilisk-lsp`) {#TYPESHEDRT-CONFIG}
 - Add to `crates/basilisk-config/src/parse.rs` + `crates/basilisk-lsp/src/config.rs`:
