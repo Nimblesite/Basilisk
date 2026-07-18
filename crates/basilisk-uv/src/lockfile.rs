@@ -46,7 +46,11 @@ pub struct LockPackage {
     pub name: String,
 
     /// Resolved version string.
-    pub version: String,
+    ///
+    /// Lockfile revision 3 omits this for editable workspace members with
+    /// dynamic versioning (e.g. Airflow's `apache-airflow-ctl`).
+    #[serde(default)]
+    pub version: Option<String>,
 
     /// Source information (registry, editable path, etc.).
     #[serde(default)]
@@ -279,6 +283,39 @@ source = { editable = "../my-editable" }
         assert_eq!(lock.version, 1);
         assert!(lock.requires_python.is_none());
         assert!(lock.packages.is_empty());
+    }
+
+    // [LSPUV-LOCK-EXTRACT]: lockfile revision 3 omits `version` for editable
+    // workspace members with dynamic versioning (e.g. apache-airflow-ctl in
+    // Airflow's uv.lock). Parsing must tolerate the absent field instead of
+    // rejecting the whole lock file (issue #320).
+    #[test]
+    fn parses_revision3_package_without_version() {
+        let content = r#"
+version = 1
+revision = 3
+requires-python = ">=3.10"
+
+[[package]]
+name = "apache-airflow-ctl"
+source = { editable = "airflow-ctl" }
+dependencies = [
+    { name = "argcomplete" },
+]
+
+[[package]]
+name = "argcomplete"
+version = "3.5.3"
+source = { registry = "https://pypi.org/simple" }
+"#;
+        let lock = toml::from_str::<LockFile>(content).unwrap();
+
+        assert_eq!(lock.packages.len(), 2);
+        let member = pkg(&lock, "apache-airflow-ctl");
+        assert_eq!(
+            member.source.as_ref().unwrap().editable.as_deref(),
+            Some("airflow-ctl")
+        );
     }
 
     #[test]

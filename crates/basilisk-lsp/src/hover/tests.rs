@@ -112,7 +112,12 @@ fn test_hover_on_method_inherited_from_external_stub_base_shows_signature() {
         import.resolution = ImportResolution::StubPyi;
         import.resolved_path = Some(stub_path);
     }
-    basilisk_checker::exports::populate_imported_symbols(&mut resolved, |_| None, None);
+    basilisk_checker::exports::populate_imported_symbols(
+        &mut resolved,
+        |_| None,
+        basilisk_checker::exports::load_external_module,
+        None,
+    );
     assert!(
         resolved.imported_symbols.contains_key("BaseModel"),
         "precondition: the stub base class resolved"
@@ -169,7 +174,12 @@ fn test_hover_on_method_reexported_through_py_typed_package_init() {
         import.resolution = ImportResolution::SourcePy;
         import.resolved_path = Some(pkg.join("__init__.py"));
     }
-    basilisk_checker::exports::populate_imported_symbols(&mut resolved, |_| None, None);
+    basilisk_checker::exports::populate_imported_symbols(
+        &mut resolved,
+        |_| None,
+        basilisk_checker::exports::load_external_module,
+        None,
+    );
     assert!(
         resolved.imported_symbols.contains_key("BaseModel"),
         "the TYPE_CHECKING re-export in the package __init__ must surface \

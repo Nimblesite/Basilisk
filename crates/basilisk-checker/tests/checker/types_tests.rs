@@ -182,6 +182,24 @@ def func(x: Literal[None]) -> None:
     Ok(())
 }
 
+// A string literal containing a comma is ONE literal value, not two:
+// `split_type_params` must not split inside quotes, and the lone `'` it
+// produced made `parse_single_literal` panic on `val[1..0]` (issue #316).
+#[test]
+fn literal_string_containing_comma_does_not_panic() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import Literal
+
+comma: Literal[','] = ','
+"#;
+    let diags = run(source)?;
+    assert!(
+        diags.is_empty(),
+        "assigning ',' to Literal[','] is valid and must produce no diagnostics, got: {diags:?}"
+    );
+    Ok(())
+}
+
 #[test]
 fn literal_bytes() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
