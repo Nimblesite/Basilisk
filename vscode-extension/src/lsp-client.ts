@@ -20,6 +20,7 @@ import { effect } from "@preact/signals-core";
 import { Logger } from "./logger";
 import { createLspTraceChannel } from "./lsp-trace";
 import { BASILISK_DOCUMENT_SELECTOR } from "./lsp-document-selector";
+import { CONFIGURATION_EDITOR_COMMAND } from "./configuration-editor";
 import { type Store, type LspState } from "./store";
 
 /** Maximum LSP errors before shutting down the server. */
@@ -200,7 +201,12 @@ function bindLspStateEffects(store: Store, updateStatusBar: StatusBarUpdater): v
   });
 }
 
-function buildClientOptions(
+/**
+ * Build the LanguageClient options — documentSelector, synchronize,
+ * middleware (hover trust, executeCommand UI, configuration merge), and
+ * error recovery. Exported so tests can exercise the middleware wiring.
+ */
+export function buildClientOptions(
   outputCh: vscode.LogOutputChannel | undefined,
   traceCh: vscode.LogOutputChannel,
   updateStatusBar: StatusBarUpdater
@@ -236,6 +242,9 @@ function buildClientOptions(
     },
     middleware: {
       executeCommand: executeCommandMiddleware,
+      // eslint-disable-next-line max-params -- vscode-languageclient fixes the 4-arg middleware signature.
+      provideHover: async (document, position, token, next) =>
+        trustConfigureSeverityLinks(await next(document, position, token)),
       workspace: {
         configuration: async (params, token, next) => {
           const results = await next(params, token);
@@ -289,6 +298,25 @@ const TOAST_MESSAGES: Record<string, string> = {
 };
 
 type NextFn = (command: string, args: unknown[]) => Thenable<unknown>;
+
+/**
+ * The LSP embeds `command:basilisk.openConfigurationEditor` links in hover
+ * markdown for non-PEP diagnostics (the Configure Severity deep link,
+ * [CONFIGEDITOR-VSIX-EXPERIENCE]). VS Code renders LSP hover markdown
+ * untrusted by default, which strips command links — so trust hover content
+ * for exactly that one command and nothing else.
+ */
+export function trustConfigureSeverityLinks<T extends vscode.Hover | null | undefined>(
+  hover: T,
+): T {
+  if (hover === null || hover === undefined) { return hover; }
+  for (const content of hover.contents) {
+    if (content instanceof vscode.MarkdownString) {
+      content.isTrusted = { enabledCommands: [CONFIGURATION_EDITOR_COMMAND] };
+    }
+  }
+  return hover;
+}
 
 function activeOrVisibleFileEditor(): vscode.TextEditor | undefined {
   const active = vscode.window.activeTextEditor;

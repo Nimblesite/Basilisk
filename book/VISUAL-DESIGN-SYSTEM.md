@@ -90,7 +90,7 @@ feedback loop. Use one focal point and no more than eight primary elements.
 - Capture real Basilisk behavior from the release recorded in `metadata.yaml`.
 - Use a clean fixture from `book/examples/`; never expose personal paths,
   tokens, unrelated extensions, notifications, or private repository names.
-- Record OS, architecture, editor, theme, zoom, Python target, Basilisk version,
+- Record OS, architecture, editor, theme, zoom, Python interpreter, Basilisk version,
   fixture, capture command/manual steps, and source file in `figures.json`.
 - Crop to the evidence while retaining enough editor/terminal context to orient
   the reader.
@@ -134,4 +134,3 @@ Every ready visual must pass:
 The release gate also finds missing, unreferenced, and duplicate assets. The
 book should aim for one meaningful visual every two to three print-equivalent
 pages, not filler at a fixed interval.
-

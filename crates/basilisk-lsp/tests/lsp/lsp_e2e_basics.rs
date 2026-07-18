@@ -30,7 +30,10 @@ fn test_lsp_did_open_with_type_errors() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
     let _ = fixture.initialize()?;
 
-    let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
+    // `name` has no default to infer from (BSK-0001) and the returned method
+    // call is not inferable (BSK-0002) — an f-string return would infer
+    // `-> str` and silence BSK-0002 ([TYPEINF-FUNC-RETURN]).
+    let python_code = "def greet(name):\n    return name.upper()";
     fixture.did_open("file:///test.py", python_code)?;
 
     let diag = fixture

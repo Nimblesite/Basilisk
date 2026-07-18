@@ -190,19 +190,18 @@ fn and_e0002_class_methods() -> Result<(), Box<dyn std::error::Error>> {
 // dunder methods without return annotations
 // ---------------------------------------------------------------------------
 
+/// [TYPEINF-FUNC-RETURN]: BSK-0002 fires only where the return type is not
+/// inferable. `__init__` (no return → `None`), `__repr__` (f-string → `str`),
+/// and `__len__` (`return 2` → `int`) are all inferable and must stay silent;
+/// only `__add__` (returns a constructor call) still needs an annotation.
 #[test]
-fn dunder_methods_all_missing_return() -> Result<(), Box<dyn std::error::Error>> {
+fn dunder_methods_only_uninferable_return_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0002_dunder_methods.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0002_dunder_methods.py"))?;
     assert_diagnostics(
         &src,
         &diags,
-        &[
-            Expected::error("BSK-0002", "`__init__`", 2, 9),
-            Expected::error("BSK-0002", "`__repr__`", 6, 9),
-            Expected::error("BSK-0002", "`__add__`", 9, 9),
-            Expected::error("BSK-0002", "`__len__`", 12, 9),
-        ],
+        &[Expected::error("BSK-0002", "`__add__`", 9, 9)],
     );
     Ok(())
 }
@@ -294,7 +293,8 @@ fn and_e0002_four_completely_untyped_functions() -> Result<(), Box<dyn std::erro
         &[
             Expected::error("BSK-0002", "`parse`", 1, 5),
             Expected::error("BSK-0001", "`raw`", 1, 11),
-            Expected::error("BSK-0002", "`validate`", 5, 5),
+            // `validate` returns `True` — inferable as `bool`, so no BSK-0002
+            // ([TYPEINF-FUNC-RETURN]); its parameter still fires BSK-0001.
             Expected::error("BSK-0001", "`value`", 5, 14),
             Expected::error("BSK-0002", "`transform`", 9, 5),
             Expected::error("BSK-0001", "`data`", 9, 15),

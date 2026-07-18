@@ -203,7 +203,10 @@ mod tests {
     /// that config from disk exactly as it would in production. No modes; this
     /// is configuration. See [CHKARCH-CONFIGURATION-ONLY].
     fn write_temp(name: &str, source: &str) -> (std::path::PathBuf, String) {
-        let dir = std::env::temp_dir().join(format!("{name}.proj"));
+        // Per-process dir name (same pattern as `stage_project` in
+        // cli_binary_tests): a stray watcher or leftover harness process from
+        // a previous run must never touch this run's fixture files.
+        let dir = std::env::temp_dir().join(format!("{name}.{}.proj", std::process::id()));
         std::fs::create_dir_all(&dir).expect("create temp project dir");
         std::fs::write(
             dir.join("pyproject.toml"),
@@ -401,10 +404,19 @@ mod tests {
 
     #[test]
     fn run_fix_applies_e0002_missing_return_annotation() {
-        let (py, path) = write_temp("basilisk_test_fix_e0002.py", "def foo(x: int):\n    pass\n");
+        // The returned method call is not inferable, so BSK-0002 fires and the
+        // fix inserts the honest `-> Any` placeholder ([TYPEINF-FUNC-RETURN]).
+        // A `pass` body would infer `-> None` and leave nothing to fix.
+        let (py, path) = write_temp(
+            "basilisk_test_fix_e0002.py",
+            "def foo(x: int):\n    return x.bit_length()\n",
+        );
         let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-0002".to_owned()]);
         assert_eq!(code, 0, "BSK-0002 fix must return 0");
-        assert_eq!(fixed, "def foo(x: int) -> None:\n    pass\n");
+        assert_eq!(
+            fixed,
+            "def foo(x: int) -> Any:\n    return x.bit_length()\n"
+        );
     }
 
     #[test]
@@ -417,9 +429,11 @@ mod tests {
 
     #[test]
     fn run_fix_applies_multiple_rules_in_one_file() {
+        // `x` has no default to infer from (BSK-0001) and `return x` is not
+        // inferable (BSK-0002); `y: int = 42` is redundant (BSK-0050).
         let (py, path) = write_temp(
             "basilisk_test_fix_multi_rules.py",
-            "def foo(x):\n    pass\n\ny: int = 42\n",
+            "def foo(x):\n    return x\n\ny: int = 42\n",
         );
         let (code, fixed) = fix_and_read(&path, &py, false, &[]);
         assert_eq!(code, 0);
@@ -428,7 +442,7 @@ mod tests {
             "BSK-0001 not applied, got: {fixed}"
         );
         assert!(
-            fixed.contains("-> None"),
+            fixed.contains("-> Any"),
             "BSK-0002 not applied, got: {fixed}"
         );
         assert!(
@@ -439,7 +453,11 @@ mod tests {
 
     #[test]
     fn run_fix_directory_traversal() {
-        let dir = std::env::temp_dir().join("basilisk_test_fix_dir_traversal");
+        // Per-process dir name — see `write_temp` for the rationale.
+        let dir = std::env::temp_dir().join(format!(
+            "basilisk_test_fix_dir_traversal.{}",
+            std::process::id()
+        ));
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(
             dir.join("pyproject.toml"),

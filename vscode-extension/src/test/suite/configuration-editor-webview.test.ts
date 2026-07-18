@@ -104,7 +104,7 @@ suite("Configuration editor — hardened, accessible document", () => {
 
   // [CONFIGEDITOR-VSIX-EXPERIENCE]: the tag-first Rules view is the whole
   // editor. Tag groups get the tag-entry control; rows get per-rule entry
-  // controls; pep rows have no Disabled option ([CHKARCH-CONFIG-MODEL]).
+  // controls; pep controls have no Disabled option ([CHKARCH-CONFIG-MODEL]).
   test("renders the tag-first Rules view with pep-gated entry controls", () => {
     const html = buildConfigurationEditorDocument();
     assert.ok(html.includes("select.dataset.tagEntry = tag.name"), "tag groups expose the tag-entry control");
@@ -112,11 +112,9 @@ suite("Configuration editor — hardened, accessible document", () => {
     assert.ok(html.includes("const PEP_TAG = 'pep'"));
     assert.ok(
       html.includes("SEVERITIES.filter((value) => value !== 'Disabled')"),
-      "pep rows must offer error/warning/info/remove-entry and never Disabled",
+      "pep controls must offer error/warning/info and never Disabled",
     );
     assert.ok(html.includes("isPepRule(rule)"));
-    assert.ok(html.includes("{ kind: 'RemoveRule', code }"), "remove-entry emits RemoveRule");
-    assert.ok(html.includes("{ kind: 'RemoveTag', tag }"), "remove-entry emits RemoveTag");
     assert.ok(html.includes("{ kind: 'SetRule', code, severity: { kind: value } }"));
     assert.ok(html.includes("{ kind: 'SetTag', tag, severity: { kind: value } }"));
     assert.ok(html.includes("Load more occurrences"));
@@ -124,6 +122,36 @@ suite("Configuration editor — hardened, accessible document", () => {
     assert.ok(html.includes("impactCell(impact.errorsBefore, impact.errorsAfter, 'errors')"));
     assert.ok(html.includes('id="rule-search"'), "search stays");
     assert.ok(html.includes("Open raw"));
+  });
+
+  // [CONFIGEDITOR-VSIX-EXPERIENCE] / [CHKARCH-CONFIG-MODEL]: an entry dropdown
+  // lists concrete severities only. "No entry" duplicated Disabled — an analyze
+  // rule or tag with no entry does not run (resolution step 3) — so the
+  // redundant choice is gone from every select. Disabled is gone from every
+  // pep-affecting control (pep rows, the pep source tag, PEP-category tags)
+  // because no disable exists for pep rules.
+  test("entry dropdowns never offer No entry and pep-affecting controls omit Disabled", () => {
+    const html = buildConfigurationEditorDocument();
+    assert.ok(
+      !html.includes("[NO_ENTRY].concat"),
+      "no dropdown may offer a No-entry option",
+    );
+    assert.ok(
+      html.includes("severityOptions(isPepRule(rule))"),
+      "rule rows must gate Disabled on pep provenance",
+    );
+    assert.ok(
+      html.includes("severityOptions(isPepTag(tag))"),
+      "tag controls must gate Disabled on pep-affecting tags",
+    );
+    assert.ok(
+      !html.includes("'RemoveRule'"),
+      "a dropdown change always writes a rule entry — never removes one",
+    );
+    assert.ok(
+      !html.includes("'RemoveTag'"),
+      "a dropdown change always writes a tag entry — never removes one",
+    );
   });
 
   // [CONFIGEDITOR-ACCEPTANCE]: adoption, path overrides, presets, and

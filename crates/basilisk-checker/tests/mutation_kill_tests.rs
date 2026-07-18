@@ -1666,3 +1666,94 @@ fn mutant_context_line_index_places_inline_suppression() -> Result<(), Box<dyn s
     );
     Ok(())
 }
+
+/// Count `classes_override` diagnostics.
+fn classes_override_count(diags: &[basilisk_checker::Diagnostic]) -> usize {
+    diags
+        .iter()
+        .filter(|d| d.code.code == "classes_override")
+        .count()
+}
+
+/// `annotations_conflict`: an `@override` signature conflicts only when BOTH
+/// annotation sides are present and differ. Absent annotations are implicitly
+/// `Any` and can never prove incompatibility ([TYPEINF-TARGET-GRADUAL]) —
+/// stripping a child annotation must not create a new error.
+#[mutation_safe(rule = "classes_override", fns = "annotations_conflict")]
+#[test]
+fn mutant_classes_override_annotations_conflict() -> Result<(), Box<dyn std::error::Error>> {
+    // Differing parameter annotations must fire.
+    let param_mismatch = r"
+from typing import override
+
+class Base:
+    def process(self, value: int) -> int:
+        return value
+
+class Child(Base):
+    @override
+    def process(self, value: str) -> int:
+        return 0
+";
+    assert!(
+        classes_override_count(&run(param_mismatch)?) >= 1,
+        "str-vs-int parameter override must fire classes_override"
+    );
+
+    // Differing return annotations must fire.
+    let return_mismatch = r"
+from typing import override
+
+class Base:
+    def process(self, value: int) -> int:
+        return value
+
+class Child(Base):
+    @override
+    def process(self, value: int) -> str:
+        return ''
+";
+    assert!(
+        classes_override_count(&run(return_mismatch)?) >= 1,
+        "str-vs-int return override must fire classes_override"
+    );
+
+    // Identical signatures never fire.
+    let identical = r"
+from typing import override
+
+class Base:
+    def process(self, value: int) -> int:
+        return value
+
+class Child(Base):
+    @override
+    def process(self, value: int) -> int:
+        return value
+";
+    assert_eq!(
+        classes_override_count(&run(identical)?),
+        0,
+        "identical override signature must not fire"
+    );
+
+    // An UNANNOTATED override side is implicitly Any — never a conflict.
+    let unannotated_child = r"
+from typing import override
+
+class Base:
+    def process(self, value: int) -> int:
+        return value
+
+class Child(Base):
+    @override
+    def process(self, value):
+        return value
+";
+    assert_eq!(
+        classes_override_count(&run(unannotated_child)?),
+        0,
+        "absent child annotations are implicitly Any and must not fire"
+    );
+    Ok(())
+}

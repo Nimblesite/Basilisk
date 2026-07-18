@@ -37,7 +37,6 @@ variant and predict every place that becomes non-exhaustive.
 - [Type narrowing](https://typing.python.org/en/latest/spec/narrowing.html)
 - [Unreachable code and exhaustiveness](https://typing.python.org/en/latest/guides/unreachable.html)
 - [PEP 647 — User-defined type guards](https://peps.python.org/pep-0647/)
-- [Python 3.12 match statement](https://docs.python.org/3.12/reference/compound_stmts.html#the-match-statement)
+- [Python `match` statement](https://docs.python.org/3/reference/compound_stmts.html#the-match-statement)
 - Use the [Basilisk rule reference](https://www.basilisk-python.dev/docs/rules/)
   for the captured narrowing and match diagnostics.
-

@@ -172,83 +172,67 @@
     },
     {
       "key": "python-typing-docs",
-      "title": "Python 3.12 typing documentation",
-      "url": "https://docs.python.org/3.12/library/typing.html",
+      "title": "Python typing documentation",
+      "url": "https://docs.python.org/3/library/typing.html",
       "authority": "Python Software Foundation",
-      "versionScope": "Python 3.12",
+      "versionScope": "current Python 3 documentation; use a versioned page for version-dependent claims",
       "topics": ["typing runtime API", "annotation runtime limits"]
     },
     {
       "key": "python-annotations",
-      "title": "Python 3.12 annotation best practices",
-      "url": "https://docs.python.org/3.12/howto/annotations.html",
+      "title": "Python annotation best practices",
+      "url": "https://docs.python.org/3/howto/annotations.html",
       "authority": "Python Software Foundation",
-      "versionScope": "Python 3.12",
+      "versionScope": "current Python 3 documentation; use a versioned page for version-dependent claims",
       "topics": ["annotation evaluation", "annotation access"]
     },
     {
       "key": "python-match-statement",
-      "title": "Python 3.12 match statement",
-      "url": "https://docs.python.org/3.12/reference/compound_stmts.html#the-match-statement",
+      "title": "Python match statement",
+      "url": "https://docs.python.org/3/reference/compound_stmts.html#the-match-statement",
       "authority": "Python Software Foundation",
-      "versionScope": "Python 3.12",
+      "versionScope": "current Python 3 documentation; match is version-dependent syntax",
       "topics": ["pattern matching", "match statement"]
     },
     {
       "key": "python-dataclasses",
-      "title": "Python 3.12 dataclasses",
-      "url": "https://docs.python.org/3.12/library/dataclasses.html",
+      "title": "Python dataclasses",
+      "url": "https://docs.python.org/3/library/dataclasses.html",
       "authority": "Python Software Foundation",
-      "versionScope": "Python 3.12",
+      "versionScope": "current Python 3 documentation; use a versioned page for version-dependent claims",
       "topics": ["dataclass runtime behavior"]
     },
     {
       "key": "python-enum",
-      "title": "Python 3.12 enum",
-      "url": "https://docs.python.org/3.12/library/enum.html",
+      "title": "Python enum",
+      "url": "https://docs.python.org/3/library/enum.html",
       "authority": "Python Software Foundation",
-      "versionScope": "Python 3.12",
+      "versionScope": "current Python 3 documentation; use a versioned page for version-dependent claims",
       "topics": ["enum runtime behavior"]
     },
     {
       "key": "python-pdb",
-      "title": "Python 3.12 debugger",
-      "url": "https://docs.python.org/3.12/library/pdb.html",
+      "title": "Python debugger",
+      "url": "https://docs.python.org/3/library/pdb.html",
       "authority": "Python Software Foundation",
-      "versionScope": "Python 3.12",
+      "versionScope": "current Python 3 documentation; use a versioned page for version-dependent claims",
       "topics": ["debugging concepts"]
     },
     {
       "key": "python-tracemalloc",
-      "title": "Python 3.12 tracemalloc",
-      "url": "https://docs.python.org/3.12/library/tracemalloc.html",
+      "title": "Python tracemalloc",
+      "url": "https://docs.python.org/3/library/tracemalloc.html",
       "authority": "Python Software Foundation",
-      "versionScope": "Python 3.12",
+      "versionScope": "current Python 3 documentation; use a versioned page for version-dependent claims",
       "topics": ["memory allocation tracing"]
     },
     {
       "key": "python-gc",
-      "title": "Python 3.12 garbage collector",
-      "url": "https://docs.python.org/3.12/library/gc.html",
+      "title": "Python garbage collector",
+      "url": "https://docs.python.org/3/library/gc.html",
       "authority": "Python Software Foundation",
-      "versionScope": "Python 3.12",
+      "versionScope": "current Python 3 documentation; use a versioned page for version-dependent claims",
       "topics": ["garbage collection", "gc.garbage"]
-    },
-    {
-      "key": "cpython-typing-source",
-      "title": "CPython 3.12 typing.py",
-      "url": "https://github.com/python/cpython/blob/3.12/Lib/typing.py",
-      "authority": "Python Software Foundation",
-      "versionScope": "CPython 3.12 branch",
-      "topics": ["typing runtime implementation"]
-    },
-    {
-      "key": "cpython-grammar",
-      "title": "CPython 3.12 grammar",
-      "url": "https://github.com/python/cpython/blob/3.12/Grammar/python.gram",
-      "authority": "Python Software Foundation",
-      "versionScope": "CPython 3.12 branch",
-      "topics": ["Python syntax"]
     },
     {
       "key": "typeshed",
@@ -265,6 +249,14 @@
       "authority": "Python Software Foundation",
       "versionScope": "historical rationale",
       "topics": ["py.typed history", "stub distribution history"]
+    },
+    {
+      "key": "pep-585",
+      "title": "PEP 585 — Type Hinting Generics In Standard Collections",
+      "url": "https://peps.python.org/pep-0585/",
+      "authority": "Python Software Foundation",
+      "versionScope": "accepted in Python 3.9",
+      "topics": ["built-in generic syntax history"]
     },
     {
       "key": "pep-604",
@@ -428,4 +420,3 @@
     }
   ]
 }
-

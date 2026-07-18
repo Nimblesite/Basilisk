@@ -19,15 +19,15 @@ rather than inventing a parallel normative glossary.
 
 ## Appendix C — Source map
 
-Map each book topic to the maintained typing specification, Python 3.12
+Map each book topic to the maintained typing specification, Python
 documentation, CPython source, typeshed, packaging specification, and live
 Basilisk destination. Explain when a PEP is historical context rather than the
 current specification.
 
 ## Appendix D — Reproducibility record
 
-Record the book revision, build date, Python target, Basilisk release and source
-commit, upstream conformance snapshot, example results, screenshot environment,
+Record the book revision, build date, Python interpreter used for the examples,
+Basilisk release and source commit, upstream conformance snapshot, example results, screenshot environment,
 image manifest result, link-audit result, Pandoc version, and EPUBCheck version.
 
 ## Continue after the last page
@@ -36,4 +36,3 @@ Send readers to the [Basilisk website](https://www.basilisk-python.dev/), the
 [live rule reference](https://www.basilisk-python.dev/docs/rules/), and
 [release notes](https://www.basilisk-python.dev/docs/releases/). Confirm the
 final corrections and feedback URL before publication.
-

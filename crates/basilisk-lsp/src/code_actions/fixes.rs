@@ -27,14 +27,19 @@ pub(super) fn fix_missing_param_annotation(uri: &Url, diag: &Diagnostic) -> Code
     )
 }
 
-/// Insert ` -> None` after the closing `)` of the parameter list.
+/// Insert ` -> Any` after the closing `)` of the parameter list.
+///
+/// BSK-0002 only fires when the return type is NOT inferable (a valued,
+/// uninferable return or a generator — [TYPEINF-FUNC-RETURN]), so `Any` is the
+/// only honest placeholder; a hardcoded `-> None` would be false on every
+/// firing function. Mirrors the BSK-0001 fix (`: Any`).
 pub(super) fn fix_missing_return_annotation(uri: &Url, diag: &Diagnostic) -> CodeAction {
     single_insert(
         uri,
         diag,
         diag.range.end,
-        " -> None",
-        "Add `-> None` return type (basilisk)",
+        " -> Any",
+        "Add `-> Any` return type (basilisk)",
     )
 }
 

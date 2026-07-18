@@ -274,7 +274,12 @@ navigation and display features.
 ### Hover {#LSPARCH-FEATURES-HOVER}
 
 Hover presents the resolved symbol signature and relevant Basilisk diagnostics; unknown
-inferred pieces are represented explicitly rather than fabricated.
+inferred pieces are represented explicitly rather than fabricated. A non-PEP diagnostic's
+hover section additionally carries a **Configure Severity** command link
+(`command:basilisk.openConfigurationEditor` with a `{ "rule": <code> }` argument) that
+deep-links into the configuration editor focused on the rule
+([CONFIGEDITOR-VSIX-EXPERIENCE](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-VSIX-EXPERIENCE));
+PEP rules are graded by the typing spec and never disabled, so they get no link.
 
 ### Go to definition {#LSPARCH-FEATURES-DEFINITION}
 

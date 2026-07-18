@@ -101,7 +101,8 @@
       "id": "fig-04-runtime-static",
       "section": "04",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/04-runtime-static-split.svg",
       "path": "assets/diagrams/04-runtime-static-split.png",
       "title": "Annotations inform tools without converting values",
       "alt": "Two aligned lanes separate a Python value's runtime behavior from the static information an annotation gives Basilisk."
@@ -110,19 +111,21 @@
       "id": "fig-04-unions",
       "section": "04",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/04-union-values.svg",
       "path": "assets/diagrams/04-union-values.png",
       "title": "A union describes several permitted possibilities",
       "alt": "Example string, float, and None values enter one union-typed boundary while unrelated values stop outside it."
     },
     {
-      "id": "fig-04-any",
+      "id": "fig-04-alias",
       "section": "04",
       "kind": "diagram",
-      "status": "planned",
-      "path": "assets/diagrams/04-any-information-loss.png",
-      "title": "Any removes information in both directions",
-      "alt": "A precise type trace becomes an unlabelled channel at Any, illustrating why later operations carry less useful static evidence."
+      "status": "ready",
+      "master": "assets/diagrams/04-alias-domain-name.svg",
+      "path": "assets/diagrams/04-alias-domain-name.png",
+      "title": "An alias names a domain idea without creating a distinct type",
+      "alt": "RawReading and NormalizedReading label two application boundaries while both expand to the same dictionary type and remain equivalent."
     },
     {
       "id": "fig-05-compatibility-gate",

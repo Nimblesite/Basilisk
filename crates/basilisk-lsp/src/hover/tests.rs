@@ -1,7 +1,7 @@
 use super::*;
 
 /// Parse and resolve `source` as `test.py` for hover tests.
-fn parse_and_resolve(source: &str) -> ResolvedModule {
+pub(super) fn parse_and_resolve(source: &str) -> ResolvedModule {
     let parsed = basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned())
         .expect("test source should parse");
     basilisk_resolver::resolve(&parsed).expect("resolution should not fail")

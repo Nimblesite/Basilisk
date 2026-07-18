@@ -23,6 +23,8 @@ import { SingletonWebviewPanel, type WebviewMessage } from "./profiler-webview";
 import type { Store } from "./store";
 
 export const CONFIGURATION_EDITOR_COMMAND = "basilisk.openConfigurationEditor";
+/** Explorer context-menu entry on pyproject.toml ("Edit Config"). */
+export const EDIT_CONFIG_COMMAND = "basilisk.editConfig";
 export const CONFIGURATION_EDITOR_CONTEXT = "basilisk.configurationEditorSupported";
 const SNAPSHOT_METHOD = "basilisk/configurationSnapshot";
 const PREVIEW_METHOD = "basilisk/previewConfigurationChange";
@@ -186,8 +188,12 @@ export class ConfigurationEditorController implements vscode.Disposable {
     });
   }
 
-  /** Open/re-render the editor for one explicit workspace root. */
-  public open(rootUri: string): void {
+  /**
+   * Open/re-render the editor for one explicit workspace root, optionally
+   * focused on one rule (the diagnostic hover's Configure Severity link,
+   * [CONFIGEDITOR-VSIX-EXPERIENCE]).
+   */
+  public open(rootUri: string, focusRule?: string): void {
     if (this.disposed) { return; }
     const wasOpen = this.panel.isOpen();
     const wasVisible = this.panel.isVisible();
@@ -195,7 +201,8 @@ export class ConfigurationEditorController implements vscode.Disposable {
     if (this.store.configurationEditor.value.rootUri !== rootUri) {
       this.pendingRefreshRoot = undefined;
     }
-    this.store.beginConfigurationLoad(rootUri);
+    // A plain open must clear any stale focus target — `null`, not undefined.
+    this.store.beginConfigurationLoad(rootUri, focusRule ?? null);
     this.panel.show("Basilisk Configuration", buildConfigurationEditorDocument());
     // A hidden live panel refreshes from the real hidden→visible callback.
     // New/already-visible panels do not produce that transition, so load here.
@@ -450,30 +457,65 @@ function fileIsWithinRoot(target: vscode.Uri, rootUri: string | undefined): bool
   }
 }
 
-/** Register the capability-gated command and context used by the view-title gear. */
+const MAX_RULE_CODE_LENGTH = 64;
+
+/**
+ * Decode the optional `{ rule }` command argument carried by a diagnostic's
+ * Configure Severity hover link ([CONFIGEDITOR-VSIX-EXPERIENCE]). Untrusted:
+ * anything that is not a bounded, non-empty string yields no focus target.
+ */
+export function configurationEditorFocusRule(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) { return undefined; }
+  const rule = (value as { readonly rule?: unknown }).rule;
+  return typeof rule === "string" && rule.length > 0 && rule.length <= MAX_RULE_CODE_LENGTH
+    ? rule
+    : undefined;
+}
+
+/**
+ * Open the editor for the workspace folder that owns `resource` (the
+ * explorer context-menu target), falling back to the usual root selection.
+ * `focusRule` deep-links the opened editor to one rule's row.
+ */
+async function openConfigurationFor(
+  controller: ConfigurationEditorController,
+  resource?: vscode.Uri,
+  focusRule?: string,
+): Promise<void> {
+  const folder = resource === undefined ? undefined : vscode.workspace.getWorkspaceFolder(resource);
+  const rootUri = folder?.uri.toString() ?? await selectConfigurationRoot();
+  if (rootUri === undefined) {
+    void vscode.window.showInformationMessage("Open a workspace folder to configure Basilisk.");
+    return;
+  }
+  controller.open(rootUri, focusRule);
+}
+
+/** Register the capability-gated commands and context used by the view-title gear and explorer menu. */
 export function registerConfigurationEditor(
   store: Store,
   transport?: ConfigurationEditorTransport,
 ): { readonly controller: ConfigurationEditorController; readonly disposables: vscode.Disposable[] } {
   const controller = new ConfigurationEditorController(store, transport);
-  let command: vscode.Disposable | undefined;
+  let commands: vscode.Disposable[] | undefined;
+  function disposeCommands(): void {
+    commands?.forEach((command) => { command.dispose(); });
+    commands = undefined;
+  }
   let previouslySupported = false;
   const disposeCapabilityEffect = effect(() => {
     const supported = transport !== undefined
       || (store.lspState.value === "running" && supportsConfigurationEditor(store.client.value));
     void vscode.commands.executeCommand("setContext", CONFIGURATION_EDITOR_CONTEXT, supported);
-    if (supported && command === undefined) {
-      command = vscode.commands.registerCommand(CONFIGURATION_EDITOR_COMMAND, async () => {
-        const rootUri = await selectConfigurationRoot();
-        if (rootUri === undefined) {
-          void vscode.window.showInformationMessage("Open a workspace folder to configure Basilisk.");
-          return;
-        }
-        controller.open(rootUri);
-      });
+    if (supported && commands === undefined) {
+      commands = [
+        vscode.commands.registerCommand(CONFIGURATION_EDITOR_COMMAND, async (argument?: unknown) =>
+          openConfigurationFor(controller, undefined, configurationEditorFocusRule(argument))),
+        vscode.commands.registerCommand(EDIT_CONFIG_COMMAND, async (resource?: vscode.Uri) =>
+          openConfigurationFor(controller, resource instanceof vscode.Uri ? resource : undefined)),
+      ];
     } else if (!supported) {
-      command?.dispose();
-      command = undefined;
+      disposeCommands();
       if (controller.isOpen() && previouslySupported) {
         controller.capabilityLost("The language server no longer advertises the configuration editor. Reconnect or update Basilisk.");
       }
@@ -484,8 +526,7 @@ export function registerConfigurationEditor(
   const capabilityLifecycle: vscode.Disposable = {
     dispose(): void {
       disposeCapabilityEffect();
-      command?.dispose();
-      command = undefined;
+      disposeCommands();
       void vscode.commands.executeCommand("setContext", CONFIGURATION_EDITOR_CONTEXT, false);
     },
   };

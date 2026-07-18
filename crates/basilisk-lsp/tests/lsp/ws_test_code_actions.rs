@@ -83,14 +83,17 @@ async fn test_ws_code_action_missing_return_annotation() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
 
-    let code = "def greet(name: str):\n    return f\"Hello, {name}!\"";
+    // The returned method call is not inferable, so BSK-0002 fires — an
+    // f-string return would infer `-> str` and stay silent
+    // ([TYPEINF-FUNC-RETURN]).
+    let code = "def greet(name: str):\n    return name.upper()";
     fixture.did_open("file:///ca_e0002.py", code).await?;
 
     let resp = code_action_for(&mut fixture, "file:///ca_e0002.py", 201, "BSK-0002").await?;
 
     assert!(
-        resp.contains("-> None"),
-        "BSK-0002 action should insert '-> None': {resp}"
+        resp.contains("-> Any"),
+        "BSK-0002 action should insert '-> Any': {resp}"
     );
     assert!(
         resp.contains("quickfix"),

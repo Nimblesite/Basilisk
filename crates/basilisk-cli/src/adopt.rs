@@ -294,7 +294,10 @@ mod tests {
 
     /// Python code with a missing parameter annotation (triggers BSK-0001)
     /// and a missing return type annotation (triggers BSK-0002).
-    const BAD_PYTHON: &str = "def foo(x):\n    pass\n";
+    // `x` has no default to infer from (BSK-0001) and `return x` is not
+    // inferable (BSK-0002) — a `pass` body would infer `-> None` and only
+    // fire BSK-0001 ([TYPEINF-FUNC-RETURN]).
+    const BAD_PYTHON: &str = "def foo(x):\n    return x\n";
 
     /// Fully typed Python code that should produce zero errors.
     const CLEAN_PYTHON: &str = "def greet(name: str) -> str:\n    return name\n";
@@ -308,7 +311,11 @@ mod tests {
     /// and those analyze-scope rules are off by default — so the test project
     /// turns them on exactly as a real adopter would ([CHKARCH-COMMANDS]).
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("bsk_adopt_test_{name}"));
+        // Per-process dir name (same pattern as `stage_project` in
+        // cli_binary_tests): a stray watcher or leftover harness process from
+        // a previous run must never touch this run's fixture files.
+        let dir =
+            std::env::temp_dir().join(format!("bsk_adopt_test_{name}.{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         fs::write(
@@ -373,7 +380,9 @@ mod tests {
     /// afterwards.
     #[test]
     fn run_adopt_records_pep_debt_as_warning_entry() {
-        let dir = std::env::temp_dir().join("bsk_adopt_test_pep_debt");
+        // Per-process dir name — see `temp_dir` for the rationale.
+        let dir =
+            std::env::temp_dir().join(format!("bsk_adopt_test_pep_debt.{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         fs::write(

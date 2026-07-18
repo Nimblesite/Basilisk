@@ -134,8 +134,11 @@ fn emits_e0001_for_missing_parameter_annotation() -> Result<(), Box<dyn std::err
 
 #[test]
 fn emits_e0002_for_missing_return_annotation() -> Result<(), Box<dyn std::error::Error>> {
+    // The returned method-call result is NOT inferable by the current engine,
+    // so the annotation is required ([TYPEINF-FUNC-RETURN]). A body that never
+    // returns a value would infer `-> None` and stay silent.
     let diags = run_with_config(
-        "def process(data: str):\n    pass\n",
+        "def process(data: str):\n    return data.upper()\n",
         &annotation_rules_config(),
     )?;
     assert_eq!(diags.len(), 1);
@@ -146,7 +149,12 @@ fn emits_e0002_for_missing_return_annotation() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn emits_both_for_unannotated_function() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_config("def process(data):\n    pass\n", &annotation_rules_config())?;
+    // `data` has no default to infer from (BSK-0001) and `return data` is a
+    // name reference the current engine cannot infer (BSK-0002) — both fire.
+    let diags = run_with_config(
+        "def process(data):\n    return data\n",
+        &annotation_rules_config(),
+    )?;
     assert_eq!(diags.len(), 2, "should emit BSK-0001 and BSK-0002");
 
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
@@ -1166,12 +1174,14 @@ fn guards_abstractmethod_is_stub_context() -> Result<(), Box<dyn std::error::Err
 fn guards_protocol_class_name_match() -> Result<(), Box<dyn std::error::Error>> {
     // Two classes: one Protocol, one not. Methods in Protocol must be exempt;
     // methods in the non-Protocol class must NOT be exempt.
+    // NotProto.unannotated returns an attribute access — not inferable, so
+    // BSK-0002 must fire there (a `pass` body would infer `-> None`).
     let src = concat!(
         "from typing import Protocol\n",
         "class MyProto(Protocol):\n",
         "    def required(self) -> None: ...\n",
         "class NotProto:\n",
-        "    def unannotated(self): pass\n",
+        "    def unannotated(self): return self.value\n",
     );
     let diags = run_with_config(src, &annotation_rules_config())?;
     let e2: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0002").collect();

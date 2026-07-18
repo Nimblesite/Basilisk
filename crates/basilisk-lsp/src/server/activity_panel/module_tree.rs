@@ -174,9 +174,14 @@ fn module_kind(path: &Path) -> &'static str {
 
 /// Fold the per-file grading rollup into a module node — enabled path only
 /// ([ANALYSIS-ENABLED]): while disabled these fields are absent by construction.
+/// The raw symbol counts ride along so clients can roll folder/package coverage
+/// up symbol-weighted — matching the workspace header — instead of averaging
+/// pre-divided percentages ([EXTACT-MODULES-TREE-STRUCTURE]).
 fn attach_grading(node: &mut serde_json::Value, health: &super::type_health::FileHealth) {
     if let Some(obj) = node.as_object_mut() {
         let _ = obj.insert("coveragePercent".into(), health.coverage_percent.into());
+        let _ = obj.insert("totalSymbols".into(), health.total_symbols.into());
+        let _ = obj.insert("annotatedSymbols".into(), health.annotated_symbols.into());
         let _ = obj.insert("errors".into(), health.errors.into());
         let _ = obj.insert("warnings".into(), health.warnings.into());
     }
@@ -505,6 +510,48 @@ mod tests {
             tree.modules[0].get("coveragePercent").is_some(),
             "enabled payload keeps the grading rollup"
         );
+    }
+
+    // Server side of [EXTACT-MODULES-TREE-STRUCTURE] coverage rollup: each
+    // module node must carry its symbol counts (`totalSymbols` /
+    // `annotatedSymbols`) so the client can roll folder/package coverage up
+    // symbol-weighted — matching the workspace header — instead of having only
+    // the pre-divided per-file percentage with no weights.
+    #[test]
+    fn test_module_nodes_carry_symbol_counts_for_folder_rollup() {
+        let root = PathBuf::from("/workspace");
+        let idx = make_index_with_roots(vec![root.clone()]);
+        // Half-annotated file: 1 of 2 symbols annotated.
+        let uri = make_uri("/workspace/pkg/partial.py");
+        let _ = idx.set_open(&uri, "a: int = 1\nb = 2\n", 1);
+
+        let tree = build_module_tree(&idx, "", true, true);
+        assert_eq!(tree.modules.len(), 1);
+        let module = &tree.modules[0];
+        assert_eq!(
+            module
+                .get("totalSymbols")
+                .and_then(serde_json::Value::as_u64),
+            Some(2),
+            "module node must carry totalSymbols as the client's rollup weight, got {module}"
+        );
+        assert_eq!(
+            module
+                .get("annotatedSymbols")
+                .and_then(serde_json::Value::as_u64),
+            Some(1),
+            "module node must carry annotatedSymbols for the client's rollup, got {module}"
+        );
+
+        // Disabled toggle omits the counts like every other grading field
+        // ([ANALYSIS-ENABLED], #119).
+        let disabled = build_module_tree(&idx, "", false, true);
+        for field in ["totalSymbols", "annotatedSymbols"] {
+            assert!(
+                disabled.modules[0].get(field).is_none(),
+                "disabled toggle must omit '{field}' from module nodes"
+            );
+        }
     }
 
     // Tests [EXTACT-MODULES-DIAGNOSTICS] (GitHub #235): every module node must

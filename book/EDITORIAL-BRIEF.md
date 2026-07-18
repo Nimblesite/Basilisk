@@ -52,9 +52,11 @@ whenever prediction will expose their mental model.
 
 ## Scope and versions
 
-- Canonical language target: Python 3.12
 - Typing semantics: current Python typing specification, with historical PEPs
   used for rationale rather than as a substitute for the maintained spec
+- Python versions: no edition-wide support target. Mention a version only when
+  the typing specification, an accepted PEP, or documented runtime behaviour
+  makes the boundary relevant to the lesson
 - Basilisk behavior: one named release per book edition
 - Screenshots: captured from that same release and recorded in `figures.json`
 - Website: practical companion links may move forward; release-specific claims
@@ -93,14 +95,18 @@ repository can resolve it first; a later edition can then add the topic.
 - Every diagnostic excerpt must be generated from the documented Basilisk
   release, not composed from memory.
 - Show file paths when an example spans files.
-- Prefer Python 3.12 syntax unless a compatibility comparison is the lesson.
+- Use the least version-specific syntax that teaches the lesson. When syntax
+  has a Python-version floor, name and cite the governing PEP or language
+  documentation beside it.
 - Do not add typing syntax purely to make an example look sophisticated.
 - Explain whether an annotation changes runtime behavior in the demonstrated
   context.
 
 ## Corrections and maintenance
 
-Every edition records its build date, Basilisk version, Python target, example
-test result, link-audit result, and screenshot environment. Readers should be
-sent to the Basilisk website and repository issue tracker for live corrections;
-the final URLs are confirmed before publication.
+Every edition records its build date, Basilisk version, interpreter used to run
+the examples, example test result, link-audit result, and screenshot
+environment. That interpreter record makes the build reproducible; it is not a
+Basilisk support boundary. Readers should be sent to the Basilisk website and
+repository issue tracker for live corrections; the final URLs are confirmed
+before publication.

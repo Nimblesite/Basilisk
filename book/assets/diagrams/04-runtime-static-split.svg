@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">Runtime conversion and static annotation are separate</title>
+  <desc id="description">A string passes through an explicit float call to become a floating-point value in the runtime lane. A separate static lane follows inferred string and float types to the expected float annotation.</desc>
+  <defs>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="2" fill="#252d3f"/>
+    </pattern>
+    <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#6ec5e9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#e8500a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="url(#dots)" stroke="#252d3f" stroke-width="3"/>
+
+  <text x="82" y="112" fill="#e8500a" font-family="'JetBrains Mono',monospace" font-size="28" font-weight="700" letter-spacing="5">ANNOTATION ≠ CONVERSION</text>
+  <text x="82" y="178" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="60" font-weight="800">One line, two kinds of information</text>
+  <text x="84" y="226" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="29">The call computes a value. The annotation states an expected type.</text>
+
+  <rect x="188" y="275" width="1224" height="112" rx="24" fill="#141820" stroke="#4a5468" stroke-width="3"/>
+  <text x="800" y="346" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="38">celsius: float = float(raw_celsius)</text>
+
+  <g transform="translate(82 442)">
+    <text x="0" y="0" fill="#6ec5e9" font-family="'JetBrains Mono',monospace" font-size="28" font-weight="700" letter-spacing="4">RUNTIME VALUES</text>
+    <rect x="0" y="38" width="330" height="160" rx="24" fill="#141820" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="165" y="104" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="37">"21.5"</text>
+    <text x="165" y="153" text-anchor="middle" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="28">runtime type: str</text>
+
+    <path d="M350 118H468" fill="none" stroke="#6ec5e9" stroke-width="5" marker-end="url(#arrow-blue)"/>
+    <rect x="494" y="55" width="300" height="126" rx="63" fill="#0f1218" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="644" y="130" text-anchor="middle" fill="#bae6fd" font-family="'JetBrains Mono',monospace" font-size="34">float(...)</text>
+    <path d="M814 118H932" fill="none" stroke="#6ec5e9" stroke-width="5" marker-end="url(#arrow-blue)"/>
+
+    <rect x="958" y="38" width="410" height="160" rx="24" fill="#141820" stroke="#34d399" stroke-width="4"/>
+    <text x="1163" y="104" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="37">21.5</text>
+    <text x="1163" y="153" text-anchor="middle" fill="#a7f3d0" font-family="'JetBrains Mono',monospace" font-size="28">runtime type: float</text>
+  </g>
+
+  <g transform="translate(82 724)">
+    <text x="0" y="0" fill="#e8500a" font-family="'JetBrains Mono',monospace" font-size="28" font-weight="700" letter-spacing="4">STATIC INFORMATION</text>
+    <rect x="0" y="38" width="330" height="126" rx="22" fill="#141820" stroke="#e8500a" stroke-width="4"/>
+    <text x="165" y="91" text-anchor="middle" fill="#fed7aa" font-family="'JetBrains Mono',monospace" font-size="31">raw_celsius</text>
+    <text x="165" y="134" text-anchor="middle" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="27">inferred: str</text>
+    <path d="M350 101H468" fill="none" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow-orange)"/>
+    <rect x="494" y="38" width="300" height="126" rx="22" fill="#141820" stroke="#e8500a" stroke-width="4"/>
+    <text x="644" y="91" text-anchor="middle" fill="#fed7aa" font-family="'JetBrains Mono',monospace" font-size="31">float(...)</text>
+    <text x="644" y="134" text-anchor="middle" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="27">result: float</text>
+    <path d="M814 101H932" fill="none" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow-orange)"/>
+    <rect x="958" y="38" width="410" height="126" rx="22" fill="#141820" stroke="#34d399" stroke-width="4"/>
+    <text x="1163" y="91" text-anchor="middle" fill="#a7f3d0" font-family="'JetBrains Mono',monospace" font-size="31">celsius: float</text>
+    <text x="1163" y="134" text-anchor="middle" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="27">expected = result</text>
+  </g>
+</svg>

@@ -30,6 +30,12 @@ export interface ConfigurationEditorState {
   readonly repairUri: string | undefined;
   readonly message: string;
   readonly refreshRequested: boolean;
+  /**
+   * Rule code the webview should focus once per webview lifetime — set when
+   * the editor is opened from a diagnostic's Configure Severity hover link
+   * ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+   */
+  readonly focusRule: string | undefined;
 }
 
 export const IDLE_CONFIGURATION_EDITOR: ConfigurationEditorState = {
@@ -42,10 +48,16 @@ export const IDLE_CONFIGURATION_EDITOR: ConfigurationEditorState = {
   repairUri: undefined,
   message: "",
   refreshRequested: false,
+  focusRule: undefined,
 };
 
 export interface ConfigurationEditorActions {
-  beginConfigurationLoad(rootUri: string): void;
+  /**
+   * `focusRule` semantics: a string sets the pending focus target, `null`
+   * clears it (a plain open with no target), and `undefined` (internal
+   * refreshes) preserves any pending same-root focus.
+   */
+  beginConfigurationLoad(rootUri: string, focusRule?: string | null): void;
   acceptConfigurationSnapshot(snapshot: ConfigurationSnapshot): void;
   beginConfigurationPreview(): void;
   acceptConfigurationPreview(preview: ConfigurationPreview): void;
@@ -86,8 +98,17 @@ export function requestConfigurationRefresh(
   };
 }
 
-function beginLoad(state: Signal<ConfigurationEditorState>, rootUri: string): void {
+function beginLoad(
+  state: Signal<ConfigurationEditorState>,
+  rootUri: string,
+  focusRule?: string | null,
+): void {
   const sameRoot = state.value.rootUri === rootUri;
+  // string = set, null = clear (plain open), undefined = internal refresh —
+  // keep any pending same-root focus so it survives open()'s load chain.
+  const nextFocus = focusRule === undefined
+    ? (sameRoot ? state.value.focusRule : undefined)
+    : (focusRule ?? undefined);
   state.value = {
     ...state.value,
     phase: "loading",
@@ -99,6 +120,7 @@ function beginLoad(state: Signal<ConfigurationEditorState>, rootUri: string): vo
     repairUri: undefined,
     message: "Reading the active project policy…",
     refreshRequested: false,
+    focusRule: nextFocus,
   };
 }
 
@@ -153,7 +175,7 @@ export function createConfigurationEditorActions(
   state: Signal<ConfigurationEditorState>,
 ): ConfigurationEditorActions {
   return {
-    beginConfigurationLoad(rootUri): void { beginLoad(state, rootUri); },
+    beginConfigurationLoad(rootUri, focusRule): void { beginLoad(state, rootUri, focusRule); },
     acceptConfigurationSnapshot(snapshot): void { acceptSnapshot(state, snapshot); },
     beginConfigurationPreview(): void { beginPreview(state); },
     acceptConfigurationPreview(preview): void { acceptPreview(state, preview); },

@@ -9,7 +9,17 @@
     ],
     "summary": "Missing parameter type annotation",
     "summaryHtml": "Missing parameter type annotation",
-    "body": [],
+    "body": [
+      {
+        "type": "text",
+        "html": "Never fires where the current engine already infers the parameter type: a scalar-literal default (<code>timeout=30</code> \u2192 <code>int</code>) determines the type, so demanding an annotation there would be redundant (TYPEINF-FUNC-DEFAULTS). Defaults that do NOT determine the type \u2014 <code>None</code>, empty containers, calls, lambdas, arbitrary expressions \u2014 still require an annotation."
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "def connect(timeout=30):              # \u2713 \u2014 type inferred as int\n    pass\n\ndef connect(retries):                 # BSK-0001 \u2014 nothing to infer from\n    pass\n\ndef connect(timeout=None):            # BSK-0001 \u2014 None does not determine T | None\n    pass"
+      }
+    ],
     "group": "Missing Annotations",
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0001"
   },
@@ -23,7 +33,17 @@
     ],
     "summary": "Missing return type annotation",
     "summaryHtml": "Missing return type annotation",
-    "body": [],
+    "body": [
+      {
+        "type": "text",
+        "html": "Never fires where the current engine already infers the return type (TYPEINF-FUNC-RETURN): a body whose every <code>return</code> is bare or carries a type-determining literal \u2014 or that has no <code>return</code> at all (<code>None</code>) \u2014 needs no annotation. Returns the engine cannot infer (calls, names, arbitrary expressions) and generators (<code>Generator...</code>) still require one."
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "def answer():                 # \u2713 \u2014 return type inferred as int\n    return 42\n\ndef log_it(msg: str):         # \u2713 \u2014 no return: inferred as None\n    print(msg)\n\ndef fetch():                  # BSK-0002 \u2014 call result is not inferable\n    return make_value()"
+      }
+    ],
     "group": "Missing Annotations",
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0002"
   },

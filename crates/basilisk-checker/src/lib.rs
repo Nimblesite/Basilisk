@@ -28,6 +28,7 @@
 //! when configuration resolves it to a non-disabled severity
 //! ([CHKARCH-COMMANDS]).
 
+pub mod bidir;
 pub mod cached;
 pub mod collection_inference;
 pub mod context;
@@ -35,7 +36,10 @@ pub mod diagnostic;
 pub mod exports;
 pub mod imports;
 pub mod incremental;
+pub mod incremental_defs;
 pub mod inference;
+pub mod narrow;
+pub mod param_infer;
 pub mod rule_catalog;
 pub mod rule_tags;
 pub mod rules;
@@ -44,6 +48,7 @@ pub mod suppression;
 mod suppression_audit;
 pub mod types;
 pub mod types_parsing;
+pub(crate) mod types_star_tuples;
 
 pub use cached::CachedDiagnostic;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};

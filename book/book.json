@@ -2,7 +2,6 @@
   "schemaVersion": 1,
   "title": "The Basilisk Book",
   "status": "structural-prototype",
-  "canonicalPythonVersion": "3.12",
   "basiliskRelease": null,
   "targets": {
     "words": 29700,
@@ -26,7 +25,7 @@
       "number": 1,
       "title": "Meet Basilisk",
       "file": "manuscript/01-meet-basilisk.md",
-      "status": "outline",
+      "status": "draft-complete",
       "targetWords": 1800,
       "targetPages": 6,
       "targetFigures": 2
@@ -59,7 +58,7 @@
       "number": 4,
       "title": "The everyday type vocabulary",
       "file": "manuscript/04-everyday-type-vocabulary.md",
-      "status": "outline",
+      "status": "draft-complete",
       "targetWords": 2400,
       "targetPages": 8,
       "targetFigures": 3

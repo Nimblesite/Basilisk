@@ -60,13 +60,19 @@ def greet(name):
     return f"Hello, {name}"
 
 # Passes check always; fires BSK-0002 under analyze once configured
+# (the returned call is not inferable — a literal/f-string return would
+# infer the type and stay silent, [TYPEINF-EXCEEDS-REQUIRED])
 def greet(name: str):
-    return f"Hello, {name}"
+    return build_greeting(name)
 
 # OK under any configuration
 def greet(name: str) -> str:
     return f"Hello, {name}"
 ```
+
+Even when enabled, the require-annotation rules fire only where the type cannot
+be inferred — see
+[TYPEINF-EXCEEDS-REQUIRED](CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-EXCEEDS-REQUIRED).
 
 #### `Any` Is Explicit, Never Implicit {#CHKARCH-STRICTNESS-ANY}
 
@@ -294,7 +300,7 @@ Basilisk's **target** is 100% conformance with the Python typing specification. 
 
 ### Type Inference Engine {#CHKARCH-INFERENCE}
 
-When the require-annotation rules (`BSK-0001`/`BSK-0002`/`BSK-0004`) have config entries, explicit annotations are required on public APIs; local variable types are always inferred:
+When the require-annotation rules (`BSK-0001`/`BSK-0002`/`BSK-0004`) have config entries, explicit annotations are required on public APIs **only where the type cannot be inferred** ([TYPEINF-EXCEEDS-REQUIRED](CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-EXCEEDS-REQUIRED)); local variable types are always inferred:
 
 ```python
 def process(items: list[str]) -> int:
@@ -329,24 +335,24 @@ Full support for:
 
 ### Target Version and Platform {#CHKARCH-VERSION-TARGET}
 
-Every rule runs against the **configured** target Python version — never a
-hardcoded constant (issue #93).
+A rule consults the project's Python version only when the maintained typing
+specification, an accepted PEP, or Python language semantics makes its result
+version-dependent. A version-independent rule must not branch on a Python
+release. Basilisk has no canonical Python version.
 
 - `BasiliskConfig.python_version` / `python_platform` (from `pyproject.toml`
   `[tool.basilisk]` `python-version`/`python-platform`) parse into a typed
   `CheckContext { target_version: (major, minor), target_platform }`
   (`crates/basilisk-checker/src/context.rs`).
-- The centralized default is `DEFAULT_TARGET_VERSION = (3, 12)` — the **only**
-  place the default version constant lives. A malformed version string falls
-  back to the default rather than panicking or disabling gating.
 - When the checker config does not pin a version, the CLI and LSP detect it
   from project files per
   [`[LSPUV-PYTHON-VERSION-RESOLUTION-ORDER]`](LSP-UV-INTEGRATION-SPEC.md):
   `.python-version` → `[project].requires-python` lower bound → `uv.lock`
   `requires-python` lower bound (`basilisk_uv::python_version::resolve_target_python_version`).
 - `rules::run_all(module, ctx)` threads the context into every
-  `Rule::check(module, ctx, diagnostics)` — no rule may reference a literal
-  target version.
+  `Rule::check(module, ctx, diagnostics)`. Feature-version boundaries come from
+  their governing PEP or Python language rule, never from a book-wide or
+  product-wide support target.
 
 #### Version/Platform Narrowing {#CHKARCH-VERSION-NARROWING}
 
@@ -994,11 +1000,10 @@ is **never read or written**
 How the file is found and how multiple ancestor tables combine is specified in
 [Configuration Discovery](#CHKARCH-CONFIG-DISCOVERY).
 
-Canonical TOML example:
+Project TOML example:
 
 ```toml
 [tool.basilisk]
-python-version = "3.12"
 python-platform = "All"          # Default: check for all platforms
 stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
 # typeshed-path = "typeshed-x"   # resolution step 3: provide canonical stdlib stubs
@@ -1135,8 +1140,8 @@ Every error has at least one associated code action:
 
 | Error | Quick Fix |
 |---|---|
-| BSK-0001 (missing param type) | Insert `: <inferred_type>` |
-| BSK-0002 (missing return type) | Insert `-> <inferred_type>` |
+| BSK-0001 (missing param type) | Insert `: Any` (the rule only fires where no type is inferable, [TYPEINF-EXCEEDS-REQUIRED](CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-EXCEEDS-REQUIRED)) |
+| BSK-0002 (missing return type) | Insert `-> Any` (same rationale) |
 | enums_behaviors (mutation of immutable param) | Add `InOut` annotation |
 | dataclasses_order (implicit coercion) | Wrap in explicit conversion |
 

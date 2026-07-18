@@ -13,94 +13,24 @@ import { type Store } from "./store";
 import { subscribeRevision } from "./reactive-refresh";
 import { Logger } from "./logger";
 import {
+  FULL_COVERAGE_PERCENT,
+  coverageColor,
+  diagnosticTally,
+  moduleDescription,
+  moduleTooltip,
+  packageDescription,
+  packageIconColor,
+  packageTooltip,
+  type HealthStats,
+  type ModuleNode,
+  type PackageTreeNode,
+  type SymbolNode,
+  type WorkspaceModulesResponse,
+} from "./module-explorer-render";
+import {
   DiagnosticTreeItem,
   diagnosticItems,
-  type DiagnosticNode,
 } from "./module-explorer-diagnostics";
-
-// ── LSP response types ───────────────────────────────────────────────────
-//
-// Implements the client mirror of [EXTACT-DATA-MODEL] — the shared
-// WorkspaceModulesResponse / ModuleNode / SymbolNode / DiagnosticNode /
-// HealthStats wire shapes returned by basilisk.workspaceModules.
-
-interface SymbolNode {
-  readonly name: string;
-  readonly kind: "class" | "function" | "variable" | "constant" | "typeAlias";
-  readonly line: number;
-  readonly annotated: boolean;
-  readonly exported: boolean;
-  readonly children?: readonly SymbolNode[];
-}
-
-interface ModuleNode {
-  readonly name: string;
-  readonly path: string;
-  readonly kind: "package" | "module";
-  readonly symbols: readonly SymbolNode[];
-  // Every diagnostic for this module, rendered as the first drill-down rows so
-  // the errors/warnings tallies below are navigable, never dead
-  // ([EXTACT-MODULES-DIAGNOSTICS], #235). Empty while Type Checking is
-  // disabled; optional only to stay crash-safe against a pre-#235 server
-  // binary supplied via basilisk.executablePath.
-  readonly diagnostics?: readonly DiagnosticNode[];
-  // Health rollup folded into each module by basilisk.workspaceModules
-  // [EXTACT-MODULES] — coverage %, diagnostic counts, and adoption state, so the
-  // merged panel needs no separate basilisk.typeHealth round-trip. ABSENT while
-  // Type Checking is disabled ([ANALYSIS-ENABLED], #119): the server omits all
-  // grading, so there is nothing to render as "% typed" or a red tint.
-  readonly coveragePercent?: number;
-  readonly errors?: number;
-  readonly warnings?: number;
-  readonly adopted?: boolean;
-}
-
-/** Workspace-wide health rollup carried alongside the module list. */
-interface HealthStats {
-  // The Type Checking toggle state stamped by the server ([ANALYSIS-ENABLED],
-  // #119). `false` means the grading fields below are absent by construction.
-  readonly typeCheckingEnabled?: boolean;
-  readonly totalSymbols?: number;
-  readonly annotatedSymbols?: number;
-  readonly coveragePercent?: number;
-  readonly errors?: number;
-  readonly warnings?: number;
-  readonly adoptedFiles?: number;
-  readonly totalFiles: number;
-  // Whether the server's initial workspace scan has finished. A zero-file
-  // rollup only means "empty workspace" when this is true; before that it
-  // means "not scanned yet" ([EXTACT-MODULES-HEADER-LOADING], #144).
-  readonly scanComplete?: boolean;
-}
-
-interface WorkspaceModulesResponse {
-  readonly modules: readonly ModuleNode[];
-  readonly workspace: HealthStats;
-}
-
-/**
- * A node in the client-reconstructed package/folder tree
- * [EXTACT-MODULES-TREE-STRUCTURE] (#149). The LSP returns a *flat* list of
- * modules keyed by dotted name (e.g. `pkg.sub.mod`); the nested tree is rebuilt
- * here by splitting each name into path segments. Intermediate folders that are
- * not themselves Python packages are synthesised as container nodes with no
- * `module`, so the panel renders `pkg/ → sub/ → mod` instead of a flat list.
- */
-interface PackageTreeNode {
-  /** Last path segment — the row's display label (e.g. `auth`). */
-  readonly segment: string;
-  /** Fully-qualified dotted prefix up to and including this node. */
-  readonly fullName: string;
-  /** The module/package file mapping exactly here, if one exists. */
-  module?: ModuleNode;
-  /** Child packages and modules, keyed by their segment. */
-  readonly children: Map<string, PackageTreeNode>;
-  // Diagnostics rolled up across this node's whole subtree (self module +
-  // every descendant). Surfaced on the folder/package row so errors are
-  // visible without drilling into the hierarchy (#149). Set by `rollup`.
-  errors: number;
-  warnings: number;
-}
 
 // ── Tree items ───────────────────────────────────────────────────────────
 
@@ -227,101 +157,6 @@ function symbolIcon(symbol: SymbolNode): vscode.ThemeIcon {
     case "typeAlias": return new vscode.ThemeIcon("symbol-type-parameter", color);
     default: return new vscode.ThemeIcon("symbol-misc", color);
   }
-}
-
-// ── Coverage rendering [EXTACT-MODULES] ──────────────────────────────────
-
-/** Width of the Unicode coverage bar in characters. */
-const COVERAGE_BAR_WIDTH = 10;
-/** Coverage threshold for "good" (green). */
-const COVERAGE_GOOD_THRESHOLD = 90;
-/** Coverage threshold for "warning" (yellow); below it is red. */
-const COVERAGE_WARN_THRESHOLD = 50;
-/** Neutral coverage for ungraded rows (Type Checking disabled, #119). */
-const FULL_COVERAGE_PERCENT = 100;
-
-/** Render a coverage progress bar using Unicode block characters. */
-function coverageBar(percent: number): string {
-  const filled = Math.round(percent / COVERAGE_BAR_WIDTH);
-  return "█".repeat(filled) + "░".repeat(COVERAGE_BAR_WIDTH - filled);
-}
-
-/** Theme color for a coverage percentage: green >=90%, yellow >=50%, else red. */
-function coverageColor(percent: number): vscode.ThemeColor {
-  if (percent >= COVERAGE_GOOD_THRESHOLD) { return new vscode.ThemeColor("testing.iconPassed"); }
-  if (percent >= COVERAGE_WARN_THRESHOLD) { return new vscode.ThemeColor("list.warningForeground"); }
-  return new vscode.ThemeColor("list.errorForeground");
-}
-
-// [EXTACT-MODULES-COUNT-STYLE] is the diagnostic-tally surface for module rows.
-/** Module row description: coverage bar + % + error/warning counts + adopted badge. */
-function moduleDescription(module: ModuleNode): string {
-  // Type Checking disabled (#119): the server serves no grading, so the row is
-  // a plain navigation entry — no bar, no percentage, no tallies.
-  if (module.coveragePercent === undefined) { return ""; }
-  const issueTally = diagnosticTally(module.errors ?? 0, module.warnings ?? 0);
-  const issueStr = issueTally === "" ? "" : ` — ${issueTally}`;
-  const badge = module.adopted === true ? " [adopted]" : "";
-  return `${coverageBar(module.coveragePercent)} ${module.coveragePercent}%${issueStr}${badge}`;
-}
-
-/** Module row tooltip: name + path + coverage + diagnostics + adoption. */
-function moduleTooltip(module: ModuleNode): string {
-  return [
-    module.name,
-    module.path,
-    module.coveragePercent !== undefined ? `Coverage: ${module.coveragePercent}%` : "",
-    module.errors !== undefined ? `Errors: ${module.errors}` : "",
-    module.warnings !== undefined ? `Warnings: ${module.warnings}` : "",
-    module.adopted === true ? "Status: Adopted (errors demoted to warnings)" : "",
-  ].filter(Boolean).join("\n");
-}
-
-/** Implements [EXTACT-MODULES-COUNT-STYLE]: coloured glyphs `🔴 n` (errors) /
- *  `🟠 n` (warnings) — never `nE nW`; a zero severity is omitted, or "" when clean. */
-function diagnosticTally(errors: number, warnings: number): string {
-  const issues: string[] = [];
-  if (errors > 0) { issues.push(`🔴 ${errors}`); }
-  if (warnings > 0) { issues.push(`🟠 ${warnings}`); }
-  return issues.join(" ");
-}
-
-/**
- * Folder/package icon tint: red if the subtree holds any error, else yellow if
- * any warning, else a package's own coverage colour (a pure folder stays
- * untinted). Lets a folder with hidden errors read red without expanding (#149).
- */
-function packageIconColor(node: PackageTreeNode): vscode.ThemeColor | undefined {
-  if (node.errors > 0) { return new vscode.ThemeColor("list.errorForeground"); }
-  if (node.warnings > 0) { return new vscode.ThemeColor("list.warningForeground"); }
-  // No coverage served (Type Checking disabled, #119) → untinted, like a folder.
-  return node.module?.coveragePercent !== undefined
-    ? coverageColor(node.module.coveragePercent)
-    : undefined;
-}
-
-/**
- * Folder/package row description: the subtree's rolled-up count-style tally
- * ([EXTACT-MODULES-COUNT-STYLE]) so problems are visible without drilling in
- * (#149). A package (`__init__.py`) also keeps its own coverage bar.
- */
-function packageDescription(node: PackageTreeNode): string {
-  const coverage = node.module?.coveragePercent;
-  const own = coverage !== undefined ? `${coverageBar(coverage)} ${coverage}%` : "";
-  return [own, diagnosticTally(node.errors, node.warnings)].filter(Boolean).join(" — ");
-}
-
-/** Folder/package row tooltip: name + (package path/coverage) + subtree diagnostics. */
-function packageTooltip(node: PackageTreeNode): string {
-  const errs = `${node.errors} error${node.errors === 1 ? "" : "s"}`;
-  const warns = `${node.warnings} warning${node.warnings === 1 ? "" : "s"}`;
-  const coverage = node.module?.coveragePercent;
-  return [
-    node.fullName,
-    node.module?.path,
-    coverage !== undefined ? `Coverage: ${coverage}%` : "",
-    `Subtree: ${errs}, ${warns}`,
-  ].filter(Boolean).join("\n");
 }
 
 // ── Workspace health chrome [EXTACT-MODULES-HEADER] ──────────────────────
@@ -537,20 +372,34 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
    * (`pkg/__init__.py`, dotted name `pkg`) shares its node with the `pkg/` folder.
    */
   private static buildPackageTree(modules: readonly ModuleNode[]): PackageTreeNode {
-    const root: PackageTreeNode = { segment: "", fullName: "", children: new Map(), errors: 0, warnings: 0 };
+    const root = ModuleExplorerProvider.emptyNode("", "");
     for (const module of modules) {
       const segments = module.name.split(".").filter((seg) => seg !== "");
       let node = root;
       for (const segment of segments) {
         const fullName = node.fullName === "" ? segment : `${node.fullName}.${segment}`;
         const existing = node.children.get(segment);
-        const child = existing ?? { segment, fullName, children: new Map(), errors: 0, warnings: 0 };
+        const child = existing ?? ModuleExplorerProvider.emptyNode(segment, fullName);
         if (existing === undefined) { node.children.set(segment, child); }
         node = child;
       }
       node.module = module;
     }
     return root;
+  }
+
+  /** A fresh container node with zeroed rollup accumulators (filled by `rollup`). */
+  private static emptyNode(segment: string, fullName: string): PackageTreeNode {
+    return {
+      segment,
+      fullName,
+      children: new Map(),
+      errors: 0,
+      warnings: 0,
+      totalSymbols: 0,
+      annotatedSymbols: 0,
+      graded: false,
+    };
   }
 
   /**
@@ -561,13 +410,22 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
   private static rollup(node: PackageTreeNode): void {
     let errors = node.module?.errors ?? 0;
     let warnings = node.module?.warnings ?? 0;
+    let totalSymbols = node.module?.totalSymbols ?? 0;
+    let annotatedSymbols = node.module?.annotatedSymbols ?? 0;
+    let graded = node.module?.coveragePercent !== undefined;
     for (const child of node.children.values()) {
       ModuleExplorerProvider.rollup(child);
       errors += child.errors;
       warnings += child.warnings;
+      totalSymbols += child.totalSymbols;
+      annotatedSymbols += child.annotatedSymbols;
+      graded ||= child.graded;
     }
     node.errors = errors;
     node.warnings = warnings;
+    node.totalSymbols = totalSymbols;
+    node.annotatedSymbols = annotatedSymbols;
+    node.graded = graded;
   }
 
   /** Render a node: a container becomes a package row, a bare leaf a module row. */

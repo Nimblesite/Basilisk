@@ -5,7 +5,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
     function entryOption(value, selected) {
       const option = document.createElement('option');
       option.value = value;
-      option.textContent = value === 'None' ? 'No entry' : value;
+      option.textContent = value;
       option.selected = value === selected;
       return option;
     }
@@ -15,11 +15,15 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       const select = document.createElement('select');
       select.className = 'severity-select';
       select.dataset.tagEntry = tag.name;
-      const current = entryValue(tag.entry);
+      // No entry shows what no entry resolves to ([CHKARCH-CONFIG-MODEL]):
+      // pep-affecting tags run at error, everything else does not run.
+      const current = entryValue(tag.entry) === NO_ENTRY
+        ? (isPepTag(tag) ? 'Error' : 'Disabled')
+        : entryValue(tag.entry);
       select.dataset.severity = current;
-      // Tag-entry control: error/warning/info/disabled/remove entry. The
-      // server rejects a tag entry that would resolve a pep rule to disabled.
-      [NO_ENTRY].concat(SEVERITIES).forEach((value) => select.append(entryOption(value, current)));
+      // Tag-entry control: error/warning/info — plus disabled only where the
+      // server would accept it (never on a tag that grades pep rules).
+      severityOptions(isPepTag(tag)).forEach((value) => select.append(entryOption(value, current)));
       label.append(select);
       return label;
     }
@@ -62,13 +66,12 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       select.className = 'severity-select';
       select.dataset.ruleEntry = rule.descriptor.code;
       select.dataset.severity = effectiveValue(rule);
-      const current = entryValue(rule.entry);
-      // pep rows: error/warning/info/remove entry — no Disabled control exists
-      // for them ([CHKARCH-CONFIG-MODEL]); analyze rows also offer Disabled.
-      const options = isPepRule(rule)
-        ? [NO_ENTRY].concat(SEVERITIES.filter((value) => value !== 'Disabled'))
-        : [NO_ENTRY].concat(SEVERITIES);
-      options.forEach((value) => select.append(entryOption(value, current)));
+      // No entry shows the resolved severity — for an untouched analyze rule
+      // that IS Disabled ([CHKARCH-CONFIG-MODEL] resolution step 3).
+      const current = entryValue(rule.entry) === NO_ENTRY ? effectiveValue(rule) : entryValue(rule.entry);
+      // pep rows: error/warning/info — no Disabled control exists for them
+      // ([CHKARCH-CONFIG-MODEL]); analyze rows also offer Disabled.
+      severityOptions(isPepRule(rule)).forEach((value) => select.append(entryOption(value, current)));
       label.append(select);
       return label;
     }
@@ -167,12 +170,29 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       byId('root-label').textContent = compactUri(snapshot.rootUri);
       byId('source-label').textContent = compactUri(snapshot.configUri) + ' · revision ' + snapshot.revision;
     }
+    // Configure Severity deep link ([CONFIGEDITOR-VSIX-EXPERIENCE]): focus
+    // the requested rule once — prefill the search filter with its code,
+    // scroll its row into the virtual window, and open its detail panel.
+    function consumeFocusRule() {
+      const code = editorState.focusRule;
+      if (focusRuleConsumed || !code || !snapshot) return;
+      if (!snapshot.rules.some((rule) => rule.descriptor.code === code)) return;
+      focusRuleConsumed = true;
+      byId('rule-search').value = code;
+      applyFilter();
+      const index = filteredRules.findIndex((rule) => rule.descriptor.code === code);
+      if (index >= 0) byId('rule-viewport').scrollTop = index * ROW_HEIGHT;
+      renderRuleWindow();
+      showRule(code);
+      announce('Focused rule ' + code);
+    }
     function renderSnapshot() {
       if (!snapshot) return;
       saveFocus();
       renderSource();
       renderTags();
       applyFilter();
+      consumeFocusRule();
       renderRuleDetail();
       window.requestAnimationFrame(restoreFocus);
     }

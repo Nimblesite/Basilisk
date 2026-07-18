@@ -114,6 +114,9 @@ pub fn hover_at(
             if let Some(ref help) = d.help {
                 let _ = write!(diag_md, "\n\n_{help}_");
             }
+            if let Some(link) = configure_severity_link(d.code.code) {
+                let _ = write!(diag_md, "\n\n{link}");
+            }
             sections.push(diag_md);
         }
     }
@@ -243,6 +246,27 @@ fn format_import_hover(import_info: &ImportInfo) -> String {
     parts.join("\n\n")
 }
 
+/// A "Configure Severity" command link for a non-PEP diagnostic `code`.
+///
+/// Opt-in Basilisk house rules can be graded or disabled per project, so
+/// their hover deep-links into the configuration editor focused on the rule
+/// ([CONFIGEDITOR-VSIX-EXPERIENCE]). PEP rules are graded by the typing spec
+/// and never disabled ([CHKARCH-CONFIG-MODEL]) — they get no link.
+///
+/// The link is a `command:` URI whose argument list `[{"rule":"<code>"}]` is
+/// percent-encoded per the VS Code command-URI contract. Rule codes are
+/// static ASCII identifiers, so only the fixed JSON punctuation needs
+/// encoding.
+fn configure_severity_link(code: &str) -> Option<String> {
+    if basilisk_checker::is_pep_rule(code) {
+        return None;
+    }
+    let command = basilisk_common::configuration_editor::OPEN_EDITOR_COMMAND;
+    Some(format!(
+        "[Configure Severity](command:{command}?%5B%7B%22rule%22%3A%22{code}%22%7D%5D)"
+    ))
+}
+
 mod members;
 
 use members::{builtin_member_hover, external_member_hover, find_class_init};
@@ -254,3 +278,11 @@ use members::{builtin_member_hover, external_member_hover, find_class_init};
     reason = "test-only code: expect/panic acceptable in unit tests"
 )]
 mod tests;
+
+#[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test-only code: expect/panic acceptable in unit tests"
+)]
+mod tests_diagnostics;

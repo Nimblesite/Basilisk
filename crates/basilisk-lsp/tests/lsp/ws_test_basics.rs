@@ -31,9 +31,12 @@ async fn test_ws_initialize() -> TestResult<()> {
 
 #[tokio::test]
 async fn test_ws_did_open_with_type_errors() -> TestResult<()> {
+    // `name` has no default to infer from (BSK-0001) and the returned method
+    // call is not inferable (BSK-0002) — an f-string return would infer
+    // `-> str` and silence BSK-0002 ([TYPEINF-FUNC-RETURN]).
     let (_fixture, diag) = open_and_diagnose(
         "file:///test.py",
-        "def greet(name):\n    return f\"Hello, {name}!\"",
+        "def greet(name):\n    return name.upper()",
     )
     .await?;
 

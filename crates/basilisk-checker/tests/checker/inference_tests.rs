@@ -101,7 +101,13 @@ fn test_unannotated_param_fires_e0001() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn test_missing_return_fires_e0002() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_config("def process(data: str): pass\n", &annotation_rules_config())?;
+    // The returned method-call result is not inferable, so the annotation is
+    // required. A `pass` body would infer `-> None` and stay silent
+    // ([TYPEINF-FUNC-RETURN]).
+    let diags = run_with_config(
+        "def process(data: str): return data.upper()\n",
+        &annotation_rules_config(),
+    )?;
     let e0002: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0002").collect();
     assert!(
         !e0002.is_empty(),

@@ -134,6 +134,13 @@
         "enablement": "basilisk.configurationEditorSupported"
       },
       {
+        "command": "basilisk.editConfig",
+        "title": "Edit Config",
+        "category": "Basilisk",
+        "icon": "$(settings-gear)",
+        "enablement": "basilisk.configurationEditorSupported"
+      },
+      {
         "command": "basilisk.organizeImports",
         "title": "Basilisk: Organize Imports",
         "category": "Basilisk",
@@ -389,6 +396,10 @@
           "when": "basilisk.configurationEditorSupported"
         },
         {
+          "command": "basilisk.editConfig",
+          "when": "false"
+        },
+        {
           "command": "basilisk.info.runAction",
           "when": "false"
         },
@@ -435,6 +446,13 @@
         {
           "command": "basilisk.memoryStop",
           "when": "basilisk.debugging"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "basilisk.editConfig",
+          "when": "resourceFilename == pyproject.toml && basilisk.configurationEditorSupported",
+          "group": "navigation@1"
         }
       ],
       "debug/toolBar": [

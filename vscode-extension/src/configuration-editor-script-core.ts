@@ -20,6 +20,10 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     let selectedRuleCode;
     let lastFocusedRule;
     let overlayWasBlocking = false;
+    // One-shot per webview lifetime: the Configure Severity deep link's
+    // focus target is applied on the first snapshot render only, so later
+    // state posts never stomp the user's own search/selection.
+    let focusRuleConsumed = false;
 
     function byId(id) { return document.getElementById(id); }
     function clear(node) { node.replaceChildren(); }
@@ -49,6 +53,12 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     // THE partition ([CHKARCH-COMMANDS]): pep-tagged rules always run and can
     // never be disabled; only analyze rules get a Disabled control.
     function isPepRule(rule) { return rule.descriptor.tags.indexOf(PEP_TAG) !== -1; }
+    // A pep-affecting tag entry can never be disabled either: the pep source
+    // tag and every PEP category grade only pep rules ([CHKARCH-CONFIG-MODEL]).
+    function isPepTag(tag) { return tag.name === PEP_TAG || kind(tag.kind, 'Descriptive') === 'PepCategory'; }
+    // Dropdowns list concrete severities only — there is no separate no-entry
+    // choice; an analyze rule with no entry is disabled, so the two were one.
+    function severityOptions(pep) { return pep ? SEVERITIES.filter((value) => value !== 'Disabled') : SEVERITIES; }
     function ruleSearchText(rule) {
       const descriptor = rule.descriptor;
       return [descriptor.code, descriptor.title, descriptor.summary].concat(descriptor.tags).join(' ').toLowerCase();
@@ -81,17 +91,13 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     function postPreview(mutations) {
       vscode.postMessage({ type: 'preview', mutations });
     }
-    // A rule row can request exactly SetRule or RemoveRule ([CONFIGEDITOR-MODEL]).
+    // A dropdown change always writes an explicit entry ([CONFIGEDITOR-MODEL]):
+    // an explicit 'disabled' beats any tag entry, so Disabled always disables.
     function ruleMutation(code, value) {
-      return value === NO_ENTRY
-        ? { kind: 'RemoveRule', code }
-        : { kind: 'SetRule', code, severity: { kind: value } };
+      return { kind: 'SetRule', code, severity: { kind: value } };
     }
-    // A tag group can request exactly SetTag or RemoveTag ([CONFIGEDITOR-MODEL]).
     function tagMutation(tag, value) {
-      return value === NO_ENTRY
-        ? { kind: 'RemoveTag', tag }
-        : { kind: 'SetTag', tag, severity: { kind: value } };
+      return { kind: 'SetTag', tag, severity: { kind: value } };
     }
     function selectedRule() {
       return snapshot && snapshot.rules.find((rule) => rule.descriptor.code === selectedRuleCode);
@@ -106,10 +112,16 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     }
     function restoreFocus() {
       if (!lastFocusedRule) return;
+      // Only re-attach focus the row rebuild destroyed (focus fell back to
+      // body) — never steal live focus. preventScroll keeps the restored
+      // focus from scrolling the stale row back into view, which pinned the
+      // viewport and made rules below the fold unreachable.
+      const active = document.activeElement;
+      if (active && active !== document.body) return;
       const row = document.querySelector('[data-rule-code="' + CSS.escape(lastFocusedRule.code) + '"]');
       if (!row) return;
       const selector = lastFocusedRule.control === 'select' ? 'select' : '.rule-copy button';
       const control = row.querySelector(selector);
-      if (control) control.focus();
+      if (control) control.focus({ preventScroll: true });
     }
 `;

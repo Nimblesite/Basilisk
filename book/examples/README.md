@@ -1,13 +1,16 @@
 # Signal Box example project
 
 Signal Box will be the book-owned, executable through-line. It will remain
-dependency-light and target Python 3.12.
+dependency-light and avoid a project-wide Python-version assumption. A
+checkpoint may use a versioned feature only when the lesson names its governing
+PEP or language boundary.
 
-The first executable checkpoint now lives in [`signal-box/`](signal-box/).
-Chapter 9 uses its explicit annotation policy and deliberately incomplete
-functions to capture the real configuration editor and its path preview. Run
-the capture reproducibly with `make -C book screenshots` from the repository
-root.
+Chapter 4's executable checkpoint lives in
+[`ch04-type-vocabulary/`](ch04-type-vocabulary/). Chapter 9 uses
+[`signal-box/`](signal-box/) with its explicit annotation policy and
+deliberately incomplete functions to capture the real configuration editor and
+its path preview. Run that capture reproducibly with `make -C book screenshots`
+from the repository root.
 
 Planned checkpoints:
 

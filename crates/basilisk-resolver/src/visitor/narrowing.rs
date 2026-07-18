@@ -150,54 +150,11 @@ fn extract_guard_from_test(
     else_body_span: Option<Span>,
 ) -> Option<NarrowingGuardKind> {
     match test {
-        // isinstance(x, T) or isinstance(x, (T1, T2))
-        Expr::Call(call) => {
-            let func_name = expr_simple_name(&call.func)?;
-            if func_name == "isinstance" && call.arguments.args.len() == 2 {
-                let variable = expr_simple_name(call.arguments.args.first()?)?;
-                let type_names = extract_type_names(call.arguments.args.get(1)?);
-                if !type_names.is_empty() {
-                    return Some(NarrowingGuardKind::IsInstance {
-                        variable,
-                        type_names,
-                        if_body_span,
-                        else_body_span,
-                    });
-                }
-            }
-            None
-        }
-        // x is None / x is not None
+        // isinstance(x, T) / issubclass(x, T) / hasattr(x, "name")
+        Expr::Call(call) => extract_call_guard(call, if_body_span, else_body_span),
+        // x is None / x == lit / x in (lits) / "key" in td
         Expr::Compare(cmp) if cmp.comparators.len() == 1 => {
-            let is_none_check = matches!(cmp.comparators.first(), Some(Expr::NoneLiteral(_)));
-            let left_is_name = expr_simple_name(&cmp.left);
-
-            // Also handle `None is x` (reversed)
-            let (variable, is_none) = if is_none_check {
-                (left_is_name?, true)
-            } else if matches!(cmp.left.as_ref(), Expr::NoneLiteral(_)) {
-                let right_name = cmp.comparators.first().and_then(expr_simple_name)?;
-                (right_name, true)
-            } else {
-                return None;
-            };
-
-            if !is_none {
-                return None;
-            }
-
-            let is_positive = match cmp.ops.first() {
-                Some(CmpOp::Is) => true,
-                Some(CmpOp::IsNot) => false,
-                _ => return None,
-            };
-
-            Some(NarrowingGuardKind::IsNone {
-                variable,
-                is_positive,
-                if_body_span,
-                else_body_span,
-            })
+            extract_compare_guard(cmp, if_body_span, else_body_span)
         }
         // `not x` — inverted truthiness
         Expr::UnaryOp(unary) if matches!(unary.op, ruff_python_ast::UnaryOp::Not) => {
@@ -218,6 +175,207 @@ fn extract_guard_from_test(
                 if_body_span,
                 else_body_span,
             })
+        }
+        _ => None,
+    }
+}
+
+/// Extract a guard from a call test: `isinstance`, `issubclass`, `hasattr`.
+fn extract_call_guard(
+    call: &ruff_python_ast::ExprCall,
+    if_body_span: Span,
+    else_body_span: Option<Span>,
+) -> Option<NarrowingGuardKind> {
+    let func_name = expr_simple_name(&call.func)?;
+    if call.arguments.args.len() != 2 {
+        return None;
+    }
+    let variable = expr_simple_name(call.arguments.args.first()?)?;
+    let second = call.arguments.args.get(1)?;
+    match func_name.as_str() {
+        "isinstance" => {
+            let type_names = extract_type_names(second);
+            (!type_names.is_empty()).then_some(NarrowingGuardKind::IsInstance {
+                variable,
+                type_names,
+                if_body_span,
+                else_body_span,
+            })
+        }
+        // Implements [TYPEINF-NARROWING-ISSUBCLASS].
+        "issubclass" => {
+            let type_names = extract_type_names(second);
+            (!type_names.is_empty()).then_some(NarrowingGuardKind::IsSubclass {
+                variable,
+                type_names,
+                if_body_span,
+                else_body_span,
+            })
+        }
+        // Implements [TYPEINF-NARROWING-HASATTR] (groundwork).
+        "hasattr" => match second {
+            Expr::StringLiteral(lit) => Some(NarrowingGuardKind::HasAttr {
+                variable,
+                attribute: lit.value.to_str().to_owned(),
+                if_body_span,
+                else_body_span,
+            }),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Extract a guard from a single comparison: `is None`, `== <literal>`,
+/// `in (<literals>)`, or `"key" in td`.
+fn extract_compare_guard(
+    cmp: &ruff_python_ast::ExprCompare,
+    if_body_span: Span,
+    else_body_span: Option<Span>,
+) -> Option<NarrowingGuardKind> {
+    let op = *cmp.ops.first()?;
+    let right = cmp.comparators.first()?;
+    match op {
+        CmpOp::Is | CmpOp::IsNot => {
+            // Implements [TYPEINF-NARROWING-TYPEOF]: `type(x) is C`.
+            if let Some(guard) = extract_type_of_guard(cmp, op, right, if_body_span, else_body_span)
+            {
+                return Some(guard);
+            }
+            extract_none_guard(cmp, op, right, if_body_span, else_body_span)
+        }
+        // Implements [TYPEINF-NARROWING-EQ-LITERAL].
+        CmpOp::Eq | CmpOp::NotEq => {
+            let variable = expr_simple_name(&cmp.left)?;
+            let literal_text = literal_source_text(right)?;
+            Some(NarrowingGuardKind::EqualsLiteral {
+                variable,
+                literal_text,
+                is_positive: matches!(op, CmpOp::Eq),
+                if_body_span,
+                else_body_span,
+            })
+        }
+        CmpOp::In | CmpOp::NotIn => {
+            extract_membership_guard(cmp, op, right, if_body_span, else_body_span)
+        }
+        _ => None,
+    }
+}
+
+/// `type(x) is C` / `type(x) is not C` — exact-class comparison.
+fn extract_type_of_guard(
+    cmp: &ruff_python_ast::ExprCompare,
+    op: CmpOp,
+    right: &Expr,
+    if_body_span: Span,
+    else_body_span: Option<Span>,
+) -> Option<NarrowingGuardKind> {
+    let Expr::Call(call) = cmp.left.as_ref() else {
+        return None;
+    };
+    if expr_simple_name(&call.func)? != "type" || call.arguments.args.len() != 1 {
+        return None;
+    }
+    let variable = expr_simple_name(call.arguments.args.first()?)?;
+    let type_name = expr_simple_name(right)?;
+    Some(NarrowingGuardKind::TypeOfIs {
+        variable,
+        type_name,
+        is_positive: matches!(op, CmpOp::Is),
+        if_body_span,
+        else_body_span,
+    })
+}
+
+/// The original `is None` / `is not None` extraction (both operand orders).
+fn extract_none_guard(
+    cmp: &ruff_python_ast::ExprCompare,
+    op: CmpOp,
+    right: &Expr,
+    if_body_span: Span,
+    else_body_span: Option<Span>,
+) -> Option<NarrowingGuardKind> {
+    let variable = if matches!(right, Expr::NoneLiteral(_)) {
+        expr_simple_name(&cmp.left)?
+    } else if matches!(cmp.left.as_ref(), Expr::NoneLiteral(_)) {
+        expr_simple_name(right)?
+    } else {
+        return None;
+    };
+    Some(NarrowingGuardKind::IsNone {
+        variable,
+        is_positive: matches!(op, CmpOp::Is),
+        if_body_span,
+        else_body_span,
+    })
+}
+
+/// `x in (lits)` → [`NarrowingGuardKind::InLiterals`];
+/// `"key" in td` → [`NarrowingGuardKind::KeyInDict`].
+fn extract_membership_guard(
+    cmp: &ruff_python_ast::ExprCompare,
+    op: CmpOp,
+    right: &Expr,
+    if_body_span: Span,
+    else_body_span: Option<Span>,
+) -> Option<NarrowingGuardKind> {
+    let is_positive = matches!(op, CmpOp::In);
+    // Implements [TYPEINF-NARROWING-TYPEDDICT-KEY]: `"key" in td`.
+    if let (Expr::StringLiteral(key), Some(variable)) = (cmp.left.as_ref(), expr_simple_name(right))
+    {
+        return Some(NarrowingGuardKind::KeyInDict {
+            variable,
+            key: key.value.to_str().to_owned(),
+            is_positive,
+            if_body_span,
+            else_body_span,
+        });
+    }
+    // Implements [TYPEINF-NARROWING-IN-LITERAL]: `x in ("a", "b")`.
+    let variable = expr_simple_name(&cmp.left)?;
+    let elements: &[Expr] = match right {
+        Expr::Tuple(tuple) => &tuple.elts,
+        Expr::List(list) => &list.elts,
+        Expr::Set(set) => &set.elts,
+        _ => return None,
+    };
+    let literal_texts: Vec<String> = elements.iter().filter_map(literal_source_text).collect();
+    if literal_texts.len() != elements.len() || literal_texts.is_empty() {
+        return None;
+    }
+    Some(NarrowingGuardKind::InLiterals {
+        variable,
+        literal_texts,
+        is_positive,
+        if_body_span,
+        else_body_span,
+    })
+}
+
+/// Case-preserving literal text for equality/membership guards: quoted
+/// strings, decimal ints (including negated), and booleans. Anything else —
+/// including strings containing a double quote — is skipped rather than
+/// approximated.
+fn literal_source_text(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::StringLiteral(lit) => {
+            let value = lit.value.to_str();
+            (!value.contains('"')).then(|| format!("\"{value}\""))
+        }
+        Expr::NumberLiteral(num) => match &num.value {
+            ruff_python_ast::Number::Int(int) => int.as_i64().map(|n| n.to_string()),
+            _ => None,
+        },
+        Expr::BooleanLiteral(lit) => Some(if lit.value { "True" } else { "False" }.to_owned()),
+        Expr::UnaryOp(unary) if matches!(unary.op, ruff_python_ast::UnaryOp::USub) => {
+            match unary.operand.as_ref() {
+                Expr::NumberLiteral(num) => match &num.value {
+                    ruff_python_ast::Number::Int(int) => int.as_i64().map(|n| (-n).to_string()),
+                    _ => None,
+                },
+                _ => None,
+            }
         }
         _ => None,
     }

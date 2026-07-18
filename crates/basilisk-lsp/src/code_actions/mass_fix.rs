@@ -17,7 +17,7 @@ use super::fixes;
 /// All diagnostic codes that have an autofix implementation.
 pub const ALL_FIXABLE_RULES: &[&str] = &[
     "BSK-0001", // Missing parameter type → `: Any`
-    "BSK-0002", // Missing return type → `-> None`
+    "BSK-0002", // Missing return type → `-> Any`
     "BSK-0003", // Missing variable type → `: <inferred>`
     "BSK-0005", // Missing class attribute type → `: Any`
     "BSK-0050", // Redundant annotation → remove
