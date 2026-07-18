@@ -69,7 +69,7 @@ the complete text.
 
 typeshed  —  https://github.com/python/typeshed
 Author:  The typeshed contributors
-License: Apache-2.0
+License: Apache-2.0 (parts MIT)
 
 Basilisk derives two data tables from typeshed's git tree, compiled into the
 binary as perfect-hash maps by `crates/basilisk-stubs/build.rs`:
@@ -84,8 +84,10 @@ typeshed is also the Tier-1 baseline for standard-library stubs
 ([CHKARCH-STUBS-TYPESHED]); users may replace it wholesale via the
 `typeshed-path` config.
 
-typeshed is distributed under the Apache License, Version 2.0. The full license
-text is available at: https://www.apache.org/licenses/LICENSE-2.0 and in
+typeshed's LICENSE states the project is "licensed under the terms of the Apache
+license" and that "Parts of typeshed are licensed under different licenses (like
+the MIT license)" (Copyright (c) 2015 Jukka Lehtosalo and contributors). The full
+text is available at https://www.apache.org/licenses/LICENSE-2.0 and in
 typeshed's repository at https://github.com/python/typeshed/blob/main/LICENSE
 
 -------------------------------------------------------------------------------

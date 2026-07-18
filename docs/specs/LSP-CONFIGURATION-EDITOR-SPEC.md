@@ -76,29 +76,40 @@ Multi-root selection is explicit: the active editor's root wins, otherwise the u
 
 A non-PEP diagnostic's hover carries a **Configure Severity** deep link ([LSPARCH-FEATURES-HOVER](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-HOVER)): the LSP embeds a `command:basilisk.openConfigurationEditor` link with a `{ "rule": <code> }` argument, the client trusts hover markdown for exactly that one command, and the opened editor focuses the rule once per webview lifetime — the search filter is prefilled with the code and the rule's detail opens. The argument is untrusted input: anything but a bounded, non-empty string is ignored, and an unknown code opens the editor unfocused. PEP rules get no link — no disable exists for them.
 
-## Typeshed path settings {#LSPCFGED-TYPESHED}
+## Typeshed settings {#LSPCFGED-TYPESHED}
 
 The standard-library source implements the pinned typing specification's custom
 "canonical source" option
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-Basilisk otherwise acquires an explicit `typeshed-commit` or verifies `main` at
-runtime ([CHECKER-STUB-RESOLUTION §STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)).
-Two of its `[tool.basilisk]` keys name a directory on disk — `typeshed-cache-path`
-(where automatic data is stored) and `typeshed-path` (your sole step-3 tree,
-which disables every other step-3 source) — so the editor surfaces them as **path-typed settings** rendered
-with a native **folder-picker** rather than a free-text field. These are the only
-path-typed settings the editor exposes; they are scalar directory keys, distinct
-from the glob-path and per-module rule overrides the editor deliberately excludes
+With no override Basilisk downloads the latest `python/typeshed@main` commit and
+falls back to the bundled ZIP snapshot offline
+([CHECKER-STUB-RESOLUTION §STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)).
+The guiding principle is **freshness by default, determinism one control away**:
+an empty `typeshed-commit` tracks the freshest upstream types; filling it pins
+byte-for-byte. Every typeshed knob is editable here — none is CLI-only:
+
+| Control | `[tool.basilisk]` key | Widget |
+|---|---|---|
+| Pinned commit (empty = latest) | `typeshed-commit` | text (40-char SHA) |
+| Alternate archive URL | `typeshed-url` | text (`{sha}` template) |
+| Download cache location | `typeshed-cache-path` | **folder-picker** |
+| Custom canonical tree | `typeshed-path` | **folder-picker** |
+| Verify downloads against the SHA | `typeshed-verify` | toggle (default on) |
+
+The two directory keys render with a native folder-picker rather than free text;
+they are the only path-typed settings the editor exposes, distinct from the
+glob-path and per-module rule overrides it deliberately excludes
 ([§CONFIGEDITOR-ACCEPTANCE](#CONFIGEDITOR-ACCEPTANCE)).
 
-The server owns the setting metadata. The LSP advertises each path setting as an
-editor field carrying its `[tool.basilisk]` key, its server-resolved current value,
-and a `directory` path type — the discriminator that tells the client to offer a
-folder chooser instead of a text control. Values are resolved exactly like every
-other snapshot field: a relative path is shown against the workspace root, and an
-unset key shows its resolved default (the OS cache directory for
-`typeshed-cache-path`; no selected directory for `typeshed-path`). The client renders only
-what the server advertises and never fabricates a setting the server did not
+The server owns the setting metadata. The LSP advertises each typeshed setting as
+an editor field carrying its `[tool.basilisk]` key, its server-resolved current
+value, and a widget discriminator — `directory` (folder chooser), `text`, or
+`boolean` — so the client renders the right control instead of guessing. Values
+are resolved exactly like every other snapshot field: a relative path is shown
+against the workspace root, and an unset key shows its resolved default (the OS
+cache directory for `typeshed-cache-path`; latest-`main` for an empty
+`typeshed-commit`; no selected directory for `typeshed-path`). The client renders
+only what the server advertises and never fabricates a setting the server did not
 describe.
 
 Choosing a folder is a client affordance, not a new command. The VS Code shell opens
@@ -120,10 +131,10 @@ surfaces the live typeshed acquisition state as a read-only row:
 
 - **while acquiring** — a spinner (`$(sync~spin)`) with an *acquiring typeshed…*
   label, shown from `initialized` acquisition until the stdlib source is
-  ready ([§STUBRES-TYPESHED-CLONE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CLONE));
-- **once ready** — the selected source and path: custom, explicit pinned SHA,
-  freshly verified `main` SHA, or the bundled names-only fallback
-  ([§STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
+  ready ([§STUBRES-TYPESHED-ACQUIRE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE));
+- **once ready** — the selected source and path: custom, pinned SHA, latest
+  verified `main` SHA, or the bundled ZIP snapshot (surfaced with the prominent
+  fallback warning) ([§STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 
 The row carries no command and no inline control and refreshes from the same LSP
 lifecycle and configuration signals as the rest of the tree; the server is the sole
