@@ -18,6 +18,6 @@ pub mod guards;
 pub mod set_ops;
 
 pub use env::NarrowEnv;
-pub use flow::{analyse_function, FlowResult, NarrowedUse};
-pub use guards::{guard_outcomes, GuardOutcome};
+pub use flow::{analyse_function, analyse_function_in, FlowResult, NarrowedUse};
+pub use guards::{guard_outcomes, guard_outcomes_in, GuardOutcome, NarrowContext, TypedDictKeys};
 pub use set_ops::{intersect, subtract};

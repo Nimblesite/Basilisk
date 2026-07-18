@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 
 use basilisk_checker::narrow::{analyse_function, FlowResult, NarrowEnv};
-use basilisk_checker::types::InferredType;
+use basilisk_checker::types::{InferredType, LiteralValue};
 use ruff_python_ast::Stmt;
 
 /// Run the flow walker over `source`'s FIRST top-level function, with
@@ -264,6 +264,150 @@ def f(x: int) -> None:
         last_use(&result, "x"),
         Some(InferredType::Never),
         "inside `isinstance(x, str)` with x: int the branch is unreachable: {:?}",
+        result.narrowed_uses
+    );
+}
+
+/// `x == <literal>` narrows to the literal; the complement removes exactly
+/// that literal member ([TYPEINF-NARROWING-EQ-LITERAL]).
+#[test]
+fn equality_literal_narrows_both_branches() {
+    let result = analyse(
+        r"
+def f(x: Literal[1] | Literal[2]) -> None:
+    if x == 1:
+        a = x
+    else:
+        b = x
+",
+    );
+    let uses: Vec<&InferredType> = result
+        .narrowed_uses
+        .iter()
+        .filter(|u| u.name == "x")
+        .map(|u| &u.narrowed)
+        .collect();
+    assert!(
+        uses.contains(&&InferredType::Literal(LiteralValue::Int(1))),
+        "positive branch must see Literal[1]: {uses:?}"
+    );
+    assert!(
+        uses.contains(&&InferredType::Literal(LiteralValue::Int(2))),
+        "complement must see Literal[2]: {uses:?}"
+    );
+}
+
+/// `x in (1, 2)` narrows to the union of members; `not in`/else removes them
+/// ([TYPEINF-NARROWING-IN-LITERAL]).
+#[test]
+fn membership_literals_narrow_both_branches() {
+    let result = analyse(
+        r"
+def f(x: Literal[1] | Literal[2] | Literal[3]) -> None:
+    if x in (1, 2):
+        a = x
+    else:
+        b = x
+",
+    );
+    let else_use = last_use(&result, "x").expect("else-branch use recorded");
+    assert_eq!(
+        else_use,
+        InferredType::Literal(LiteralValue::Int(3)),
+        "the complement of `in (1, 2)` must be Literal[3]: {:?}",
+        result.narrowed_uses
+    );
+}
+
+/// `"key" in td` keeps union members whose `TypedDict` schema declares the
+/// key; the complement drops members where it is required
+/// ([TYPEINF-NARROWING-TYPEDDICT-KEY]).
+#[test]
+fn typeddict_key_membership_narrows_union() {
+    use basilisk_checker::narrow::{analyse_function_in, NarrowContext, TypedDictKeys};
+    let source = r#"
+def f(x: WithKey | WithoutKey) -> None:
+    if "k" in x:
+        a = x
+    else:
+        b = x
+"#;
+    let parsed = basilisk_parser::parse_source(source.to_owned(), "td.py".to_owned())
+        .expect("fixture parses");
+    let resolved = basilisk_resolver::resolve(&parsed).expect("fixture resolves");
+    let function = resolved.functions.first().expect("function");
+    let declared: HashMap<String, InferredType> = [(
+        "x".to_owned(),
+        InferredType::Union(vec![
+            InferredType::Named("withkey".to_owned()),
+            InferredType::Named("withoutkey".to_owned()),
+        ]),
+    )]
+    .into_iter()
+    .collect();
+    let mut ctx = NarrowContext::default();
+    let _ = ctx.typeddict_keys.insert(
+        "withkey".to_owned(),
+        TypedDictKeys {
+            all: ["k".to_owned()].into_iter().collect(),
+            required: ["k".to_owned()].into_iter().collect(),
+        },
+    );
+    let _ = ctx
+        .typeddict_keys
+        .insert("withoutkey".to_owned(), TypedDictKeys::default());
+
+    let reparsed = ruff_python_parser::parse_module(source).expect("reparses");
+    let body = reparsed
+        .syntax()
+        .body
+        .iter()
+        .find_map(|stmt| match stmt {
+            Stmt::FunctionDef(def) => Some(def.body.clone()),
+            _ => None,
+        })
+        .expect("body");
+    let result = analyse_function_in(
+        &body,
+        NarrowEnv::new(declared),
+        &function.narrowing_guards,
+        &ctx,
+    );
+    let uses: Vec<&InferredType> = result
+        .narrowed_uses
+        .iter()
+        .filter(|u| u.name == "x")
+        .map(|u| &u.narrowed)
+        .collect();
+    assert!(
+        uses.contains(&&InferredType::Named("withkey".to_owned())),
+        "positive branch keeps the schema with the key: {uses:?}"
+    );
+    assert!(
+        uses.contains(&&InferredType::Named("withoutkey".to_owned())),
+        "complement keeps the schema lacking the required key: {uses:?}"
+    );
+}
+
+/// Implied else: when every match case diverges, code after the match sees
+/// the subject minus all covered pattern types.
+#[test]
+fn exhaustive_diverging_match_narrows_after() {
+    let result = analyse(
+        r"
+def f(x: int | str | None) -> None:
+    match x:
+        case int():
+            return
+        case str():
+            return
+    y = x
+",
+    );
+    assert_eq!(
+        last_use(&result, "x"),
+        Some(InferredType::None_),
+        "after int/str cases both return, only None remains: {:?}",
         result.narrowed_uses
     );
 }

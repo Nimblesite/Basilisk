@@ -423,9 +423,19 @@ reproducible, write-always, ratcheted:
   results lands with the Integration-stage rule migration.
 - [ ] Reformulate narrowing as intersection-and-negation types over a
   Salsa-backed use-def map with `phi`/join at control-flow merges.
-- [ ] Extend guard support: `issubclass`, `==`/`in` against literals,
+- [x] Extend guard support: `issubclass`, `==`/`in` against literals,
   `hasattr` (synthetic protocol intersection), exhaustiveness/implied-else,
   and TypedDict `"key" in td` narrowing.
+  — Resolver extraction for all five (`visitor/narrowing.rs`, new
+  `NarrowingGuardKind` variants with case-preserving literal capture) and
+  checker interpretation (`narrow/guards.rs`): `==`/`in` literal
+  narrowing with exact-literal complements, `"key" in td` union filtering
+  over a `NarrowContext` of `TypedDict` key sets (required vs optional),
+  and implied-else after fully-diverging `match` statements. `issubclass`
+  and `hasattr` interpretation is deliberately identity until `type[...]`
+  object modelling and synthetic-protocol intersections land with the
+  shared-subtyping work — extraction is live, so flipping them on is a
+  local change.
 - [ ] Decide and document the attribute-narrowing-across-calls tradeoff;
   default to the usable behavior, make it configurable.
 - [ ] Replace pattern-matched reachability idioms with inference-driven

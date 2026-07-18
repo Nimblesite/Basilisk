@@ -16,7 +16,7 @@ use crate::bidir::BidirEngine;
 use crate::types::InferredType;
 
 use super::env::NarrowEnv;
-use super::guards::{guard_outcomes, GuardOutcome};
+use super::guards::{guard_outcomes_in, GuardOutcome};
 
 /// One narrowed name-use site: the location and the type visible there.
 #[derive(Debug, Clone, PartialEq)]
@@ -44,12 +44,25 @@ pub struct FlowResult {
 /// test-expression span).
 #[must_use]
 pub fn analyse_function(body: &[Stmt], env: NarrowEnv, guards: &[NarrowingGuard]) -> FlowResult {
+    analyse_function_in(body, env, guards, &super::guards::NarrowContext::default())
+}
+
+/// [`analyse_function`] with module facts (`TypedDict` schemas) available to
+/// the guard interpreter.
+#[must_use]
+pub fn analyse_function_in(
+    body: &[Stmt],
+    env: NarrowEnv,
+    guards: &[NarrowingGuard],
+    ctx: &super::guards::NarrowContext,
+) -> FlowResult {
     let mut walker = FlowWalker {
         env,
         guards_by_span: guards
             .iter()
             .map(|guard| ((guard.span.start, guard.span.end), guard))
             .collect(),
+        ctx,
         result: FlowResult::default(),
     };
     walker.walk_stmts(body);
@@ -60,6 +73,7 @@ pub fn analyse_function(body: &[Stmt], env: NarrowEnv, guards: &[NarrowingGuard]
 struct FlowWalker<'g> {
     env: NarrowEnv,
     guards_by_span: HashMap<(u32, u32), &'g NarrowingGuard>,
+    ctx: &'g super::guards::NarrowContext,
     result: FlowResult,
 }
 
@@ -209,6 +223,41 @@ impl FlowWalker<'_> {
             self.walk_stmts(&case.body);
             let _ = self.env.pop_branch();
         }
+        self.narrow_after_match(match_guard, node);
+    }
+
+    /// Implied-else exhaustiveness: when every case body diverges, reaching
+    /// past the `match` means no case matched — the subject loses every
+    /// covered pattern type ([TYPEINF-NARROWING-MATCH]).
+    fn narrow_after_match(
+        &mut self,
+        match_guard: Option<&NarrowingGuard>,
+        node: &ruff_python_ast::StmtMatch,
+    ) {
+        let Some(guard) = match_guard.filter(|guard| !guard.in_loop) else {
+            return;
+        };
+        let basilisk_resolver::NarrowingGuardKind::Match {
+            variable,
+            cases,
+            has_wildcard,
+        } = &guard.kind
+        else {
+            return;
+        };
+        let all_diverge = node.cases.iter().all(|case| diverges(&case.body));
+        if *has_wildcard || !all_diverge {
+            return;
+        }
+        let Some(current) = self.env.lookup(variable) else {
+            return;
+        };
+        let covered = cases
+            .iter()
+            .map(|case| InferredType::from_annotation(&case.pattern_type))
+            .fold(InferredType::Never, InferredType::union);
+        self.env
+            .narrow(variable, super::set_ops::subtract(&current, &covered));
     }
 
     /// Apply one case's pattern narrowing, when the resolver captured it.
@@ -265,7 +314,7 @@ impl FlowWalker<'_> {
         let key = (u32::from(range.start()), u32::from(range.end()));
         let guard = self.guards_by_span.get(&key)?;
         let current = self.env.lookup(variable_of(guard))?;
-        guard_outcomes(guard, &current)
+        guard_outcomes_in(guard, &current, self.ctx)
     }
 
     /// Record every narrowed `Name` read inside `expr`.
@@ -292,17 +341,7 @@ impl FlowWalker<'_> {
 /// The variable a guard narrows (guards produced by the resolver always
 /// target exactly one name).
 fn variable_of(guard: &NarrowingGuard) -> &str {
-    use basilisk_resolver::NarrowingGuardKind as K;
-    match &guard.kind {
-        K::IsInstance { variable, .. }
-        | K::IsNone { variable, .. }
-        | K::Truthiness { variable, .. }
-        | K::Assignment { variable, .. }
-        | K::TypeGuard { variable, .. }
-        | K::TypeIs { variable, .. }
-        | K::Match { variable, .. } => variable,
-        K::Assert { inner } => variable_of_kind(inner),
-    }
+    variable_of_kind(&guard.kind)
 }
 
 /// Recurse into an `assert`'s inner guard kind for its variable.
@@ -315,7 +354,12 @@ fn variable_of_kind(kind: &basilisk_resolver::NarrowingGuardKind) -> &str {
         | K::Assignment { variable, .. }
         | K::TypeGuard { variable, .. }
         | K::TypeIs { variable, .. }
-        | K::Match { variable, .. } => variable,
+        | K::Match { variable, .. }
+        | K::IsSubclass { variable, .. }
+        | K::EqualsLiteral { variable, .. }
+        | K::InLiterals { variable, .. }
+        | K::HasAttr { variable, .. }
+        | K::KeyInDict { variable, .. } => variable,
         K::Assert { inner } => variable_of_kind(inner),
     }
 }
