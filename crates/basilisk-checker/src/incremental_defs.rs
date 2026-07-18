@@ -323,3 +323,64 @@ pub fn module_interface(db: &dyn Db, file: SourceFile) -> ModuleInterface {
             .collect(),
     )
 }
+
+/// Tracked query: the flow-narrowed name uses within one function
+/// definition — the **Salsa-backed use-def map** of
+/// [TYPEINF-TARGET-NARROWING] at definition granularity.
+///
+/// Re-parses and re-resolves the definition's own slice (so the query
+/// depends on nothing but the tracked `source` field: an edit elsewhere in
+/// the file leaves this memo untouched), seeds the narrowing environment
+/// from the parameter annotations, and runs the flow walker
+/// ([`crate::narrow::analyse_function`]) with its branch frames and
+/// `phi`-joins over the resolver-collected guards.
+#[salsa::tracked(returns(ref))]
+pub fn narrowed_uses<'db>(
+    db: &'db dyn Db,
+    def: Definition<'db>,
+) -> Vec<crate::narrow::NarrowedUse> {
+    if def.kind(db) != DefKind::Function {
+        return Vec::new();
+    }
+    let slice = def.source(db);
+    let Ok(parsed) = basilisk_parser::parse_source(slice.clone(), "def.py".to_owned()) else {
+        return Vec::new();
+    };
+    let Ok(resolved) = basilisk_resolver::resolve(&parsed) else {
+        return Vec::new();
+    };
+    let Some(function) = resolved.functions.first() else {
+        return Vec::new();
+    };
+    let declared = declared_parameter_types(slice, function);
+    let Ok(reparsed) = ruff_python_parser::parse_module(slice) else {
+        return Vec::new();
+    };
+    let Some(Stmt::FunctionDef(function_def)) = reparsed.syntax().body.first() else {
+        return Vec::new();
+    };
+    crate::narrow::analyse_function(
+        &function_def.body,
+        crate::narrow::NarrowEnv::new(declared),
+        &function.narrowing_guards,
+    )
+    .narrowed_uses
+}
+
+/// Parameter name → declared type, from a function's annotation spans.
+fn declared_parameter_types(
+    slice: &str,
+    function: &basilisk_resolver::FunctionInfo,
+) -> std::collections::HashMap<String, InferredType> {
+    function
+        .parameters
+        .iter()
+        .filter_map(|param| {
+            let span = param.annotation_span?;
+            let start = usize::try_from(span.start).ok()?;
+            let end = usize::try_from(span.end).ok()?;
+            let text = slice.get(start..end)?;
+            Some((param.name.clone(), InferredType::from_annotation(text)))
+        })
+        .collect()
+}

@@ -129,6 +129,20 @@ fn outcome_for_kind(
             })
         }
         NarrowingGuardKind::Assert { inner } => outcome_for_kind(inner, current, true, ctx),
+        extended => extended_outcome_for_kind(extended, current, whole_scope, ctx),
+    }
+}
+
+/// Interpretation of the extended guards ([NARROWPLAN-CHECKLIST] Stage 2,
+/// "extend guard support") — split from [`outcome_for_kind`] purely to keep
+/// both dispatchers small.
+fn extended_outcome_for_kind(
+    kind: &NarrowingGuardKind,
+    current: &InferredType,
+    whole_scope: bool,
+    ctx: &NarrowContext,
+) -> Option<GuardOutcome> {
+    match kind {
         // Implements [TYPEINF-NARROWING-EQ-LITERAL]: `x == <lit>` narrows
         // positively to the literal; the complement removes exactly that
         // literal member (equality never excludes a broader type).
@@ -198,8 +212,9 @@ fn outcome_for_kind(
         }),
         // Assignment and match narrowing flow through dedicated paths (the
         // bidirectional engine's walrus/assign handling and per-case match
-        // environments) rather than a two-branch outcome.
-        NarrowingGuardKind::Assignment { .. } | NarrowingGuardKind::Match { .. } => None,
+        // environments) rather than a two-branch outcome. Core kinds were
+        // handled by [`outcome_for_kind`] before delegating here.
+        _ => None,
     }
 }
 

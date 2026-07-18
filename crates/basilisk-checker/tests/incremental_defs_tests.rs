@@ -179,3 +179,49 @@ fn body_only_edit_backdates_the_module_interface() {
         "a body-only edit must not change the interface value"
     );
 }
+
+/// The Salsa-backed use-def map ([TYPEINF-TARGET-NARROWING]): `narrowed_uses`
+/// reports flow-narrowed reads per definition, and editing one function
+/// re-executes only that function's query — narrowing is incremental at
+/// definition granularity.
+#[test]
+fn narrowed_uses_is_definition_incremental() {
+    use basilisk_checker::incremental_defs::narrowed_uses;
+
+    const TWO_FUNCTIONS: &str = r"def first(x: int | None) -> int:
+    assert x is not None
+    return x
+
+def second(y: int | str) -> None:
+    if isinstance(y, int):
+        a = y
+";
+    let mut db = EventDb::default();
+    let file = SourceFile::new(&db, "m.py".to_owned(), TWO_FUNCTIONS.to_owned());
+    for def in definitions(&db, file) {
+        let _ = narrowed_uses(&db, *def);
+    }
+    let first_uses = definitions(&db, file)
+        .first()
+        .map(|def| narrowed_uses(&db, *def).clone())
+        .unwrap_or_default();
+    assert!(
+        first_uses
+            .iter()
+            .any(|use_site| use_site.name == "x" && use_site.narrowed == InferredType::Int),
+        "assert narrowing must be visible through the tracked query: {first_uses:?}"
+    );
+    let _ = db.executions_of("narrowed_uses");
+
+    // Edit ONLY `second` — `first`'s narrowing memo must survive.
+    let edited = TWO_FUNCTIONS.replace("a = y", "b = y");
+    let _ = file.set_text(&mut db).to(edited);
+    for def in definitions(&db, file) {
+        let _ = narrowed_uses(&db, *def);
+    }
+    assert_eq!(
+        db.executions_of("narrowed_uses"),
+        1,
+        "only the edited definition's narrowing may recompute"
+    );
+}

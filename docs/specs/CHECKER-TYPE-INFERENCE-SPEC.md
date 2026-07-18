@@ -995,6 +995,20 @@ soundness tradeoff is decided explicitly (per Pyrefly's lesson): default to
 the usable behavior, configurable for security-sensitive users. Reachability
 analysis is **inference-driven** (ty's model), not pattern-matched idioms.
 
+#### Attribute narrowing across calls {#TYPEINF-NARROWING-ATTR-CALLS}
+
+**Decision (Stage 2):** attribute narrowing (`if x.attr is not None:`)
+**survives intervening calls by default.** Any call *could* re-enter and
+mutate the attribute, so this default is deliberately unsound — but treating
+every call as an invalidation discards nearly every attribute narrow in real
+code, which is why the usable behavior is the ecosystem norm. Projects that
+want the sound-but-strict behavior set
+`narrow-attributes-across-calls = false` under `[tool.basilisk]`
+(`BasiliskConfig::narrow_attributes_across_calls`; `None`/unset means the
+usable default `true`). The knob is wired through configuration now so the
+semantics are user-visible from the first release that narrows attributes;
+the checker consults it wherever attribute narrowing is applied.
+
 ### Incrementality {#TYPEINF-TARGET-INCREMENTAL}
 
 Salsa with **definition-level and expression-level tracked queries** (ty's

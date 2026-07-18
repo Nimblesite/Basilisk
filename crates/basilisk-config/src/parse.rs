@@ -88,6 +88,16 @@ pub struct BasiliskConfig {
 
     /// Target platform for platform-aware rules ([CHKARCH-VERSION-TARGET]).
     pub python_platform: Option<String>,
+
+    /// Whether attribute narrowing (`x.attr` guards) survives intervening
+    /// calls — the explicit soundness tradeoff of
+    /// [TYPEINF-NARROWING-ATTR-CALLS]. `None` means the default `true`: the
+    /// USABLE behavior (a call *could* invalidate the attribute, but
+    /// treating every call as an invalidation makes attribute narrowing
+    /// useless in practice — Pyrefly's documented lesson). Projects that
+    /// prefer the sound-but-strict behavior set
+    /// `narrow-attributes-across-calls = false` in `[tool.basilisk]`.
+    pub narrow_attributes_across_calls: Option<bool>,
 }
 
 impl Default for BasiliskConfig {
@@ -106,6 +116,7 @@ impl Default for BasiliskConfig {
             auto_stub_path: PathBuf::from(".basilisk/stubs"),
             python_version: None,
             python_platform: None,
+            narrow_attributes_across_calls: None,
         }
     }
 }
@@ -192,6 +203,9 @@ impl BasiliskConfig {
         self.typeshed_path = child.typeshed_path.or(self.typeshed_path);
         self.python_version = child.python_version.or(self.python_version);
         self.python_platform = child.python_platform.or(self.python_platform);
+        self.narrow_attributes_across_calls = child
+            .narrow_attributes_across_calls
+            .or(self.narrow_attributes_across_calls);
         self
     }
 }
@@ -271,6 +285,14 @@ pub(crate) fn parse_pyproject_content(content: &str) -> Option<BasiliskConfig> {
     }
     if let Some(val) = basilisk.get("python-platform").and_then(|v| v.as_str()) {
         cfg.python_platform = Some(val.to_owned());
+    }
+
+    // [TYPEINF-NARROWING-ATTR-CALLS]: the attribute-narrowing soundness knob.
+    if let Some(val) = basilisk
+        .get("narrow-attributes-across-calls")
+        .and_then(toml::Value::as_bool)
+    {
+        cfg.narrow_attributes_across_calls = Some(val);
     }
 
     Some(cfg)

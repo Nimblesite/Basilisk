@@ -421,8 +421,14 @@ reproducible, write-always, ratcheted:
   `analyse_function` pipeline over all six cases (unreachable branches via
   the `Never` narrowing signal). Diagnostic-level surfacing of these
   results lands with the Integration-stage rule migration.
-- [ ] Reformulate narrowing as intersection-and-negation types over a
+- [x] Reformulate narrowing as intersection-and-negation types over a
   Salsa-backed use-def map with `phi`/join at control-flow merges.
+  — Intersection/negation: `narrow/set_ops.rs` (`intersect`/`subtract`
+  delegating atoms to `is_assignable_to`); `phi`/join: `NarrowEnv::join`;
+  Salsa backing: the tracked `narrowed_uses` query in
+  `incremental_defs.rs` keys the whole flow analysis on one definition's
+  source slice — editing one function re-executes only its own narrowing
+  (proven by `WillExecute` log in `tests/incremental_defs_tests.rs`).
 - [x] Extend guard support: `issubclass`, `==`/`in` against literals,
   `hasattr` (synthetic protocol intersection), exhaustiveness/implied-else,
   and TypedDict `"key" in td` narrowing.
@@ -436,8 +442,15 @@ reproducible, write-always, ratcheted:
   object modelling and synthetic-protocol intersections land with the
   shared-subtyping work — extraction is live, so flipping them on is a
   local change.
-- [ ] Decide and document the attribute-narrowing-across-calls tradeoff;
+- [x] Decide and document the attribute-narrowing-across-calls tradeoff;
   default to the usable behavior, make it configurable.
+  — Decided and recorded in
+  [TYPEINF-NARROWING-ATTR-CALLS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ATTR-CALLS):
+  narrows survive calls by default (usable), and
+  `narrow-attributes-across-calls = false` in `[tool.basilisk]` opts into
+  the sound-but-strict behavior
+  (`BasiliskConfig::narrow_attributes_across_calls`, parsed + merged in
+  `crates/basilisk-config/src/parse.rs`).
 - [ ] Replace pattern-matched reachability idioms with inference-driven
   reachability.
 - [ ] Measure narrowing richness against the utahplt/ifT-benchmark
