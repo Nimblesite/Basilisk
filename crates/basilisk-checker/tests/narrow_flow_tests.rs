@@ -411,3 +411,23 @@ def f(x: int | str | None) -> None:
         result.narrowed_uses
     );
 }
+
+/// Inference-driven reachability: a branch whose guard narrows the variable
+/// to `Never` is reported unreachable — derived from the type lattice, not
+/// a pattern-matched idiom.
+#[test]
+fn impossible_branch_is_reported_unreachable() {
+    let result = analyse(
+        r"
+def f(x: int) -> None:
+    if isinstance(x, str):
+        y = x
+",
+    );
+    assert_eq!(
+        result.unreachable_ranges.len(),
+        1,
+        "the isinstance(x, str) body must be unreachable for x: int: {:?}",
+        result.unreachable_ranges
+    );
+}

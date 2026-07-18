@@ -37,6 +37,11 @@ pub struct FlowResult {
     /// Every `Name` read whose flow-narrowed type differs from its declared
     /// type — the sites hover/diagnostics consume.
     pub narrowed_uses: Vec<NarrowedUse>,
+    /// Body ranges of branches whose guard narrows a variable to `Never` —
+    /// **inference-driven reachability** ([TYPEINF-TARGET-NARROWING]): the
+    /// branch is unreachable because the type lattice proves the guard can
+    /// never hold, not because a syntactic idiom matched.
+    pub unreachable_ranges: Vec<(u32, u32)>,
 }
 
 /// Walk `body` under `env`'s declared types, consuming the function's
@@ -161,6 +166,11 @@ impl FlowWalker<'_> {
             } else {
                 out.negative.clone()
             };
+            if ty == InferredType::Never {
+                if let Some(range) = body_range(body) {
+                    self.result.unreachable_ranges.push(range);
+                }
+            }
             self.env.narrow(&out.variable, ty);
         }
         self.walk_stmts(body);
@@ -374,6 +384,13 @@ fn matching_case<'c>(
     cases
         .iter()
         .find(|entry| entry.body_span.start == start && entry.body_span.end == end)
+}
+
+/// The byte range spanned by a statement list, when non-empty.
+fn body_range(body: &[Stmt]) -> Option<(u32, u32)> {
+    let start = u32::from(body.first()?.range().start());
+    let end = u32::from(body.last()?.range().end());
+    Some((start, end))
 }
 
 /// Whether a statement list definitely diverges (ends in `return`/`raise`/
