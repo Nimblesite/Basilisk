@@ -28,7 +28,7 @@ Depend on established open-source tools rather than reimplementing them.
 |---|---|---|---|
 | **`ruff_python_formatter`** | Code formatting | MIT | Embedded in-process — the formatter is Ruff's, no `ruff` CLI. Pinned to the same rev as the parser ([LSPFMT-ENGINE](LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE)). |
 | **`ruff_python_parser`** | Python AST parsing | MIT | Battle-tested Rust crate. Powers Ruff. Our parser. |
-| **`python/typeshed` clone** | Standard-library `.pyi` and stub-distribution data | Apache-2.0 | Implements "Typeshed stubs for the standard library" from pinned typing step 3 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). An explicit commit or freshly verified `main` is resolved directly; a loose names-only baseline is the fallback. Downloaded or custom data wholly bypasses any bundled or compiled baseline ([STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)). |
+| **`python/typeshed` stdlib** | Standard-library `.pyi` and stub-distribution data | Apache-2.0; parts MIT | Implements "Typeshed stubs for the standard library" from pinned typing step 3 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). Step 3 uses one custom tree, exact-SHA archive, or bundled stdlib ZIP; sources never mix ([STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)). |
 | **Salsa** | Incremental computation framework | Apache-2.0/MIT | Powers rust-analyzer. Proven at scale. |
 | **`lsp-server`** / **`tower-lsp`** | LSP implementation | MIT | Standard Rust LSP crates. |
 
@@ -37,7 +37,7 @@ Depend on established open-source tools rather than reimplementing them.
 | Tool | Interop Strategy |
 |---|---|
 | **Ruff** | Basilisk **embeds** the `ruff_python_formatter` crate in-process for formatting and reimplements import hygiene natively — the `ruff` CLI is never spawned ([LSPFMT-DECISION](LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)). Configuration unified in `pyproject.toml` (`[tool.ruff.format]`). |
-| **typeshed** | Step 3 selects a custom `typeshed-path`, an explicit `typeshed-commit`, freshly verified `main`, or the bundled names-only fallback. The custom path is canonical as required by pinned typing step 3; downloaded data overrides bundled/compiled data wholesale ([STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561), [`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). |
+| **typeshed** | Step 3 selects a custom `typeshed-path`, an exact-SHA archive (explicit pin or current `main`), or the bundled stdlib ZIP. The custom path is canonical as required by pinned typing step 3; step-3 sources never mix ([STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561), [`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). |
 | **PEP 561** | Full support for `py.typed` packages, inline type annotations, and stub-only packages. |
 
 ---
@@ -928,9 +928,9 @@ stub-resolution spec and `basilisk-stubs`.
 Pinned typing step 3 says a configured custom typeshed is the "canonical source"
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 Accordingly, `typeshed-path` is the sole step-3 tree when set. Otherwise Basilisk
-uses an explicit `typeshed-commit`, freshly verified `main`, or the bundled
-names-only fallback. Downloaded content wholly replaces bundled or compiled
-data; failed unpinned acquisition never reuses an earlier checkout.
+uses an exact-SHA archive for an explicit `typeshed-commit` or current `main`, or
+the bundled stdlib ZIP. Step-3 sources never mix; failed unpinned acquisition
+never reuses an earlier archive.
 `typeshed-cache-path` only relocates automatic storage, while `stub-paths`
 remains the separate step-1 override
 ([STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)).
@@ -1015,9 +1015,12 @@ Project TOML example:
 [tool.basilisk]
 python-platform = "All"          # Default: check for all platforms
 stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
-# Unpinned acquisition verifies python/typeshed@main on startup:
+# Unpinned acquisition resolves current python/typeshed@main on startup:
 # typeshed-commit = "<full commit SHA>"  # optional explicit immutable source
+# typeshed-url = "https://mirror.example/typeshed/{sha}.zip"
 # typeshed-cache-path = ".cache/typeshed"
+# typeshed-cache = true
+# typeshed-verify = true
 # typeshed-path = "typeshed-x"   # resolution step 3: your sole custom stdlib tree
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]

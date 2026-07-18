@@ -264,11 +264,11 @@ No workspace scan; the server waits for `didOpen` notifications.
 ### wholeModule Startup {#ANALYSIS-STARTUP-WHOLE}
 
 On `initialized`, Basilisk acquires the selected step-3 stdlib source and gates
-the first check on it ([STUBRES-TYPESHED-CLONE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CLONE)).
+the first check on it ([STUBRES-TYPESHED-ACQUIRE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
 This implements "Typeshed stubs for the standard library" in the pinned typing
 order ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-The source is the custom path, explicit commit, freshly verified `main`, or the
-bundled names-only baseline; no previous unpinned checkout is eligible. The scan
+The source is the custom path, an exact-SHA archive for an explicit commit or
+current `main`, or the bundled stdlib ZIP; no previous unpinned archive is eligible. The scan
 then builds import paths, primes Salsa, analyzes each workspace file once, and
 publishes diagnostics. Open buffers are re-analyzed from editor text. Progress
 and the selected source appear in Service Info
@@ -293,7 +293,7 @@ The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk rel
 The cached `ImportSearchPaths` include the selected typeshed path and exact source
 identity. A `typeshed-path` or `typeshed-commit` change invalidates them and
 rebuilds step 3 before rechecking
-([STUBRES-TYPESHED-CLONE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CLONE)).
+([STUBRES-TYPESHED-ACQUIRE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
 This derived cache changes performance only; it preserves the pinned resolution
 order ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 It is reused across keystrokes, never across a source or configuration change.

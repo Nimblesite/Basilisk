@@ -33,8 +33,8 @@ Inputs that can affect the diagnostics for `basilisk check <file>`:
    so it invalidates every entry (`CHKCACHE-INPUT-VERSION`).
 6. **Standard-library typeshed identity** — the exact
    [`python/typeshed`](https://github.com/python/typeshed) commit SHA, custom-tree
-   content identity, or bundled-baseline identity
-   ([`STUBRES-TYPESHED-CLONE`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CLONE),
+   content identity, or bundled-ZIP identity
+   ([`STUBRES-TYPESHED-ACQUIRE`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE),
    [`STUBRES-TYPESHED-BASELINE`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-BASELINE)).
    The selected identity moves **independently of the binary**: a fresh unpinned
    acquisition or a `typeshed-commit` change swaps the stdlib `.pyi` bodies under a fixed
@@ -126,8 +126,8 @@ LSP and non-cached CLI runs), active only during a cached check.
 
 `fingerprint = hash(version ‖ typeshed_id ‖ config_hash ‖ env_hash ‖ sorted[(path, content_hash)…])`
 
-`typeshed_id` is the resolved `python/typeshed` commit SHA of the runtime clone,
-or the bundled-baseline identity when no clone is available
+`typeshed_id` is the resolved `python/typeshed` commit SHA of the downloaded archive,
+the custom-tree content identity, or the bundled-ZIP identity
 (`CHKCACHE-INPUT-TYPESHED`) — see
 [`STUBRES-TYPESHED`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED).
 
@@ -184,7 +184,7 @@ Disabled (default) ⟹ behaviour is byte-for-byte identical to today.
 3. `CHKCACHE-TEST-DEP` — editing an imported dependency yields fresh diagnostics.
 4. `CHKCACHE-TEST-CONFIG` — a config change forces a miss.
 5. `CHKCACHE-TEST-TYPESHED` — a change to the resolved typeshed commit (or a
-   switch between the runtime clone and the bundled baseline) forces a miss.
+   switch between an archive, custom tree, and bundled ZIP) forces a miss.
 6. `CHKCACHE-TEST-DISABLED` — without `--cache`, no cache dir is created and
    output is unchanged.
 7. `CHKCACHE-TEST-STATS` — `--cache-stats` reports a miss then a hit across two

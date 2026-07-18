@@ -41,13 +41,13 @@ it must not reuse an unstructured prompt as an implicit API.
 
 - [ ] Basilisk remains fully functional with no AI provider and with invalid provider
   configuration. With no network it still checks — standard-library types come from the
-  bundled offline baseline and the CLI shows the dim-amber baseline warning
+  bundled stdlib ZIP and the CLI shows the high-severity fallback warning
   ([CHECKER-STUB-RESOLUTION-SPEC §STUBRES-TYPESHED-WARN](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 - [ ] Every AI result is visibly provider-originated and unsafe until reviewed.
 - [ ] No **AI-provider** network request occurs unless a user enables a provider — no provider is
   contacted in the default configuration or in deterministic test suites. (The default typeshed
-  clone is a separate, expected default network operation; tests select an explicit `typeshed-commit` or
-  run against the offline bundled baseline —
+  archive download is a separate, expected default network operation; tests select an explicit `typeshed-commit` or
+  run against the bundled stdlib ZIP —
   [CHECKER-STUB-RESOLUTION-SPEC §STUBRES-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED),
   applying pinned typing step 3 at [`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst).)
 - [ ] Cancellation prevents stale edits from being offered after the document changes.

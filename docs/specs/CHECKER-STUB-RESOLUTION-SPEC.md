@@ -52,8 +52,8 @@ module MAY *stay* `Any` only through an explicit opt-out — a module-level
 
 ## Import Resolution Order {#STUBRES-PEP561}
 
-Basilisk MUST resolve modules that carry type information in the exact order
-mandated by the Python typing specification —
+Basilisk adopts the typing specification's upstream **SHOULD** order as an
+internal **MUST** —
 [Distributing type information → Import resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)
 (the normative successor to [PEP 561](https://peps.python.org/pep-0561/)).
 The table maps that upstream order to Basilisk; the linked typing specification
@@ -96,6 +96,20 @@ Verify the pin before relying on it: the SHA is a fixed point in history, and
 >    (from typeshed or elsewhere), these SHOULD come last in the module
 >    resolution order.
 
+The two immediately following clauses are also part of this contract, verbatim:
+
+> If typecheckers identify a stub-only namespace package without the desired
+> module in step 4, they should continue to step 5/6. Typecheckers should identify
+> namespace packages by the absence of `__init__.pyi`. This allows different
+> subpackages to independently opt for inline vs stub-only.
+
+> Type checkers that check a different Python version than the version they run
+> on MUST find the type information in the `site-packages`/`dist-packages` of that
+> Python version. This can be queried e.g. `pythonX.Y -c 'import site;
+> print(site.getsitepackages())'`. It is also recommended that the type checker
+> allow for the user to point to a particular Python binary, in case it is not in
+> the path.
+
 **Stub files, `py.typed`, the `-stubs` naming scheme, partial stubs, and `.pyi`
 precedence** — the remaining normative clauses this spec relies on, verbatim from
 the same source (bracketed `[…]` marks where non-normative prose between
@@ -135,6 +149,12 @@ reorder a resolution step.
 | 4 — stub-only packages | Installed `foopkg-stubs` / typeshed `types-foopkg` distributions, discovered in site-packages. They supersede an inline-typed install of the same package. | (auto) |
 | 5 — `py.typed` packages | Installed packages shipping a `py.typed` marker (stubs in `.pyi` or inline in `.py`). | (auto) |
 | 6 — vendored third-party stubs | Basilisk vendors none for resolution. The typeshed distribution map drives only the "install stubs" quick fix ([§STUBRES-CODEACTIONS](#STUBRES-CODEACTIONS)). | — |
+
+A complete step-4 package stops on a miss; a partial package or stub-only
+namespace miss continues to steps 5–6. Steps 4–5 use the target interpreter's
+`site-packages`/`dist-packages`, not the process running Basilisk. This is the
+pinned specification's only Python-version-to-storage relationship; it never
+selects a typeshed commit.
 
 A module that matches no step resolves to `Unknown` and `imports_unresolved`
 fires ([§STUBRES-PROVENANCE-DIAG](#STUBRES-PROVENANCE-DIAG)).
@@ -288,96 +308,171 @@ the typing specification prescribes no transport, cache, commit, or freshness
 policy.
 
 - **SHA selection.** With no override, resolve `python/typeshed@main` to one
-  exact SHA and pin it for this run/session. With `typeshed-commit`, use that
-  SHA. There is no Python-version-to-commit map.
+  exact commit SHA and record the **tree SHA** that commit points to, pinning
+  both for this run/session. With `typeshed-commit`, resolve that commit to its
+  tree SHA the same way. There is no Python-version-to-commit map.
 - **The pin is immutable; the cached download is not.** A `typeshed-commit`
   checkout is reused while its cache entry survives. Cache entries MAY be evicted
-  (size/age cleanup); a miss re-downloads the *same* SHA, byte-identical. No
-  freshness TTL is ever applied to a pin — only the cache entry is evictable.
+  (size/age cleanup); a miss re-downloads the *same* SHA and re-verifies it. The
+  re-fetched archive *bytes* need not be identical — GitHub does not guarantee
+  stable tarball bytes — but the *extracted tree* is: it hashes to the same Git
+  tree SHA. No freshness TTL is ever applied to a pin; only the cache entry is
+  evictable.
 - **Alternate download URL.** `typeshed-url` supplies an operator-chosen archive
   location (a template resolved with the selected SHA, e.g.
   `https://mirror.example/typeshed/{sha}.tar.gz`) for when the default GitHub
   endpoint is blocked or unavailable — corporate proxies, mirrors, air-gapped
-  networks. Integrity verification still binds to the resolved commit SHA, so an
-  alternate mirror cannot substitute different content.
+  networks. It substitutes the *archive* download only, for a **known SHA**: a
+  `typeshed-commit` pin fetches through it, but resolving the *latest* `main` SHA
+  still needs GitHub commit metadata to be reachable. If metadata is unreachable
+  and no pin is set, resolution falls to the bundled ZIP
+  ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)). Integrity verification still
+  binds to the selected commit's tree SHA, so an alternate mirror cannot
+  substitute different content.
 - **Integrity verification.** Before use, a cached archive is verified by
-  recomputing the extracted tree's Git object hashes and confirming they roll up
-  to the resolved commit — GitHub archive tarball checksums are not stable, so
-  verification binds to the commit's own content hash, not the download bytes.
-  The default is cheap (a recorded per-commit manifest, no re-extraction);
-  `--no-typeshed-cache` forces a fresh download plus full verification then
-  discards it (hermetic reproducibility); `--no-typeshed-verification` skips the
-  check when its cost is unacceptable. The default verification depth is governed
-  by the benchmark ratchet
+  recomputing the extracted tree's Git object hashes (blobs → trees) and
+  confirming the root hashes to the **tree SHA** recorded when the commit was
+  resolved. GitHub archive tarball checksums are not stable, and a commit SHA also
+  hashes commit metadata (author, date, message), so verification binds to the
+  tree the commit points to — taken from the same trusted metadata response — not
+  to the download bytes. The default is cheap (a recorded per-commit manifest, no
+  re-extraction); `--no-typeshed-cache` forces a fresh download plus full
+  verification then discards it (hermetic reproducibility);
+  `--no-typeshed-verification` (or `typeshed-verify = false`) skips the hash check
+  when its cost is unacceptable, and the resolved source is then reported
+  **`UNVERIFIED`** ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)). The default
+  verification depth is governed by the benchmark ratchet
   ([CHKARCH-TESTING-BENCH-RATCHET](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET)).
+- **Extraction safety is always on.** Independent of `typeshed-verify`, every
+  downloaded archive is extracted under fixed guards — rejecting absolute or `..`
+  path-traversal entries, symlinks escaping the cache root, and archives exceeding
+  entry-count or decompressed-size ceilings (zip-bomb defence). These guards
+  protect the filesystem and cannot be disabled; `--no-typeshed-verification`
+  waives only the content-hash check, never extraction safety.
 - `typeshed-cache-path` relocates the cache. `typeshed-path` bypasses download
   and is canonical under [§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED).
 
 #### Bundled ZIP snapshot {#STUBRES-TYPESHED-BASELINE}
 
-Basilisk ships a complete `python/typeshed` snapshot as a ZIP in the binary,
-pinned to one exact SHA and refreshed per release. It is the offline floor for
-step 3 of the pinned resolution order
+Basilisk ships a complete typeshed **`stdlib/` stub snapshot** as a ZIP in the
+binary — every standard-library `.pyi`, `stdlib/VERSIONS`, and typeshed's own
+composite `LICENSE` (plus `NOTICE` iff the snapshot SHA has one) — pinned to one
+exact SHA and refreshed per release. It is the offline floor for step 3 of the
+pinned resolution order
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst))
 and carries **real `.pyi` bodies** — the same shape ty
 ["bundled as a zip file in the binary"](https://docs.astral.sh/ty/reference/configuration/).
-Because it is a full snapshot, #289/#288 signature hovers work offline, not only
-after a download. A downloaded archive supersedes it wholesale; the two never
-mix. A benchmark-justified compiled name index (the `stdlib/VERSIONS` module set
-and `types-<distribution>` map) MAY accelerate lookups over the snapshot
+Because every stdlib body is present, #289/#288 signature hovers work offline,
+not only after a download. A downloaded archive supersedes it wholesale; the two
+never mix. A benchmark-justified compiled name index (the `stdlib/VERSIONS` module
+set and the derived `types-<distribution>` map) MAY accelerate lookups over the
+snapshot
 ([CHKARCH-TESTING-BENCH-RATCHET](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET)).
 
 #### License and attribution {#STUBRES-TYPESHED-LICENSE}
 
-typeshed's [`LICENSE`](https://github.com/python/typeshed/blob/main/LICENSE)
-states the project is "licensed under the terms of the Apache license" and that
-"Parts of typeshed are licensed under different licenses (like the MIT license)"
-(`Copyright (c) 2015 Jukka Lehtosalo and contributors`). Both are permissive and
-compatible with Basilisk's own MIT license, so shipping the snapshot is an
-**attribution** obligation, not a relicensing one — Basilisk stays MIT and the
-typeshed data keeps its Apache-2.0/MIT terms.
+typeshed's `LICENSE` at the bundled SHA
+([`python/typeshed@83c2518`](https://github.com/python/typeshed/blob/83c2518a9e6abbda0c44592c3483de459198f887/LICENSE))
+is a single **composite** file: it states the project is "licensed under the terms
+of the Apache license" and that "Parts of typeshed are licensed under different
+licenses (like the MIT license)" (`Copyright (c) 2015 Jukka Lehtosalo and
+contributors`). Both licenses are permissive and compatible with Basilisk's own
+MIT license, so shipping the snapshot is an **attribution** obligation, not a
+relicensing one: Basilisk stays MIT, and the bundled typeshed files retain their
+own applicable terms. Basilisk MUST NOT describe the snapshot as Apache-only or
+MIT-only — it ships the composite `LICENSE` verbatim and lets it govern the files
+it covers.
 
-Bundling the ZIP ([§STUBRES-TYPESHED-BASELINE](#STUBRES-TYPESHED-BASELINE))
-redistributes typeshed source and so triggers Apache 2.0 §4. Basilisk discharges
-it the same way it already ships Ruff's license
-([LSPFMT-PROVENANCE](LSP-FORMATTING-SPEC.md#LSPFMT-PROVENANCE) — the repo's
-`THIRD-PARTY-LICENSES` + `NOTICES`):
+**Redistribution boundary.** Only the bundled ZIP
+([§STUBRES-TYPESHED-BASELINE](#STUBRES-TYPESHED-BASELINE)) is redistributed *by
+Basilisk*: it is part of the release artifact, so Apache 2.0 §4 attaches. A
+`typeshed-commit` / `main` archive, by contrast, is fetched by the user directly
+from GitHub (or their `typeshed-url` mirror); Basilisk does not redistribute it,
+so no packaging obligation attaches to a download.
 
-- **Bundle verbatim, stdlib only.** The ZIP carries typeshed's `stdlib/` tree
-  plus its own `LICENSE` (and `NOTICE` if present) **unmodified**, preserving the
-  upstream notices and avoiding Apache 2.0's "state your changes" clause.
-  Third-party `stubs/` bodies are **not** bundled — only the derived
-  `types-<distribution>` name map — so the redistributed surface stays
-  Apache-2.0/MIT.
-- **`THIRD-PARTY-LICENSES`** carries typeshed's full Apache 2.0 + MIT text;
-  **`NOTICES`** names typeshed, both licenses, and the exact snapshot SHA the ZIP
-  was cut from.
-- **Downloaded archives are not redistributed by Basilisk** — the user fetches
-  them from GitHub, each carrying its own `LICENSE` — so no packaging obligation
-  attaches to a `typeshed-commit` / `main` download; provenance is still surfaced
-  ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)).
+**Legal obligations — bundled artifact only (Apache 2.0 §4, MUST):**
 
-A release gate asserts the bundled ZIP ships typeshed's `LICENSE`, and that
-`THIRD-PARTY-LICENSES` + `NOTICES` name typeshed, its Apache-2.0/MIT licenses, and
-the snapshot SHA.
+- **Deliver the license.** The ZIP carries typeshed's `stdlib/` stub files and its
+  composite root `LICENSE`, each copied **byte-for-byte** from the bundled SHA.
+  Selecting and repacking those files into a ZIP is not a modification of the
+  files themselves.
+- **Conditional `NOTICE`.** Iff the bundled SHA has a root `NOTICE`, its contents
+  are reproduced. The reviewed SHA `83c2518a9e6abbda0c44592c3483de459198f887` has
+  **no** `NOTICE`, so none ships for it; the release gate re-checks per SHA.
+- **Mark modifications.** Any bundled upstream file Basilisk changes carries a
+  prominent "modified by Basilisk" notice. Stub bodies ship unmodified, so today
+  nothing is marked.
+- **Retain notices.** Copyright, attribution, and license notices inside the
+  bundled files are preserved as-is.
+- No source-disclosure duty attaches (Apache 2.0 is not copyleft).
+- **`THIRD-PARTY-LICENSES`** carries typeshed's full composite Apache 2.0 + MIT
+  text; **`NOTICES`** names typeshed, both licenses, and the exact bundled SHA.
+
+**Basilisk provenance policy — not legally required, but done because the user
+asked for attribution done properly (SHOULD):**
+
+- **Derived tables are attributed conservatively.** The compiled name index (the
+  `stdlib/VERSIONS` module set and the `types-<distribution>` map) is derived data
+  whose copyright/derivative status is fact-sensitive; rather than litigate it,
+  Basilisk attributes it to typeshed and records the source SHA. This is a
+  conservative policy, not an assertion that every derived table is legally an
+  Apache-covered derivative work.
+- **Cache retains provenance.** A downloaded archive keeps typeshed's `LICENSE`
+  (and `NOTICE` if present) beside the extracted stubs. Because the download is
+  not Basilisk redistribution this is provenance hygiene, not an Apache §4 duty —
+  but Basilisk never strips upstream license files from a cache it extracted.
+- **Custom `typeshed-path` is not relabelled.** A user-supplied tree is
+  user-managed and MAY carry entirely different terms; Basilisk never presents it
+  as Apache/typeshed-licensed.
+- **Every surface shows the source.** CLI, LSP Service Info, and MCP report the
+  active source, its SHA, and a "View License" affordance
+  ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)). Apache mandates none of this
+  multi-surface display; it is Basilisk's traceability policy.
+
+**Release gate.** A packaged-artifact test asserts the bundled ZIP ships
+typeshed's `LICENSE` **byte-for-byte identical** to the file at the bundled SHA,
+verifies `NOTICE` presence/absence matches that SHA (copying it iff present), and
+confirms `THIRD-PARTY-LICENSES` + `NOTICES` name typeshed, its composite
+Apache-2.0/MIT license, and the exact SHA. If the selected SHA changes the
+`LICENSE` text or license identity, or adds a `NOTICE`, the gate **fails for human
+review** before the artifact can ship. Basilisk discharges these obligations the
+same way it already ships Ruff's license
+([LSPFMT-PROVENANCE](LSP-FORMATTING-SPEC.md#LSPFMT-PROVENANCE)).
 
 #### Source reporting {#STUBRES-TYPESHED-WARN}
 
 The pinned typing specification defines resolution order, not transport status
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 Basilisk reports the active source on every surface — CLI, LSP Service Info, and
-MCP:
+MCP — each carrying a "View License" affordance onto the active tree's `LICENSE`:
 
-- downloaded archive: `typeshed <short-sha> · <commit-date>` (with `pinned` when
-  `typeshed-commit` selected it);
-- bundled ZIP fallback: a **prominent, high-severity warning** — never a quiet
-  log line — on the CLI (a banner to stderr), in the LSP (a `window/showMessage`
-  warning plus the Service Info tree), and in MCP tool output:
+- **downloaded archive**: `typeshed <short-sha> · <commit-date>` (with `pinned`
+  when `typeshed-commit` selected it);
+- **not pinned (advisory)**: whenever no explicit `typeshed-commit` is set — the
+  **Latest** source — Basilisk emits a warning-level advisory that the typeshed
+  source is *not pinned* and offers **Pin current** to freeze it. This fires **even
+  when the bundled ZIP supplied step 3**: the snapshot is pinned at *build* time,
+  but the user has chosen no commit, so from the project's standpoint the source
+  still floats. Pinning writes the resolved SHA — the downloaded `main` SHA, or the
+  bundled snapshot's own SHA when offline. A custom `typeshed-path` is an explicit
+  source and raises no advisory.
+- **bundled ZIP fallback**: a **prominent, high-severity, persistent warning** —
+  never a quiet log line, and never auto-dismissed — on the CLI (a banner to
+  stderr), in the LSP (a `window/showMessage` warning plus a standing row in the
+  Service Info tree), and in MCP tool output:
   `typeshed download unavailable — checking against the bundled snapshot
-  <short-sha>, which may be behind upstream`.
+  <short-sha>, which may be behind upstream`;
+- **unverified source**: when `--no-typeshed-verification` / `typeshed-verify =
+  false` waived the content-hash check, the active source is reported
+  **`UNVERIFIED`** as a standing high-severity marker on all three surfaces, so a
+  skipped check is never silent.
 
-There is no stale-cache outcome (a pinned checkout is not stale). The fallback
-warning fires only when the bundled ZIP actually supplied step 3.
+There is no stale-cache outcome (a pinned checkout is not stale). These three
+signals compose orthogonally: the **not-pinned** advisory tracks *whether the user
+pinned a commit* (warning-level), the **fallback** warning tracks *whether the
+download succeeded* (high-severity), and **`UNVERIFIED`** tracks *whether the hash
+check ran* (high-severity). A single run may show any combination — e.g. Latest +
+offline + verification off surfaces all three.
 
 #### Config keys {#STUBRES-TYPESHED-CONFIG}
 
@@ -394,7 +489,7 @@ leaves open. Every one is exposed as a control in the configuration UI
 | `typeshed-url` | `string` | _(GitHub codeload)_ | Alternate archive URL template (`{sha}`) for blocked/air-gapped networks; verification still binds to the SHA. |
 | `typeshed-cache-path` | `string` | _(OS cache dir)_ | Where downloaded archives are extracted and cached. |
 | `typeshed-path` | `string` | _(unset)_ | Supply the canonical custom step-3 tree; disables download and the bundled ZIP. |
-| `typeshed-verify` | `bool` | `true` | Verify cached and downloaded stubs hash to the resolved commit. |
+| `typeshed-verify` | `bool` | `true` | Verify the extracted tree hashes to the resolved commit's tree SHA; `false` reports the source `UNVERIFIED`. Extraction safety is unaffected. |
 | `--no-typeshed-cache` | flag | off | Ignore the cache for one run: download, fully verify, then discard — hermetic reproducibility. |
 | `--no-typeshed-verification` | flag | off | One-run override of `typeshed-verify = false` when verification cost is unacceptable. |
 
@@ -565,11 +660,11 @@ Resolution still follows the pinned typing-spec order quoted in
 | Config key (`[tool.basilisk]`) | Type | Default | Description |
 |-------------------------------|------|---------|-------------|
 | `stub-paths` | `string[]` | `[]` | Additional directories to search for `.pyi` stubs (resolution step 1 — [§STUBRES-PEP561](#STUBRES-PEP561)) |
-| `typeshed-commit` | `string` | _(unset → resolve latest `main`)_ | Pin an exact immutable upstream commit; its archive is downloaded once and cached ([§STUBRES-TYPESHED-ACQUIRE](#STUBRES-TYPESHED-ACQUIRE)) |
-| `typeshed-url` | `string` | _(GitHub codeload)_ | Alternate archive URL template (`{sha}`) for blocked/air-gapped networks; verification still binds to the SHA ([§STUBRES-TYPESHED-ACQUIRE](#STUBRES-TYPESHED-ACQUIRE)) |
-| `typeshed-cache-path` | `string` | _(OS cache dir)_ | Where downloaded archives are cached; folder-picker in the config UI ([§STUBRES-TYPESHED-ACQUIRE](#STUBRES-TYPESHED-ACQUIRE)) |
-| `typeshed-path` | `string` | _(unset → automatic source selection)_ | Supply your own typeshed tree; disables every other step-3 source and becomes the canonical source for standard-library types (resolution step 3 — [§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)) |
-| `typeshed-verify` | `bool` | `true` | Verify cached and downloaded stubs hash to the resolved commit ([§STUBRES-TYPESHED-ACQUIRE](#STUBRES-TYPESHED-ACQUIRE)) |
+
+The step-3 typeshed keys — `typeshed-commit`, `typeshed-url`,
+`typeshed-cache-path`, `typeshed-path`, `typeshed-verify`, and the
+`--no-typeshed-cache` / `--no-typeshed-verification` flags — are specified once in
+[§STUBRES-TYPESHED-CONFIG](#STUBRES-TYPESHED-CONFIG) and are not repeated here.
 
 These keys live in the one project configuration — `pyproject.toml`
 `[tool.basilisk]`

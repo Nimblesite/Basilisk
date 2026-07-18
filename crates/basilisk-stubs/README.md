@@ -1,7 +1,8 @@
 # basilisk-stubs
 
-Standard-library type resolution for Basilisk: a custom or runtime
-`python/typeshed` tree plus a bundled names-only fallback.
+Standard-library type resolution for Basilisk: a custom or downloaded
+`python/typeshed` tree, with a bundled full-`stdlib/` ZIP snapshot as the offline
+floor.
 
 ## Role in Basilisk
 
@@ -14,16 +15,21 @@ selection contract is
 
 ## Key concepts
 
-- **Runtime typeshed clone** — an explicit `typeshed-commit` or freshly verified
-  `main` supplies real `.pyi` bodies, `stdlib/VERSIONS`, and the distribution
-  map from one SHA. An unpinned failed acquisition never reuses an old checkout
-  ([STUBRES-TYPESHED-CLONE](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CLONE)).
-- **Bundled baseline** — loose `VERSIONS`-format names and the distribution map,
-  never `.pyi` bodies. A compiled copy may accelerate that same fallback only
+- **Runtime typeshed acquisition** — an explicit `typeshed-commit` or the latest
+  verified `main` supplies real `.pyi` bodies, `stdlib/VERSIONS`, and the
+  distribution map from one SHA. The source archive is **downloaded over HTTPS
+  (never `git clone`)**, extracted under always-on safety guards, and verified
+  against the commit's tree SHA. An unpinned failed acquisition never reuses an
+  old checkout
+  ([STUBRES-TYPESHED-ACQUIRE](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
+- **Bundled ZIP snapshot** — a complete typeshed `stdlib/` tree with **real
+  `.pyi` bodies** plus its composite `LICENSE`, pinned to one SHA and refreshed
+  per release. It is the offline floor, so #288/#289 hovers work with no network;
+  a compiled name index accelerates lookups over it
   ([STUBRES-TYPESHED-BASELINE](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-BASELINE),
   [STUBRES-TYPESHED-WARN](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
-- **No mixed source** — custom or downloaded content wholly bypasses baseline
-  and compiled lookups.
+- **No mixed source** — custom or downloaded content wholly bypasses the bundled
+  snapshot and its compiled lookups.
 - **Custom typeshed** — `typeshed-path` is the sole step-3 source when set, as
   required by the pinned "canonical source" clause; a miss proceeds to step 4
   ([STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
@@ -36,16 +42,17 @@ selection contract is
 
 | Crate | Purpose |
 |-------|---------|
-| `phf` | Compile-time hash lookup for the bundled baseline name-set (an in-binary acceleration of the loose fallback data, never the authoritative stdlib index) |
+| `phf` | Compile-time perfect-hash index over the bundled snapshot's module and `types-<distribution>` names (a lookup accelerator, not a substitute for the `.pyi` bodies) |
 | `basilisk-parser` / `ruff_python_ast` | Parse `.pyi` files for signatures and re-exports |
 | `serde` / `serde_json` | (De)serialize resolution and cache metadata |
 
 ## Status
 
-The `typeshed-path` custom-tree override and the bundled baseline (stdlib
-name-set + `types-<distribution>` map) are shipped and consumed by
-`basilisk-checker`. Runtime `python/typeshed` acquisition is the default path
+The `typeshed-path` custom-tree override and the compiled name tables (stdlib
+name-set + `types-<distribution>` map, from `build.rs`) are shipped and consumed
+by `basilisk-checker`. Runtime `python/typeshed` archive acquisition and the
+bundled full-`stdlib/` ZIP snapshot (real `.pyi` bodies) are the default path
 defined by
 [STUBRES-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED);
-its `gix`-backed acquisition and source reporting are tracked
-against that spec.
+the HTTPS archive download (never `git clone`), tree-SHA verification, and
+source reporting are tracked against that spec.

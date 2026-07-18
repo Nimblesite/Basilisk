@@ -12,8 +12,8 @@ helpers. On startup the server acquires the step-3 typeshed source required by
 the pinned typing order
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst),
 [STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)). Automatic
-acquisition is an in-process `gix` network operation; an explicit custom path
-requires none.
+acquisition resolves an exact SHA and downloads an HTTPS archive; Basilisk never
+clones the repository, and an explicit custom path requires no network.
 
 The analysis path is parser → resolver → checker. Workspace state, import graphs, and
 resolved modules are retained by the server so feature handlers do not reparse every
@@ -40,8 +40,9 @@ their installation flows in their editor specs.
 The server configuration model is `crates/basilisk-lsp/src/config.rs`. Editor manifests and
 settings must map to that model rather than maintaining a second semantic configuration.
 The stable shared surface includes the executable and Python paths, analysis mode, stub
-paths, the typeshed acquisition settings (`typeshed-path`, `typeshed-cache-path`,
-`typeshed-commit` —
+paths, the typeshed source, mirror, cache, and verification settings
+(`typeshed-path`, `typeshed-commit`, `typeshed-url`, `typeshed-cache-path`,
+`typeshed-cache`, `typeshed-verify` —
 [STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)),
 formatter selection, inlay-hint switches, debugger settings, and the uv, test, profiling,
 and memory namespaces. The custom path implements the pinned typing specification's

@@ -85,16 +85,55 @@ With no override Basilisk downloads the latest `python/typeshed@main` commit and
 falls back to the bundled ZIP snapshot offline
 ([CHECKER-STUB-RESOLUTION §STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)).
 The guiding principle is **freshness by default, determinism one control away**:
-an empty `typeshed-commit` tracks the freshest upstream types; filling it pins
-byte-for-byte. Every typeshed knob is editable here — none is CLI-only:
+the default tracks the freshest upstream types, and a single **Source** choice
+opts into a reproducible pin or a hand-maintained tree. Every typeshed knob is
+editable here — none is CLI-only.
 
-| Control | `[tool.basilisk]` key | Widget |
+**Source selector (mutually exclusive).** One top-level control decides the step-3
+source so the pin and the custom-tree fields can never conflict. Picking a mode
+enables that mode's fields and disables the rest:
+
+| Source mode | Enables | Writes | Step-3 effect |
+|---|---|---|---|
+| **Latest** *(default)* | — | clears `typeshed-commit` + `typeshed-path` | resolves & downloads the newest `main` SHA |
+| **Exact commit** | commit field + **Pin current** action | `typeshed-commit` = 40-char SHA | downloads that immutable commit; deterministic type results |
+| **Custom folder** | folder-picker | `typeshed-path` = directory | that tree is canonical; download + bundled ZIP disabled |
+
+**Pin current** captures the SHA the server just resolved for `main` and writes it
+into `typeshed-commit` — freezing today's freshest types for reproducible CI in one
+click, with no SHA to type.
+
+The remaining controls apply across the download modes (a custom folder ignores
+the transport ones):
+
+| Control | `[tool.basilisk]` key / flag | Widget |
 |---|---|---|
-| Pinned commit (empty = latest) | `typeshed-commit` | text (40-char SHA) |
 | Alternate archive URL | `typeshed-url` | text (`{sha}` template) |
 | Download cache location | `typeshed-cache-path` | **folder-picker** |
-| Custom canonical tree | `typeshed-path` | **folder-picker** |
-| Verify downloads against the SHA | `typeshed-verify` | toggle (default on) |
+| Verify against the tree SHA | `typeshed-verify` | toggle (default on) |
+| Bypass cache for one run | `--no-typeshed-cache` | action button (download, verify, discard) |
+
+**Alternate URL is archive-only.** `typeshed-url` substitutes the download of a
+**known SHA**; it cannot resolve *Latest* on its own. The field's help says so:
+with **Latest** selected and GitHub commit metadata unreachable, Basilisk cannot
+learn the newest SHA and falls back to the bundled ZIP — a mirror helps only once a
+SHA is known (a pin, or a previously resolved `main`).
+
+**Turning verification off requires confirmation.** Clearing `typeshed-verify` (or
+a one-run `--no-typeshed-verification`) opens a confirm dialog explaining stubs
+will be trusted without a content-hash check; on confirm, the editor shows a
+**persistent `UNVERIFIED` badge** on the typeshed section and the Service Info row
+until verification is restored. Extraction safety stays on regardless
+([§STUBRES-TYPESHED-ACQUIRE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
+
+**Not-pinned advisory.** In **Latest** mode the section shows a warning-level
+*not pinned* advisory whose call to action is **Pin current** — and it shows even
+when Basilisk is running on the bundled snapshot it shipped with, because a
+build-time snapshot is not a user-chosen commit
+([§STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
+**View License** sits beside the active source, opening the resolved tree's
+`LICENSE` (typeshed's composite Apache-2.0/MIT file) so provenance is one click
+away ([§STUBRES-TYPESHED-LICENSE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-LICENSE)).
 
 The two directory keys render with a native folder-picker rather than free text;
 they are the only path-typed settings the editor exposes, distinct from the
@@ -103,14 +142,16 @@ glob-path and per-module rule overrides it deliberately excludes
 
 The server owns the setting metadata. The LSP advertises each typeshed setting as
 an editor field carrying its `[tool.basilisk]` key, its server-resolved current
-value, and a widget discriminator — `directory` (folder chooser), `text`, or
-`boolean` — so the client renders the right control instead of guessing. Values
-are resolved exactly like every other snapshot field: a relative path is shown
-against the workspace root, and an unset key shows its resolved default (the OS
-cache directory for `typeshed-cache-path`; latest-`main` for an empty
-`typeshed-commit`; no selected directory for `typeshed-path`). The client renders
-only what the server advertises and never fabricates a setting the server did not
-describe.
+value, a widget discriminator — `directory` (folder chooser), `text`, `boolean`,
+`enum` (the Source selector), or `action` (**Pin current**, bypass-cache) — and a
+server-computed `enabled` flag so the client greys out the fields the chosen
+Source mode does not apply instead of guessing which combinations are legal.
+Values are resolved exactly like every other snapshot field: a relative path is
+shown against the workspace root, and an unset key shows its resolved default (the
+Source selector at **Latest**; the OS cache directory for `typeshed-cache-path`;
+latest-`main` for an empty `typeshed-commit`; no selected directory for
+`typeshed-path`). The client renders only what the server advertises and never
+fabricates a setting the server did not describe.
 
 Choosing a folder is a client affordance, not a new command. The VS Code shell opens
 `vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false })`,
@@ -132,9 +173,25 @@ surfaces the live typeshed acquisition state as a read-only row:
 - **while acquiring** — a spinner (`$(sync~spin)`) with an *acquiring typeshed…*
   label, shown from `initialized` acquisition until the stdlib source is
   ready ([§STUBRES-TYPESHED-ACQUIRE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE));
-- **once ready** — the selected source and path: custom, pinned SHA, latest
-  verified `main` SHA, or the bundled ZIP snapshot (surfaced with the prominent
-  fallback warning) ([§STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
+- **once ready** — the selected source and path: custom tree, pinned SHA, or
+  latest verified `main` SHA;
+- **not pinned** — a warning-level advisory (`$(warning)`) whenever the Source is
+  **Latest** (no explicit `typeshed-commit`), *including* when the bundled ZIP
+  supplied the stubs; the editor's **Pin current** action (above) freezes the
+  resolved SHA;
+- **bundled-ZIP fallback** — a **persistent high-severity row** (`$(warning)`),
+  never auto-dismissed, stating the download was unavailable and the bundled
+  snapshot `<short-sha>` may be behind upstream
+  ([§STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN));
+- **`UNVERIFIED`** — an orthogonal standing high-severity badge whenever the
+  content-hash check was waived (`typeshed-verify = false` /
+  `--no-typeshed-verification`), on any source, until verification is restored.
+
+The three status signals are independent — not pinned (did the user pin?),
+fallback (did the download succeed?), and `UNVERIFIED` (did the hash check run?) —
+and may appear together; the row mirrors server state read-only, while every fix
+(**Pin current**, **View License**, the verify toggle) lives in the editable
+section above.
 
 The row carries no command and no inline control and refreshes from the same LSP
 lifecycle and configuration signals as the rest of the tree; the server is the sole
