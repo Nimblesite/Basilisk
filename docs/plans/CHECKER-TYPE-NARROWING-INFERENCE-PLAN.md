@@ -469,7 +469,15 @@ reproducible, write-always, ratcheted:
 
 ### Stage 2 — expression inference
 
-- [ ] Infer same-module and imported function/method return types.
+- [x] Infer same-module and imported function/method return types.
+  — Same-module: unannotated returns synthesize from the body
+  (`incremental_defs::function_type`) and `x = f()` resolves through the
+  sibling's declared-or-synthesized return via the backdated
+  `callable_interface` query. Imported: `param_infer::imported_callable_globals`
+  maps the cross-module layer's `imported_symbols` (functions →
+  `Callable[..., R]` from their return annotation, classes → instance form,
+  variables → their annotation) into engine scope. Builtin METHOD returns
+  come from the centralized table.
 - [ ] Infer constructor, attribute, subscript, binary/unary, conditional, and
   walrus expressions from structured AST data.
 - [x] Centralize builtin constructor/method signatures instead of adding

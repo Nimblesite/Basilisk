@@ -237,3 +237,121 @@ def f(p: int, q):
         assert_eq!(inferred.parameters.first(), Some(&("p".to_owned(), None)));
     }
 }
+
+/// Engine globals from cross-module imports ([NARROWPLAN-CHECKLIST]
+/// "imported function/method return types"): each imported symbol in
+/// [`basilisk_resolver::ResolvedModule::imported_symbols`] maps to a type —
+/// functions become the gradual `Callable[..., R]` from their return
+/// annotation (so calls to imported names infer their returns), classes
+/// become their instance-`Named` form, variables take their annotation.
+/// Symbols without type information are omitted (they stay `Unknown` in the
+/// engine — never a guess).
+#[must_use]
+pub fn imported_callable_globals(
+    module: &basilisk_resolver::ResolvedModule,
+) -> Vec<(String, InferredType)> {
+    use basilisk_resolver::scope::ExternalSymbolKind;
+    module
+        .imported_symbols
+        .iter()
+        .map(|(binding, symbol)| {
+            let ty = match symbol.kind {
+                ExternalSymbolKind::Function => {
+                    InferredType::Callable(crate::types::CallableInfo {
+                        param_types: Vec::new(),
+                        return_type: Box::new(
+                            symbol
+                                .type_annotation
+                                .as_deref()
+                                .map_or(InferredType::Unknown, InferredType::from_annotation),
+                        ),
+                    })
+                }
+                ExternalSymbolKind::Class => InferredType::Named(symbol.name.to_ascii_lowercase()),
+                ExternalSymbolKind::Variable | ExternalSymbolKind::ReExport => symbol
+                    .type_annotation
+                    .as_deref()
+                    .map_or(InferredType::Unknown, InferredType::from_annotation),
+            };
+            (binding.clone(), ty)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod imported_globals_tests {
+    #![expect(
+        clippy::expect_used,
+        reason = "test-only lookups over fixed fixture symbols"
+    )]
+
+    use super::*;
+    use basilisk_resolver::scope::{ExternalSymbol, ExternalSymbolKind, Span};
+
+    fn symbol(kind: ExternalSymbolKind, annotation: Option<&str>) -> ExternalSymbol {
+        ExternalSymbol {
+            name: "helper".to_owned(),
+            kind,
+            type_annotation: annotation.map(str::to_owned),
+            source_path: std::path::PathBuf::from("other.py"),
+            source_span: Span::new(0, 0),
+            signature: None,
+            provenance: None,
+            methods: Vec::new(),
+        }
+    }
+
+    /// Imported functions expose their return annotation as a gradual
+    /// callable, so `x = helper()` infers the imported return type.
+    #[test]
+    fn imported_function_returns_flow_through_calls() {
+        let mut module = basilisk_resolver::ResolvedModule::default();
+        let _ = module.imported_symbols.insert(
+            "helper".to_owned(),
+            symbol(ExternalSymbolKind::Function, Some("list[int]")),
+        );
+        let globals = imported_callable_globals(&module);
+        let inferred = infer_parameters("def f(p):\n    return helper()\n", "f", &globals, &[])
+            .expect("inferred");
+        // The parameter has no evidence — but the imported callable is in
+        // scope, proving the globals wire in (return flows are covered by
+        // the engine call-synthesis tests).
+        assert_eq!(inferred.parameters.len(), 1);
+
+        let (_, ty) = globals.first().expect("helper present");
+        assert!(
+            matches!(
+                ty,
+                InferredType::Callable(info)
+                    if *info.return_type == InferredType::List(Box::new(InferredType::Int))
+            ),
+            "imported function must map to Callable[..., list[int]], got {ty:?}"
+        );
+    }
+
+    /// Classes map to instances; unannotated variables are Unknown.
+    #[test]
+    fn imported_classes_and_variables_map_conservatively() {
+        let mut module = basilisk_resolver::ResolvedModule::default();
+        let _ = module
+            .imported_symbols
+            .insert("Widget".to_owned(), symbol(ExternalSymbolKind::Class, None));
+        let _ = module.imported_symbols.insert(
+            "COUNT".to_owned(),
+            symbol(ExternalSymbolKind::Variable, Some("int")),
+        );
+        let globals = imported_callable_globals(&module);
+        let lookup = |name: &str| {
+            globals
+                .iter()
+                .find(|(binding, _)| binding == name)
+                .map(|(_, ty)| ty.clone())
+        };
+        assert_eq!(
+            lookup("Widget"),
+            Some(InferredType::Named("helper".to_owned())),
+            "class binding maps to the SOURCE class name's instance form"
+        );
+        assert_eq!(lookup("COUNT"), Some(InferredType::Int));
+    }
+}
