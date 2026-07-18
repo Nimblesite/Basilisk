@@ -84,11 +84,13 @@ typeshed is also the Tier-1 baseline for standard-library stubs
 ([CHKARCH-STUBS-TYPESHED]); users may replace it wholesale via the
 `typeshed-path` config.
 
-typeshed's LICENSE states the project is "licensed under the terms of the Apache
-license" and that "Parts of typeshed are licensed under different licenses (like
-the MIT license)" (Copyright (c) 2015 Jukka Lehtosalo and contributors). The full
-text is available at https://www.apache.org/licenses/LICENSE-2.0 and in
-typeshed's repository at https://github.com/python/typeshed/blob/main/LICENSE
+typeshed's LICENSE is a single composite file: it states the project is "licensed
+under the terms of the Apache license" and that "Parts of typeshed are licensed
+under different licenses (like the MIT license)" (Copyright (c) 2015 Jukka
+Lehtosalo and contributors). The composite text — Apache-2.0 plus the MIT parts —
+is pinned for a stable reference at commit 83c2518a9e6abbda0c44592c3483de459198f887:
+https://github.com/python/typeshed/blob/83c2518a9e6abbda0c44592c3483de459198f887/LICENSE
+(the standalone Apache-2.0 text is at https://www.apache.org/licenses/LICENSE-2.0).
 
 -------------------------------------------------------------------------------
 

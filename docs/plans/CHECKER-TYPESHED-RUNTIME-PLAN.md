@@ -45,9 +45,10 @@ Step 3 requires **“Typeshed stubs for the standard library”**, while the sam
 
 ### Integrity, verification, and cache {#TYPESHEDRT-ACCEPTANCE-VERIFY}
 
-GitHub archive tarball bytes are not stable, and a commit SHA also hashes commit metadata, so verification binds to the **tree** SHA the commit points to ([§STUBRES-TYPESHED-ACQUIRE](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
+GitHub archive tarball bytes are not stable, and a commit SHA also hashes commit metadata, so verification binds to the **tree** SHA the commit points to ([§STUBRES-TYPESHED-ACQUIRE](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)). Verification is integrity, not authenticity ([§STUBRES-TYPESHED-SECURITY](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-SECURITY)).
 
 - [ ] **Tree-SHA binding:** verify against the recorded tree SHA; assert a tree whose bytes differ but content matches passes, and any content mutation fails — the raw tarball checksum is never the gate.
+- [ ] **Integrity ≠ authenticity:** assert a `VERIFIED` report claims only “matches the resolved SHA”, never “official typeshed”; assert a self-consistent tree at an attacker-chosen SHA still verifies (integrity holds) while docs and reporting make no authenticity/provenance guarantee and validate no commit/tag signature.
 - [ ] **Re-fetch equivalence:** evict a pinned cache entry, re-download, and assert the extracted tree hashes to the same tree SHA even if the archive bytes differ; the pin never “expires”.
 - [ ] **`--no-typeshed-cache`:** assert a fresh download is verified then discarded, leaving no cache entry, and the result equals the cached path's result.
 - [ ] **Verification waived:** with `typeshed-verify = false` / `--no-typeshed-verification`, assert the hash check is skipped, extraction safety still runs, and the source reports `UNVERIFIED` on CLI, LSP, and MCP.

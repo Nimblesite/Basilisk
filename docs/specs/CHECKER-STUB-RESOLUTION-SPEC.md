@@ -269,32 +269,23 @@ built-in CPython classification.
 The pinned typing specification names "Typeshed stubs for the standard library",
 says they are "usually" vendored, and makes a configured custom tree canonical
 ([step 3, `python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-Every reference checker vendors a pinned typeshed and refreshes it per release:
-mypy bundles the stdlib because ["all mypy users need them"](https://mypy-lang.blogspot.com/2021/05/the-upcoming-switch-to-modular-typeshed.html),
-ty ships ["vendored typeshed stubs for the stdlib, bundled as a zip file in the binary"](https://docs.astral.sh/ty/reference/configuration/),
-pyrefly bundles them ["with every build"](https://pyrefly.org/blog/stubs/), and
-pyright ships a ["typeshed-fallback"](https://raw.githubusercontent.com/microsoft/pyright/main/docs/import-resolution.md)
-copy. Basilisk does the same and selects exactly one step-3 source — always full
-`.pyi` bodies, never names only:
+The specification does not prescribe transport, caching, commits, or freshness.
+For precedent, mypy says all users need its bundled stdlib stubs, while ty
+documents a vendored stdlib ZIP and custom-tree option
+([mypy](https://mypy-lang.blogspot.com/2021/05/the-upcoming-switch-to-modular-typeshed.html),
+[ty](https://docs.astral.sh/ty/reference/configuration/)). Basilisk uses one
+complete source; names, `VERSIONS`, `.pyi` bodies, and derived indexes MUST NOT
+mix across sources.
 
-1. `typeshed-path`, when configured;
-2. the commit archive for an explicit `typeshed-commit`, or for the latest
-   `python/typeshed@main` commit resolved for this CLI run or LSP session,
-   downloaded over HTTPS (never `git clone`) and integrity-verified;
-3. the bundled full-snapshot ZIP shipped in the binary when download is
-   unavailable — real bodies, so hovers and signatures work offline.
+| Mode | Active source | Failure rule |
+|---|---|---|
+| Custom folder | `typeshed-path` verbatim | miss continues to step 4; no other step-3 source |
+| Exact commit | verified archive, or bundled ZIP only if its SHA equals the pin | otherwise fail closed |
+| Latest (default) | current `python/typeshed@main`, once per run/session | never reuse old unpinned data; warn and use bundled ZIP |
 
-A downloaded archive replaces the bundled ZIP **wholesale**: stub bodies, module
-names, `stdlib/VERSIONS`, and the distribution map all come from the same commit.
-The two MUST NOT mix.
-
-**Freshness over determinism — determinism one line away.** The default resolves
-the *latest* `main` commit, so types are as fresh as upstream; adding a
-`typeshed-commit` pin opts into deterministic type results — the exact same
-extracted stub tree on every run, reproduced from the commit's own Git object
-hashes, not the archive bytes (GitHub does not guarantee stable tarball bytes).
-Every control here is exposed in the configuration UI
-([§LSPCFGED-TYPESHED](LSP-CONFIGURATION-EDITOR-SPEC.md#LSPCFGED-TYPESHED)).
+Freshness is the default; determinism is one **Pin current** action away. Every
+mode without an explicit commit, including Custom folder and bundled, warns that
+the project is unpinned ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)).
 
 #### Archive acquisition {#STUBRES-TYPESHED-ACQUIRE}
 
@@ -340,7 +331,9 @@ policy.
   verification then discards it (hermetic reproducibility);
   `--no-typeshed-verification` (or `typeshed-verify = false`) skips the hash check
   when its cost is unacceptable, and the resolved source is then reported
-  **`UNVERIFIED`** ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)). The default
+  **`UNVERIFIED`** ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)). A passing
+  check proves integrity against the SHA, not that the SHA is an official typeshed
+  commit — see [§STUBRES-TYPESHED-SECURITY](#STUBRES-TYPESHED-SECURITY). The default
   verification depth is governed by the benchmark ratchet
   ([CHKARCH-TESTING-BENCH-RATCHET](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET)).
 - **Extraction safety is always on.** Independent of `typeshed-verify`, every
@@ -351,6 +344,44 @@ policy.
   waives only the content-hash check, never extraction safety.
 - `typeshed-cache-path` relocates the cache. `typeshed-path` bypasses download
   and is canonical under [§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED).
+
+#### Integrity is not authenticity {#STUBRES-TYPESHED-SECURITY}
+
+Tree-SHA verification ([§STUBRES-TYPESHED-ACQUIRE](#STUBRES-TYPESHED-ACQUIRE)) is
+an **integrity** check, not an **authenticity** one, and this spec MUST NOT
+overstate it. Confirming the extracted tree hashes to the resolved or pinned tree
+SHA proves only that the content matches *that SHA* — that bytes were not corrupted
+in transit or swapped for a different commit's content. It does **not** prove the
+SHA is a genuine, official `python/typeshed` commit: Git content addressing binds
+content to a hash, but anyone can construct a tree that hashes to a SHA they chose,
+so a matching hash is not provenance. **There is no verifiable guarantee that a
+type check ran against an official typeshed version** — Basilisk states this
+plainly rather than papering over it.
+
+The real trust anchors, and their limits:
+
+- **Default transport (GitHub codeload over HTTPS).** TLS authenticates
+  `github.com` as the origin, so a SHA resolved and fetched from GitHub is as
+  trustworthy as GitHub itself. This is the strongest path.
+- **A pinned SHA is only as trustworthy as its source.** A `typeshed-commit`
+  copied from the official repository inherits that trust; a SHA taken from an
+  untrusted place does not — verifying against it is circular, since an attacker
+  who chose the SHA also supplies the tree that matches it.
+- **`typeshed-url` mirrors are unauthenticated.** An operator-chosen mirror moves
+  the trust decision to the operator; Basilisk cannot tell whether a mirror's tree
+  is the official typeshed content for that SHA, only that it matches the SHA it
+  was asked to match.
+- **No signature check.** Basilisk validates no commit or tag signature (typeshed
+  publishes none a checker verifies), so authenticity rests entirely on transport
+  and on where the SHA came from — never on cryptographic proof of officialness.
+
+Consequently a **`VERIFIED` report means "matches the resolved SHA," never
+"provably official."** The source, SHA, and transport are surfaced on every
+surface ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)) precisely so a human can
+judge provenance; `UNVERIFIED` marks the weaker state where even SHA-integrity was
+waived. Extraction safety ([§STUBRES-TYPESHED-ACQUIRE](#STUBRES-TYPESHED-ACQUIRE))
+is the one guarantee that holds regardless of provenance — it defends the
+filesystem against a hostile archive whether or not the content is authentic.
 
 #### Bundled ZIP snapshot {#STUBRES-TYPESHED-BASELINE}
 
@@ -424,8 +455,10 @@ asked for attribution done properly (SHOULD):**
 - **Custom `typeshed-path` is not relabelled.** A user-supplied tree is
   user-managed and MAY carry entirely different terms; Basilisk never presents it
   as Apache/typeshed-licensed.
-- **Every surface shows the source.** CLI, LSP Service Info, and MCP report the
-  active source, its SHA, and a "View License" affordance
+- **Every surface shows the source.** CLI, LSP, and MCP report the active source
+  and its SHA; a **View License** affordance onto the active tree's `LICENSE` is
+  offered by the CLI and the config-editor typeshed section (the read-only Service
+  Info tree mirrors state only)
   ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)). Apache mandates none of this
   multi-surface display; it is Basilisk's traceability policy.
 
@@ -443,8 +476,11 @@ same way it already ships Ruff's license
 
 The pinned typing specification defines resolution order, not transport status
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-Basilisk reports the active source on every surface — CLI, LSP Service Info, and
-MCP — each carrying a "View License" affordance onto the active tree's `LICENSE`:
+Basilisk reports the active source on every surface — CLI, LSP, and MCP. The
+read-only LSP Service Info tree mirrors that state; the **View License** affordance
+onto the active tree's `LICENSE` lives in the CLI output and the config-editor
+typeshed section ([§LSPCFGED-TYPESHED](LSP-CONFIGURATION-EDITOR-SPEC.md#LSPCFGED-TYPESHED)),
+not the tree:
 
 - **downloaded archive**: `typeshed <short-sha> · <commit-date>` (with `pinned`
   when `typeshed-commit` selected it);
