@@ -13,9 +13,11 @@
 //!   `match`) into positive/negative environment updates.
 
 pub mod env;
+pub mod flow;
 pub mod guards;
 pub mod set_ops;
 
 pub use env::NarrowEnv;
+pub use flow::{analyse_function, FlowResult, NarrowedUse};
 pub use guards::{guard_outcomes, GuardOutcome};
 pub use set_ops::{intersect, subtract};

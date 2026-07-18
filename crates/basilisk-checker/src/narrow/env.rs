@@ -25,6 +25,10 @@ type Frame = HashMap<String, InferredType>;
 #[derive(Debug, Clone, Default)]
 pub struct NarrowEnv {
     declared: Frame,
+    /// Whole-scope narrowing facts (`assert`, post-early-exit complements,
+    /// assignment narrowing outside any branch) — layered over `declared`
+    /// WITHOUT mutating it, so the declared anchor survives.
+    scope: Frame,
     frames: Vec<Frame>,
 }
 
@@ -34,6 +38,7 @@ impl NarrowEnv {
     pub fn new(declared: HashMap<String, InferredType>) -> Self {
         Self {
             declared,
+            scope: Frame::new(),
             frames: Vec::new(),
         }
     }
@@ -47,13 +52,14 @@ impl NarrowEnv {
     }
 
     /// The narrowed type currently visible for `name`, innermost frame first,
-    /// falling back to the declared type.
+    /// then whole-scope facts, falling back to the declared type.
     #[must_use]
     pub fn lookup(&self, name: &str) -> Option<InferredType> {
         self.frames
             .iter()
             .rev()
             .find_map(|frame| frame.get(name))
+            .or_else(|| self.scope.get(name))
             .or_else(|| self.declared.get(name))
             .cloned()
     }
@@ -77,11 +83,12 @@ impl NarrowEnv {
     }
 
     /// Record a narrowing fact in the innermost open branch (or, outside any
-    /// branch, as a whole-scope fact — the `assert` case).
+    /// branch, as a whole-scope fact — the `assert` case). The declared
+    /// layer is NEVER written: assignment validation keeps its anchor.
     pub fn narrow(&mut self, name: &str, ty: InferredType) {
         let frame = match self.frames.last_mut() {
             Some(frame) => frame,
-            None => &mut self.declared,
+            None => &mut self.scope,
         };
         let _ = frame.insert(name.to_owned(), ty);
     }
