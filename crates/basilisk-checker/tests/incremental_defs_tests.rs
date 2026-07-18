@@ -267,3 +267,30 @@ def diverging_return():
         "a body ending in return must not union None: {diverging:?}"
     );
 }
+
+/// Same-module call-return inference: `x = f()` resolves through the
+/// sibling's declared or synthesized return type, including chains.
+#[test]
+fn variable_from_sibling_call_infers_the_return() {
+    let db = EventDb::default();
+    let source = r#"def make(a: int) -> str:
+    return "s"
+
+def synth_only():
+    return 42
+
+made = make(1)
+synthesized = synth_only()
+"#;
+    let file = SourceFile::new(&db, "m.py".to_owned(), source.to_owned());
+    let defs = definitions(&db, file);
+    let made = defs.get(2).copied().expect("made");
+    assert_eq!(definition_type(&db, made), InferredType::Str);
+
+    let synthesized = defs.get(3).copied().expect("synthesized");
+    assert_eq!(
+        definition_type(&db, synthesized),
+        InferredType::Literal(LiteralValue::Int(42)),
+        "the callee's SYNTHESIZED return flows into the variable"
+    );
+}

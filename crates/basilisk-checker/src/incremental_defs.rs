@@ -282,9 +282,13 @@ fn variable_type<'db>(db: &'db dyn Db, def: Definition<'db>) -> InferredType {
     };
     match parsed.syntax().body.first() {
         Some(Stmt::AnnAssign(assign)) => annotation_type(slice, Some(&assign.annotation)),
+        // A bare-name alias resolves its sibling directly (the definition
+        // cycle edge); any other right-hand side synthesizes with the
+        // module's callables in scope, so same-module call returns
+        // (`x = f()` → `f`'s declared-or-synthesized return) resolve.
         Some(Stmt::Assign(assign)) => match assign.value.as_ref() {
             Expr::Name(reference) => sibling_type(db, def, reference.id.as_str()),
-            value => synth_expression(value),
+            value => synth_expression(db, def, value),
         },
         _ => InferredType::Unknown,
     }
@@ -301,12 +305,39 @@ fn sibling_type<'db>(db: &'db dyn Db, def: Definition<'db>, name: &str) -> Infer
         })
 }
 
-/// Synthesize one expression through the bidirectional engine.
-fn synth_expression(expr: &Expr) -> InferredType {
-    let mut engine = BidirEngine::new(std::collections::HashMap::new());
+/// Synthesize one expression with the module's CALLABLES bound in scope.
+///
+/// Sibling functions/classes arrive through [`callable_interface`] — a
+/// `PartialEq` value — so a body-only edit to a sibling with a DECLARED
+/// signature backdates and this definition's memo survives (the early
+/// cutoff the checklist demands); a changed SYNTHESIZED return correctly
+/// invalidates.
+fn synth_expression<'db>(db: &'db dyn Db, def: Definition<'db>, expr: &Expr) -> InferredType {
+    let globals: std::collections::HashMap<String, crate::bidir::Ty> =
+        callable_interface(db, def.file(db))
+            .0
+            .iter()
+            .map(|(name, ty)| (name.clone(), crate::bidir::Ty::from_inferred(ty)))
+            .collect();
+    let mut engine = BidirEngine::new(globals);
     let ty = engine.synth(expr);
     let solution = engine.finish();
     ty.to_inferred(&solution.vars)
+}
+
+/// Tracked query: the `(name, type)` interface of the module's FUNCTIONS and
+/// CLASSES only — the backdating boundary variable inference reads its
+/// callables through (variables are excluded to keep variable↔variable
+/// resolution on the direct, cycle-recovered [`definition_type`] edge).
+#[salsa::tracked(returns(ref))]
+pub fn callable_interface(db: &dyn Db, file: SourceFile) -> ModuleInterface {
+    ModuleInterface(
+        definitions(db, file)
+            .iter()
+            .filter(|def| matches!(def.kind(db), DefKind::Function | DefKind::Class))
+            .map(|def| (def.name(db).clone(), definition_type(db, *def)))
+            .collect(),
+    )
 }
 
 /// One expression-level inference result within a definition.
