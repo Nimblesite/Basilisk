@@ -397,12 +397,24 @@ reproducible, write-always, ratcheted:
 
 ### Stage 2 — flow analysis and narrowing
 
-- [ ] Add a scoped narrowing environment with branch push, complement, join,
+- [x] Add a scoped narrowing environment with branch push, complement, join,
   and nested-function boundaries.
-- [ ] Consume resolver guards for `isinstance`, `is None`, truthiness,
+  — `crates/basilisk-checker/src/narrow/env.rs` (`NarrowEnv`: branch frames,
+  a whole-scope layer for `assert`/early-exit facts, `phi`-join at merges,
+  fresh-environment nested-function boundary) plus the statement-level
+  walker in `narrow/flow.rs` (early-exit complement persistence, loop and
+  try/except frames discarded).
+- [x] Consume resolver guards for `isinstance`, `is None`, truthiness,
   `TypeGuard`, `TypeIs`, `assert`, and pattern matching.
-- [ ] Model assignment narrowing without changing the declared type used for
+  — `narrow/guards.rs` (two-branch outcomes with PEP 647/742 asymmetry,
+  loop-guard suppression) + `narrow/flow.rs` (span-matched application,
+  `match` per-case subject narrowing with value-pattern conservatism).
+- [x] Model assignment narrowing without changing the declared type used for
   assignment validation.
+  — `NarrowEnv` keeps the declared layer immutable (`declared()` is the
+  validation anchor); `x = expr` narrows only the flow layer via the
+  bidirectional engine's synthesized type (tests in
+  `tests/narrow_flow_tests.rs` and `narrow/env.rs`).
 - [ ] Test positive/complement branches, loops, early exits, closures, and
   unreachable branches through public checker behavior.
 - [ ] Reformulate narrowing as intersection-and-negation types over a

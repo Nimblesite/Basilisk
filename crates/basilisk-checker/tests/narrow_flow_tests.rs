@@ -198,3 +198,51 @@ def f(x: int | str) -> None:
         "after x = 1 the flow type must be int-compatible, got {narrowed:?}"
     );
 }
+
+/// `match` cases narrow the subject per case ([TYPEINF-NARROWING-MATCH]).
+#[test]
+fn match_cases_narrow_the_subject() {
+    let result = analyse(
+        r"
+def f(x: int | str) -> None:
+    match x:
+        case int():
+            a = x
+        case str():
+            b = x
+",
+    );
+    let uses: Vec<(&str, &InferredType)> = result
+        .narrowed_uses
+        .iter()
+        .map(|u| (u.name.as_str(), &u.narrowed))
+        .collect();
+    assert!(
+        uses.contains(&("x", &InferredType::Int)),
+        "int() case must narrow to int: {uses:?}"
+    );
+    assert!(
+        uses.contains(&("x", &InferredType::Str)),
+        "str() case must narrow to str: {uses:?}"
+    );
+}
+
+/// Value patterns (`case 1:`) never fabricate `Never` narrowing.
+#[test]
+fn match_value_patterns_stay_conservative() {
+    let result = analyse(
+        r"
+def f(x: int | str) -> None:
+    match x:
+        case 1:
+            a = x
+",
+    );
+    for use_site in &result.narrowed_uses {
+        assert_ne!(
+            use_site.narrowed,
+            InferredType::Never,
+            "value pattern must not narrow to Never"
+        );
+    }
+}

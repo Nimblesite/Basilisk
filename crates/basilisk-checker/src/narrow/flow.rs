@@ -100,6 +100,7 @@ impl FlowWalker<'_> {
             }
             Stmt::With(node) => self.walk_stmts(&node.body),
             Stmt::Try(node) => self.walk_try(node),
+            Stmt::Match(node) => self.walk_match(node),
             // Everything else — including nested functions/classes, which
             // are a narrowing BOUNDARY (enclosing narrows must not flow into
             // a closure that may run later) — is not walked.
@@ -194,6 +195,52 @@ impl FlowWalker<'_> {
         }
     }
 
+    /// `match <subject>: case ...` — per-case narrowing of the subject
+    /// ([TYPEINF-NARROWING-MATCH]): each case body walks in its own branch
+    /// frame with the subject intersected with the case's pattern type.
+    fn walk_match(&mut self, node: &ruff_python_ast::StmtMatch) {
+        self.record_uses(&node.subject);
+        let range = node.range();
+        let key = (u32::from(range.start()), u32::from(range.end()));
+        let match_guard = self.guards_by_span.get(&key).copied();
+        for case in &node.cases {
+            self.env.push_branch();
+            self.narrow_match_case(match_guard, case);
+            self.walk_stmts(&case.body);
+            let _ = self.env.pop_branch();
+        }
+    }
+
+    /// Apply one case's pattern narrowing, when the resolver captured it.
+    fn narrow_match_case(
+        &mut self,
+        match_guard: Option<&NarrowingGuard>,
+        case: &ruff_python_ast::MatchCase,
+    ) {
+        let Some(guard) = match_guard.filter(|guard| !guard.in_loop) else {
+            return;
+        };
+        let basilisk_resolver::NarrowingGuardKind::Match {
+            variable, cases, ..
+        } = &guard.kind
+        else {
+            return;
+        };
+        let Some(pattern) = matching_case(cases, case) else {
+            return;
+        };
+        let Some(current) = self.env.lookup(variable) else {
+            return;
+        };
+        let target = InferredType::from_annotation(&pattern.pattern_type);
+        let narrowed = super::set_ops::intersect(&current, &target);
+        // A `Never` here usually means a VALUE pattern (`case 1:`) whose text
+        // is not a type — never fabricate unreachability from that.
+        if narrowed != InferredType::Never {
+            self.env.narrow(variable, narrowed);
+        }
+    }
+
     /// Try/except: handler and else/final bodies walk in discarded frames —
     /// exceptions make mid-body narrowing unreliable.
     fn walk_try(&mut self, node: &ruff_python_ast::StmtTry) {
@@ -271,6 +318,18 @@ fn variable_of_kind(kind: &basilisk_resolver::NarrowingGuardKind) -> &str {
         | K::Match { variable, .. } => variable,
         K::Assert { inner } => variable_of_kind(inner),
     }
+}
+
+/// Find the resolver case entry matching an AST case, by body span.
+fn matching_case<'c>(
+    cases: &'c [basilisk_resolver::MatchCaseNarrowing],
+    case: &ruff_python_ast::MatchCase,
+) -> Option<&'c basilisk_resolver::MatchCaseNarrowing> {
+    let start = u32::from(case.body.first()?.range().start());
+    let end = u32::from(case.body.last()?.range().end());
+    cases
+        .iter()
+        .find(|entry| entry.body_span.start == start && entry.body_span.end == end)
 }
 
 /// Whether a statement list definitely diverges (ends in `return`/`raise`/
