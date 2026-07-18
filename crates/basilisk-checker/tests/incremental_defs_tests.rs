@@ -225,3 +225,45 @@ def second(y: int | str) -> None:
         "only the edited definition's narrowing may recompute"
     );
 }
+
+/// Same-module return inference: an unannotated function's return type is
+/// synthesized from its body ([NARROWPLAN-CHECKLIST] expression inference).
+#[test]
+fn unannotated_return_is_synthesized_from_the_body() {
+    let db = EventDb::default();
+    let source = r#"def no_return(x: int):
+    y = x
+
+def returns_literal():
+    return "done"
+
+def diverging_return():
+    return 1
+"#;
+    let file = SourceFile::new(&db, "m.py".to_owned(), source.to_owned());
+    let defs = definitions(&db, file);
+
+    let return_of = |index: usize| -> InferredType {
+        let def = defs.get(index).copied().expect("definition exists");
+        match definition_type(&db, def) {
+            InferredType::Callable(info) => *info.return_type,
+            other => other,
+        }
+    };
+
+    // No return statement at all → None.
+    assert_eq!(return_of(0), InferredType::None_);
+
+    // A single trailing return synthesizes its literal type precisely.
+    assert_eq!(
+        return_of(1),
+        InferredType::Literal(LiteralValue::Str("done".to_owned()))
+    );
+
+    // Trailing return diverges: no implicit None union.
+    let diverging = return_of(2);
+    assert!(
+        !InferredType::None_.is_assignable_to(&diverging),
+        "a body ending in return must not union None: {diverging:?}"
+    );
+}

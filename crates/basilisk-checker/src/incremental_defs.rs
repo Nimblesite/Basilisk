@@ -155,7 +155,10 @@ fn definition_type_cycle_recover<'db>(
     }
 }
 
-/// The declared `Callable` surface of a function definition's slice.
+/// The `Callable` surface of a function definition's slice: declared
+/// annotations where present, with an UNANNOTATED return synthesized from
+/// the body's `return` expressions — same-module return inference
+/// ([NARROWPLAN-CHECKLIST] Stage 2, expression inference).
 fn function_type(slice: &str) -> InferredType {
     let Ok(parsed) = ruff_python_parser::parse_module(slice) else {
         return InferredType::Unknown;
@@ -168,11 +171,92 @@ fn function_type(slice: &str) -> InferredType {
         .iter()
         .map(|param| annotation_type(slice, param.annotation()))
         .collect();
-    let return_type = annotation_type(slice, def.returns.as_deref());
+    let return_type = match def.returns.as_deref() {
+        Some(annotation) => annotation_type(slice, Some(annotation)),
+        None => synthesized_return_type(&def.body),
+    };
     InferredType::Callable(crate::types::CallableInfo {
         param_types,
         return_type: Box::new(return_type),
     })
+}
+
+/// Synthesize an unannotated function's return type: the union of its
+/// `return` expression types through the bidirectional engine, plus `None`
+/// when a bare `return` exists or the body can fall through.
+///
+/// Gradual-guarantee note ([TYPEINF-TARGET-GRADUAL]): this type is inferred
+/// FROM unannotated code, so when rules consume it (Integration stage) it is
+/// display/assist-grade — it must never be enforced as if the user declared
+/// it, or removing a return annotation could introduce new errors. The
+/// differential harness (`tests/gradual_guarantee_tests.rs`) pins the
+/// behavioral invariant.
+fn synthesized_return_type(body: &[Stmt]) -> InferredType {
+    let mut returns = Vec::new();
+    let mut has_bare_return = false;
+    collect_return_exprs(body, &mut returns, &mut has_bare_return);
+    if returns.is_empty() && !has_bare_return {
+        // No return statement at all: the function returns None.
+        return InferredType::None_;
+    }
+    let mut engine = BidirEngine::new(std::collections::HashMap::new());
+    let types: Vec<crate::bidir::Ty> = returns.iter().map(|expr| engine.synth(expr)).collect();
+    let solution = engine.finish();
+    let mut result = types
+        .into_iter()
+        .map(|ty| ty.to_inferred(&solution.vars))
+        .fold(InferredType::Never, InferredType::union);
+    // Approximate fall-through: unless the body's last statement diverges,
+    // an implicit `return None` path exists. Conservative in the sound
+    // direction — a spurious `| None` widens, never fabricates precision.
+    let last_diverges = matches!(body.last(), Some(Stmt::Return(_) | Stmt::Raise(_)));
+    if has_bare_return || !last_diverges {
+        result = InferredType::union(result, InferredType::None_);
+    }
+    result
+}
+
+/// Collect `return` expressions (and bare-`return` presence) recursively,
+/// stopping at nested function/class boundaries.
+fn collect_return_exprs<'a>(stmts: &'a [Stmt], out: &mut Vec<&'a Expr>, bare: &mut bool) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::Return(ret) => match ret.value.as_deref() {
+                Some(value) => out.push(value),
+                None => *bare = true,
+            },
+            Stmt::If(node) => {
+                collect_return_exprs(&node.body, out, bare);
+                for clause in &node.elif_else_clauses {
+                    collect_return_exprs(&clause.body, out, bare);
+                }
+            }
+            Stmt::For(node) => {
+                collect_return_exprs(&node.body, out, bare);
+                collect_return_exprs(&node.orelse, out, bare);
+            }
+            Stmt::While(node) => {
+                collect_return_exprs(&node.body, out, bare);
+                collect_return_exprs(&node.orelse, out, bare);
+            }
+            Stmt::With(node) => collect_return_exprs(&node.body, out, bare),
+            Stmt::Try(node) => {
+                collect_return_exprs(&node.body, out, bare);
+                for handler in &node.handlers {
+                    let ruff_python_ast::ExceptHandler::ExceptHandler(h) = handler;
+                    collect_return_exprs(&h.body, out, bare);
+                }
+                collect_return_exprs(&node.orelse, out, bare);
+                collect_return_exprs(&node.finalbody, out, bare);
+            }
+            Stmt::Match(node) => {
+                for case in &node.cases {
+                    collect_return_exprs(&case.body, out, bare);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Parse one annotation expression's text, `Unknown` when absent.
