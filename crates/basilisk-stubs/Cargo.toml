@@ -1,6 +1,6 @@
 [package]
 name        = "basilisk-stubs"
-description = "Bundled type stubs and stdlib index for Basilisk"
+description = "Runtime python/typeshed clone + cache and the offline baseline for Basilisk"
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true

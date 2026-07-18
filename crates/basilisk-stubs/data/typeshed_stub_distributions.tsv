@@ -1,4 +1,8 @@
 # typeshed third-party stub distribution map — GENERATED, do not edit by hand.
+# This is the OFFLINE DAY-ONE BASELINE for the types-* map only: at runtime the
+# python/typeshed clone wholesale overrides it, and this file is consulted solely
+# when no clone is available (offline, clone failed, or pre-clone). See
+# STUBRES-TYPESHED-BASELINE.
 # Source: python/typeshed `stubs/<DIST>/` directories (main branch).
 # Each line maps a Python *import root* to the PyPI *distribution* that
 # publishes its stubs (always `types-<DIST>`). Used by the BSK-0152 quick fix

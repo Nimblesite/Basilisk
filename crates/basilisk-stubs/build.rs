@@ -6,7 +6,17 @@
 
 //! Build script for basilisk-stubs.
 //!
-//! Generates compile-time perfect-hash tables:
+//! Generates compile-time perfect-hash tables for the **offline baseline
+//! only** — the small, loose, replaceable day-one fallback data. At runtime the
+//! `python/typeshed` clone acquired and refreshed on the fly wholesale overrides
+//! this baseline; these tables are consulted solely when no clone is available
+//! (offline, clone failed, or pre-clone). See
+//! `docs/plans/CHECKER-TYPESHED-RUNTIME-PLAN.md` and [STUBRES-TYPESHED-BASELINE].
+//! Whether the baseline stays a compiled PHF table (as here) or moves to a loose
+//! data file loaded at runtime is governed by the benchmark ratchet, not by this
+//! script — see [CHKARCH-TESTING-BENCH-RATCHET].
+//!
+//! The generated tables:
 //! * a `phf::Set` of all `CPython` 3.12 stdlib top-level module names from the
 //!   typeshed VERSIONS data (replaces the hand-maintained `STDLIB_ROOTS` list
 //!   in `e0010.rs`), and

@@ -3,8 +3,12 @@
 ## Status {#LSPAIPLAN-STATUS}
 
 Only the narrow `AiTypingProvider` interface and no-op default exist. They are not wired into
-the server. Everything below is optional product work and must preserve the deterministic,
-offline checker described in [LSP-AI-SPEC.md](../specs/LSP-AI-SPEC.md).
+the server. Everything below is optional product work and must preserve the deterministic
+checker described in [LSP-AI-SPEC.md](../specs/LSP-AI-SPEC.md): checking never depends on an AI
+service or provider. This is *not* an "offline" claim — by default Basilisk clones
+`python/typeshed` for standard-library types
+([CHECKER-STUB-RESOLUTION-SPEC §STUBRES-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED));
+the AI provider is a separate, opt-in network surface that this plan governs.
 
 ## First usable slice {#LSPAIPLAN-FIRST-SLICE}
 
@@ -35,7 +39,14 @@ it must not reuse an unstructured prompt as an implicit API.
 
 ## Acceptance {#LSPAIPLAN-ACCEPTANCE}
 
-- [ ] Basilisk remains fully functional offline and with invalid provider configuration.
+- [ ] Basilisk remains fully functional with no AI provider and with invalid provider
+  configuration. With no network it still checks — standard-library types come from the
+  bundled offline baseline and the CLI shows the dim-amber baseline warning
+  ([CHECKER-STUB-RESOLUTION-SPEC §STUBRES-TYPESHED-WARN](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 - [ ] Every AI result is visibly provider-originated and unsafe until reviewed.
-- [ ] No network request occurs in default configuration or deterministic test suites.
+- [ ] No **AI-provider** network request occurs unless a user enables a provider — no provider is
+  contacted in the default configuration or in deterministic test suites. (The default typeshed
+  clone is a separate, expected default network operation; tests pin it via `typeshed-commit` or
+  run against the offline bundled baseline —
+  [CHECKER-STUB-RESOLUTION-SPEC §STUBRES-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED).)
 - [ ] Cancellation prevents stale edits from being offered after the document changes.

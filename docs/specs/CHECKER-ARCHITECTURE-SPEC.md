@@ -28,7 +28,7 @@ Depend on established open-source tools rather than reimplementing them.
 |---|---|---|---|
 | **`ruff_python_formatter`** | Code formatting | MIT | Embedded in-process — the formatter is Ruff's, no `ruff` CLI. Pinned to the same rev as the parser ([LSPFMT-ENGINE](LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE)). |
 | **`ruff_python_parser`** | Python AST parsing | MIT | Battle-tested Rust crate. Powers Ruff. Our parser. |
-| **typeshed data** | Standard-library and stub-distribution indexes | Apache-2.0 | Build-time source for the compact indexes in `basilisk-stubs`; full `.pyi` trees are not embedded. |
+| **`python/typeshed` clone** | Standard-library `.pyi` and stub-distribution data | Apache-2.0 | Acquired as a real on-disk clone at runtime and resolved against directly ([STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)). A small, loose, replaceable **bundled baseline** — stdlib names in typeshed `VERSIONS` format plus the `types-*` map, never `.pyi` bodies — is the offline day-one fallback only, never authoritative; it is loaded at runtime, and any compiled-in copy is a benchmark-justified acceleration over that loose source of truth, not the authoritative form ([STUBRES-TYPESHED-BASELINE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-BASELINE)). |
 | **Salsa** | Incremental computation framework | Apache-2.0/MIT | Powers rust-analyzer. Proven at scale. |
 | **`lsp-server`** / **`tower-lsp`** | LSP implementation | MIT | Standard Rust LSP crates. |
 
@@ -37,7 +37,7 @@ Depend on established open-source tools rather than reimplementing them.
 | Tool | Interop Strategy |
 |---|---|
 | **Ruff** | Basilisk **embeds** the `ruff_python_formatter` crate in-process for formatting and reimplements import hygiene natively — the `ruff` CLI is never spawned ([LSPFMT-DECISION](LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)). Configuration unified in `pyproject.toml` (`[tool.ruff.format]`). |
-| **typeshed** | Compile-time stdlib-name and stub-distribution indexes. Users provide real `.pyi` files through `stub-paths`, installed packages, or `typeshed-path`; see [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561). |
+| **typeshed** | The default standard-library source is an on-disk clone of `python/typeshed` acquired and refreshed at runtime, resolved against its real `stdlib/*.pyi` + `stdlib/VERSIONS`; a loose bundled baseline backs it offline only, until the first successful clone. Users may still layer real `.pyi` through `stub-paths` or installed packages, or replace the clone entirely with `typeshed-path`; see [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561). |
 | **PEP 561** | Full support for `py.typed` packages, inline type annotations, and stub-only packages. |
 
 ---
@@ -921,9 +921,16 @@ stub-resolution spec and `basilisk-stubs`.
 
 ### typeshed compatibility {#CHKARCH-STUBS-TYPESHED}
 
-`basilisk-stubs` embeds compact indexes derived from typeshed, not the full stub tree.
-`typeshed-path` supplies the canonical standard-library `.pyi` tree for resolution step 3;
-`stub-paths` prepends project stubs at step 1. The exact order is
+`basilisk-stubs` resolves the standard library against a real on-disk clone of
+`python/typeshed` that Basilisk acquires and refreshes at runtime — the canonical
+source for resolution step 3 by default
+([STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)). A small,
+loose bundled baseline (stdlib names + the `types-*` map, no `.pyi` bodies) is
+consulted only while no clone is available — offline, clone failed, or pre-clone
+— and every such run warns; a successful clone wholesale overrides it.
+`typeshed-path` overrides the clone with your own stdlib `.pyi` tree and turns
+cloning off; `typeshed-cache-path` only relocates where the automatic clone is
+stored; `stub-paths` prepends project stubs at step 1. The exact order is
 [STUBRES-CUSTOM-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED).
 
 ---
@@ -1006,7 +1013,11 @@ Project TOML example:
 [tool.basilisk]
 python-platform = "All"          # Default: check for all platforms
 stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
-# typeshed-path = "typeshed-x"   # resolution step 3: provide canonical stdlib stubs
+# Standard-library typeshed is cloned and refreshed automatically at runtime; tune it:
+# typeshed-commit = "83c2518a9e6abbda0c44592c3483de459198f887"  # optional: pin & freeze a commit
+# typeshed-cache-path = ".cache/typeshed"                       # optional: where the auto-clone lives
+# typeshed-refresh-interval = "24h"                             # optional: update-check TTL when unpinned
+# typeshed-path = "typeshed-x"   # resolution step 3: your own stdlib stubs — overrides the clone and disables cloning
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]
 

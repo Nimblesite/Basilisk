@@ -20,7 +20,15 @@ crate.
 - **Per-path overrides** — disable specific rules or override their severity for matching path globs (e.g. legacy directories).
 - **Global severity overrides** — set an enabled rule to `error`, `warning`,
   `info`, or `disabled`.
-- **Import-resolution overrides** — `stub-paths` prepends user stub directories (resolution step 1); `typeshed-path` replaces the vendored standard-library typeshed wholesale as the canonical step-3 source ([STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
+- **Import-resolution overrides** — `stub-paths` prepends user stub directories
+  (resolution step 1); `typeshed-path` supplies your own typeshed tree, becoming
+  the canonical step-3 source for standard-library types and **disabling the
+  runtime clone** that is the default
+  ([STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
+  The runtime clone itself is tuned by `typeshed-commit` (pin an exact SHA and
+  freeze it), `typeshed-cache-path` (where the clone is stored), and
+  `typeshed-refresh-interval` (update-check TTL when unpinned)
+  ([STUBRES-TYPESHED-CONFIG](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)).
 - **Adoption target** — exact-file `per-path-overrides` entries in the active
   config carry generated demotions. All rule configuration stays in that one
   file; there is no separate adoption sidecar.
