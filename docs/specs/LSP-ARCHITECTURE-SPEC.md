@@ -125,7 +125,7 @@ nothing usable exists; `version` is `null` when the `--version` probe fails but 
 path is real. Versions come from running `<tool> --version` once at initialize.
 
 Editors render a resolved tool as `<version> (<path>)`; with an empty (auto-detect)
-setting the row shows the outcome — `auto-detect → 3.12.4 (/usr/bin/python3)`,
+setting the row shows the outcome — `auto-detect → X.Y.Z (/usr/bin/python3)`,
 `auto-detect → none found`, or `auto-detect → awaiting server…` — never the bare
 `auto-detect` placeholder. The Binary row renders only from this payload: populated
 while a server is running, absent otherwise

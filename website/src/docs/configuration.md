@@ -70,7 +70,7 @@ rules."imports_unresolved" = "warning"
 **Default:** auto-detected from the interpreter on PATH, or `"3.12"` if not found
 **Example:** `"3.12"`
 
-The Python version to target for type checking. Affects which PEPs and typing features are available. Supports versions `"3.9"` through `"3.14"`.
+The Python version to target for type checking (for example `"3.11"`). Basilisk applies it as an evaluator input — to typeshed's `stdlib/VERSIONS` and to the `sys.version_info` / `sys.platform` guards the typing spec requires checkers to understand ([spec: version and platform checking, `python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)). It selects *within* one typeshed snapshot; it never selects a typeshed commit.
 
 ### `python-platform`
 

@@ -59,7 +59,7 @@ rules."imports_unresolved" = "warning"
 **默认值：** 从 PATH 上的解释器自动检测，如果未找到则为 `"3.12"`
 **示例：** `"3.12"`
 
-用于类型检查的目标 Python 版本。影响哪些 PEP 和类型功能可用。支持 `"3.9"` 到 `"3.14"` 的版本。
+用于类型检查的目标 Python 版本（例如 `"3.11"`）。Basilisk 将其作为求值输入——应用于 typeshed 的 `stdlib/VERSIONS`，以及类型规范要求检查器理解的 `sys.version_info` / `sys.platform` 条件判断（[规范：版本与平台检查，`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)）。它在单个 typeshed 快照*内*进行选择，绝不选择某个 typeshed 提交。
 
 ### `python-platform`
 
