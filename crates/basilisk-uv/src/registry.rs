@@ -26,8 +26,8 @@ pub enum DepKind {
 pub struct PackageInfo {
     /// Normalised `PyPI` package name.
     pub name: String,
-    /// Resolved version string.
-    pub version: String,
+    /// Resolved version string; absent for dynamic-version workspace members.
+    pub version: Option<String>,
     /// Python import name (may differ from package name).
     pub import_name: String,
     /// How this package relates to the project.
@@ -176,7 +176,7 @@ mod tests {
     ) -> LockPackage {
         LockPackage {
             name: name.to_owned(),
-            version: version.to_owned(),
+            version: Some(version.to_owned()),
             source,
             dependencies: deps,
             dev_dependencies: dev_deps,

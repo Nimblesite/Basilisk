@@ -208,6 +208,6 @@ fn enrich_package_metadata(
         basilisk_uv::DepKind::Dev => PackageDepKind::Dev,
         basilisk_uv::DepKind::Transitive => PackageDepKind::Transitive,
     });
-    import.package_version = Some(info.version.clone());
+    import.package_version = info.version.clone();
     import.package_name = Some(info.name.clone());
 }
