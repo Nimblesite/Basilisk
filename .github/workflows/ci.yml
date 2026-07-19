@@ -621,11 +621,15 @@ jobs:
     # cargo-mutants rebuilds + reruns the test suite once per mutant, so it is
     # heavily CPU-bound — the primary reason BIG_RUNNER exists. The 20-minute
     # budget was calibrated for an 8-core larger runner; the standard hosted
-    # runner's slower shards tip over it non-deterministically, so 60 min gives
-    # ~3x headroom on the fallback path without weakening the mutation gate (the
-    # merge job still enforces score). On BIG_RUNNER the shards finish well
-    # under it; the ceiling is harmless.
-    timeout-minutes: 60
+    # runner is far slower. Empirically the four fallback shards land at ~43/50/
+    # 54/60+ min, so the previous 60-min ceiling was ~1x headroom, not the 3x it
+    # claimed — the heaviest shard tips over it and gets cancelled mid-run
+    # (a wall-clock cancellation, NOT a surviving mutant). 90 min restores real
+    # headroom on the fallback path WITHOUT weakening the mutation gate: the
+    # merge job still enforces the score against the committed baseline, so every
+    # mutant is still tested and must be killed. On BIG_RUNNER the shards finish
+    # well under it; the ceiling is harmless.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
