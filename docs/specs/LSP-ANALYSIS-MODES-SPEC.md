@@ -364,7 +364,7 @@ mid-scan must stay cleared).
 
 ## Type Checking Toggle {#ANALYSIS-ENABLED}
 
-The `basilisk.enabled` setting (surfaced as the **Analyzer** toggle in the
+The `basilisk.enabled` setting (surfaced as the **Diagnostics** toggle in the
 activity panel, [EXTACT-INFO-FEATURE-STATUS]) gates **all diagnostic
 publication**. The LSP is authoritative for diagnostics in every mode, so the
 toggle is honoured **server-side** — the editor's own

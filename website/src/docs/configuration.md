@@ -289,14 +289,22 @@ Basilisk selects exactly **one** step-3 source:
 | --- | --- |
 | Custom folder | your `typeshed-path` directory, verbatim |
 | Exact commit | the `typeshed-commit` SHA, downloaded as a verified archive (fails closed if unavailable) |
-| Latest _(default)_ | the current `python/typeshed@main` commit, resolved once per run/session; if it cannot be resolved, the bundled snapshot with a warning |
+| Latest _(default)_ | the current `python/typeshed@main` commit, resolved once per run/session; if it cannot be resolved, the compiled-in bundled snapshot, with `UNPINNED` and `DOWNLOAD FAILED` warnings |
 
 Latest keeps you fresh but is not reproducible day-to-day — the editor's
-Server Info panel reports it as `UNPINNED` and offers **Pin current**, which
-writes the resolved SHA as `typeshed-commit`. Downloaded archives pass
-safety, shape, license, and content-verification gates before activation, and
-are cached as immutable ZIPs. Full detail:
+Server Info panel reports it as an `UNPINNED` row, and the Configuration
+Editor's **Pin current** action writes the resolved SHA as `typeshed-commit`.
+Downloaded archives pass safety, shape, license, and content-verification
+gates before activation, and are cached as immutable ZIPs. Full detail:
 [`STUBRES-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED).
+
+The bundled snapshot is compiled into the binary, so stdlib types work with no
+network at all — on a plane, behind a firewall, in an air-gapped CI runner. It
+is the **complete typeshed `stdlib/` tree** (third-party `stubs/` excluded) at
+commit
+[`83c2518`](https://github.com/python/typeshed/tree/83c2518a9e6abbda0c44592c3483de459198f887/stdlib):
+752 `.pyi` files plus `stdlib/VERSIONS` and `LICENSE`, ~2.85 MB uncompressed.
+It is a fallback, not a pin — when it is in use Basilisk always says so.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -306,6 +314,13 @@ are cached as immutable ZIPs. Full detail:
 | `typeshed-cache` | bool | `true` | Reuse the re-hashed cached ZIP for 24 hours; `false` downloads, validates, and discards every run. |
 | `typeshed-verify` | bool | `true` | Content-attest the archive against the trusted git tree; `false` reports `UNVERIFIED` and never bypasses the safety, shape, or license gates. |
 | `typeshed-path` | path | _(unset)_ | Your own stdlib stub tree — disables both download and the bundled snapshot. |
+
+Two of these have one-off CLI equivalents on `basilisk check` and
+`basilisk analyze`, for a single CI run you don't want to encode in the file:
+`--no-typeshed-cache` (equivalent to `typeshed-cache = false`) and
+`--no-typeshed-verification` (equivalent to `typeshed-verify = false`).
+Unrelated despite the name: `basilisk stubs` generates stubs for untyped
+**third-party** packages and has nothing to do with typeshed acquisition.
 
 `typeshed-path` and `typeshed-commit` are **one source selection**: a nested
 config file that sets either replaces the inherited choice as a unit, never
@@ -384,8 +399,14 @@ point at it:
 ```toml
 [tool.basilisk]
 python-version = "3.12"
-typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
+typeshed-path = ".venv/lib/python3.12/site-packages"
 ```
+
+The wheel unpacks `stdlib/` **directly into `site-packages`** — there is no
+`micropython_stdlib_stubs/` directory — so `typeshed-path` points at
+`site-packages` itself, the directory that contains `stdlib/`. Pointing it one
+level deeper fails closed with `custom typeshed source is unavailable` (exit
+code 3), because a custom typeshed never falls back.
 
 Because `micropython-stdlib-stubs` is a **partial** stdlib, a module it does
 not ship (e.g. `tkinter`, which does not exist on a board) is **not** rescued

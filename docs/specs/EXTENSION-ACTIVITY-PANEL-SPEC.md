@@ -205,7 +205,7 @@ This is a compact settings/status view, not a second command palette.
 
 ### Structure {#EXTACT-INFO-STRUCTURE}
 
-One Analyzer toggle appears at the root with an explicit `Enabled` or `Disabled` state,
+One Diagnostics toggle appears at the root with an explicit `Enabled` or `Disabled` state,
 followed by flat read-only server-information rows. Read-only information is not nested
 under a collapsible tree node. The provider refreshes on Basilisk configuration and LSP
 lifecycle signal changes.
@@ -224,8 +224,10 @@ rows.
 ### Feature status {#EXTACT-INFO-FEATURE-STATUS}
 
 Only `basilisk.enabled` is a shipped toggle because the server demonstrably clears and
-suppresses diagnostics while disabled and rechecks when enabled. Settings that are not read
-by their feature path must not appear as functional toggles.
+suppresses diagnostics from both the check and analyze rule sets while disabled, then
+rechecks when enabled. The label must not call this the Checker or Analyzer because those
+are distinct rule sets. Settings that are not read by their feature path must not appear as
+functional toggles.
 
 ### Quick actions {#EXTACT-INFO-QUICK-ACTIONS}
 

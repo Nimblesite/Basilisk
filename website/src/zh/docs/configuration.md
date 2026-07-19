@@ -264,13 +264,20 @@ exclude = [
 | --- | --- |
 | 自定义文件夹 | 你的 `typeshed-path` 目录，原样使用 |
 | 精确提交 | `typeshed-commit` 指定的 SHA，以经验证的归档下载（不可用时失败关闭） |
-| 最新（默认） | 当前的 `python/typeshed@main` 提交，每次运行/会话解析一次；无法解析时回退到内置快照并警告 |
+| 最新（默认） | 当前的 `python/typeshed@main` 提交，每次运行/会话解析一次；无法解析时回退到编译进二进制的内置快照，并给出 `UNPINNED` 与 `DOWNLOAD FAILED` 两条警告 |
 
-"最新"模式保持新鲜但无法逐日复现——编辑器的 Server Info 面板将其报告为
-`UNPINNED` 并提供 **Pin current** 操作，把解析出的 SHA 写入
+"最新"模式保持新鲜但无法逐日复现——编辑器的 Server Info 面板会将其报告为
+`UNPINNED` 行，而配置编辑器中的 **Pin current** 操作会把解析出的 SHA 写入
 `typeshed-commit`。下载的归档在激活前需通过安全、结构、许可证与内容验证
 关卡，并以不可变 ZIP 缓存。完整细节：
 [`STUBRES-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)。
+
+内置快照被编译进二进制文件，因此完全无需网络也能获得标准库类型——在飞机上、
+在防火墙后、在隔离网络的 CI 中都一样。它是提交
+[`83c2518`](https://github.com/python/typeshed/tree/83c2518a9e6abbda0c44592c3483de459198f887/stdlib)
+处**完整的 typeshed `stdlib/` 树**（不含第三方 `stubs/`）：752 个 `.pyi`
+文件，外加 `stdlib/VERSIONS` 与 `LICENSE`，未压缩约 2.85 MB。它是回退方案而非
+固定来源——一旦启用，Basilisk 一定会明确告知。
 
 | 键 | 类型 | 默认值 | 含义 |
 | --- | --- | --- | --- |
@@ -280,6 +287,12 @@ exclude = [
 | `typeshed-cache` | bool | `true` | 24 小时内复用经重新哈希的缓存 ZIP；`false` 每次运行都下载、验证并丢弃。 |
 | `typeshed-verify` | bool | `true` | 对归档做内容证明，与受信任的 git 树比对；`false` 报告 `UNVERIFIED`，且绝不绕过安全、结构或许可证关卡。 |
 | `typeshed-path` | 路径 | _（未设置）_ | 你自己的标准库存根树——同时禁用下载与内置快照。 |
+
+其中两项在 `basilisk check` 与 `basilisk analyze` 上有一次性的命令行等价开关，
+适用于不想写进配置文件的单次 CI 运行：`--no-typeshed-cache`（等价于
+`typeshed-cache = false`）与 `--no-typeshed-verification`（等价于
+`typeshed-verify = false`）。另请注意：`basilisk stubs` 用于为**第三方**未加
+类型的包生成存根，与 typeshed 获取无关。
 
 `typeshed-path` 与 `typeshed-commit` 是**同一个来源选择**：设置了其中任一
 键的嵌套配置文件会将继承的选择作为整体替换，绝不会把一个文件的路径和
@@ -352,8 +365,14 @@ MicroPython 的标准库与 CPython 存在差异——`os`、`time` 和 `machine
 ```toml
 [tool.basilisk]
 python-version = "3.12"
-typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
+typeshed-path = ".venv/lib/python3.12/site-packages"
 ```
+
+该 wheel 会把 `stdlib/` **直接解压到 `site-packages` 下**——并不存在
+`micropython_stdlib_stubs/` 目录——因此 `typeshed-path` 应指向包含 `stdlib/`
+的 `site-packages` 本身。若多指向一层，自定义 typeshed 会失败关闭并报
+`custom typeshed source is unavailable`（退出码 3），因为自定义 typeshed
+绝不回退。
 
 由于 `micropython-stdlib-stubs` 是**部分**标准库，它未包含的模块（例如
 开发板上并不存在的 `tkinter`）**不会**由 CPython 存根来兜底——自定义
