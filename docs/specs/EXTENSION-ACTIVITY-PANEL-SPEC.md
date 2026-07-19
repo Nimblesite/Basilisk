@@ -201,12 +201,14 @@ Fetch on demand and invalidate from the same analysis-revision signals as the mo
 
 ## Basilisk information view {#EXTACT-INFO}
 
-This is a compact settings/status tree, not a second command palette.
+This is a compact settings/status view, not a second command palette.
 
 ### Structure {#EXTACT-INFO-STRUCTURE}
 
-One Type Checking toggle appears at the root, followed by a read-only Server Info section.
-The provider refreshes on Basilisk configuration and LSP lifecycle signal changes.
+One Analyzer toggle appears at the root with an explicit `Enabled` or `Disabled` state,
+followed by flat read-only server-information rows. Read-only information is not nested
+under a collapsible tree node. The provider refreshes on Basilisk configuration and LSP
+lifecycle signal changes.
 
 ### Interaction affordance {#EXTACT-INFO-AFFORDANCE}
 

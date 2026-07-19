@@ -2,8 +2,8 @@
 /**
  * Basilisk Info Panel — TreeDataProvider for the Basilisk sidebar.
  *
- * Slimmed per issue #103: feature toggles at the top level (two toggles do
- * not justify a section header) plus a compact read-only Server Info section.
+ * Slimmed per issue #103: one analyzer toggle followed by flat, read-only
+ * server details. Read-only data does not need collapsible tree structure.
  * Quick actions live elsewhere — Fix All / Organize Imports / Restart are
  * toolbar buttons on the Modules panel (when-gated on the server running),
  * Show Output is the status-bar click action, and everything remains in the
@@ -21,18 +21,7 @@ import type { TypeshedStatusState } from "./configuration-editor-model";
 
 // ── Tree node types ──────────────────────────────────────────────────────
 
-type InfoItem = SectionItem | FeatureItem | InfoTextItem;
-
-/** Section header — collapsible container for related items. */
-class SectionItem extends vscode.TreeItem {
-  constructor(
-    public readonly section: string,
-    public readonly items: InfoItem[],
-  ) {
-    super(section, vscode.TreeItemCollapsibleState.Expanded);
-    this.contextValue = "section";
-  }
-}
+type InfoItem = FeatureItem | InfoTextItem;
 
 /**
  * Feature toggle — clicking toggles the corresponding setting.
@@ -87,7 +76,7 @@ interface FeatureDef {
 // Implements [EXTACT-INFO-FEATURE-STATUS]: only features whose toggle has a
 // real, observable effect belong here. A toggle that writes a setting the server
 // (or extension) never reads is a lie to the user and must not exist.
-//   - Type Checking (basilisk.enabled): the LSP is authoritative for diagnostics
+//   - Analyzer (basilisk.enabled): the LSP is authoritative for diagnostics
 //     and honours this setting — disabling clears published diagnostics and
 //     suppresses new ones; re-enabling re-scans. See [ANALYSIS-ENABLED]
 //     (crates/basilisk-lsp/src/server/init.rs) and GitHub #65 / #119.
@@ -102,7 +91,7 @@ interface FeatureDef {
 //     (never even declared), AI Typing — all dropped server-side likewise.
 // See EXTACT-INFO-FEATURE-STATUS.
 const FEATURES: readonly FeatureDef[] = [
-  { label: "Type Checking", settingKey: "basilisk.enabled" },
+  { label: "Analyzer", settingKey: "basilisk.enabled" },
 ];
 
 // ── Resolved environment ([LSPARCH-RESOLVED-ENV]) ────────────────────────
@@ -334,18 +323,15 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
   }
 
   public getChildren(element?: InfoItem): InfoItem[] {
-    if (element instanceof SectionItem) {
-      return element.items;
-    }
     if (element !== undefined) { return []; }
 
-    // Implements [EXTACT-INFO-STRUCTURE] / [EXTACT-INFO-QUICK-ACTIONS]: slimmed
-    // layout (issue #103) — toggles at the root, then compact Server Info. No
+    // Implements [EXTACT-INFO-STRUCTURE] / [EXTACT-INFO-QUICK-ACTIONS]: flat
+    // layout — the analyzer toggle, then compact read-only server details. No
     // Quick Actions section: those are Modules-toolbar buttons, the status bar,
     // and the command palette.
     return [
       ...buildFeatureToggles(),
-      this.buildServerInfoSection(),
+      ...this.buildServerInfoItems(),
     ];
   }
 
@@ -353,7 +339,7 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
   // Mode / Python / uv / Binary rows; no live server-state row. Python, uv,
   // and Binary render the server-RESOLVED values from [LSPARCH-RESOLVED-ENV]
   // (issue #153) — never a bare `auto-detect` placeholder or a blank row.
-  private buildServerInfoSection(): SectionItem {
+  private buildServerInfoItems(): InfoTextItem[] {
     // No live "Server" state row: the status bar already shows it (issue
     // #103). The lspState/client effect in the constructor still re-renders
     // this section so the Version row appears as soon as the server is up.
@@ -380,7 +366,7 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
       ...typeshedInfoItems(this.store.typeshedStatuses.value),
     ];
 
-    return new SectionItem("Server Info", items);
+    return items;
   }
 }
 

@@ -75,6 +75,17 @@ basilisk check examples/mixed.py  # 一个真实的类型错误，加上未注�
 basilisk check examples/          # 一次检查整个文件夹
 ```
 
+## 标准库类型：在线与离线皆可
+
+Basilisk 从 [typeshed](https://github.com/python/typeshed) 解析标准库类型。默认情况下，
+它每次运行通过 HTTPS 校验一次 `python/typeshed@main`，对归档执行安全校验并缓存 24 小时，
+同时将来源标记为未固定（unpinned）。在没有网络或下载失败时，它会回退到编译进二进制文件中的
+完整 typeshed `stdlib/` 快照，因此标准库类型在离线状态下依然可用。
+
+在 `[tool.basilisk]` 中使用 `typeshed-commit = "<40 位 sha>"` 固定到某个确切提交
+（该配置失败即报错，绝不替换为其他提交），或用 `typeshed-path` 指向你自己的 typeshed
+目录树。完整选项参见[配置指南](https://www.basilisk-python.dev/docs/configuration/)。
+
 ## 编辑器
 
 一个扩展，覆盖完整工作流：默认严格的诊断、自动补全、悬停信息、跳转到定义、重构代码操作、调试与性能分析。无需 Node.js 或 Python 运行时 —— 由单一 Rust 二进制文件驱动一切。

@@ -27,9 +27,16 @@ crate.
   clause
   ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst),
   [STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
-  `typeshed-commit` selects an exact immutable SHA; `typeshed-cache-path`
-  relocates automatic storage. Unpinned acquisition verifies `main` each run or
-  session; it has no TTL or old-checkout fallback
+  `typeshed-commit` pins an exact 40-character SHA and fails closed — an
+  abbreviated SHA is rejected and another commit is never substituted;
+  `typeshed-url` is a `{sha}` archive-mirror template, which cannot resolve
+  Latest; `typeshed-cache-path` relocates automatic storage; `typeshed-cache`
+  (default `true`) reuses re-hashed downloaded ZIP bytes, which expire after 24
+  hours; `typeshed-verify` (default `true`) attests content against the trusted
+  git tree, reporting `UNVERIFIED` when disabled without ever waiving the
+  safety, shape, or license gates. Unpinned acquisition verifies `main` each run
+  or session and never substitutes an older cached commit; the pin identity
+  itself never expires
   ([STUBRES-TYPESHED-CONFIG](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)).
 - **Adoption target** — exact-file `per-path-overrides` entries in the active
   config carry generated demotions. All rule configuration stays in that one

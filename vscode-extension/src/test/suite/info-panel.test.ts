@@ -2,9 +2,8 @@
 /**
  * Info Panel contents E2E tests — the slimmed panel of issue #103.
  *
- * The panel is exactly: the feature toggles at the root (no "Feature Status"
- * section header — a single shipped toggle doesn't justify one) plus a compact
- * read-only Server Info section. There is NO Quick Actions section: the high-value
+ * The panel is exactly: the Analyzer toggle followed by flat, read-only server
+ * details. There is NO Quick Actions section: the high-value
  * actions are Modules-toolbar buttons gated on the server running (see
  * activity-panel.test.ts), the status-bar click opens the basilisk.statusMenu
  * quick-pick (Open Configuration / Show Output / Restart), and everything stays
@@ -31,7 +30,7 @@ import { createStore } from "../../store";
 import { EXTENSION_ID, SUITE_SETUP_TIMEOUT_MS, waitForLspReady } from "./test-helpers";
 
 /** Toggles that ship — each has a namesake, observable effect. */
-const KEPT_FEATURE_LABELS = ["Type Checking"] as const;
+const KEPT_FEATURE_LABELS = ["Analyzer"] as const;
 
 /** Toggles removed because their setting was a no-op (server dropped it). */
 const REMOVED_FEATURE_LABELS = [
@@ -84,9 +83,7 @@ function verifyTypeshedInfoRows(): void {
   ]]);
   const typeshedProvider = new InfoPanelProvider(store);
   try {
-    const section = typeshedProvider.getChildren().find((row) => labelOf(row) === "Server Info");
-    assert.ok(section, "Server Info section should exist");
-    const rows = typeshedProvider.getChildren(section);
+    const rows = typeshedProvider.getChildren().filter((row) => row.contextValue === "info");
     const byLabel = new Map(rows.map((row) => [labelOf(row), row]));
     const source = byLabel.get("Typeshed Source");
     assert.ok(String(source?.description).includes("83c2518a9e6abbda0c44592c3483de459198f887"));
@@ -122,10 +119,8 @@ function verifyAcquiringTypeshedSpinner(): void {
   ]]);
   const typeshedProvider = new InfoPanelProvider(store);
   try {
-    const section = typeshedProvider.getChildren().find((row) => labelOf(row) === "Server Info");
-    assert.ok(section, "Server Info section should exist");
     const state = typeshedProvider
-      .getChildren(section)
+      .getChildren()
       .find((row) => labelOf(row) === "Typeshed State");
     assert.ok(state?.iconPath instanceof vscode.ThemeIcon);
     assert.strictEqual(state.iconPath.id, "loading~spin");
@@ -154,21 +149,17 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     provider.dispose();
   });
 
-  /** Children of the Server Info section. */
+  /** Flat read-only server-information rows. */
   function serverInfoRows(): vscode.TreeItem[] {
-    const section = provider.getChildren().find((row) => labelOf(row) === "Server Info");
-    assert.ok(section, "Server Info section should exist");
-    return provider.getChildren(section);
+    return provider.getChildren().filter((row) => row.contextValue === "info");
   }
 
   // Tests [EXTACT-INFO-STRUCTURE] / [EXTACT-INFO-QUICK-ACTIONS] (no Quick Actions section).
-  test("root is exactly the feature toggles followed by Server Info — no section headers, no Quick Actions", () => {
+  test("root is the Analyzer toggle followed by flat read-only details", () => {
     const labels = provider.getChildren().map(labelOf);
-    assert.deepStrictEqual(
-      labels,
-      [...KEPT_FEATURE_LABELS, "Server Info"],
-      "slimmed panel root must be the shipped toggle(s) + Server Info, in order",
-    );
+    assert.deepStrictEqual(labels.slice(0, KEPT_FEATURE_LABELS.length), [...KEPT_FEATURE_LABELS]);
+    assert.ok(labels.includes("Analysis Mode"), "server details should render at the root");
+    assert.ok(!labels.includes("Server Info"), "read-only details do not need a collapsible parent");
     assert.ok(!labels.includes("Feature Status"), "the Feature Status header was removed (one toggle doesn't justify it)");
     assert.ok(!labels.includes("Quick Actions"), "the Quick Actions section was removed (actions live on the Modules toolbar / status bar / palette)");
   });
@@ -258,15 +249,15 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
 
   // Tests [EXTACT-INFO-FEATURE-STATUS]: a toggle has an observable, namesake effect.
   test("toggleFeature writes through and the panel reflects it", async () => {
-    // End-to-end: flip Type Checking off via the real command (this host has a
+    // End-to-end: flip the Analyzer off via the real command (this host has a
     // folder, so it writes the Workspace target) and assert the toggle row
     // re-renders as Disabled. (The deeper effect — diagnostics actually clear —
     // is proven end-to-end in type-checking-toggle.test.ts.)
     const cfg = vscode.workspace.getConfiguration();
     try {
       await vscode.commands.executeCommand("basilisk.toggleFeature", "basilisk.enabled", false);
-      const toggle = provider.getChildren().find((row) => labelOf(row) === "Type Checking");
-      assert.ok(toggle, "Type Checking toggle should exist");
+      const toggle = provider.getChildren().find((row) => labelOf(row) === "Analyzer");
+      assert.ok(toggle, "Analyzer toggle should exist");
       assert.strictEqual(toggle.description, "Disabled", "toggle row must reflect the written setting");
     } finally {
       await cfg.update("basilisk.enabled", undefined, vscode.ConfigurationTarget.Workspace);
@@ -278,7 +269,7 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
 //
 // Regression tests for issue #65: actionable rows must be visually
 // unmistakable from read-only rows. In the slimmed panel the actionable class
-// is exactly the feature toggles; everything under Server Info is read-only.
+// is exactly the Analyzer toggle; every server-detail row is read-only.
 //
 // Spec: docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-AFFORDANCE
 
@@ -314,11 +305,9 @@ suite("Basilisk Info Panel Affordance [EXTACT-INFO-AFFORDANCE]", () => {
     return provider.getChildren().filter((row) => row.contextValue === "feature");
   }
 
-  /** Read-only rows under Server Info. */
+  /** Flat read-only server-information rows. */
   function readOnlyRows(): vscode.TreeItem[] {
-    const section = provider.getChildren().find((row) => labelOf(row) === "Server Info");
-    assert.ok(section, "Server Info section should exist");
-    return provider.getChildren(section);
+    return provider.getChildren().filter((row) => row.contextValue === "info");
   }
 
   test("every feature toggle carries a command and an imperative tooltip", () => {
@@ -338,7 +327,7 @@ suite("Basilisk Info Panel Affordance [EXTACT-INFO-AFFORDANCE]", () => {
     }
   });
 
-  test("every read-only Server Info row carries no command and contextValue 'info'", () => {
+  test("every read-only server detail carries no command and contextValue 'info'", () => {
     const rows = readOnlyRows();
     assert.ok(rows.length > 0, "Server Info should have rows");
     for (const row of rows) {

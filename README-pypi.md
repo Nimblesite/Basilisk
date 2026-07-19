@@ -39,6 +39,16 @@ Machine-readable output for tooling:
 basilisk check path/to/your_code.py --output json --color never
 ```
 
+## Standard-library types
+
+Standard-library types come from [typeshed](https://github.com/python/typeshed).
+By default Basilisk verifies `python/typeshed@main` over HTTPS once per run and
+caches the gated archive for 24 hours; with no network it falls back to the
+complete typeshed `stdlib/` snapshot compiled into the binary, so offline and
+air-gapped runs still get stdlib types. Pin an exact commit with
+`typeshed-commit` under `[tool.basilisk]` in `pyproject.toml`, or skip the cache
+for a single run with `--no-typeshed-cache`.
+
 ## Acknowledgments
 
 The bundled binary is built on [Ruff](https://github.com/astral-sh/ruff) by

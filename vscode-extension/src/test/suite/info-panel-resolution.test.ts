@@ -82,11 +82,9 @@ suite("Server Info resolved environment (issue #153)", () => {
     provider.dispose();
   });
 
-  /** Children of the Server Info section, keyed by row label. */
+  /** Flat server-information row keyed by its label. */
   function serverInfoRow(label: string): vscode.TreeItem | undefined {
-    const section = provider.getChildren().find((row) => labelOf(row) === "Server Info");
-    assert.ok(section, "Server Info section should exist");
-    return provider.getChildren(section).find((row) => labelOf(row) === label);
+    return provider.getChildren().find((row) => labelOf(row) === label);
   }
 
   // Defect 1 of issue #153: the Python row rendered the raw setting (default

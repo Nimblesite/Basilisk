@@ -326,9 +326,9 @@
       },
       {
         "command": "basilisk.info.runAction",
-        "title": "Run Action",
+        "title": "Toggle Analyzer",
         "category": "Basilisk",
-        "icon": "$(play)"
+        "icon": "$(arrow-swap)"
       },
       {
         "command": "basilisk.refreshProcesses",

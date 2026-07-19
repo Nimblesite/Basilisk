@@ -60,6 +60,7 @@ manifest-path = "crates/basilisk-cli/Cargo.toml"
 strip = true
 
 [tool.basilisk]
+typeshed-commit = "e4e0f7e3faccda1ea2be38c00fc43ba4a77249d0"
 
 [tool.basilisk.rules]
 BSK-0001 = "error"
