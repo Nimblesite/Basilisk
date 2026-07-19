@@ -5,6 +5,18 @@
 //! that pins the Python version used by the project.
 
 use std::path::Path;
+use std::time::{Duration, Instant};
+
+/// Hard ceiling for the one-time interpreter platform probe.
+///
+/// A valid interpreter answers in milliseconds; this generous ceiling exists
+/// only so a genuinely unresponsive interpreter cannot block CLI/LSP startup.
+/// It is deliberately well clear of scheduling stalls on a saturated machine:
+/// a trivial probe that merely waits for CPU under heavy load must still finish
+/// inside the budget, so the ceiling measures interpreter health, not runner
+/// load. The timeout is injectable ([`read_python_platform_within`]) so the
+/// timeout path is exercised without spending this full budget in tests.
+const PLATFORM_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Read `sys.platform` from the interpreter that will execute the project.
 ///
@@ -13,6 +25,15 @@ use std::path::Path;
 /// selected interpreter reports its own concrete runtime platform.
 #[must_use]
 pub fn read_python_platform(interpreter: &Path) -> Option<String> {
+    read_python_platform_within(interpreter, PLATFORM_PROBE_TIMEOUT)
+}
+
+/// [`read_python_platform`] with an explicit probe ceiling.
+///
+/// Splitting the timeout out keeps the production ceiling generous (so honest
+/// interpreters never lose a race against runner load) while letting tests
+/// drive the timeout path with a short budget instead of the full ceiling.
+fn read_python_platform_within(interpreter: &Path, timeout: Duration) -> Option<String> {
     use std::io::Read as _;
 
     let mut child = std::process::Command::new(interpreter)
@@ -21,12 +42,12 @@ pub fn read_python_platform(interpreter: &Path) -> Option<String> {
         .stderr(std::process::Stdio::null())
         .spawn()
         .ok()?;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = Instant::now() + timeout;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
-            Ok(None) if std::time::Instant::now() < deadline => {
-                std::thread::sleep(std::time::Duration::from_millis(10));
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(10));
             }
             Ok(None) | Err(_) => {
                 drop(child.kill());
@@ -196,10 +217,25 @@ mod tests {
         std::fs::write(&interpreter, "#!/bin/sh\nprintf 'fixture-platform\\n'\n").unwrap();
         std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-        assert_eq!(
-            read_python_platform(&interpreter).as_deref(),
-            Some("fixture-platform")
-        );
+        // Spawning a *just-written* executable can transiently fail with ETXTBSY
+        // when a sibling test thread's concurrent `fork` briefly holds a duplicate
+        // of the writable fd across this write->exec window (the workspace runs
+        // every crate's `--all-targets` at once, and several e2e tests spawn
+        // subprocesses). Real interpreters are pre-existing binaries nobody holds
+        // open for writing, so production `read_python_platform` never races this;
+        // retry through the transient window so the parse assertion below — the
+        // actual subject of this test — stays deterministic. All attempts failing
+        // still fails the test, so a genuine parse regression surfaces.
+        let mut platform = None;
+        for _ in 0..10 {
+            platform = read_python_platform(&interpreter);
+            if platform.is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        assert_eq!(platform.as_deref(), Some("fixture-platform"));
     }
 
     #[cfg(unix)]
@@ -222,17 +258,24 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let interpreter = dir.path().join("python");
+        // Sleeps far longer than the injected budget so the probe can only
+        // return by hitting the timeout, never by the interpreter answering.
         std::fs::write(
             &interpreter,
-            "#!/bin/sh\nsleep 4\nprintf 'fixture-platform\\n'\n",
+            "#!/bin/sh\nsleep 30\nprintf 'fixture-platform\\n'\n",
         )
         .unwrap();
         std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let started = std::time::Instant::now();
+        let started = Instant::now();
 
-        assert_eq!(read_python_platform(&interpreter), None);
+        // Inject a short ceiling: the timeout path is what matters here, not the
+        // production budget, so this stays fast and load-insensitive.
+        assert_eq!(
+            read_python_platform_within(&interpreter, Duration::from_millis(200)),
+            None
+        );
         assert!(
-            started.elapsed() < std::time::Duration::from_secs(3),
+            started.elapsed() < Duration::from_secs(2),
             "an unresponsive configured interpreter must not hang CLI/LSP startup"
         );
     }
