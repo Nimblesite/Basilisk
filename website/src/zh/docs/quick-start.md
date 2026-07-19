@@ -154,8 +154,9 @@ Found 2 diagnostics (0 errors).
 提升为 `"error"`，您的项目就达到了完全严格。
 
 在 VS Code 中无需手动编辑：从命令面板运行 **Basilisk: Open Configuration
-Editor**。它展示每条规则的实时严重级别，应用前可预览更改，其 **Strict
-预设**一键启用完整规则目录。完整模式请参阅[配置参考](/zh/docs/configuration/)。
+Editor**。它展示每条规则的实时严重级别，应用前可预览更改，其标签操作用
+一条 `rule-tags` 配置行（例如 `"basilisk" = "error"`）启用整组规则。
+完整模式请参阅[配置参考](/zh/docs/configuration/)。
 
 ![Basilisk 的标签优先 VS Code 配置编辑器，显示实时规则分面和每条规则的严重级别控件](/assets/images/vscode-configuration-editor.png)
 

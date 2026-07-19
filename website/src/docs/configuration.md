@@ -1,10 +1,10 @@
 ---
 layout: layouts/docs.njk
 title: "Configuration Reference — pyproject.toml Settings"
-description: "Complete reference for all Basilisk configuration options in pyproject.toml. Severity overrides, per-path rules, inline suppressions, and Ruff integration."
+description: "Complete reference for all Basilisk configuration options in pyproject.toml. Rule and tag severities, typeshed source pinning, inline suppressions, and folder-scoped configuration."
 keywords: basilisk, configuration, pyproject.toml, settings
 date: 2026-02-28
-dateModified: 2026-07-14
+dateModified: 2026-07-19
 author: The Basilisk Project
 eleventyNavigation:
   key: Configuration
@@ -14,11 +14,19 @@ eleventyNavigation:
 # Configuration Reference
 
 `[tool.basilisk]` in `pyproject.toml` is the only configuration source. For
-each file it checks, Basilisk walks up from the file's directory and reads
-every ancestor `pyproject.toml` that carries a `[tool.basilisk]` table. The
-tables merge cumulatively, with the nearest file winning wherever the same key
-is set — a `pyproject.toml` in a child folder refines the root configuration,
-it never replaces it.
+each file it checks, Basilisk walks up from the file's directory and visits
+every ancestor `pyproject.toml` that carries a `[tool.basilisk]` table. A
+`pyproject.toml` **without** the table contributes nothing and does not stop
+the walk.
+
+What the visited tables combine to, and how:
+
+- **Rule severities are never merged.** The *nearest* table that decides a
+  rule wins outright — see [Severity resolution](#severity-resolution).
+- **Non-rule settings** (paths, versions, typeshed keys) resolve per key: the
+  nearest file that sets the key wins, keys a nearer file doesn't set come
+  from the ancestors. `stub-paths` is the one additive key — entries append,
+  deduplicated.
 
 > **Migrating from `basilisk.json`?** The legacy root-level `basilisk.json`
 > file is no longer read. Translate its keys into `[tool.basilisk]`
@@ -26,54 +34,166 @@ it never replaces it.
 > the file. The configuration editor reports a stray `basilisk.json` as an
 > ignored shadowed source.
 
-## Minimal configuration
+## Zero configuration
 
-```toml
-[tool.basilisk]
-python-version = "3.12"
-```
+Basilisk needs no configuration file at all. With no `[tool.basilisk]` table
+anywhere (or an empty one — the two behave identically):
 
-That's all you need. Basilisk finds Python files from the current directory and applies its default rule set — the **core PEP conformance rules**. Extra Basilisk rules that go beyond the spec are opt-in; enable them when you want stricter-than-spec checking.
+- Every **core PEP conformance rule** runs at `error` severity. Basilisk's
+  own opt-in house rules stay off.
+- Files are discovered from the current directory.
+- The target Python version is resolved from your project files:
+  `.python-version`, then the `[project].requires-python` lower bound, then
+  the `uv.lock` `requires-python` lower bound.
+- Standard-library stubs are acquired at runtime from the latest
+  [python/typeshed](https://github.com/python/typeshed) commit, with a
+  bundled snapshot as the offline fallback — see
+  [Standard-library stubs](#standard-library-stubs-typeshed).
 
 ## Full configuration example
 
 ```toml
 [tool.basilisk]
-python-version = "3.12"
-python-platform = "All"
-stub-paths = ["stubs/"]
-typeshed-path = "typeshed-micropython"   # optional: replace the bundled stdlib typeshed
+python-version = "3.12"          # only consulted where a PEP is version-dependent
+python-platform = "All"          # explicit cross-platform analysis
+stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
+# typeshed-commit = "<full 40-char commit SHA>"  # pin the stdlib stub source
+# typeshed-path = "vendor/typeshed"              # or: your own stdlib stub tree
 
 [tool.basilisk.rules]
-"BSK-0001" = "warning"             # selects this opt-in rule at warning
-"imports_unresolved" = "info"
-"dataclasses_order" = "disabled"
+"imports_unresolved" = "warning"   # a PEP rule graded down — never disabled
+"BSK-0050" = "error"               # one house rule promoted above its tag entry
 
-[tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["returns_compatibility"]
-rules."imports_unresolved" = "warning"
+[tool.basilisk.rule-tags]
+"basilisk" = "error"               # every house rule on — strict in one line
 ```
 
 ---
 
-## `[tool.basilisk]`
+## Rules: two flat maps
+
+Rule configuration is two flat maps and nothing else
+([`CHKARCH-CONFIG-MODEL`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)):
+per-rule entries and tag entries. Rule codes carry no severity class — a code
+is `BSK-nnnn` or a conformance snake_case name like `imports_unresolved`; only
+the config entry carries the severity.
+
+### `[tool.basilisk.rules]`
+
+Explicit per-rule entries, `"<code>" = "<severity>"`:
+
+```toml
+[tool.basilisk.rules]
+"imports_unresolved" = "warning"
+"BSK-0050" = "error"
+"BSK-0001" = "info"
+```
+
+Accepted severities are `"error"`, `"warning"`, `"info"`, and `"disabled"`.
+For an opt-in rule, any non-disabled value also *selects* it — no second
+switch is required. Browse every code in the generated
+[rule reference](/docs/rules/).
+
+### `[tool.basilisk.rule-tags]`
+
+Explicit group entries, `"<tag>" = "<severity>"` — one written line that
+grades **every rule carrying that tag**:
+
+```toml
+[tool.basilisk.rule-tags]
+"basilisk" = "error"       # every opt-in house rule on
+"suppressions" = "warning" # the suppression-audit family at warning
+```
+
+A tag entry is real configuration in the file — never an implicit mode or
+hidden switch. The canonical tag vocabulary:
+
+- **Provenance:** `pep` (the core conformance rules that run by default) and
+  `basilisk` (the opt-in house rules).
+- **PEP categories**, matching the
+  [conformance suite's](https://github.com/python/typing/tree/main/conformance/tests)
+  own file naming: `aliases`, `annotations`, `callables`, `classes`,
+  `constructors`, `dataclasses`, `directives`, `enums`, `exceptions`,
+  `generics`, `historical`, `literals`, `namedtuples`, `narrowing`,
+  `overloads`, `protocols`, `qualifiers`, `specialtypes`, `tuples`,
+  `typeddicts`, `typeforms`.
+- **Descriptive tags** on house rules: `style`, `redundancy`, `strictness`,
+  `dependencies`, `imports`, `stubs`, `suppressions`.
+
+The [rule reference](/docs/rules/) lists each rule's tags; the configuration
+editor's tag actions write these same `rule-tags` lines.
+
+### Severity resolution
+
+Per rule, per checked file — one walk, first decision wins:
+
+1. Walk from the file's folder to the root. The **nearest** `[tool.basilisk]`
+   table that decides the rule wins outright.
+2. Within one table, a per-rule entry beats tag entries; among matching tag
+   entries the **strictest** severity wins
+   (`error` > `warning` > `info` > `disabled`).
+3. If no table decides the rule: `pep`-tagged rules run at `error`; every
+   other rule is disabled.
+
+That is the whole model — no inherited rule state, no precedence scores, no
+merge rules between tables.
+
+### PEP rules are graded, never disabled
+
+`disabled` never applies to a `pep`-tagged rule. A configuration that
+resolves a PEP rule to `disabled` — whether by rule entry or tag entry — is
+**invalid**: the CLI and the editor surface it as a configuration error, and
+the checker keeps the rule running regardless, so a conformance diagnostic is
+never silently lost. To quiet a PEP rule, grade it to `"warning"` or
+`"info"`, suppress specific lines with `# type: ignore`
+([below](#inline-suppressions)), or `exclude` the paths.
+
+### Scoping rules to part of the tree
+
+There are **no** glob path patterns, per-path override tables, or per-module
+exceptions in rule configuration. Scoping a rule differently for part of the
+tree means placing a `pyproject.toml` with a `[tool.basilisk]` table in that
+folder — the nearest deciding table wins per rule:
+
+```toml
+# pyproject.toml (repo root)
+[tool.basilisk.rule-tags]
+"basilisk" = "error"
+
+# tests/pyproject.toml
+[tool.basilisk.rules]
+"BSK-0001" = "disabled"    # opt-in rule off again for everything under tests/
+```
+
+---
+
+## `[tool.basilisk]` settings
 
 ### `python-version`
 
-**Type:** `string`
-**Default:** auto-detected from the interpreter on PATH, or `"3.12"` if not found
-**Example:** `"3.12"`
+**Type:** `string`, e.g. `"3.12"`
+**Default:** _(unset — resolved from project files: `.python-version` → `[project].requires-python` lower bound → `uv.lock` `requires-python` lower bound)_
 
-The Python version to target for type checking. Affects which PEPs and typing features are available. Supports versions `"3.9"` through `"3.14"`.
+The Python version the checked code targets. Basilisk has no canonical Python
+release: a rule consults this version **only** where the
+[typing specification](https://typing.python.org/en/latest/spec/index.html),
+an accepted PEP, or Python language semantics makes the answer
+version-dependent — for example, [PEP 695](https://peps.python.org/pep-0695/)
+`type X = ...` / `class C[T]` syntax is rejected when the target is below
+3.12, because the target interpreter cannot parse it. Version-independent
+rules never branch on this value.
 
 ### `python-platform`
 
 **Type:** `"Linux" | "macOS" | "Windows" | "All"`
-**Default:** `"All"`
+**Default:** _(unset — the selected project interpreter is asked for its `sys.platform`)_
 
-Target platform. Affects platform-specific type stubs and conditional imports.
+Target platform for platform-dependent stubs and `sys.platform` narrowing.
+When unset, Basilisk probes the project interpreter and uses that concrete
+platform; if the probe fails the platform stays unknown — Basilisk never
+invents one. An explicit `"All"` keeps cross-platform intersection semantics.
 
 ### `stub-paths`
 
@@ -81,30 +201,25 @@ Target platform. Affects platform-specific type stubs and conditional imports.
 **Default:** `[]`
 **Example:** `["stubs/", "typings/"]`
 
-Additional directories to search for `.pyi` stub files. These sit at the **head** of the import search path — step 1 of the [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering) — so they can patch or shadow any later module, standard-library or third-party. Useful for custom stubs for internal libraries.
-
-### `typeshed-path`
-
-**Type:** `string`
-**Default:** _(unset — the bundled typeshed is used)_
-**Example:** `"typeshed-micropython"`
-**Spec:** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
-
-Path to a directory containing a custom or modified version of typeshed's standard-library stubs. When set, this directory becomes the **canonical source for standard-library types** — step 3 of the [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering), which states that type checkers "SHOULD use this as the canonical source for standard-library types in this step." Basilisk resolves stdlib modules against it in preference to the bundled typeshed; a stdlib module absent from the directory falls through to the remaining resolution steps.
-
-The directory must follow typeshed's layout — standard-library stubs live under a top-level `stdlib/` subdirectory, so Basilisk resolves each module as `<typeshed-path>/stdlib/<module>.pyi`. A clone of the [python/typeshed](https://github.com/python/typeshed) repository, or any directory you already use as Pyright's [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) or mypy's [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html), works unchanged. Relative paths resolve against the project root.
-
-Use this to type-check against an alternative standard library — for example MicroPython's [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs), whose `os`, `time`, and `machine` signatures differ from CPython. Symbols resolved from the custom typeshed hover with a `(custom typeshed)` tag — distinct from the bundled typeshed's `(typeshed)` — so you can confirm the override is active and know a MicroPython signature is never misreported as CPython's.
-
-`stub-paths` *prepends* extra stub directories; `typeshed-path` *replaces* the vendored standard library wholesale. They are independent and can be combined. See [How to use a custom typeshed](#how-to-use-a-custom-typeshed) below for a step-by-step walkthrough.
+Additional directories to search for `.pyi` stub files. These sit at the
+**head** of the import search path — step 1 of the
+[typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)
+— so they can patch or shadow any later module, standard-library or
+third-party. Useful for custom stubs for internal libraries. Across nested
+config files this is the one additive key: nearer entries append to inherited
+ones (deduplicated).
 
 ### `include`
 
 **Type:** `string[]`
-**Default:** `["."]` (current directory)
+**Default:** _(unset — the current directory is scanned)_
 **Example:** `["src/", "tests/"]`
 
-Directories or files to analyze. Plain paths relative to the project root — unlike `exclude`, `include` does **not** accept glob patterns. Only `.py` files are processed.
+The roots scanned when no paths are given on the CLI. Plain paths — unlike
+`exclude`, `include` does **not** accept glob patterns — resolved relative to
+the config file's directory. Explicit CLI paths override it; `exclude`
+applies within the include roots. The LSP honors the same roots, so the
+editor analyses exactly the files `basilisk check` would.
 
 ### `exclude`
 
@@ -122,9 +237,15 @@ exclude = [
 
 **Example:** `["py-gen", "**/generated/**", "*.pb.py"]`
 
-Gitignore-style glob patterns for paths to skip. Hidden directories (names starting with `.`) are always skipped regardless of this setting.
+Gitignore-style glob patterns for paths to skip. Hidden directories (names
+starting with `.`) are always skipped regardless of this setting, and the
+editor's bulk workspace scan additionally always skips the built-in
+vendored/cache directory names above.
 
-> **`exclude` _replaces_ the defaults — it does not extend them.** As soon as you set `exclude`, the built-in list above no longer applies. Re-list any defaults you still want alongside your own patterns, or they'll be analyzed again.
+> **`exclude` _replaces_ the defaults — it does not extend them.** As soon as
+> you set `exclude`, the built-in list above no longer applies to the CLI's
+> file discovery. Re-list any defaults you still want alongside your own
+> patterns.
 
 Pattern syntax, matched against each path relative to the project root:
 
@@ -136,17 +257,90 @@ Pattern syntax, matched against each path relative to the project root:
 | `gen?.py` | `?` — exactly one character within a segment |
 | `src/generated` | an **anchored** pattern (contains `/`) — the path or any ancestor dir, plus its subtree |
 
-The same patterns are honoured everywhere Basilisk discovers files: the LSP workspace scan, the `basilisk check` / `fix` / `adopt` CLI, and the editor's per-file checks when you open or edit a file — so a file excluded on the CLI is also silent in the editor. See `CHKARCH-CONFIG-EXCLUDE` in the architecture spec for the canonical semantics.
+One canonical matcher is shared by every entry point — the LSP workspace
+scan, the `basilisk check` / `fix` / `adopt` CLI, and the editor's per-file
+checks — so a path excluded on the CLI is also silent in the editor. See
+[`CHKARCH-CONFIG-EXCLUDE`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-EXCLUDE)
+for the canonical semantics.
+
+### `narrow-attributes-across-calls`
+
+**Type:** `bool`
+**Default:** `true`
+
+Whether attribute narrowing (`if x.attr is not None:` guards) survives
+intervening function calls. The default is the *usable* behavior: a call
+**could** invalidate the attribute, but treating every call as an
+invalidation makes attribute narrowing useless in practice. Set to `false`
+for the sound-but-strict behavior where any call discards attribute
+narrowing. See
+[`TYPEINF-NARROWING-ATTR-CALLS`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ATTR-CALLS).
 
 ---
 
+## Standard-library stubs (typeshed)
+
+Standard-library types come from
+[typeshed](https://github.com/python/typeshed) stubs — step 3 of the
+[typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering).
+Basilisk selects exactly **one** step-3 source:
+
+| Mode | Active source |
+| --- | --- |
+| Custom folder | your `typeshed-path` directory, verbatim |
+| Exact commit | the `typeshed-commit` SHA, downloaded as a verified archive (fails closed if unavailable) |
+| Latest _(default)_ | the current `python/typeshed@main` commit, resolved once per run/session; if it cannot be resolved, the bundled snapshot with a warning |
+
+Latest keeps you fresh but is not reproducible day-to-day — the editor's
+Server Info panel reports it as `UNPINNED` and offers **Pin current**, which
+writes the resolved SHA as `typeshed-commit`. Downloaded archives pass
+safety, shape, license, and content-verification gates before activation, and
+are cached as immutable ZIPs. Full detail:
+[`STUBRES-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED).
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `typeshed-commit` | full 40-char SHA | _(unset — Latest)_ | Exact `python/typeshed` commit to use. A pin **fails closed** — it never silently substitutes another commit. Abbreviated SHAs are rejected. |
+| `typeshed-url` | URL template | GitHub codeload | HTTPS archive mirror containing exactly one `{sha}` placeholder. A mirror cannot resolve Latest. |
+| `typeshed-cache-path` | path | OS cache dir | Where gate-accepted ZIPs are cached. |
+| `typeshed-cache` | bool | `true` | Reuse the re-hashed cached ZIP for 24 hours; `false` downloads, validates, and discards every run. |
+| `typeshed-verify` | bool | `true` | Content-attest the archive against the trusted git tree; `false` reports `UNVERIFIED` and never bypasses the safety, shape, or license gates. |
+| `typeshed-path` | path | _(unset)_ | Your own stdlib stub tree — disables both download and the bundled snapshot. |
+
+`typeshed-path` and `typeshed-commit` are **one source selection**: a nested
+config file that sets either replaces the inherited choice as a unit, never
+mixing a path from one file with a pin from another.
+
+### `typeshed-path`
+
+**Type:** `string`
+**Default:** _(unset — typeshed is acquired at runtime as above)_
+**Example:** `"vendor/typeshed"`
+**Spec:** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
+
+Path to a directory containing a custom or modified version of typeshed's
+standard-library stubs. When set, this directory becomes the **canonical
+source for standard-library types** — the typing spec states that type
+checkers "SHOULD use this as the canonical source for standard-library types
+in this step." A stdlib module absent from the directory falls through to the
+remaining resolution steps — it is **not** rescued by a downloaded or bundled
+typeshed.
+
 ## How to use a custom typeshed
 
-`typeshed-path` swaps the standard-library stubs Basilisk bundles for your own copy. Reach for it when you target an alternative Python whose standard library differs from CPython (MicroPython, a patched CPython, a vendor SDK), or when you need a newer or forked typeshed than the one baked into your Basilisk release.
+`typeshed-path` swaps the standard-library stubs for your own copy. Reach for
+it when you target an alternative Python whose standard library differs from
+CPython (MicroPython, a patched CPython, a vendor SDK), or when you need a
+forked typeshed rather than an official commit (for an official commit, pin
+`typeshed-commit` instead).
 
 ### 1. Lay the directory out like typeshed
 
-Point `typeshed-path` at the **root** of a typeshed-layout directory. Standard-library stubs must sit under a top-level `stdlib/` subdirectory, exactly as in the [python/typeshed](https://github.com/python/typeshed) repository — Basilisk resolves each module as `<typeshed-path>/stdlib/<module>.pyi`:
+Point `typeshed-path` at the **root** of a typeshed-layout directory.
+Standard-library stubs must sit under a top-level `stdlib/` subdirectory,
+exactly as in the [python/typeshed](https://github.com/python/typeshed)
+repository — Basilisk resolves each module as
+`<typeshed-path>/stdlib/<module>.pyi`:
 
 ```
 vendor/typeshed/
@@ -156,11 +350,16 @@ vendor/typeshed/
     └── ...
 ```
 
-Any directory you already use as Pyright's [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) or mypy's [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html) consumes this same layout, so it works with Basilisk unchanged.
+Any directory you already use as Pyright's
+[`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) or
+mypy's
+[`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html)
+consumes this same layout, so it works with Basilisk unchanged.
 
-### 2a. Point at a forked or newer typeshed
+### 2a. Point at a forked typeshed
 
-Clone the typeshed repo (or your fork of it), then point `typeshed-path` at the clone and patch the `.pyi` files you need:
+Clone the typeshed repo (or your fork of it), then point `typeshed-path` at
+the clone and patch the `.pyi` files you need:
 
 ```sh
 git clone https://github.com/python/typeshed vendor/typeshed
@@ -171,11 +370,16 @@ git clone https://github.com/python/typeshed vendor/typeshed
 typeshed-path = "vendor/typeshed"
 ```
 
-Basilisk now type-checks the standard library against `vendor/typeshed/stdlib/` instead of its bundled copy.
+Basilisk now type-checks the standard library against
+`vendor/typeshed/stdlib/`.
 
 ### 2b. Point at MicroPython's standard library
 
-MicroPython's stdlib diverges from CPython — `os`, `time`, and `machine` carry different signatures. Install [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs) (a typeshed-layout copy of the stdlib with MicroPython-specific edits) and point at it:
+MicroPython's stdlib diverges from CPython — `os`, `time`, and `machine`
+carry different signatures. Install
+[`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs)
+(a typeshed-layout copy of the stdlib with MicroPython-specific edits) and
+point at it:
 
 ```toml
 [tool.basilisk]
@@ -183,12 +387,16 @@ python-version = "3.12"
 typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 ```
 
-Because `micropython-stdlib-stubs` is a **partial** stdlib, a module it does not ship (e.g. `tkinter`, which does not exist on a board) is **not** rescued by the bundled CPython stub — the custom typeshed is the canonical source for step 3, so the import is reported as unresolved. That is the honest answer for an embedded target.
+Because `micropython-stdlib-stubs` is a **partial** stdlib, a module it does
+not ship (e.g. `tkinter`, which does not exist on a board) is **not** rescued
+by a CPython stub — the custom typeshed is the canonical source for step 3,
+so the import is reported as unresolved. That is the honest answer for an
+embedded target.
 
 ### 3. Configure it in the active project file
 
-`typeshed-path` lives in `[tool.basilisk]` like every other setting — there is
-no second spelling and no second file. Set it in the `pyproject.toml` that
+`typeshed-path` lives in `[tool.basilisk]` like every other setting — there
+is no second spelling and no second file. Set it in the `pyproject.toml` that
 governs the files you are checking (the nearest ancestor with a
 `[tool.basilisk]` table). Editors do not carry a second copy; that project
 config file is authoritative. If you are migrating a legacy `basilisk.json`,
@@ -196,7 +404,11 @@ its camelCase `typeshedPath` key becomes `typeshed-path` here.
 
 ### 4. Confirm it took effect — hover provenance
 
-Symbols resolved from a custom typeshed hover with a `(custom typeshed)` tag, distinct from the bundled typeshed's `(typeshed)` tag. Hover over an imported stdlib symbol: seeing `(custom typeshed)` confirms the override is active and that the signature came from your directory — a MicroPython `os.uname` is never misreported as CPython's.
+Symbols resolved from a custom typeshed hover with a `(custom typeshed)` tag,
+distinct from the official source's `(typeshed)` tag. Hover over an imported
+stdlib symbol: seeing `(custom typeshed)` confirms the override is active and
+that the signature came from your directory — a MicroPython `os.uname` is
+never misreported as CPython's.
 
 ### `typeshed-path` vs `stub-paths`
 
@@ -204,96 +416,25 @@ They solve different problems and can be combined:
 
 | | `stub-paths` (step 1) | `typeshed-path` (step 3) |
 | --- | --- | --- |
-| Role | *Prepends* extra `.pyi` directories at the head of the search path | *Replaces* the bundled standard-library typeshed wholesale |
+| Role | *Prepends* extra `.pyi` directories at the head of the search path | *Replaces* the standard-library typeshed wholesale |
 | Scope | Can shadow any single module, stdlib or third-party | Canonical source for the entire standard library |
-| Typical use | Patch one broken stub; stubs for an internal library | Target an alternative or forked stdlib (MicroPython, a newer typeshed) |
+| Typical use | Patch one broken stub; stubs for an internal library | Target an alternative or forked stdlib (MicroPython, a patched tree) |
 | Precedence | Wins — a `stub-paths` module still shadows the custom typeshed | Sits below `stub-paths`, above installed packages |
-
----
-
-## Rule selection and global severity
-
-The unconfigured default enables the complete core PEP rule set. Basilisk-
-specific house rules are tagged `basilisk` and stay off until a project opts in.
-There is no ambient basic/standard/strict mode. The editor's **Strict
-preset** is a one-shot recipe that writes every live rule's native severity
-explicitly into the active config file; after applying it, each rule remains
-independently configurable.
-
-Every opt-in rule is selected by assigning that rule a non-disabled severity:
-
-```toml
-[tool.basilisk.rules]
-"BSK-0001" = "error"   # required parameter annotations
-"BSK-0025" = "error"   # required @override
-"BSK-0011" = "warning" # undeclared dependency imports
-"BSK-0152" = "error"   # missing type stubs
-```
-
-There are no family switches in the project or editor settings. Use the
-generated [rule reference](/docs/rules/) or configuration editor to browse the
-canonical tags; tag actions expand to explicit rule entries in this file.
-
-### `[tool.basilisk.rules]`
-
-Set a rule's global severity. For an opt-in rule, any non-disabled value also
-selects it:
-
-```toml
-[tool.basilisk.rules]
-"imports_unresolved" = "warning"
-"BSK-0050" = "error"
-"dataclasses_order" = "disabled"
-```
-
-Accepted values are `"error"`, `"warning"`, `"info"`, and `"disabled"`.
-For an opt-in rule, `"error"`, `"warning"`, or `"info"` selects that individual
-rule; `"disabled"` keeps it off. No second switch is required.
-
----
-
-## `[tool.basilisk.per-path-overrides."<glob>"]`
-
-Apply different settings to specific paths. The glob is matched against file paths relative to the project root.
-
-```toml
-[tool.basilisk.per-path-overrides."legacy/**"]
-# Turn rules off entirely for matching files
-disabled = ["returns_compatibility"]
-
-[tool.basilisk.per-path-overrides."tests/**"]
-# Or soften a rule's severity instead of disabling it
-rules."returns_compatibility" = "warning"
-```
-
-### `disabled`
-
-**Type:** `string[]`
-**Example:** `["returns_compatibility", "BSK-0001"]`
-
-Rule codes to disable entirely for files matching this glob.
-
-### `rules`
-
-**Type:** table of rule code → severity
-**Severities:** `"error"`, `"warning"`, `"info"`, `"disabled"`
-**Example:** `rules."returns_compatibility" = "warning"`
-
-Override the severity of specific rules for matching files. Prefer softening or disabling individual rules over relaxing broad swaths of checking.
 
 ---
 
 ## Inline suppressions
 
-Use the standard `# type: ignore` spelling. A Basilisk rule code makes the
-suppression specific:
+Use the standard
+[`# type: ignore`](https://typing.python.org/en/latest/spec/directives.html#type-ignore-comments)
+spelling. A Basilisk rule code makes the suppression specific:
 
 ```python
-result: Any = get_legacy_value()  # type: ignore[returns_compatibility]
+result = get_legacy_value()  # type: ignore[returns_compatibility]
 ```
 
-Bare or foreign-checker ignore codes follow PEP 484 compatibility behavior and
-suppress all diagnostics on the line:
+Bare or foreign-checker ignore codes follow PEP 484 compatibility behavior
+and suppress all diagnostics on the line:
 
 ```python
 data = unsafe_cast(value)  # type: ignore
@@ -307,7 +448,19 @@ value = legacy_call()  # type: info[returns_compatibility]
 value = legacy_call()  # type: disabled[returns_compatibility]
 ```
 
-File-level directives are standalone comments:
+A directive on its own line opens a **block**, closed by the matching
+`end-` directive:
+
+```python
+# type: disabled[imports_unresolved]
+from fastmcp import FastMCP
+from result import Result
+# type: end-disabled[imports_unresolved]
+```
+
+File-level directives are standalone comments — `relaxed` grades every error
+in the file down to a warning; the `file-` forms apply one effect to specific
+codes (or, with no codes, to every rule):
 
 ```python
 # basilisk: relaxed
@@ -315,45 +468,33 @@ File-level directives are standalone comments:
 # basilisk: file-disabled[imports_unresolved]
 ```
 
-Suppression auditing is an **opt-in** tagged rule family. It emits nothing by
+Suppression auditing is an **opt-in** tagged rule family
+(`"suppressions"` in `[tool.basilisk.rule-tags]`). It emits nothing by
 default. Configure `BSK-0060` (active specific), `BSK-0061` (active blanket),
 `BSK-0062` (unused), and `BSK-0063` (malformed) independently at error,
-warning, info, or disabled. See the
-[configuration-editor specification](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SUPPRESSIONS).
+warning, info, or disabled.
 
 ---
 
-## Configuration discovery
+## Adoption debt
 
-Basilisk discovers configuration per checked file by walking **up** from the
-file's directory. Every ancestor `pyproject.toml` that carries a
-`[tool.basilisk]` table contributes, and the tables merge cumulatively: where
-the same key is set in more than one file, the **nearest** file wins. Keys a
-child table does not set continue to come from the ancestors, so a nested
-`pyproject.toml` refines the root configuration — it never blows the root
-config away.
-
-The legacy root-level `basilisk.json` is **never** read. If one is still
-present, the configuration editor reports it as an ignored shadowed source;
-translate its keys into `[tool.basilisk]` and delete the file.
-
-If no ancestor `pyproject.toml` carries a `[tool.basilisk]` table, Basilisk uses defaults: the **core PEP conformance rule set** enabled (extra Basilisk rules stay opt-in), `python-version = "3.12"`, check the current directory.
+`basilisk adopt` records a folder's existing diagnostics as ordinary
+warning-severity `[tool.basilisk.rules]` entries in the active config file —
+no sidecar files, markers, or hidden state. `basilisk unadopt` deletes those
+entries, and re-running `adopt` recomputes them, so rules that no longer fire
+revert to their full severity automatically.
 
 ---
 
 ## Visual configuration editor
 
-The tag-first VS Code editor reads the live rule catalog from the LSP, previews
-all/tag/rule bulk changes, exposes every rule's effective and explicit severity,
-and makes opt-in suppression diagnostics searchable across the workspace. Its
-LSP-advertised Strict preset turns the complete catalog on at each rule's native
-severity and persists the expanded rule entries—not a mode flag. Safe fixes are
-a separate root-scoped LSP action, so applying a preset never hides source edits
-inside a config transaction.
-
-Generated adoption debt is stored as ordinary exact-file `per-path-overrides`
-entries in this same active config file—no `.basilisk/adoptions.toml`, hidden
-state, or adoption mode. The VSIX does not parse or write configuration itself.
+The tag-first VS Code editor reads the live rule catalog from the LSP,
+previews bulk changes, and shows every rule's effective severity and where it
+was decided. Its edits are typed mutations the LSP applies to the active
+`pyproject.toml` — set or remove a rule entry, a tag entry, or a typeshed
+setting; requesting `disabled` for a PEP rule is rejected as an error. The
+extension never parses or writes configuration files itself, and folder
+configs back the editor's scoped-grading view.
 
 ![Basilisk's tag-first VS Code configuration editor, showing live rule facets and per-rule severity controls](/assets/images/vscode-configuration-editor.png)
 

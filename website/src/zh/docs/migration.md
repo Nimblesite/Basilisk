@@ -43,15 +43,16 @@ exclude = [
 核心 PEP 规则无需开关。Basilisk 扩展规则通过明确的逐规则严重性启用：
 
 ```toml
+[tool.basilisk.rule-tags]
+"basilisk" = "error"     # 一行启用所有可选自有规则
+
 [tool.basilisk.rules]
-"BSK-0001" = "error"
-"BSK-0025" = "error"
-"BSK-0011" = "warning"
-"BSK-0152" = "error"
+"BSK-0011" = "warning"   # 再对个别规则作出高于标签条目的定级
 ```
 
 规则按实时的来源、PEP 类别和描述性标签组织。Basilisk 没有
-basic/standard/strict 运行模式或规则族开关；策略由配置文件中的逐规则严重性组成。
+basic/standard/strict 运行模式；策略就是配置文件中持久化的规则条目与
+标签条目。参见[规则：两个扁平映射](/zh/docs/configuration/#规则-两个扁平映射)。
 
 ## 3. 先应用安全修复
 
@@ -76,16 +77,20 @@ basilisk fix src/ tests/
 支持 `error`、`warning`、`info` 和 `disabled`。显式的非 disabled 严重性
 也会启用一个默认关闭的 Basilisk 规则。
 
-将遗留债务限制在路径中：
+将遗留债务限制在路径中：在那个文件夹放置带 `[tool.basilisk]` 表的
+`pyproject.toml`——最近作出决定的表按规则胜出，树的其余部分保持严格定级：
 
 ```toml
-[tool.basilisk.per-path-overrides."legacy/**"]
-rules."returns_compatibility" = "warning"
-rules."imports_unresolved" = "info"
+# legacy/pyproject.toml
+[tool.basilisk.rules]
+"returns_compatibility" = "warning"
+"imports_unresolved" = "info"
 ```
 
-项目级 `disabled` 也会隐藏以后新增的问题；若债务只存在于旧文件，
-路径或精确文件例外更安全。
+规则配置中没有 glob 路径模式或逐路径覆盖表——作用域策略始终是放在
+对应文件夹里的配置文件。项目级 `disabled` 也会隐藏以后新增的问题
+（且对 PEP 规则无效——它们只能定级）；若债务只存在于旧代码，
+`basilisk adopt` 是更安全的工具。
 
 ## 5. 保留并审计内联忽略
 
@@ -114,7 +119,7 @@ error、warning、info 或 disabled。
 | `stubPath` | `[tool.basilisk].stub-paths` |
 | `typeshedPath` | `[tool.basilisk].typeshed-path` |
 | `report…` 严重性 | `[tool.basilisk.rules]."RULE_CODE"` |
-| 执行环境例外 | 语义相符时使用 `per-path-overrides` |
+| 执行环境例外 | 在对应文件夹放置带 `[tool.basilisk]` 表的 `pyproject.toml` |
 
 不要机械映射 `typeCheckingMode`；Basilisk 将策略保存为显式规则严重性，
 而不是模式。
@@ -127,7 +132,7 @@ error、warning、info 或 disabled。
 | `exclude` | `[tool.basilisk].exclude` |
 | `mypy_path` | 包含存根时使用 `[tool.basilisk].stub-paths` |
 | `custom_typeshed_dir` | `[tool.basilisk].typeshed-path` |
-| 每模块放宽 | 适用时使用每路径覆盖 |
+| 每模块放宽 | 例外基于源码路径时，使用文件夹作用域的 `pyproject.toml` |
 | `# type: ignore[code]` | 保留语法并换成 Basilisk 规则码 |
 
 mypy 插件不能直接加载到 Basilisk。对于框架特有债务，应使用有针对性的
@@ -138,16 +143,15 @@ mypy 插件不能直接加载到 Basilisk。对于框架特有债务，应使用
 VS Code 配置编辑器采用标签优先界面，并由可复用 LSP API 驱动：
 
 1. 按权威标签浏览实时规则目录；
-2. 预览 LSP 提供的 **Strict preset**，把所有规则按各自原生严重性启用；
-3. 先运行 Safe 修复；
-4. 按标签、规则、文件和可修复性审查剩余债务；
-5. 只降低选中的规则，或为受影响文件记录精确例外；
-6. 检查准确影响后，通过版本令牌应用；
-7. 持续查找采用例外和可选的忽略审计诊断。
+2. 用一条 `rule-tags` 条目（例如 `"basilisk" = "error"`）启用整组规则，
+   并在应用前预览效果；
+3. 先运行 Safe 修复（独立的根作用域 LSP 操作）；
+4. 按标签和规则审查剩余债务；
+5. 显式降低选中的规则，或用 `basilisk adopt` 记录债务；
+6. 持续跟踪例外与可选的抑制审计诊断，直至清零。
 
-Preset 是一次性的配置配方，不是运行模式。应用 Strict 后，LSP 会把展开
-后的逐规则严重性写入当前有效配置文件。精确文件采用同样写入该文件的
-`per-path-overrides`，不会创建 `.basilisk/adoptions.toml` 或隐藏状态。
+采用债务保存为同一个活动配置文件中普通的 warning 严重性规则条目，
+不会创建第二个配置文件或持久模式。
 
 参见权威的
 [规范](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md)

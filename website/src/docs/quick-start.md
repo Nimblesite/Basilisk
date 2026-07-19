@@ -163,8 +163,8 @@ project is at full strictness.
 
 In VS Code, skip the hand-editing: run **Basilisk: Open Configuration Editor**
 from the Command Palette. It shows every rule with its live severity, previews
-changes before applying them, and its **Strict preset** turns the complete
-catalog on in one click. See the
+changes before applying them, and its tag actions turn a whole rule group on
+with one written `rule-tags` line (e.g. `"basilisk" = "error"`). See the
 [configuration reference](/docs/configuration/) for the full schema.
 
 ![Basilisk's tag-first VS Code configuration editor, showing live rule facets and per-rule severity controls](/assets/images/vscode-configuration-editor.png)

@@ -4,7 +4,7 @@ title: "Migrate to Basilisk from Pyright or mypy"
 description: "Current, honest steps for moving a Python project to Basilisk with per-rule severity and gradual path-based adoption."
 keywords: migrate to basilisk, from pyright, from mypy, python type checker migration
 date: 2026-02-28
-dateModified: 2026-07-14
+dateModified: 2026-07-19
 author: The Basilisk Project
 eleventyNavigation:
   key: Migration
@@ -50,21 +50,22 @@ reports a stray `basilisk.json` as an ignored shadowed source.
 
 ## 2. Choose the target policy
 
-The PEP rule set needs no switch. Opt into Basilisk rules with explicit
-severities (or apply a configuration-editor preset, which writes these entries):
+The PEP rule set needs no switch. Opt into Basilisk rules individually, or
+grade a whole tag with one written line:
 
 ```toml
+[tool.basilisk.rule-tags]
+"basilisk" = "error"     # every opt-in house rule on
+
 [tool.basilisk.rules]
-"BSK-0001" = "error"
-"BSK-0025" = "error"
-"BSK-0011" = "warning"
-"BSK-0152" = "error"
+"BSK-0011" = "warning"   # then grade individual rules over their tag entry
 ```
 
 Rules are organised by their live
 [provenance, PEP-category, and descriptive tags](/docs/rules/). Basilisk has no
-basic/standard/strict mode or rule-family switches; the persisted per-rule
-severities are the policy.
+basic/standard/strict mode; the policy is exactly the rule and tag entries
+persisted in the file. See
+[Rules: two flat maps](/docs/configuration/#rules-two-flat-maps).
 
 ## 3. Run the checker and fix safe debt first
 
@@ -90,19 +91,22 @@ Accepted severities are `error`, `warning`, `info`, and `disabled`. An explicit
 non-disabled severity also enables an opt-in rule; removing the entry returns it
 to inherited tag/default selection.
 
-For legacy areas, keep the exception local:
+For legacy areas, keep the exception local by placing a `pyproject.toml` with
+a `[tool.basilisk]` table in that folder — the nearest deciding table wins per
+rule, so the rest of the tree keeps the strict grading:
 
 ```toml
-[tool.basilisk.per-path-overrides."legacy/**"]
-rules."returns_compatibility" = "warning"
-rules."imports_unresolved" = "info"
-
-[tool.basilisk.per-path-overrides."vendor/**"]
-disabled = ["imports_unresolved"]
+# legacy/pyproject.toml
+[tool.basilisk.rules]
+"returns_compatibility" = "warning"
+"imports_unresolved" = "info"
 ```
 
-A project-wide `disabled` entry hides future violations too. Path and per-file
-adoption are safer when the debt is confined to existing code.
+There are no glob path patterns or per-path override tables — scoped policy is
+always a config file in the scoped folder. A project-wide `disabled` entry
+hides future violations too (and is invalid for PEP rules, which can only be
+graded); `basilisk adopt` is the safer tool when the debt is confined to
+existing code.
 
 ## 5. Preserve and audit inline ignores
 
@@ -147,7 +151,7 @@ manual mappings are:
 | `stubPath` | `[tool.basilisk].stub-paths` |
 | `typeshedPath` | `[tool.basilisk].typeshed-path` |
 | `report…` severity | `[tool.basilisk.rules]."RULE_CODE"` |
-| execution-environment exception | `[tool.basilisk.per-path-overrides."glob"]` where semantics match |
+| execution-environment exception | a `pyproject.toml` with `[tool.basilisk]` in that folder |
 
 Use the [Pyright configuration reference](https://microsoft.github.io/pyright/#/configuration)
 to inspect the source value and Basilisk's [rule reference](/docs/rules/) to
@@ -165,7 +169,7 @@ Typical manual mappings are:
 | `exclude` | `[tool.basilisk].exclude` (gitignore-style patterns) |
 | `mypy_path` | `[tool.basilisk].stub-paths` when it contains stubs |
 | `custom_typeshed_dir` | `[tool.basilisk].typeshed-path` |
-| per-module relaxations | per-path overrides where the exception is source-path based |
+| per-module relaxations | a folder-scoped `pyproject.toml` where the exception is source-path based |
 | `# type: ignore[code]` | keep the syntax, replace the foreign code with a Basilisk code |
 
 Consult the [mypy configuration reference](https://mypy.readthedocs.io/en/stable/config_file.html)
@@ -178,16 +182,17 @@ than disabling unrelated checks globally.
 The VS Code configuration editor provides this workflow as one review surface:
 
 1. browse the canonical rule catalog by tags;
-2. preview the LSP-advertised **Strict preset** (all rules at native severity)
-   or “maximum policy”;
+2. turn a whole tag on with one `rule-tags` entry (e.g. `"basilisk" = "error"`)
+   and preview the effect before applying;
 3. run Safe fixes through the separate root-scoped LSP action;
-4. group remaining debt by tag, rule, file, and fixability;
-5. demote/disable selected rules globally or adopt only affected files;
-6. preview the exact diff and apply it against a revision token;
-7. track exceptions and opt-in suppression diagnostics until they graduate.
+4. group remaining debt by tag and rule;
+5. grade selected rules down explicitly, or record the debt with
+   `basilisk adopt`;
+6. track exceptions and opt-in suppression diagnostics until they graduate.
 
-Per-file adoption is stored as exact-file rule severities in the same active
-project config. It does not create a second config file or a persistent mode.
+Adoption debt is stored as ordinary warning-severity rule entries in the same
+active project config. It does not create a second config file or a persistent
+mode.
 
 It is [specified](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md)
 and tracked in the [implementation plan](https://github.com/Nimblesite/Basilisk/blob/main/docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md).
