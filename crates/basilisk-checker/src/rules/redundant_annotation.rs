@@ -173,38 +173,25 @@ fn extract_annotation(source: &str, name_span: basilisk_resolver::Span) -> Optio
     }
 }
 
-/// Check whether inference already provides exactly the written type.
+/// Check if types match for BSK-0050 purposes (base scalar comparison).
 fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bool {
-    use InferredType::{
-        Bool, Bytes, Dict, Float, Int, List, LiteralString, None_, Set, Str, Tuple,
-    };
+    use InferredType::{Bool, Bytes, Float, Int, LiteralString, None_, Str};
 
-    // Exact structural equality is intentionally narrower than assignability:
-    // an annotation that widens an inferred element, key, value, or tuple shape
-    // still adds information and must remain silent.
-    match (inferred, declared) {
+    // Only fire BSK-0050 for simple scalar types that are exactly equal. A
+    // string literal infers as `LiteralString`, which an explicit `str`
+    // annotation genuinely restates. Collection and other complex types are
+    // never flagged: the annotation documents element/key/value/tuple shape the
+    // literal alone does not make obvious, so it stays useful even when the
+    // engine could infer it (see test_w0050_{list,dict,set,tuple}_literal_no_warning).
+    matches!(
+        (inferred, declared),
         (Int, Int)
-        | (Str | LiteralString, Str)
-        | (Float, Float)
-        | (Bool, Bool)
-        | (Bytes, Bytes)
-        | (None_, None_) => true,
-        (List(inferred), List(declared)) | (Set(inferred), Set(declared)) => {
-            types_match_for_w0050(inferred, declared)
-        }
-        (Dict(inferred_key, inferred_value), Dict(declared_key, declared_value)) => {
-            types_match_for_w0050(inferred_key, declared_key)
-                && types_match_for_w0050(inferred_value, declared_value)
-        }
-        (Tuple(inferred), Tuple(declared)) => {
-            inferred.len() == declared.len()
-                && inferred
-                    .iter()
-                    .zip(declared)
-                    .all(|(inferred, declared)| types_match_for_w0050(inferred, declared))
-        }
-        _ => false,
-    }
+            | (Str | LiteralString, Str)
+            | (Float, Float)
+            | (Bool, Bool)
+            | (Bytes, Bytes)
+            | (None_, None_)
+    )
 }
 
 /// Infer a type from the assignment's source text when resolver inference fails.

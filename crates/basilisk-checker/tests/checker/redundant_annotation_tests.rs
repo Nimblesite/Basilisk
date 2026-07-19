@@ -477,7 +477,7 @@ g: None = None
 }
 
 // ============================================================================
-// Module-level redundant and non-redundant annotations
+// Module-level NON-redundant annotations (widening, collections, calls)
 // ============================================================================
 
 #[test]
@@ -496,7 +496,7 @@ y: object = \"hello\"
 }
 
 #[test]
-fn module_level_collection_redundancies() -> Result<(), Box<dyn std::error::Error>> {
+fn module_level_collections_no_w0050() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 items: list[int] = [1, 2, 3]
 pairs: dict[str, int] = {\"a\": 1}
@@ -506,13 +506,8 @@ coords: tuple[int, int] = (1, 2)
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
         count_code(&diags, "BSK-0050"),
-        4,
-        "exact collection annotations should all fire BSK-0050, got: {:?}",
-        diags
-            .iter()
-            .filter(|diag| diag.code.code == "BSK-0050")
-            .map(|diag| &diag.message)
-            .collect::<Vec<_>>()
+        0,
+        "collection annotations should not fire BSK-0050"
     );
     Ok(())
 }
