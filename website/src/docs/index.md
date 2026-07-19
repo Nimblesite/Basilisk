@@ -56,12 +56,13 @@ Basilisk's behaviour is decided entirely by **configuration**, and the default c
 
 Stricter-than-spec checking is **opt-in**. Basilisk also ships extra rules the spec doesn't define — *require an annotation* on every parameter and return, a redundant-annotation warning, a missing-`@override` nudge, an explicit-`Any` nudge. They stay **off** until you enable them in config. Because they flag code the spec considers valid, turning them on deliberately trades strict spec conformance for a stricter standard of your team's choosing — a per-project choice, never a default.
 
-Configuration is also where you relax rules for the paths that need it — for example, softening or disabling a rule across a legacy directory:
+Configuration is also where you relax rules for the paths that need it — place a `pyproject.toml` with a `[tool.basilisk]` table in the folder, and the nearest deciding table wins for the files beneath it:
 
 ```toml
-[tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["returns_compatibility"]        # turn a rule off for legacy code
-rules."imports_unresolved" = "warning"   # or just soften its severity
+# legacy/pyproject.toml
+[tool.basilisk.rules]
+"returns_compatibility" = "warning"   # graded down for legacy code only
+"imports_unresolved" = "info"
 ```
 
 This keeps the default honest — pure spec conformance — while letting each team dial strictness exactly where they want it.

@@ -324,7 +324,7 @@ permalink: /
         {{ ruleStats.strictness }} opt-in strictness rules refuse that: they require a type on every parameter,
         return, variable, <code>*args</code>/<code>**kwargs</code>, and class attribute, demand
         <code>@override</code> on overrides, reject implicit and explicit <code>Any</code>, and flag
-        unannotated lambdas. Every one is off by default &mdash; switch them on per-file or per-path
+        unannotated lambdas. Every one is off by default &mdash; switch them on project-wide or per-folder
         from your editor or <code>pyproject.toml</code>, and one-click quick-fixes drop in a placeholder
         annotation (<code>: Any</code>, <code>-&gt; None</code>) so you can fill in the real type. They never run during conformance, so they can&rsquo;t pad that score.
         <a href="/docs/rules/">See the rules &rarr;</a>
