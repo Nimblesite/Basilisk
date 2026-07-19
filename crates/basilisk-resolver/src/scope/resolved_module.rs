@@ -280,7 +280,7 @@ pub struct ResolvedModule {
     /// This is populated alongside imports from the same root-keyed snapshot,
     /// so editor features and diagnostics never consult a compiled hand table
     /// or another generation's `builtins.pyi`.
-    pub builtin_classes: std::collections::HashMap<String, super::IndexedStubClass>,
+    pub builtin_classes: std::sync::Arc<std::collections::HashMap<String, super::IndexedStubClass>>,
     /// Public member API of plain-imported modules backed by a user/local stub,
     /// keyed by local binding name (`X` for `import X`).
     ///
