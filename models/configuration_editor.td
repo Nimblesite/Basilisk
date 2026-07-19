@@ -60,6 +60,15 @@ union TypeshedSourceMode {
   CustomFolder
 }
 
+# The ACTIVE source carries the value that defines it, so "latest with a pin"
+# and "a pinned commit plus a custom folder" cannot be expressed at all
+# ([LSPCFGED-TYPESHED]).
+union TypeshedSourceState {
+  Latest
+  ExactCommit { commit: String }
+  CustomFolder { path: String }
+}
+
 union TypeshedWidget {
   Directory
   Text
@@ -116,7 +125,9 @@ union TypeshedWarningSeverity {
 type TypeshedSourceOption {
   mode: TypeshedSourceMode
   label: String
+  description: String
   enabled: Bool
+  unavailableReason: Option<String>
 }
 
 type TypeshedSettingState {
@@ -156,7 +167,7 @@ type TypeshedStatusState {
 }
 
 type TypeshedConfigurationState {
-  sourceMode: TypeshedSourceMode
+  source: TypeshedSourceState
   sourceOptions: List<TypeshedSourceOption>
   settings: List<TypeshedSettingState>
   actions: List<TypeshedActionState>

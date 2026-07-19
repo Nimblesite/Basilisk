@@ -64,6 +64,15 @@ export type TypeshedSourceMode =
   | { kind: "ExactCommit" }
   | { kind: "CustomFolder" };
 
+/**
+ * The active source carries the value that defines it: "latest with a pin" and
+ * "a pinned commit plus a custom folder" are unrepresentable ([LSPCFGED-TYPESHED]).
+ */
+export type TypeshedSourceState =
+  | { kind: "Latest" }
+  | { kind: "ExactCommit"; commit: string }
+  | { kind: "CustomFolder"; path: string };
+
 export type TypeshedWidget =
   | { kind: "Directory" }
   | { kind: "Text" }
@@ -112,7 +121,9 @@ export type TypeshedWarningSeverity =
 export interface TypeshedSourceOption {
   mode: TypeshedSourceMode;
   label: string;
+  description: string;
   enabled: boolean;
+  unavailableReason: string | undefined;
 }
 
 export interface TypeshedSettingState {
@@ -152,7 +163,7 @@ export interface TypeshedStatusState {
 }
 
 export interface TypeshedConfigurationState {
-  sourceMode: TypeshedSourceMode;
+  source: TypeshedSourceState;
   sourceOptions: TypeshedSourceOption[];
   settings: TypeshedSettingState[];
   actions: TypeshedActionState[];

@@ -207,7 +207,7 @@ fn snapshot_describes_typeshed_controls_and_terminal_status() {
     runtime_snapshot.status = status;
     let generation = TypeshedGeneration::Ready(Arc::new(runtime_snapshot));
     let snapshot = build_snapshot(&index, &root, &document, Some(&generation));
-    assert_eq!(snapshot.typeshed.source_mode, TypeshedSourceMode::Latest);
+    assert_eq!(snapshot.typeshed.source, TypeshedSourceState::Latest);
     assert_eq!(snapshot.typeshed.status.lifecycle, TypeshedLifecycle::Ready);
     assert_eq!(
         snapshot.typeshed.status.commit_identity.as_deref(),
@@ -231,18 +231,52 @@ fn snapshot_describes_typeshed_controls_and_terminal_status() {
         cache.and_then(|setting| setting.value.clone()),
         Some(TypeshedSettingValue::Boolean { value: false })
     );
-    let pin = snapshot
-        .typeshed
-        .actions
-        .iter()
-        .find(|action| action.action == TypeshedAction::PinCurrent);
-    assert_eq!(pin.map(|action| action.enabled), Some(true));
+    // Pinning is offered because an active commit exists to pin, and the
+    // source-defining keys never appear as loose settings.
+    let pin = source_option(&snapshot, TypeshedSourceMode::ExactCommit);
+    assert_eq!(pin.map(|option| option.enabled), Some(true));
+    assert_eq!(pin.and_then(|option| option.unavailable_reason.as_deref()), None);
+    assert!(
+        !snapshot.typeshed.actions.iter().any(|action| action.action == TypeshedAction::PinCurrent),
+        "pinning is the source choice itself, never a second redundant button"
+    );
+    assert!(
+        snapshot.typeshed.settings.iter().all(|setting| setting.key
+            != TypeshedSettingKey::TypeshedCommit
+            && setting.key != TypeshedSettingKey::TypeshedPath),
+        "source-defining values travel in TypeshedSourceState, never as settings"
+    );
+
+    // A pinned commit is carried BY the active source.
+    document.config.typeshed_commit = Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned());
+    let pinned = build_snapshot(&index, &root, &document, Some(&generation));
+    assert_eq!(
+        pinned.typeshed.source,
+        TypeshedSourceState::ExactCommit {
+            commit: "83c2518a9e6abbda0c44592c3483de459198f887".to_owned(),
+        }
+    );
+    document.config.typeshed_commit = None;
 
     document.config.typeshed_path = Some(root.join("custom-typeshed"));
     let custom = build_snapshot(&index, &root, &document, Some(&generation));
     assert_eq!(
-        custom.typeshed.source_mode,
-        TypeshedSourceMode::CustomFolder
+        custom.typeshed.source,
+        TypeshedSourceState::CustomFolder {
+            path: root.join("custom-typeshed").to_string_lossy().into_owned(),
+        }
+    );
+    assert!(
+        custom.typeshed.settings.is_empty(),
+        "a user-managed folder downloads nothing, so no download setting exists"
+    );
+    let custom_pin = source_option(&custom, TypeshedSourceMode::ExactCommit);
+    assert_eq!(custom_pin.map(|option| option.enabled), Some(false));
+    assert!(
+        custom_pin
+            .and_then(|option| option.unavailable_reason.as_deref())
+            .is_some_and(|reason| reason.contains("Switch to Latest first")),
+        "an unavailable source must teach why"
     );
     let acquire = custom
         .typeshed

@@ -15,6 +15,28 @@ pub enum TypeshedSourceMode {
     CustomFolder,
 }
 
+/// The active source and the value that defines it. A pinned commit and a
+/// custom folder cannot coexist, and `Latest` cannot carry a pin — the wire
+/// model makes those states unrepresentable ([LSPCFGED-TYPESHED]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all_fields = "camelCase")]
+pub enum TypeshedSourceState {
+    Latest,
+    ExactCommit { commit: String },
+    CustomFolder { path: String },
+}
+
+impl TypeshedSourceState {
+    /// The option identity this active source selects.
+    pub const fn mode(&self) -> TypeshedSourceMode {
+        match self {
+            Self::Latest => TypeshedSourceMode::Latest,
+            Self::ExactCommit { .. } => TypeshedSourceMode::ExactCommit,
+            Self::CustomFolder { .. } => TypeshedSourceMode::CustomFolder,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum TypeshedWidget {
@@ -89,7 +111,12 @@ pub enum TypeshedWarningSeverity {
 pub struct TypeshedSourceOption {
     pub mode: TypeshedSourceMode,
     pub label: String,
+    pub description: String,
     pub enabled: bool,
+    /// Why an unavailable option cannot be chosen — every disabled control
+    /// teaches instead of stonewalling.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unavailable_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -147,7 +174,7 @@ pub struct TypeshedStatusState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TypeshedConfigurationState {
-    pub source_mode: TypeshedSourceMode,
+    pub source: TypeshedSourceState,
     pub source_options: Vec<TypeshedSourceOption>,
     pub settings: Vec<TypeshedSettingState>,
     pub actions: Vec<TypeshedActionState>,
