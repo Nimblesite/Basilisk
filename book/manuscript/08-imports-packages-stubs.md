@@ -18,9 +18,12 @@ behavior.
 
 ## Typeshed and the standard library
 
-Explain typeshed's role without implying that current upstream `main` is
-necessarily identical to the information bundled with the documented Basilisk
-release.
+Explain typeshed's role and which source the documented release actually used.
+By default Basilisk verifies `python/typeshed@main` at run time and reports the
+result as unpinned; the complete `stdlib/` snapshot compiled into the release is
+the offline fallback, not the normal source. Show `typeshed-commit` as the way a
+project makes standard-library information reproducible, and state that the pin
+fails closed rather than silently substituting another commit.
 
 ## Typed distributions and `py.typed`
 
@@ -29,9 +32,13 @@ packages. Use PEP 561 for history only.
 
 ## Search order and provenance
 
-Show the implemented Basilisk resolution order, project overrides, custom
-typeshed option, and hover provenance. Verify every detail against the release
-implementation and tests before final prose.
+Show the six implemented resolution steps in order — manual `stub-paths`, user
+code, the selected standard-library source, stub packages, inline `py.typed`
+packages, then vendored third-party stubs — and make clear that step 3 selects
+exactly one source: a custom `typeshed-path`, an exact `typeshed-commit`, the
+verified latest commit, or the bundled snapshot. Show hover provenance
+distinguishing `(typeshed)` from `(custom typeshed)`. Verify every detail
+against the release implementation and tests before final prose.
 
 ## Generate, then inspect
 

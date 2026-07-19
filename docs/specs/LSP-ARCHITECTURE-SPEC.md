@@ -165,9 +165,11 @@ Every request identifies its workspace root. Unknown roots, rules, tags, severit
 selectors, and stale revisions are errors; they never fall back to a different root
 or to defaults.
 
-A mutation sets or removes one rule entry or one tag entry — nothing else
-exists: no preset, inherit, or native intents, and setting `disabled` on a
-`pep`-tagged rule is a request error
+A mutation sets or removes one rule entry, one tag entry, or one allowlisted
+Typeshed setting
+([STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG))
+— nothing else exists: no preset, inherit, or native intents, and setting
+`disabled` on a `pep`-tagged rule is a request error
 ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 Mass fixing stays the standalone `basilisk.fixWorkspace` execute command; a
 supplied `{ rootUri }` is validated and restricts the edit to that active root.

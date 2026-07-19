@@ -198,6 +198,9 @@ respond appropriately when a package has no usable typing information.
 
 - Source modules, `.pyi` files, and what a stub promises
 - Typeshed and the standard library
+- Where standard-library types come from at run time: the verified latest
+  commit, an exact `typeshed-commit` pin, a custom tree, or the offline
+  bundled snapshot
 - `py.typed` and typed distributions
 - Import resolution from project overrides to installed packages
 - Missing versus incomplete stubs

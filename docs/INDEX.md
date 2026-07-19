@@ -54,7 +54,7 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [AI-assisted LSP](plans/LSP-AI-PLAN.md) | First opt-in provider slice and privacy/safety gate. |
 | [Activity panel](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Settings wiring and remaining cross-editor/test quality. |
 | [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Bidirectional/constraint-based inference engine, flow analysis, shared subtyping, and PEP 827 readiness. |
-| [Runtime typeshed acquisition](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Replace the compile-time index with real `.pyi` acquisition, exact source precedence, startup gating, and #288/#289 acceptance tests. |
+| [Runtime typeshed acquisition](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Acquisition, source precedence, startup gating, and #288/#289 hovers all shipped; only the per-artifact licensing gate remains (composite LICENSE, conditional NOTICE files, and modified-file marks verified inside every binary, wheel, and VSIX). |
 | [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Replace remaining raw-source rule scans with AST data. |
 | [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Mojo checks, plugin host, migration, and CI helpers. |
 | [Native compiler](plans/COMPILER-ARCHITECTURE-PLAN.md) | HIR, backend, runtime, interop, CLI, and native acceptance. |

@@ -149,8 +149,10 @@ PINNED BEFORE PUBLICATION** in the edition metadata. Until that field names a
 released build, product commands, diagnostics, and screenshots remain
 editorial evidence rather than publication claims. The free public edition
 will record its Basilisk version, build date, the interpreter used to run the
-examples, example test result, link-audit result, and screenshot environment.
-The interpreter is a reproducibility fact, not a support boundary.
+examples, the typeshed commit the standard-library examples were captured
+against, example test result, link-audit result, and screenshot environment.
+The interpreter and the typeshed commit are reproducibility facts, not support
+boundaries.
 
 That record is your starting point when the live product moves on. Follow the
 book with its named release for reproducible results; follow the website when

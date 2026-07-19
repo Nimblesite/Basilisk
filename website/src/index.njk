@@ -236,7 +236,7 @@ permalink: /
   <div class="feature-row">
     <div class="feature-row__text">
       <p class="feature-row__num">01 &mdash; Conformance first</p>
-      <h2 class="feature-row__title">{{ conformance.scorePct }}% to the typing spec.<br>Pinned to the exact commit.</h2>
+      <h2 class="feature-row__title">{{ conformance.scorePct }}% to the typing spec.<br>Re-run against <code>main</code>, every release.</h2>
       <p class="feature-row__body">
         Scored by the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">python/typing conformance suite</a> &mdash; the same published
         harness that grades Pyright, mypy, and Pyrefly &mdash; run on the real binary with every
@@ -251,7 +251,7 @@ permalink: /
       <div class="stat-block">
         <span class="stat-block__number">{{ conformance.scorePct }}<span class="stat-block__unit">%</span></span>
         <span class="stat-block__label">PEP conformance score</span>
-        <span class="stat-block__sub">graded against <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %} ({{ conformance.commitDate }}){% endif %} &mdash; re-pinned every release</span>
+        <span class="stat-block__sub">graded against <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %} ({{ conformance.commitDate }}){% endif %} &mdash; re-cloned from <code>main</code> every release</span>
       </div>
     </div>
   </div>

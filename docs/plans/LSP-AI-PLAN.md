@@ -5,7 +5,7 @@
 Only the narrow `AiTypingProvider` interface and no-op default exist. They are not wired into
 the server. Everything below is optional product work and must preserve the deterministic
 checker described in [LSP-AI-SPEC.md](../specs/LSP-AI-SPEC.md): checking never depends on an AI
-service or provider. This is *not* an "offline" claim — by default Basilisk clones
+service or provider. This is *not* an "offline" claim — by default Basilisk downloads a commit archive over HTTPS (it never clones) from
 `python/typeshed` for standard-library types
 ([CHECKER-STUB-RESOLUTION-SPEC §STUBRES-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED));
 the AI provider is a separate, opt-in network surface that this plan governs.

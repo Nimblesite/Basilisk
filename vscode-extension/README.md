@@ -62,7 +62,7 @@ One extension replaces Pylance and gives you the whole workflow — no Node.js, 
 - **Inlay hints** and **Ruff** formatting/import-organization, built in
 - **Standard-library types from [typeshed](https://github.com/python/typeshed)** — verified `python/typeshed@main` by default, with a complete `stdlib/` snapshot compiled into the bundled binary so hover and diagnostics keep working offline
 
-Every diagnostic teaches: rustc-style output with a `help`, a `note`, and a link to a per-rule explainer, so a red squiggle always tells you *why*. Other checkers default to permissive; Basilisk **starts strict** and stays strict.
+Every diagnostic teaches: rustc-style output with a `help`, a `note`, and a link to a per-rule explainer, so a red squiggle always tells you *why*. Basilisk **starts strict** and stays strict — the unconfigured default enables the complete typing-spec rule set, and strictness is dialled per rule, never by a mode.
 
 ## Zero install
 
