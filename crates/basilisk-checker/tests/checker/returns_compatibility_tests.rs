@@ -177,3 +177,79 @@ fn dict_literal_with_wrong_value_still_errors() -> Result<(), Box<dyn std::error
     );
     Ok(())
 }
+
+#[test]
+fn list_literal_valid_for_union_with_object_arm() -> Result<(), Box<dyn std::error::Error>> {
+    // `object` parses to `Any`, an UNJUDGEABLE union member: the literal-context
+    // check must DEFER (return `None`) rather than reject, so `[1]` is accepted
+    // via the `object` arm. Guards the Union `saw_unjudgeable` deferral —
+    // without it this was a false positive.
+    let source = "def f() -> list[str] | object:\n    return [1]\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "int literal must be accepted for `list[str] | object` via the object arm, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn nonempty_list_literal_widens_literalstring_to_str() -> Result<(), Box<dyn std::error::Error>> {
+    // A non-empty list of string literals infers `list[LiteralString]`; in a
+    // `-> list[str]` return context each element widens LiteralString -> str, so
+    // no error. Locks the covariant NON-EMPTY List arm.
+    let source = "def f() -> list[str]:\n    return [\"a\", \"b\"]\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "list[str] literal return must widen from LiteralString, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn set_literal_return_is_checked_in_declared_context() -> Result<(), Box<dyn std::error::Error>> {
+    // A `{1}` set literal infers `set[int]`; in a `-> set[float]` context each
+    // element widens int -> float. Locks the Set arm of
+    // `literal_collection_assignable_to`.
+    let source = "def f() -> set[float]:\n    return {1}\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "int set literal must widen to set[float], got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_list_return_valid_for_explicit_optional_list() -> Result<(), Box<dyn std::error::Error>> {
+    // The `Optional[list[int]]` spelling parses to `InferredType::Optional`
+    // (unlike `list[int] | None`, which is a Union), so this locks the Optional
+    // recursion arm specifically.
+    let source = "from typing import Optional\ndef f() -> Optional[list[int]]:\n    return []\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty list must be valid for `Optional[list[int]]` return, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_dict_return_is_checked_in_declared_context() -> Result<(), Box<dyn std::error::Error>> {
+    // An empty `{}` dict literal constructs a `dict[str, int]` directly in a
+    // return context rather than first becoming `dict[Never, Never]`. Locks the
+    // EmptyDict arm.
+    let source = "def f() -> dict[str, int]:\n    return {}\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty dict literal must be valid for `dict[str, int]` return, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

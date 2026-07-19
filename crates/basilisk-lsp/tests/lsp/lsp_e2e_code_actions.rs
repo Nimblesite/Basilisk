@@ -265,8 +265,8 @@ fn test_lsp_inlay_hints_variable_types() -> TestResult<()> {
         "inlay hints should show 'int' for x=42: {resp}"
     );
     assert!(
-        resp.contains("LiteralString"),
-        "inlay hints should retain LiteralString precision for y=\"hello\": {resp}"
+        resp.contains(": str"),
+        "inlay hints should display 'str' for y=\"hello\": {resp}"
     );
     assert!(
         resp.contains("bool"),

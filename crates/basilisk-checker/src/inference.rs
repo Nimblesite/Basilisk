@@ -66,15 +66,26 @@ pub fn literal_collection_assignable_to(rhs: &RhsKind, declared: &InferredType) 
     match declared {
         // A literal fits a union/optional iff it fits at least one member.
         InferredType::Union(members) => {
-            let mut judged_any = false;
+            // A literal fits a union iff it fits at least one member. If any
+            // member is UNJUDGEABLE here (`None` — e.g. an `Any`/`object` arm),
+            // we cannot definitively reject: defer to the caller's invariant
+            // fallback (which accepts via that arm). Only return `Some(false)`
+            // when EVERY member was judged and none accepted — otherwise a
+            // valid `return [1]` for `list[str] | object` becomes a false
+            // positive (the `object` arm parses to `Any`).
+            let mut saw_unjudgeable = false;
             for member in members {
                 match literal_collection_assignable_to(rhs, member) {
                     Some(true) => return Some(true),
-                    Some(false) => judged_any = true,
-                    None => {}
+                    Some(false) => {}
+                    None => saw_unjudgeable = true,
                 }
             }
-            judged_any.then_some(false)
+            if saw_unjudgeable {
+                None
+            } else {
+                Some(false)
+            }
         }
         InferredType::Optional(inner) => literal_collection_assignable_to(rhs, inner),
         InferredType::List(elem) => match rhs {
