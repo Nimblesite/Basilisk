@@ -134,6 +134,90 @@ function verifyAcquiringTypeshedSpinner(): void {
   }
 }
 
+/** A store whose single root reports the UNPINNED typeshed warning. */
+function storeWithUnpinnedWarning(): ReturnType<typeof createStore> {
+  const store = createStore();
+  const writable = store.typeshedStatuses as unknown as {
+    value: ReadonlyMap<string, TypeshedStatusState>;
+  };
+  writable.value = new Map([[
+    "file:///workspace",
+    {
+      lifecycle: { kind: "Ready" }, activeSource: { kind: "Latest" },
+      blockedReason: undefined,
+      commitIdentity: "6fb14c98ee340a07eea807a4c804e20a849eb92b",
+      treeIdentity: undefined,
+      transport: { kind: "Codeload" }, licenseStatus: { kind: "Approved" },
+      licenseReference: "typeshed://license/6fb14c9", provenance: { kind: "GithubTlsAttested" },
+      signedRelease: false,
+      warnings: [{
+        code: "UNPINNED", message: "Pin current to make this reproducible",
+        severity: { kind: "Advisory" },
+      }],
+    },
+  ]]);
+  return store;
+}
+
+// Tests [LSPCFGED-TYPESHED-SERVICE-INFO] navigation + [EXTACT-INFO-AFFORDANCE]:
+// the UNPINNED row's own message tells the user to "Pin current", and the Pin
+// current action lives in the configuration editor — so the row must navigate
+// there when the editor capability is live (info-panel.ts typeshedInfoItems).
+function verifyUnpinnedWarningRowOpensConfigurationEditor(): void {
+  const store = storeWithUnpinnedWarning();
+  const writableClient = store.client as unknown as { value: unknown };
+  writableClient.value = {
+    initializeResult: {
+      capabilities: { experimental: { basilisk: { configurationEditor: true } } },
+    },
+  };
+  const typeshedProvider = new InfoPanelProvider(store);
+  try {
+    const section = typeshedProvider.getChildren().find((row) => labelOf(row) === "Server Info");
+    assert.ok(section, "Server Info section should exist");
+    const unpinned = typeshedProvider
+      .getChildren(section)
+      .find((row) => labelOf(row) === "Typeshed UNPINNED");
+    assert.ok(unpinned, "the UNPINNED warning row should exist");
+    assert.strictEqual(
+      unpinned.command?.command,
+      "basilisk.openConfigurationEditor",
+      "the UNPINNED row advertises Pin current, so clicking it must open the configuration editor where Pin current lives",
+    );
+    const tip = tooltipOf(unpinned).trim();
+    assert.ok(
+      tip.length > 0,
+      "an actionable row must carry an imperative tooltip describing its effect",
+    );
+  } finally {
+    typeshedProvider.dispose();
+  }
+}
+
+// Regression guard for issue #103 defect 1: basilisk.openConfigurationEditor
+// is capability-gated (configuration-editor-registration.ts), so a warning row
+// must NOT carry it while no server advertises the editor — a shown-but-dead
+// command raises "command not found".
+function verifyUnpinnedWarningRowStaysInertWithoutEditorCapability(): void {
+  const store = storeWithUnpinnedWarning();
+  const typeshedProvider = new InfoPanelProvider(store);
+  try {
+    const section = typeshedProvider.getChildren().find((row) => labelOf(row) === "Server Info");
+    assert.ok(section, "Server Info section should exist");
+    const unpinned = typeshedProvider
+      .getChildren(section)
+      .find((row) => labelOf(row) === "Typeshed UNPINNED");
+    assert.ok(unpinned, "the UNPINNED warning row should exist");
+    assert.strictEqual(
+      unpinned.command,
+      undefined,
+      "without the configuration-editor capability the row must not carry a dead command",
+    );
+  } finally {
+    typeshedProvider.dispose();
+  }
+}
+
 suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
   let provider: InfoPanelProvider;
 
@@ -218,6 +302,16 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
   test("Server Info renders the root-keyed Typeshed source and trust state", verifyTypeshedInfoRows);
 
   test("Server Info shows an acquiring Typeshed spinner", verifyAcquiringTypeshedSpinner);
+
+  test(
+    "the UNPINNED warning row opens the configuration editor where Pin current lives",
+    verifyUnpinnedWarningRowOpensConfigurationEditor,
+  );
+
+  test(
+    "the UNPINNED warning row stays inert while no server advertises the configuration editor",
+    verifyUnpinnedWarningRowStaysInertWithoutEditorCapability,
+  );
 
   // Tests [EXTACT-INFO-SERVER-INFO]: one uv row, sub-settings in the tooltip.
   test("uv sub-settings are folded into the uv row tooltip, not separate rows", () => {

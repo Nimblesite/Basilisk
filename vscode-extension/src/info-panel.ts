@@ -18,6 +18,7 @@ import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { type Store } from "./store";
 import type { TypeshedStatusState } from "./configuration-editor-model";
+import { CONFIGURATION_EDITOR_COMMAND, supportsConfigurationEditor } from "./configuration-editor";
 
 // ── Tree node types ──────────────────────────────────────────────────────
 
@@ -264,8 +265,38 @@ function typeshedSourceItem(
   return item;
 }
 
+// Implements the navigation affordance of [LSPCFGED-TYPESHED-SERVICE-INFO]:
+// warning rows never mutate (fixes stay in the editable section), but their
+// messages name actions that live in the configuration editor (e.g. the
+// UNPINNED row's "Pin current"), so a warning row navigates there on click.
+// The command is attached only while the server advertises the editor —
+// basilisk.openConfigurationEditor is capability-gated
+// (configuration-editor-registration.ts), and a shown-but-dead command is
+// exactly issue #103 defect 1.
+function typeshedWarningItem(
+  prefix: string,
+  warning: TypeshedStatusState["warnings"][number],
+  editorSupported: boolean,
+): InfoTextItem {
+  const item = new InfoTextItem(
+    `${prefix} ${warning.code}`,
+    warning.message,
+    statusKind(warning.severity) === "High" ? "warning" : "info",
+  );
+  if (editorSupported) {
+    item.contextValue = "typeshed-warning";
+    item.tooltip = "Click to open the Configuration Editor, where the typeshed fixes live";
+    item.command = {
+      command: CONFIGURATION_EDITOR_COMMAND,
+      title: "Open Configuration Editor",
+    };
+  }
+  return item;
+}
+
 function typeshedInfoItems(
   statuses: ReadonlyMap<string, TypeshedStatusState>,
+  editorSupported: boolean,
 ): InfoTextItem[] {
   const entries = [...statuses.entries()].sort(([left], [right]) => left.localeCompare(right));
   return entries.flatMap(([rootUri, status]) => {
@@ -280,11 +311,7 @@ function typeshedInfoItems(
       ...(status.blockedReason === undefined
         ? []
         : [new InfoTextItem(`${prefix} Blocked`, status.blockedReason, "error")]),
-      ...status.warnings.map((warning) => new InfoTextItem(
-        `${prefix} ${warning.code}`,
-        warning.message,
-        statusKind(warning.severity) === "High" ? "warning" : "info",
-      )),
+      ...status.warnings.map((warning) => typeshedWarningItem(prefix, warning, editorSupported)),
     ];
     return rows;
   });
@@ -377,7 +404,7 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
       ...(binary !== undefined && binary !== null
         ? [new InfoTextItem("Binary", formatResolvedTool(binary), "file-binary")]
         : []),
-      ...typeshedInfoItems(this.store.typeshedStatuses.value),
+      ...typeshedInfoItems(this.store.typeshedStatuses.value, supportsConfigurationEditor(client)),
     ];
 
     return new SectionItem("Server Info", items);
