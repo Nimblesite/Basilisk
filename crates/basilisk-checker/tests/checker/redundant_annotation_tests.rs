@@ -513,6 +513,24 @@ coords: tuple[int, int] = (1, 2)
 }
 
 #[test]
+fn module_level_collection_annotations_that_add_information_are_not_redundant(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = "\
+floats: list[float] = [1, 2, 3]
+objects: dict[str, object] = {\"a\": 1}
+union_items: set[int | str] = {1, 2}
+shorter: tuple[int] = (1, 2)
+";
+    let diags = run_with_config(source, &annotation_rules_config())?;
+    assert_eq!(
+        count_code(&diags, "BSK-0050"),
+        0,
+        "collection annotations that widen or reshape the inferred type must not fire BSK-0050"
+    );
+    Ok(())
+}
+
+#[test]
 fn module_level_call_expression_no_w0050() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 x: int = int(\"42\")

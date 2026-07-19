@@ -1,4 +1,5 @@
 //! `assignment_compatibility`: Assignment type incompatibility (literal mismatches).
+//! Owns structural `TypedDict` assignment for [TYPEINF-SUBTYPING-TYPEDDICT].
 //!
 //! Detects annotated module-level variables where the declared type and the
 //! literal kind of the right-hand side are clearly incompatible, for example:
@@ -27,7 +28,7 @@ mod typeform_check;
 
 use crate::span_util::slice_span;
 use crate::types::InferredType;
-use basilisk_resolver::{ResolvedModule, Span, VariableInfo};
+use basilisk_resolver::{ResolvedModule, RhsKind, Span, VariableInfo};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
@@ -185,6 +186,34 @@ struct SkipNames {
     /// used for PEP 705 structural assignability of `TypedDict`-to-`TypedDict`
     /// assignments instead of name equality.
     typeddict_schemas: typeddict_struct::TdSchemas,
+}
+
+/// Collection literals are checked in the annotation's expected-type context.
+/// This permits literal widening (`LiteralString` -> `str`, `int` -> `float`)
+/// and empty-container `Never` without weakening invariance between two
+/// already-typed mutable containers.
+fn literal_collection_assignable(
+    var: &VariableInfo,
+    inferred: &InferredType,
+    declared: &InferredType,
+    skip: &SkipNames,
+) -> bool {
+    if !matches!(
+        var.rhs_kind,
+        RhsKind::EmptyList
+            | RhsKind::EmptyDict
+            | RhsKind::List(_)
+            | RhsKind::Dict(_)
+            | RhsKind::Set(_)
+            | RhsKind::Tuple(_)
+    ) {
+        return false;
+    }
+    let ctx = alias_match::AliasCtx {
+        union: &skip.value_aliases,
+        generic: &skip.generic_aliases,
+    };
+    alias_match::alias_assignable(inferred, declared, &ctx, 0)
 }
 
 /// Collect names defined via `Name = TypeAliasType(...)` (lowercase).
@@ -379,7 +408,9 @@ fn check_vars(
                 }
             }
 
-            if inferred_type.is_assignable_to(&declared_type) {
+            if inferred_type.is_assignable_to(&declared_type)
+                || literal_collection_assignable(var, &inferred_type, &declared_type, skip)
+            {
                 None
             } else if callable_rescue(var, source, annotation_text, params, call_index) {
                 // Structurally valid callable subtyping (callback protocols,

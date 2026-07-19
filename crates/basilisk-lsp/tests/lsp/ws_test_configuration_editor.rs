@@ -158,13 +158,34 @@ async fn configuration_snapshot_reflects_live_diagnostics() -> TestResult<()> {
         .get("diagnosticCount")
         .and_then(serde_json::Value::as_i64)
         .is_some_and(|count| count >= 1));
-    // Removed v1 machinery must be absent from the wire ([CONFIGEDITOR-ACCEPTANCE]).
-    for gone in ["presets", "debt", "pathOverrides", "problems", "source"] {
+    // Presets stay off the wire ([CHKARCH-CONFIGURATION-ONLY]): no policy
+    // bundles, ever.
+    assert!(
+        snapshot.get("presets").is_none(),
+        "presets must never be serialized: {snapshot}"
+    );
+    // The four data-backed views are restored — their server-computed feeds
+    // ride the snapshot ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+    for present in ["debt", "pathOverrides", "problems", "source"] {
         assert!(
-            snapshot.get(gone).is_none(),
-            "removed field '{gone}' must not be serialized: {snapshot}"
+            snapshot.get(present).is_some(),
+            "restored field '{present}' must be serialized: {snapshot}"
         );
     }
+    // Overview/Adoption debt is a real, exact partition of the live inventory.
+    let debt = snapshot.get("debt").ok_or("debt missing from snapshot")?;
+    assert!(debt
+        .get("remainingDiagnostics")
+        .and_then(serde_json::Value::as_i64)
+        .is_some_and(|total| total >= 1));
+    // Project source reflects the real active document.
+    let source = snapshot
+        .get("source")
+        .ok_or("source missing from snapshot")?;
+    assert!(source
+        .get("uri")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|uri| uri.ends_with("pyproject.toml")));
     // The provenance tag facets are present ([CONFIGEDITOR-TAGS]).
     let pep_tag = tag_state(&snapshot, "pep").ok_or("pep tag missing from snapshot")?;
     assert_eq!(

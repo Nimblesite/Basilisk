@@ -1,4 +1,5 @@
 //! Implements [LSPARCH-FEATURES-HOVER]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-HOVER
+//! Implements the shared-declaration consumer half of [TYPESHEDRT-ACCEPTANCE-HOVER].
 //!
 //! Dot-access member hover lookups: methods inherited from external
 //! (stub/py.typed) base classes (GitHub #287), builtin-typed receivers like
@@ -110,34 +111,78 @@ fn walk_class_hierarchy<'r, T>(
     None
 }
 
-/// Hover markdown for `recv.member` where `recv` is a builtin-typed receiver:
-/// a string literal (`" ".join(...)`) or a variable/parameter whose type is a
-/// builtin. Signatures come from the curated typeshed mirror in
-/// `basilisk_stubs::builtin_method_signature` (GitHub #288).
+/// Hover markdown for `recv.member` where `recv` is a builtin-typed receiver.
+/// Every overload comes from the structured declaration indexed from the
+/// active snapshot's real `builtins.pyi` body (GitHub #288).
 pub(super) fn builtin_member_hover(
     resolved: &ResolvedModule,
     source: &str,
     byte_offset: usize,
 ) -> Option<String> {
     let member = identifier_at_offset(source, byte_offset)?;
-    let type_name = dot_receiver_builtin_type(resolved, source, byte_offset)?;
-    let signature = basilisk_stubs::builtin_method_signature(&type_name, &member)?;
-    Some(format!("```python\n(method) {signature}\n```"))
+    let (class, declarations) =
+        builtin_member_declarations(resolved, source, byte_offset, &member)?;
+    let signatures = declarations
+        .iter()
+        .map(|declaration| basilisk_stubs::render_stub_signature(declaration))
+        .map(|signature| {
+            format!(
+                "(method) def {}.{rest}",
+                class.declaration.name,
+                rest = signature.strip_prefix("def ").unwrap_or(&signature)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut markdown = format!("```python\n{signatures}\n```");
+    if let Some(label) = class.provenance.hover_label() {
+        let _ = write!(markdown, "\n\n*{label}* — `{}`", class.source_identity);
+    }
+    Some(markdown)
+}
+
+/// Active structured declarations for the built-in member at an editor offset.
+pub(crate) fn builtin_member_declarations<'a>(
+    resolved: &'a ResolvedModule,
+    source: &str,
+    byte_offset: usize,
+    member: &str,
+) -> Option<(
+    &'a basilisk_resolver::scope::IndexedStubClass,
+    Vec<&'a basilisk_stubs::StubFunction>,
+)> {
+    let (type_name, literal_receiver) = dot_receiver_builtin_type(resolved, source, byte_offset)?;
+    let class = resolved.builtin_classes.get(&type_name)?;
+    let declarations = class
+        .declaration
+        .methods
+        .iter()
+        .filter(|method| method.name == member)
+        .filter(|method| {
+            literal_receiver
+                || method
+                    .receiver
+                    .as_ref()
+                    .and_then(|receiver| receiver.annotation.as_deref())
+                    .is_none_or(|annotation| !annotation.contains("LiteralString"))
+        })
+        .collect::<Vec<_>>();
+    (!declarations.is_empty()).then_some((class, declarations))
 }
 
 /// The builtin type name of the receiver before the `.` at `byte_offset`,
 /// or `None` when it cannot be determined.
-fn dot_receiver_builtin_type(
+pub(crate) fn dot_receiver_builtin_type(
     resolved: &ResolvedModule,
     source: &str,
     byte_offset: usize,
-) -> Option<String> {
+) -> Option<(String, bool)> {
     let before = source.get(..byte_offset.min(source.len()))?;
     let trimmed = before.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_');
     let receiver_text = trimmed.strip_suffix('.')?;
     match receiver_text.chars().last()? {
         quote @ ('"' | '\'') if str_literal_receiver(receiver_text, quote) => {
-            Some("str".to_owned())
+            Some(("str".to_owned(), true))
         }
         c if c.is_alphanumeric() || c == '_' => {
             let receiver = crate::completion::prefix::dot_receiver(source, byte_offset)?;
@@ -166,19 +211,27 @@ fn variable_builtin_type(
     resolved: &ResolvedModule,
     source: &str,
     receiver: &str,
-) -> Option<String> {
+) -> Option<(String, bool)> {
     let (annotation_span, rhs_kind) = match find_definition_by_name(resolved, receiver)? {
         SymbolHit::Variable(var) => (var.annotation_span, Some(&var.rhs_kind)),
         SymbolHit::Parameter { param, .. } => (param.annotation_span, None),
         _ => return None,
     };
     if let Some(annotation) = crate::util::annotation_text(annotation_span, source) {
-        return Some(annotation);
+        let literal = annotation == "LiteralString" || annotation == "typing.LiteralString";
+        let type_name = if literal {
+            "str".to_owned()
+        } else {
+            annotation
+        };
+        return Some((type_name, literal));
     }
     let inferred = crate::util::rhs_type_display(rhs_kind?);
     if inferred.is_empty() {
         None
     } else {
-        Some(inferred)
+        let literal =
+            inferred == "str" && matches!(rhs_kind, Some(basilisk_resolver::RhsKind::StrLiteral));
+        Some((inferred, literal))
     }
 }

@@ -32,7 +32,7 @@ class Test2(Test):
 "#;
 
 #[test]
-fn missing_override_decorator_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn missing_override_decorator_fires() {
     let source = r"
 class Base:
     def process(self) -> None:
@@ -42,13 +42,12 @@ class Child(Base):
     def process(self) -> None:
         pass
 ";
-    let diags = run_with_config(source, &annotation_rules_config())?;
+    let diags = run_with_python_version(source, "3.12");
     assert!(
         codes(&diags).contains(&"BSK-0025"),
         "overriding method without @override should fire BSK-0025, got: {:?}",
         codes(&diags)
     );
-    Ok(())
 }
 
 #[test]

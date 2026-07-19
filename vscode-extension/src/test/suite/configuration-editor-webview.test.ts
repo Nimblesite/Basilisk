@@ -5,9 +5,9 @@ import { buildConfigurationEditorDocument } from "../../configuration-editor-doc
 import { decodeConfigurationEditorIntent } from "../../configuration-editor-intents";
 
 suite("Configuration editor — untrusted intent decoder", () => {
-  // [CONFIGEDITOR-MODEL]: exactly four mutations exist — SetRule, RemoveRule,
-  // SetTag, RemoveTag. Every persisted severity is accepted; nothing else is.
-  test("accepts the four EditorMutation kinds with every persisted severity", () => {
+  // [CONFIGEDITOR-MODEL]: the four rule/tag mutations and two allowlisted
+  // Typeshed setting mutations are the complete write vocabulary.
+  test("accepts the six EditorMutation kinds with typed values", () => {
     for (const severity of ["Error", "Warning", "Info", "Disabled"]) {
       const setRule = decodeConfigurationEditorIntent({
         type: "preview",
@@ -26,6 +26,23 @@ suite("Configuration editor — untrusted intent decoder", () => {
     assert.strictEqual(decodeConfigurationEditorIntent({
       type: "preview", mutations: [{ kind: "RemoveTag", tag: "basilisk" }],
     })?.type, "preview");
+    for (const key of ["TypeshedPath", "TypeshedCommit", "TypeshedUrl", "TypeshedCachePath"]) {
+      assert.strictEqual(decodeConfigurationEditorIntent({
+        type: "preview",
+        mutations: [{ kind: "SetTypeshedSetting", key: { kind: key }, value: { kind: "Text", value: "configured" } }],
+      })?.type, "preview");
+    }
+    for (const key of ["TypeshedCache", "TypeshedVerify"]) {
+      assert.strictEqual(decodeConfigurationEditorIntent({
+        type: "preview",
+        mutations: [{ kind: "SetTypeshedSetting", key: { kind: key }, value: { kind: "Boolean", value: false } }],
+      })?.type, "preview");
+    }
+    assert.strictEqual(decodeConfigurationEditorIntent({
+      type: "preview", mutations: [{ kind: "RemoveTypeshedSetting", key: { kind: "TypeshedUrl" } }],
+    })?.type, "preview");
+    assert.strictEqual(decodeConfigurationEditorIntent({ type: "typeshedAction", action: "PinCurrent" })?.type, "typeshedAction");
+    assert.strictEqual(decodeConfigurationEditorIntent({ type: "pickTypeshedFolder", key: "TypeshedPath" })?.type, "pickTypeshedFolder");
   });
 
   // [CONFIGEDITOR-ACCEPTANCE]: selector mutations, Inherit/Native settings,
@@ -50,7 +67,14 @@ suite("Configuration editor — untrusted intent decoder", () => {
     assert.strictEqual(decodeConfigurationEditorIntent({
       type: "preview", mutations: [{ kind: "SetTag", tag: "", severity: { kind: "Error" } }],
     }), undefined);
-    assert.strictEqual(decodeConfigurationEditorIntent({ type: "fixSafe" }), undefined);
+    assert.strictEqual(decodeConfigurationEditorIntent({
+      type: "preview",
+      mutations: [{ kind: "SetTypeshedSetting", key: { kind: "TypeshedVerify" }, value: { kind: "Text", value: "false" } }],
+    }), undefined);
+    assert.strictEqual(decodeConfigurationEditorIntent({
+      type: "preview",
+      mutations: [{ kind: "SetTypeshedSetting", key: { kind: "ArbitraryKey" }, value: { kind: "Text", value: "x" } }],
+    }), undefined);
   });
 
   // [CONFIGEDITOR-OPERATIONS]: occurrence reads use only the all/codes/tags
@@ -154,16 +178,16 @@ suite("Configuration editor — hardened, accessible document", () => {
     );
   });
 
-  // [CONFIGEDITOR-ACCEPTANCE]: adoption, path overrides, presets, and
-  // Inherit/Native controls are removed outright — no legacy shims.
-  test("carries no adoption, path-override, preset, or Inherit/Native UI", () => {
+  // [CONFIGEDITOR-VSIX-EXPERIENCE]: the five navigation views are server-data
+  // projections; removed preset and Inherit/Native mutation concepts stay out.
+  test("retains the five views without preset or Inherit/Native UI", () => {
     const html = buildConfigurationEditorDocument();
-    assert.ok(!html.includes("adoption"), "the Adoption view is deleted");
-    assert.ok(!html.includes("pathOverrides"), "the Path Overrides view is deleted");
+    assert.ok(html.includes("adoption"), "the Adoption view is present");
+    assert.ok(html.includes("pathOverrides"), "the Path Overrides view is present");
+    assert.ok(html.includes("data-section-target"), "multi-section navigation is present");
     assert.ok(!html.includes("preset"), "preset UI is deleted");
     assert.ok(!html.includes("'Inherit'"), "no Inherit control survives");
     assert.ok(!html.includes("'Native'"), "no Native control survives");
-    assert.ok(!html.includes("fixSafe"), "safe-fix actions are not editor UI");
-    assert.ok(!html.includes("data-section-target"), "no multi-section navigation survives");
+    assert.ok(html.includes("fixSafe"), "the standalone safe-fix action is available");
   });
 });

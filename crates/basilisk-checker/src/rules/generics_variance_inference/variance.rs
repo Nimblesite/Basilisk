@@ -1,5 +1,6 @@
 //! Implements [`generics_variance_inference`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Variance inference for `generics_variance_inference`.
+//! Implements [TYPEINF-GENERICS-VARIANCE].
 //!
 //! Implements PEP 695 automatic variance inference for type parameters.
 //!

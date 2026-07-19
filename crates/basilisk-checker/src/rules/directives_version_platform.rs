@@ -50,20 +50,42 @@ impl Rule for DeadBranchVariable {
         let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
+        let target = TargetEnvironment {
+            version: ctx.target_version,
+            platform: ctx.target_platform.as_deref(),
+        };
+        if target.version.is_none() && target.platform.is_none() {
+            return;
+        }
 
-        check_stmts_for_dead_branches(
-            &parsed.ast.body,
-            ctx.target_version,
-            &module.path,
-            diagnostics,
-        );
+        check_stmts_for_dead_branches(&parsed.ast.body, target, &module.path, diagnostics);
+    }
+}
+
+/// Explicit project/interpreter evidence used to evaluate static guards.
+#[derive(Clone, Copy)]
+struct TargetEnvironment<'a> {
+    version: Option<(u32, u32)>,
+    platform: Option<&'a str>,
+}
+
+impl TargetEnvironment<'_> {
+    fn description(self) -> String {
+        match (self.version, self.platform) {
+            (Some((major, minor)), Some(platform)) => {
+                format!("Python {major}.{minor} on {platform}")
+            }
+            (Some((major, minor)), None) => format!("Python {major}.{minor}"),
+            (None, Some(platform)) => format!("platform {platform}"),
+            (None, None) => "the configured target".to_owned(),
+        }
     }
 }
 
 /// Recursively walk statements looking for version/platform guard if-statements.
 fn check_stmts_for_dead_branches(
     stmts: &[Stmt],
-    target: (u32, u32),
+    target: TargetEnvironment<'_>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -83,7 +105,7 @@ fn check_stmts_for_dead_branches(
 /// Check a function body for version/platform guards and dead-branch variables.
 fn check_function_body(
     stmts: &[Stmt],
-    target: (u32, u32),
+    target: TargetEnvironment<'_>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -180,7 +202,7 @@ enum DeadBranch {
 
 /// Determine if a test expression is a version/platform guard and which branch
 /// is dead.
-fn identify_dead_branch(test: &Expr, target: (u32, u32)) -> Option<DeadBranch> {
+fn identify_dead_branch(test: &Expr, target: TargetEnvironment<'_>) -> Option<DeadBranch> {
     let Expr::Compare(cmp) = test else {
         return None;
     };
@@ -197,18 +219,26 @@ fn identify_dead_branch(test: &Expr, target: (u32, u32)) -> Option<DeadBranch> {
 
     // Check for `sys.version_info <op> (major, minor[, micro])`.
     if is_version_info_attr(left) {
-        return check_version_guard(*op, right, target);
+        return target
+            .version
+            .and_then(|version| check_version_guard(*op, right, version));
     }
     if is_version_info_attr(right) {
-        return check_version_guard(flip_op(*op), left, target);
+        return target
+            .version
+            .and_then(|version| check_version_guard(flip_op(*op), left, version));
     }
 
     // Check for `sys.platform <op> "string"`.
     if is_platform_attr(left) {
-        return check_platform_guard(*op, right);
+        return target
+            .platform
+            .and_then(|platform| check_platform_guard(*op, right, platform));
     }
     if is_platform_attr(right) {
-        return check_platform_guard(flip_op(*op), left);
+        return target
+            .platform
+            .and_then(|platform| check_platform_guard(flip_op(*op), left, platform));
     }
 
     None
@@ -302,27 +332,22 @@ fn int_literal_value(expr: &Expr) -> Option<u32> {
 
 /// Determine dead branch for platform guards (`sys.platform == "..."` or
 /// `sys.platform != "..."`).
-fn check_platform_guard(op: CmpOp, value_expr: &Expr) -> Option<DeadBranch> {
+fn check_platform_guard(op: CmpOp, value_expr: &Expr, target_platform: &str) -> Option<DeadBranch> {
     let Expr::StringLiteral(string_lit) = value_expr else {
         return None;
     };
     let platform_str = string_lit.value.to_str();
 
-    // We assume the target platform is NOT a "bogus" platform.
-    // For well-known platforms (linux, darwin, win32), we'd need config.
-    // For clearly bogus values, we can safely determine the dead branch.
-    let is_known_bogus =
-        platform_str.starts_with("bogus") || platform_str == "unknown" || platform_str == "test";
-
-    if !is_known_bogus {
-        return None;
-    }
-
-    match op {
-        CmpOp::Eq => Some(DeadBranch::IfBody), // platform == "bogus" → false
-        CmpOp::NotEq => Some(DeadBranch::ElseBody), // platform != "bogus" → true
-        _ => None,
-    }
+    let condition_true = match op {
+        CmpOp::Eq => target_platform == platform_str,
+        CmpOp::NotEq => target_platform != platform_str,
+        _ => return None,
+    };
+    Some(if condition_true {
+        DeadBranch::ElseBody
+    } else {
+        DeadBranch::IfBody
+    })
 }
 
 /// Collect variable names assigned in a list of statements.
@@ -351,7 +376,7 @@ fn check_expr_for_dead_var_usage(
     expr: &Expr,
     dead_vars: &HashSet<String>,
     live_vars: &HashSet<String>,
-    target: (u32, u32),
+    target: TargetEnvironment<'_>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -372,8 +397,8 @@ fn check_expr_for_dead_var_usage(
                     path,
                     Some(format!(
                         "`{var_name}` is assigned in a branch that is unreachable \
-                         for the target Python version ({}.{})",
-                        target.0, target.1
+                         for {}",
+                        target.description()
                     )),
                     Some(
                         "PEP 484: type checkers should evaluate version/platform guards \

@@ -26,12 +26,28 @@ fn collect_uncached(
     paths: &[String],
     scope: DiagnosticScope,
 ) -> Result<CheckOutcome, PipelineError> {
-    collect_and_check(
+    collect_and_check_with_typeshed(
         paths,
         &no_cache(),
         &mut cache_check::CacheStats::default(),
         scope,
+        TypeshedOverrides::default(),
+        activate_bundled_typeshed,
     )
+}
+
+fn activate_bundled_typeshed(
+    search_paths: &mut basilisk_lsp::import_resolver::ImportSearchPaths,
+    config: &basilisk_lsp::config::WorkspaceConfig,
+) -> Result<(), PipelineError> {
+    let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot()
+        .map(std::sync::Arc::new)
+        .map_err(|error| PipelineError::Internal(error.to_string()))?;
+    search_paths.typeshed_snapshot = Some(basilisk_checker::imports::ActiveTypeshed::new(
+        snapshot,
+        basilisk_lsp::import_resolver::stub_target_from_config(config),
+    ));
+    Ok(())
 }
 
 /// Unique temp dir for tests that need an isolated project root.
@@ -40,6 +56,292 @@ fn unique_project_dir(prefix: &str) -> std::path::PathBuf {
     static CTR: AtomicU64 = AtomicU64::new(0);
     let n = CTR.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!("{prefix}_{}_{n}", std::process::id()))
+}
+
+/// [STUBRES-TYPESHED-WARN]: ordinary CLI analysis activates the configured
+/// production source once and attaches its exact status/target to resolution.
+#[test]
+fn cli_activation_uses_custom_snapshot_and_target() -> Result<(), Box<dyn std::error::Error>> {
+    let project = unique_project_dir("basilisk_cli_custom_typeshed");
+    let stdlib = project.join("typeshed").join("stdlib");
+    std::fs::create_dir_all(&stdlib)?;
+    std::fs::write(stdlib.join("VERSIONS"), "sentinel: 3.8-\n")?;
+    std::fs::write(stdlib.join("sentinel.pyi"), "VALUE: str\n")?;
+    let config = basilisk_lsp::config::WorkspaceConfig {
+        typeshed_path: Some(project.join("typeshed")),
+        typeshed_cache: false,
+        python_version: Some("3.12".to_owned()),
+        python_platform: Some("Linux".to_owned()),
+        ..basilisk_lsp::config::WorkspaceConfig::default()
+    };
+    let mut search_paths = crate::import_search::roots_only(vec![project.clone()]);
+    super::typeshed::activate_production_typeshed(&mut search_paths, &config)
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    let active = search_paths
+        .typeshed_snapshot
+        .as_ref()
+        .ok_or("active Typeshed missing")?;
+    assert_eq!(
+        active.snapshot().status.active_source,
+        basilisk_stubs::typeshed::source::SourceKind::Custom
+    );
+    assert_eq!(
+        active
+            .snapshot()
+            .status
+            .warnings
+            .iter()
+            .map(|warning| warning.code.as_str())
+            .collect::<Vec<_>>(),
+        vec!["UNPINNED", "USER-MANAGED SOURCE"]
+    );
+    assert_eq!(
+        active.target().map(|target| target.python_version),
+        Some((3, 12))
+    );
+    let _ = std::fs::remove_dir_all(project);
+    Ok(())
+}
+
+#[test]
+fn one_run_typeshed_overrides_reach_activation_without_mutating_config(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = unique_project_dir("basilisk_cli_typeshed_overrides");
+    std::fs::create_dir_all(&project)?;
+    std::fs::write(
+        project.join("pyproject.toml"),
+        "[tool.basilisk]\ntypeshed-cache = true\ntypeshed-verify = true\n",
+    )?;
+    let source = project.join("clean.py");
+    std::fs::write(&source, "value: int = 1\n")?;
+    let path = source.to_string_lossy().into_owned();
+
+    let result = collect_and_check_with_typeshed(
+        &[path],
+        &no_cache(),
+        &mut cache_check::CacheStats::default(),
+        DiagnosticScope::Check,
+        TypeshedOverrides {
+            no_cache: true,
+            no_verification: true,
+        },
+        |_search_paths, config| {
+            assert!(!config.typeshed_cache);
+            assert!(!config.typeshed_verify);
+            Ok(())
+        },
+    );
+    let persisted = std::fs::read_to_string(project.join("pyproject.toml"))?;
+    let _ = std::fs::remove_dir_all(project);
+    assert!(result.is_ok());
+    assert!(persisted.contains("typeshed-cache = true"));
+    assert!(persisted.contains("typeshed-verify = true"));
+    Ok(())
+}
+
+/// Project-level target evidence applies when the checked file is nested
+/// below the project root. The official python/typing suite has exactly this
+/// layout: `conformance/pyproject.toml` declares Python 3.12 and fixtures live
+/// in `conformance/tests/`.
+#[test]
+fn nested_file_inherits_project_python_target_for_analysis(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = unique_project_dir("basilisk_cli_nested_python_target");
+    let tests = project.join("tests");
+    std::fs::create_dir_all(&tests)?;
+    std::fs::write(
+        project.join("pyproject.toml"),
+        "[project]\nname = \"fixture\"\nversion = \"0.0.0\"\nrequires-python = \"==3.12.*\"\n",
+    )?;
+    let source = tests.join("fixture.py");
+    std::fs::write(&source, "value: int = 1\n")?;
+
+    let result = collect_and_check_with_typeshed(
+        &[source.to_string_lossy().into_owned()],
+        &no_cache(),
+        &mut cache_check::CacheStats::default(),
+        DiagnosticScope::Check,
+        TypeshedOverrides::default(),
+        |_search_paths, config| {
+            assert_eq!(config.python_version.as_deref(), Some("3.12"));
+            Ok(())
+        },
+    );
+    let _ = std::fs::remove_dir_all(project);
+    assert!(result.is_ok());
+    Ok(())
+}
+
+/// The official python/typing layout supplies a project Python version but no
+/// `python-platform`. The selected interpreter is concrete environment
+/// evidence, so both forms of an impossible platform guard must still narrow.
+#[test]
+fn nested_file_inherits_selected_interpreter_platform_for_analysis(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = unique_project_dir("basilisk_cli_nested_platform_target");
+    let tests = project.join("tests");
+    std::fs::create_dir_all(&tests)?;
+    std::fs::write(
+        project.join("pyproject.toml"),
+        "[project]\nname = \"fixture\"\nversion = \"0.0.0\"\nrequires-python = \"==3.12.*\"\n",
+    )?;
+    let source = tests.join("directives_version_platform.py");
+    std::fs::write(
+        &source,
+        concat!(
+            "import sys\n\n",
+            "def test():\n",
+            "    if sys.version_info < (3, 8):\n",
+            "        val3 = ''\n",
+            "    else:\n",
+            "        live3 = ''\n",
+            "    use3 = val3\n",
+            "    if sys.platform == 'bogus_platform':\n",
+            "        val6 = ''\n",
+            "    else:\n",
+            "        live6 = ''\n",
+            "    use6 = val6\n",
+            "    if sys.platform != 'bogus_platform':\n",
+            "        live9 = ''\n",
+            "    else:\n",
+            "        val9 = ''\n",
+            "    use9 = val9\n",
+            "    return live3, live6, live9\n",
+        ),
+    )?;
+
+    let outcome = collect_uncached(
+        &[source.to_string_lossy().into_owned()],
+        DiagnosticScope::Check,
+    )
+    .map_err(|error| error.to_string())?;
+    let _ = std::fs::remove_dir_all(project);
+    let messages = outcome
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == "directives_version_platform")
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    for dead in ["val3", "val6", "val9"] {
+        assert!(
+            messages.iter().any(|message| message.contains(dead)),
+            "missing dead-branch diagnostic for {dead}: {messages:?}"
+        );
+    }
+    for live in ["live3", "live6", "live9"] {
+        assert!(
+            messages.iter().all(|message| !message.contains(live)),
+            "selected-interpreter narrowing must not flag live {live}: {messages:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn explicit_all_platform_does_not_narrow_checker_branches() -> Result<(), Box<dyn std::error::Error>>
+{
+    let project = unique_project_dir("basilisk_cli_all_platform_target");
+    std::fs::create_dir_all(&project)?;
+    std::fs::write(
+        project.join("pyproject.toml"),
+        concat!(
+            "[project]\nname = \"fixture\"\nversion = \"0.0.0\"\n",
+            "requires-python = \"==3.12.*\"\n\n",
+            "[tool.basilisk]\npython-platform = \"All\"\n",
+        ),
+    )?;
+    let source = project.join("platform.py");
+    std::fs::write(
+        &source,
+        concat!(
+            "import sys\n\n",
+            "def test():\n",
+            "    if sys.platform == 'win32':\n",
+            "        windows = ''\n",
+            "    else:\n",
+            "        other = ''\n",
+            "    return windows, other\n",
+        ),
+    )?;
+
+    let outcome = collect_uncached(
+        &[source.to_string_lossy().into_owned()],
+        DiagnosticScope::Check,
+    )
+    .map_err(|error| error.to_string())?;
+    let _ = std::fs::remove_dir_all(project);
+    let platform_diagnostics = outcome
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == "directives_version_platform")
+        .collect::<Vec<_>>();
+
+    assert!(
+        platform_diagnostics.is_empty(),
+        "cross-platform analysis cannot call either platform branch dead: {platform_diagnostics:#?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn bare_filename_anchors_project_discovery_at_current_directory() {
+    assert_eq!(
+        first_path_dir(&["fixture.py".to_owned()]),
+        std::path::PathBuf::from(".")
+    );
+}
+
+#[test]
+fn bare_filename_adds_current_directory_to_import_roots() -> Result<(), Box<dyn std::error::Error>>
+{
+    let roots = analysis_roots(&["fixture.py".to_owned()], std::path::Path::new(".."));
+    let current = std::fs::canonicalize(".")?;
+    assert!(roots.contains(&current), "{roots:#?}");
+    Ok(())
+}
+
+#[test]
+fn configured_target_prunes_inactive_conditional_constructor_fields(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = unique_project_dir("basilisk_cli_conditional_constructor_fields");
+    std::fs::create_dir_all(&project)?;
+    let source = project.join("fixture.py");
+    std::fs::write(
+        &source,
+        concat!(
+            "from typing import NamedTuple\n",
+            "import sys\n\n",
+            "class ConditionalField(NamedTuple):\n",
+            "    x: int\n",
+            "    if sys.version_info >= (3, 12):\n",
+            "        y: int\n",
+            "    if sys.version_info >= (4, 0):\n",
+            "        z: int\n\n",
+            "ConditionalField(1, 2)\n",
+            "ConditionalField(1, 2, 3)\n",
+        ),
+    )?;
+    let search_paths = crate::import_search::roots_only(vec![project.clone()]);
+    let config = basilisk_config::BasiliskConfig {
+        python_version: Some("3.12".to_owned()),
+        ..basilisk_config::BasiliskConfig::default()
+    };
+    let (diagnostics, _) = process_file(&source.to_string_lossy(), &search_paths, &config)?;
+    let constructor_messages = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == "constructors_call_init")
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(constructor_messages.len(), 1, "{diagnostics:#?}");
+    assert!(
+        constructor_messages
+            .first()
+            .is_some_and(|message| message.contains("accepts at most 2 positional arguments")),
+        "{diagnostics:#?}"
+    );
+    let _ = std::fs::remove_dir_all(project);
+    Ok(())
 }
 
 // ── DiagnosticScope ([CHKARCH-COMMANDS]) ──────────────────────────────────
@@ -647,4 +949,38 @@ fn pluralise_one_returns_empty() {
 #[test]
 fn pluralise_many_returns_s() {
     assert_eq!(pluralise(5), "s");
+}
+
+#[test]
+fn pipeline_errors_preserve_the_exit_code_category_in_display() {
+    assert_eq!(
+        PipelineError::Config("bad target".to_owned()).to_string(),
+        "invalid configuration: bad target"
+    );
+    assert_eq!(
+        PipelineError::Internal("read failed".to_owned()).to_string(),
+        "read failed"
+    );
+}
+
+#[test]
+fn analysis_roots_adds_a_distinct_checked_directory() -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempfile::tempdir()?;
+    let checked = tempfile::tempdir()?;
+    let source = checked.path().join("module.py");
+    std::fs::write(&source, "value: int = 1\n")?;
+
+    let roots = analysis_roots(&[source.to_string_lossy().into_owned()], project.path());
+
+    assert_eq!(roots.len(), 2);
+    assert!(roots.contains(&std::fs::canonicalize(checked.path())?));
+    Ok(())
+}
+
+#[test]
+fn non_not_found_metadata_errors_are_skipped_without_aborting_other_roots() {
+    let invalid = "path-with-nul\0.py".to_owned();
+    let files = collect_python_files(&[invalid], &test_excludes());
+
+    assert!(matches!(files, Ok(found) if found.is_empty()));
 }

@@ -1,4 +1,6 @@
-//! Implements [TYPEINF-TARGET-BIDIRECTIONAL]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-BIDIRECTIONAL
+//! Implements [TYPEINF-TARGET-BIDIRECTIONAL], including
+//! [TYPEINF-VARS-WALRUS] and [TYPEINF-COLLECTIONS-COMPREHENSIONS]. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-BIDIRECTIONAL
 //! The bidirectional engine — synthesis mode (`synth(e) → τ`).
 //!
 //! Every AST expression node supports both modes: [`BidirEngine::synth`]
@@ -130,6 +132,15 @@ impl BidirEngine {
             Expr::ListComp(comp) => self.synth_comprehension(&comp.generators, &comp.elt, Ty::List),
             Expr::SetComp(comp) => self.synth_comprehension(&comp.generators, &comp.elt, Ty::Set),
             Expr::DictComp(comp) => self.synth_dict_comprehension(comp),
+            Expr::Generator(generator) => {
+                self.synth_comprehension(&generator.generators, &generator.elt, |element| {
+                    Ty::Generator(
+                        element,
+                        Box::new(Ty::Ground(InferredType::None_)),
+                        Box::new(Ty::Ground(InferredType::None_)),
+                    )
+                })
+            }
             Expr::Subscript(subscript) => self.synth_subscript(subscript),
             Expr::Attribute(attribute) => self.synth_attribute(attribute),
             _ => Ty::unknown(),
@@ -455,6 +466,7 @@ fn iteration_element(iterable: &Ty) -> Ty {
         Ty::Ground(InferredType::Str | InferredType::LiteralString) => {
             Ty::Ground(InferredType::Str)
         }
+        Ty::Ground(InferredType::Named(name)) if name == "range" => Ty::Ground(InferredType::Int),
         _ => Ty::unknown(),
     }
 }

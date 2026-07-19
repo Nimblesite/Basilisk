@@ -18,6 +18,14 @@ pub(super) fn dot_completions(
     let receiver = dot_receiver(text, byte_offset);
     let prefix = extract_prefix(text, byte_offset);
 
+    if let Some((type_name, literal_receiver)) =
+        crate::hover::members::dot_receiver_builtin_type(resolved, text, byte_offset)
+    {
+        if let Some(class) = resolved.builtin_classes.get(&type_name) {
+            return builtin_class_member_items(class, &prefix, literal_receiver);
+        }
+    }
+
     if receiver.as_deref() == Some("self") {
         enclosing_class(resolved, byte_offset)
             .map(|c| class_member_items(c, &prefix))
@@ -32,6 +40,41 @@ pub(super) fn dot_completions(
     } else {
         vec![]
     }
+}
+
+fn builtin_class_member_items(
+    class: &basilisk_resolver::scope::IndexedStubClass,
+    prefix: &str,
+    literal_receiver: bool,
+) -> Vec<CompletionItem> {
+    let mut seen = std::collections::HashSet::new();
+    class
+        .declaration
+        .methods
+        .iter()
+        .filter(|method| prefix.is_empty() || method.name.starts_with(prefix))
+        .filter(|method| {
+            literal_receiver
+                || method
+                    .receiver
+                    .as_ref()
+                    .and_then(|receiver| receiver.annotation.as_deref())
+                    .is_none_or(|annotation| !annotation.contains("LiteralString"))
+        })
+        .filter(|method| seen.insert(method.name.clone()))
+        .map(|method| CompletionItem {
+            label: method.name.clone(),
+            kind: Some(CompletionItemKind::METHOD),
+            detail: Some(basilisk_stubs::render_stub_signature(method)),
+            data: Some(serde_json::json!({
+                "kind": "method",
+                "name": method.name,
+                "sourceIdentity": class.source_identity,
+                "sourcePath": class.source_path,
+            })),
+            ..Default::default()
+        })
+        .collect()
 }
 
 /// Find the innermost class that encloses `offset`.

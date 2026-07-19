@@ -24,13 +24,13 @@ name = "basilisk-python"
 description = "Basilisk — the only Python type checker scoring 100% on the official python/typing conformance suite (https://github.com/python/typing/blob/main/conformance/results/results.html) — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default."
 readme = "README-pypi.md"
 requires-python = ">=3.8"
-license = "MIT"
-# The wheel bundles the native binary, which statically links MIT-licensed
-# third-party code (notably the Ruff crates by Astral — "Copyright (c) 2022
-# Charles Marsh"). Their copyright notices MUST travel with every copy, so the
-# notice files are packaged into the wheel's `.dist-info/licenses/` explicitly
-# rather than relying on the default license-file glob.
-license-files = ["LICENSE", "NOTICES", "THIRD-PARTY-LICENSES"]
+license = "Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND CDDL-1.0 AND CDLA-Permissive-2.0 AND ISC AND MIT AND MPL-2.0 AND Unicode-3.0 AND Unicode-DFS-2016 AND Zlib"
+# PEP 639 applies this expression to the containing wheel. It therefore covers
+# Basilisk's MIT code, the Apache-2.0/MIT Typeshed snapshot, and every license
+# selected for the statically linked runtime recorded in NOTICES. Release builds
+# replace this macOS expression with the target's locked expression. The exact
+# legal files travel in `.dist-info/licenses/` rather than relying on defaults.
+license-files = ["LICENSE", "NOTICES", "THIRD-PARTY-LICENSES", "RUST-DEPENDENCY-LICENSES"]
 authors = [{ name = "Nimblesite", email = "cftools@nimblesite.co" }]
 dynamic = ["version"]
 keywords = ["type-checker", "typing", "static-analysis", "lsp", "pep", "python"]

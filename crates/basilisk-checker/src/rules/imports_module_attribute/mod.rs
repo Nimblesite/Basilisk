@@ -1,11 +1,9 @@
 //! Implements [`imports_module_attribute`] from [CHKARCH-DIAG] / [CHKARCH-DIAG-STUB-MEMBER]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-stub-member
 //! `imports_module_attribute`: Access to a module attribute the local stub does not declare.
 //!
-//! When `import X` resolves to a **user/local stub** (a `.pyi` under a
-//! configured `stub-paths` dir, including the auto-discovered `.basilisk/stubs`),
-//! that stub is authoritative: Basilisk only knows the names it declares. So
-//! `X.attr` where `attr` is not declared is a hard error — the counterpart that
-//! makes a hand-written or quick-fix-generated stub *mean something*.
+//! When `import X` resolves to an authoritative user/local or selected Typeshed
+//! stub, Basilisk sees the declarations and re-exports in that stub. `X.attr`
+//! where `attr` is not declared is an error.
 //!
 //! The escape hatch is the module-level `def __getattr__(name: str) -> Any: ...`
 //! that the "Create local type stub" quick fix ships by default: keep it and
@@ -17,10 +15,8 @@
 //! cowsay.get_output_string(...)  # E0154 if the stub declares neither this nor __getattr__
 //! ```
 //!
-//! Scope (Phase 1): only plain, single-segment `import X` backed by a user stub.
-//! `imported_modules` is populated *only* for those, so this rule is a complete
-//! no-op for code without local stubs (the conformance suite, first-party code),
-//! keeping the false-positive surface at zero.
+//! Scope: plain imports backed by a user stub or the active step-3 Typeshed
+//! source. Untyped and inline third-party imports remain outside this rule.
 
 use basilisk_resolver::{ImportedModuleApi, ResolvedModule, Span};
 use ruff_python_ast::visitor::{walk_expr, Visitor};
@@ -70,8 +66,7 @@ impl Rule for ModuleAttributeUndefined {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Only projects with user/local stubs populate `imported_modules`, so
-        // this short-circuits (and parses nothing) everywhere else.
+        // Only authoritative stub-backed imports populate `imported_modules`.
         if module.imported_modules.is_empty() {
             return;
         }

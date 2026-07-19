@@ -100,7 +100,7 @@ fn extract_package_name(specifier: &str) -> &str {
         .find(|ch: char| !ch.is_alphanumeric() && ch != '-' && ch != '_' && ch != '.')
         .unwrap_or(trimmed.len());
 
-    &trimmed[..end]
+    trimmed.get(..end).unwrap_or(trimmed)
 }
 
 #[cfg(test)]

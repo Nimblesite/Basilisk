@@ -286,3 +286,20 @@ def gen(name: str) -> Iterator[str]:
     );
     Ok(())
 }
+
+#[test]
+fn yielded_dict_literal_is_checked_in_declared_context() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from collections.abc import Iterator
+
+def rows() -> Iterator[dict[str, int]]:
+    yield {"count": 1}
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"annotations_generators"),
+        "dict literal key must widen from LiteralString to str in yield context, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

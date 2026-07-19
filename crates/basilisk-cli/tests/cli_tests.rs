@@ -13,30 +13,11 @@
 //! files. They do NOT test CLI argument parsing — they test the pipeline
 //! that powers the CLI.
 
-use std::path::Path;
-
-use basilisk_checker::{check, check_with_config, Severity};
+use basilisk_checker::Severity;
 use basilisk_config::BasiliskConfig;
-use basilisk_parser::parse_file;
-use basilisk_resolver::resolve;
 
-fn fixture(name: &str) -> String {
-    let manifest = env!("CARGO_MANIFEST_DIR");
-    Path::new(manifest)
-        .join("tests/fixtures")
-        .join(name)
-        .to_string_lossy()
-        .into_owned()
-}
-
-fn check_fixture(
-    name: &str,
-) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
-    let path = fixture(name);
-    let parsed = parse_file(&path)?;
-    let resolved = resolve(&parsed)?;
-    Ok(check(&resolved))
-}
+mod common;
+use common::{fixture, run as check_fixture, run_with_config};
 
 /// Check a fixture with the annotation house rules enabled in configuration —
 /// the off-by-default rules (`BSK-0001`/`BSK-0002`) these tests exercise. The
@@ -45,18 +26,15 @@ fn check_fixture(
 fn check_fixture_strict(
     name: &str,
 ) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
-    let path = fixture(name);
-    let parsed = parse_file(&path)?;
-    let resolved = resolve(&parsed)?;
-    Ok(check_with_config(
-        &resolved,
+    run_with_config(
+        name,
         &BasiliskConfig::with_rule_entries(
             ["BSK-0001", "BSK-0002"]
                 .into_iter()
                 .map(|code| (code.to_owned(), basilisk_config::RuleSeverity::Error))
                 .collect(),
         ),
-    ))
+    )
 }
 
 #[test]

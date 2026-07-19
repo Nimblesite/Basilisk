@@ -1421,6 +1421,7 @@
       "missed": 0,
       "falsePositives": 0,
       "codes": [
+        "assignment_compatibility",
         "specialtypes_never",
         "specialtypes_never_2"
       ]

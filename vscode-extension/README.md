@@ -71,10 +71,11 @@ Want the `basilisk` CLI on your PATH too (for CI or the terminal)? `brew install
 
 ## Acknowledgments
 
-Built on [Ruff](https://github.com/astral-sh/ruff) by [Astral](https://astral.sh/) (MIT) and [typeshed](https://github.com/python/typeshed) (Apache-2.0); bundles [debugpy](https://github.com/microsoft/debugpy) (Microsoft, MIT). Full notices: [NOTICES](https://github.com/Nimblesite/Basilisk/blob/main/NOTICES).
+Built on [Ruff](https://github.com/astral-sh/ruff) by [Astral](https://astral.sh/) (MIT) and [typeshed](https://github.com/python/typeshed) (Apache-2.0, with MIT-licensed parts); bundles [debugpy](https://github.com/microsoft/debugpy) (Microsoft, MIT). The VSIX ships Rust notices in `RUST-DEPENDENCY-LICENSES`, npm notices in `VSCODE-DEPENDENCY-LICENSES`, and debugpy's own license and `ThirdPartyNotices.txt` inside `bundled/debugpy`.
 
 ## License
 
-MIT.
+Basilisk source code is MIT licensed. The VSIX also contains third-party
+components under the license files and notices packaged with the extension.
 
 Built by [NIMBLESITE PTY LTD](https://www.nimblesite.co).

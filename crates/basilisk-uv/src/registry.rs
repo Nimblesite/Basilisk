@@ -101,10 +101,10 @@ impl PackageRegistry {
     ///
     /// Returns the import name of the stub package if present. This is a
     /// plain registry lookup; the BSK-0152 stub *suggestion* path
-    /// ([LSPUV-DIAGNOSTICS-MISSING-STUBS]) instead uses the bundled typeshed
-    /// index (`basilisk_stubs::typeshed_stub_distribution`), and installed
+    /// ([LSPUV-DIAGNOSTICS-MISSING-STUBS]) instead uses the active Typeshed
+    /// snapshot's distribution index, and installed
     /// `{name}-stubs` packages are honoured at import-resolution time
-    /// ([STUBRES-PEP561] step 3) — never by name guessing here.
+    /// ([STUBRES-PEP561] step 4) — never by name guessing here.
     #[must_use]
     pub fn find_stub_package(&self, name: &str) -> Option<String> {
         let stub_import = format!("types_{name}");
@@ -347,8 +347,8 @@ mod tests {
 
     // A `types-<pkg>` entry in uv.lock is discoverable as the matching stub
     // package (keyed `types_<pkg>`). Registry lookup only — the BSK-0152
-    // suggestion path ([LSPUV-DIAGNOSTICS-MISSING-STUBS]) uses the bundled
-    // typeshed index instead.
+    // suggestion path ([LSPUV-DIAGNOSTICS-MISSING-STUBS]) uses the active
+    // Typeshed snapshot's distribution index instead.
     #[test]
     fn find_stub_package_found() {
         let lock = LockFile {

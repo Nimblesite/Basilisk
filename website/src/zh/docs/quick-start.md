@@ -179,12 +179,14 @@ basilisk check
 
 ```toml
 [tool.basilisk]
-python-version = "3.12"
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]
 ```
 
-有了配置文件，运行 `basilisk check` 会自动使用这些设置。
+有了配置文件，运行 `basilisk check` 会自动使用这些设置。Basilisk 没有固定的
+Python 版本默认值；只有要覆盖项目或解释器证据时才显式设置。版本判断遵循固定
+提交的 typing 指令规范
+（[`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)）。
 
 ## 第 6 步——理解诊断
 

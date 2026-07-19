@@ -35,49 +35,6 @@ pub(super) fn all_base_names(class_info: &ClassInfo) -> Vec<&str> {
 }
 
 /// Recursively check if any base class defines `__init__` or `__new__`.
-/// Builtin types that have custom `__init__` or `__new__` accepting
-/// arguments.  Classes inheriting from these can always be constructed
-/// with arguments even though they don't define `__init__` in user code.
-const BUILTINS_WITH_INIT: &[&str] = &[
-    "str",
-    "int",
-    "float",
-    "bool",
-    "bytes",
-    "bytearray",
-    "complex",
-    "list",
-    "dict",
-    "set",
-    "frozenset",
-    "tuple",
-    "type",
-    "range",
-    "slice",
-    "memoryview",
-    "super",
-    "property",
-    "staticmethod",
-    "classmethod",
-    "Exception",
-    "BaseException",
-    "ValueError",
-    "TypeError",
-    "KeyError",
-    "IndexError",
-    "AttributeError",
-    "RuntimeError",
-    "StopIteration",
-    "OSError",
-    "IOError",
-    "UserDict",
-    "UserList",
-    "UserString",
-    "Mapping",
-    "MutableMapping",
-    "ABC",
-];
-
 pub(super) fn has_custom_init_in_bases(
     class_info: &ClassInfo,
     class_map: &HashMap<&str, &ClassInfo>,
@@ -101,11 +58,6 @@ fn custom_init_walk<'a>(
             continue;
         }
 
-        // Builtin types always have custom __init__/__new__.
-        if BUILTINS_WITH_INIT.contains(&base_name) {
-            return true;
-        }
-
         // Check if the base class itself defines __init__ or __new__.
         if method_map.contains_key(&(base_name, "__init__"))
             || method_map.contains_key(&(base_name, "__new__"))
@@ -126,8 +78,8 @@ fn custom_init_walk<'a>(
 }
 
 /// Returns `true` if the class has a base the checker cannot resolve to a known
-/// definition — i.e. a base that is not `object`/`Generic`/`Protocol`, not a
-/// known builtin, and not a class defined in this module.
+/// definition — i.e. a base that is not `object`/`Generic`/`Protocol` and not a
+/// class defined in this module.
 ///
 /// Such a base is an external import (e.g. pydantic `BaseModel`, attrs, msgspec)
 /// that may provide an argument-accepting constructor we cannot see. Callers
@@ -140,7 +92,6 @@ pub(super) fn has_unresolved_base(
         base_name != "object"
             && base_name != "Generic"
             && base_name != "Protocol"
-            && !BUILTINS_WITH_INIT.contains(&base_name)
             && !class_map.contains_key(base_name)
     })
 }

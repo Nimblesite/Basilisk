@@ -70,10 +70,14 @@ def process(flag: bool):
     Ok(())
 }
 
-// Exercises [TYPEINF-FUNC-SELFCLS] — self/cls exempt from the annotation requirement.
+// Exercises [TYPEINF-FUNC-SELFCLS] / [TYPEINF-SPECIAL-SELF] — self/cls are
+// exempt from the annotation requirement without claiming first-class `Self` inference.
 #[test]
 fn test_self_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_config("def method(self): pass\n", &annotation_rules_config())?;
+    let diags = run_with_config(
+        "class C:\n    def method(self): pass\n",
+        &annotation_rules_config(),
+    )?;
     let e0001: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0001").collect();
     assert!(e0001.is_empty(), "self parameter should not fire BSK-0001");
     Ok(())
@@ -81,9 +85,30 @@ fn test_self_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_cls_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_config("def method(cls): pass\n", &annotation_rules_config())?;
+    let diags = run_with_config(
+        "class C:\n    @classmethod\n    def method(cls): pass\n",
+        &annotation_rules_config(),
+    )?;
     let e0001: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0001").collect();
     assert!(e0001.is_empty(), "cls parameter should not fire BSK-0001");
+    Ok(())
+}
+
+#[test]
+fn self_and_cls_names_are_not_implicit_receivers_in_free_functions(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run_with_config(
+        "def first(self): pass\ndef second(cls): pass\n",
+        &annotation_rules_config(),
+    )?;
+    let missing = diags
+        .iter()
+        .filter(|diag| diag.code.code == "BSK-0001")
+        .count();
+    assert_eq!(
+        missing, 2,
+        "free-function names do not create receiver types"
+    );
     Ok(())
 }
 

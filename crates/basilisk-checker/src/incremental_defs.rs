@@ -1,4 +1,6 @@
-//! Implements [TYPEINF-TARGET-INCREMENTAL]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-INCREMENTAL
+//! Implements [TYPEINF-FUNC], [TYPEINF-INFERRED], and
+//! [TYPEINF-TARGET-INCREMENTAL]. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-INCREMENTAL
 //! Definition-level and expression-level Salsa queries — Stage 1 of
 //! [NARROWPLAN-CHECKLIST](../../docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md).
 //!
@@ -184,6 +186,8 @@ fn function_type(slice: &str) -> InferredType {
 /// Synthesize an unannotated function's return type: the union of its
 /// `return` expression types through the bidirectional engine, plus `None`
 /// when a bare `return` exists or the body can fall through.
+/// Functions that terminate with `raise` and have no return path synthesize
+/// the bottom type `Never` ([TYPEINF-FUNC-RETURN], [TYPEINF-SPECIAL-NEVER]).
 ///
 /// Gradual-guarantee note ([TYPEINF-TARGET-GRADUAL]): this type is inferred
 /// FROM unannotated code, so when rules consume it (Integration stage) it is
@@ -195,9 +199,13 @@ fn synthesized_return_type(body: &[Stmt]) -> InferredType {
     let mut returns = Vec::new();
     let mut has_bare_return = false;
     collect_return_exprs(body, &mut returns, &mut has_bare_return);
+    let last_diverges = matches!(body.last(), Some(Stmt::Return(_) | Stmt::Raise(_)));
     if returns.is_empty() && !has_bare_return {
-        // No return statement at all: the function returns None.
-        return InferredType::None_;
+        return if last_diverges {
+            InferredType::Never
+        } else {
+            InferredType::None_
+        };
     }
     let mut engine = BidirEngine::new(std::collections::HashMap::new());
     let types: Vec<crate::bidir::Ty> = returns.iter().map(|expr| engine.synth(expr)).collect();
@@ -209,7 +217,6 @@ fn synthesized_return_type(body: &[Stmt]) -> InferredType {
     // Approximate fall-through: unless the body's last statement diverges,
     // an implicit `return None` path exists. Conservative in the sound
     // direction — a spurious `| None` widens, never fabricates precision.
-    let last_diverges = matches!(body.last(), Some(Stmt::Return(_) | Stmt::Raise(_)));
     if has_bare_return || !last_diverges {
         result = InferredType::union(result, InferredType::None_);
     }

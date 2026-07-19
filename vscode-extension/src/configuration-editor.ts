@@ -2,10 +2,14 @@
 /** VS Code host for the LSP-owned Basilisk configuration editor. */
 
 import { effect } from "@preact/signals-core";
-import * as path from "path";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { buildConfigurationEditorDocument } from "./configuration-editor-document";
+import {
+  configurationError,
+  configurationRepairUri,
+  fileIsWithinRoot,
+} from "./configuration-editor-errors";
 import {
   decodeConfigurationEditorIntent,
   type ConfigurationEditorIntent,
@@ -17,7 +21,15 @@ import type {
   PreviewConfigurationRequest,
   RuleOccurrencesRequest,
   RuleOccurrencesResponse,
+  TypeshedActionRequest,
+  TypeshedActionResult,
 } from "./configuration-editor-model";
+import {
+  confirmVerificationOff,
+  disablesTypeshedVerification,
+  pickTypeshedFolder,
+  TypeshedEditorUi,
+} from "./configuration-editor-typeshed";
 import { Logger } from "./logger";
 import { SingletonWebviewPanel, type WebviewMessage } from "./profiler-webview";
 import type { Store } from "./store";
@@ -30,8 +42,12 @@ const SNAPSHOT_METHOD = "basilisk/configurationSnapshot";
 const PREVIEW_METHOD = "basilisk/previewConfigurationChange";
 const APPLY_METHOD = "basilisk/applyConfigurationChange";
 const OCCURRENCES_METHOD = "basilisk/ruleOccurrences";
+const TYPESHED_ACTION_METHOD = "basilisk/typeshedAction";
+const EXECUTE_COMMAND_METHOD = "workspace/executeCommand";
+const ADOPT_WORKSPACE_COMMAND = "basilisk.adoptWorkspace";
+const FIX_WORKSPACE_COMMAND = "basilisk.fixWorkspace";
 const CONFIGURATION_VIEW_TYPE = "basilisk.configurationEditor";
-const CONFLICT_WORDS = ["stale", "conflict", "revision", "changed since preview"] as const;
+export { configurationRepairUri } from "./configuration-editor-errors";
 
 /** Typed transport seam: production uses LanguageClient; tests can inject a fake. */
 export interface ConfigurationEditorTransport {
@@ -39,18 +55,14 @@ export interface ConfigurationEditorTransport {
   preview(request: PreviewConfigurationRequest): Promise<ConfigurationPreview>;
   apply(request: ApplyConfigurationRequest): Promise<ConfigurationSnapshot>;
   occurrences(request: RuleOccurrencesRequest): Promise<RuleOccurrencesResponse>;
+  typeshedAction(request: TypeshedActionRequest): Promise<TypeshedActionResult>;
+  executeCommand(command: string, args: readonly unknown[]): Promise<void>;
 }
 
 interface ExperimentalCapabilities {
   readonly basilisk?: {
     readonly configurationEditor?: unknown;
   };
-}
-
-interface ConfigurationError {
-  readonly message: string;
-  readonly conflict: boolean;
-  readonly repairUri: string | undefined;
 }
 
 /**
@@ -83,47 +95,12 @@ function clientTransport(store: Store): ConfigurationEditorTransport {
     async occurrences(request: RuleOccurrencesRequest): Promise<RuleOccurrencesResponse> {
       return runningClient().sendRequest<RuleOccurrencesResponse>(OCCURRENCES_METHOD, request);
     },
-  };
-}
-
-/** Accept only the root-level `pyproject.toml` as a repair/open target. */
-export function configurationRepairUri(value: unknown, rootUri: string | undefined): string | undefined {
-  if (typeof value !== "string" || rootUri === undefined) { return undefined; }
-  try {
-    const source = vscode.Uri.parse(value, true);
-    const root = vscode.Uri.parse(rootUri, true);
-    if (source.scheme !== "file" || root.scheme !== "file") { return undefined; }
-    const sourcePath = path.resolve(source.fsPath);
-    const rootPath = path.resolve(root.fsPath);
-    if (path.dirname(sourcePath) !== rootPath) { return undefined; }
-    if (path.basename(sourcePath) !== "pyproject.toml") { return undefined; }
-    return source.toString();
-  } catch {
-    return undefined;
-  }
-}
-
-function errorDetails(error: unknown, rootUri?: string): ConfigurationError {
-  const record = typeof error === "object" && error !== null
-    ? error as { readonly data?: unknown; readonly message?: unknown }
-    : undefined;
-  const message = error instanceof Error
-    ? error.message
-    : typeof record?.message === "string" ? record.message : String(error);
-  const lower = message.toLowerCase();
-  const data = record?.data;
-  const structuredConflict = typeof data === "object" && data !== null
-    && (data as { readonly kind?: unknown }).kind === "revisionConflict";
-  const context = typeof data === "object" && data !== null
-    ? (data as { readonly context?: unknown }).context
-    : undefined;
-  const sourceUri = typeof context === "object" && context !== null
-    ? (context as { readonly sourceUri?: unknown }).sourceUri
-    : undefined;
-  return {
-    message,
-    conflict: structuredConflict || CONFLICT_WORDS.some((word) => lower.includes(word)),
-    repairUri: configurationRepairUri(sourceUri, rootUri),
+    async typeshedAction(request: TypeshedActionRequest): Promise<TypeshedActionResult> {
+      return runningClient().sendRequest<TypeshedActionResult>(TYPESHED_ACTION_METHOD, request);
+    },
+    async executeCommand(command: string, args: readonly unknown[]): Promise<void> {
+      await runningClient().sendRequest(EXECUTE_COMMAND_METHOD, { command, arguments: args });
+    },
   };
 }
 
@@ -151,6 +128,7 @@ export class ConfigurationEditorController implements vscode.Disposable {
   private readonly panel: SingletonWebviewPanel;
   private readonly transport: ConfigurationEditorTransport;
   private readonly disposeStateEffect: () => void;
+  private readonly typeshedUi = new TypeshedEditorUi();
   private webviewReady = false;
   private readyMessages = 0;
   private loadingRoot: string | undefined;
@@ -230,10 +208,15 @@ export class ConfigurationEditorController implements vscode.Disposable {
       case "refresh": await this.refresh(); return;
       case "preview": await this.preview(intent); return;
       case "apply": await this.apply(); return;
+      case "adopt": await this.runWorkspaceCommand(ADOPT_WORKSPACE_COMMAND, false); return;
+      case "fixSafe": await this.runWorkspaceCommand(FIX_WORKSPACE_COMMAND, true); return;
+      case "openConfigFile": await this.openConfigFile(intent.uri); return;
       case "occurrences": await this.loadOccurrences(intent.request); return;
       case "openRaw": await this.openRawConfiguration(); return;
       case "openDocs": await this.openRuleDocs(intent.uri); return;
       case "openOccurrence": await this.openOccurrence(intent); return;
+      case "pickTypeshedFolder": await this.pickTypeshedFolder(intent.key); return;
+      case "typeshedAction": await this.runTypeshedAction(intent.action); return;
     }
   }
 
@@ -276,7 +259,7 @@ export class ConfigurationEditorController implements vscode.Disposable {
       this.store.acceptConfigurationSnapshot(snapshot);
     } catch (error: unknown) {
       if (this.requestIsStale(generation)) { return; }
-      const details = errorDetails(error, rootUri);
+      const details = configurationError(error, rootUri);
       this.store.failConfigurationEditor(details.message, details.conflict, details.repairUri);
     } finally {
       if (generation === this.loadGeneration) {
@@ -294,6 +277,12 @@ export class ConfigurationEditorController implements vscode.Disposable {
     const state = this.store.configurationEditor.value;
     const snapshot = state.snapshot;
     if (snapshot === undefined || state.phase === "applying") { return; }
+    if (disablesTypeshedVerification(intent)) {
+      if (!await confirmVerificationOff()) {
+        void this.panel.postMessage({ type: "state", state });
+        return;
+      }
+    }
     const generation = this.loadGeneration;
     const previewGeneration = ++this.previewGeneration;
     this.store.beginConfigurationPreview();
@@ -309,7 +298,39 @@ export class ConfigurationEditorController implements vscode.Disposable {
     } catch (error: unknown) {
       if (generation !== this.loadGeneration || previewGeneration !== this.previewGeneration
         || this.disposed || !this.panel.isOpen()) { return; }
-      const details = errorDetails(error, snapshot.rootUri);
+      const details = configurationError(error, snapshot.rootUri);
+      this.store.failConfigurationEditor(details.message, details.conflict, details.repairUri);
+    }
+  }
+
+  private async pickTypeshedFolder(key: "TypeshedPath" | "TypeshedCachePath"): Promise<void> {
+    const snapshot = this.store.configurationEditor.value.snapshot;
+    if (snapshot === undefined) { return; }
+    const intent = await pickTypeshedFolder(snapshot, key);
+    if (intent !== undefined) { await this.preview(intent); }
+  }
+
+  private async runTypeshedAction(action: TypeshedActionRequest["action"]): Promise<void> {
+    const snapshot = this.store.configurationEditor.value.snapshot;
+    if (snapshot === undefined) { return; }
+    const generation = this.loadGeneration;
+    try {
+      const result = await this.transport.typeshedAction({
+        rootUri: snapshot.rootUri,
+        baseRevision: snapshot.revision,
+        action,
+      });
+      if (this.requestIsStale(generation, snapshot.rootUri)) { return; }
+      if (result.kind === "Preview") {
+        this.store.acceptConfigurationPreview(result.preview);
+      } else if (result.kind === "Snapshot") {
+        this.store.acceptConfigurationSnapshot(result.snapshot);
+      } else {
+        await this.typeshedUi.showLicense(result.license);
+      }
+    } catch (error: unknown) {
+      if (this.requestIsStale(generation, snapshot.rootUri)) { return; }
+      const details = configurationError(error, snapshot.rootUri);
       this.store.failConfigurationEditor(details.message, details.conflict, details.repairUri);
     }
   }
@@ -336,9 +357,45 @@ export class ConfigurationEditorController implements vscode.Disposable {
       this.store.acceptConfigurationSnapshot(fresh);
     } catch (error: unknown) {
       if (generation !== this.loadGeneration || this.disposed || !this.panel.isOpen()) { return; }
-      const details = errorDetails(error, snapshot.rootUri);
+      const details = configurationError(error, snapshot.rootUri);
       this.store.failConfigurationEditor(details.message, details.conflict, details.repairUri);
     }
+  }
+
+  /**
+   * Run a workspace-scoped server command (adopt current debt, apply safe
+   * fixes) and reload. Both are the real, already-registered commands that
+   * rewrite configuration via `workspace/applyEdit`; the editor only forwards
+   * and re-snapshots — it never computes debt or edits config text itself.
+   */
+  private async runWorkspaceCommand(command: string, includeRoot: boolean): Promise<void> {
+    const rootUri = this.store.configurationEditor.value.snapshot?.rootUri;
+    if (rootUri === undefined || this.store.configurationEditor.value.phase === "applying") { return; }
+    const generation = this.loadGeneration;
+    this.previewGeneration += 1;
+    this.store.beginConfigurationApply();
+    try {
+      await this.transport.executeCommand(command, includeRoot ? [{ rootUri }] : []);
+      if (this.requestIsStale(generation, rootUri)) { return; }
+      await this.load(rootUri);
+    } catch (error: unknown) {
+      if (this.requestIsStale(generation, rootUri)) { return; }
+      const details = configurationError(error, rootUri);
+      this.store.failConfigurationEditor(details.message, details.conflict, details.repairUri);
+    }
+  }
+
+  /**
+   * Open a nested path-override configuration file. Untrusted input: only a URI
+   * the current snapshot listed as a path override, and only inside the root.
+   */
+  private async openConfigFile(uri: string): Promise<void> {
+    const overrides = this.store.configurationEditor.value.snapshot?.pathOverrides ?? [];
+    if (!overrides.some((entry) => entry.configUri === uri)) { return; }
+    const target = vscode.Uri.parse(uri);
+    const rootUri = this.store.configurationEditor.value.rootUri;
+    if (target.scheme !== "file" || !fileIsWithinRoot(target, rootUri)) { return; }
+    await vscode.window.showTextDocument(target, { preview: false });
   }
 
   private async loadOccurrences(request: Omit<RuleOccurrencesRequest, "rootUri">): Promise<void> {
@@ -356,7 +413,7 @@ export class ConfigurationEditorController implements vscode.Disposable {
     } catch (error: unknown) {
       if (generation !== this.loadGeneration || occurrenceGeneration !== this.occurrenceGeneration
         || this.disposed || !this.panel.isOpen()) { return; }
-      const details = errorDetails(error, rootUri);
+      const details = configurationError(error, rootUri);
       this.store.failRuleOccurrences(details.message);
     }
   }
@@ -399,6 +456,7 @@ export class ConfigurationEditorController implements vscode.Disposable {
   public dispose(): void {
     this.disposed = true;
     this.disposeStateEffect();
+    this.typeshedUi.dispose();
     this.panel.dispose();
     this.store.resetConfigurationEditor();
   }
@@ -443,93 +501,4 @@ async function saveConfigurationDocument(sourceUri: string): Promise<void> {
   if (!saved) {
     Logger.warn("Configuration apply could not save pyproject.toml; the change is still unsaved in the editor");
   }
-}
-
-function fileIsWithinRoot(target: vscode.Uri, rootUri: string | undefined): boolean {
-  if (rootUri === undefined) { return false; }
-  try {
-    const root = vscode.Uri.parse(rootUri, true);
-    if (root.scheme !== "file") { return false; }
-    const relative = path.relative(path.resolve(root.fsPath), path.resolve(target.fsPath));
-    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-  } catch {
-    return false;
-  }
-}
-
-const MAX_RULE_CODE_LENGTH = 64;
-
-/**
- * Decode the optional `{ rule }` command argument carried by a diagnostic's
- * Configure Severity hover link ([CONFIGEDITOR-VSIX-EXPERIENCE]). Untrusted:
- * anything that is not a bounded, non-empty string yields no focus target.
- */
-export function configurationEditorFocusRule(value: unknown): string | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) { return undefined; }
-  const rule = (value as { readonly rule?: unknown }).rule;
-  return typeof rule === "string" && rule.length > 0 && rule.length <= MAX_RULE_CODE_LENGTH
-    ? rule
-    : undefined;
-}
-
-/**
- * Open the editor for the workspace folder that owns `resource` (the
- * explorer context-menu target), falling back to the usual root selection.
- * `focusRule` deep-links the opened editor to one rule's row.
- */
-async function openConfigurationFor(
-  controller: ConfigurationEditorController,
-  resource?: vscode.Uri,
-  focusRule?: string,
-): Promise<void> {
-  const folder = resource === undefined ? undefined : vscode.workspace.getWorkspaceFolder(resource);
-  const rootUri = folder?.uri.toString() ?? await selectConfigurationRoot();
-  if (rootUri === undefined) {
-    void vscode.window.showInformationMessage("Open a workspace folder to configure Basilisk.");
-    return;
-  }
-  controller.open(rootUri, focusRule);
-}
-
-/** Register the capability-gated commands and context used by the view-title gear and explorer menu. */
-export function registerConfigurationEditor(
-  store: Store,
-  transport?: ConfigurationEditorTransport,
-): { readonly controller: ConfigurationEditorController; readonly disposables: vscode.Disposable[] } {
-  const controller = new ConfigurationEditorController(store, transport);
-  let commands: vscode.Disposable[] | undefined;
-  function disposeCommands(): void {
-    commands?.forEach((command) => { command.dispose(); });
-    commands = undefined;
-  }
-  let previouslySupported = false;
-  const disposeCapabilityEffect = effect(() => {
-    const supported = transport !== undefined
-      || (store.lspState.value === "running" && supportsConfigurationEditor(store.client.value));
-    void vscode.commands.executeCommand("setContext", CONFIGURATION_EDITOR_CONTEXT, supported);
-    if (supported && commands === undefined) {
-      commands = [
-        vscode.commands.registerCommand(CONFIGURATION_EDITOR_COMMAND, async (argument?: unknown) =>
-          openConfigurationFor(controller, undefined, configurationEditorFocusRule(argument))),
-        vscode.commands.registerCommand(EDIT_CONFIG_COMMAND, async (resource?: vscode.Uri) =>
-          openConfigurationFor(controller, resource instanceof vscode.Uri ? resource : undefined)),
-      ];
-    } else if (!supported) {
-      disposeCommands();
-      if (controller.isOpen() && previouslySupported) {
-        controller.capabilityLost("The language server no longer advertises the configuration editor. Reconnect or update Basilisk.");
-      }
-    }
-    if (supported && !previouslySupported) { controller.refreshOpen(); }
-    previouslySupported = supported;
-  });
-  const capabilityLifecycle: vscode.Disposable = {
-    dispose(): void {
-      disposeCapabilityEffect();
-      disposeCommands();
-      void vscode.commands.executeCommand("setContext", CONFIGURATION_EDITOR_CONTEXT, false);
-    },
-  };
-  const disposables: vscode.Disposable[] = [controller, capabilityLifecycle];
-  return { controller, disposables };
 }

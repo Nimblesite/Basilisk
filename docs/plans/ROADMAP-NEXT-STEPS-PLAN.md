@@ -85,8 +85,9 @@ complete:
 
 ## Ecosystem expansion {#NEXTSTEPS-ECOSYSTEM}
 
-- [ ] **`[AGENT]`** Specify an MCP server only when its tool surface and packaging
-  are concrete; reuse the workspace index rather than duplicating analysis.
+- [ ] **`[AGENT]`** Specify any future MCP analysis tools before widening the
+  shipped status-only [checker MCP service](../specs/CHECKER-MCP-SPEC.md); reuse
+  the workspace index rather than duplicating analysis.
 - [ ] **`[HYBRID]`** Implement a real AI provider behind the existing optional
   interface, with hermetic provider-boundary tests and user-supplied credentials.
 - [ ] **`[AGENT]`** Add translation-drift detection before adding more locales.

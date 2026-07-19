@@ -9,6 +9,7 @@ license.workspace    = true
 basilisk-parser.workspace   = true
 basilisk-resolver.workspace = true
 basilisk-checker.workspace  = true
+basilisk-stubs.workspace    = true
 thiserror.workspace         = true
 ruff_python_ast.workspace   = true
 

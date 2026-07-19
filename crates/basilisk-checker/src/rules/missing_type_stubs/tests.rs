@@ -1,4 +1,4 @@
-//! Tests for [STUBRES-PEP561] step 6 (no stubs found → BSK-0152) and the
+//! Tests for [STUBRES-PEP561] after all six steps miss (BSK-0152) and the
 //! [STUBRES-PROVENANCE-DIAG]/[STUBRES-CODEACTIONS] help-text contract for the
 //! `Untyped` provenance row. Exercises `MissingTypeStubs::check`,
 //! `make_diagnostic`, and `stub_help_text` in `super`.
@@ -9,6 +9,14 @@ use basilisk_resolver::scope::ImportKind;
 use basilisk_resolver::Span;
 use std::fs;
 use std::path::PathBuf;
+
+fn bundled_stub_distribution(module: &str) -> Option<String> {
+    basilisk_stubs::typeshed::bundle::bundled_snapshot()
+        .ok()?
+        .distribution_index
+        .distribution(module)
+        .map(str::to_owned)
+}
 
 fn make_module(imports: Vec<ImportInfo>) -> ResolvedModule {
     ResolvedModule {
@@ -37,6 +45,7 @@ fn make_import(
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: bundled_stub_distribution(module),
         unresolved_reason: None,
     }
 }
@@ -174,14 +183,18 @@ fn skips_workspace_source_py() {
 }
 
 #[test]
-fn skips_stdlib_modules() {
+fn name_only_bundle_table_does_not_override_an_actual_step_five_resolution() {
     let import = make_import(
         "os",
         9,
         ImportResolution::SourcePy,
         Some("/venv/lib/python3.12/site-packages/os/__init__.py"),
     );
-    assert!(run_check(import).is_empty());
+    assert_eq!(
+        run_check(import).len(),
+        1,
+        "once a canonical step-3 source misses, a same-named site-packages module is third-party"
+    );
 }
 
 #[test]
@@ -226,6 +239,7 @@ fn skips_site_packages_package_with_py_typed_marker() -> Result<(), Box<dyn std:
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: None,
         unresolved_reason: None,
     };
     let module = make_module(vec![import]);
@@ -278,6 +292,7 @@ fn skips_nested_submodule_when_root_package_has_py_typed() -> Result<(), Box<dyn
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: None,
         unresolved_reason: None,
     };
     let module = make_module(vec![import]);
@@ -332,6 +347,7 @@ fn skips_flat_file_submodule_when_root_package_has_py_typed(
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: None,
         unresolved_reason: None,
     };
     let module = make_module(vec![import]);
@@ -383,6 +399,7 @@ fn skips_deeper_nested_submodule_when_root_package_has_py_typed(
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: None,
         unresolved_reason: None,
     };
     let module = make_module(vec![import]);
@@ -433,6 +450,7 @@ fn skips_httpx_underscore_flat_submodule_when_root_has_py_typed(
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: None,
         unresolved_reason: None,
     };
     let module = make_module(vec![import]);

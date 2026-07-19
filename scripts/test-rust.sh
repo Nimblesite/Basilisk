@@ -7,7 +7,18 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+
+# The workflow rewrites shared coverage, mirrored-fixture, and report outputs.
+# Serialize whole-worktree runs so a second invocation cannot corrupt the first.
+LOCK_PATH="$REPO_ROOT/target/test-rust.lock"
+if [[ -z "${BASILISK_TEST_RUST_LOCK_FD:-}" ]] || \
+    ! python3 "$REPO_ROOT/conformance/worktree_lock.py" --check "$LOCK_PATH"; then
+    mkdir -p "$REPO_ROOT/target"
+    exec python3 "$REPO_ROOT/conformance/worktree_lock.py" \
+        "$LOCK_PATH" "$0" "$@"
+fi
+
 source "$REPO_ROOT/scripts/common.sh"
 cd "$REPO_ROOT"
 
@@ -20,6 +31,28 @@ done
 
 LCOV_FILE="$REPO_ROOT/lcov.info"
 HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
+TYPING_SUITE_BASE="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+case "$TYPING_SUITE_BASE/" in
+    "$REPO_ROOT/"*)
+        echo "FATAL: conformance temp directory must be outside the repository." >&2
+        exit 1
+        ;;
+esac
+TYPING_SUITE_PARENT="$(mktemp -d "$TYPING_SUITE_BASE/basilisk-conformance.XXXXXX")"
+TYPING_SUITE_DIR="$TYPING_SUITE_PARENT/typing"
+export BASILISK_CONFORMANCE_RUN_ID="${TYPING_SUITE_PARENT##*/}"
+
+cleanup_typing_suite() {
+    case "$TYPING_SUITE_PARENT" in
+        "$TYPING_SUITE_BASE"/basilisk-conformance.??????)
+            rm -rf -- "$TYPING_SUITE_PARENT"
+            ;;
+        *)
+            warn "refusing to remove unexpected conformance temp path"
+            ;;
+    esac
+}
+trap cleanup_typing_suite EXIT
 
 # Ensure llvm-tools-preview is installed so cargo-llvm-cov never prompts.
 rustup component add llvm-tools-preview 2>/dev/null || true
@@ -86,7 +119,7 @@ fi
 header "Syncing PEP conformance fixtures from the real python/typing suite"
 python3 -m unittest discover -s "$REPO_ROOT/conformance" -p 'test_*.py'
 python3 -m unittest discover -s "$REPO_ROOT/benchmarks" -p 'test_*.py'
-python3 "$REPO_ROOT/conformance/run_conformance.py" --sync-tests
+python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_DIR" --sync-tests
 
 set +e
 cargo test --profile ci --workspace --exclude basilisk-compiler --all-targets
@@ -128,10 +161,10 @@ ok "instrumented basilisk binary ready: $BASILISK_BIN"
 # never an instrumented one, never a prior (PyPI) release. If the real harness
 # cannot be cloned and run, this FAILS the build. See [CHKARCH-CONFORMANCE].
 header "Conformance coverage pass (instrumented binary over the real suite)"
-python3 "$REPO_ROOT/conformance/run_conformance.py" --bin "$BASILISK_BIN" --reuse-clone
+python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_DIR" --bin "$BASILISK_BIN" --reuse-clone
 
 header "Enforcing PEP conformance gate (freshly-built CLEAN RELEASE build vs the REAL harness)"
-python3 "$REPO_ROOT/conformance/run_conformance.py" --bin "$REPO_ROOT/target/release/basilisk" --gate --reuse-clone
+python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_DIR" --bin "$REPO_ROOT/target/release/basilisk" --gate --reuse-clone
 
 # ── macOS: drop truncated profiles before the merge ──────────────────────────
 # Completes the `%p` fix above. All instrumented runs are done, so any profile
@@ -205,7 +238,7 @@ check_crate() {
 }
 RUST_CRATES=(
     basilisk-checker basilisk-cli basilisk-db basilisk-lsp basilisk-mojo
-    basilisk-parser basilisk-plugin basilisk-resolver basilisk-stubs basilisk-config
+    basilisk-parser basilisk-resolver basilisk-stubs basilisk-config
 )
 for crate in "${RUST_CRATES[@]}"; do
     check_crate "$crate" "$(coverage_threshold_for "$crate")"

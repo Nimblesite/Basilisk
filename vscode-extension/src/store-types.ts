@@ -7,6 +7,7 @@ import type {
   ConfigurationEditorActions,
   ConfigurationEditorState,
 } from "./configuration-editor-state";
+import type { TypeshedStatusState } from "./configuration-editor-model";
 import type { LogSink } from "./logger";
 import type { ProcessPanelActions, ProcessPanelState } from "./processes-state";
 import type { ProfilerActions, ProfilerSession } from "./profiler-state";
@@ -40,6 +41,7 @@ export interface Store extends ProfilerActions, ProcessPanelActions, Configurati
   readonly processes: ReadonlySignal<ProcessPanelState>;
   readonly processesRevision: ReadonlySignal<number>;
   readonly configurationEditor: ReadonlySignal<ConfigurationEditorState>;
+  readonly typeshedStatuses: ReadonlySignal<ReadonlyMap<string, TypeshedStatusState>>;
   readonly lspReadyPromise: ReadonlySignal<Promise<void> | undefined>;
 
   setClient(context: vscode.ExtensionContext, client: LanguageClient): void;
@@ -71,6 +73,7 @@ export interface StoreSignals {
   profiler: Signal<ProfilerSession>;
   processes: Signal<ProcessPanelState>;
   configurationEditor: Signal<ConfigurationEditorState>;
+  typeshedStatuses: Signal<ReadonlyMap<string, TypeshedStatusState>>;
   readyHandle: Signal<ReadyHandle | undefined>;
   analysisRevision: Signal<number>;
   diagnosticsDebounce: ReturnType<typeof setTimeout> | undefined;

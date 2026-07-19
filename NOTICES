@@ -5,16 +5,17 @@ This software incorporates components from the following open-source projects.
 Each component is used in accordance with its respective license. Basilisk is
 grateful to their authors and maintainers.
 
-Every dependency in Basilisk's build graph is permissively licensed
-(MIT, Apache-2.0, BSD, Zlib, Unicode, or a dual/tri combination thereof). The
-only file-level copyleft components are `inferno` (CDDL-1.0) and `colored`
-(MPL-2.0), both linked unmodified as published crates and listed below. There
-is no GPL/AGPL/LGPL-only code in the distribution.
+The runtime graph uses MIT, Apache-2.0, ISC, BSD, Zlib, Unicode,
+CDLA-Permissive-2.0, CDDL-1.0, and MPL-2.0 terms. The file-level copyleft
+components are `inferno` (CDDL-1.0) and `colored` (MPL-2.0), both linked
+unmodified as published crates and listed below. There is no
+GPL/AGPL/LGPL-only code in the distribution.
 
-The most significant incorporated components are listed below. This is a
-curated list of the notable projects; the complete, machine-generated set of
-every transitive dependency and its license is reproducible from the workspace
-`Cargo.lock` (`cargo license`).
+The most significant incorporated components are listed below. The complete
+locked release-target inventory, copyright notices, and license texts ship in
+`RUST-DEPENDENCY-LICENSES`; `runtime-license-manifest.json` binds that generated
+carrier to the locked third-party Cargo graph while ignoring release-stamped
+workspace version fields.
 
 -------------------------------------------------------------------------------
 
@@ -69,24 +70,76 @@ the complete text.
 
 typeshed  —  https://github.com/python/typeshed
 Author:  The typeshed contributors
-License: Apache-2.0
+License: Apache-2.0 (parts MIT)
 
-Basilisk derives two data tables from typeshed's git tree, compiled into the
-binary as perfect-hash maps by `crates/basilisk-stubs/build.rs`:
+Basilisk ships an unmodified standard-library snapshot from the following exact
+Typeshed source identity, repackaged as a deterministic stored ZIP:
 
-  - the standard-library top-level module names (from typeshed's
-    `stdlib/VERSIONS`), used to recognise stdlib imports; and
-  - the import-root → stub-distribution index (from typeshed's `stubs/<DIST>/`
-    directories), used to offer `uv add --dev types-<dist>` quick fixes
-    (BSK-0152) — see `data/typeshed_stub_distributions.tsv`.
+  Commit:       83c2518a9e6abbda0c44592c3483de459198f887
+  Root tree:    66408ffce2750980efc6da09e8a6652733f852e4
+  Bundle SHA-256:
+                e5141e63b6b1932dc2b648591b41f842604155e63f6af8ebd0a2f096fdb3c189
+  LICENSE SHA-256:
+                295f8538c94ae5c3043301cf7cff1c852dab6a786a8ddee471e061b40d5ecabe
+  VERSIONS SHA-256:
+                8a236d098757a04bdaeb40bb78545d0f9becc8db6a834c21b3d86e8d4d82bce3
+  Bundle files: every `stdlib/` `.pyi`, `stdlib/VERSIONS`, and root `LICENSE`
+
+The reviewed source has no root `NOTICE` and no nested `stdlib/` license or
+notice file. Upstream file bytes are not modified. The bundle's sidecar records
+the commit, root tree, ZIP digest, `VERSIONS` digest, and approved exact
+path-and-SHA-256 legal-file identity. The source identity is authenticated by
+GitHub TLS and Git-tree reconstruction; it is not a signed release.
+
+The ZIP is embedded verbatim as the offline snapshot. Its import-root →
+stub-distribution sidecar (from Typeshed's `stubs/<DIST>/` directories) is
+generated from the same exact commit for BSK-0152 quick fixes; the bundle
+manifest identity-binds its 274 entries and SHA-256
+`dc995d1599210db5b5f472d6eb6869130e229c1c9a0d3a4bf158e28db25c5639`.
 
 typeshed is also the Tier-1 baseline for standard-library stubs
 ([CHKARCH-STUBS-TYPESHED]); users may replace it wholesale via the
 `typeshed-path` config.
 
-typeshed is distributed under the Apache License, Version 2.0. The full license
-text is available at: https://www.apache.org/licenses/LICENSE-2.0 and in
-typeshed's repository at https://github.com/python/typeshed/blob/main/LICENSE
+Typeshed's LICENSE is a single composite file: it states the project is "licensed
+under the terms of the Apache license" and that "Parts of typeshed are licensed
+under different licenses (like the MIT license)" (Copyright (c) 2015 Jukka
+Lehtosalo and contributors). The composite text — Apache-2.0 plus the MIT parts —
+is pinned for a stable reference at commit 83c2518a9e6abbda0c44592c3483de459198f887:
+https://github.com/python/typeshed/blob/83c2518a9e6abbda0c44592c3483de459198f887/LICENSE
+(the standalone Apache-2.0 text is at https://www.apache.org/licenses/LICENSE-2.0).
+
+-------------------------------------------------------------------------------
+
+Typeshed acquisition runtime
+Source:  https://github.com/algesten/ureq (v3.3.0)
+         https://github.com/rustls/rustls (v0.23.42)
+         https://github.com/dalek-cryptography/subtle (v2.6.1)
+         https://github.com/zip-rs/zip2 (v5.1.1)
+License: MIT OR Apache-2.0 (ureq)
+         Apache-2.0 OR ISC OR MIT (rustls)
+         BSD-3-Clause (subtle)
+         MIT (zip)
+
+Typeshed metadata and archives are fetched through Ureq's Rustls-backed
+authenticated-HTTPS adapter and decoded with zip. The directly relevant
+acquisition crates in the locked release graph are:
+
+  ureq 3.3.0                    MIT OR Apache-2.0
+  ureq-proto 0.6.0              MIT OR Apache-2.0
+  utf8-zero 0.8.1               MIT OR Apache-2.0
+  rustls 0.23.42                Apache-2.0 OR ISC OR MIT
+  rustls-pki-types 1.15.0       MIT OR Apache-2.0
+  rustls-webpki 0.103.13        ISC
+  subtle 2.6.1                  BSD-3-Clause
+  ring 0.17.14                  Apache-2.0 AND ISC
+  untrusted 0.9.0               ISC
+  webpki-roots 1.0.9            CDLA-Permissive-2.0
+  zip 5.1.1                     MIT
+
+The corresponding MIT, BSD-3-Clause, ISC, Apache-2.0, and
+CDLA-Permissive-2.0 license texts and copyright notices are retained in
+`THIRD-PARTY-LICENSES`.
 
 -------------------------------------------------------------------------------
 
@@ -184,7 +237,7 @@ See https://opensource.org/licenses/MIT for the full license text.
 -------------------------------------------------------------------------------
 
 inferno
-Source:        https://github.com/jonhoo/inferno (v0.12)
+Source:        https://github.com/jonhoo/inferno.git (v0.12.7)
 License:       CDDL-1.0
 Modifications: NONE. Used unmodified as a Cargo dependency.
 
@@ -193,14 +246,14 @@ Development and Distribution License, Version 1.0 (CDDL-1.0). The full
 text of the CDDL-1.0 is available at:
 https://opensource.org/licenses/CDDL-1.0
 
-Source code for `inferno` is available unmodified at the URL above. No
-modifications have been made by Basilisk; we link against the unmodified
-upstream crate as published on crates.io.
+Source code for the exact `inferno 0.12.7` crate is available at
+https://github.com/jonhoo/inferno.git and from its crates.io package. Basilisk
+links the unmodified published crate.
 
 -------------------------------------------------------------------------------
 
 colored
-Source:        https://github.com/colored-rs/colored (v3.x)
+Source:        https://github.com/mackwic/colored (v3.1.1)
 License:       MPL-2.0
 Modifications: NONE. Used unmodified as a Cargo dependency.
 
@@ -209,9 +262,8 @@ Public License, Version 2.0 (MPL-2.0). The full text of the MPL-2.0 is
 available at:
 https://www.mozilla.org/en-US/MPL/2.0/
 
-Source code for `colored` is available unmodified at the URL above. No
-modifications have been made by Basilisk; we link against the unmodified
-upstream crate as published on crates.io.
+Source code for the exact `colored 3.1.1` crate is available at
+https://github.com/mackwic/colored and from its crates.io package. Basilisk
+links the unmodified published crate.
 
 -------------------------------------------------------------------------------
-</content>

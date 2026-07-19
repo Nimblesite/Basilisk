@@ -1,5 +1,6 @@
-//! Tests for [TYPEINF-TARGET-NARROWING] Stage 2 flow analysis. See
-//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-NARROWING and
+//! Tests for [TYPEINF-NARROWING] / [TYPEINF-TARGET-NARROWING] Stage 2 flow
+//! analysis. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING,
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-NARROWING, and
 //! docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-CHECKLIST.
 //!
 //! End-to-end over the real pipeline: parse → resolve (the resolver collects
@@ -13,8 +14,9 @@
 
 use std::collections::HashMap;
 
-use basilisk_checker::narrow::{analyse_function, FlowResult, NarrowEnv};
+use basilisk_checker::narrow::{analyse_function, guard_outcomes, FlowResult, NarrowEnv};
 use basilisk_checker::types::{InferredType, LiteralValue};
+use basilisk_resolver::{NarrowingGuard, NarrowingGuardKind};
 use ruff_python_ast::Stmt;
 
 /// Run the flow walker over `source`'s FIRST top-level function, with
@@ -48,6 +50,19 @@ fn analyse(source: &str) -> FlowResult {
         .expect("function body found");
 
     analyse_function(&body, NarrowEnv::new(declared), &function.narrowing_guards)
+}
+
+/// Resolve every guard collected for `source`'s first function.
+fn resolved_guards(source: &str) -> Vec<NarrowingGuard> {
+    let parsed = basilisk_parser::parse_source(source.to_owned(), "flow.py".to_owned())
+        .expect("fixture parses");
+    let resolved = basilisk_resolver::resolve(&parsed).expect("fixture resolves");
+    resolved
+        .functions
+        .first()
+        .expect("fixture has a function")
+        .narrowing_guards
+        .clone()
 }
 
 /// The narrowed type observed for `name` at its LAST recorded use.
@@ -84,6 +99,103 @@ def f(x: int | str) -> None:
     assert!(
         uses.contains(&("x", &InferredType::Str)),
         "complement branch must see str: {uses:?}"
+    );
+}
+
+/// `issubclass` extraction is live, but class-object subtyping is staged; both
+/// branches therefore preserve the declared type without guessed precision
+/// ([TYPEINF-NARROWING-ISSUBCLASS]).
+#[test]
+fn staged_issubclass_guard_preserves_both_branches() {
+    let source = r"
+def f(x: type[int] | type[str]) -> None:
+    if issubclass(x, int):
+        positive = x
+    else:
+        negative = x
+";
+    let guards = resolved_guards(source);
+    let guard = guards
+        .iter()
+        .find(|guard| matches!(&guard.kind, NarrowingGuardKind::IsSubclass { variable, type_names, .. } if variable == "x" && type_names == &["int"]))
+        .expect("resolver extracts issubclass guard");
+    let declared = InferredType::from_annotation("type[int] | type[str]");
+    let outcome = guard_outcomes(guard, &declared).expect("checker consumes issubclass guard");
+    assert_eq!(outcome.positive, declared);
+    assert_eq!(outcome.negative, declared);
+
+    let result = analyse(source);
+    assert!(result.narrowed_uses.is_empty());
+    assert!(result.unreachable_ranges.is_empty());
+}
+
+/// `hasattr` extraction is live, but synthetic-protocol intersections are
+/// staged; both branches preserve the declared type without guessed precision
+/// ([TYPEINF-NARROWING-HASATTR]).
+#[test]
+fn staged_hasattr_guard_preserves_both_branches() {
+    let source = r#"
+def f(x: A | B) -> None:
+    if hasattr(x, "value"):
+        positive = x
+    else:
+        negative = x
+"#;
+    let guards = resolved_guards(source);
+    let guard = guards
+        .iter()
+        .find(|guard| matches!(&guard.kind, NarrowingGuardKind::HasAttr { variable, attribute, .. } if variable == "x" && attribute == "value"))
+        .expect("resolver extracts hasattr guard");
+    let declared = InferredType::from_annotation("A | B");
+    let outcome = guard_outcomes(guard, &declared).expect("checker consumes hasattr guard");
+    assert_eq!(outcome.positive, declared);
+    assert_eq!(outcome.negative, declared);
+
+    let result = analyse(source);
+    assert!(result.narrowed_uses.is_empty());
+    assert!(result.unreachable_ranges.is_empty());
+}
+
+/// Truthiness partitions a finite literal union exactly: the true branch
+/// excludes `None` and every falsy literal, while the false branch keeps only
+/// those falsy members ([TYPEINF-NARROWING-TRUTHY]).
+#[test]
+fn truthiness_partitions_none_and_falsy_literals() {
+    let result = analyse(
+        r#"
+def f(x: Literal[0] | Literal[1] | Literal[""] | Literal["ok"] | Literal[False] | Literal[True] | None) -> None:
+    if x:
+        truthy = x
+    else:
+        falsy = x
+"#,
+    );
+    let uses: Vec<&InferredType> = result
+        .narrowed_uses
+        .iter()
+        .filter(|use_site| use_site.name == "x")
+        .map(|use_site| &use_site.narrowed)
+        .collect();
+
+    let truthy = InferredType::Union(vec![
+        InferredType::Literal(LiteralValue::Int(1)),
+        InferredType::Literal(LiteralValue::Str("ok".to_owned())),
+        InferredType::Literal(LiteralValue::Bool(true)),
+    ]);
+    let falsy = InferredType::Union(vec![
+        InferredType::Literal(LiteralValue::Int(0)),
+        InferredType::Literal(LiteralValue::Str(String::new())),
+        InferredType::Literal(LiteralValue::Bool(false)),
+        InferredType::None_,
+    ]);
+
+    assert!(
+        uses.contains(&&truthy),
+        "the positive branch must contain only truthy members: {uses:?}"
+    );
+    assert!(
+        uses.contains(&&falsy),
+        "the negative branch must contain only falsy members: {uses:?}"
     );
 }
 

@@ -8,7 +8,12 @@ in the linked specs and editor-specific UI belongs in the VS Code, Zed, and Neov
 `basilisk lsp` runs the parser, resolver, checker, formatter, and language features in one
 process. VS Code, Zed, and Neovim communicate with it over LSP. External processes are
 limited to features that require them, notably `debugpy`, `uv`, test runners, and profiling
-helpers.
+helpers. On startup the server acquires the step-3 typeshed source required by
+the pinned typing order
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst),
+[STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)). Automatic
+acquisition resolves an exact SHA and downloads an HTTPS archive; Basilisk never
+clones the repository, and an explicit custom path requires no network.
 
 The analysis path is parser → resolver → checker. Workspace state, import graphs, and
 resolved modules are retained by the server so feature handlers do not reparse every
@@ -34,9 +39,16 @@ their installation flows in their editor specs.
 
 The server configuration model is `crates/basilisk-lsp/src/config.rs`. Editor manifests and
 settings must map to that model rather than maintaining a second semantic configuration.
-The stable shared surface includes the executable and Python paths, analysis mode, stub and
-typeshed paths, formatter selection, inlay-hint switches, debugger settings, and the uv,
-test, profiling, and memory namespaces. Detailed contracts live in their feature specs.
+The stable shared surface includes the executable and Python paths, analysis mode, stub
+paths, the typeshed source, mirror, cache, and verification settings
+(`typeshed-path`, `typeshed-commit`, `typeshed-url`, `typeshed-cache-path`,
+`typeshed-cache`, `typeshed-verify` —
+[STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)),
+formatter selection, inlay-hint switches, debugger settings, and the uv, test, profiling,
+and memory namespaces. The custom path implements the pinned typing specification's
+step-3 "canonical source" option
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+Detailed contracts live in their feature specs.
 
 There is ONE project configuration
 ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)), shared by
@@ -117,7 +129,7 @@ nothing usable exists; `version` is `null` when the `--version` probe fails but 
 path is real. Versions come from running `<tool> --version` once at initialize.
 
 Editors render a resolved tool as `<version> (<path>)`; with an empty (auto-detect)
-setting the row shows the outcome — `auto-detect → 3.12.4 (/usr/bin/python3)`,
+setting the row shows the outcome — `auto-detect → X.Y.Z (/usr/bin/python3)`,
 `auto-detect → none found`, or `auto-detect → awaiting server…` — never the bare
 `auto-detect` placeholder. The Binary row renders only from this payload: populated
 while a server is running, absent otherwise

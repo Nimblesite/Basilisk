@@ -113,6 +113,25 @@ pub(super) async fn initialize(
 
     // Store workspace roots for later use by import resolution.
     (*server.workspace_roots.write().await).clone_from(&roots);
+    let python_interpreter = params
+        .initialization_options
+        .as_ref()
+        .and_then(parse_python_interpreter);
+    (*server.python_interpreter.write().await).clone_from(&python_interpreter);
+
+    // Every root starts in an explicit non-ready generation. The
+    // `initialized` notification acquires one fully gated source before any
+    // workspace analysis starts, and publishes the matching root-keyed status.
+    {
+        let mut generations = server.typeshed_generations.write().await;
+        generations.clear();
+        for root in &roots {
+            let _ = generations.insert(
+                root.clone(),
+                super::typeshed_status::TypeshedGeneration::Acquiring,
+            );
+        }
+    }
 
     // Load project-level checker config (pyproject.toml [tool.basilisk]) so
     // that rule severity overrides, per-module, and per-path settings match
@@ -121,7 +140,7 @@ pub(super) async fn initialize(
     // inside a project still discovers the project's config.
     let checker_config = roots
         .first()
-        .map(|r| basilisk_config::load_basilisk_config(r))
+        .map(|root| checker_config_for_root(root, python_interpreter.as_deref()))
         .unwrap_or_default();
 
     // Resolve the environment actually in use (python / uv / this binary) and
@@ -136,6 +155,12 @@ pub(super) async fn initialize(
         params.initialization_options.as_ref(),
         &roots,
     ));
+    let typeshed_generations = server.typeshed_generations.read().await;
+    capabilities.experimental = Some(super::typeshed_status::experimental_payload(
+        capabilities.experimental.take(),
+        &typeshed_generations,
+    ));
+    drop(typeshed_generations);
 
     // Build the workspace index now so `initialized()` can scan immediately.
     let index = WorkspaceIndex::new(roots, mode, checker_config);
@@ -173,6 +198,20 @@ fn parse_formatter(value: &serde_json::Value) -> Option<crate::config::Formatter
         .or_else(|| value.get("basilisk").and_then(|b| b.get("formatter")))
         .and_then(serde_json::Value::as_str)
         .map(crate::config::FormatterEngine::parse)
+}
+
+/// Read the explicit editor-selected Python binary.
+///
+/// VS Code sends this as `initializationOptions.basilisk.python`; accepting the
+/// flat form as well keeps the server usable by other LSP clients. Empty
+/// strings mean auto-detect and therefore do not manufacture a target.
+fn parse_python_interpreter(value: &serde_json::Value) -> Option<std::path::PathBuf> {
+    value
+        .get("python")
+        .or_else(|| value.get("basilisk").and_then(|b| b.get("python")))
+        .and_then(serde_json::Value::as_str)
+        .filter(|path| !path.trim().is_empty())
+        .map(std::path::PathBuf::from)
 }
 
 /// Build the full `ServerCapabilities` for the `initialize` response.
@@ -285,6 +324,21 @@ pub(super) async fn initialized(server: &LspServer) {
         .log_message(MessageType::INFO, "Basilisk LSP initialized")
         .await;
 
+    acquire_initial_typeshed(server).await;
+    install_initial_search_paths(server).await;
+
+    let statuses = server
+        .typeshed_generations
+        .read()
+        .await
+        .values()
+        .filter_map(super::typeshed_status::TypeshedGeneration::ready_status)
+        .cloned()
+        .collect::<Vec<_>>();
+    for status in statuses {
+        super::typeshed_status::show_high_warnings(&server.client, &status).await;
+    }
+
     // Spawn file watcher registration in the background so it never blocks
     // the message loop (register_capability sends a request to the client).
     let client = server.client.clone();
@@ -304,6 +358,28 @@ pub(super) async fn initialized(server: &LspServer) {
         previous.abort();
     }
 
+    let ready_roots = typeshed_ready_roots(server).await;
+    let root_count = server.workspace_roots.read().await.len();
+    if ready_roots.is_empty() {
+        server
+            .client
+            .log_message(
+                MessageType::WARNING,
+                "Basilisk: analysis is blocked because no workspace root has an active Typeshed source",
+            )
+            .await;
+        return;
+    }
+    if ready_roots.len() < root_count {
+        server
+            .client
+            .log_message(
+                MessageType::WARNING,
+                "Basilisk: some workspace roots are blocked; healthy roots will continue independently",
+            )
+            .await;
+    }
+
     // Read the analysis mode, then release the lock immediately so the
     // message loop is not blocked while the workspace scan runs.
     let mode = {
@@ -316,6 +392,21 @@ pub(super) async fn initialized(server: &LspServer) {
     match mode {
         // Implements [ANALYSIS-STARTUP-OPEN]
         AnalysisMode::OpenFilesOnly => {
+            // `didOpen` may arrive while the initial Typeshed generation is
+            // still Acquiring.  The document handler preserves that buffer's
+            // authoritative text without analysing it; once acquisition has
+            // completed, this is the convergence point that analyses and
+            // publishes every deferred open file owned by a ready root.
+            let guard = server.index.read().await;
+            let Some(index) = guard.as_ref() else { return };
+            let results = index.refresh_open_files_for_roots(&ready_roots);
+            drop(guard);
+            for (uri, diagnostics) in results {
+                server
+                    .publish_diagnostics_if_enabled(uri, diagnostics)
+                    .await;
+            }
+
             // No workspace scan runs in this mode, so zero-file rollups are
             // already final ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
             server
@@ -345,6 +436,58 @@ pub(super) async fn initialized(server: &LspServer) {
 
     // Spawn initial test discovery in the background.
     spawn_initial_test_discovery(server);
+}
+
+async fn acquire_typeshed_snapshot(
+    root: &std::path::Path,
+    config: crate::config::WorkspaceConfig,
+) -> Result<
+    Arc<basilisk_stubs::typeshed::snapshot::Snapshot>,
+    super::typeshed_status::TypeshedFailure,
+> {
+    let cache_path = config.typeshed_cache_path.clone();
+    let request = crate::config::typeshed_request(&config)
+        .map_err(super::typeshed_status::TypeshedFailure::acquisition)?;
+    let manager = basilisk_stubs::typeshed::runtime::production_manager(request, cache_path)
+        .map_err(|error| super::typeshed_status::TypeshedFailure::acquisition(error.to_string()))?;
+    let result = tokio::task::spawn_blocking(move || manager.snapshot())
+        .await
+        .map_err(|_join_error| {
+            super::typeshed_status::TypeshedFailure::acquisition("Typeshed acquisition task failed")
+        })?
+        .map_err(|error| super::typeshed_status::TypeshedFailure::from_selection(&error));
+    if result.is_err() {
+        tracing::warn!(root = %root.display(), "initial Typeshed acquisition failed");
+    }
+    result
+}
+
+/// Acquire each root's immutable generation before the first scan. Identical
+/// root policies may hit the same immutable cache entry, but each result is
+/// still published under the owning root so later configuration changes can
+/// replace one generation without cross-root bleed.
+async fn acquire_initial_typeshed(server: &LspServer) {
+    let mut roots = server.workspace_roots.read().await.clone();
+    roots.sort();
+    acquire_typeshed_for_roots(server, roots).await;
+}
+
+async fn acquire_typeshed_for_roots(server: &LspServer, roots: Vec<std::path::PathBuf>) {
+    let interpreter = server.python_interpreter.read().await.clone();
+    for root in roots {
+        let mut config = crate::config::load_config(&root);
+        config.python_interpreter.clone_from(&interpreter);
+        let generation = match acquire_typeshed_snapshot(&root, config).await {
+            Ok(snapshot) => super::typeshed_status::TypeshedGeneration::Ready(snapshot),
+            Err(failure) => super::typeshed_status::TypeshedGeneration::Blocked { failure },
+        };
+        let _ = server
+            .typeshed_generations
+            .write()
+            .await
+            .insert(root.clone(), generation.clone());
+        super::typeshed_status::notify_generation(&server.client, &root, &generation).await;
+    }
 }
 
 /// Handle `didChangeConfiguration`: update the analysis mode on the index and
@@ -525,11 +668,14 @@ pub(super) async fn did_change_workspace_folders(
     let event = params.event;
 
     let mut roots = server.workspace_roots.write().await;
+    let mut removed_roots = Vec::new();
+    let mut added_roots = Vec::new();
 
     // Remove folders that were closed.
     for removed in &event.removed {
         if let Ok(path) = removed.uri.to_file_path() {
             roots.retain(|r| r != &path);
+            removed_roots.push(path);
         }
     }
 
@@ -537,7 +683,8 @@ pub(super) async fn did_change_workspace_folders(
     for added in &event.added {
         if let Ok(path) = added.uri.to_file_path() {
             if !roots.contains(&path) {
-                roots.push(path);
+                roots.push(path.clone());
+                added_roots.push(path);
             }
         }
     }
@@ -565,15 +712,41 @@ pub(super) async fn did_change_workspace_folders(
         let _ = crate::config_seed::seed_root_if_unconfigured(root);
     }
 
+    {
+        let mut generations = server.typeshed_generations.write().await;
+        for root in &removed_roots {
+            let _ = generations.remove(root);
+        }
+        for root in &added_roots {
+            let _ = generations.insert(
+                root.clone(),
+                super::typeshed_status::TypeshedGeneration::Acquiring,
+            );
+        }
+    }
+    for root in &added_roots {
+        super::typeshed_status::notify_generation(
+            &server.client,
+            root,
+            &super::typeshed_status::TypeshedGeneration::Acquiring,
+        )
+        .await;
+    }
+    acquire_typeshed_for_roots(server, added_roots).await;
+
+    let interpreter = server.python_interpreter.read().await.clone();
     let checker_config = updated_roots
         .first()
-        .map(|r| basilisk_config::load_basilisk_config(r))
+        .map(|root| checker_config_for_root(root, interpreter.as_deref()))
         .unwrap_or_default();
     let index = WorkspaceIndex::new(updated_roots, mode, checker_config);
     *server.index.write().await = Some(index);
+    install_initial_search_paths(server).await;
 
     // Re-scan if in a whole-workspace analysis mode.
-    if matches!(mode, AnalysisMode::WholeModule | AnalysisMode::CrossModule) {
+    if !typeshed_ready_roots(server).await.is_empty()
+        && matches!(mode, AnalysisMode::WholeModule | AnalysisMode::CrossModule)
+    {
         run_workspace_scan(server, mode).await;
     }
 }
@@ -631,7 +804,9 @@ async fn register_file_watchers(client: &Client) {
 /// all other messages — including the `textDocument/didClose` whose clear the
 /// editor is waiting on — for the scan's full duration (GitHub #264).
 async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
-    let scan_roots = server.workspace_roots.read().await.clone();
+    let scan_roots = typeshed_ready_roots(server).await;
+    let complete_workspace = scan_roots.len() == server.workspace_roots.read().await.len();
+    let scan_typeshed = active_typeshed_for_roots(server, &scan_roots).await;
     let scan_index = Arc::clone(&server.index);
     let scan_client = server.client.clone();
     // Clone the toggle so the spawned scan suppresses publication when type
@@ -639,6 +814,7 @@ async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
     let scan_enabled = Arc::clone(&server.type_checking_enabled);
     let scan_analyze = Arc::clone(&server.analyze_enabled);
     let scan_complete = Arc::clone(&server.initial_scan_complete);
+    let scan_python = server.python_interpreter.read().await.clone();
     drop(tokio::spawn(async move {
         let ScanResult {
             diagnostics,
@@ -647,7 +823,12 @@ async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
         } = {
             let guard = scan_index.read().await;
             let Some(index) = guard.as_ref() else { return };
-            scan_resolve_and_check_with_roots(index, &scan_roots)
+            scan_resolve_and_check_with_roots(
+                index,
+                &scan_roots,
+                scan_python.as_deref(),
+                scan_typeshed.as_ref(),
+            )
         };
         publish_scan_results(
             &scan_index,
@@ -663,10 +844,13 @@ async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
         // loading state even when the scan published nothing — a genuinely
         // empty workspace produces no diagnostics events at all
         // ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
-        scan_complete.store(true, std::sync::atomic::Ordering::Relaxed);
+        scan_complete.store(complete_workspace, std::sync::atomic::Ordering::Relaxed);
         scan_client
             .send_notification::<super::activity_panel::ScanCompleteNotification>(
-                serde_json::json!({ "totalFiles": file_count }),
+                serde_json::json!({
+                    "totalFiles": file_count,
+                    "partial": !complete_workspace
+                }),
             )
             .await;
         scan_client
@@ -739,39 +923,36 @@ struct ScanResult {
 fn scan_resolve_and_check_with_roots(
     index: &WorkspaceIndex,
     roots: &[std::path::PathBuf],
+    python_interpreter: Option<&std::path::Path>,
+    typeshed: Option<&crate::import_resolver::ActiveTypeshed>,
 ) -> ScanResult {
-    let config = roots
-        .first()
-        .map(|r| crate::config::load_config(r))
-        .unwrap_or_default();
-
-    // Detect uv project, build package registry and discover workspace members
-    // BEFORE scanning, so the scan itself analyses with import resolution.
-    let registry = build_uv_registry(roots);
-    let search_paths = crate::import_resolver::search_paths_from_config(roots, &config, registry);
-    info!(
-        site_packages = ?search_paths.site_packages,
-        workspace_members = search_paths.workspace_members.len(),
-        stub_paths = search_paths.stub_paths.len(),
-        has_registry = search_paths.registry.is_some(),
-        "built LSP import search paths"
-    );
+    let search_paths_by_root = build_search_paths_by_root(roots, python_interpreter, typeshed);
+    for (root, search_paths) in &search_paths_by_root {
+        info!(
+            root = %root.display(),
+            site_packages = ?search_paths.site_packages,
+            workspace_members = search_paths.workspace_members.len(),
+            stub_paths = search_paths.stub_paths.len(),
+            has_registry = search_paths.registry.is_some(),
+            "built LSP import search paths"
+        );
+    }
     // Cache the search paths so incremental single-file re-checks (didOpen /
     // didChange) resolve third-party imports identically to this scan, instead
     // of resurrecting false imports_unresolved. Implements [ANALYSIS-INCR-IMPORTS].
-    index.set_search_paths(search_paths);
+    index.set_search_paths_by_root(search_paths_by_root);
 
     // One pass: the scan primes the salsa engine with the whole workspace and
     // analyses each file exactly once through the memoized queries — imports
     // resolved and, in crossModule mode, `imported_symbols` populated. Every
     // later edit hits the memos this pass created. Implements
     // [CHKARCH-INCREMENTAL-SALSA] adoption / [ANALYSIS-STARTUP-WHOLE].
-    let (mut diagnostics, file_count, _initial_error_count) = index.scan();
+    let (mut diagnostics, file_count, _initial_error_count) = index.scan_roots(roots);
 
     // Open files are skipped by the scan (editor text is authoritative), but
     // their pre-scan diagnostics were computed without the search paths —
     // re-analyse them through the engine so open editors converge too.
-    diagnostics.extend(index.refresh_open_files());
+    diagnostics.extend(index.refresh_open_files_for_roots(roots));
 
     if matches!(index.mode(), AnalysisMode::CrossModule) {
         // Reverse-edge lookups for cross-file references/rename.
@@ -798,6 +979,162 @@ fn scan_resolve_and_check_with_roots(
         file_count,
         error_count: final_error_count,
     }
+}
+
+async fn active_typeshed_for_roots(
+    server: &LspServer,
+    roots: &[std::path::PathBuf],
+) -> Option<crate::import_resolver::ActiveTypeshed> {
+    let interpreter = server.python_interpreter.read().await.clone();
+    let generations = server.typeshed_generations.read().await;
+    let bindings = roots
+        .iter()
+        .filter_map(|root| {
+            let snapshot = Arc::clone(generations.get(root)?.ready_snapshot()?);
+            let target = stub_target_for_root(root, interpreter.as_deref());
+            Some((root.clone(), snapshot, target))
+        })
+        .collect();
+    crate::import_resolver::ActiveTypeshed::from_roots(bindings)
+}
+
+fn stub_target_for_root(
+    root: &std::path::Path,
+    interpreter: Option<&std::path::Path>,
+) -> Option<basilisk_stubs::types::StubTarget> {
+    let mut config = crate::config::load_config(root);
+    if let Some(interpreter) = interpreter {
+        config.python_interpreter = Some(interpreter.to_path_buf());
+    }
+    if config.python_version.is_none() {
+        config.python_version = basilisk_uv::python_version::resolve_target_python_version(root);
+    }
+    if config.python_platform.is_none() {
+        config.python_platform =
+            selected_interpreter_platform(root, config.python_interpreter.as_deref());
+    }
+    crate::import_resolver::stub_target_from_config(&config)
+}
+
+fn checker_config_for_root(
+    root: &std::path::Path,
+    interpreter: Option<&std::path::Path>,
+) -> basilisk_config::BasiliskConfig {
+    let mut config = basilisk_config::load_basilisk_config(root);
+    if config.python_platform.is_none() {
+        let analysis_config = crate::config::load_config(root);
+        config.python_platform = selected_interpreter_platform(
+            root,
+            interpreter.or(analysis_config.python_interpreter.as_deref()),
+        );
+    }
+    config
+}
+
+fn selected_interpreter_platform(
+    root: &std::path::Path,
+    interpreter: Option<&std::path::Path>,
+) -> Option<String> {
+    let selected = interpreter.map_or_else(
+        || std::path::PathBuf::from(crate::debug::resolve_python(root)),
+        std::path::Path::to_path_buf,
+    );
+    basilisk_uv::python_version::read_python_platform(&selected)
+}
+
+async fn typeshed_ready_roots(server: &LspServer) -> Vec<std::path::PathBuf> {
+    let roots = server.workspace_roots.read().await;
+    let generations = server.typeshed_generations.read().await;
+    roots
+        .iter()
+        .filter(|root| {
+            generations
+                .get(*root)
+                .and_then(super::typeshed_status::TypeshedGeneration::ready_snapshot)
+                .is_some()
+        })
+        .cloned()
+        .collect()
+}
+
+fn root_is_ready_for_path(
+    roots: &[std::path::PathBuf],
+    ready_roots: &[std::path::PathBuf],
+    path: &std::path::Path,
+) -> bool {
+    roots
+        .iter()
+        .filter(|root| path.starts_with(root))
+        .max_by_key(|root| root.components().count())
+        .is_none_or(|owner| ready_roots.contains(owner))
+}
+
+/// Whether the longest-prefix workspace root owning `uri` has an active
+/// Typeshed generation. Files outside every workspace root retain the legacy
+/// behavior and are allowed through.
+pub(super) async fn typeshed_ready_for_uri(server: &LspServer, uri: &Url) -> bool {
+    let Ok(path) = uri.to_file_path() else {
+        return true;
+    };
+    let roots = server.workspace_roots.read().await.clone();
+    let generations = server.typeshed_generations.read().await;
+    let ready_roots = roots
+        .iter()
+        .filter(|root| {
+            generations
+                .get(*root)
+                .and_then(super::typeshed_status::TypeshedGeneration::ready_snapshot)
+                .is_some()
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    root_is_ready_for_path(&roots, &ready_roots, &path)
+}
+
+async fn install_initial_search_paths(server: &LspServer) {
+    let roots = server.workspace_roots.read().await.clone();
+    let interpreter = server.python_interpreter.read().await.clone();
+    let typeshed = active_typeshed_for_roots(server, &roots).await;
+    let search_paths =
+        build_search_paths_by_root(&roots, interpreter.as_deref(), typeshed.as_ref());
+    let guard = server.index.read().await;
+    if let Some(index) = guard.as_ref() {
+        index.set_search_paths_by_root(search_paths);
+    }
+}
+
+fn build_search_paths_by_root(
+    roots: &[std::path::PathBuf],
+    python_interpreter: Option<&std::path::Path>,
+    typeshed: Option<&crate::import_resolver::ActiveTypeshed>,
+) -> std::collections::HashMap<std::path::PathBuf, Arc<crate::import_resolver::ImportSearchPaths>> {
+    roots
+        .iter()
+        .map(|root| {
+            let config = crate::config::load_config(root);
+            let search_paths =
+                build_root_search_paths(roots, root, config, python_interpreter, typeshed.cloned());
+            (root.clone(), Arc::new(search_paths))
+        })
+        .collect()
+}
+
+pub(crate) fn build_root_search_paths(
+    roots: &[std::path::PathBuf],
+    root: &std::path::Path,
+    mut config: crate::config::WorkspaceConfig,
+    python_interpreter: Option<&std::path::Path>,
+    typeshed: Option<crate::import_resolver::ActiveTypeshed>,
+) -> crate::import_resolver::ImportSearchPaths {
+    if let Some(interpreter) = python_interpreter {
+        config.python_interpreter = Some(interpreter.to_path_buf());
+    }
+    let root = root.to_path_buf();
+    let registry = build_uv_registry(std::slice::from_ref(&root));
+    let mut search_paths =
+        crate::import_resolver::search_paths_from_config(roots, &config, registry);
+    search_paths.typeshed_snapshot = typeshed;
+    search_paths
 }
 
 // Implements [ANALYSIS-PUBLISH] (runtime mode-switch → clear non-open files;
@@ -873,18 +1210,14 @@ pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else { return };
 
-    let roots = server.workspace_roots.read().await;
-    let config = roots
-        .first()
-        .map(|r| crate::config::load_config(r))
-        .unwrap_or_default();
-
-    let registry = build_uv_registry(&roots);
-    let search_paths = crate::import_resolver::search_paths_from_config(&roots, &config, registry);
+    let roots = server.workspace_roots.read().await.clone();
+    let interpreter = server.python_interpreter.read().await.clone();
+    let typeshed = active_typeshed_for_roots(server, &roots).await;
+    let search_paths =
+        build_search_paths_by_root(&roots, interpreter.as_deref(), typeshed.as_ref());
     // Refresh the cached search paths so subsequent incremental re-checks pick
     // up the rebuilt registry / venv. Implements [ANALYSIS-INCR-IMPORTS].
-    index.set_search_paths(search_paths);
-    drop(roots);
+    index.set_search_paths_by_root(search_paths);
 
     // Re-analyse all files through the salsa engine (the changed
     // `SearchPathsInput` invalidates exactly the import-resolving queries) and
@@ -1057,4 +1390,339 @@ pub(super) async fn shutdown(server: &LspServer) -> LspResult<()> {
         watcher.abort();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod explicit_python_tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use tower_lsp::lsp_types::NumberOrString;
+
+    use super::*;
+
+    #[test]
+    fn initialization_option_reads_nested_python_and_ignores_empty_auto_detect() {
+        assert_eq!(
+            parse_python_interpreter(&serde_json::json!({
+                "basilisk": { "python": "/opt/python-target/bin/python" }
+            })),
+            Some(std::path::PathBuf::from("/opt/python-target/bin/python"))
+        );
+        assert!(parse_python_interpreter(&serde_json::json!({
+            "basilisk": { "python": "" }
+        }))
+        .is_none());
+    }
+
+    #[test]
+    fn startup_target_uses_python_version_file_without_selecting_a_typeshed_commit() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        let root = std::env::temp_dir().join(format!(
+            "basilisk_lsp_python_version_target_{}_{}",
+            std::process::id(),
+            unique
+        ));
+        let setup = std::fs::create_dir_all(&root)
+            .and_then(|()| std::fs::write(root.join(".python-version"), b"3.14\n"));
+        assert!(setup.is_ok(), "fixture setup failed: {setup:?}");
+        if setup.is_err() {
+            return;
+        }
+
+        let target = stub_target_for_root(&root, None);
+        assert_eq!(target.map(|target| target.python_version), Some((3, 14)));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn startup_target_uses_selected_interpreter_platform() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        let root = std::env::temp_dir().join(format!(
+            "basilisk_lsp_python_platform_target_{}_{}",
+            std::process::id(),
+            unique
+        ));
+        let interpreter = root.join("python");
+        let setup = std::fs::create_dir_all(&root)
+            .and_then(|()| std::fs::write(root.join(".python-version"), b"3.14\n"))
+            .and_then(|()| {
+                std::fs::write(&interpreter, b"#!/bin/sh\nprintf 'fixture-platform\\n'\n")
+            })
+            .and_then(|()| {
+                std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o755))
+            });
+        assert!(setup.is_ok(), "fixture setup failed: {setup:?}");
+        if setup.is_err() {
+            return;
+        }
+
+        let target = stub_target_for_root(&root, Some(&interpreter));
+
+        assert_eq!(
+            target.map(|target| target.platform),
+            Some(basilisk_stubs::types::StubTargetPlatform::Concrete(
+                "fixture-platform".to_owned()
+            ))
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// [TYPESHEDRT-ACCEPTANCE-TARGET]: the editor's explicit Python binary
+    /// reaches the startup scan and selects that interpreter's site-packages.
+    /// This exercises the complete initialization-option → `WorkspaceConfig` →
+    /// import-search path rather than only the ambient detector.
+    #[test]
+    fn startup_scan_resolves_from_explicit_interpreter_site_packages() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        let base = std::env::temp_dir().join(format!(
+            "basilisk_lsp_explicit_python_{}_{}",
+            std::process::id(),
+            unique
+        ));
+        let root = base.join("workspace");
+        let prefix = base.join("target-python");
+        let interpreter = prefix.join("bin/python");
+        let package = prefix
+            .join("lib/python9.9/site-packages")
+            .join("bsk_explicit_target_only_991");
+
+        let setup = std::fs::create_dir_all(&root)
+            .and_then(|()| std::fs::create_dir_all(interpreter.parent().unwrap_or(&prefix)))
+            .and_then(|()| std::fs::create_dir_all(&package))
+            .and_then(|()| std::fs::write(&interpreter, b"fake interpreter fixture\n"))
+            .and_then(|()| {
+                std::fs::write(
+                    root.join("main.py"),
+                    b"import bsk_explicit_target_only_991\n",
+                )
+            })
+            .and_then(|()| std::fs::write(package.join("py.typed"), b""))
+            .and_then(|()| std::fs::write(package.join("__init__.pyi"), b"answer: int\n"));
+        assert!(setup.is_ok(), "fixture setup failed: {setup:?}");
+        if setup.is_err() {
+            return;
+        }
+
+        let index = WorkspaceIndex::new(
+            vec![root.clone()],
+            AnalysisMode::WholeModule,
+            basilisk_config::BasiliskConfig::default(),
+        );
+        let result = scan_resolve_and_check_with_roots(
+            &index,
+            std::slice::from_ref(&root),
+            Some(&interpreter),
+            None,
+        );
+        let unresolved = result.diagnostics.iter().any(|(_, diagnostics)| {
+            diagnostics.iter().any(|diagnostic| {
+                matches!(
+                    diagnostic.code.as_ref(),
+                    Some(NumberOrString::String(code)) if code == "imports_unresolved"
+                )
+            })
+        });
+        assert!(
+            !unresolved,
+            "explicit target package must resolve: {:?}",
+            result.diagnostics
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// [TYPESHEDRT-ACCEPTANCE-TARGET]: each workspace root owns its target
+    /// interpreter. A package installed only for root A must not leak into
+    /// root B, while both roots still resolve packages from their own target.
+    #[test]
+    fn startup_scan_isolates_target_packages_per_workspace_root() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        let base = std::env::temp_dir().join(format!(
+            "basilisk_lsp_multi_root_python_{}_{}",
+            std::process::id(),
+            unique
+        ));
+        let root_a = base.join("root-a");
+        let root_b = base.join("root-b");
+        let prefix_a = base.join("python-a");
+        let prefix_b = base.join("python-b");
+        let interpreter_a = prefix_a.join("bin/python");
+        let interpreter_b = prefix_b.join("bin/python");
+        let package_a = prefix_a
+            .join("lib/python9.9/site-packages")
+            .join("bsk_root_a_only_991");
+        let package_b = prefix_b
+            .join("lib/python9.9/site-packages")
+            .join("bsk_root_b_only_992");
+
+        let config_a = format!("[tool.basilisk]\npython = '{}'\n", interpreter_a.display());
+        let config_b = format!("[tool.basilisk]\npython = '{}'\n", interpreter_b.display());
+        let setup = std::fs::create_dir_all(&root_a)
+            .and_then(|()| std::fs::create_dir_all(&root_b))
+            .and_then(|()| std::fs::create_dir_all(interpreter_a.parent().unwrap_or(&prefix_a)))
+            .and_then(|()| std::fs::create_dir_all(interpreter_b.parent().unwrap_or(&prefix_b)))
+            .and_then(|()| std::fs::create_dir_all(&package_a))
+            .and_then(|()| std::fs::create_dir_all(&package_b))
+            .and_then(|()| std::fs::write(&interpreter_a, b"fake interpreter A\n"))
+            .and_then(|()| std::fs::write(&interpreter_b, b"fake interpreter B\n"))
+            .and_then(|()| std::fs::write(root_a.join("pyproject.toml"), config_a))
+            .and_then(|()| std::fs::write(root_b.join("pyproject.toml"), config_b))
+            .and_then(|()| std::fs::write(root_a.join("own.py"), b"import bsk_root_a_only_991\n"))
+            .and_then(|()| std::fs::write(root_b.join("own.py"), b"import bsk_root_b_only_992\n"))
+            .and_then(|()| {
+                std::fs::write(root_b.join("foreign.py"), b"import bsk_root_a_only_991\n")
+            })
+            .and_then(|()| std::fs::write(package_a.join("py.typed"), b""))
+            .and_then(|()| std::fs::write(package_a.join("__init__.pyi"), b"answer: int\n"))
+            .and_then(|()| std::fs::write(package_b.join("py.typed"), b""))
+            .and_then(|()| std::fs::write(package_b.join("__init__.pyi"), b"answer: int\n"));
+        assert!(setup.is_ok(), "fixture setup failed: {setup:?}");
+        if setup.is_err() {
+            return;
+        }
+
+        let roots = vec![root_a.clone(), root_b.clone()];
+        let index = WorkspaceIndex::new(
+            roots.clone(),
+            AnalysisMode::WholeModule,
+            basilisk_config::BasiliskConfig::default(),
+        );
+        let result = scan_resolve_and_check_with_roots(&index, &roots, None, None);
+        let has_unresolved = |path: &std::path::Path| {
+            result.diagnostics.iter().any(|(uri, diagnostics)| {
+                uri.to_file_path().as_deref() == Ok(path)
+                    && diagnostics.iter().any(|diagnostic| {
+                        matches!(
+                            diagnostic.code.as_ref(),
+                            Some(NumberOrString::String(code)) if code == "imports_unresolved"
+                        )
+                    })
+            })
+        };
+
+        assert!(
+            !has_unresolved(&root_a.join("own.py")),
+            "root A must resolve its own target package"
+        );
+        assert!(
+            !has_unresolved(&root_b.join("own.py")),
+            "root B must resolve its own target package"
+        );
+        assert!(
+            has_unresolved(&root_b.join("foreign.py")),
+            "root B must not inherit root A's target package"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[tokio::test]
+    async fn startup_acquires_custom_typeshed_before_analysis() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        let base = std::env::temp_dir().join(format!(
+            "basilisk_lsp_initial_typeshed_{}_{}",
+            std::process::id(),
+            unique
+        ));
+        let root = base.join("workspace");
+        let custom = base.join("custom-typeshed");
+        let setup = std::fs::create_dir_all(&root)
+            .and_then(|()| std::fs::create_dir_all(custom.join("stdlib")))
+            .and_then(|()| std::fs::write(custom.join("stdlib/os.pyi"), b"name: str\n"));
+        assert!(setup.is_ok(), "fixture setup failed: {setup:?}");
+        if setup.is_err() {
+            return;
+        }
+
+        let config = crate::config::WorkspaceConfig {
+            typeshed_path: Some(custom),
+            ..crate::config::WorkspaceConfig::default()
+        };
+        let snapshot = acquire_typeshed_snapshot(&root, config).await;
+        assert!(snapshot.is_ok(), "custom startup acquisition: {snapshot:?}");
+        let Ok(snapshot) = snapshot else {
+            let _ = std::fs::remove_dir_all(&base);
+            return;
+        };
+
+        assert_eq!(
+            snapshot.status.active_source,
+            basilisk_stubs::typeshed::source::SourceKind::Custom
+        );
+        assert!(snapshot.read_stub("os").is_some());
+
+        let expected_identity = snapshot.identity.uri_component();
+        let active = crate::import_resolver::ActiveTypeshed::from_roots(vec![(
+            root.clone(),
+            snapshot,
+            None,
+        )]);
+        assert!(active.is_some(), "one root binding");
+        let Some(active) = active else {
+            let _ = std::fs::remove_dir_all(&base);
+            return;
+        };
+        let index = WorkspaceIndex::new(
+            vec![root.clone()],
+            AnalysisMode::WholeModule,
+            basilisk_config::BasiliskConfig::default(),
+        );
+        let _ = scan_resolve_and_check_with_roots(
+            &index,
+            std::slice::from_ref(&root),
+            None,
+            Some(&active),
+        );
+        let installed_identity = index
+            .search_paths_for_file(&root)
+            .map(|(_, paths)| paths)
+            .and_then(|paths| paths.typeshed_snapshot.clone())
+            .map(|active| active.identity_fingerprint());
+        assert_eq!(
+            installed_identity.as_deref(),
+            Some(expected_identity.as_str())
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// [STUBRES-TYPESHED-ACQUIRE]: readiness follows the longest owning root;
+    /// a ready parent must not authorize analysis inside its blocked child.
+    #[test]
+    fn nested_workspace_typeshed_readiness_uses_the_longest_owner() {
+        let parent = std::path::PathBuf::from("/workspace");
+        let child = parent.join("nested");
+        let roots = vec![parent.clone(), child.clone()];
+
+        assert!(!root_is_ready_for_path(
+            &roots,
+            std::slice::from_ref(&parent),
+            &child.join("blocked.py")
+        ));
+        assert!(!root_is_ready_for_path(
+            &roots,
+            std::slice::from_ref(&child),
+            &parent.join("blocked.py")
+        ));
+        assert!(root_is_ready_for_path(
+            &roots,
+            std::slice::from_ref(&child),
+            &child.join("ready.py")
+        ));
+        assert!(root_is_ready_for_path(
+            &roots,
+            &[],
+            std::path::Path::new("/outside/file.py")
+        ));
+    }
 }

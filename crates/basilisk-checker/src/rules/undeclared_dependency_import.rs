@@ -45,7 +45,6 @@ impl Rule for UndeclaredDependencyImport {
             .imports
             .iter()
             .filter(|import| import.resolution != ImportResolution::Unresolved)
-            .filter(|import| !basilisk_stubs::is_stdlib_module(&import.module))
             .filter(|import| import.package_dep_kind == Some(PackageDepKind::Transitive))
             .for_each(|import| {
                 let root_module = import.module.split('.').next().unwrap_or(&import.module);
@@ -105,6 +104,7 @@ mod tests {
             package_dep_kind: dep_kind,
             package_version: None,
             package_name: None,
+            stub_distribution: None,
             unresolved_reason: None,
         }
     }

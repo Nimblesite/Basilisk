@@ -28,7 +28,7 @@ Depend on established open-source tools rather than reimplementing them.
 |---|---|---|---|
 | **`ruff_python_formatter`** | Code formatting | MIT | Embedded in-process — the formatter is Ruff's, no `ruff` CLI. Pinned to the same rev as the parser ([LSPFMT-ENGINE](LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE)). |
 | **`ruff_python_parser`** | Python AST parsing | MIT | Battle-tested Rust crate. Powers Ruff. Our parser. |
-| **typeshed data** | Standard-library and stub-distribution indexes | Apache-2.0 | Build-time source for the compact indexes in `basilisk-stubs`; full `.pyi` trees are not embedded. |
+| **`python/typeshed` stdlib** | Standard-library `.pyi` and stub-distribution data | Apache-2.0; parts MIT | Implements "Typeshed stubs for the standard library" from pinned typing step 3 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). Step 3 uses one custom tree, exact-SHA archive, or bundled stdlib ZIP; sources never mix ([STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)). |
 | **Salsa** | Incremental computation framework | Apache-2.0/MIT | Powers rust-analyzer. Proven at scale. |
 | **`lsp-server`** / **`tower-lsp`** | LSP implementation | MIT | Standard Rust LSP crates. |
 
@@ -37,7 +37,7 @@ Depend on established open-source tools rather than reimplementing them.
 | Tool | Interop Strategy |
 |---|---|
 | **Ruff** | Basilisk **embeds** the `ruff_python_formatter` crate in-process for formatting and reimplements import hygiene natively — the `ruff` CLI is never spawned ([LSPFMT-DECISION](LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)). Configuration unified in `pyproject.toml` (`[tool.ruff.format]`). |
-| **typeshed** | Compile-time stdlib-name and stub-distribution indexes. Users provide real `.pyi` files through `stub-paths`, installed packages, or `typeshed-path`; see [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561). |
+| **typeshed** | Step 3 selects a custom `typeshed-path`, an exact-SHA archive (explicit pin or current `main`), or the bundled stdlib ZIP. Basilisk adopts the pinned typing step-3 canonical-path SHOULD; step-3 sources never mix ([STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561), [`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). |
 | **PEP 561** | Full support for `py.typed` packages, inline type annotations, and stub-only packages. |
 
 ---
@@ -331,7 +331,7 @@ Full support for:
 - Unreachable branch elimination
 - `NoReturn` propagation from `sys.exit()`, `raise`, and custom `NoReturn` functions
 - `assert_never()` for exhaustiveness checking
-- Platform-aware reachability (default: assume code may run on any platform)
+- Platform-aware reachability (an unknown target preserves every platform branch)
 
 ### Target Version and Platform {#CHKARCH-VERSION-TARGET}
 
@@ -349,12 +349,22 @@ release. Basilisk has no canonical Python version.
   [`[LSPUV-PYTHON-VERSION-RESOLUTION-ORDER]`](LSP-UV-INTEGRATION-SPEC.md):
   `.python-version` → `[project].requires-python` lower bound → `uv.lock`
   `requires-python` lower bound (`basilisk_uv::python_version::resolve_target_python_version`).
+- When `python-platform` is absent, the CLI and LSP ask the selected project
+  interpreter for `sys.platform` and thread that concrete evidence through
+  both Typeshed guard selection and checker rules. An explicit
+  `python-platform = "All"` keeps cross-platform intersection semantics. A
+  failed interpreter probe leaves the platform unknown; the checker never
+  manufactures a host or fixed-platform target.
 - `rules::run_all(module, ctx)` threads the context into every
   `Rule::check(module, ctx, diagnostics)`. Feature-version boundaries come from
   their governing PEP or Python language rule, never from a book-wide or
   product-wide support target.
 
 #### Version/Platform Narrowing {#CHKARCH-VERSION-NARROWING}
+
+The pinned stub syntax text specifically says the `type` keyword is "only
+accepted by the Python parser in Python 3.12 and later"
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 
 - `directives_version_platform` evaluates `sys.version_info` / `sys.platform` guards against
   `ctx.target_version`, so dead-branch analysis follows the project's real
@@ -642,7 +652,6 @@ basilisk/
     basilisk-lsp/          # Language Server Protocol implementation
     basilisk-cli/          # Command-line interface
     basilisk-stubs/        # Stub generation, loading, registry client
-    basilisk-plugin/       # WASM-based plugin host
     basilisk-db/           # Salsa incremental computation database
     basilisk-safety/       # Python package: Borrowed, Owned, InOut annotations
   editors/
@@ -663,7 +672,6 @@ basilisk-db (foundation)
                       <- basilisk-cli (leaf: terminal)
 
 basilisk-stubs (standalone, used by basilisk-resolver)
-basilisk-plugin (standalone, used by basilisk-checker)
 ```
 
 ### Build System {#CHKARCH-ARCH-BUILD}
@@ -921,16 +929,21 @@ stub-resolution spec and `basilisk-stubs`.
 
 ### typeshed compatibility {#CHKARCH-STUBS-TYPESHED}
 
-`basilisk-stubs` embeds compact indexes derived from typeshed, not the full stub tree.
-`typeshed-path` supplies the canonical standard-library `.pyi` tree for resolution step 3;
-`stub-paths` prepends project stubs at step 1. The exact order is
-[STUBRES-CUSTOM-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED).
+Pinned typing step 3 says a configured custom typeshed is the "canonical source"
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+Accordingly, `typeshed-path` is the sole step-3 tree when set. Otherwise Basilisk
+uses an exact-SHA archive for an explicit `typeshed-commit` or current `main`, or
+the bundled stdlib ZIP. Step-3 sources never mix; failed unpinned acquisition
+never reuses an earlier archive.
+`typeshed-cache-path` only relocates automatic storage, while `stub-paths`
+remains the separate step-1 override
+([STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)).
 
 ---
 
 ## Plugin host (planned) {#CHKARCH-PLUGINS}
 
-`basilisk-plugin` is currently a placeholder path validator, not a WASM runtime.
+No plugin crate ships today. A WASM host remains future work rather than a placeholder runtime.
 
 ### Sandbox target {#CHKARCH-PLUGINS-ARCH}
 
@@ -1004,9 +1017,15 @@ Project TOML example:
 
 ```toml
 [tool.basilisk]
-python-platform = "All"          # Default: check for all platforms
+python-platform = "All"          # Explicit cross-platform analysis
 stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
-# typeshed-path = "typeshed-x"   # resolution step 3: provide canonical stdlib stubs
+# Unpinned acquisition resolves current python/typeshed@main on startup:
+# typeshed-commit = "<full commit SHA>"  # optional explicit immutable source
+# typeshed-url = "https://mirror.example/typeshed/{sha}.zip"
+# typeshed-cache-path = ".cache/typeshed"
+# typeshed-cache = true
+# typeshed-verify = true
+# typeshed-path = "typeshed-x"   # resolution step 3: your sole custom stdlib tree
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]
 

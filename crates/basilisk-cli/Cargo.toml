@@ -34,7 +34,8 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 basilisk-test-utils = { workspace = true, features = ["checker"] }
-basilisk-stubs.workspace  = true
+basilisk-stubs.workspace = true
+tempfile = "3"
 
 [build-dependencies]
 basilisk-buildinfo.workspace = true

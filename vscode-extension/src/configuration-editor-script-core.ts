@@ -11,6 +11,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     const PEP_TAG = 'pep';
     const NO_ENTRY = 'None';
     const SEVERITIES = ['Error', 'Warning', 'Info', 'Disabled'];
+    const SECTION_NAMES = ['overview', 'rules', 'adoption', 'paths', 'project'];
     let editorState = { phase: 'idle', message: '' };
     let snapshot;
     let preview;
@@ -20,6 +21,9 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     let selectedRuleCode;
     let lastFocusedRule;
     let overlayWasBlocking = false;
+    // Which navigation view is visible. Rules is the default so the editor
+    // opens on the tag-first rule browser exactly as before.
+    let activeSection = 'rules';
     // One-shot per webview lifetime: the Configure Severity deep link's
     // focus target is applied on the first snapshot render only, so later
     // state posts never stomp the user's own search/selection.
@@ -99,6 +103,19 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     function tagMutation(tag, value) {
       return { kind: 'SetTag', tag, severity: { kind: value } };
     }
+    function typeshedKey(name) { return { kind: name }; }
+    function typeshedRemove(name) {
+      return { kind: 'RemoveTypeshedSetting', key: typeshedKey(name) };
+    }
+    function typeshedSetText(name, value) {
+      return { kind: 'SetTypeshedSetting', key: typeshedKey(name), value: { kind: 'Text', value } };
+    }
+    function typeshedSetBoolean(name, value) {
+      return { kind: 'SetTypeshedSetting', key: typeshedKey(name), value: { kind: 'Boolean', value } };
+    }
+    function typeshedSetting(name) {
+      return snapshot && snapshot.typeshed.settings.find((setting) => kind(setting.key, '') === name);
+    }
     function selectedRule() {
       return snapshot && snapshot.rules.find((rule) => rule.descriptor.code === selectedRuleCode);
     }
@@ -123,5 +140,20 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
       const selector = lastFocusedRule.control === 'select' ? 'select' : '.rule-copy button';
       const control = row.querySelector(selector);
       if (control) control.focus({ preventScroll: true });
+    }
+    // Switch the visible navigation view. Sections carry data-section; the nav
+    // buttons carry data-section-target. Rules stays virtualized, so re-measure
+    // its viewport once it becomes visible again.
+    function showSection(name) {
+      if (SECTION_NAMES.indexOf(name) === -1) return;
+      activeSection = name;
+      document.querySelectorAll('[data-section]').forEach((section) => {
+        section.hidden = section.getAttribute('data-section') !== name;
+      });
+      document.querySelectorAll('#section-nav [data-section-target]').forEach((button) => {
+        if (button.getAttribute('data-section-target') === name) button.setAttribute('aria-current', 'page');
+        else button.removeAttribute('aria-current');
+      });
+      if (name === 'rules') window.requestAnimationFrame(renderRuleWindow);
     }
 `;

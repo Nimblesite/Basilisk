@@ -1,0 +1,43 @@
+{
+  "bundle": {
+    "file_count": 754,
+    "format": "zip-stored",
+    "pyi_count": 752,
+    "scope": "stdlib-subset",
+    "sha256": "e5141e63b6b1932dc2b648591b41f842604155e63f6af8ebd0a2f096fdb3c189",
+    "uncompressed_bytes": 2852844
+  },
+  "derived_indexes": {
+    "stub_distributions": {
+      "entries": 274,
+      "path": "data/typeshed_stub_distributions.tsv",
+      "sha256": "dc995d1599210db5b5f472d6eb6869130e229c1c9a0d3a4bf158e28db25c5639"
+    }
+  },
+  "license_manifest": {
+    "files": [
+      {
+        "path": "LICENSE",
+        "sha256": "295f8538c94ae5c3043301cf7cff1c852dab6a786a8ddee471e061b40d5ecabe"
+      }
+    ],
+    "identity_sha256": "2819dbceee0e931debda11ff1362360a5e92fd461bb14badaff103537598f6d8",
+    "version": 1
+  },
+  "schema_version": 1,
+  "source": {
+    "commit_sha": "83c2518a9e6abbda0c44592c3483de459198f887",
+    "repository": "https://github.com/python/typeshed",
+    "tree_scope": "full-repository",
+    "tree_sha": "66408ffce2750980efc6da09e8a6652733f852e4",
+    "verification": {
+      "method": "github-api-tree-and-full-codeload-blob-set-match",
+      "signed_release": false,
+      "trust_boundary": "github-tls"
+    }
+  },
+  "versions": {
+    "path": "stdlib/VERSIONS",
+    "sha256": "8a236d098757a04bdaeb40bb78545d0f9becc8db6a834c21b3d86e8d4d82bce3"
+  }
+}

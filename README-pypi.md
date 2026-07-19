@@ -43,9 +43,12 @@ basilisk check path/to/your_code.py --output json --color never
 
 The bundled binary is built on [Ruff](https://github.com/astral-sh/ruff) by
 [Astral](https://astral.sh/) (MIT) and [typeshed](https://github.com/python/typeshed)
-(Apache-2.0), among other open-source projects. Full third-party notices:
-<https://github.com/Nimblesite/Basilisk/blob/main/NOTICES>.
+(Apache-2.0, with MIT-licensed parts), among other open-source projects. The
+wheel carries the complete locked notices and license texts in its
+`.dist-info/licenses/` directory.
 
 ## License
 
-MIT
+Basilisk source code is MIT licensed. This binary wheel also contains
+third-party components under the composite `License-Expression` and the exact
+license files shipped in `.dist-info/licenses/`.

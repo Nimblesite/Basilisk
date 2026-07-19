@@ -294,3 +294,75 @@ fn union_with_none_satisfies_optional_target() {
     let str_or_none = InferredType::Union(vec![InferredType::Str, InferredType::None_]);
     assert!(!str_or_none.is_assignable_to(&optional_int));
 }
+
+// Exercises [TYPEINF-SPECIAL-LITERALSTRING] — only literal-proven strings may
+// flow into LiteralString; a dynamic plain `str` must not.
+#[test]
+fn dynamic_string_is_not_assignable_to_literal_string() {
+    use basilisk_checker::types::{InferredType, LiteralValue};
+
+    let literal = InferredType::Literal(LiteralValue::Str("SELECT 1".to_owned()));
+    assert!(literal.is_assignable_to(&InferredType::LiteralString));
+    assert!(InferredType::LiteralString.is_assignable_to(&InferredType::Str));
+    assert!(!InferredType::Str.is_assignable_to(&InferredType::LiteralString));
+}
+
+// Exercises [TYPEINF-SPECIAL-LITERALSTRING] — literal expressions retain
+// literal-string provenance through standard container inference.
+#[test]
+fn string_literal_container_infers_literal_string_elements() {
+    use basilisk_checker::collection_inference::infer_list_type;
+    use basilisk_checker::types::InferredType;
+    use basilisk_resolver::RhsKind;
+
+    assert_eq!(
+        infer_list_type(&[RhsKind::StrLiteral, RhsKind::StrLiteral]),
+        InferredType::List(Box::new(InferredType::LiteralString))
+    );
+}
+
+// Exercises [TYPEINF-SUBTYPING-GENERIC] — mutable built-in containers are
+// invariant even when their element types have a scalar subtype relation.
+#[test]
+fn mutable_builtin_containers_are_invariant() {
+    use basilisk_checker::types::InferredType;
+
+    let int_list = InferredType::List(Box::new(InferredType::Int));
+    let float_list = InferredType::List(Box::new(InferredType::Float));
+    assert!(!int_list.is_assignable_to(&float_list));
+    assert!(!float_list.is_assignable_to(&int_list));
+
+    let int_set = InferredType::Set(Box::new(InferredType::Int));
+    let float_set = InferredType::Set(Box::new(InferredType::Float));
+    assert!(!int_set.is_assignable_to(&float_set));
+    assert!(!float_set.is_assignable_to(&int_set));
+
+    let str_int_dict = InferredType::Dict(Box::new(InferredType::Str), Box::new(InferredType::Int));
+    let str_float_dict =
+        InferredType::Dict(Box::new(InferredType::Str), Box::new(InferredType::Float));
+    assert!(!str_int_dict.is_assignable_to(&str_float_dict));
+    assert!(!str_float_dict.is_assignable_to(&str_int_dict));
+
+    let any_list = InferredType::List(Box::new(InferredType::Any));
+    assert!(any_list.is_assignable_to(&int_list));
+    assert!(int_list.is_assignable_to(&any_list));
+}
+
+// Exercises [TYPEINF-SUBTYPING-CALLABLE] — a source may require fewer
+// parameters than the target when its remaining parameters are optional.
+#[test]
+fn callable_source_may_have_fewer_required_parameters() {
+    use basilisk_checker::types::{CallableInfo, InferredType};
+
+    let source = InferredType::Callable(CallableInfo {
+        param_types: vec![InferredType::Int],
+        return_type: Box::new(InferredType::Bool),
+    });
+    let target = InferredType::Callable(CallableInfo {
+        param_types: vec![InferredType::Int, InferredType::Str],
+        return_type: Box::new(InferredType::Bool),
+    });
+
+    assert!(source.is_assignable_to(&target));
+    assert!(!target.is_assignable_to(&source));
+}

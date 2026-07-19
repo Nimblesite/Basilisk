@@ -145,9 +145,44 @@ export const CONFIGURATION_EDITOR_STYLES = `
   .primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
   .primary:hover { background: var(--vscode-button-hoverBackground); }
 
-  #shell { height: calc(100vh - 74px); }
+  #shell { height: calc(100vh - 74px); display: grid; grid-template-columns: 190px minmax(0, 1fr); }
+  #section-nav { padding: 16px 10px; overflow-y: auto; background: var(--surface); border-right: 1px solid var(--border); }
+  #section-nav button { width: 100%; display: flex; align-items: center; gap: 10px; margin-bottom: 3px; padding: 8px 10px; background: transparent; border-color: transparent; border-radius: 7px; color: var(--muted); text-align: left; }
+  #section-nav button:hover { background: var(--vscode-list-hoverBackground); color: var(--text); }
+  #section-nav button[aria-current="page"] { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); font-weight: 600; }
+  #section-nav button span:first-child { width: 18px; flex: 0 0 auto; text-align: center; }
   main { height: 100%; min-width: 0; overflow: hidden; }
-  main > section { height: 100%; overflow: hidden; }
+  main > section { height: 100%; overflow: auto; padding: 24px; }
+  main > section[hidden] { display: none; }
+  #rules-section { padding: 0; overflow: hidden; }
+
+  .section-heading { max-width: 940px; margin: 0 auto 20px; }
+  .section-heading h2 { margin: 0 0 4px; font-size: 21px; letter-spacing: -.02em; }
+  .section-heading p { margin: 0; color: var(--muted); }
+  .dashboard-grid { width: min(100%, 940px); margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .card[data-accent]::before { position: absolute; top: -1px; left: 16px; width: 38px; height: 2px; border-radius: 2px; background: var(--bsk-orange); content: ""; }
+  .card[data-accent="sky"]::before { background: var(--bsk-sky); }
+  .card h3 { margin: 0 0 6px; font-size: 13px; }
+  .card > p { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+  .stat { display: block; margin-bottom: 10px; font-size: 30px; font-weight: 650; letter-spacing: -.04em; }
+  #severity-strip { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; padding: 0; overflow: hidden; background: var(--border); }
+  #severity-strip div { padding: 14px 16px; background: var(--surface-raised); }
+  #severity-strip strong { display: block; font-size: 22px; letter-spacing: -.03em; }
+  #severity-strip span { color: var(--muted); font-size: 11px; }
+  .wide { grid-column: 1 / -1; }
+  #source-details { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 14px; }
+  #source-details dt { color: var(--muted); }
+  #source-details dd { margin: 0; overflow-wrap: anywhere; }
+  #problem-list { display: grid; gap: 6px; }
+  .problem-row { margin: 0; padding: 8px 10px; background: var(--surface); border-left: 3px solid var(--warning); border-radius: 4px; font-size: 12px; }
+  .problem-row strong { color: var(--warning); }
+  #path-override-list { display: grid; gap: 10px; }
+  .path-override-card { padding: 12px 14px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 8px; }
+  .path-override-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .path-override-card h3 { margin: 0; overflow-wrap: anywhere; font: 600 12px var(--vscode-editor-font-family); }
+  .path-override-card ul { display: grid; gap: 4px; margin: 10px 0 0; padding: 0; list-style: none; }
+  .path-override-card li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+  .path-override-card code { color: var(--text); overflow-wrap: anywhere; }
 
   #rules-layout { height: 100%; display: grid; grid-template-columns: 250px minmax(360px, 1fr) minmax(240px, 320px); }
   #tag-rail, #rule-detail { min-width: 0; padding: 18px 12px; overflow-y: auto; background: var(--surface); }
@@ -272,6 +307,17 @@ export const CONFIGURATION_EDITOR_STYLES = `
   #state-card h2 { margin: 0 0 5px; }
   #state-card p { margin: 0 0 14px; color: var(--muted); }
   .overlay-actions { justify-content: center; }
+  #typeshed-status dl { display: grid; grid-template-columns: minmax(100px, auto) minmax(0, 1fr); gap: 4px 12px; }
+  #typeshed-status dt { color: var(--muted); }
+  #typeshed-status dd { margin: 0; overflow-wrap: anywhere; }
+  .typeshed-warning { padding: 8px 10px; border-left: 3px solid var(--bsk-orange); background: var(--bsk-orange-soft); }
+  .typeshed-warning[data-severity="high"] { border-left-color: var(--vscode-errorForeground); }
+  #typeshed-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 16px 0; }
+  .typeshed-control { display: grid; gap: 5px; align-content: start; }
+  .typeshed-control > span { font-weight: 600; }
+  .typeshed-control > small { min-height: 30px; color: var(--muted); }
+  .typeshed-control input[type="text"], .typeshed-control select { width: 100%; min-width: 0; }
+  .path-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
 
   @keyframes breathe { 50% { opacity: .25; transform: scale(.75); } }
   @media (prefers-reduced-motion: reduce) {
@@ -279,6 +325,7 @@ export const CONFIGURATION_EDITOR_STYLES = `
   }
   @media (max-width: 980px) {
     main > section { overflow: auto; }
+    #rules-section { overflow: auto; }
     #rules-layout {
       height: auto;
       min-height: 100%;
@@ -294,7 +341,9 @@ export const CONFIGURATION_EDITOR_STYLES = `
   @media (max-width: 720px) {
     body > header { min-height: 64px; padding: 9px 12px; }
     #status-pill { display: none; }
-    #shell { height: calc(100vh - 64px); }
+    #shell { height: calc(100vh - 64px); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+    #section-nav { display: flex; gap: 4px; padding: 7px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+    #section-nav button { width: auto; flex: 0 0 auto; justify-content: center; margin: 0; }
     .preview-change { grid-template-columns: minmax(0, 1fr); }
     .preview-change strong { text-align: left; }
   }

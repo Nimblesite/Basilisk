@@ -26,6 +26,16 @@ pub struct Fingerprint {
     pub config_hash: u64,
     /// Hash of the resolution environment (search paths, `uv.lock`).
     pub env_hash: u64,
+    /// Identity of the active standard-library typeshed snapshot
+    /// ([STUBRES-TYPESHED], [CHKCACHE-FINGERPRINT]): the resolved commit/tree
+    /// SHA, a custom-tree digest, or the bundled-snapshot SHA.
+    ///
+    /// This is a *runtime* identity that [`Self::config_hash`] cannot
+    /// represent: unpinned "Latest" can resolve to different commits between
+    /// runs, and a bundled fallback substitutes different `.pyi` bodies, all
+    /// under byte-identical configuration. A change forces a miss so cached
+    /// diagnostics never outlive the stubs that produced them.
+    pub typeshed_id: String,
 }
 
 /// A persistent result cache rooted at a directory.
@@ -45,6 +55,7 @@ struct Entry<T> {
     version: String,
     config_hash: u64,
     env_hash: u64,
+    typeshed_id: String,
     deps: Vec<Dep>,
     payload: T,
 }
@@ -74,6 +85,7 @@ impl CheckCache {
         if entry.version != fingerprint.version
             || entry.config_hash != fingerprint.config_hash
             || entry.env_hash != fingerprint.env_hash
+            || entry.typeshed_id != fingerprint.typeshed_id
         {
             return None;
         }
@@ -107,6 +119,7 @@ impl CheckCache {
             version: fingerprint.version.clone(),
             config_hash: fingerprint.config_hash,
             env_hash: fingerprint.env_hash,
+            typeshed_id: fingerprint.typeshed_id.clone(),
             deps,
             payload,
         };

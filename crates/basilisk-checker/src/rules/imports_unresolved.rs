@@ -28,41 +28,21 @@ const CODE: ErrorCode = ErrorCode {
 /// Emits `imports_unresolved` for imports from modules outside the known stdlib/typing
 /// ecosystem.
 ///
-/// Uses the compiled typeshed index from `basilisk-stubs` for O(1) module
-/// recognition.  Imports that resolved to workspace or stub files are skipped
-/// — they already have type information available.
+/// Imports that resolved to workspace or stub files are skipped — they already
+/// have type information available.
 /// Suppression is handled centrally by the `suppression` module.
-///
-/// The stdlib skip is gated on
-/// [`crate::imports::bundled_stdlib_recognized`], not the raw name-set: when a
-/// custom typeshed (`typeshed-path`) is canonical for step 3, a stdlib module
-/// absent from it is surfaced as unresolved rather than silently skipped
-/// ([STUBRES-CUSTOM-TYPESHED]).
 pub(crate) struct ImportFromUntypedModule;
 
 impl Rule for ImportFromUntypedModule {
     fn check(
         &self,
         module: &ResolvedModule,
-        ctx: &super::CheckContext,
+        _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         module
             .imports
             .iter()
-            // Skip modules the bundled stdlib name-set still vouches for. When a
-            // custom typeshed is configured it is canonical for step 3, so that
-            // name-set no longer rescues a stdlib module absent from it — the
-            // import must surface as unresolved instead of being silently
-            // swallowed here ([STUBRES-CUSTOM-TYPESHED]). Gating on
-            // `bundled_stdlib_recognized` keeps this decision identical to the
-            // resolver and cascade-suppression sites.
-            .filter(|import| {
-                !crate::imports::bundled_stdlib_recognized(
-                    &import.module,
-                    ctx.custom_typeshed_configured,
-                )
-            })
             // Terminal state of the static search ([STUBRES-STATIC-MODEL]):
             // whatever the search could not follow to a `.py`/`.pyi` is an
             // implicit `Any` we surface here instead of silently accepting.
@@ -170,6 +150,7 @@ mod tests {
             package_dep_kind: None,
             package_version: None,
             package_name: None,
+            stub_distribution: None,
             unresolved_reason: reason,
         }
     }
@@ -252,30 +233,17 @@ mod tests {
     }
 
     #[test]
-    fn skips_stdlib_imports() {
-        assert!(run_check(make_import("os", None)).is_empty());
+    fn unresolved_stdlib_is_reported_without_an_active_snapshot() {
+        assert_eq!(run_check(make_import("os", None)).len(), 1);
     }
 
-    /// Run the rule with a custom typeshed configured in the context.
-    fn run_check_custom_typeshed(import: ImportInfo) -> Vec<crate::Diagnostic> {
-        let module = make_module(vec![import]);
-        let ctx = crate::context::CheckContext {
-            custom_typeshed_configured: true,
-            ..crate::context::CheckContext::default()
-        };
-        let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &ctx, &mut diagnostics);
-        diagnostics
-    }
-
-    /// [STUBRES-CUSTOM-TYPESHED]: with a custom typeshed configured the bundled
-    /// name-set is no longer canonical, so a stdlib module that failed to resolve
-    /// against it MUST surface as unresolved instead of being silently skipped.
+    /// [STUBRES-CUSTOM-TYPESHED]: a custom typeshed is the sole step-3 source, so
+    /// a stdlib module absent from it MUST surface as unresolved instead of being
+    /// mixed in from the bundled snapshot.
     /// Regression guard for the second suppression site the resolver fix missed.
     #[test]
     fn custom_typeshed_surfaces_absent_stdlib() {
-        let mut diags =
-            run_check_custom_typeshed(make_import("fractions", Some(UnresolvedReason::Unknown)));
+        let mut diags = run_check(make_import("fractions", Some(UnresolvedReason::Unknown)));
         assert_eq!(
             diags.len(),
             1,
@@ -293,7 +261,7 @@ mod tests {
             ..make_import("os", None)
         };
         assert!(
-            run_check_custom_typeshed(import).is_empty(),
+            run_check(import).is_empty(),
             "a stdlib module resolved via the custom typeshed must not be reported"
         );
     }

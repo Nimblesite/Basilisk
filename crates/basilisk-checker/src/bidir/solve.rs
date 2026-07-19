@@ -93,6 +93,12 @@ fn step(
     match (sub, sup) {
         (Ty::Var(v), sup) => bound_var_above(v, &sup, range, reason, vars, worklist),
         (sub, Ty::Var(v)) => bound_var_below(v, &sub, range, reason, vars, worklist),
+        (sub @ Ty::List(_), sup @ Ty::List(_))
+        | (sub @ Ty::Set(_), sup @ Ty::Set(_))
+        | (sub @ Ty::Dict(_, _), sup @ Ty::Dict(_, _))
+        | (sub @ Ty::Tuple(_), sup @ Ty::Tuple(_)) => {
+            decompose(sub, sup, range, reason, worklist, residual);
+        }
         (sub, sup) if !sub.contains_var() && !sup.contains_var() => {
             leaf_check(&sub, &sup, range, reason, vars, errors);
         }

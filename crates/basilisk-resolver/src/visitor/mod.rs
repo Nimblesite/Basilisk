@@ -251,6 +251,7 @@ fn build_resolved_module(
         generator_violations: results.generator_issues,
         unbound_typevar_usages: Vec::new(),
         imported_symbols: std::collections::HashMap::new(),
+        builtin_classes: std::sync::Arc::new(std::collections::HashMap::new()),
         imported_modules: std::collections::HashMap::new(),
         pep695_scoping: pep695_scoping::collect_pep695_scoping(stmts, &module.source),
         path: module.path.clone(),

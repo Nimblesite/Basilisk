@@ -60,6 +60,14 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
       else if (action === 'load-more-occurrences') loadMoreOccurrences();
       else if (action === 'close-preview') byId('preview-dialog').close();
       else if (action === 'apply-preview' && editorState.phase === 'preview') vscode.postMessage({ type: 'apply' });
+      else if (action === 'adopt-workspace') vscode.postMessage({ type: 'adopt', scope: 'workspace' });
+      else if (action === 'fix-safe') vscode.postMessage({ type: 'fixSafe' });
+      else if (action === 'show-current') {
+        showSection('rules');
+        byId('rule-search').value = 'has:diagnostics';
+        applyFilter();
+        byId('rule-search').focus();
+      }
     }
     function occurrenceMessage(target) {
       return {
@@ -69,11 +77,44 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
         character: Number(target.dataset.occurrenceCharacter),
       };
     }
+    function chooseSourceMode(mode) {
+      if (mode === 'Latest') {
+        postPreview([typeshedRemove('TypeshedCommit'), typeshedRemove('TypeshedPath')]);
+        return;
+      }
+      if (mode === 'CustomFolder') {
+        const current = typeshedSetting('TypeshedPath');
+        const path = current && typeshedValue(current);
+        if (typeof path === 'string' && path !== '') {
+          postPreview([typeshedRemove('TypeshedCommit')]);
+        } else {
+          vscode.postMessage({ type: 'pickTypeshedFolder', key: 'TypeshedPath' });
+        }
+        return;
+      }
+      const current = typeshedSetting('TypeshedCommit');
+      const commit = current && typeshedValue(current);
+      if (typeof commit === 'string' && commit !== '') {
+        postPreview([typeshedRemove('TypeshedPath')]);
+      } else {
+        const input = document.querySelector('[data-typeshed-text="TypeshedCommit"]');
+        if (input) { input.disabled = false; input.focus(); }
+        announce('Enter a full 40-character commit SHA');
+      }
+    }
     document.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target.closest('button') : undefined;
       if (!target) return;
+      const section = target.dataset.sectionTarget;
+      if (section) { showSection(section); return; }
       const action = target.dataset.action;
       if (action) { handleAction(action); return; }
+      const openConfigUri = target.dataset.openConfig;
+      if (openConfigUri) { vscode.postMessage({ type: 'openConfigFile', uri: openConfigUri }); return; }
+      const folderKey = target.dataset.pickTypeshedFolder;
+      if (folderKey) { vscode.postMessage({ type: 'pickTypeshedFolder', key: folderKey }); return; }
+      const typeshedAction = target.dataset.typeshedAction;
+      if (typeshedAction) { vscode.postMessage({ type: 'typeshedAction', action: typeshedAction }); return; }
       const tag = target.dataset.tag;
       if (tag) { selectTag(tag); return; }
       const code = target.dataset.showRule;
@@ -86,7 +127,21 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
     });
     document.addEventListener('change', (event) => {
       const target = event.target;
+      if (target instanceof HTMLInputElement && target.dataset.typeshedBoolean) {
+        postPreview([typeshedSetBoolean(target.dataset.typeshedBoolean, target.checked)]);
+        return;
+      }
+      if (target instanceof HTMLInputElement && target.dataset.typeshedText) {
+        const value = target.value.trim();
+        const mutations = value === ''
+          ? [typeshedRemove(target.dataset.typeshedText)]
+          : [typeshedSetText(target.dataset.typeshedText, value)];
+        if (target.dataset.typeshedText === 'TypeshedCommit') mutations.push(typeshedRemove('TypeshedPath'));
+        postPreview(mutations);
+        return;
+      }
       if (!(target instanceof HTMLSelectElement)) return;
+      if (target.id === 'typeshed-source-mode') { chooseSourceMode(target.value); return; }
       // One control change = exactly one typed mutation ([CONFIGEDITOR-MODEL]).
       if (target.dataset.ruleEntry) {
         lastFocusedRule = { code: target.dataset.ruleEntry, control: 'select' };
@@ -107,10 +162,12 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
       const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement;
       if (event.key === '/' && !typing) {
         event.preventDefault();
+        showSection('rules');
         byId('rule-search').focus();
       }
       if (event.key === 'Escape' && byId('preview-dialog').open) byId('preview-dialog').close();
     });
+    showSection(activeSection);
     vscode.postMessage({ type: 'ready' });
   })();
 `;

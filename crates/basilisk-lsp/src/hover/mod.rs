@@ -53,7 +53,8 @@ pub fn hover_at(
     // races cross-file indexing.
     if hit.is_none() {
         if let Some(name) = identifier_at_offset(source, byte_offset) {
-            let stub_md = resolved.imported_symbols.get(&name).map(|ext_sym| {
+            let mut pushed = false;
+            if let Some(ext_sym) = resolved.imported_symbols.get(&name) {
                 let mut md = if let Some(sig) = &ext_sym.signature {
                     format!("```python\n{sig}\n```")
                 } else if let Some(ty) = &ext_sym.type_annotation {
@@ -70,15 +71,24 @@ pub fn hover_at(
                     }
                     let _ = write!(md, "*{label}*");
                 }
-                md
-            });
-            match stub_md {
-                Some(md) if !md.is_empty() => sections.push(md),
-                _ => {
-                    if let Some(imp) = crate::util::find_import_by_bound_name(resolved, &name) {
-                        let sig = format_type_signature(&SymbolHit::Import(imp), source);
-                        sections.push(format!("```python\n{sig}\n```"));
+                if !md.is_empty() {
+                    sections.push(md);
+                    pushed = true;
+                }
+                // An imported class also shows its constructor, resolved from the
+                // real `.pyi` via the flattened MRO methods — its own or inherited
+                // `__init__`/`__new__` (GitHub #289). Never a hand table.
+                if ext_sym.kind == basilisk_resolver::scope::ExternalSymbolKind::Class {
+                    for ctor in external_constructor_signatures(ext_sym) {
+                        sections.push(format!("```python\n{ctor}\n```"));
+                        pushed = true;
                     }
+                }
+            }
+            if !pushed {
+                if let Some(imp) = crate::util::find_import_by_bound_name(resolved, &name) {
+                    let sig = format_type_signature(&SymbolHit::Import(imp), source);
+                    sections.push(format!("```python\n{sig}\n```"));
                 }
             }
         }
@@ -185,6 +195,85 @@ fn push_symbol_sections(
     }
 }
 
+/// Render an imported class's constructor for hover ([STUBRES-PYI], GitHub #289).
+///
+/// Returns the callable union synthesized from the class's flattened `.pyi`
+/// methods (its own or inherited over the C3 MRO). A metaclass `__call__` with
+/// a non-instance return terminates conversion first. Otherwise every
+/// `__new__` overload is bound and retained; when it returns the constructed
+/// instance, every `__init__` overload is retained too. A non-instance
+/// `__new__` terminates before `__init__`. The `object` fallback needs no extra
+/// display.
+fn external_constructor_signatures(ext: &basilisk_resolver::scope::ExternalSymbol) -> Vec<String> {
+    if ext
+        .metaclass_calls
+        .iter()
+        .any(|method| constructor_return_is_non_instance(&method.signature, &ext.name))
+    {
+        return ext
+            .metaclass_calls
+            .iter()
+            .map(|method| qualify_constructor(&method.signature, &ext.name))
+            .collect();
+    }
+    let news: Vec<_> = ext
+        .methods
+        .iter()
+        .filter(|method| method.name == "__new__")
+        .collect();
+    let new_terminates = news
+        .iter()
+        .any(|method| constructor_return_is_non_instance(&method.signature, &ext.name));
+    let methods = news.into_iter().chain(
+        ext.methods
+            .iter()
+            .filter(|method| !new_terminates && method.name == "__init__"),
+    );
+    methods
+        .map(|method| qualify_constructor(&method.signature, &ext.name))
+        .collect()
+}
+
+/// Qualify a bound constructor method signature with the constructed class.
+fn qualify_constructor(signature: &str, class_name: &str) -> String {
+    signature.strip_prefix("def ").map_or_else(
+        || signature.to_owned(),
+        |rest| format!("def {class_name}.{rest}"),
+    )
+}
+
+/// A union containing anything other than `Self` or the constructed class
+/// makes metaclass `__call__` / `__new__` terminate constructor conversion.
+fn constructor_return_is_non_instance(signature: &str, class_name: &str) -> bool {
+    let Some(return_type) = signature.rsplit_once(" -> ").map(|(_, ty)| ty) else {
+        return false;
+    };
+    constructor_union_members(return_type)
+        .into_iter()
+        .any(|member| !constructor_return_is_instance(member, class_name))
+}
+
+fn constructor_union_members(return_type: &str) -> Vec<&str> {
+    let return_type = return_type.trim().trim_matches(['\'', '"']);
+    let union_body = return_type
+        .strip_prefix("Union[")
+        .or_else(|| return_type.strip_prefix("typing.Union["))
+        .and_then(|body| body.strip_suffix(']'));
+    union_body.map_or_else(
+        || return_type.split('|').map(str::trim).collect(),
+        |body| body.split(',').map(str::trim).collect(),
+    )
+}
+
+fn constructor_return_is_instance(return_type: &str, class_name: &str) -> bool {
+    let return_type = return_type.trim().trim_matches(['\'', '"']);
+    if return_type.rsplit('.').next() == Some("Self") {
+        return true;
+    }
+    let head = return_type.split('[').next().unwrap_or(return_type).trim();
+    head.rsplit('.').next() == Some(class_name)
+}
+
 /// Find an import at the given byte offset.
 ///
 /// Returns the first `ImportInfo` whose source span contains `byte_offset`,
@@ -267,7 +356,7 @@ fn configure_severity_link(code: &str) -> Option<String> {
     ))
 }
 
-mod members;
+pub(crate) mod members;
 
 use members::{builtin_member_hover, external_member_hover, find_class_init};
 

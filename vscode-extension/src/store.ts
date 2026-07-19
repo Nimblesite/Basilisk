@@ -38,10 +38,13 @@ import {
 import {
   createConfigurationEditorActions,
   decodeConfigurationChanged,
+  decodeTypeshedStatusChanged,
   IDLE_CONFIGURATION_EDITOR,
   requestConfigurationRefresh,
+  requestTypeshedStatusRefresh,
   type ConfigurationEditorState,
 } from "./configuration-editor-state";
+import type { TypeshedStatusState } from "./configuration-editor-model";
 import {
   awaitLspReady,
   createReadyHandle,
@@ -169,6 +172,33 @@ function bumpAnalysisRevision(signals: StoreSignals): void {
   signals.analysisRevision.value += 1;
 }
 
+function replaceInitialTypeshedStatuses(
+  signals: StoreSignals,
+  client: LanguageClient,
+): void {
+  const experimental = client.initializeResult?.capabilities.experimental as
+    | { basilisk?: { typeshedStatuses?: unknown } }
+    | undefined;
+  const values = experimental?.basilisk?.typeshedStatuses;
+  const next = new Map<string, TypeshedStatusState>();
+  if (Array.isArray(values)) {
+    for (const value of values) {
+      const change = decodeTypeshedStatusChanged(value);
+      if (change !== undefined) { next.set(change.rootUri, change.status); }
+    }
+  }
+  signals.typeshedStatuses.value = next;
+}
+
+function upsertTypeshedStatus(signals: StoreSignals, value: unknown): void {
+  const change = decodeTypeshedStatusChanged(value);
+  if (change === undefined) { return; }
+  const next = new Map(signals.typeshedStatuses.value);
+  next.set(change.rootUri, change.status);
+  signals.typeshedStatuses.value = next;
+  requestTypeshedStatusRefresh(signals.configurationEditor, change);
+}
+
 /** Debounce window for diagnostics-driven refreshes (diagnostics fire per file). */
 const DIAGNOSTICS_BUMP_DEBOUNCE_MS = 300;
 
@@ -209,6 +239,7 @@ function bindClientStateListener(
       signals.lspState.value = "running";
       disposeAllCommands(signals);
       syncServerCommands(signals);
+      replaceInitialTypeshedStatuses(signals, lspClient);
       registerClientCommands(signals, context);
       // Implements the client side of [EXTACT-LSP-COMMANDS-MODULE-CHANGED] —
       // consumes the server's `basilisk/moduleChanged` notification (re-analysis
@@ -233,6 +264,9 @@ function bindClientStateListener(
             requestConfigurationRefresh(signals.configurationEditor, change);
           }
         }),
+        lspClient.onNotification("basilisk/typeshedStatusChanged", (value: unknown) => {
+          upsertTypeshedStatus(signals, value);
+        }),
       );
       resolveLspReady(signals);
       // Initial analysis becomes available once the server runs.
@@ -243,6 +277,7 @@ function bindClientStateListener(
     if (newState === State.Stopped) {
       disposeAllCommands(signals);
       signals.lspState.value = "stopped";
+      signals.typeshedStatuses.value = new Map();
       return;
     }
 
@@ -268,6 +303,7 @@ function resetSignals(signals: StoreSignals): void {
   signals.profiler.value = IDLE_PROFILER_SESSION;
   signals.processes.value = IDLE_PROCESS_PANEL;
   signals.configurationEditor.value = IDLE_CONFIGURATION_EDITOR;
+  signals.typeshedStatuses.value = new Map();
   signals.readyHandle.value = undefined;
   // outputChannel and logSink are stable logging infrastructure created once by
   // initLogging (and owned by context.subscriptions) — they are deliberately
@@ -342,6 +378,7 @@ function createStoreSignals(): StoreSignals {
     profiler: signal<ProfilerSession>(IDLE_PROFILER_SESSION),
     processes: signal<ProcessPanelState>(IDLE_PROCESS_PANEL),
     configurationEditor: signal<ConfigurationEditorState>(IDLE_CONFIGURATION_EDITOR),
+    typeshedStatuses: signal(new Map()),
     readyHandle: signal<ReadyHandle | undefined>(undefined),
     analysisRevision: signal<number>(0),
     diagnosticsDebounce: undefined,
@@ -357,7 +394,6 @@ export function createStore(onReset?: () => void): Store {
   const isServerReady = computed(() => signals.client.value?.isRunning() === true);
   const lspReadyPromise = computed(async () => signals.readyHandle.value?.promise);
   const profilerBusy = computed(() => isProfilerBusy(signals.profiler.value));
-
   return {
     client: signals.client,
     serverCommands: signals.serverCommands,
@@ -375,6 +411,7 @@ export function createStore(onReset?: () => void): Store {
     processes: signals.processes,
     processesRevision: computed(() => signals.processes.value.revision),
     configurationEditor: signals.configurationEditor,
+    typeshedStatuses: signals.typeshedStatuses,
     lspReadyPromise,
     isServerReady,
     analysisRevision: signals.analysisRevision,
@@ -387,9 +424,7 @@ export function createStore(onReset?: () => void): Store {
       bindClientStateListener(signals, context, c);
       bindDiagnosticsListener(signals, context);
     },
-    bumpAnalysisRevision(): void {
-      bumpAnalysisRevision(signals);
-    },
+    bumpAnalysisRevision: (): void => { bumpAnalysisRevision(signals); },
     ...infrastructureSetters(signals),
     ...debuggeePidActions(signals),
     isClientCommandRegistered(id: string): boolean {

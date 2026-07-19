@@ -265,8 +265,8 @@ fn test_lsp_inlay_hints_variable_types() -> TestResult<()> {
         "inlay hints should show 'int' for x=42: {resp}"
     );
     assert!(
-        resp.contains("str"),
-        "inlay hints should show 'str' for y=\"hello\": {resp}"
+        resp.contains(": str"),
+        "inlay hints should display 'str' for y=\"hello\": {resp}"
     );
     assert!(
         resp.contains("bool"),
@@ -644,8 +644,10 @@ fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
     let code = "x: int = 42\ny = None\n";
     fixture.did_open(&uri, code)?;
     let _ = fixture
-        .wait_for_diagnostics()
-        .ok_or("no diagnostics published")?;
+        .wait_for_diagnostics_matching(|message| {
+            message.contains(&uri) && message.contains("BSK-0003") && message.contains("BSK-0050")
+        })
+        .ok_or("no settled Safe and Unsafe diagnostics published")?;
 
     // Surface 1: the `source.fixAll` code action must include only Safe fixes.
     let resp = send_request(
@@ -743,12 +745,16 @@ fn test_fix_commands_enforce_workspace_authority_and_converge() -> TestResult<()
     let code = "x: int = 42\n";
     fixture.did_open(&root_uri, code)?;
     let _ = fixture
-        .wait_for_diagnostics()
-        .ok_or("no diagnostics for in-root document")?;
+        .wait_for_diagnostics_matching(|message| {
+            message.contains(&root_uri) && message.contains("BSK-0050")
+        })
+        .ok_or("no settled diagnostics for in-root document")?;
     fixture.did_open(external_uri, code)?;
     let _ = fixture
-        .wait_for_diagnostics()
-        .ok_or("no diagnostics for external document")?;
+        .wait_for_diagnostics_matching(|message| {
+            message.contains(external_uri) && message.contains("BSK-0050")
+        })
+        .ok_or("no settled diagnostics for external document")?;
 
     let workspace = send_request(
         &mut fixture,

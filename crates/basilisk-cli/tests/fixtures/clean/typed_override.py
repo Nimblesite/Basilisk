@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from typing import override, Any
-from basilisk.safety import Borrowed, Owned
+from typing import Any, override
 
 
 class Animal:
     def speak(self) -> str:
         return ""
 
-    def __init__(self, dna: Borrowed[Any]) -> None:
-        self.dna = dna  # Shows proper borrowing pattern
+    def __init__(self, dna: Any) -> None:
+        self.dna = dna
 
     def name(self) -> str:
         return "animal"

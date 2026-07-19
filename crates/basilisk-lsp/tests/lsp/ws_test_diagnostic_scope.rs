@@ -44,8 +44,12 @@ async fn initialize_with_options(
     Ok(())
 }
 
-/// Codes carried by the first `publishDiagnostics` for `uri`.
-async fn published_codes(fixture: &mut WsTestFixture, uri: &str) -> TestResult<Vec<String>> {
+/// Codes carried by the settled `publishDiagnostics` for `uri`.
+async fn published_codes(
+    fixture: &mut WsTestFixture,
+    uri: &str,
+    expected_code: &str,
+) -> TestResult<Vec<String>> {
     for _ in 0..10 {
         let msg = fixture
             .wait_for_diagnostics()
@@ -59,7 +63,7 @@ async fn published_codes(fixture: &mut WsTestFixture, uri: &str) -> TestResult<V
         {
             continue;
         }
-        let codes = parsed
+        let codes: Vec<String> = parsed
             .pointer("/params/diagnostics")
             .and_then(serde_json::Value::as_array)
             .map(|diagnostics| {
@@ -71,7 +75,9 @@ async fn published_codes(fixture: &mut WsTestFixture, uri: &str) -> TestResult<V
                     .collect()
             })
             .unwrap_or_default();
-        return Ok(codes);
+        if codes.iter().any(|code| code == expected_code) {
+            return Ok(codes);
+        }
     }
     Err(format!("no publishDiagnostics arrived for {uri}").into())
 }
@@ -89,7 +95,7 @@ async fn default_scope_publishes_the_union_of_both_scopes() -> TestResult<()> {
     );
     fixture.did_open(&uri, MIXED_SCOPE_SOURCE).await?;
 
-    let codes = published_codes(&mut fixture, &uri).await?;
+    let codes = published_codes(&mut fixture, &uri, "returns_compatibility").await?;
     assert!(
         codes.iter().any(|code| code == "returns_compatibility"),
         "check-scope (pep) diagnostics must publish: {codes:?}"
@@ -118,7 +124,7 @@ async fn analyze_opt_out_filters_published_diagnostics_to_pep_only() -> TestResu
     );
     fixture.did_open(&uri, MIXED_SCOPE_SOURCE).await?;
 
-    let codes = published_codes(&mut fixture, &uri).await?;
+    let codes = published_codes(&mut fixture, &uri, "returns_compatibility").await?;
     assert!(
         codes.iter().any(|code| code == "returns_compatibility"),
         "check-scope diagnostics must still publish: {codes:?}"
@@ -187,7 +193,7 @@ async fn seeded_root_publishes_analyze_diagnostics_out_of_the_box() -> TestResul
     let uri = format!("{root_uri}/seeded.py");
     fixture.did_open(&uri, "def f(x):\n    return x\n").await?;
 
-    let codes = published_codes(&mut fixture, &uri).await?;
+    let codes = published_codes(&mut fixture, &uri, "BSK-0001").await?;
     assert!(
         codes.iter().any(|code| code == "BSK-0001"),
         "the seed's basilisk=error tag entry must enable the house rules: {codes:?}"

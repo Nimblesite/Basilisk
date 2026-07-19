@@ -4,9 +4,33 @@ pub use basilisk_parser::parse_source;
 pub use basilisk_resolver::resolve;
 
 pub fn run(source: &str) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
-    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
-    let resolved = resolve(&parsed)?;
+    let resolved = resolve_test_module(source)?;
     Ok(check(&resolved))
+}
+
+/// Resolve a test module with the release-bundled immutable Typeshed generation.
+fn resolve_test_module(
+    source: &str,
+) -> Result<basilisk_resolver::ResolvedModule, Box<dyn std::error::Error>> {
+    use std::sync::Arc;
+
+    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
+    let mut resolved = resolve(&parsed)?;
+    let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot()?;
+    let paths = basilisk_checker::imports::ImportSearchPaths {
+        roots: Vec::new(),
+        extra_paths: Vec::new(),
+        stub_paths: Vec::new(),
+        workspace_members: Vec::new(),
+        site_packages: None,
+        registry: None,
+        typeshed_snapshot: Some(basilisk_checker::imports::ActiveTypeshed::new(
+            Arc::new(snapshot),
+            None,
+        )),
+    };
+    basilisk_checker::imports::resolve_module_imports(&mut resolved, &paths);
+    Ok(resolved)
 }
 
 /// Run the checker honoring an explicit project configuration.
@@ -23,8 +47,7 @@ pub fn run_with_config(
     source: &str,
     config: &basilisk_config::BasiliskConfig,
 ) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
-    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
-    let resolved = resolve(&parsed)?;
+    let resolved = resolve_test_module(source)?;
     Ok(basilisk_checker::check_with_config(&resolved, config))
 }
 

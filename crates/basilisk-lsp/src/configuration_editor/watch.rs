@@ -20,7 +20,7 @@ use std::time::Duration;
 use basilisk_config::active_config_path;
 use tokio::sync::RwLock;
 
-use super::transaction::{refresh_after_configuration_change_with, ConfigurationRefreshHandles};
+use super::transaction::ConfigurationRefreshHandles;
 
 /// Poll interval for the server-owned configuration watcher (milliseconds).
 /// A few small-file reads per root per tick — cheap enough to feel real-time.
@@ -85,7 +85,7 @@ fn watched_sources(root: &Path) -> Vec<PathBuf> {
 /// same single recheck ([ANALYSIS-INCR-IMPORTS]).
 pub(crate) async fn refresh_root_from_disk(
     handles: &ConfigurationRefreshHandles,
-    roots: &[PathBuf],
+    _roots: &[PathBuf],
     root: &Path,
     reason: &str,
 ) {
@@ -98,8 +98,76 @@ pub(crate) async fn refresh_root_from_disk(
         return;
     }
     tracing::info!(root = %root.display(), reason, "configuration source changed on disk");
-    refresh_search_paths(handles, roots).await;
-    if let Err(error) = refresh_after_configuration_change_with(handles, root, reason).await {
+    let before = handles
+        .index
+        .read()
+        .await
+        .as_ref()
+        .and_then(|index| index.root_configs.get(root))
+        .cloned()
+        .unwrap_or_default();
+    let document = handles.configuration_editor.effective_document(root);
+    let result = match document {
+        Ok(document) => {
+            match super::typeshed_acquisition::stage_watched_configuration_change(
+                handles,
+                root,
+                &before,
+                &document.config,
+            )
+            .await
+            {
+                Ok(Some(staged)) => {
+                    let refreshed = super::transaction::refresh_with_document_and_typeshed(
+                        handles,
+                        root,
+                        reason,
+                        &document,
+                        Some(staged.candidate()),
+                    )
+                    .await;
+                    match refreshed {
+                        Ok(()) => {
+                            staged.activate_with(handles, root).await;
+                            Ok(())
+                        }
+                        Err(error) => {
+                            let cleanup = super::transaction::refresh_with_document(
+                                handles,
+                                root,
+                                "typeshedWatchedConfigurationBlocked",
+                                &document,
+                            )
+                            .await;
+                            staged
+                                .block_with(handles, root, "configuration refresh failed")
+                                .await;
+                            if let Err(cleanup_error) = cleanup {
+                                tracing::warn!(root = %root.display(), error = %cleanup_error, "failed to clear analysis after watched Typeshed activation failure");
+                            }
+                            Err(error)
+                        }
+                    }
+                }
+                Ok(None) => {
+                    super::transaction::refresh_with_document(handles, root, reason, &document)
+                        .await
+                }
+                Err(error) => {
+                    let rpc_error = error.rpc_error();
+                    let refresh =
+                        super::transaction::refresh_with_document(handles, root, reason, &document)
+                            .await;
+                    if let Some(failure) = error.into_failure() {
+                        super::typeshed_acquisition::publish_failure(handles, root, failure).await;
+                    }
+                    refresh.and(Err(rpc_error))
+                }
+            }
+        }
+        Err(error) => Err(super::protocol::config_error(error)),
+    };
+    if let Err(error) = result {
         // Malformed mid-write content is retried on the next observed change;
         // the recorded baseline prevents a hot refresh loop.
         tracing::debug!(
@@ -143,22 +211,121 @@ pub(crate) async fn refresh_environment_from_disk(
             index.reload_root_configs();
         }
     }
-    refresh_search_paths(handles, roots).await;
+    refresh_search_paths(handles, roots, None).await;
     recheck_and_publish(handles).await;
 }
 
 /// Rebuild the package registry and import search paths from the current
 /// on-disk configuration and cache them on the index ([ANALYSIS-INCR-IMPORTS]).
-async fn refresh_search_paths(handles: &ConfigurationRefreshHandles, roots: &[PathBuf]) {
+pub(super) async fn refresh_search_paths(
+    handles: &ConfigurationRefreshHandles,
+    roots: &[PathBuf],
+    document: Option<&basilisk_config::ConfigDocument>,
+) {
+    refresh_search_paths_with_typeshed(handles, roots, document, None).await;
+}
+
+pub(super) async fn refresh_search_paths_with_typeshed(
+    handles: &ConfigurationRefreshHandles,
+    roots: &[PathBuf],
+    document: Option<&basilisk_config::ConfigDocument>,
+    candidate: Option<&Arc<basilisk_stubs::typeshed::snapshot::Snapshot>>,
+) {
     let guard = handles.index.read().await;
     let Some(index) = guard.as_ref() else { return };
-    let config = roots
-        .first()
-        .map(|root| crate::config::load_config(root))
-        .unwrap_or_default();
-    let registry = crate::server::init::build_uv_registry(roots);
-    let search_paths = crate::import_resolver::search_paths_from_config(roots, &config, registry);
-    index.set_search_paths(search_paths);
+    let configs: Vec<_> = roots
+        .iter()
+        .map(|root| {
+            let config = document
+                .filter(|document| document.root == *root)
+                .map_or_else(
+                    || {
+                        index.root_configs.get(root).map_or_else(
+                            || crate::config::load_config(root),
+                            |config| workspace_config_for_basilisk(root, config),
+                        )
+                    },
+                    |document| workspace_config_for_basilisk(root, &document.config),
+                );
+            (root.clone(), config)
+        })
+        .collect();
+    let generations = handles.typeshed_generations.read().await;
+    let bindings = configs
+        .iter()
+        .filter_map(|(root, root_config)| {
+            let snapshot = document
+                .filter(|document| document.root == *root)
+                .and(candidate)
+                .cloned()
+                .or_else(|| generations.get(root)?.ready_snapshot().cloned())?;
+            let target = crate::import_resolver::stub_target_from_config(root_config);
+            Some((root.clone(), snapshot, target))
+        })
+        .collect();
+    let active_typeshed = crate::import_resolver::ActiveTypeshed::from_roots(bindings);
+    drop(generations);
+    let interpreter = handles.python_interpreter.read().await.clone();
+    let search_paths = configs
+        .into_iter()
+        .map(|(root, config)| {
+            let search_paths = crate::server::init::build_root_search_paths(
+                roots,
+                &root,
+                config,
+                interpreter.as_deref(),
+                active_typeshed.clone(),
+            );
+            (root, Arc::new(search_paths))
+        })
+        .collect();
+    index.set_search_paths_by_root(search_paths);
+}
+
+pub(super) fn workspace_config_for_basilisk(
+    root: &Path,
+    basilisk: &basilisk_config::BasiliskConfig,
+) -> crate::config::WorkspaceConfig {
+    let mut config = crate::config::load_config(root);
+    if config.python_version.is_none() {
+        config.python_version = basilisk_uv::python_version::resolve_target_python_version(root);
+    }
+    config.stub_paths = basilisk
+        .stub_paths
+        .iter()
+        .map(|path| {
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                root.join(path)
+            }
+        })
+        .collect();
+    config.typeshed_path = basilisk.typeshed_path.as_ref().map(|path| {
+        if path.is_absolute() {
+            path.clone()
+        } else {
+            root.join(path)
+        }
+    });
+    config.typeshed_commit.clone_from(&basilisk.typeshed_commit);
+    config.typeshed_url.clone_from(&basilisk.typeshed_url);
+    config.typeshed_cache_path = basilisk.typeshed_cache_path.as_ref().map(|path| {
+        if path.is_absolute() {
+            path.clone()
+        } else {
+            root.join(path)
+        }
+    });
+    config.typeshed_cache = basilisk.typeshed_cache.unwrap_or(true);
+    config.typeshed_verify = basilisk.typeshed_verify.unwrap_or(true);
+    if basilisk.python_version.is_some() {
+        config.python_version.clone_from(&basilisk.python_version);
+    }
+    if basilisk.python_platform.is_some() {
+        config.python_platform.clone_from(&basilisk.python_platform);
+    }
+    config
 }
 
 /// Recheck every indexed file and publish the diagnostics that changed.
@@ -184,4 +351,42 @@ async fn recheck_and_publish(handles: &ConfigurationRefreshHandles) {
 /// empty content (deleting a source is itself a change).
 async fn read_source_content(path: &Path) -> String {
     tokio::fs::read_to_string(path).await.unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use basilisk_config::BasiliskConfig;
+
+    use super::workspace_config_for_basilisk;
+
+    #[test]
+    fn editor_refresh_preserves_discovered_target_evidence() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        let root = std::env::temp_dir().join(format!(
+            "basilisk_config_editor_target_{}_{}",
+            std::process::id(),
+            unique
+        ));
+        let setup = std::fs::create_dir_all(&root)
+            .and_then(|()| std::fs::write(root.join(".python-version"), "3.11\n"));
+        assert!(setup.is_ok(), "fixture setup failed: {setup:?}");
+        if setup.is_err() {
+            return;
+        }
+
+        let discovered = workspace_config_for_basilisk(&root, &BasiliskConfig::default());
+        assert_eq!(discovered.python_version.as_deref(), Some("3.11"));
+
+        let explicit = BasiliskConfig {
+            python_version: Some("3.12".to_owned()),
+            ..BasiliskConfig::default()
+        };
+        let overridden = workspace_config_for_basilisk(&root, &explicit);
+        assert_eq!(overridden.python_version.as_deref(), Some("3.12"));
+        let _ = std::fs::remove_dir_all(root);
+    }
 }

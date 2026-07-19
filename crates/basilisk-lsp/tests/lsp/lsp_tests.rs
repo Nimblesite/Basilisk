@@ -22,8 +22,6 @@ fn lsp_returns_diagnostics_for_unannotated_function() {
 
 #[test]
 fn lsp_returns_no_diagnostics_for_clean_code() {
-    // Phase 2: fully annotated code must produce no diagnostics once the LSP
-    // is implemented.  Currently returns empty regardless (placeholder).
     let source = "def foo(x: int) -> int:\n    return x\n";
     let diags = basilisk_lsp::check_source(source);
     assert!(

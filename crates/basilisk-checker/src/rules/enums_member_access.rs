@@ -57,15 +57,13 @@ impl Rule for EnumMemberAccess {
         let Some(parsed) = parse_module(module) else {
             return;
         };
+        let Some(target_version) = ctx.target_version else {
+            return;
+        };
 
         // enum class name -> member names whose guard is statically false at the target.
         let mut excluded: HashMap<String, HashSet<String>> = HashMap::new();
-        collect_excluded_members(
-            &parsed.ast.body,
-            &enum_names,
-            ctx.target_version,
-            &mut excluded,
-        );
+        collect_excluded_members(&parsed.ast.body, &enum_names, target_version, &mut excluded);
         if excluded.is_empty() {
             return;
         }

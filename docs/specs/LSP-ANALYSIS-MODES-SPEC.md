@@ -263,7 +263,16 @@ No workspace scan; the server waits for `didOpen` notifications.
 
 ### wholeModule Startup {#ANALYSIS-STARTUP-WHOLE}
 
-On `initialized`: the import search paths are built first (uv registry, workspace members, stub dirs), then all `.py`/`.pyi` files under workspace roots are collected (respecting `include`/`exclude`), the salsa engine is primed with every file's text, and each file is analysed **exactly once through the memoized queries** ([CHKARCH-INCREMENTAL-SALSA]) — the same memos every subsequent edit hits. Diagnostics are published for every file; open files (skipped by the scan — editor text is authoritative) are re-analysed through the engine afterwards so they converge with the scanned workspace. Progress via `window/workDoneProgress`.
+On `initialized`, Basilisk acquires the selected step-3 stdlib source and gates
+the first check on it ([STUBRES-TYPESHED-ACQUIRE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
+This implements "Typeshed stubs for the standard library" in the pinned typing
+order ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+The source is the custom path, an exact-SHA archive for an explicit commit or
+current `main`, or the bundled stdlib ZIP; no previous unpinned archive is eligible. The scan
+then builds import paths, primes Salsa, analyzes each workspace file once, and
+publishes diagnostics. Open buffers are re-analyzed from editor text. Progress
+and the selected source appear in Service Info
+([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 
 ### crossModule Startup {#ANALYSIS-STARTUP-CROSS}
 
@@ -279,9 +288,15 @@ Incremental edits are applied to the in-memory buffer, then parse → resolve �
 
 ### Import resolution on incremental re-check {#ANALYSIS-INCR-IMPORTS}
 
-The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, uv registry) the full scan used. The full scan builds and caches these on the workspace index; incremental re-checks reuse the cached value (site-packages discovery may touch the filesystem or spawn a subprocess and MUST NOT run per keystroke).
+The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, the resolved typeshed stdlib source, uv registry) the full scan used. The full scan builds and caches these on the workspace index; incremental re-checks reuse the cached value (site-packages discovery may touch the filesystem or spawn a subprocess and MUST NOT run per keystroke).
 
-The cached `ImportSearchPaths` are a **derived config cache**: they are built from configuration (`stub-paths`, `typeshed-path`, venv/uv state), so every observed change to a watched configuration or environment source rebuilds them before the recheck runs — via the server-owned watcher or a client watcher event, whichever fires first ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG), [LSPUV-WATCHERS](LSP-UV-INTEGRATION-SPEC.md#LSPUV-WATCHERS)). "Cached" means reused across keystrokes, never past a configuration change.
+The cached `ImportSearchPaths` include the selected typeshed path and exact source
+identity. A `typeshed-path` or `typeshed-commit` change invalidates them and
+rebuilds step 3 before rechecking
+([STUBRES-TYPESHED-ACQUIRE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
+This derived cache changes performance only; it preserves the pinned resolution
+order ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+It is reused across keystrokes, never across a source or configuration change.
 
 Otherwise the syntactic resolver marks every import `Unresolved`, resurrecting false `imports_unresolved` for packages that resolve cleanly on the CLI and at startup. The diagnostics an incremental re-check **publishes** MUST reflect import resolution — not just the cached symbol table used by navigation.
 

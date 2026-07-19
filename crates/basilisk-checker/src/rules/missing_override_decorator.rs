@@ -53,7 +53,10 @@ impl Rule for MissingOverrideDecorator {
     ) {
         // `@override` (PEP 698) only exists from Python 3.12 — don't suggest it
         // on an older configured target (issue #171).
-        if ctx.target_version < OVERRIDE_MIN_VERSION {
+        let Some(target_version) = ctx.target_version else {
+            return;
+        };
+        if target_version < OVERRIDE_MIN_VERSION {
             return;
         }
 

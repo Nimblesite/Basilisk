@@ -85,7 +85,7 @@ That default is measurable. Basilisk scores 100% on the official [python/typing 
 
 A few honest boundaries so you know exactly what you are getting:
 
-- Basilisk's canonical target is **Python 3.12**. It does not yet special-case Python 3.14 syntax such as the deferred annotation evaluation from [PEP 649 and PEP 749](https://docs.python.org/3/whatsnew/3.14.html). The type-safety argument in this post is about your code's correctness under real parallelism, and it holds regardless of which recent interpreter you run.
+- Basilisk has no canonical Python target. It applies version-dependent behavior only where the maintained typing specification, an accepted PEP, or Python syntax requires it ([pinned typing directives, `python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)). The type-safety argument here holds regardless of which supported interpreter the project selects.
 - Basilisk has **no concurrency-specific analysis.** Its job is catching type errors, which is the general-purpose defense that gets more valuable once the GIL is no longer serializing your program for you.
 - Beyond the spec-conformant default, a small set of stricter house-style rules are one config change away when you want them: require a type on every parameter (`BSK-0001`) and every return (`BSK-0002`), require `@override` when you override a base method (`BSK-0025`), flag redundant annotations (`BSK-0050`), and nudge on explicit `Any` (`BSK-0014`). They are off by default and scoped per project.
 

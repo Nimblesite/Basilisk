@@ -9,7 +9,7 @@
 //! load-bearing consequence of a custom typeshed being *canonical for stdlib
 //! resolution* (typing-spec import-resolution step 3): a stdlib module absent
 //! from the configured typeshed is surfaced as unresolved instead of being
-//! silently rescued by the bundled name-set.
+//! mixed with the bundled snapshot.
 #![allow(
     clippy::allow_attributes,
     clippy::expect_used,
@@ -132,8 +132,8 @@ fn typeshed_path_full_lifecycle_through_pyproject() {
     seed_typeshed(&dir, "ts", &[("os.pyi", "def uname() -> str: ...\n")]);
     write(&dir, "app.py", APP_OS_AND_FRACTIONS);
 
-    // ── Interaction 1: NO typeshed-path → bundled name-set rescues both stdlib
-    // modules, so the project is clean even though nothing resolves on disk. ──
+    // ── Interaction 1: NO typeshed-path → the default Latest-first runtime
+    // source resolves both stdlib modules, so the project is clean. ──
     write(
         &dir,
         "pyproject.toml",
@@ -143,7 +143,7 @@ fn typeshed_path_full_lifecycle_through_pyproject() {
 
     // ── Interaction 2: add typeshed-path. The custom typeshed is now canonical
     // for step 3: `os` resolves from its stdlib/, but `fractions` — absent from
-    // it — is no longer rescued by the bundled name-set and surfaces unresolved. ──
+    // it — cannot be mixed in from the bundled snapshot and surfaces unresolved. ──
     write(
         &dir,
         "pyproject.toml",
@@ -182,8 +182,8 @@ fn typeshed_path_full_lifecycle_through_pyproject() {
         .expect("remove fractions stub");
     assert_flags_unresolved(&check(&dir), "fractions", &["os", "uname"]);
 
-    // ── Interaction 5: remove typeshed-path entirely → the bundled name-set
-    // rescues stdlib modules again, so the project is clean once more. ──
+    // ── Interaction 5: remove typeshed-path entirely → the default Latest-first
+    // runtime source becomes active again, so the project is clean once more. ──
     write(
         &dir,
         "pyproject.toml",

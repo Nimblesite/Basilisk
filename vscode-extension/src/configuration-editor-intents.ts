@@ -6,6 +6,9 @@ import type {
   RuleOccurrencesRequest,
   RuleSelector,
   RuleSeverity,
+  TypeshedAction,
+  TypeshedSettingKey,
+  TypeshedSettingValue,
 } from "./configuration-editor-model";
 
 const MAX_MUTATIONS = 512;
@@ -20,9 +23,14 @@ export type ConfigurationEditorIntent =
   | { readonly type: "openRaw" }
   | { readonly type: "apply" }
   | { readonly type: "preview"; readonly mutations: EditorMutation[] }
+  | { readonly type: "adopt"; readonly scope: "workspace" }
+  | { readonly type: "fixSafe" }
+  | { readonly type: "openConfigFile"; readonly uri: string }
   | { readonly type: "occurrences"; readonly request: Omit<RuleOccurrencesRequest, "rootUri"> }
   | { readonly type: "openDocs"; readonly uri: string }
-  | { readonly type: "openOccurrence"; readonly uri: string; readonly line: number; readonly character: number };
+  | { readonly type: "openOccurrence"; readonly uri: string; readonly line: number; readonly character: number }
+  | { readonly type: "pickTypeshedFolder"; readonly key: "TypeshedPath" | "TypeshedCachePath" }
+  | { readonly type: "typeshedAction"; readonly action: TypeshedAction };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -70,12 +78,59 @@ function decodeSeverity(value: unknown): RuleSeverity | undefined {
   }
 }
 
+function decodeTypeshedKey(value: unknown): TypeshedSettingKey | undefined {
+  if (!isRecord(value) || typeof value.kind !== "string") { return undefined; }
+  switch (value.kind) {
+    case "TypeshedPath": return { kind: "TypeshedPath" };
+    case "TypeshedCommit": return { kind: "TypeshedCommit" };
+    case "TypeshedUrl": return { kind: "TypeshedUrl" };
+    case "TypeshedCachePath": return { kind: "TypeshedCachePath" };
+    case "TypeshedCache": return { kind: "TypeshedCache" };
+    case "TypeshedVerify": return { kind: "TypeshedVerify" };
+    default: return undefined;
+  }
+}
+
+function decodeTypeshedValue(value: unknown): TypeshedSettingValue | undefined {
+  if (!isRecord(value) || typeof value.kind !== "string") { return undefined; }
+  if (value.kind === "Text") {
+    const text = boundedString(value.value);
+    return text === undefined ? undefined : { kind: "Text", value: text };
+  }
+  return value.kind === "Boolean" && typeof value.value === "boolean"
+    ? { kind: "Boolean", value: value.value }
+    : undefined;
+}
+
+function typeshedValueMatches(key: TypeshedSettingKey, value: TypeshedSettingValue): boolean {
+  const booleanKey = key.kind === "TypeshedCache" || key.kind === "TypeshedVerify";
+  return booleanKey ? value.kind === "Boolean" : value.kind === "Text";
+}
+
 /**
  * The only four things the editor can request: set or remove one rule entry
  * or one tag entry ([CHKARCH-CONFIG-MODEL], [CONFIGEDITOR-OPERATIONS]).
  */
+function decodeTypeshedMutation(value: Record<string, unknown>): EditorMutation | undefined {
+  if (value.kind === "SetTypeshedSetting") {
+    const key = decodeTypeshedKey(value.key);
+    const setting = decodeTypeshedValue(value.value);
+    return key === undefined || setting === undefined || !typeshedValueMatches(key, setting)
+      ? undefined
+      : { kind: "SetTypeshedSetting", key, value: setting };
+  }
+  if (value.kind === "RemoveTypeshedSetting") {
+    const key = decodeTypeshedKey(value.key);
+    return key === undefined ? undefined : { kind: "RemoveTypeshedSetting", key };
+  }
+  return undefined;
+}
+
 function decodeMutation(value: unknown): EditorMutation | undefined {
   if (!isRecord(value) || typeof value.kind !== "string") { return undefined; }
+  if (value.kind === "SetTypeshedSetting" || value.kind === "RemoveTypeshedSetting") {
+    return decodeTypeshedMutation(value);
+  }
   switch (value.kind) {
     case "SetRule": {
       const code = boundedString(value.code);
@@ -99,6 +154,15 @@ function decodeMutation(value: unknown): EditorMutation | undefined {
       const tag = boundedString(value.tag);
       return tag === undefined ? undefined : { kind: "RemoveTag", tag };
     }
+    default: return undefined;
+  }
+}
+
+function decodeTypeshedAction(value: unknown): TypeshedAction | undefined {
+  switch (value) {
+    case "PinCurrent": return { kind: "PinCurrent" };
+    case "AcquireFresh": return { kind: "AcquireFresh" };
+    case "ViewLicense": return { kind: "ViewLicense" };
     default: return undefined;
   }
 }
@@ -140,16 +204,35 @@ function decodeNavigationIntent(value: Record<string, unknown>): ConfigurationEd
     : undefined;
 }
 
-/** Decode one untrusted `webview.onDidReceiveMessage` payload. */
-export function decodeConfigurationEditorIntent(value: unknown): ConfigurationEditorIntent | undefined {
-  if (!isRecord(value) || typeof value.type !== "string") { return undefined; }
+function decodeCoreIntent(value: Record<string, unknown>): ConfigurationEditorIntent | undefined {
   switch (value.type) {
     case "ready": return { type: "ready" };
     case "refresh": return { type: "refresh" };
     case "openRaw": return { type: "openRaw" };
     case "apply": return { type: "apply" };
-    case "preview": return decodePreview(value);
-    case "occurrences": return decodeOccurrences(value);
-    default: return decodeNavigationIntent(value);
+    case "adopt": return value.scope === "workspace" ? { type: "adopt", scope: "workspace" } : undefined;
+    case "fixSafe": return { type: "fixSafe" };
+    default: return undefined;
   }
+}
+
+/** Decode one untrusted `webview.onDidReceiveMessage` payload. */
+export function decodeConfigurationEditorIntent(value: unknown): ConfigurationEditorIntent | undefined {
+  if (!isRecord(value) || typeof value.type !== "string") { return undefined; }
+  if (value.type === "preview") { return decodePreview(value); }
+  if (value.type === "occurrences") { return decodeOccurrences(value); }
+  if (value.type === "openConfigFile") {
+    const uri = boundedString(value.uri);
+    return uri === undefined ? undefined : { type: "openConfigFile", uri };
+  }
+  if (value.type === "pickTypeshedFolder") {
+    return value.key === "TypeshedPath" || value.key === "TypeshedCachePath"
+      ? { type: "pickTypeshedFolder", key: value.key }
+      : undefined;
+  }
+  if (value.type === "typeshedAction") {
+    const action = decodeTypeshedAction(value.action);
+    return action === undefined ? undefined : { type: "typeshedAction", action };
+  }
+  return decodeCoreIntent(value) ?? decodeNavigationIntent(value);
 }

@@ -26,11 +26,13 @@ and recording narrow exceptions for the debt you cannot resolve yet.
 
 ## 1. Add canonical project configuration
 
-Start with the target Python version and the paths you own:
+Start with the paths you own. Add `python-version` only when deliberately
+overriding project/interpreter evidence; the pinned typing specification defines
+how version checks behave, not a default target
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)):
 
 ```toml
 [tool.basilisk]
-python-version = "3.12"
 include = ["src/", "tests/"]
 exclude = [
   "__pycache__", ".venv", "site-packages", "build", "dist",

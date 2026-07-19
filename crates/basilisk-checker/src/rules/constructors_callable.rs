@@ -27,7 +27,7 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ClassInfo, FunctionInfo, ParameterInfo, ResolvedModule, Span};
+use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, Span};
 use ruff_python_ast::{Expr, ExprCall, Number, Stmt};
 use ruff_text_size::Ranged as _;
 
@@ -35,13 +35,14 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
+mod conversion;
+
+use conversion::{build_converted_callables, CallableGroup, CallableVariant};
+
 const CODE: ErrorCode = ErrorCode {
     code: "constructors_callable",
     docs_url: "https://www.basilisk-python.dev/errors/constructors_callable",
 };
-
-/// Method-map key: `(class_name, method_name)` → method definitions.
-type MethodMap<'a> = HashMap<(&'a str, &'a str), Vec<&'a FunctionInfo>>;
 
 /// Emits `constructors_callable` for invalid calls to constructor-derived callables.
 pub(crate) struct ConstructorCallableMisuse;
@@ -74,20 +75,17 @@ impl Rule for ConstructorCallableMisuse {
             let Some(class_name) = var_to_class.get(callee.id.as_str()) else {
                 return;
             };
-            let sig = build_converted_callable(class_name, &class_map, &method_map, source);
-            validate_call(call, class_name, &sig, &typevars, &module.path, diagnostics);
+            let signatures = build_converted_callables(class_name, &class_map, &method_map, source);
+            validate_call(
+                call,
+                class_name,
+                &signatures,
+                &typevars,
+                &module.path,
+                diagnostics,
+            );
         });
     }
-}
-
-/// The constructor-to-callable signature synthesized for a class.
-struct ConvertedCallable<'a> {
-    /// Parameters after dropping the implicit `cls`/`self`.
-    params: Vec<&'a ParameterInfo>,
-    /// `true` when the controlling method accepts `*args`.
-    has_var_positional: bool,
-    /// `true` when the controlling method accepts `**kwargs`.
-    has_var_keyword: bool,
 }
 
 /// Collect module-level identity-over-callable functions.
@@ -181,108 +179,11 @@ fn wrapped_class<'a>(
         .map(|(name, _)| *name)
 }
 
-/// Synthesize the constructor-to-callable signature for `class_name`.
-///
-/// Priority: a custom metaclass `__call__`, then `__new__` (when its return
-/// type is neither `Self` nor the class), then `__init__`. A class with no
-/// controlling method synthesizes a zero-argument callable.
-fn build_converted_callable<'a>(
-    class_name: &str,
-    class_map: &HashMap<&'a str, &'a ClassInfo>,
-    method_map: &MethodMap<'a>,
-    source: &str,
-) -> ConvertedCallable<'a> {
-    if let Some(call_fn) = metaclass_call(class_name, class_map, method_map) {
-        return from_method(call_fn);
-    }
-
-    let new_impl = method_map
-        .get(&(class_name, "__new__"))
-        .and_then(|v| pick_impl(v));
-    let init_impl = method_map
-        .get(&(class_name, "__init__"))
-        .and_then(|v| pick_impl(v));
-
-    let controlling = match (new_impl, init_impl) {
-        (Some(new_fn), _) if new_controls(new_fn, class_name, source) => Some(new_fn),
-        (_, Some(init_fn)) => Some(init_fn),
-        (Some(new_fn), None) => Some(new_fn),
-        (None, None) => None,
-    };
-
-    controlling.map_or_else(
-        || ConvertedCallable {
-            params: Vec::new(),
-            has_var_positional: false,
-            has_var_keyword: false,
-        },
-        from_method,
-    )
-}
-
-/// Return the custom metaclass `__call__` controlling construction, if any.
-///
-/// A class whose declared metaclass defines `__call__` has that method govern
-/// the call signature (e.g. a `__call__` with `*args, **kwargs` accepts any
-/// arguments). Classes without an explicit metaclass — or whose metaclass only
-/// inherits `type.__call__` — fall through to `__new__`/`__init__`.
-fn metaclass_call<'a>(
-    class_name: &str,
-    class_map: &HashMap<&'a str, &'a ClassInfo>,
-    method_map: &MethodMap<'a>,
-) -> Option<&'a FunctionInfo> {
-    let metaclass = class_map.get(class_name)?.metaclass_name.as_deref()?;
-    pick_impl(method_map.get(&(metaclass, "__call__"))?)
-}
-
-/// Build a converted signature from a controlling method (drops `cls`/`self`).
-fn from_method(method: &FunctionInfo) -> ConvertedCallable<'_> {
-    ConvertedCallable {
-        params: method.parameters.iter().skip(1).collect(),
-        has_var_positional: method.vararg.is_some(),
-        has_var_keyword: method.kwarg.is_some(),
-    }
-}
-
-/// Pick the non-`@overload` implementation, falling back to the first entry.
-fn pick_impl<'a>(funcs: &[&'a FunctionInfo]) -> Option<&'a FunctionInfo> {
-    funcs
-        .iter()
-        .find(|f| !f.decorators.iter().any(|d| d == "overload"))
-        .or_else(|| funcs.first())
-        .copied()
-}
-
-/// Returns `true` when `__new__`'s return type takes over construction.
-///
-/// Per the spec, when `__new__` returns a type that is neither `Self` nor the
-/// class itself, `__init__` is ignored and the converted callable uses
-/// `__new__`'s signature and return type.
-fn new_controls(new_fn: &FunctionInfo, class_name: &str, source: &str) -> bool {
-    let Some(text) = new_fn
-        .return_annotation_span
-        .and_then(|span| span.slice_source(source))
-    else {
-        return false;
-    };
-    let text = text.trim();
-    if last_segment(text) == "Self" {
-        return false;
-    }
-    let head = text.split('[').next().unwrap_or(text).trim();
-    last_segment(head) != class_name
-}
-
-/// Return the final `.`-separated segment of `s` (`typing.Self` → `Self`).
-fn last_segment(s: &str) -> &str {
-    s.rsplit('.').next().unwrap_or(s)
-}
-
 /// Validate a call against the synthesized signature, emitting one diagnostic.
 fn validate_call(
     call: &ExprCall,
     class_name: &str,
-    sig: &ConvertedCallable<'_>,
+    signatures: &[CallableGroup<'_>],
     typevars: &[&str],
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
@@ -307,22 +208,42 @@ fn validate_call(
         .filter_map(|k| k.arg.as_ref().map(ruff_python_ast::Identifier::as_str))
         .collect();
 
-    if let Some(diag) = check_keywords(call, class_name, sig, &kw_names, path) {
-        diagnostics.push(diag);
-    } else if let Some(diag) = check_too_many(call, class_name, sig, positional, path) {
-        diagnostics.push(diag);
-    } else if let Some(diag) = check_missing(call, class_name, sig, positional, &kw_names, path) {
-        diagnostics.push(diag);
-    } else if let Some(diag) = check_typevar_conflict(call, class_name, sig, typevars, path) {
-        diagnostics.push(diag);
+    let failure = signatures.iter().find_map(|group| {
+        group_failure(
+            call, class_name, group, positional, &kw_names, typevars, path,
+        )
+    });
+    if let Some(failure) = failure {
+        diagnostics.push(failure);
     }
+}
+
+fn group_failure(
+    call: &ExprCall,
+    class_name: &str,
+    group: &CallableGroup<'_>,
+    positional: usize,
+    kw_names: &[&str],
+    typevars: &[&str],
+    path: &str,
+) -> Option<Diagnostic> {
+    let mut first_failure = None;
+    for signature in &group.variants {
+        let failure = check_keywords(call, class_name, signature, kw_names, path)
+            .or_else(|| check_too_many(call, class_name, signature, positional, path))
+            .or_else(|| check_missing(call, class_name, signature, positional, kw_names, path))
+            .or_else(|| check_typevar_conflict(call, class_name, signature, typevars, path));
+        let _diagnostic = failure.as_ref()?;
+        first_failure = first_failure.or(failure);
+    }
+    first_failure
 }
 
 /// Flag the first keyword that names no parameter (when no `**kwargs`).
 fn check_keywords(
     call: &ExprCall,
     class_name: &str,
-    sig: &ConvertedCallable<'_>,
+    sig: &CallableVariant<'_>,
     kw_names: &[&str],
     path: &str,
 ) -> Option<Diagnostic> {
@@ -349,7 +270,7 @@ fn check_keywords(
 fn check_too_many(
     call: &ExprCall,
     class_name: &str,
-    sig: &ConvertedCallable<'_>,
+    sig: &CallableVariant<'_>,
     positional: usize,
     path: &str,
 ) -> Option<Diagnostic> {
@@ -376,7 +297,7 @@ fn check_too_many(
 fn check_missing(
     call: &ExprCall,
     class_name: &str,
-    sig: &ConvertedCallable<'_>,
+    sig: &CallableVariant<'_>,
     positional: usize,
     kw_names: &[&str],
     path: &str,
@@ -403,7 +324,7 @@ fn check_missing(
 fn check_typevar_conflict(
     call: &ExprCall,
     class_name: &str,
-    sig: &ConvertedCallable<'_>,
+    sig: &CallableVariant<'_>,
     typevars: &[&str],
     path: &str,
 ) -> Option<Diagnostic> {

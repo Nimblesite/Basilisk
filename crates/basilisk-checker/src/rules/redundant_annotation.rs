@@ -173,24 +173,25 @@ fn extract_annotation(source: &str, name_span: basilisk_resolver::Span) -> Optio
     }
 }
 
-/// Check if types match for BSK-0050 purposes (base type comparison)
+/// Check if types match for BSK-0050 purposes (base scalar comparison).
 fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bool {
-    use InferredType::{Bool, Bytes, Float, Int, None_, Str};
+    use InferredType::{Bool, Bytes, Float, Int, LiteralString, None_, Str};
 
-    // Only fire BSK-0050 for simple scalar types that are exactly equal
-    // Collection types and other complex types should not trigger BSK-0050
-    // because annotations provide useful documentation even when "redundant"
-    match (inferred, declared) {
-        // Basic scalar types (exact match)
+    // Only fire BSK-0050 for simple scalar types that are exactly equal. A
+    // string literal infers as `LiteralString`, which an explicit `str`
+    // annotation genuinely restates. Collection and other complex types are
+    // never flagged: the annotation documents element/key/value/tuple shape the
+    // literal alone does not make obvious, so it stays useful even when the
+    // engine could infer it (see test_w0050_{list,dict,set,tuple}_literal_no_warning).
+    matches!(
+        (inferred, declared),
         (Int, Int)
-        | (Str, Str)
-        | (Float, Float)
-        | (Bool, Bool)
-        | (Bytes, Bytes)
-        | (None_, None_) => true,
-        // All other types (collections, unions, optionals, etc.) - no warning
-        _ => false,
-    }
+            | (Str | LiteralString, Str)
+            | (Float, Float)
+            | (Bool, Bool)
+            | (Bytes, Bytes)
+            | (None_, None_)
+    )
 }
 
 /// Infer a type from the assignment's source text when resolver inference fails.

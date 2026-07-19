@@ -1,4 +1,7 @@
-//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-arch-pipeline
+//! Implements [CHKARCH-ARCH-PIPELINE] and integrates the modules specified by
+//! [TYPEINF-SPEC] / [TYPEINF-IMPL]. See
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-arch-pipeline and
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-IMPL.
 //! Type checker for Basilisk.
 //!
 //! The public API is [`check`] and [`check_with_config`], which take a
@@ -44,8 +47,13 @@ pub mod rule_catalog;
 pub mod rule_tags;
 pub mod rules;
 pub mod span_util;
+pub mod stub_constructor;
 pub mod suppression;
 mod suppression_audit;
+/// Bounded type-level alias evaluation groundwork.
+///
+/// Implements [TYPEINF-TARGET] and [TYPEINF-TARGET-TYPELEVEL].
+pub mod tyeval;
 pub mod types;
 pub mod types_parsing;
 pub(crate) mod types_star_tuples;
@@ -118,17 +126,7 @@ pub fn check_with_config(
         module
             .imports
             .iter()
-            .filter(|i| {
-                // A configured custom typeshed is canonical for step 3, so the
-                // bundled name-set no longer treats an absent stdlib module as typed
-                // ([STUBRES-CUSTOM-TYPESHED]); its imported names then participate in
-                // cascade suppression like any other unresolved import.
-                i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved
-                    && !crate::imports::bundled_stdlib_recognized(
-                        &i.module,
-                        config.typeshed_path.is_some(),
-                    )
-            })
+            .filter(|i| i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved)
             .flat_map(|i| i.names.iter().cloned())
             .collect()
     } else {
@@ -648,7 +646,21 @@ mod tests {
         let source = "from os import path\nx = path.join('a', 'b')\n";
         let parsed =
             basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned()).unwrap();
-        let module = basilisk_resolver::resolve(&parsed).unwrap();
+        let mut module = basilisk_resolver::resolve(&parsed).unwrap();
+        let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot().unwrap();
+        let paths = imports::ImportSearchPaths {
+            roots: Vec::new(),
+            extra_paths: Vec::new(),
+            stub_paths: Vec::new(),
+            workspace_members: Vec::new(),
+            site_packages: None,
+            registry: None,
+            typeshed_snapshot: Some(imports::ActiveTypeshed::new(
+                std::sync::Arc::new(snapshot),
+                None,
+            )),
+        };
+        imports::resolve_module_imports(&mut module, &paths);
 
         let config = basilisk_config::BasiliskConfig::default();
         let diagnostics = check_with_config(&module, &config);

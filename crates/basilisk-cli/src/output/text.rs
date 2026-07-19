@@ -118,7 +118,10 @@ fn format_snippet_plain_into(
 ) {
     let line_num = index.line(start);
     let line_start = index.line_start(start);
-    let line_text = source[line_start..].lines().next().unwrap_or("");
+    let line_text = source
+        .get(line_start..)
+        .and_then(|tail| tail.lines().next())
+        .unwrap_or("");
     let col_start = start - line_start;
     let col_end = (end - line_start).min(line_text.len());
     let underline_len = col_end.saturating_sub(col_start).max(1);
@@ -246,7 +249,10 @@ pub(super) fn format_snippet(
 ) -> String {
     let line_num = index.line(start);
     let line_start = index.line_start(start);
-    let line_text = source[line_start..].lines().next().unwrap_or("");
+    let line_text = source
+        .get(line_start..)
+        .and_then(|tail| tail.lines().next())
+        .unwrap_or("");
 
     let col_start = start - line_start;
     let col_end = (end - line_start).min(line_text.len());

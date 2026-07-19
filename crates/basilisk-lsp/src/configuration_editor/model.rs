@@ -3,11 +3,17 @@
 //!
 //! Implements [CONFIGEDITOR-MODEL] / [LSPARCH-CONFIG-EDITOR-PROTOCOL]. The
 //! declarations below preserve the typeDiagram shapes; derives and serde tags
-//! are Rust transport integration applied to the generated declarations.
+//! are Rust transport integration applied to the generated declarations. The
+//! Typeshed subset is split into `model_typeshed.rs` only to preserve the
+//! repository's per-file size ceiling.
 
 #![allow(clippy::struct_field_names, missing_docs)]
 
 use serde::{Deserialize, Serialize};
+
+#[path = "model_typeshed.rs"]
+mod model_typeshed;
+pub use model_typeshed::*;
 
 pub type Uri = String;
 pub type Revision = String;
@@ -34,9 +40,27 @@ pub enum TagKind {
     Descriptive,
 }
 
-/// The only four things the editor can ask for — exactly the four things a
-/// config file can express ([CHKARCH-CONFIG-MODEL]). Setting `Disabled` on a
-/// `pep`-tagged rule is a request error.
+/// Closed allowlist of runtime Typeshed configuration keys.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "kind")]
+pub enum TypeshedSettingKey {
+    TypeshedPath,
+    TypeshedCommit,
+    TypeshedUrl,
+    TypeshedCachePath,
+    TypeshedCache,
+    TypeshedVerify,
+}
+
+/// Typed values accepted by Typeshed setting mutations.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind")]
+pub enum TypeshedSettingValue {
+    Text { value: String },
+    Boolean { value: bool },
+}
+
+/// The six operations the editor may ask the configuration service to apply.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum EditorMutation {
@@ -53,6 +77,13 @@ pub enum EditorMutation {
     },
     RemoveTag {
         tag: RuleTag,
+    },
+    SetTypeshedSetting {
+        key: TypeshedSettingKey,
+        value: TypeshedSettingValue,
+    },
+    RemoveTypeshedSetting {
+        key: TypeshedSettingKey,
     },
 }
 
@@ -109,14 +140,92 @@ pub struct TagState {
     pub diagnostic_count: i64,
 }
 
+/// The active configuration source behind a snapshot ([CONFIGEDITOR-VSIX-EXPERIENCE]
+/// Project view). `uri`, `exists`, and `read_only` come straight from the loaded
+/// [`ConfigDocument`](basilisk_config::ConfigDocument) — never synthesized. There
+/// is exactly one format (the root `pyproject.toml`), so no format discriminator.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigurationSource {
+    pub uri: Uri,
+    pub exists: bool,
+    pub read_only: bool,
+}
+
+/// One real configuration problem surfaced to the Project view — e.g. an entry
+/// naming a rule code that is not in the catalog. Never a synthetic warning.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigurationProblem {
+    pub code: RuleCode,
+    pub message: String,
+    pub uri: Uri,
+    pub line: i64,
+    pub character: i64,
+}
+
+/// Server-computed effective-state counters for the Overview and Adoption views.
+/// Every field is a real count folded from the live diagnostic inventory and the
+/// resolved rule severities — the exact effective state, never a synthetic score.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DebtSummary {
+    /// Total emitted diagnostics across the root (the sum of the partitions).
+    pub remaining_diagnostics: i64,
+    /// Emitted `error`/safety diagnostics.
+    pub error_diagnostics: i64,
+    /// Emitted `warning` diagnostics.
+    pub warning_diagnostics: i64,
+    /// Emitted `info` diagnostics.
+    pub info_diagnostics: i64,
+    /// `pep` rules graded below `error` by a config entry (the adoption signature).
+    pub adopted_rules: i64,
+    /// Rules whose effective severity resolves to `Disabled`.
+    pub disabled_rules: i64,
+}
+
+/// One per-rule entry inside a nested `[tool.basilisk.rules]` table.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PathRuleSetting {
+    pub code: RuleCode,
+    pub severity: RuleSeverity,
+}
+
+/// One per-tag entry inside a nested `[tool.basilisk.rule-tags]` table.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PathTagSetting {
+    pub tag: RuleTag,
+    pub severity: RuleSeverity,
+}
+
+/// One nested per-directory `[tool.basilisk]` table discovered under the root
+/// ([CHKARCH-CONFIG-DISCOVERY]) for the Path Overrides view. `path` is the
+/// directory (root-relative) whose `pyproject.toml` holds the table; the checker
+/// honors these entries for code beneath that directory via the ancestor walk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PathOverrideState {
+    pub path: String,
+    pub config_uri: Uri,
+    pub rules: Vec<PathRuleSetting>,
+    pub tags: Vec<PathTagSetting>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigurationSnapshot {
     pub root_uri: Uri,
     pub config_uri: Uri,
     pub revision: Revision,
+    pub source: ConfigurationSource,
     pub rules: Vec<RuleState>,
     pub tags: Vec<TagState>,
+    pub path_overrides: Vec<PathOverrideState>,
+    pub debt: DebtSummary,
+    pub problems: Vec<ConfigurationProblem>,
+    pub typeshed: TypeshedConfigurationState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -156,6 +265,7 @@ pub struct ConfigurationPreview {
     pub preview_id: PreviewId,
     pub base_revision: Revision,
     pub changes: Vec<ResolvedRuleChange>,
+    pub typeshed_changes: Vec<TypeshedSettingChange>,
     pub impact: ConfigurationImpact,
 }
 

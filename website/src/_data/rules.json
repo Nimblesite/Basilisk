@@ -12,6 +12,10 @@
     "body": [
       {
         "type": "text",
+        "html": "receiver exemption shared by TYPEINF-SPECIAL-SELF."
+      },
+      {
+        "type": "text",
         "html": "Never fires where the current engine already infers the parameter type: a scalar-literal default (<code>timeout=30</code> \u2192 <code>int</code>) determines the type, so demanding an annotation there would be redundant (TYPEINF-FUNC-DEFAULTS). Defaults that do NOT determine the type \u2014 <code>None</code>, empty containers, calls, lambdas, arbitrary expressions \u2014 still require an annotation."
       },
       {
@@ -662,6 +666,10 @@
     "summary": "Assignment type incompatibility (literal mismatches)",
     "summaryHtml": "Assignment type incompatibility (literal mismatches)",
     "body": [
+      {
+        "type": "text",
+        "html": "Owns structural <code>TypedDict</code> assignment for TYPEINF-SUBTYPING-TYPEDDICT."
+      },
       {
         "type": "text",
         "html": "Detects annotated module-level variables where the declared type and the literal kind of the right-hand side are clearly incompatible, for example:"
@@ -1875,6 +1883,10 @@
     "body": [
       {
         "type": "text",
+        "html": "paths in TYPEINF-GENERICS, TYPEINF-GENERICS-TYPEVAR, and TYPEINF-GENERICS-CONSTRAINED."
+      },
+      {
+        "type": "text",
         "html": "Detects several generic-type errors:"
       },
       {
@@ -2672,7 +2684,7 @@
     "body": [
       {
         "type": "text",
-        "html": "When <code>import X</code> resolves to a **user/local stub** (a <code>.pyi</code> under a configured <code>stub-paths</code> dir, including the auto-discovered <code>.basilisk/stubs</code>), that stub is authoritative: Basilisk only knows the names it declares. So <code>X.attr</code> where <code>attr</code> is not declared is a hard error \u2014 the counterpart that makes a hand-written or quick-fix-generated stub <em>mean something</em>."
+        "html": "When <code>import X</code> resolves to an authoritative user/local or selected Typeshed stub, Basilisk sees the declarations and re-exports in that stub. <code>X.attr</code> where <code>attr</code> is not declared is an error."
       },
       {
         "type": "text",
@@ -2685,7 +2697,7 @@
       },
       {
         "type": "text",
-        "html": "Scope (Phase 1): only plain, single-segment <code>import X</code> backed by a user stub. <code>imported_modules</code> is populated <em>only</em> for those, so this rule is a complete no-op for code without local stubs (the conformance suite, first-party code), keeping the false-positive surface at zero."
+        "html": "Scope: plain imports backed by a user stub or the active step-3 Typeshed source. Untyped and inline third-party imports remain outside this rule."
       }
     ],
     "group": "Type System",
@@ -2803,6 +2815,10 @@
     "summary": "Augmented assignment widens `Literal` type",
     "summaryHtml": "Augmented assignment widens <code>Literal</code> type",
     "body": [
+      {
+        "type": "text",
+        "html": "augmented assignment keeps the declared target type and validates whether the operation widens out of it."
+      },
       {
         "type": "text",
         "html": "When a function parameter is annotated with <code>Literal...</code>, augmented assignment (<code>+=</code>, <code>-=</code>, etc.) effectively reassigns the variable to a widened type (e.g. <code>int</code> instead of <code>Literal3, 4, 5</code>), violating the declared <code>Literal</code> constraint."

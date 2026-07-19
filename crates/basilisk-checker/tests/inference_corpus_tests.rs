@@ -2,6 +2,8 @@
 //! container/comprehension/lambda benchmark and the targeted higher-order
 //! (`map`/`filter`/decorators/`ParamSpec`) benchmark". See
 //! docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md.
+//! This is the external precision ratchet for [TYPEINF-TARGET] and
+//! [TYPEINF-TARGET-BIDIRECTIONAL].
 //!
 //! Each case is a tiny module whose LAST definition's inferred type
 //! (through the definition-level Salsa queries — the same engine everything
@@ -178,4 +180,22 @@ fn inference_precision_corpus_holds_the_floor() {
         "precision ratchet violated: {} passing < floor {PRECISION_FLOOR}; missed: {missed:#?}",
         passed.len()
     );
+}
+
+/// [TYPEINF-COLLECTIONS-COMPREHENSIONS]: a generator expression retains the
+/// element type supplied by its comprehension scope.
+#[test]
+fn generator_expression_infers_generator_element_type() {
+    let db = EventDb::default();
+    let file = SourceFile::new(
+        &db,
+        "generator_expression.py".to_owned(),
+        "x = (n for n in range(3))\n".to_owned(),
+    );
+    let defs = definitions(&db, file);
+    let definition = defs.last().copied().expect("x definition");
+
+    let expected = InferredType::from_annotation("Generator[int, None, None]");
+    assert_eq!(definition_type(&db, definition), expected);
+    assert_eq!(expected.to_string(), "Generator[int, None, None]");
 }

@@ -88,7 +88,7 @@ Basilisk 是我们对"强制执行是可选的"这个问题的回答。它是一
 
 几条诚实的边界，好让你确切知道你得到的是什么：
 
-- Basilisk 的规范目标是 **Python 3.12**。它尚未对 Python 3.14 的语法做特殊处理，例如 [PEP 649 与 PEP 749](https://docs.python.org/3/whatsnew/3.14.html) 的延迟注解求值。本文的类型安全论点是关于你的代码在真正并行下的正确性，无论你运行哪个较新的解释器，它都成立。
+- Basilisk 没有规范的 Python 目标版本。只有维护中的 typing 规范、已接受 PEP 或 Python 语法要求时，行为才随版本变化（[固定提交的 typing 指令规范，`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)）。本文的类型安全论点适用于项目选择的任何受支持解释器。
 - Basilisk **没有针对并发的专门分析。** 它的工作是捕获类型错误，而这是那种在 GIL 不再为你串行化程序之后变得更有价值的通用防线。
 - 在符合规范的默认之外，一小组更严格的房屋风格规则在你需要时只差一次配置改动：要求每个参数都有类型（`BSK-0001`）、每个返回值都有类型（`BSK-0002`），在覆盖基类方法时要求 `@override`（`BSK-0025`），标记冗余注解（`BSK-0050`），并对显式 `Any` 予以提示（`BSK-0014`）。它们默认关闭，并按项目限定。
 

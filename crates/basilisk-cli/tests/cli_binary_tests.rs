@@ -418,6 +418,19 @@ fn traverses_clean_directory_exits_0() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
+#[test]
+fn bound_method_does_not_collide_with_same_named_function() -> Result<(), Box<dyn std::error::Error>>
+{
+    let out = run_check(&[&fixture("clean/typed_optional.py")])?;
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "`haystack.find(needle)` must not be checked against the module function `find(haystack, needle)`:\n{}",
+        stdout(&out)
+    );
+    Ok(())
+}
+
 // ── Output severity label ─────────────────────────────────────────────────────
 
 #[test]

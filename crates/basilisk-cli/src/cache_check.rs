@@ -70,6 +70,7 @@ pub fn build_context(
         version: env!("CARGO_PKG_VERSION").to_owned(),
         config_hash: hash_dir_configs(dir_configs),
         env_hash: hash_env(search_paths, project_root),
+        typeshed_id: typeshed_snapshot_identity(search_paths),
     };
     Some(CacheContext {
         cache: CheckCache::new(dir),
@@ -80,6 +81,18 @@ pub fn build_context(
 /// Default cache location: `<project-root>/.basilisk/cache/check`.
 fn default_cache_dir(project_root: &Path) -> PathBuf {
     project_root.join(".basilisk").join("cache").join("check")
+}
+
+/// Identity of the active step-3 typeshed snapshot for the fingerprint
+/// ([STUBRES-TYPESHED], [CHKCACHE-FINGERPRINT]).
+///
+/// The gate-accepted snapshot is the only step-3 identity. Configuration
+/// values cannot substitute for bytes the checker actually consumed.
+fn typeshed_snapshot_identity(search_paths: &ImportSearchPaths) -> String {
+    search_paths.typeshed_snapshot.as_ref().map_or_else(
+        || "unavailable".to_owned(),
+        basilisk_checker::imports::ActiveTypeshed::identity_fingerprint,
+    )
 }
 
 /// Hash the *effective* per-directory configs. Canonicalised through
@@ -195,4 +208,173 @@ where
         Err(err) => tracing::warn!(path, %err, "failed to write cache entry"),
     }
     Ok((diagnostics, source))
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "test-only fixed Snapshot fixtures must fail loudly"
+)]
+mod tests {
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+
+    use basilisk_checker::imports::ActiveTypeshed;
+    use basilisk_stubs::typeshed::archive::{Archive, ArchiveEntry, ArchiveVfs};
+    use basilisk_stubs::typeshed::gittree::{FileMode, Oid};
+    use basilisk_stubs::typeshed::snapshot::Snapshot;
+    use basilisk_stubs::typeshed::source::{
+        LicenseStatus, Provenance, SourceIdentity, SourceKind, Transport, TypeshedStatus,
+    };
+
+    use super::{build_context, typeshed_snapshot_identity, CacheContext, CacheOptions};
+
+    fn snapshot(identity: SourceIdentity) -> Arc<Snapshot> {
+        let status = TypeshedStatus {
+            active_source: if matches!(identity, SourceIdentity::Custom { .. }) {
+                SourceKind::Custom
+            } else {
+                SourceKind::ExactCommit
+            },
+            commit: identity.commit(),
+            tree: identity.commit(),
+            transport: if matches!(identity, SourceIdentity::Custom { .. }) {
+                Transport::CustomPath
+            } else {
+                Transport::Codeload
+            },
+            license_status: if matches!(identity, SourceIdentity::Custom { .. }) {
+                LicenseStatus::NotSupplied
+            } else {
+                LicenseStatus::Approved
+            },
+            license_reference: None,
+            provenance: if matches!(identity, SourceIdentity::Custom { .. }) {
+                Provenance::UserManaged
+            } else {
+                Provenance::GithubTlsAttested
+            },
+            signed_release: false,
+            warnings: Vec::new(),
+        };
+        let archive = Archive::new(vec![
+            ArchiveEntry {
+                path: "stdlib/VERSIONS".to_owned(),
+                mode: FileMode::Regular,
+                data: b"os: 3.0-\n".to_vec(),
+            },
+            ArchiveEntry {
+                path: "stdlib/os.pyi".to_owned(),
+                mode: FileMode::Regular,
+                data: b"name: str\n".to_vec(),
+            },
+        ]);
+        let uri = identity.uri_component();
+        Arc::new(
+            Snapshot::build(identity, status, ArchiveVfs::new(uri, archive), None)
+                .expect("valid cache-identity fixture"),
+        )
+    }
+
+    fn fingerprint(snapshot: Arc<Snapshot>) -> String {
+        let mut paths = crate::import_search::roots_only(Vec::new());
+        paths.typeshed_snapshot = Some(ActiveTypeshed::new(snapshot, None));
+        typeshed_snapshot_identity(&paths)
+    }
+
+    fn cache_context(cache_dir: &std::path::Path, snapshot: Arc<Snapshot>) -> CacheContext {
+        let mut paths = crate::import_search::roots_only(Vec::new());
+        paths.typeshed_snapshot = Some(ActiveTypeshed::new(snapshot, None));
+        build_context(
+            &CacheOptions {
+                enabled: true,
+                dir: Some(cache_dir.to_path_buf()),
+                stats: false,
+            },
+            &BTreeMap::new(),
+            &paths,
+            cache_dir,
+        )
+        .expect("enabled cache context")
+    }
+
+    #[test]
+    fn active_snapshot_identity_distinguishes_commits_custom_and_bundle() {
+        let commit_a =
+            Oid::from_hex("1111111111111111111111111111111111111111").expect("valid commit A");
+        let commit_b =
+            Oid::from_hex("2222222222222222222222222222222222222222").expect("valid commit B");
+        let a = fingerprint(snapshot(SourceIdentity::Commit {
+            commit: commit_a,
+            pinned: true,
+        }));
+        let same_a = fingerprint(snapshot(SourceIdentity::Commit {
+            commit: commit_a,
+            pinned: false,
+        }));
+        let b = fingerprint(snapshot(SourceIdentity::Commit {
+            commit: commit_b,
+            pinned: false,
+        }));
+        let custom = fingerprint(snapshot(SourceIdentity::Custom {
+            digest: "custom-tree".to_owned(),
+        }));
+        let bundled = fingerprint(snapshot(SourceIdentity::Bundled { commit: commit_a }));
+
+        assert_eq!(a, same_a, "pin policy does not change identical bytes");
+        assert_ne!(a, b);
+        assert_ne!(a, custom);
+        assert_ne!(a, bundled);
+    }
+
+    #[test]
+    fn checker_cache_hits_only_for_the_identical_active_snapshot_identity() {
+        let directory = tempfile::tempdir().expect("cache directory");
+        let target = std::path::Path::new("/workspace/module.py");
+        let commit_a = Oid::from_hex("1111111111111111111111111111111111111111").expect("commit A");
+        let commit_b = Oid::from_hex("2222222222222222222222222222222222222222").expect("commit B");
+        let stored = cache_context(
+            directory.path(),
+            snapshot(SourceIdentity::Commit {
+                commit: commit_a,
+                pinned: true,
+            }),
+        );
+        let payload = vec!["cached diagnostics".to_owned()];
+        stored
+            .cache
+            .store(target, &stored.fingerprint, BTreeMap::new(), &payload)
+            .expect("store checker result");
+
+        let identical = cache_context(
+            directory.path(),
+            snapshot(SourceIdentity::Commit {
+                commit: commit_a,
+                pinned: false,
+            }),
+        );
+        assert_eq!(
+            identical
+                .cache
+                .lookup::<Vec<String>>(target, &identical.fingerprint),
+            Some(payload)
+        );
+
+        for identity in [
+            SourceIdentity::Commit {
+                commit: commit_b,
+                pinned: false,
+            },
+            SourceIdentity::Custom {
+                digest: "custom-tree".to_owned(),
+            },
+            SourceIdentity::Bundled { commit: commit_a },
+        ] {
+            let changed = cache_context(directory.path(), snapshot(identity));
+            assert!(changed
+                .cache
+                .lookup::<Vec<String>>(target, &changed.fingerprint)
+                .is_none());
+        }
+    }
 }

@@ -17,8 +17,27 @@ pub fn signature_help_at(
     source: &str,
     byte_offset: usize,
 ) -> Option<SignatureHelp> {
-    let (callee, active_param) = find_call_context(source, byte_offset)?;
-    let func = find_function(resolved, &callee)?;
+    let (callee, active_param, open_paren) = find_call_context(source, byte_offset)?;
+    if let Some((_, member)) = callee.rsplit_once('.') {
+        let member_offset = open_paren.checked_sub(member.len())?;
+        if let Some((_class, declarations)) = crate::hover::members::builtin_member_declarations(
+            resolved,
+            source,
+            member_offset,
+            member,
+        ) {
+            return Some(SignatureHelp {
+                signatures: declarations
+                    .into_iter()
+                    .map(build_stub_signature_information)
+                    .collect(),
+                active_signature: Some(0),
+                active_parameter: Some(active_param),
+            });
+        }
+    }
+    let local_name = callee.rsplit('.').next().unwrap_or(&callee);
+    let func = find_function(resolved, local_name)?;
 
     let signature = build_signature(func, source);
     let active_parameter = adjust_active_param(func, active_param);
@@ -34,7 +53,7 @@ pub fn signature_help_at(
 ///
 /// Returns `(callee_name, comma_count)` where `comma_count` is the number of
 /// commas before the cursor (indicating which parameter is active).
-fn find_call_context(source: &str, offset: usize) -> Option<(String, u32)> {
+fn find_call_context(source: &str, offset: usize) -> Option<(String, u32, usize)> {
     let before = source.get(..offset)?;
     let mut depth = 0i32;
     let mut commas = 0u32;
@@ -48,7 +67,7 @@ fn find_call_context(source: &str, offset: usize) -> Option<(String, u32)> {
                     // Found the opening paren. Extract callee name before it.
                     let before_paren = before.get(..idx)?;
                     let callee = extract_callee(before_paren)?;
-                    return Some((callee, commas));
+                    return Some((callee, commas, idx));
                 }
                 depth -= 1;
             }
@@ -76,8 +95,46 @@ fn extract_callee(text: &str) -> Option<String> {
     if name.is_empty() {
         None
     } else {
-        // Return just the last segment for method calls (e.g. "self.greet" → "greet")
-        Some(name.rsplit('.').next().unwrap_or(&name).to_owned())
+        Some(name)
+    }
+}
+
+fn build_stub_signature_information(
+    declaration: &basilisk_stubs::StubFunction,
+) -> SignatureInformation {
+    let rendered = basilisk_stubs::render_stub_signature(declaration);
+    let label = rendered
+        .strip_prefix("def ")
+        .unwrap_or(&rendered)
+        .to_owned();
+    let parameters = declaration
+        .params
+        .iter()
+        .map(|parameter| {
+            let prefix = match parameter.kind {
+                basilisk_stubs::StubParamKind::Vararg => "*",
+                basilisk_stubs::StubParamKind::Kwarg => "**",
+                _ => "",
+            };
+            let mut label = format!("{prefix}{}", parameter.name);
+            if let Some(annotation) = &parameter.annotation {
+                label.push_str(": ");
+                label.push_str(annotation);
+            }
+            if parameter.has_default {
+                label.push_str(" = ...");
+            }
+            ParameterInformation {
+                label: ParameterLabel::Simple(label),
+                documentation: None,
+            }
+        })
+        .collect();
+    SignatureInformation {
+        label,
+        documentation: None,
+        parameters: Some(parameters),
+        active_parameter: None,
     }
 }
 

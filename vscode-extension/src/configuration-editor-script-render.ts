@@ -186,10 +186,197 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       showRule(code);
       announce('Focused rule ' + code);
     }
+    // Overview/Adoption/Project/Path Overrides render exact server-computed
+    // snapshot state (snapshot.debt / .source / .problems / .pathOverrides) —
+    // never client arithmetic dressed up as a score ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+    function renderSeverityStrip() {
+      const strip = byId('severity-strip');
+      clear(strip);
+      const debt = snapshot.debt;
+      [['Error', debt.errorDiagnostics], ['Warning', debt.warningDiagnostics], ['Info', debt.infoDiagnostics], ['Total', debt.remainingDiagnostics]]
+        .forEach(([label, value]) => {
+          const cell = document.createElement('div');
+          cell.append(textNode('strong', formatNumber(value)), textNode('span', label));
+          strip.append(cell);
+        });
+    }
+    function renderOverview() {
+      renderSeverityStrip();
+      byId('overview-diagnostics').textContent = formatNumber(snapshot.debt.remainingDiagnostics);
+      byId('overview-adopted').textContent = formatNumber(snapshot.debt.adoptedRules);
+      byId('overview-disabled').textContent = formatNumber(snapshot.debt.disabledRules);
+    }
+    function renderAdoption() {
+      const openRules = snapshot.rules.filter((rule) => rule.diagnosticCount > 0).length;
+      byId('adoption-open-rules').textContent = formatNumber(openRules);
+      byId('adoption-open-diagnostics').textContent = formatNumber(snapshot.debt.remainingDiagnostics);
+    }
+    function pathSettingRow(label, severity) {
+      const item = document.createElement('li');
+      item.append(textNode('code', label), textNode('span', kind(severity, 'Error')));
+      return item;
+    }
+    function renderPaths() {
+      const list = byId('path-override-list');
+      clear(list);
+      const overrides = snapshot.pathOverrides || [];
+      if (overrides.length === 0) {
+        list.append(textNode('p', 'No path overrides. Project policy applies everywhere. Add a nested pyproject.toml [tool.basilisk] table to scope rules to a subtree.', 'empty-state'));
+        return;
+      }
+      overrides.forEach((entry) => {
+        const card = document.createElement('article');
+        card.className = 'path-override-card';
+        const header = document.createElement('div');
+        header.className = 'path-override-head';
+        header.append(textNode('h3', entry.path || '.'));
+        const open = textNode('button', 'Open configuration file', 'secondary');
+        open.type = 'button';
+        open.dataset.openConfig = entry.configUri;
+        header.append(open);
+        card.append(header);
+        const rows = document.createElement('ul');
+        entry.rules.forEach((rule) => rows.append(pathSettingRow(rule.code, rule.severity)));
+        entry.tags.forEach((tag) => rows.append(pathSettingRow('tag:' + tag.tag, tag.severity)));
+        card.append(rows);
+        list.append(card);
+      });
+    }
+    function typeshedValue(setting) {
+      const value = setting.value === undefined || setting.value === null
+        ? setting.defaultValue
+        : setting.value;
+      return value && Object.prototype.hasOwnProperty.call(value, 'value') ? value.value : undefined;
+    }
+    function renderTypeshedStatus() {
+      const target = byId('typeshed-status');
+      clear(target);
+      const status = snapshot.typeshed.status;
+      const lifecycle = kind(status.lifecycle, 'Acquiring');
+      const summary = document.createElement('dl');
+      [
+        ['State', lifecycle],
+        ['Active source', kind(status.activeSource, 'Acquiring')],
+        ['Commit', status.commitIdentity || 'Not supplied'],
+        ['Tree', status.treeIdentity || 'Not attested'],
+        ['Transport', kind(status.transport, 'Pending')],
+        ['License', kind(status.licenseStatus, 'Acquiring')],
+        ['Provenance', kind(status.provenance, 'Pending') + (status.signedRelease ? ' · signed release' : ' · no signed release')],
+      ].forEach(([name, value]) => summary.append(textNode('dt', name), textNode('dd', value)));
+      target.append(summary);
+      status.warnings.forEach((warning) => {
+        const row = textNode('p', warning.message, 'typeshed-warning');
+        row.dataset.severity = kind(warning.severity, 'Advisory').toLowerCase();
+        target.append(row);
+      });
+    }
+    function typeshedControl(setting) {
+      const row = document.createElement('label');
+      row.className = 'typeshed-control';
+      row.append(textNode('span', setting.label), textNode('small', setting.description));
+      const key = kind(setting.key, '');
+      const widget = kind(setting.widget, 'Text');
+      const value = typeshedValue(setting);
+      if (widget === 'Boolean') {
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = value === true;
+        input.disabled = !setting.enabled;
+        input.dataset.typeshedBoolean = key;
+        row.append(input);
+      } else if (widget === 'Directory') {
+        const controls = document.createElement('div');
+        controls.className = 'path-picker';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.readOnly = true;
+        input.value = typeof value === 'string' ? value : '';
+        input.placeholder = 'Not configured';
+        const choose = textNode('button', 'Choose folder…', 'secondary');
+        choose.type = 'button';
+        choose.disabled = !setting.enabled;
+        choose.dataset.pickTypeshedFolder = key;
+        controls.append(input, choose);
+        row.append(controls);
+      } else {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = typeof value === 'string' ? value : '';
+        input.disabled = !setting.enabled;
+        input.dataset.typeshedText = key;
+        input.autocomplete = 'off';
+        input.spellcheck = false;
+        row.append(input);
+      }
+      return row;
+    }
+    function renderTypeshedControls() {
+      renderTypeshedStatus();
+      const controls = byId('typeshed-controls');
+      clear(controls);
+      const modeLabel = document.createElement('label');
+      modeLabel.className = 'typeshed-control';
+      modeLabel.append(textNode('span', 'Source mode'));
+      const select = document.createElement('select');
+      select.id = 'typeshed-source-mode';
+      const current = kind(snapshot.typeshed.sourceMode, 'Latest');
+      snapshot.typeshed.sourceOptions.forEach((source) => {
+        const option = entryOption(kind(source.mode, 'Latest'), kind(source.mode, 'Latest') === current);
+        option.textContent = source.label;
+        option.disabled = !source.enabled;
+        select.append(option);
+      });
+      select.disabled = snapshot.typeshed.sourceOptions.every((source) => !source.enabled);
+      modeLabel.append(select);
+      controls.append(modeLabel);
+      snapshot.typeshed.settings.forEach((setting) => controls.append(typeshedControl(setting)));
+      const actions = byId('typeshed-actions');
+      clear(actions);
+      snapshot.typeshed.actions.forEach((action) => {
+        const button = textNode('button', action.label, kind(action.action, '') === 'PinCurrent' ? 'primary' : 'secondary');
+        button.type = 'button';
+        button.disabled = !action.enabled;
+        button.dataset.typeshedAction = kind(action.action, '');
+        actions.append(button);
+      });
+    }
+    function renderProject() {
+      const dl = byId('source-details');
+      clear(dl);
+      const source = snapshot.source;
+      const facts = [
+        ['Root', compactUri(snapshot.rootUri)],
+        ['Source', compactUri(source.uri)],
+        ['Revision', snapshot.revision],
+        ['On disk', source.exists ? 'Yes' : 'Created on first change'],
+        ['Writable', source.readOnly ? 'Read-only' : 'Writable'],
+      ];
+      facts.forEach(([name, value]) => dl.append(textNode('dt', name), textNode('dd', value)));
+      renderTypeshedControls();
+      const problemList = byId('problem-list');
+      clear(problemList);
+      const problems = snapshot.problems || [];
+      if (problems.length === 0) {
+        problemList.className = 'empty-state';
+        problemList.textContent = 'No configuration problems.';
+        return;
+      }
+      problemList.className = '';
+      problems.forEach((problem) => {
+        const item = document.createElement('p');
+        item.className = 'problem-row';
+        item.append(textNode('strong', problem.code), document.createTextNode(' ' + problem.message));
+        problemList.append(item);
+      });
+    }
     function renderSnapshot() {
       if (!snapshot) return;
       saveFocus();
       renderSource();
+      renderOverview();
+      renderAdoption();
+      renderPaths();
+      renderProject();
       renderTags();
       applyFilter();
       consumeFocusRule();
@@ -226,12 +413,24 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
         );
         changes.append(row);
       });
-      if (preview.changes.length === 0) {
-        changes.append(textNode('p', 'No rule changes effective severity.', 'empty-state'));
+      preview.typeshedChanges.forEach((change) => {
+        const row = document.createElement('div');
+        row.className = 'preview-change';
+        const before = change.before && Object.prototype.hasOwnProperty.call(change.before, 'value')
+          ? String(change.before.value)
+          : 'default';
+        const after = change.after && Object.prototype.hasOwnProperty.call(change.after, 'value')
+          ? String(change.after.value)
+          : 'default';
+        row.append(textNode('code', kind(change.key, 'Typeshed')), textNode('strong', before + ' → ' + after));
+        changes.append(row);
+      });
+      if (preview.changes.length === 0 && preview.typeshedChanges.length === 0) {
+        changes.append(textNode('p', 'No effective configuration changes.', 'empty-state'));
       }
       const dialog = byId('preview-dialog');
       if (!dialog.open) dialog.showModal();
-      announce('Preview ready: ' + formatNumber(preview.changes.length) + ' rule(s) change');
+      announce('Preview ready: ' + formatNumber(preview.changes.length + preview.typeshedChanges.length) + ' setting(s) change');
     }
     function renderOverlay() {
       const overlay = byId('state-overlay');
@@ -242,7 +441,9 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       document.querySelector('main').setAttribute('aria-busy', String(blocking));
       if (!blocking) {
         if (overlayWasBlocking) {
-          const recovery = byId('rule-search');
+          const recovery = activeSection === 'rules'
+            ? byId('rule-search')
+            : document.querySelector('[data-section="' + activeSection + '"] h2');
           if (recovery) window.requestAnimationFrame(() => recovery.focus());
         }
         overlayWasBlocking = false;

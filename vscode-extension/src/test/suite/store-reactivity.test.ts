@@ -13,16 +13,16 @@ import { ModuleExplorerProvider, wireReactiveRefresh } from "../../module-explor
 import { createStore, type Store } from "../../store";
 
 type StateListener = (event: { newState: State; oldState: State }) => void;
-type NotificationListener = () => void;
+type NotificationListener = (value?: unknown) => void;
 
 /** A fake client that exposes its state + notification listeners to the test. */
 interface FakeClientHandles {
   client: LanguageClient;
   fireState: (state: State) => void;
-  fireNotification: (method: string) => void;
+  fireNotification: (method: string, value?: unknown) => void;
 }
 
-function fakeClient(): FakeClientHandles {
+function fakeClient(typeshedStatuses: readonly unknown[] = []): FakeClientHandles {
   const stateListeners: StateListener[] = [];
   const notificationListeners = new Map<string, NotificationListener>();
   const client = {
@@ -36,7 +36,9 @@ function fakeClient(): FakeClientHandles {
       return { dispose: (): undefined => undefined };
     },
     sendRequest: async (): Promise<unknown> => ({ modules: [], workspace: undefined }),
-    initializeResult: { capabilities: {} },
+    initializeResult: {
+      capabilities: { experimental: { basilisk: { typeshedStatuses } } },
+    },
   } as unknown as LanguageClient;
   return {
     client,
@@ -45,37 +47,35 @@ function fakeClient(): FakeClientHandles {
         listener({ newState: state, oldState: State.Starting });
       }
     },
-    fireNotification: (method: string): void => {
-      notificationListeners.get(method)?.();
+    fireNotification: (method: string, value?: unknown): void => {
+      notificationListeners.get(method)?.(value);
     },
   };
 }
 
-function storeWithFakeClient(): { store: Store; handles: FakeClientHandles } {
+function storeWithFakeClient(
+  typeshedStatuses: readonly unknown[] = [],
+): { store: Store; handles: FakeClientHandles } {
   const store = createStore();
-  const handles = fakeClient();
+  const handles = fakeClient(typeshedStatuses);
   store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, handles.client);
   return { store, handles };
 }
 
-suite("Centralized analysis reactivity (issue #58)", () => {
-  /**
-   * Run fn with command registration stubbed: the store's Running handler
-   * registers real client commands, which the already-activated extension
-   * owns — the stub keeps this component test from colliding with it.
-   */
-  function withStubbedCommands(fn: () => void): void {
-    const original = vscode.commands.registerCommand;
-    (vscode.commands as { registerCommand: unknown }).registerCommand = (): vscode.Disposable => ({
-      dispose: (): undefined => undefined,
-    });
-    try {
-      fn();
-    } finally {
-      (vscode.commands as { registerCommand: unknown }).registerCommand = original;
-    }
+/** Avoid colliding with commands owned by the already-activated extension. */
+function withStubbedCommands(fn: () => void): void {
+  const original = vscode.commands.registerCommand;
+  (vscode.commands as { registerCommand: unknown }).registerCommand = (): vscode.Disposable => ({
+    dispose: (): undefined => undefined,
+  });
+  try {
+    fn();
+  } finally {
+    (vscode.commands as { registerCommand: unknown }).registerCommand = original;
   }
+}
 
+suite("Centralized analysis reactivity (issue #58)", () => {
   test("analysisRevision bumps when the server reaches Running", () => {
     withStubbedCommands(() => {
       const { store, handles } = storeWithFakeClient();
@@ -99,6 +99,61 @@ suite("Centralized analysis reactivity (issue #58)", () => {
       assert.ok(
         store.analysisRevision.value > before,
         "re-analysis completion must bump analysisRevision",
+      );
+    });
+  });
+
+  test("Typeshed status changes refresh only the matching open root", () => {
+    withStubbedCommands(() => {
+      const { store, handles } = storeWithFakeClient();
+      handles.fireState(State.Running);
+      store.beginConfigurationLoad("file:///workspace");
+      handles.fireNotification("basilisk/typeshedStatusChanged", {
+        rootUri: "file:///other",
+        status: {
+          lifecycle: { kind: "Ready" }, licenseStatus: { kind: "Approved" },
+          provenance: { kind: "BundleVetted" }, signedRelease: false, warnings: [],
+        },
+      });
+      assert.strictEqual(store.typeshedStatuses.value.has("file:///other"), true);
+      assert.strictEqual(store.configurationEditor.value.refreshRequested, false);
+      handles.fireNotification("basilisk/typeshedStatusChanged", {
+        rootUri: "file:///workspace",
+        status: {
+          lifecycle: { kind: "Ready" }, licenseStatus: { kind: "Approved" },
+          provenance: { kind: "BundleVetted" }, signedRelease: false, warnings: [],
+        },
+      });
+      assert.strictEqual(
+        store.typeshedStatuses.value.get("file:///workspace")?.licenseStatus.kind,
+        "Approved",
+      );
+      assert.strictEqual(store.configurationEditor.value.refreshRequested, true);
+    });
+  });
+
+  test("Typeshed statuses seed from initialize and invalid notifications cannot replace them", () => {
+    withStubbedCommands(() => {
+      const initial = {
+        rootUri: "file:///workspace",
+        status: {
+          lifecycle: { kind: "Blocked" }, blockedReason: "exact unavailable",
+          licenseStatus: { kind: "Changed" }, provenance: { kind: "Pending" },
+          signedRelease: false, warnings: [],
+        },
+      };
+      const { store, handles } = storeWithFakeClient([initial]);
+      handles.fireState(State.Running);
+      assert.strictEqual(
+        store.typeshedStatuses.value.get("file:///workspace")?.licenseStatus.kind,
+        "Changed",
+      );
+      handles.fireNotification("basilisk/typeshedStatusChanged", {
+        rootUri: "file:///workspace", status: { lifecycle: { kind: "invented" } },
+      });
+      assert.strictEqual(
+        store.typeshedStatuses.value.get("file:///workspace")?.blockedReason,
+        "exact unavailable",
       );
     });
   });

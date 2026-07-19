@@ -247,6 +247,14 @@ pub async fn handle_connection(
             basilisk_common::configuration_editor::OCCURRENCES,
             LspServer::rule_occurrences,
         )
+        .custom_method(
+            basilisk_common::configuration_editor::TYPESHED_ACTION,
+            LspServer::typeshed_action,
+        )
+        .custom_method(
+            basilisk_common::configuration_editor::TYPESHED_DOCUMENT,
+            LspServer::typeshed_document,
+        )
         .finish();
 
     // Channel for injecting synthesised responses (e.g. parse errors) into

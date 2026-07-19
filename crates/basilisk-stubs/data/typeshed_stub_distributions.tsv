@@ -1,9 +1,7 @@
 # typeshed third-party stub distribution map — GENERATED, do not edit by hand.
-# Source: python/typeshed `stubs/<DIST>/` directories (main branch).
-# Each line maps a Python *import root* to the PyPI *distribution* that
-# publishes its stubs (always `types-<DIST>`). Used by the BSK-0152 quick fix
-# to offer a real `uv add --dev <dist>` and to suppress the fix when no
-# stub distribution exists. Regenerate from typeshed's git tree.
+# Implements [STUBRES-TYPESHED-BASELINE].
+# Source commit: python/typeshed@83c2518a9e6abbda0c44592c3483de459198f887
+# Source root tree: 66408ffce2750980efc6da09e8a6652733f852e4
 # Format: <import_root>\t<distribution>
 Jetson	types-Jetson.GPIO
 MySQLdb	types-mysqlclient
@@ -157,10 +155,10 @@ pyluach	types-pyluach
 pymeeus	types-PyMeeus
 pymysql	types-PyMySQL
 pynput	types-pynput
+pyogrio	types-pyogrio
 pyperclip	types-pyperclip
 pyphen	types-pyphen
 pyscreeze	types-PyScreeze
-pysftp	types-pysftp
 pytest_lazyfixture	types-pytest-lazy-fixture
 python_http_client	types-python-http-client
 pythoncom	types-pywin32
@@ -179,6 +177,7 @@ resampy	types-resampy
 retry	types-retry
 rfc3339_validator	types-rfc3339-validator
 s2clientprotocol	types-s2clientprotocol
+scp	types-scp
 seaborn	types-seaborn
 send2trash	types-Send2Trash
 serial	types-pyserial
@@ -215,6 +214,7 @@ waitress	types-waitress
 watchpoints	types-watchpoints
 webencodings	types-webencodings
 webob	types-WebOb
+webtest	types-WebTest
 whatthepatch	types-whatthepatch
 win2kras	types-pywin32
 win32	types-pywin32

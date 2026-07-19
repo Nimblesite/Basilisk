@@ -1,0 +1,206 @@
+{
+  "carrier_sha256": "1d9f60c90143c251d0b48c53a9da4858f36c9d4d092d7fe6914b96d1dc213d12",
+  "dependencies": [
+    {
+      "name": "@nimblesite/shipwright-core",
+      "version": "0.10.0",
+      "license": "MIT",
+      "repository": "https://github.com/Nimblesite/Shipwright.git",
+      "resolved": "https://registry.npmjs.org/@nimblesite/shipwright-core/-/shipwright-core-0.10.0.tgz",
+      "integrity": "sha512-vVbQ2K5VmOwkZ9zsiG0jGsVACJJ79R44vk0iUMR+4a8/8e+oYB330lv3pAQDFSwUDnH/3SGA7LXLDH8xB5LHCQ==",
+      "legal_files": [
+        {
+          "label": "shared Shipwright repository LICENSE",
+          "source": "node_modules/@nimblesite/shipwright-vscode/LICENSE",
+          "sha256": "032c14bd0ff61c4ea546e23e8849b74a68770e9b91375d25a772b20587dc3159"
+        }
+      ]
+    },
+    {
+      "name": "@nimblesite/shipwright-vscode",
+      "version": "0.10.0",
+      "license": "MIT",
+      "repository": "https://github.com/Nimblesite/Shipwright.git",
+      "resolved": "https://registry.npmjs.org/@nimblesite/shipwright-vscode/-/shipwright-vscode-0.10.0.tgz",
+      "integrity": "sha512-rdTYt+jetNtxcEhAwJFYcyPlvnzhzCJxSNTrmMuXYLoL7ES38xbErJW36GfxWliUgvOVsL7XI3KtUZAewptdpA==",
+      "legal_files": [
+        {
+          "label": "LICENSE",
+          "source": "node_modules/@nimblesite/shipwright-vscode/LICENSE",
+          "sha256": "032c14bd0ff61c4ea546e23e8849b74a68770e9b91375d25a772b20587dc3159"
+        }
+      ]
+    },
+    {
+      "name": "@preact/signals-core",
+      "version": "1.14.3",
+      "license": "MIT",
+      "repository": "https://github.com/preactjs/signals",
+      "resolved": "https://registry.npmjs.org/@preact/signals-core/-/signals-core-1.14.3.tgz",
+      "integrity": "sha512-m0K3vnbSLC5rHs2ZVfeAMvBtT1zIyq4mxx5OlNncSgMj5Iz6W5Rn3kPrDxAC+iIKmiVe0lSl6U37t5ZkEWoVAw==",
+      "legal_files": [
+        {
+          "label": "LICENSE",
+          "source": "node_modules/@preact/signals-core/LICENSE",
+          "sha256": "a11fc89e4c6b118854c7a667734a0b2e6bf2af5e45c6686de31adbccc8f3ae8d"
+        }
+      ]
+    },
+    {
+      "name": "balanced-match",
+      "version": "4.0.4",
+      "license": "MIT",
+      "repository": "git://github.com/juliangruber/balanced-match.git",
+      "resolved": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
+      "integrity": "sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==",
+      "legal_files": [
+        {
+          "label": "LICENSE.md",
+          "source": "node_modules/brace-expansion/node_modules/balanced-match/LICENSE.md",
+          "sha256": "d408f38ffa3355c5faec517153295338892eb0f1ea43f57874bb23c6075979b5"
+        }
+      ]
+    },
+    {
+      "name": "brace-expansion",
+      "version": "5.0.6",
+      "license": "MIT",
+      "repository": "git+ssh://git@github.com/juliangruber/brace-expansion.git",
+      "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.6.tgz",
+      "integrity": "sha512-kLpxurY4Z4r9sgMsyG0Z9uzsBlgiU/EFKhj/h91/8yHu0edo7XuixOIH3VcJ8kkxs6/jPzoI6U9Vj3WqbMQ94g==",
+      "legal_files": [
+        {
+          "label": "LICENSE",
+          "source": "node_modules/brace-expansion/LICENSE",
+          "sha256": "9c63a23124d68cd30cd316a94a1a0bca34f032786df6df69fc4b5f136bac8d2e"
+        }
+      ]
+    },
+    {
+      "name": "minimatch",
+      "version": "10.2.5",
+      "license": "BlueOak-1.0.0",
+      "repository": "git@github.com:isaacs/minimatch",
+      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.5.tgz",
+      "integrity": "sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg==",
+      "legal_files": [
+        {
+          "label": "LICENSE.md",
+          "source": "node_modules/minimatch/LICENSE.md",
+          "sha256": "2c7c5d22ed5a8ee968c64757710979afcd77438c48b4a265b94e615babd8a901"
+        }
+      ]
+    },
+    {
+      "name": "semver",
+      "version": "7.8.2",
+      "license": "ISC",
+      "repository": "git+https://github.com/npm/node-semver.git",
+      "resolved": "https://registry.npmjs.org/semver/-/semver-7.8.2.tgz",
+      "integrity": "sha512-c8jsqUZm3omBOI66G90z1Dyw5z622G8oLG+omfsHBJf3CWQTlOcwOjvOG6wtiNfW6anKm/eA39LMwMtMez2TiQ==",
+      "legal_files": [
+        {
+          "label": "LICENSE",
+          "source": "node_modules/semver/LICENSE",
+          "sha256": "4ec3d4c66cd87f5c8d8ad911b10f99bf27cb00cdfcff82621956e379186b016b"
+        }
+      ]
+    },
+    {
+      "name": "vscode-jsonrpc",
+      "version": "9.0.0",
+      "license": "MIT",
+      "repository": "https://github.com/Microsoft/vscode-languageserver-node.git",
+      "resolved": "https://registry.npmjs.org/vscode-jsonrpc/-/vscode-jsonrpc-9.0.0.tgz",
+      "integrity": "sha512-+VvMmQPJhtvJ+8O+zu2JKIRiLxXF8NW7krWgyMGeOHrp4Cn23T5hc0v2LknNeopDOB70wghHAds7mKtcZ0I4Sg==",
+      "legal_files": [
+        {
+          "label": "License.txt",
+          "source": "node_modules/vscode-jsonrpc/License.txt",
+          "sha256": "ec9ee83580841e8eb687aca9867f221503809ba6426c7f876ede17d91b9fcfd0"
+        },
+        {
+          "label": "thirdpartynotices.txt",
+          "source": "node_modules/vscode-jsonrpc/thirdpartynotices.txt",
+          "sha256": "a89123562fe364dc8e969e85614eb6c1f8452afe131d6e42bd1314bb2d092b04"
+        }
+      ]
+    },
+    {
+      "name": "vscode-languageclient",
+      "version": "10.0.1",
+      "license": "MIT",
+      "repository": "https://github.com/Microsoft/vscode-languageserver-node.git",
+      "resolved": "https://registry.npmjs.org/vscode-languageclient/-/vscode-languageclient-10.0.1.tgz",
+      "integrity": "sha512-kXitJTQVKfv69/TY0LnQdsSMaqzRaeoJMMic+B6ad7HLtFPO46MLxpNjnFh1KF1nOhZUoLX+6e+JoIl+Jp3ycQ==",
+      "legal_files": [
+        {
+          "label": "License.txt",
+          "source": "node_modules/vscode-languageclient/License.txt",
+          "sha256": "ec9ee83580841e8eb687aca9867f221503809ba6426c7f876ede17d91b9fcfd0"
+        }
+      ]
+    },
+    {
+      "name": "vscode-languageserver-protocol",
+      "version": "3.18.1",
+      "license": "MIT",
+      "repository": "https://github.com/Microsoft/vscode-languageserver-node.git",
+      "resolved": "https://registry.npmjs.org/vscode-languageserver-protocol/-/vscode-languageserver-protocol-3.18.1.tgz",
+      "integrity": "sha512-RTiiVHdpxpYcJVI5sq6S5TLjQ4WDR/rBrIWru+kPXe6sGQ9PFQ3GamrTKLvPqbR4ylr1SoodhmcqbFII0WXVuw==",
+      "legal_files": [
+        {
+          "label": "License.txt",
+          "source": "node_modules/vscode-languageserver-protocol/License.txt",
+          "sha256": "ec9ee83580841e8eb687aca9867f221503809ba6426c7f876ede17d91b9fcfd0"
+        },
+        {
+          "label": "thirdpartynotices.txt",
+          "source": "node_modules/vscode-languageserver-protocol/thirdpartynotices.txt",
+          "sha256": "9265d27cf75775aa5ae19c5ba01846fb70ecd5121f8c39c81bef7e03f007072c"
+        }
+      ]
+    },
+    {
+      "name": "vscode-languageserver-textdocument",
+      "version": "1.0.13",
+      "license": "MIT",
+      "repository": "https://github.com/Microsoft/vscode-languageserver-node.git",
+      "resolved": "https://registry.npmjs.org/vscode-languageserver-textdocument/-/vscode-languageserver-textdocument-1.0.13.tgz",
+      "integrity": "sha512-nx0ZHwMGIsVkzFG3/VLeJYBLTaFBRuNdGDvevvjuoayU5EOS2fEYazOhtCM3PI9ClMMg5igc0uwXtAq4tJj+Dw==",
+      "legal_files": [
+        {
+          "label": "License.txt",
+          "source": "node_modules/vscode-languageserver-textdocument/License.txt",
+          "sha256": "ec9ee83580841e8eb687aca9867f221503809ba6426c7f876ede17d91b9fcfd0"
+        },
+        {
+          "label": "thirdpartynotices.txt",
+          "source": "node_modules/vscode-languageserver-textdocument/thirdpartynotices.txt",
+          "sha256": "a89123562fe364dc8e969e85614eb6c1f8452afe131d6e42bd1314bb2d092b04"
+        }
+      ]
+    },
+    {
+      "name": "vscode-languageserver-types",
+      "version": "3.18.0",
+      "license": "MIT",
+      "repository": "https://github.com/Microsoft/vscode-languageserver-node.git",
+      "resolved": "https://registry.npmjs.org/vscode-languageserver-types/-/vscode-languageserver-types-3.18.0.tgz",
+      "integrity": "sha512-8TsGPNMIMiiBdkORgRSvLjuiEIiAFtO+KssmYWxQ+uSVvlf7RjK8YKCOjPzZ+YA04jXEV7+7LvkSmHkhpNS99g==",
+      "legal_files": [
+        {
+          "label": "License.txt",
+          "source": "node_modules/vscode-languageserver-types/License.txt",
+          "sha256": "ec9ee83580841e8eb687aca9867f221503809ba6426c7f876ede17d91b9fcfd0"
+        },
+        {
+          "label": "thirdpartynotices.txt",
+          "source": "node_modules/vscode-languageserver-types/thirdpartynotices.txt",
+          "sha256": "a89123562fe364dc8e969e85614eb6c1f8452afe131d6e42bd1314bb2d092b04"
+        }
+      ]
+    }
+  ],
+  "production_graph_sha256": "0cde329d95c6111d14152a9e04f4bd890377383c0fa5994f216c19b3834a0767"
+}

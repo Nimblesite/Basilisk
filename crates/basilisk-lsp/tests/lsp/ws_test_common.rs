@@ -35,9 +35,10 @@ pub struct WsTestFixture {
         >,
     >,
     /// Temp workspace root opened by [`WsTestFixture::initialize`]. It ships a
-    /// `pyproject.toml` whose `[tool.basilisk.rules]` opts into the annotation
-    /// house rules (off by default — the default config is pure PEP
-    /// conformance). Documents fall back to this root's config, so house
+    /// `pyproject.toml` whose `[tool.basilisk]` table supplies an explicit
+    /// Python target and whose rule table opts into the annotation house rules
+    /// (off by default — the default config is pure PEP conformance). Documents
+    /// fall back to this root's config, so house
     /// diagnostics (`BSK-0001` …) fire exactly as they do for a project that
     /// enabled them. No modes; configuration.
     /// See [CHKARCH-CONFIGURATION-ONLY].
@@ -86,7 +87,10 @@ impl WsTestFixture {
         // them keeps firing. See [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
             workspace_root.join("pyproject.toml"),
-            "[tool.basilisk.rules]\n\
+            "[tool.basilisk]\n\
+python-version = \"3.12\"\n\
+\n\
+[tool.basilisk.rules]\n\
 \"BSK-0001\" = \"error\"\n\
 \"BSK-0002\" = \"error\"\n\
 \"BSK-0003\" = \"error\"\n\
@@ -156,10 +160,21 @@ impl WsTestFixture {
         }))
         .await?;
 
-        // Drain the server's log message.
-        let _ = timeout(Duration::from_millis(500), self.ws_read.next()).await;
-
-        Ok(response)
+        // `initialized` acquires and gates Typeshed before analysis. Await the
+        // typed Ready notification so subsequent document opens can never
+        // observe the deliberately empty blocked-root publication.
+        for _ in 0..20 {
+            let message = self
+                .recv()
+                .await
+                .ok_or("no terminal Typeshed status after initialized")?;
+            if message.contains("\"method\":\"basilisk/typeshedStatusChanged\"")
+                && message.contains("\"lifecycle\":{\"kind\":\"Ready\"}")
+            {
+                return Ok(response);
+            }
+        }
+        Err("Typeshed did not become ready during initialization".into())
     }
 
     /// Send `textDocument/didOpen`.

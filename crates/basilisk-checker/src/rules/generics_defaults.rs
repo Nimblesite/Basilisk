@@ -1,4 +1,6 @@
-//! Implements [`generics_defaults`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`generics_defaults`] from [CHKARCH-DIAG-OWNERSHIP] and
+//! [TYPEINF-GENERICS-DEFAULTS]. See
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! `generics_defaults`: Non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`.
 //!
 //! PEP 696 §Ordering defines two ordering rules for type parameters in `Generic[...]`:

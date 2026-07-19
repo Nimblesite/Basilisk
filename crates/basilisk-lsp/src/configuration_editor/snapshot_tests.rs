@@ -3,15 +3,24 @@
 
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use basilisk_config::{BasiliskConfig, RuleSeverity as ConfigSeverity};
+use basilisk_stubs::typeshed::gittree::Oid;
+use basilisk_stubs::typeshed::source::{
+    LicenseStatus, Provenance, SourceKind, Transport, TypeshedStatus,
+};
+use basilisk_stubs::typeshed::warning::WarningSeverity;
 
 use super::{build_snapshot, hypothetical_inventory, inventory, occurrences, page_occurrences};
 use crate::config::AnalysisMode;
 use crate::configuration_editor::catalog::descriptors;
 use crate::configuration_editor::model::{
-    RuleOccurrence, RuleSeverity, SourcePosition, SourceRange,
+    RuleOccurrence, RuleSeverity, SourcePosition, SourceRange, TypeshedAction,
+    TypeshedLicenseStatus, TypeshedLifecycle, TypeshedSettingKey, TypeshedSettingValue,
+    TypeshedSourceMode,
 };
+use crate::server::typeshed_status::{TypeshedFailure, TypeshedGeneration};
 use crate::workspace::WorkspaceIndex;
 
 #[test]
@@ -128,7 +137,7 @@ fn snapshot_reports_rule_entries_effective_severities_and_tag_entries() {
     let Ok(document) = document else {
         unreachable!("fixture pyproject.toml must parse");
     };
-    let snapshot = build_snapshot(&index, &root, &document);
+    let snapshot = build_snapshot(&index, &root, &document, None);
     assert_eq!(snapshot.revision, document.revision);
     assert!(snapshot.config_uri.ends_with("pyproject.toml"));
     assert!(snapshot.root_uri.starts_with("file://"));
@@ -159,6 +168,162 @@ fn snapshot_reports_rule_entries_effective_severities_and_tag_entries() {
         pep.map(|state| state.effective_severity),
         Some(RuleSeverity::Error)
     );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// [LSPCFGED-TYPESHED]: snapshot settings and status come entirely from the
+/// server's parsed config plus one shared terminal runtime status.
+#[test]
+fn snapshot_describes_typeshed_controls_and_terminal_status() {
+    let Some((root, index)) = indexed_root("typeshed") else {
+        unreachable!("indexed fixture must produce diagnostics");
+    };
+    let Ok(mut document) = basilisk_config::discover_config_document(&root) else {
+        unreachable!("fixture configuration must parse");
+    };
+    document.config.typeshed_cache = Some(false);
+    document.config.typeshed_verify = Some(false);
+    let Ok(commit) = Oid::from_hex("83c2518a9e6abbda0c44592c3483de459198f887") else {
+        unreachable!("fixture SHA must parse");
+    };
+    let status = TypeshedStatus {
+        active_source: SourceKind::Bundled,
+        commit: Some(commit),
+        tree: None,
+        transport: Transport::EmbeddedZip,
+        license_status: LicenseStatus::Approved,
+        license_reference: Some("typeshed://license/83c2518".to_owned()),
+        provenance: Provenance::BundleVetted,
+        signed_release: false,
+        warnings: vec![basilisk_stubs::typeshed::source::StatusWarning {
+            code: "UNPINNED".to_owned(),
+            message: "UNPINNED — Pin current to make this reproducible".to_owned(),
+            severity: WarningSeverity::Advisory,
+        }],
+    };
+    let Ok(mut runtime_snapshot) = basilisk_stubs::typeshed::bundle::bundled_snapshot() else {
+        unreachable!("bundled snapshot must activate");
+    };
+    runtime_snapshot.status = status;
+    let generation = TypeshedGeneration::Ready(Arc::new(runtime_snapshot));
+    let snapshot = build_snapshot(&index, &root, &document, Some(&generation));
+    assert_eq!(snapshot.typeshed.source_mode, TypeshedSourceMode::Latest);
+    assert_eq!(snapshot.typeshed.status.lifecycle, TypeshedLifecycle::Ready);
+    assert_eq!(
+        snapshot.typeshed.status.commit_identity.as_deref(),
+        Some("83c2518a9e6abbda0c44592c3483de459198f887")
+    );
+    assert_eq!(
+        snapshot
+            .typeshed
+            .status
+            .warnings
+            .first()
+            .map(|warning| warning.code.as_str()),
+        Some("UNPINNED")
+    );
+    let cache = snapshot
+        .typeshed
+        .settings
+        .iter()
+        .find(|setting| setting.key == TypeshedSettingKey::TypeshedCache);
+    assert_eq!(
+        cache.and_then(|setting| setting.value.clone()),
+        Some(TypeshedSettingValue::Boolean { value: false })
+    );
+    let pin = snapshot
+        .typeshed
+        .actions
+        .iter()
+        .find(|action| action.action == TypeshedAction::PinCurrent);
+    assert_eq!(pin.map(|action| action.enabled), Some(true));
+
+    document.config.typeshed_path = Some(root.join("custom-typeshed"));
+    let custom = build_snapshot(&index, &root, &document, Some(&generation));
+    assert_eq!(
+        custom.typeshed.source_mode,
+        TypeshedSourceMode::CustomFolder
+    );
+    let acquire = custom
+        .typeshed
+        .actions
+        .iter()
+        .find(|action| action.action == TypeshedAction::AcquireFresh);
+    assert_eq!(
+        acquire.map(|action| action.enabled),
+        Some(true),
+        "custom acquisition re-snapshots the user-managed tree"
+    );
+    document.config.typeshed_path = None;
+
+    let blocked = TypeshedGeneration::Blocked {
+        failure: TypeshedFailure::acquisition("exact commit unavailable"),
+    };
+    let snapshot = build_snapshot(&index, &root, &document, Some(&blocked));
+    assert_eq!(
+        snapshot.typeshed.status.lifecycle,
+        TypeshedLifecycle::Blocked
+    );
+    assert_eq!(
+        snapshot.typeshed.status.license_status,
+        TypeshedLicenseStatus::Unavailable
+    );
+    assert_eq!(
+        snapshot.typeshed.status.blocked_reason.as_deref(),
+        Some("exact commit unavailable")
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// [LSPCFGED-TYPESHED]: acquisition is an atomic source transition. While a
+/// candidate is being acquired, no source-policy control may start a second
+/// mutation against the in-flight generation.
+#[test]
+fn acquiring_typeshed_disables_every_source_setting_and_action() {
+    let Some((root, index)) = indexed_root("typeshed-acquiring") else {
+        unreachable!("indexed fixture must produce diagnostics");
+    };
+    let Ok(document) = basilisk_config::discover_config_document(&root) else {
+        unreachable!("fixture configuration must parse");
+    };
+
+    let snapshot = build_snapshot(
+        &index,
+        &root,
+        &document,
+        Some(&TypeshedGeneration::Acquiring),
+    );
+
+    assert_eq!(
+        snapshot.typeshed.status.lifecycle,
+        TypeshedLifecycle::Acquiring
+    );
+    assert!(
+        snapshot
+            .typeshed
+            .source_options
+            .iter()
+            .all(|option| !option.enabled),
+        "the source selector must be locked while acquisition is in flight"
+    );
+    assert_eq!(snapshot.typeshed.settings.len(), 6);
+    assert!(
+        snapshot
+            .typeshed
+            .settings
+            .iter()
+            .all(|setting| !setting.enabled),
+        "all six source-policy settings must be locked while acquisition is in flight"
+    );
+    assert!(
+        snapshot
+            .typeshed
+            .actions
+            .iter()
+            .all(|action| !action.enabled),
+        "Typeshed actions must be locked while acquisition is in flight"
+    );
+
     let _ = std::fs::remove_dir_all(root);
 }
 

@@ -26,6 +26,7 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { InfoPanelProvider, featureToggleTarget } from "../../info-panel";
+import type { TypeshedStatusState } from "../../configuration-editor-model";
 import { createStore } from "../../store";
 import { EXTENSION_ID, SUITE_SETUP_TIMEOUT_MS, waitForLspReady } from "./test-helpers";
 
@@ -58,6 +59,79 @@ function tooltipOf(item: vscode.TreeItem): string {
   if (typeof tooltip === "string") { return tooltip; }
   if (tooltip instanceof vscode.MarkdownString) { return tooltip.value; }
   return "";
+}
+
+function verifyTypeshedInfoRows(): void {
+  const store = createStore();
+  const writable = store.typeshedStatuses as unknown as {
+    value: ReadonlyMap<string, TypeshedStatusState>;
+  };
+  writable.value = new Map([[
+    "file:///workspace",
+    {
+      lifecycle: { kind: "Ready" }, activeSource: { kind: "Bundled" },
+      blockedReason: undefined,
+      commitIdentity: "83c2518a9e6abbda0c44592c3483de459198f887",
+      treeIdentity: "66408ffce2750980efc6da09e8a6652733f852e4",
+      transport: { kind: "EmbeddedZip" }, licenseStatus: { kind: "Approved" },
+      licenseReference: "typeshed://license/83c2518", provenance: { kind: "BundleVetted" },
+      signedRelease: false,
+      warnings: [{
+        code: "UNPINNED", message: "Pin current to make this reproducible",
+        severity: { kind: "Advisory" },
+      }],
+    },
+  ]]);
+  const typeshedProvider = new InfoPanelProvider(store);
+  try {
+    const section = typeshedProvider.getChildren().find((row) => labelOf(row) === "Server Info");
+    assert.ok(section, "Server Info section should exist");
+    const rows = typeshedProvider.getChildren(section);
+    const byLabel = new Map(rows.map((row) => [labelOf(row), row]));
+    const source = byLabel.get("Typeshed Source");
+    assert.ok(String(source?.description).includes("83c2518a9e6abbda0c44592c3483de459198f887"));
+    const sourceTooltip = tooltipOf(source ?? new vscode.TreeItem("missing"));
+    assert.ok(sourceTooltip.includes("Tree: 66408ffce2750980efc6da09e8a6652733f852e4"));
+    assert.ok(sourceTooltip.includes("Transport: EmbeddedZip"));
+    assert.ok(sourceTooltip.includes("Provenance: BundleVetted"));
+    assert.ok(sourceTooltip.includes("Signed release: no"));
+    assert.ok(sourceTooltip.includes("License: Approved"));
+    assert.ok(!byLabel.has("Typeshed Transport"), "trust details belong in one source tooltip");
+    assert.strictEqual(
+      byLabel.get("Typeshed UNPINNED")?.description,
+      "Pin current to make this reproducible",
+    );
+  } finally {
+    typeshedProvider.dispose();
+  }
+}
+
+function verifyAcquiringTypeshedSpinner(): void {
+  const store = createStore();
+  const writable = store.typeshedStatuses as unknown as {
+    value: ReadonlyMap<string, TypeshedStatusState>;
+  };
+  writable.value = new Map([[
+    "file:///workspace",
+    {
+      lifecycle: { kind: "Acquiring" }, blockedReason: undefined, activeSource: undefined,
+      commitIdentity: undefined, treeIdentity: undefined, transport: undefined,
+      licenseStatus: { kind: "Acquiring" }, licenseReference: undefined,
+      provenance: { kind: "Pending" }, signedRelease: false, warnings: [],
+    },
+  ]]);
+  const typeshedProvider = new InfoPanelProvider(store);
+  try {
+    const section = typeshedProvider.getChildren().find((row) => labelOf(row) === "Server Info");
+    assert.ok(section, "Server Info section should exist");
+    const state = typeshedProvider
+      .getChildren(section)
+      .find((row) => labelOf(row) === "Typeshed State");
+    assert.ok(state?.iconPath instanceof vscode.ThemeIcon);
+    assert.strictEqual(state.iconPath.id, "loading~spin");
+  } finally {
+    typeshedProvider.dispose();
+  }
 }
 
 suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
@@ -140,6 +214,10 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
       "the Server state row duplicates the status bar and was dropped (issue #103)",
     );
   });
+
+  test("Server Info renders the root-keyed Typeshed source and trust state", verifyTypeshedInfoRows);
+
+  test("Server Info shows an acquiring Typeshed spinner", verifyAcquiringTypeshedSpinner);
 
   // Tests [EXTACT-INFO-SERVER-INFO]: one uv row, sub-settings in the tooltip.
   test("uv sub-settings are folded into the uv row tooltip, not separate rows", () => {

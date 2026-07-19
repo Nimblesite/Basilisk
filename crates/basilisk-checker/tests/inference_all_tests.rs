@@ -1,4 +1,9 @@
-//! Tests for [TYPEINF-ALGO]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ALGO
+//! External tests for [TYPEINF-SPEC], [TYPEINF-OVERVIEW], [TYPEINF-INFERRED],
+//! [TYPEINF-ALGO], [TYPEINF-VARS], [TYPEINF-SUBTYPING],
+//! [TYPEINF-SUBTYPING-IMPL], [TYPEINF-SPECIAL], [TYPEINF-IMPL],
+//! [TYPEINF-EXCEEDS], [TYPEINF-EXCEEDS-NOUNKNOWN], and
+//! [TYPEINF-EXCEEDS-CONTAINERS]. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md.
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

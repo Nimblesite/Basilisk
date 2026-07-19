@@ -6,17 +6,31 @@
 //! class definitions with methods and attributes, and module-level
 //! variable annotations.
 
+mod class_members;
+mod dunder_all;
+mod guard;
+mod imports;
+mod syntax;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use ruff_python_ast::{
-    self as ast, Decorator, Expr, Parameters, Stmt, StmtAnnAssign, StmtAssign, StmtAugAssign,
-    StmtClassDef, StmtFunctionDef, StmtIf, StmtImport, StmtImportFrom,
+    Expr, Operator, Stmt, StmtAnnAssign, StmtAssign, StmtAugAssign, StmtFunctionDef, StmtIf,
 };
 
 use crate::types::{
-    StarReexport, StubClass, StubFunction, StubModule, StubParam, StubParamKind, StubSource,
-    StubTier, StubVariable,
+    DunderAllItem, DunderAllMutation, StarReexport, StubClass, StubFunction, StubModule,
+    StubSource, StubSpan, StubTarget, StubTier, StubVariable,
+};
+
+pub(crate) use self::dunder_all::intersect_name_lists;
+use self::dunder_all::{
+    dotted_expression, literal_dunder_all, literal_dunder_all_items, string_literal,
+};
+use self::guard::feasible_branches;
+use self::syntax::{
+    ann_assign_target_name, expr_to_annotation, extract_decorator_names, extract_params,
 };
 
 /// Errors that can occur during `.pyi` parsing.
@@ -58,7 +72,34 @@ pub fn parse_pyi_file(
         path: path.to_path_buf(),
         source: err,
     })?;
-    parse_pyi_source(&content, path, module_name, source, tier)
+    parse_pyi_source_with_target(&content, path, module_name, source, tier, None)
+}
+
+/// Parse a `.pyi` file using concrete target evidence for guarded declarations.
+///
+/// # Errors
+///
+/// Returns [`StubParseError::Io`] if the file cannot be read, or
+/// [`StubParseError::Syntax`] if the file has parse errors.
+pub fn parse_pyi_file_for_target(
+    path: &Path,
+    module_name: &str,
+    source: StubSource,
+    tier: StubTier,
+    target: &StubTarget,
+) -> Result<StubModule, StubParseError> {
+    let content = basilisk_common::fs::read_tracked(path).map_err(|err| StubParseError::Io {
+        path: path.to_path_buf(),
+        source: err,
+    })?;
+    parse_pyi_source_with_target(
+        &content,
+        path,
+        module_name,
+        source,
+        tier,
+        Some(target.clone()),
+    )
 }
 
 /// Parse `.pyi` source text and extract a [`StubModule`].
@@ -76,6 +117,40 @@ pub fn parse_pyi_source(
     source: StubSource,
     tier: StubTier,
 ) -> Result<StubModule, StubParseError> {
+    parse_pyi_source_with_target(content, path, module_name, source, tier, None)
+}
+
+/// Parse `.pyi` source using concrete target evidence for guarded declarations.
+///
+/// # Errors
+///
+/// Returns [`StubParseError::Syntax`] if the source has parse errors.
+pub fn parse_pyi_source_for_target(
+    content: &str,
+    path: &Path,
+    module_name: &str,
+    source: StubSource,
+    tier: StubTier,
+    target: &StubTarget,
+) -> Result<StubModule, StubParseError> {
+    parse_pyi_source_with_target(
+        content,
+        path,
+        module_name,
+        source,
+        tier,
+        Some(target.clone()),
+    )
+}
+
+fn parse_pyi_source_with_target(
+    content: &str,
+    path: &Path,
+    module_name: &str,
+    source: StubSource,
+    tier: StubTier,
+    target: Option<StubTarget>,
+) -> Result<StubModule, StubParseError> {
     let module_ast =
         basilisk_parser::parse_source(content.to_owned(), path.to_string_lossy().into_owned())
             .map_err(|err| StubParseError::Syntax {
@@ -83,40 +158,51 @@ pub fn parse_pyi_source(
                 message: err.to_string(),
             })?
             .ast;
-    let mut extractor = StubExtractor::new(module_name, path, source, tier);
+    let mut extractor = StubExtractor::new(module_name, path, source, tier, target);
     extractor.visit_body(&module_ast.body);
     Ok(extractor.into_module())
 }
 
 /// Walks the AST and collects stub information.
+#[derive(Clone)]
 struct StubExtractor {
     module_name: String,
     path: PathBuf,
     source: StubSource,
     tier: StubTier,
+    target: Option<StubTarget>,
     functions: HashMap<String, StubFunction>,
     overloads: HashMap<String, Vec<StubFunction>>,
     classes: HashMap<String, StubClass>,
     variables: HashMap<String, StubVariable>,
-    dunder_all: Option<Vec<String>>,
+    dunder_all_mutations: Vec<DunderAllMutation>,
     reexported_names: Vec<String>,
     star_reexports: Vec<StarReexport>,
+    module_bindings: HashMap<String, StarReexport>,
 }
 
 impl StubExtractor {
-    fn new(module_name: &str, path: &Path, source: StubSource, tier: StubTier) -> Self {
+    fn new(
+        module_name: &str,
+        path: &Path,
+        source: StubSource,
+        tier: StubTier,
+        target: Option<StubTarget>,
+    ) -> Self {
         Self {
             module_name: module_name.to_owned(),
             path: path.to_path_buf(),
             source,
             tier,
+            target,
             functions: HashMap::new(),
             overloads: HashMap::new(),
             classes: HashMap::new(),
             variables: HashMap::new(),
-            dunder_all: None,
+            dunder_all_mutations: Vec::new(),
             reexported_names: Vec::new(),
             star_reexports: Vec::new(),
+            module_bindings: HashMap::new(),
         }
     }
 
@@ -126,11 +212,13 @@ impl StubExtractor {
             path: self.path,
             source: self.source,
             tier: self.tier,
+            target: self.target,
             functions: self.functions,
             overloads: self.overloads,
             classes: self.classes,
             variables: self.variables,
-            dunder_all: self.dunder_all,
+            dunder_all: literal_dunder_all(&self.dunder_all_mutations),
+            dunder_all_mutations: self.dunder_all_mutations,
             reexported_names: self.reexported_names,
             star_reexports: self.star_reexports,
         }
@@ -145,6 +233,7 @@ impl StubExtractor {
                 Stmt::AnnAssign(ann) => self.visit_ann_assign(ann),
                 Stmt::Assign(assign) => self.visit_assign(assign),
                 Stmt::AugAssign(aug) => self.visit_aug_assign(aug),
+                Stmt::Expr(expr) => self.visit_expr(&expr.value),
                 Stmt::Import(import) => self.visit_import(import),
                 Stmt::ImportFrom(import) => self.visit_import_from(import),
                 Stmt::If(if_stmt) => self.visit_if(if_stmt),
@@ -153,68 +242,118 @@ impl StubExtractor {
         }
     }
 
-    // Implements [STUBRES-PYI-REEXPORTS] — the typing spec's import
-    // conventions: `import x as x` marks `x` as re-exported.
-    fn visit_import(&mut self, import: &StmtImport) {
-        for alias in &import.names {
-            if alias
-                .asname
-                .as_ref()
-                .is_some_and(|asname| asname.as_str() == alias.name.as_str())
-            {
-                self.reexported_names.push(alias.name.to_string());
+    /// Select concrete target branches, or intersect all feasible alternatives
+    /// when platform/version evidence is absent or explicitly `All`.
+    fn visit_if(&mut self, if_stmt: &StmtIf) {
+        let branches = feasible_branches(if_stmt, self.target.as_ref());
+        if branches.len() == 1 {
+            if let Some(body) = branches.first().and_then(|body| *body) {
+                self.visit_body(body);
             }
-        }
-    }
-
-    // Implements [STUBRES-PYI-REEXPORTS] — `from y import *` re-exports the
-    // target's export set; `from y import x as x` re-exports `x`.
-    fn visit_import_from(&mut self, import: &StmtImportFrom) {
-        if import.names.iter().any(|alias| alias.name.as_str() == "*") {
-            self.star_reexports.push(StarReexport {
-                module: import
-                    .module
-                    .as_ref()
-                    .map(ToString::to_string)
-                    .unwrap_or_default(),
-                level: import.level,
-            });
             return;
         }
-        for alias in &import.names {
-            if alias
-                .asname
-                .as_ref()
-                .is_some_and(|asname| asname.as_str() == alias.name.as_str())
-            {
-                self.reexported_names.push(alias.name.to_string());
+
+        let mutation_prefix_len = self.dunder_all_mutations.len();
+        let alternatives: Vec<Self> = branches
+            .into_iter()
+            .map(|body| {
+                let mut alternative = self.clone();
+                if let Some(stmts) = body {
+                    alternative.visit_body(stmts);
+                }
+                alternative
+            })
+            .collect();
+        let branch_mutations: Vec<Vec<DunderAllMutation>> = alternatives
+            .iter()
+            .map(|alternative| {
+                alternative
+                    .dunder_all_mutations
+                    .get(mutation_prefix_len..)
+                    .map_or_else(Vec::new, <[DunderAllMutation]>::to_vec)
+            })
+            .collect();
+        if let Some(mut intersection) = Self::intersect_alternatives(&alternatives) {
+            intersection
+                .dunder_all_mutations
+                .truncate(mutation_prefix_len);
+            if branch_mutations.iter().any(|branch| !branch.is_empty()) {
+                intersection
+                    .dunder_all_mutations
+                    .push(DunderAllMutation::Choice(branch_mutations));
             }
+            *self = intersection;
         }
     }
 
-    /// Collect export-affecting statements (`__all__`, re-export imports) from
-    /// version/platform-gated branches (`if sys.version_info >= …:`). Branches
-    /// are unioned: for attribute existence an over-approximation can only
-    /// suppress false positives, never create one ([STUBRES-PYI-REEXPORTS]).
-    /// Definitions inside conditionals stay out of scope, as at top level.
-    fn visit_if(&mut self, if_stmt: &StmtIf) {
-        self.collect_conditional_exports(&if_stmt.body);
-        for clause in &if_stmt.elif_else_clauses {
-            self.collect_conditional_exports(&clause.body);
+    fn intersect_alternatives(alternatives: &[Self]) -> Option<Self> {
+        let mut intersection = alternatives.first()?.clone();
+        for alternative in alternatives.iter().skip(1) {
+            retain_matching_entries(
+                &mut intersection.functions,
+                &alternative.functions,
+                same_stub_function,
+            );
+            retain_matching_entries(
+                &mut intersection.overloads,
+                &alternative.overloads,
+                |left, right| same_stub_functions(left, right),
+            );
+            retain_matching_entries(
+                &mut intersection.classes,
+                &alternative.classes,
+                same_stub_class,
+            );
+            retain_equal_entries(&mut intersection.variables, &alternative.variables);
+            retain_equal_entries(
+                &mut intersection.module_bindings,
+                &alternative.module_bindings,
+            );
+            retain_common(
+                &mut intersection.reexported_names,
+                &alternative.reexported_names,
+            );
+            retain_common(
+                &mut intersection.star_reexports,
+                &alternative.star_reexports,
+            );
         }
+        Some(intersection)
     }
 
-    /// The `if`-body statement walk backing [`Self::visit_if`].
-    fn collect_conditional_exports(&mut self, stmts: &[Stmt]) {
-        for stmt in stmts {
-            match stmt {
-                Stmt::Import(import) => self.visit_import(import),
-                Stmt::ImportFrom(import) => self.visit_import_from(import),
-                Stmt::Assign(assign) => self.collect_assign_dunder_all(assign),
-                Stmt::AugAssign(aug) => self.visit_aug_assign(aug),
-                Stmt::If(nested) => self.visit_if(nested),
-                _ => {}
+    fn visit_expr(&mut self, expr: &Expr) {
+        let Expr::Call(call) = expr else {
+            return;
+        };
+        let Expr::Attribute(method) = call.func.as_ref() else {
+            return;
+        };
+        if !matches!(method.value.as_ref(), Expr::Name(name) if name.id == "__all__")
+            || !call.arguments.keywords.is_empty()
+            || call.arguments.args.len() != 1
+        {
+            return;
+        }
+        let Some(argument) = call.arguments.args.first() else {
+            return;
+        };
+        match method.attr.as_str() {
+            "extend" => {
+                if let Some(items) = self.dunder_all_items(argument) {
+                    self.record_dunder_all_mutation(DunderAllMutation::Extend(items));
+                }
             }
+            "append" => {
+                if let Some(name) = string_literal(argument) {
+                    self.record_dunder_all_mutation(DunderAllMutation::Append(name));
+                }
+            }
+            "remove" => {
+                if let Some(name) = string_literal(argument) {
+                    self.record_dunder_all_mutation(DunderAllMutation::Remove(name));
+                }
+            }
+            _ => {}
         }
     }
 
@@ -225,24 +364,68 @@ impl StubExtractor {
             .iter()
             .any(|target| matches!(target, Expr::Name(name) if name.id == "__all__"));
         if targets_all {
-            self.record_dunder_all(&assign.value);
+            if let Some(items) = self.dunder_all_items(&assign.value) {
+                self.record_dunder_all_mutation(DunderAllMutation::Assign(items));
+            }
         }
     }
 
     /// Record `__all__ += [...]` extensions ([STUBRES-PYI-REEXPORTS]).
     fn visit_aug_assign(&mut self, aug: &StmtAugAssign) {
-        if matches!(aug.target.as_ref(), Expr::Name(name) if name.id == "__all__") {
-            self.record_dunder_all(&aug.value);
+        if matches!(aug.target.as_ref(), Expr::Name(name) if name.id == "__all__")
+            && matches!(aug.op, Operator::Add)
+        {
+            if let Some(items) = self.dunder_all_items(&aug.value) {
+                self.record_dunder_all_mutation(DunderAllMutation::Extend(items));
+            }
         }
     }
 
-    /// Fold the string entries of a list/tuple literal into `dunder_all`.
-    /// A non-literal value (e.g. `__all__ = _helper()`) is ignored.
-    fn record_dunder_all(&mut self, value: &Expr) {
-        let Some(entries) = string_list_entries(value) else {
-            return;
-        };
-        self.dunder_all.get_or_insert_with(Vec::new).extend(entries);
+    fn record_dunder_all_mutation(&mut self, mutation: DunderAllMutation) {
+        self.dunder_all_mutations.push(mutation);
+    }
+
+    fn dunder_all_items(&self, value: &Expr) -> Option<Vec<DunderAllItem>> {
+        match value {
+            Expr::List(list) => literal_dunder_all_items(&list.elts),
+            Expr::Tuple(tuple) => literal_dunder_all_items(&tuple.elts),
+            Expr::BinOp(binary) if matches!(binary.op, Operator::Add) => {
+                let mut items = self.dunder_all_items(&binary.left)?;
+                items.extend(self.dunder_all_items(&binary.right)?);
+                Some(items)
+            }
+            Expr::Name(name) => self
+                .module_bindings
+                .get(name.id.as_str())
+                .cloned()
+                .map(DunderAllItem::ModuleAll)
+                .map(|item| vec![item]),
+            Expr::Attribute(_) => self
+                .module_all_reference(value)
+                .map(DunderAllItem::ModuleAll)
+                .map(|item| vec![item]),
+            _ => None,
+        }
+    }
+
+    fn module_all_reference(&self, value: &Expr) -> Option<StarReexport> {
+        let dotted = dotted_expression(value)?;
+        let mut segments = dotted.split('.');
+        let binding = segments.next()?;
+        let suffix: Vec<&str> = segments.collect();
+        if suffix.last().copied() != Some("__all__") {
+            return None;
+        }
+        let mut target = self.module_bindings.get(binding)?.clone();
+        let module_suffix = suffix.get(..suffix.len().saturating_sub(1))?.join(".");
+        if !module_suffix.is_empty() {
+            target.module = if target.module.is_empty() {
+                module_suffix
+            } else {
+                format!("{}.{}", target.module, module_suffix)
+            };
+        }
+        Some(target)
     }
 
     // Implements [STUBRES-PYI] — `@overload` is the one decorator that is
@@ -250,17 +433,22 @@ impl StubExtractor {
     fn visit_function(&mut self, func: &StmtFunctionDef, class_name: Option<&str>) {
         let decorators = extract_decorator_names(&func.decorator_list);
         let is_overload = decorators.iter().any(|d| d == "overload");
-        let params = extract_params(&func.parameters, class_name.is_some());
+        let params = extract_params(&func.parameters);
         let return_type = func.returns.as_ref().map(|ret| expr_to_annotation(ret));
 
         let stub_fn = StubFunction {
             name: func.name.to_string(),
+            receiver: None,
             params,
             return_type,
             is_overload,
             is_async: func.is_async,
             decorators,
             class_name: class_name.map(str::to_owned),
+            source_span: StubSpan {
+                start: func.name.range.start().into(),
+                end: func.name.range.end().into(),
+            },
         };
 
         let name = func.name.to_string();
@@ -268,76 +456,6 @@ impl StubExtractor {
             self.overloads.entry(name).or_default().push(stub_fn);
         } else {
             let _ = self.functions.insert(name, stub_fn);
-        }
-    }
-
-    fn visit_class(&mut self, class: &StmtClassDef) {
-        let bases = class
-            .arguments
-            .as_ref()
-            .map(|args| args.args.iter().map(expr_to_annotation).collect())
-            .unwrap_or_default();
-
-        let mut methods = Vec::new();
-        let mut attributes = Vec::new();
-
-        for stmt in &class.body {
-            match stmt {
-                Stmt::FunctionDef(func) => {
-                    let class_name = class.name.to_string();
-                    let decorators = extract_decorator_names(&func.decorator_list);
-                    let is_overload = decorators.iter().any(|d| d == "overload");
-                    let params = extract_params(&func.parameters, true);
-                    let return_type = func.returns.as_ref().map(|ret| expr_to_annotation(ret));
-
-                    methods.push(StubFunction {
-                        name: func.name.to_string(),
-                        params,
-                        return_type,
-                        is_overload,
-                        is_async: func.is_async,
-                        decorators,
-                        class_name: Some(class_name),
-                    });
-                }
-                Stmt::AnnAssign(ann) => {
-                    if let Some(name) = ann_assign_target_name(ann) {
-                        attributes.push(StubVariable {
-                            name,
-                            annotation: Some(expr_to_annotation(&ann.annotation)),
-                        });
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Also register methods at the module level for the function,
-        // including overloads tracking on the class stub.
-        self.visit_function_methods_for_class(&class.name, &methods);
-
-        let stub_class = StubClass {
-            name: class.name.to_string(),
-            bases,
-            methods,
-            attributes,
-        };
-        let _ = self.classes.insert(class.name.to_string(), stub_class);
-    }
-
-    /// Register class methods' overload groups on the extractor so they can be
-    /// queried by qualified name (`ClassName.method_name`).
-    fn visit_function_methods_for_class(&mut self, class_name: &str, methods: &[StubFunction]) {
-        for method in methods {
-            let qualified = format!("{class_name}.{}", method.name);
-            if method.is_overload {
-                self.overloads
-                    .entry(qualified)
-                    .or_default()
-                    .push(method.clone());
-            } else {
-                let _ = self.functions.insert(qualified, method.clone());
-            }
         }
     }
 
@@ -371,175 +489,131 @@ impl StubExtractor {
     }
 }
 
-/// The string entries of a list/tuple literal (`["a", "b"]` / `("a", "b")`),
-/// or `None` for any other expression. Non-string elements are skipped.
-fn string_list_entries(expr: &Expr) -> Option<Vec<String>> {
-    let elements = match expr {
-        Expr::List(list) => &list.elts,
-        Expr::Tuple(tuple) => &tuple.elts,
-        _ => return None,
-    };
-    Some(
-        elements
+fn retain_equal_entries<K, V>(left: &mut HashMap<K, V>, right: &HashMap<K, V>)
+where
+    K: std::hash::Hash + Eq,
+    V: Eq,
+{
+    left.retain(|key, value| right.get(key) == Some(value));
+}
+
+fn retain_matching_entries<K, V, F>(left: &mut HashMap<K, V>, right: &HashMap<K, V>, matches: F)
+where
+    K: std::hash::Hash + Eq,
+    F: Fn(&V, &V) -> bool,
+{
+    left.retain(|key, value| right.get(key).is_some_and(|other| matches(value, other)));
+}
+
+pub(super) fn retain_common<T: PartialEq>(left: &mut Vec<T>, right: &[T]) {
+    left.retain(|value| right.contains(value));
+}
+
+pub(super) fn retain_common_by<T>(left: &mut Vec<T>, right: &[T], matches: fn(&T, &T) -> bool) {
+    left.retain(|value| right.iter().any(|other| matches(value, other)));
+}
+
+pub(super) fn same_stub_function(left: &StubFunction, right: &StubFunction) -> bool {
+    left.name == right.name
+        && left.receiver == right.receiver
+        && left.params == right.params
+        && left.return_type == right.return_type
+        && left.is_overload == right.is_overload
+        && left.is_async == right.is_async
+        && left.decorators == right.decorators
+        && left.class_name == right.class_name
+}
+
+fn same_stub_functions(left: &[StubFunction], right: &[StubFunction]) -> bool {
+    left.len() == right.len()
+        && left
             .iter()
-            .filter_map(|element| match element {
-                Expr::StringLiteral(literal) => Some(literal.value.to_string()),
-                _ => None,
-            })
-            .collect(),
-    )
+            .zip(right)
+            .all(|(left, right)| same_stub_function(left, right))
 }
 
-/// Extract the target name from an annotated assignment (`x: int = ...`).
-fn ann_assign_target_name(ann: &StmtAnnAssign) -> Option<String> {
-    if let Expr::Name(name_expr) = ann.target.as_ref() {
-        Some(name_expr.id.to_string())
-    } else {
-        None
-    }
+fn same_stub_class(left: &StubClass, right: &StubClass) -> bool {
+    left.name == right.name
+        && left.bases == right.bases
+        && left.metaclass == right.metaclass
+        && same_stub_functions(&left.methods, &right.methods)
+        && left.attributes == right.attributes
 }
 
-/// Extract decorator names from a list of decorators.
-///
-/// Handles simple names (`@overload`), dotted names (`@typing.overload`),
-/// and call expressions (`@some_decorator()`).
-fn extract_decorator_names(decorators: &[Decorator]) -> Vec<String> {
-    decorators
-        .iter()
-        .map(|dec| expr_to_decorator_name(&dec.expression))
-        .collect()
-}
+#[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "test-only fixed parser fixture must fail loudly"
+)]
+mod regression_tests {
+    use std::fmt::Write as _;
+    use std::path::Path;
 
-/// Convert a decorator expression to its string name.
-fn expr_to_decorator_name(expr: &Expr) -> String {
-    match expr {
-        Expr::Name(name) => name.id.to_string(),
-        Expr::Attribute(attr) => {
-            let prefix = expr_to_decorator_name(&attr.value);
-            format!("{prefix}.{}", attr.attr)
-        }
-        Expr::Call(call) => expr_to_decorator_name(&call.func),
-        _ => String::new(),
-    }
-}
+    use super::parse_pyi_source;
+    use crate::types::{StubSource, StubTier};
 
-/// Convert a type annotation expression to its text representation.
-///
-/// Recursively handles subscripts (`list[int]`), unions (`int | str`),
-/// attributes (`typing.Optional`), and other forms.
-fn expr_to_annotation(expr: &Expr) -> String {
-    match expr {
-        Expr::Name(name) => name.id.to_string(),
-        Expr::NoneLiteral(_) => "None".to_owned(),
-        Expr::EllipsisLiteral(_) => "...".to_owned(),
-        Expr::Attribute(attr) => {
-            let prefix = expr_to_annotation(&attr.value);
-            format!("{prefix}.{}", attr.attr)
+    #[test]
+    fn independent_unknown_guards_do_not_duplicate_identical_all_histories() {
+        let mut source = String::from("__all__ = ['public']\n");
+        for index in 0..32 {
+            let _ = write!(source, "if feature_{index}:\n    value_{index}: int\n");
         }
-        Expr::Subscript(sub) => {
-            let base = expr_to_annotation(&sub.value);
-            let slice = expr_to_annotation(&sub.slice);
-            format!("{base}[{slice}]")
-        }
-        Expr::Tuple(tuple) => {
-            let elts: Vec<String> = tuple.elts.iter().map(expr_to_annotation).collect();
-            elts.join(", ")
-        }
-        Expr::List(list) => {
-            let elts: Vec<String> = list.elts.iter().map(expr_to_annotation).collect();
-            format!("[{}]", elts.join(", "))
-        }
-        Expr::BinOp(binop) if matches!(binop.op, ast::Operator::BitOr) => {
-            let left = expr_to_annotation(&binop.left);
-            let right = expr_to_annotation(&binop.right);
-            format!("{left} | {right}")
-        }
-        Expr::StringLiteral(s) => format!("\"{}\"", s.value),
-        Expr::NumberLiteral(n) => match &n.value {
-            ast::Number::Int(i) => i.to_string(),
-            ast::Number::Float(f) => format!("{f}"),
-            ast::Number::Complex { real, imag } => format!("{real}+{imag}j"),
-        },
-        Expr::BooleanLiteral(b) => {
-            if b.value {
-                "True".to_owned()
-            } else {
-                "False".to_owned()
-            }
-        }
-        Expr::Starred(starred) => {
-            let inner = expr_to_annotation(&starred.value);
-            format!("*{inner}")
-        }
-        _ => "Unknown".to_owned(),
-    }
-}
-
-/// Extract parameters from a function's parameter list.
-///
-/// When `is_method` is true, the first parameter (`self`/`cls`) is skipped.
-fn extract_params(params: &Parameters, is_method: bool) -> Vec<StubParam> {
-    let mut result = Vec::new();
-
-    // Positional-only parameters (before `/`)
-    let posonlyargs = &params.posonlyargs;
-    for (idx, param) in posonlyargs.iter().enumerate() {
-        if is_method && idx == 0 && result.is_empty() {
-            continue;
-        }
-        result.push(param_to_stub_param(param, StubParamKind::PositionalOnly));
+        let module = parse_pyi_source(
+            &source,
+            Path::new("guards.pyi"),
+            "guards",
+            StubSource::Typeshed,
+            StubTier::Tier1,
+        )
+        .expect("fixture parses");
+        assert_eq!(module.dunder_all_mutations.len(), 1);
+        assert_eq!(module.dunder_all, Some(vec!["public".to_owned()]));
     }
 
-    // Regular parameters
-    let skip_first = is_method && result.is_empty();
-    for (idx, param) in params.args.iter().enumerate() {
-        if skip_first && idx == 0 {
-            continue;
+    #[test]
+    fn guarded_all_mutations_do_not_create_a_power_set() {
+        let mut source = String::from("__all__ = ['base']\n");
+        for index in 0..8 {
+            let _ = write!(
+                source,
+                "if feature_{index}:\n    __all__.append('optional_{index}')\n"
+            );
         }
-        result.push(param_to_stub_param(param, StubParamKind::Regular));
+        let module = parse_pyi_source(
+            &source,
+            Path::new("guarded_all.pyi"),
+            "guarded_all",
+            StubSource::Typeshed,
+            StubTier::Tier1,
+        )
+        .expect("fixture parses");
+        assert_eq!(module.dunder_all_mutations.len(), 9);
+        assert_eq!(module.dunder_all, Some(vec!["base".to_owned()]));
     }
 
-    // *args
-    if let Some(vararg) = &params.vararg {
-        result.push(StubParam {
-            name: vararg.name.to_string(),
-            annotation: vararg
-                .annotation
-                .as_ref()
-                .map(|ann| expr_to_annotation(ann)),
-            has_default: false,
-            kind: StubParamKind::Vararg,
-        });
+    #[test]
+    fn guarded_all_meet_preserves_duplicate_counts_for_later_remove() {
+        let module = parse_pyi_source(
+            "__all__ = ['shared']\nif feature:\n    __all__.append('shared')\nelse:\n    __all__.extend(['shared', 'shared'])\n__all__.remove('shared')\n",
+            Path::new("guarded_counts.pyi"),
+            "guarded_counts",
+            StubSource::Typeshed,
+            StubTier::Tier1,
+        )
+        .expect("fixture parses");
+        assert_eq!(module.dunder_all, Some(vec!["shared".to_owned()]));
     }
 
-    // Keyword-only parameters (after `*` or `*args`)
-    for param in &params.kwonlyargs {
-        result.push(param_to_stub_param(param, StubParamKind::KeywordOnly));
-    }
-
-    // **kwargs
-    if let Some(kwarg) = &params.kwarg {
-        result.push(StubParam {
-            name: kwarg.name.to_string(),
-            annotation: kwarg.annotation.as_ref().map(|ann| expr_to_annotation(ann)),
-            has_default: false,
-            kind: StubParamKind::Kwarg,
-        });
-    }
-
-    result
-}
-
-/// Convert a `ruff_python_ast::ParameterWithDefault` to a [`StubParam`].
-fn param_to_stub_param(param: &ast::ParameterWithDefault, kind: StubParamKind) -> StubParam {
-    StubParam {
-        name: param.parameter.name.to_string(),
-        annotation: param
-            .parameter
-            .annotation
-            .as_ref()
-            .map(|ann| expr_to_annotation(ann)),
-        has_default: param.default.is_some(),
-        kind,
+    #[test]
+    fn identical_guarded_append_is_visible_to_a_later_remove() {
+        let module = parse_pyi_source(
+            "if feature:\n    __all__.append('shared')\nelse:\n    __all__.append('shared')\n__all__.remove('shared')\n",
+            Path::new("guarded_remove.pyi"),
+            "guarded_remove",
+            StubSource::Typeshed,
+            StubTier::Tier1,
+        )
+        .expect("fixture parses");
+        assert_eq!(module.dunder_all, Some(Vec::new()));
     }
 }

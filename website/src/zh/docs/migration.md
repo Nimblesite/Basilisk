@@ -19,9 +19,12 @@ Basilisk 的默认配置启用完整的核心 PEP 规则集。Basilisk 自有的
 
 ## 1. 添加项目配置
 
+先配置你拥有的路径。只有要覆盖项目或解释器证据时才添加 `python-version`；
+固定提交的 typing 规范定义版本判断，而不是默认目标
+（[`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)）。
+
 ```toml
 [tool.basilisk]
-python-version = "3.12"
 include = ["src/", "tests/"]
 exclude = [
   "__pycache__", ".venv", "site-packages", "build", "dist",

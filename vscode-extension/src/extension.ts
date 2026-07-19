@@ -18,7 +18,7 @@ import { registerTestExplorer } from "./test-explorer";
 import { registerModuleExplorer } from "./module-explorer";
 import { registerInfoPanel } from "./info-panel";
 import { registerPythonProcesses } from "./process-explorer";
-import { registerConfigurationEditor } from "./configuration-editor";
+import { registerConfigurationEditor } from "./configuration-editor-registration";
 import { createStore, type Store } from "./store";
 import { registerProfiler, disposeProfiler } from "./profiler";
 import { registerMemoryProfiler, disposeMemoryProfiler } from "./memory-profiler";

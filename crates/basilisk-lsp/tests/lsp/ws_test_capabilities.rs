@@ -146,6 +146,51 @@ async fn test_ws_initialize_advertises_resolved_environment() -> TestResult<()> 
     Ok(())
 }
 
+// Tests [STUBRES-TYPESHED-WARN] and [LSPCFGED-TYPESHED-SERVICE-INFO]:
+// source status is ordinary LSP metadata, never a Python diagnostic.
+#[tokio::test]
+async fn test_ws_initialize_advertises_typeshed_status() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let response = fixture.initialize().await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&response)?;
+    let statuses = parsed
+        .pointer("/result/capabilities/experimental/basilisk/typeshedStatuses")
+        .and_then(serde_json::Value::as_array)
+        .ok_or("missing experimental.basilisk.typeshedStatuses in initialize response")?;
+    let entry = statuses
+        .first()
+        .ok_or("missing root-keyed Typeshed status in initialize response")?;
+    assert!(
+        entry
+            .get("rootUri")
+            .is_some_and(serde_json::Value::is_string),
+        "missing rootUri: {entry}"
+    );
+    let status = entry
+        .get("status")
+        .ok_or("missing typed Typeshed state in initialize response")?;
+
+    assert_eq!(
+        status
+            .pointer("/lifecycle/kind")
+            .and_then(serde_json::Value::as_str),
+        Some("Acquiring"),
+        "initialize must expose the pre-analysis Acquiring generation: {status}"
+    );
+    assert!(status.get("activeSource").is_none());
+    assert!(status
+        .get("warnings")
+        .is_some_and(serde_json::Value::is_array));
+    assert!(
+        parsed
+            .pointer("/result/capabilities/experimental/basilisk/configurationEditor")
+            .is_some(),
+        "typeshedStatuses must merge with existing experimental data: {response}"
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_ws_initialize_advertises_declaration_provider() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;

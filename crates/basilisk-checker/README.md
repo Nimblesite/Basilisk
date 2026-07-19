@@ -22,7 +22,11 @@ AST + resolved scopes + effective config ➜ [basilisk-checker] ➜ diagnostics
   project configuration in the precedence ladder.
 - **Live tagged registry** — provenance, PEP-category, and descriptive tags are
   attached to rules and drive selection/classification.
-- **Stub resolution** — resolves types from bundled stubs (`basilisk-stubs`) for stdlib and third-party modules.
+- **Stub resolution** — resolves types via `basilisk-stubs`: the standard
+  library from the pinned step-3 typeshed source—custom path, explicit commit,
+  verified `main`, or complete bundled ZIP snapshot—followed by third-party
+  packages in the specified order
+  ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 - **Gradual adoption** — project/path configuration and the LSP adoption store
   let existing codebases record debt without changing the default rule set.
 

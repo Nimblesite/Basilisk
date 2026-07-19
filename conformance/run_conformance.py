@@ -60,12 +60,19 @@ import tempfile
 from pathlib import Path
 from typing import Callable
 
+from worktree_lock import (
+    WorktreeBusyError,
+    exclusive_worktree_lock,
+    inherited_lock_is_valid,
+)
+
 # The suite's own harness imports these at runtime; the score/`caught` pass also
 # imports its calculator, so this interpreter must have them. NOT a reimplement.
 HARNESS_DEPS = ("jinja2", "markdown", "tomlkit")
 UPSTREAM_REPO = "python/typing"
 UPSTREAM_URL = f"https://github.com/{UPSTREAM_REPO}"
 UPSTREAM_REF = "main"
+RUN_ID_ENV = "BASILISK_CONFORMANCE_RUN_ID"
 # The two functions that ARE the official scoring algorithm; we reuse only the
 # first (for the `caught` stat). The harness itself applies both to grade files.
 OFFICIAL_FUNCS = ("get_expected_errors", "diff_expected_errors")
@@ -152,13 +159,17 @@ def clone_suite(ref: str, dest: Path) -> tuple[Path, dict]:
     if shutil.which("git") is None:
         raise RuntimeError("git not found on PATH — cannot clone the real suite")
     if dest.exists():
-        shutil.rmtree(dest)
+        raise RuntimeError(f"fresh clone destination must not already exist: {dest}")
     dest.parent.mkdir(parents=True, exist_ok=True)
     args = ["git", "clone", "--depth", "1"]
     if ref != UPSTREAM_REF:
         args += ["--branch", ref]
     run(args + [UPSTREAM_URL, str(dest)])
-    return _suite_paths(dest)
+    suite = _suite_paths(dest)
+    run_id = os.environ.get(RUN_ID_ENV)
+    if run_id:
+        _owner_marker(dest).write_text(run_id, encoding="utf-8")
+    return suite
 
 
 def _git_out(dest: Path, *args: str) -> str:
@@ -426,31 +437,70 @@ def parse_args(argv: list[str]) -> dict:
     return opts
 
 
-def resolve_suite(opts: dict, root: Path) -> tuple[Path, dict]:
+def _ensure_outside_repo(destination: Path, root: Path) -> None:
+    """Reject suite paths that can inherit this repository's configuration."""
+    resolved = destination.resolve()
+    repository = root.resolve()
+    if resolved == repository or repository in resolved.parents:
+        raise RuntimeError(
+            "conformance suite must remain outside the Basilisk repository"
+        )
+
+
+def _owner_marker(destination: Path) -> Path:
+    """Return the run-ownership marker outside the pristine checkout tree."""
+    return destination.parent / f".{destination.name}.basilisk-owner"
+
+
+def _suite_destination(
+    opts: dict, root: Path
+) -> tuple[Path, tempfile.TemporaryDirectory | None]:
+    """Return a caller-owned path or an isolated invocation-owned path."""
+    if opts["suite_dir"]:
+        destination = Path(opts["suite_dir"])
+        _ensure_outside_repo(destination, root)
+        return destination, None
+    if opts["reuse_clone"]:
+        raise RuntimeError(
+            "--reuse-clone requires an explicit --suite-dir owned by this run"
+        )
+    owner = tempfile.TemporaryDirectory(prefix="basilisk-typing-upstream-")
+    destination = Path(owner.name) / "typing"
+    try:
+        _ensure_outside_repo(destination, root)
+    except RuntimeError:
+        owner.cleanup()
+        raise
+    return destination, owner
+
+
+def resolve_suite(opts: dict, dest: Path) -> tuple[Path, dict]:
     # The clone lives OUTSIDE the repository tree: per-file config discovery
     # walks ancestor directories ([CHKARCH-CONFIG-DISCOVERY]), so a clone under
     # the repo would inherit the repo's own `[tool.basilisk]` rules and the
     # score would no longer be the binary's out-of-the-box default. A neutral
     # system-temp location keeps the suite config-free, exactly what a user
     # gets with no configuration ([CHKARCH-CONFORMANCE]).
-    dest = (
-        Path(opts["suite_dir"])
-        if opts["suite_dir"]
-        else Path(tempfile.gettempdir()) / "basilisk-typing-upstream"
-    )
-    if opts["reuse_clone"] and (dest / "conformance" / "src" / "main.py").is_file():
+    if opts["reuse_clone"]:
+        run_id = os.environ.get(RUN_ID_ENV)
+        marker = _owner_marker(dest)
+        if (
+            not run_id
+            or not marker.is_file()
+            or marker.read_text(encoding="utf-8") != run_id
+        ):
+            raise RuntimeError(
+                "--reuse-clone requires a checkout owned by the active conformance run"
+            )
         conf, commit = _suite_paths(dest)
         print(f"  Reusing fresh clone at {dest} (python/typing@{commit['short']})")
         return conf, commit
     return clone_suite(opts["ref"], dest)
 
 
-def main(argv: list[str]) -> int:
-    opts = parse_args(argv)
-    root = repo_root()
-    ensure_harness_deps(root)
-
-    conf_dir, commit = resolve_suite(opts, root)
+def _run_with_suite(opts: dict, root: Path, suite_dir: Path) -> int:
+    """Run one phase against the suite directory owned by the caller."""
+    conf_dir, commit = resolve_suite(opts, suite_dir)
 
     # --sync-tests: only refresh the fixtures the Rust suite reads, then stop.
     # (Runs before `cargo test`, which needs conformance/tests present.)
@@ -494,6 +544,32 @@ def main(argv: list[str]) -> int:
         ]
     )
     return gate.returncode
+
+
+def _run_owned(opts: dict, root: Path) -> int:
+    """Run after the caller has established exclusive worktree ownership."""
+    suite_dir, owner = _suite_destination(opts, root)
+    try:
+        return _run_with_suite(opts, root, suite_dir)
+    finally:
+        if owner is not None:
+            owner.cleanup()
+
+
+def main(argv: list[str]) -> int:
+    opts = parse_args(argv)
+    root = repo_root()
+    lock_path = root / "target" / "test-rust.lock"
+    if inherited_lock_is_valid(lock_path):
+        ensure_harness_deps(root)
+        return _run_owned(opts, root)
+    try:
+        with exclusive_worktree_lock(lock_path):
+            ensure_harness_deps(root)
+            return _run_owned(opts, root)
+    except WorktreeBusyError as exc:
+        print(f"  ✗ {exc}", file=sys.stderr)
+        return 75
 
 
 if __name__ == "__main__":

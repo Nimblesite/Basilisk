@@ -7,8 +7,10 @@ pub mod model;
 mod mutation;
 mod protocol;
 mod snapshot;
+pub(crate) mod snapshot_typeshed;
 mod state;
 mod transaction;
+mod typeshed_acquisition;
 mod watch;
 
 pub(crate) use state::ConfigurationEditorState;

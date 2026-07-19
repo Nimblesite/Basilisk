@@ -7,8 +7,8 @@
 
 use super::common::*;
 
-/// A guard whose dead branch flips with the target version: on 3.12 the
-/// if-body is dead (`val`), on 3.9 the else-body is dead (`other`).
+/// A guard whose dead branch flips with a concrete target version. Without
+/// target evidence neither branch may be called dead.
 const VERSION_GUARD_SOURCE: &str = concat!(
     "import sys\n",
     "\n",
@@ -32,16 +32,16 @@ fn run_with_python_version(source: &str, version: &str) -> Vec<Diagnostic> {
 }
 
 #[test]
-fn test_e0150_default_target_flags_sub_3_10_branch() {
+fn test_e0150_without_target_keeps_all_version_branches() {
     let diags = run(VERSION_GUARD_SOURCE).unwrap();
     let messages = messages_for(&diags, "directives_version_platform");
     assert!(
-        messages.iter().any(|m| m.contains("`val`")),
-        "on the default 3.12 target the `< (3, 10)` body is dead: {messages:?}"
+        !messages.iter().any(|m| m.contains("`val`")),
+        "without target evidence the `< (3, 10)` body may be live: {messages:?}"
     );
     assert!(
         !messages.iter().any(|m| m.contains("`other`")),
-        "the else body is live on 3.12: {messages:?}"
+        "without target evidence the else body may be live: {messages:?}"
     );
 }
 
@@ -103,7 +103,8 @@ fn test_e0155_silent_on_3_12_target() {
 
 #[test]
 fn test_e0155_silent_without_configured_version() {
-    // The centralized default target is 3.12 — PEP 695 is allowed.
+    // No target is manufactured. Version-specific syntax diagnostics need
+    // concrete project/interpreter evidence.
     let diags = run("type Alias = int\n").unwrap();
     assert!(!has_code(&diags, "version_target_syntax"));
 }
@@ -124,8 +125,8 @@ fn test_python_version_parsed_from_pyproject() {
 
 #[test]
 fn test_malformed_python_version_falls_back_to_default() {
-    // An unparsable version must behave exactly like the 3.12 default,
-    // not panic and not produce spurious version gating.
+    // An unparsable version behaves as no target: it cannot justify a
+    // version-specific diagnostic.
     let diags = run_with_python_version("type Alias = int\n", "not-a-version");
     assert!(!has_code(&diags, "version_target_syntax"));
 }

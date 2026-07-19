@@ -14,6 +14,13 @@ use tracing::{info, warn};
 use crate::cache_check;
 use crate::output::FileSource;
 
+mod typeshed;
+
+pub(crate) use typeshed::build_import_search_paths;
+use typeshed::{
+    activate_production_typeshed, build_import_search_paths_with_config, load_cli_workspace_config,
+};
+
 /// Which command's diagnostics to keep at the CLI edge.
 ///
 /// Implements [CHKARCH-COMMANDS]: one rule universe, partitioned exactly once
@@ -137,17 +144,71 @@ pub(crate) fn collect_and_check(
     stats: &mut cache_check::CacheStats,
     scope: DiagnosticScope,
 ) -> Result<CheckOutcome, PipelineError> {
+    collect_and_check_with_overrides(paths, cache, stats, scope, TypeshedOverrides::default())
+}
+
+/// One-run command-line overrides for Typeshed acquisition policy.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct TypeshedOverrides {
+    pub(crate) no_cache: bool,
+    pub(crate) no_verification: bool,
+}
+
+pub(crate) fn collect_and_check_with_overrides(
+    paths: &[String],
+    cache: &cache_check::CacheOptions,
+    stats: &mut cache_check::CacheStats,
+    scope: DiagnosticScope,
+    overrides: TypeshedOverrides,
+) -> Result<CheckOutcome, PipelineError> {
+    collect_and_check_with_typeshed(
+        paths,
+        cache,
+        stats,
+        scope,
+        overrides,
+        activate_production_typeshed,
+    )
+}
+
+fn collect_and_check_with_typeshed<F>(
+    paths: &[String],
+    cache: &cache_check::CacheOptions,
+    stats: &mut cache_check::CacheStats,
+    scope: DiagnosticScope,
+    overrides: TypeshedOverrides,
+    activate_typeshed: F,
+) -> Result<CheckOutcome, PipelineError>
+where
+    F: Fn(
+        &mut basilisk_lsp::import_resolver::ImportSearchPaths,
+        &basilisk_lsp::config::WorkspaceConfig,
+    ) -> Result<(), PipelineError>,
+{
     // [CHKARCH-CONFIG-DISCOVERY] The first path only anchors project-level
     // concerns (include expansion, version detection, cache location); rule
     // config is resolved per checked file below, so diagnostics never depend
     // on argument order (GitHub #311).
     let config_root = first_path_dir(paths);
+    // Project metadata can live above the checked path (for example,
+    // `conformance/tests/case.py` inherits `conformance/pyproject.toml`).
+    // Resolve the project root before reading target-version evidence so a
+    // nested invocation observes the same explicit project target as the LSP.
+    let project_root = find_project_root(&config_root);
     let mut config = basilisk_config::load_basilisk_config(&config_root);
     // [CHKARCH-VERSION-TARGET] Detect the target version from project files
     // when the config does not pin one, matching the LSP (issue #93).
     if config.python_version.is_none() {
         config.python_version =
-            basilisk_uv::python_version::resolve_target_python_version(&config_root);
+            basilisk_uv::python_version::resolve_target_python_version(&project_root);
+    }
+
+    let mut workspace_config =
+        load_cli_workspace_config(&project_root, config.python_version.as_deref());
+    if config.python_platform.is_none() {
+        config
+            .python_platform
+            .clone_from(&workspace_config.python_platform);
     }
 
     let excluded = excluded_dirs_and_log(&config, &config_root);
@@ -158,15 +219,21 @@ pub(crate) fn collect_and_check(
     let python_files = collect_python_files(paths, &excluded).map_err(PipelineError::Internal)?;
 
     // Build import search paths (venv, uv registry, workspace members).
-    // Use cwd as the project root — pyproject.toml, uv.lock, and .venv
-    // live at the project root, not necessarily in the checked path.
-    let project_root = find_project_root(&config_root);
+    // pyproject.toml, uv.lock, and .venv live at the discovered project root,
+    // not necessarily in the checked path.
     let roots = analysis_roots(paths, &project_root);
-    let search_paths = if crate::import_search::files_might_import(&python_files) {
-        build_import_search_paths(roots, &project_root)
+    if overrides.no_cache {
+        workspace_config.typeshed_cache = false;
+    }
+    if overrides.no_verification {
+        workspace_config.typeshed_verify = false;
+    }
+    let mut search_paths = if crate::import_search::files_might_import(&python_files) {
+        build_import_search_paths_with_config(roots, &workspace_config)
     } else {
         crate::import_search::roots_only(roots)
     };
+    activate_typeshed(&mut search_paths, &workspace_config)?;
 
     // Per-file rule config, memoized per directory ([CHKARCH-CONFIG-DISCOVERY]).
     // The cache fingerprint covers every directory's config so a child config
@@ -220,11 +287,12 @@ pub(crate) fn analysis_roots(
     let canonical = std::fs::canonicalize(project_root).unwrap_or_else(|_| project_root.into());
     paths.iter().fold(vec![canonical], |mut roots, path| {
         let candidate = std::path::Path::new(path);
-        let directory = candidate
-            .is_dir()
-            .then_some(candidate)
-            .or_else(|| candidate.parent());
-        if let Some(absolute) = directory.and_then(|dir| std::fs::canonicalize(dir).ok()) {
+        let directory = if candidate.is_dir() {
+            candidate.to_path_buf()
+        } else {
+            parent_dir_of(path)
+        };
+        if let Ok(absolute) = std::fs::canonicalize(directory) {
             if !roots.contains(&absolute) {
                 roots.push(absolute);
             }
@@ -233,71 +301,14 @@ pub(crate) fn analysis_roots(
     })
 }
 
-/// Build the shared CLI/LSP import search path model for a project.
-pub(crate) fn build_import_search_paths(
-    roots: Vec<std::path::PathBuf>,
-    project_root: &std::path::Path,
-) -> basilisk_lsp::import_resolver::ImportSearchPaths {
-    let config = basilisk_lsp::config::load_analysis_config(project_root);
-    let registry = build_uv_registry(&roots);
-    let mut search_paths =
-        basilisk_lsp::import_resolver::search_paths_from_config(&roots, &config, registry);
-    search_paths.roots = roots;
-    info!(
-        site_packages = ?search_paths.site_packages,
-        has_registry = search_paths.registry.is_some(),
-        "built import search paths"
-    );
-    search_paths
-}
-
-/// Build a uv package registry from workspace roots, if this is a uv project.
-fn build_uv_registry(
-    roots: &[std::path::PathBuf],
-) -> Option<std::sync::Arc<basilisk_uv::PackageRegistry>> {
-    let uv_info = basilisk_uv::detect_uv_project(roots)?;
-
-    if !uv_info.has_lockfile {
-        info!(
-            root = %uv_info.root.display(),
-            "uv project detected but no uv.lock — skipping registry"
-        );
-        return None;
-    }
-
-    let lock_path = uv_info.root.join("uv.lock");
-    let lock_file = match basilisk_uv::parse_lock_file(&lock_path) {
-        Ok(lock) => lock,
-        Err(err) => {
-            warn!(
-                path = %lock_path.display(),
-                %err,
-                "failed to parse uv.lock — package registry unavailable"
-            );
-            return None;
-        }
-    };
-
-    let deps = basilisk_uv::extract_pyproject_deps(&uv_info.root);
-    let registry = basilisk_uv::PackageRegistry::from_lock_file(&lock_file, &deps);
-
-    let pkg_count = registry.all_packages().count();
-    info!(
-        root = %uv_info.root.display(),
-        packages = pkg_count,
-        direct_deps = deps.len(),
-        "built uv package registry"
-    );
-
-    Some(std::sync::Arc::new(registry))
-}
-
 fn process_file(
     path: &str,
     search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
     config: &basilisk_config::BasiliskConfig,
 ) -> Result<(Vec<basilisk_checker::Diagnostic>, String), String> {
-    let (resolved, source) = resolve_file_imports(path, search_paths)?;
+    let target_version =
+        basilisk_checker::context::CheckContext::from_config(config).target_version;
+    let (resolved, source) = resolve_file_imports(path, search_paths, target_version)?;
     // Apply the project's `[tool.basilisk]` tables so the CLI and editor
     // agree on selection and severity ([CHKARCH-CONFIG-MODEL]). Using `check`
     // here would silently drop config.
@@ -309,10 +320,15 @@ fn process_file(
 pub(crate) fn resolve_file_imports(
     path: &str,
     search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
+    target_version: Option<(u32, u32)>,
 ) -> Result<(basilisk_resolver::ResolvedModule, String), String> {
     let parsed = basilisk_parser::parse_file(path).map_err(|e| e.to_string())?;
     let source = parsed.source.clone();
-    let mut resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
+    let mut resolved = match target_version {
+        Some(target_version) => basilisk_resolver::resolve_with_target(&parsed, target_version),
+        None => basilisk_resolver::resolve(&parsed),
+    }
+    .map_err(|e| e.to_string())?;
 
     // Resolve imports against venv/site-packages and uv registry using the same
     // routine the LSP uses, so the CLI and editor agree on what resolves and on
@@ -324,17 +340,19 @@ pub(crate) fn resolve_file_imports(
 /// The directory anchoring project-level concerns for a CLI invocation: the
 /// first path argument's own directory (or its parent for a file), else cwd.
 pub(crate) fn first_path_dir(paths: &[String]) -> std::path::PathBuf {
-    paths
-        .first()
-        .map(std::path::Path::new)
-        .and_then(|p| {
+    paths.first().map(std::path::Path::new).map_or_else(
+        || std::path::PathBuf::from("."),
+        |p| {
             if p.is_dir() {
-                Some(p.to_path_buf())
+                p.to_path_buf()
             } else {
-                p.parent().map(std::path::Path::to_path_buf)
+                p.parent()
+                    .filter(|parent| !parent.as_os_str().is_empty())
+                    .unwrap_or_else(|| std::path::Path::new("."))
+                    .to_path_buf()
             }
-        })
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        },
+    )
 }
 
 /// The directory owning `path` (its parent, or `.` for a bare filename).
@@ -368,6 +386,9 @@ pub(crate) fn resolve_dir_configs(
                 let mut cfg = basilisk_config::load_basilisk_config(dir);
                 if cfg.python_version.is_none() {
                     cfg.python_version.clone_from(&fallback.python_version);
+                }
+                if cfg.python_platform.is_none() {
+                    cfg.python_platform.clone_from(&fallback.python_platform);
                 }
                 std::sync::Arc::new(cfg)
             });

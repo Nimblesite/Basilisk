@@ -13,6 +13,17 @@ fn assignment_compatibility_count(diagnostics: &[basilisk_checker::Diagnostic]) 
         .count()
 }
 
+fn run_with_target_3_12_linux(
+    source: &str,
+) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
+    let config = basilisk_config::BasiliskConfig {
+        python_version: Some("3.12".to_owned()),
+        python_platform: Some("linux".to_owned()),
+        ..Default::default()
+    };
+    run_with_config(source, &config)
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // types.rs is_assignable_to — Optional match arm
 // ═══════════════════════════════════════════════════════════════════════
@@ -307,7 +318,7 @@ def check():
     x = dead
     y = live
 "#;
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_target_3_12_linux(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")
@@ -338,7 +349,7 @@ def check():
     x = dead
     y = live
 "#;
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_target_3_12_linux(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")
@@ -367,7 +378,7 @@ def check():
         live = "live"
     x = dead
 "#;
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_target_3_12_linux(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")
@@ -391,7 +402,7 @@ def check():
         dead = "dead"
     x = dead
 "#;
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_target_3_12_linux(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")

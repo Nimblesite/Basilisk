@@ -36,6 +36,8 @@ pub enum Ty {
     /// `Callable[[P1..Pn], R]`; an empty parameter list means the gradual
     /// `Callable[..., R]` form, matching [`CallableInfo`].
     Callable(Vec<Ty>, Box<Ty>),
+    /// `Generator[Yield, Send, Return]` with solver-visible positions.
+    Generator(Box<Ty>, Box<Ty>, Box<Ty>),
 }
 
 impl Ty {
@@ -75,6 +77,11 @@ impl Ty {
                 info.param_types.iter().map(Self::from_inferred).collect(),
                 Box::new(Self::from_inferred(&info.return_type)),
             ),
+            InferredType::Generator(yield_type, send_type, return_type) => Ty::Generator(
+                Box::new(Self::from_inferred(yield_type)),
+                Box::new(Self::from_inferred(send_type)),
+                Box::new(Self::from_inferred(return_type)),
+            ),
             ground => Ty::Ground(ground.clone()),
         }
     }
@@ -104,6 +111,11 @@ impl Ty {
                 param_types: params.iter().map(|p| p.to_inferred(vars)).collect(),
                 return_type: Box::new(ret.to_inferred(vars)),
             }),
+            Ty::Generator(yield_type, send_type, return_type) => InferredType::Generator(
+                Box::new(yield_type.to_inferred(vars)),
+                Box::new(send_type.to_inferred(vars)),
+                Box::new(return_type.to_inferred(vars)),
+            ),
         }
     }
 
@@ -117,6 +129,9 @@ impl Ty {
             Ty::Dict(key, value) => key.contains_var() || value.contains_var(),
             Ty::Tuple(elems) | Ty::Union(elems) => elems.iter().any(Ty::contains_var),
             Ty::Callable(params, ret) => params.iter().any(Ty::contains_var) || ret.contains_var(),
+            Ty::Generator(yield_type, send_type, return_type) => {
+                yield_type.contains_var() || send_type.contains_var() || return_type.contains_var()
+            }
         }
     }
 }
