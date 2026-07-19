@@ -12,6 +12,10 @@
     "body": [
       {
         "type": "text",
+        "html": "receiver exemption shared by TYPEINF-SPECIAL-SELF."
+      },
+      {
+        "type": "text",
         "html": "Never fires where the current engine already infers the parameter type: a scalar-literal default (<code>timeout=30</code> \u2192 <code>int</code>) determines the type, so demanding an annotation there would be redundant (TYPEINF-FUNC-DEFAULTS). Defaults that do NOT determine the type \u2014 <code>None</code>, empty containers, calls, lambdas, arbitrary expressions \u2014 still require an annotation."
       },
       {
@@ -662,6 +666,10 @@
     "summary": "Assignment type incompatibility (literal mismatches)",
     "summaryHtml": "Assignment type incompatibility (literal mismatches)",
     "body": [
+      {
+        "type": "text",
+        "html": "Owns structural <code>TypedDict</code> assignment for TYPEINF-SUBTYPING-TYPEDDICT."
+      },
       {
         "type": "text",
         "html": "Detects annotated module-level variables where the declared type and the literal kind of the right-hand side are clearly incompatible, for example:"
@@ -1875,6 +1883,10 @@
     "body": [
       {
         "type": "text",
+        "html": "paths in TYPEINF-GENERICS, TYPEINF-GENERICS-TYPEVAR, and TYPEINF-GENERICS-CONSTRAINED."
+      },
+      {
+        "type": "text",
         "html": "Detects several generic-type errors:"
       },
       {
@@ -2803,6 +2815,10 @@
     "summary": "Augmented assignment widens `Literal` type",
     "summaryHtml": "Augmented assignment widens <code>Literal</code> type",
     "body": [
+      {
+        "type": "text",
+        "html": "augmented assignment keeps the declared target type and validates whether the operation widens out of it."
+      },
       {
         "type": "text",
         "html": "When a function parameter is annotated with <code>Literal...</code>, augmented assignment (<code>+=</code>, <code>-=</code>, etc.) effectively reassigns the variable to a widened type (e.g. <code>int</code> instead of <code>Literal3, 4, 5</code>), violating the declared <code>Literal</code> constraint."
