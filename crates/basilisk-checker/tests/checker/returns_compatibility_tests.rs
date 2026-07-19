@@ -107,3 +107,73 @@ fn empty_list_return_is_checked_in_declared_context() -> Result<(), Box<dyn std:
     );
     Ok(())
 }
+
+#[test]
+fn empty_list_return_is_valid_for_optional_list() -> Result<(), Box<dyn std::error::Error>> {
+    // Contextual typing distributes through `Optional` (`list[int] | None`): an
+    // empty literal fits the list arm (guards the `Optional` recursion arm).
+    let source = "def g() -> list[int] | None:\n    return []\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty list literal must be valid for a list[int] | None return, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn list_literal_with_wrong_element_still_errors() -> Result<(), Box<dyn std::error::Error>> {
+    // Contextual literal typing ([TYPEINF-SPECIAL-LITERAL-CONTEXT]) is covariant
+    // per element, not a blanket pass: a genuine element mismatch must still fire.
+    let source = "def f() -> list[str]:\n    return [1]\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"returns_compatibility"),
+        "list[int] literal must not satisfy a list[str] return, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn list_literal_with_one_bad_element_still_errors() -> Result<(), Box<dyn std::error::Error>> {
+    // Every element must match — one incompatible element fails the whole literal
+    // (guards the `all`, not `any`, semantics of the per-element check).
+    let source = "def f() -> list[str]:\n    return [\"ok\", 2]\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"returns_compatibility"),
+        "a list literal with a non-str element must not satisfy list[str], got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn list_literal_matching_no_union_member_still_errors() -> Result<(), Box<dyn std::error::Error>> {
+    // A literal that fits no arm of the union must still fail (guards the union
+    // fold that only returns `Some(true)` when a member accepts the literal).
+    let source = "def f() -> list[str] | None:\n    return [1]\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"returns_compatibility"),
+        "list[int] literal must not satisfy list[str] | None, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn dict_literal_with_wrong_value_still_errors() -> Result<(), Box<dyn std::error::Error>> {
+    // The dict key widens (LiteralString -> str) but a genuinely wrong value
+    // type must still fire, proving contextual typing is not a blanket pass.
+    let source = "def f() -> dict[str, int]:\n    return {\"k\": \"v\"}\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"returns_compatibility"),
+        "dict value mismatch must still fire against dict[str, int], got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
