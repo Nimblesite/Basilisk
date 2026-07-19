@@ -1,4 +1,7 @@
-//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-arch-pipeline
+//! Implements [CHKARCH-ARCH-PIPELINE] and integrates the modules specified by
+//! [TYPEINF-SPEC] / [TYPEINF-IMPL]. See
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-arch-pipeline and
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-IMPL.
 //! Type checker for Basilisk.
 //!
 //! The public API is [`check`] and [`check_with_config`], which take a
@@ -47,6 +50,10 @@ pub mod span_util;
 pub mod stub_constructor;
 pub mod suppression;
 mod suppression_audit;
+/// Bounded type-level alias evaluation groundwork.
+///
+/// Implements [TYPEINF-TARGET] and [TYPEINF-TARGET-TYPELEVEL].
+pub mod tyeval;
 pub mod types;
 pub mod types_parsing;
 pub(crate) mod types_star_tuples;

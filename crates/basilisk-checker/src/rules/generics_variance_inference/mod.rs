@@ -66,10 +66,6 @@ impl Rule for TypeVarScopeViolation {
             .map(|tv| tv.name.clone())
             .collect();
 
-        if all_typevars.is_empty() {
-            return;
-        }
-
         let lines: Vec<&str> = module.source.lines().collect();
         let triple_quote_mask = compute_triple_quote_mask(&lines);
 

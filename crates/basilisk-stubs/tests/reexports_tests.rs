@@ -195,6 +195,30 @@ fn dunder_all_can_copy_and_mutate_a_submodule_dunder_all() {
 }
 
 #[test]
+fn guarded_module_all_references_intersect_after_resolution() {
+    let pkg = make_tmp_dir("bsk_rx_guarded_module_all").join("pkg");
+    fs::create_dir_all(&pkg).unwrap();
+    fs::write(
+        pkg.join("__init__.pyi"),
+        "if feature:\n    from . import left\n    __all__ = left.__all__\nelse:\n    from . import right\n    __all__ = right.__all__\n",
+    )
+    .unwrap();
+    fs::write(pkg.join("left.pyi"), "__all__ = ('common', 'left_only')\n").unwrap();
+    fs::write(
+        pkg.join("right.pyi"),
+        "__all__ = ('common', 'right_only')\n",
+    )
+    .unwrap();
+
+    assert_eq!(
+        names(&parse_file(&pkg.join("__init__.pyi"))),
+        HashSet::from(["common".to_owned()])
+    );
+
+    let _ = fs::remove_dir_all(pkg.parent().unwrap());
+}
+
+#[test]
 fn star_target_without_dunder_all_exports_public_names_recursively() {
     let pkg = make_tmp_dir("bsk_rx_pub").join("pkg");
     fs::create_dir_all(&pkg).unwrap();

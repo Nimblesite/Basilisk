@@ -343,6 +343,49 @@ mod tests {
     }
 
     #[test]
+    fn store_rejects_bytes_that_do_not_match_the_recorded_digest(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let cache = DiskCache::new(dir.path());
+        let key = CacheKey::from_identity("digest-mismatch");
+        let expected = record(b"expected bytes");
+
+        assert!(matches!(
+            cache.store(&key, b"different bytes", &expected),
+            Err(CacheError::Mutation { .. })
+        ));
+        assert!(matches!(cache.load_fresh(&key, NOW), Ok(None)));
+        Ok(())
+    }
+
+    #[test]
+    fn conflicting_metadata_for_one_encoding_is_quarantined_and_replaced(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let cache = DiskCache::new(dir.path());
+        let key = CacheKey::from_identity("metadata-conflict");
+        let zip = b"one immutable encoding";
+        let first = record(zip);
+        assert!(cache.store(&key, zip, &first).is_ok());
+
+        let mut replacement = first;
+        replacement.acquired_at_unix_seconds = NOW + 1;
+        assert!(cache.store(&key, zip, &replacement).is_ok());
+
+        let loaded = cache.load_fresh(&key, NOW + 1);
+        assert!(matches!(
+            loaded,
+            Ok(Some(entry)) if entry.record == replacement && entry.zip == zip
+        ));
+        let generations = dir.path().join("metadata-conflict").join("generations");
+        let quarantined = fs::read_dir(generations)?
+            .filter_map(Result::ok)
+            .any(|entry| entry.file_name().to_string_lossy().starts_with(".corrupt-"));
+        assert!(quarantined);
+        Ok(())
+    }
+
+    #[test]
     fn missing_entry_is_none() {
         let Ok(dir) = tempfile::tempdir() else {
             return;
@@ -353,10 +396,8 @@ mod tests {
     }
 
     #[test]
-    fn mutation_is_detected_on_reuse() {
-        let Ok(dir) = tempfile::tempdir() else {
-            return;
-        };
+    fn mutation_is_detected_on_reuse() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
         let cache = DiskCache::new(dir.path());
         let key = CacheKey::from_identity("abc123");
         let zip = b"original bytes";
@@ -368,11 +409,13 @@ mod tests {
             .join("generations")
             .join(sha256_hex(zip))
             .join("archive.zip");
-        assert!(fs::write(&tampered, b"tampered bytes").is_ok());
+        fs::write(&tampered, b"tampered bytes")?;
         assert!(matches!(
             cache.load_fresh(&key, NOW),
             Err(CacheError::Mutation { .. })
         ));
+        assert!(matches!(cache.load_fresh(&key, NOW), Ok(None)));
+        Ok(())
     }
 
     #[test]
@@ -473,6 +516,76 @@ mod tests {
 
         let loaded = cache.load_fresh(&key, NOW);
         assert!(matches!(loaded, Ok(Some(entry)) if entry.zip == fresh_zip));
+    }
+
+    #[test]
+    fn equal_age_encodings_resolve_deterministically_by_digest(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let cache = DiskCache::new(dir.path());
+        let key = CacheKey::from_identity("equal-age");
+        let first = b"first equally fresh encoding";
+        let second = b"second equally fresh encoding";
+        assert!(cache.store(&key, first, &record(first)).is_ok());
+        assert!(cache.store(&key, second, &record(second)).is_ok());
+
+        let expected = if sha256_hex(first) > sha256_hex(second) {
+            first.as_slice()
+        } else {
+            second.as_slice()
+        };
+        assert!(matches!(
+            cache.load_fresh(&key, NOW),
+            Ok(Some(entry)) if entry.zip == expected
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn fresher_encoding_wins_even_when_its_digest_sorts_lower(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let cache = DiskCache::new(dir.path());
+        let key = CacheKey::from_identity("freshness-first");
+        let first = b"first different encoding";
+        let second = b"second different encoding";
+        let (lower_digest, higher_digest) = if sha256_hex(first) < sha256_hex(second) {
+            (first.as_slice(), second.as_slice())
+        } else {
+            (second.as_slice(), first.as_slice())
+        };
+        let mut older = record(higher_digest);
+        older.acquired_at_unix_seconds = NOW - 1;
+        let newer = record(lower_digest);
+        assert!(cache.store(&key, higher_digest, &older).is_ok());
+        assert!(cache.store(&key, lower_digest, &newer).is_ok());
+
+        assert!(matches!(
+            cache.load_fresh(&key, NOW),
+            Ok(Some(entry)) if entry.zip == lower_digest
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn malformed_promoted_metadata_fails_closed() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let cache = DiskCache::new(dir.path());
+        let key = CacheKey::from_identity("bad-metadata");
+        let generation = dir
+            .path()
+            .join("bad-metadata")
+            .join("generations")
+            .join("generation");
+        fs::create_dir_all(&generation)?;
+        fs::write(generation.join("archive.zip"), b"bytes")?;
+        fs::write(generation.join("meta.json"), b"not json")?;
+
+        assert!(matches!(
+            cache.load_fresh(&key, NOW),
+            Err(CacheError::Metadata(_))
+        ));
+        Ok(())
     }
 
     #[test]

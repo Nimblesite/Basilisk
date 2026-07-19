@@ -1,5 +1,6 @@
 //! Implements [`callables_protocol`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Higher-order `ParamSpec` argument validation (PEP 612).
+//! Implements [TYPEINF-GENERICS-PARAMSPEC].
 //!
 //! A function parameter annotated `Callable[Concatenate[T1, ..., P], R]`
 //! requires arguments (including decorator applications) whose leading

@@ -1,6 +1,8 @@
 //! Black-box acceptance coverage for runtime Typeshed source acquisition.
 //!
-//! Implements [TYPESHEDRT-ACCEPTANCE-SOURCE],
+//! Implements the parent [TYPESHEDRT-MODEL], [TYPESHEDRT-WORK], and
+//! [TYPESHEDRT-ACCEPTANCE] contracts through the following independent
+//! [TYPESHEDRT-ACCEPTANCE-SOURCE],
 //! [TYPESHEDRT-ACCEPTANCE-VERIFY], and
 //! [TYPESHEDRT-ACCEPTANCE-OVERRIDES].
 

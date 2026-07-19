@@ -96,16 +96,9 @@ fn outcome_for_kind(
             is_positive,
             ..
         } => Some(none_outcome(variable, current, *is_positive, whole_scope)),
-        NarrowingGuardKind::Truthiness { variable, .. } => Some(GuardOutcome {
-            variable: variable.clone(),
-            // Truthiness eliminates `None` in the truthy branch; the falsy
-            // branch stays unchanged (falsy ints/strs are still ints/strs —
-            // narrowing there needs literal-level falsy modelling, kept
-            // conservative for now).
-            positive: subtract(current, &InferredType::None_),
-            negative: current.clone(),
-            whole_scope,
-        }),
+        NarrowingGuardKind::Truthiness { variable, .. } => {
+            Some(truthiness_outcome(variable, current, whole_scope))
+        }
         NarrowingGuardKind::TypeGuard {
             variable,
             guard_type,
@@ -133,6 +126,60 @@ fn outcome_for_kind(
         }
         NarrowingGuardKind::Assert { inner } => outcome_for_kind(inner, current, true, ctx),
         extended => extended_outcome_for_kind(extended, current, whole_scope, ctx),
+    }
+}
+
+/// Implements [TYPEINF-NARROWING-TRUTHY]: partition types whose truthiness is
+/// statically known while retaining broader types conservatively in both arms.
+fn truthiness_outcome(variable: &str, current: &InferredType, whole_scope: bool) -> GuardOutcome {
+    GuardOutcome {
+        variable: variable.to_owned(),
+        positive: project_truthiness(current, true),
+        negative: project_truthiness(current, false),
+        whole_scope,
+    }
+}
+
+/// Project one type onto the requested truthiness branch.
+fn project_truthiness(current: &InferredType, truthy_branch: bool) -> InferredType {
+    match current {
+        InferredType::Union(members) => members
+            .iter()
+            .map(|member| project_truthiness(member, truthy_branch))
+            .fold(InferredType::Never, InferredType::union),
+        InferredType::Optional(inner) => project_optional_truthiness(current, inner, truthy_branch),
+        InferredType::None_ | InferredType::Never if truthy_branch => InferredType::Never,
+        InferredType::Literal(literal) if literal_is_truthy(literal) != truthy_branch => {
+            InferredType::Never
+        }
+        known => known.clone(),
+    }
+}
+
+/// Preserve an optional's declared shape when its inner type stays possible.
+fn project_optional_truthiness(
+    current: &InferredType,
+    inner: &InferredType,
+    truthy_branch: bool,
+) -> InferredType {
+    let projected = project_truthiness(inner, truthy_branch);
+    if truthy_branch {
+        projected
+    } else if projected == *inner {
+        current.clone()
+    } else {
+        InferredType::union(projected, InferredType::None_)
+    }
+}
+
+/// Python truthiness for the literal values represented by [`InferredType`].
+fn literal_is_truthy(literal: &LiteralValue) -> bool {
+    match literal {
+        LiteralValue::Int(value) => *value != 0,
+        LiteralValue::Str(value) => !value.is_empty(),
+        LiteralValue::Float(value) => *value != 0.0,
+        LiteralValue::Bool(value) => *value,
+        LiteralValue::Bytes(value) => !value.is_empty(),
     }
 }
 
@@ -529,9 +576,10 @@ mod tests {
         assert!(guard_outcomes(&in_loop, &InferredType::Unknown).is_none());
     }
 
-    /// Truthiness removes `None` positively and never invents negatively.
+    /// Broad strings remain possible in the falsy branch because the type
+    /// includes `""`; the positive branch still removes `None`.
     #[test]
-    fn truthiness_removes_none_only() {
+    fn truthiness_removes_none_and_keeps_ambiguous_strings() {
         let current = InferredType::Optional(Box::new(InferredType::Str));
         let outcome = guard_outcomes(
             &guard(NarrowingGuardKind::Truthiness {
@@ -544,5 +592,37 @@ mod tests {
         .expect("outcome");
         assert_eq!(outcome.positive, InferredType::Str);
         assert_eq!(outcome.negative, current);
+    }
+
+    /// Literal floats and bytes use Python's exact zero/empty truthiness.
+    #[test]
+    fn truthiness_partitions_float_and_bytes_literals() {
+        let falsy_float = InferredType::Literal(LiteralValue::Float(0.0));
+        let truthy_float = InferredType::Literal(LiteralValue::Float(1.5));
+        let falsy_bytes = InferredType::Literal(LiteralValue::Bytes(Vec::new()));
+        let truthy_bytes = InferredType::Literal(LiteralValue::Bytes(vec![1]));
+        let current = InferredType::Union(vec![
+            falsy_float.clone(),
+            truthy_float.clone(),
+            falsy_bytes.clone(),
+            truthy_bytes.clone(),
+        ]);
+        let outcome = guard_outcomes(
+            &guard(NarrowingGuardKind::Truthiness {
+                variable: "x".to_owned(),
+                if_body_span: Span::new(0, 0),
+                else_body_span: None,
+            }),
+            &current,
+        )
+        .expect("outcome");
+        assert_eq!(
+            outcome.positive,
+            InferredType::Union(vec![truthy_float, truthy_bytes])
+        );
+        assert_eq!(
+            outcome.negative,
+            InferredType::Union(vec![falsy_float, falsy_bytes])
+        );
     }
 }

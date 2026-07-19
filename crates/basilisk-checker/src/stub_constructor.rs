@@ -1,4 +1,5 @@
 //! Implements [STUBRES-PYI] #289 constructor-chain resolution.
+//! Implements the constructor half of [TYPESHEDRT-ACCEPTANCE-HOVER].
 //! See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PYI
 //!
 //! Resolves, from a set of parsed `.pyi` classes, which class in a target

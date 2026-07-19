@@ -1,4 +1,6 @@
-//! Implements [TYPEINF-OVERVIEW]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-overview
+//! Implements [TYPEINF-OVERVIEW], [TYPEINF-SUBTYPING], and
+//! [TYPEINF-SPECIAL]. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-overview
 //! Type representation for Basilisk's type inference engine.
 //!
 //! Annotation parsing logic lives in [`super::types_parsing`].
@@ -36,6 +38,12 @@ pub enum InferredType {
     Optional(Box<InferredType>),
     /// Callable type (`Callable[[params...], return]` or `Callable[..., return]`)
     Callable(CallableInfo),
+    /// Generator type (`Generator[Yield, Send, Return]`).
+    Generator(
+        Box<InferredType>,
+        Box<InferredType>,
+        Box<InferredType>,
+    ),
     /// Any type (`Any`) - explicit escape hatch.
     /// Implements [TYPEINF-SPECIAL-ANY] — the explicit escape hatch variant; never
     /// inferred as a fallback (unannotated params produce E0001, not `Any`).
@@ -125,6 +133,9 @@ impl fmt::Display for InferredType {
                     write!(f, "{param}")?;
                 }
                 write!(f, "], {}]", info.return_type)
+            }
+            InferredType::Generator(yield_type, send_type, return_type) => {
+                write!(f, "Generator[{yield_type}, {send_type}, {return_type}]")
             }
             InferredType::Any => write!(f, "Any"),
             InferredType::Never => write!(f, "Never"),
@@ -274,14 +285,17 @@ impl InferredType {
             (inner, InferredType::Optional(other)) => inner.is_assignable_to(other),
             // `A <: A | B` (a type is a subtype of any union containing it).
             (inner, InferredType::Union(types)) => types.iter().any(|t| inner.is_assignable_to(t)),
-            // Container types require element type assignability.
+            // Mutable containers are invariant: each argument must be
+            // compatible in both directions. This preserves gradual `Any` /
+            // `Unknown` compatibility while rejecting one-way widening such
+            // as `list[int]` -> `list[float]`.
             // Implements [TYPEINF-SUBTYPING-GENERIC] — list/set/dict are invariant
             // here (element types checked structurally, no cross-container matching).
             // List and Set cannot use or-patterns — that would incorrectly allow cross-matching.
             (InferredType::List(a), InferredType::List(b))
-            | (InferredType::Set(a), InferredType::Set(b)) => a.is_assignable_to(b),
+            | (InferredType::Set(a), InferredType::Set(b)) => invariantly_assignable(a, b),
             (InferredType::Dict(a_key, a_val), InferredType::Dict(b_key, b_val)) => {
-                a_key.is_assignable_to(b_key) && a_val.is_assignable_to(b_val)
+                invariantly_assignable(a_key, b_key) && invariantly_assignable(a_val, b_val)
             }
             (InferredType::Tuple(a), InferredType::Tuple(b)) => {
                 // Implements [TYPEINF-COLLECTIONS-TUPLES] — fixed-length positional
@@ -371,6 +385,9 @@ impl InferredType {
 
                 true
             }
+            (a @ InferredType::Generator(..), b @ InferredType::Generator(..)) => {
+                generator_assignable(a, b)
+            }
             // TypeForm covariance: TypeForm[S] is assignable to TypeForm[T] if S is assignable to T.
             (InferredType::TypeForm(inner_a), InferredType::TypeForm(inner_b)) => {
                 inner_a.is_assignable_to(inner_b)
@@ -390,6 +407,25 @@ impl InferredType {
             _ => false,
         }
     }
+}
+
+fn invariantly_assignable(left: &InferredType, right: &InferredType) -> bool {
+    left.is_assignable_to(right) && right.is_assignable_to(left)
+}
+
+/// Generator yield/return positions are covariant; the value sent back into
+/// the suspended generator is contravariant.
+fn generator_assignable(left: &InferredType, right: &InferredType) -> bool {
+    let (
+        InferredType::Generator(left_yield, left_send, left_return),
+        InferredType::Generator(right_yield, right_send, right_return),
+    ) = (left, right)
+    else {
+        return false;
+    };
+    left_yield.is_assignable_to(right_yield)
+        && right_send.is_assignable_to(left_send)
+        && left_return.is_assignable_to(right_return)
 }
 
 pub(crate) use crate::types_star_tuples::{

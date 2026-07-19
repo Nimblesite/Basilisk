@@ -203,6 +203,14 @@ where
             basilisk_uv::python_version::resolve_target_python_version(&project_root);
     }
 
+    let mut workspace_config =
+        load_cli_workspace_config(&project_root, config.python_version.as_deref());
+    if config.python_platform.is_none() {
+        config
+            .python_platform
+            .clone_from(&workspace_config.python_platform);
+    }
+
     let excluded = excluded_dirs_and_log(&config, &config_root);
 
     // Implements [CHKARCH-CONFIG-INCLUDE] (issue #37): a no-args run walks
@@ -214,8 +222,6 @@ where
     // pyproject.toml, uv.lock, and .venv live at the discovered project root,
     // not necessarily in the checked path.
     let roots = analysis_roots(paths, &project_root);
-    let mut workspace_config =
-        load_cli_workspace_config(&project_root, config.python_version.as_deref());
     if overrides.no_cache {
         workspace_config.typeshed_cache = false;
     }
@@ -380,6 +386,9 @@ pub(crate) fn resolve_dir_configs(
                 let mut cfg = basilisk_config::load_basilisk_config(dir);
                 if cfg.python_version.is_none() {
                     cfg.python_version.clone_from(&fallback.python_version);
+                }
+                if cfg.python_platform.is_none() {
+                    cfg.python_platform.clone_from(&fallback.python_platform);
                 }
                 std::sync::Arc::new(cfg)
             });

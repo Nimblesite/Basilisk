@@ -179,6 +179,11 @@ impl TyVarStore {
                 param_types: params.iter().map(|p| self.project(p, visiting)).collect(),
                 return_type: Box::new(self.project(ret, visiting)),
             }),
+            Ty::Generator(yield_type, send_type, return_type) => InferredType::Generator(
+                Box::new(self.project(yield_type, visiting)),
+                Box::new(self.project(send_type, visiting)),
+                Box::new(self.project(return_type, visiting)),
+            ),
             Ty::Ground(ground) => ground.clone(),
         }
     }

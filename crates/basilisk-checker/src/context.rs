@@ -42,7 +42,11 @@ impl CheckContext {
                 .python_version
                 .as_deref()
                 .and_then(parse_target_version),
-            target_platform: config.python_platform.clone(),
+            target_platform: config
+                .python_platform
+                .as_ref()
+                .filter(|platform| !platform.eq_ignore_ascii_case("all"))
+                .cloned(),
             line_index: basilisk_common::text::LineIndex::default(),
         }
     }
@@ -93,6 +97,20 @@ mod tests {
             ..BasiliskConfig::default()
         };
         assert_eq!(CheckContext::from_config(&cfg).target_version, Some((3, 9)));
+    }
+
+    #[test]
+    fn all_platform_keeps_checker_target_cross_platform() {
+        let cfg = BasiliskConfig {
+            python_platform: Some("All".to_owned()),
+            ..BasiliskConfig::default()
+        };
+
+        assert_eq!(
+            CheckContext::from_config(&cfg).target_platform,
+            None,
+            "`All` is the cross-platform domain, never a literal sys.platform value"
+        );
     }
 
     /// A malformed `python-version` stays unknown rather than defaulting to a

@@ -51,7 +51,9 @@ fn production_sources_reject_forbidden_typeshed_policy() {
     );
     assert!(
         CHECK_CONTEXT.contains("target_version: config")
-            && CHECK_CONTEXT.contains("target_platform: config.python_platform.clone()"),
+            && CHECK_CONTEXT.contains("target_platform: config")
+            && CHECK_CONTEXT.contains(".python_platform")
+            && CHECK_CONTEXT.contains("filter(|platform| !platform.eq_ignore_ascii_case(\"all\"))"),
         "checker targets must remain evidence-derived from project/interpreter configuration"
     );
 }

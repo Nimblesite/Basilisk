@@ -1,4 +1,7 @@
-//! Implements [TYPEINF-ALGO]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-algo
+//! Implements [TYPEINF-OVERVIEW], [TYPEINF-INFERRED], [TYPEINF-ALGO],
+//! [TYPEINF-VARS], [TYPEINF-VARS-SIMPLE], and the shared predicates behind
+//! [TYPEINF-REQUIRED] / [TYPEINF-EXCEEDS]. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md.
 //! Type inference engine for Basilisk.
 
 use crate::types::InferredType;

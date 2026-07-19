@@ -1,5 +1,9 @@
 //! `generics_basic_3`: Generic type argument violations.
 //!
+//! Implements the focused generic and constrained-`TypeVar` call-resolution
+//! paths in [TYPEINF-GENERICS], [TYPEINF-GENERICS-TYPEVAR], and
+//! [TYPEINF-GENERICS-CONSTRAINED].
+//!
 //! Detects several generic-type errors:
 //!
 //! 1. **Constrained `TypeVar` constraint mismatch**: When a function parameter is typed

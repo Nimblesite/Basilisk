@@ -13,6 +13,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+use crate::pyi_parser::intersect_name_lists;
 use crate::types::{
     DunderAllItem, DunderAllMutation, StarReexport, StubModule, StubSource, StubTier,
 };
@@ -111,46 +112,105 @@ fn effective_dunder_all_with_default(
     loader: &mut impl FnMut(&str) -> Option<StubModule>,
     stack: &mut HashSet<String>,
 ) -> Option<HashSet<String>> {
-    if stub.dunder_all_variants.iter().all(Vec::is_empty) {
+    if stub.dunder_all_mutations.is_empty() {
         return stub
             .dunder_all
             .as_ref()
             .map(|entries| entries.iter().cloned().collect());
     }
-    let alternatives = stub.dunder_all_variants.iter().map(|mutations| {
-        if mutations.is_empty() {
-            default_exports.clone()
-        } else {
-            evaluate_mutations(mutations, stub, loader, stack)
-        }
-    });
-    Some(intersect_sets(alternatives))
+    let names = evaluate_mutations(
+        &stub.dunder_all_mutations,
+        default_exports,
+        stub,
+        loader,
+        stack,
+    );
+    Some(names.into_iter().collect())
 }
 
 fn evaluate_mutations(
     mutations: &[DunderAllMutation],
+    default_exports: &HashSet<String>,
     stub: &StubModule,
     loader: &mut impl FnMut(&str) -> Option<StubModule>,
     stack: &mut HashSet<String>,
-) -> HashSet<String> {
-    let mut names = Vec::new();
+) -> Vec<String> {
+    let mut state = DunderAllState::default();
+    apply_mutations(&mut state, mutations, default_exports, stub, loader, stack);
+    state.effective_names(default_exports)
+}
+
+#[derive(Clone, Default)]
+struct DunderAllState {
+    names: Vec<String>,
+    defined: bool,
+}
+
+impl DunderAllState {
+    fn effective_names(&self, default_exports: &HashSet<String>) -> Vec<String> {
+        if self.defined {
+            self.names.clone()
+        } else {
+            default_exports.iter().cloned().collect()
+        }
+    }
+}
+
+fn apply_mutations(
+    state: &mut DunderAllState,
+    mutations: &[DunderAllMutation],
+    default_exports: &HashSet<String>,
+    stub: &StubModule,
+    loader: &mut impl FnMut(&str) -> Option<StubModule>,
+    stack: &mut HashSet<String>,
+) {
     for mutation in mutations {
         match mutation {
             DunderAllMutation::Assign(items) => {
-                names = resolve_items(items, stub, loader, stack);
+                state.names = resolve_items(items, stub, loader, stack);
             }
             DunderAllMutation::Extend(items) => {
-                names.extend(resolve_items(items, stub, loader, stack));
+                state
+                    .names
+                    .extend(resolve_items(items, stub, loader, stack));
             }
-            DunderAllMutation::Append(name) => names.push(name.clone()),
+            DunderAllMutation::Append(name) => state.names.push(name.clone()),
             DunderAllMutation::Remove(name) => {
-                if let Some(position) = names.iter().position(|entry| entry == name) {
-                    let _ = names.remove(position);
+                if let Some(position) = state.names.iter().position(|entry| entry == name) {
+                    let _ = state.names.remove(position);
                 }
             }
+            DunderAllMutation::Choice(branches) => {
+                apply_choice(state, branches, default_exports, stub, loader, stack);
+            }
         }
+        state.defined = true;
     }
-    names.into_iter().collect()
+}
+
+fn apply_choice(
+    state: &mut DunderAllState,
+    branches: &[Vec<DunderAllMutation>],
+    default_exports: &HashSet<String>,
+    stub: &StubModule,
+    loader: &mut impl FnMut(&str) -> Option<StubModule>,
+    stack: &mut HashSet<String>,
+) {
+    let initial = state.clone();
+    let mut alternatives = Vec::with_capacity(branches.len());
+    for branch in branches {
+        let mut alternative = initial.clone();
+        apply_mutations(
+            &mut alternative,
+            branch,
+            default_exports,
+            stub,
+            loader,
+            stack,
+        );
+        alternatives.push(alternative.effective_names(default_exports));
+    }
+    state.names = intersect_name_lists(alternatives.into_iter());
 }
 
 fn resolve_items(
@@ -187,14 +247,6 @@ fn referenced_dunder_all(
         .unwrap_or_default();
     let _ = stack.remove(&module_name);
     names
-}
-
-fn intersect_sets(mut alternatives: impl Iterator<Item = HashSet<String>>) -> HashSet<String> {
-    let mut intersection = alternatives.next().unwrap_or_default();
-    for alternative in alternatives {
-        intersection.retain(|name| alternative.contains(name));
-    }
-    intersection
 }
 
 /// Top-level names a stub without `__all__` exposes to `import *`: definition

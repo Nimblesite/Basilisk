@@ -172,6 +172,118 @@ fn nested_file_inherits_project_python_target_for_analysis(
     Ok(())
 }
 
+/// The official python/typing layout supplies a project Python version but no
+/// `python-platform`. The selected interpreter is concrete environment
+/// evidence, so both forms of an impossible platform guard must still narrow.
+#[test]
+fn nested_file_inherits_selected_interpreter_platform_for_analysis(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = unique_project_dir("basilisk_cli_nested_platform_target");
+    let tests = project.join("tests");
+    std::fs::create_dir_all(&tests)?;
+    std::fs::write(
+        project.join("pyproject.toml"),
+        "[project]\nname = \"fixture\"\nversion = \"0.0.0\"\nrequires-python = \"==3.12.*\"\n",
+    )?;
+    let source = tests.join("directives_version_platform.py");
+    std::fs::write(
+        &source,
+        concat!(
+            "import sys\n\n",
+            "def test():\n",
+            "    if sys.version_info < (3, 8):\n",
+            "        val3 = ''\n",
+            "    else:\n",
+            "        live3 = ''\n",
+            "    use3 = val3\n",
+            "    if sys.platform == 'bogus_platform':\n",
+            "        val6 = ''\n",
+            "    else:\n",
+            "        live6 = ''\n",
+            "    use6 = val6\n",
+            "    if sys.platform != 'bogus_platform':\n",
+            "        live9 = ''\n",
+            "    else:\n",
+            "        val9 = ''\n",
+            "    use9 = val9\n",
+            "    return live3, live6, live9\n",
+        ),
+    )?;
+
+    let outcome = collect_uncached(
+        &[source.to_string_lossy().into_owned()],
+        DiagnosticScope::Check,
+    )
+    .map_err(|error| error.to_string())?;
+    let _ = std::fs::remove_dir_all(project);
+    let messages = outcome
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == "directives_version_platform")
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect::<Vec<_>>();
+
+    for dead in ["val3", "val6", "val9"] {
+        assert!(
+            messages.iter().any(|message| message.contains(dead)),
+            "missing dead-branch diagnostic for {dead}: {messages:?}"
+        );
+    }
+    for live in ["live3", "live6", "live9"] {
+        assert!(
+            messages.iter().all(|message| !message.contains(live)),
+            "selected-interpreter narrowing must not flag live {live}: {messages:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn explicit_all_platform_does_not_narrow_checker_branches() -> Result<(), Box<dyn std::error::Error>>
+{
+    let project = unique_project_dir("basilisk_cli_all_platform_target");
+    std::fs::create_dir_all(&project)?;
+    std::fs::write(
+        project.join("pyproject.toml"),
+        concat!(
+            "[project]\nname = \"fixture\"\nversion = \"0.0.0\"\n",
+            "requires-python = \"==3.12.*\"\n\n",
+            "[tool.basilisk]\npython-platform = \"All\"\n",
+        ),
+    )?;
+    let source = project.join("platform.py");
+    std::fs::write(
+        &source,
+        concat!(
+            "import sys\n\n",
+            "def test():\n",
+            "    if sys.platform == 'win32':\n",
+            "        windows = ''\n",
+            "    else:\n",
+            "        other = ''\n",
+            "    return windows, other\n",
+        ),
+    )?;
+
+    let outcome = collect_uncached(
+        &[source.to_string_lossy().into_owned()],
+        DiagnosticScope::Check,
+    )
+    .map_err(|error| error.to_string())?;
+    let _ = std::fs::remove_dir_all(project);
+    let platform_diagnostics = outcome
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == "directives_version_platform")
+        .collect::<Vec<_>>();
+
+    assert!(
+        platform_diagnostics.is_empty(),
+        "cross-platform analysis cannot call either platform branch dead: {platform_diagnostics:#?}"
+    );
+    Ok(())
+}
+
 #[test]
 fn bare_filename_anchors_project_discovery_at_current_directory() {
     assert_eq!(
@@ -837,4 +949,38 @@ fn pluralise_one_returns_empty() {
 #[test]
 fn pluralise_many_returns_s() {
     assert_eq!(pluralise(5), "s");
+}
+
+#[test]
+fn pipeline_errors_preserve_the_exit_code_category_in_display() {
+    assert_eq!(
+        PipelineError::Config("bad target".to_owned()).to_string(),
+        "invalid configuration: bad target"
+    );
+    assert_eq!(
+        PipelineError::Internal("read failed".to_owned()).to_string(),
+        "read failed"
+    );
+}
+
+#[test]
+fn analysis_roots_adds_a_distinct_checked_directory() -> Result<(), Box<dyn std::error::Error>> {
+    let project = tempfile::tempdir()?;
+    let checked = tempfile::tempdir()?;
+    let source = checked.path().join("module.py");
+    std::fs::write(&source, "value: int = 1\n")?;
+
+    let roots = analysis_roots(&[source.to_string_lossy().into_owned()], project.path());
+
+    assert_eq!(roots.len(), 2);
+    assert!(roots.contains(&std::fs::canonicalize(checked.path())?));
+    Ok(())
+}
+
+#[test]
+fn non_not_found_metadata_errors_are_skipped_without_aborting_other_roots() {
+    let invalid = "path-with-nul\0.py".to_owned();
+    let files = collect_python_files(&[invalid], &test_excludes());
+
+    assert!(matches!(files, Ok(found) if found.is_empty()));
 }

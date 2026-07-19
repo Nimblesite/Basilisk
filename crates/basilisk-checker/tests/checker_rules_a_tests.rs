@@ -1,4 +1,7 @@
-//! Tests for [BSK-0001]-[BSK-0025] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
+//! Tests for [BSK-0001]-[BSK-0025] from [CHKARCH-DIAG-MISSING], including
+//! [TYPEINF-REQUIRED], [TYPEINF-EXCEEDS-REQUIRED], and
+//! [TYPEINF-SUBTYPING-TYPEDDICT]. See
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

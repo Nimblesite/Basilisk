@@ -183,7 +183,11 @@ struct ApiTreeEntry {
 
 fn convert_tree_entry(entry: ApiTreeEntry) -> Option<Result<TreeEntry, TransportError>> {
     if entry.kind == "tree" {
-        return None;
+        return if entry.mode == "040000" {
+            None
+        } else {
+            Some(Err(TransportError::Metadata))
+        };
     }
     let mode = match (entry.kind.as_str(), entry.mode.as_str()) {
         ("blob", "100644") => FileMode::Regular,
@@ -221,6 +225,17 @@ fn validate_mirror(template: &str) -> Result<(), TransportError> {
 mod tests {
     use super::*;
 
+    const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+
+    fn api_entry(kind: &str, mode: &str, sha: &str) -> ApiTreeEntry {
+        ApiTreeEntry {
+            path: "stdlib/example.pyi".to_owned(),
+            mode: mode.to_owned(),
+            kind: kind.to_owned(),
+            sha: sha.to_owned(),
+        }
+    }
+
     #[test]
     fn mirror_requires_one_https_sha_placeholder() {
         assert!(HttpsTransport::new(Some("https://mirror.test/{sha}.zip".to_owned())).is_ok());
@@ -232,5 +247,77 @@ mod tests {
             HttpsTransport::new(Some("https://mirror.test/archive.zip".to_owned())).err(),
             Some(TransportError::InvalidMirror)
         );
+        assert_eq!(
+            HttpsTransport::new(Some(
+                "https://mirror.test/{sha}/duplicate-{sha}.zip".to_owned()
+            ))
+            .err(),
+            Some(TransportError::InvalidMirror)
+        );
+        assert_eq!(
+            HttpsTransport::new(Some("https:///{sha}.zip".to_owned())).err(),
+            Some(TransportError::InvalidMirror)
+        );
+    }
+
+    #[test]
+    fn archive_identity_and_transport_follow_the_configured_source() -> Result<(), TransportError> {
+        let commit = Oid::from_hex(SHA).map_err(|_error| TransportError::Metadata)?;
+        let official = HttpsTransport::new(None)?;
+        assert_eq!(
+            official.archive_url(commit),
+            format!("{CODELOAD_ROOT}/{SHA}")
+        );
+        assert_eq!(official.archive_transport(), SourceTransport::Codeload);
+
+        let mirror_template = "https://mirror.test/private/{sha}.zip";
+        let mirror = HttpsTransport::new(Some(mirror_template.to_owned()))?;
+        assert_eq!(
+            mirror.archive_url(commit),
+            "https://mirror.test/private/0123456789abcdef0123456789abcdef01234567.zip"
+        );
+        assert_eq!(mirror.archive_transport(), SourceTransport::Mirror);
+
+        let debug = format!("{mirror:?}");
+        assert!(debug.contains("mirror_configured: true"));
+        assert!(
+            !debug.contains("private"),
+            "mirror URLs must remain redacted"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn tree_metadata_accepts_only_canonical_git_leaf_modes() -> Result<(), TransportError> {
+        let expected_oid = Oid::from_hex(SHA).map_err(|_error| TransportError::Metadata)?;
+        let cases = [
+            ("blob", "100644", FileMode::Regular),
+            ("blob", "100755", FileMode::Executable),
+            ("blob", "120000", FileMode::Symlink),
+            ("commit", "160000", FileMode::Submodule),
+        ];
+        for (kind, mode, expected) in cases {
+            let converted = convert_tree_entry(api_entry(kind, mode, SHA))
+                .ok_or(TransportError::Metadata)??;
+            assert_eq!(converted.path, "stdlib/example.pyi");
+            assert_eq!(converted.oid, expected_oid);
+            assert_eq!(converted.mode, expected);
+        }
+
+        assert!(convert_tree_entry(api_entry("tree", "040000", SHA)).is_none());
+        assert_eq!(
+            convert_tree_entry(api_entry("tree", "100644", SHA)),
+            Some(Err(TransportError::Metadata)),
+            "noncanonical tree modes must fail closed"
+        );
+        assert_eq!(
+            convert_tree_entry(api_entry("blob", "160000", SHA)),
+            Some(Err(TransportError::Metadata))
+        );
+        assert_eq!(
+            convert_tree_entry(api_entry("blob", "100644", "not-a-sha")),
+            Some(Err(TransportError::Metadata))
+        );
+        Ok(())
     }
 }

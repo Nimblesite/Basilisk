@@ -1,4 +1,5 @@
-//! Tests for [TYPEINF-TARGET-INCREMENTAL] Stage 1. See
+//! External tests for [TYPEINF-FUNC], [TYPEINF-INFERRED], and
+//! [TYPEINF-TARGET-INCREMENTAL] Stage 1. See
 //! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-INCREMENTAL and
 //! docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-CHECKLIST.
 //!
@@ -265,6 +266,27 @@ def diverging_return():
     assert!(
         !InferredType::None_.is_assignable_to(&diverging),
         "a body ending in return must not union None: {diverging:?}"
+    );
+}
+
+/// An unannotated function whose body always raises synthesizes `Never`, the
+/// bottom return type ([TYPEINF-FUNC-RETURN], [TYPEINF-SPECIAL-NEVER]).
+#[test]
+fn unannotated_function_that_always_raises_infers_never() {
+    let db = EventDb::default();
+    let source = r"def fail(message: str):
+    raise RuntimeError(message)
+";
+    let file = SourceFile::new(&db, "m.py".to_owned(), source.to_owned());
+    let defs = definitions(&db, file);
+    let fail = defs.first().copied().expect("fail exists");
+
+    assert_eq!(
+        definition_type(&db, fail),
+        InferredType::Callable(CallableInfo {
+            param_types: vec![InferredType::Str],
+            return_type: Box::new(InferredType::Never),
+        })
     );
 }
 

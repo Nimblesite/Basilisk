@@ -1,4 +1,5 @@
 //! Tests for [ANALYSIS-CROSSLSP-IMPORT]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-IMPORT
+//! Tests the source precedence required by [TYPESHEDRT-ACCEPTANCE-RESOLUTION].
 #![allow(
     clippy::allow_attributes,
     clippy::unwrap_used,

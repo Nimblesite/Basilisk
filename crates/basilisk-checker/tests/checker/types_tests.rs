@@ -321,6 +321,38 @@ fn string_literal_container_infers_literal_string_elements() {
     );
 }
 
+// Exercises [TYPEINF-SUBTYPING-GENERIC] — mutable built-in containers are
+// invariant even when their element types have a scalar subtype relation.
+#[test]
+fn mutable_builtin_containers_are_invariant() {
+    use basilisk_checker::types::InferredType;
+
+    let int_list = InferredType::List(Box::new(InferredType::Int));
+    let float_list = InferredType::List(Box::new(InferredType::Float));
+    assert!(!int_list.is_assignable_to(&float_list));
+    assert!(!float_list.is_assignable_to(&int_list));
+
+    let int_set = InferredType::Set(Box::new(InferredType::Int));
+    let float_set = InferredType::Set(Box::new(InferredType::Float));
+    assert!(!int_set.is_assignable_to(&float_set));
+    assert!(!float_set.is_assignable_to(&int_set));
+
+    let str_int_dict = InferredType::Dict(
+        Box::new(InferredType::Str),
+        Box::new(InferredType::Int),
+    );
+    let str_float_dict = InferredType::Dict(
+        Box::new(InferredType::Str),
+        Box::new(InferredType::Float),
+    );
+    assert!(!str_int_dict.is_assignable_to(&str_float_dict));
+    assert!(!str_float_dict.is_assignable_to(&str_int_dict));
+
+    let any_list = InferredType::List(Box::new(InferredType::Any));
+    assert!(any_list.is_assignable_to(&int_list));
+    assert!(int_list.is_assignable_to(&any_list));
+}
+
 // Exercises [TYPEINF-SUBTYPING-CALLABLE] — a source may require fewer
 // parameters than the target when its remaining parameters are optional.
 #[test]

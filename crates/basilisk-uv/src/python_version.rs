@@ -6,6 +6,58 @@
 
 use std::path::Path;
 
+/// Read `sys.platform` from the interpreter that will execute the project.
+///
+/// This is target evidence, not a host-platform default: cross-platform
+/// analysis can still select `python-platform = "All"`, while an explicitly
+/// selected interpreter reports its own concrete runtime platform.
+#[must_use]
+pub fn read_python_platform(interpreter: &Path) -> Option<String> {
+    use std::io::Read as _;
+
+    let mut child = std::process::Command::new(interpreter)
+        .args(["-I", "-c", "import sys; print(sys.platform)"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Ok(None) | Err(_) => {
+                drop(child.kill());
+                drop(child.wait());
+                return None;
+            }
+        }
+    };
+    if !status.success() {
+        return None;
+    }
+
+    let mut output = Vec::with_capacity(65);
+    let _bytes_read = child
+        .stdout
+        .take()?
+        .take(65)
+        .read_to_end(&mut output)
+        .ok()?;
+    if output.len() > 64 {
+        return None;
+    }
+    let platform = std::str::from_utf8(&output).ok()?.trim();
+    (!platform.is_empty()
+        && platform.len() <= 64
+        && platform
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')))
+    .then(|| platform.to_owned())
+}
+
 /// Read the Python version string from a `.python-version` file.
 ///
 /// Returns `None` if the file does not exist or contains no valid version line.
@@ -132,5 +184,56 @@ mod tests {
         std::fs::write(dir.path().join(".python-version"), "  3.13.0  ").unwrap();
 
         assert_eq!(read_python_version(dir.path()), Some("3.13.0".to_owned()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reads_platform_from_selected_interpreter() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let interpreter = dir.path().join("python");
+        std::fs::write(&interpreter, "#!/bin/sh\nprintf 'fixture-platform\\n'\n").unwrap();
+        std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert_eq!(
+            read_python_platform(&interpreter).as_deref(),
+            Some("fixture-platform")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_untrusted_platform_output() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let interpreter = dir.path().join("python");
+        std::fs::write(&interpreter, "#!/bin/sh\nprintf 'not a platform\\n'\n").unwrap();
+        std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert_eq!(read_python_platform(&interpreter), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn platform_probe_times_out() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let interpreter = dir.path().join("python");
+        std::fs::write(
+            &interpreter,
+            "#!/bin/sh\nsleep 4\nprintf 'fixture-platform\\n'\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let started = std::time::Instant::now();
+
+        assert_eq!(read_python_platform(&interpreter), None);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(3),
+            "an unresponsive configured interpreter must not hang CLI/LSP startup"
+        );
     }
 }

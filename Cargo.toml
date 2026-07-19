@@ -8,7 +8,6 @@ members = [
     "crates/basilisk-cli",
     "crates/basilisk-stubs",
     "crates/basilisk-config",
-    "crates/basilisk-plugin",
     "crates/basilisk-lsp",
     "crates/basilisk-mojo",
     "crates/basilisk-compiler",

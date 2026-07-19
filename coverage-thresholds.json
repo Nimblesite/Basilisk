@@ -21,9 +21,6 @@
     "basilisk-parser": {
       "threshold": 100
     },
-    "basilisk-plugin": {
-      "threshold": 100
-    },
     "basilisk-resolver": {
       "threshold": 95
     },

@@ -5,7 +5,9 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import os
 import shutil
+import subprocess
 import tarfile
 import tempfile
 import tomllib
@@ -195,6 +197,53 @@ class ReleaseAttributionTests(unittest.TestCase):
         script = package["scripts"]["package"]
         self.assertIn("make _release_vsix", script)
         self.assertNotIn("vsce package", script)
+
+    def test_release_vsix_recipe_fails_when_packager_produces_no_vsix(self) -> None:
+        # [VSIX-PACKAGING-PARITY] A continued shell comment must not truncate
+        # the recipe before packaging and final verification run.
+        commands = self.root / "bin"
+        commands.mkdir()
+        successful_stub = "#!/bin/sh\nexit 0\n"
+        for name in ("cargo", "cp", "npm", "npx", "python3"):
+            command = commands / name
+            command.write_text(successful_stub)
+            command.chmod(0o755)
+        node = commands / "node"
+        node.write_text(
+            "#!/bin/sh\n"
+            'if [ "$2" = "vsix" ] && [ ! -f "$3" ]; then\n'
+            '  echo "missing VSIX: $3" >&2\n'
+            "  exit 42\n"
+            "fi\n"
+            "exit 0\n"
+        )
+        node.chmod(0o755)
+        (self.root / "vscode-extension").mkdir()
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "BSK_VSIX_TARGET": "linux-x64",
+                "PATH": f"{commands}{os.pathsep}{environment['PATH']}",
+            }
+        )
+
+        result = subprocess.run(
+            [
+                "make",
+                "--no-print-directory",
+                "-f",
+                str(REPO_ROOT / "Makefile"),
+                "_release_vsix",
+            ],
+            cwd=self.root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("missing VSIX", result.stderr)
 
     def test_readmes_describe_typeshed_composite_license(self) -> None:
         # [STUBRES-TYPESHED-LICENSE] Typeshed is not Apache-only: its root

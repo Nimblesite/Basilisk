@@ -37,6 +37,28 @@ result: int = add(1, 2)
 }
 
 #[test]
+fn bound_method_does_not_collide_with_same_named_function() -> Result<(), Box<dyn std::error::Error>>
+{
+    let source = r#"
+def consume(value: int) -> None:
+    pass
+
+class Box:
+    def consume(self, value: str) -> None:
+        pass
+
+box: Box = Box()
+box.consume("valid method argument")
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"calls_argument_type"),
+        "a bound method must not be checked against a same-named module function"
+    );
+    Ok(())
+}
+
+#[test]
 fn int_literal_for_str_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def greet(name: str) -> str:

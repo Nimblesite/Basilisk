@@ -74,6 +74,12 @@ An explicit Basilisk config value is applied by the consumer first. Otherwise
 resolver returns no project-version evidence. No interpreter subprocess is probed by this
 resolution path.
 
+Platform evidence is resolved separately. An explicit `python-platform` wins;
+otherwise the CLI/LSP query the selected interpreter for `sys.platform`. This
+probe does not invent a Python version and does not participate in Typeshed
+commit selection. Explicit `python-platform = "All"` retains every feasible
+platform branch instead of probing.
+
 ## Diagnostics {#LSPUV-DIAGNOSTICS}
 
 ### Unresolved imports {#LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND}

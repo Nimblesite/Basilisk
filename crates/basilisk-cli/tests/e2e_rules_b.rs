@@ -297,78 +297,71 @@ fn override_without_decorator() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// FAILING TESTS — rules not yet implemented (Phase 1 limitations)
-// These tests document desired behavior and fail to mark missing functionality.
+// Type-safety and flow diagnostics.
 // ---------------------------------------------------------------------------
 
 /// Argument type mismatch.
-/// Requires a type inference engine — not implemented in Phase 1.
 #[test]
-fn argument_type_mismatch_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn argument_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0012_wrong_arg_type.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "calls_argument_type"),
-        "E0012 (argument type mismatch) not yet implemented — Phase 1 limitation"
+        "expected calls_argument_type for an incompatible argument"
     );
     Ok(())
 }
 
 /// Incompatible method override (type-level).
-/// Requires class hierarchy + type inference — not implemented in Phase 1.
 #[test]
-fn incompatible_method_override_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn incompatible_method_override() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0016_incompatible_override.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "classes_override"),
-        "E0016 (incompatible override) not yet implemented — Phase 1 limitation"
+        "expected classes_override for an incompatible method override"
     );
     Ok(())
 }
 
 /// Incompatible variable override.
-/// Requires type inference for variable types — not implemented in Phase 1.
 #[test]
-fn incompatible_variable_override_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn incompatible_variable_override() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0017_variable_override.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "classes_override_2"),
-        "E0017 (incompatible variable override) not yet implemented — Phase 1 limitation"
+        "expected classes_override_2 for an incompatible variable override"
     );
     Ok(())
 }
 
 /// Undefined variable.
-/// Requires full scope analysis of expressions — not implemented in Phase 1.
 #[test]
-fn undefined_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn undefined_variable() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0018_undefined_variable.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "names_undefined"),
-        "E0018 (undefined variable) not yet implemented — Phase 1 limitation"
+        "expected names_undefined for an undefined variable"
     );
     Ok(())
 }
 
 /// Unbound variable on some code paths.
-/// Requires full flow analysis — not implemented in Phase 1.
 #[test]
-fn unbound_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_variable() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0019_unbound_variable.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "names_unbound"),
-        "E0019 (unbound variable) not yet implemented — Phase 1 limitation"
+        "expected names_unbound for a conditionally unbound variable"
     );
     Ok(())
 }
 
 /// Unhashable type in hash-requiring context.
-/// Requires type inference — not implemented in Phase 1.
 #[test]
-fn unhashable_type_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn unhashable_type() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0022_unhashable_type.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "dict_key_hashable"),
-        "E0022 (unhashable type) not yet implemented — Phase 1 limitation"
+        "expected dict_key_hashable for an unhashable dictionary key"
     );
     Ok(())
 }

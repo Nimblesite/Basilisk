@@ -80,7 +80,7 @@ Basilisk 是一个 Cargo 工作区，包含 16 个 Rust crate，每个拥有系�
 | **分析管道** | `basilisk-parser` &rarr; `basilisk-resolver` &rarr; `basilisk-checker` &rarr; `basilisk-cli` |
 | **LSP & 基础设施** | `basilisk-lsp`, `basilisk-db`, `basilisk-config`, `basilisk-stubs`, `basilisk-uv`, `basilisk-common`, `basilisk-test-utils`, `basilisk-profiler-helper` |
 | **编辑器扩展** | VS Code (`vscode-extension`), Neovim (`basilisk.nvim`), Zed (`basilisk-zed`) |
-| **未来** | `basilisk-mojo`（所有权），`basilisk-compiler`（原生），`basilisk-plugin`（WASM 插件） |
+| **未来** | `basilisk-mojo`（所有权），`basilisk-compiler`（原生），WASM 插件 |
 
 ## 下一步
 

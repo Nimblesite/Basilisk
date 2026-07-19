@@ -1,4 +1,6 @@
-//! Tests for [`generics_defaults`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+//! Tests for [`generics_defaults`] from [CHKARCH-DIAG-OWNERSHIP] and
+//! [TYPEINF-GENERICS-DEFAULTS]. See
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for generics_defaults: Non-default after default `TypeVar`.
 
 use super::common::*;

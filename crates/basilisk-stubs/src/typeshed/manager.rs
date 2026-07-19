@@ -289,4 +289,38 @@ mod tests {
         assert!(!message.contains("secret-token"));
         assert!(!message.contains("example.invalid"));
     }
+
+    #[test]
+    fn debug_output_never_echoes_configured_mirror_credentials() {
+        let backend = Arc::new(CountingBackend::new(false));
+        let mut request = request(SourceSelection::Latest);
+        request.url_template = Some(
+            "https://secret-user:secret-password@example.invalid/{sha}.zip?token=query-secret"
+                .to_owned(),
+        );
+        let request_debug = format!("{request:?}");
+        let manager = TypeshedManager::new(request, backend);
+        let manager_debug = format!("{manager:?}");
+
+        for (label, debug) in [
+            ("request", request_debug.as_str()),
+            ("manager", manager_debug.as_str()),
+        ] {
+            assert!(
+                debug.contains("mirror_configured: true"),
+                "{label}: {debug}"
+            );
+            for secret in [
+                "secret-user",
+                "secret-password",
+                "example.invalid",
+                "query-secret",
+            ] {
+                assert!(
+                    !debug.contains(secret),
+                    "{label} debug leaked `{secret}`: {debug}"
+                );
+            }
+        }
+    }
 }

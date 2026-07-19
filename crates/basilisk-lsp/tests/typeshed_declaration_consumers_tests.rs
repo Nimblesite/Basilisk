@@ -1,4 +1,5 @@
 //! End-to-end acceptance for [STUBRES-PYI] #288 shared declarations.
+//! Exercises all LSP declaration consumers required by [TYPESHEDRT-ACCEPTANCE-HOVER].
 
 use std::sync::Arc;
 

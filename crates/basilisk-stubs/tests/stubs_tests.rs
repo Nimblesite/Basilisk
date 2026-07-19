@@ -35,29 +35,25 @@ fn bundled_stub_distribution(module: &str) -> Option<String> {
 // Exercises [STUBRES-TYPESHED] against the exact bundled snapshot body.
 #[test]
 fn bundled_builtin_str_type() {
-    // Phase 5: the stubs library must know about Python built-in types.
-    // Currently returns None for all names (placeholder).
     assert!(
         bundled_builtin_exists("str"),
-        "str must be a known builtin type — Phase 5 stubs not yet implemented"
+        "the bundled snapshot must declare str"
     );
 }
 
 #[test]
 fn bundled_builtin_int_type() {
-    // Phase 5: int must be a known built-in type.
     assert!(
         bundled_builtin_exists("int"),
-        "int must be a known builtin type — Phase 5 stubs not yet implemented"
+        "the bundled snapshot must declare int"
     );
 }
 
 #[test]
 fn bundled_builtin_list_type() {
-    // Phase 5: list must be a known built-in type.
     assert!(
         bundled_builtin_exists("list"),
-        "list must be a known builtin type — Phase 5 stubs not yet implemented"
+        "the bundled snapshot must declare list"
     );
 }
 

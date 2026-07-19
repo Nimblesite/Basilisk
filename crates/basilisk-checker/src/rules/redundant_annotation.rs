@@ -173,22 +173,34 @@ fn extract_annotation(source: &str, name_span: basilisk_resolver::Span) -> Optio
     }
 }
 
-/// Check if types match for BSK-0050 purposes (base type comparison)
+/// Check whether inference already provides exactly the written type.
 fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bool {
-    use InferredType::{Bool, Bytes, Float, Int, LiteralString, None_, Str};
+    use InferredType::{Bool, Bytes, Dict, Float, Int, List, LiteralString, None_, Set, Str, Tuple};
 
-    // Only fire BSK-0050 for simple scalar types that are exactly equal
-    // Collection types and other complex types should not trigger BSK-0050
-    // because annotations provide useful documentation even when "redundant"
+    // Exact structural equality is intentionally narrower than assignability:
+    // an annotation that widens an inferred element, key, value, or tuple shape
+    // still adds information and must remain silent.
     match (inferred, declared) {
-        // Basic scalar types (exact match)
         (Int, Int)
         | (Str | LiteralString, Str)
         | (Float, Float)
         | (Bool, Bool)
         | (Bytes, Bytes)
         | (None_, None_) => true,
-        // All other types (collections, unions, optionals, etc.) - no warning
+        (List(inferred), List(declared)) | (Set(inferred), Set(declared)) => {
+            types_match_for_w0050(inferred, declared)
+        }
+        (Dict(inferred_key, inferred_value), Dict(declared_key, declared_value)) => {
+            types_match_for_w0050(inferred_key, declared_key)
+                && types_match_for_w0050(inferred_value, declared_value)
+        }
+        (Tuple(inferred), Tuple(declared)) => {
+            inferred.len() == declared.len()
+                && inferred
+                    .iter()
+                    .zip(declared)
+                    .all(|(inferred, declared)| types_match_for_w0050(inferred, declared))
+        }
         _ => false,
     }
 }

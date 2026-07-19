@@ -24,8 +24,9 @@ use crate::types::{
     StubSource, StubSpan, StubTarget, StubTier, StubVariable,
 };
 
+pub(crate) use self::dunder_all::intersect_name_lists;
 use self::dunder_all::{
-    dotted_expression, literal_dunder_all_intersection, literal_dunder_all_items, string_literal,
+    dotted_expression, literal_dunder_all, literal_dunder_all_items, string_literal,
 };
 use self::guard::feasible_branches;
 use self::syntax::{
@@ -174,7 +175,7 @@ struct StubExtractor {
     overloads: HashMap<String, Vec<StubFunction>>,
     classes: HashMap<String, StubClass>,
     variables: HashMap<String, StubVariable>,
-    dunder_all_variants: Vec<Vec<DunderAllMutation>>,
+    dunder_all_mutations: Vec<DunderAllMutation>,
     reexported_names: Vec<String>,
     star_reexports: Vec<StarReexport>,
     module_bindings: HashMap<String, StarReexport>,
@@ -198,7 +199,7 @@ impl StubExtractor {
             overloads: HashMap::new(),
             classes: HashMap::new(),
             variables: HashMap::new(),
-            dunder_all_variants: vec![Vec::new()],
+            dunder_all_mutations: Vec::new(),
             reexported_names: Vec::new(),
             star_reexports: Vec::new(),
             module_bindings: HashMap::new(),
@@ -216,8 +217,8 @@ impl StubExtractor {
             overloads: self.overloads,
             classes: self.classes,
             variables: self.variables,
-            dunder_all: literal_dunder_all_intersection(&self.dunder_all_variants),
-            dunder_all_variants: self.dunder_all_variants,
+            dunder_all: literal_dunder_all(&self.dunder_all_mutations),
+            dunder_all_mutations: self.dunder_all_mutations,
             reexported_names: self.reexported_names,
             star_reexports: self.star_reexports,
         }
@@ -252,6 +253,7 @@ impl StubExtractor {
             return;
         }
 
+        let mutation_prefix_len = self.dunder_all_mutations.len();
         let alternatives: Vec<Self> = branches
             .into_iter()
             .map(|body| {
@@ -262,7 +264,24 @@ impl StubExtractor {
                 alternative
             })
             .collect();
-        if let Some(intersection) = Self::intersect_alternatives(&alternatives) {
+        let branch_mutations: Vec<Vec<DunderAllMutation>> = alternatives
+            .iter()
+            .map(|alternative| {
+                alternative
+                    .dunder_all_mutations
+                    .get(mutation_prefix_len..)
+                    .map_or_else(Vec::new, <[DunderAllMutation]>::to_vec)
+            })
+            .collect();
+        if let Some(mut intersection) = Self::intersect_alternatives(&alternatives) {
+            intersection
+                .dunder_all_mutations
+                .truncate(mutation_prefix_len);
+            if branch_mutations.iter().any(|branch| !branch.is_empty()) {
+                intersection
+                    .dunder_all_mutations
+                    .push(DunderAllMutation::Choice(branch_mutations));
+            }
             *self = intersection;
         }
     }
@@ -299,20 +318,6 @@ impl StubExtractor {
                 &alternative.star_reexports,
             );
         }
-        // Unrelated unknown guards commonly leave `__all__` unchanged. Blindly
-        // concatenating every branch doubles identical histories at each guard
-        // and made parsing the real bundled typeshed exponential. Preserve all
-        // distinct feasible histories, but merge duplicates immediately.
-        let mut variants = Vec::new();
-        for variant in alternatives
-            .iter()
-            .flat_map(|alternative| alternative.dunder_all_variants.iter())
-        {
-            if !variants.contains(variant) {
-                variants.push(variant.clone());
-            }
-        }
-        intersection.dunder_all_variants = variants;
         Some(intersection)
     }
 
@@ -377,13 +382,7 @@ impl StubExtractor {
     }
 
     fn record_dunder_all_mutation(&mut self, mutation: DunderAllMutation) {
-        let Some((last, variants)) = self.dunder_all_variants.split_last_mut() else {
-            return;
-        };
-        for variant in variants {
-            variant.push(mutation.clone());
-        }
-        last.push(mutation);
+        self.dunder_all_mutations.push(mutation);
     }
 
     fn dunder_all_items(&self, value: &Expr) -> Option<Vec<DunderAllItem>> {
@@ -567,7 +566,54 @@ mod regression_tests {
             StubTier::Tier1,
         )
         .expect("fixture parses");
-        assert_eq!(module.dunder_all_variants.len(), 1);
+        assert_eq!(module.dunder_all_mutations.len(), 1);
         assert_eq!(module.dunder_all, Some(vec!["public".to_owned()]));
+    }
+
+    #[test]
+    fn guarded_all_mutations_do_not_create_a_power_set() {
+        let mut source = String::from("__all__ = ['base']\n");
+        for index in 0..8 {
+            let _ = write!(
+                source,
+                "if feature_{index}:\n    __all__.append('optional_{index}')\n"
+            );
+        }
+        let module = parse_pyi_source(
+            &source,
+            Path::new("guarded_all.pyi"),
+            "guarded_all",
+            StubSource::Typeshed,
+            StubTier::Tier1,
+        )
+        .expect("fixture parses");
+        assert_eq!(module.dunder_all_mutations.len(), 9);
+        assert_eq!(module.dunder_all, Some(vec!["base".to_owned()]));
+    }
+
+    #[test]
+    fn guarded_all_meet_preserves_duplicate_counts_for_later_remove() {
+        let module = parse_pyi_source(
+            "__all__ = ['shared']\nif feature:\n    __all__.append('shared')\nelse:\n    __all__.extend(['shared', 'shared'])\n__all__.remove('shared')\n",
+            Path::new("guarded_counts.pyi"),
+            "guarded_counts",
+            StubSource::Typeshed,
+            StubTier::Tier1,
+        )
+        .expect("fixture parses");
+        assert_eq!(module.dunder_all, Some(vec!["shared".to_owned()]));
+    }
+
+    #[test]
+    fn identical_guarded_append_is_visible_to_a_later_remove() {
+        let module = parse_pyi_source(
+            "if feature:\n    __all__.append('shared')\nelse:\n    __all__.append('shared')\n__all__.remove('shared')\n",
+            Path::new("guarded_remove.pyi"),
+            "guarded_remove",
+            StubSource::Typeshed,
+            StubTier::Tier1,
+        )
+        .expect("fixture parses");
+        assert_eq!(module.dunder_all, Some(Vec::new()));
     }
 }

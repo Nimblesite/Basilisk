@@ -1,4 +1,5 @@
 //! Implements [LSPARCH-FEATURES-HOVER]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-HOVER
+//! Implements the shared-declaration consumer half of [TYPESHEDRT-ACCEPTANCE-HOVER].
 //!
 //! Dot-access member hover lookups: methods inherited from external
 //! (stub/py.typed) base classes (GitHub #287), builtin-typed receivers like

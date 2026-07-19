@@ -1,4 +1,6 @@
 //! Production acquisition backend over injected HTTPS transport and disk cache.
+//! Implements the source model and work contract in [TYPESHEDRT-MODEL],
+//! [TYPESHEDRT-WORK], and [TYPESHEDRT-ACCEPTANCE].
 
 mod custom;
 

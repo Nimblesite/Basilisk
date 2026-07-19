@@ -327,6 +327,106 @@ fn concrete_target_selects_one_version_and_platform_branch() {
 }
 
 #[test]
+fn type_checking_boolean_and_negation_guards_are_selected_statically() {
+    let stub = parse_stub(
+        "import typing\nimport typing_extensions\n\
+if TYPE_CHECKING:\n    direct: int\nelse:\n    direct_runtime: int\n\
+if typing.TYPE_CHECKING:\n    typing_attr: int\n\
+if typing_extensions.TYPE_CHECKING:\n    extensions_attr: int\n\
+if True and not False:\n    conjunction: int\n\
+if False or True:\n    disjunction: int\n",
+    );
+
+    for name in [
+        "direct",
+        "typing_attr",
+        "extensions_attr",
+        "conjunction",
+        "disjunction",
+    ] {
+        assert!(stub.variables.contains_key(name), "missing `{name}`");
+    }
+    assert!(!stub.variables.contains_key("direct_runtime"));
+}
+
+#[test]
+fn reversed_version_and_platform_guards_cover_every_ordering_operator() {
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::Concrete("win32".to_owned()),
+    };
+    let stub = parse_stub_for_target(
+        "import sys\n\
+if (3, 11) < sys.version_info:\n    reversed_version: int\n\
+if sys.version_info <= (3, 12):\n    less_equal: int\n\
+if sys.version_info > (3, 13):\n    impossible_greater: int\nelse:\n    greater_else: int\n\
+if sys.version_info >= (3, 12):\n    greater_equal: int\n\
+if sys.version_info == (3, 12):\n    equal: int\n\
+if sys.version_info != (3, 11):\n    not_equal: int\n\
+if \"win32\" == sys.platform:\n    reversed_platform: int\n",
+        &target,
+    );
+
+    for name in [
+        "reversed_version",
+        "less_equal",
+        "greater_else",
+        "greater_equal",
+        "equal",
+        "not_equal",
+        "reversed_platform",
+    ] {
+        assert!(stub.variables.contains_key(name), "missing `{name}`");
+    }
+    assert!(!stub.variables.contains_key("impossible_greater"));
+}
+
+#[test]
+fn malformed_and_unsupported_comparisons_intersect_all_feasible_branches() {
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::Concrete("linux".to_owned()),
+    };
+    let stub = parse_stub_for_target(
+        "import sys\n\
+if sys.version_info < (3, 12) < (4, 0):\n    chained_common: int\n    chained_left: int\nelse:\n    chained_common: int\n    chained_right: int\n\
+if sys.version_info >= \"3.12\":\n    version_common: int\n    version_left: int\nelse:\n    version_common: int\n    version_right: int\n\
+if sys.platform == 123:\n    platform_common: int\n    platform_left: int\nelse:\n    platform_common: int\n    platform_right: int\n\
+if project_feature == 1:\n    unknown_common: int\n    unknown_left: int\nelse:\n    unknown_common: int\n    unknown_right: int\n",
+        &target,
+    );
+
+    for name in [
+        "chained_common",
+        "version_common",
+        "platform_common",
+        "unknown_common",
+    ] {
+        assert!(stub.variables.contains_key(name), "missing `{name}`");
+    }
+    for name in [
+        "chained_left",
+        "chained_right",
+        "version_left",
+        "version_right",
+        "platform_left",
+        "platform_right",
+        "unknown_left",
+        "unknown_right",
+    ] {
+        assert!(!stub.variables.contains_key(name), "retained `{name}`");
+    }
+}
+
+#[test]
+fn false_elif_chain_without_else_contributes_no_declarations() {
+    let stub = parse_stub("if False:\n    first: int\nelif False:\n    second: int\n");
+
+    assert!(!stub.variables.contains_key("first"));
+    assert!(!stub.variables.contains_key("second"));
+}
+
+#[test]
 fn all_platform_target_intersects_guarded_declarations() {
     let target = StubTarget {
         python_version: (3, 12),

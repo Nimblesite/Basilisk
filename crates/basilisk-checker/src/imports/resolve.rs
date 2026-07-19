@@ -1,4 +1,5 @@
 //! Implements [ANALYSIS-CROSSLSP-IMPORT]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-IMPORT
+//! Implements the six-step runtime ordering in [TYPESHEDRT-ACCEPTANCE-RESOLUTION].
 //! Filesystem path resolution: `module_name` + [`ImportSearchPaths`] → a file.
 //!
 //! This is the whole of import resolution: a static filesystem search, never an

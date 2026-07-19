@@ -1,4 +1,5 @@
 //! Tests for [STUBRES-PYI] bound-method signature synthesis (GitHub #288).
+//! Covers real `.pyi` constructor/signature behavior for [TYPESHEDRT-ACCEPTANCE-HOVER].
 //! See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PYI
 #![allow(clippy::allow_attributes, clippy::unwrap_used, clippy::expect_used)]
 //! `basilisk_checker::exports::bound_method_signatures` renders a bound

@@ -59,9 +59,13 @@ impl Rule for ArgumentTypeMismatch {
             .collect();
 
         for call in &module.calls {
-            // Only check calls to locally-defined functions for now.
-            // Cross-module argument checking requires parsing imported function
-            // signatures from `ExternalSymbol` — future work (Phase 4+).
+            // Bound calls are checked against receiver-aware declarations below,
+            // never against a same-named module-level function.
+            if call.receiver.is_some() {
+                continue;
+            }
+            // This pass checks locally defined functions. Receiver-aware
+            // declaration checks run separately below.
             let Some(funcs) = func_groups.get(call.callee.as_str()) else {
                 continue;
             };

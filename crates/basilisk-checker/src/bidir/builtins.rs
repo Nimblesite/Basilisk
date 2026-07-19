@@ -28,6 +28,7 @@ pub fn builtin_call_return(name: &str) -> Option<InferredType> {
             Box::new(InferredType::Unknown),
         ),
         "set" | "frozenset" => InferredType::Set(Box::new(InferredType::Unknown)),
+        "range" => InferredType::Named("range".to_owned()),
         "print" => InferredType::None_,
         _ => return None,
     })

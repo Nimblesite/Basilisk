@@ -1,4 +1,5 @@
-//! Implements [TYPEINF-TARGET] Stage 3 groundwork. See
+//! Implements [TYPEINF-TARGET] and [TYPEINF-TARGET-TYPELEVEL] Stage 3
+//! groundwork. See
 //! docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-CHECKLIST
 //! ("Stage 3 — type-level evaluation groundwork").
 //!

@@ -315,6 +315,8 @@ _build_vsix:
 # and the published package can never diverge. Set BSK_VSIX_TARGET (e.g.
 # darwin-arm64) to pin the platform regardless of host; unset auto-detects from
 # uname. Implements [VSIX-PACKAGING-PARITY].
+# [STUBRES-TYPESHED-LICENSE] Every binary-bearing package carries the Basilisk
+# license and the exact third-party attribution files.
 _release_vsix:
 	@set -e; \
 	python3 scripts/verify_release_attribution.py --policy-only; \
@@ -354,8 +356,6 @@ _release_vsix:
 	fi; \
 	node $(_EXTENSION_DIR)/scripts/stage-runtime.mjs "target/$$rust_target/release" "$$target"; \
 	cp shipwright.json $(_EXTENSION_DIR)/shipwright.json; \
-	# [STUBRES-TYPESHED-LICENSE] Every binary-bearing package carries the \
-	# Basilisk license and the exact third-party attribution files. \
 	cp VSCODE-DISTRIBUTION-LICENSE $(_EXTENSION_DIR)/LICENSE.txt; \
 	cp NOTICES THIRD-PARTY-LICENSES RUST-DEPENDENCY-LICENSES \
 		VSCODE-DEPENDENCY-LICENSES $(_EXTENSION_DIR)/; \

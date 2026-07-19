@@ -113,10 +113,11 @@ pub(super) async fn initialize(
 
     // Store workspace roots for later use by import resolution.
     (*server.workspace_roots.write().await).clone_from(&roots);
-    *server.python_interpreter.write().await = params
+    let python_interpreter = params
         .initialization_options
         .as_ref()
         .and_then(parse_python_interpreter);
+    (*server.python_interpreter.write().await).clone_from(&python_interpreter);
 
     // Every root starts in an explicit non-ready generation. The
     // `initialized` notification acquires one fully gated source before any
@@ -139,7 +140,7 @@ pub(super) async fn initialize(
     // inside a project still discovers the project's config.
     let checker_config = roots
         .first()
-        .map(|r| basilisk_config::load_basilisk_config(r))
+        .map(|root| checker_config_for_root(root, python_interpreter.as_deref()))
         .unwrap_or_default();
 
     // Resolve the environment actually in use (python / uv / this binary) and
@@ -733,9 +734,10 @@ pub(super) async fn did_change_workspace_folders(
     }
     acquire_typeshed_for_roots(server, added_roots).await;
 
+    let interpreter = server.python_interpreter.read().await.clone();
     let checker_config = updated_roots
         .first()
-        .map(|r| basilisk_config::load_basilisk_config(r))
+        .map(|root| checker_config_for_root(root, interpreter.as_deref()))
         .unwrap_or_default();
     let index = WorkspaceIndex::new(updated_roots, mode, checker_config);
     *server.index.write().await = Some(index);
@@ -1001,11 +1003,43 @@ fn stub_target_for_root(
     interpreter: Option<&std::path::Path>,
 ) -> Option<basilisk_stubs::types::StubTarget> {
     let mut config = crate::config::load_config(root);
-    config.python_interpreter = interpreter.map(std::path::Path::to_path_buf);
+    if let Some(interpreter) = interpreter {
+        config.python_interpreter = Some(interpreter.to_path_buf());
+    }
     if config.python_version.is_none() {
         config.python_version = basilisk_uv::python_version::resolve_target_python_version(root);
     }
+    if config.python_platform.is_none() {
+        config.python_platform =
+            selected_interpreter_platform(root, config.python_interpreter.as_deref());
+    }
     crate::import_resolver::stub_target_from_config(&config)
+}
+
+fn checker_config_for_root(
+    root: &std::path::Path,
+    interpreter: Option<&std::path::Path>,
+) -> basilisk_config::BasiliskConfig {
+    let mut config = basilisk_config::load_basilisk_config(root);
+    if config.python_platform.is_none() {
+        let analysis_config = crate::config::load_config(root);
+        config.python_platform = selected_interpreter_platform(
+            root,
+            interpreter.or(analysis_config.python_interpreter.as_deref()),
+        );
+    }
+    config
+}
+
+fn selected_interpreter_platform(
+    root: &std::path::Path,
+    interpreter: Option<&std::path::Path>,
+) -> Option<String> {
+    let selected = interpreter.map_or_else(
+        || std::path::PathBuf::from(crate::debug::resolve_python(root)),
+        std::path::Path::to_path_buf,
+    );
+    basilisk_uv::python_version::read_python_platform(&selected)
 }
 
 async fn typeshed_ready_roots(server: &LspServer) -> Vec<std::path::PathBuf> {
@@ -1399,6 +1433,44 @@ mod explicit_python_tests {
 
         let target = stub_target_for_root(&root, None);
         assert_eq!(target.map(|target| target.python_version), Some((3, 14)));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn startup_target_uses_selected_interpreter_platform() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        let root = std::env::temp_dir().join(format!(
+            "basilisk_lsp_python_platform_target_{}_{}",
+            std::process::id(),
+            unique
+        ));
+        let interpreter = root.join("python");
+        let setup = std::fs::create_dir_all(&root)
+            .and_then(|()| std::fs::write(root.join(".python-version"), b"3.14\n"))
+            .and_then(|()| {
+                std::fs::write(&interpreter, b"#!/bin/sh\nprintf 'fixture-platform\\n'\n")
+            })
+            .and_then(|()| {
+                std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o755))
+            });
+        assert!(setup.is_ok(), "fixture setup failed: {setup:?}");
+        if setup.is_err() {
+            return;
+        }
+
+        let target = stub_target_for_root(&root, Some(&interpreter));
+
+        assert_eq!(
+            target.map(|target| target.platform),
+            Some(basilisk_stubs::types::StubTargetPlatform::Concrete(
+                "fixture-platform".to_owned()
+            ))
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 

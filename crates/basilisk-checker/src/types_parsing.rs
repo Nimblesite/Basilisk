@@ -37,6 +37,11 @@ impl InferredType {
                 param_types: Vec::new(),
                 return_type: Box::new(InferredType::Any),
             }),
+            "generator" => InferredType::Generator(
+                Box::new(InferredType::Any),
+                Box::new(InferredType::None_),
+                Box::new(InferredType::None_),
+            ),
             // Bare generics without `[...]` are implicitly parameterised with Any.
             "list" => InferredType::List(Box::new(InferredType::Any)),
             "dict" => InferredType::Dict(Box::new(InferredType::Any), Box::new(InferredType::Any)),
@@ -72,6 +77,18 @@ fn parse_complex_annotation(annotation: &str) -> InferredType {
     if annotation.starts_with("callable[") && annotation.ends_with(']') {
         let inner = annotation["callable[".len()..annotation.len() - 1].trim();
         return parse_callable_annotation(inner);
+    }
+    if annotation.starts_with("generator[") && annotation.ends_with(']') {
+        let inner = &annotation["generator[".len()..annotation.len() - 1];
+        let parts = split_type_params(inner);
+        if let [yield_type, send_type, return_type] = parts.as_slice() {
+            return InferredType::Generator(
+                Box::new(InferredType::from_annotation(yield_type.trim())),
+                Box::new(InferredType::from_annotation(send_type.trim())),
+                Box::new(InferredType::from_annotation(return_type.trim())),
+            );
+        }
+        return InferredType::Named(annotation.to_owned());
     }
     if annotation == "typeform" {
         return InferredType::TypeForm(Box::new(InferredType::Any));

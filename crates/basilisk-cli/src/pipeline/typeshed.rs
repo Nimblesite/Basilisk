@@ -19,6 +19,12 @@ pub(super) fn load_cli_workspace_config(
     if config.python_version.is_none() {
         config.python_version = detected_python_version.map(str::to_owned);
     }
+    if config.python_platform.is_none() {
+        let interpreter = config.python_interpreter.clone().unwrap_or_else(|| {
+            std::path::PathBuf::from(basilisk_lsp::debug::resolve_python(project_root))
+        });
+        config.python_platform = basilisk_uv::python_version::read_python_platform(&interpreter);
+    }
     config
 }
 
@@ -144,7 +150,7 @@ fn build_uv_registry(
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use super::{load_cli_workspace_config, report_typeshed_status};
+    use super::{build_uv_registry, load_cli_workspace_config, report_typeshed_status};
 
     #[derive(Clone, Default)]
     struct Capture(Arc<Mutex<Vec<u8>>>);
@@ -157,7 +163,7 @@ mod tests {
                 .0
                 .lock()
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
-            output.write_all(bytes)?;
+            output.extend_from_slice(bytes);
             Ok(bytes.len())
         }
 
@@ -209,6 +215,89 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn selected_interpreter_supplies_platform_target_evidence(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let project = tempfile::tempdir()?;
+        let interpreter = project.path().join("python");
+        std::fs::write(&interpreter, "#!/bin/sh\nprintf 'fixture-platform\\n'\n")?;
+        std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o755))?;
+        std::fs::write(
+            project.path().join("pyproject.toml"),
+            format!("[tool.basilisk]\npython = '{}'\n", interpreter.display()),
+        )?;
+
+        let config = load_cli_workspace_config(project.path(), None);
+
+        assert_eq!(
+            config.python_platform.as_deref(),
+            Some("fixture-platform"),
+            "an explicitly selected interpreter is real target evidence for sys.platform"
+        );
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn explicit_all_platform_keeps_cross_platform_target() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let project = tempfile::tempdir()?;
+        let interpreter = project.path().join("python");
+        std::fs::write(&interpreter, "#!/bin/sh\nprintf 'fixture-platform\\n'\n")?;
+        std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o755))?;
+        std::fs::write(
+            project.path().join("pyproject.toml"),
+            format!(
+                "[tool.basilisk]\npython = '{}'\npython-platform = 'All'\n",
+                interpreter.display()
+            ),
+        )?;
+
+        let config = load_cli_workspace_config(project.path(), None);
+
+        assert_eq!(config.python_platform.as_deref(), Some("All"));
+        Ok(())
+    }
+
+    #[test]
+    fn uv_detection_without_a_lockfile_does_not_build_a_registry(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let project = tempfile::tempdir()?;
+        std::fs::write(project.path().join(".python-version"), "3.13\n")?;
+
+        assert!(build_uv_registry(&[project.path().to_path_buf()]).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn malformed_uv_lockfile_does_not_build_a_partial_registry(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let project = tempfile::tempdir()?;
+        std::fs::write(project.path().join("uv.lock"), "not valid TOML = [")?;
+
+        assert!(build_uv_registry(&[project.path().to_path_buf()]).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn valid_uv_lockfile_builds_the_registry() -> Result<(), Box<dyn std::error::Error>> {
+        let project = tempfile::tempdir()?;
+        std::fs::write(
+            project.path().join("uv.lock"),
+            "version = 1\n\n[[package]]\nname = 'example'\nversion = '1.0.0'\n",
+        )?;
+
+        let registry = build_uv_registry(&[project.path().to_path_buf()])
+            .ok_or("valid uv.lock should build a registry")?;
+        assert_eq!(registry.all_packages().count(), 1);
+        Ok(())
+    }
+
     #[test]
     fn latest_fallback_status_is_loud_and_ordered() -> Result<(), Box<dyn std::error::Error>> {
         use basilisk_stubs::typeshed::source::StatusWarning;
@@ -247,6 +336,35 @@ mod tests {
                 .is_some_and(|((first, second), third)| first < second && second < third),
             "Latest fallback warnings must remain loud and canonical: {stderr}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn status_reporting_names_missing_optional_identities() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut status = basilisk_stubs::typeshed::bundle::bundled_snapshot()?.status;
+        status.commit = None;
+        status.tree = None;
+        status.license_reference = None;
+        status.warnings.clear();
+        let capture = Capture::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_ansi(false)
+            .without_time()
+            .with_target(false)
+            .with_writer(capture.clone())
+            .finish();
+
+        tracing::subscriber::with_default(subscriber, || report_typeshed_status(&status));
+
+        let stderr = capture.text()?;
+        for field in [
+            "commit_identity=\"not supplied\"",
+            "tree_identity=\"not supplied\"",
+            "license_reference=\"not supplied\"",
+        ] {
+            assert!(stderr.contains(field), "missing `{field}` in: {stderr}");
+        }
         Ok(())
     }
 }

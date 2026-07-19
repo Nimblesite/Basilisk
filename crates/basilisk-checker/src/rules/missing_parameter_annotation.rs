@@ -1,5 +1,7 @@
 //! Implements [BSK-0001] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
 //! BSK-0001: Missing parameter type annotation.
+//! Implements the parameter-policy slice of [TYPEINF-REQUIRED] and the
+//! receiver exemption shared by [TYPEINF-SPECIAL-SELF].
 //!
 //! Never fires where the current engine already infers the parameter type: a
 //! scalar-literal default (`timeout=30` → `int`) determines the type, so
@@ -60,16 +62,34 @@ impl Rule for MissingParameterAnnotation {
     }
 }
 
-// Implements [TYPEINF-FUNC-SELFCLS] — the self/cls exemption side: `self` and
-// `cls` are never required to be annotated (their types are implicit). Note: the
-// spec's full Self / type[Self] inference is not modelled here.
+// Implements [TYPEINF-FUNC-SELFCLS] — only the first conventional receiver of
+// an actual method is exempt. A free function parameter merely named `self` or
+// `cls` has no implicit receiver type.
 fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
     func.parameters
         .iter()
-        .filter(|p| {
-            !p.has_annotation && p.name != "self" && p.name != "cls" && !default_determines_type(p)
+        .enumerate()
+        .filter(|(index, p)| {
+            !p.has_annotation
+                && !is_implicit_receiver(func, *index, p)
+                && !default_determines_type(p)
         })
-        .for_each(|p| out.push(make_diagnostic(p, path)));
+        .for_each(|(_, p)| out.push(make_diagnostic(p, path)));
+}
+
+fn is_implicit_receiver(func: &FunctionInfo, index: usize, param: &ParameterInfo) -> bool {
+    if index != 0
+        || func.class_name.is_none()
+        || func.decorators.iter().any(|name| name == "staticmethod")
+    {
+        return false;
+    }
+    let class_receiver = func
+        .decorators
+        .iter()
+        .any(|name| name == "classmethod")
+        || matches!(func.name.as_str(), "__new__" | "__init_subclass__");
+    param.name == if class_receiver { "cls" } else { "self" }
 }
 
 /// Implements [TYPEINF-FUNC-DEFAULTS]: `true` when the parameter's default

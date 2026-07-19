@@ -1,6 +1,10 @@
 //! Implements [`literals_semantics`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! `literals_semantics`: Augmented assignment widens `Literal` type.
 //!
+//! Implements the supported annotated slice of [TYPEINF-VARS-AUGMENTED]:
+//! augmented assignment keeps the declared target type and validates whether
+//! the operation widens out of it.
+//!
 //! When a function parameter is annotated with `Literal[...]`, augmented
 //! assignment (`+=`, `-=`, etc.) effectively reassigns the variable to a
 //! widened type (e.g. `int` instead of `Literal[3, 4, 5]`), violating the

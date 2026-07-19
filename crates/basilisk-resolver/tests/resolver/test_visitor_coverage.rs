@@ -2,6 +2,7 @@
 // Tests for resolver: `test_visitor_coverage`.
 
 use super::common::resolve_src;
+use basilisk_resolver::scope::CallReceiver;
 
 #[test]
 fn dict_spread_item_does_not_crash() -> Result<(), Box<dyn std::error::Error>> {
@@ -52,13 +53,15 @@ fn class_with_docstring_not_collected_as_attribute() -> Result<(), Box<dyn std::
 }
 
 #[test]
-fn module_level_method_call_not_collected_as_call_site() -> Result<(), Box<dyn std::error::Error>> {
+fn module_level_method_call_preserves_receiver_identity() -> Result<(), Box<dyn std::error::Error>>
+{
     let src = "result = obj.method(42)\n".to_owned();
     let resolved = resolve_src(&src)?;
-    // obj.method is an Attribute, not a simple Name → call_site_from_expr returns None
-    assert!(
-        resolved.calls.is_empty(),
-        "method call must not be collected as a call site"
+    assert_eq!(resolved.calls.len(), 1);
+    assert_eq!(resolved.calls[0].callee, "method");
+    assert_eq!(
+        resolved.calls[0].receiver,
+        Some(CallReceiver::Name("obj".to_owned()))
     );
     Ok(())
 }

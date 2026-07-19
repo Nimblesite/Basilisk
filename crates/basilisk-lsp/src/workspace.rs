@@ -242,6 +242,17 @@ impl WorkspaceIndex {
                     cfg.python_version =
                         basilisk_uv::python_version::resolve_target_python_version(root);
                 }
+                if cfg.python_platform.is_none() {
+                    let analysis_config = crate::config::load_config(root);
+                    let interpreter = analysis_config
+                        .python_interpreter
+                        .unwrap_or_else(|| PathBuf::from(crate::debug::resolve_python(root)));
+                    cfg.python_platform =
+                        basilisk_uv::python_version::read_python_platform(&interpreter);
+                    if cfg.python_platform.is_none() {
+                        cfg.python_platform.clone_from(&fallback.python_platform);
+                    }
+                }
                 (root.clone(), cfg)
             })
             .collect()
@@ -3351,6 +3362,48 @@ mod tests {
     }
 
     // ── Config loaded from pyproject.toml via WorkspaceIndex constructor ────
+
+    #[cfg(unix)]
+    #[test]
+    fn multi_root_platform_evidence_is_resolved_per_root() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let base = unique_tmp("bsk_multi_root_platform");
+        let roots = [base.join("a"), base.join("b")];
+        for (root, platform) in roots.iter().zip(["platform-a", "platform-b"]) {
+            std::fs::create_dir_all(root).unwrap();
+            let interpreter = root.join("python");
+            std::fs::write(&interpreter, format!("#!/bin/sh\nprintf '{platform}\\n'\n")).unwrap();
+            std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::write(
+                root.join("pyproject.toml"),
+                format!("[tool.basilisk]\npython = '{}'\n", interpreter.display()),
+            )
+            .unwrap();
+        }
+
+        let index = WorkspaceIndex::new(
+            roots.to_vec(),
+            AnalysisMode::OpenFilesOnly,
+            BasiliskConfig::default(),
+        );
+
+        assert_eq!(
+            index
+                .root_configs
+                .get(&roots[0])
+                .and_then(|config| config.python_platform.as_deref()),
+            Some("platform-a")
+        );
+        assert_eq!(
+            index
+                .root_configs
+                .get(&roots[1])
+                .and_then(|config| config.python_platform.as_deref()),
+            Some("platform-b")
+        );
+        let _ = std::fs::remove_dir_all(base);
+    }
 
     #[test]
     fn workspace_index_with_pyproject_config_applies_overrides() {

@@ -1,4 +1,4 @@
-//! Tests default bundled typeshed behavior for [STUBRES-CUSTOM-TYPESHED].
+//! Tests default runtime typeshed behavior for [STUBRES-CUSTOM-TYPESHED].
 //! See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED
 #![allow(
     clippy::allow_attributes,
@@ -15,7 +15,7 @@ fn unique_dir(prefix: &str) -> PathBuf {
     static CTR: AtomicU64 = AtomicU64::new(0);
     let n = CTR.fetch_add(1, Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!(
-        "bsk_bundled_typeshed_{prefix}_{}_{n}",
+        "bsk_runtime_typeshed_{prefix}_{}_{n}",
         std::process::id()
     ));
     std::fs::create_dir_all(&dir).expect("create temp dir");
@@ -33,8 +33,8 @@ fn check_app(dir: &Path) -> Output {
 }
 
 #[test]
-fn cli_without_typeshed_path_uses_the_bundled_snapshot() {
-    let dir = unique_dir("bundled_snapshot");
+fn cli_without_typeshed_path_activates_the_default_runtime_source() {
+    let dir = unique_dir("default_source");
     std::fs::write(
         dir.join("pyproject.toml"),
         "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\n",
@@ -52,16 +52,16 @@ fn cli_without_typeshed_path_uses_the_bundled_snapshot() {
 
     assert!(
         !stdout.contains("imports_unresolved"),
-        "the bundled snapshot must suppress unresolved diagnostics, stdout: {stdout}, stderr: {stderr}"
+        "the default runtime source must suppress unresolved diagnostics, stdout: {stdout}, stderr: {stderr}"
     );
     assert!(
         !stdout.contains("fractions"),
-        "diagnostics must not name a bundled stdlib module, stdout: {stdout}"
+        "diagnostics must not name a resolved stdlib module, stdout: {stdout}"
     );
     assert_eq!(
         output.status.code(),
         Some(0),
-        "the bundled snapshot must let the CLI check pass, stdout: {stdout}, stderr: {stderr}"
+        "the default runtime source must let the CLI check pass, stdout: {stdout}, stderr: {stderr}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);

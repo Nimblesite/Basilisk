@@ -331,7 +331,7 @@ Full support for:
 - Unreachable branch elimination
 - `NoReturn` propagation from `sys.exit()`, `raise`, and custom `NoReturn` functions
 - `assert_never()` for exhaustiveness checking
-- Platform-aware reachability (default: assume code may run on any platform)
+- Platform-aware reachability (an unknown target preserves every platform branch)
 
 ### Target Version and Platform {#CHKARCH-VERSION-TARGET}
 
@@ -349,6 +349,12 @@ release. Basilisk has no canonical Python version.
   [`[LSPUV-PYTHON-VERSION-RESOLUTION-ORDER]`](LSP-UV-INTEGRATION-SPEC.md):
   `.python-version` → `[project].requires-python` lower bound → `uv.lock`
   `requires-python` lower bound (`basilisk_uv::python_version::resolve_target_python_version`).
+- When `python-platform` is absent, the CLI and LSP ask the selected project
+  interpreter for `sys.platform` and thread that concrete evidence through
+  both Typeshed guard selection and checker rules. An explicit
+  `python-platform = "All"` keeps cross-platform intersection semantics. A
+  failed interpreter probe leaves the platform unknown; the checker never
+  manufactures a host or fixed-platform target.
 - `rules::run_all(module, ctx)` threads the context into every
   `Rule::check(module, ctx, diagnostics)`. Feature-version boundaries come from
   their governing PEP or Python language rule, never from a book-wide or
@@ -646,7 +652,6 @@ basilisk/
     basilisk-lsp/          # Language Server Protocol implementation
     basilisk-cli/          # Command-line interface
     basilisk-stubs/        # Stub generation, loading, registry client
-    basilisk-plugin/       # WASM-based plugin host
     basilisk-db/           # Salsa incremental computation database
     basilisk-safety/       # Python package: Borrowed, Owned, InOut annotations
   editors/
@@ -667,7 +672,6 @@ basilisk-db (foundation)
                       <- basilisk-cli (leaf: terminal)
 
 basilisk-stubs (standalone, used by basilisk-resolver)
-basilisk-plugin (standalone, used by basilisk-checker)
 ```
 
 ### Build System {#CHKARCH-ARCH-BUILD}
@@ -939,7 +943,7 @@ remains the separate step-1 override
 
 ## Plugin host (planned) {#CHKARCH-PLUGINS}
 
-`basilisk-plugin` is currently a placeholder path validator, not a WASM runtime.
+No plugin crate ships today. A WASM host remains future work rather than a placeholder runtime.
 
 ### Sandbox target {#CHKARCH-PLUGINS-ARCH}
 
@@ -1013,7 +1017,7 @@ Project TOML example:
 
 ```toml
 [tool.basilisk]
-python-platform = "All"          # Default: check for all platforms
+python-platform = "All"          # Explicit cross-platform analysis
 stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
 # Unpinned acquisition resolves current python/typeshed@main on startup:
 # typeshed-commit = "<full commit SHA>"  # optional explicit immutable source

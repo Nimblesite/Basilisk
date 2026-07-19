@@ -160,7 +160,7 @@ pub enum SourceSelection {
 }
 
 /// A config-free acquisition request the CLI/LSP builds from `[tool.basilisk]`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TypeshedRequest {
     /// Which source to use.
     pub selection: SourceSelection,
@@ -170,6 +170,18 @@ pub struct TypeshedRequest {
     pub use_cache: bool,
     /// A `typeshed-url` `{sha}` archive-mirror template, if configured.
     pub url_template: Option<String>,
+}
+
+impl std::fmt::Debug for TypeshedRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("TypeshedRequest")
+            .field("selection", &self.selection)
+            .field("verify_content", &self.verify_content)
+            .field("use_cache", &self.use_cache)
+            .field("mirror_configured", &self.url_template.is_some())
+            .finish()
+    }
 }
 
 /// A warning projected into `{code, message, severity}` for machine surfaces.

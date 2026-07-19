@@ -1,11 +1,11 @@
-# Runtime typeshed acquisition — Implementation Plan {#TYPESHEDRT-OVERVIEW}
+# [TYPESHEDRT-OVERVIEW] Runtime typeshed acquisition — Implementation Plan {#TYPESHEDRT-OVERVIEW}
 
 > **Normative spec**: [STUBRES-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)
 > **Pinned typing authority**: [`python/typing@6ef9f7719ecfff09dad8724ef42b621fd994fb5e`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)
 
 This supplies the real standard-library `.pyi` bodies missing in [#324](https://github.com/Nimblesite/Basilisk/issues/324), so [#289](https://github.com/Nimblesite/Basilisk/issues/289) and [#288](https://github.com/Nimblesite/Basilisk/issues/288) can be fixed — offline and online alike — without changing the typing specification's resolution order.
 
-## Contract {#TYPESHEDRT-MODEL}
+## [TYPESHEDRT-MODEL] Contract {#TYPESHEDRT-MODEL}
 
 Pinned step 3 says **“Typeshed stubs for the standard library”**, says those stubs are **“usually”** vendored, and says a provided custom path **“SHOULD [be used] as the canonical source for standard-library types in this step”** ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). “Usually” mandates neither bundling nor any Git policy; the transport below is Basilisk policy where the specification is silent.
 
@@ -16,7 +16,7 @@ commits, or changes an exact identity. Latest
 warns `UNPINNED` and **Pin current** makes determinism one action away. Custom
 is user-managed.
 
-## Work {#TYPESHEDRT-WORK}
+## [TYPESHEDRT-WORK] Work {#TYPESHEDRT-WORK}
 
 The pinned order puts standard-library typeshed at step 3, stub packages at step 4, inline `py.typed` packages at step 5, and optional vendored third-party stubs last ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). Implement only what preserves that order:
 
@@ -27,11 +27,11 @@ The pinned order puts standard-library typeshed at step 3, stub packages at step
    Cache-off downloads, validates, and discards. A custom miss proceeds to step 4.
 4. Gate analysis, fingerprint caches by source identity, and return active source/full SHA plus composable `UNPINNED`, fallback, `LICENSE CHANGED`, `UNVERIFIED`, and user-managed statuses on CLI/LSP/MCP ([§STUBRES-TYPESHED-WARN](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 
-## Acceptance criteria {#TYPESHEDRT-ACCEPTANCE}
+## [TYPESHEDRT-ACCEPTANCE] Acceptance criteria {#TYPESHEDRT-ACCEPTANCE}
 
 Each checkbox is an independent automated test. The pinned specification says type checkers **“SHOULD resolve modules containing type information”** in its listed order ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)); the acquisition mechanics below are Basilisk policy where that specification is silent.
 
-### Source acquisition and identity {#TYPESHEDRT-ACCEPTANCE-SOURCE}
+### [TYPESHEDRT-ACCEPTANCE-SOURCE] Source acquisition and identity {#TYPESHEDRT-ACCEPTANCE-SOURCE}
 
 Step 3 identifies **“Typeshed stubs for the standard library”**, while the same pinned text does not prescribe transport, cache age, or commit selection ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 
@@ -44,7 +44,7 @@ Step 3 identifies **“Typeshed stubs for the standard library”**, while the s
 - [x] **Concurrent callers:** CLI/LSP/MCP callers observe one complete identity and one atomic promotion.
 - [x] **Cache fingerprint:** different SHAs, custom-tree identities, and bundled identity miss the checker cache; identical identities hit it.
 
-### Integrity, verification, and cache {#TYPESHEDRT-ACCEPTANCE-VERIFY}
+### [TYPESHEDRT-ACCEPTANCE-VERIFY] Integrity, verification, and cache {#TYPESHEDRT-ACCEPTANCE-VERIFY}
 
 Trusted GitHub metadata binds commit to tree; a user pin selects the commit, and
 Git-tree verification binds VFS-consumed bytes to that tree
@@ -59,7 +59,7 @@ Git-tree verification binds VFS-consumed bytes to that tree
 - [x] **Mirror:** known SHA downloads through `{sha}` and verifies; Latest without official metadata cannot reuse an earlier SHA and falls back loudly.
 - [x] **Status routing:** compose `UNPINNED` + fallback + `UNVERIFIED`; assert CLI uses stderr, LSP uses `showMessage`/Service Info (not `publishDiagnostics`), and MCP returns the same ordered structured warnings.
 
-### Explicit user sources {#TYPESHEDRT-ACCEPTANCE-OVERRIDES}
+### [TYPESHEDRT-ACCEPTANCE-OVERRIDES] Explicit user sources {#TYPESHEDRT-ACCEPTANCE-OVERRIDES}
 
 Pinned step 3 says a supplied custom typeshed **“SHOULD [be used] as the canonical source for standard-library types in this step”** ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 
@@ -74,7 +74,7 @@ Pinned step 3 says a supplied custom typeshed **“SHOULD [be used] as the canon
   absolute/workspace-relative paths, required `stdlib/`, nonexistent paths,
   malformed trees, and deterministic fail-closed errors.
 
-### Python target semantics {#TYPESHEDRT-ACCEPTANCE-TARGET}
+### [TYPESHEDRT-ACCEPTANCE-TARGET] Python target semantics {#TYPESHEDRT-ACCEPTANCE-TARGET}
 
 The pinned stub specification says checkers should fully support **“Simple version and platform checks”**; its directives say checkers are **“expected to understand simple version and platform checks”** using `sys.version_info` and `sys.platform` ([distributing](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst), [directives](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst), both `python/typing@6ef9f77`).
 
@@ -84,7 +84,7 @@ The pinned stub specification says checkers should fully support **“Simple ver
 - [x] **No commit inference:** instrument the network and change only `python-version`/`python-platform`; assert no different SHA is selected, guessed, or fetched.
 - [x] **No manufactured target:** assert configuration, generated data, and bundled data contain no Python-version-to-SHA map and no fixed Python target appears without project/interpreter evidence.
 
-### Resolution and stub semantics {#TYPESHEDRT-ACCEPTANCE-RESOLUTION}
+### [TYPESHEDRT-ACCEPTANCE-RESOLUTION] Resolution and stub semantics {#TYPESHEDRT-ACCEPTANCE-RESOLUTION}
 
 The pinned specification orders manual stubs, user code, stdlib typeshed, stub packages, inline `py.typed`, and optional vendored third-party stubs; it also says checkers **“MUST maintain the normal resolution order of checking `*.pyi` before `*.py` files”** ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 
@@ -97,7 +97,7 @@ The pinned specification orders manual stubs, user code, stdlib typeshed, stub p
   production module binding; redundant aliases, specified `__all__` mutations,
   stars, private exclusion, cycles, and long chains resolve without target unions.
 
-### #288 and #289 behavior {#TYPESHEDRT-ACCEPTANCE-HOVER}
+### [TYPESHEDRT-ACCEPTANCE-HOVER] #288 and #289 behavior {#TYPESHEDRT-ACCEPTANCE-HOVER}
 
 Pinned stub and constructor rules govern these tests
 ([distributing](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst),
@@ -109,7 +109,7 @@ both `python/typing@6ef9f77`).
 - [x] **Offline parity:** repeat #288/#289 on the **bundled ZIP** (network removed) and assert identical real-body signatures — the offline floor is not names-only.
 - [x] **Override behavior:** repeat both with conflicting custom stubs and assert custom signatures/provenance.
 - [x] **Shared declaration:** assert hover, signature help, completion, and go-to-definition use the same indexed declaration and source identity.
-### Licensing and release gates {#TYPESHEDRT-ACCEPTANCE-GATES}
+### [TYPESHEDRT-ACCEPTANCE-GATES] Licensing and release gates {#TYPESHEDRT-ACCEPTANCE-GATES}
 
 Bundling invokes Apache 2.0 §4; runtime downloads do not make Basilisk the
 redistributor ([§STUBRES-TYPESHED-LICENSE](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-LICENSE)).

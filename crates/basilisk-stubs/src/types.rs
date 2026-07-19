@@ -311,8 +311,8 @@ pub struct StarReexport {
 /// Python/platform evidence used to select guarded declarations in a stub.
 ///
 /// A target is deliberately explicit: callers that have no target evidence use
-/// the legacy parser entry points, which retain only declarations valid across
-/// every feasible guarded branch ([STUBRES-TYPESHED-VERSION]).
+/// the target-free parser entry points, which retain only declarations valid
+/// across every feasible guarded branch ([STUBRES-TYPESHED-VERSION]).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StubTarget {
     /// Concrete target Python `(major, minor)` version.
@@ -350,6 +350,9 @@ pub enum DunderAllMutation {
     Append(String),
     /// `__all__.remove("name")` removes its first matching entry.
     Remove(String),
+    /// Mutually exclusive guarded mutation sequences. The effective export
+    /// names are those present after every feasible branch.
+    Choice(Vec<Vec<DunderAllMutation>>),
 }
 
 /// All type information extracted from a single `.pyi` file.
@@ -381,9 +384,9 @@ pub struct StubModule {
     /// branch intersection. References are resolved by the re-export walker.
     /// `None` when no feasible branch mutates `__all__`.
     pub dunder_all: Option<Vec<String>>,
-    /// Ordered `__all__` mutation sequences. Multiple entries are feasible
-    /// target branches and are intersected after module references resolve.
-    pub dunder_all_variants: Vec<Vec<DunderAllMutation>>,
+    /// Ordered `__all__` mutation program. Guarded alternatives remain nested
+    /// so sequential guards cannot create an exponential path set.
+    pub dunder_all_mutations: Vec<DunderAllMutation>,
     /// Names re-exported via the typing spec's redundant-alias convention:
     /// `from y import x as x` / `import x as x` ([STUBRES-PYI-REEXPORTS]).
     pub reexported_names: Vec<String>,
