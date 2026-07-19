@@ -878,6 +878,23 @@ def check(x: int | str) -> None:
         reveal_type(x)  # Never — exhaustive
 ```
 
+### [TYPEINF-SPECIAL-LITERAL-CONTEXT] Contextually-typed collection literals {#TYPEINF-SPECIAL-LITERAL-CONTEXT}
+
+Mutable containers are **invariant** ([TYPEINF-SUBTYPING-GENERIC](#TYPEINF-SUBTYPING-GENERIC)): a stored `c: list[Never]` is **not** assignable to `list[int]`, and `specialtypes_never.py` requires that error. A *freshly-constructed collection literal*, however, has no aliasing, so in a `return`/`yield` position it is typed **against** the expected type rather than at its own narrow type:
+
+```python
+def make_bytes() -> list[bytes]:
+    return []                      # OK — [] constructs a list[bytes], not list[Never]
+
+def rows() -> Iterator[dict[str, int]]:
+    yield {"count": 1}             # OK — the literal is a dict[str, int], not dict[LiteralString, int]
+
+def pick() -> list[int] | list[str]:
+    return []                      # OK — [] fits either arm of the union
+```
+
+Each literal element need only be assignable *to* the declared element type (covariant, recursing through nested literals and distributing over unions/`Optional`). Genuine element mismatches still fire — `return [1]` against `list[str]` is an error — so no required diagnostic is lost. Non-literal returns (a name, a call) keep the invariant check. Implemented by `literal_collection_assignable_to` in `crates/basilisk-checker/src/inference.rs`, consulted by `returns_compatibility`, `returns_compatibility_2`, and `annotations_generators` before their invariant fallback.
+
 ### [TYPEINF-SPECIAL-SELF] `Self` {#TYPEINF-SPECIAL-SELF}
 
 `Self` represents the current class in a method's return or parameter type.

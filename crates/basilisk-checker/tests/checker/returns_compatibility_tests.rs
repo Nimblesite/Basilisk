@@ -92,3 +92,18 @@ fn concrete_mismatch_still_fires_after_guard() -> Result<(), Box<dyn std::error:
     );
     Ok(())
 }
+
+#[test]
+fn empty_list_return_is_checked_in_declared_context() -> Result<(), Box<dyn std::error::Error>> {
+    // A literal expression is inferred in its expected return context. `list`
+    // remains invariant for already-typed values, but an empty literal can
+    // construct a `list[bytes]` without first becoming a `list[Never]` value.
+    let source = "def make_bytes() -> list[bytes]:\n    return []\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty list literal must be valid in a list[bytes] return context, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

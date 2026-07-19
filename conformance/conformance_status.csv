@@ -118,7 +118,7 @@ qualifiers_annotated|qualifiers_annotated_2,qualifiers_annotated.py,qualifiers,P
 assignment_compatibility|calls_argument_count|namedtuples_define_functional|qualifiers_final_annotation|qualifiers_final_annotation_2,qualifiers_final_annotation.py,qualifiers,PASS,26,0,0
 overloads_consistency_2|qualifiers_final_decorator,qualifiers_final_decorator.py,qualifiers,PASS,3,0,0
 ,specialtypes_any.py,specialtypes,PASS,0,0,0
-specialtypes_never|specialtypes_never_2,specialtypes_never.py,specialtypes,PASS,3,0,0
+assignment_compatibility|specialtypes_never|specialtypes_never_2,specialtypes_never.py,specialtypes,PASS,3,0,0
 assignment_compatibility|calls_argument_type,specialtypes_none.py,specialtypes,PASS,3,0,0
 specialtypes_promotions,specialtypes_promotions.py,specialtypes,PASS,1,0,0
 callables_annotation|generics_defaults_specialization|specialtypes_type,specialtypes_type.py,specialtypes,PASS,9,0,0

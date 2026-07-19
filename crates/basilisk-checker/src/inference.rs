@@ -44,6 +44,71 @@ pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
     }
 }
 
+/// Checks a freshly-constructed collection *literal* against a declared
+/// container type using **covariant, contextual** typing.
+///
+/// Implements [TYPEINF-SPECIAL-LITERAL-CONTEXT]. A stored value keeps the
+/// invariant subtyping of [TYPEINF-SUBTYPING-GENERIC]: `c: list[Never]` is not
+/// assignable to `list[int]`, and `specialtypes_never.py` requires that error.
+/// But a literal expression has no aliasing, so in a `return`/`yield` context it
+/// is typed *against* the expected type — `return []` constructs a `list[bytes]`
+/// directly, and `yield {"": 0}` a `dict[str, int]` — rather than first becoming
+/// a `list[Never]` / `dict[LiteralString, int]` value and then failing
+/// invariance. Each literal element need only be assignable *to* the declared
+/// element type.
+///
+/// Returns `None` when `rhs` is not a collection literal this can judge against
+/// `declared`, so callers fall back to the invariant
+/// [`InferredType::is_assignable_to`]. Genuine element mismatches (`return [1]`
+/// against `list[str]`) still yield `Some(false)`, preserving required errors.
+#[must_use]
+pub fn literal_collection_assignable_to(rhs: &RhsKind, declared: &InferredType) -> Option<bool> {
+    match declared {
+        // A literal fits a union/optional iff it fits at least one member.
+        InferredType::Union(members) => {
+            let mut judged_any = false;
+            for member in members {
+                match literal_collection_assignable_to(rhs, member) {
+                    Some(true) => return Some(true),
+                    Some(false) => judged_any = true,
+                    None => {}
+                }
+            }
+            judged_any.then_some(false)
+        }
+        InferredType::Optional(inner) => literal_collection_assignable_to(rhs, inner),
+        InferredType::List(elem) => match rhs {
+            RhsKind::EmptyList => Some(true),
+            RhsKind::List(elements) => {
+                Some(elements.iter().all(|e| literal_element_assignable_to(e, elem)))
+            }
+            _ => None,
+        },
+        InferredType::Set(elem) => match rhs {
+            RhsKind::Set(elements) => {
+                Some(elements.iter().all(|e| literal_element_assignable_to(e, elem)))
+            }
+            _ => None,
+        },
+        InferredType::Dict(key_ty, val_ty) => match rhs {
+            RhsKind::EmptyDict => Some(true),
+            RhsKind::Dict(pairs) => Some(pairs.iter().all(|(key, value)| {
+                literal_element_assignable_to(key, key_ty)
+                    && literal_element_assignable_to(value, val_ty)
+            })),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Assignability of a single literal element: a nested collection literal stays
+/// covariant/contextual; anything else uses its ordinary inferred type.
+fn literal_element_assignable_to(rhs: &RhsKind, declared: &InferredType) -> bool {
+    literal_collection_assignable_to(rhs, declared)
+        .unwrap_or_else(|| infer_rhs(rhs).is_assignable_to(declared))
+}
+
 /// Returns `true` when the CURRENT engine fully determines a usable declared
 /// type from this RHS alone — i.e. [`infer_rhs`] produces a type with no
 /// `Unknown`/`Never` component and no widening guess.

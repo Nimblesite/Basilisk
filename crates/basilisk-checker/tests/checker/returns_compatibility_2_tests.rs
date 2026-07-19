@@ -45,3 +45,18 @@ def get_count() -> int:
     let _ = codes(&diags);
     Ok(())
 }
+
+#[test]
+fn empty_list_return_is_valid_for_union_of_lists() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def values() -> list[int] | list[str]:
+    return []
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility_2"),
+        "empty list literal must use either compatible union return context, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
