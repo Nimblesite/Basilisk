@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 title: 安装
-description: 如何安装 Basilisk——通过 Homebrew、Scoop、预构建二进制文件、VS Code 扩展、Zed 扩展或从源代码构建。
-keywords: basilisk, 安装, homebrew, scoop, rust, python类型检查器, vs code, zed
+description: 如何安装 Basilisk——通过 PyPI（uv 或 pipx）、Homebrew、Scoop、预构建二进制文件、VS Code 扩展、Zed 扩展或从源代码构建。
+keywords: basilisk, 安装, pypi, pip, uv, pipx, homebrew, scoop, rust, python类型检查器, vs code, zed
 lang: zh
 ---
 
@@ -36,6 +36,18 @@ cargo build --release
 | Windows | x86_64 |
 
 仅当您明确想覆盖 VSIX 中捆绑的二进制文件时，才需要设置 `basilisk.executablePath`、`basilisk.binaries.basilisk` 或 `basilisk.binaries.path`。
+
+## PyPI（uv、pipx）
+
+wheel 包 [`basilisk-python`](https://pypi.org/project/basilisk-python/) 捆绑的是与 Homebrew、Scoop 和 GitHub Releases 完全相同的原生二进制文件。请将其作为独立工具安装，这样 `basilisk` 命令会进入 PATH，而不会影响任何项目环境：
+
+```bash
+uv tool install basilisk-python
+# 或
+pipx install basilisk-python
+```
+
+安装后的命令仍然是 `basilisk`（发行版之所以命名为 `basilisk-python`，只是因为 `basilisk` 这个名字在 PyPI 上已被占用）。wheel 发布平台：Linux（x86_64、aarch64）、macOS（Apple Silicon）和 Windows（x64、arm64）。wheel 中不含任何 Python 代码——它就是同一个独立的 Rust 二进制文件，因此适用于任何 CPython 或 PyPy 3.x。
 
 ## Homebrew (macOS、Linux)
 

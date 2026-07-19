@@ -1,68 +1,183 @@
 ---
 layout: layouts/docs.njk
 title: 配置参考
-description: Basilisk pyproject.toml 配置选项的完整参考。严重性覆盖、每路径规则、内联抑制和 Ruff 集成。
+description: Basilisk pyproject.toml 配置选项的完整参考。规则与标签严重性、typeshed 来源固定、内联抑制以及按文件夹作用域的配置。
 keywords: basilisk, 配置, pyproject.toml, 设置
 lang: zh
-dateModified: 2026-07-14
+dateModified: 2026-07-19
 ---
 
 # 配置参考
 
 `pyproject.toml` 中的 `[tool.basilisk]` 是唯一的配置来源。对于每个被检查的
-文件，Basilisk 从该文件所在目录向上遍历，读取每一个带有 `[tool.basilisk]`
-表的祖先 `pyproject.toml`。这些表会累积合并：同一个键在多个文件中都有设置
-时，**最近**的文件生效——子目录中的 `pyproject.toml` 只是细化根配置，
-绝不会将其整体替换。
+文件，Basilisk 从该文件所在目录向上遍历，访问每一个带有 `[tool.basilisk]`
+表的祖先 `pyproject.toml`。**不带**该表的 `pyproject.toml` 不参与配置，
+也不会终止遍历。
+
+被访问的表如何组合：
+
+- **规则严重性从不合并。** 对每条规则，*最近*作出决定的表直接胜出——见
+  [严重性解析](#严重性解析)。
+- **非规则设置**（路径、版本、typeshed 键）按键解析：最近设置了该键的
+  文件生效，更近的文件未设置的键继续沿用祖先的值。`stub-paths` 是唯一的
+  追加型键——条目追加并去重。
 
 > **正在从 `basilisk.json` 迁移？** 旧版根目录 `basilisk.json` 文件已不再
 > 被读取。请将其键翻译为 `[tool.basilisk]`（驼峰式 → 短横线式，例如
 > `typeshedPath` → `typeshed-path`），然后删除该文件。配置编辑器会将遗留的
 > `basilisk.json` 报告为被忽略的遮蔽来源。
 
-## 最小配置
+## 零配置
 
-```toml
-[tool.basilisk]
-python-version = "3.12"
-```
+Basilisk 完全不需要配置文件。当任何地方都没有 `[tool.basilisk]` 表时
+（或表为空——两者行为完全一致）：
 
-这就是您所需要的全部。Basilisk 从当前目录查找 Python 文件并应用其默认规则集——**核心 PEP 符合性规则**。超出规范的额外 Basilisk 规则是可选的；当你想要比规范更严格的检查时再启用它们。
+- 每条**核心 PEP 符合性规则**以 `error` 严重性运行；Basilisk 自有的可选
+  规则保持关闭。
+- 从当前目录发现文件。
+- 目标 Python 版本从项目文件解析：`.python-version`，然后是
+  `[project].requires-python` 下界，然后是 `uv.lock` 的
+  `requires-python` 下界。
+- 标准库存根在运行时从最新的
+  [python/typeshed](https://github.com/python/typeshed) 提交获取，离线时
+  回退到内置快照——见[标准库存根](#标准库存根-typeshed)。
 
 ## 完整配置示例
 
 ```toml
 [tool.basilisk]
-python-version = "3.12"
-python-platform = "All"
-stub-paths = ["stubs/"]
-typeshed-path = "typeshed-micropython"   # 可选：替换捆绑的标准库 typeshed
+python-version = "3.12"          # 仅当 PEP 依赖版本时才被查询
+python-platform = "All"          # 显式跨平台分析
+stub-paths = ["stubs/"]          # 解析第 1 步：前置额外的 .pyi 存根目录
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
+# typeshed-commit = "<完整 40 位提交 SHA>"  # 固定标准库存根来源
+# typeshed-path = "vendor/typeshed"          # 或：你自己的标准库存根树
 
-[tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["returns_compatibility"]
-rules."imports_unresolved" = "warning"
+[tool.basilisk.rules]
+"imports_unresolved" = "warning"   # PEP 规则降级——绝不禁用
+"BSK-0050" = "error"               # 单条自有规则提升到其标签条目之上
+
+[tool.basilisk.rule-tags]
+"basilisk" = "error"               # 一行启用所有自有规则——严格模式
 ```
 
 ---
 
-## `[tool.basilisk]`
+## 规则：两个扁平映射
+
+规则配置是两个扁平映射，除此之外别无其他
+（[`CHKARCH-CONFIG-MODEL`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)）：
+逐规则条目和标签条目。规则代码本身不携带严重性——代码是 `BSK-nnnn` 或
+符合性 snake_case 名称（如 `imports_unresolved`）；只有配置条目携带
+严重性。
+
+### `[tool.basilisk.rules]`
+
+显式的逐规则条目，`"<代码>" = "<严重性>"`：
+
+```toml
+[tool.basilisk.rules]
+"imports_unresolved" = "warning"
+"BSK-0050" = "error"
+"BSK-0001" = "info"
+```
+
+可用值为 `"error"`、`"warning"`、`"info"` 与 `"disabled"`。对于可选规则，
+任何非 disabled 的值同时也*选择*该规则——无需第二个开关。可在生成的
+[规则参考](/zh/docs/rules/)中浏览所有代码。
+
+### `[tool.basilisk.rule-tags]`
+
+显式的分组条目，`"<标签>" = "<严重性>"`——一行即可为**携带该标签的每条
+规则**定级：
+
+```toml
+[tool.basilisk.rule-tags]
+"basilisk" = "error"       # 所有可选自有规则全部启用
+"suppressions" = "warning" # 抑制审计规则族设为 warning
+```
+
+标签条目是写在文件里的真实配置——绝不是隐式模式或隐藏开关。规范标签
+词汇表：
+
+- **来源标签：** `pep`（默认运行的核心符合性规则）与 `basilisk`
+  （可选的自有规则）。
+- **PEP 分类**，与[符合性测试套件](https://github.com/python/typing/tree/main/conformance/tests)
+  的文件命名一致：`aliases`、`annotations`、`callables`、`classes`、
+  `constructors`、`dataclasses`、`directives`、`enums`、`exceptions`、
+  `generics`、`historical`、`literals`、`namedtuples`、`narrowing`、
+  `overloads`、`protocols`、`qualifiers`、`specialtypes`、`tuples`、
+  `typeddicts`、`typeforms`。
+- **描述性标签**（自有规则）：`style`、`redundancy`、`strictness`、
+  `dependencies`、`imports`、`stubs`、`suppressions`。
+
+[规则参考](/zh/docs/rules/)列出每条规则的标签；配置编辑器的标签操作
+写入的正是这些 `rule-tags` 行。
+
+### 严重性解析
+
+按规则、按被检查文件——一次遍历，首个决定胜出：
+
+1. 从文件所在文件夹向根目录遍历。**最近**对该规则作出决定的
+   `[tool.basilisk]` 表直接胜出。
+2. 在同一个表内，逐规则条目优先于标签条目；多个匹配的标签条目中，
+   **最严格**的严重性胜出（`error` > `warning` > `info` > `disabled`）。
+3. 没有任何表对该规则作出决定时：带 `pep` 标签的规则以 `error` 运行；
+   其他所有规则处于禁用状态。
+
+这就是完整的模型——没有继承的规则状态，没有优先级分数，表与表之间
+也没有合并规则。
+
+### PEP 规则只能定级，绝不禁用
+
+`disabled` 永远不适用于带 `pep` 标签的规则。任何将 PEP 规则解析为
+`disabled` 的配置——无论通过规则条目还是标签条目——都是**无效的**：
+CLI 与编辑器会将其呈现为配置错误，且检查器无论如何都会保持该规则运行，
+确保符合性诊断绝不会被静默丢失。要让 PEP 规则安静，请将其定级为
+`"warning"` 或 `"info"`，用 `# type: ignore` 抑制特定行
+（[见下文](#内联抑制)），或 `exclude` 相关路径。
+
+### 将规则作用于目录树的一部分
+
+规则配置中**没有** glob 路径模式、逐路径覆盖表或逐模块例外。要让某个
+子树使用不同的规则配置，就在那个文件夹放置带 `[tool.basilisk]` 表的
+`pyproject.toml`——最近作出决定的表按规则胜出：
+
+```toml
+# pyproject.toml（仓库根目录）
+[tool.basilisk.rule-tags]
+"basilisk" = "error"
+
+# tests/pyproject.toml
+[tool.basilisk.rules]
+"BSK-0001" = "disabled"    # tests/ 下重新关闭这条可选规则
+```
+
+---
+
+## `[tool.basilisk]` 设置
 
 ### `python-version`
 
-**类型：** `string`
-**默认值：** 从 PATH 上的解释器自动检测，如果未找到则为 `"3.12"`
-**示例：** `"3.12"`
+**类型：** `string`，例如 `"3.12"`
+**默认值：** _（未设置——从项目文件解析：`.python-version` → `[project].requires-python` 下界 → `uv.lock` 的 `requires-python` 下界）_
 
-用于类型检查的目标 Python 版本。影响哪些 PEP 和类型功能可用。支持 `"3.9"` 到 `"3.14"` 的版本。
+被检查代码的目标 Python 版本。Basilisk 没有规范的 Python 发行版本：只有当
+[typing 规范](https://typing.python.org/en/latest/spec/index.html)、已接受的
+PEP 或 Python 语言语义使结果依赖版本时，规则才会查询此版本——例如
+[PEP 695](https://peps.python.org/pep-0695/) 的 `type X = ...` /
+`class C[T]` 语法在目标低于 3.12 时会被拒绝，因为目标解释器根本无法解析
+它。与版本无关的规则从不依据此值分支。
 
 ### `python-platform`
 
 **类型：** `"Linux" | "macOS" | "Windows" | "All"`
-**默认值：** `"All"`
+**默认值：** _（未设置——向所选项目解释器查询其 `sys.platform`）_
 
-目标平台。影响平台特定的类型存根和条件导入。
+平台相关存根与 `sys.platform` 窄化的目标平台。未设置时，Basilisk 探测项目
+解释器并使用该具体平台；探测失败则平台保持未知——Basilisk 绝不凭空捏造
+平台。显式的 `"All"` 保持跨平台交集语义。
 
 ### `stub-paths`
 
@@ -70,30 +185,22 @@ rules."imports_unresolved" = "warning"
 **默认值：** `[]`
 **示例：** `["stubs/", "typings/"]`
 
-用于搜索 `.pyi` 存根文件的额外目录。它们位于导入搜索路径的**最前端**——[typing 规范的导入解析顺序](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)中的第 1 步——因此可以修补或遮蔽任何后续模块，无论是标准库还是第三方。对于内部库的自定义存根很有用。
-
-### `typeshed-path`
-
-**类型：** `string`
-**默认值：** _（未设置——使用捆绑的 typeshed）_
-**示例：** `"typeshed-micropython"`
-**规范：** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
-
-指向包含 typeshed 标准库存根的自定义或修改版本的目录路径。设置后，该目录将成为**标准库类型的规范来源**——[typing 规范的导入解析顺序](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)中的第 3 步，该规范指出类型检查器"SHOULD use this as the canonical source for standard-library types in this step"（应将其用作此步骤中标准库类型的规范来源）。Basilisk 优先针对它解析标准库模块，而不是捆绑的 typeshed；目录中缺失的标准库模块将继续进入后续的解析步骤。
-
-该目录必须遵循 typeshed 的布局——标准库存根位于顶层 `stdlib/` 子目录下，因此 Basilisk 将每个模块解析为 `<typeshed-path>/stdlib/<module>.pyi`。[python/typeshed](https://github.com/python/typeshed) 仓库的克隆，或任何你已用作 Pyright 的 [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) 或 mypy 的 [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html) 的目录，都可原样使用。相对路径相对于项目根目录解析。
-
-使用此选项可针对替代标准库进行类型检查——例如 MicroPython 的 [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs)，其 `os`、`time` 和 `machine` 签名与 CPython 不同。从自定义 typeshed 解析的符号在悬停时会带有 `(custom typeshed)` 标记——区别于捆绑 typeshed 的 `(typeshed)`——因此你可以确认覆盖已生效，并确保 MicroPython 的签名绝不会被误报为 CPython 的签名。
-
-`stub-paths` *前置*额外的存根目录；`typeshed-path` 则*整体替换*捆绑的标准库。二者相互独立，可以组合使用。有关分步演练，请参见下方的"如何使用自定义 typeshed"一节。
+用于搜索 `.pyi` 存根文件的额外目录。它们位于导入搜索路径的**最前端**——
+[typing 规范的导入解析顺序](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)
+中的第 1 步——因此可以修补或遮蔽任何后续模块，无论是标准库还是第三方。
+对于内部库的自定义存根很有用。在嵌套配置文件之间，这是唯一的追加型键：
+更近的条目追加到继承的条目上（去重）。
 
 ### `include`
 
 **类型：** `string[]`
-**默认值：** `["."]`（当前目录）
+**默认值：** _（未设置——扫描当前目录）_
 **示例：** `["src/", "tests/"]`
 
-要分析的目录或文件。相对于项目根目录的普通路径——与 `exclude` 不同，`include` **不**接受 glob 模式。只处理 `.py` 文件。
+CLI 未给出路径时扫描的根目录。普通路径——与 `exclude` 不同，`include`
+**不**接受 glob 模式——相对于配置文件所在目录解析。显式的 CLI 路径会
+覆盖它；`exclude` 在 include 根目录内生效。LSP 遵循相同的根目录，因此
+编辑器分析的正是 `basilisk check` 会分析的那些文件。
 
 ### `exclude`
 
@@ -111,9 +218,13 @@ exclude = [
 
 **示例：** `["py-gen", "**/generated/**", "*.pb.py"]`
 
-用于跳过路径的 gitignore 风格 glob 模式。隐藏目录（名称以 `.` 开头）无论此设置如何都始终会被跳过。
+用于跳过路径的 gitignore 风格 glob 模式。隐藏目录（名称以 `.` 开头）
+无论此设置如何都始终会被跳过，且编辑器的批量工作区扫描始终额外跳过上面
+内置的 vendored/缓存目录名。
 
-> **`exclude` 会_替换_默认值——而不是在其基础上追加。** 一旦你设置了 `exclude`，上面的内置列表便不再生效。请将你仍需要的任何默认值与自己的模式一并重新列出，否则它们会被重新分析。
+> **`exclude` 会_替换_默认值——而不是在其基础上追加。** 一旦你设置了
+> `exclude`，上面的内置列表便不再作用于 CLI 的文件发现。请将你仍需要的
+> 任何默认值与自己的模式一并重新列出。
 
 模式语法，针对每个相对于项目根目录的路径进行匹配：
 
@@ -125,17 +236,81 @@ exclude = [
 | `gen?.py` | `?`——段内恰好一个字符 |
 | `src/generated` | **锚定**模式（包含 `/`）——该路径或其任意祖先目录，及其子树 |
 
-Basilisk 在发现文件的所有场景中都遵循相同的模式：LSP 工作区扫描、`basilisk check` / `fix` / `adopt` CLI，以及你打开或编辑文件时编辑器的逐文件检查——因此在 CLI 上被排除的文件在编辑器中同样静默。规范语义请参见架构规范中的 `CHKARCH-CONFIG-EXCLUDE`。
+所有入口共享同一个规范匹配器——LSP 工作区扫描、`basilisk check` /
+`fix` / `adopt` CLI，以及编辑器的逐文件检查——因此在 CLI 上被排除的路径
+在编辑器中同样静默。规范语义请参见
+[`CHKARCH-CONFIG-EXCLUDE`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-EXCLUDE)。
+
+### `narrow-attributes-across-calls`
+
+**类型：** `bool`
+**默认值：** `true`
+
+属性窄化（`if x.attr is not None:` 守卫）是否在中间函数调用后仍然保持。
+默认值是*实用*的行为：调用**可能**使属性失效，但把每次调用都当作失效会
+让属性窄化在实践中毫无用处。设为 `false` 可获得健全但严格的行为：任何
+调用都会丢弃属性窄化。参见
+[`TYPEINF-NARROWING-ATTR-CALLS`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ATTR-CALLS)。
 
 ---
 
+## 标准库存根（typeshed）
+
+标准库类型来自 [typeshed](https://github.com/python/typeshed) 存根——
+[typing 规范的导入解析顺序](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)
+中的第 3 步。Basilisk 恰好选择**一个**第 3 步来源：
+
+| 模式 | 生效来源 |
+| --- | --- |
+| 自定义文件夹 | 你的 `typeshed-path` 目录，原样使用 |
+| 精确提交 | `typeshed-commit` 指定的 SHA，以经验证的归档下载（不可用时失败关闭） |
+| 最新（默认） | 当前的 `python/typeshed@main` 提交，每次运行/会话解析一次；无法解析时回退到内置快照并警告 |
+
+"最新"模式保持新鲜但无法逐日复现——编辑器的 Server Info 面板将其报告为
+`UNPINNED` 并提供 **Pin current** 操作，把解析出的 SHA 写入
+`typeshed-commit`。下载的归档在激活前需通过安全、结构、许可证与内容验证
+关卡，并以不可变 ZIP 缓存。完整细节：
+[`STUBRES-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)。
+
+| 键 | 类型 | 默认值 | 含义 |
+| --- | --- | --- | --- |
+| `typeshed-commit` | 完整 40 位 SHA | _（未设置——最新）_ | 要使用的精确 `python/typeshed` 提交。固定后**失败关闭**——绝不静默替换为其他提交。缩写 SHA 会被拒绝。 |
+| `typeshed-url` | URL 模板 | GitHub codeload | 包含恰好一个 `{sha}` 占位符的 HTTPS 归档镜像。镜像无法解析"最新"。 |
+| `typeshed-cache-path` | 路径 | 操作系统缓存目录 | 通过关卡的 ZIP 的缓存位置。 |
+| `typeshed-cache` | bool | `true` | 24 小时内复用经重新哈希的缓存 ZIP；`false` 每次运行都下载、验证并丢弃。 |
+| `typeshed-verify` | bool | `true` | 对归档做内容证明，与受信任的 git 树比对；`false` 报告 `UNVERIFIED`，且绝不绕过安全、结构或许可证关卡。 |
+| `typeshed-path` | 路径 | _（未设置）_ | 你自己的标准库存根树——同时禁用下载与内置快照。 |
+
+`typeshed-path` 与 `typeshed-commit` 是**同一个来源选择**：设置了其中任一
+键的嵌套配置文件会将继承的选择作为整体替换，绝不会把一个文件的路径和
+另一个文件的固定提交混在一起。
+
+### `typeshed-path`
+
+**类型：** `string`
+**默认值：** _（未设置——按上文在运行时获取 typeshed）_
+**示例：** `"vendor/typeshed"`
+**规范：** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
+
+指向包含 typeshed 标准库存根的自定义或修改版本的目录路径。设置后，该目录
+将成为**标准库类型的规范来源**——typing 规范指出类型检查器"SHOULD use
+this as the canonical source for standard-library types in this step"
+（应将其用作此步骤中标准库类型的规范来源）。目录中缺失的标准库模块将继续
+进入后续的解析步骤——**不会**由下载的或内置的 typeshed 来兜底。
+
 ## 如何使用自定义 typeshed
 
-`typeshed-path` 会将 Basilisk 捆绑的标准库存根替换为你自己的副本。当你面向标准库与 CPython 不同的替代 Python（MicroPython、打过补丁的 CPython、厂商 SDK），或需要比 Basilisk 发行版内置版本更新或分叉的 typeshed 时，就可以使用它。
+`typeshed-path` 会将标准库存根替换为你自己的副本。当你面向标准库与
+CPython 不同的替代 Python（MicroPython、打过补丁的 CPython、厂商 SDK），
+或需要分叉的 typeshed 而非官方提交时（官方提交请改用固定
+`typeshed-commit`），就可以使用它。
 
 ### 1. 按 typeshed 的方式组织目录
 
-将 `typeshed-path` 指向 typeshed 布局目录的**根**。标准库存根必须位于顶层 `stdlib/` 子目录下，与 [python/typeshed](https://github.com/python/typeshed) 仓库完全一致——Basilisk 将每个模块解析为 `<typeshed-path>/stdlib/<module>.pyi`：
+将 `typeshed-path` 指向 typeshed 布局目录的**根**。标准库存根必须位于顶层
+`stdlib/` 子目录下，与 [python/typeshed](https://github.com/python/typeshed)
+仓库完全一致——Basilisk 将每个模块解析为
+`<typeshed-path>/stdlib/<module>.pyi`：
 
 ```
 vendor/typeshed/
@@ -145,11 +320,16 @@ vendor/typeshed/
     └── ...
 ```
 
-任何你已用作 Pyright 的 [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) 或 mypy 的 [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html) 的目录都采用同样的布局，因此可与 Basilisk 原样配合使用。
+任何你已用作 Pyright 的
+[`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) 或
+mypy 的
+[`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html)
+的目录都采用同样的布局，因此可与 Basilisk 原样配合使用。
 
-### 2a. 指向分叉或更新的 typeshed
+### 2a. 指向分叉的 typeshed
 
-克隆 typeshed 仓库（或你的分叉），然后将 `typeshed-path` 指向该克隆，并修补你需要的 `.pyi` 文件：
+克隆 typeshed 仓库（或你的分叉），然后将 `typeshed-path` 指向该克隆，
+并修补你需要的 `.pyi` 文件：
 
 ```sh
 git clone https://github.com/python/typeshed vendor/typeshed
@@ -160,11 +340,14 @@ git clone https://github.com/python/typeshed vendor/typeshed
 typeshed-path = "vendor/typeshed"
 ```
 
-现在 Basilisk 会针对 `vendor/typeshed/stdlib/` 而不是其捆绑副本对标准库进行类型检查。
+现在 Basilisk 会针对 `vendor/typeshed/stdlib/` 对标准库进行类型检查。
 
 ### 2b. 指向 MicroPython 的标准库
 
-MicroPython 的标准库与 CPython 存在差异——`os`、`time` 和 `machine` 的签名各不相同。安装 [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs)（一份带有 MicroPython 特定改动的 typeshed 布局标准库副本）并将其指向它：
+MicroPython 的标准库与 CPython 存在差异——`os`、`time` 和 `machine` 的
+签名各不相同。安装
+[`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs)
+（一份带有 MicroPython 特定改动的 typeshed 布局标准库副本）并指向它：
 
 ```toml
 [tool.basilisk]
@@ -172,7 +355,10 @@ python-version = "3.12"
 typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 ```
 
-由于 `micropython-stdlib-stubs` 是**部分**标准库，它未包含的模块（例如开发板上并不存在的 `tkinter`）**不会**由捆绑的 CPython 存根来兜底——自定义 typeshed 是第 3 步的规范来源，因此该导入会被报告为无法解析。对于嵌入式目标而言，这才是诚实的结果。
+由于 `micropython-stdlib-stubs` 是**部分**标准库，它未包含的模块（例如
+开发板上并不存在的 `tkinter`）**不会**由 CPython 存根来兜底——自定义
+typeshed 是第 3 步的规范来源，因此该导入会被报告为无法解析。对于嵌入式
+目标而言，这才是诚实的结果。
 
 ### 3. 在活动项目文件中配置
 
@@ -184,7 +370,10 @@ typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 
 ### 4. 确认已生效——悬停溯源
 
-从自定义 typeshed 解析的符号在悬停时会带有 `(custom typeshed)` 标记，区别于捆绑 typeshed 的 `(typeshed)` 标记。将鼠标悬停在导入的标准库符号上：看到 `(custom typeshed)` 即可确认覆盖已生效，且该签名来自你的目录——MicroPython 的 `os.uname` 绝不会被误报为 CPython 的。
+从自定义 typeshed 解析的符号在悬停时会带有 `(custom typeshed)` 标记，
+区别于官方来源的 `(typeshed)` 标记。将鼠标悬停在导入的标准库符号上：
+看到 `(custom typeshed)` 即可确认覆盖已生效，且该签名来自你的目录——
+MicroPython 的 `os.uname` 绝不会被误报为 CPython 的。
 
 ### `typeshed-path` 与 `stub-paths` 的区别
 
@@ -192,73 +381,21 @@ typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 
 | | `stub-paths`（第 1 步） | `typeshed-path`（第 3 步） |
 | --- | --- | --- |
-| 作用 | 在搜索路径最前端*前置*额外的 `.pyi` 目录 | *整体替换*捆绑的标准库 typeshed |
+| 作用 | 在搜索路径最前端*前置*额外的 `.pyi` 目录 | *整体替换*标准库 typeshed |
 | 范围 | 可遮蔽任意单个模块，无论标准库还是第三方 | 整个标准库的规范来源 |
-| 典型用途 | 修补某个损坏的存根；为内部库提供存根 | 面向替代或分叉的标准库（MicroPython、更新的 typeshed） |
+| 典型用途 | 修补某个损坏的存根；为内部库提供存根 | 面向替代或分叉的标准库（MicroPython、打过补丁的树） |
 | 优先级 | 更高——`stub-paths` 中的模块仍会遮蔽自定义 typeshed | 位于 `stub-paths` 之下、已安装包之上 |
-
----
-
-## 规则选择与全局严重性
-
-未配置时，Basilisk 启用完整的核心 PEP 规则集；带 `basilisk` 标签的扩展
-规则默认关闭。不存在 basic/standard/strict 模式，也不存在规则族开关。
-配置编辑器中的 **Strict 预设**只是一次性配方：它把每条实时规则的原生
-严重性显式写入活动配置文件，之后每条规则仍可独立调整。
-
-任何非 `disabled` 的显式严重性都会启用相应的可选规则：
-
-```toml
-[tool.basilisk.rules]
-"BSK-0001" = "error"
-"BSK-0011" = "warning"
-"BSK-0152" = "error"
-"BSK-0060" = "info"
-```
-
-可用值为 `"error"`、`"warning"`、`"info"` 与 `"disabled"`。标签只用于
-浏览和批量选择，不会充当隐藏开关。所有项目策略都保存在这一个活动配置
-文件中。
-
----
-
-## `[tool.basilisk.per-path-overrides."<glob>"]`
-
-将不同的设置应用于特定路径。glob 与相对于项目根目录的文件路径匹配。
-
-```toml
-[tool.basilisk.per-path-overrides."legacy/**"]
-# 为匹配的文件完全禁用规则
-disabled = ["returns_compatibility"]
-
-[tool.basilisk.per-path-overrides."tests/**"]
-# 或降低规则的严重性而不是完全禁用
-rules."returns_compatibility" = "warning"
-```
-
-### `disabled`
-
-**类型：** `string[]`
-**示例：** `["returns_compatibility", "BSK-0001"]`
-
-为匹配此 glob 的文件完全禁用的规则代码。
-
-### `rules`
-
-**类型：** 规则代码 → 严重性的表
-**严重性：** `"error"`、`"warning"`、`"info"`、`"disabled"`
-**示例：** `rules."returns_compatibility" = "warning"`
-
-为匹配的文件覆盖特定规则的严重性。尽可能选择降低或禁用单个规则，而不是放宽大范围的检查。
 
 ---
 
 ## 内联抑制
 
-使用标准的 `# type: ignore` 拼写。指定 Basilisk 规则代码可让抑制保持精确：
+使用标准的
+[`# type: ignore`](https://typing.python.org/en/latest/spec/directives.html#type-ignore-comments)
+拼写。指定 Basilisk 规则代码可让抑制保持精确：
 
 ```python
-result: Any = get_legacy_value()  # type: ignore[returns_compatibility]
+result = get_legacy_value()  # type: ignore[returns_compatibility]
 ```
 
 裸 ignore（以及其他检查器的代码）按 PEP 484 兼容语义抑制整行：
@@ -275,7 +412,17 @@ value = legacy_call()  # type: info[returns_compatibility]
 value = legacy_call()  # type: disabled[returns_compatibility]
 ```
 
-文件级指令必须位于文件顶部并单独成行：
+单独成行的指令会开启一个**块**，由匹配的 `end-` 指令关闭：
+
+```python
+# type: disabled[imports_unresolved]
+from fastmcp import FastMCP
+from result import Result
+# type: end-disabled[imports_unresolved]
+```
+
+文件级指令是单独成行的注释——`relaxed` 将整个文件中的所有错误降级为
+警告；`file-` 形式将同一效果应用于特定代码（不写代码则应用于所有规则）：
 
 ```python
 # basilisk: relaxed
@@ -283,42 +430,32 @@ value = legacy_call()  # type: disabled[returns_compatibility]
 # basilisk: file-disabled[imports_unresolved]
 ```
 
-`suppressions` 标签下的四条审计规则默认全部关闭：`BSK-0060`（有效且
-精确）、`BSK-0061`（有效但宽泛）、`BSK-0062`（未使用）与
-`BSK-0063`（格式错误）。它们和其他规则一样可分别配置为 error、warning、
-info 或 disabled。格式错误的指令可以被审计，但绝不会真正抑制诊断。
+抑制审计是**可选的**标签规则族（`[tool.basilisk.rule-tags]` 中的
+`"suppressions"`），默认不产生任何输出。`BSK-0060`（有效且精确）、
+`BSK-0061`（有效但宽泛）、`BSK-0062`（未使用）与 `BSK-0063`（格式错误）
+可分别独立配置为 error、warning、info 或 disabled。
 
 ---
 
-## 配置发现
+## 采用债务
 
-Basilisk 按被检查的文件逐一发现配置：从该文件所在目录**向上**遍历，每一个
-带有 `[tool.basilisk]` 表的祖先 `pyproject.toml` 都会参与，且这些表会累积
-合并——同一个键在多个文件中都有设置时，**最近**的文件生效。子表未设置的键
-继续沿用祖先的值，因此嵌套的 `pyproject.toml` 只是细化根配置，绝不会将
-根配置整体清除。
-
-旧版根目录 `basilisk.json` **绝不**会被读取。若该文件仍然存在，配置编辑器
-会将其报告为被忽略的遮蔽来源；请将其键翻译为 `[tool.basilisk]` 后删除该
-文件。
-
-如果没有任何祖先 `pyproject.toml` 带有 `[tool.basilisk]` 表，Basilisk 使用默认值：启用**核心 PEP 符合性规则集**（额外的 Basilisk 规则保持可选），`python-version = "3.12"`，检查当前目录。
+`basilisk adopt` 将某个文件夹的现有诊断记录为活动配置文件中普通的
+warning 严重性 `[tool.basilisk.rules]` 条目——没有边车文件、标记或隐藏
+状态。`basilisk unadopt` 删除这些条目；重新运行 `adopt` 会重新计算它们，
+因此不再触发的规则会自动恢复到完整严重性。
 
 ---
 
 ## 可视化配置编辑器
 
-VS Code 中的标签优先配置编辑器直接读取 LSP 的实时规则目录。它按来源、
-PEP 分类与策略标签浏览规则，支持逐规则及批量严重性、路径覆盖、精确的
-前后变更预览和分页出现位置。
-
-严格优先采用流程由三个显式操作组成：应用 Strict 或 Maximum 预设；运行
-限定到当前根目录的安全修复；刷新后用 `WithoutSafeFix` 检查剩余债务，再
-显式选择 disabled、较低严重性或更窄的路径覆盖。抑制审计预设只会把
-`suppressions` 标签展开为普通规则条目，不会写入模式标志。
-
-采用债务也保存在同一个配置文件的精确文件 `per-path-overrides` 中，并带
-`adoption = true` 来源标记；不会创建 `.basilisk/adoptions.toml` 或任何隐藏
-状态。VSIX 本身不解析或写入配置，所有操作均由可复用的 LSP API 完成。
+VS Code 中的标签优先配置编辑器从 LSP 读取实时规则目录，预览批量变更，
+并展示每条规则的生效严重性及其决定位置。它的编辑是由 LSP 应用到活动
+`pyproject.toml` 的类型化变更——设置或移除规则条目、标签条目或
+typeshed 设置；对 PEP 规则请求 `disabled` 会作为错误被拒绝。扩展本身
+从不解析或写入配置文件；文件夹配置支撑编辑器的作用域定级视图。
 
 ![Basilisk 的标签优先 VS Code 配置编辑器，展示实时规则分类和逐规则严重性控制](/assets/images/vscode-configuration-editor.png)
+
+请追踪权威的
+[规范](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md)
+与[实现计划](https://github.com/Nimblesite/Basilisk/blob/main/docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md)。

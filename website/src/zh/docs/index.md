@@ -47,12 +47,13 @@ Basilisk 的行为完全由**配置**决定，而默认配置恰好就是**核�
 
 比规范更严格的检查是**可选启用**的。Basilisk 还附带规范未定义的额外规则——要求每个参数和返回值都有注解、冗余注解警告、缺失 `@override` 提示、显式 `Any` 提示。在你于配置中启用之前，它们始终**关闭**。由于它们会标记规范视为有效的代码，刻意开启它们就是用严格的规范符合换取由团队自行选择的更严格标准——这是逐项目的选择，绝非默认。
 
-配置同样是你为需要的路径放宽规则的地方——例如在某个遗留目录中软化或禁用某条规则：
+配置同样是你为需要的路径放宽规则的地方——在那个文件夹放置带 `[tool.basilisk]` 表的 `pyproject.toml`，最近作出决定的表对其下的文件胜出：
 
 ```toml
-[tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["returns_compatibility"]        # 为遗留代码完全禁用某规则
-rules."imports_unresolved" = "warning"   # 或仅降低其严重性
+# legacy/pyproject.toml
+[tool.basilisk.rules]
+"returns_compatibility" = "warning"   # 仅为遗留代码降级
+"imports_unresolved" = "info"
 ```
 
 这让默认保持诚实——纯粹的规范符合——同时让每个团队在他们想要的地方精确地调节严格程度。

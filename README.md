@@ -53,6 +53,18 @@ Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> sin
 
 
 
+## Install
+
+The CLI is on [PyPI as `basilisk-python`](https://pypi.org/project/basilisk-python/) — install it as a standalone tool; the installed command is `basilisk`:
+
+```sh
+uv tool install basilisk-python     # or: pipx install basilisk-python
+```
+
+Also available via Homebrew (`brew tap Nimblesite/tap && brew install basilisk`), Scoop, and
+[GitHub Releases](https://github.com/Nimblesite/Basilisk/releases) — every channel ships the same
+single Rust binary. Full options: [install guide](https://www.basilisk-python.dev/docs/install-cli/).
+
 ## Try it
 
 The `examples/` folder has ready-to-go Python files:
