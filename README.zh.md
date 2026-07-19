@@ -52,6 +52,18 @@ Basilisk 是**唯一**在官方
 
 在 <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> 上，跨 <!--g:benchCount-->26<!--/g:benchCount--> 个单一类型构造压力测试样本的冷启动全文件检查中位数 —— 数值越低越好。Basilisk 的热重检查可降至约 <!--g:benchWarm-->4<!--/g:benchWarm--> ms。每个数字均由 [`hyperfine`](https://github.com/sharkdp/hyperfine) 生成并按机器提交，没有一个是手写的。**克隆仓库，在你自己的硬件上运行 `make bench`，并把 CSV 发给我们 —— 欢迎社区独立复核。** [完整基准测试与方法论（英文）&rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 
+## 安装
+
+CLI 已发布到 [PyPI，包名为 `basilisk-python`](https://pypi.org/project/basilisk-python/)——请将其作为独立工具安装，安装后的命令是 `basilisk`：
+
+```sh
+uv tool install basilisk-python     # 或：pipx install basilisk-python
+```
+
+也可通过 Homebrew（`brew tap Nimblesite/tap && brew install basilisk`）、Scoop 以及
+[GitHub Releases](https://github.com/Nimblesite/Basilisk/releases) 安装——所有渠道分发的都是同一个
+Rust 二进制文件。完整选项参见[安装指南](https://www.basilisk-python.dev/docs/install-cli/)。
+
 ## 试用
 
 `examples/` 文件夹中提供了可直接运行的 Python 文件：

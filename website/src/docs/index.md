@@ -94,7 +94,7 @@ Basilisk is a Cargo workspace with 18 Rust crates, each owning one layer of the 
 
 ## Next steps
 
-- [Install Basilisk](/docs/installation/) — Homebrew, Scoop, your editor's marketplace, or build from source
+- [Install Basilisk](/docs/installation/) — PyPI (`uv tool install`), Homebrew, Scoop, your editor's marketplace, or build from source
 - [Quick Start](/docs/quick-start/) — your first type check in under 5 minutes
 - [Refactoring](/docs/refactoring/) — the full refactoring suite (extract, inline, move, rename, convert)
 - [Debugging](/docs/debugging/) — set breakpoints, step through code, inspect variables
