@@ -286,6 +286,7 @@ dependencies = [
  "basilisk-checker",
  "basilisk-parser",
  "basilisk-resolver",
+ "basilisk-stubs",
  "ruff_python_ast",
  "thiserror",
  "walkdir",

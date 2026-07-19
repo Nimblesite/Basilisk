@@ -50,8 +50,28 @@ pub fn compile_and_run(source: &str, path: &str) -> Result<CompileResult, Compil
         .map_err(|err| CompileError::Parse(err.to_string()))?;
 
     // Stage 2: Resolve
-    let resolved = basilisk_resolver::resolve(&parsed)
+    let mut resolved = basilisk_resolver::resolve(&parsed)
         .map_err(|err| CompileError::Resolve(err.to_string()))?;
+
+    // Attach the bundled Typeshed snapshot so stdlib imports (`typing`, `os`, …)
+    // resolve in-process. Since [STUBRES-CUSTOM-TYPESHED] the checker recognises
+    // stdlib names only through an attached snapshot — without one, `check`
+    // reports every stdlib import as `imports_unresolved`.
+    let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot()
+        .map_err(|err| CompileError::Resolve(err.to_string()))?;
+    let search_paths = basilisk_checker::imports::ImportSearchPaths {
+        roots: Vec::new(),
+        extra_paths: Vec::new(),
+        stub_paths: Vec::new(),
+        workspace_members: Vec::new(),
+        site_packages: None,
+        registry: None,
+        typeshed_snapshot: Some(basilisk_checker::imports::ActiveTypeshed::new(
+            std::sync::Arc::new(snapshot),
+            None,
+        )),
+    };
+    basilisk_checker::imports::resolve_module_imports(&mut resolved, &search_paths);
 
     // Stage 3: Type check — the hard GATE of [COMPILER-PIPELINE]
     // ("any Error stops compilation"). Code with errors never reaches execution.
