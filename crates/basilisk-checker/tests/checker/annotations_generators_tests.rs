@@ -287,7 +287,6 @@ def gen(name: str) -> Iterator[str]:
     Ok(())
 }
 
-
 #[test]
 fn yielded_dict_literal_is_checked_in_declared_context() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"

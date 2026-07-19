@@ -39,11 +39,7 @@ pub enum InferredType {
     /// Callable type (`Callable[[params...], return]` or `Callable[..., return]`)
     Callable(CallableInfo),
     /// Generator type (`Generator[Yield, Send, Return]`).
-    Generator(
-        Box<InferredType>,
-        Box<InferredType>,
-        Box<InferredType>,
-    ),
+    Generator(Box<InferredType>, Box<InferredType>, Box<InferredType>),
     /// Any type (`Any`) - explicit escape hatch.
     /// Implements [TYPEINF-SPECIAL-ANY] — the explicit escape hatch variant; never
     /// inferred as a fallback (unannotated params produce E0001, not `Any`).

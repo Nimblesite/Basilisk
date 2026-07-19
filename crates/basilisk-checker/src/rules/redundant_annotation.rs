@@ -175,7 +175,9 @@ fn extract_annotation(source: &str, name_span: basilisk_resolver::Span) -> Optio
 
 /// Check whether inference already provides exactly the written type.
 fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bool {
-    use InferredType::{Bool, Bytes, Dict, Float, Int, List, LiteralString, None_, Set, Str, Tuple};
+    use InferredType::{
+        Bool, Bytes, Dict, Float, Int, List, LiteralString, None_, Set, Str, Tuple,
+    };
 
     // Exact structural equality is intentionally narrower than assignability:
     // an annotation that widens an inferred element, key, value, or tuple shape

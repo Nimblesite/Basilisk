@@ -105,7 +105,10 @@ fn self_and_cls_names_are_not_implicit_receivers_in_free_functions(
         .iter()
         .filter(|diag| diag.code.code == "BSK-0001")
         .count();
-    assert_eq!(missing, 2, "free-function names do not create receiver types");
+    assert_eq!(
+        missing, 2,
+        "free-function names do not create receiver types"
+    );
     Ok(())
 }
 

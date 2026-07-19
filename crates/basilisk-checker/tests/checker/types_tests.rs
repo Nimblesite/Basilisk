@@ -337,14 +337,9 @@ fn mutable_builtin_containers_are_invariant() {
     assert!(!int_set.is_assignable_to(&float_set));
     assert!(!float_set.is_assignable_to(&int_set));
 
-    let str_int_dict = InferredType::Dict(
-        Box::new(InferredType::Str),
-        Box::new(InferredType::Int),
-    );
-    let str_float_dict = InferredType::Dict(
-        Box::new(InferredType::Str),
-        Box::new(InferredType::Float),
-    );
+    let str_int_dict = InferredType::Dict(Box::new(InferredType::Str), Box::new(InferredType::Int));
+    let str_float_dict =
+        InferredType::Dict(Box::new(InferredType::Str), Box::new(InferredType::Float));
     assert!(!str_int_dict.is_assignable_to(&str_float_dict));
     assert!(!str_float_dict.is_assignable_to(&str_int_dict));
 

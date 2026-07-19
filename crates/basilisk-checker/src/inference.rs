@@ -79,15 +79,19 @@ pub fn literal_collection_assignable_to(rhs: &RhsKind, declared: &InferredType) 
         InferredType::Optional(inner) => literal_collection_assignable_to(rhs, inner),
         InferredType::List(elem) => match rhs {
             RhsKind::EmptyList => Some(true),
-            RhsKind::List(elements) => {
-                Some(elements.iter().all(|e| literal_element_assignable_to(e, elem)))
-            }
+            RhsKind::List(elements) => Some(
+                elements
+                    .iter()
+                    .all(|e| literal_element_assignable_to(e, elem)),
+            ),
             _ => None,
         },
         InferredType::Set(elem) => match rhs {
-            RhsKind::Set(elements) => {
-                Some(elements.iter().all(|e| literal_element_assignable_to(e, elem)))
-            }
+            RhsKind::Set(elements) => Some(
+                elements
+                    .iter()
+                    .all(|e| literal_element_assignable_to(e, elem)),
+            ),
             _ => None,
         },
         InferredType::Dict(key_ty, val_ty) => match rhs {

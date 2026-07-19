@@ -84,10 +84,7 @@ fn is_implicit_receiver(func: &FunctionInfo, index: usize, param: &ParameterInfo
     {
         return false;
     }
-    let class_receiver = func
-        .decorators
-        .iter()
-        .any(|name| name == "classmethod")
+    let class_receiver = func.decorators.iter().any(|name| name == "classmethod")
         || matches!(func.name.as_str(), "__new__" | "__init_subclass__");
     param.name == if class_receiver { "cls" } else { "self" }
 }

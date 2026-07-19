@@ -186,8 +186,9 @@ fn check_yield_types(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec
         // A yielded collection literal is contextually typed against the
         // declared yield type ([TYPEINF-SPECIAL-LITERAL-CONTEXT]); a stored
         // value keeps invariant subtyping.
-        let is_assignable = literal_collection_assignable_to(&yield_expr.rhs_kind, &declared_yield_type)
-            .unwrap_or_else(|| inferred.is_assignable_to(&declared_yield_type));
+        let is_assignable =
+            literal_collection_assignable_to(&yield_expr.rhs_kind, &declared_yield_type)
+                .unwrap_or_else(|| inferred.is_assignable_to(&declared_yield_type));
         if !is_assignable {
             out.push(error_diagnostic_owned(
                 CODE.clone(),
