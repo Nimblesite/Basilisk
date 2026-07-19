@@ -44,7 +44,7 @@ fn push_variable_type_hints(vars: &[VariableInfo], source: &str, hints: &mut Vec
         if var.has_annotation {
             continue;
         }
-        let type_name = inlay_type_display(rhs_type_display(&var.rhs_kind));
+        let type_name = inlay_type_display(&rhs_type_display(&var.rhs_kind));
         if type_name.is_empty() {
             continue;
         }
@@ -115,7 +115,7 @@ fn function_return_type_hints(resolved: &ResolvedModule, source: &str, hints: &m
             continue;
         }
 
-        let inferred = inlay_type_display(infer_return_type_display(func));
+        let inferred = inlay_type_display(&infer_return_type_display(func));
         if inferred.is_empty() {
             continue;
         }
@@ -145,7 +145,7 @@ fn function_return_type_hints(resolved: &ResolvedModule, source: &str, hints: &m
 /// `LiteralString` remains available to checking and hover consumers, while
 /// inlay hints present it as the runtime-facing `str` type. This also covers
 /// occurrences nested inside inferred collection types.
-fn inlay_type_display(type_name: String) -> String {
+fn inlay_type_display(type_name: &str) -> String {
     type_name.replace("LiteralString", "str")
 }
 
