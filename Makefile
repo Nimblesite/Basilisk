@@ -180,14 +180,14 @@ mutation-test:
 		if [ -n "$$test_args" ]; then \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
 				--jobs "$$mutation_jobs" --timeout 120 --build-timeout 600 --baseline skip --copy-target true \
-				--package "$$package" --re "$$examine_re" \
+				--package "$$package" --test-package "$$package" --re "$$examine_re" \
 				$$shard_arg \
 				--output "$$out_dir" \
 				-- $$test_args || true; \
 		else \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
 				--jobs "$$mutation_jobs" --timeout 120 --build-timeout 600 --baseline skip --copy-target true \
-				--package "$$package" --re "$$examine_re" \
+				--package "$$package" --test-package "$$package" --re "$$examine_re" \
 				$$shard_arg \
 				--output "$$out_dir" || true; \
 		fi; \
