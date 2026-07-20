@@ -377,7 +377,13 @@ export class ConfigurationEditorController implements vscode.Disposable {
       // notification precedes the apply response, so a racing refresh
       // routinely bumps the generation — the disk write still has to land.
       if (!sourceWasDirty) { await saveConfigurationDocument(fresh.configUri); }
-      if (generation !== this.loadGeneration || this.disposed || !this.panel.isOpen()) { return; }
+      if (this.disposed || !this.panel.isOpen()
+        || this.store.configurationEditor.value.rootUri !== snapshot.rootUri) { return; }
+      if (generation !== this.loadGeneration) {
+        this.loadGeneration += 1;
+        this.loadingRoot = undefined;
+      }
+      this.pendingRefreshRoot = undefined;
       this.store.acceptConfigurationSnapshot(fresh);
     } catch (error: unknown) {
       if (generation !== this.loadGeneration || this.disposed || !this.panel.isOpen()) { return; }

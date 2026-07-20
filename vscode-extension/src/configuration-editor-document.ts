@@ -56,7 +56,7 @@ const PROJECT_SECTION = `
     <div class="section-heading"><h2 id="project-title" tabindex="-1">Project source</h2><p>The active configuration document resolved by the language server. The editor never reads or writes configuration files itself.</p></div>
     <div class="dashboard-grid">
       <article class="card wide" data-accent="sky"><h3>Active configuration</h3><dl id="source-details"></dl><div class="action-row"><button type="button" class="primary" data-action="open-raw">Open raw configuration</button><button type="button" class="secondary" data-action="refresh">Refresh</button></div></article>
-      <article class="card wide" data-accent="orange"><h3>Typeshed standard library</h3><p>Freshness is the default; pin the active commit when you need reproducibility.</p><div id="typeshed-status" aria-live="polite"></div><div id="typeshed-controls"></div><div id="typeshed-actions" class="action-row"></div></article>
+      <article class="card wide" data-accent="orange"><h3>Typeshed standard library</h3><p>Pin a commit for deterministic behavior.</p><div id="typeshed-status" aria-live="polite"></div><div id="typeshed-controls"></div><div id="typeshed-actions" class="action-row"></div></article>
       <article class="card wide"><h3>Configuration problems</h3><div id="problem-list"></div></article>
     </div>
   </section>`;

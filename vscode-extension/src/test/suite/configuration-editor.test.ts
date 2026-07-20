@@ -581,6 +581,48 @@ suite("Configuration editor — thin LSP shell", () => {
 });
 
 suite("Configuration editor — transaction lifecycle", () => {
+  test("a Typeshed source choice survives the apply invalidation that precedes its response", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    const pinned = {
+      ...configurationSnapshot("revision-1"),
+      typeshed: typeshedFixture({ source: { kind: "ExactCommit", commit: "83c2518a9e6abbda0c44592c3483de459198f887" } }),
+    };
+    const latest = {
+      ...configurationSnapshot("revision-2"),
+      typeshed: typeshedFixture({ source: { kind: "Latest" } }),
+    };
+    transport.snapshotResult = pinned;
+    transport.previewResult = { ...configurationPreview(), typeshedChanges: [] };
+    let finishApply: ((snapshot: ConfigurationSnapshot) => void) | undefined;
+    transport.applyHandler = async () => new Promise<ConfigurationSnapshot>((resolve) => { finishApply = resolve; });
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+
+      const chooseLatest = controller.receive({
+        type: "preview",
+        mutations: [
+          { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedCommit" } },
+          { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedPath" } },
+        ],
+      });
+      await pollUntil(() => transport.applyRequests.length === 1);
+
+      store.markConfigurationChanged({ rootUri: ROOT_URI, revision: "revision-2" });
+      await pollUntil(() => transport.snapshotRequests.length === 2);
+      finishApply?.(latest);
+      await chooseLatest;
+
+      assert.strictEqual(store.configurationEditor.value.phase, "ready");
+      assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-2");
+      assert.strictEqual(store.configurationEditor.value.snapshot?.typeshed.source.kind, "Latest");
+    } finally {
+      controller.dispose();
+    }
+  });
+
   test("keeps the newest preview and submits an applying preview only once", async () => {
     const store = createStore();
     const transport = new RecordingTransport();
