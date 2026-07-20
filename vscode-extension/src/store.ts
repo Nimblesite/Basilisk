@@ -258,10 +258,17 @@ function bindClientStateListener(
         lspClient.onNotification("basilisk/scanComplete", () => {
           bumpAnalysisRevision(signals);
         }),
+        // An applied configuration change rewrites the severity of every
+        // affected diagnostic, so panels rendering health rollups are stale the
+        // moment the server confirms it. The debounced diagnostics listener
+        // cannot be relied on here: a severity-only recheck can republish
+        // nothing the client observes, leaving the Modules panel showing the
+        // PREVIOUS configuration ([EXTACT-REACTIVE-STATE] / [LSPARCH-CONFIG]).
         lspClient.onNotification("basilisk/configurationChanged", (value: unknown) => {
           const change = decodeConfigurationChanged(value);
           if (change !== undefined) {
             requestConfigurationRefresh(signals.configurationEditor, change);
+            bumpAnalysisRevision(signals);
           }
         }),
         lspClient.onNotification("basilisk/typeshedStatusChanged", (value: unknown) => {

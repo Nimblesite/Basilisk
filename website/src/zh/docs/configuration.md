@@ -4,7 +4,7 @@ title: 配置参考
 description: Basilisk pyproject.toml 配置选项的完整参考。规则与标签严重性、typeshed 来源固定、内联抑制以及按文件夹作用域的配置。
 keywords: basilisk, 配置, pyproject.toml, 设置
 lang: zh
-dateModified: 2026-07-19
+dateModified: 2026-07-21
 ---
 
 # 配置参考
@@ -30,11 +30,11 @@ dateModified: 2026-07-19
 
 ## 零配置
 
-Basilisk 完全不需要配置文件。当任何地方都没有 `[tool.basilisk]` 表时
-（或表为空——两者行为完全一致）：
+Basilisk 完全不需要配置文件。当遍历路径上任何地方都没有 `[tool.basilisk]`
+表时：
 
 - 每条**核心 PEP 符合性规则**以 `error` 严重性运行；Basilisk 自有的可选
-  规则保持关闭。
+  规则保持关闭——这正是 `basilisk check` 每次运行时的行为。
 - 从当前目录发现文件。
 - 目标 Python 版本从项目文件解析：`.python-version`，然后是
   `[project].requires-python` 下界，然后是 `uv.lock` 的
@@ -42,6 +42,22 @@ Basilisk 完全不需要配置文件。当任何地方都没有 `[tool.basilisk]
 - 标准库存根在运行时从最新的
   [python/typeshed](https://github.com/python/typeshed) 提交获取，离线时
   回退到内置快照——见[标准库存根](#标准库存根-typeshed)。
+
+> **在编辑器中，这一状态会被一次性写入种子配置——CLI 从不写配置，但 LSP 会。**
+> 当某个工作区根目录的遍历找不到任何 `[tool.basilisk]` 表时，语言服务器会在
+> 首次分析之前，把这两行"默认严格"的种子配置写入该根目录的 `pyproject.toml`
+> （若项目还没有该文件则创建它）
+> （[`LSPARCH-CONFIG-SEEDING`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)）：
+>
+> ```toml
+> [tool.basilisk.rule-tags]
+> "basilisk" = "error"
+> ```
+>
+> 因此在编辑器中，所有自有规则一开始就以 `error` 启用——它明明白白写在你的
+> 文件里，是可以降级或删除的一行。种子只写入**一次**：遍历路径上任何
+> `[tool.basilisk]` 表都会阻止它，包括你删除该条目后残留的空表。这正是
+> "没有表"与"空表"唯一表现不同的地方。
 
 ## 完整配置示例
 
@@ -180,6 +196,12 @@ PEP 或 Python 语言语义使结果依赖版本时，规则才会查询此版�
 解释器并使用该具体平台；探测失败则平台保持未知——Basilisk 绝不凭空捏造
 平台。显式的 `"All"` 保持跨平台交集语义。
 
+上面四种写法是规范写法，但该值**不做校验**：除 `"macOS"` 外，`"Darwin"`
+与 `"MacOS"` 同样被接受，小写的 `"windows"`/`"all"` 以及原始 `sys.platform`
+值（`linux`、`darwin`、`win32`）也可识别。其他任何字符串都会被原样当作具体
+平台名，因此拼写错误不会报错，只会得到一个没有任何存根匹配的平台。请坚持
+使用上述四种规范写法。
+
 ### `stub-paths`
 
 **类型：** `string[]`
@@ -199,9 +221,11 @@ PEP 或 Python 语言语义使结果依赖版本时，规则才会查询此版�
 **示例：** `["src/", "tests/"]`
 
 CLI 未给出路径时扫描的根目录。普通路径——与 `exclude` 不同，`include`
-**不**接受 glob 模式——相对于配置文件所在目录解析。显式的 CLI 路径会
-覆盖它；`exclude` 在 include 根目录内生效。LSP 遵循相同的根目录，因此
-编辑器分析的正是 `basilisk check` 会分析的那些文件。
+**不**接受 glob 模式——相对于**扫描根目录**解析：`basilisk check` 下是当前
+目录，编辑器中则是工作区根目录。它们*不*相对于声明它们的那个配置文件所在
+目录解析，因此在祖先 `pyproject.toml` 中设置的 `include` 仍然相对于扫描起点
+解析。显式的 CLI 路径会覆盖它；`exclude` 在 include 根目录内生效。LSP 遵循
+相同的根目录，因此编辑器分析的正是 `basilisk check` 会分析的那些文件。
 
 ### `exclude`
 
@@ -246,11 +270,13 @@ exclude = [
 
 **类型：** `bool`
 **默认值：** `true`
+**状态：** _仅解析，尚未被读取——目前设置它不会产生任何效果。_
 
-属性窄化（`if x.attr is not None:` 守卫）是否在中间函数调用后仍然保持。
-默认值是*实用*的行为：调用**可能**使属性失效，但把每次调用都当作失效会
-让属性窄化在实践中毫无用处。设为 `false` 可获得健全但严格的行为：任何
-调用都会丢弃属性窄化。参见
+为"属性窄化（`if x.attr is not None:` 守卫）在中间函数调用后仍然保持"预留。
+属性窄化尚未实现，因此没有任何检查器路径会读取该键；接受它只是为了让现有
+配置文件继续正常解析。预期的默认值是*实用*的行为：调用**可能**使属性失效，
+但把每次调用都当作失效会让属性窄化在实践中毫无用处——将来 `false` 会选择
+健全但严格的行为：任何调用都会丢弃属性窄化。参见
 [`TYPEINF-NARROWING-ATTR-CALLS`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ATTR-CALLS)。
 
 ---
@@ -276,8 +302,9 @@ SHA 写入 `typeshed-commit`，并清除任何 `typeshed-path`。下载的归档
 内置快照被编译进二进制文件，因此完全无需网络也能获得标准库类型——在飞机上、
 在防火墙后、在隔离网络的 CI 中都一样。它是提交
 [`83c2518`](https://github.com/python/typeshed/tree/83c2518a9e6abbda0c44592c3483de459198f887/stdlib)
-处**完整的 typeshed `stdlib/` 树**（不含第三方 `stubs/`）：752 个 `.pyi`
-文件，外加 `stdlib/VERSIONS` 与 `LICENSE`，未压缩约 2.85 MB。它是回退方案而非
+处**完整的 typeshed `stdlib/` `.pyi` 存根集合**（不含第三方 `stubs/`，也不含
+typeshed 自身在 `stdlib/` 下的非存根文件）：752 个 `.pyi` 文件，外加
+`stdlib/VERSIONS` 与 `LICENSE`，未压缩约 2.85 MB。它是回退方案而非
 固定来源——一旦启用，Basilisk 一定会明确告知。
 
 | 键 | 类型 | 默认值 | 含义 |
@@ -432,7 +459,9 @@ value = legacy_call()  # type: info[returns_compatibility]
 value = legacy_call()  # type: disabled[returns_compatibility]
 ```
 
-单独成行的指令会开启一个**块**，由匹配的 `end-` 指令关闭：
+单独成行的 `warning`、`info` 或 `disabled` 指令会开启一个**块**，由匹配的
+`end-` 指令关闭。（`ignore` 是例外：单独成行的 `# type: ignore` 是文件级的
+全量忽略，并不开启块，也没有 `end-ignore`。）
 
 ```python
 # type: disabled[imports_unresolved]
@@ -441,8 +470,10 @@ from result import Result
 # type: end-disabled[imports_unresolved]
 ```
 
-文件级指令是单独成行的注释——`relaxed` 将整个文件中的所有错误降级为
-警告；`file-` 形式将同一效果应用于特定代码（不写代码则应用于所有规则）：
+文件级指令是单独成行的注释，且必须出现在文件中**任何代码之前**——出现在
+语句之后的指令会被丢弃，并报告为 `BSK-0063`（格式错误）。`relaxed` 将整个
+文件中的所有错误降级为警告；`file-` 形式将同一效果应用于特定代码（不写代码
+则应用于所有规则）：
 
 ```python
 # basilisk: relaxed

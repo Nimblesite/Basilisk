@@ -9,8 +9,11 @@
 ## 运行示例
 
 ```bash
-# 检查单个文件
+# 单个文件中的类型规范错误
 basilisk check examples/bad.py
+
+# 同一文件上可选启用的自定规则
+basilisk analyze examples/bad.py
 
 # 一次性检查所有示例
 basilisk check examples/
@@ -18,6 +21,11 @@ basilisk check examples/
 # JSON 输出（用于编辑器 / CI）
 basilisk check examples/bad.py --output json
 ```
+
+`check` 与 `analyze` 读取的是同一套规则，只是按来源做了划分（[CHKARCH-COMMANDS]）：
+`check` 只报告带 `pep` 标签的类型规范规则，而 `analyze` 报告由配置表选用的、不带
+`pep` 标签的自定规则；两者都遵循下文表格所描述的严重级别。因此下文列出的 `BSK-`
+代码只会出现在 `analyze` 中——`check` 永远不会输出它们。
 
 ## 规范规则 vs 自定规则
 

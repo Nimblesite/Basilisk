@@ -11,9 +11,12 @@ VS Code, Cursor, Zed & Neovim extensions. Strict by default.
 - Source: <https://github.com/Nimblesite/Basilisk>
 
 This package (`basilisk-python`) bundles the native `basilisk` binary as a
-Python wheel so it can be installed with `pip`/`uv`. It is the **same binary**
-distributed via GitHub Releases, Homebrew and Scoop — the wheel is a convenience
-for Python-managed environments, not a separate build.
+Python wheel so it can be installed with `pip`/`uv`. It is built from the **same
+source, at the same version**, as the binaries distributed via GitHub Releases,
+Homebrew and Scoop — every channel is stamped from the Cargo workspace version
+by `scripts/stamp-version.sh` in one release run. The wheel is compiled by its
+own `maturin --release` job, so the file itself is not byte-identical to the
+release archive's binary.
 
 > The distribution is named `basilisk-python` because the name `basilisk` was
 > already taken on PyPI. The installed command is still `basilisk`.

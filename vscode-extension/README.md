@@ -25,7 +25,7 @@
   conformance suite, scored on the wheel-installed CLI in its default config by the real upstream harness. The only checker on the board at 100%.
 </p>
 
-## The only 100% checker — and the fastest
+## The only 100% checker — and the fastest according to our benchmarks
 
 Basilisk is the **only** Python type checker with a perfect score on the official
 [`python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html):

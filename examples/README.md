@@ -8,15 +8,24 @@ clean, fully-typed code looks like.
 ## Running the examples
 
 ```bash
-# Check a single file
+# Typing-spec errors in a single file
 basilisk check examples/bad.py
 
-# Check every example at once
+# The opt-in house rules on that same file
+basilisk analyze examples/bad.py
+
+# Every example at once
 basilisk check examples/
 
 # JSON output (for editors / CI)
 basilisk check examples/bad.py --output json
 ```
+
+`check` and `analyze` read one rule universe partitioned by provenance
+([CHKARCH-COMMANDS]): `check` reports the `pep`-tagged typing-spec rules and
+nothing else, while `analyze` reports the non-`pep` house rules a table
+selected. Both honour the severities the tables below describe. The `BSK-` codes
+tabulated later therefore appear under `analyze` — never under `check`.
 
 ## Spec rules vs house rules
 

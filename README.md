@@ -27,7 +27,7 @@
   We target <code>python/typing@main</code> and ratchet the score up only.
 </p>
 
-## The only 100% checker &mdash; and the fastest
+## The only 100% checker &mdash; and the fastest according to our benchmarks
 
 Basilisk is the **only** Python type checker with a perfect score on the official
 [`python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html):
@@ -63,18 +63,26 @@ uv tool install basilisk-python     # or: pipx install basilisk-python
 
 Also available via Homebrew (`brew tap Nimblesite/tap && brew install basilisk`), Scoop, and
 [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases) — every channel ships the same
-single Rust binary. Full options: [install guide](https://www.basilisk-python.dev/docs/install-cli/).
+single Rust CLI, built from this repository at the same version, with no runtime dependencies.
+Full options: [install guide](https://www.basilisk-python.dev/docs/install-cli/).
 
 ## Try it
 
 The `examples/` folder has ready-to-go Python files:
 
 ```sh
-basilisk check examples/bad.py    # typing-spec errors + strictness warnings
-basilisk check examples/good.py   # clean, even at full strictness
-basilisk check examples/mixed.py  # one real type error, plus untyped-code warnings
-basilisk check examples/          # the whole folder at once
+basilisk check   examples/bad.py    # 8 typing-spec errors — always on, no config needed
+basilisk analyze examples/bad.py    # the opt-in strictness warnings on the same file
+basilisk analyze examples/good.py   # clean, even at full strictness
+basilisk check   examples/mixed.py  # one real type error
+basilisk check   examples/          # the whole folder at once
 ```
+
+The two commands read one rule universe split by provenance ([`CHKARCH-COMMANDS`](docs/specs/CHECKER-ARCHITECTURE-SPEC.md)): `check` reports
+the `pep`-tagged typing-spec rules and nothing else — that set is always on, and
+while a config table may grade one of them down to `warning`/`info`, none may
+switch it off. `analyze` reports the non-`pep` house rules, which stay silent
+until a table selects them. Only `analyze` emits `BSK-` diagnostics.
 
 ## Standard-library types, online or offline
 

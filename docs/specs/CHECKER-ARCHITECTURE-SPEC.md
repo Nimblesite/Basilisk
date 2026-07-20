@@ -1114,10 +1114,12 @@ the workspace root:
 - an anchored pattern (containing `/`) matches the full path or any ancestor
   directory, so `vendor/**` or `src/generated` also excludes everything beneath it.
 
-A baseline set of vendored/cache directories is **always** excluded
-(`node_modules`, `site-packages`, `.venv`, `__pycache__`, `build`, `dist`, the
-extension's `bundled` / `_vendored` trees); user `exclude` entries extend it.
-Hidden directories (`.`-prefixed) are always skipped. The single canonical matcher
+When `exclude` is **unset**, a default set of vendored/cache directories is
+excluded (`basilisk_config::DEFAULT_EXCLUDES`: `node_modules`, `site-packages`,
+`.venv`, `__pycache__`, `build`, `dist`, the extension's `bundled` /
+`_vendored` trees, and friends). Setting `exclude` **replaces** those defaults
+entirely — re-add any default entries explicitly if they are still needed.
+Hidden directories (`.`-prefixed) are always skipped regardless. The single canonical matcher
 `basilisk_config::path_matches_pattern` is shared by every entry point so they
 exclude identically:
 

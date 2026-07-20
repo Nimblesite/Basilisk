@@ -20,7 +20,7 @@ Use these methods when you want the `basilisk` binary on its own — for the com
 
 ## PyPI (uv, pipx)
 
-The wheel [`basilisk-python`](https://pypi.org/project/basilisk-python/) bundles the same native binary that ships via Homebrew, Scoop, and GitHub Releases. Install it as a standalone tool, so the `basilisk` command lands on your PATH without touching any project environment:
+The wheel [`basilisk-python`](https://pypi.org/project/basilisk-python/) bundles the same native `basilisk` CLI that ships via Homebrew, Scoop, and GitHub Releases — built from the same source at the same version, in its own release job. Install it as a standalone tool, so the `basilisk` command lands on your PATH without touching any project environment:
 
 ```bash
 uv tool install basilisk-python
@@ -28,7 +28,7 @@ uv tool install basilisk-python
 pipx install basilisk-python
 ```
 
-The installed command is `basilisk` (the distribution is named `basilisk-python` only because the [`basilisk`](https://pypi.org/project/basilisk/) name on PyPI is held by an unrelated project). Wheels are published for Linux (x86_64, aarch64), macOS (Apple Silicon), and Windows (x64, arm64). The wheel contains no Python code — it is the same standalone Rust binary, so it works on any CPython or PyPy meeting the distribution's `requires-python = ">=3.8"`.
+The installed command is `basilisk` (the distribution is named `basilisk-python` only because the [`basilisk`](https://pypi.org/project/basilisk/) name on PyPI is held by an unrelated project). Wheels are published for Linux (x86_64, aarch64), macOS (Apple Silicon), and Windows (x64, arm64). The wheel contains no Python code — no shim, no console-script entry point, just the standalone Rust binary — so it works on any CPython or PyPy meeting the distribution's `requires-python = ">=3.8"`. Intel macOS is not a published target on any channel — no wheel, no release archive, no Homebrew bottle — so build [from source](#build-from-source) there.
 
 ## Homebrew (macOS, Linux)
 

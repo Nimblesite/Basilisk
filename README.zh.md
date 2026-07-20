@@ -62,18 +62,24 @@ uv tool install basilisk-python     # 或：pipx install basilisk-python
 
 也可通过 Homebrew（`brew tap Nimblesite/tap && brew install basilisk`）、Scoop 以及
 [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases) 安装——所有渠道分发的都是同一个
-Rust 二进制文件。完整选项参见[安装指南](https://www.basilisk-python.dev/zh/docs/installation/)。
+Rust CLI，由本仓库同一版本构建，且没有任何运行时依赖。完整选项参见[安装指南](https://www.basilisk-python.dev/zh/docs/installation/)。
 
 ## 试用
 
 `examples/` 文件夹中提供了可直接运行的 Python 文件：
 
 ```sh
-basilisk check examples/bad.py    # 类型规范错误 + 严格性警告
-basilisk check examples/good.py   # 干净——即使在完全严格模式下
-basilisk check examples/mixed.py  # 一个真实的类型错误，加上未注解代码的警告
-basilisk check examples/          # 一次检查整个文件夹
+basilisk check   examples/bad.py    # 8 个类型规范错误——始终启用，无需任何配置
+basilisk analyze examples/bad.py    # 同一文件上可选启用的严格性警告
+basilisk analyze examples/good.py   # 干净——即使在完全严格模式下
+basilisk check   examples/mixed.py  # 一个真实的类型错误
+basilisk check   examples/          # 一次检查整个文件夹
 ```
+
+这两个命令读取的是同一套规则，只是按来源做了划分（[`CHKARCH-COMMANDS`](docs/specs/CHECKER-ARCHITECTURE-SPEC.md)）：`check` 只报告带
+`pep` 标签的类型规范规则——这组规则始终启用，配置表可以把其中某条降级为
+`warning`/`info`，但任何表都无法将其关闭；`analyze` 报告不带 `pep` 标签的自定
+规则，它们在被配置表选用之前始终保持沉默。只有 `analyze` 会输出 `BSK-` 诊断。
 
 ## 标准库类型：在线与离线皆可
 
