@@ -234,7 +234,8 @@ fn snapshot_describes_typeshed_controls_and_terminal_status() {
         signed_release: false,
         warnings: vec![basilisk_stubs::typeshed::source::StatusWarning {
             code: "UNPINNED".to_owned(),
-            message: "UNPINNED — choose the pinned-commit source to make this reproducible".to_owned(),
+            message: "UNPINNED — choose the pinned-commit source to make this reproducible"
+                .to_owned(),
             severity: WarningSeverity::Advisory,
         }],
     };
