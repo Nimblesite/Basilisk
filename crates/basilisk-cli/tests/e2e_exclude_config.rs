@@ -49,7 +49,9 @@ fn pyproject_with(dir: &Path, basilisk_table: &str) {
     write(
         dir,
         "pyproject.toml",
-        &format!("[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\n{basilisk_table}"),
+        &format!(
+            "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\n{basilisk_table}"
+        ),
     );
 }
 
@@ -86,7 +88,13 @@ fn default_excludes_skip_vendored_and_cache_directories() {
         !stdout.contains("returns_compatibility"),
         "DEFAULT_EXCLUDES directories must never be scanned when `exclude` is unset, stdout: {stdout}, stderr: {stderr}"
     );
-    for skipped in ["node_modules", "site-packages", "build", "dist", "__pycache__"] {
+    for skipped in [
+        "node_modules",
+        "site-packages",
+        "build",
+        "dist",
+        "__pycache__",
+    ] {
         assert!(
             !stdout.contains(skipped),
             "no diagnostic may name the default-excluded `{skipped}` tree, stdout: {stdout}"

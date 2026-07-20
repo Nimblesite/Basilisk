@@ -1004,12 +1004,18 @@ name — [CHKARCH-DIAG-CODES](#CHKARCH-DIAG-CODES)); only entries carry severity
 
 ### Configuration File {#CHKARCH-CONFIG-FILE}
 
-`pyproject.toml` under `[tool.basilisk]` is the **single** configuration source
-and the seeding target for new projects
+`pyproject.toml` under `[tool.basilisk]` is the **single** Basilisk-native
+configuration source and the seeding target for new projects
 ([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
 There is no other Basilisk config format: a legacy root-level `basilisk.json`
 is **never read or written**
 ([CONFIGEDITOR-SOURCES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES)).
+For drop-in migration, the **analysis-environment tier only** (import
+resolution, stub search, typeshed activation — never rule severities) also
+accepts pyright-compatible spellings: a root `pyrightconfig.json`, a
+`[tool.pyright]` fallback table, and camelCase key aliases (`pythonVersion`,
+`extraPaths`, `stubPaths`, `typeshedPath`), with priority specified in
+[ANALYSIS-CONFIG-PRI](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CONFIG-PRI).
 How the file is found and how multiple ancestor tables combine is specified in
 [Configuration Discovery](#CHKARCH-CONFIG-DISCOVERY).
 
@@ -1047,7 +1053,9 @@ Rule configuration is resolved **per checked file** through one shared routine
 (`basilisk_config::load_basilisk_config`), used identically by `basilisk check`,
 `basilisk fix`, `basilisk adopt`, and the LSP (GitHub #311). The result is
 independent of argument order, path spelling, and cwd — for the same file in
-the same project, every surface resolves the identical config.
+the same project, every surface resolves the identical **rule** configuration.
+(Which keys are per-file versus per-project is scoped under **Two tiers**
+below.)
 
 **Walk.** Starting from the file's own directory, every ancestor directory up
 to the filesystem root is visited. Each directory contributes at most its
@@ -1064,6 +1072,23 @@ per key: `stub-paths` appends (deduplicated); remaining scalar/list fields
 keep the ancestor's value unless the child explicitly sets one; the nearest
 config's directory becomes the merged config's `project_root`, anchoring
 `include`/`exclude` globs.
+
+**Two tiers.** The per-file ancestor walk above governs the **rule tier**:
+rule severities (`rules`, `rule-tags`), `include`/`exclude`, and
+`python-version`/`python-platform` as consumed by version-gated rules. The
+**analysis-environment tier** — `extra-paths`, `stub-paths` as import search
+roots, every `typeshed-*` key, and `python-version` as the stub-resolution
+target — is instead resolved **once per project root** by the workspace
+loader (which also honors the pyright-compatible sources,
+[CHKARCH-CONFIG-FILE](#CHKARCH-CONFIG-FILE)) and applied uniformly to the
+whole workspace by `basilisk check`, the MCP server, and LSP initialization
+([ANALYSIS-CONFIG-PRI](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CONFIG-PRI)).
+A nested `[tool.basilisk]` table therefore cannot re-point the import
+environment for a subtree — only the root decides it. One deliberate
+exception: the LSP configuration editor and its config-file watcher read the
+typeshed keys back through the ancestor-walk loader, so editor changes
+round-trip through the same file the editor writes
+([CONFIGEDITOR-SOURCES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES)).
 
 **Surfaces.**
 

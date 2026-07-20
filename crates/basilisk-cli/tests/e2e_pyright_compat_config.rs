@@ -33,8 +33,11 @@ fn unique_dir(prefix: &str) -> PathBuf {
 /// pointing at `vendor` can make the import resolve.
 fn write_vendored_fixture(dir: &Path) {
     std::fs::create_dir_all(dir.join("vendor")).expect("create vendor dir");
-    std::fs::write(dir.join("vendor").join("vendored_mod.py"), "value: int = 1\n")
-        .expect("write vendored module");
+    std::fs::write(
+        dir.join("vendor").join("vendored_mod.py"),
+        "value: int = 1\n",
+    )
+    .expect("write vendored module");
     std::fs::write(
         dir.join("app.py"),
         "import vendored_mod\n\ntotal: int = vendored_mod.value\n",

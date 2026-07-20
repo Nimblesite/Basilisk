@@ -361,7 +361,7 @@ mod tests {
     fn candidate_staging_is_limited_to_the_six_typeshed_settings() {
         let before = BasiliskConfig::default();
         let mut rule_only = before.clone();
-        rule_only.auto_stub_mode = "disabled".to_owned();
+        rule_only.python_version = Some("3.12".to_owned());
         assert!(!typeshed_policy_changed(&before, &rule_only));
 
         let mut source = before.clone();

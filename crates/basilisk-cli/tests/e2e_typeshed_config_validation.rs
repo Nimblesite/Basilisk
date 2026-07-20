@@ -35,7 +35,9 @@ fn unique_dir(prefix: &str) -> PathBuf {
 fn check_with_config(dir: &Path, basilisk_table: &str) -> Output {
     std::fs::write(
         dir.join("pyproject.toml"),
-        format!("[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\n{basilisk_table}"),
+        format!(
+            "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\n{basilisk_table}"
+        ),
     )
     .expect("write pyproject");
     std::fs::write(dir.join("app.py"), "value: int = 1\n").expect("write app");
@@ -73,7 +75,10 @@ fn assert_fails_closed(output: &Output, expected_reason: &str) {
 fn short_typeshed_commit_fails_closed() {
     let dir = unique_dir("short_commit");
     let output = check_with_config(&dir, "typeshed-commit = \"abc123\"\n");
-    assert_fails_closed(&output, "typeshed-commit must be a full 40-character hex SHA");
+    assert_fails_closed(
+        &output,
+        "typeshed-commit must be a full 40-character hex SHA",
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -84,7 +89,10 @@ fn full_length_non_hex_typeshed_commit_fails_closed() {
         &dir,
         "typeshed-commit = \"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\"\n",
     );
-    assert_fails_closed(&output, "typeshed-commit must be a full 40-character hex SHA");
+    assert_fails_closed(
+        &output,
+        "typeshed-commit must be a full 40-character hex SHA",
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -138,7 +146,10 @@ fn typeshed_path_with_commit_pin_fails_closed() {
         &dir,
         "typeshed-path = \"ts\"\ntypeshed-commit = \"0123456789012345678901234567890123456789\"\n",
     );
-    assert_fails_closed(&output, "typeshed-path and typeshed-commit are mutually exclusive");
+    assert_fails_closed(
+        &output,
+        "typeshed-path and typeshed-commit are mutually exclusive",
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
