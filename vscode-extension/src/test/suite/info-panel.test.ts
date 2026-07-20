@@ -128,6 +128,123 @@ function verifyAcquiringTypeshedSpinner(): void {
   }
 }
 
+/** A store whose single root reports the UNPINNED typeshed warning. */
+function storeWithUnpinnedWarning(): ReturnType<typeof createStore> {
+  const store = createStore();
+  const writable = store.typeshedStatuses as unknown as {
+    value: ReadonlyMap<string, TypeshedStatusState>;
+  };
+  writable.value = new Map([[
+    "file:///workspace",
+    {
+      lifecycle: { kind: "Ready" }, activeSource: { kind: "Latest" },
+      blockedReason: undefined,
+      commitIdentity: "6fb14c98ee340a07eea807a4c804e20a849eb92b",
+      transport: { kind: "Codeload" }, licenseStatus: { kind: "Approved" },
+      provenance: { kind: "GithubTlsAttested" },
+      signedRelease: false,
+      warnings: [{
+        code: "UNPINNED", message: "Pin current to make this reproducible",
+        severity: { kind: "Advisory" },
+      }],
+    },
+  ]]);
+  return store;
+}
+
+/**
+ * Drive the store into the EXACT state in which
+ * configuration-editor-registration.ts registers the open command: a running
+ * server that advertises the editor capability. The panel gates the warning
+ * row's command on this same pair, so anything less must leave the row inert.
+ */
+function advertiseConfigurationEditor(
+  store: ReturnType<typeof createStore>,
+  options: { readonly running: boolean },
+): void {
+  const writableClient = store.client as unknown as { value: unknown };
+  writableClient.value = {
+    initializeResult: {
+      capabilities: { experimental: { basilisk: { configurationEditor: true } } },
+    },
+  };
+  const writableState = store.lspState as unknown as { value: string };
+  writableState.value = options.running ? "running" : "starting";
+}
+
+/** The single UNPINNED warning row from a flat-root panel. */
+function unpinnedRow(store: ReturnType<typeof createStore>): vscode.TreeItem {
+  const typeshedProvider = new InfoPanelProvider(store);
+  try {
+    const row = typeshedProvider
+      .getChildren()
+      .find((candidate) => labelOf(candidate) === "Typeshed UNPINNED");
+    assert.ok(row, "the UNPINNED warning row should exist");
+    return row;
+  } finally {
+    typeshedProvider.dispose();
+  }
+}
+
+// Tests [LSPCFGED-TYPESHED-SERVICE-INFO] navigation + [EXTACT-INFO-AFFORDANCE]:
+// the UNPINNED row's own message tells the user to "Pin current", and Pin
+// current lives in the configuration editor — so the row must navigate there
+// when the editor is genuinely reachable (info-panel.ts typeshedWarningItem).
+function verifyUnpinnedWarningRowOpensConfigurationEditor(): void {
+  const store = storeWithUnpinnedWarning();
+  advertiseConfigurationEditor(store, { running: true });
+  const unpinned = unpinnedRow(store);
+  assert.strictEqual(
+    unpinned.command?.command,
+    "basilisk.openConfigurationEditor",
+    "the UNPINNED row advertises Pin current, so clicking it must open the configuration editor where Pin current lives",
+  );
+  assert.strictEqual(
+    unpinned.contextValue,
+    "typeshed-warning",
+    "a navigating warning row is marked typeshed-warning so it never gets the feature-toggle inline button",
+  );
+  const tip = tooltipOf(unpinned).trim();
+  assert.ok(
+    tip.length > 0,
+    "an actionable row must carry an imperative tooltip describing its effect",
+  );
+}
+
+// Regression guard for issue #103 defect 1: basilisk.openConfigurationEditor
+// is capability-gated (configuration-editor-registration.ts), so a warning row
+// must NOT carry it while no server advertises the editor — a shown-but-dead
+// command raises "command not found".
+function verifyUnpinnedWarningRowStaysInertWithoutEditorCapability(): void {
+  const unpinned = unpinnedRow(storeWithUnpinnedWarning());
+  assert.strictEqual(
+    unpinned.command,
+    undefined,
+    "without the configuration-editor capability the row must not carry a dead command",
+  );
+  assert.strictEqual(
+    unpinned.contextValue,
+    "info",
+    "an inert warning row stays an ordinary read-only info row",
+  );
+}
+
+// The command is registered on `running` AND the capability — not the
+// capability alone. A client that has already returned its initializeResult
+// while the server is still starting advertises the capability with no command
+// registered yet, so the row must stay inert. Guards the gate asymmetry that
+// would otherwise be load-bearing but unasserted.
+function verifyUnpinnedWarningRowStaysInertWhileServerIsNotRunning(): void {
+  const store = storeWithUnpinnedWarning();
+  advertiseConfigurationEditor(store, { running: false });
+  const unpinned = unpinnedRow(store);
+  assert.strictEqual(
+    unpinned.command,
+    undefined,
+    "the capability alone is not enough — the open command is only registered while the server runs",
+  );
+}
+
 suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
   let provider: InfoPanelProvider;
 
@@ -171,24 +288,38 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
   });
 
   // Tests [EXTACT-INFO-ACTION-WIRING]: no shown-but-dead actions in the panel.
-  test("no row in the entire panel carries a command other than the registered toggle", () => {
+  test("no row in the entire panel carries a command outside the allowed set", () => {
     // Regression for issue #103 defect 1: a row that looks clickable but has
-    // no live handler raises "command not found". The slimmed panel makes
-    // that impossible — the ONLY command any row may carry is
-    // basilisk.toggleFeature, which registerInfoPanel itself registers.
+    // no live handler raises "command not found". Exactly two commands may
+    // appear in this panel, and each is guaranteed to be registered whenever
+    // it is attached:
+    //   - basilisk.toggleFeature — registerInfoPanel registers it itself, so
+    //     it is always live.
+    //   - basilisk.openConfigurationEditor — capability-gated. It is attached
+    //     ONLY to typeshed warning rows and ONLY when the same predicate that
+    //     registers it holds (running server + advertised capability), so it
+    //     can never be shown dead. See [LSPCFGED-TYPESHED-SERVICE-INFO].
+    // Any OTHER command, on any row, is the defect this test exists to catch.
     const allRows = provider
       .getChildren()
       .flatMap((row) => [row, ...provider.getChildren(row)]);
     assert.ok(allRows.length > 0, "panel should render rows");
     for (const row of allRows) {
       const commandId = row.command?.command;
-      if (commandId !== undefined) {
+      if (commandId === undefined) { continue; }
+      if (commandId === "basilisk.openConfigurationEditor") {
         assert.strictEqual(
-          commandId,
-          "basilisk.toggleFeature",
-          `"${labelOf(row)}" carries "${commandId}" — only the always-registered toggle command is allowed in this panel`,
+          row.contextValue,
+          "typeshed-warning",
+          `"${labelOf(row)}" carries the configuration-editor command but is not a typeshed warning row — only warning rows may navigate`,
         );
+        continue;
       }
+      assert.strictEqual(
+        commandId,
+        "basilisk.toggleFeature",
+        `"${labelOf(row)}" carries "${commandId}" — only the always-registered toggle and the capability-gated configuration-editor command are allowed in this panel`,
+      );
     }
   });
 
@@ -215,6 +346,21 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
   test("Server Info renders the root-keyed Typeshed source and trust state", verifyTypeshedInfoRows);
 
   test("Server Info shows an acquiring Typeshed spinner", verifyAcquiringTypeshedSpinner);
+
+  test(
+    "the UNPINNED warning row opens the configuration editor where Pin current lives",
+    verifyUnpinnedWarningRowOpensConfigurationEditor,
+  );
+
+  test(
+    "the UNPINNED warning row stays inert while no server advertises the configuration editor",
+    verifyUnpinnedWarningRowStaysInertWithoutEditorCapability,
+  );
+
+  test(
+    "the UNPINNED warning row stays inert while the server is not yet running",
+    verifyUnpinnedWarningRowStaysInertWhileServerIsNotRunning,
+  );
 
   // Tests [EXTACT-INFO-SERVER-INFO]: one uv row, sub-settings in the tooltip.
   test("uv sub-settings are folded into the uv row tooltip, not separate rows", () => {
@@ -347,6 +493,18 @@ suite("Basilisk Info Panel Affordance [EXTACT-INFO-AFFORDANCE]", () => {
     assert.ok(rows.length > 0, "Server Info should have rows");
     for (const row of rows) {
       const label = labelOf(row);
+      // The one documented exception ([LSPCFGED-TYPESHED-SERVICE-INFO]): a
+      // typeshed warning row navigates to the Configuration Editor where its
+      // named fix lives. It is still read-only — it mutates nothing — so it
+      // gets its own contextValue and therefore still no inline button.
+      if (row.contextValue === "typeshed-warning") {
+        assert.strictEqual(
+          row.command?.command,
+          "basilisk.openConfigurationEditor",
+          `"${label}" is marked typeshed-warning, so it must carry exactly the navigation-only editor command`,
+        );
+        continue;
+      }
       assert.strictEqual(
         row.command,
         undefined,

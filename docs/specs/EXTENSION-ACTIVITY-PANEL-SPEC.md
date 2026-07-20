@@ -216,6 +216,15 @@ Actionable items have a command, imperative tooltip, action icon, and inline con
 Read-only rows have no command/inline action and put their value in the description. Shared
 constructors enforce the distinction.
 
+One exception, and only one: a Typeshed warning row carries a single
+navigation-only command that opens the configuration editor, because the row's
+own message names a fix that lives there
+([LSPCFGED-TYPESHED-SERVICE-INFO](LSP-CONFIGURATION-EDITOR-SPEC.md#LSPCFGED-TYPESHED-SERVICE-INFO)).
+It navigates and never mutates, so it keeps its own `typeshed-warning`
+contextValue and therefore still contributes no inline action. The command is
+attached only while the server is running and advertises the editor capability
+— the same pair that registers it — so it can never be shown dead.
+
 ### Getting started {#EXTACT-INFO-GETTING-STARTED}
 
 Onboarding content belongs to VS Code walkthroughs and welcome views, not permanent panel

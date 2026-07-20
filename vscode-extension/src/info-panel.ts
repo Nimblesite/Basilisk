@@ -18,6 +18,7 @@ import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { type Store } from "./store";
 import type { TypeshedStatusState } from "./configuration-editor-model";
+import { CONFIGURATION_EDITOR_COMMAND, supportsConfigurationEditor } from "./configuration-editor";
 
 // ── Tree node types ──────────────────────────────────────────────────────
 
@@ -254,8 +255,46 @@ function typeshedSourceItem(
   return item;
 }
 
+/**
+ * One typeshed warning row ([LSPCFGED-TYPESHED-SERVICE-INFO]).
+ *
+ * A warning's message names its own fix (`UNPINNED` names **Pin current**), and
+ * every one of those fixes lives in the Configuration Editor — so the row
+ * carries a single navigation-only command that opens it. This is the ONE
+ * documented exception to [EXTACT-INFO-AFFORDANCE]'s "read-only rows have no
+ * command": it navigates, it never mutates configuration.
+ *
+ * The command is attached only when the editor is genuinely reachable —
+ * `basilisk.openConfigurationEditor` is capability-gated and registered only
+ * while the server runs AND advertises it (configuration-editor-registration.ts),
+ * and a shown-but-dead command is exactly issue #103 defect 1. The caller
+ * computes `editorSupported` with that SAME predicate so the two can never
+ * drift apart.
+ */
+function typeshedWarningItem(
+  prefix: string,
+  warning: TypeshedStatusState["warnings"][number],
+  editorSupported: boolean,
+): InfoTextItem {
+  const item = new InfoTextItem(
+    `${prefix} ${warning.code}`,
+    warning.message,
+    statusKind(warning.severity) === "High" ? "warning" : "info",
+  );
+  if (editorSupported) {
+    item.contextValue = "typeshed-warning";
+    item.tooltip = "Click to open the Configuration Editor, where the typeshed fixes live";
+    item.command = {
+      command: CONFIGURATION_EDITOR_COMMAND,
+      title: "Open Configuration Editor",
+    };
+  }
+  return item;
+}
+
 function typeshedInfoItems(
   statuses: ReadonlyMap<string, TypeshedStatusState>,
+  editorSupported: boolean,
 ): InfoTextItem[] {
   const entries = [...statuses.entries()].sort(([left], [right]) => left.localeCompare(right));
   return entries.flatMap(([rootUri, status]) => {
@@ -270,11 +309,7 @@ function typeshedInfoItems(
       ...(status.blockedReason === undefined
         ? []
         : [new InfoTextItem(`${prefix} Blocked`, status.blockedReason, "error")]),
-      ...status.warnings.map((warning) => new InfoTextItem(
-        `${prefix} ${warning.code}`,
-        warning.message,
-        statusKind(warning.severity) === "High" ? "warning" : "info",
-      )),
+      ...status.warnings.map((warning) => typeshedWarningItem(prefix, warning, editorSupported)),
     ];
     return rows;
   });
@@ -364,7 +399,14 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
       ...(binary !== undefined && binary !== null
         ? [new InfoTextItem("Binary", formatResolvedTool(binary), "file-binary")]
         : []),
-      ...typeshedInfoItems(this.store.typeshedStatuses.value),
+      // The SAME predicate registerConfigurationEditor uses to register the
+      // command (configuration-editor-registration.ts). Gating on the
+      // capability alone would attach the command during `starting`/`stopped`,
+      // when the command is not registered — a shown-but-dead row.
+      ...typeshedInfoItems(
+        this.store.typeshedStatuses.value,
+        this.store.lspState.value === "running" && supportsConfigurationEditor(client),
+      ),
     ];
 
     return items;

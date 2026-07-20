@@ -81,14 +81,8 @@ BSK-0050 = "warning"
 BSK-0061 = "warning"
 BSK-0062 = "warning"
 
-# The examples model the incremental-adoption story the docs teach: PEP
-# typing-spec violations stay errors, while Basilisk's opt-in strictness
-# rules surface as warnings — "this type-checks, but strictness isn't at
-# full yet". See website/src/docs/quick-start.md step 3.
-[tool.basilisk.per-path-overrides."examples/**"]
-rules."BSK-0001" = "warning"
-rules."BSK-0002" = "warning"
-rules."BSK-0003" = "warning"
-rules."BSK-0004" = "warning"
-rules."BSK-0005" = "warning"
-rules."BSK-0025" = "warning"
+# The examples grade those same rules down to `warning`; that lives in
+# examples/pyproject.toml, because folder-scoped configuration is the
+# nearest-deciding table on the ancestor walk ([CHKARCH-CONFIG-MODEL]) — there
+# is no per-path override table, and a table this file does not define is
+# simply never read.

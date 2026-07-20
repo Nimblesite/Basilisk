@@ -490,9 +490,10 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .blog-post-header h1 { margin: 0 0 var(--space-3); color: var(--color-text-primary); font-size: clamp(1.875rem, 4vw, 2.5rem); font-weight: 800; letter-spacing: -0.035em; line-height: 1.12; }
 .blog-post-header p { margin-bottom: var(--space-4); color: var(--color-text-secondary); font-size: 1rem; }
 .blog-post-tags { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.blog-post-tags a { padding: 0.2em 0.75em; border: 1px solid rgba(232, 80, 10, 0.24); border-radius: 9999px; background: rgba(232, 80, 10, 0.08); color: var(--color-primary-light); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.05em; text-decoration: none; text-transform: uppercase; }
+.blog-post-tags a { display: inline-flex; min-height: 48px; align-items: center; padding: 0.2em 0.75em; border: 1px solid rgba(232, 80, 10, 0.24); border-radius: 9999px; background: rgba(232, 80, 10, 0.08); color: var(--color-primary-light); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.05em; text-decoration: none; text-transform: uppercase; }
 .blog-post-tags a:hover { border-color: rgba(232, 80, 10, 0.46); background: rgba(232, 80, 10, 0.15); }
 .blog-post-footer { margin-top: var(--space-12); text-align: center; }
+.blog-post-footer .btn { min-height: 48px; }
 
 /* ── Site footer ──────────────────────────────────────────── */
 .site-footer { background: var(--color-bg-secondary); border-top: 1px solid var(--color-border); margin-top: auto; }

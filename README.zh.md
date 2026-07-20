@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.basilisk-python.dev">官网</a> &nbsp;&bull;&nbsp;
+  <a href="https://www.basilisk-python.dev/zh/">官网</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/zh/docs/installation/">安装</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/zh/docs/quick-start/">快速开始</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/zh/docs/rules/">规则</a> &nbsp;&bull;&nbsp;

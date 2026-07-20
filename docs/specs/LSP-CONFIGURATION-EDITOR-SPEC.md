@@ -174,8 +174,13 @@ from [STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WA
 | verification waived | persistent `UNVERIFIED` |
 | custom | persistent `USER-MANAGED SOURCE` |
 
-Rows may coexist, never poll, and carry no command; fixes remain in the editable
-section. They describe Basilisk transport around pinned typing step 3, not extra
+Rows may coexist, never poll, and never mutate; fixes remain in the editable
+section. A warning row's message names its fix (e.g. `UNPINNED`'s **Pin
+current**), so the row carries exactly one navigation-only command that opens
+the configuration editor — attached only while the server is running and
+advertises the editor capability, because the open command is gated on that
+same pair and a shown-but-dead command is forbidden. Other rows carry no
+command. They describe Basilisk transport around pinned typing step 3, not extra
 typing diagnostics
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 

@@ -18,36 +18,45 @@ basilisk check examples/
 basilisk check examples/bad.py --output json
 ```
 
-## Errors vs warnings
+## Spec rules vs house rules
 
-Every **error** below is a genuine violation of the
+Every **PEP** diagnostic below is a genuine violation of the
 [Python typing spec](https://typing.python.org/en/latest/spec/index.html).
 Those rules are on out of the box — in your own project, with no
-configuration, you get exactly them.
+configuration, you get exactly them, at `error`. A config file can grade one
+of them down to `warning` or `info`, but no table may switch it off.
 
-Every **warning** comes from Basilisk's opt-in strictness rules (annotations
-required everywhere, `@override` required, and so on). They are silent by
-default; this repository enables them for `examples/**` as warnings via a
-`per-path-overrides` entry in the root `pyproject.toml`. That is the
-incremental-adoption setup the docs teach: warnings mean "this type-checks,
-but strictness isn't at full yet". When the warnings hit zero, promote the
-rules to `error` — in `[tool.basilisk.rules]`, or with the Strict preset in
-the VS Code configuration editor (**Basilisk: Open Configuration Editor**).
+The rest are Basilisk's opt-in house rules (annotations required everywhere,
+`@override` required, and so on). They stay silent until a `[tool.basilisk]`
+table selects them. Basilisk resolves configuration per checked file by
+walking up from the file's own folder, and the nearest table that decides a
+rule wins outright. Two tables decide things here: the root `pyproject.toml`
+selects the house rules for the repository, and `examples/pyproject.toml` — the
+nearer one for everything under `examples/` — grades `BSK-0001`–`BSK-0005` and
+`BSK-0025` down to `warning`. That is the incremental-adoption setup the docs
+teach: warnings mean "this type-checks, but strictness isn't at full yet".
+Rules the examples' table says nothing about, such as `BSK-0014` and
+`BSK-0050`, are still decided by the root table.
+
+That is the whole scoping mechanism. To run a rule at a different severity in
+one part of a tree, put a `pyproject.toml` carrying its own `[tool.basilisk]`
+table in that folder; there are no glob path patterns, no per-module tables,
+and no presets or modes.
 
 ## Files
 
 ### Violation showcases (many diagnostics)
 
-| File | Domain | PEP errors (always on) | Strictness warnings (opt-in) |
+| File | Domain | PEP rules (always on, errors here) | Basilisk house rules (opt-in) |
 |---|---|---|---|
-| [bad.py](bad.py) | Minimal tour | `calls_argument_type`, `returns_compatibility`, `assignment_compatibility`, `calls_argument_count`, `classes_override`, `names_unbound`, `match_exhaustiveness` | BSK-0001, E0002, E0004 |
-| [mixed.py](mixed.py) | Mixed typed / untyped | `calls_argument_type` | BSK-0001, E0002 |
-| [api_server.py](api_server.py) | REST API handler | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014, W0050 |
-| [data_pipeline.py](data_pipeline.py) | ETL pipeline | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014 |
-| [ml_trainer.py](ml_trainer.py) | ML training loop | `assignment_compatibility`, `overloads_consistency`, `match_exhaustiveness`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014, W0050 |
-| [finance.py](finance.py) | Financial calculations | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, E0025, W0014, W0050 |
-| [cli_tool.py](cli_tool.py) | CLI application | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, E0025, W0014, W0050 |
-| [weird_violations.py](weird_violations.py) | Subtle edge cases | `overloads_consistency`, `names_unbound`, `classes_override_2`, `assignment_compatibility`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, W0014, W0050 |
+| [bad.py](bad.py) | Minimal tour | `calls_argument_type`, `returns_compatibility`, `assignment_compatibility`, `calls_argument_count`, `classes_override`, `names_unbound`, `match_exhaustiveness` | BSK-0001, BSK-0002, BSK-0004 |
+| [mixed.py](mixed.py) | Mixed typed / untyped | `calls_argument_type` | BSK-0001, BSK-0002 |
+| [api_server.py](api_server.py) | REST API handler | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–BSK-0003, BSK-0025, BSK-0014, BSK-0050 |
+| [data_pipeline.py](data_pipeline.py) | ETL pipeline | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–BSK-0003, BSK-0025, BSK-0014 |
+| [ml_trainer.py](ml_trainer.py) | ML training loop | `assignment_compatibility`, `overloads_consistency`, `match_exhaustiveness`, `dict_key_hashable`, `classes_override_2` | BSK-0001–BSK-0003, BSK-0025, BSK-0014, BSK-0050 |
+| [finance.py](finance.py) | Financial calculations | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–BSK-0003, BSK-0025, BSK-0014, BSK-0050 |
+| [cli_tool.py](cli_tool.py) | CLI application | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–BSK-0003, BSK-0025, BSK-0014, BSK-0050 |
+| [weird_violations.py](weird_violations.py) | Subtle edge cases | `overloads_consistency`, `names_unbound`, `classes_override_2`, `assignment_compatibility`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–BSK-0003, BSK-0014, BSK-0050 |
 
 ### Clean counterparts (zero diagnostics)
 
@@ -74,7 +83,7 @@ debugger rather than statically checked. Open one and press F5.
 Every diagnostic ends with a `see:` link to its documentation page. The full
 catalog lives at [basilisk-python.dev/docs/rules](https://www.basilisk-python.dev/docs/rules/).
 
-### PEP typing-spec rules shown here (errors, always on)
+### PEP typing-spec rules shown here (always on, errors here)
 
 | Code | Meaning |
 |---|---|
@@ -89,14 +98,18 @@ catalog lives at [basilisk-python.dev/docs/rules](https://www.basilisk-python.de
 | `dict_key_hashable` | Unhashable type used as a dict key |
 | `overloads_consistency` | Inconsistent or overlapping `@overload` group |
 
-### Basilisk strictness rules shown here (warnings, opt-in)
+### Basilisk house rules shown here (opt-in)
 
-| Code | Meaning |
-|---|---|
-| BSK-0001 | Missing parameter type annotation |
-| BSK-0002 | Missing return type annotation |
-| BSK-0003 | Cannot infer type of empty collection or `None` |
-| BSK-0004 | Missing `*args` / `**kwargs` type annotation |
-| BSK-0025 | Override missing `@override` decorator |
-| BSK-0014 | Explicit `Any` without justification |
-| BSK-0050 | Redundant type annotation |
+The severity column is what the tables governing `examples/` select, not a
+property of the code — a rule code carries no severity class. In an
+unconfigured project none of these rules run at all.
+
+| Code | Meaning | Severity here |
+|---|---|---|
+| BSK-0001 | Missing parameter type annotation | warning |
+| BSK-0002 | Missing return type annotation | warning |
+| BSK-0003 | Cannot infer type of empty collection or `None` | warning |
+| BSK-0004 | Missing `*args` / `**kwargs` type annotation | warning |
+| BSK-0025 | Override missing `@override` decorator | warning |
+| BSK-0014 | Explicit `Any` without justification | warning |
+| BSK-0050 | Redundant type annotation | warning |
