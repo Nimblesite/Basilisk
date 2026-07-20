@@ -317,6 +317,31 @@ fn json_path_list(arr: &[serde_json::Value]) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Stub directories from a `pyrightconfig.json`-shaped object.
+///
+/// Pyright's own key is the **singular** `stubPath`, holding a single path
+/// string (its default is `./typings`) — not the plural array Basilisk also
+/// accepts. Reading only the plural meant a `pyrightconfig.json` copied
+/// verbatim silently lost its stub directory, which is precisely the config
+/// this loader exists to understand. `stub-paths` is the step-1 "manual path
+/// head" config key ([STUBRES-PEP561-MAPPING]).
+///
+/// An explicit list wins when both spellings are present, since it is the
+/// strictly more expressive of the two.
+fn json_stub_paths(obj: &serde_json::Map<String, serde_json::Value>) -> Vec<PathBuf> {
+    obj.get("stubPaths")
+        .or_else(|| obj.get("stub-paths"))
+        .and_then(|v| v.as_array())
+        .map(|arr| json_path_list(arr))
+        .or_else(|| {
+            obj.get("stubPath")
+                .or_else(|| obj.get("stub-path"))
+                .and_then(serde_json::Value::as_str)
+                .map(|path| vec![PathBuf::from(path)])
+        })
+        .unwrap_or_default()
+}
+
 /// Parse a `pyrightconfig.json` compatibility config file.
 fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
     let content = std::fs::read_to_string(path).ok()?;
@@ -355,13 +380,7 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
     if let Some(v) = obj.get("formatter").and_then(|v| v.as_str()) {
         cfg.formatter = FormatterEngine::parse(v);
     }
-    if let Some(arr) = obj
-        .get("stubPaths")
-        .or_else(|| obj.get("stub-paths"))
-        .and_then(|v| v.as_array())
-    {
-        cfg.stub_paths = json_path_list(arr);
-    }
+    cfg.stub_paths = json_stub_paths(obj);
     if let Some(v) = obj
         .get("typeshedPath")
         .or_else(|| obj.get("typeshed-path"))
@@ -465,7 +484,12 @@ fn workspace_config_from_toml(section: &toml::Table) -> WorkspaceConfig {
     if let Some(v) = toml_str(section, &["formatter"]) {
         cfg.formatter = FormatterEngine::parse(v);
     }
-    if let Some(paths) = toml_paths(section, &["stub-paths", "stubPaths"]) {
+    // Pyright spells this `stubPath` (singular, one path string); Basilisk's
+    // own key is the plural array. Accept both, list first — see
+    // `json_stub_paths` for why the singular spelling must not be dropped.
+    if let Some(paths) = toml_paths(section, &["stub-paths", "stubPaths"]).or_else(|| {
+        toml_str(section, &["stub-path", "stubPath"]).map(|path| vec![PathBuf::from(path)])
+    }) {
         cfg.stub_paths = paths;
     }
     if let Some(v) = toml_str(section, &["typeshed-path", "typeshedPath"]) {
@@ -748,6 +772,66 @@ mod tests {
             cfg.stub_paths,
             vec![dir.join("stubs"), dir.join("more-stubs")]
         );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Pyright's stub-directory key is the SINGULAR `stubPath` holding one path
+    // string, not the plural array. Reading only the plural made a real
+    // pyrightconfig.json — the exact file this compatibility loader exists to
+    // understand — silently lose its stub directory, so every stub in it went
+    // unresolved with no diagnostic ([STUBRES-PEP561-MAPPING], step 1).
+    #[test]
+    fn pyright_singular_stub_path_is_not_silently_dropped() {
+        let dir = std::env::temp_dir().join("basilisk_cfg_pyright_stub_path");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("pyrightconfig.json"),
+            "{\"stubPath\": \"typings\"}\n",
+        )
+        .unwrap();
+
+        let cfg = load_config(&dir);
+        assert_eq!(
+            cfg.stub_paths,
+            vec![dir.join("typings")],
+            "pyright's singular `stubPath` must contribute a stub directory"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // When both spellings appear the explicit list wins: it is strictly more
+    // expressive, so honouring the single-path key instead would lose entries.
+    #[test]
+    fn explicit_stub_paths_list_wins_over_singular_stub_path() {
+        let dir = std::env::temp_dir().join("basilisk_cfg_stub_path_both");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("pyrightconfig.json"),
+            "{\"stubPath\": \"typings\", \"stubPaths\": [\"a\", \"b\"]}\n",
+        )
+        .unwrap();
+
+        let cfg = load_config(&dir);
+        assert_eq!(cfg.stub_paths, vec![dir.join("a"), dir.join("b")]);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // The same singular spelling must work in the TOML surface too.
+    #[test]
+    fn pyright_singular_stub_path_is_honoured_in_pyproject() {
+        let dir = std::env::temp_dir().join("basilisk_cfg_toml_stub_path");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            "[tool.pyright]\nstubPath = \"typings\"\n",
+        )
+        .unwrap();
+
+        let cfg = load_config(&dir);
+        assert_eq!(cfg.stub_paths, vec![dir.join("typings")]);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

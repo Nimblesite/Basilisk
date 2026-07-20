@@ -1014,7 +1014,10 @@ For drop-in migration, the **analysis-environment tier only** (import
 resolution, stub search, typeshed activation — never rule severities) also
 accepts pyright-compatible spellings: a root `pyrightconfig.json`, a
 `[tool.pyright]` fallback table, and camelCase key aliases (`pythonVersion`,
-`extraPaths`, `stubPaths`, `typeshedPath`), with priority specified in
+`extraPaths`, `typeshedPath`). Note that pyright's stub-directory key is the
+**singular** `stubPath` holding one path string, not a plural array; both it
+and Basilisk's own `stub-paths`/`stubPaths` list are accepted, with the list
+winning when both appear. Priority is specified in
 [ANALYSIS-CONFIG-PRI](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CONFIG-PRI).
 How the file is found and how multiple ancestor tables combine is specified in
 [Configuration Discovery](#CHKARCH-CONFIG-DISCOVERY).
