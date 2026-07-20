@@ -403,10 +403,20 @@ community/generated stubs, or untyped imports; there is no `TrackedType` wrapper
 | Unresolved (`Untyped`) | `imports_unresolved` error by default | dependent cascades suppressed | no type information available | add dependency or sync |
 | Installed untyped (`Untyped`) | opt-in `BSK-0152`; off by default | normal resolved-source analysis | "(no type stubs available)" | install a published stub package or create a local stub |
 
+### Typing status of installed packages {#STUBRES-TYPING-STATUS}
+
 The two untyped states do not share a diagnostic. A terminal unresolved import
 emits `imports_unresolved` once and suppresses dependent cascades. An installed
 site-packages `.py` without `py.typed` is resolved, never emits
 `imports_unresolved`, and emits `BSK-0152` only when the project opts in.
+
+The rule behind that split: a `py.typed` marker governs **provenance and
+completeness classification, never resolution**. Its absence downgrades what
+Basilisk claims to know about a module; it does not make the module missing.
+Conflating the two would report `imports_unresolved` — "this import cannot be
+found" — for a package that is installed and importable, which is simply false,
+and would then suppress the dependent cascade and hide real errors behind it.
+Enforced at steps 4-5 of the resolution order ([STUBRES-PEP561-MAPPING]).
 
 ### Code Actions for Unresolved Imports {#STUBRES-CODEACTIONS}
 
@@ -477,5 +487,27 @@ runtime-introspection/AST output to `.basilisk/stubs/`; `basilisk stubs status`
 reports coverage. Generated files are Tier 3 step-1 stubs, consistent with the
 pinned rule that a user-supplied stub is considered first
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+
+### Generation modes {#STUBRES-AUTOGEN-MODES}
+
+`basilisk stubs generate --mode <mode>` selects the backend. There are exactly
+three, and the mode is a **command argument, not configuration** — consistent
+with [CHKARCH-CONFIGURATION-ONLY], the config file grades rules and never
+selects behaviour.
+
+| Mode | Backend | Needs a Python subprocess | Needs `.py` source |
+|---|---|---|---|
+| `runtime` | `inspect.signature()` in the target interpreter | yes | no |
+| `ast` | parses `.py` source with `basilisk-parser` | no | yes |
+| `hybrid` (default) | runtime first, falling back to AST per function | yes | for the fallback |
+
+Accuracy runs highest-to-lowest in that same order for anything whose signature
+is only knowable at runtime (decorated, C-accelerated, or dynamically built
+callables), which is why `hybrid` is the default: it takes the accurate answer
+where one exists and degrades rather than failing. `ast` is the only mode that
+never launches a subprocess, and it fails with a diagnostic when the package
+ships no importable source. Whichever mode produced it, output is tagged
+[`StubTier::Tier3`] so downstream diagnostics report best-effort provenance
+([STUBRES-PROVENANCE-DIAG]) and never false confidence.
 
 ---
