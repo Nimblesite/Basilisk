@@ -182,8 +182,9 @@ before anything is written.
 which persisted entry would change and how the current Signal Box diagnostics
 would be reclassified without mutating the fixture used to reproduce the image.*
 
-Read the lower line first: it names `BSK-0002` and the change to Warning, and
-it names the file that will receive it. Then read the impact cards.
+Read the lower line first: it names `BSK-0002` and the severity it moves from
+and to. The header's source badge names the file that will receive the entry.
+Then read the impact cards.
 Those numbers are a forecast for the current workspace, not a promise about
 future files. **Cancel** closes the preview without changing anything. **Apply
 changes** approves this specific preview, writes and saves the active project

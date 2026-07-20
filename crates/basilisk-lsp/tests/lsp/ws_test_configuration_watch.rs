@@ -297,7 +297,10 @@ async fn consecutive_applies_with_open_config_buffer_are_never_one_behind() -> T
     let config_text = std::fs::read_to_string(&config_path)?;
     fixture.did_open(&config_uri, &config_text).await?;
 
-    for (index, (id, severity)) in [(970_u64, 2_u64), (980, 1), (990, 2)].into_iter().enumerate() {
+    for (index, (id, severity)) in [(970_u64, 2_u64), (980, 1), (990, 2)]
+        .into_iter()
+        .enumerate()
+    {
         let revision = snapshot_revision(&mut fixture, id).await?;
         let preview = preview_result(
             &mut fixture,
@@ -352,8 +355,8 @@ async fn consecutive_applies_with_open_config_buffer_are_never_one_behind() -> T
             }
         }
 
-        let snapshot = applied_snapshot
-            .ok_or_else(|| format!("apply #{} returned no snapshot", index + 1))?;
+        let snapshot =
+            applied_snapshot.ok_or_else(|| format!("apply #{} returned no snapshot", index + 1))?;
         let effective = rule_state(&snapshot, "BSK-0001")
             .and_then(|state| state.pointer("/effectiveSeverity/kind"))
             .and_then(serde_json::Value::as_str)

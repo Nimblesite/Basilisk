@@ -79,7 +79,7 @@ examples 的表没有提到的规则（例如 `BSK-0014` 与 `BSK-0050`）仍由
 每条诊断末尾都带有指向其文档页面的 `see:` 链接。完整目录见
 [basilisk-python.dev/docs/rules](https://www.basilisk-python.dev/docs/rules/)。
 
-### 此处展示的 PEP 类型规范规则（始终启用，始终为错误）
+### 此处展示的 PEP 类型规范规则（始终启用，此处为错误）
 
 | 代码 | 含义 |
 |---|---|
@@ -96,16 +96,15 @@ examples 的表没有提到的规则（例如 `BSK-0014` 与 `BSK-0050`）仍由
 
 ### 此处展示的 Basilisk 自定规则（可选启用）
 
-严重级别一列是*本*仓库根 `[tool.basilisk.rules]` 表所选中的值，而不是代码自身
-的属性——规则代码不携带任何严重级别类别。在未作配置的项目中，这些规则根本
-不会运行。
+严重级别一列是管辖 `examples/` 的那些表所选中的值，而不是代码自身的属性——
+规则代码不携带任何严重级别类别。在未作配置的项目中，这些规则根本不会运行。
 
 | 代码 | 含义 | 此处的严重级别 |
 |---|---|---|
-| BSK-0001 | 缺少参数类型注解 | error |
-| BSK-0002 | 缺少返回值类型注解 | error |
-| BSK-0003 | 无法推断空集合或 `None` 的类型 | error |
-| BSK-0004 | 缺少 `*args` / `**kwargs` 类型注解 | error |
-| BSK-0025 | 重写缺少 `@override` 装饰器 | error |
+| BSK-0001 | 缺少参数类型注解 | warning |
+| BSK-0002 | 缺少返回值类型注解 | warning |
+| BSK-0003 | 无法推断空集合或 `None` 的类型 | warning |
+| BSK-0004 | 缺少 `*args` / `**kwargs` 类型注解 | warning |
+| BSK-0025 | 重写缺少 `@override` 装饰器 | warning |
 | BSK-0014 | 使用显式 `Any` 但缺少说明 | warning |
 | BSK-0050 | 冗余的类型注解 | warning |

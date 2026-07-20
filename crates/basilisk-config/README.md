@@ -21,7 +21,10 @@ crate.
 ## Key concepts
 
 - **Rule entries** — `[tool.basilisk.rules]` grades one rule code `error`,
-  `warning`, `info`, or `disabled`. **Tag entries** — `[tool.basilisk.rule-tags]`
+  `warning`, `info`, or `disabled`; a `pep`-tagged rule may be graded down but
+  never `disabled` — that resolution is invalid and fails the run before
+  checking starts (`basilisk_checker::pep_disable_violations`).
+  **Tag entries** — `[tool.basilisk.rule-tags]`
   grades every rule carrying a tag in one line; within a table a rule entry
   beats tag entries, and the strictest matching tag entry wins.
 - **Folder scoping** — a rule is graded differently for part of the tree by

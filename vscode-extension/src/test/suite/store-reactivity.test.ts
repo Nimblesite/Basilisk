@@ -103,6 +103,30 @@ suite("Centralized analysis reactivity (issue #58)", () => {
     });
   });
 
+  // [EXTACT-REACTIVE-STATE] / [LSPARCH-CONFIG]: applying a rule-severity change
+  // in the configuration editor rewrites every affected diagnostic's severity,
+  // so the Modules panel's health rollup is stale the moment the server
+  // confirms the change. `basilisk/configurationChanged` must therefore bump
+  // analysisRevision — relying on the debounced diagnostics listener alone
+  // leaves the panel rendering the PREVIOUS configuration's severities whenever
+  // the recheck republishes nothing the client can observe.
+  test("analysisRevision bumps on basilisk/configurationChanged", () => {
+    withStubbedCommands(() => {
+      const { store, handles } = storeWithFakeClient();
+      handles.fireState(State.Running);
+      const before = store.analysisRevision.value;
+      handles.fireNotification("basilisk/configurationChanged", {
+        rootUri: "file:///workspace",
+        revision: "fnv1a64:0000000000000001",
+      });
+      assert.ok(
+        store.analysisRevision.value > before,
+        "an applied configuration change must bump analysisRevision so the "
+          + "Modules panel stops showing the previous configuration's severities",
+      );
+    });
+  });
+
   test("Typeshed status changes refresh only the matching open root", () => {
     withStubbedCommands(() => {
       const { store, handles } = storeWithFakeClient();
