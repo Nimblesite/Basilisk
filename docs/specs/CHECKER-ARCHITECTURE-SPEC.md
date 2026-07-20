@@ -1074,8 +1074,13 @@ config's directory becomes the merged config's `project_root`, anchoring
 `include`/`exclude` globs.
 
 **Two tiers.** The per-file ancestor walk above governs the **rule tier**:
-rule severities (`rules`, `rule-tags`), `include`/`exclude`, and
-`python-version`/`python-platform` as consumed by version-gated rules. The
+rule severities (`rules`, `rule-tags`) and `python-version`/`python-platform`
+as consumed by version-gated rules. `include`/`exclude` live in the same
+`[tool.basilisk]` tables but are **discovery-time** keys: each invocation
+resolves them once — from the first checked path's ancestor chain on the
+CLI, per workspace root in the LSP — because they decide *which files are
+collected* before any per-file rule resolution exists
+([CHKARCH-CONFIG-EXCLUDE](#CHKARCH-CONFIG-EXCLUDE)). The
 **analysis-environment tier** — `extra-paths`, `stub-paths` as import search
 roots, every `typeshed-*` key, and `python-version` as the stub-resolution
 target — is instead resolved **once per project root** by the workspace
@@ -1384,10 +1389,22 @@ Mutation testing proves the test suite actually asserts behaviour. Scope only ev
   like `assignment_compatibility`); omitting `fns` scopes the whole file. Adding
   these tests is the only way to widen scope.
 - **Baseline is ratcheted.** `mutation_testing/mutation_scores.json` is the committed
-  baseline; `mutation_testing/mutants_report.py` fails the build when the **viable
-  mutant pool shrinks**, `caught` drops, `missed`/`timeout` rises, or `kill_rate`
-  drops. (`unviable` mutants don't compile and are excluded.) Both `make
-  mutation-test` and the CI shard merge enforce the same function.
+  baseline; `mutation_testing/mutants_report.py::regression_messages` fails the build
+  when `kill_rate` drops below the baseline or the absolute floor, when `detected`
+  (`caught` + `timeout`) drops **while the viable pool did not grow**, or when
+  `timeout` rises. (`unviable` mutants don't compile and are excluded.) Absolute
+  `missed` is deliberately *not* a signal: widening scope mutates more code, so a
+  larger raw `missed` against a smaller-pool baseline is expected — `kill_rate` is
+  the size-independent guard. Both `make mutation-test` and the CI shard merge
+  enforce the same function.
+- **A timeout may never rise.** A `timeout` is credited as a kill (the PIT/Stryker
+  convention: a terminating suite made non-terminating *has* been detected). That
+  credit is only honest while timeouts come from hung code rather than slowness —
+  and the mutants that time out are structurally the likely *survivors*, since a
+  killed mutant exits at the first failing test binary while an uncaught one runs
+  the whole suite. So a rise in `timeout` is itself a build failure: it means
+  mutants were credited as killed without being evaluated. Fix the budget or the
+  suite's speed ([`.cargo/mutants.toml`](../../.cargo/mutants.toml)); never absorb it.
 - **Direction.** End state is the full workspace under mutation
   (`make mutation-test ALL=1`); until then each checker-logic PR leaves the viable
   pool the same size or larger.

@@ -252,6 +252,10 @@ MIN_KILL_RATE = 20.0
 def regression_messages(
     fresh: MutationScore, baseline: MutationScore | None
 ) -> list[str]:
+    """Implements [CHKARCH-TESTING-MUTATION-RATCHET].
+
+    See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-MUTATION-RATCHET.
+    """
     regressions: list[str] = []
     # Absolute kill-rate floor — the primary honest gate. Applies on EVERY run,
     # baseline or not, so a first run can never enshrine a sub-floor score.
