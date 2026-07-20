@@ -116,6 +116,23 @@ fn remember_builtins(key: &str, map: &std::sync::Arc<BuiltinsMap>) {
     }
 }
 
+/// The provenance to record for stubs read out of `snapshot`.
+///
+/// A custom root is its own source, never Typeshed — provenance drives honest
+/// hover text, so the two must not be conflated.
+fn snapshot_stub_source(
+    snapshot: &basilisk_stubs::typeshed::snapshot::Snapshot,
+) -> basilisk_stubs::StubSource {
+    if matches!(
+        snapshot.identity,
+        basilisk_stubs::typeshed::source::SourceIdentity::Custom { .. }
+    ) {
+        basilisk_stubs::StubSource::CustomTypeshed
+    } else {
+        basilisk_stubs::StubSource::Typeshed
+    }
+}
+
 fn populate_builtin_classes(
     resolved: &mut basilisk_resolver::ResolvedModule,
     search_paths: &ImportSearchPaths,
@@ -147,14 +164,7 @@ fn populate_builtin_classes(
         let Some((logical_uri, source_text)) = located else {
             return map;
         };
-        let stub_source = if matches!(
-            snapshot.identity,
-            basilisk_stubs::typeshed::source::SourceIdentity::Custom { .. }
-        ) {
-            basilisk_stubs::StubSource::CustomTypeshed
-        } else {
-            basilisk_stubs::StubSource::Typeshed
-        };
+        let stub_source = snapshot_stub_source(snapshot);
         let parsed = match target {
             Some(target) => basilisk_stubs::pyi_parser::parse_pyi_source_for_target(
                 source_text,
@@ -246,18 +256,9 @@ fn capture_active_typeshed_api(
     let (snapshot, target, source_text) =
         active.source_for_uri(&resolved_path.to_string_lossy(), importer_target)?;
 
-    // Provenance drives honest hover text; a custom root is its own source.
-    let stub_source = if matches!(
-        snapshot.identity,
-        basilisk_stubs::typeshed::source::SourceIdentity::Custom { .. }
-    ) {
-        basilisk_stubs::StubSource::CustomTypeshed
-    } else {
-        basilisk_stubs::StubSource::Typeshed
-    };
     let request = crate::exports::ExternalModuleRequest::Stub {
         module_name: import.module.clone(),
-        source: stub_source,
+        source: snapshot_stub_source(snapshot),
     };
     let external = crate::exports::load_snapshot_stub_module(
         resolved_path,
