@@ -312,11 +312,25 @@ export const CONFIGURATION_EDITOR_STYLES = `
   #typeshed-status dd { margin: 0; overflow-wrap: anywhere; }
   .typeshed-warning { padding: 8px 10px; border-left: 3px solid var(--bsk-orange); background: var(--bsk-orange-soft); }
   .typeshed-warning[data-severity="high"] { border-left-color: var(--vscode-errorForeground); }
-  #typeshed-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 16px 0; }
-  .typeshed-control { display: grid; gap: 5px; align-content: start; }
-  .typeshed-control > span { font-weight: 600; }
-  .typeshed-control > small { min-height: 30px; color: var(--muted); }
-  .typeshed-control input[type="text"], .typeshed-control select { width: 100%; min-width: 0; }
+  #typeshed-controls { display: grid; gap: 14px; max-width: 620px; margin: 16px 0; }
+  .typeshed-source { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 0; }
+  .typeshed-source legend { padding: 0 6px; color: var(--muted); }
+  .source-choice, .typeshed-toggle {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: baseline;
+  }
+  .source-choice input, .typeshed-toggle input { grid-row: 1 / span 2; align-self: center; margin: 0; }
+  .source-choice small, .typeshed-toggle small { grid-column: 2; color: var(--muted); }
+  .source-choice:has(input:disabled) span, .typeshed-toggle:has(input:disabled) span { color: var(--muted); }
+  .typeshed-field { display: grid; gap: 5px; }
+  .typeshed-field > span { font-weight: 600; }
+  .typeshed-field > small { color: var(--muted); }
+  .typeshed-field input[type="text"] { width: 100%; min-width: 0; }
+  .typeshed-field input[aria-invalid="true"] { outline: 1px solid var(--vscode-errorForeground); }
+  .field-error { color: var(--vscode-errorForeground); }
+  .field-error[hidden] { display: none; }
+  .typeshed-advanced { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 12px; }
+  .typeshed-advanced summary { cursor: pointer; color: var(--muted); }
+  .typeshed-advanced[open] summary { margin-bottom: 2px; }
   .path-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
 
   @keyframes breathe { 50% { opacity: .25; transform: scale(.75); } }

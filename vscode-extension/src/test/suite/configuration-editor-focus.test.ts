@@ -24,6 +24,7 @@ import {
 import { configurationEditorFocusRule } from "../../configuration-editor-registration";
 import { buildClientOptions, trustConfigureSeverityLinks } from "../../lsp-client";
 import { createStore } from "../../store";
+import { typeshedFixture } from "./typeshed-fixture";
 
 const ROOT_URI = "file:///workspace";
 const RULE_CODE = "BSK-0001";
@@ -57,25 +58,7 @@ function snapshotWithRule(): ConfigurationSnapshot {
       disabledRules: 0,
     },
     problems: [],
-    typeshed: {
-      sourceMode: { kind: "Latest" },
-      sourceOptions: [],
-      settings: [],
-      actions: [],
-      status: {
-        lifecycle: { kind: "Acquiring" },
-        blockedReason: undefined,
-        activeSource: undefined,
-        commitIdentity: undefined,
-        treeIdentity: undefined,
-        transport: undefined,
-        licenseStatus: { kind: "Acquiring" },
-        licenseReference: undefined,
-        provenance: { kind: "Pending" },
-        signedRelease: false,
-        warnings: [],
-      },
-    },
+    typeshed: typeshedFixture({ acquiring: true }),
   };
 }
 

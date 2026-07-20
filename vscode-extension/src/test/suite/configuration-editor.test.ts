@@ -17,7 +17,6 @@ import type {
   RuleOccurrencesResponse,
   TypeshedActionRequest,
   TypeshedActionResult,
-  TypeshedConfigurationState,
 } from "../../configuration-editor-model";
 import {
   ConfigurationEditorController,
@@ -33,40 +32,11 @@ import { decodeConfigurationEditorIntent } from "../../configuration-editor-inte
 import { readBasiliskSettings } from "../../lsp-client";
 import { createStore } from "../../store";
 import { removeTestDir } from './test-helpers';
+import { typeshedFixture } from "./typeshed-fixture";
 
 const ROOT_URI = "file:///workspace";
 const PEP_CODE = "BSK-0001";
 const ANALYZE_CODE = "BSK-0060";
-
-function typeshedState(): TypeshedConfigurationState {
-  return {
-    sourceMode: { kind: "Latest" },
-    sourceOptions: [
-      { mode: { kind: "Latest" }, label: "Latest", enabled: true },
-      { mode: { kind: "ExactCommit" }, label: "Exact commit", enabled: true },
-      { mode: { kind: "CustomFolder" }, label: "Custom folder", enabled: true },
-    ],
-    settings: [],
-    actions: [
-      { action: { kind: "PinCurrent" }, label: "Pin current", enabled: true },
-      { action: { kind: "AcquireFresh" }, label: "Acquire fresh", enabled: true },
-      { action: { kind: "ViewLicense" }, label: "View License", enabled: true },
-    ],
-    status: {
-      lifecycle: { kind: "Ready" },
-      blockedReason: undefined,
-      activeSource: { kind: "Bundled" },
-      commitIdentity: "83c2518a9e6abbda0c44592c3483de459198f887",
-      treeIdentity: undefined,
-      transport: { kind: "EmbeddedZip" },
-      licenseStatus: { kind: "Approved" },
-      licenseReference: "https://example.test/LICENSE",
-      provenance: { kind: "BundleVetted" },
-      signedRelease: false,
-      warnings: [],
-    },
-  };
-}
 
 /**
  * [CONFIGEDITOR-MODEL]: one pep rule (check scope, never disabled) and one
@@ -133,7 +103,7 @@ function configurationSnapshot(revision = "revision-1"): ConfigurationSnapshot {
       disabledRules: 0,
     },
     problems: [],
-    typeshed: typeshedState(),
+    typeshed: typeshedFixture(),
   };
 }
 
@@ -295,22 +265,21 @@ suite("Configuration editor — typed mutation routing", () => {
   // set/remove. Each is
   // relayed verbatim through preview, and apply sends only root + preview id.
   test("relays each of the six EditorMutation kinds verbatim through preview", async () => {
-    const mutations: EditorMutation[] = [
+    const ruleMutations: EditorMutation[] = [
       { kind: "SetRule", code: PEP_CODE, severity: { kind: "Warning" } },
       { kind: "RemoveRule", code: ANALYZE_CODE },
       { kind: "SetTag", tag: "basilisk", severity: { kind: "Info" } },
       { kind: "RemoveTag", tag: "basilisk" },
-      {
-        kind: "SetTypeshedSetting",
-        key: { kind: "TypeshedCache" },
-        value: { kind: "Boolean", value: true },
-      },
+    ];
+    const typeshedMutations: EditorMutation[] = [
+      { kind: "SetTypeshedSetting", key: { kind: "TypeshedCache" }, value: { kind: "Boolean", value: true } },
       { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedUrl" } },
     ];
-    for (const mutation of mutations) {
+    for (const mutation of [...ruleMutations, ...typeshedMutations]) {
       const store = createStore();
       const transport = new RecordingTransport();
       const controller = new ConfigurationEditorController(store, transport);
+      const typeshed = typeshedMutations.includes(mutation);
       try {
         controller.open(ROOT_URI);
         await pollUntil(() => store.configurationEditor.value.phase === "ready");
@@ -320,7 +289,24 @@ suite("Configuration editor — typed mutation routing", () => {
           baseRevision: "revision-1",
           mutations: [mutation],
         }], `${mutation.kind} must be relayed without translation`);
-        assert.strictEqual(store.configurationEditor.value.phase, "preview");
+        // A rule/tag change costs an impact review; a Typeshed edit is a
+        // direct source switch and lands at once ([LSPCFGED-TYPESHED]).
+        assert.strictEqual(
+          store.configurationEditor.value.phase,
+          typeshed ? "ready" : "preview",
+          `${mutation.kind} must ${typeshed ? "apply immediately" : "wait for review"}`,
+        );
+        assert.deepStrictEqual(
+          transport.applyRequests,
+          typeshed ? [{ rootUri: ROOT_URI, previewId: "preview-1" }] : [],
+          `${mutation.kind} apply must carry only root + preview id`,
+        );
+        assert.strictEqual(
+          store.configurationEditor.value.snapshot?.revision,
+          typeshed ? "revision-2" : "revision-1",
+          `${mutation.kind} must leave the snapshot the server returned`,
+        );
+        assert.strictEqual(store.configurationEditor.value.preview, typeshed ? undefined : transport.previewResult);
       } finally {
         controller.dispose();
       }
@@ -366,6 +352,63 @@ suite("Configuration editor — typed mutation routing", () => {
       controller.dispose();
     }
   });
+});
+
+suite("Configuration editor — direct Typeshed writes and discarded previews", () => {
+  // The reported failure: a dismissed dialog left the control showing a value
+  // the configuration never held. Discarding must restore the snapshot state
+  // and write nothing at all.
+  test("discarding a preview writes nothing and returns to the snapshot", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      await controller.receive({
+        type: "preview",
+        mutations: [{ kind: "SetRule", code: PEP_CODE, severity: { kind: "Warning" } }],
+      });
+      assert.strictEqual(store.configurationEditor.value.phase, "preview");
+      await controller.receive({ type: "cancelPreview" });
+      assert.strictEqual(store.configurationEditor.value.phase, "ready");
+      assert.strictEqual(store.configurationEditor.value.preview, undefined);
+      assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-1");
+      assert.deepStrictEqual(transport.applyRequests, [], "a discarded preview must never be applied");
+      // A later apply cannot resurrect the discarded change.
+      await controller.receive({ type: "apply" });
+      assert.deepStrictEqual(transport.applyRequests, []);
+      assert.strictEqual(store.configurationEditor.value.phase, "ready");
+    } finally {
+      controller.dispose();
+    }
+  });
+
+  // Pinning is a source choice: the server's preview is applied at once, so
+  // the pinned source the user selected is the source they get.
+  test("PinCurrent applies the server's pin preview without a review step", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    transport.typeshedActionResult = { kind: "Preview", preview: configurationPreview() };
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      await controller.receive({ type: "typeshedAction", action: "PinCurrent" });
+      assert.deepStrictEqual(transport.typeshedActionRequests, [{
+        rootUri: ROOT_URI,
+        baseRevision: "revision-1",
+        action: { kind: "PinCurrent" },
+      }]);
+      assert.deepStrictEqual(transport.applyRequests, [{ rootUri: ROOT_URI, previewId: "preview-1" }]);
+      assert.strictEqual(store.configurationEditor.value.phase, "ready");
+      assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-2");
+      assert.strictEqual(store.configurationEditor.value.preview, undefined);
+    } finally {
+      controller.dispose();
+    }
+  });
+
 });
 
 suite("Configuration editor — project action routing", () => {

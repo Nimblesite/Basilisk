@@ -7,42 +7,28 @@ use super::{
     TypeshedSettingValue, Uri,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind")]
-pub enum TypeshedSourceMode {
-    Latest,
-    ExactCommit,
-    CustomFolder,
-}
-
 /// The active source and the value that defines it. A pinned commit and a
 /// custom folder cannot coexist, and `Latest` cannot carry a pin — the wire
 /// model makes those states unrepresentable ([LSPCFGED-TYPESHED]).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all_fields = "camelCase")]
-pub enum TypeshedSourceState {
+pub enum TypeshedSource {
     Latest,
     ExactCommit { commit: String },
     CustomFolder { path: String },
 }
 
-impl TypeshedSourceState {
-    /// The option identity this active source selects.
-    pub const fn mode(&self) -> TypeshedSourceMode {
-        match self {
-            Self::Latest => TypeshedSourceMode::Latest,
-            Self::ExactCommit { .. } => TypeshedSourceMode::ExactCommit,
-            Self::CustomFolder { .. } => TypeshedSourceMode::CustomFolder,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind")]
-pub enum TypeshedWidget {
-    Directory,
-    Text,
-    Boolean,
+/// Download policy of a downloaded source. A user-managed folder downloads
+/// nothing, so it has none at all.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TypeshedDownloadPolicy {
+    pub reuse_downloads: bool,
+    pub verify_content: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archive_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_folder: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,41 +94,6 @@ pub enum TypeshedWarningSeverity {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TypeshedSourceOption {
-    pub mode: TypeshedSourceMode,
-    pub label: String,
-    pub description: String,
-    pub enabled: bool,
-    /// Why an unavailable option cannot be chosen — every disabled control
-    /// teaches instead of stonewalling.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unavailable_reason: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TypeshedSettingState {
-    pub key: TypeshedSettingKey,
-    pub label: String,
-    pub description: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub value: Option<TypeshedSettingValue>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_value: Option<TypeshedSettingValue>,
-    pub widget: TypeshedWidget,
-    pub enabled: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TypeshedActionState {
-    pub action: TypeshedAction,
-    pub label: String,
-    pub enabled: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct TypeshedWarningState {
     pub code: String,
     pub message: String,
@@ -160,12 +111,8 @@ pub struct TypeshedStatusState {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub commit_identity: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tree_identity: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub transport: Option<TypeshedTransport>,
     pub license_status: TypeshedLicenseStatus,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub license_reference: Option<String>,
     pub provenance: TypeshedProvenance,
     pub signed_release: bool,
     pub warnings: Vec<TypeshedWarningState>,
@@ -173,11 +120,17 @@ pub struct TypeshedStatusState {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Everything the editor needs and nothing it can misrender: the one active
+/// source, the download policy that source has, the commit
+/// [`TypeshedAction::PinCurrent`] would write when pinning is possible, and
+/// whether a license document exists to open. Labels are client copy.
 pub struct TypeshedConfigurationState {
-    pub source: TypeshedSourceState,
-    pub source_options: Vec<TypeshedSourceOption>,
-    pub settings: Vec<TypeshedSettingState>,
-    pub actions: Vec<TypeshedActionState>,
+    pub source: TypeshedSource,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub downloads: Option<TypeshedDownloadPolicy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinnable_commit: Option<String>,
+    pub license_available: bool,
     pub status: TypeshedStatusState,
 }
 

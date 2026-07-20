@@ -71,9 +71,8 @@ function verifyTypeshedInfoRows(): void {
       lifecycle: { kind: "Ready" }, activeSource: { kind: "Bundled" },
       blockedReason: undefined,
       commitIdentity: "83c2518a9e6abbda0c44592c3483de459198f887",
-      treeIdentity: "66408ffce2750980efc6da09e8a6652733f852e4",
       transport: { kind: "EmbeddedZip" }, licenseStatus: { kind: "Approved" },
-      licenseReference: "typeshed://license/83c2518", provenance: { kind: "BundleVetted" },
+      provenance: { kind: "BundleVetted" },
       signedRelease: false,
       warnings: [{
         code: "UNPINNED", message: "Pin current to make this reproducible",
@@ -88,7 +87,7 @@ function verifyTypeshedInfoRows(): void {
     const source = byLabel.get("Typeshed Source");
     assert.ok(String(source?.description).includes("83c2518a9e6abbda0c44592c3483de459198f887"));
     const sourceTooltip = tooltipOf(source ?? new vscode.TreeItem("missing"));
-    assert.ok(sourceTooltip.includes("Tree: 66408ffce2750980efc6da09e8a6652733f852e4"));
+    assert.ok(sourceTooltip.includes("Commit: 83c2518a9e6abbda0c44592c3483de459198f887"));
     assert.ok(sourceTooltip.includes("Transport: EmbeddedZip"));
     assert.ok(sourceTooltip.includes("Provenance: BundleVetted"));
     assert.ok(sourceTooltip.includes("Signed release: no"));
@@ -112,8 +111,8 @@ function verifyAcquiringTypeshedSpinner(): void {
     "file:///workspace",
     {
       lifecycle: { kind: "Acquiring" }, blockedReason: undefined, activeSource: undefined,
-      commitIdentity: undefined, treeIdentity: undefined, transport: undefined,
-      licenseStatus: { kind: "Acquiring" }, licenseReference: undefined,
+      commitIdentity: undefined, transport: undefined,
+      licenseStatus: { kind: "Acquiring" },
       provenance: { kind: "Pending" }, signedRelease: false, warnings: [],
     },
   ]]);

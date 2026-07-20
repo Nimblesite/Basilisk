@@ -267,8 +267,8 @@ exclude = [
 | 最新（默认） | 当前的 `python/typeshed@main` 提交，每次运行/会话解析一次；无法解析时回退到编译进二进制的内置快照，并给出 `UNPINNED` 与 `DOWNLOAD FAILED` 两条警告 |
 
 "最新"模式保持新鲜但无法逐日复现——编辑器的 Server Info 面板会将其报告为
-`UNPINNED` 行，而配置编辑器中的 **Pin current** 操作会把解析出的 SHA 写入
-`typeshed-commit`。下载的归档在激活前需通过安全、结构、许可证与内容验证
+`UNPINNED` 行；在配置编辑器中选择 **Pinned commit**（固定提交）来源会把解析出的
+SHA 写入 `typeshed-commit`，并清除任何 `typeshed-path`。下载的归档在激活前需通过安全、结构、许可证与内容验证
 关卡，并以不可变 ZIP 缓存。完整细节：
 [`STUBRES-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)。
 

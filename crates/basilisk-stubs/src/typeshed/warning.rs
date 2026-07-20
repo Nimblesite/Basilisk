@@ -93,7 +93,7 @@ impl TypeshedWarning {
     pub fn message(&self) -> String {
         match self {
             Self::Unpinned(UnpinnedKind::LatestOrBundled) => {
-                "UNPINNED — Pin current to make this reproducible".to_owned()
+                "UNPINNED — choose the pinned-commit source to make this reproducible".to_owned()
             }
             Self::Unpinned(UnpinnedKind::CustomFolder) => {
                 "UNPINNED — folder contents can change; version or content-address the folder externally"
@@ -195,7 +195,7 @@ mod tests {
         // Exact strings — a mutant that edits a word is caught.
         assert_eq!(
             TypeshedWarning::Unpinned(UnpinnedKind::LatestOrBundled).message(),
-            "UNPINNED — Pin current to make this reproducible"
+            "UNPINNED — choose the pinned-commit source to make this reproducible"
         );
         assert_eq!(
             TypeshedWarning::Unpinned(UnpinnedKind::CustomFolder).message(),

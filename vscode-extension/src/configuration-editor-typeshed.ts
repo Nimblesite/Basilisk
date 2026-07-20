@@ -61,6 +61,19 @@ export async function pickTypeshedFolder(
   return { type: "preview", mutations };
 }
 
+/**
+ * A Typeshed edit is a direct source switch, not a rule-severity trade-off:
+ * there is no impact to weigh, so it applies as soon as it is made
+ * ([LSPCFGED-TYPESHED]). A control that needed a second confirmation could
+ * show a value the configuration does not hold.
+ */
+export function isTypeshedOnly(
+  intent: Extract<ConfigurationEditorIntent, { type: "preview" }>,
+): boolean {
+  return intent.mutations.every((mutation) =>
+    mutation.kind === "SetTypeshedSetting" || mutation.kind === "RemoveTypeshedSetting");
+}
+
 export function disablesTypeshedVerification(
   intent: Extract<ConfigurationEditorIntent, { type: "preview" }>,
 ): boolean {

@@ -285,15 +285,16 @@ Standard-library types come from
 [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering).
 Basilisk selects exactly **one** step-3 source:
 
-| Mode | Active source |
+| Source | Active source |
 | --- | --- |
 | Custom folder | your `typeshed-path` directory, verbatim |
-| Exact commit | the `typeshed-commit` SHA, downloaded as a verified archive (fails closed if unavailable) |
+| Pinned commit | the `typeshed-commit` SHA, downloaded as a verified archive (fails closed if unavailable) |
 | Latest _(default)_ | the current `python/typeshed@main` commit, resolved once per run/session; if it cannot be resolved, the compiled-in bundled snapshot, with `UNPINNED` and `DOWNLOAD FAILED` warnings |
 
 Latest keeps you fresh but is not reproducible day-to-day — the editor's
-Server Info panel reports it as an `UNPINNED` row, and the Configuration
-Editor's **Pin current** action writes the resolved SHA as `typeshed-commit`.
+Server Info panel reports it as an `UNPINNED` row, and choosing **Pinned
+commit** in the Configuration Editor writes the resolved SHA as
+`typeshed-commit` (and clears any `typeshed-path`).
 Downloaded archives pass safety, shape, license, and content-verification
 gates before activation, and are cached as immutable ZIPs. Full detail:
 [`STUBRES-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED).

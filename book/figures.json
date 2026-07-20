@@ -131,16 +131,18 @@
       "id": "fig-05-compatibility-gate",
       "section": "05",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/05-compatibility-gate.svg",
       "path": "assets/diagrams/05-compatibility-gate.png",
       "title": "Can this value be used here?",
-      "alt": "Values approach a labelled destination type; compatible values pass through while an incompatible value produces a diagnostic."
+      "alt": "Values approach labelled destination types; compatible values pass while an incompatible string stops before a float destination."
     },
     {
       "id": "fig-05-function-contract",
       "section": "05",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/05-function-contract.svg",
       "path": "assets/diagrams/05-function-contract.png",
       "title": "Parameters receive and returns promise",
       "alt": "A function contract connects typed argument ports to a body and a typed return port with concrete Signal Box values."
@@ -149,7 +151,8 @@
       "id": "fig-05-mutable-collection",
       "section": "05",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/05-mutable-collection-trap.svg",
       "path": "assets/diagrams/05-mutable-collection-trap.png",
       "title": "Mutation changes the compatibility question",
       "alt": "The same mutable list is read and written through two type views, exposing the unsafe write that prevents a tempting substitution."

@@ -109,7 +109,15 @@ suite("Configuration editor — hardened, accessible document", () => {
     assert.ok(/style-src 'nonce-[^']+'/.test(html));
     assert.ok(/script-src 'nonce-[^']+'/.test(html));
     assert.ok(!html.includes("unsafe-inline"));
-    assert.ok(!html.includes("https://"), "the shell must load no remote resources");
+    // `default-src 'none'` is the enforcement; assert the document also never
+    // ASKS for a remote resource (an example URL in placeholder copy is not a
+    // fetch, so match resource attributes rather than the bare scheme).
+    assert.ok(
+      !/(?:src|href)\s*=\s*["']https?:/i.test(html),
+      "the shell must load no remote resources",
+    );
+    assert.ok(!/url\(\s*["']?https?:/i.test(html), "no stylesheet may fetch a remote asset");
+    assert.ok(html.includes("img-src data:"), "images are inline data only");
     assert.ok(html.includes("var(--vscode-editor-background)"));
     assert.ok(html.includes("vscode-high-contrast"));
     assert.ok(html.includes("prefers-reduced-motion"));

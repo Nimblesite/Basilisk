@@ -229,12 +229,10 @@ function typeshedTooltip(rootUri: string, status: TypeshedStatusState): string {
     `State: ${statusKind(status.lifecycle)}`,
     `Source: ${statusKind(status.activeSource)}`,
     `Commit: ${status.commitIdentity ?? "not available"}`,
-    `Tree: ${status.treeIdentity ?? "not available"}`,
     `Transport: ${statusKind(status.transport)}`,
     `Provenance: ${statusKind(status.provenance)}`,
     `Signed release: ${status.signedRelease ? "yes" : "no"}`,
     `License: ${statusKind(status.licenseStatus)}`,
-    `License reference: ${status.licenseReference ?? "not supplied"}`,
   ].join("\n");
 }
 

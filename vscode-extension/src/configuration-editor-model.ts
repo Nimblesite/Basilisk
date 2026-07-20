@@ -59,24 +59,22 @@ export type EditorMutation =
   | { kind: "SetTypeshedSetting"; key: TypeshedSettingKey; value: TypeshedSettingValue }
   | { kind: "RemoveTypeshedSetting"; key: TypeshedSettingKey };
 
-export type TypeshedSourceMode =
-  | { kind: "Latest" }
-  | { kind: "ExactCommit" }
-  | { kind: "CustomFolder" };
-
 /**
  * The active source carries the value that defines it: "latest with a pin" and
  * "a pinned commit plus a custom folder" are unrepresentable ([LSPCFGED-TYPESHED]).
  */
-export type TypeshedSourceState =
+export type TypeshedSource =
   | { kind: "Latest" }
   | { kind: "ExactCommit"; commit: string }
   | { kind: "CustomFolder"; path: string };
 
-export type TypeshedWidget =
-  | { kind: "Directory" }
-  | { kind: "Text" }
-  | { kind: "Boolean" };
+/** Download policy of a downloaded source; a custom folder has none. */
+export interface TypeshedDownloadPolicy {
+  reuseDownloads: boolean;
+  verifyContent: boolean;
+  archiveUrl: string | undefined;
+  cacheFolder: string | undefined;
+}
 
 export type TypeshedLifecycle =
   | { kind: "Acquiring" }
@@ -118,30 +116,6 @@ export type TypeshedWarningSeverity =
   | { kind: "Advisory" }
   | { kind: "High" };
 
-export interface TypeshedSourceOption {
-  mode: TypeshedSourceMode;
-  label: string;
-  description: string;
-  enabled: boolean;
-  unavailableReason: string | undefined;
-}
-
-export interface TypeshedSettingState {
-  key: TypeshedSettingKey;
-  label: string;
-  description: string;
-  value: TypeshedSettingValue | undefined;
-  defaultValue: TypeshedSettingValue | undefined;
-  widget: TypeshedWidget;
-  enabled: boolean;
-}
-
-export interface TypeshedActionState {
-  action: TypeshedAction;
-  label: string;
-  enabled: boolean;
-}
-
 export interface TypeshedWarningState {
   code: string;
   message: string;
@@ -153,20 +127,23 @@ export interface TypeshedStatusState {
   blockedReason: string | undefined;
   activeSource: TypeshedActiveSource | undefined;
   commitIdentity: string | undefined;
-  treeIdentity: string | undefined;
   transport: TypeshedTransport | undefined;
   licenseStatus: TypeshedLicenseStatus;
-  licenseReference: string | undefined;
   provenance: TypeshedProvenance;
   signedRelease: boolean;
   warnings: TypeshedWarningState[];
 }
 
+/**
+ * Everything the editor needs and nothing it can misrender: the one active
+ * source, the download policy that source has, the commit `PinCurrent` would
+ * write when pinning is possible, and whether a license document exists.
+ */
 export interface TypeshedConfigurationState {
-  source: TypeshedSourceState;
-  sourceOptions: TypeshedSourceOption[];
-  settings: TypeshedSettingState[];
-  actions: TypeshedActionState[];
+  source: TypeshedSource;
+  downloads: TypeshedDownloadPolicy | undefined;
+  pinnableCommit: string | undefined;
+  licenseAvailable: boolean;
   status: TypeshedStatusState;
 }
 

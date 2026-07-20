@@ -218,7 +218,7 @@ Basilisk likewise never mixes a source's names, bodies, `VERSIONS`, or indexes.
 | Exact commit | selected archive (content-attested unless waived), or bundle only at that SHA | otherwise fail closed |
 | Latest (default) | current `python/typeshed@main`, once per run/session | never reuse old unpinned data; warn and use bundled ZIP |
 
-Latest defaults to freshness and is one **Pin current** action from determinism.
+Latest defaults to freshness and is one source choice — **Pinned commit** — from determinism.
 Custom and bundled are also reported unpinned
 ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)).
 
@@ -295,7 +295,7 @@ Basilisk reports `active_source` plus an ordered `warnings[]`; warnings compose.
 
 | Condition | Persistent status |
 |---|---|
-| Latest or bundled without explicit commit | `UNPINNED — Pin current to make this reproducible` |
+| Latest or bundled without explicit commit | `UNPINNED — choose the pinned-commit source to make this reproducible` |
 | Custom folder | `UNPINNED — folder contents can change; version or content-address the folder externally` |
 | Latest could not resolve, download, or validate | `DOWNLOAD FAILED — using bundled <sha>; may be behind upstream` |
 | approved license/NOTICE identity changed | `LICENSE CHANGED — Basilisk update/review required` |

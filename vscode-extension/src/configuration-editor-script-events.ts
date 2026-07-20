@@ -77,31 +77,6 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
         character: Number(target.dataset.occurrenceCharacter),
       };
     }
-    function chooseSourceMode(mode) {
-      if (mode === 'Latest') {
-        postPreview([typeshedRemove('TypeshedCommit'), typeshedRemove('TypeshedPath')]);
-        return;
-      }
-      if (mode === 'CustomFolder') {
-        const current = typeshedSetting('TypeshedPath');
-        const path = current && typeshedValue(current);
-        if (typeof path === 'string' && path !== '') {
-          postPreview([typeshedRemove('TypeshedCommit')]);
-        } else {
-          vscode.postMessage({ type: 'pickTypeshedFolder', key: 'TypeshedPath' });
-        }
-        return;
-      }
-      const current = typeshedSetting('TypeshedCommit');
-      const commit = current && typeshedValue(current);
-      if (typeof commit === 'string' && commit !== '') {
-        postPreview([typeshedRemove('TypeshedPath')]);
-      } else {
-        const input = document.querySelector('[data-typeshed-text="TypeshedCommit"]');
-        if (input) { input.disabled = false; input.focus(); }
-        announce('Enter a full 40-character commit SHA');
-      }
-    }
     document.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target.closest('button') : undefined;
       if (!target) return;
@@ -127,21 +102,8 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
     });
     document.addEventListener('change', (event) => {
       const target = event.target;
-      if (target instanceof HTMLInputElement && target.dataset.typeshedBoolean) {
-        postPreview([typeshedSetBoolean(target.dataset.typeshedBoolean, target.checked)]);
-        return;
-      }
-      if (target instanceof HTMLInputElement && target.dataset.typeshedText) {
-        const value = target.value.trim();
-        const mutations = value === ''
-          ? [typeshedRemove(target.dataset.typeshedText)]
-          : [typeshedSetText(target.dataset.typeshedText, value)];
-        if (target.dataset.typeshedText === 'TypeshedCommit') mutations.push(typeshedRemove('TypeshedPath'));
-        postPreview(mutations);
-        return;
-      }
+      if (target instanceof HTMLInputElement && typeshedChanged(target)) return;
       if (!(target instanceof HTMLSelectElement)) return;
-      if (target.id === 'typeshed-source-mode') { chooseSourceMode(target.value); return; }
       // One control change = exactly one typed mutation ([CONFIGEDITOR-MODEL]).
       if (target.dataset.ruleEntry) {
         lastFocusedRule = { code: target.dataset.ruleEntry, control: 'select' };
@@ -149,6 +111,12 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
       } else if (target.dataset.tagEntry) {
         postPreview([tagMutation(target.dataset.tagEntry, target.value)]);
       }
+    });
+    // A dialog dismissed any way at all (button, Escape, backdrop) discards
+    // the change: the host returns to the snapshot and every control
+    // re-renders from it, so nothing on screen can outlive the decision.
+    byId('preview-dialog').addEventListener('close', () => {
+      if (editorState.phase === 'preview') vscode.postMessage({ type: 'cancelPreview' });
     });
     byId('rule-search').addEventListener('input', applyFilter);
     byId('rule-viewport').addEventListener('scroll', () => window.requestAnimationFrame(renderRuleWindow), { passive: true });
