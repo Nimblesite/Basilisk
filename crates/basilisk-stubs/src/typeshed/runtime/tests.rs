@@ -649,3 +649,65 @@ fn trusted_git_modes_override_zip_modes_and_blob_mutation_fails() {
         Some(BackendError::Validation)
     );
 }
+
+// `typeshed-cache-path` selection ([STUBRES-TYPESHED-CONFIG]). The wiring in
+// `production_manager` was previously unreachable from a test, because that
+// function also builds an HTTPS transport; `select_cache` isolates the choice.
+
+/// A configured `typeshed-cache-path` must be the directory that actually
+/// receives cached bytes. Asserting the cache is merely `Some` would pass even
+/// if the configured path were dropped and the per-user OS cache silently used
+/// instead — which would write outside the project while appearing to work.
+#[test]
+fn configured_cache_path_is_the_directory_actually_written_to() {
+    let dir = tempfile::tempdir().expect("cache dir");
+    let cache = select_cache(true, Some(dir.path().to_path_buf())).expect("cache enabled");
+
+    let zip = b"not-a-real-zip-but-hashed-consistently";
+    let key = CacheKey::from_identity(A_SHA);
+    let record = CacheRecord {
+        commit: Some(A_SHA.to_owned()),
+        tree: None,
+        zip_sha256: sha256_hex(zip),
+        verified: false,
+        transport: None,
+        acquired_at_unix_seconds: 1,
+        tree_files: Vec::new(),
+    };
+    cache.store(&key, zip, &record).expect("store into cache");
+
+    let generation = dir
+        .path()
+        .join(key.dir_name())
+        .join("generations")
+        .join(&record.zip_sha256);
+    assert!(
+        generation.is_dir(),
+        "cached bytes must land under the configured typeshed-cache-path, \
+         found nothing at {}",
+        generation.display()
+    );
+}
+
+/// `typeshed-cache = false` outranks a configured path. Were it not to, a
+/// project that switched caching off would keep reusing archives from the very
+/// directory it also named, and the setting would be a no-op.
+#[test]
+fn disabling_the_cache_outranks_a_configured_cache_path() {
+    let dir = tempfile::tempdir().expect("cache dir");
+    assert!(select_cache(false, Some(dir.path().to_path_buf())).is_none());
+    assert!(select_cache(false, None).is_none());
+}
+
+/// With caching on and no path configured, selection falls back to the
+/// canonical per-user OS cache rather than disabling reuse. Compared against
+/// `default_cache_path` so the test states the same thing on a platform that
+/// exposes no user cache directory, without writing to the real one.
+#[test]
+fn caching_without_a_configured_path_falls_back_to_the_os_cache() {
+    assert_eq!(
+        select_cache(true, None).is_some(),
+        default_cache_path().is_some(),
+        "an unconfigured cache must fall back to the per-user OS cache"
+    );
+}

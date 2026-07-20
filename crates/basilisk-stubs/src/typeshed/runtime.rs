@@ -242,13 +242,28 @@ pub fn production_manager(
     request: TypeshedRequest,
     cache_path: Option<PathBuf>,
 ) -> Result<TypeshedManager, TransportError> {
-    let cache = if request.use_cache {
-        cache_path.map(DiskCache::new).or_else(default_cache)
-    } else {
-        None
-    };
+    let cache = select_cache(request.use_cache, cache_path);
     let transport = Arc::new(HttpsTransport::new(request.url_template.clone())?);
     Ok(manager_for_request(request, transport, cache))
+}
+
+/// Resolve which disk cache an acquisition may use.
+///
+/// Separated from [`production_manager`] so the choice is reachable without
+/// constructing an HTTPS transport, which the surrounding function does and
+/// which no unit test can exercise offline.
+///
+/// `typeshed-cache = false` disables reuse outright and outranks any configured
+/// directory — otherwise a project that had switched caching off would silently
+/// keep reusing bytes from a path it also configured. `typeshed-cache-path`
+/// then relocates storage, and only its absence falls back to the canonical
+/// per-user OS cache ([STUBRES-TYPESHED-CONFIG]).
+#[must_use]
+pub fn select_cache(use_cache: bool, cache_path: Option<PathBuf>) -> Option<DiskCache> {
+    if !use_cache {
+        return None;
+    }
+    cache_path.map(DiskCache::new).or_else(default_cache)
 }
 
 /// Canonical per-user typeshed cache directory for this platform.
