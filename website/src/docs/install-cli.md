@@ -28,7 +28,7 @@ uv tool install basilisk-python
 pipx install basilisk-python
 ```
 
-The installed command is `basilisk` (the distribution is named `basilisk-python` only because `basilisk` was already taken on PyPI). Wheels are published for Linux (x86_64, aarch64), macOS (Apple Silicon), and Windows (x64, arm64). The wheel contains no Python code — it is the same standalone Rust binary, so it works on any CPython or PyPy 3.x.
+The installed command is `basilisk` (the distribution is named `basilisk-python` only because the [`basilisk`](https://pypi.org/project/basilisk/) name on PyPI is held by an unrelated project). Wheels are published for Linux (x86_64, aarch64), macOS (Apple Silicon), and Windows (x64, arm64). The wheel contains no Python code — it is the same standalone Rust binary, so it works on any CPython or PyPy meeting the distribution's `requires-python = ">=3.8"`.
 
 ## Homebrew (macOS, Linux)
 

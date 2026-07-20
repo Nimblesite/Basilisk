@@ -2,7 +2,7 @@
 /**
  * Info Panel contents E2E tests — the slimmed panel of issue #103.
  *
- * The panel is exactly: the Analyzer toggle followed by flat, read-only server
+ * The panel is exactly: the Diagnostics toggle followed by flat, read-only server
  * details. There is NO Quick Actions section: the high-value
  * actions are Modules-toolbar buttons gated on the server running (see
  * activity-panel.test.ts), the status-bar click opens the basilisk.statusMenu
@@ -30,7 +30,7 @@ import { createStore } from "../../store";
 import { EXTENSION_ID, SUITE_SETUP_TIMEOUT_MS, waitForLspReady } from "./test-helpers";
 
 /** Toggles that ship — each has a namesake, observable effect. */
-const KEPT_FEATURE_LABELS = ["Analyzer"] as const;
+const KEPT_FEATURE_LABELS = ["Diagnostics"] as const;
 
 /** Toggles removed because their setting was a no-op (server dropped it). */
 const REMOVED_FEATURE_LABELS = [
@@ -148,13 +148,20 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     provider.dispose();
   });
 
-  /** Flat read-only server-information rows. */
+  /**
+   * Flat read-only server-information rows: every root row that is not one of
+   * the shipped feature toggles. Selected by LABEL, never by `contextValue` —
+   * selecting on the property under test would make the `contextValue`
+   * assertions below vacuous (a row that lost its `info` marker would silently
+   * drop out of the set instead of failing).
+   */
   function serverInfoRows(): vscode.TreeItem[] {
-    return provider.getChildren().filter((row) => row.contextValue === "info");
+    const toggles = new Set<string>(KEPT_FEATURE_LABELS);
+    return provider.getChildren().filter((row) => !toggles.has(labelOf(row)));
   }
 
   // Tests [EXTACT-INFO-STRUCTURE] / [EXTACT-INFO-QUICK-ACTIONS] (no Quick Actions section).
-  test("root is the Analyzer toggle followed by flat read-only details", () => {
+  test("root is the Diagnostics toggle followed by flat read-only details", () => {
     const labels = provider.getChildren().map(labelOf);
     assert.deepStrictEqual(labels.slice(0, KEPT_FEATURE_LABELS.length), [...KEPT_FEATURE_LABELS]);
     assert.ok(labels.includes("Analysis Mode"), "server details should render at the root");
@@ -248,15 +255,15 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
 
   // Tests [EXTACT-INFO-FEATURE-STATUS]: a toggle has an observable, namesake effect.
   test("toggleFeature writes through and the panel reflects it", async () => {
-    // End-to-end: flip the Analyzer off via the real command (this host has a
+    // End-to-end: flip the Diagnostics toggle off via the real command (this host has a
     // folder, so it writes the Workspace target) and assert the toggle row
     // re-renders as Disabled. (The deeper effect — diagnostics actually clear —
     // is proven end-to-end in type-checking-toggle.test.ts.)
     const cfg = vscode.workspace.getConfiguration();
     try {
       await vscode.commands.executeCommand("basilisk.toggleFeature", "basilisk.enabled", false);
-      const toggle = provider.getChildren().find((row) => labelOf(row) === "Analyzer");
-      assert.ok(toggle, "Analyzer toggle should exist");
+      const toggle = provider.getChildren().find((row) => labelOf(row) === "Diagnostics");
+      assert.ok(toggle, "Diagnostics toggle should exist");
       assert.strictEqual(toggle.description, "Disabled", "toggle row must reflect the written setting");
     } finally {
       await cfg.update("basilisk.enabled", undefined, vscode.ConfigurationTarget.Workspace);
@@ -268,7 +275,7 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
 //
 // Regression tests for issue #65: actionable rows must be visually
 // unmistakable from read-only rows. In the slimmed panel the actionable class
-// is exactly the Analyzer toggle; every server-detail row is read-only.
+// is exactly the Diagnostics toggle; every server-detail row is read-only.
 //
 // Spec: docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-AFFORDANCE
 
@@ -299,14 +306,23 @@ suite("Basilisk Info Panel Affordance [EXTACT-INFO-AFFORDANCE]", () => {
     provider.dispose();
   });
 
+  // Both partitions are selected by LABEL, never by `contextValue`. The whole
+  // point of this suite is that the two classes are marked correctly, so
+  // selecting on the marker under test would make every assertion below
+  // self-fulfilling: a toggle that regressed to `contextValue: "info"` would
+  // vanish from `toggleRows()` rather than fail. Label selection keeps the
+  // partition independent of the property being asserted.
+
   /** Top-level feature toggle rows. */
   function toggleRows(): vscode.TreeItem[] {
-    return provider.getChildren().filter((row) => row.contextValue === "feature");
+    const toggles = new Set<string>(KEPT_FEATURE_LABELS);
+    return provider.getChildren().filter((row) => toggles.has(labelOf(row)));
   }
 
   /** Flat read-only server-information rows. */
   function readOnlyRows(): vscode.TreeItem[] {
-    return provider.getChildren().filter((row) => row.contextValue === "info");
+    const toggles = new Set<string>(KEPT_FEATURE_LABELS);
+    return provider.getChildren().filter((row) => !toggles.has(labelOf(row)));
   }
 
   test("every feature toggle carries a command and an imperative tooltip", () => {

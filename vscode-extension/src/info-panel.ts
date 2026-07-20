@@ -76,7 +76,7 @@ interface FeatureDef {
 // Implements [EXTACT-INFO-FEATURE-STATUS]: only features whose toggle has a
 // real, observable effect belong here. A toggle that writes a setting the server
 // (or extension) never reads is a lie to the user and must not exist.
-//   - Analyzer (basilisk.enabled): the LSP is authoritative for diagnostics
+//   - Diagnostics (basilisk.enabled): the LSP is authoritative for diagnostics
 //     and honours this setting — disabling clears published diagnostics and
 //     suppresses new ones; re-enabling re-scans. See [ANALYSIS-ENABLED]
 //     (crates/basilisk-lsp/src/server/init.rs) and GitHub #65 / #119.
@@ -90,8 +90,11 @@ interface FeatureDef {
 //   - Inlay Hints (Params/Types), Ruff Integration, Test Explorer, Debugger
 //     (never even declared), AI Typing — all dropped server-side likewise.
 // See EXTACT-INFO-FEATURE-STATUS.
+// [EXTACT-INFO-STRUCTURE] names this row "Diagnostics"; [EXTACT-INFO-FEATURE-STATUS]
+// forbids "Checker"/"Analyzer" because those name distinct rule sets and this
+// toggle governs both.
 const FEATURES: readonly FeatureDef[] = [
-  { label: "Analyzer", settingKey: "basilisk.enabled" },
+  { label: "Diagnostics", settingKey: "basilisk.enabled" },
 ];
 
 // ── Resolved environment ([LSPARCH-RESOLVED-ENV]) ────────────────────────

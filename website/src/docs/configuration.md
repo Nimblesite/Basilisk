@@ -29,10 +29,11 @@ What the visited tables combine to, and how:
   deduplicated.
 
 > **Migrating from `basilisk.json`?** The legacy root-level `basilisk.json`
-> file is no longer read. Translate its keys into `[tool.basilisk]`
-> (camelCase → kebab-case, e.g. `typeshedPath` → `typeshed-path`) and delete
-> the file. The configuration editor reports a stray `basilisk.json` as an
-> ignored shadowed source.
+> file is not read by anything — it is inert, and the configuration editor
+> does not surface it at all. Translate its keys into `[tool.basilisk]`
+> (camelCase → kebab-case, e.g. `typeshedPath` → `typeshed-path`), move its
+> per-rule and per-tag severities into `[tool.basilisk.rules]` and
+> `[tool.basilisk.rule-tags]`, then delete the file.
 
 ## Zero configuration
 

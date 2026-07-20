@@ -146,6 +146,138 @@ async fn apply_observing_reactivity(
     Ok(signals)
 }
 
+/// Answer `workspace/applyEdit` the way a REAL editor does: write the edit's
+/// replacement text to disk before replying `applied: true`. The plain
+/// `answer_apply_edit` helper only claims success, so it never exercises the
+/// interaction between an applied edit and the server's own disk watcher
+/// ([LSPARCH-CONFIG]) — the path every VS Code / Zed user actually runs.
+/// Returns whether `parsed` was a `workspace/applyEdit` request.
+async fn answer_apply_edit_writing_disk(
+    fixture: &mut WsTestFixture,
+    parsed: &serde_json::Value,
+) -> TestResult<bool> {
+    if parsed.get("method").and_then(serde_json::Value::as_str) != Some("workspace/applyEdit") {
+        return Ok(false);
+    }
+    let operations = parsed
+        .pointer("/params/edit/documentChanges")
+        .and_then(serde_json::Value::as_array)
+        .ok_or("workspace/applyEdit carried no documentChanges operations")?;
+    for operation in operations {
+        let (Some(uri), Some(new_text)) = (
+            operation
+                .pointer("/textDocument/uri")
+                .and_then(serde_json::Value::as_str),
+            operation
+                .pointer("/edits/0/newText")
+                .and_then(serde_json::Value::as_str),
+        ) else {
+            continue;
+        };
+        let path = uri
+            .strip_prefix("file://")
+            .ok_or("configuration edit URI was not a file URI")?;
+        std::fs::write(path, new_text)?;
+    }
+    answer_apply_edit(fixture, parsed).await
+}
+
+/// Drive one snapshot → preview → apply cycle against a real editor that
+/// writes the configuration file to disk, then pump the connection until the
+/// open Python file's diagnostics are republished with `code` at `severity`.
+async fn apply_severity_and_await_republish(
+    fixture: &mut WsTestFixture,
+    id: u64,
+    python_uri: &str,
+    code: &str,
+    severity: u64,
+) -> TestResult<bool> {
+    let revision = snapshot_revision(fixture, id).await?;
+    let preview = preview_result(
+        fixture,
+        id + 1,
+        &revision,
+        serde_json::json!([{
+            "kind": "SetRule",
+            "code": code,
+            "severity": { "kind": if severity == 1 { "Error" } else { "Warning" } }
+        }]),
+    )
+    .await?;
+    let preview_id = preview_id_of(&preview)?;
+    let root = root_uri(fixture);
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": id + 2,
+            "method": APPLY,
+            "params": { "rootUri": root, "previewId": preview_id }
+        }))
+        .await?;
+    for _ in 0..60 {
+        let Some(msg) = fixture.recv().await else {
+            break;
+        };
+        let parsed: serde_json::Value = serde_json::from_str(&msg)?;
+        if answer_apply_edit_writing_disk(fixture, &parsed).await? {
+            continue;
+        }
+        if parsed.get("method").and_then(serde_json::Value::as_str)
+            == Some("textDocument/publishDiagnostics")
+            && parsed["params"]["uri"].as_str() == Some(python_uri)
+        {
+            if let Some(updated) = extract_diagnostic(&parsed, code) {
+                if updated["severity"].as_u64() == Some(severity) {
+                    return Ok(true);
+                }
+            }
+        }
+    }
+    Ok(false)
+}
+
+/// [LSPARCH-CONFIG] / [CONFIGEDITOR-OPERATIONS]: every rule-severity change
+/// applied through the configuration editor must take effect on the FIRST
+/// apply, including the second and later applies in one session — against a
+/// real editor that writes the configuration file to disk. Regression test for
+/// the reported "apply is one change behind": the UI kept showing the previous
+/// apply's severities because the refresh after an applied edit went stale.
+#[tokio::test]
+async fn consecutive_ui_applies_each_take_effect_immediately() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let uri = file_uri(&fixture, "consecutive_apply.py");
+    fixture
+        .did_open(&uri, "def handler(value):\n    return value\n")
+        .await?;
+    let raw = fixture.wait_for_diagnostics().await?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+    let diag = extract_diagnostic(&json, "BSK-0001")
+        .ok_or("BSK-0001 should fire before any configuration change")?;
+    assert_eq!(
+        diag["severity"].as_u64(),
+        Some(1),
+        "BSK-0001 must start at error severity: {diag}"
+    );
+
+    assert!(
+        apply_severity_and_await_republish(&mut fixture, 940, &uri, "BSK-0001", 2).await?,
+        "first apply: BSK-0001 was never republished at warning severity"
+    );
+    assert!(
+        apply_severity_and_await_republish(&mut fixture, 950, &uri, "BSK-0001", 1).await?,
+        "second apply: BSK-0001 was never republished at error severity — the \
+         configuration editor is one apply behind"
+    );
+    assert!(
+        apply_severity_and_await_republish(&mut fixture, 960, &uri, "BSK-0001", 2).await?,
+        "third apply: BSK-0001 was never republished at warning severity — the \
+         configuration editor is one apply behind"
+    );
+    Ok(())
+}
+
 /// [LSPARCH-CONFIG] / [CONFIGEDITOR-OPERATIONS]: changing a rule severity
 /// through the configuration-editor UI protocol (snapshot → preview → apply)
 /// must run the same shared refresh tail as an external disk edit — the open

@@ -22,10 +22,11 @@ dateModified: 2026-07-19
   文件生效，更近的文件未设置的键继续沿用祖先的值。`stub-paths` 是唯一的
   追加型键——条目追加并去重。
 
-> **正在从 `basilisk.json` 迁移？** 旧版根目录 `basilisk.json` 文件已不再
-> 被读取。请将其键翻译为 `[tool.basilisk]`（驼峰式 → 短横线式，例如
-> `typeshedPath` → `typeshed-path`），然后删除该文件。配置编辑器会将遗留的
-> `basilisk.json` 报告为被忽略的遮蔽来源。
+> **正在从 `basilisk.json` 迁移？** 旧版根目录 `basilisk.json` 文件不会被
+> 任何组件读取——它完全无效，配置编辑器也不会以任何方式呈现它。请将其键
+> 翻译为 `[tool.basilisk]`（驼峰式 → 短横线式，例如 `typeshedPath` →
+> `typeshed-path`），把逐规则与逐标签的严重性移入
+> `[tool.basilisk.rules]` 与 `[tool.basilisk.rule-tags]`，然后删除该文件。
 
 ## 零配置
 

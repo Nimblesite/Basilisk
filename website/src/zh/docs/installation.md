@@ -30,10 +30,10 @@ cargo build --release
 | 操作系统 | 架构 |
 |----|-------------|
 | macOS | Apple Silicon (aarch64) |
-| macOS | Intel (x86_64) |
 | Linux | x86_64 |
 | Linux | aarch64 |
 | Windows | x86_64 |
+| Windows | arm64 |
 
 仅当您明确想覆盖 VSIX 中捆绑的二进制文件时，才需要设置 `basilisk.executablePath`、`basilisk.binaries.basilisk` 或 `basilisk.binaries.path`。
 
@@ -47,7 +47,7 @@ uv tool install basilisk-python
 pipx install basilisk-python
 ```
 
-安装后的命令仍然是 `basilisk`（发行版之所以命名为 `basilisk-python`，只是因为 `basilisk` 这个名字在 PyPI 上已被占用）。wheel 发布平台：Linux（x86_64、aarch64）、macOS（Apple Silicon）和 Windows（x64、arm64）。wheel 中不含任何 Python 代码——它就是同一个独立的 Rust 二进制文件，因此适用于任何 CPython 或 PyPy 3.x。
+安装后的命令仍然是 `basilisk`（发行版之所以命名为 `basilisk-python`，只是因为 PyPI 上的 [`basilisk`](https://pypi.org/project/basilisk/) 这个名字已被一个无关项目占用）。wheel 发布平台：Linux（x86_64、aarch64）、macOS（Apple Silicon）和 Windows（x64、arm64）。wheel 中不含任何 Python 代码——它就是同一个独立的 Rust 二进制文件，因此适用于任何满足该发行版 `requires-python = ">=3.8"` 的 CPython 或 PyPy。
 
 ## Homebrew (macOS、Linux)
 

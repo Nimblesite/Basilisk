@@ -62,7 +62,7 @@ uv tool install basilisk-python     # 或：pipx install basilisk-python
 
 也可通过 Homebrew（`brew tap Nimblesite/tap && brew install basilisk`）、Scoop 以及
 [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases) 安装——所有渠道分发的都是同一个
-Rust 二进制文件。完整选项参见[安装指南](https://www.basilisk-python.dev/docs/install-cli/)。
+Rust 二进制文件。完整选项参见[安装指南](https://www.basilisk-python.dev/zh/docs/installation/)。
 
 ## 试用
 
@@ -84,7 +84,7 @@ Basilisk 从 [typeshed](https://github.com/python/typeshed) 解析标准库类�
 
 在 `[tool.basilisk]` 中使用 `typeshed-commit = "<40 位 sha>"` 固定到某个确切提交
 （该配置失败即报错，绝不替换为其他提交），或用 `typeshed-path` 指向你自己的 typeshed
-目录树。完整选项参见[配置指南](https://www.basilisk-python.dev/docs/configuration/)。
+目录树。完整选项参见[配置指南](https://www.basilisk-python.dev/zh/docs/configuration/)。
 
 ## 编辑器
 
