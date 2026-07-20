@@ -45,14 +45,42 @@ const detailDriver = String.raw`
       pepButton.click();
       await sleep(250);
       const headingAfterPep = heading();
-      // 2. The user scrolls toward the basilisk rules in wheel-sized steps.
+      // 2. The user scrolls toward the basilisk rules, one viewport at a time.
+      // The regression shows up as the viewport SNAPPING BACK after a
+      // re-render, so what matters is that repeated scrolls make progress —
+      // not how many timer ticks the walk takes. The loop therefore stops the
+      // moment the target row virtualizes in, and gives up on a scroll that
+      // made no progress, rather than burning a fixed 30 short timers. Chromium
+      // clamps setTimeout to 1Hz in a window without OS focus, so a fixed-tick
+      // walk silently turned a 1.2s scroll into a 30s one and blew the harness
+      // timeout — making the suite pass only while it held the developer's
+      // screen. Bounded progress keeps it honest in either state.
+      const maxScrollTop = viewport.scrollHeight - viewport.clientHeight;
+      const scrollStep = ${VIEWPORT_HEIGHT_PX};
       for (let stepIndex = 0; stepIndex < 30; stepIndex += 1) {
-        viewport.scrollTop = viewport.scrollTop + 300;
+        if (el('[data-show-rule="BSK-0005"]')) break;
+        const before = viewport.scrollTop;
+        viewport.scrollTop = Math.min(before + scrollStep, maxScrollTop);
         await sleep(40);
+        // No movement at the bottom means the walk is done; no movement short
+        // of the bottom is the snap-back regression itself — stop either way
+        // and let the assertions report what the viewport actually did.
+        if (viewport.scrollTop === before) break;
       }
       await sleep(150);
       const scrollTopAfterScroll = viewport.scrollTop;
-      const maxScrollTop = viewport.scrollHeight - viewport.clientHeight;
+      // The scroll listener repaints the virtual window through
+      // requestAnimationFrame, which Chromium suspends outright in a window
+      // that does not hold OS focus — so the rows for the scrolled-to position
+      // would never materialise and this would look identical to the snap-back
+      // regression. Nudge the filter, whose applyFilter() path repaints the
+      // window synchronously, so the assertions below read the DOM that the
+      // viewport's real scrollTop implies. This cannot mask the regression: a
+      // yanked-back viewport still repaints at the WRONG offset and the
+      // basilisk rows still stay out of the window.
+      const search = document.getElementById('rule-search');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      await sleep(50);
       // 3. The user clicks the last basilisk rule.
       const bskButton = el('[data-show-rule="BSK-0005"]');
       if (bskButton) {
