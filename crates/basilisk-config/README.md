@@ -13,10 +13,11 @@ ancestor `pyproject.toml` carrying a `[tool.basilisk]` table contributes.
 Rule entries are never merged — the tables are kept as a nearest-first chain
 and the nearest table that decides a rule wins outright; non-rule scalar
 fields merge additively, nearest directory winning per key
-([CHKARCH-CONFIG-DISCOVERY]). A stray legacy `basilisk.json` is never read;
-the config editor reports it in `shadowed_sources`. LSP/editor settings such
-as analysis mode live in `basilisk-lsp` today and are not parsed by this
-crate.
+([CHKARCH-CONFIG-DISCOVERY]). A stray legacy `basilisk.json` is never read and
+is wholly inert — the configuration editor does not surface it at all
+([LSPCFGED-CONTRACT] excludes shadowed-source reporting, and tests assert its
+absence). LSP/editor settings such as analysis mode live in `basilisk-lsp`
+today and are not parsed by this crate.
 
 ## Key concepts
 
@@ -71,7 +72,7 @@ analysis modes. Those are separate planned/consumer concerns.
 Parsing is consumed by `basilisk-checker`, `basilisk-cli`, and `basilisk-lsp`.
 Validated mutation, ancestor-walk nearest-first discovery, content revisions, and
 the editor API are implemented; the editor targets `pyproject.toml` only and
-surfaces a stray `basilisk.json` as an ignored shadowed source. Remaining
+never reports a stray `basilisk.json` at all. Remaining
 provenance, document-version safety, and domain consolidation work is tracked
 in
 [`LSP-CONFIGURATION-EDITOR-PLAN.md`](../../docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md).

@@ -62,6 +62,17 @@ export default defineConfig({
         launchArgs: [
             '--disable-extensions',
             '--user-data-dir', userDataDir,
+            // Chromium clamps setTimeout to 1Hz and pauses requestAnimationFrame
+            // in a renderer it considers backgrounded — which is any window that
+            // does not hold OS focus. The webview-DOM drivers
+            // ([CONFIGEDITOR-VSIX-EXPERIENCE]) pace real user interaction with
+            // dozens of short timers, so under the clamp they blow their harness
+            // timeout and fail. Without these flags the suite only passes while
+            // it holds the developer's screen, which is not a property a test
+            // run may depend on. CI is unaffected either way.
+            '--disable-background-timer-throttling',
+            '--disable-renderer-backgrounding',
+            '--disable-backgrounding-occluded-windows',
             // [VSIX-EDITOR-SCREENSHOTS-PIPELINE]: when capturing website
             // screenshots, expose the headed VS Code window over CDP so the
             // watcher (screenshot-watcher.mjs) can grab it. No effect normally.
