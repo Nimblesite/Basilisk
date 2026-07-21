@@ -393,6 +393,23 @@ export const DRIVER_PRELUDE = String.raw`
     }
     return false;
   };
+  // Wait for an OBSERVABLE consequence instead of guessing how long the
+  // extension host will take. Every webview interaction costs two IPC round
+  // trips through the host's single event loop plus a full re-render, and that
+  // loop is shared with every other suite in the run — a language client
+  // pumping messages, the test-explorer poller, live panel effects. A fixed
+  // sleep encodes "the host is idle", which is true only when this file runs
+  // alone; in full-suite order the reply lands late and the driver samples a
+  // DOM that has not reacted yet. Returns false on timeout so the caller's
+  // assertion still fails loudly rather than the whole scenario hanging.
+  const waitUntil = async (predicate, tries) => {
+    for (let attempt = 0; attempt < (tries || 400); attempt += 1) {
+      try { if (predicate()) return true; } catch (ignored) { /* not rendered yet */ }
+      await sleep(25);
+    }
+    return false;
+  };
+  const dialog = () => document.getElementById('preview-dialog');
   // Read every observable fact about the Typeshed panel at this instant.
   const probe = () => {
     const commit = el('[data-typeshed-commit]');

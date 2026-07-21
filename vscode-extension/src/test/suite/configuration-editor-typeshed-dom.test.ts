@@ -150,19 +150,30 @@ const dialogDriver = String.raw`
       };
       const first = record('before');
       first.ruleValue = ruleValue();
-      // A rule change still costs an impact review...
+      // A rule change still costs an impact review. Wait for the dialog the
+      // change causes rather than for a fixed delay: the proposal travels to
+      // the extension host and back before anything renders, and that host is
+      // shared with every other suite in the run.
       await change(el('select[data-rule-entry="pep_rule_000"]'), 'Warning');
+      if (!await waitUntil(() => dialog().open)) { report({ ok: false, reason: 'the impact dialog never opened for the rule change', steps }); return; }
       const opened = record('dialog-open');
       opened.ruleValue = ruleValue();
       // ...and dismissing it discards the change: the control must snap back.
-      document.getElementById('preview-dialog').close();
-      await sleep(250);
+      // Closing a dialog that is already open is what fires the close event, so
+      // the wait above is also what makes the discard reach the host at all.
+      dialog().close();
+      await waitUntil(() => !dialog().open);
+      await sleep(settleDelay);
       const cancelled = record('dialog-cancelled');
       cancelled.ruleValue = ruleValue();
-      // Re-run it and apply for real.
+      // Re-run it and apply for real. Applying is ignored unless the editor is
+      // actually in its preview phase, so wait for the dialog to prove it is
+      // there before clicking — otherwise the click is silently discarded.
       await change(el('select[data-rule-entry="pep_rule_000"]'), 'Info');
+      if (!await waitUntil(() => dialog().open)) { report({ ok: false, reason: 'the impact dialog never reopened, so apply had nothing to confirm', steps }); return; }
       await click(el('[data-action="apply-preview"]'));
-      await sleep(250);
+      await waitUntil(() => !dialog().open);
+      await sleep(settleDelay);
       const applied = record('applied');
       applied.ruleValue = ruleValue();
       report({ ok: true, steps });
