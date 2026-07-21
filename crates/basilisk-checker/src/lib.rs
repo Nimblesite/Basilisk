@@ -1,6 +1,6 @@
 //! Implements [CHKARCH-ARCH-PIPELINE] and integrates the modules specified by
-//! [TYPEINF-SPEC] / [TYPEINF-IMPL]. See
-//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-arch-pipeline and
+//! [TYPEINF] / [TYPEINF-IMPL]. See
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE and
 //! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-IMPL.
 //! Type checker for Basilisk.
 //!

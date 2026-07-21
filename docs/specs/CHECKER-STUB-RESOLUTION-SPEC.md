@@ -1,6 +1,6 @@
 # Stub Resolution & Type Provenance — Specification {#STUBRES-OVERVIEW}
 
-> **Crate**: `basilisk-stubs` (resolution, the downloaded `python/typeshed` archive + on-disk cache, and the bundled stdlib ZIP), `basilisk-config` (overrides)
+> **Crate**: `basilisk-stubs` (resolution and the offline step-3 sources — the bundled stdlib ZIP, the content-addressed commit store, and offline pin verification; it links no HTTP client, see [§STUBRES-TYPESHED-OFFLINE](#STUBRES-TYPESHED-OFFLINE)), `basilisk-typeshed-fetch` (the segregated, user-invoked download that is the only code which opens a connection, see [§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD)), `basilisk-config` (overrides)
 > **Related**: [LSP-UV-INTEGRATION-SPEC.md §LSPUV-LOCK-REGISTRY](LSP-UV-INTEGRATION-SPEC.md#LSPUV-LOCK-REGISTRY) — `PackageRegistry` accelerates stub discovery
 
 ---
@@ -387,7 +387,7 @@ That is the whole surface: three keys. There are no cache-reuse, expiry,
 verification-waiver, or mirror settings, and no one-run flags: nothing is
 cached, nothing expires, a pin always verifies
 ([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)), and downloads come only from
-GitHub ([§STUBRES-TYPESHED-DOWNLOAD]).
+GitHub ([§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD)).
 
 #### Target Python version {#STUBRES-TYPESHED-VERSION}
 

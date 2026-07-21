@@ -1,4 +1,4 @@
-//! Implements [`directives_disjoint_base`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`directives_disjoint_base`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `directives_disjoint_base`: PEP 800 disjoint bases.
 //!
 //! PEP 800 introduces `typing.disjoint_base`. A class is a *disjoint base* when

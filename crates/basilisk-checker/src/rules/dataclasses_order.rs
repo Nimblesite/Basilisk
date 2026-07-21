@@ -1,4 +1,4 @@
-//! Implements [`dataclasses_order`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! Implements [`dataclasses_order`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 //! `dataclasses_order`: Invalid ordering comparison of dataclass instances.
 //!
 //! When `@dataclass(order=True)`, Python synthesizes `__lt__`, `__le__`, `__gt__`,

@@ -1,4 +1,4 @@
-//! Implements [`classes_override`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`classes_override`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `classes_override`: Incompatible method override.
 //!
 //! When a class method marked with `@override` has a different parameter

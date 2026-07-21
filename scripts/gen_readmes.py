@@ -4,10 +4,10 @@
 
 Basilisk's front page is published to three storefronts — GitHub, the VS Code
 Marketplace / Open VSX (one VSIX, one file), and PyPI. They used to be three
-hand-maintained files, so they drifted. Now `docs/readme/README.src.md` (and its
-Chinese mirror) is the only authored copy, and every published README is
-generated from it: identical except for one paragraph saying which artifact the
-reader is looking at ([README-IDENTITY]).
+hand-maintained files, so they drifted ([README-PURPOSE]). Now
+`docs/readme/README.src.md` (and its Chinese mirror) is the only authored copy,
+and every published README is generated from it: identical except for one
+paragraph saying which artifact the reader is looking at ([README-IDENTITY]).
 
 Usage:
     python3 scripts/gen_readmes.py            # rewrite the generated READMEs
@@ -36,7 +36,7 @@ GENERATED_BANNER = (
 
 @dataclass(frozen=True)
 class Target:
-    """One storefront the README is published to."""
+    """One storefront the README is published to ([README-TARGETS])."""
 
     key: str
     output: Path
@@ -45,7 +45,7 @@ class Target:
 
 @dataclass(frozen=True)
 class Source:
-    """One authored README and the targets rendered from it."""
+    """One authored README and the targets rendered from it ([README-SOURCE])."""
 
     path: Path
     targets: tuple[Target, ...]
@@ -91,7 +91,10 @@ class GenerationError(RuntimeError):
 
 
 def apply_variants(text: str, key: str) -> str:
-    """Keep each `<!--v:…-->` block only for the targets that list it."""
+    """Keep each `<!--v:…-->` block only for the targets that list it.
+
+    Transform 1 of [README-RENDER].
+    """
 
     def resolve(match: re.Match[str]) -> str:
         keys = match["keys"].split(",")
@@ -117,7 +120,11 @@ def _is_relative(url: str) -> bool:
 
 
 def absolutise_links(text: str) -> str:
-    """Rewrite every repo-relative link/image to its canonical GitHub URL."""
+    """Rewrite every repo-relative link/image to its canonical GitHub URL.
+
+    Transform 3 of [README-RENDER]. Only the `github` target keeps relative
+    links, because only there does the rendered file sit at the repository root.
+    """
 
     def markdown(match: re.Match[str]) -> str:
         url = match["url"]
@@ -135,7 +142,12 @@ def absolutise_links(text: str) -> str:
 
 
 def render(source_text: str, source_name: str, target: Target) -> str:
-    """Render one target: variants, tokens, then link absolutisation."""
+    """Render one target: variants, tokens, then link absolutisation.
+
+    The three [README-RENDER] transforms, in the order the spec fixes. Token
+    substitution is transform 2; `{{altLangHref}}` is a per-target expression of
+    one statement, not content ([README-IDENTITY]).
+    """
     body = apply_variants(source_text, target.key)
     body = body.replace("{{altLangHref}}", target.alt_lang_href)
     if target.key != "github":
@@ -151,32 +163,87 @@ def strip_authoring_header(text: str) -> str:
     return text[end:]
 
 
-def comparable(source_text: str, key: str) -> str:
-    """The rendered body reduced to the content every target must share.
+@dataclass(frozen=True)
+class Variant:
+    """One `<!--v:…-->` block: its body and the targets it renders for."""
 
-    The identity paragraph ([README-IDENTITY]) is dropped, the language-switch
-    href is left as its token rather than a per-target URL, and links stay
-    relative — what remains is the text that may not vary between storefronts.
+    keys: tuple[str, ...]
+    body: str
+
+    @property
+    def marker(self) -> str:
+        """The opening marker, for naming the block in an error message."""
+        return f"<!--v:{','.join(self.keys)}-->"
+
+    def is_identity_paragraph(self) -> bool:
+        """One blockquote line saying which artifact the reader is looking at."""
+        lines = [line for line in self.body.splitlines() if line.strip()]
+        return len(lines) == 1 and lines[0].startswith("> ")
+
+
+def variants(source_text: str) -> tuple[Variant, ...]:
+    """Every `<!--v:…-->` block in the source, in document order."""
+    return tuple(
+        Variant(tuple(match["keys"].split(",")), match["body"])
+        for match in VARIANT_RE.finditer(source_text)
+    )
+
+
+def comparable(source_text: str) -> str:
+    """The source with every variant block removed.
+
+    What remains is shared by every target verbatim: the language-switch href is
+    still its token rather than a per-target URL and links are still relative, so
+    this is the text that may not vary between storefronts ([README-IDENTITY]).
     """
-    body = apply_variants(source_text, key)
-    return "\n".join(
-        line for line in body.splitlines() if not line.startswith("> **")
-    ).strip()
+    return VARIANT_RE.sub("", source_text).strip()
+
+
+def _assert_identity_variant(
+    variant: Variant, declared: frozenset[str], claimed: frozenset[str], name: str
+) -> None:
+    """One block must be an identity paragraph for a declared, unclaimed target."""
+    if unknown := [key for key in variant.keys if key not in declared]:
+        raise GenerationError(
+            f"{name}: {variant.marker} renders for no target of this source "
+            f"({', '.join(unknown)}) — dead content, see [README-IDENTITY]"
+        )
+    if not variant.is_identity_paragraph():
+        raise GenerationError(
+            f"{name}: {variant.marker} is not a single identity paragraph — that "
+            "one line is all a target may vary by, see [README-IDENTITY]"
+        )
+    if repeated := [key for key in variant.keys if key in claimed]:
+        raise GenerationError(
+            f"{name}: target `{repeated[0]}` carries a second variant block — one "
+            "identity paragraph per target, see [README-IDENTITY]"
+        )
 
 
 def assert_only_identity_differs(
     source_text: str, keys: tuple[str, ...], source_name: str
 ) -> None:
-    """[README-IDENTITY]: targets may differ by the identity paragraph alone."""
-    baseline = comparable(source_text, "github")
-    if not baseline:
+    """[README-IDENTITY]: targets may differ by the identity paragraph alone.
+
+    A `<!--v:…-->` block is the only thing that can make content target-specific,
+    so the rule is enforced on the blocks themselves rather than on a text diff
+    that has to guess which lines are the identity: everything outside them is
+    shared verbatim, and every block is one identity paragraph claimed by exactly
+    one declared target.
+    """
+    if not comparable(source_text):
         raise GenerationError(f"{source_name}: rendered nothing")
-    for key in keys:
-        if comparable(source_text, key) != baseline:
-            raise GenerationError(
-                f"{source_name}: target `{key}` differs from `github` by more than "
-                "the identity paragraph — see [README-IDENTITY]"
-            )
+    declared = frozenset(keys)
+    claimed: set[str] = set()
+    for variant in variants(source_text):
+        _assert_identity_variant(variant, declared, frozenset(claimed), source_name)
+        claimed.update(variant.keys)
+    if missing := sorted(declared - claimed):
+        raise GenerationError(
+            f"{source_name}: target(s) {', '.join(missing)} carry no identity "
+            "paragraph — every storefront must say which artifact it is, see "
+            "[README-IDENTITY]"
+        )
 
 
 def outputs() -> list[tuple[Path, str]]:
@@ -197,6 +264,7 @@ def outputs() -> list[tuple[Path, str]]:
 
 
 def main(argv: list[str]) -> int:
+    """Write every generated README, or with `--check` enforce [README-DRIFT]."""
     check = "--check" in argv[1:]
     try:
         generated = outputs()

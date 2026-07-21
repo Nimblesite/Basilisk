@@ -1,4 +1,4 @@
-//! Implements [`classes_classvar`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`classes_classvar`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! Argument validation helpers for `classes_classvar`: `ClassVar` argument correctness
 //! checks and type-mismatch detection between the `ClassVar` inner type and the RHS.
 

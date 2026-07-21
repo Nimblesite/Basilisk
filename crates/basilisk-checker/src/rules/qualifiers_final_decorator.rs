@@ -1,4 +1,4 @@
-//! Implements [`qualifiers_final_decorator`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`qualifiers_final_decorator`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! `qualifiers_final_decorator`: `@final` decorator violations.
 //!
 //! Three violations are detected:

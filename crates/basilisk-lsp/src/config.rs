@@ -8,17 +8,26 @@
 
 use std::path::{Path, PathBuf};
 
-/// Controls which files the LSP server analyses.
+/// Controls which files the LSP server analyses ([ANALYSIS-MODES]).
 ///
-/// See `docs/LSP-ANALYSIS-MODES-SPEC.md` for the full specification.
+/// See `docs/specs/LSP-ANALYSIS-MODES-SPEC.md` for the full specification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AnalysisMode {
-    /// Analyse only files currently open in the editor.
+    /// Analyse only files currently open in the editor ([ANALYSIS-OPEN]).
     OpenFilesOnly,
-    /// Analyse all workspace Python files (default, strict-by-default).
+    /// Analyse all workspace Python files, publishing diagnostics for closed
+    /// files too (default, strict-by-default) ([ANALYSIS-WHOLE]).
     #[default]
     WholeModule,
-    /// Cross-file import graph analysis (reserved for future use).
+    /// `WholeModule` plus cross-file import-graph analysis ([ANALYSIS-CROSS]).
+    ///
+    /// Selects the cross-module salsa diagnostics query, so a file is checked
+    /// against the **current** content of the modules it imports
+    /// ([ANALYSIS-SYMBOLS-POP]); an edit to an open module's exports re-checks
+    /// that module's importers ([ANALYSIS-SYMBOLS-INVAL]); and the import graph
+    /// is built so navigation can answer "who imports this file?"
+    /// ([ANALYSIS-GRAPH]). The other modes check each file on its own, keeping
+    /// byte-for-byte `basilisk check` parity on what they report.
     CrossModule,
 }
 

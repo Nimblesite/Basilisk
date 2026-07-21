@@ -12,6 +12,7 @@
 <p align="center">
   <strong>The only Python type checker scoring 100% on the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> conformance suite</a> — and the fastest we&rsquo;ve measured.</strong><br>
   Complete open-source Python dev environment in <strong>Rust</strong>: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed &amp; Neovim extensions. Strict by default.
+  Weighing up the <a href="https://www.basilisk-python.dev/docs/comparison/">best Python type checker</a> for your codebase? Start with the scoreboard.
 </p>
 
 > **You are reading the Basilisk extension listing** for VS Code, Cursor, Windsurf, and every VS Code fork — the same extension is published to the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Nimblesite.basilisk) and [Open VSX](https://open-vsx.org/extension/Nimblesite/basilisk).

@@ -22,9 +22,6 @@
 <!--v:vscode-->
 > **你正在阅读 Basilisk 的扩展页面**，适用于 VS Code、Cursor、Windsurf 以及所有 VS Code 分支 —— 同一个扩展同时发布到 [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Nimblesite.basilisk) 与 [Open VSX](https://open-vsx.org/extension/Nimblesite/basilisk)。
 <!--/v:vscode-->
-<!--v:pypi-->
-> **你正在阅读 `basilisk-python` wheel 的页面** —— 为 `pip`/`uv` 打包的 Basilisk 命令行工具。发行包之所以命名为 `basilisk-python`，是因为 PyPI 上的 `basilisk` 已被占用；安装后的命令仍然是 `basilisk`。
-<!--/v:pypi-->
 
 <p align="center">
   <a href="https://www.basilisk-python.dev/zh/">网站</a> &nbsp;&bull;&nbsp;

@@ -78,10 +78,11 @@ pub enum SelectionError {
     /// Custom is the sole step-3 source and could not activate.
     #[error("custom typeshed failed without fallback: {0}")]
     Custom(BackendError),
-    /// The pinned commit is not on this machine (or failed verification).
-    /// The message is the spec's `NO SOURCE` status line verbatim
-    /// ([STUBRES-TYPESHED-WARN]).
-    #[error("NO SOURCE — {commit} is not on this machine; run Download latest or basilisk typeshed download --commit {commit}")]
+    /// The pinned commit is not on this machine, or the entry that IS on this
+    /// machine failed a gate. The message is the matching spec status line
+    /// ([STUBRES-TYPESHED-WARN]) — the two persistent statuses stay distinct,
+    /// see [`terminal_status_line`].
+    #[error("{}", terminal_status_line(.commit, *.reason))]
     NoSource {
         /// The full pinned commit SHA.
         commit: Oid,
@@ -91,6 +92,28 @@ pub enum SelectionError {
     /// A backend returned a source different from the requested candidate.
     #[error("typeshed backend returned an inconsistent source identity")]
     InconsistentIdentity,
+}
+
+/// The spec's persistent status line for a terminal pinned-source failure
+/// ([STUBRES-TYPESHED-WARN] lists the two as separate rows). Drift of the
+/// build-approved license identity is its own status: those bytes ARE on this
+/// machine and downloading them again changes nothing, so it must never
+/// masquerade as `NO SOURCE`. The full SHA rides along either way — every
+/// surface shows it when it is known.
+fn terminal_status_line(commit: &Oid, reason: BackendError) -> String {
+    match reason {
+        BackendError::LicenseChanged => format!(
+            "{} (commit {commit})",
+            TypeshedWarning::LicenseChanged.message()
+        ),
+        BackendError::InvalidConfiguration
+        | BackendError::Missing
+        | BackendError::Corrupt
+        | BackendError::Custom
+        | BackendError::Bundle => format!(
+            "NO SOURCE — {commit} is not on this machine; run Download latest or basilisk typeshed download --commit {commit}"
+        ),
+    }
 }
 
 /// Select exactly one complete step-3 source under the configured policy.
@@ -202,3 +225,50 @@ fn identity_matches_vfs(snapshot: &Snapshot) -> bool {
     reason = "test-only fixtures use fixed embedded assets and SHA constants"
 )]
 mod tests;
+
+/// [STUBRES-TYPESHED-WARN]: the status table's two terminal rows — license
+/// drift and an absent/unverifiable pin — never collapse into one message.
+#[cfg(test)]
+mod status_line_tests {
+    use super::{terminal_status_line, BackendError, Oid, SelectionError};
+
+    const SHA: &str = "0123456789012345678901234567890123456789";
+
+    #[test]
+    fn license_drift_reports_its_own_status_line_never_no_source() {
+        let rendered = Oid::from_hex(SHA).map(|commit| {
+            SelectionError::NoSource {
+                commit,
+                reason: BackendError::LicenseChanged,
+            }
+            .to_string()
+        });
+        assert_eq!(
+            rendered.ok(),
+            Some(format!(
+                "LICENSE CHANGED — Basilisk update/review required (commit {SHA})"
+            )),
+            "license drift is the spec's LICENSE CHANGED status, not NO SOURCE"
+        );
+    }
+
+    #[test]
+    fn every_other_category_reports_the_no_source_recovery_line() {
+        for reason in [
+            BackendError::Missing,
+            BackendError::Corrupt,
+            BackendError::InvalidConfiguration,
+            BackendError::Custom,
+            BackendError::Bundle,
+        ] {
+            let rendered = Oid::from_hex(SHA).map(|commit| terminal_status_line(&commit, reason));
+            assert_eq!(
+                rendered.ok(),
+                Some(format!(
+                    "NO SOURCE — {SHA} is not on this machine; run Download latest or basilisk typeshed download --commit {SHA}"
+                )),
+                "{reason:?} must keep the loud NO SOURCE recovery line"
+            );
+        }
+    }
+}

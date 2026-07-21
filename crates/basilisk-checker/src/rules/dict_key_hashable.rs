@@ -1,4 +1,4 @@
-//! Implements [`dict_key_hashable`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`dict_key_hashable`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `dict_key_hashable`: Unhashable type used as a dict key.
 //!
 //! Lists, sets, and plain dicts are not hashable and cannot be used as

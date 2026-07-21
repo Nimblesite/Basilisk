@@ -374,6 +374,41 @@ mod tests {
             Some("elsewhere.solo".to_owned())
         );
         assert_eq!(stub_module_name(Path::new("/cache/notes.txt"), cache), None);
-        assert_eq!(stub_module_name(Path::new("/cache/no_extension"), cache), None);
+        assert_eq!(
+            stub_module_name(Path::new("/cache/no_extension"), cache),
+            None
+        );
+    }
+    /// The three CLI mode spellings map one-to-one onto generator modes.
+    #[test]
+    fn generation_mode_arguments_map_to_generator_modes() {
+        assert!(matches!(
+            StubGenMode::from(StubGenModeArg::Runtime),
+            StubGenMode::Runtime
+        ));
+        assert!(matches!(
+            StubGenMode::from(StubGenModeArg::Ast),
+            StubGenMode::Ast
+        ));
+        assert!(matches!(
+            StubGenMode::from(StubGenModeArg::Hybrid),
+            StubGenMode::Hybrid
+        ));
+    }
+
+    /// [STUBRES-AUTOGEN]: contradictory or empty selections are rejected
+    /// before any interpreter or filesystem work happens.
+    #[test]
+    fn generation_target_selection_rejects_contradictory_requests() {
+        let root = Path::new("/nonexistent-project-root");
+        let python = Path::new("python3");
+        assert!(
+            generation_targets(&["requests".to_owned()], true, python, root).is_err(),
+            "--all plus explicit packages must be rejected"
+        );
+        assert!(
+            generation_targets(&[], false, python, root).is_err(),
+            "no packages and no --all must be rejected"
+        );
     }
 }

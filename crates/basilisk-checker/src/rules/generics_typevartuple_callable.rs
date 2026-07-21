@@ -1,4 +1,4 @@
-//! Implements [`generics_typevartuple_callable`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_typevartuple_callable`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_typevartuple_callable`: `TypeVarTuple` callable/tuple argument mismatch.
 //!
 //! When a constructor (or function) links two parameters via a `TypeVarTuple`

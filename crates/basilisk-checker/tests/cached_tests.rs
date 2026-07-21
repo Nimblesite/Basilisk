@@ -1,5 +1,5 @@
 //! Tests for [CHKCACHE-DIAG] / [CHKCACHE-DIAG-INTERN].
-//! See docs/specs/CHECKER-CACHE-SPEC.md#chkcache-entry
+//! See docs/specs/CHECKER-CACHE-SPEC.md#CHKCACHE-ENTRY
 #![allow(clippy::allow_attributes, clippy::unwrap_used, clippy::expect_used)]
 //! Crate-boundary tests for the serde-friendly diagnostic projection and the
 //! `&'static` code interner used on cache replay.

@@ -1,4 +1,4 @@
-//! Implements [`generics_base_class_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_base_class_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_base_class_2`: Inconsistent `TypeVar` ordering across base classes.
 //!
 //! When a class inherits from multiple generic bases that share a common

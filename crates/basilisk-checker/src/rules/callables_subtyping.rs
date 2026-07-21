@@ -1,4 +1,4 @@
-//! Implements [`callables_subtyping`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`callables_subtyping`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `callables_subtyping`: Callable subtyping violations (covariance / contravariance).
 //!
 //! Callable types are covariant with respect to return types and contravariant

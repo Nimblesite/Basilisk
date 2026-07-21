@@ -41,6 +41,7 @@ linked to an active plan.
 | [Website screenshots](specs/WEBSITE-SCREENSHOTS-SPEC.md) | Verified CLI screenshot generation. |
 | [Website error pages](specs/WEBSITE-ERROR-PAGES-SPEC.md) | Generated per-diagnostic documentation. |
 | [READMEs](specs/DOCS-README-SPEC.md) | One authored README per language, generated to GitHub, the VSIX (Marketplace + Open VSX), and PyPI. |
+| [Repository standards](specs/REPO-STANDARDS-SPEC.md) | Root/`.github` gates: duplication budget, coverage thresholds, committed editor directories, Dependabot, CodeQL, and dependency review. |
 
 ## Active plans
 
@@ -50,12 +51,12 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 |---|---|
 | [Roadmap](plans/ROADMAP-NEXT-STEPS-PLAN.md) | Distribution follow-ups, scale, ecosystem, and links to focused plans. |
 | [Specification conformance audit](plans/SPEC-CONFORMANCE-AUDIT-PLAN.md) | Confirmed implementation/spec deviations. |
-| [Configuration editor](plans/LSP-CONFIGURATION-EDITOR-PLAN.md) | Buffer safety, protocol E2E coverage, provenance/metadata, cross-editor clients, and release evidence. |
+| [Configuration editor](plans/LSP-CONFIGURATION-EDITOR-PLAN.md) | Canonical fixability metadata, DTO drift test, config-projection consolidation, field provenance, protocol/adoption/suppression E2E coverage, accessibility verification, cross-editor clients, and release gates. |
 | [Formatting](plans/LSP-FORMATTING-PLAN.md) | VS Code default-formatter opt-in and published-artifact verification. |
 | [AI-assisted LSP](plans/LSP-AI-PLAN.md) | First opt-in provider slice and privacy/safety gate. |
 | [Activity panel](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Settings wiring and remaining cross-editor/test quality. |
 | [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Bidirectional/constraint-based inference engine, flow analysis, shared subtyping, and PEP 827 readiness. |
-| [Runtime typeshed resolution](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Offline two-source resolution, segregated download component, startup gating, and #288/#289 hovers all shipped; only the per-artifact licensing gate remains (composite LICENSE, conditional NOTICE files, and modified-file marks verified inside every binary, wheel, and VSIX). |
+| [Runtime typeshed resolution](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Two open items: a socket-instrumented witness that checking is offline across CLI/LSP/MCP, and byte-exact per-artifact licensing verification inside the VSIX (binaries and wheels are already verified). |
 | [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Replace remaining raw-source rule scans with AST data. |
 | [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Mojo checks, plugin host, migration, and CI helpers. |
 | [Native compiler](plans/COMPILER-ARCHITECTURE-PLAN.md) | HIR, backend, runtime, interop, CLI, and native acceptance. |

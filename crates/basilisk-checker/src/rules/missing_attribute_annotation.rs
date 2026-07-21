@@ -1,4 +1,4 @@
-//! Implements [BSK-0005] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
+//! Implements [BSK-0005] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
 //! BSK-0005: Missing class attribute type annotation.
 //!
 //! Every class attribute declared in the class body must have an explicit type

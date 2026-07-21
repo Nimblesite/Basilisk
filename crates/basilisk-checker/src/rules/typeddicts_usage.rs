@@ -1,4 +1,4 @@
-//! Implements [`typeddicts_usage`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`typeddicts_usage`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `typeddicts_usage`: `TypedDict` runtime violation.
 //!
 //! PEP 589 defines constraints on what you can do with `TypedDict` type objects at runtime:

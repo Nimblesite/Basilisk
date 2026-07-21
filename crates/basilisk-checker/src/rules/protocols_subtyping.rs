@@ -1,4 +1,4 @@
-//! Implements [`protocols_subtyping`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`protocols_subtyping`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `protocols_subtyping`: Protocol attribute tuple element type mismatch.
 //!
 //! When a class explicitly implements a `Protocol` and assigns to a

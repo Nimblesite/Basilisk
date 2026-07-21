@@ -1,4 +1,4 @@
-//! Implements [`dataclasses_frozen`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! Implements [`dataclasses_frozen`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! `dataclasses_frozen`: Assignment to attribute of a frozen dataclass instance, or invalid
 //! frozen/non-frozen dataclass inheritance.
 //!

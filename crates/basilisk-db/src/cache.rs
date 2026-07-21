@@ -1,5 +1,5 @@
 //! Implements [CHKCACHE-ENTRY] / [CHKCACHE-FINGERPRINT].
-//! See docs/specs/CHECKER-CACHE-SPEC.md#chkcache-entry
+//! See docs/specs/CHECKER-CACHE-SPEC.md#CHKCACHE-ENTRY
 //!
 //! A generic, content-addressed, on-disk result cache.
 //!

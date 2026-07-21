@@ -1,4 +1,4 @@
-//! Implements [`enums_member_values`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! Implements [`enums_member_values`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 //! `enums_member_values`: Enum member value incompatible with `_value_` type annotation.
 //!
 //! When an enum class declares `_value_: T` (annotation-only, no value), all

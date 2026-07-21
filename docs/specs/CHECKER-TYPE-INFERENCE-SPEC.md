@@ -1,4 +1,4 @@
-# [TYPEINF-SPEC] Basilisk type inference {#TYPEINF}
+# Basilisk type inference {#TYPEINF}
 
 Basilisk combines conservative shared inference with focused typing-rule algorithms. The default configuration follows the typing specification; optional house rules can require or discourage annotations without changing PEP behavior (see [TYPEINF-REDUNDANT]).
 

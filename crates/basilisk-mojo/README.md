@@ -4,7 +4,7 @@ Mojo-inspired ownership and immutability analysis for Basilisk.
 
 ## Role in Basilisk
 
-This crate implements **static ownership semantics** as type annotations over standard Python syntax. Using `Annotated` from the `typing` module, developers can declare ownership contracts that Basilisk enforces at analysis time — catching mutation of borrowed values and use-after-move before they reach production.
+This crate implements **static ownership semantics** as type annotations over standard Python syntax. Using `Annotated` from the `typing` module, developers can declare ownership contracts that Basilisk enforces at analysis time — catching mutation of borrowed values and use-after-move before they reach production. Implements [CHKARCH-MOJO-SAFETY](../../docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-MOJO-SAFETY).
 
 ## Key concepts
 
@@ -20,7 +20,7 @@ from typing import Annotated
 from basilisk import Borrowed
 
 def summarise(items: Annotated[list[int], Borrowed]) -> int:
-    items.append(99)  # generics_defaults: mutation of Borrowed parameter
+    items.append(99)  # directives_cast: mutation of Borrowed parameter `items` via `.append()` is not allowed
     return sum(items)
 ```
 

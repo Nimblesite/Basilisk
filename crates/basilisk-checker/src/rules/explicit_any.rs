@@ -1,4 +1,4 @@
-//! Implements [BSK-0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [BSK-0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! BSK-0014: Explicit `Any` annotation.
 //!
 //! Emitted as a `Warning` when a function parameter or return annotation is

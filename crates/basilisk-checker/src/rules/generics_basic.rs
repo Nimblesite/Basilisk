@@ -1,4 +1,4 @@
-//! Implements [`generics_basic`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`generics_basic`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `generics_basic`: `TypeVar` declared with exactly one constraint.
 //!
 //! PEP 484 requires a `TypeVar` to have either zero constraints (unconstrained)

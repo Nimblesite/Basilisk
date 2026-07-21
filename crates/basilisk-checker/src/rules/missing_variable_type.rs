@@ -1,4 +1,4 @@
-//! Implements [BSK-0003] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
+//! Implements [BSK-0003] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
 //! BSK-0003: Missing variable type annotation.
 //!
 //! Fires when a module-level variable has no type annotation.  This house rule

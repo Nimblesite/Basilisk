@@ -1,4 +1,4 @@
-//! Implements [`protocols_modules`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! Implements [`protocols_modules`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 //! `protocols_modules`: Module assigned to incompatible protocol type.
 //!
 //! When a module object is assigned to a variable typed as a `Protocol`, the

@@ -24,6 +24,7 @@ import {
   type DomStep,
 } from "./webview-dom-harness";
 import { ACTIVE_COMMIT, LATEST_COMMIT, OTHER_COMMIT } from "./typeshed-fixture";
+import { decodeConfigurationEditorIntent } from "../../configuration-editor-intents";
 
 const CUSTOM_FOLDER = "/workspace/vendor/typeshed";
 const STORE_FOLDER = "/workspace/.basilisk/typeshed-store";
@@ -284,9 +285,32 @@ function assertPinnedAndCommitEditing(steps: DomStep[] | undefined, intents: rea
   assert.strictEqual(repinned.commitInvalid, null);
   assert.strictEqual(repinned.dialogOpen, false, "a Typeshed edit never opens the impact dialog");
   assert.deepStrictEqual(mutationsOf(intents, 1), [
-    { kind: "SetTypeshedSetting", key: { kind: "TypeshedCommit" }, value: { kind: "Text", value: OTHER_COMMIT } },
+    { kind: "SetTypeshedSetting", key: { kind: "TypeshedCommit" }, value: OTHER_COMMIT },
     { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedPath" } },
   ]);
+}
+
+/**
+ * Every intent the webview posts must survive the decoder the extension host
+ * actually runs it through ([LSPCFGED-TYPESHED]).
+ *
+ * The reported failure this locks down: the webview built
+ * `SetTypeshedSetting` with a retired `{ kind: 'Text', value }` wrapper. Both
+ * sides were tested in isolation and both passed, but the decoder dropped the
+ * unknown shape, so editing a typeshed path or commit in the editor silently
+ * did nothing. Asserting the DOM shape alone cannot catch that — the posted
+ * intent has to be decoded.
+ */
+function assertEveryPostedIntentDecodes(intents: readonly Record<string, unknown>[]): void {
+  const actionable = intents.filter((intent) => intent.type !== "ready" && intent.type !== "domTestBoot");
+  assert.ok(actionable.length > 0, "the journey must post at least one actionable intent");
+  for (const intent of actionable) {
+    assert.notStrictEqual(
+      decodeConfigurationEditorIntent(intent),
+      undefined,
+      `the extension host must be able to decode what the webview posted: ${JSON.stringify(intent)}`,
+    );
+  }
 }
 
 /** 3-5: the folder source, the atomic switch back, and the cancelled picker. */
@@ -360,7 +384,7 @@ function assertDownloadLatest(steps: DomStep[] | undefined, intents: readonly Re
 
   const edited = step(steps, "edited-mid-download");
   assert.deepStrictEqual(mutationsOf(intents, 2), [
-    { kind: "SetTypeshedSetting", key: { kind: "TypeshedCommit" }, value: { kind: "Text", value: OTHER_COMMIT } },
+    { kind: "SetTypeshedSetting", key: { kind: "TypeshedCommit" }, value: OTHER_COMMIT },
     { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedPath" } },
   ], "an SHA edit mid-download still writes — configuration never waits on the network");
   assert.strictEqual(edited.commitValue, OTHER_COMMIT);
@@ -430,6 +454,7 @@ suite("Configuration editor — Typeshed source in a real webview DOM", () => {
     assert.strictEqual(result.ok, true, `driver failed: ${result.reason ?? "unknown"}`);
     assertPinnedAndCommitEditing(result.steps, intents);
     assertCustomFolder(result.steps, intents);
+    assertEveryPostedIntentDecodes(intents);
   });
 
   test("Download latest spins only its own button while every control stays live", async function () {
@@ -438,6 +463,7 @@ suite("Configuration editor — Typeshed source in a real webview DOM", () => {
     const { result, intents } = await runScenario(downloadLatestDriver, host);
     assert.strictEqual(result.ok, true, `driver failed: ${result.reason ?? "unknown"}`);
     assertDownloadLatest(result.steps, intents);
+    assertEveryPostedIntentDecodes(intents);
   });
 
   test("NO SOURCE renders a persistent inline row fixed by Download pinned", async function () {

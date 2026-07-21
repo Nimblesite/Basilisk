@@ -1,4 +1,4 @@
-//! Implements [`literals_parameterizations_2`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! Implements [`literals_parameterizations_2`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 //! `literals_parameterizations_2`: `Literal["EnumClass.MEMBER"]` (string) used where
 //! `Literal[EnumClass.MEMBER]` (enum member reference) is required.
 //!

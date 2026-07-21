@@ -1,4 +1,4 @@
-//! Implements [`protocols_definition`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`protocols_definition`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `protocols_definition`: Protocol method sets self-attributes not declared in the Protocol.
 //!
 //! When a Protocol class defines a method (including `__init__`/`__new__`) that

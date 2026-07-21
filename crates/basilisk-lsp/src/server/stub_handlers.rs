@@ -1,4 +1,4 @@
-//! Implements [STUBRES-CREATE-LOCAL]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#stubres-create-local
+//! Implements [STUBRES-CREATE-LOCAL]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL
 //!
 //! LSP command handler for `basilisk.stubs.createLocal`.
 //!

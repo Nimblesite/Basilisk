@@ -1,4 +1,4 @@
-//! Implements [`generics_scoping`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_scoping`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_scoping`: Unbound type variable in scope.
 //!
 //! A type variable used in a type annotation must be "in scope" — i.e. it must

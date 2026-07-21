@@ -1,4 +1,4 @@
-//! Implements [`classes_classvar`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`classes_classvar`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! Shared helper utilities for `classes_classvar`: text-based `ClassVar` detection,
 //! diagnostic construction, and the `TypeParamKind` classification enum.
 

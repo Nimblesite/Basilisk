@@ -1,4 +1,4 @@
-//! Implements [`generics_basic_2`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! Implements [`generics_basic_2`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 //! `generics_basic_2`: Non-TypeVar argument in `Generic[...]` or `Protocol[...]`.
 //!
 //! PEP 484 requires that all arguments to `Generic[...]` and `Protocol[...]`

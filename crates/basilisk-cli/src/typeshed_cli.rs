@@ -122,15 +122,25 @@ fn download_latest_and_pin(
 
 /// Write `typeshed-commit` through the same validated, structure-preserving
 /// editor transaction the LSP configuration editor uses ([LSPCFGED-TYPESHED]).
+///
+/// The pin and a custom folder are the two mutually exclusive step-3 sources
+/// ([STUBRES-TYPESHED]), so the same transaction retires `typeshed-path` —
+/// byte for byte the update the LSP's Download latest button writes
+/// (`pin_update` in `crates/basilisk-lsp/src/typeshed_download.rs`). Without
+/// the retirement the patch would name both sources and validation would
+/// reject the whole write, leaving a downloaded commit unpinned.
 fn write_pin(workspace: &Path, sha: &str) -> Result<(), basilisk_config::ConfigDocumentError> {
     let document = basilisk_config::discover_config_document(workspace)?;
     let update = basilisk_config::ConfigurationUpdate {
         rules: basilisk_config::RuleConfigUpdate::default(),
         typeshed: basilisk_config::TypeshedConfigUpdate {
-            entries: BTreeMap::from([(
-                basilisk_config::TypeshedConfigKey::TypeshedCommit,
-                Some(sha.to_owned()),
-            )]),
+            entries: BTreeMap::from([
+                (
+                    basilisk_config::TypeshedConfigKey::TypeshedCommit,
+                    Some(sha.to_owned()),
+                ),
+                (basilisk_config::TypeshedConfigKey::TypeshedPath, None),
+            ]),
         },
     };
     let patch = basilisk_config::build_configuration_patch(&document, &update)?;
@@ -179,6 +189,34 @@ mod tests {
         Ok(())
     }
 
+    /// [STUBRES-TYPESHED-DOWNLOAD]: pinning retires a custom folder in the
+    /// same transaction, exactly like the LSP's Download latest action. The
+    /// two step-3 sources are mutually exclusive, so a write that kept both
+    /// would be rejected outright and the download would end up unpinned.
+    #[test]
+    fn write_pin_retires_a_custom_typeshed_path() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        std::fs::write(
+            dir.path().join("pyproject.toml"),
+            "[tool.basilisk]\ntypeshed-path = \"vendor/typeshed\"\ntypeshed-store-path = \"store\"\n",
+        )?;
+        write_pin(dir.path(), "83c2518a9e6abbda0c44592c3483de459198f887")?;
+        let written = std::fs::read_to_string(dir.path().join("pyproject.toml"))?;
+        assert!(
+            written.contains("typeshed-commit = \"83c2518a9e6abbda0c44592c3483de459198f887\""),
+            "the resolved pin must be written: {written}"
+        );
+        assert!(
+            !written.contains("typeshed-path"),
+            "the custom folder must be retired by the same write: {written}"
+        );
+        assert!(
+            written.contains("typeshed-store-path = \"store\""),
+            "unrelated typeshed settings must survive untouched: {written}"
+        );
+        Ok(())
+    }
+
     #[test]
     fn a_malformed_commit_argument_is_a_configuration_error() {
         let api = FakeApi::new(fake_repo());
@@ -189,8 +227,8 @@ mod tests {
     /// The `run` dispatch reaches the same validation: a malformed pin exits
     /// `2` before any transport work.
     #[test]
-    fn run_rejects_a_malformed_sha_through_the_dispatch(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn run_rejects_a_malformed_sha_through_the_dispatch() -> Result<(), Box<dyn std::error::Error>>
+    {
         let dir = tempfile::tempdir()?;
         let action = TypeshedAction::Download {
             commit: Some("short".to_owned()),
@@ -203,8 +241,8 @@ mod tests {
     /// `download --commit <sha>` materialises the exact pin into the store and
     /// writes no configuration ([STUBRES-TYPESHED-DOWNLOAD]).
     #[test]
-    fn download_exact_materialises_the_pin_into_the_store(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn download_exact_materialises_the_pin_into_the_store() -> Result<(), Box<dyn std::error::Error>>
+    {
         let store = tempfile::tempdir()?;
         let api = FakeApi::new(fake_repo());
         let sha = api.repo.commit.to_hex();
@@ -245,10 +283,7 @@ mod tests {
     fn download_latest_pins_the_resolved_sha() -> Result<(), Box<dyn std::error::Error>> {
         let workspace = tempfile::tempdir()?;
         let store = tempfile::tempdir()?;
-        std::fs::write(
-            workspace.path().join("pyproject.toml"),
-            "[tool.basilisk]\n",
-        )?;
+        std::fs::write(workspace.path().join("pyproject.toml"), "[tool.basilisk]\n")?;
         let api = FakeApi::new(fake_repo());
         assert_eq!(
             download_latest_and_pin(
@@ -273,10 +308,7 @@ mod tests {
     fn a_failed_latest_download_writes_no_pin() -> Result<(), Box<dyn std::error::Error>> {
         let workspace = tempfile::tempdir()?;
         let store = tempfile::tempdir()?;
-        std::fs::write(
-            workspace.path().join("pyproject.toml"),
-            "[tool.basilisk]\n",
-        )?;
+        std::fs::write(workspace.path().join("pyproject.toml"), "[tool.basilisk]\n")?;
         let mut api = FakeApi::new(fake_repo());
         api.faults = Faults {
             archive_fails: true,
@@ -308,10 +340,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt as _;
         let workspace = tempfile::tempdir()?;
         let store = tempfile::tempdir()?;
-        std::fs::write(
-            workspace.path().join("pyproject.toml"),
-            "[tool.basilisk]\n",
-        )?;
+        std::fs::write(workspace.path().join("pyproject.toml"), "[tool.basilisk]\n")?;
         let api = FakeApi::new(fake_repo());
         std::fs::set_permissions(workspace.path(), std::fs::Permissions::from_mode(0o555))?;
         let exit = download_latest_and_pin(

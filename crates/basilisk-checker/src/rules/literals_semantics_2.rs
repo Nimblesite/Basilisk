@@ -1,4 +1,4 @@
-//! Implements [`literals_semantics_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`literals_semantics_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `literals_semantics_2`: Literal value assignment incompatibility.
 //!
 //! Detects two classes of Literal-related assignment errors inside function bodies:

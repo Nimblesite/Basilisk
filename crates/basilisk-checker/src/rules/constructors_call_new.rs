@@ -1,4 +1,4 @@
-//! Implements [`constructors_call_new`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! Implements [`constructors_call_new`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 //! `constructors_call_new`: Constructor call type mismatch with specialized generic class.
 //!
 //! When a generic class is called with explicit type arguments (e.g.

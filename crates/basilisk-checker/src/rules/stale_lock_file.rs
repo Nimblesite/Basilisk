@@ -1,4 +1,4 @@
-//! Implements [BSK-0013] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [BSK-0013] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! BSK-0013: Stale uv lock file.
 //!
 //! Fires when the `uv.lock` file is older than `pyproject.toml`, indicating

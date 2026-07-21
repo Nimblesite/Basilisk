@@ -1,4 +1,4 @@
-//! Implements [`overloads_definitions`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`overloads_definitions`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `overloads_definitions`: Missing `@overload` implementation.
 //!
 //! When a function name is defined multiple times and every definition carries

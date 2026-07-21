@@ -1,4 +1,4 @@
-//! Implements [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Diagnostic data types for Basilisk.
 
 use basilisk_resolver::Span;

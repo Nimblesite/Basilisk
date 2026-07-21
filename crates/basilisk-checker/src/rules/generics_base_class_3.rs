@@ -1,4 +1,4 @@
-//! Implements [`generics_base_class_3`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_base_class_3`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_base_class_3`: Invariant generic type mismatch at call site.
 //!
 //! When a function parameter expects a parameterised generic like

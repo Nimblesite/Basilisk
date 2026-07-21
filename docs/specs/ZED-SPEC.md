@@ -66,7 +66,12 @@ graph TB
 basilisk-zed/
   extension.toml
   Cargo.toml
-  src/lib.rs
+  src/
+    lib.rs                  # Thin zed_extension_api glue — the WASM entry points
+    logic.rs                # Pure logic, zero zed_extension_api imports (host-testable)
+    logic_tests.rs          # Unit tests for logic.rs; #[path]-included as `mod tests`
+  tests/
+    fixtures/               # Python sample files (clean, type_error, completions)
   languages/
     python/
       config.toml

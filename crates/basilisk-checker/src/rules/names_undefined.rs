@@ -1,4 +1,4 @@
-//! Implements [`names_undefined`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`names_undefined`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `names_undefined`: Undefined variable used in a return statement.
 //!
 //! Flags any name referenced in a `return` expression — bare (`return x`), the

@@ -1,4 +1,4 @@
-//! Implements [`generics_base_class`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`generics_base_class`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `generics_base_class`: Duplicate `TypeVar` in a `Generic[...]` base.
 //!
 //! Each type parameter in `Generic[T1, T2, ...]` must be unique.

@@ -1,4 +1,4 @@
-//! Implements [`typeddicts_operations`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`typeddicts_operations`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `TypedDict` type consistency checks (PEP 589 §5).
 //!
 //! Validates assignments where the RHS is a `TypedDict`-typed variable:

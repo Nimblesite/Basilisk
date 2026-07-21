@@ -1,4 +1,4 @@
-//! Implements [`protocols_explicit`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`protocols_explicit`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `protocols_explicit`: Direct instantiation of a Protocol class.
 //!
 //! Protocol classes define structural interfaces and cannot be instantiated

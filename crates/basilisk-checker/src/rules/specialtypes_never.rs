@@ -1,4 +1,4 @@
-//! Implements [`specialtypes_never`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! Implements [`specialtypes_never`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 //! `specialtypes_never`: `-> NoReturn` / `-> Never` function can fall through.
 //!
 //! A function declared with a return type of `NoReturn` or `Never` must

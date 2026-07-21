@@ -53,6 +53,31 @@ fn check_uses_custom_typeshed_and_routes_status_only_to_stderr(
     Ok(())
 }
 
+/// [STUBRES-TYPESHED-DOWNLOAD]: a malformed `--commit` is rejected by
+/// validation (exit `2`) before any transport work — safe to assert offline.
+#[test]
+fn a_malformed_download_commit_is_rejected_offline() -> Result<(), Box<dyn std::error::Error>> {
+    let workspace = tempfile::tempdir()?;
+    let output = Command::new(env!("CARGO_BIN_EXE_basilisk"))
+        .args([
+            "typeshed",
+            "download",
+            "--commit",
+            "not-a-sha",
+            "--workspace",
+        ])
+        .arg(workspace.path())
+        .output()?;
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "stdout={}; stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
 #[test]
 fn a_pin_missing_from_the_store_does_not_fall_back() -> Result<(), Box<dyn std::error::Error>> {
     let workspace = tempfile::tempdir()?;

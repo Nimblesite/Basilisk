@@ -284,6 +284,118 @@ fn negotiation_and_notification_order_follow_lifecycle() -> Result<(), String> {
     Ok(())
 }
 
+/// [MCP-STDIO]: every malformed request shape gets the prescribed JSON-RPC
+/// error — nothing is silently dropped and nothing kills the session.
+#[test]
+fn malformed_request_shapes_each_get_the_prescribed_error() -> Result<(), String> {
+    let responses = exchange(&[
+        json!([1, 2, 3]),
+        json!({"jsonrpc":"2.0","id":true,"method":"ping"}),
+        json!({"jsonrpc":"2.0","id":4}),
+        json!({"jsonrpc":"1.0","id":5,"method":"ping"}),
+    ])?;
+    let codes: Vec<Option<i64>> = responses
+        .iter()
+        .map(|response| response.pointer("/error/code").and_then(Value::as_i64))
+        .collect();
+    assert_eq!(codes, vec![Some(-32600); 4]);
+    Ok(())
+}
+
+/// [MCP-STDIO]: lifecycle guards — initialize without a protocol version,
+/// re-initialize, unknown methods, unknown tools, and ping.
+#[test]
+fn lifecycle_guards_cover_reinit_unknown_methods_and_bad_tools() -> Result<(), String> {
+    let responses = exchange(&[
+        json!({"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}),
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":PROTOCOL_VERSION,"capabilities":{},"clientInfo":{"name":"t","version":"1"}}}),
+        json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+        json!({"jsonrpc":"2.0","id":2,"method":"ping"}),
+        json!({"jsonrpc":"2.0","id":3,"method":"resources/list"}),
+        json!({"jsonrpc":"2.0","id":4,"method":"initialize","params":{"protocolVersion":PROTOCOL_VERSION}}),
+        json!({"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"unknown_tool","arguments":{}}}),
+    ])?;
+    let codes: Vec<Option<i64>> = responses
+        .iter()
+        .map(|response| response.pointer("/error/code").and_then(Value::as_i64))
+        .collect();
+    assert_eq!(
+        codes,
+        vec![
+            Some(-32602),
+            None,
+            None,
+            Some(-32601),
+            Some(-32600),
+            Some(-32602)
+        ]
+    );
+    assert_eq!(
+        responses
+            .get(2)
+            .and_then(|response| response.pointer("/result")),
+        Some(&json!({})),
+        "ping must answer with an empty result"
+    );
+    Ok(())
+}
+
+/// [MCP-STDIO]: a line that is not UTF-8 is a parse error, and the session
+/// keeps serving afterwards.
+#[test]
+fn invalid_utf8_input_is_a_parse_error_and_the_session_survives() -> Result<(), String> {
+    let mut input: Vec<u8> = vec![0xFF, 0xFE, b'\n'];
+    input.extend_from_slice(
+        br#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}"#,
+    );
+    let mut output = Vec::new();
+    run_transport(std::io::Cursor::new(input), &mut output, || Ok(status()))?;
+    let responses = String::from_utf8(output)
+        .map_err(|error| error.to_string())?
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).map_err(|error| error.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(
+        responses
+            .first()
+            .and_then(|response| response.pointer("/error/code"))
+            .and_then(Value::as_i64),
+        Some(-32700)
+    );
+    assert!(
+        responses
+            .get(1)
+            .and_then(|response| response.pointer("/result/protocolVersion"))
+            .is_some(),
+        "the session must keep serving after a non-UTF-8 line"
+    );
+    Ok(())
+}
+
+/// [STUBRES-TYPESHED-WARN]: every license state projects to its wire word.
+#[test]
+fn status_document_maps_every_license_state() {
+    use basilisk_stubs::typeshed::source::{LicenseStatus, SourceKind, TypeshedStatus};
+    for (state, expected) in [
+        (LicenseStatus::Approved, "approved"),
+        (LicenseStatus::Changed, "changed"),
+        (LicenseStatus::NotSupplied, "not supplied"),
+    ] {
+        let document = status_document(&TypeshedStatus {
+            active_source: SourceKind::Bundled,
+            commit: None,
+            tree: None,
+            license_status: state,
+            license_reference: None,
+            warnings: Vec::new(),
+        });
+        assert_eq!(
+            document.get("license_status").and_then(Value::as_str),
+            Some(expected)
+        );
+    }
+}
+
 #[test]
 fn oversized_line_is_drained_before_the_next_request() -> Result<(), String> {
     let mut input = vec![b' '; MAX_MESSAGE_BYTES + 1];

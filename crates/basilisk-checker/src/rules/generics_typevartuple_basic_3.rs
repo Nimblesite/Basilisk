@@ -1,4 +1,4 @@
-//! Implements [`generics_typevartuple_basic_3`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_typevartuple_basic_3`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_typevartuple_basic_3`: `TypeVarTuple` variance/bounds/constraints violation.
 //!
 //! `TypeVarTuple` does not support specification of variance, bounds, or constraints.

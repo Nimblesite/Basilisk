@@ -3,7 +3,7 @@
   "title": "Basilisk: The Only 100% PEP-Conformant Python Language Server",
   "description": "Open-source Python language server with a perfect official typing-conformance score, plus refactoring, debugging, profiling, and editor extensions.",
   "url": "https://www.basilisk-python.dev",
-  "keywords": "basilisk, python type checker, 100% pep conformance, python/typing conformance results, python language server, lsp, strict typing, rust, vs code, cursor, zed, neovim, open source, autocomplete, refactoring",
+  "keywords": "basilisk, best python type checker, python type checker, 100% pep conformance, python/typing conformance results, python language server, lsp, strict typing, rust, vs code, cursor, zed, neovim, open source, autocomplete, refactoring",
   "themeColor": "#e8500a",
   "stylesheet": "/assets/css/styles.css",
   "github": "https://github.com/Nimblesite/Basilisk",

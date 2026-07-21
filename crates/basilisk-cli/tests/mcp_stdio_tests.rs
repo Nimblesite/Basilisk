@@ -22,6 +22,26 @@ fn custom_typeshed_workspace() -> Result<tempfile::TempDir, Box<dyn std::error::
 }
 
 fn run_session(workspace: &std::path::Path) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
+    let requests = [
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":PROTOCOL_VERSION,"capabilities":{},"clientInfo":{"name":"e2e","version":"1"}}}),
+        json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+        json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}),
+        json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"basilisk_typeshed_status","arguments":{}}}),
+    ];
+    let mut payload = Vec::new();
+    for request in requests {
+        payload.extend_from_slice(serde_json::to_string(&request)?.as_bytes());
+        payload.push(b'\n');
+    }
+    run_raw_session(workspace, &payload)
+}
+
+/// Drive one MCP session over the spawned binary's stdio with raw bytes, so
+/// tests can send lines no serializer would produce (invalid UTF-8, arrays).
+fn run_raw_session(
+    workspace: &std::path::Path,
+    payload: &[u8],
+) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
     let mut child = Command::new(env!("CARGO_BIN_EXE_basilisk"))
         .arg("mcp")
         .arg("--workspace")
@@ -30,17 +50,8 @@ fn run_session(workspace: &std::path::Path) -> Result<Vec<Value>, Box<dyn std::e
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
-    let requests = [
-        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":PROTOCOL_VERSION,"capabilities":{},"clientInfo":{"name":"e2e","version":"1"}}}),
-        json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
-        json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}),
-        json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"basilisk_typeshed_status","arguments":{}}}),
-    ];
     let mut stdin = child.stdin.take().ok_or("MCP stdin was not piped")?;
-    for request in requests {
-        serde_json::to_writer(&mut stdin, &request)?;
-        stdin.write_all(b"\n")?;
-    }
+    stdin.write_all(payload)?;
     drop(stdin);
     let output = child.wait_with_output()?;
     if !output.status.success() {
@@ -156,6 +167,56 @@ fn packaged_binary_advertises_mcp_capability() -> Result<(), Box<dyn std::error:
             .iter()
             .any(|entry| entry.as_str() == Some("mcp")),
         "packaged basilisk binary must advertise MCP: {version}"
+    );
+    Ok(())
+}
+
+/// [MCP-STDIO]: the spawned binary answers every malformed request shape with
+/// the prescribed JSON-RPC error and keeps the session alive throughout —
+/// invalid UTF-8, non-object requests, bad ids, missing methods, wrong
+/// protocol versions, re-initialization, and unknown tools.
+#[test]
+fn protocol_guard_paths_respond_and_the_session_survives() -> Result<(), Box<dyn std::error::Error>>
+{
+    let workspace = custom_typeshed_workspace()?;
+    let mut payload: Vec<u8> = vec![0xFF, 0xFE, b'\n'];
+    for request in [
+        json!([1]),
+        json!({"jsonrpc":"2.0","id":true,"method":"ping"}),
+        json!({"jsonrpc":"2.0","id":1}),
+        json!({"jsonrpc":"1.0","id":2,"method":"ping"}),
+        json!({"jsonrpc":"2.0","id":3,"method":"initialize","params":{}}),
+        json!({"jsonrpc":"2.0","id":4,"method":"initialize","params":{"protocolVersion":PROTOCOL_VERSION,"capabilities":{},"clientInfo":{"name":"e2e","version":"1"}}}),
+        json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+        json!({"jsonrpc":"2.0","id":5,"method":"ping"}),
+        json!({"jsonrpc":"2.0","id":6,"method":"resources/list"}),
+        json!({"jsonrpc":"2.0","id":7,"method":"initialize","params":{"protocolVersion":PROTOCOL_VERSION}}),
+        json!({"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"nope","arguments":{}}}),
+    ] {
+        payload.extend_from_slice(serde_json::to_string(&request)?.as_bytes());
+        payload.push(b'\n');
+    }
+    let responses = run_raw_session(workspace.path(), &payload)?;
+    let codes: Vec<Option<i64>> = responses
+        .iter()
+        .map(|response| response.pointer("/error/code").and_then(Value::as_i64))
+        .collect();
+    assert_eq!(
+        codes,
+        vec![
+            Some(-32700),
+            Some(-32600),
+            Some(-32600),
+            Some(-32600),
+            Some(-32600),
+            Some(-32602),
+            None,
+            None,
+            Some(-32601),
+            Some(-32600),
+            Some(-32602),
+        ],
+        "each guard must answer with its prescribed code: {responses:?}"
     );
     Ok(())
 }

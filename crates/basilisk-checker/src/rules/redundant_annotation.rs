@@ -1,4 +1,4 @@
-//! Implements [BSK-0050] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! Implements [BSK-0050] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! BSK-0050: Redundant type annotation warning.
 //!
 //! Emits a warning when a type annotation is redundant because the inferred type

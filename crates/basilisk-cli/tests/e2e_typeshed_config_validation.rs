@@ -15,9 +15,14 @@
     clippy::panic
 )]
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
+
+use basilisk_config::{
+    ConfigurationUpdate, RuleConfigUpdate, TypeshedConfigKey, TypeshedConfigUpdate,
+};
 
 fn unique_dir(prefix: &str) -> PathBuf {
     static CTR: AtomicU64 = AtomicU64::new(0);
@@ -41,6 +46,12 @@ fn check_with_config(dir: &Path, basilisk_table: &str) -> Output {
     )
     .expect("write pyproject");
     std::fs::write(dir.join("app.py"), "value: int = 1\n").expect("write app");
+    run_check(dir)
+}
+
+/// Run `basilisk check app.py` in `dir` against whatever configuration is on
+/// disk, with the ambient venv scrubbed.
+fn run_check(dir: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_basilisk"))
         .arg("check")
         .arg("app.py")
@@ -48,6 +59,20 @@ fn check_with_config(dir: &Path, basilisk_table: &str) -> Output {
         .env_remove("VIRTUAL_ENV")
         .output()
         .expect("spawn basilisk")
+}
+
+/// The typeshed half of a configuration update, as both pin-writing surfaces
+/// build it.
+fn typeshed_update(entries: &[(TypeshedConfigKey, Option<&str>)]) -> ConfigurationUpdate {
+    ConfigurationUpdate {
+        rules: RuleConfigUpdate::default(),
+        typeshed: TypeshedConfigUpdate {
+            entries: entries
+                .iter()
+                .map(|(key, setting)| (*key, setting.map(str::to_owned)))
+                .collect::<BTreeMap<_, _>>(),
+        },
+    }
 }
 
 /// Assert the fail-closed contract shared by every invalid typeshed setting:
@@ -149,7 +174,7 @@ fn retired_download_policy_keys_are_inert_and_never_echoed() {
     let dir = unique_dir("retired_keys");
     let output = check_with_config(
         &dir,
-        "typeshed-url = \"http://internal-host.corp.example/secret-{sha}.zip\"\ntypeshed-cache = false\ntypeshed-verify = false\ntyped-cache-path = \"secret-cache\"\n",
+        "typeshed-url = \"http://internal-host.corp.example/secret-{sha}.zip\"\ntypeshed-cache = false\ntypeshed-verify = false\ntypeshed-cache-path = \"secret-cache\"\n",
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -159,11 +184,88 @@ fn retired_download_policy_keys_are_inert_and_never_echoed() {
         Some(0),
         "retired keys must not alter the bundled-default check, stdout: {stdout}, stderr: {stderr}"
     );
+    for retired_value in ["internal-host.corp.example", "secret-cache"] {
+        assert!(
+            !stderr.contains(retired_value) && !stdout.contains(retired_value),
+            "a retired key's value must never be echoed back: `{retired_value}`, stdout: {stdout}, stderr: {stderr}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// [STUBRES-TYPESHED-DOWNLOAD] agreement between the two pin-writing
+/// surfaces: `basilisk typeshed download` (`write_pin` in
+/// `crates/basilisk-cli/src/typeshed_cli.rs`) and the LSP's Download latest
+/// button (`pin_update` in `crates/basilisk-lsp/src/typeshed_download.rs`)
+/// build the SAME two-entry update — set `typeshed-commit`, retire
+/// `typeshed-path` — because the two step-3 sources are mutually exclusive
+/// ([STUBRES-TYPESHED]). This drives that shared `basilisk-config`
+/// transaction over a workspace that names a custom folder and hands the
+/// result to the real binary. The commit-only half-update, which would leave
+/// both sources named, is refused wholesale — so a surface that skipped the
+/// retirement would download bytes and then fail to pin them.
+#[test]
+fn pinning_a_downloaded_commit_retires_the_custom_folder() {
+    let pin = "0123456789012345678901234567890123456789";
+    let dir = unique_dir("pin_retires_path");
+    std::fs::create_dir_all(dir.join("ts").join("stdlib")).expect("create custom tree");
+    std::fs::write(dir.join("app.py"), "value: int = 1\n").expect("write app");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\ntypeshed-path = \"ts\"\ntypeshed-store-path = \"store\"\n",
+    )
+    .expect("write pyproject");
+
+    let document = basilisk_config::discover_config_document(&dir).expect("discover config");
+    let commit_only = typeshed_update(&[(TypeshedConfigKey::TypeshedCommit, Some(pin))]);
     assert!(
-        !stderr.contains("internal-host.corp.example")
-            && !stdout.contains("internal-host.corp.example"),
-        "a retired mirror value must never be echoed back, stderr: {stderr}"
+        basilisk_config::build_configuration_patch(&document, &commit_only).is_err(),
+        "a pin write that keeps the custom folder names two sources at once and must be refused"
     );
+
+    let patch = basilisk_config::build_configuration_patch(
+        &document,
+        &typeshed_update(&[
+            (TypeshedConfigKey::TypeshedCommit, Some(pin)),
+            (TypeshedConfigKey::TypeshedPath, None),
+        ]),
+    )
+    .expect("the retiring pin write is a valid transaction");
+    basilisk_config::apply_config_patch(&patch).expect("apply the pin write");
+
+    let written = std::fs::read_to_string(dir.join("pyproject.toml")).expect("read pyproject");
+    assert!(
+        written.contains(&format!("typeshed-commit = \"{pin}\"")),
+        "the resolved pin must be written: {written}"
+    );
+    assert!(
+        !written.contains("typeshed-path"),
+        "the custom folder must be retired by the same write: {written}"
+    );
+    assert!(
+        written.contains("typeshed-store-path = \"store\""),
+        "unrelated typeshed settings must survive untouched: {written}"
+    );
+
+    // The real binary reads exactly one source out of the written file: the
+    // pin. It fails on resolution (`NO SOURCE`), never on configuration.
+    let output = run_check(&dir);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("mutually exclusive"),
+        "the written configuration must name a single source, stderr: {stderr}"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "the lone pin is valid configuration whose bytes are absent, stdout: {stdout}, stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("NO SOURCE") && stderr.contains(pin),
+        "stderr must carry the NO SOURCE line naming the freshly written pin, stderr: {stderr}"
+    );
+
     let _ = std::fs::remove_dir_all(&dir);
 }
 

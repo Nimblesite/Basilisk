@@ -1,4 +1,4 @@
-//! Implements [BSK-0001] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
+//! Implements [BSK-0001] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
 //! BSK-0001: Missing parameter type annotation.
 //! Implements the parameter-policy slice of [TYPEINF-REQUIRED] and the
 //! receiver exemption shared by [TYPEINF-SPECIAL-SELF].

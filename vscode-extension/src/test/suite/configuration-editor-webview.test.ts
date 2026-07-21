@@ -26,12 +26,21 @@ suite("Configuration editor — untrusted intent decoder", () => {
     assert.strictEqual(decodeConfigurationEditorIntent({
       type: "preview", mutations: [{ kind: "RemoveTag", tag: "basilisk" }],
     })?.type, "preview");
-    // [LSPCFGED-TYPESHED]: the three surviving keys are all text-typed.
+    // [LSPCFGED-TYPESHED]: the three surviving keys are all text-typed, so the
+    // model carries a bare String — `SetTypeshedSetting { key, value: String }`
+    // in models/configuration_editor.td.
     for (const key of ["TypeshedPath", "TypeshedCommit", "TypeshedStorePath"]) {
       assert.strictEqual(decodeConfigurationEditorIntent({
         type: "preview",
+        mutations: [{ kind: "SetTypeshedSetting", key: { kind: key }, value: "configured" }],
+      })?.type, "preview", `SetTypeshedSetting ${key} must be accepted`);
+      // The retired tagged value shape must be REJECTED, not quietly coerced:
+      // accepting it would let the webview post a mutation the LSP cannot
+      // apply, losing the user's edit with no error.
+      assert.strictEqual(decodeConfigurationEditorIntent({
+        type: "preview",
         mutations: [{ kind: "SetTypeshedSetting", key: { kind: key }, value: { kind: "Text", value: "configured" } }],
-      })?.type, "preview");
+      }), undefined, `the retired tagged value shape must be rejected for ${key}`);
     }
     assert.strictEqual(decodeConfigurationEditorIntent({
       type: "preview", mutations: [{ kind: "RemoveTypeshedSetting", key: { kind: "TypeshedStorePath" } }],
@@ -73,9 +82,12 @@ suite("Configuration editor — untrusted intent decoder", () => {
     // [LSPCFGED-TYPESHED]: the cache/verify toggles, the cache-path key, and
     // the alternate-URL key are deleted from the contract entirely.
     for (const key of ["TypeshedCache", "TypeshedVerify", "TypeshedCachePath", "TypeshedUrl", "ArbitraryKey"]) {
+      // The value is a VALID bare string, so the retired key is the only thing
+      // that can cause the rejection — a malformed value would let this pass
+      // even if the key check regressed.
       assert.strictEqual(decodeConfigurationEditorIntent({
         type: "preview",
-        mutations: [{ kind: "SetTypeshedSetting", key: { kind: key }, value: { kind: "Text", value: "x" } }],
+        mutations: [{ kind: "SetTypeshedSetting", key: { kind: key }, value: "x" }],
       }), undefined, `${key} was removed from the contract`);
       assert.strictEqual(decodeConfigurationEditorIntent({
         type: "preview",

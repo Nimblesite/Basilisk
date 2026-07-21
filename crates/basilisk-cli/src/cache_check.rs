@@ -1,5 +1,5 @@
 //! Implements [CHKCACHE-CLI] / [CHKCACHE-FINGERPRINT].
-//! See docs/specs/CHECKER-CACHE-SPEC.md#chkcache-cli
+//! See docs/specs/CHECKER-CACHE-SPEC.md#CHKCACHE-CLI
 //!
 //! CLI glue for the opt-in result cache: turns the `--cache*` flags into a
 //! [`CacheContext`], wraps the per-file cold check with a lookup/store, and

@@ -1,4 +1,4 @@
-//! Implements [`annotations_forward_refs`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! Implements [`annotations_forward_refs`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 //! Structural annotation validity checks for `annotations_forward_refs`.
 //!
 //! Contains pure functions for detecting structurally invalid type expressions

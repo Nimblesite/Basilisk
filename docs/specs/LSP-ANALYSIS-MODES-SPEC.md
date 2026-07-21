@@ -426,19 +426,34 @@ panel-payload gating, header/row neutrality, and zero-diagnostics refresh).
 
 ## LSP Capabilities {#ANALYSIS-CAPS}
 
-When `analysisMode` is `wholeModule` or `crossModule`, the server advertises:
+Workspace capabilities are **mode-independent**. `build_capabilities`
+(`crates/basilisk-lsp/src/server/init.rs`) is parameterised only by whether the
+formatter engine is enabled ([LSPFMT-CAPABILITIES](LSP-FORMATTING-SPEC.md#LSPFMT-CAPABILITIES)),
+so the `initialize` response advertises the same workspace block in every
+`analysisMode`, `openFilesOnly` included:
 
 ```json
 "workspace": {
+  "workspaceFolders": { "supported": true, "changeNotifications": true },
   "fileOperations": {
-    "didCreate": { "filters": [{ "pattern": { "glob": "**/*.py" } }] },
-    "didDelete": { "filters": [{ "pattern": { "glob": "**/*.py" } }] },
-    "didRename": { "filters": [{ "pattern": { "glob": "**/*.py" } }] }
+    "willRename": {
+      "filters": [
+        { "scheme": "file", "pattern": { "glob": "**/*.py", "matches": "file" } }
+      ]
+    }
   }
 }
 ```
 
-When `analysisMode` is `openFilesOnly`, these capabilities are omitted.
+`workspace/willRenameFiles` is the only file-operation method the server serves
+(`crates/basilisk-lsp/src/server/handlers/file_operations.rs`): renaming a module
+returns a `WorkspaceEdit` rewriting the imports that pointed at it
+([REFACTOR-RENAMEMOD](LSP-REFACTORING-SPEC.md#REFACTOR-RENAMEMOD)). The
+`didCreate` / `didDelete` / `didRename` notifications are neither advertised nor
+handled — creations and deletions reach the index through
+`workspace/didChangeWatchedFiles`, which is where the mode gate actually lives:
+that handler returns early in `openFilesOnly` after refreshing configuration
+([ANALYSIS-INCR-WATCH]).
 
 ---
 

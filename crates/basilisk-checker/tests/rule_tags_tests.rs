@@ -1,4 +1,4 @@
-//! Implements [CHKTAG-TESTS] from [CHKTAG]. See docs/specs/CHECKER-RULE-TAGGING-SPEC.md#chktag-tests
+//! Implements [CHKTAG-TESTS] from [CHKTAG]. See docs/specs/CHECKER-RULE-TAGGING-SPEC.md#CHKTAG-TESTS
 //!
 //! Coarse e2e for the rule tagging system: every shipping rule code resolves to
 //! a valid, conflict-free tag set, and the user-facing invariants hold —

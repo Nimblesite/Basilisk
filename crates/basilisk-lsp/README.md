@@ -16,7 +16,7 @@ Editor ⟷ [basilisk-lsp] ⟷ parser + resolver + checker
 - **Incremental analysis** — integrates with `basilisk-db` (Salsa) for sub-10ms response times on edits.
 - **Integrated debugging** — spawns debugpy and brokers DAP connections so editors get F5-to-debug without separate extensions.
 - **Integrated profiling** — embeds py-spy for performance profiling with heatmap visualization.
-- **Ruff integration** — delegates formatting and import organization to Ruff via subprocess.
+- **Embedded Ruff formatter** — links the `ruff_python_formatter` crate into the binary and reimplements import hygiene natively on the Ruff AST. The `ruff` CLI is not a runtime dependency and is never spawned ([LSPFMT-ENGINE](../../docs/specs/LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE), [LSPFMT-IMPORTS](../../docs/specs/LSP-FORMATTING-SPEC.md#LSPFMT-IMPORTS)).
 - **Code actions & refactoring** — extract function/variable, rename, move symbol, inline, and more.
 - **uv integration** — detects uv workspaces, parses lock files, and provides package intelligence.
 
@@ -32,6 +32,7 @@ Editor ⟷ [basilisk-lsp] ⟷ parser + resolver + checker
 | `basilisk-db` | Incremental computation |
 | `basilisk-uv` | uv package manager |
 | `tower-lsp` | LSP transport |
+| `ruff_python_formatter` | In-process formatting engine |
 
 ## Status
 

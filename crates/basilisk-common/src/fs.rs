@@ -1,5 +1,5 @@
 //! Implements [CHKCACHE-READSET-FS] / [CHKCACHE-READSET-GUARD].
-//! See docs/specs/CHECKER-CACHE-SPEC.md#chkcache-readset
+//! See docs/specs/CHECKER-CACHE-SPEC.md#CHKCACHE-READSET
 //!
 //! File reads with optional read-set recording for the result cache.
 //!

@@ -1,4 +1,4 @@
-//! Implements [`tuples_index`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`tuples_index`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `tuples_index`: Tuple index out of bounds.
 //!
 //! When a fixed-length `tuple[T1, T2, ...]` variable is indexed with a literal

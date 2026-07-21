@@ -1,4 +1,4 @@
-//! Implements [`tuples_type_compat`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`tuples_type_compat`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Source text parsing helpers for `tuples_type_compat`.
 
 use basilisk_resolver::Span;

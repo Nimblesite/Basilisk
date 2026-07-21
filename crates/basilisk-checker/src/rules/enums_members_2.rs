@@ -1,4 +1,4 @@
-//! Implements [`enums_members_2`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! Implements [`enums_members_2`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 //! `enums_members_2`: Non-member referenced in `Literal[EnumClass.X]` annotation.
 //!
 //! The `Literal[EnumClass.X]` type is only valid when `X` is an actual enum

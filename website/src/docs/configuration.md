@@ -331,14 +331,17 @@ has not been downloaded to this machine, the check tanks hard with a
 substitutes another source.
 
 Typeshed bytes arrive on a machine only through explicit download actions,
-which live entirely outside the checker:
+which live entirely outside the checker. There are exactly two download
+contracts, each reachable from the Configuration Editor and from the CLI:
 
-- the Configuration Editor's **Download latest** button, which downloads the
-  current `python/typeshed@main` commit and writes the resolved SHA as your
-  `typeshed-commit` pin (clearing any `typeshed-path`);
-- `basilisk typeshed download [--commit <sha>]` — with no `--commit` it does
-  the same as the button; with `--commit` it materialises that exact,
-  already-configured pin and writes no configuration.
+- **Download latest** — the Configuration Editor button (offered whenever no
+  download is running), or `basilisk typeshed download` with no `--commit`.
+  Downloads the current `python/typeshed@main` commit and writes the resolved
+  SHA as your `typeshed-commit` pin (clearing any `typeshed-path`).
+- **Download pinned** — the Configuration Editor button on the `NO SOURCE` row
+  (offered when the pinned commit is not on this machine), or
+  `basilisk typeshed download --commit <sha>`. Materialises that exact,
+  already-configured pin into the store and writes no configuration.
 
 Every download passes safety, shape, license, and content-verification gates
 before anything lands in the content-addressed store; entries are immutable
