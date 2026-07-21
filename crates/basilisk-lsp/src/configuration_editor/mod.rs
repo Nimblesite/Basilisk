@@ -13,6 +13,7 @@ mod transaction;
 mod typeshed_resolution;
 mod watch;
 
+pub(crate) use protocol::rpc_error;
 pub(crate) use state::ConfigurationEditorState;
 pub(crate) use transaction::{
     apply_configuration_update, apply_rule_updates, configuration_document,

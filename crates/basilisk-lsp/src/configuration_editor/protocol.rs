@@ -12,10 +12,9 @@ use tower_lsp::lsp_types::Url;
 
 use super::catalog::{descriptors, expand_selector};
 use super::model::{
-    ApplyConfigurationRequest, ConfigurationPreview, ConfigurationSnapshot, EditorMutation,
+    ApplyConfigurationRequest, ConfigurationPreview, ConfigurationSnapshot,
     PreviewConfigurationRequest, RuleOccurrencesRequest, RuleOccurrencesResponse, TypeshedAction,
-    TypeshedActionRequest, TypeshedActionResult, TypeshedLicenseDocument, TypeshedSettingKey,
-    TypeshedSettingValue,
+    TypeshedActionRequest, TypeshedActionResult, TypeshedLicenseDocument,
 };
 use super::mutation::{
     build_impact, build_update, require_mutations, require_no_pep_disable, require_revision,
@@ -175,7 +174,10 @@ impl LspServer {
         ))
     }
 
-    /// Handle the closed Typeshed action union ([LSPCFGED-TYPESHED]).
+    /// Handle the closed Typeshed action union ([LSPCFGED-TYPESHED]). The two
+    /// download actions are the ONLY paths that reach the network, and both
+    /// live outside the configuration editor ([TYPESHEDRT-SEGREGATION]);
+    /// their finished state is returned as a fresh snapshot.
     pub(crate) async fn typeshed_action(
         &self,
         request: TypeshedActionRequest,
@@ -187,115 +189,20 @@ impl LspServer {
             .map_err(config_error)?;
         require_revision(&document, &request.base_revision)?;
         match request.action {
-            TypeshedAction::PinCurrent => self.pin_current_action(&root, &document, request).await,
-            TypeshedAction::AcquireFresh => self.acquire_fresh_action(&root, &document).await,
+            TypeshedAction::DownloadLatest => {
+                crate::typeshed_download::download_latest_and_pin(self, &root, &document).await?;
+                Ok(TypeshedActionResult::Snapshot {
+                    snapshot: snapshot_for_root(self, &root).await?,
+                })
+            }
+            TypeshedAction::DownloadPinned => {
+                crate::typeshed_download::download_pinned(self, &root, &document).await?;
+                Ok(TypeshedActionResult::Snapshot {
+                    snapshot: snapshot_for_root(self, &root).await?,
+                })
+            }
             TypeshedAction::ViewLicense => self.view_license_action(&root, &document).await,
         }
-    }
-
-    async fn pin_current_action(
-        &self,
-        root: &Path,
-        document: &ConfigDocument,
-        request: TypeshedActionRequest,
-    ) -> LspResult<TypeshedActionResult> {
-        if document.config.typeshed_path.is_some() {
-            return Err(rpc_error(
-                "typeshedActionUnavailable",
-                "a custom Typeshed folder has no upstream commit to pin",
-            ));
-        }
-        let commit = self
-            .typeshed_generations
-            .read()
-            .await
-            .get(root)
-            .and_then(crate::server::typeshed_status::TypeshedGeneration::ready_snapshot)
-            .filter(|snapshot| snapshot_matches_document(snapshot, document))
-            .and_then(|snapshot| snapshot.status.commit)
-            .ok_or_else(|| {
-                rpc_error(
-                    "typeshedActionUnavailable",
-                    "the active Typeshed source has no commit to pin",
-                )
-            })?
-            .to_hex();
-        let preview = self
-            .preview_configuration_change(PreviewConfigurationRequest {
-                root_uri: request.root_uri,
-                base_revision: request.base_revision,
-                mutations: vec![
-                    EditorMutation::SetTypeshedSetting {
-                        key: TypeshedSettingKey::TypeshedCommit,
-                        value: TypeshedSettingValue::Text { value: commit },
-                    },
-                    EditorMutation::RemoveTypeshedSetting {
-                        key: TypeshedSettingKey::TypeshedPath,
-                    },
-                ],
-            })
-            .await?;
-        Ok(TypeshedActionResult::Preview { preview })
-    }
-
-    async fn acquire_fresh_action(
-        &self,
-        root: &Path,
-        document: &ConfigDocument,
-    ) -> LspResult<TypeshedActionResult> {
-        let staged = match super::typeshed_acquisition::acquire_fresh(self, root, &document.config)
-            .await
-        {
-            Ok(staged) => staged,
-            Err(error) => {
-                let rpc_error = error.rpc_error();
-                let Some(failure) = error.into_failure() else {
-                    return Err(rpc_error);
-                };
-                let handles = self.refresh_handles();
-                let refresh = super::transaction::refresh_with_document(
-                    &handles,
-                    root,
-                    "typeshedAcquireFreshFailed",
-                    document,
-                )
-                .await;
-                super::typeshed_acquisition::publish_failure(&handles, root, failure).await;
-                if let Err(error) = refresh {
-                    tracing::warn!(root = %root.display(), error = %error, "failed to clear analysis after Typeshed refresh failure");
-                }
-                return Err(rpc_error);
-            }
-        };
-        let handles = self.refresh_handles();
-        let refresh = super::transaction::refresh_with_document_and_typeshed(
-            &handles,
-            root,
-            "typeshedAcquireFresh",
-            document,
-            Some(staged.candidate()),
-        )
-        .await;
-        if let Err(error) = refresh {
-            let cleanup = super::transaction::refresh_with_document(
-                &handles,
-                root,
-                "typeshedAcquireFreshBlocked",
-                document,
-            )
-            .await;
-            staged
-                .block(self, root, "configuration refresh failed")
-                .await;
-            if let Err(cleanup_error) = cleanup {
-                tracing::warn!(root = %root.display(), error = %cleanup_error, "failed to clear analysis after Typeshed activation failure");
-            }
-            return Err(error);
-        }
-        staged.activate(self, root).await;
-        Ok(TypeshedActionResult::Snapshot {
-            snapshot: snapshot_with_document(self, root, document).await?,
-        })
     }
 
     async fn view_license_action(
@@ -321,7 +228,7 @@ impl LspServer {
             .ok_or_else(|| {
                 rpc_error(
                     "typeshedActionUnavailable",
-                    "Typeshed acquisition for this workspace has not reached a terminal source",
+                    "the selected Typeshed source is not on this machine, so no license document is available",
                 )
             })?;
         let content = snapshot
@@ -348,17 +255,17 @@ fn snapshot_matches_document(
         return snapshot.status.active_source
             == basilisk_stubs::typeshed::source::SourceKind::Custom;
     }
-    match document.config.typeshed_commit.as_deref() {
-        Some(commit) => snapshot
-            .status
-            .commit
-            .is_some_and(|oid| oid.to_hex() == commit),
-        None => matches!(
-            snapshot.status.active_source,
-            basilisk_stubs::typeshed::source::SourceKind::Latest
-                | basilisk_stubs::typeshed::source::SourceKind::Bundled
-        ),
-    }
+    // An unset pin IS the bundled commit ([STUBRES-TYPESHED]), so the active
+    // snapshot matches when it carries the effective SHA.
+    let effective_commit = document
+        .config
+        .typeshed_commit
+        .clone()
+        .unwrap_or_else(|| basilisk_stubs::typeshed::bundle::bundled_commit_sha().to_owned());
+    snapshot
+        .status
+        .commit
+        .is_some_and(|oid| oid.to_hex() == effective_commit)
 }
 
 async fn snapshot_for_root(server: &LspServer, root: &Path) -> LspResult<ConfigurationSnapshot> {
@@ -430,7 +337,7 @@ pub(super) fn config_error(error: ConfigDocumentError) -> Error {
     )
 }
 
-pub(super) fn rpc_error(kind: &str, message: &str) -> Error {
+pub(crate) fn rpc_error(kind: &str, message: &str) -> Error {
     rpc_error_data(kind, message, serde_json::json!({}))
 }
 
