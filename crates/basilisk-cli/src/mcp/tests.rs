@@ -156,7 +156,9 @@ fn tool_contract_declares_closed_output_and_honest_annotations() {
         result
             .pointer("/tools/0/annotations/openWorldHint")
             .and_then(Value::as_bool),
-        Some(true)
+        Some(false),
+        "status resolution is offline by construction [STUBRES-TYPESHED-OFFLINE] — \
+         the tool must declare itself closed-world"
     );
 }
 

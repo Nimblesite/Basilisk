@@ -249,7 +249,9 @@ fn tools_result() -> Value {
                 "readOnlyHint": true,
                 "destructiveHint": false,
                 "idempotentHint": true,
-                "openWorldHint": true
+                // Resolution is offline by construction [STUBRES-TYPESHED-OFFLINE]:
+                // status never contacts an upstream, so the tool is closed-world.
+                "openWorldHint": false
             },
             "execution": { "taskSupport": "forbidden" }
         }]

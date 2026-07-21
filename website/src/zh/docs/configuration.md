@@ -39,9 +39,10 @@ Basilisk 完全不需要配置文件。当遍历路径上任何地方都没有 `
 - 目标 Python 版本从项目文件解析：`.python-version`，然后是
   `[project].requires-python` 下界，然后是 `uv.lock` 的
   `requires-python` 下界。
-- 标准库存根在运行时从最新的
-  [python/typeshed](https://github.com/python/typeshed) 提交获取，离线时
-  回退到内置快照——见[标准库存根](#标准库存根-typeshed)。
+- 标准库存根来自编译进二进制的
+  [python/typeshed](https://github.com/python/typeshed) 内置快照——完全
+  离线，在你固定某个提交之前会附带 `UNPINNED`
+  提示——见[标准库存根](#标准库存根-typeshed)。
 
 > **在编辑器中，这一状态会被一次性写入种子配置——CLI 从不写配置，但 LSP 会。**
 > 当某个工作区根目录的遍历找不到任何 `[tool.basilisk]` 表时，语言服务器会在
@@ -290,13 +291,26 @@ exclude = [
 | 模式 | 生效来源 |
 | --- | --- |
 | 自定义文件夹 | 你的 `typeshed-path` 目录，原样使用 |
-| 精确提交 | `typeshed-commit` 指定的 SHA，以经验证的归档下载（不可用时失败关闭） |
-| 最新（默认） | 当前的 `python/typeshed@main` 提交，每次运行/会话解析一次；无法解析时回退到编译进二进制的内置快照，并给出 `UNPINNED` 与 `DOWNLOAD FAILED` 两条警告 |
+| 固定提交 | `typeshed-commit` 指定的 SHA，离线对照磁盘上的存储库校验（该提交不在本机时失败关闭） |
 
-"最新"模式保持新鲜但无法逐日复现——编辑器的 Server Info 面板会将其报告为
-`UNPINNED` 行；在配置编辑器中选择 **Pinned commit**（固定提交）来源会把解析出的
-SHA 写入 `typeshed-commit`，并清除任何 `typeshed-path`。下载的归档在激活前需通过安全、结构、许可证与内容验证
-关卡，并以不可变 ZIP 缓存。完整细节：
+解析**完全离线**：`basilisk check`、`basilisk analyze` 和 LSP 绝不下载任何
+东西。固定提交只做一件事——校验磁盘上的 typeshed 树与该提交的 SHA 一致。
+如果固定的提交尚未下载到本机，检查会以 `NO SOURCE` 错误硬失败（退出码
+3），并给出恢复命令；绝不静默替换为其他来源。
+
+typeshed 的字节只能通过显式下载操作到达机器，而这些操作完全位于检查器
+之外：
+
+- 配置编辑器的 **Download latest**（下载最新）按钮：下载当前的
+  `python/typeshed@main` 提交，并把解析出的 SHA 写入你的
+  `typeshed-commit` 固定项（同时清除任何 `typeshed-path`）；
+- `basilisk typeshed download [--commit <sha>]`——不带 `--commit` 时与按钮
+  行为相同；带 `--commit` 时将该已配置的精确提交物化到存储库，不写入任何
+  配置。
+
+每次下载在任何字节落入内容寻址存储库之前，都要通过安全、结构、许可证与
+内容验证关卡；条目写入后不可变，之后的每次解析都会离线地将存储的树重新
+哈希并对照该固定提交的提交对象。完整细节：
 [`STUBRES-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)。
 
 内置快照被编译进二进制文件，因此完全无需网络也能获得标准库类型——在飞机上、
@@ -304,23 +318,19 @@ SHA 写入 `typeshed-commit`，并清除任何 `typeshed-path`。下载的归档
 [`83c2518`](https://github.com/python/typeshed/tree/83c2518a9e6abbda0c44592c3483de459198f887/stdlib)
 处**完整的 typeshed `stdlib/` `.pyi` 存根集合**（不含第三方 `stubs/`，也不含
 typeshed 自身在 `stdlib/` 下的非存根文件）：752 个 `.pyi` 文件，外加
-`stdlib/VERSIONS` 与 `LICENSE`，未压缩约 2.85 MB。它是回退方案而非
-固定来源——一旦启用，Basilisk 一定会明确告知。
+`stdlib/VERSIONS` 与 `LICENSE`，未压缩约 2.85 MB。未设置 `typeshed-commit`
+时，内置提交即为生效的固定项，编辑器的 Server Info 面板会显示 `UNPINNED`
+提示；显式固定任意提交——包括内置的 `83c2518…`——即可清除该提示。
 
 | 键 | 类型 | 默认值 | 含义 |
 | --- | --- | --- | --- |
-| `typeshed-commit` | 完整 40 位 SHA | _（未设置——最新）_ | 要使用的精确 `python/typeshed` 提交。固定后**失败关闭**——绝不静默替换为其他提交。缩写 SHA 会被拒绝。 |
-| `typeshed-url` | URL 模板 | GitHub codeload | 包含恰好一个 `{sha}` 占位符的 HTTPS 归档镜像。镜像无法解析"最新"。 |
-| `typeshed-cache-path` | 路径 | 操作系统缓存目录 | 通过关卡的 ZIP 的缓存位置。 |
-| `typeshed-cache` | bool | `true` | 24 小时内复用经重新哈希的缓存 ZIP；`false` 每次运行都下载、验证并丢弃。 |
-| `typeshed-verify` | bool | `true` | 对归档做内容证明，与受信任的 git 树比对；`false` 报告 `UNVERIFIED`，且绝不绕过安全、结构或许可证关卡。 |
-| `typeshed-path` | 路径 | _（未设置）_ | 你自己的标准库存根树——同时禁用下载与内置快照。 |
+| `typeshed-commit` | 完整 40 位 SHA | _（未设置——内置提交，附 `UNPINNED` 提示）_ | 磁盘上的树必须匹配的精确 `python/typeshed` 提交。固定后**失败关闭**——绝不静默替换为其他提交。缩写 SHA 会被拒绝。 |
+| `typeshed-store-path` | 路径 | 操作系统缓存目录 | 经验证的内容寻址存储库根目录：`basilisk typeshed download` 写入这里，固定提交从这里解析。 |
+| `typeshed-path` | 路径 | _（未设置）_ | 你自己的标准库存根树——完全取代存储库与内置快照。 |
 
-其中两项在 `basilisk check` 与 `basilisk analyze` 上有一次性的命令行等价开关，
-适用于不想写进配置文件的单次 CI 运行：`--no-typeshed-cache`（等价于
-`typeshed-cache = false`）与 `--no-typeshed-verification`（等价于
-`typeshed-verify = false`）。另请注意：`basilisk stubs` 用于为**第三方**未加
-类型的包生成存根，与 typeshed 获取无关。
+这就是全部配置面：不存在任何下载策略键，`check` 与 `analyze` 也没有任何
+与下载相关的命令行开关——下载绝不是检查运行的一部分。另请注意：
+`basilisk stubs` 用于为**第三方**未加类型的包生成存根，与 typeshed 无关。
 
 `typeshed-path` 与 `typeshed-commit` 是**同一个来源选择**：设置了其中任一
 键的嵌套配置文件会将继承的选择作为整体替换，绝不会把一个文件的路径和
@@ -329,7 +339,7 @@ typeshed 自身在 `stdlib/` 下的非存根文件）：752 个 `.pyi` 文件，
 ### `typeshed-path`
 
 **类型：** `string`
-**默认值：** _（未设置——按上文在运行时获取 typeshed）_
+**默认值：** _（未设置——按上文使用固定或内置提交）_
 **示例：** `"vendor/typeshed"`
 **规范：** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
 
@@ -337,7 +347,7 @@ typeshed 自身在 `stdlib/` 下的非存根文件）：752 个 `.pyi` 文件，
 将成为**标准库类型的规范来源**——typing 规范指出类型检查器"SHOULD use
 this as the canonical source for standard-library types in this step"
 （应将其用作此步骤中标准库类型的规范来源）。目录中缺失的标准库模块将继续
-进入后续的解析步骤——**不会**由下载的或内置的 typeshed 来兜底。
+进入后续的解析步骤——**不会**由存储库或内置的 typeshed 来兜底。
 
 ## 如何使用自定义 typeshed
 
