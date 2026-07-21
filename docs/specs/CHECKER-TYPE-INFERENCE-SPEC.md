@@ -891,9 +891,12 @@ def rows() -> Iterator[dict[str, int]]:
 
 def pick() -> list[int] | list[str]:
     return []                      # OK — [] fits either arm of the union
+
+def split() -> tuple[list[int], str]:
+    return [], "lit"               # OK — the declared type reaches each tuple position
 ```
 
-Each literal element need only be assignable *to* the declared element type (covariant, recursing through nested literals and distributing over unions/`Optional`). Genuine element mismatches still fire — `return [1]` against `list[str]` is an error — so no required diagnostic is lost. Non-literal returns (a name, a call) keep the invariant check. Implemented by `literal_collection_assignable_to` in `crates/basilisk-checker/src/inference.rs`, consulted by `returns_compatibility`, `returns_compatibility_2`, and `annotations_generators` before their invariant fallback.
+Each literal element need only be assignable *to* the declared element type (covariant, recursing through nested literals and distributing over unions/`Optional`). A **tuple display** carries the declared type inward per position — positionally against a fixed-length `tuple[X, Y]`, and over every position against the homogeneous `tuple[X, ...]` form ([TYPEINF-COLLECTIONS-TUPLES](#TYPEINF-COLLECTIONS-TUPLES)); a PEP 646 unpacked segment or an arity mismatch is left to the invariant fallback. Genuine element mismatches still fire — `return [1]` against `list[str]`, or `return [1], "a"` against `tuple[list[str], str]`, is an error — so no required diagnostic is lost. Non-literal returns (a name, a call) keep the invariant check. Implemented by `literal_collection_assignable_to` in `crates/basilisk-checker/src/inference.rs`, consulted by `returns_compatibility`, `returns_compatibility_2`, and `annotations_generators` before their invariant fallback.
 
 ### [TYPEINF-SPECIAL-SELF] `Self` {#TYPEINF-SPECIAL-SELF}
 
