@@ -102,12 +102,6 @@ pub struct BasiliskConfig {
     /// outright ([`Self::resolve_severity`]).
     pub rule_chain: Vec<RuleTables>,
 
-    /// Auto-stub generation mode: `"runtime"`, `"ast"`, `"hybrid"`, or `"disabled"`.
-    pub auto_stub_mode: String,
-
-    /// Directory for auto-generated stubs.
-    pub auto_stub_path: PathBuf,
-
     /// Target Python version for version-aware rules ([CHKARCH-VERSION-TARGET]).
     pub python_version: Option<String>,
 
@@ -142,8 +136,6 @@ impl Default for BasiliskConfig {
             typeshed_cache: None,
             typeshed_verify: None,
             rule_chain: Vec::new(),
-            auto_stub_mode: "hybrid".to_owned(),
-            auto_stub_path: PathBuf::from(".basilisk/stubs"),
             python_version: None,
             python_platform: None,
             narrow_attributes_across_calls: None,
@@ -224,12 +216,6 @@ impl BasiliskConfig {
         // The nearest config's directory anchors root-relative interpretation
         // (`include`/`exclude` globs).
         self.project_root = child.project_root.or(self.project_root);
-        if child.auto_stub_mode != defaults.auto_stub_mode {
-            self.auto_stub_mode = child.auto_stub_mode;
-        }
-        if child.auto_stub_path != defaults.auto_stub_path {
-            self.auto_stub_path = child.auto_stub_path;
-        }
         // `typeshed-path` and `typeshed-commit` are one source selection. A
         // nearer directory that chooses either replaces the inherited choice
         // as a unit; merging the two fields independently could manufacture
@@ -355,14 +341,6 @@ pub(crate) fn parse_pyproject_content(content: &str) -> Option<BasiliskConfig> {
     }
     cfg.rule_chain = vec![tables];
 
-    if let Some(val) = basilisk.get("auto-stub-mode").and_then(|v| v.as_str()) {
-        val.clone_into(&mut cfg.auto_stub_mode);
-    }
-
-    if let Some(val) = basilisk.get("auto-stub-path").and_then(|v| v.as_str()) {
-        cfg.auto_stub_path = PathBuf::from(val);
-    }
-
     // python-version / python-platform [CHKARCH-VERSION-TARGET]
     if let Some(val) = basilisk.get("python-version").and_then(|v| v.as_str()) {
         cfg.python_version = Some(val.to_owned());
@@ -388,10 +366,26 @@ pub(crate) fn parse_pyproject_content(content: &str) -> Option<BasiliskConfig> {
 }
 
 /// Parse a `"<key>" = "<severity>"` TOML table into `target`.
+///
+/// An entry whose value is not one of the four severity names is dropped — the
+/// key keeps whatever the rest of the walk decides ([CHKARCH-CONFIG-MODEL]).
+/// Dropping it *silently* is the trap: `BSK-0001 = "eror"` then reads as a rule
+/// the author graded, while the checker never sees the entry at all. The
+/// configuration editor already rejects such a value outright, so a run that
+/// merely ignored it would disagree with the editor about the same file. Warn
+/// with the key and the offending spelling so the mismatch is visible — both
+/// are author-written config identifiers, never PII.
 fn parse_severity_map(table: &toml::Table, target: &mut HashMap<String, RuleSeverity>) {
     for (key, severity_val) in table {
         if let Some(severity) = severity_val.as_str().and_then(RuleSeverity::parse) {
             let _ = target.insert(key.clone(), severity);
+        } else {
+            tracing::warn!(
+                key = key.as_str(),
+                value = severity_val.to_string(),
+                "ignoring config entry: not one of `error`, `warning`, `info`, `disabled` \
+                 (or the aliases `warn`/`information`/`off`/`none`); the entry has no effect"
+            );
         }
     }
 }
@@ -449,9 +443,10 @@ fn warn_on_malformed_typeshed_values(cfg: &BasiliskConfig) {
 
 #[cfg(test)]
 mod validation_tests {
+    use std::collections::HashMap;
     use std::path::PathBuf;
 
-    use super::{is_full_commit_sha, is_valid_typeshed_url_template, BasiliskConfig};
+    use super::{is_full_commit_sha, is_valid_typeshed_url_template, BasiliskConfig, RuleSeverity};
 
     /// [STUBRES-TYPESHED-CONFIG]: only a full 40-char hex SHA is a valid pin.
     #[test]
@@ -552,5 +547,79 @@ mod validation_tests {
         let merged = BasiliskConfig::default().merged_with(child);
         assert!(merged.typeshed_path.is_some());
         assert!(merged.typeshed_commit.is_some());
+    }
+
+    /// Build a `[tool.basilisk.rules]`-shaped table directly, so the fixture
+    /// carries no `Result` to unwrap and can hold non-string values a TOML
+    /// severity table must still tolerate.
+    fn severity_table(entries: &[(&str, toml::Value)]) -> toml::Table {
+        let mut table = toml::Table::new();
+        for (key, value) in entries {
+            let _ = table.insert((*key).to_owned(), value.clone());
+        }
+        table
+    }
+
+    /// [CHKARCH-STRICTNESS-SEVERITY]: every documented spelling — the four
+    /// canonical names and the four aliases — must reach the rule map, so a
+    /// config the docs sanction is never quietly a no-op.
+    #[test]
+    fn every_documented_severity_spelling_is_accepted() {
+        let table = severity_table(&[
+            ("a", toml::Value::from("error")),
+            ("b", toml::Value::from("warning")),
+            ("c", toml::Value::from("warn")),
+            ("d", toml::Value::from("info")),
+            ("e", toml::Value::from("information")),
+            ("f", toml::Value::from("disabled")),
+            ("g", toml::Value::from("off")),
+            ("h", toml::Value::from("none")),
+        ]);
+        let mut parsed = HashMap::new();
+        super::parse_severity_map(&table, &mut parsed);
+
+        assert_eq!(parsed.get("a"), Some(&RuleSeverity::Error));
+        assert_eq!(parsed.get("b"), Some(&RuleSeverity::Warning));
+        assert_eq!(parsed.get("c"), Some(&RuleSeverity::Warning));
+        assert_eq!(parsed.get("d"), Some(&RuleSeverity::Info));
+        assert_eq!(parsed.get("e"), Some(&RuleSeverity::Info));
+        assert_eq!(parsed.get("f"), Some(&RuleSeverity::Disabled));
+        assert_eq!(parsed.get("g"), Some(&RuleSeverity::Disabled));
+        assert_eq!(parsed.get("h"), Some(&RuleSeverity::Disabled));
+        assert_eq!(parsed.len(), 8, "no documented spelling may be dropped");
+    }
+
+    /// [CHKARCH-CONFIG-MODEL]: a value that is not a severity is dropped rather
+    /// than coerced — a typo must never silently become `error`, and it must
+    /// never take a neighbouring valid entry down with it. The drop is
+    /// announced through `tracing::warn!` in `parse_severity_map`, because the
+    /// configuration editor rejects the same value outright and a silent run
+    /// would disagree with the editor about one file.
+    #[test]
+    fn unparseable_severities_are_dropped_without_disturbing_valid_entries() {
+        let table = severity_table(&[
+            ("typo", toml::Value::from("eror")),
+            ("wrong_case", toml::Value::from("ERROR")),
+            ("empty", toml::Value::from("")),
+            ("numeric", toml::Value::from(3)),
+            ("boolean", toml::Value::from(true)),
+            ("listy", toml::Value::from(vec!["error"])),
+            ("good", toml::Value::from("warning")),
+        ]);
+        let mut parsed = HashMap::new();
+        super::parse_severity_map(&table, &mut parsed);
+
+        for dropped in ["typo", "wrong_case", "empty", "numeric", "boolean", "listy"] {
+            assert!(
+                !parsed.contains_key(dropped),
+                "`{dropped}` is not a severity and must not enter the rule map"
+            );
+        }
+        assert_eq!(
+            parsed.get("good"),
+            Some(&RuleSeverity::Warning),
+            "a malformed neighbour must not suppress a valid entry"
+        );
+        assert_eq!(parsed.len(), 1);
     }
 }

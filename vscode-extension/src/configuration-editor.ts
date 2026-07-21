@@ -27,6 +27,7 @@ import type {
 import {
   confirmVerificationOff,
   disablesTypeshedVerification,
+  isTypeshedOnly,
   pickTypeshedFolder,
   TypeshedEditorUi,
 } from "./configuration-editor-typeshed";
@@ -208,6 +209,7 @@ export class ConfigurationEditorController implements vscode.Disposable {
       case "refresh": await this.refresh(); return;
       case "preview": await this.preview(intent); return;
       case "apply": await this.apply(); return;
+      case "cancelPreview": this.cancelPreview(); return;
       case "adopt": await this.runWorkspaceCommand(ADOPT_WORKSPACE_COMMAND, false); return;
       case "fixSafe": await this.runWorkspaceCommand(FIX_WORKSPACE_COMMAND, true); return;
       case "openConfigFile": await this.openConfigFile(intent.uri); return;
@@ -294,6 +296,8 @@ export class ConfigurationEditorController implements vscode.Disposable {
       });
       if (generation !== this.loadGeneration || previewGeneration !== this.previewGeneration
         || this.disposed || !this.panel.isOpen()) { return; }
+      // A Typeshed edit has no severity impact to weigh, so it lands at once.
+      if (isTypeshedOnly(intent)) { await this.applyPreview(preview); return; }
       this.store.acceptConfigurationPreview(preview);
     } catch (error: unknown) {
       if (generation !== this.loadGeneration || previewGeneration !== this.previewGeneration
@@ -304,10 +308,13 @@ export class ConfigurationEditorController implements vscode.Disposable {
   }
 
   private async pickTypeshedFolder(key: "TypeshedPath" | "TypeshedCachePath"): Promise<void> {
-    const snapshot = this.store.configurationEditor.value.snapshot;
-    if (snapshot === undefined) { return; }
-    const intent = await pickTypeshedFolder(snapshot, key);
-    if (intent !== undefined) { await this.preview(intent); }
+    const state = this.store.configurationEditor.value;
+    if (state.snapshot === undefined) { return; }
+    const intent = await pickTypeshedFolder(state.snapshot, key);
+    // A cancelled picker writes nothing, so the controls must snap back to the
+    // configuration that still holds ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+    if (intent === undefined) { void this.panel.postMessage({ type: "state", state }); return; }
+    await this.preview(intent);
   }
 
   private async runTypeshedAction(action: TypeshedActionRequest["action"]): Promise<void> {
@@ -322,7 +329,8 @@ export class ConfigurationEditorController implements vscode.Disposable {
       });
       if (this.requestIsStale(generation, snapshot.rootUri)) { return; }
       if (result.kind === "Preview") {
-        this.store.acceptConfigurationPreview(result.preview);
+        // PinCurrent writes the active commit: a source choice, applied now.
+        await this.applyPreview(result.preview);
       } else if (result.kind === "Snapshot") {
         this.store.acceptConfigurationSnapshot(result.snapshot);
       } else {
@@ -336,8 +344,24 @@ export class ConfigurationEditorController implements vscode.Disposable {
   }
 
   private async apply(): Promise<void> {
-    const { snapshot, preview, phase } = this.store.configurationEditor.value;
-    if (snapshot === undefined || preview === undefined || phase !== "preview") { return; }
+    const { preview, phase } = this.store.configurationEditor.value;
+    if (preview === undefined || phase !== "preview") { return; }
+    await this.applyPreview(preview);
+  }
+
+  /**
+   * Discard an unapplied preview and re-render from the snapshot, so a
+   * dismissed dialog can never leave a control showing a value the
+   * configuration does not hold ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+   */
+  private cancelPreview(): void {
+    this.previewGeneration += 1;
+    this.store.cancelConfigurationPreview();
+  }
+
+  private async applyPreview(preview: ConfigurationPreview): Promise<void> {
+    const snapshot = this.store.configurationEditor.value.snapshot;
+    if (snapshot === undefined) { return; }
     const generation = this.loadGeneration;
     this.previewGeneration += 1;
     this.store.beginConfigurationApply();
@@ -353,7 +377,13 @@ export class ConfigurationEditorController implements vscode.Disposable {
       // notification precedes the apply response, so a racing refresh
       // routinely bumps the generation — the disk write still has to land.
       if (!sourceWasDirty) { await saveConfigurationDocument(fresh.configUri); }
-      if (generation !== this.loadGeneration || this.disposed || !this.panel.isOpen()) { return; }
+      if (this.disposed || !this.panel.isOpen()
+        || this.store.configurationEditor.value.rootUri !== snapshot.rootUri) { return; }
+      if (generation !== this.loadGeneration) {
+        this.loadGeneration += 1;
+        this.loadingRoot = undefined;
+      }
+      this.pendingRefreshRoot = undefined;
       this.store.acceptConfigurationSnapshot(fresh);
     } catch (error: unknown) {
       if (generation !== this.loadGeneration || this.disposed || !this.panel.isOpen()) { return; }

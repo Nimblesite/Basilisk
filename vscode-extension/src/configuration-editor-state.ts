@@ -62,6 +62,8 @@ export interface ConfigurationEditorActions {
   acceptConfigurationSnapshot(snapshot: ConfigurationSnapshot): void;
   beginConfigurationPreview(): void;
   acceptConfigurationPreview(preview: ConfigurationPreview): void;
+  /** Drop an unapplied preview and return to the snapshot as it stands. */
+  cancelConfigurationPreview(): void;
   beginConfigurationApply(): void;
   beginRuleOccurrences(reset: boolean): void;
   acceptRuleOccurrences(response: RuleOccurrencesResponse, append: boolean): void;
@@ -116,9 +118,7 @@ function hasTypeshedStateKinds(fields: Record<string, unknown>): boolean {
 
 function hasTypeshedIdentityFields(fields: Record<string, unknown>): boolean {
   return isOptionalString(fields.blockedReason)
-    && isOptionalString(fields.commitIdentity)
-    && isOptionalString(fields.treeIdentity)
-    && isOptionalString(fields.licenseReference);
+    && isOptionalString(fields.commitIdentity);
 }
 
 function isTypeshedStatus(value: unknown): boolean {
@@ -227,6 +227,21 @@ function acceptPreview(state: Signal<ConfigurationEditorState>, preview: Configu
   };
 }
 
+/**
+ * Nothing was written, so the snapshot still describes the truth: return to it
+ * and let every control re-render from it ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+ */
+function cancelPreview(state: Signal<ConfigurationEditorState>): void {
+  if (state.value.snapshot === undefined) { return; }
+  if (state.value.phase !== "preview" && state.value.phase !== "previewing") { return; }
+  state.value = {
+    ...state.value,
+    phase: "ready",
+    preview: undefined,
+    message: "Change discarded; configuration is unchanged",
+  };
+}
+
 function failEditor(
   state: Signal<ConfigurationEditorState>,
   failure: { readonly message: string; readonly conflict: boolean; readonly repairUri: string | undefined },
@@ -249,6 +264,7 @@ export function createConfigurationEditorActions(
     acceptConfigurationSnapshot(snapshot): void { acceptSnapshot(state, snapshot); },
     beginConfigurationPreview(): void { beginPreview(state); },
     acceptConfigurationPreview(preview): void { acceptPreview(state, preview); },
+    cancelConfigurationPreview(): void { cancelPreview(state); },
     beginConfigurationApply(): void {
       state.value = { ...state.value, phase: "applying", message: "Applying one validated workspace edit…" };
     },

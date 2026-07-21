@@ -113,9 +113,6 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     function typeshedSetBoolean(name, value) {
       return { kind: 'SetTypeshedSetting', key: typeshedKey(name), value: { kind: 'Boolean', value } };
     }
-    function typeshedSetting(name) {
-      return snapshot && snapshot.typeshed.settings.find((setting) => kind(setting.key, '') === name);
-    }
     function selectedRule() {
       return snapshot && snapshot.rules.find((rule) => rule.descriptor.code === selectedRuleCode);
     }

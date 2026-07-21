@@ -103,6 +103,79 @@ suite("Centralized analysis reactivity (issue #58)", () => {
     });
   });
 
+  // [EXTACT-REACTIVE-STATE] / [LSPARCH-CONFIG]: applying a rule-severity change
+  // in the configuration editor rewrites every affected diagnostic's severity,
+  // so the Modules panel's health rollup is stale the moment the server
+  // confirms the change. `basilisk/configurationChanged` must therefore bump
+  // analysisRevision — relying on the debounced diagnostics listener alone
+  // leaves the panel rendering the PREVIOUS configuration's severities whenever
+  // the recheck republishes nothing the client can observe.
+  test("analysisRevision bumps on basilisk/configurationChanged", () => {
+    withStubbedCommands(() => {
+      const { store, handles } = storeWithFakeClient();
+      handles.fireState(State.Running);
+      const before = store.analysisRevision.value;
+      handles.fireNotification("basilisk/configurationChanged", {
+        rootUri: "file:///workspace",
+        revision: "fnv1a64:0000000000000001",
+      });
+      assert.ok(
+        store.analysisRevision.value > before,
+        "an applied configuration change must bump analysisRevision so the "
+          + "Modules panel stops showing the previous configuration's severities",
+      );
+    });
+  });
+
+  test("Modules panel refreshes automatically when analysisRevision bumps", async () => {
+    const { store } = storeWithFakeClient();
+    const provider = new ModuleExplorerProvider(store);
+    try {
+      wireReactiveRefresh(store, provider);
+
+      const fired = new Promise<void>((resolve) => {
+        const sub = provider.onDidChangeTreeData(() => {
+          sub.dispose();
+          resolve();
+        });
+      });
+      store.bumpAnalysisRevision();
+      await fired;
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  test("diagnostics changes bump analysisRevision (debounced)", async function () {
+    this.timeout(10_000);
+    const { store } = storeWithFakeClient();
+    const before = store.analysisRevision.value;
+
+    // Drive a REAL diagnostics change through the VS Code API.
+    const collection = vscode.languages.createDiagnosticCollection("bsk-issue58-test");
+    try {
+      collection.set(vscode.Uri.parse("untitled:issue58-test.py"), [
+        new vscode.Diagnostic(new vscode.Range(0, 0, 0, 1), "issue58 probe"),
+      ]);
+      // The bump is debounced — poll briefly.
+      const deadline = Date.now() + 5000;
+      while (store.analysisRevision.value === before && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      assert.ok(
+        store.analysisRevision.value > before,
+        "a diagnostics change must bump analysisRevision per EXTACT-HEALTH-REFRESH",
+      );
+    } finally {
+      collection.dispose();
+    }
+  });
+});
+
+// Typeshed status is a distinct reactive channel from analysisRevision: it
+// targets a single root rather than repainting every panel, so it lives in its
+// own suite ([EXTACT-REACTIVE-STATE]).
+suite("Typeshed status reactivity (issue #58)", () => {
   test("Typeshed status changes refresh only the matching open root", () => {
     withStubbedCommands(() => {
       const { store, handles } = storeWithFakeClient();
@@ -157,48 +230,5 @@ suite("Centralized analysis reactivity (issue #58)", () => {
       );
     });
   });
-
-  test("Modules panel refreshes automatically when analysisRevision bumps", async () => {
-    const { store } = storeWithFakeClient();
-    const provider = new ModuleExplorerProvider(store);
-    try {
-      wireReactiveRefresh(store, provider);
-
-      const fired = new Promise<void>((resolve) => {
-        const sub = provider.onDidChangeTreeData(() => {
-          sub.dispose();
-          resolve();
-        });
-      });
-      store.bumpAnalysisRevision();
-      await fired;
-    } finally {
-      provider.dispose();
-    }
-  });
-
-  test("diagnostics changes bump analysisRevision (debounced)", async function () {
-    this.timeout(10_000);
-    const { store } = storeWithFakeClient();
-    const before = store.analysisRevision.value;
-
-    // Drive a REAL diagnostics change through the VS Code API.
-    const collection = vscode.languages.createDiagnosticCollection("bsk-issue58-test");
-    try {
-      collection.set(vscode.Uri.parse("untitled:issue58-test.py"), [
-        new vscode.Diagnostic(new vscode.Range(0, 0, 0, 1), "issue58 probe"),
-      ]);
-      // The bump is debounced — poll briefly.
-      const deadline = Date.now() + 5000;
-      while (store.analysisRevision.value === before && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-      assert.ok(
-        store.analysisRevision.value > before,
-        "a diagnostics change must bump analysisRevision per EXTACT-HEALTH-REFRESH",
-      );
-    } finally {
-      collection.dispose();
-    }
-  });
 });
+

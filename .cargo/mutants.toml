@@ -14,13 +14,12 @@ cap_lints = true
 # Without this, cargo-mutants copies 200MB+ of node_modules per mutant → disk full.
 gitignore = true
 
-# Crates under mutation. Both have real, fast test suites; every line of their
-# source is mutated (NO code exclusions). The Makefile drives one crate per run
-# (`PKG=`), scopes the *tests* per crate (checker: the mutation-safe binaries;
-# lsp: `--lib` fast inline unit tests only, never the subprocess/E2E `tests/`),
-# and records a separate baseline per scope in mutation_scores.json.
-#   basilisk-checker — mutation-safe unit tests (`--test coverage_boost_33_tests
-#                      --test mutation_kill_tests`).
+# Crates under mutation: basilisk-checker and basilisk-lsp. Both have real, fast
+# test suites; every line of their source is mutated (NO code exclusions). The
+# Makefile drives ONE crate per run (`PKG=`) and records a separate baseline per
+# scope in mutation_scores.json.
+#   basilisk-checker — the broad rule-test binaries listed in the Makefile's
+#                      `_CHECKER_MUTATION_TESTS`, plus `--lib`.
 #   basilisk-lsp     — fast inline `#[cfg(test)]` unit tests via `--lib`; the
 #                      heavy E2E binaries in tests/ (spawn LSP subprocess /
 #                      sockets / python) are excluded as TESTS, not code.
@@ -29,10 +28,16 @@ gitignore = true
 #   basilisk-parser   — 2 mutants, 0 tests, all unviable
 #   basilisk-resolver — cold builds take 300s+; tests don't cover mutations well
 #   basilisk-cli      — e2e tests spawn compiled binary; hangs per-mutant
-test_package = [
-    "basilisk-checker",
-    "basilisk-lsp",
-]
+#
+# NO `test_package` list here, DELIBERATELY. A static list is workspace-global:
+# cargo-mutants unions it into EVERY mutant's build, so listing both crates made
+# each of the 141 basilisk-checker mutants compile and link the whole
+# basilisk-lsp test suite — including the very E2E binaries this file says are
+# "excluded as TESTS" — only to never run them. That was pure waste on every
+# mutant and it is what pushed the test phase into the `--timeout` ceiling (see
+# TIMEOUTS below). The Makefile now passes `--test-package "$PKG"` per run, so a
+# checker run builds and runs checker tests and nothing else. This scopes the
+# TEST suite, never the mutant pool — `--re` still lists every line.
 
 # NO `exclude_re`. Excluding *code* from the mutant generator is forbidden: it
 # hides mutants that would otherwise survive, inflating the kill rate against a
@@ -43,29 +48,49 @@ test_package = [
 # the open, never excluded. Widen coverage by adding #[mutation_safe] tests that
 # kill those survivors — never by hiding the code from the generator.
 #
-# TIMEOUTS — none should occur from slowness; any that remains is a hung-code KILL.
+# TIMEOUTS — none may occur from slowness; any that remains is a hung-code KILL.
+# This is an INVARIANT, not an aspiration: the gate in `mutants_report.py` folds
+# Timeout into the killed total, so a timeout caused by slowness would launder an
+# untested mutant into a "kill". The timeout ratchet there enforces the invariant.
 #
-# MEASURED root cause of the timeouts we saw: the cargo-mutants *test phase* runs
-# `cargo test`, which INCREMENTALLY RECOMPILES the crate + its test binaries under
-# the mutation BEFORE running them. That compile is ~10-24s. The pure test RUN is
-# <1s. So the wall-clock of the "test" phase is dominated by compilation, ~10-24s.
-# `--timeout` bounds that whole phase. A too-tight `--timeout 20` therefore
-# mislabelled honest CAUGHT/MISSED mutants as TIMEOUT purely because compilation
-# hadn't finished — e.g. every aliases_implicit.rs mutant "timed out" at 20s but,
-# at 120s, resolved cleanly to 5 CAUGHT / 4 MISSED with ZERO timeouts. It was
-# never hung code and never a slow test; it was the compile budget.
-#   Fixes: `--timeout 120` (5-6x headroom over the compile-included run, so
-#   slowness never trips it) and `--build-timeout 600` (the dedicated build phase
-#   gets its own generous ceiling). `--jobs` is also capped to min(4, cores/2) so
-#   concurrent rebuilds don't starve each other. All three are TEST-execution
-#   settings, not code exclusions — every mutant still runs.
+# MEASURED (2026-07-21, this workspace):
+#   - Serial and warm, the FULL killing suite — what a mutant no test kills must
+#     run, with no early exit — is 29 binaries in ~25s.
+#   - Build phase (the per-mutant incremental rebuild): ~54s median.
+#   - That 25s does NOT describe the per-mutant test phase under `--jobs 4`. Each
+#     job works in its own copied tree, so a mutated lib relinks all 29 test
+#     binaries in every concurrent job; that link cost, not test execution, is
+#     what the ceiling has to cover.
+#   - At `--timeout 120` this produced 30 TIMEOUTs across 144 mutants (0 MISSED).
+#     Re-running those same mutants over the full 29-binary set at `--timeout 400
+#     --jobs 1` caught every one of them, ~27s each — so they were always
+#     killable, and the ceiling rather than the code was what failed them.
+# `--timeout 400` therefore sizes the ceiling to the link-bound worst case rather
+# than the serial warm one, and `--build-timeout 600` covers the build phase
+# separately. `--jobs` is capped to min(4, cores/2) so concurrent rebuilds don't
+# starve each other. All three are TEST-execution settings, not code exclusions —
+# every mutant still runs.
+#
+# HISTORY — why the baseline once showed 29 timeouts and 0 missed. A global
+# `test_package` list (removed above) unioned basilisk-lsp into every
+# basilisk-checker mutant, so each mutant also built the lsp test suite and RAN
+# its lib tests. That pushed the test phase to a 38s median / 110s max against
+# the 120s ceiling — 1.09x headroom, not the 5-6x claimed here at the time. The
+# mutants that blew it were, by construction, the ones NO test killed: a killed
+# mutant exits at the first failing binary, while a survivor runs every binary to
+# the end. So the slowest mutants were precisely the would-be survivors, and
+# timeout-as-kill recorded them as caught. Scoping the test package REDUCED that
+# cost but did not remove it — 30 timeouts survived the scoping — because the
+# per-mutant relink described above remained. Raising the ceiling is what
+# actually cleared them; the timeout ratchet stops the symptom from ever being
+# silent again.
 #
 # The residual policy, for any GENUINE infinite-loop mutant (one that would run
-# FOREVER, far past any 120s compile+run): it has been DETECTED — a terminating
-# suite became non-terminating, an observable behaviour change — so a Timeout
-# counts as a KILL, exactly as PIT and Stryker do. `mutants_report.py` folds
-# Timeout into the killed total; it is NEVER a survivor bucket that drags the
-# score down. The 120s bound caps any such true hang so it can't drag out a run.
+# FOREVER, far past any 400s run): it has been DETECTED — a terminating suite
+# became non-terminating, an observable behaviour change — so a Timeout counts as
+# a KILL, exactly as PIT and Stryker do. That remains true. What changed is that
+# a RISE in the timeout count is now itself a gate failure, so the kill credit
+# can never quietly grow on the back of a slow runner.
 #
 # BASELINE & SCOPE — two runs, one honest gate.
 # The whole-crate run (`make mutation-test ALL=1`, examine_re=".", ~9085 mutants,

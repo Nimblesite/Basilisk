@@ -60,7 +60,7 @@ impl RuntimeBackend {
         pinned: bool,
     ) -> Result<Snapshot, BackendError> {
         if request.use_cache {
-            if let Some(cached) = self.load_cache(metadata.commit) {
+            if let Some(cached) = self.load_cache(metadata.commit, pinned) {
                 let cached_result = validate_cache_record(metadata.commit, metadata.tree, &cached)
                     .and_then(|()| trusted_from_cache(metadata.commit, &cached))
                     .and_then(|trusted| {
@@ -116,11 +116,25 @@ impl RuntimeBackend {
         Ok(snapshot)
     }
 
-    fn load_cache(&self, commit: Oid) -> Option<CachedArchive> {
+    /// Look up `commit` in the cache.
+    ///
+    /// `pinned` selects the reuse window. An explicit `typeshed-commit` pin is
+    /// content-addressed and re-hashed on every load, so age tells us nothing
+    /// and expiring it would only force a needless network round-trip. `Latest`
+    /// resolves the moving `main` reference, where stale bytes really would
+    /// misrepresent the selection, so it keeps the 24-hour window
+    /// ([STUBRES-TYPESHED-ACQUIRE]).
+    fn load_cache(&self, commit: Oid, pinned: bool) -> Option<CachedArchive> {
         let Some(cache) = &self.cache else {
             return None;
         };
-        match cache.load_fresh(&cache_key(commit), unix_seconds_now()) {
+        let key = cache_key(commit);
+        let found = if pinned {
+            cache.load_pinned(&key)
+        } else {
+            cache.load_fresh(&key, unix_seconds_now())
+        };
+        match found {
             Ok(cached) => cached,
             Err(_error) => {
                 // A cache is an optimization, never an alternate trust root.
@@ -180,7 +194,7 @@ impl AcquisitionBackend for RuntimeBackend {
         request: &TypeshedRequest,
     ) -> Result<Snapshot, BackendError> {
         if request.use_cache {
-            if let Some(cached) = self.load_cache(commit) {
+            if let Some(cached) = self.load_cache(commit, true) {
                 let cached_result = trusted_from_cache(commit, &cached).and_then(|trusted| {
                     activate_zip(
                         commit,
@@ -242,13 +256,28 @@ pub fn production_manager(
     request: TypeshedRequest,
     cache_path: Option<PathBuf>,
 ) -> Result<TypeshedManager, TransportError> {
-    let cache = if request.use_cache {
-        cache_path.map(DiskCache::new).or_else(default_cache)
-    } else {
-        None
-    };
+    let cache = select_cache(request.use_cache, cache_path);
     let transport = Arc::new(HttpsTransport::new(request.url_template.clone())?);
     Ok(manager_for_request(request, transport, cache))
+}
+
+/// Resolve which disk cache an acquisition may use.
+///
+/// Separated from [`production_manager`] so the choice is reachable without
+/// constructing an HTTPS transport, which the surrounding function does and
+/// which no unit test can exercise offline.
+///
+/// `typeshed-cache = false` disables reuse outright and outranks any configured
+/// directory — otherwise a project that had switched caching off would silently
+/// keep reusing bytes from a path it also configured. `typeshed-cache-path`
+/// then relocates storage, and only its absence falls back to the canonical
+/// per-user OS cache ([STUBRES-TYPESHED-CONFIG]).
+#[must_use]
+pub fn select_cache(use_cache: bool, cache_path: Option<PathBuf>) -> Option<DiskCache> {
+    if !use_cache {
+        return None;
+    }
+    cache_path.map(DiskCache::new).or_else(default_cache)
 }
 
 /// Canonical per-user typeshed cache directory for this platform.

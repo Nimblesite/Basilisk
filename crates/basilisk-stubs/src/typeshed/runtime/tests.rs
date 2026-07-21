@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::{Cursor, Write as _};
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -309,8 +310,32 @@ fn exact_pin_reuses_cache_offline_and_remains_pinned() {
     assert_eq!(offline.archive_calls.load(Ordering::SeqCst), 0);
 }
 
+/// Age out every generation under `key` by stamping the oldest possible
+/// timestamp onto its record. Zero is the legacy-record sentinel, so this also
+/// covers entries written before the field existed.
+fn age_out_cached_bytes(cache_dir: &Path, key: &str) {
+    let generations = cache_dir.join(key).join("generations");
+    for entry in std::fs::read_dir(&generations).expect("generations dir") {
+        let meta = entry.expect("generation entry").path().join("meta.json");
+        let mut record: CacheRecord =
+            serde_json::from_slice(&std::fs::read(&meta).expect("cache metadata"))
+                .expect("valid metadata");
+        record.acquired_at_unix_seconds = 0;
+        std::fs::write(
+            &meta,
+            serde_json::to_vec_pretty(&record).expect("serialize metadata"),
+        )
+        .expect("age out cached bytes");
+    }
+}
+
+/// A pinned commit is content-addressed, so its archive can never change
+/// meaning and age carries no information about it. Reuse is guarded by the
+/// per-load re-hash, not by a clock. Expiring such an entry would buy nothing
+/// and would stop a pinned, reproducible project from typechecking offline or
+/// while GitHub is rate-limiting ([STUBRES-TYPESHED-ACQUIRE]).
 #[test]
-fn expired_cached_bytes_reacquire_the_same_exact_pin() {
+fn aged_out_cached_bytes_are_still_reused_for_an_exact_pin() {
     let cache_dir = tempfile::tempdir().expect("cache dir");
     let cache = DiskCache::new(cache_dir.path());
     let a = fixture(A_SHA, "A");
@@ -325,35 +350,68 @@ fn expired_cached_bytes_reacquire_the_same_exact_pin() {
     let _ = manager(request(exact.clone(), true), seed, Some(cache.clone()))
         .snapshot()
         .expect("seed exact cache");
+    age_out_cached_bytes(cache_dir.path(), A_SHA);
 
-    let meta = cache_dir
-        .path()
-        .join(A_SHA)
-        .join("generations")
-        .join(sha256_hex(&a.zip))
-        .join("meta.json");
-    let mut record: CacheRecord =
-        serde_json::from_slice(&std::fs::read(&meta).expect("cache metadata"))
-            .expect("valid metadata");
-    record.acquired_at_unix_seconds = 0;
-    std::fs::write(
-        &meta,
-        serde_json::to_vec_pretty(&record).expect("serialize metadata"),
-    )
-    .expect("expire cached bytes");
+    let offline = Arc::new(FakeTransport::offline());
+    let snapshot = manager(request(exact, true), Arc::clone(&offline), Some(cache))
+        .snapshot()
+        .expect("an aged-out exact pin still activates offline");
+    assert_eq!(snapshot.status.commit, Some(a.metadata.commit));
+    assert!(matches!(
+        snapshot.identity,
+        SourceIdentity::Commit { pinned: true, .. }
+    ));
+    assert_eq!(
+        offline.commit_calls.load(Ordering::SeqCst),
+        0,
+        "an immutable pin must not be re-resolved because its bytes aged"
+    );
+    assert_eq!(offline.tree_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(offline.archive_calls.load(Ordering::SeqCst), 0);
+}
 
-    let retry = Arc::new(FakeTransport::new(
-        None,
+/// The counterpart to the pin exemption: `Latest` tracks the moving `main`
+/// reference, so aged bytes really could misrepresent the selection and the
+/// 24-hour window still applies. Dropping expiry wholesale would silently
+/// pin users to whatever `main` was the day they first ran.
+#[test]
+fn expired_cached_bytes_are_reacquired_for_the_moving_latest_reference() {
+    let cache_dir = tempfile::tempdir().expect("cache dir");
+    let cache = DiskCache::new(cache_dir.path());
+    let a = fixture(A_SHA, "A");
+    let seed = Arc::new(FakeTransport::new(
+        Some(a.metadata.commit),
         std::slice::from_ref(&a),
         SourceTransport::Codeload,
     ));
-    let snapshot = manager(request(exact, true), Arc::clone(&retry), Some(cache))
-        .snapshot()
-        .expect("reacquire expired exact pin");
+    let _ = manager(
+        request(SourceSelection::Latest, true),
+        seed,
+        Some(cache.clone()),
+    )
+    .snapshot()
+    .expect("seed latest cache");
+    age_out_cached_bytes(cache_dir.path(), A_SHA);
+
+    let retry = Arc::new(FakeTransport::new(
+        Some(a.metadata.commit),
+        std::slice::from_ref(&a),
+        SourceTransport::Codeload,
+    ));
+    let snapshot = manager(
+        request(SourceSelection::Latest, true),
+        Arc::clone(&retry),
+        Some(cache),
+    )
+    .snapshot()
+    .expect("reacquire expired latest bytes");
     assert_eq!(snapshot.status.commit, Some(a.metadata.commit));
-    assert_eq!(retry.commit_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(retry.tree_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(retry.archive_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(retry.latest_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        retry.archive_calls.load(Ordering::SeqCst),
+        1,
+        "expired bytes for a moving reference must be redownloaded"
+    );
 }
 
 #[test]
@@ -370,7 +428,9 @@ fn exact_bundle_commit_restarts_offline_without_a_download_cache() {
     assert_eq!(snapshot.status.active_source, SourceKind::Bundled);
     assert_eq!(snapshot.status.commit, Some(commit));
     assert!(snapshot.status.warnings.is_empty());
-    assert_eq!(offline.commit_calls.load(Ordering::SeqCst), 1);
+    // The bundle satisfies its own pin before any acquisition, so an offline
+    // restart makes no transport call at all ([STUBRES-TYPESHED-ACQUIRE]).
+    assert_eq!(offline.commit_calls.load(Ordering::SeqCst), 0);
     assert_eq!(offline.archive_calls.load(Ordering::SeqCst), 0);
 }
 
@@ -647,5 +707,67 @@ fn trusted_git_modes_override_zip_modes_and_blob_mutation_fails() {
     assert_eq!(
         bad.load_commit(valid.metadata.commit, &no_cache).err(),
         Some(BackendError::Validation)
+    );
+}
+
+// `typeshed-cache-path` selection ([STUBRES-TYPESHED-CONFIG]). The wiring in
+// `production_manager` was previously unreachable from a test, because that
+// function also builds an HTTPS transport; `select_cache` isolates the choice.
+
+/// A configured `typeshed-cache-path` must be the directory that actually
+/// receives cached bytes. Asserting the cache is merely `Some` would pass even
+/// if the configured path were dropped and the per-user OS cache silently used
+/// instead — which would write outside the project while appearing to work.
+#[test]
+fn configured_cache_path_is_the_directory_actually_written_to() {
+    let dir = tempfile::tempdir().expect("cache dir");
+    let cache = select_cache(true, Some(dir.path().to_path_buf())).expect("cache enabled");
+
+    let zip = b"not-a-real-zip-but-hashed-consistently";
+    let key = CacheKey::from_identity(A_SHA);
+    let record = CacheRecord {
+        commit: Some(A_SHA.to_owned()),
+        tree: None,
+        zip_sha256: sha256_hex(zip),
+        verified: false,
+        transport: None,
+        acquired_at_unix_seconds: 1,
+        tree_files: Vec::new(),
+    };
+    cache.store(&key, zip, &record).expect("store into cache");
+
+    let generation = dir
+        .path()
+        .join(key.dir_name())
+        .join("generations")
+        .join(&record.zip_sha256);
+    assert!(
+        generation.is_dir(),
+        "cached bytes must land under the configured typeshed-cache-path, \
+         found nothing at {}",
+        generation.display()
+    );
+}
+
+/// `typeshed-cache = false` outranks a configured path. Were it not to, a
+/// project that switched caching off would keep reusing archives from the very
+/// directory it also named, and the setting would be a no-op.
+#[test]
+fn disabling_the_cache_outranks_a_configured_cache_path() {
+    let dir = tempfile::tempdir().expect("cache dir");
+    assert!(select_cache(false, Some(dir.path().to_path_buf())).is_none());
+    assert!(select_cache(false, None).is_none());
+}
+
+/// With caching on and no path configured, selection falls back to the
+/// canonical per-user OS cache rather than disabling reuse. Compared against
+/// `default_cache_path` so the test states the same thing on a platform that
+/// exposes no user cache directory, without writing to the real one.
+#[test]
+fn caching_without_a_configured_path_falls_back_to_the_os_cache() {
+    assert_eq!(
+        select_cache(true, None).is_some(),
+        default_cache_path().is_some(),
+        "an unconfigured cache must fall back to the per-user OS cache"
     );
 }

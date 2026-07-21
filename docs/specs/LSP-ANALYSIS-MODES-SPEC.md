@@ -85,9 +85,17 @@ Tier 1 and the fallback are resolved by `resolve_analysis_mode` (`crates/basilis
 To be explicit about liveness ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)): the analysis **mode** is resolved when the index is (re)built — at `initialize`, on a `didChangeConfiguration` that supplies a mode, and on workspace-folder changes — it is a session-scoped structural choice, not hot-swapped per keystroke. **Rule** configuration, include/exclude, and the import environment are fully live: the server's own watcher refreshes them through the shared refresh tail without any client watcher support and without a restart.
 
 This tiering governs the **analysis-level** workspace config (mode, formatter,
-etc.) only. **Rule** config (severities, per-module/per-path overrides) is
-resolved per file by walking ancestor directories and merging cumulatively —
-see [CHKARCH-CONFIG-DISCOVERY](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY)
+etc.) only. **Rule** config is resolved per file by walking ancestor
+directories, and it is deliberately *not* a cumulative merge: every ancestor
+`pyproject.toml` carrying a `[tool.basilisk]` table contributes to a
+nearest-first chain, and the nearest table that decides a rule wins that rule
+outright. Non-rule scalar fields do merge additively, nearest directory winning
+per key. There are no per-module or per-path override tables and no glob-keyed
+sections — the model is exactly two flat maps, `[tool.basilisk.rules]` and
+`[tool.basilisk.rule-tags]` ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
+Scoping a rule to part of the tree is done by placing a `pyproject.toml` in
+that folder. See
+[CHKARCH-CONFIG-DISCOVERY](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY)
 (GitHub #311) — identically in the CLI and the LSP.
 
 ---
@@ -364,7 +372,7 @@ mid-scan must stay cleared).
 
 ## Type Checking Toggle {#ANALYSIS-ENABLED}
 
-The `basilisk.enabled` setting (surfaced as the **Type Checking** toggle in the
+The `basilisk.enabled` setting (surfaced as the **Diagnostics** toggle in the
 activity panel, [EXTACT-INFO-FEATURE-STATUS]) gates **all diagnostic
 publication**. The LSP is authoritative for diagnostics in every mode, so the
 toggle is honoured **server-side** — the editor's own

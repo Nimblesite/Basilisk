@@ -37,7 +37,7 @@ from typing import Any
 
 # 警告——显式 `Any` 必须注明原因
 def handle(
-    data: Any,  # basilisk: ignore[returns_compatibility] -- awaiting stubs for third-party SDK
+    data: Any,  # type: ignore[returns_compatibility]  # 等待第三方 SDK 的存根
 ) -> bool:
     ...
 

@@ -9,8 +9,11 @@
 ## 运行示例
 
 ```bash
-# 检查单个文件
+# 单个文件中的类型规范错误
 basilisk check examples/bad.py
+
+# 同一文件上可选启用的自定规则
+basilisk analyze examples/bad.py
 
 # 一次性检查所有示例
 basilisk check examples/
@@ -19,34 +22,46 @@ basilisk check examples/
 basilisk check examples/bad.py --output json
 ```
 
-## 错误 vs 警告
+`check` 与 `analyze` 读取的是同一套规则，只是按来源做了划分（[CHKARCH-COMMANDS]）：
+`check` 只报告带 `pep` 标签的类型规范规则，而 `analyze` 报告由配置表选用的、不带
+`pep` 标签的自定规则；两者都遵循下文表格所描述的严重级别。因此下文列出的 `BSK-`
+代码只会出现在 `analyze` 中——`check` 永远不会输出它们。
 
-下面的每个**错误**都是对
+## 规范规则 vs 自定规则
+
+下面的每个 **PEP** 诊断都是对
 [Python 类型规范](https://typing.python.org/en/latest/spec/index.html)的真实违反。
-这些规则开箱即用——在您自己的项目中，无需任何配置，您得到的正是它们。
+这些规则开箱即用——在您自己的项目中，无需任何配置，您得到的正是它们，级别为
+`error`。配置文件可以把其中某条降级为 `warning` 或 `info`，但任何表都无法把
+它关掉。
 
-每个**警告**都来自 Basilisk 的可选严格性规则（处处要求注解、要求
-`@override` 等）。它们默认关闭；本仓库通过根 `pyproject.toml` 中的
-`per-path-overrides` 条目为 `examples/**` 以警告级别启用了它们。这正是文档
-教授的渐进式采纳方式：警告意味着"这段代码通过类型检查，但严格度还没有
-拉满"。当警告清零后，把这些规则提升为 `error`——在 `[tool.basilisk.rules]`
-中，或使用 VS Code 配置编辑器（**Basilisk: Open Configuration Editor**）
-的 Strict 预设。
+其余的都是 Basilisk 的可选自定规则（处处要求注解、要求 `@override` 等）。
+在某个 `[tool.basilisk]` 表选中它们之前，它们保持沉默。Basilisk 针对每个被
+检查的文件，从该文件所在目录逐级向上查找配置，最近的、对某条规则作出决定的表
+直接胜出。这里有两个表在起作用：根 `pyproject.toml` 为整个仓库选中这些自定
+规则，而 `examples/pyproject.toml`——对 `examples/` 下的一切来说更近的那个
+表——把 `BSK-0001`–`BSK-0005` 与 `BSK-0025` 降级为 `warning`。这正是文档教授
+的渐进式采纳方式：警告意味着"这段代码通过类型检查，但严格度还没有拉满"。
+examples 的表没有提到的规则（例如 `BSK-0014` 与 `BSK-0050`）仍由根表决定。
+
+这就是全部的作用域机制。若要让某条规则在目录树的某一部分以不同严重级别运行，
+请在该文件夹放一个带有自己的 `[tool.basilisk]` 表的 `pyproject.toml`；这里
+没有 glob 路径模式，没有按模块的表，也没有预设或模式。
 
 ## 文件
 
 ### 违规展示（包含大量诊断）
 
-| 文件 | 领域 | PEP 错误（始终启用） | 严格性警告（可选启用） |
+| 文件 | 领域 | PEP 规则（始终启用，此处为错误） | Basilisk 自定规则（可选启用） |
 |---|---|---|---|
-| [bad.py](bad.py) | 最小化导览 | `calls_argument_type`, `returns_compatibility`, `assignment_compatibility`, `calls_argument_count`, `classes_override`, `names_unbound`, `match_exhaustiveness` | BSK-0001, E0002, E0004 |
-| [mixed.py](mixed.py) | 混合：有类型 / 无类型 | `calls_argument_type` | BSK-0001, E0002 |
-| [api_server.py](api_server.py) | REST API 处理器 | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014, W0050 |
-| [data_pipeline.py](data_pipeline.py) | ETL 管道 | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014 |
-| [ml_trainer.py](ml_trainer.py) | 机器学习训练循环 | `assignment_compatibility`, `overloads_consistency`, `match_exhaustiveness`, `dict_key_hashable`, `classes_override_2` | BSK-0001–E0003, E0025, W0014, W0050 |
-| [finance.py](finance.py) | 财务计算 | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, E0025, W0014, W0050 |
-| [cli_tool.py](cli_tool.py) | CLI 应用程序 | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, E0025, W0014, W0050 |
-| [weird_violations.py](weird_violations.py) | 微妙的边界情况 | `overloads_consistency`, `names_unbound`, `classes_override_2`, `assignment_compatibility`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–E0003, W0014, W0050 |
+| [bad.py](bad.py) | 最小化导览 | `calls_argument_type`, `returns_compatibility`, `assignment_compatibility`, `calls_argument_count`, `classes_override`, `names_unbound`, `match_exhaustiveness` | BSK-0001, BSK-0002, BSK-0004 |
+| [mixed.py](mixed.py) | 混合：有类型 / 无类型 | `calls_argument_type` | BSK-0001, BSK-0002 |
+| [api_server.py](api_server.py) | REST API 处理器 | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–BSK-0003, BSK-0025, BSK-0014, BSK-0050 |
+| [data_pipeline.py](data_pipeline.py) | ETL 管道 | `assignment_compatibility`, `overloads_consistency`, `names_unbound`, `dict_key_hashable`, `classes_override_2` | BSK-0001–BSK-0003, BSK-0025, BSK-0014 |
+| [ml_trainer.py](ml_trainer.py) | 机器学习训练循环 | `assignment_compatibility`, `overloads_consistency`, `match_exhaustiveness`, `dict_key_hashable`, `classes_override_2` | BSK-0001–BSK-0003, BSK-0025, BSK-0014, BSK-0050 |
+| [finance.py](finance.py) | 财务计算 | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–BSK-0003, BSK-0025, BSK-0014, BSK-0050 |
+| [cli_tool.py](cli_tool.py) | CLI 应用程序 | `assignment_compatibility`, `classes_override_2`, `overloads_consistency`, `names_unbound`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–BSK-0003, BSK-0025, BSK-0014, BSK-0050 |
+| [weird_violations.py](weird_violations.py) | 微妙的边界情况 | `overloads_consistency`, `names_unbound`, `classes_override_2`, `assignment_compatibility`, `match_exhaustiveness`, `dict_key_hashable` | BSK-0001–BSK-0003, BSK-0014, BSK-0050 |
 
 ### 无错误对照版本（零诊断）
 
@@ -72,7 +87,7 @@ basilisk check examples/bad.py --output json
 每条诊断末尾都带有指向其文档页面的 `see:` 链接。完整目录见
 [basilisk-python.dev/docs/rules](https://www.basilisk-python.dev/docs/rules/)。
 
-### 此处展示的 PEP 类型规范规则（错误，始终启用）
+### 此处展示的 PEP 类型规范规则（始终启用，此处为错误）
 
 | 代码 | 含义 |
 |---|---|
@@ -87,14 +102,17 @@ basilisk check examples/bad.py --output json
 | `dict_key_hashable` | 不可哈希的类型被用作字典键 |
 | `overloads_consistency` | `@overload` 组不一致或相互重叠 |
 
-### 此处展示的 Basilisk 严格性规则（警告，可选启用）
+### 此处展示的 Basilisk 自定规则（可选启用）
 
-| 代码 | 含义 |
-|---|---|
-| BSK-0001 | 缺少参数类型注解 |
-| BSK-0002 | 缺少返回值类型注解 |
-| BSK-0003 | 无法推断空集合或 `None` 的类型 |
-| BSK-0004 | 缺少 `*args` / `**kwargs` 类型注解 |
-| BSK-0025 | 重写缺少 `@override` 装饰器 |
-| BSK-0014 | 使用显式 `Any` 但缺少说明 |
-| BSK-0050 | 冗余的类型注解 |
+严重级别一列是管辖 `examples/` 的那些表所选中的值，而不是代码自身的属性——
+规则代码不携带任何严重级别类别。在未作配置的项目中，这些规则根本不会运行。
+
+| 代码 | 含义 | 此处的严重级别 |
+|---|---|---|
+| BSK-0001 | 缺少参数类型注解 | warning |
+| BSK-0002 | 缺少返回值类型注解 | warning |
+| BSK-0003 | 无法推断空集合或 `None` 的类型 | warning |
+| BSK-0004 | 缺少 `*args` / `**kwargs` 类型注解 | warning |
+| BSK-0025 | 重写缺少 `@override` 装饰器 | warning |
+| BSK-0014 | 使用显式 `Any` 但缺少说明 | warning |
+| BSK-0050 | 冗余的类型注解 | warning |

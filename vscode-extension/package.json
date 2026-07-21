@@ -326,9 +326,9 @@
       },
       {
         "command": "basilisk.info.runAction",
-        "title": "Run Action",
+        "title": "Toggle Diagnostics",
         "category": "Basilisk",
-        "icon": "$(play)"
+        "icon": "$(arrow-swap)"
       },
       {
         "command": "basilisk.refreshProcesses",
@@ -781,7 +781,7 @@
         "basilisk.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable or disable the Basilisk type checker."
+          "description": "Enable or disable diagnostic publication from both Basilisk check and analyze rule sets."
         },
         "basilisk.analyze": {
           "type": "boolean",

@@ -89,7 +89,7 @@
   <g transform="translate(78 752)">
     <rect width="1444" height="154" rx="24" fill="#0f1218" stroke="#4a5468" stroke-width="3"/>
     <text x="28" y="42" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="19" letter-spacing="3">DURABLE PROJECT POLICY</text>
-    <text x="28" y="82" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="21">[tool.basilisk.per-path-overrides."tests/**".rules]</text>
+    <text x="28" y="82" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="21">tests/pyproject.toml &#8594; [tool.basilisk.rules]</text>
     <text x="28" y="118" fill="#fed7aa" font-family="'JetBrains Mono',monospace" font-size="22">"BSK-0002" = "warning"</text>
     <line x1="850" y1="26" x2="850" y2="128" stroke="#252d3f" stroke-width="3"/>
     <text x="892" y="65" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="25" font-weight="700">The editor is a view of this policy—</text>

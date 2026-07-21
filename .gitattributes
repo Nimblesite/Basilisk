@@ -1,0 +1,26 @@
+# Legal files ship byte-exact ([STUBRES-TYPESHED-LICENSE]).
+#
+# scripts/verify_release_attribution.py asserts that the LICENSE bytes read out
+# of crates/basilisk-stubs/data/typeshed/stdlib.zip appear VERBATIM inside
+# THIRD-PARTY-LICENSES. Zip entry payloads are never line-ending converted, so
+# on a runner whose Git sets core.autocrlf=true (the Git-for-Windows default,
+# which windows-latest inherits) the checked-out THIRD-PARTY-LICENSES becomes
+# CRLF while the embedded payload stays LF — the substring match fails and the
+# release job dies with "THIRD-PARTY-LICENSES does not retain exact LICENSE".
+#
+# That is not attribution drift, it is a checkout artifact — but the archive it
+# would have produced is a genuine defect: a Windows release shipping licence
+# text whose bytes differ from the licence we were granted. Pinning these files
+# to LF makes every platform package the identical bytes, so the gate compares
+# what it is meant to compare and never has to be waived.
+LICENSE                  -text
+NOTICES                  -text
+THIRD-PARTY-LICENSES     -text
+RUST-DEPENDENCY-LICENSES -text
+basilisk-zed/LICENSE     -text
+basilisk.nvim/LICENSE    -text
+vscode-extension/LICENSE.txt -text
+
+# The embedded Typeshed snapshot is verified by SHA-256 against its sidecar
+# manifest; any conversion would break the hash.
+crates/basilisk-stubs/data/typeshed/stdlib.zip binary

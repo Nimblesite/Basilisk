@@ -181,6 +181,32 @@ fn exact_failure_accepts_only_equal_bundle_and_suppresses_unpinned() {
 }
 
 #[test]
+fn exact_pin_of_the_bundled_commit_never_consults_the_network() {
+    // Implements [STUBRES-TYPESHED-ACQUIRE]: a pin naming the bundled commit
+    // is already complete inside the binary — content-addressed identity makes
+    // the embedded bytes exact — so selection must activate the bundle without
+    // consulting the network-backed commit loader. Reaching for rate-limited
+    // metadata first is what let a 403 block a root whose pinned stdlib was
+    // sitting embedded in the very binary that refused to activate it.
+    let matching = bundle();
+    let commit = matching.identity.commit().expect("bundle commit");
+    let backend = FakeBackend {
+        bundle: Mutex::new(Some(Ok(matching))),
+        ..FakeBackend::default()
+    };
+    let selected = select_snapshot(&request(SourceSelection::ExactCommit { commit }), &backend)
+        .expect("embedded bundle satisfies its own pinned commit offline");
+    assert_eq!(selected.status.active_source, SourceKind::Bundled);
+    assert_eq!(selected.status.commit, Some(commit));
+    assert_eq!(selected.status.transport, Transport::EmbeddedZip);
+    assert!(selected.status.warnings.is_empty());
+    assert_eq!(
+        backend.calls.lock().ok().map(|calls| calls.clone()),
+        Some(vec!["bundle"])
+    );
+}
+
+#[test]
 fn exact_license_drift_survives_an_unavailable_bundle_fallback() {
     let commit = Oid::from_hex(OTHER_SHA).expect("valid test oid");
     let backend = FakeBackend {

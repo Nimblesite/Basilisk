@@ -252,6 +252,10 @@ MIN_KILL_RATE = 20.0
 def regression_messages(
     fresh: MutationScore, baseline: MutationScore | None
 ) -> list[str]:
+    """Implements [CHKARCH-TESTING-MUTATION-RATCHET].
+
+    See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-MUTATION-RATCHET.
+    """
     regressions: list[str] = []
     # Absolute kill-rate floor — the primary honest gate. Applies on EVERY run,
     # baseline or not, so a first run can never enshrine a sub-floor score.
@@ -276,6 +280,22 @@ def regression_messages(
     # double-penalise.
     if fresh.viable <= baseline.viable and fresh.detected < baseline.detected:
         regressions.append(f"detected dropped {baseline.detected} -> {fresh.detected}")
+    # Timeout ratchet — the guard that keeps `detected` honest. A Timeout is
+    # credited as a kill (see `score_percentage`), so a timeout caused by mere
+    # SLOWNESS silently converts an untested mutant into a "kill". Worse, the
+    # mutants that time out are structurally the ones most likely to be
+    # survivors: a killed mutant stops at the first failing test binary, while a
+    # mutant no test kills runs the entire suite and is therefore the slowest.
+    # Timeout-as-kill without this ratchet thus launders exactly the mutants the
+    # suite failed to catch. `.cargo/mutants.toml` states the invariant that no
+    # timeout may arise from slowness; this enforces it. The count may fall
+    # freely — it may never rise.
+    if fresh.timeout > baseline.timeout:
+        regressions.append(
+            f"timeout rose {baseline.timeout} -> {fresh.timeout}: a timeout is "
+            "credited as a kill, so a rise hides mutants the suite never "
+            "evaluated. Speed up the suite or raise --timeout; never accept it"
+        )
     # NOTE: absolute `missed` and `viable` are NOT regression signals here.
     # Mutating the whole crate means `missed` is large and shrinks as coverage
     # improves; the whole point of this suite is to drive it DOWN, so a rise in

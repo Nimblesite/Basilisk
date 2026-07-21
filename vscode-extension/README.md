@@ -25,7 +25,7 @@
   conformance suite, scored on the wheel-installed CLI in its default config by the real upstream harness. The only checker on the board at 100%.
 </p>
 
-## The only 100% checker — and the fastest
+## The only 100% checker — and the fastest according to our benchmarks
 
 Basilisk is the **only** Python type checker with a perfect score on the official
 [`python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html):
@@ -60,8 +60,9 @@ One extension replaces Pylance and gives you the whole workflow — no Node.js, 
 - **Integrated profiling** — CPU heat map, flame graph, and a memory dashboard with leak detection
 - **Activity panel** — module tree with per-module type-health coverage, plus feature toggles
 - **Inlay hints** and **Ruff** formatting/import-organization, built in
+- **Standard-library types from [typeshed](https://github.com/python/typeshed)** — verified `python/typeshed@main` by default, with a complete `stdlib/` snapshot compiled into the bundled binary so hover and diagnostics keep working offline
 
-Every diagnostic teaches: rustc-style output with a `help`, a `note`, and a link to a per-rule explainer, so a red squiggle always tells you *why*. Other checkers default to permissive; Basilisk **starts strict** and stays strict.
+Every diagnostic teaches: rustc-style output with a `help`, a `note`, and a link to a per-rule explainer, so a red squiggle always tells you *why*. Basilisk **starts strict** and stays strict — the unconfigured default enables the complete typing-spec rule set, and strictness is dialled per rule, never by a mode.
 
 ## Zero install
 

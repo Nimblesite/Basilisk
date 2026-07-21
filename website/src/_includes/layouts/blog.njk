@@ -70,6 +70,9 @@ layout: layouts/base.njk
     <header class="blog-post-header">
       <p class="blog-post-meta">
         <time datetime="{{ date | isoDate }}">{{ date | dateFormat(lang) }}</time>
+        {% if dateModified %}
+          &middot; {% if lang == 'zh' %}更新于{% else %}Updated{% endif %} <time datetime="{{ dateModified | isoDate }}">{{ dateModified | dateFormat(lang) }}</time>
+        {% endif %}
         {% if author %}
           {%- set authorRecord = null -%}
           {%- for a in authors.authors -%}{%- if a.name == author or a.nameZh == author -%}{%- set authorRecord = a -%}{%- endif -%}{%- endfor -%}

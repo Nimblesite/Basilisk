@@ -54,16 +54,22 @@ union EditorMutation {
   RemoveTypeshedSetting { key: TypeshedSettingKey }
 }
 
-union TypeshedSourceMode {
+# The ACTIVE source carries the value that defines it, so "latest with a pin"
+# and "a pinned commit plus a custom folder" cannot be expressed at all
+# ([LSPCFGED-TYPESHED]).
+union TypeshedSource {
   Latest
-  ExactCommit
-  CustomFolder
+  ExactCommit { commit: String }
+  CustomFolder { path: String }
 }
 
-union TypeshedWidget {
-  Directory
-  Text
-  Boolean
+# Download policy exists only for a downloaded source: a user-managed folder
+# downloads nothing, so it has none.
+type TypeshedDownloadPolicy {
+  reuseDownloads: Bool
+  verifyContent: Bool
+  archiveUrl: Option<String>
+  cacheFolder: Option<String>
 }
 
 union TypeshedLifecycle {
@@ -113,28 +119,6 @@ union TypeshedWarningSeverity {
   High
 }
 
-type TypeshedSourceOption {
-  mode: TypeshedSourceMode
-  label: String
-  enabled: Bool
-}
-
-type TypeshedSettingState {
-  key: TypeshedSettingKey
-  label: String
-  description: String
-  value: Option<TypeshedSettingValue>
-  defaultValue: Option<TypeshedSettingValue>
-  widget: TypeshedWidget
-  enabled: Bool
-}
-
-type TypeshedActionState {
-  action: TypeshedAction
-  label: String
-  enabled: Bool
-}
-
 type TypeshedWarningState {
   code: String
   message: String
@@ -146,20 +130,22 @@ type TypeshedStatusState {
   blockedReason: Option<String>
   activeSource: Option<TypeshedActiveSource>
   commitIdentity: Option<String>
-  treeIdentity: Option<String>
   transport: Option<TypeshedTransport>
   licenseStatus: TypeshedLicenseStatus
-  licenseReference: Option<String>
   provenance: TypeshedProvenance
   signedRelease: Bool
   warnings: List<TypeshedWarningState>
 }
 
+# Everything the editor needs, and nothing it can misrender: the one active
+# source, the download policy that source has (none for a custom folder), the
+# commit PinCurrent would write when pinning is possible, and whether a license
+# document exists to open. Labels are client copy, not server state.
 type TypeshedConfigurationState {
-  sourceMode: TypeshedSourceMode
-  sourceOptions: List<TypeshedSourceOption>
-  settings: List<TypeshedSettingState>
-  actions: List<TypeshedActionState>
+  source: TypeshedSource
+  downloads: Option<TypeshedDownloadPolicy>
+  pinnableCommit: Option<String>
+  licenseAvailable: Bool
   status: TypeshedStatusState
 }
 

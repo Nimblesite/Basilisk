@@ -1,6 +1,6 @@
 # Stub Resolution & Type Provenance — Specification {#STUBRES-OVERVIEW}
 
-> **Crate**: `basilisk-stubs` (resolution, the downloaded `python/typeshed` archive + on-disk cache, and the bundled full-snapshot ZIP), `basilisk-config` (overrides)
+> **Crate**: `basilisk-stubs` (resolution, the downloaded `python/typeshed` archive + on-disk cache, and the bundled stdlib ZIP), `basilisk-config` (overrides)
 > **Related**: [LSP-UV-INTEGRATION-SPEC.md §LSPUV-LOCK-REGISTRY](LSP-UV-INTEGRATION-SPEC.md#LSPUV-LOCK-REGISTRY) — `PackageRegistry` accelerates stub discovery
 
 ---
@@ -125,7 +125,7 @@ reorder a resolution step.
 |---|---|---|
 | 1 — manual path head | User `.pyi` in `stub-paths`, generated `.basilisk/stubs/`, and `.pyi` or Python source in manual `extra-paths`; `.pyi` precedes `.py` at each location. These MAY shadow every later step. | `stub-paths`, `extra-paths` |
 | 2 — user code | Workspace `.pyi`/`.py` under roots / `include`, with `.pyi` first. | roots, `include` |
-| 3 — stdlib typeshed | One selected source: a custom `typeshed-path`; otherwise the pinned or latest commit downloaded as an archive; otherwise the bundled full-snapshot ZIP ([§STUBRES-TYPESHED](#STUBRES-TYPESHED)). | `typeshed-path`, `typeshed-commit`, `typeshed-cache-path` |
+| 3 — stdlib typeshed | One selected source: a custom `typeshed-path`; otherwise the pinned or latest commit downloaded as an archive; otherwise the bundled stdlib ZIP — the complete typeshed `stdlib/` tree, third-party `stubs/` excluded ([§STUBRES-TYPESHED](#STUBRES-TYPESHED)). | `typeshed-path`, `typeshed-commit`, `typeshed-url`, `typeshed-cache-path`, `typeshed-cache`, `typeshed-verify` |
 | 4 — stub-only packages | Installed `foopkg-stubs` / typeshed `types-foopkg` distributions, discovered in site-packages. They supersede an inline-typed install of the same package. | (auto) |
 | 5 — `py.typed` packages | Installed packages shipping a `py.typed` marker (stubs in `.pyi` or inline in `.py`). | (auto) |
 | 6 — vendored third-party stubs | Basilisk vendors none for resolution. The typeshed distribution map drives only the "install stubs" quick fix ([§STUBRES-CODEACTIONS](#STUBRES-CODEACTIONS)). | — |
@@ -215,20 +215,36 @@ Basilisk likewise never mixes a source's names, bodies, `VERSIONS`, or indexes.
 | Mode | Active source | Failure rule |
 |---|---|---|
 | Custom folder | `typeshed-path` verbatim | miss continues to step 4; no other step-3 source |
-| Exact commit | selected archive (content-attested unless waived), or bundle only at that SHA | otherwise fail closed |
+| Exact commit | the bundle when it is exactly that SHA (embedded bytes are content-addressed, so no acquisition runs); otherwise the selected archive (content-attested unless waived) | otherwise fail closed |
 | Latest (default) | current `python/typeshed@main`, once per run/session | never reuse old unpinned data; warn and use bundled ZIP |
 
-Latest defaults to freshness and is one **Pin current** action from determinism.
+Latest defaults to freshness and is one source choice — **Pinned commit** — from determinism.
 Custom and bundled are also reported unpinned
 ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)).
 
 #### Archive acquisition {#STUBRES-TYPESHED-ACQUIRE}
 
-Basilisk never clones. It resolves official commit → root-tree metadata over
+Basilisk never clones. A pin naming the bundled commit is served from the
+embedded ZIP without any network activity: the commit is content-addressed, so
+the vetted embedded bytes are that source, and consulting the network first
+would only add failure modes and spend rate-limited metadata calls. Every
+other selection resolves official commit → root-tree metadata over
 authenticated HTTPS, then downloads that SHA from GitHub codeload or a
 `typeshed-url` `{sha}` archive mirror. A mirror cannot resolve Latest; if official
 metadata is unavailable and no pin exists, Latest warns and uses the bundled ZIP.
 URLs are redacted in logs.
+
+**Credential.** Requests carry `Authorization: Bearer` from `GITHUB_TOKEN` or
+`GH_TOKEN` when either is set to a non-blank value — the names GitHub Actions and
+the GitHub CLI already export, so no Basilisk-specific setup is needed. Anonymous
+callers share GitHub's unauthenticated rate limit, which a shared CI egress IP
+exhausts; an authenticated caller gets a much larger per-token budget
+([GitHub rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)).
+The credential is sent ONLY to `api.github.com` and `codeload.github.com`, matched
+on the parsed authority. A `typeshed-url` mirror is third-party infrastructure and
+is always contacted anonymously, so the token is never disclosed outside the trust
+boundary it was issued for. The token value is never logged, never rendered in
+debug output, and never included in an error; only its presence is recorded.
 
 **Security boundary.** A pin is not an archive checksum or provenance proof:
 Git defines a commit from a tree object ([Git `commit-tree`](https://git-scm.com/docs/git-commit-tree)),
@@ -253,9 +269,11 @@ First acquisition records the accepted ZIP's SHA-256. Reuse hashes the cached
 ZIP, detecting mutation without extraction; `.pyi` is read from that same ZIP.
 Cache metadata records whether content verification ran; enabling it later MUST
 rerun the content gate before the archive can be reported as verified.
-The exact commit identity never expires. Downloaded cached ZIP bytes expire
-after 24 hours and are re-hashed on every reuse. Expiry, explicit eviction, or
-`typeshed-cache = false` reacquires the same selected SHA and reruns all gates. Disabling verification reports
+The exact commit identity never expires. The 24-hour expiry bounds reuse of
+unpinned downloaded ZIP bytes only. Bytes for an explicitly pinned exact commit
+are reused regardless of age because the commit is content-addressed, and every
+reuse re-hashes the ZIP against its recorded SHA-256. Expiry, explicit eviction,
+or `typeshed-cache = false` reacquires the same selected SHA and reruns all gates. Disabling verification reports
 `UNVERIFIED` and never disables safety, shape, or license review. A fresh
 unpinned download is not hermetic.
 
@@ -295,7 +313,7 @@ Basilisk reports `active_source` plus an ordered `warnings[]`; warnings compose.
 
 | Condition | Persistent status |
 |---|---|
-| Latest or bundled without explicit commit | `UNPINNED — Pin current to make this reproducible` |
+| Latest or bundled without explicit commit | `UNPINNED — choose the pinned-commit source to make this reproducible` |
 | Custom folder | `UNPINNED — folder contents can change; version or content-address the folder externally` |
 | Latest could not resolve, download, or validate | `DOWNLOAD FAILED — using bundled <sha>; may be behind upstream` |
 | approved license/NOTICE identity changed | `LICENSE CHANGED — Basilisk update/review required` |
@@ -324,7 +342,7 @@ leaves open. Every one is exposed as a control in the configuration UI
 | `typeshed-commit` | full SHA | unset | Exact commit; unset selects Latest. |
 | `typeshed-url` | URL template | GitHub codeload | Codeload-compatible archive mirror containing `{sha}` and one common top-level directory; does not resolve Latest. |
 | `typeshed-cache-path` | path | OS cache | Cached gate-accepted ZIPs. |
-| `typeshed-cache` | bool | `true` | Reuse a re-hashed accepted downloaded ZIP for 24 hours; false downloads, validates, and discards. |
+| `typeshed-cache` | bool | `true` | Reuse a re-hashed accepted downloaded ZIP for 24 hours when unpinned, or until evicted when pinned to an exact commit; false downloads, validates, and discards. |
 | `typeshed-path` | `string` | _(unset)_ | Supply the canonical custom step-3 tree; disables download and the bundled ZIP. |
 | `typeshed-verify` | bool | `true` | Content attestation; false reports `UNVERIFIED`. |
 | `--no-typeshed-cache` | flag | off | One-run `typeshed-cache = false`. |
@@ -403,10 +421,20 @@ community/generated stubs, or untyped imports; there is no `TrackedType` wrapper
 | Unresolved (`Untyped`) | `imports_unresolved` error by default | dependent cascades suppressed | no type information available | add dependency or sync |
 | Installed untyped (`Untyped`) | opt-in `BSK-0152`; off by default | normal resolved-source analysis | "(no type stubs available)" | install a published stub package or create a local stub |
 
+### Typing status of installed packages {#STUBRES-TYPING-STATUS}
+
 The two untyped states do not share a diagnostic. A terminal unresolved import
 emits `imports_unresolved` once and suppresses dependent cascades. An installed
 site-packages `.py` without `py.typed` is resolved, never emits
 `imports_unresolved`, and emits `BSK-0152` only when the project opts in.
+
+The rule behind that split: a `py.typed` marker governs **provenance and
+completeness classification, never resolution**. Its absence downgrades what
+Basilisk claims to know about a module; it does not make the module missing.
+Conflating the two would report `imports_unresolved` — "this import cannot be
+found" — for a package that is installed and importable, which is simply false,
+and would then suppress the dependent cascade and hide real errors behind it.
+Enforced at steps 4-5 of the resolution order ([STUBRES-PEP561-MAPPING]).
 
 ### Code Actions for Unresolved Imports {#STUBRES-CODEACTIONS}
 
@@ -477,5 +505,27 @@ runtime-introspection/AST output to `.basilisk/stubs/`; `basilisk stubs status`
 reports coverage. Generated files are Tier 3 step-1 stubs, consistent with the
 pinned rule that a user-supplied stub is considered first
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+
+### Generation modes {#STUBRES-AUTOGEN-MODES}
+
+`basilisk stubs generate --mode <mode>` selects the backend. There are exactly
+three, and the mode is a **command argument, not configuration** — consistent
+with [CHKARCH-CONFIGURATION-ONLY], the config file grades rules and never
+selects behaviour.
+
+| Mode | Backend | Needs a Python subprocess | Needs `.py` source |
+|---|---|---|---|
+| `runtime` | `inspect.signature()` in the target interpreter | yes | no |
+| `ast` | parses `.py` source with `basilisk-parser` | no | yes |
+| `hybrid` (default) | runtime first, falling back to AST per function | yes | for the fallback |
+
+Accuracy runs highest-to-lowest in that same order for anything whose signature
+is only knowable at runtime (decorated, C-accelerated, or dynamically built
+callables), which is why `hybrid` is the default: it takes the accurate answer
+where one exists and degrades rather than failing. `ast` is the only mode that
+never launches a subprocess, and it fails with a diagnostic when the package
+ships no importable source. Whichever mode produced it, output is tagged
+[`StubTier::Tier3`] so downstream diagnostics report best-effort provenance
+([STUBRES-PROVENANCE-DIAG]) and never false confidence.
 
 ---

@@ -59,6 +59,13 @@ pub fn resolve_module_imports(
         // `stub-paths` dir (Phase 1: the stubs the developer owns).
         if let Some((binding, api)) = capture_user_stub_api(import, search_paths) {
             captured.push((binding, api));
+        } else if let Some((binding, api)) =
+            capture_active_typeshed_api(import, search_paths, &importing_file)
+        {
+            // GitHub #330: the other half of the same rule. Without this the
+            // step-3 Typeshed member set only ever reached cross-module mode,
+            // so `basilisk check` accepted `json.parse_body` in silence.
+            captured.push((binding, api));
         }
 
         import.stub_distribution =
@@ -109,6 +116,23 @@ fn remember_builtins(key: &str, map: &std::sync::Arc<BuiltinsMap>) {
     }
 }
 
+/// The provenance to record for stubs read out of `snapshot`.
+///
+/// A custom root is its own source, never Typeshed — provenance drives honest
+/// hover text, so the two must not be conflated.
+fn snapshot_stub_source(
+    snapshot: &basilisk_stubs::typeshed::snapshot::Snapshot,
+) -> basilisk_stubs::StubSource {
+    if matches!(
+        snapshot.identity,
+        basilisk_stubs::typeshed::source::SourceIdentity::Custom { .. }
+    ) {
+        basilisk_stubs::StubSource::CustomTypeshed
+    } else {
+        basilisk_stubs::StubSource::Typeshed
+    }
+}
+
 fn populate_builtin_classes(
     resolved: &mut basilisk_resolver::ResolvedModule,
     search_paths: &ImportSearchPaths,
@@ -140,14 +164,7 @@ fn populate_builtin_classes(
         let Some((logical_uri, source_text)) = located else {
             return map;
         };
-        let stub_source = if matches!(
-            snapshot.identity,
-            basilisk_stubs::typeshed::source::SourceIdentity::Custom { .. }
-        ) {
-            basilisk_stubs::StubSource::CustomTypeshed
-        } else {
-            basilisk_stubs::StubSource::Typeshed
-        };
+        let stub_source = snapshot_stub_source(snapshot);
         let parsed = match target {
             Some(target) => basilisk_stubs::pyi_parser::parse_pyi_source_for_target(
                 source_text,
@@ -211,6 +228,75 @@ fn capture_user_stub_api(
     )
     .ok()?;
     Some((import.module.clone(), build_stub_api(&stub, stub_path)))
+}
+
+/// Capture the member API of a plain `import X` backed by the **active step-3
+/// Typeshed source** (GitHub #330).
+///
+/// The mirror image of [`capture_user_stub_api`] for the other authoritative
+/// stub source. `populate_imported_symbols` already does this for cross-module
+/// mode; doing it here too is what gives the CLI and the non-cross-module LSP
+/// modes the same `imports_module_attribute` coverage of the standard library.
+///
+/// Exports come from [`crate::exports::load_snapshot_stub_module`] — the same
+/// producer the cross-module path uses — so the captured member set follows the
+/// stub's re-export graph. A shallower capture would report every valid
+/// re-export as a missing attribute (GitHub #312).
+fn capture_active_typeshed_api(
+    import: &basilisk_resolver::ImportInfo,
+    search_paths: &ImportSearchPaths,
+    importing_file: &std::path::Path,
+) -> Option<(String, ImportedModuleApi)> {
+    if import.kind != ImportKind::Plain {
+        return None;
+    }
+    let resolved_path = import.resolved_path.as_ref()?;
+    let active = search_paths.typeshed_snapshot.as_ref()?;
+    let (_, importer_target) = active.for_importer(Some(importing_file))?;
+    let (snapshot, target, source_text) =
+        active.source_for_uri(&resolved_path.to_string_lossy(), importer_target)?;
+
+    let request = crate::exports::ExternalModuleRequest::Stub {
+        module_name: import.module.clone(),
+        source: snapshot_stub_source(snapshot),
+    };
+    let external = crate::exports::load_snapshot_stub_module(
+        resolved_path,
+        source_text,
+        &request,
+        snapshot,
+        target,
+    );
+    if external.exports.is_empty() {
+        return None;
+    }
+
+    // A plain `import foo as f` carries its alias in `names`; the alias binds
+    // the module object, so it — not the dotted module path — is the base name
+    // an attribute access is written against.
+    let binding = import.names.first().cloned().unwrap_or_else(|| {
+        import
+            .module
+            .split('.')
+            .next()
+            .unwrap_or(&import.module)
+            .to_owned()
+    });
+    Some((
+        binding,
+        ImportedModuleApi {
+            has_getattr: external
+                .exports
+                .iter()
+                .any(|(name, _)| name == "__getattr__"),
+            member_names: external
+                .exports
+                .iter()
+                .map(|(name, _)| name.clone())
+                .collect(),
+            stub_path: resolved_path.clone(),
+        },
+    ))
 }
 
 /// Re-capture a user-stub import's API from stub **source text** rather than

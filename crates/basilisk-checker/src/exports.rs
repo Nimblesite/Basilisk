@@ -339,6 +339,61 @@ pub fn load_external_module(path: &Path, request: &ExternalModuleRequest) -> Sha
     }
 }
 
+/// Load one **active-snapshot** stub module's exports, following its re-export
+/// graph through that same snapshot.
+///
+/// The single place that knows how to turn `(snapshot, target, stub source
+/// text)` into an export set. Shared by the salsa `external_module` query and
+/// by the single-file import pipeline the CLI runs, so a step-3 Typeshed
+/// module yields the identical member set on both paths — the divergence that
+/// silently dropped `imports_module_attribute` from `basilisk check`
+/// (GitHub #330).
+#[must_use]
+pub fn load_snapshot_stub_module(
+    logical_path: &Path,
+    source_text: &str,
+    request: &ExternalModuleRequest,
+    snapshot: &basilisk_stubs::typeshed::snapshot::Snapshot,
+    target: Option<&StubTarget>,
+) -> SharedExternalModule {
+    let ExternalModuleRequest::Stub { source, .. } = request else {
+        // `py.typed` modules stay filesystem sources at resolution step 5.
+        return load_external_module_from_source(logical_path, source_text, request, target);
+    };
+    let stub_source = *source;
+    load_external_module_from_source_with_loader(
+        logical_path,
+        source_text,
+        request,
+        target,
+        |module_name| {
+            let (logical_uri, body) = match target {
+                Some(target) => snapshot.read_stub_for_target(module_name, target.python_version),
+                None => snapshot.read_stub(module_name),
+            }?;
+            match target {
+                Some(target) => basilisk_stubs::pyi_parser::parse_pyi_source_for_target(
+                    body,
+                    Path::new(&logical_uri),
+                    module_name,
+                    stub_source,
+                    basilisk_stubs::StubTier::Tier1,
+                    target,
+                )
+                .ok(),
+                None => basilisk_stubs::parse_pyi_source(
+                    body,
+                    Path::new(&logical_uri),
+                    module_name,
+                    stub_source,
+                    basilisk_stubs::StubTier::Tier1,
+                )
+                .ok(),
+            }
+        },
+    )
+}
+
 /// Load a `.pyi` external module from immutable VFS text rather than disk.
 /// Non-stub requests are rejected because `py.typed` modules remain filesystem
 /// sources at resolution step 5.

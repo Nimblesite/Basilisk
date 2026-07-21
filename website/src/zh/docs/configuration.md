@@ -4,7 +4,7 @@ title: 配置参考
 description: Basilisk pyproject.toml 配置选项的完整参考。规则与标签严重性、typeshed 来源固定、内联抑制以及按文件夹作用域的配置。
 keywords: basilisk, 配置, pyproject.toml, 设置
 lang: zh
-dateModified: 2026-07-19
+dateModified: 2026-07-21
 ---
 
 # 配置参考
@@ -22,18 +22,19 @@ dateModified: 2026-07-19
   文件生效，更近的文件未设置的键继续沿用祖先的值。`stub-paths` 是唯一的
   追加型键——条目追加并去重。
 
-> **正在从 `basilisk.json` 迁移？** 旧版根目录 `basilisk.json` 文件已不再
-> 被读取。请将其键翻译为 `[tool.basilisk]`（驼峰式 → 短横线式，例如
-> `typeshedPath` → `typeshed-path`），然后删除该文件。配置编辑器会将遗留的
-> `basilisk.json` 报告为被忽略的遮蔽来源。
+> **正在从 `basilisk.json` 迁移？** 旧版根目录 `basilisk.json` 文件不会被
+> 任何组件读取——它完全无效，配置编辑器也不会以任何方式呈现它。请将其键
+> 翻译为 `[tool.basilisk]`（驼峰式 → 短横线式，例如 `typeshedPath` →
+> `typeshed-path`），把逐规则与逐标签的严重性移入
+> `[tool.basilisk.rules]` 与 `[tool.basilisk.rule-tags]`，然后删除该文件。
 
 ## 零配置
 
-Basilisk 完全不需要配置文件。当任何地方都没有 `[tool.basilisk]` 表时
-（或表为空——两者行为完全一致）：
+Basilisk 完全不需要配置文件。当遍历路径上任何地方都没有 `[tool.basilisk]`
+表时：
 
 - 每条**核心 PEP 符合性规则**以 `error` 严重性运行；Basilisk 自有的可选
-  规则保持关闭。
+  规则保持关闭——这正是 `basilisk check` 每次运行时的行为。
 - 从当前目录发现文件。
 - 目标 Python 版本从项目文件解析：`.python-version`，然后是
   `[project].requires-python` 下界，然后是 `uv.lock` 的
@@ -41,6 +42,22 @@ Basilisk 完全不需要配置文件。当任何地方都没有 `[tool.basilisk]
 - 标准库存根在运行时从最新的
   [python/typeshed](https://github.com/python/typeshed) 提交获取，离线时
   回退到内置快照——见[标准库存根](#标准库存根-typeshed)。
+
+> **在编辑器中，这一状态会被一次性写入种子配置——CLI 从不写配置，但 LSP 会。**
+> 当某个工作区根目录的遍历找不到任何 `[tool.basilisk]` 表时，语言服务器会在
+> 首次分析之前，把这两行"默认严格"的种子配置写入该根目录的 `pyproject.toml`
+> （若项目还没有该文件则创建它）
+> （[`LSPARCH-CONFIG-SEEDING`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)）：
+>
+> ```toml
+> [tool.basilisk.rule-tags]
+> "basilisk" = "error"
+> ```
+>
+> 因此在编辑器中，所有自有规则一开始就以 `error` 启用——它明明白白写在你的
+> 文件里，是可以降级或删除的一行。种子只写入**一次**：遍历路径上任何
+> `[tool.basilisk]` 表都会阻止它，包括你删除该条目后残留的空表。这正是
+> "没有表"与"空表"唯一表现不同的地方。
 
 ## 完整配置示例
 
@@ -179,6 +196,12 @@ PEP 或 Python 语言语义使结果依赖版本时，规则才会查询此版�
 解释器并使用该具体平台；探测失败则平台保持未知——Basilisk 绝不凭空捏造
 平台。显式的 `"All"` 保持跨平台交集语义。
 
+上面四种写法是规范写法，但该值**不做校验**：除 `"macOS"` 外，`"Darwin"`
+与 `"MacOS"` 同样被接受，小写的 `"windows"`/`"all"` 以及原始 `sys.platform`
+值（`linux`、`darwin`、`win32`）也可识别。其他任何字符串都会被原样当作具体
+平台名，因此拼写错误不会报错，只会得到一个没有任何存根匹配的平台。请坚持
+使用上述四种规范写法。
+
 ### `stub-paths`
 
 **类型：** `string[]`
@@ -198,9 +221,11 @@ PEP 或 Python 语言语义使结果依赖版本时，规则才会查询此版�
 **示例：** `["src/", "tests/"]`
 
 CLI 未给出路径时扫描的根目录。普通路径——与 `exclude` 不同，`include`
-**不**接受 glob 模式——相对于配置文件所在目录解析。显式的 CLI 路径会
-覆盖它；`exclude` 在 include 根目录内生效。LSP 遵循相同的根目录，因此
-编辑器分析的正是 `basilisk check` 会分析的那些文件。
+**不**接受 glob 模式——相对于**扫描根目录**解析：`basilisk check` 下是当前
+目录，编辑器中则是工作区根目录。它们*不*相对于声明它们的那个配置文件所在
+目录解析，因此在祖先 `pyproject.toml` 中设置的 `include` 仍然相对于扫描起点
+解析。显式的 CLI 路径会覆盖它；`exclude` 在 include 根目录内生效。LSP 遵循
+相同的根目录，因此编辑器分析的正是 `basilisk check` 会分析的那些文件。
 
 ### `exclude`
 
@@ -245,11 +270,13 @@ exclude = [
 
 **类型：** `bool`
 **默认值：** `true`
+**状态：** _仅解析，尚未被读取——目前设置它不会产生任何效果。_
 
-属性窄化（`if x.attr is not None:` 守卫）是否在中间函数调用后仍然保持。
-默认值是*实用*的行为：调用**可能**使属性失效，但把每次调用都当作失效会
-让属性窄化在实践中毫无用处。设为 `false` 可获得健全但严格的行为：任何
-调用都会丢弃属性窄化。参见
+为"属性窄化（`if x.attr is not None:` 守卫）在中间函数调用后仍然保持"预留。
+属性窄化尚未实现，因此没有任何检查器路径会读取该键；接受它只是为了让现有
+配置文件继续正常解析。预期的默认值是*实用*的行为：调用**可能**使属性失效，
+但把每次调用都当作失效会让属性窄化在实践中毫无用处——将来 `false` 会选择
+健全但严格的行为：任何调用都会丢弃属性窄化。参见
 [`TYPEINF-NARROWING-ATTR-CALLS`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ATTR-CALLS)。
 
 ---
@@ -264,13 +291,21 @@ exclude = [
 | --- | --- |
 | 自定义文件夹 | 你的 `typeshed-path` 目录，原样使用 |
 | 精确提交 | `typeshed-commit` 指定的 SHA，以经验证的归档下载（不可用时失败关闭） |
-| 最新（默认） | 当前的 `python/typeshed@main` 提交，每次运行/会话解析一次；无法解析时回退到内置快照并警告 |
+| 最新（默认） | 当前的 `python/typeshed@main` 提交，每次运行/会话解析一次；无法解析时回退到编译进二进制的内置快照，并给出 `UNPINNED` 与 `DOWNLOAD FAILED` 两条警告 |
 
-"最新"模式保持新鲜但无法逐日复现——编辑器的 Server Info 面板将其报告为
-`UNPINNED` 并提供 **Pin current** 操作，把解析出的 SHA 写入
-`typeshed-commit`。下载的归档在激活前需通过安全、结构、许可证与内容验证
+"最新"模式保持新鲜但无法逐日复现——编辑器的 Server Info 面板会将其报告为
+`UNPINNED` 行；在配置编辑器中选择 **Pinned commit**（固定提交）来源会把解析出的
+SHA 写入 `typeshed-commit`，并清除任何 `typeshed-path`。下载的归档在激活前需通过安全、结构、许可证与内容验证
 关卡，并以不可变 ZIP 缓存。完整细节：
 [`STUBRES-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)。
+
+内置快照被编译进二进制文件，因此完全无需网络也能获得标准库类型——在飞机上、
+在防火墙后、在隔离网络的 CI 中都一样。它是提交
+[`83c2518`](https://github.com/python/typeshed/tree/83c2518a9e6abbda0c44592c3483de459198f887/stdlib)
+处**完整的 typeshed `stdlib/` `.pyi` 存根集合**（不含第三方 `stubs/`，也不含
+typeshed 自身在 `stdlib/` 下的非存根文件）：752 个 `.pyi` 文件，外加
+`stdlib/VERSIONS` 与 `LICENSE`，未压缩约 2.85 MB。它是回退方案而非
+固定来源——一旦启用，Basilisk 一定会明确告知。
 
 | 键 | 类型 | 默认值 | 含义 |
 | --- | --- | --- | --- |
@@ -280,6 +315,12 @@ exclude = [
 | `typeshed-cache` | bool | `true` | 24 小时内复用经重新哈希的缓存 ZIP；`false` 每次运行都下载、验证并丢弃。 |
 | `typeshed-verify` | bool | `true` | 对归档做内容证明，与受信任的 git 树比对；`false` 报告 `UNVERIFIED`，且绝不绕过安全、结构或许可证关卡。 |
 | `typeshed-path` | 路径 | _（未设置）_ | 你自己的标准库存根树——同时禁用下载与内置快照。 |
+
+其中两项在 `basilisk check` 与 `basilisk analyze` 上有一次性的命令行等价开关，
+适用于不想写进配置文件的单次 CI 运行：`--no-typeshed-cache`（等价于
+`typeshed-cache = false`）与 `--no-typeshed-verification`（等价于
+`typeshed-verify = false`）。另请注意：`basilisk stubs` 用于为**第三方**未加
+类型的包生成存根，与 typeshed 获取无关。
 
 `typeshed-path` 与 `typeshed-commit` 是**同一个来源选择**：设置了其中任一
 键的嵌套配置文件会将继承的选择作为整体替换，绝不会把一个文件的路径和
@@ -352,8 +393,14 @@ MicroPython 的标准库与 CPython 存在差异——`os`、`time` 和 `machine
 ```toml
 [tool.basilisk]
 python-version = "3.12"
-typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
+typeshed-path = ".venv/lib/python3.12/site-packages"
 ```
+
+该 wheel 会把 `stdlib/` **直接解压到 `site-packages` 下**——并不存在
+`micropython_stdlib_stubs/` 目录——因此 `typeshed-path` 应指向包含 `stdlib/`
+的 `site-packages` 本身。若多指向一层，自定义 typeshed 会失败关闭并报
+`custom typeshed source is unavailable`（退出码 3），因为自定义 typeshed
+绝不回退。
 
 由于 `micropython-stdlib-stubs` 是**部分**标准库，它未包含的模块（例如
 开发板上并不存在的 `tkinter`）**不会**由 CPython 存根来兜底——自定义
@@ -412,7 +459,9 @@ value = legacy_call()  # type: info[returns_compatibility]
 value = legacy_call()  # type: disabled[returns_compatibility]
 ```
 
-单独成行的指令会开启一个**块**，由匹配的 `end-` 指令关闭：
+单独成行的 `warning`、`info` 或 `disabled` 指令会开启一个**块**，由匹配的
+`end-` 指令关闭。（`ignore` 是例外：单独成行的 `# type: ignore` 是文件级的
+全量忽略，并不开启块，也没有 `end-ignore`。）
 
 ```python
 # type: disabled[imports_unresolved]
@@ -421,8 +470,10 @@ from result import Result
 # type: end-disabled[imports_unresolved]
 ```
 
-文件级指令是单独成行的注释——`relaxed` 将整个文件中的所有错误降级为
-警告；`file-` 形式将同一效果应用于特定代码（不写代码则应用于所有规则）：
+文件级指令是单独成行的注释，且必须出现在文件中**任何代码之前**——出现在
+语句之后的指令会被丢弃，并报告为 `BSK-0063`（格式错误）。`relaxed` 将整个
+文件中的所有错误降级为警告；`file-` 形式将同一效果应用于特定代码（不写代码
+则应用于所有规则）：
 
 ```python
 # basilisk: relaxed

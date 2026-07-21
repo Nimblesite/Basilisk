@@ -21,7 +21,7 @@ build-backend = "maturin"
 
 [project]
 name = "basilisk-python"
-description = "Basilisk — the only Python type checker scoring 100% on the official python/typing conformance suite (https://github.com/python/typing/blob/main/conformance/results/results.html) — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default."
+description = "Basilisk — the only Python type checker scoring 100% on the official python/typing conformance suite (https://github.com/python/typing/blob/main/conformance/results/results.html) — and the fastest according to our benchmarks. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default."
 readme = "README-pypi.md"
 requires-python = ">=3.8"
 license = "Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND CDDL-1.0 AND CDLA-Permissive-2.0 AND ISC AND MIT AND MPL-2.0 AND Unicode-3.0 AND Unicode-DFS-2016 AND Zlib"
@@ -60,6 +60,7 @@ manifest-path = "crates/basilisk-cli/Cargo.toml"
 strip = true
 
 [tool.basilisk]
+typeshed-commit = "83c2518a9e6abbda0c44592c3483de459198f887"
 
 [tool.basilisk.rules]
 BSK-0001 = "error"
@@ -80,14 +81,8 @@ BSK-0050 = "warning"
 BSK-0061 = "warning"
 BSK-0062 = "warning"
 
-# The examples model the incremental-adoption story the docs teach: PEP
-# typing-spec violations stay errors, while Basilisk's opt-in strictness
-# rules surface as warnings — "this type-checks, but strictness isn't at
-# full yet". See website/src/docs/quick-start.md step 3.
-[tool.basilisk.per-path-overrides."examples/**"]
-rules."BSK-0001" = "warning"
-rules."BSK-0002" = "warning"
-rules."BSK-0003" = "warning"
-rules."BSK-0004" = "warning"
-rules."BSK-0005" = "warning"
-rules."BSK-0025" = "warning"
+# The examples grade those same rules down to `warning`; that lives in
+# examples/pyproject.toml, because folder-scoped configuration is the
+# nearest-deciding table on the ancestor walk ([CHKARCH-CONFIG-MODEL]) — there
+# is no per-path override table, and a table this file does not define is
+# simply never read.

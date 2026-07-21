@@ -35,6 +35,7 @@ Basilisk takes a different position. Its default *is* the typing spec — full P
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
 - An **integrated profiler** — sampling CPU profiler with inline heatmap annotations, flame graphs, memory leak detection, and reference graph visualization, all inside your editor
 - A **PEP-conformant type checker by default** — the core spec rule set out of the box, with opt-in Basilisk rules for checking stricter than the spec
+- **Standard-library types out of the box** — typeshed stubs are acquired at runtime from `python/typeshed@main`, verified, and cached; a complete typeshed `stdlib/` tree is compiled into the binary as the offline fallback, so stdlib types work with no network and no configuration
 - A **CLI tool** for CI integration — exits with code 1 when errors are found
 - A **migration assistant** that reads your existing `pyrightconfig.json` or `mypy.ini`
 - **uv integration** — workspace detection, lock file parsing, and package management commands
@@ -75,10 +76,10 @@ Basilisk is under **active development** — the core checker, LSP server, and e
 |---|---|---|
 | 1 | Parser, resolver, type checker, CLI | Complete |
 | 2 | LSP server, editor extensions (VS Code, Cursor, Zed, Neovim) | Complete |
-| 3 | Expanded rule set, PEP conformance ({{ conformance.scorePct }}% on the pinned suite), gradual adoption | In progress |
+| 3 | Expanded rule set, PEP conformance ({{ conformance.scorePct }}% against `python/typing@main`), gradual adoption | In progress |
 | 4 | Ownership & immutability analysis (Mojo-inspired) | Planned |
 | 5 | WASM plugins, Django/Pydantic/SQLAlchemy | Planned |
-| 6 | 95%+ PEP, SARIF/JUnit, JetBrains extension | Planned |
+| 6 | SARIF/JUnit output, JetBrains extension | Planned |
 | 7 | Plugin marketplace, community stubs, ecosystem | Planned |
 
 ## Architecture

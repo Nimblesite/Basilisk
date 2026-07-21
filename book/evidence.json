@@ -52,7 +52,45 @@
       ],
       "blocker": "The current build identifies itself as 0.0.0-PLACEHOLDER. Pin a released Basilisk version, rerun the Chapter 4 static evidence, and capture any release-specific output before setting decision to publish."
     },
-    {"section": "05", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {
+      "section": "05",
+      "decision": "withhold-until-versioned-release",
+      "governingSpecs": [
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-VARS-ANNOTATED",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-FUNC-PARAMS",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-FUNC-RETURN",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-NOMINAL",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-GENERIC",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-UNION",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-CALLABLE",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SPECIAL-LITERAL-CONTEXT",
+        "https://typing.python.org/en/latest/spec/concepts.html",
+        "https://typing.python.org/en/latest/spec/special-types.html",
+        "https://typing.python.org/en/latest/spec/callables.html",
+        "https://typing.python.org/en/latest/spec/generics.html"
+      ],
+      "releaseImplementation": [],
+      "workingTreeImplementation": [
+        "crates/basilisk-checker/src/types.rs",
+        "crates/basilisk-checker/src/rules/assignment_compatibility/",
+        "crates/basilisk-checker/src/rules/calls_argument_type.rs",
+        "crates/basilisk-checker/src/rules/returns_compatibility.rs",
+        "crates/basilisk-checker/src/rules/returns_compatibility_2.rs",
+        "crates/basilisk-checker/src/rules/callables_subtyping.rs"
+      ],
+      "executableEvidence": [
+        "Python 3.14.6 ran the Chapter 5 Signal Box checkpoint: 4 tests passed on 2026-07-20",
+        "target/debug/basilisk check --color never . reported no issue across the Chapter 5 source and tests on 2026-07-20",
+        "The placeholder working-tree binary rejected the verified scalar assignment, union narrowing, nominal reverse assignment, literal call, concrete return, typed-parameter list-invariance, and callable-parameter variance samples on 2026-07-20",
+        "The placeholder working-tree binary accepted the verified nominal subtype assignment, contextually typed list[float] literal, Sequence[float] read, and numeric callable-variance samples on 2026-07-20"
+      ],
+      "omitted": [
+        "Exact diagnostic wording and identifiers are omitted until the edition pins a released Basilisk binary.",
+        "A real release-specific Basilisk diagnostic capture and before-to-diagnostic-to-after sequence are omitted until the edition release is pinned.",
+        "The object-versus-Any lesson remains omitted because the working-tree assignment path does not yet preserve the distinction required by the maintained typing specification."
+      ],
+      "blocker": "The current build identifies itself as 0.0.0-PLACEHOLDER. Pin a released Basilisk version, rerun the Chapter 5 static evidence, and capture any release-specific output before setting decision to publish."
+    },
     {"section": "06", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {"section": "07", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {"section": "08", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},

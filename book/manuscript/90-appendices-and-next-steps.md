@@ -27,7 +27,9 @@ current specification.
 ## Appendix D — Reproducibility record
 
 Record the book revision, build date, Python interpreter used for the examples,
-Basilisk release and source commit, upstream conformance snapshot, example results, screenshot environment,
+Basilisk release and source commit, the typeshed commit the examples were
+captured against and whether it was pinned or the resolved latest,
+upstream conformance snapshot, example results, screenshot environment,
 image manifest result, link-audit result, Pandoc version, and EPUBCheck version.
 
 ## Continue after the last page

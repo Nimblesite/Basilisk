@@ -4,7 +4,7 @@ title: "Configuration Reference — pyproject.toml Settings"
 description: "Complete reference for all Basilisk configuration options in pyproject.toml. Rule and tag severities, typeshed source pinning, inline suppressions, and folder-scoped configuration."
 keywords: basilisk, configuration, pyproject.toml, settings
 date: 2026-02-28
-dateModified: 2026-07-19
+dateModified: 2026-07-21
 author: The Basilisk Project
 eleventyNavigation:
   key: Configuration
@@ -29,18 +29,20 @@ What the visited tables combine to, and how:
   deduplicated.
 
 > **Migrating from `basilisk.json`?** The legacy root-level `basilisk.json`
-> file is no longer read. Translate its keys into `[tool.basilisk]`
-> (camelCase → kebab-case, e.g. `typeshedPath` → `typeshed-path`) and delete
-> the file. The configuration editor reports a stray `basilisk.json` as an
-> ignored shadowed source.
+> file is not read by anything — it is inert, and the configuration editor
+> does not surface it at all. Translate its keys into `[tool.basilisk]`
+> (camelCase → kebab-case, e.g. `typeshedPath` → `typeshed-path`), move its
+> per-rule and per-tag severities into `[tool.basilisk.rules]` and
+> `[tool.basilisk.rule-tags]`, then delete the file.
 
 ## Zero configuration
 
 Basilisk needs no configuration file at all. With no `[tool.basilisk]` table
-anywhere (or an empty one — the two behave identically):
+anywhere on the walk:
 
 - Every **core PEP conformance rule** runs at `error` severity. Basilisk's
-  own opt-in house rules stay off.
+  own opt-in house rules stay off — that is exactly what `basilisk check`
+  does, every run.
 - Files are discovered from the current directory.
 - The target Python version is resolved from your project files:
   `.python-version`, then the `[project].requires-python` lower bound, then
@@ -49,6 +51,24 @@ anywhere (or an empty one — the two behave identically):
   [python/typeshed](https://github.com/python/typeshed) commit, with a
   bundled snapshot as the offline fallback — see
   [Standard-library stubs](#standard-library-stubs-typeshed).
+
+> **In an editor, that state is seeded once — the CLI never writes
+> configuration, the LSP does.** When a workspace root's walk finds no
+> `[tool.basilisk]` table, the language server writes the two-line
+> strict-by-default seed into the root's `pyproject.toml` — creating the file
+> if the project has none — before the first analysis
+> ([`LSPARCH-CONFIG-SEEDING`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)):
+>
+> ```toml
+> [tool.basilisk.rule-tags]
+> "basilisk" = "error"
+> ```
+>
+> So an editor session starts with every house rule on at `error` — visibly,
+> in your file, as one line you can grade down or delete. Seeding happens
+> **once**: any `[tool.basilisk]` table on the walk blocks it, including the
+> empty table left behind when you delete the entry. That is the one place
+> where a missing table and an empty table differ.
 
 ## Full configuration example
 
@@ -195,6 +215,13 @@ When unset, Basilisk probes the project interpreter and uses that concrete
 platform; if the probe fails the platform stays unknown — Basilisk never
 invents one. An explicit `"All"` keeps cross-platform intersection semantics.
 
+The four spellings above are canonical, but the value is **not validated**:
+`"Darwin"` and `"MacOS"` are accepted alongside `"macOS"`, as are lowercase
+`"windows"`/`"all"` and raw `sys.platform` values (`linux`, `darwin`,
+`win32`). Anything else is passed through verbatim as a concrete platform
+name, so a typo silently yields a platform no stub matches rather than an
+error. Stick to the canonical four.
+
 ### `stub-paths`
 
 **Type:** `string[]`
@@ -216,10 +243,13 @@ ones (deduplicated).
 **Example:** `["src/", "tests/"]`
 
 The roots scanned when no paths are given on the CLI. Plain paths — unlike
-`exclude`, `include` does **not** accept glob patterns — resolved relative to
-the config file's directory. Explicit CLI paths override it; `exclude`
-applies within the include roots. The LSP honors the same roots, so the
-editor analyses exactly the files `basilisk check` would.
+`exclude`, `include` does **not** accept glob patterns — resolved against the
+**scan root**: the current directory for `basilisk check`, the workspace root
+in the editor. They are *not* resolved against the directory of the file that
+declares them, so an `include` set in an ancestor `pyproject.toml` still
+resolves relative to where the scan starts. Explicit CLI paths override it;
+`exclude` applies within the include roots. The LSP honors the same roots, so
+the editor analyses exactly the files `basilisk check` would.
 
 ### `exclude`
 
@@ -267,13 +297,15 @@ for the canonical semantics.
 
 **Type:** `bool`
 **Default:** `true`
+**Status:** _parsed, not yet consulted — setting it changes nothing today._
 
-Whether attribute narrowing (`if x.attr is not None:` guards) survives
-intervening function calls. The default is the *usable* behavior: a call
-**could** invalidate the attribute, but treating every call as an
-invalidation makes attribute narrowing useless in practice. Set to `false`
-for the sound-but-strict behavior where any call discards attribute
-narrowing. See
+Reserved for attribute narrowing (`if x.attr is not None:` guards) surviving
+intervening function calls. Attribute narrowing is not implemented yet, so no
+checker path reads this key; it is accepted so existing files keep parsing.
+The intended default is the *usable* behavior: a call **could** invalidate the
+attribute, but treating every call as an invalidation makes attribute narrowing
+useless in practice — `false` will select the sound-but-strict behavior where
+any call discards attribute narrowing. See
 [`TYPEINF-NARROWING-ATTR-CALLS`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ATTR-CALLS).
 
 ---
@@ -285,27 +317,43 @@ Standard-library types come from
 [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering).
 Basilisk selects exactly **one** step-3 source:
 
-| Mode | Active source |
+| Source | What it resolves to |
 | --- | --- |
 | Custom folder | your `typeshed-path` directory, verbatim |
-| Exact commit | the `typeshed-commit` SHA, downloaded as a verified archive (fails closed if unavailable) |
-| Latest _(default)_ | the current `python/typeshed@main` commit, resolved once per run/session; if it cannot be resolved, the bundled snapshot with a warning |
+| Pinned commit | the `typeshed-commit` SHA, downloaded as a verified archive (fails closed if unavailable) |
+| Latest _(default)_ | the current `python/typeshed@main` commit, resolved once per run/session; if it cannot be resolved, the compiled-in bundled snapshot, with `UNPINNED` and `DOWNLOAD FAILED` warnings |
 
 Latest keeps you fresh but is not reproducible day-to-day — the editor's
-Server Info panel reports it as `UNPINNED` and offers **Pin current**, which
-writes the resolved SHA as `typeshed-commit`. Downloaded archives pass
-safety, shape, license, and content-verification gates before activation, and
-are cached as immutable ZIPs. Full detail:
+Server Info panel reports it as an `UNPINNED` row, and choosing **Pinned
+commit** in the Configuration Editor writes the resolved SHA as
+`typeshed-commit` (and clears any `typeshed-path`).
+Downloaded archives pass safety, shape, license, and content-verification
+gates before activation, and are cached as immutable ZIPs. Full detail:
 [`STUBRES-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED).
+
+The bundled snapshot is compiled into the binary, so stdlib types work with no
+network at all — on a plane, behind a firewall, in an air-gapped CI runner. It
+is the **complete set of typeshed `stdlib/` `.pyi` stubs** (third-party `stubs/`
+and typeshed's own non-stub `stdlib/` files excluded) at commit
+[`83c2518`](https://github.com/python/typeshed/tree/83c2518a9e6abbda0c44592c3483de459198f887/stdlib):
+752 `.pyi` files plus `stdlib/VERSIONS` and `LICENSE`, ~2.85 MB uncompressed.
+It is a fallback, not a pin — when it is in use Basilisk always says so.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `typeshed-commit` | full 40-char SHA | _(unset — Latest)_ | Exact `python/typeshed` commit to use. A pin **fails closed** — it never silently substitutes another commit. Abbreviated SHAs are rejected. |
 | `typeshed-url` | URL template | GitHub codeload | HTTPS archive mirror containing exactly one `{sha}` placeholder. A mirror cannot resolve Latest. |
 | `typeshed-cache-path` | path | OS cache dir | Where gate-accepted ZIPs are cached. |
-| `typeshed-cache` | bool | `true` | Reuse the re-hashed cached ZIP for 24 hours; `false` downloads, validates, and discards every run. |
+| `typeshed-cache` | bool | `true` | Reuse re-hashed cached ZIPs until explicitly evicted for an exact pin, or for 24 hours with Latest; `false` downloads, validates, and discards every run. |
 | `typeshed-verify` | bool | `true` | Content-attest the archive against the trusted git tree; `false` reports `UNVERIFIED` and never bypasses the safety, shape, or license gates. |
 | `typeshed-path` | path | _(unset)_ | Your own stdlib stub tree — disables both download and the bundled snapshot. |
+
+Two of these have one-off CLI equivalents on `basilisk check` and
+`basilisk analyze`, for a single CI run you don't want to encode in the file:
+`--no-typeshed-cache` (equivalent to `typeshed-cache = false`) and
+`--no-typeshed-verification` (equivalent to `typeshed-verify = false`).
+Unrelated despite the name: `basilisk stubs` generates stubs for untyped
+**third-party** packages and has nothing to do with typeshed acquisition.
 
 `typeshed-path` and `typeshed-commit` are **one source selection**: a nested
 config file that sets either replaces the inherited choice as a unit, never
@@ -384,8 +432,14 @@ point at it:
 ```toml
 [tool.basilisk]
 python-version = "3.12"
-typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
+typeshed-path = ".venv/lib/python3.12/site-packages"
 ```
+
+The wheel unpacks `stdlib/` **directly into `site-packages`** — there is no
+`micropython_stdlib_stubs/` directory — so `typeshed-path` points at
+`site-packages` itself, the directory that contains `stdlib/`. Pointing it one
+level deeper fails closed with `custom typeshed source is unavailable` (exit
+code 3), because a custom typeshed never falls back.
 
 Because `micropython-stdlib-stubs` is a **partial** stdlib, a module it does
 not ship (e.g. `tkinter`, which does not exist on a board) is **not** rescued
@@ -448,8 +502,10 @@ value = legacy_call()  # type: info[returns_compatibility]
 value = legacy_call()  # type: disabled[returns_compatibility]
 ```
 
-A directive on its own line opens a **block**, closed by the matching
-`end-` directive:
+A `warning`, `info`, or `disabled` directive on its own line opens a
+**block**, closed by the matching `end-` directive. (`ignore` is the
+exception: a standalone `# type: ignore` is a file-wide blanket ignore, not a
+block opener, and there is no `end-ignore`.)
 
 ```python
 # type: disabled[imports_unresolved]
@@ -458,9 +514,11 @@ from result import Result
 # type: end-disabled[imports_unresolved]
 ```
 
-File-level directives are standalone comments — `relaxed` grades every error
-in the file down to a warning; the `file-` forms apply one effect to specific
-codes (or, with no codes, to every rule):
+File-level directives are standalone comments that must appear **before any
+code** in the file — one that follows a statement is dropped and reported as
+`BSK-0063` (malformed). `relaxed` grades every error in the file down to a
+warning; the `file-` forms apply one effect to specific codes (or, with no
+codes, to every rule):
 
 ```python
 # basilisk: relaxed

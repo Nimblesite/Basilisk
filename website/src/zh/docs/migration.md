@@ -33,10 +33,11 @@ exclude = [
 ```
 
 设置 `exclude` 会替换内置列表，因此请保留仍然需要的默认项。旧版根目录
-`basilisk.json` 已不再被读取；若该文件仍然存在，请将其键翻译为
+`basilisk.json` 不会被任何组件读取；若该文件仍然存在，它也完全无效——没有
+任何工具会加载它，配置编辑器也不会以任何方式呈现它。请将其键翻译为
 `[tool.basilisk]`（驼峰式 → 短横线式，例如 `typeshedPath` →
-`typeshed-path`）后删除该文件——配置编辑器会将遗留的 `basilisk.json`
-报告为被忽略的遮蔽来源。
+`typeshed-path`），把逐规则与逐标签的严重性移入 `[tool.basilisk.rules]`
+与 `[tool.basilisk.rule-tags]`，然后删除该文件。
 
 ## 2. 选择目标规则
 

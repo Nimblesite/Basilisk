@@ -38,7 +38,15 @@ PKG                        ?= basilisk-checker
 # mutant pool. Add existing binaries here to raise the kill rate — never invent
 # new tests just for mutation. Slow/E2E-ish binaries are deliberately omitted so
 # the per-mutant test run stays cheap.
+#
+# Order matters, but only a little. `cargo test` stops at the first failing
+# binary, so a mutant dies as soon as a binary that kills it runs;
+# `mutation_kill_tests` exists to kill these mutants, so it runs first. Measured
+# effect of the move alone: 31 -> 30 timeouts. It is kept because it is free and
+# directionally right, NOT because it solved anything — see `--timeout` below for
+# what actually did ([CHKARCH-TESTING-MUTATION-RATCHET]).
 _CHECKER_MUTATION_TESTS := \
+	--test mutation_kill_tests \
 	--test coverage_boost_tests \
 	--test coverage_boost_32_tests \
 	--test coverage_boost_33_tests \
@@ -65,8 +73,7 @@ _CHECKER_MUTATION_TESTS := \
 	--test incremental_tests \
 	--test incremental_cross_tests \
 	--test incremental_resolved_tests \
-	--test inference_all_tests \
-	--test mutation_kill_tests
+	--test inference_all_tests
 _COVERAGE_THRESHOLDS_FILE  := coverage-thresholds.json
 OPEN                       ?= 0
 ALL                        ?= 0
@@ -177,17 +184,18 @@ mutation-test:
 			exit 1; \
 		fi; \
 		echo -e "\033[0;36m  [diag] Total mutants: $$mutants_count\033[0m"; \
+		echo -e "\033[0;36m  [diag] Test timeout: 400s — a mutated lib relinks every test binary in each parallel job; at 120s that link cost alone exhausted the budget, so killable mutants were recorded as TIMEOUT and credited as kills without ever being evaluated\033[0m"; \
 		if [ -n "$$test_args" ]; then \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
-				--jobs "$$mutation_jobs" --timeout 120 --build-timeout 600 --baseline skip --copy-target true \
-				--package "$$package" --re "$$examine_re" \
+				--jobs "$$mutation_jobs" --timeout 400 --build-timeout 600 --baseline skip --copy-target true \
+				--package "$$package" --test-package "$$package" --re "$$examine_re" \
 				$$shard_arg \
 				--output "$$out_dir" \
 				-- $$test_args || true; \
 		else \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
-				--jobs "$$mutation_jobs" --timeout 120 --build-timeout 600 --baseline skip --copy-target true \
-				--package "$$package" --re "$$examine_re" \
+				--jobs "$$mutation_jobs" --timeout 400 --build-timeout 600 --baseline skip --copy-target true \
+				--package "$$package" --test-package "$$package" --re "$$examine_re" \
 				$$shard_arg \
 				--output "$$out_dir" || true; \
 		fi; \

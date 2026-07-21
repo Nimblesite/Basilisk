@@ -165,3 +165,9 @@ website/_verify/
 /*.png
 
 book/dist/
+
+# The analysisMode e2e writes this Python file into the VSIX fixture workspace
+# and unlinks it in its finally block. An interrupted run skips that cleanup, so
+# without this the residue gets committed and the next run type-checks a file
+# the suite believes it created fresh.
+vscode-extension/test-fixtures/workspace/ofo_no_scan_target.py

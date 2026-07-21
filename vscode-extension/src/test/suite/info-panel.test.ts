@@ -2,9 +2,8 @@
 /**
  * Info Panel contents E2E tests — the slimmed panel of issue #103.
  *
- * The panel is exactly: the feature toggles at the root (no "Feature Status"
- * section header — a single shipped toggle doesn't justify one) plus a compact
- * read-only Server Info section. There is NO Quick Actions section: the high-value
+ * The panel is exactly: the Diagnostics toggle followed by flat, read-only server
+ * details. There is NO Quick Actions section: the high-value
  * actions are Modules-toolbar buttons gated on the server running (see
  * activity-panel.test.ts), the status-bar click opens the basilisk.statusMenu
  * quick-pick (Open Configuration / Show Output / Restart), and everything stays
@@ -31,7 +30,7 @@ import { createStore } from "../../store";
 import { EXTENSION_ID, SUITE_SETUP_TIMEOUT_MS, waitForLspReady } from "./test-helpers";
 
 /** Toggles that ship — each has a namesake, observable effect. */
-const KEPT_FEATURE_LABELS = ["Type Checking"] as const;
+const KEPT_FEATURE_LABELS = ["Diagnostics"] as const;
 
 /** Toggles removed because their setting was a no-op (server dropped it). */
 const REMOVED_FEATURE_LABELS = [
@@ -72,9 +71,8 @@ function verifyTypeshedInfoRows(): void {
       lifecycle: { kind: "Ready" }, activeSource: { kind: "Bundled" },
       blockedReason: undefined,
       commitIdentity: "83c2518a9e6abbda0c44592c3483de459198f887",
-      treeIdentity: "66408ffce2750980efc6da09e8a6652733f852e4",
       transport: { kind: "EmbeddedZip" }, licenseStatus: { kind: "Approved" },
-      licenseReference: "typeshed://license/83c2518", provenance: { kind: "BundleVetted" },
+      provenance: { kind: "BundleVetted" },
       signedRelease: false,
       warnings: [{
         code: "UNPINNED", message: "Pin current to make this reproducible",
@@ -84,14 +82,12 @@ function verifyTypeshedInfoRows(): void {
   ]]);
   const typeshedProvider = new InfoPanelProvider(store);
   try {
-    const section = typeshedProvider.getChildren().find((row) => labelOf(row) === "Server Info");
-    assert.ok(section, "Server Info section should exist");
-    const rows = typeshedProvider.getChildren(section);
+    const rows = typeshedProvider.getChildren().filter((row) => row.contextValue === "info");
     const byLabel = new Map(rows.map((row) => [labelOf(row), row]));
     const source = byLabel.get("Typeshed Source");
     assert.ok(String(source?.description).includes("83c2518a9e6abbda0c44592c3483de459198f887"));
     const sourceTooltip = tooltipOf(source ?? new vscode.TreeItem("missing"));
-    assert.ok(sourceTooltip.includes("Tree: 66408ffce2750980efc6da09e8a6652733f852e4"));
+    assert.ok(sourceTooltip.includes("Commit: 83c2518a9e6abbda0c44592c3483de459198f887"));
     assert.ok(sourceTooltip.includes("Transport: EmbeddedZip"));
     assert.ok(sourceTooltip.includes("Provenance: BundleVetted"));
     assert.ok(sourceTooltip.includes("Signed release: no"));
@@ -115,17 +111,15 @@ function verifyAcquiringTypeshedSpinner(): void {
     "file:///workspace",
     {
       lifecycle: { kind: "Acquiring" }, blockedReason: undefined, activeSource: undefined,
-      commitIdentity: undefined, treeIdentity: undefined, transport: undefined,
-      licenseStatus: { kind: "Acquiring" }, licenseReference: undefined,
+      commitIdentity: undefined, transport: undefined,
+      licenseStatus: { kind: "Acquiring" },
       provenance: { kind: "Pending" }, signedRelease: false, warnings: [],
     },
   ]]);
   const typeshedProvider = new InfoPanelProvider(store);
   try {
-    const section = typeshedProvider.getChildren().find((row) => labelOf(row) === "Server Info");
-    assert.ok(section, "Server Info section should exist");
     const state = typeshedProvider
-      .getChildren(section)
+      .getChildren()
       .find((row) => labelOf(row) === "Typeshed State");
     assert.ok(state?.iconPath instanceof vscode.ThemeIcon);
     assert.strictEqual(state.iconPath.id, "loading~spin");
@@ -146,9 +140,8 @@ function storeWithUnpinnedWarning(): ReturnType<typeof createStore> {
       lifecycle: { kind: "Ready" }, activeSource: { kind: "Latest" },
       blockedReason: undefined,
       commitIdentity: "6fb14c98ee340a07eea807a4c804e20a849eb92b",
-      treeIdentity: undefined,
       transport: { kind: "Codeload" }, licenseStatus: { kind: "Approved" },
-      licenseReference: "typeshed://license/6fb14c9", provenance: { kind: "GithubTlsAttested" },
+      provenance: { kind: "GithubTlsAttested" },
       signedRelease: false,
       warnings: [{
         code: "UNPINNED", message: "Pin current to make this reproducible",
@@ -159,39 +152,63 @@ function storeWithUnpinnedWarning(): ReturnType<typeof createStore> {
   return store;
 }
 
-// Tests [LSPCFGED-TYPESHED-SERVICE-INFO] navigation + [EXTACT-INFO-AFFORDANCE]:
-// the UNPINNED row's own message tells the user to "Pin current", and the Pin
-// current action lives in the configuration editor — so the row must navigate
-// there when the editor capability is live (info-panel.ts typeshedInfoItems).
-function verifyUnpinnedWarningRowOpensConfigurationEditor(): void {
-  const store = storeWithUnpinnedWarning();
+/**
+ * Drive the store into the EXACT state in which
+ * configuration-editor-registration.ts registers the open command: a running
+ * server that advertises the editor capability. The panel gates the warning
+ * row's command on this same pair, so anything less must leave the row inert.
+ */
+function advertiseConfigurationEditor(
+  store: ReturnType<typeof createStore>,
+  options: { readonly running: boolean },
+): void {
   const writableClient = store.client as unknown as { value: unknown };
   writableClient.value = {
     initializeResult: {
       capabilities: { experimental: { basilisk: { configurationEditor: true } } },
     },
   };
+  const writableState = store.lspState as unknown as { value: string };
+  writableState.value = options.running ? "running" : "starting";
+}
+
+/** The single UNPINNED warning row from a flat-root panel. */
+function unpinnedRow(store: ReturnType<typeof createStore>): vscode.TreeItem {
   const typeshedProvider = new InfoPanelProvider(store);
   try {
-    const section = typeshedProvider.getChildren().find((row) => labelOf(row) === "Server Info");
-    assert.ok(section, "Server Info section should exist");
-    const unpinned = typeshedProvider
-      .getChildren(section)
-      .find((row) => labelOf(row) === "Typeshed UNPINNED");
-    assert.ok(unpinned, "the UNPINNED warning row should exist");
-    assert.strictEqual(
-      unpinned.command?.command,
-      "basilisk.openConfigurationEditor",
-      "the UNPINNED row advertises Pin current, so clicking it must open the configuration editor where Pin current lives",
-    );
-    const tip = tooltipOf(unpinned).trim();
-    assert.ok(
-      tip.length > 0,
-      "an actionable row must carry an imperative tooltip describing its effect",
-    );
+    const row = typeshedProvider
+      .getChildren()
+      .find((candidate) => labelOf(candidate) === "Typeshed UNPINNED");
+    assert.ok(row, "the UNPINNED warning row should exist");
+    return row;
   } finally {
     typeshedProvider.dispose();
   }
+}
+
+// Tests [LSPCFGED-TYPESHED-SERVICE-INFO] navigation + [EXTACT-INFO-AFFORDANCE]:
+// the UNPINNED row's own message tells the user to "Pin current", and Pin
+// current lives in the configuration editor — so the row must navigate there
+// when the editor is genuinely reachable (info-panel.ts typeshedWarningItem).
+function verifyUnpinnedWarningRowOpensConfigurationEditor(): void {
+  const store = storeWithUnpinnedWarning();
+  advertiseConfigurationEditor(store, { running: true });
+  const unpinned = unpinnedRow(store);
+  assert.strictEqual(
+    unpinned.command?.command,
+    "basilisk.openConfigurationEditor",
+    "the UNPINNED row advertises Pin current, so clicking it must open the configuration editor where Pin current lives",
+  );
+  assert.strictEqual(
+    unpinned.contextValue,
+    "typeshed-warning",
+    "a navigating warning row is marked typeshed-warning so it never gets the feature-toggle inline button",
+  );
+  const tip = tooltipOf(unpinned).trim();
+  assert.ok(
+    tip.length > 0,
+    "an actionable row must carry an imperative tooltip describing its effect",
+  );
 }
 
 // Regression guard for issue #103 defect 1: basilisk.openConfigurationEditor
@@ -199,23 +216,33 @@ function verifyUnpinnedWarningRowOpensConfigurationEditor(): void {
 // must NOT carry it while no server advertises the editor — a shown-but-dead
 // command raises "command not found".
 function verifyUnpinnedWarningRowStaysInertWithoutEditorCapability(): void {
+  const unpinned = unpinnedRow(storeWithUnpinnedWarning());
+  assert.strictEqual(
+    unpinned.command,
+    undefined,
+    "without the configuration-editor capability the row must not carry a dead command",
+  );
+  assert.strictEqual(
+    unpinned.contextValue,
+    "info",
+    "an inert warning row stays an ordinary read-only info row",
+  );
+}
+
+// The command is registered on `running` AND the capability — not the
+// capability alone. A client that has already returned its initializeResult
+// while the server is still starting advertises the capability with no command
+// registered yet, so the row must stay inert. Guards the gate asymmetry that
+// would otherwise be load-bearing but unasserted.
+function verifyUnpinnedWarningRowStaysInertWhileServerIsNotRunning(): void {
   const store = storeWithUnpinnedWarning();
-  const typeshedProvider = new InfoPanelProvider(store);
-  try {
-    const section = typeshedProvider.getChildren().find((row) => labelOf(row) === "Server Info");
-    assert.ok(section, "Server Info section should exist");
-    const unpinned = typeshedProvider
-      .getChildren(section)
-      .find((row) => labelOf(row) === "Typeshed UNPINNED");
-    assert.ok(unpinned, "the UNPINNED warning row should exist");
-    assert.strictEqual(
-      unpinned.command,
-      undefined,
-      "without the configuration-editor capability the row must not carry a dead command",
-    );
-  } finally {
-    typeshedProvider.dispose();
-  }
+  advertiseConfigurationEditor(store, { running: false });
+  const unpinned = unpinnedRow(store);
+  assert.strictEqual(
+    unpinned.command,
+    undefined,
+    "the capability alone is not enough — the open command is only registered while the server runs",
+  );
 }
 
 suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
@@ -238,44 +265,61 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     provider.dispose();
   });
 
-  /** Children of the Server Info section. */
+  /**
+   * Flat read-only server-information rows: every root row that is not one of
+   * the shipped feature toggles. Selected by LABEL, never by `contextValue` —
+   * selecting on the property under test would make the `contextValue`
+   * assertions below vacuous (a row that lost its `info` marker would silently
+   * drop out of the set instead of failing).
+   */
   function serverInfoRows(): vscode.TreeItem[] {
-    const section = provider.getChildren().find((row) => labelOf(row) === "Server Info");
-    assert.ok(section, "Server Info section should exist");
-    return provider.getChildren(section);
+    const toggles = new Set<string>(KEPT_FEATURE_LABELS);
+    return provider.getChildren().filter((row) => !toggles.has(labelOf(row)));
   }
 
   // Tests [EXTACT-INFO-STRUCTURE] / [EXTACT-INFO-QUICK-ACTIONS] (no Quick Actions section).
-  test("root is exactly the feature toggles followed by Server Info — no section headers, no Quick Actions", () => {
+  test("root is the Diagnostics toggle followed by flat read-only details", () => {
     const labels = provider.getChildren().map(labelOf);
-    assert.deepStrictEqual(
-      labels,
-      [...KEPT_FEATURE_LABELS, "Server Info"],
-      "slimmed panel root must be the shipped toggle(s) + Server Info, in order",
-    );
+    assert.deepStrictEqual(labels.slice(0, KEPT_FEATURE_LABELS.length), [...KEPT_FEATURE_LABELS]);
+    assert.ok(labels.includes("Analysis Mode"), "server details should render at the root");
+    assert.ok(!labels.includes("Server Info"), "read-only details do not need a collapsible parent");
     assert.ok(!labels.includes("Feature Status"), "the Feature Status header was removed (one toggle doesn't justify it)");
     assert.ok(!labels.includes("Quick Actions"), "the Quick Actions section was removed (actions live on the Modules toolbar / status bar / palette)");
   });
 
   // Tests [EXTACT-INFO-ACTION-WIRING]: no shown-but-dead actions in the panel.
-  test("no row in the entire panel carries a command other than the registered toggle", () => {
+  test("no row in the entire panel carries a command outside the allowed set", () => {
     // Regression for issue #103 defect 1: a row that looks clickable but has
-    // no live handler raises "command not found". The slimmed panel makes
-    // that impossible — the ONLY command any row may carry is
-    // basilisk.toggleFeature, which registerInfoPanel itself registers.
+    // no live handler raises "command not found". Exactly two commands may
+    // appear in this panel, and each is guaranteed to be registered whenever
+    // it is attached:
+    //   - basilisk.toggleFeature — registerInfoPanel registers it itself, so
+    //     it is always live.
+    //   - basilisk.openConfigurationEditor — capability-gated. It is attached
+    //     ONLY to typeshed warning rows and ONLY when the same predicate that
+    //     registers it holds (running server + advertised capability), so it
+    //     can never be shown dead. See [LSPCFGED-TYPESHED-SERVICE-INFO].
+    // Any OTHER command, on any row, is the defect this test exists to catch.
     const allRows = provider
       .getChildren()
       .flatMap((row) => [row, ...provider.getChildren(row)]);
     assert.ok(allRows.length > 0, "panel should render rows");
     for (const row of allRows) {
       const commandId = row.command?.command;
-      if (commandId !== undefined) {
+      if (commandId === undefined) { continue; }
+      if (commandId === "basilisk.openConfigurationEditor") {
         assert.strictEqual(
-          commandId,
-          "basilisk.toggleFeature",
-          `"${labelOf(row)}" carries "${commandId}" — only the always-registered toggle command is allowed in this panel`,
+          row.contextValue,
+          "typeshed-warning",
+          `"${labelOf(row)}" carries the configuration-editor command but is not a typeshed warning row — only warning rows may navigate`,
         );
+        continue;
       }
+      assert.strictEqual(
+        commandId,
+        "basilisk.toggleFeature",
+        `"${labelOf(row)}" carries "${commandId}" — only the always-registered toggle and the capability-gated configuration-editor command are allowed in this panel`,
+      );
     }
   });
 
@@ -311,6 +355,11 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
   test(
     "the UNPINNED warning row stays inert while no server advertises the configuration editor",
     verifyUnpinnedWarningRowStaysInertWithoutEditorCapability,
+  );
+
+  test(
+    "the UNPINNED warning row stays inert while the server is not yet running",
+    verifyUnpinnedWarningRowStaysInertWhileServerIsNotRunning,
   );
 
   // Tests [EXTACT-INFO-SERVER-INFO]: one uv row, sub-settings in the tooltip.
@@ -352,15 +401,15 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
 
   // Tests [EXTACT-INFO-FEATURE-STATUS]: a toggle has an observable, namesake effect.
   test("toggleFeature writes through and the panel reflects it", async () => {
-    // End-to-end: flip Type Checking off via the real command (this host has a
+    // End-to-end: flip the Diagnostics toggle off via the real command (this host has a
     // folder, so it writes the Workspace target) and assert the toggle row
     // re-renders as Disabled. (The deeper effect — diagnostics actually clear —
     // is proven end-to-end in type-checking-toggle.test.ts.)
     const cfg = vscode.workspace.getConfiguration();
     try {
       await vscode.commands.executeCommand("basilisk.toggleFeature", "basilisk.enabled", false);
-      const toggle = provider.getChildren().find((row) => labelOf(row) === "Type Checking");
-      assert.ok(toggle, "Type Checking toggle should exist");
+      const toggle = provider.getChildren().find((row) => labelOf(row) === "Diagnostics");
+      assert.ok(toggle, "Diagnostics toggle should exist");
       assert.strictEqual(toggle.description, "Disabled", "toggle row must reflect the written setting");
     } finally {
       await cfg.update("basilisk.enabled", undefined, vscode.ConfigurationTarget.Workspace);
@@ -372,7 +421,7 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
 //
 // Regression tests for issue #65: actionable rows must be visually
 // unmistakable from read-only rows. In the slimmed panel the actionable class
-// is exactly the feature toggles; everything under Server Info is read-only.
+// is exactly the Diagnostics toggle; every server-detail row is read-only.
 //
 // Spec: docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-AFFORDANCE
 
@@ -403,16 +452,23 @@ suite("Basilisk Info Panel Affordance [EXTACT-INFO-AFFORDANCE]", () => {
     provider.dispose();
   });
 
+  // Both partitions are selected by LABEL, never by `contextValue`. The whole
+  // point of this suite is that the two classes are marked correctly, so
+  // selecting on the marker under test would make every assertion below
+  // self-fulfilling: a toggle that regressed to `contextValue: "info"` would
+  // vanish from `toggleRows()` rather than fail. Label selection keeps the
+  // partition independent of the property being asserted.
+
   /** Top-level feature toggle rows. */
   function toggleRows(): vscode.TreeItem[] {
-    return provider.getChildren().filter((row) => row.contextValue === "feature");
+    const toggles = new Set<string>(KEPT_FEATURE_LABELS);
+    return provider.getChildren().filter((row) => toggles.has(labelOf(row)));
   }
 
-  /** Read-only rows under Server Info. */
+  /** Flat read-only server-information rows. */
   function readOnlyRows(): vscode.TreeItem[] {
-    const section = provider.getChildren().find((row) => labelOf(row) === "Server Info");
-    assert.ok(section, "Server Info section should exist");
-    return provider.getChildren(section);
+    const toggles = new Set<string>(KEPT_FEATURE_LABELS);
+    return provider.getChildren().filter((row) => !toggles.has(labelOf(row)));
   }
 
   test("every feature toggle carries a command and an imperative tooltip", () => {
@@ -432,11 +488,23 @@ suite("Basilisk Info Panel Affordance [EXTACT-INFO-AFFORDANCE]", () => {
     }
   });
 
-  test("every read-only Server Info row carries no command and contextValue 'info'", () => {
+  test("every read-only server detail carries no command and contextValue 'info'", () => {
     const rows = readOnlyRows();
     assert.ok(rows.length > 0, "Server Info should have rows");
     for (const row of rows) {
       const label = labelOf(row);
+      // The one documented exception ([LSPCFGED-TYPESHED-SERVICE-INFO]): a
+      // typeshed warning row navigates to the Configuration Editor where its
+      // named fix lives. It is still read-only — it mutates nothing — so it
+      // gets its own contextValue and therefore still no inline button.
+      if (row.contextValue === "typeshed-warning") {
+        assert.strictEqual(
+          row.command?.command,
+          "basilisk.openConfigurationEditor",
+          `"${label}" is marked typeshed-warning, so it must carry exactly the navigation-only editor command`,
+        );
+        continue;
+      }
       assert.strictEqual(
         row.command,
         undefined,

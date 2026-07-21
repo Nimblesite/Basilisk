@@ -22,6 +22,7 @@ export type ConfigurationEditorIntent =
   | { readonly type: "refresh" }
   | { readonly type: "openRaw" }
   | { readonly type: "apply" }
+  | { readonly type: "cancelPreview" }
   | { readonly type: "preview"; readonly mutations: EditorMutation[] }
   | { readonly type: "adopt"; readonly scope: "workspace" }
   | { readonly type: "fixSafe" }
@@ -210,6 +211,7 @@ function decodeCoreIntent(value: Record<string, unknown>): ConfigurationEditorIn
     case "refresh": return { type: "refresh" };
     case "openRaw": return { type: "openRaw" };
     case "apply": return { type: "apply" };
+    case "cancelPreview": return { type: "cancelPreview" };
     case "adopt": return value.scope === "workspace" ? { type: "adopt", scope: "workspace" } : undefined;
     case "fixSafe": return { type: "fixSafe" };
     default: return undefined;

@@ -383,48 +383,12 @@ pub fn external_module<'db>(
         if let Some((snapshot, target, source)) =
             active.source_for_uri(key.path(db), key.target(db).as_ref())
         {
-            let request = key.request(db);
-            let stub_source = match request {
-                crate::exports::ExternalModuleRequest::Stub { source, .. } => *source,
-                crate::exports::ExternalModuleRequest::PyTyped => {
-                    return crate::exports::load_external_module_from_source(
-                        path, source, request, target,
-                    );
-                }
-            };
-            return crate::exports::load_external_module_from_source_with_loader(
+            return crate::exports::load_snapshot_stub_module(
                 path,
                 source,
-                request,
+                key.request(db),
+                snapshot,
                 target,
-                |module_name| {
-                    let located = match target {
-                        Some(target) => {
-                            snapshot.read_stub_for_target(module_name, target.python_version)
-                        }
-                        None => snapshot.read_stub(module_name),
-                    }?;
-                    let (logical_uri, body) = located;
-                    match target {
-                        Some(target) => basilisk_stubs::pyi_parser::parse_pyi_source_for_target(
-                            body,
-                            std::path::Path::new(&logical_uri),
-                            module_name,
-                            stub_source,
-                            basilisk_stubs::StubTier::Tier1,
-                            target,
-                        )
-                        .ok(),
-                        None => basilisk_stubs::parse_pyi_source(
-                            body,
-                            std::path::Path::new(&logical_uri),
-                            module_name,
-                            stub_source,
-                            basilisk_stubs::StubTier::Tier1,
-                        )
-                        .ok(),
-                    }
-                },
             );
         }
     }

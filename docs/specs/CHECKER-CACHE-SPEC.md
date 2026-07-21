@@ -22,9 +22,10 @@ Inputs that can affect the diagnostics for `basilisk check <file>`:
 1. **Target file bytes** (`CHKCACHE-INPUT-TARGET`).
 2. **Bytes of every other source/stub file the checker actually read** —
    transitive imports and `.pyi` stubs included (`CHKCACHE-INPUT-DEPS`).
-3. **Effective configuration** — the resolved `BasiliskConfig` (rule severities,
-   per-path/per-module overrides, excludes, stub paths, auto-stub mode, …)
-   (`CHKCACHE-INPUT-CONFIG`).
+3. **Effective configuration** — the resolved `BasiliskConfig` (the
+   nearest-first rule-severity chain, include/exclude patterns, stub paths,
+   the `typeshed-*` keys, `python-version`/`python-platform`, narrowing
+   toggles, …) (`CHKCACHE-INPUT-CONFIG`).
 4. **Resolution environment** — import search roots, site-packages dirs, the
    selected standard-library source path, and `uv.lock` contents when
    present; a change can change *which* files an import resolves to

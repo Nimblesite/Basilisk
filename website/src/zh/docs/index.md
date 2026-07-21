@@ -30,6 +30,7 @@ Basilisk 采取不同的立场。它的默认*就是*类型规范——开箱即
 - **集成调试器**——按 F5 调试 Python，支持断点、单步执行、变量检查和监视表达式，全部通过 Basilisk LSP 代理
 - **集成性能分析器**——采样式 CPU 分析器，具有内联热图注解、火焰图、内存泄漏检测和引用图可视化，全部在您的编辑器内
 - **默认符合 PEP 规范的类型检查器**——开箱即用核心规范规则集，并提供可选的 Basilisk 规则以实现比规范更严格的检查
+- **开箱即得标准库类型**——运行时从 `python/typeshed@main` 获取并验证标准库存根后缓存；二进制文件中还编译进了一份完整的 typeshed `stdlib/` 树作为离线回退，因此无需网络、无需配置即可获得标准库类型
 - **用于 CI 集成的 CLI 工具**——发现错误时以代码 1 退出
 - **迁移助手**，读取您现有的 `pyrightconfig.json` 或 `mypy.ini`
 - **uv 集成**——工作区检测、锁文件解析和包管理命令
@@ -66,15 +67,15 @@ Basilisk 正在**积极开发中**——核心检查器、LSP 服务器和编辑
 |---|---|---|
 | 1 | 解析器、解析器、类型检查器、CLI | 完成 |
 | 2 | LSP 服务器、编辑器扩展（VS Code、Cursor、Zed、Neovim） | 完成 |
-| 3 | 扩展规则集，PEP 符合性（固定套件上 {{ conformance.scorePct }}%），渐进式采用 | 进行中 |
+| 3 | 扩展规则集，PEP 符合性（对照 `python/typing@main` 达 {{ conformance.scorePct }}%），渐进式采用 | 进行中 |
 | 4 | 所有权与不可变性分析（Mojo 启发） | 计划中 |
 | 5 | WASM 插件，Django/Pydantic/SQLAlchemy | 计划中 |
-| 6 | 95%+ PEP，SARIF/JUnit，JetBrains 扩展 | 计划中 |
+| 6 | SARIF/JUnit 输出，JetBrains 扩展 | 计划中 |
 | 7 | 插件市场，社区存根，生态系统 | 计划中 |
 
 ## 架构
 
-Basilisk 是一个 Cargo 工作区，包含 16 个 Rust crate，每个拥有系统的一层：
+Basilisk 是一个 Cargo 工作区，包含 18 个 Rust crate，每个拥有系统的一层：
 
 | 层 | Crate |
 |-------|--------|

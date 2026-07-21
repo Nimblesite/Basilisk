@@ -95,26 +95,51 @@ Freshness is the default; determinism is one control away. Every key in
 [STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)
 is editable here.
 
-| Source mode | Enables | Writes | Step-3 effect |
-|---|---|---|---|
-| **Latest** *(default)* | — | clears `typeshed-commit` + `typeshed-path` | resolves & downloads the newest `main` SHA |
-| **Exact commit** | commit + **Pin current** | full `typeshed-commit` | selected SHA; verified unless disabled; failure closes unless bundle matches |
-| **Custom folder** | folder-picker | `typeshed-path` | canonical user-managed tree; no download/bundle |
+The wire model makes an impossible source unrepresentable: the snapshot carries
+ONE active source that holds the value defining it — `Latest`,
+`ExactCommit { commit }`, or `CustomFolder { path }` — so "latest with a pin" or
+"a pin plus a custom folder" cannot be described at all. Alongside it the server
+sends the download policy that source HAS (absent for a custom folder, which
+downloads nothing), the commit `PinCurrent` would write when pinning is possible,
+and whether a license document exists to open. There are no per-control widget,
+label, or enabled descriptors: copy is client presentation, and availability is
+the data itself.
 
-| Control | Key/action | Widget |
+| Source | Chosen by | Writes | Step-3 effect |
+|---|---|---|---|
+| **Latest** *(default)* | selecting it | clears `typeshed-commit` + `typeshed-path` | resolves & downloads the newest `main` SHA |
+| **Pinned commit** | selecting it (`PinCurrent`), or editing the SHA | full `typeshed-commit`, clears `typeshed-path` | selected SHA; verified unless disabled; failure closes unless bundle matches |
+| **Custom folder** | selecting it (folder-picker) | `typeshed-path`, clears `typeshed-commit` | canonical user-managed tree; no download/bundle |
+
+Selecting a source is one atomic transition, and only the ACTIVE source's own
+field is rendered. Pinning is the source choice itself — never a second button —
+and is offered only when there is an active commit to pin; otherwise the choice
+states why (an in-flight acquisition, or a custom folder with no upstream commit).
+A SHA that is not 40 hexadecimal characters is refused in the field and never
+reaches the configuration.
+
+Download policy (Latest and Pinned commit only):
+
+| Control | Key | Widget |
 |---|---|---|
-| Alternate archive URL | `typeshed-url` | text (`{sha}` template) |
-| Cache folder | `typeshed-cache-path` | folder-picker |
 | Reuse downloads | `typeshed-cache` | toggle + one-run fresh-download action |
 | Verify content | `typeshed-verify` | toggle; disabling requires confirmation |
-| License | active source | **View License**, or `not supplied` for custom |
+| Alternate archive URL | `typeshed-url` | text (`{sha}` template), under Advanced |
+| Cache folder | `typeshed-cache-path` | folder-picker, under Advanced |
+| License | active source | **View license**, or `not supplied` for custom |
+
+A Typeshed edit has no rule-severity impact to weigh, so it is written as soon as
+it is made — no impact dialog stands between the control and the configuration,
+and every control re-renders from the snapshot that results. The impact dialog
+remains for rule and tag entries; dismissing it discards the change and returns
+every control to the configuration that still holds.
 
 The URL downloads only a known SHA; Latest still needs official metadata.
-Downloaded cached ZIP bytes are reused for 24 hours and re-hashed every time;
-after 24 hours they are reacquired without changing an exact pin.
+Downloaded cached ZIP bytes are re-hashed every time; exact pins are reused
+regardless of age until explicitly evicted, while Latest downloads expire after 24 hours.
 Cache off downloads, validates, and discards—it is not labelled hermetic.
 Verification off leaves safety, shape, and license gates active and displays `UNVERIFIED`.
-Only Exact commit suppresses `UNPINNED`; Latest/bundled offer **Pin current**,
+Only a pinned commit suppresses `UNPINNED`; Latest/bundled offer the pinned source,
 while Custom says its folder can change and should be versioned or content-addressed externally.
 Custom shows user-managed terms, never the typeshed composite license
 ([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
@@ -127,12 +152,12 @@ The two directory keys render with a native folder-picker rather than free text;
 they are the only path-typed settings the editor exposes, distinct from the
 glob-path and per-module rule overrides it deliberately excludes
 ([§CONFIGEDITOR-ACCEPTANCE](#CONFIGEDITOR-ACCEPTANCE)).
-
-The server advertises each setting key, resolved value,
-`directory`/`text`/`boolean` widget, and enabled state, plus separate closed
-source-mode and action descriptors; the client never invents combinations.
 Folder selection feeds the ordinary validated transaction in
-[§CONFIGEDITOR-SOURCES](#CONFIGEDITOR-SOURCES); cancellation writes nothing.
+[§CONFIGEDITOR-SOURCES](#CONFIGEDITOR-SOURCES); cancellation writes nothing and
+restores the controls to the active source.
+
+While a candidate is being acquired every source, control, and action is inert:
+acquisition is one atomic transition and nothing may race it.
 
 ### Service Info tree {#LSPCFGED-TYPESHED-SERVICE-INFO}
 
@@ -152,10 +177,10 @@ from [STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WA
 Rows may coexist, never poll, and never mutate; fixes remain in the editable
 section. A warning row's message names its fix (e.g. `UNPINNED`'s **Pin
 current**), so the row carries exactly one navigation-only command that opens
-the configuration editor — attached only while the server advertises the
-editor capability, because the open command is capability-gated and a
-shown-but-dead command is forbidden. Other rows carry no command. They
-describe Basilisk transport around pinned typing step 3, not extra
+the configuration editor — attached only while the server is running and
+advertises the editor capability, because the open command is gated on that
+same pair and a shown-but-dead command is forbidden. Other rows carry no
+command. They describe Basilisk transport around pinned typing step 3, not extra
 typing diagnostics
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 

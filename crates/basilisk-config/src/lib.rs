@@ -510,10 +510,13 @@ exclude = ["legacy", "third_party"]
         assert!(!ruled.is_empty());
     }
 
-    /// [CHKARCH-CONFIG-FILE]: `auto-stub-mode`/`auto-stub-path` parse from the
-    /// file, and a child's non-default values win when folders merge.
+    /// [CHKARCH-CONFIG-MODEL]: a key the parser does not implement must not be
+    /// quietly absorbed. `auto-stub-mode`/`auto-stub-path` used to parse, merge
+    /// and carry a default while NO consumer ever read them, so setting one was
+    /// a silent no-op. They are gone; this pins that they stay gone rather than
+    /// returning as dead surface a reader would reasonably trust.
     #[test]
-    fn auto_stub_settings_parse_and_child_wins_merge() {
+    fn retired_auto_stub_keys_are_not_resurrected_as_silent_no_ops() {
         with_temp_cfg_dir(
             "bsk_cfg_auto_stub_xm",
             &[(
@@ -521,11 +524,18 @@ exclude = ["legacy", "third_party"]
                 "[tool.basilisk]\nauto-stub-mode = \"runtime\"\nauto-stub-path = \"stubs_gen\"\n",
             )],
             |cfg| {
-                assert_eq!(cfg.auto_stub_mode, "runtime");
-                assert_eq!(cfg.auto_stub_path, std::path::PathBuf::from("stubs_gen"));
-                let merged = BasiliskConfig::default().merged_with(cfg);
-                assert_eq!(merged.auto_stub_mode, "runtime");
-                assert_eq!(merged.auto_stub_path, std::path::PathBuf::from("stubs_gen"));
+                // The file still parses — an unknown key is not an error …
+                assert!(
+                    cfg.rule_chain.iter().all(RuleTables::is_empty),
+                    "the retired keys must not manufacture rule entries"
+                );
+                // … and grants no behaviour: this table decides nothing, exactly
+                // like the empty table it now is.
+                assert_eq!(cfg.resolve_severity("BSK-0001", &[]), None);
+                assert_eq!(
+                    cfg.resolve_severity("returns_compatibility", &["pep"]),
+                    None
+                );
             },
         );
     }

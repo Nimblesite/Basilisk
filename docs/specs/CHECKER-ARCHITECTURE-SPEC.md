@@ -1004,12 +1004,21 @@ name — [CHKARCH-DIAG-CODES](#CHKARCH-DIAG-CODES)); only entries carry severity
 
 ### Configuration File {#CHKARCH-CONFIG-FILE}
 
-`pyproject.toml` under `[tool.basilisk]` is the **single** configuration source
-and the seeding target for new projects
+`pyproject.toml` under `[tool.basilisk]` is the **single** Basilisk-native
+configuration source and the seeding target for new projects
 ([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
 There is no other Basilisk config format: a legacy root-level `basilisk.json`
 is **never read or written**
 ([CONFIGEDITOR-SOURCES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES)).
+For drop-in migration, the **analysis-environment tier only** (import
+resolution, stub search, typeshed activation — never rule severities) also
+accepts pyright-compatible spellings: a root `pyrightconfig.json`, a
+`[tool.pyright]` fallback table, and camelCase key aliases (`pythonVersion`,
+`extraPaths`, `typeshedPath`). Note that pyright's stub-directory key is the
+**singular** `stubPath` holding one path string, not a plural array; both it
+and Basilisk's own `stub-paths`/`stubPaths` list are accepted, with the list
+winning when both appear. Priority is specified in
+[ANALYSIS-CONFIG-PRI](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CONFIG-PRI).
 How the file is found and how multiple ancestor tables combine is specified in
 [Configuration Discovery](#CHKARCH-CONFIG-DISCOVERY).
 
@@ -1047,7 +1056,9 @@ Rule configuration is resolved **per checked file** through one shared routine
 (`basilisk_config::load_basilisk_config`), used identically by `basilisk check`,
 `basilisk fix`, `basilisk adopt`, and the LSP (GitHub #311). The result is
 independent of argument order, path spelling, and cwd — for the same file in
-the same project, every surface resolves the identical config.
+the same project, every surface resolves the identical **rule** configuration.
+(Which keys are per-file versus per-project is scoped under **Two tiers**
+below.)
 
 **Walk.** Starting from the file's own directory, every ancestor directory up
 to the filesystem root is visited. Each directory contributes at most its
@@ -1064,6 +1075,28 @@ per key: `stub-paths` appends (deduplicated); remaining scalar/list fields
 keep the ancestor's value unless the child explicitly sets one; the nearest
 config's directory becomes the merged config's `project_root`, anchoring
 `include`/`exclude` globs.
+
+**Two tiers.** The per-file ancestor walk above governs the **rule tier**:
+rule severities (`rules`, `rule-tags`) and `python-version`/`python-platform`
+as consumed by version-gated rules. `include`/`exclude` live in the same
+`[tool.basilisk]` tables but are **discovery-time** keys: each invocation
+resolves them once — from the first checked path's ancestor chain on the
+CLI, per workspace root in the LSP — because they decide *which files are
+collected* before any per-file rule resolution exists
+([CHKARCH-CONFIG-EXCLUDE](#CHKARCH-CONFIG-EXCLUDE)). The
+**analysis-environment tier** — `extra-paths`, `stub-paths` as import search
+roots, every `typeshed-*` key, and `python-version` as the stub-resolution
+target — is instead resolved **once per project root** by the workspace
+loader (which also honors the pyright-compatible sources,
+[CHKARCH-CONFIG-FILE](#CHKARCH-CONFIG-FILE)) and applied uniformly to the
+whole workspace by `basilisk check`, the MCP server, and LSP initialization
+([ANALYSIS-CONFIG-PRI](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CONFIG-PRI)).
+A nested `[tool.basilisk]` table therefore cannot re-point the import
+environment for a subtree — only the root decides it. One deliberate
+exception: the LSP configuration editor and its config-file watcher read the
+typeshed keys back through the ancestor-walk loader, so editor changes
+round-trip through the same file the editor writes
+([CONFIGEDITOR-SOURCES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES)).
 
 **Surfaces.**
 
@@ -1114,10 +1147,12 @@ the workspace root:
 - an anchored pattern (containing `/`) matches the full path or any ancestor
   directory, so `vendor/**` or `src/generated` also excludes everything beneath it.
 
-A baseline set of vendored/cache directories is **always** excluded
-(`node_modules`, `site-packages`, `.venv`, `__pycache__`, `build`, `dist`, the
-extension's `bundled` / `_vendored` trees); user `exclude` entries extend it.
-Hidden directories (`.`-prefixed) are always skipped. The single canonical matcher
+When `exclude` is **unset**, a default set of vendored/cache directories is
+excluded (`basilisk_config::DEFAULT_EXCLUDES`: `node_modules`, `site-packages`,
+`.venv`, `__pycache__`, `build`, `dist`, the extension's `bundled` /
+`_vendored` trees, and friends). Setting `exclude` **replaces** those defaults
+entirely — re-add any default entries explicitly if they are still needed.
+Hidden directories (`.`-prefixed) are always skipped regardless. The single canonical matcher
 `basilisk_config::path_matches_pattern` is shared by every entry point so they
 exclude identically:
 
@@ -1357,10 +1392,22 @@ Mutation testing proves the test suite actually asserts behaviour. Scope only ev
   like `assignment_compatibility`); omitting `fns` scopes the whole file. Adding
   these tests is the only way to widen scope.
 - **Baseline is ratcheted.** `mutation_testing/mutation_scores.json` is the committed
-  baseline; `mutation_testing/mutants_report.py` fails the build when the **viable
-  mutant pool shrinks**, `caught` drops, `missed`/`timeout` rises, or `kill_rate`
-  drops. (`unviable` mutants don't compile and are excluded.) Both `make
-  mutation-test` and the CI shard merge enforce the same function.
+  baseline; `mutation_testing/mutants_report.py::regression_messages` fails the build
+  when `kill_rate` drops below the baseline or the absolute floor, when `detected`
+  (`caught` + `timeout`) drops **while the viable pool did not grow**, or when
+  `timeout` rises. (`unviable` mutants don't compile and are excluded.) Absolute
+  `missed` is deliberately *not* a signal: widening scope mutates more code, so a
+  larger raw `missed` against a smaller-pool baseline is expected — `kill_rate` is
+  the size-independent guard. Both `make mutation-test` and the CI shard merge
+  enforce the same function.
+- **A timeout may never rise.** A `timeout` is credited as a kill (the PIT/Stryker
+  convention: a terminating suite made non-terminating *has* been detected). That
+  credit is only honest while timeouts come from hung code rather than slowness —
+  and the mutants that time out are structurally the likely *survivors*, since a
+  killed mutant exits at the first failing test binary while an uncaught one runs
+  the whole suite. So a rise in `timeout` is itself a build failure: it means
+  mutants were credited as killed without being evaluated. Fix the budget or the
+  suite's speed ([`.cargo/mutants.toml`](../../.cargo/mutants.toml)); never absorb it.
 - **Direction.** End state is the full workspace under mutation
   (`make mutation-test ALL=1`); until then each checker-logic PR leaves the viable
   pool the same size or larger.

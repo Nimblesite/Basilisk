@@ -43,10 +43,12 @@ exclude = [
 Setting `exclude` replaces Basilisk's built-in list, so retain every default you
 still need. See the complete [configuration reference](/docs/configuration/).
 
-A legacy root-level `basilisk.json` is no longer read. If one still exists,
-translate its keys into `[tool.basilisk]` (camelCase → kebab-case, e.g.
-`typeshedPath` → `typeshed-path`) and delete the file; the configuration editor
-reports a stray `basilisk.json` as an ignored shadowed source.
+A legacy root-level `basilisk.json` is not read by anything. If one still
+exists it is inert — no tool loads it, and the configuration editor does not
+surface it at all. Translate its keys into `[tool.basilisk]` (camelCase →
+kebab-case, e.g. `typeshedPath` → `typeshed-path`), move its per-rule and
+per-tag severities into `[tool.basilisk.rules]` and
+`[tool.basilisk.rule-tags]`, then delete the file.
 
 ## 2. Choose the target policy
 

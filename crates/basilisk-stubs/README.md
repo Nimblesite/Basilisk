@@ -19,8 +19,12 @@ selection contract is
   verified `main` supplies real `.pyi` bodies, `stdlib/VERSIONS`, and the
   distribution map from one SHA. The source archive is **downloaded over HTTPS
   (never `git clone`)**, streamed through safety/shape/license/tree gates, cached
-  as an immutable ZIP, and read through the same archive VFS. An unpinned failed
-  acquisition never reuses old content
+  as an immutable ZIP that is re-hashed on every reuse, and read through the same
+  archive VFS. Cached bytes standing in for the moving `main` reference expire
+  after 24 hours; bytes for an explicitly pinned commit do not, because that
+  commit is content-addressed and every reuse re-hashes the ZIP against its
+  recorded SHA-256. An unpinned failed acquisition falls back to the bundled
+  snapshot and never reuses an older commit
   ([STUBRES-TYPESHED-ACQUIRE](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
 - **Bundled ZIP snapshot** — a complete typeshed `stdlib/` tree with **real
   `.pyi` bodies** plus its composite `LICENSE`, pinned to one SHA and refreshed

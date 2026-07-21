@@ -201,18 +201,29 @@ Fetch on demand and invalidate from the same analysis-revision signals as the mo
 
 ## Basilisk information view {#EXTACT-INFO}
 
-This is a compact settings/status tree, not a second command palette.
+This is a compact settings/status view, not a second command palette.
 
 ### Structure {#EXTACT-INFO-STRUCTURE}
 
-One Type Checking toggle appears at the root, followed by a read-only Server Info section.
-The provider refreshes on Basilisk configuration and LSP lifecycle signal changes.
+One Diagnostics toggle appears at the root with an explicit `Enabled` or `Disabled` state,
+followed by flat read-only server-information rows. Read-only information is not nested
+under a collapsible tree node. The provider refreshes on Basilisk configuration and LSP
+lifecycle signal changes.
 
 ### Interaction affordance {#EXTACT-INFO-AFFORDANCE}
 
 Actionable items have a command, imperative tooltip, action icon, and inline control.
 Read-only rows have no command/inline action and put their value in the description. Shared
 constructors enforce the distinction.
+
+One exception, and only one: a Typeshed warning row carries a single
+navigation-only command that opens the configuration editor, because the row's
+own message names a fix that lives there
+([LSPCFGED-TYPESHED-SERVICE-INFO](LSP-CONFIGURATION-EDITOR-SPEC.md#LSPCFGED-TYPESHED-SERVICE-INFO)).
+It navigates and never mutates, so it keeps its own `typeshed-warning`
+contextValue and therefore still contributes no inline action. The command is
+attached only while the server is running and advertises the editor capability
+— the same pair that registers it — so it can never be shown dead.
 
 ### Getting started {#EXTACT-INFO-GETTING-STARTED}
 
@@ -222,8 +233,10 @@ rows.
 ### Feature status {#EXTACT-INFO-FEATURE-STATUS}
 
 Only `basilisk.enabled` is a shipped toggle because the server demonstrably clears and
-suppresses diagnostics while disabled and rechecks when enabled. Settings that are not read
-by their feature path must not appear as functional toggles.
+suppresses diagnostics from both the check and analyze rule sets while disabled, then
+rechecks when enabled. The label must not call this the Checker or Analyzer because those
+are distinct rule sets. Settings that are not read by their feature path must not appear as
+functional toggles.
 
 ### Quick actions {#EXTACT-INFO-QUICK-ACTIONS}
 

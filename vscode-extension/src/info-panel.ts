@@ -2,8 +2,8 @@
 /**
  * Basilisk Info Panel — TreeDataProvider for the Basilisk sidebar.
  *
- * Slimmed per issue #103: feature toggles at the top level (two toggles do
- * not justify a section header) plus a compact read-only Server Info section.
+ * Slimmed per issue #103: one analyzer toggle followed by flat, read-only
+ * server details. Read-only data does not need collapsible tree structure.
  * Quick actions live elsewhere — Fix All / Organize Imports / Restart are
  * toolbar buttons on the Modules panel (when-gated on the server running),
  * Show Output is the status-bar click action, and everything remains in the
@@ -22,18 +22,7 @@ import { CONFIGURATION_EDITOR_COMMAND, supportsConfigurationEditor } from "./con
 
 // ── Tree node types ──────────────────────────────────────────────────────
 
-type InfoItem = SectionItem | FeatureItem | InfoTextItem;
-
-/** Section header — collapsible container for related items. */
-class SectionItem extends vscode.TreeItem {
-  constructor(
-    public readonly section: string,
-    public readonly items: InfoItem[],
-  ) {
-    super(section, vscode.TreeItemCollapsibleState.Expanded);
-    this.contextValue = "section";
-  }
-}
+type InfoItem = FeatureItem | InfoTextItem;
 
 /**
  * Feature toggle — clicking toggles the corresponding setting.
@@ -88,7 +77,7 @@ interface FeatureDef {
 // Implements [EXTACT-INFO-FEATURE-STATUS]: only features whose toggle has a
 // real, observable effect belong here. A toggle that writes a setting the server
 // (or extension) never reads is a lie to the user and must not exist.
-//   - Type Checking (basilisk.enabled): the LSP is authoritative for diagnostics
+//   - Diagnostics (basilisk.enabled): the LSP is authoritative for diagnostics
 //     and honours this setting — disabling clears published diagnostics and
 //     suppresses new ones; re-enabling re-scans. See [ANALYSIS-ENABLED]
 //     (crates/basilisk-lsp/src/server/init.rs) and GitHub #65 / #119.
@@ -102,8 +91,11 @@ interface FeatureDef {
 //   - Inlay Hints (Params/Types), Ruff Integration, Test Explorer, Debugger
 //     (never even declared), AI Typing — all dropped server-side likewise.
 // See EXTACT-INFO-FEATURE-STATUS.
+// [EXTACT-INFO-STRUCTURE] names this row "Diagnostics"; [EXTACT-INFO-FEATURE-STATUS]
+// forbids "Checker"/"Analyzer" because those name distinct rule sets and this
+// toggle governs both.
 const FEATURES: readonly FeatureDef[] = [
-  { label: "Type Checking", settingKey: "basilisk.enabled" },
+  { label: "Diagnostics", settingKey: "basilisk.enabled" },
 ];
 
 // ── Resolved environment ([LSPARCH-RESOLVED-ENV]) ────────────────────────
@@ -241,12 +233,10 @@ function typeshedTooltip(rootUri: string, status: TypeshedStatusState): string {
     `State: ${statusKind(status.lifecycle)}`,
     `Source: ${statusKind(status.activeSource)}`,
     `Commit: ${status.commitIdentity ?? "not available"}`,
-    `Tree: ${status.treeIdentity ?? "not available"}`,
     `Transport: ${statusKind(status.transport)}`,
     `Provenance: ${statusKind(status.provenance)}`,
     `Signed release: ${status.signedRelease ? "yes" : "no"}`,
     `License: ${statusKind(status.licenseStatus)}`,
-    `License reference: ${status.licenseReference ?? "not supplied"}`,
   ].join("\n");
 }
 
@@ -265,14 +255,22 @@ function typeshedSourceItem(
   return item;
 }
 
-// Implements the navigation affordance of [LSPCFGED-TYPESHED-SERVICE-INFO]:
-// warning rows never mutate (fixes stay in the editable section), but their
-// messages name actions that live in the configuration editor (e.g. the
-// UNPINNED row's "Pin current"), so a warning row navigates there on click.
-// The command is attached only while the server advertises the editor —
-// basilisk.openConfigurationEditor is capability-gated
-// (configuration-editor-registration.ts), and a shown-but-dead command is
-// exactly issue #103 defect 1.
+/**
+ * One typeshed warning row ([LSPCFGED-TYPESHED-SERVICE-INFO]).
+ *
+ * A warning's message names its own fix (`UNPINNED` names **Pin current**), and
+ * every one of those fixes lives in the Configuration Editor — so the row
+ * carries a single navigation-only command that opens it. This is the ONE
+ * documented exception to [EXTACT-INFO-AFFORDANCE]'s "read-only rows have no
+ * command": it navigates, it never mutates configuration.
+ *
+ * The command is attached only when the editor is genuinely reachable —
+ * `basilisk.openConfigurationEditor` is capability-gated and registered only
+ * while the server runs AND advertises it (configuration-editor-registration.ts),
+ * and a shown-but-dead command is exactly issue #103 defect 1. The caller
+ * computes `editorSupported` with that SAME predicate so the two can never
+ * drift apart.
+ */
 function typeshedWarningItem(
   prefix: string,
   warning: TypeshedStatusState["warnings"][number],
@@ -361,18 +359,15 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
   }
 
   public getChildren(element?: InfoItem): InfoItem[] {
-    if (element instanceof SectionItem) {
-      return element.items;
-    }
     if (element !== undefined) { return []; }
 
-    // Implements [EXTACT-INFO-STRUCTURE] / [EXTACT-INFO-QUICK-ACTIONS]: slimmed
-    // layout (issue #103) — toggles at the root, then compact Server Info. No
+    // Implements [EXTACT-INFO-STRUCTURE] / [EXTACT-INFO-QUICK-ACTIONS]: flat
+    // layout — the analyzer toggle, then compact read-only server details. No
     // Quick Actions section: those are Modules-toolbar buttons, the status bar,
     // and the command palette.
     return [
       ...buildFeatureToggles(),
-      this.buildServerInfoSection(),
+      ...this.buildServerInfoItems(),
     ];
   }
 
@@ -380,7 +375,7 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
   // Mode / Python / uv / Binary rows; no live server-state row. Python, uv,
   // and Binary render the server-RESOLVED values from [LSPARCH-RESOLVED-ENV]
   // (issue #153) — never a bare `auto-detect` placeholder or a blank row.
-  private buildServerInfoSection(): SectionItem {
+  private buildServerInfoItems(): InfoTextItem[] {
     // No live "Server" state row: the status bar already shows it (issue
     // #103). The lspState/client effect in the constructor still re-renders
     // this section so the Version row appears as soon as the server is up.
@@ -404,10 +399,17 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
       ...(binary !== undefined && binary !== null
         ? [new InfoTextItem("Binary", formatResolvedTool(binary), "file-binary")]
         : []),
-      ...typeshedInfoItems(this.store.typeshedStatuses.value, supportsConfigurationEditor(client)),
+      // The SAME predicate registerConfigurationEditor uses to register the
+      // command (configuration-editor-registration.ts). Gating on the
+      // capability alone would attach the command during `starting`/`stopped`,
+      // when the command is not registered — a shown-but-dead row.
+      ...typeshedInfoItems(
+        this.store.typeshedStatuses.value,
+        this.store.lspState.value === "running" && supportsConfigurationEditor(client),
+      ),
     ];
 
-    return new SectionItem("Server Info", items);
+    return items;
   }
 }
 
