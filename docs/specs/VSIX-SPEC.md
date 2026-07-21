@@ -115,7 +115,12 @@ Palette visibility is narrowed in `contributes.menus.commandPalette`:
 
 - `openConfigurationEditor` appears only under `basilisk.configurationEditorSupported` (the same context key gates its `enablement`, as it does `editConfig`'s);
 - `editConfig`, `info.runAction`, `profileProcess`, `memoryTrackProcess`, `copyProcessPid` and `revealProcessScript` are `"when": false` — context-menu / view-title actions only;
-- every memory command is gated on `basilisk.debugging`, so the palette offers them only while a debug session is live.
+- the seven in-session memory commands — `memoryMenu`, `memoryStart`,
+  `memorySnapshot`, `memoryDiff`, `memoryGcCollect`, `memoryReferences`,
+  `memoryStop` — are gated on `basilisk.debugging`, so the palette offers them
+  only while a debug session is live. `trackMemoryCurrentFile` is deliberately
+  ungated: it *starts* the tracked session, so gating it on `basilisk.debugging`
+  would make it unreachable. (`memoryTrackProcess` is `"when": false`, above.)
 
 ---
 
@@ -198,6 +203,10 @@ Implementation lives in `vscode-extension/src/`, split into focused files each
 kept under the repository's 500-LOC ceiling:
 
 - `configuration-editor.ts` — panel lifecycle and intent routing;
+- `configuration-editor-transport.ts` — the LSP seam: capability probe, the
+  `ConfigurationEditorTransport` request wrapper, and workspace-root selection
+  (re-exported from `configuration-editor.ts`, so callers still import the
+  editor's public surface from one module);
 - `configuration-editor-registration.ts` — capability-gated command registration
   (`basilisk.openConfigurationEditor` / `basilisk.editConfig` + context key);
 - `configuration-editor-document.ts` — CSP HTML document;

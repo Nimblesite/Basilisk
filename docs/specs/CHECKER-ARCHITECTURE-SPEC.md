@@ -1202,9 +1202,21 @@ Every error has at least one associated code action:
 
 ### Parallelism {#CHKARCH-PERF-PARALLEL}
 
-- File-level parallelism using Rayon (work-stealing)
-- Module dependency graph partitioned into independent subgraphs
-- Cross-module dependencies resolved first in dependency-ordered pass
+Analysis is single-threaded, by design and in fact. `check` / `analyze` / `fix` /
+`adopt` all run on one dedicated large-stack thread (`run_with_analysis_stack`,
+[LSPARCH-ARCH-STACK]) because the AST walk recurses deeply enough to overflow the
+default main-thread stack. No Basilisk crate calls Rayon — `rayon` reaches the
+lockfile only as a transitive dependency of `salsa` and `ruff_db`.
+
+Concurrency lives in the LSP server instead, on Tokio: request multiplexing, plus
+`spawn_blocking` for the genuinely blocking work (typeshed download, debug-adapter
+accept loop, process enumeration). What keeps an edit sub-10ms is Salsa's
+incremental invalidation ([CHKARCH-INCREMENTAL]), not thread count.
+
+File-level parallelism stays a future option. It is not implemented, and no
+benchmark number in this repository depends on it — so a change that adds it must
+still clear the benchmark ratchet on its own merits
+([CHKARCH-TESTING-BENCH-RATCHET]).
 
 ### Memory {#CHKARCH-PERF-MEMORY}
 
