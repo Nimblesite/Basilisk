@@ -313,7 +313,13 @@ jobs:
     # target — CPU-bound, so it rides BIG_RUNNER too (see the mutation job for
     # the opt-in contract). Falls back to the standard runner when unset.
     runs-on: ${{ vars.BIG_RUNNER || 'ubuntu-24.04' }}
-    timeout-minutes: 20
+    # Two full workspace compiles dominate this job: the instrumented `ci`-profile
+    # build (~8m) and the clean `--release` build the conformance gate demands
+    # (~5m). Tests and the gate itself are the cheap part. At 20 the job was
+    # killed 30 SECONDS into the conformance gate with every test already green —
+    # a budget that stops the prime-directive gate from running is worse than no
+    # budget at all, because a red gate and a gate that never ran look identical.
+    timeout-minutes: 35
     steps:
       # cargo-llvm-cov instruments and RE-compiles the entire workspace, and the
       # conformance gate clones python/typing fresh — together they exhausted the
