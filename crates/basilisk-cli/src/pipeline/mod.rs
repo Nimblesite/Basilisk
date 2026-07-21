@@ -78,6 +78,10 @@ pub(crate) struct CheckOutcome {
     pub(crate) diagnostics: Vec<basilisk_checker::Diagnostic>,
     pub(crate) sources: Vec<FileSource>,
     pub(crate) failures: Vec<FileAnalysisFailure>,
+    /// How many rules configuration selected that this scope never evaluated
+    /// — always `0` outside [`DiagnosticScope::Check`]
+    /// ([CHKARCH-CLI-SCOPE-NOTICE]).
+    pub(crate) unrun_selected_rules: usize,
 }
 
 /// Resolve the paths a check run walks. Implements [CHKARCH-CONFIG-INCLUDE]:
@@ -100,25 +104,37 @@ pub(crate) fn effective_check_paths(
         .collect()
 }
 
+/// The per-directory rule configuration of a run, keyed by owning directory
+/// ([CHKARCH-CONFIG-DISCOVERY]).
+pub(crate) type DirConfigs =
+    std::collections::BTreeMap<std::path::PathBuf, std::sync::Arc<basilisk_config::BasiliskConfig>>;
+
+/// The union of the codes `select` reports across the base config and every
+/// per-directory config in this run — one file's config never speaks for the
+/// whole run ([CHKARCH-CONFIG-DISCOVERY]).
+fn codes_across_configs(
+    dir_configs: &DirConfigs,
+    base: &basilisk_config::BasiliskConfig,
+    select: fn(&basilisk_config::BasiliskConfig) -> Vec<&'static str>,
+) -> std::collections::BTreeSet<&'static str> {
+    let mut codes: std::collections::BTreeSet<&'static str> = select(base).into_iter().collect();
+    for config in dir_configs.values() {
+        codes.extend(select(config));
+    }
+    codes
+}
+
 /// The codes an invalid configuration resolves to `disabled` although they
 /// are `pep`-tagged, across every per-directory config in this run.
 ///
 /// Implements [CHKARCH-CONFIG-MODEL]: `disabled` never applies to a `pep`
 /// rule — such a configuration is invalid and fails the run before checking.
 fn pep_disable_config_error(
-    dir_configs: &std::collections::BTreeMap<
-        std::path::PathBuf,
-        std::sync::Arc<basilisk_config::BasiliskConfig>,
-    >,
+    dir_configs: &DirConfigs,
     base: &basilisk_config::BasiliskConfig,
 ) -> Option<String> {
-    let mut violations: std::collections::BTreeSet<&'static str> =
-        basilisk_checker::pep_disable_violations(base)
-            .into_iter()
-            .collect();
-    for config in dir_configs.values() {
-        violations.extend(basilisk_checker::pep_disable_violations(config));
-    }
+    let violations =
+        codes_across_configs(dir_configs, base, basilisk_checker::pep_disable_violations);
     if violations.is_empty() {
         return None;
     }
@@ -246,6 +262,21 @@ where
         return Err(PipelineError::Config(message));
     }
 
+    // [CHKARCH-CLI-SCOPE-NOTICE] (GitHub #334): the edge filter below drops
+    // every analyze-scope diagnostic from a `check` run. Count the rules
+    // configuration selected but this scope will never evaluate, so the
+    // renderer can say so — a silent clean run is indistinguishable from a
+    // clean project.
+    let unrun_selected_rules = match scope {
+        DiagnosticScope::Check => codes_across_configs(
+            &dir_configs,
+            &config,
+            basilisk_checker::analyze_selected_rules,
+        )
+        .len(),
+        DiagnosticScope::Analyze | DiagnosticScope::Union => 0,
+    };
+
     let cache_context =
         cache_check::build_context(cache, &dir_configs, &search_paths, &project_root);
 
@@ -276,6 +307,7 @@ where
         diagnostics: all_diagnostics,
         sources,
         failures,
+        unrun_selected_rules,
     })
 }
 
@@ -376,8 +408,7 @@ pub(crate) fn parent_dir_of(path: &str) -> std::path::PathBuf {
 pub(crate) fn resolve_dir_configs(
     python_files: &[String],
     fallback: &basilisk_config::BasiliskConfig,
-) -> std::collections::BTreeMap<std::path::PathBuf, std::sync::Arc<basilisk_config::BasiliskConfig>>
-{
+) -> DirConfigs {
     let mut dir_configs = std::collections::BTreeMap::new();
     for path in python_files {
         let _ = dir_configs
@@ -399,10 +430,7 @@ pub(crate) fn resolve_dir_configs(
 /// The per-directory config for `path`, falling back to `fallback` (only
 /// reachable if `path` was not in the file list the map was built from).
 pub(crate) fn config_for_path(
-    dir_configs: &std::collections::BTreeMap<
-        std::path::PathBuf,
-        std::sync::Arc<basilisk_config::BasiliskConfig>,
-    >,
+    dir_configs: &DirConfigs,
     path: &str,
     fallback: &basilisk_config::BasiliskConfig,
 ) -> std::sync::Arc<basilisk_config::BasiliskConfig> {

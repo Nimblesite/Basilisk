@@ -898,6 +898,22 @@ Compatibility anchors: supported methods {#CHKARCH-LSP-METHODS}; custom commands
 `check` and `analyze` support human-readable text and structured JSON. Other
 formats are not part of the current contract.
 
+#### Scope notice {#CHKARCH-CLI-SCOPE-NOTICE}
+
+`check` drops every analyze-scope diagnostic at the edge
+([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)), so on a project that grades non-`pep`
+rules it can report "All checked. No issues found." while none of those rules
+were ever evaluated. A silent clean run is indistinguishable from a clean
+project — the same class of failure as a skipped CI gate reporting success.
+
+A `check` run in text format therefore closes with one line naming how many
+rules the configuration selected that this command never runs, and pointing at
+`basilisk analyze`. The notice is a fact about the project, not boilerplate: a
+tree whose configuration selects no analyze-scope rule prints nothing extra,
+and `analyze` — which just ran them — never prints it. Exit codes
+([CHKARCH-CLI-EXITCODES](#CHKARCH-CLI-EXITCODES)) and the JSON contract are
+unchanged; machine consumers see no new field.
+
 ### Exit codes {#CHKARCH-CLI-EXITCODES}
 
 | Code | Meaning |

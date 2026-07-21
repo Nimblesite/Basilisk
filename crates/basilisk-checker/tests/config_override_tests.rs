@@ -13,9 +13,10 @@
 //! entry over tag entry, strictest matching tag), the command partition
 //! [CHKARCH-COMMANDS] (`pep` rules always run and can never be disabled;
 //! everything else runs only when configuration decides it), and the
-//! severity values of [CHKARCH-STRICTNESS-SEVERITY]. Code under test:
+//! severity values of [CHKARCH-STRICTNESS-SEVERITY], and the unrun-rule count
+//! behind [CHKARCH-CLI-SCOPE-NOTICE]. Code under test:
 //! `basilisk-checker/src/lib.rs` (`EffectiveRuleConfig`,
-//! `pep_disable_violations`, `is_pep_rule`).
+//! `pep_disable_violations`, `analyze_selected_rules`, `is_pep_rule`).
 
 use std::collections::HashMap;
 
@@ -248,6 +249,42 @@ fn pep_rule_disable_is_invalid_and_never_applied() {
     assert!(
         basilisk_checker::pep_disable_violations(&clean).is_empty(),
         "grading a pep rule is valid"
+    );
+}
+
+/// [CHKARCH-CLI-SCOPE-NOTICE] (Refs #334): `analyze_selected_rules` reports
+/// exactly the rules configuration selects that `check` will never evaluate —
+/// the count a clean `check` run tells the user about.
+#[test]
+fn analyze_selected_rules_reports_what_check_will_not_run() {
+    assert!(
+        basilisk_checker::analyze_selected_rules(&BasiliskConfig::default()).is_empty(),
+        "a bare tree selects no analyze rule, so `check` hides nothing"
+    );
+
+    let tagged = config_with(&[], &[("basilisk", RuleSeverity::Error)]);
+    let selected = basilisk_checker::analyze_selected_rules(&tagged);
+    assert!(
+        selected.contains(&"BSK-0001"),
+        "one `basilisk` tag entry selects the house rules: {selected:?}"
+    );
+    assert!(
+        selected
+            .iter()
+            .all(|code| !basilisk_checker::is_pep_rule(code)),
+        "a `pep` rule always runs under check, so it is never reported unrun: {selected:?}"
+    );
+
+    let graded_pep = config_with(&[("imports_unresolved", RuleSeverity::Warning)], &[]);
+    assert!(
+        basilisk_checker::analyze_selected_rules(&graded_pep).is_empty(),
+        "grading a pep rule configures a rule `check` does run"
+    );
+
+    let disabled = config_with(&[("BSK-0001", RuleSeverity::Disabled)], &[]);
+    assert!(
+        !basilisk_checker::analyze_selected_rules(&disabled).contains(&"BSK-0001"),
+        "a disabled rule is not selected, so it is not something `check` hid"
     );
 }
 

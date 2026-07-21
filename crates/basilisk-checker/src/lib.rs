@@ -236,6 +236,37 @@ pub fn pep_disable_violations(config: &basilisk_config::BasiliskConfig) -> Vec<&
         .collect()
 }
 
+/// Analyze-scope rules this configuration selects — the rules `check` will
+/// never evaluate, however strictly they are graded.
+///
+/// Implements [CHKARCH-CLI-SCOPE-NOTICE] (GitHub #334). The counterpart to
+/// [`pep_disable_violations`]: a rule is analyze-scope iff it is not
+/// `pep`-tagged ([CHKARCH-COMMANDS]), and configuration selects it by
+/// resolving it to a non-disabled severity ([CHKARCH-CONFIG-MODEL]). Callers
+/// report the count so a clean `check` on such a project is never mistaken for
+/// a clean project.
+#[must_use]
+pub fn analyze_selected_rules(config: &basilisk_config::BasiliskConfig) -> Vec<&'static str> {
+    // Bare-tree fast path, as in [`EffectiveRuleConfig::severity`]: with no
+    // table anywhere nothing is selected, so the conformance and benchmark
+    // hot paths never walk the catalog.
+    if !config.has_config_table() {
+        return Vec::new();
+    }
+    rule_catalog()
+        .into_iter()
+        .map(|descriptor| descriptor.code)
+        .filter(|code| !is_pep_rule(code))
+        .filter(|code| {
+            let tags = rule_tags::tags_for_code(code);
+            matches!(
+                config.resolve_severity(code, &tags),
+                Some(severity) if severity != basilisk_config::RuleSeverity::Disabled
+            )
+        })
+        .collect()
+}
+
 /// Per-file rule selection and grading over the configuration model.
 ///
 /// Implements [CHKARCH-CONFIG-MODEL]: the nearest deciding table wins, a rule
