@@ -3,8 +3,9 @@
 //! The policy layer is deliberately separate from HTTP/cache mechanics. A
 //! backend can fetch and gate candidates, while this module enforces the three
 //! non-negotiable failure rules: Custom never falls back, Exact only accepts
-//! the requested commit (including a matching bundle), and Latest falls back
-//! to the bundle rather than reusing an older unpinned cache entry.
+//! the requested commit (served from a matching bundle before any network
+//! acquisition), and Latest falls back to the bundle rather than reusing an
+//! older unpinned cache entry.
 
 use super::gittree::Oid;
 use super::snapshot::Snapshot;
@@ -156,6 +157,21 @@ fn select_exact(
     request: &TypeshedRequest,
     backend: &dyn AcquisitionBackend,
 ) -> Result<Snapshot, SelectionError> {
+    // A pin naming the bundled commit is complete inside the binary: the
+    // commit is content-addressed, so the embedded bytes ARE the pinned
+    // source. Consulting the network first would only add failure modes and
+    // spend rate-limited metadata calls ([STUBRES-TYPESHED-ACQUIRE]). The
+    // SHA guard keeps every other pin from paying the embedded-ZIP decode
+    // and gate run for a bundle that cannot satisfy it.
+    if commit.to_hex() == super::bundle::bundled_commit_sha() {
+        if let Some(snapshot) = backend
+            .load_bundled()
+            .ok()
+            .and_then(|bundle| pinned_bundle(bundle, commit))
+        {
+            return Ok(snapshot);
+        }
+    }
     match backend.load_commit(commit, request) {
         Ok(mut snapshot) => {
             if !matches!(
@@ -170,25 +186,28 @@ fn select_exact(
             normalize_download_verification(&mut snapshot, request.verify_content, &[])?;
             Ok(snapshot)
         }
-        Err(reason) => {
-            let mut bundle = backend
-                .load_bundled()
-                .map_err(|_bundle_failure| SelectionError::Exact { commit, reason })?;
-            if !matches!(&bundle.identity, SourceIdentity::Bundled { commit: actual } if *actual == commit)
-                || !identity_matches_vfs(&bundle)
-                || bundle.status.provenance != Provenance::BundleVetted
-            {
-                return Err(SelectionError::Exact { commit, reason });
-            }
-            // The user explicitly pinned this exact commit. A matching embedded
-            // bundle is deterministic and therefore suppresses UNPINNED.
-            bundle.status.active_source = SourceKind::Bundled;
-            bundle.status.commit = Some(commit);
-            bundle.status.transport = Transport::EmbeddedZip;
-            set_warnings(&mut bundle, &[]);
-            Ok(bundle)
-        }
+        // The bundle was already offered above and cannot satisfy this pin,
+        // so a failed download is terminal: Exact fails closed.
+        Err(reason) => Err(SelectionError::Exact { commit, reason }),
     }
+}
+
+/// The embedded bundle reclassified as the user's pin — only when it is
+/// exactly the pinned commit and passes identity and provenance checks. The
+/// user explicitly pinned this exact commit, so a matching embedded bundle is
+/// deterministic and therefore suppresses UNPINNED.
+fn pinned_bundle(mut bundle: Snapshot, commit: Oid) -> Option<Snapshot> {
+    if !matches!(&bundle.identity, SourceIdentity::Bundled { commit: actual } if *actual == commit)
+        || !identity_matches_vfs(&bundle)
+        || bundle.status.provenance != Provenance::BundleVetted
+    {
+        return None;
+    }
+    bundle.status.active_source = SourceKind::Bundled;
+    bundle.status.commit = Some(commit);
+    bundle.status.transport = Transport::EmbeddedZip;
+    set_warnings(&mut bundle, &[]);
+    Some(bundle)
 }
 
 fn select_latest(

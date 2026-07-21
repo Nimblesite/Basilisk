@@ -67,21 +67,47 @@ class TypeshedDocumentationTests(unittest.TestCase):
         self.assertLess(flow.index("5 ·"), flow.index("6 ·"))
 
     def test_cache_pin_and_python_target_contract_has_no_contradiction(self) -> None:
+        """The reuse window is split by whether the selection can move.
+
+        `Latest` tracks the moving `main` reference, so its bytes must keep a
+        stated expiry — documenting unbounded reuse there would promise a
+        freshness the checker does not deliver. An exact pin is
+        content-addressed and re-hashed on every load, so age carries no
+        information about it and the docs must say so rather than implying a
+        pinned project needs the network. Both halves are asserted here so
+        neither can be dropped silently.
+        """
         combined = "\n".join(document.read_text() for document in DOCUMENTS)
         normalized = re.sub(r"\s+", " ", combined).lower()
         for forbidden in (
+            # Unqualified claims that caching never expires. The pin exemption
+            # is always stated as scoped to a pin, never as a blanket property.
             "without a refresh ttl",
-            "no time-based expiry",
             "cached indefinitely",
+            # A pin must never be presented as expiring: that was the defect
+            # this contract now guards against.
+            "pins expire after 24 hours",
+            "an exact pin expires",
+            # Commit selection is never derived from the Python target.
             "uses a python-version-to-sha map",
             "selects a commit from python-version",
             "default 3.12",
         ):
             self.assertNotIn(forbidden, normalized)
-        self.assertIn("downloaded cached zip bytes expire after 24 hours", normalized)
-        self.assertIn("downloaded cached zip bytes are reused for 24 hours", normalized)
+        # The moving reference keeps a stated 24-hour bound.
+        self.assertIn(
+            "the 24-hour expiry bounds reuse of unpinned downloaded zip bytes only",
+            normalized,
+        )
+        self.assertIn("latest expires after 24 hours", normalized)
         self.assertIn("after 24 hours", normalized)
-        self.assertIn("pin identity itself never expires", normalized)
+        # The pin is exempt, and the reason is stated rather than asserted.
+        self.assertIn("reused regardless of age", normalized)
+        self.assertIn(
+            "every reuse re-hashes the zip against its recorded sha-256", normalized
+        )
+        # Identity stability is unchanged by any of the above.
+        self.assertIn("the pin never expires or changes", normalized)
         self.assertIn("exact commit identity never expires", normalized)
 
 

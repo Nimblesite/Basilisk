@@ -137,7 +137,15 @@ impl Default for WorkspaceConfig {
             python_platform: None,
             python_interpreter: None,
             include: Vec::new(),
-            exclude: Vec::new(),
+            // The effective exclude list, resolved the same way `basilisk
+            // check` resolves it ([CHKARCH-CONFIG-EXCLUDE]): the defaults
+            // stand until a config supplies `exclude`, and supplying it
+            // REPLACES them. Callers therefore never need a second hardcoded
+            // default set, which no configuration could switch off.
+            exclude: basilisk_config::DEFAULT_EXCLUDES
+                .iter()
+                .map(PathBuf::from)
+                .collect(),
             extra_paths: Vec::new(),
             venv_path: None,
             venv: None,
@@ -610,7 +618,18 @@ mod tests {
             "[STUBRES-TYPESHED-VERSION] no Python target is manufactured"
         );
         assert!(cfg.include.is_empty());
-        assert!(cfg.exclude.is_empty());
+        // [CHKARCH-CONFIG-EXCLUDE] An unconfigured workspace resolves to the
+        // same effective exclude list `basilisk check` uses, so the editor and
+        // the CLI scan identical trees. The scan applies this list and nothing
+        // else — an empty default here would make it scan `node_modules`.
+        assert_eq!(
+            cfg.exclude,
+            basilisk_config::DEFAULT_EXCLUDES
+                .iter()
+                .map(PathBuf::from)
+                .collect::<Vec<_>>(),
+            "the default config must carry DEFAULT_EXCLUDES, not an empty list"
+        );
         assert!(cfg.typeshed_path.is_none());
     }
 

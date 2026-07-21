@@ -135,8 +135,8 @@ remains for rule and tag entries; dismissing it discards the change and returns
 every control to the configuration that still holds.
 
 The URL downloads only a known SHA; Latest still needs official metadata.
-Downloaded cached ZIP bytes are reused for 24 hours and re-hashed every time;
-after 24 hours they are reacquired without changing an exact pin.
+Downloaded cached ZIP bytes are re-hashed every time; exact pins are reused
+regardless of age until explicitly evicted, while Latest downloads expire after 24 hours.
 Cache off downloads, validates, and discards—it is not labelled hermetic.
 Verification off leaves safety, shape, and license gates active and displays `UNVERIFIED`.
 Only a pinned commit suppresses `UNPINNED`; Latest/bundled offer the pinned source,

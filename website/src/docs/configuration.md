@@ -344,7 +344,7 @@ It is a fallback, not a pin — when it is in use Basilisk always says so.
 | `typeshed-commit` | full 40-char SHA | _(unset — Latest)_ | Exact `python/typeshed` commit to use. A pin **fails closed** — it never silently substitutes another commit. Abbreviated SHAs are rejected. |
 | `typeshed-url` | URL template | GitHub codeload | HTTPS archive mirror containing exactly one `{sha}` placeholder. A mirror cannot resolve Latest. |
 | `typeshed-cache-path` | path | OS cache dir | Where gate-accepted ZIPs are cached. |
-| `typeshed-cache` | bool | `true` | Reuse the re-hashed cached ZIP for 24 hours; `false` downloads, validates, and discards every run. |
+| `typeshed-cache` | bool | `true` | Reuse re-hashed cached ZIPs until explicitly evicted for an exact pin, or for 24 hours with Latest; `false` downloads, validates, and discards every run. |
 | `typeshed-verify` | bool | `true` | Content-attest the archive against the trusted git tree; `false` reports `UNVERIFIED` and never bypasses the safety, shape, or license gates. |
 | `typeshed-path` | path | _(unset)_ | Your own stdlib stub tree — disables both download and the bundled snapshot. |
 

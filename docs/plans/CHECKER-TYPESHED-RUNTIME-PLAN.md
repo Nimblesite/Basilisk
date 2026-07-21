@@ -22,9 +22,9 @@ The pinned order puts standard-library typeshed at step 3, stub packages at step
 
 1. One identity supplies module names, `VERSIONS`, real `.pyi` bodies, and derived indexes.
 2. Resolve trusted commit→tree metadata, stream a safe archive through shape, approved-license/NOTICE, and Git-tree gates, then cache the immutable ZIP and read it through the same VFS. Only content hashing is disableable.
-3. Downloaded cached ZIP bytes are reused for 24 hours and re-hashed every time.
-   After 24 hours they are reacquired; an exact pin still selects the same SHA.
-   Cache-off downloads, validates, and discards. A custom miss proceeds to step 4.
+3. Downloaded cached ZIP bytes are re-hashed on every reuse. Exact pins are reused
+   regardless of age; Latest expires after 24 hours. Explicit eviction reacquires,
+   while cache-off downloads, validates, and discards. A custom miss proceeds to step 4.
 4. Gate analysis, fingerprint caches by source identity, and return active source/full SHA plus composable `UNPINNED`, fallback, `LICENSE CHANGED`, `UNVERIFIED`, and user-managed statuses on CLI/LSP/MCP ([§STUBRES-TYPESHED-WARN](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 
 ## [TYPESHEDRT-ACCEPTANCE] Acceptance criteria {#TYPESHEDRT-ACCEPTANCE}
@@ -51,8 +51,9 @@ Git-tree verification binds VFS-consumed bytes to that tree
 ([§STUBRES-TYPESHED-ACQUIRE](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
 
 - [x] **Tree binding:** two archive encodings of one tree pass and any content mutation fails; a pin alone proves nothing because Git commits identify trees, not ZIP hashes ([Git `commit-tree`](https://git-scm.com/docs/git-commit-tree)); verified metadata reports only its GitHub/TLS trust boundary, not a signed typeshed release.
-- [x] **Cache controls:** reuse re-hashes downloaded bytes for at most 24 hours;
-  expiry or explicit eviction reacquires the same pin; cache-off leaves no ZIP;
+- [x] **Cache controls:** reuse always re-hashes downloaded bytes; an exact pin has
+  no age expiry, while Latest expires after 24 hours; explicit eviction reacquires;
+  cache-off leaves no ZIP;
   verification-on reruns the content gate before reporting verified.
 - [x] **Verification waived:** skip only tree hashing; safety, shape, approved-license/NOTICE checks still run; all surfaces report `UNVERIFIED` without implying verified provenance.
 - [x] **License drift:** change the approved path+SHA-256 manifest for any relevant root/nested `LICENSE*`/`NOTICE*` on Latest, pin, and mirror paths; block, report `LICENSE CHANGED`, and use bundled only under Latest rules.
@@ -64,8 +65,8 @@ Git-tree verification binds VFS-consumed bytes to that tree
 Pinned step 3 says a supplied custom typeshed **“SHOULD [be used] as the canonical source for standard-library types in this step”** ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 
 - [x] **Exact commit:** configure full SHA `A`; assert exact tree/VFS bytes, later `main` movement has no effect, and unavailable `A` never substitutes another bundled SHA.
-- [x] **Pinned reuse:** validate `A` and reuse its re-hashed downloaded ZIP for 24 hours;
-  expiry or eviction revalidates `A`. The pin identity itself never expires or changes.
+- [x] **Pinned reuse:** validate `A` and reuse its re-hashed downloaded ZIP regardless
+  of age; only explicit eviction or cache-off ends reuse. The pin never expires or changes.
 - [x] **Pin current:** in Latest mode, resolve `main` to `B`, invoke **Pin current**, and assert `typeshed-commit` is written to `B`; repeat offline and assert it writes the *bundled snapshot* SHA.
 - [x] **Not-pinned advisory:** fresh Latest, bundled fallback, and Custom all report `UNPINNED`; only explicit `typeshed-commit` suppresses it; status never becomes a Python diagnostic.
 - [x] **Custom tree:** conflicting custom/download/bundle data resolves custom verbatim, reports user-managed terms without assuming Apache/MIT, and bypasses every other step-3 lookup.

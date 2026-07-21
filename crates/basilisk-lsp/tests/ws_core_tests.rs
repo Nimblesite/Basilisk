@@ -29,6 +29,8 @@ mod ws_test_diagnostics_rules;
 mod ws_test_diagnostics_rules_advanced;
 #[path = "lsp/ws_test_diagnostics_structure.rs"]
 mod ws_test_diagnostics_structure;
+#[path = "lsp/ws_test_exclude_scope.rs"]
+mod ws_test_exclude_scope;
 #[path = "lsp/ws_test_shutdown.rs"]
 mod ws_test_shutdown;
 #[path = "lsp/ws_test_type_checking_toggle.rs"]

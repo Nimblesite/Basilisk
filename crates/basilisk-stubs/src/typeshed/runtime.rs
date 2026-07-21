@@ -60,7 +60,7 @@ impl RuntimeBackend {
         pinned: bool,
     ) -> Result<Snapshot, BackendError> {
         if request.use_cache {
-            if let Some(cached) = self.load_cache(metadata.commit) {
+            if let Some(cached) = self.load_cache(metadata.commit, pinned) {
                 let cached_result = validate_cache_record(metadata.commit, metadata.tree, &cached)
                     .and_then(|()| trusted_from_cache(metadata.commit, &cached))
                     .and_then(|trusted| {
@@ -116,11 +116,25 @@ impl RuntimeBackend {
         Ok(snapshot)
     }
 
-    fn load_cache(&self, commit: Oid) -> Option<CachedArchive> {
+    /// Look up `commit` in the cache.
+    ///
+    /// `pinned` selects the reuse window. An explicit `typeshed-commit` pin is
+    /// content-addressed and re-hashed on every load, so age tells us nothing
+    /// and expiring it would only force a needless network round-trip. `Latest`
+    /// resolves the moving `main` reference, where stale bytes really would
+    /// misrepresent the selection, so it keeps the 24-hour window
+    /// ([STUBRES-TYPESHED-ACQUIRE]).
+    fn load_cache(&self, commit: Oid, pinned: bool) -> Option<CachedArchive> {
         let Some(cache) = &self.cache else {
             return None;
         };
-        match cache.load_fresh(&cache_key(commit), unix_seconds_now()) {
+        let key = cache_key(commit);
+        let found = if pinned {
+            cache.load_pinned(&key)
+        } else {
+            cache.load_fresh(&key, unix_seconds_now())
+        };
+        match found {
             Ok(cached) => cached,
             Err(_error) => {
                 // A cache is an optimization, never an alternate trust root.
@@ -180,7 +194,7 @@ impl AcquisitionBackend for RuntimeBackend {
         request: &TypeshedRequest,
     ) -> Result<Snapshot, BackendError> {
         if request.use_cache {
-            if let Some(cached) = self.load_cache(commit) {
+            if let Some(cached) = self.load_cache(commit, true) {
                 let cached_result = trusted_from_cache(commit, &cached).and_then(|trusted| {
                     activate_zip(
                         commit,

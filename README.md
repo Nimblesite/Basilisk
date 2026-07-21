@@ -88,13 +88,14 @@ until a table selects them. Only `analyze` emits `BSK-` diagnostics.
 
 Basilisk resolves the standard library from [typeshed](https://github.com/python/typeshed).
 By default it verifies `python/typeshed@main` over HTTPS once per run, gates and
-caches the archive for 24 hours, and reports the source as unpinned. With no
+caches the archive for up to 24 hours, and reports the source as unpinned. With no
 network — or on any download failure — it falls back to the complete typeshed
 `stdlib/` snapshot compiled into the binary, so stdlib types still work offline.
 
 Pin an exact commit with `typeshed-commit = "<40-char sha>"` under
-`[tool.basilisk]` (it fails closed and never substitutes another commit), or
-point `typeshed-path` at your own typeshed tree. Full options:
+`[tool.basilisk]`; its cache is re-hashed on every reuse and remains until eviction
+or caching is disabled. The pin fails closed rather than substituting another
+commit. Alternatively, point `typeshed-path` at your own typeshed tree. Full options:
 [configuration guide](https://www.basilisk-python.dev/docs/configuration/).
 
 

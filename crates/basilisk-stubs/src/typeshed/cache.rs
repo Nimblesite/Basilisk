@@ -6,8 +6,10 @@
 //! beside a small metadata record. Reuse **re-hashes the cached ZIP** and
 //! compares it to the recorded SHA-256, so on-disk mutation is detected without
 //! extraction — the checker never trusts a mutable extracted tree
-//! ([STUBRES-TYPESHED-ACQUIRE]). Downloaded bytes expire after 24 hours; an
-//! exact commit pin does not, so expiry reacquires that same immutable commit.
+//! ([STUBRES-TYPESHED-ACQUIRE]). Bytes standing in for the *moving* `main`
+//! reference expire after 24 hours; bytes for an explicitly pinned exact commit
+//! do not, because that commit is content-addressed and re-hashed on every
+//! reuse. See [`DiskCache::load_fresh`] and [`DiskCache::load_pinned`].
 
 use std::fs::{self, File};
 use std::io::Write as _;
@@ -20,8 +22,10 @@ use super::gate::manifest::sha256_hex;
 
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-/// Maximum age of downloaded cached ZIP bytes. Commit selection is independent:
-/// an explicit pin remains the same identity when its bytes must be reacquired.
+/// Maximum age of cached ZIP bytes reused for a **moving** reference. Commit
+/// selection is independent: an explicit pin remains the same identity when its
+/// bytes must be reacquired, and is exempt from this window entirely
+/// ([`DiskCache::load_pinned`]).
 pub const CACHE_MAX_AGE_SECONDS: u64 = 24 * 60 * 60;
 
 /// A cache key derived from a source identity's opaque URI component.
@@ -200,6 +204,37 @@ impl DiskCache {
         key: &CacheKey,
         now_unix_seconds: u64,
     ) -> Result<Option<CachedArchive>, CacheError> {
+        self.load_accepted(key, |record| record_is_fresh(record, now_unix_seconds))
+    }
+
+    /// Load the newest cached encoding for an **explicitly pinned** commit,
+    /// ignoring [`CACHE_MAX_AGE_SECONDS`].
+    ///
+    /// The age window bounds how long bytes for a *moving* reference may stand
+    /// in for it: `main` advances, so yesterday's archive would misrepresent
+    /// "latest". A pinned commit has no such failure mode. It is
+    /// content-addressed, so its archive can never change meaning, and every
+    /// generation is re-hashed against its recorded `zip_sha256` on load
+    /// regardless of age. Expiring one therefore buys no integrity — it only
+    /// forces a network round-trip that stops a pinned, reproducible project
+    /// from typechecking offline or while GitHub is rate-limiting
+    /// ([STUBRES-TYPESHED-CONFIG]).
+    ///
+    /// Returns `Ok(None)` when the entry is absent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CacheError::Mutation`] if the stored ZIP no longer matches its
+    /// recorded hash, or an I/O/metadata error otherwise.
+    pub fn load_pinned(&self, key: &CacheKey) -> Result<Option<CachedArchive>, CacheError> {
+        self.load_accepted(key, |_record| true)
+    }
+
+    fn load_accepted(
+        &self,
+        key: &CacheKey,
+        accept: impl Fn(&CacheRecord) -> bool,
+    ) -> Result<Option<CachedArchive>, CacheError> {
         let dir = self.entry_dir(key);
         let generations = dir.join("generations");
         if !generations.is_dir() {
@@ -216,7 +251,7 @@ impl DiskCache {
         let mut freshest: Option<CachedArchive> = None;
         for entry in promoted {
             let candidate = load_generation(&generations, &entry.path())?;
-            if !record_is_fresh(&candidate.record, now_unix_seconds) {
+            if !accept(&candidate.record) {
                 continue;
             }
             let replace = match &freshest {
@@ -473,6 +508,57 @@ mod tests {
             cache.load_fresh(&key, NOW + CACHE_MAX_AGE_SECONDS),
             Ok(None)
         ));
+    }
+
+    /// The age window exists to stop stale bytes standing in for a reference
+    /// that moves. A pinned commit does not move, so the same bytes that
+    /// [`DiskCache::load_fresh`] has expired must still be reusable through
+    /// [`DiskCache::load_pinned`] — otherwise a pinned, reproducible project
+    /// cannot typecheck offline or while GitHub is rate-limiting.
+    #[test]
+    fn a_pinned_commit_reuses_bytes_that_have_aged_out_for_a_moving_reference() {
+        let Ok(dir) = tempfile::tempdir() else {
+            return;
+        };
+        let cache = DiskCache::new(dir.path());
+        let key = CacheKey::from_identity("pinned-expiry");
+        let zip = b"immutable pinned bytes";
+        assert!(cache.store(&key, zip, &record(zip)).is_ok());
+
+        let long_past_expiry = NOW + CACHE_MAX_AGE_SECONDS * 365;
+        assert!(
+            matches!(cache.load_fresh(&key, long_past_expiry), Ok(None)),
+            "a moving reference must not reuse year-old bytes"
+        );
+        assert!(
+            matches!(cache.load_pinned(&key), Ok(Some(entry)) if entry.zip == zip),
+            "a content-addressed pin has no expiry"
+        );
+    }
+
+    /// Age-blindness must not become verification-blindness: the mutation check
+    /// is the whole reason expiry is safe to drop, so it still runs.
+    #[test]
+    fn a_pinned_load_still_rejects_a_mutated_archive() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let cache = DiskCache::new(dir.path());
+        let key = CacheKey::from_identity("pinned-mutation");
+        let zip = b"pinned original bytes";
+        assert!(cache.store(&key, zip, &record(zip)).is_ok());
+        fs::write(
+            dir.path()
+                .join("pinned-mutation")
+                .join("generations")
+                .join(sha256_hex(zip))
+                .join("archive.zip"),
+            b"tampered pinned bytes",
+        )?;
+
+        assert!(matches!(
+            cache.load_pinned(&key),
+            Err(CacheError::Mutation { .. })
+        ));
+        Ok(())
     }
 
     #[test]

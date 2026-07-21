@@ -66,16 +66,25 @@ fn immutable_pins_cache_and_custom_paths_remain_supported() {
             "required source selection `{required}` was removed"
         );
     }
+    // The reuse window is split by whether the selection can move. Both halves
+    // are asserted: dropping the freshness gate would let stale bytes stand in
+    // for `main`, and dropping the pinned path would put a needless network
+    // round-trip back in front of a commit that cannot change.
     assert!(
-        RUNTIME.contains("cache.load_fresh(&cache_key(commit), unix_seconds_now())"),
-        "downloaded cached bytes must use the freshness gate"
+        RUNTIME.contains("cache.load_fresh(&key, unix_seconds_now())"),
+        "bytes standing in for the moving `main` reference must use the freshness gate"
+    );
+    assert!(
+        RUNTIME.contains("cache.load_pinned(&key)"),
+        "an explicitly pinned commit must reuse cached bytes without a freshness gate"
     );
     assert!(
         CACHE.contains("CACHE_MAX_AGE_SECONDS")
             && CACHE.contains("acquired_at_unix_seconds")
             && CACHE.contains("sha256_hex(&zip)")
             && CACHE.contains("CacheError::Mutation"),
-        "cached ZIP reuse must remain 24-hour limited and mutation checked"
+        "cached ZIP reuse must remain 24-hour limited when unpinned, and mutation \
+         checked on every load regardless of pinning"
     );
     assert!(
         !CHECK_CONTEXT.contains("typeshed_path"),
