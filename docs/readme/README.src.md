@@ -1,20 +1,31 @@
-<!-- GENERATED FILE — DO NOT EDIT.
-     Source: docs/readme/README.src.md · Regenerate: python3 scripts/gen_readmes.py
-     Spec: docs/specs/DOCS-README-SPEC.md [README] -->
+<!-- Implements [README]. See docs/specs/DOCS-README-SPEC.md
+     THIS IS THE ONLY AUTHORED README. Every published README — GitHub, the VS
+     Code Marketplace / Open VSX, PyPI — is generated from this file by
+     scripts/gen_readmes.py. Do not edit the generated copies.
+     Exactly ONE paragraph may vary per target: the identity line below
+     ([README-IDENTITY]). A second variant block is a review failure. -->
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/images/basilisk-logo.png" alt="Basilisk" width="160">
+  <img src="images/basilisk-logo.png" alt="Basilisk" width="160">
 </p>
 
 <h1 align="center">Basilisk</h1>
 
-<p align="center"><strong>English</strong> · <a href="https://github.com/Nimblesite/Basilisk/blob/main/vscode-extension/README.zh.md">简体中文</a></p>
+<p align="center"><strong>English</strong> · <a href="{{altLangHref}}">简体中文</a></p>
 
 <p align="center">
   <strong>The only Python type checker scoring 100% on the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> conformance suite</a> — and the fastest we&rsquo;ve measured.</strong><br>
   Complete open-source Python dev environment in <strong>Rust</strong>: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed &amp; Neovim extensions. Strict by default.
 </p>
 
+<!--v:github-->
+> **You are reading the Basilisk source repository** — the checker, language server, editor extensions, and website all live here.
+<!--/v:github-->
+<!--v:vscode-->
 > **You are reading the Basilisk extension listing** for VS Code, Cursor, Windsurf, and every VS Code fork — the same extension is published to the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Nimblesite.basilisk) and [Open VSX](https://open-vsx.org/extension/Nimblesite/basilisk).
+<!--/v:vscode-->
+<!--v:pypi-->
+> **You are reading the `basilisk-python` wheel listing** — the Basilisk CLI packaged for `pip`/`uv`. The distribution is named `basilisk-python` because `basilisk` was taken on PyPI; the installed command is still `basilisk`.
+<!--/v:pypi-->
 
 <p align="center">
   <a href="https://www.basilisk-python.dev">Website</a> &nbsp;&bull;&nbsp;
@@ -41,7 +52,7 @@ Basilisk is the **only** Python type checker with a perfect score on the officia
 measured by the real upstream harness on the wheel-installed CLI in its default config.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
+  <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
 </p>
 
 And it is the **fastest checker we&rsquo;ve measured** &mdash; median cold full-file check, from scratch:
@@ -86,7 +97,7 @@ Also via Homebrew (`brew install Nimblesite/tap/basilisk`), Scoop (`scoop bucket
 
 ## Try it
 
-The [`examples/`](https://github.com/Nimblesite/Basilisk/blob/main/examples/) folder has ready-to-go Python files:
+The [`examples/`](examples/) folder has ready-to-go Python files:
 
 ```sh
 basilisk check   examples/bad.py    # 8 typing-spec errors — always on, no config needed
@@ -102,7 +113,7 @@ Machine-readable output for CI and tooling:
 basilisk check path/to/your_code.py --output json --color never
 ```
 
-The two commands read one rule universe split by provenance ([`CHKARCH-COMMANDS`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-ARCHITECTURE-SPEC.md)): `check` reports
+The two commands read one rule universe split by provenance ([`CHKARCH-COMMANDS`](docs/specs/CHECKER-ARCHITECTURE-SPEC.md)): `check` reports
 the `pep`-tagged typing-spec rules and nothing else — that set is always on, and
 while a config table may grade one of them down to `warning`/`info`, none may
 switch it off. `analyze` reports the non-`pep` house rules, which stay silent
@@ -140,9 +151,9 @@ Rust 1.87+ required.
 ## Contributing
 
 Basilisk is built by a human + AI partnership, with the work split on purpose. See
-[CONTRIBUTING.md](https://github.com/Nimblesite/Basilisk/blob/main/CONTRIBUTING.md) — **For Humans** (testing, code-quality review,
+[CONTRIBUTING.md](CONTRIBUTING.md) — **For Humans** (testing, code-quality review,
 conformance/security audits, IDE feature parity, sharpening the AI instructions) and
-**For AI** (the technical execution, under the standing rules in [CLAUDE.md](https://github.com/Nimblesite/Basilisk/blob/main/CLAUDE.md)).
+**For AI** (the technical execution, under the standing rules in [CLAUDE.md](CLAUDE.md)).
 
 ## Acknowledgments
 
@@ -156,8 +167,8 @@ Basilisk builds on the open-source community — with thanks to:
 - **[debugpy](https://github.com/microsoft/debugpy)** — debug adapter (bundled in the VS Code extension).
 - The [`python/typing`](https://github.com/python/typing) conformance suite.
 
-Full component list, selected licenses, and required notices: [NOTICES](https://github.com/Nimblesite/Basilisk/blob/main/NOTICES)
-and [RUST-DEPENDENCY-LICENSES](https://github.com/Nimblesite/Basilisk/blob/main/RUST-DEPENDENCY-LICENSES). Each published
+Full component list, selected licenses, and required notices: [NOTICES](NOTICES)
+and [RUST-DEPENDENCY-LICENSES](RUST-DEPENDENCY-LICENSES). Each published
 artifact carries its own copies: the VSIX ships Rust notices in
 `RUST-DEPENDENCY-LICENSES`, npm notices in `VSCODE-DEPENDENCY-LICENSES`, and
 debugpy's license and `ThirdPartyNotices.txt` inside `bundled/debugpy`; the

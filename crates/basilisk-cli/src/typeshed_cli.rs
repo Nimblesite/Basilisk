@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use basilisk_typeshed_fetch::{DownloadPhase, GithubClient};
+use basilisk_typeshed_fetch::{DownloadPhase, GithubApi, GithubClient};
 use colored::Colorize as _;
 use tracing::error;
 
@@ -41,20 +41,26 @@ pub(crate) fn run(action: TypeshedAction) -> u8 {
 }
 
 fn run_download(commit: Option<String>, workspace: &Path) -> u8 {
+    let client = GithubClient::new();
+    download_action(commit, workspace, &client)
+}
+
+/// The download action with its transport injected, so tests drive the whole
+/// surface — config discovery, store resolution, progress — offline.
+fn download_action(commit: Option<String>, workspace: &Path, api: &dyn GithubApi) -> u8 {
     let config = basilisk_lsp::config::load_analysis_config(workspace);
     let store = config.typeshed_store_path;
-    let client = GithubClient::new();
     let progress = |phase: DownloadPhase| println!("  {}", phase_label(phase).dimmed());
     match commit {
-        Some(sha) => download_exact(&sha, store, &client, &progress),
-        None => download_latest_and_pin(workspace, store, &client, &progress),
+        Some(sha) => download_exact(&sha, store, api, &progress),
+        None => download_latest_and_pin(workspace, store, api, &progress),
     }
 }
 
 fn download_exact(
     sha: &str,
     store: Option<PathBuf>,
-    client: &GithubClient,
+    api: &dyn GithubApi,
     progress: &dyn Fn(DownloadPhase),
 ) -> u8 {
     let Ok(commit) = basilisk_stubs::typeshed::gittree::Oid::from_hex(sha) else {
@@ -65,7 +71,7 @@ fn download_exact(
         return 2;
     };
     println!("Downloading typeshed {commit} into the verified store…");
-    match basilisk_typeshed_fetch::download_commit(commit, store, client, progress) {
+    match basilisk_typeshed_fetch::download_commit(commit, store, api, progress) {
         Ok(outcome) => {
             println!(
                 "{} {} (tree {}) is now available offline",
@@ -85,11 +91,11 @@ fn download_exact(
 fn download_latest_and_pin(
     workspace: &Path,
     store: Option<PathBuf>,
-    client: &GithubClient,
+    api: &dyn GithubApi,
     progress: &dyn Fn(DownloadPhase),
 ) -> u8 {
     println!("Downloading the latest python/typeshed commit into the verified store…");
-    let outcome = match basilisk_typeshed_fetch::download_latest(store, client, progress) {
+    let outcome = match basilisk_typeshed_fetch::download_latest(store, api, progress) {
         Ok(outcome) => outcome,
         Err(download_error) => {
             error!(%download_error, "typeshed download failed; nothing was written");
@@ -143,6 +149,8 @@ const fn phase_label(phase: DownloadPhase) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use basilisk_typeshed_fetch::testing::{fake_repo, FakeApi, Faults};
+
     use super::*;
 
     /// [STUBRES-TYPESHED-DOWNLOAD]: the pin write is the same validated
@@ -173,8 +181,188 @@ mod tests {
 
     #[test]
     fn a_malformed_commit_argument_is_a_configuration_error() {
-        let client = GithubClient::new();
-        // No network is touched: the SHA fails validation before any request.
-        assert_eq!(download_exact("short", None, &client, &|_phase| {}), 2);
+        let api = FakeApi::new(fake_repo());
+        // No transport is touched: the SHA fails validation before any request.
+        assert_eq!(download_exact("short", None, &api, &|_phase| {}), 2);
+    }
+
+    /// The `run` dispatch reaches the same validation: a malformed pin exits
+    /// `2` before any transport work.
+    #[test]
+    fn run_rejects_a_malformed_sha_through_the_dispatch(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let action = TypeshedAction::Download {
+            commit: Some("short".to_owned()),
+            workspace: dir.path().to_path_buf(),
+        };
+        assert_eq!(run(action), 2);
+        Ok(())
+    }
+
+    /// `download --commit <sha>` materialises the exact pin into the store and
+    /// writes no configuration ([STUBRES-TYPESHED-DOWNLOAD]).
+    #[test]
+    fn download_exact_materialises_the_pin_into_the_store(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let store = tempfile::tempdir()?;
+        let api = FakeApi::new(fake_repo());
+        let sha = api.repo.commit.to_hex();
+        assert_eq!(
+            download_exact(&sha, Some(store.path().to_path_buf()), &api, &|_phase| {}),
+            0
+        );
+        assert_eq!(
+            std::fs::read_dir(store.path())?.count(),
+            1,
+            "exactly one verified store entry must exist"
+        );
+        Ok(())
+    }
+
+    /// A transport failure is exit `3` and writes nothing.
+    #[test]
+    fn a_transport_failure_downloading_an_exact_pin_is_exit_3(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let store = tempfile::tempdir()?;
+        let mut api = FakeApi::new(fake_repo());
+        api.faults = Faults {
+            resolve_fails: true,
+            ..Faults::default()
+        };
+        let sha = api.repo.commit.to_hex();
+        assert_eq!(
+            download_exact(&sha, Some(store.path().to_path_buf()), &api, &|_phase| {}),
+            3
+        );
+        assert_eq!(std::fs::read_dir(store.path())?.count(), 0);
+        Ok(())
+    }
+
+    /// `download` with no `--commit` resolves latest, stores it, and pegs the
+    /// resolved SHA as the workspace's `typeshed-commit` pin.
+    #[test]
+    fn download_latest_pins_the_resolved_sha() -> Result<(), Box<dyn std::error::Error>> {
+        let workspace = tempfile::tempdir()?;
+        let store = tempfile::tempdir()?;
+        std::fs::write(
+            workspace.path().join("pyproject.toml"),
+            "[tool.basilisk]\n",
+        )?;
+        let api = FakeApi::new(fake_repo());
+        assert_eq!(
+            download_latest_and_pin(
+                workspace.path(),
+                Some(store.path().to_path_buf()),
+                &api,
+                &|_phase| {}
+            ),
+            0
+        );
+        let written = std::fs::read_to_string(workspace.path().join("pyproject.toml"))?;
+        assert!(
+            written.contains(&format!("typeshed-commit = \"{}\"", api.repo.commit)),
+            "the resolved SHA must be pegged as the pin: {written}"
+        );
+        Ok(())
+    }
+
+    /// A failed latest download is exit `3` and leaves the configuration
+    /// untouched — no pin without verified bytes.
+    #[test]
+    fn a_failed_latest_download_writes_no_pin() -> Result<(), Box<dyn std::error::Error>> {
+        let workspace = tempfile::tempdir()?;
+        let store = tempfile::tempdir()?;
+        std::fs::write(
+            workspace.path().join("pyproject.toml"),
+            "[tool.basilisk]\n",
+        )?;
+        let mut api = FakeApi::new(fake_repo());
+        api.faults = Faults {
+            archive_fails: true,
+            ..Faults::default()
+        };
+        assert_eq!(
+            download_latest_and_pin(
+                workspace.path(),
+                Some(store.path().to_path_buf()),
+                &api,
+                &|_phase| {}
+            ),
+            3
+        );
+        let written = std::fs::read_to_string(workspace.path().join("pyproject.toml"))?;
+        assert!(
+            !written.contains("typeshed-commit"),
+            "no pin may be written for a failed download: {written}"
+        );
+        Ok(())
+    }
+
+    /// A pin-write failure after a successful download is exit `2`; the store
+    /// entry is kept so re-running needs no re-download.
+    #[cfg(unix)]
+    #[test]
+    fn a_pin_write_failure_after_download_is_a_configuration_error(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::PermissionsExt as _;
+        let workspace = tempfile::tempdir()?;
+        let store = tempfile::tempdir()?;
+        std::fs::write(
+            workspace.path().join("pyproject.toml"),
+            "[tool.basilisk]\n",
+        )?;
+        let api = FakeApi::new(fake_repo());
+        std::fs::set_permissions(workspace.path(), std::fs::Permissions::from_mode(0o555))?;
+        let exit = download_latest_and_pin(
+            workspace.path(),
+            Some(store.path().to_path_buf()),
+            &api,
+            &|_phase| {},
+        );
+        std::fs::set_permissions(workspace.path(), std::fs::Permissions::from_mode(0o755))?;
+        assert_eq!(exit, 2);
+        assert_eq!(
+            std::fs::read_dir(store.path())?.count(),
+            1,
+            "the verified store entry must survive the failed pin write"
+        );
+        Ok(())
+    }
+
+    /// The full action surface offline: config discovery resolves the
+    /// workspace-relative store, the latest commit lands there, and the pin is
+    /// pegged — the exact flow `basilisk typeshed download` runs.
+    #[test]
+    fn download_action_resolves_the_store_from_workspace_config(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let workspace = tempfile::tempdir()?;
+        std::fs::write(
+            workspace.path().join("pyproject.toml"),
+            "[tool.basilisk]\ntypeshed-store-path = \"store\"\n",
+        )?;
+        let api = FakeApi::new(fake_repo());
+        assert_eq!(download_action(None, workspace.path(), &api), 0);
+        assert_eq!(
+            std::fs::read_dir(workspace.path().join("store"))?.count(),
+            1,
+            "the store entry must land in the config-resolved location"
+        );
+        Ok(())
+    }
+
+    /// Every phase renders a distinct, human-readable progress label.
+    #[test]
+    fn every_download_phase_has_a_distinct_label() {
+        let labels = [
+            phase_label(DownloadPhase::Resolving),
+            phase_label(DownloadPhase::FetchingTree),
+            phase_label(DownloadPhase::FetchingArchive),
+            phase_label(DownloadPhase::Verifying),
+            phase_label(DownloadPhase::Writing),
+        ];
+        let unique: std::collections::BTreeSet<&str> = labels.iter().copied().collect();
+        assert_eq!(unique.len(), labels.len());
+        assert!(labels.iter().all(|label| !label.is_empty()));
     }
 }

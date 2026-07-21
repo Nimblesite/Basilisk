@@ -38,6 +38,8 @@ tracing-subscriber.workspace = true
 [dev-dependencies]
 basilisk-test-utils = { workspace = true, features = ["checker"] }
 basilisk-stubs.workspace = true
+# The offline fake-GitHub fixture for the `typeshed download` CLI tests.
+basilisk-typeshed-fetch = { workspace = true, features = ["test-support"] }
 tempfile = "3"
 
 [build-dependencies]

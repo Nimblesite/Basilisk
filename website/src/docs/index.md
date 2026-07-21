@@ -35,7 +35,7 @@ Basilisk takes a different position. Its default *is* the typing spec — full P
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
 - An **integrated profiler** — sampling CPU profiler with inline heatmap annotations, flame graphs, memory leak detection, and reference graph visualization, all inside your editor
 - A **PEP-conformant type checker by default** — the core spec rule set out of the box, with opt-in Basilisk rules for checking stricter than the spec
-- **Standard-library types out of the box** — typeshed stubs are acquired at runtime from `python/typeshed@main`, verified, and cached; a complete typeshed `stdlib/` tree is compiled into the binary as the offline fallback, so stdlib types work with no network and no configuration
+- **Standard-library types out of the box** — a complete typeshed `stdlib/` tree is compiled into the binary and checking never downloads anything, so stdlib types work with no network and no configuration; pin an exact `python/typeshed` commit and it is verified offline against your local store
 - A **CLI tool** for CI integration — exits with code 1 when errors are found
 - A **migration assistant** that reads your existing `pyrightconfig.json` or `mypy.ini`
 - **uv integration** — workspace detection, lock file parsing, and package management commands

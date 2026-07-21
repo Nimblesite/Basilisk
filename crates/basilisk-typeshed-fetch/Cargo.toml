@@ -12,6 +12,12 @@ publish = false
 # only `basilisk-cli` and `basilisk-lsp` may, and only behind an explicit
 # user action ([STUBRES-TYPESHED-DOWNLOAD]).
 
+[features]
+# Exposes `basilisk_typeshed_fetch::testing` — the offline fake-GitHub fixture —
+# so consumers (`basilisk-cli`) can test their download-invoking surfaces
+# without a network or a duplicated fixture.
+test-support = ["dep:zip"]
+
 [dependencies]
 basilisk-stubs.workspace = true
 serde.workspace = true
@@ -21,10 +27,12 @@ tracing.workspace = true
 # Authenticated-HTTPS adapter for GitHub metadata and codeload archives.
 # `https_only` is also enforced by the adapter.
 ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
+# `test-support` only: encode synthetic codeload zipballs for the fixture.
+zip = { version = "5.1.1", default-features = false, features = ["deflate"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"
-# Test-only: encode synthetic codeload zipballs (same spec as basilisk-stubs).
+# The crate's own tests always build the fixture module.
 zip = { version = "5.1.1", default-features = false, features = ["deflate"] }
 
 [lints]

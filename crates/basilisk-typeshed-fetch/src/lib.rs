@@ -17,6 +17,8 @@
 
 mod commit;
 mod github;
+#[cfg(any(test, feature = "test-support"))]
+pub mod testing;
 
 use std::path::PathBuf;
 
@@ -30,7 +32,7 @@ use basilisk_stubs::typeshed::store::{
     self, is_materialized, StoreEntry, StoreManifest, StoreTreeFile,
 };
 
-pub use github::{GithubApi, GithubClient, TransportError, TreeEntry};
+pub use github::{CommitInfo, GithubApi, GithubClient, TransportError, TreeEntry};
 
 /// Coarse download progress, for surfaces that render it on the invoking
 /// control ([LSPCFGED-TYPESHED-DOWNLOAD]).

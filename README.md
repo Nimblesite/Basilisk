@@ -1,3 +1,6 @@
+<!-- GENERATED FILE — DO NOT EDIT.
+     Source: docs/readme/README.src.md · Regenerate: python3 scripts/gen_readmes.py
+     Spec: docs/specs/DOCS-README-SPEC.md [README] -->
 <p align="center">
   <img src="images/basilisk-logo.png" alt="Basilisk" width="160">
 </p>
@@ -11,13 +14,16 @@
   Complete open-source Python dev environment in <strong>Rust</strong>: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed &amp; Neovim extensions. Strict by default.
 </p>
 
+> **You are reading the Basilisk source repository** — the checker, language server, editor extensions, and website all live here.
+
 <p align="center">
   <a href="https://www.basilisk-python.dev">Website</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/installation/">Install</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/quick-start/">Quick Start</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/rules/">Rules</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/refactoring/">Refactoring</a> &nbsp;&bull;&nbsp;
-  <a href="https://www.basilisk-python.dev/docs/comparison/">Compare</a>
+  <a href="https://www.basilisk-python.dev/docs/comparison/">Compare</a> &nbsp;&bull;&nbsp;
+  <a href="https://github.com/Nimblesite/Basilisk">GitHub</a>
 </p>
 
 <p align="center">
@@ -51,24 +57,36 @@ And it is the **fastest checker we&rsquo;ve measured** &mdash; median cold full-
 
 Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> single-construct typing-spec stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better. Basilisk&rsquo;s warm re-check drops to ~<!--g:benchWarm-->4<!--/g:benchWarm--> ms. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 
+## Everything in one extension
 
+One extension replaces Pylance and gives you the whole workflow — no Node.js, no Python runtime, no pip, no npm. A single bundled Rust binary drives it all:
+
+- **Strict-by-default diagnostics** — inline as you type, incremental analysis powered by Salsa (the rust-analyzer engine)
+- **Autocomplete, hover, go-to-definition, find references, rename**
+- **Refactoring code actions** — extract, inline, move symbol, organize imports
+- **Integrated debugging** — F5 to debug via bundled debugpy; no separate extension
+- **Integrated profiling** — CPU heat map, flame graph, and a memory dashboard with leak detection
+- **Activity panel** — module tree with per-module type-health coverage, plus feature toggles
+- **Inlay hints** and **Ruff** formatting/import-organization, built in
+- **Standard-library types from [typeshed](https://github.com/python/typeshed)** — a complete `stdlib/` snapshot is compiled into the binary, so hover and diagnostics work offline with no configuration
+
+Every diagnostic teaches: rustc-style output with a `help`, a `note`, and a link to a per-rule explainer, so a red squiggle always tells you *why*. Basilisk **starts strict** and stays strict — the unconfigured default enables the complete typing-spec rule set, and strictness is dialled per rule, never by a mode.
 
 ## Install
 
-The CLI is on [PyPI as `basilisk-python`](https://pypi.org/project/basilisk-python/) — install it as a standalone tool; the installed command is `basilisk`:
+**Editor extension** — install *Basilisk* from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Nimblesite.basilisk) or [Open VSX](https://open-vsx.org/extension/Nimblesite/basilisk) (Cursor, Windsurf, and other forks read Open VSX). The Basilisk binary is bundled for macOS (Apple Silicon), Linux (x86_64, aarch64), and Windows (x86_64, aarch64) — nothing else to install. Zed and Neovim 0.10+ extensions are available too.
+
+**CLI** — on [PyPI as `basilisk-python`](https://pypi.org/project/basilisk-python/); the installed command is `basilisk`:
 
 ```sh
-uv tool install basilisk-python     # or: pipx install basilisk-python
+uv tool install basilisk-python     # or: pipx install basilisk-python, pip install basilisk-python
 ```
 
-Also available via Homebrew (`brew tap Nimblesite/tap && brew install basilisk`), Scoop, and
-[GitHub Releases](https://github.com/Nimblesite/Basilisk/releases) — every channel ships the same
-single Rust CLI, built from this repository at the same version, with no runtime dependencies.
-Full options: [install guide](https://www.basilisk-python.dev/docs/install-cli/).
+Also via Homebrew (`brew install Nimblesite/tap/basilisk`), Scoop (`scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket && scoop install basilisk`), and [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases). Every channel ships the same single Rust CLI, built from this repository at the same version, with no runtime dependencies. Point `basilisk.executablePath` at your own build to have the extension use it. Full options: [install guide](https://www.basilisk-python.dev/docs/installation/).
 
 ## Try it
 
-The `examples/` folder has ready-to-go Python files:
+The [`examples/`](examples/) folder has ready-to-go Python files:
 
 ```sh
 basilisk check   examples/bad.py    # 8 typing-spec errors — always on, no config needed
@@ -76,6 +94,12 @@ basilisk analyze examples/bad.py    # the opt-in strictness warnings on the same
 basilisk analyze examples/good.py   # clean, even at full strictness
 basilisk check   examples/mixed.py  # one real type error
 basilisk check   examples/          # the whole folder at once
+```
+
+Machine-readable output for CI and tooling:
+
+```sh
+basilisk check path/to/your_code.py --output json --color never
 ```
 
 The two commands read one rule universe split by provenance ([`CHKARCH-COMMANDS`](docs/specs/CHECKER-ARCHITECTURE-SPEC.md)): `check` reports
@@ -96,24 +120,11 @@ Pin an exact commit with `typeshed-commit = "<40-char sha>"` under
 `[tool.basilisk]`. A pin does exactly one thing: it verifies, offline, that the
 typeshed tree in the local store hashes to that commit. If the commit is not on
 this machine the run fails hard with `NO SOURCE` rather than substituting
-another source — bring it down first with `basilisk typeshed download`
-(no `--commit` downloads the latest and writes the pin for you), or use the
+another source — bring it down first with `basilisk typeshed download` (with no
+`--commit` it downloads the latest and writes the pin for you), or use the
 editor's **Download latest** button. Alternatively, point `typeshed-path` at
 your own typeshed tree. Full options:
 [configuration guide](https://www.basilisk-python.dev/docs/configuration/).
-
-
-
-## Editors
-
-One extension, the whole workflow: strict-by-default diagnostics, autocomplete, hover, go-to-definition, refactoring code actions, debugging, and profiling. No Node.js or Python runtime &mdash; a single Rust binary drives it all.
-
-- **VS Code, Cursor &amp; Windsurf** &mdash; install from [Open VSX](https://open-vsx.org/)
-- **Zed** &bull; **Neovim 0.10+**
-
-Every diagnostic teaches: rustc-style output with a `help`, a `note`, and a link to a per-rule explainer. See the [full diagnostic reference](https://www.basilisk-python.dev/docs/rules/) and the [install guide](https://www.basilisk-python.dev/docs/installation/).
-
-
 
 ## Development
 
@@ -133,7 +144,6 @@ Basilisk is built by a human + AI partnership, with the work split on purpose. S
 conformance/security audits, IDE feature parity, sharpening the AI instructions) and
 **For AI** (the technical execution, under the standing rules in [CLAUDE.md](CLAUDE.md)).
 
-
 ## Acknowledgments
 
 Basilisk builds on the open-source community — with thanks to:
@@ -147,9 +157,12 @@ Basilisk builds on the open-source community — with thanks to:
 - The [`python/typing`](https://github.com/python/typing) conformance suite.
 
 Full component list, selected licenses, and required notices: [NOTICES](NOTICES)
-and [RUST-DEPENDENCY-LICENSES](RUST-DEPENDENCY-LICENSES).
-
-
+and [RUST-DEPENDENCY-LICENSES](RUST-DEPENDENCY-LICENSES). Each published
+artifact carries its own copies: the VSIX ships Rust notices in
+`RUST-DEPENDENCY-LICENSES`, npm notices in `VSCODE-DEPENDENCY-LICENSES`, and
+debugpy's license and `ThirdPartyNotices.txt` inside `bundled/debugpy`; the
+wheel carries the complete locked notices in its `.dist-info/licenses/`
+directory.
 
 ---
 

@@ -1,20 +1,30 @@
-<!-- GENERATED FILE — DO NOT EDIT.
-     Source: docs/readme/README.zh.src.md · Regenerate: python3 scripts/gen_readmes.py
-     Spec: docs/specs/DOCS-README-SPEC.md [README] -->
+<!-- Implements [README]. See docs/specs/DOCS-README-SPEC.md
+     这是唯一手工维护的 README。所有已发布的 README —— GitHub、VS Code
+     Marketplace / Open VSX、PyPI —— 均由 scripts/gen_readmes.py 从本文件生成。
+     请勿直接编辑生成的副本。每个目标只允许有一段差异：下方的身份说明段
+     ([README-IDENTITY])。新增第二个 variant 块视为评审不通过。 -->
 <p align="center">
   <img src="images/basilisk-logo.png" alt="Basilisk" width="160">
 </p>
 
 <h1 align="center">Basilisk</h1>
 
-<p align="center"><a href="README.md">English</a> · <strong>简体中文</strong></p>
+<p align="center"><a href="{{altLangHref}}">English</a> · <strong>简体中文</strong></p>
 
 <p align="center">
   <strong>唯一在官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> 一致性测试套件</a>上取得 100% 的 Python 类型检查器 —— 也是我们测得最快的。</strong><br>
   用 <strong>Rust</strong> 打造的完整开源 Python 开发环境：类型检查器、语言服务器、调试器、性能分析器，以及 VS Code、Cursor、Zed 与 Neovim 扩展。默认严格。
 </p>
 
+<!--v:github-->
 > **你正在阅读 Basilisk 的源码仓库** —— 检查器、语言服务器、编辑器扩展与网站都在这里。
+<!--/v:github-->
+<!--v:vscode-->
+> **你正在阅读 Basilisk 的扩展页面**，适用于 VS Code、Cursor、Windsurf 以及所有 VS Code 分支 —— 同一个扩展同时发布到 [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Nimblesite.basilisk) 与 [Open VSX](https://open-vsx.org/extension/Nimblesite/basilisk)。
+<!--/v:vscode-->
+<!--v:pypi-->
+> **你正在阅读 `basilisk-python` wheel 的页面** —— 为 `pip`/`uv` 打包的 Basilisk 命令行工具。发行包之所以命名为 `basilisk-python`，是因为 PyPI 上的 `basilisk` 已被占用；安装后的命令仍然是 `basilisk`。
+<!--/v:pypi-->
 
 <p align="center">
   <a href="https://www.basilisk-python.dev/zh/">网站</a> &nbsp;&bull;&nbsp;
