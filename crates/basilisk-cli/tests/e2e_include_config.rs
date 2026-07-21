@@ -104,6 +104,54 @@ fn no_args_checks_include_roots_only() {
     );
 }
 
+/// Lay down a project whose `include` is `src/` only, with a fixable
+/// `BSK-0050` violation inside the include root and an identical one inside a
+/// vendored virtualenv that the config's `exclude` does not name.
+fn write_fix_include_project(dir: &Path) {
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\ninclude = [\"src/\"]\nexclude = [\"**/migrations/**\"]\n\n[tool.basilisk.rules]\n\"BSK-0050\" = \"warning\"\n",
+    )
+    .expect("write pyproject");
+    let vendored = dir.join("venv/lib/python3.13/site-packages/dep");
+    std::fs::create_dir_all(dir.join("src")).expect("mkdir src");
+    std::fs::create_dir_all(&vendored).expect("mkdir vendored");
+    std::fs::write(dir.join("venv/pyvenv.cfg"), "home = /usr\n").expect("write pyvenv.cfg");
+    std::fs::write(dir.join("src/main.py"), "x: int = 42\n").expect("write src");
+    std::fs::write(vendored.join("mod.py"), "y: int = 42\n").expect("write vendored");
+}
+
+/// Issue #333: `basilisk fix` defaulted `PATHS` to `.` instead of falling back
+/// to the configured `include` roots like `check`/`analyze`, so a no-args run
+/// walked — and **rewrote** — third-party sources inside `venv/`.
+#[test]
+fn fix_no_args_honors_include_and_never_rewrites_vendored_files() {
+    let dir = unique_dir("fix_roots");
+    write_fix_include_project(&dir);
+    let vendored = dir.join("venv/lib/python3.13/site-packages/dep/mod.py");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_basilisk"))
+        .arg("fix")
+        .args(["--rules", "BSK-0050"])
+        .current_dir(&dir)
+        .env_remove("VIRTUAL_ENV")
+        .output()
+        .expect("spawn basilisk");
+
+    assert_eq!(
+        std::fs::read_to_string(&vendored).expect("read vendored"),
+        "y: int = 42\n",
+        "a no-args fix must never mutate files outside the include roots, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("src/main.py")).expect("read src"),
+        "x = 42\n",
+        "a no-args fix must still fix files inside the include roots, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 /// Explicit CLI paths override the configured include roots.
 #[test]
 fn explicit_paths_override_include() {

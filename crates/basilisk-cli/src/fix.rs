@@ -76,6 +76,11 @@ fn collect_and_fix(paths: &[String], allowed_rules: &[&str]) -> Result<FixSummar
 
     let excluded = crate::pipeline::excluded_dirs_and_log(&config, &config_root);
 
+    // [CHKARCH-CONFIG-INCLUDE] (GitHub #333): a no-args run walks only the
+    // configured include roots, exactly like `check`/`analyze`. `fix` mutates
+    // files, so defaulting to the whole working directory would rewrite
+    // vendored sources (`venv/`) the user never asked it to touch.
+    let paths = &crate::pipeline::effective_check_paths(paths, &config, &config_root);
     let python_files = crate::pipeline::collect_python_files(paths, &excluded)?;
     let dir_configs = crate::pipeline::resolve_dir_configs(&python_files, &config);
 

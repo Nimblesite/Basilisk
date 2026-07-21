@@ -124,8 +124,9 @@ enum Command {
     },
     /// Apply autofixes to one or more files or directories.
     Fix {
-        /// Paths to fix. Directories are traversed recursively for `.py` files.
-        #[arg(default_value = ".")]
+        /// Paths to fix. Directories are traversed recursively for `.py`
+        /// files. Defaults to the configured `[tool.basilisk] include` roots,
+        /// else the current directory.
         paths: Vec<String>,
         /// Include unsafe (heuristic) fixes alongside safe fixes.
         #[arg(long)]
