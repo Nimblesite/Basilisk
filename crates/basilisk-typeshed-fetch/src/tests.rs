@@ -9,9 +9,7 @@ use std::cell::RefCell;
 use std::io::Write as _;
 
 use basilisk_stubs::typeshed::bundle::bundled_snapshot;
-use basilisk_stubs::typeshed::gittree::{
-    git_commit_oid, reconstruct_root_tree_oid, GitFile,
-};
+use basilisk_stubs::typeshed::gittree::{git_commit_oid, reconstruct_root_tree_oid, GitFile};
 use basilisk_stubs::typeshed::store::read_snapshot;
 use zip::write::{SimpleFileOptions, ZipWriter};
 use zip::CompressionMethod;
@@ -82,7 +80,10 @@ fn zipball(repo: &FakeRepo) -> Vec<u8> {
             let options = SimpleFileOptions::default()
                 .compression_method(CompressionMethod::Stored)
                 .unix_permissions(0o644);
-            if writer.start_file(format!("{prefix}/{path}"), options).is_err() {
+            if writer
+                .start_file(format!("{prefix}/{path}"), options)
+                .is_err()
+            {
                 return Vec::new();
             }
             if writer.write_all(data).is_err() {
@@ -200,13 +201,23 @@ mod cases {
         let root = tempfile::tempdir().expect("tempdir");
         let api = FakeApi::new(fake_repo());
         let requested = api.repo.commit;
-        assert!(download_commit(requested, Some(root.path().to_path_buf()), &api, &|_phase| {})
-            .is_ok());
+        assert!(download_commit(
+            requested,
+            Some(root.path().to_path_buf()),
+            &api,
+            &|_phase| {}
+        )
+        .is_ok());
 
         let other_root = tempfile::tempdir().expect("tempdir");
         let other = git_blob_oid(b"a different commit entirely");
         assert_eq!(
-            download_commit(other, Some(other_root.path().to_path_buf()), &api, &|_phase| {}),
+            download_commit(
+                other,
+                Some(other_root.path().to_path_buf()),
+                &api,
+                &|_phase| {}
+            ),
             Err(DownloadError::Metadata)
         );
         assert_eq!(store_entry_count(other_root.path()), 0);
@@ -350,9 +361,8 @@ mod cases {
             })
             .collect();
         let tree = reconstruct_root_tree_oid(&git_files).expect("rebuilt tree");
-        repo.payload = format!(
-            "tree {tree}\nauthor a <a@a> 0 +0000\ncommitter a <a@a> 0 +0000\n\nfixture\n"
-        );
+        repo.payload =
+            format!("tree {tree}\nauthor a <a@a> 0 +0000\ncommitter a <a@a> 0 +0000\n\nfixture\n");
         repo.commit = git_commit_oid(repo.payload.as_bytes());
         repo.tree = tree;
         repo.tree_entries = tree_entries;

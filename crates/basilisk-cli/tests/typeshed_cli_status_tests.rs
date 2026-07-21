@@ -14,7 +14,7 @@ fn check_uses_custom_typeshed_and_routes_status_only_to_stderr(
     std::fs::write(workspace.path().join("app.py"), "from os import getcwd\n")?;
     std::fs::write(
         workspace.path().join("pyproject.toml"),
-        "[tool.basilisk]\ntypeshed-path = \"typeshed\"\ntypeshed-cache = false\n",
+        "[tool.basilisk]\ntypeshed-path = \"typeshed\"\n",
     )?;
 
     let output = Command::new(env!("CARGO_BIN_EXE_basilisk"))
@@ -33,8 +33,15 @@ fn check_uses_custom_typeshed_and_routes_status_only_to_stderr(
     assert!(!stdout.contains("UNPINNED"));
     assert!(stderr.contains("typeshed source status"), "{stderr}");
     assert!(stderr.contains("active_source=\"custom\""), "{stderr}");
-    assert!(stderr.contains("provenance=UserManaged"), "{stderr}");
-    assert!(stderr.contains("signed_release=false"), "{stderr}");
+    assert!(stderr.contains("license_status=NotSupplied"), "{stderr}");
+    assert!(
+        !stderr.contains("provenance="),
+        "active_source IS the trust story — no provenance field may reappear: {stderr}"
+    );
+    assert!(
+        !stderr.contains("signed_release="),
+        "active_source IS the trust story — no signed_release field may reappear: {stderr}"
+    );
     let unpinned = stderr.find("warning_code=\"UNPINNED\"");
     let user_managed = stderr.find("warning_code=\"USER-MANAGED SOURCE\"");
     assert!(
@@ -47,7 +54,7 @@ fn check_uses_custom_typeshed_and_routes_status_only_to_stderr(
 }
 
 #[test]
-fn exact_commit_transport_failure_does_not_fall_back() -> Result<(), Box<dyn std::error::Error>> {
+fn a_pin_missing_from_the_store_does_not_fall_back() -> Result<(), Box<dyn std::error::Error>> {
     let workspace = tempfile::tempdir()?;
     std::fs::write(workspace.path().join("app.py"), "from os import getcwd\n")?;
     std::fs::write(
@@ -55,8 +62,7 @@ fn exact_commit_transport_failure_does_not_fall_back() -> Result<(), Box<dyn std
         concat!(
             "[tool.basilisk]\n",
             "typeshed-commit = \"0000000000000000000000000000000000000000\"\n",
-            "typeshed-url = \"https://127.0.0.1:1/typeshed-{sha}.zip\"\n",
-            "typeshed-cache = false\n",
+            "typeshed-store-path = \"store\"\n",
         ),
     )?;
 
@@ -72,10 +78,14 @@ fn exact_commit_transport_failure_does_not_fall_back() -> Result<(), Box<dyn std
         Some(3),
         "stdout={stdout}; stderr={stderr}"
     );
-    assert!(stderr.contains("typeshed acquisition failed"), "{stderr}");
+    assert!(
+        stderr.contains("NO SOURCE")
+            && stderr.contains("0000000000000000000000000000000000000000"),
+        "the failure must carry the spec's NO SOURCE line naming the pin: {stderr}"
+    );
     assert!(
         !stderr.contains("typeshed source status"),
-        "an Exact failure must not activate or report a fallback: {stderr}"
+        "a missing pin must not activate or report a fallback: {stderr}"
     );
     Ok(())
 }

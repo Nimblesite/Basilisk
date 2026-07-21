@@ -88,31 +88,16 @@ function decodeTypeshedKey(value: unknown): TypeshedSettingKey | undefined {
   }
 }
 
-function decodeTypeshedValue(value: unknown): TypeshedSettingValue | undefined {
-  if (!isRecord(value) || typeof value.kind !== "string") { return undefined; }
-  if (value.kind === "Text") {
-    const text = boundedString(value.value);
-    return text === undefined ? undefined : { kind: "Text", value: text };
-  }
-  return value.kind === "Boolean" && typeof value.value === "boolean"
-    ? { kind: "Boolean", value: value.value }
-    : undefined;
-}
-
-/** Every surviving Typeshed key is text-typed ([LSPCFGED-TYPESHED]). */
-function typeshedValueMatches(_key: TypeshedSettingKey, value: TypeshedSettingValue): boolean {
-  return value.kind === "Text";
-}
-
 /**
  * The only four things the editor can request: set or remove one rule entry
  * or one tag entry ([CHKARCH-CONFIG-MODEL], [CONFIGEDITOR-OPERATIONS]).
+ * Every surviving Typeshed key is text-valued ([LSPCFGED-TYPESHED]).
  */
 function decodeTypeshedMutation(value: Record<string, unknown>): EditorMutation | undefined {
   if (value.kind === "SetTypeshedSetting") {
     const key = decodeTypeshedKey(value.key);
-    const setting = decodeTypeshedValue(value.value);
-    return key === undefined || setting === undefined || !typeshedValueMatches(key, setting)
+    const setting = boundedString(value.value);
+    return key === undefined || setting === undefined
       ? undefined
       : { kind: "SetTypeshedSetting", key, value: setting };
   }

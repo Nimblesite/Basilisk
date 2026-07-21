@@ -25,8 +25,7 @@ fn pinned_request(commit: Oid, explicit: bool, store: &std::path::Path) -> Types
 #[test]
 fn the_bundled_default_resolves_offline_with_unpinned() {
     let store = tempfile::tempdir().expect("tempdir");
-    let commit =
-        Oid::from_hex(super::super::bundle::bundled_commit_sha()).expect("bundled sha");
+    let commit = Oid::from_hex(super::super::bundle::bundled_commit_sha()).expect("bundled sha");
     let manager = production_manager(pinned_request(commit, false, store.path()));
     let snapshot = manager.snapshot().expect("bundled default resolves");
     assert_eq!(snapshot.status.active_source, SourceKind::Bundled);
@@ -46,8 +45,7 @@ fn the_bundled_default_resolves_offline_with_unpinned() {
 #[test]
 fn an_explicit_pin_of_the_bundled_commit_suppresses_unpinned() {
     let store = tempfile::tempdir().expect("tempdir");
-    let commit =
-        Oid::from_hex(super::super::bundle::bundled_commit_sha()).expect("bundled sha");
+    let commit = Oid::from_hex(super::super::bundle::bundled_commit_sha()).expect("bundled sha");
     let manager = production_manager(pinned_request(commit, true, store.path()));
     let snapshot = manager.snapshot().expect("explicit bundled pin resolves");
     assert!(snapshot.status.warnings.is_empty());

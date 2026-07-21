@@ -40,9 +40,8 @@ their installation flows in their editor specs.
 The server configuration model is `crates/basilisk-lsp/src/config.rs`. Editor manifests and
 settings must map to that model rather than maintaining a second semantic configuration.
 The stable shared surface includes the executable and Python paths, analysis mode, stub
-paths, the typeshed source, mirror, cache, and verification settings
-(`typeshed-path`, `typeshed-commit`, `typeshed-url`, `typeshed-cache-path`,
-`typeshed-cache`, `typeshed-verify` —
+paths, the three typeshed source settings
+(`typeshed-path`, `typeshed-commit`, `typeshed-store-path` —
 [STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)),
 formatter selection, inlay-hint switches, debugger settings, and the uv, test, profiling,
 and memory namespaces. The custom path implements the pinned typing specification's

@@ -154,7 +154,10 @@ fn patch_toml(
     })
 }
 
-fn apply_typeshed_updates(table: &mut Table, entries: &BTreeMap<TypeshedConfigKey, Option<String>>) {
+fn apply_typeshed_updates(
+    table: &mut Table,
+    entries: &BTreeMap<TypeshedConfigKey, Option<String>>,
+) {
     for (key, setting) in entries {
         match setting {
             Some(text) => table[key.as_str()] = value(text.as_str()),

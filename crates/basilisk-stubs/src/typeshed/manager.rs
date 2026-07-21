@@ -199,10 +199,8 @@ mod tests {
     #[test]
     fn concurrent_callers_share_one_arc_and_one_resolution() {
         let backend = Arc::new(CountingBackend::new(false));
-        let manager = TypeshedManager::new(
-            pinned_request(),
-            Arc::<CountingBackend>::clone(&backend),
-        );
+        let manager =
+            TypeshedManager::new(pinned_request(), Arc::<CountingBackend>::clone(&backend));
         let snapshots = thread::scope(|scope| {
             let handles: Vec<_> = (0..12)
                 .map(|_| scope.spawn(|| manager.snapshot().expect("snapshot")))

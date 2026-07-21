@@ -104,12 +104,10 @@ fn custom_typeshed_overrides_stdlib_and_parses() {
 
     let config = basilisk_lsp::config::WorkspaceConfig {
         typeshed_path: Some(ts.clone()),
-        typeshed_cache: false,
         ..Default::default()
     };
     let request = basilisk_lsp::config::typeshed_request(&config).unwrap();
-    let snapshot = basilisk_stubs::typeshed::runtime::production_manager(request, None)
-        .unwrap()
+    let snapshot = basilisk_stubs::typeshed::runtime::production_manager(request)
         .snapshot()
         .unwrap();
     assert_eq!(

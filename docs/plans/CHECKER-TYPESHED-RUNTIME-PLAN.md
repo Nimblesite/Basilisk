@@ -73,7 +73,7 @@ Step 3 identifies **“Typeshed stubs for the standard library”**, while the s
 
 Trusted GitHub metadata binds commit to tree; a user pin selects the commit, and
 Git-tree verification binds VFS-consumed bytes to that tree
-([§STUBRES-TYPESHED-ACQUIRE](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
+([§STUBRES-TYPESHED-PIN](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-PIN)).
 
 - [x] **Tree binding:** two archive encodings of one tree pass and any content mutation fails; a pin alone proves nothing because Git commits identify trees, not ZIP hashes ([Git `commit-tree`](https://git-scm.com/docs/git-commit-tree)); verified metadata reports only its GitHub/TLS trust boundary, not a signed typeshed release.
 - [ ] **Offline pin verification:** the stored commit object hashes to the pinned SHA, its tree SHA matches the re-hashed stored tree, and mutating any stored byte — or the commit object itself — fails the pin with the network unavailable.

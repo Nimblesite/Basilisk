@@ -148,8 +148,12 @@ fn download(
         .fetch_archive(info.commit)
         .map_err(|_error| DownloadError::Download)?;
     progress(DownloadPhase::Verifying);
-    let archive = decode_zip(&bytes, ZipLayout::CodeloadPrefixed, &DecodeLimits::default())
-        .map_err(|_error| DownloadError::Validation)?;
+    let archive = decode_zip(
+        &bytes,
+        ZipLayout::CodeloadPrefixed,
+        &DecodeLimits::default(),
+    )
+    .map_err(|_error| DownloadError::Validation)?;
     let bound = bind_to_tree(&archive, &entries)?;
     let approved = approved_license_manifest().map_err(|_error| DownloadError::Validation)?;
     let config = GateConfig {

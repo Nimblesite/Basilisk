@@ -111,7 +111,11 @@ pub fn is_materialized(path: &str) -> bool {
 /// Returns [`StoreError::Missing`] when no entry exists,
 /// [`StoreError::LicenseChanged`] on approved-identity drift, and
 /// [`StoreError::Corrupt`] on any verification failure.
-pub fn read_snapshot(store_root: &Path, commit: Oid, explicit: bool) -> Result<Snapshot, StoreError> {
+pub fn read_snapshot(
+    store_root: &Path,
+    commit: Oid,
+    explicit: bool,
+) -> Result<Snapshot, StoreError> {
     let dir = entry_dir(store_root, commit);
     if !dir.is_dir() {
         return Err(StoreError::Missing);
@@ -359,10 +363,9 @@ mod tests {
             .collect();
         git_files.push(unmaterialized.clone());
         let tree = reconstruct_root_tree_oid(&git_files).expect("fixture tree");
-        let commit_object = format!(
-            "tree {tree}\nauthor a <a@a> 0 +0000\ncommitter a <a@a> 0 +0000\n\nfixture\n"
-        )
-        .into_bytes();
+        let commit_object =
+            format!("tree {tree}\nauthor a <a@a> 0 +0000\ncommitter a <a@a> 0 +0000\n\nfixture\n")
+                .into_bytes();
         let commit = git_commit_oid(&commit_object);
         let manifest = StoreManifest {
             commit: commit.to_hex(),
@@ -464,10 +467,9 @@ mod tests {
             mode: FileMode::Regular,
         });
         let tree = reconstruct_root_tree_oid(&git_files).expect("rebuilt tree");
-        entry.commit_object = format!(
-            "tree {tree}\nauthor a <a@a> 0 +0000\ncommitter a <a@a> 0 +0000\n\nfixture\n"
-        )
-        .into_bytes();
+        entry.commit_object =
+            format!("tree {tree}\nauthor a <a@a> 0 +0000\ncommitter a <a@a> 0 +0000\n\nfixture\n")
+                .into_bytes();
         entry.commit = git_commit_oid(&entry.commit_object);
         entry.manifest = StoreManifest {
             commit: entry.commit.to_hex(),
@@ -590,6 +592,9 @@ mod tests {
         fs::write(&marker, b"x: int\n").expect("marker");
         // A second write of the same commit is a no-op, not a replacement.
         assert!(write_entry(root.path(), &entry).is_ok());
-        assert!(marker.exists(), "content-addressed entries are never rewritten");
+        assert!(
+            marker.exists(),
+            "content-addressed entries are never rewritten"
+        );
     }
 }

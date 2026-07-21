@@ -1,4 +1,4 @@
-//! Implements [STUBRES-TYPESHED-ACQUIRE] ZIP decode. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE
+//! Implements [STUBRES-TYPESHED-DOWNLOAD] ZIP decode. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-DOWNLOAD
 //!
 //! ZIP → [`Archive`] decoding with streaming zip-bomb caps.
 //!
@@ -6,7 +6,7 @@
 //! The decoder enforces entry-count, per-entry, **total**, and compression-ratio
 //! caps *while reading each entry*, so an inflated entry is bounded before it is
 //! fully allocated — a later gate over a fully-inflated archive would be too late
-//! ([STUBRES-TYPESHED-ACQUIRE]). Encrypted entries are rejected outright. When a
+//! ([STUBRES-TYPESHED-DOWNLOAD]). Encrypted entries are rejected outright. When a
 //! top-level prefix is stripped (GitHub zipballs nest under `typeshed-<sha>/`),
 //! the decoder requires a single coherent non-`..` common root, so a mixed-root
 //! or `../evil`-prefixed archive can never normalize into a clean path. Path

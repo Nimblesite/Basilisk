@@ -5,15 +5,12 @@ fn status() -> Value {
         "active_source": "bundled",
         "commit_identity": "0123456789012345678901234567890123456789",
         "tree_identity": "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
-        "transport": "embedded-zip",
-        "provenance": "bundle-vetted",
         "license_status": "approved",
         "license_reference": "typeshed://LICENSE",
-        "signed_release": false,
         "warnings": [
-            { "code": "UNPINNED", "message": "Pin current to make this reproducible" },
-            { "code": "DOWNLOAD FAILED", "message": "Using bundled fallback" },
-            { "code": "UNVERIFIED", "message": "Contents were not checked" }
+            { "code": "UNPINNED", "message": "Pin a commit to make this reproducible" },
+            { "code": "LICENSE CHANGED", "message": "Basilisk update/review required" },
+            { "code": "USER-MANAGED SOURCE", "message": "Folder supplies its own license" }
         ]
     })
 }
@@ -92,14 +89,14 @@ fn lifecycle_lists_and_calls_structured_status() -> Result<(), String> {
             .get(1)
             .and_then(|warning| warning.get("code"))
             .and_then(Value::as_str),
-        Some("DOWNLOAD FAILED")
+        Some("LICENSE CHANGED")
     );
     assert_eq!(
         warnings
             .get(2)
             .and_then(|warning| warning.get("code"))
             .and_then(Value::as_str),
-        Some("UNVERIFIED")
+        Some("USER-MANAGED SOURCE")
     );
     Ok(())
 }
@@ -127,15 +124,27 @@ fn tool_contract_declares_closed_output_and_honest_annotations() {
     );
     assert_eq!(
         result
-            .pointer("/tools/0/outputSchema/properties/transport/enum/0")
+            .pointer("/tools/0/outputSchema/properties/active_source/enum/0")
             .and_then(Value::as_str),
-        Some("custom-path")
+        Some("custom")
     );
     assert_eq!(
         result
-            .pointer("/tools/0/outputSchema/properties/signed_release/type")
+            .pointer("/tools/0/outputSchema/properties/license_status/enum/2")
             .and_then(Value::as_str),
-        Some("boolean")
+        Some("not supplied")
+    );
+    assert!(
+        result
+            .pointer("/tools/0/outputSchema/properties/transport")
+            .is_none(),
+        "the closed envelope must not resurrect the removed transport field"
+    );
+    assert!(
+        result
+            .pointer("/tools/0/outputSchema/properties/signed_release")
+            .is_none(),
+        "the closed envelope must not resurrect the removed signed_release field"
     );
     assert_eq!(
         result
@@ -176,7 +185,7 @@ fn acquisition_failure_is_a_tool_error_without_partial_status() -> Result<(), St
 #[test]
 fn shared_custom_status_projects_to_the_closed_mcp_envelope() {
     use basilisk_stubs::typeshed::source::{
-        LicenseStatus, Provenance, SourceKind, StatusWarning, Transport, TypeshedStatus,
+        LicenseStatus, SourceKind, StatusWarning, TypeshedStatus,
     };
     use basilisk_stubs::typeshed::warning::{TypeshedWarning, UnpinnedKind};
 
@@ -184,11 +193,8 @@ fn shared_custom_status_projects_to_the_closed_mcp_envelope() {
         active_source: SourceKind::Custom,
         commit: None,
         tree: None,
-        transport: Transport::CustomPath,
         license_status: LicenseStatus::NotSupplied,
         license_reference: None,
-        provenance: Provenance::UserManaged,
-        signed_release: false,
         warnings: StatusWarning::list(&[
             TypeshedWarning::UserManaged,
             TypeshedWarning::Unpinned(UnpinnedKind::CustomFolder),
@@ -200,20 +206,20 @@ fn shared_custom_status_projects_to_the_closed_mcp_envelope() {
         Some("custom")
     );
     assert_eq!(
-        document.get("transport").and_then(Value::as_str),
-        Some("custom-path")
-    );
-    assert_eq!(
-        document.get("signed_release").and_then(Value::as_bool),
-        Some(false)
-    );
-    assert_eq!(
         document.get("license_status").and_then(Value::as_str),
         Some("not supplied")
     );
-    assert_eq!(
-        document.get("provenance").and_then(Value::as_str),
-        Some("user-managed")
+    assert!(
+        document.get("transport").is_none(),
+        "active_source IS the trust story — no transport field may reappear"
+    );
+    assert!(
+        document.get("provenance").is_none(),
+        "active_source IS the trust story — no provenance field may reappear"
+    );
+    assert!(
+        document.get("signed_release").is_none(),
+        "active_source IS the trust story — no signed_release field may reappear"
     );
     assert!(document.pointer("/warnings/0/severity").is_none());
     assert_eq!(

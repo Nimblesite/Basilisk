@@ -95,12 +95,9 @@ fn pyi_mutation_flows_through_no_hand_table() {
         selection: basilisk_stubs::typeshed::source::SourceSelection::Custom {
             path: root.path().to_string_lossy().into_owned(),
         },
-        verify_content: true,
-        use_cache: false,
-        url_template: None,
+        store_path: None,
     };
-    let snapshot = basilisk_stubs::typeshed::runtime::production_manager(request, None)
-        .expect("custom manager")
+    let snapshot = basilisk_stubs::typeshed::runtime::production_manager(request)
         .snapshot()
         .expect("custom generation activates");
     let resolved = resolve_with_snapshot("value = ''.join('wrong')\n", snapshot);

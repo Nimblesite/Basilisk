@@ -224,7 +224,7 @@ mod tests {
     use basilisk_stubs::typeshed::gittree::{FileMode, Oid};
     use basilisk_stubs::typeshed::snapshot::Snapshot;
     use basilisk_stubs::typeshed::source::{
-        LicenseStatus, Provenance, SourceIdentity, SourceKind, Transport, TypeshedStatus,
+        LicenseStatus, SourceIdentity, SourceKind, TypeshedStatus,
     };
 
     use super::{build_context, typeshed_snapshot_identity, CacheContext, CacheOptions};
@@ -238,23 +238,12 @@ mod tests {
             },
             commit: identity.commit(),
             tree: identity.commit(),
-            transport: if matches!(identity, SourceIdentity::Custom { .. }) {
-                Transport::CustomPath
-            } else {
-                Transport::Codeload
-            },
             license_status: if matches!(identity, SourceIdentity::Custom { .. }) {
                 LicenseStatus::NotSupplied
             } else {
                 LicenseStatus::Approved
             },
             license_reference: None,
-            provenance: if matches!(identity, SourceIdentity::Custom { .. }) {
-                Provenance::UserManaged
-            } else {
-                Provenance::GithubTlsAttested
-            },
-            signed_release: false,
             warnings: Vec::new(),
         };
         let archive = Archive::new(vec![

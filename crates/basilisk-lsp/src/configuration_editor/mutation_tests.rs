@@ -11,7 +11,6 @@ use std::path::PathBuf;
 
 use basilisk_config::{
     build_configuration_patch, BasiliskConfig, ConfigDocument, RuleSeverity, TypeshedConfigKey,
-    TypeshedConfigValue,
 };
 
 use super::{
@@ -21,7 +20,7 @@ use super::{
 };
 use crate::configuration_editor::catalog::{descriptors, SelectionError};
 use crate::configuration_editor::model::{
-    EditorMutation, RuleSeverity as WireSeverity, TypeshedSettingKey, TypeshedSettingValue,
+    EditorMutation, RuleSeverity as WireSeverity, TypeshedSettingKey,
 };
 use crate::configuration_editor::snapshot::Inventory;
 
@@ -89,11 +88,11 @@ fn build_update_folds_all_six_mutations_into_entry_updates() {
                 tag: "suppressions".to_owned(),
             },
             EditorMutation::SetTypeshedSetting {
-                key: TypeshedSettingKey::TypeshedCache,
-                value: TypeshedSettingValue::Boolean { value: false },
+                key: TypeshedSettingKey::TypeshedStorePath,
+                value: "stores/typeshed".to_owned(),
             },
             EditorMutation::RemoveTypeshedSetting {
-                key: TypeshedSettingKey::TypeshedUrl,
+                key: TypeshedSettingKey::TypeshedPath,
             },
         ],
         &catalog,
@@ -115,11 +114,14 @@ fn build_update_folds_all_six_mutations_into_entry_updates() {
         update
             .typeshed
             .entries
-            .get(&TypeshedConfigKey::TypeshedCache),
-        Some(&Some(TypeshedConfigValue::Boolean(false)))
+            .get(&TypeshedConfigKey::TypeshedStorePath),
+        Some(&Some("stores/typeshed".to_owned()))
     );
     assert_eq!(
-        update.typeshed.entries.get(&TypeshedConfigKey::TypeshedUrl),
+        update
+            .typeshed
+            .entries
+            .get(&TypeshedConfigKey::TypeshedPath),
         Some(&None)
     );
 }
@@ -216,29 +218,23 @@ fn pep_disable_mutations_are_rejected() {
     );
 }
 
-/// [LSPCFGED-TYPESHED]: Typeshed settings reject wrong scalar types,
-/// malformed pins, and non-HTTPS/multi-placeholder mirrors.
+/// [LSPCFGED-TYPESHED]: the whole surface is three string keys — malformed
+/// pins and blank paths are request errors, and a full SHA passes.
 #[test]
 fn typeshed_setting_values_are_strictly_validated() {
     let catalog = descriptors();
     for mutation in [
         EditorMutation::SetTypeshedSetting {
             key: TypeshedSettingKey::TypeshedCommit,
-            value: TypeshedSettingValue::Text {
-                value: "short".to_owned(),
-            },
+            value: "short".to_owned(),
         },
         EditorMutation::SetTypeshedSetting {
-            key: TypeshedSettingKey::TypeshedUrl,
-            value: TypeshedSettingValue::Text {
-                value: "http://mirror.invalid/{sha}/{sha}.zip".to_owned(),
-            },
+            key: TypeshedSettingKey::TypeshedPath,
+            value: "   ".to_owned(),
         },
         EditorMutation::SetTypeshedSetting {
-            key: TypeshedSettingKey::TypeshedVerify,
-            value: TypeshedSettingValue::Text {
-                value: "false".to_owned(),
-            },
+            key: TypeshedSettingKey::TypeshedStorePath,
+            value: String::new(),
         },
     ] {
         let result = build_update(&[mutation], &catalog);
@@ -249,6 +245,14 @@ fn typeshed_setting_values_are_strictly_validated() {
             Some(serde_json::json!("invalidTypeshedSetting"))
         );
     }
+    assert!(build_update(
+        &[EditorMutation::SetTypeshedSetting {
+            key: TypeshedSettingKey::TypeshedCommit,
+            value: "83c2518a9e6abbda0c44592c3483de459198f887".to_owned(),
+        }],
+        &catalog,
+    )
+    .is_ok());
 }
 
 /// [LSPCFGED-TYPESHED]: custom and exact sources cannot coexist, and custom
@@ -317,10 +321,7 @@ fn resolved_typeshed_changes_cover_the_closed_setting_allowlist() {
     let after = BasiliskConfig {
         typeshed_path: Some(PathBuf::from("custom-typeshed")),
         typeshed_commit: Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
-        typeshed_url: Some("https://mirror.example/{sha}.zip".to_owned()),
-        typeshed_cache_path: Some(PathBuf::from(".typeshed-cache")),
-        typeshed_cache: Some(false),
-        typeshed_verify: Some(false),
+        typeshed_store_path: Some(PathBuf::from("stores/typeshed")),
         ..BasiliskConfig::default()
     };
 
@@ -331,10 +332,7 @@ fn resolved_typeshed_changes_cover_the_closed_setting_allowlist() {
         vec![
             TypeshedSettingKey::TypeshedPath,
             TypeshedSettingKey::TypeshedCommit,
-            TypeshedSettingKey::TypeshedUrl,
-            TypeshedSettingKey::TypeshedCachePath,
-            TypeshedSettingKey::TypeshedCache,
-            TypeshedSettingKey::TypeshedVerify,
+            TypeshedSettingKey::TypeshedStorePath,
         ]
     );
     assert!(changes.iter().all(|change| change.before.is_none()));

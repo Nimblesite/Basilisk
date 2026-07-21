@@ -91,13 +91,13 @@ fn stdio_server_lists_and_returns_ordered_structured_status(
         status.get("license_status").and_then(Value::as_str),
         Some("not supplied")
     );
-    assert_eq!(
-        status.get("provenance").and_then(Value::as_str),
-        Some("user-managed")
+    assert!(
+        status.get("provenance").is_none(),
+        "active_source IS the trust story — no provenance field may reappear"
     );
-    assert_eq!(
-        status.get("signed_release").and_then(Value::as_bool),
-        Some(false)
+    assert!(
+        status.get("signed_release").is_none(),
+        "active_source IS the trust story — no signed_release field may reappear"
     );
     let warnings = status
         .get("warnings")

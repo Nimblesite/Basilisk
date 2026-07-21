@@ -377,7 +377,10 @@ fn wrong_shaped_mutation_targets_fail_to_patch() {
 #[test]
 fn typeshed_settings_patch_atomically_and_preserve_project_content() {
     let root = temp_root("typeshed_patch");
-    let document = document_for(&root, "# keep\n[project]\nname = \"demo\"\n\n[tool.basilisk]\n");
+    let document = document_for(
+        &root,
+        "# keep\n[project]\nname = \"demo\"\n\n[tool.basilisk]\n",
+    );
     let update = ConfigurationUpdate {
         rules: set_rule("BSK-0001", RuleSeverity::Warning),
         typeshed: TypeshedConfigUpdate {

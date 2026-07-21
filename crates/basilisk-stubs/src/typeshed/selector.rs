@@ -105,9 +105,7 @@ pub fn select_snapshot(
 ) -> Result<Snapshot, SelectionError> {
     match &request.selection {
         SourceSelection::Custom { path } => select_custom(path, backend),
-        SourceSelection::Pinned { commit, explicit } => {
-            select_pinned(*commit, *explicit, backend)
-        }
+        SourceSelection::Pinned { commit, explicit } => select_pinned(*commit, *explicit, backend),
     }
 }
 

@@ -396,6 +396,7 @@ _lint_rust:
 	cargo check --workspace --all-targets && \
 	cargo clippy --workspace --all-targets -- -D warnings && \
 	cargo audit && \
+	bash scripts/check-dependency-shape.sh && \
 	echo -e '\033[0;32m✓ Rust lint passed\033[0m'
 
 _lint_vsix:

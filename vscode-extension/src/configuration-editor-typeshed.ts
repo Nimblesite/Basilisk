@@ -50,7 +50,7 @@ export async function pickTypeshedFolder(
   const folder = selected?.[0];
   if (folder === undefined) { return undefined; }
   const mutations: Extract<ConfigurationEditorIntent, { type: "preview" }>["mutations"] = [{
-    kind: "SetTypeshedSetting", key: { kind: key }, value: { kind: "Text", value: folder.fsPath },
+    kind: "SetTypeshedSetting", key: { kind: key }, value: folder.fsPath,
   }];
   if (key === "TypeshedPath") {
     mutations.push({ kind: "RemoveTypeshedSetting", key: { kind: "TypeshedCommit" } });

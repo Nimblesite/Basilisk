@@ -198,8 +198,8 @@ impl GithubApi for GithubClient {
         let url = format!("{API_ROOT}/commits/{reference}");
         let response: CommitResponse = self.get_json(&url)?;
         let commit = Oid::from_hex(&response.sha).map_err(|_error| TransportError::Metadata)?;
-        let tree = Oid::from_hex(&response.commit.tree.sha)
-            .map_err(|_error| TransportError::Metadata)?;
+        let tree =
+            Oid::from_hex(&response.commit.tree.sha).map_err(|_error| TransportError::Metadata)?;
         let payload = response
             .commit
             .verification
@@ -507,8 +507,8 @@ mod tests {
     /// content verification would then bind the archive to an incomplete tree
     /// instead of rejecting it outright.
     #[test]
-    fn tree_listings_fail_closed_when_truncated_or_rooted_elsewhere(
-    ) -> Result<(), TransportError> {
+    fn tree_listings_fail_closed_when_truncated_or_rooted_elsewhere() -> Result<(), TransportError>
+    {
         let root = Oid::from_hex(TREE_SHA).map_err(|_error| TransportError::Metadata)?;
         let response = |sha: Option<&str>, truncated: bool| TreeResponse {
             sha: sha.map(str::to_owned),
@@ -562,8 +562,8 @@ mod tests {
             ("commit", "160000", FileMode::Submodule),
         ];
         for (kind, mode, expected) in cases {
-            let converted =
-                convert_tree_entry(api_entry(kind, mode, SHA)).ok_or(TransportError::Metadata)??;
+            let converted = convert_tree_entry(api_entry(kind, mode, SHA))
+                .ok_or(TransportError::Metadata)??;
             assert_eq!(converted.path, "stdlib/example.pyi");
             assert_eq!(converted.oid, expected_oid);
             assert_eq!(converted.mode, expected);

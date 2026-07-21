@@ -1,4 +1,4 @@
-//! Implements [STUBRES-TYPESHED-ACQUIRE] activation gates. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE
+//! Implements [STUBRES-TYPESHED-DOWNLOAD] activation gates. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-DOWNLOAD
 //!
 //! The four activation gates.
 //!
@@ -250,7 +250,8 @@ pub fn run_activation(
     safety_gate(&archive, &config.limits).map_err(GateError::Safety)?;
     shape_gate(&archive).map_err(GateError::Shape)?;
     license_gate(&archive, &config.approved_license).map_err(GateError::License)?;
-    let root_tree = content_gate(&archive, &config.expected_root_tree).map_err(GateError::Content)?;
+    let root_tree =
+        content_gate(&archive, &config.expected_root_tree).map_err(GateError::Content)?;
     Ok(Activation {
         vfs: ArchiveVfs::new(identity, archive),
         root_tree,

@@ -17,8 +17,8 @@ use super::gittree::Oid;
 use super::manager::TypeshedManager;
 use super::selector::{BackendError, SourceBackend};
 use super::snapshot::Snapshot;
-use super::store::{self, StoreError};
 use super::source::TypeshedRequest;
+use super::store::{self, StoreError};
 
 /// Production policy backend shared by CLI/LSP/MCP managers.
 #[derive(Debug)]

@@ -84,11 +84,20 @@ pub(crate) async fn resolve_workspace(
     })
     .await
     .unwrap_or_else(|_join_error| {
-        Err(TypeshedFailure::resolution("Typeshed resolution task failed"))
+        Err(TypeshedFailure::resolution(
+            "Typeshed resolution task failed",
+        ))
     });
     match outcome {
         Ok(snapshot) => TypeshedGeneration::Ready(snapshot),
-        Err(failure) => TypeshedGeneration::NoSource { failure },
+        Err(failure) => {
+            tracing::warn!(
+                code = failure.rpc_code(),
+                reason = failure.reason(),
+                "Typeshed source is unavailable; the root resolves to NoSource"
+            );
+            TypeshedGeneration::NoSource { failure }
+        }
     }
 }
 

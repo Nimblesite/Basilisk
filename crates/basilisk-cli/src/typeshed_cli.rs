@@ -58,7 +58,10 @@ fn download_exact(
     progress: &dyn Fn(DownloadPhase),
 ) -> u8 {
     let Ok(commit) = basilisk_stubs::typeshed::gittree::Oid::from_hex(sha) else {
-        error!(len = sha.len(), "--commit must be a full 40-character hex SHA");
+        error!(
+            len = sha.len(),
+            "--commit must be a full 40-character hex SHA"
+        );
         return 2;
     };
     println!("Downloading typeshed {commit} into the verified store…");
@@ -146,17 +149,14 @@ mod tests {
     /// editor transaction the configuration editor uses — structure
     /// preserved, full SHA required.
     #[test]
-    fn write_pin_round_trips_through_the_validated_editor(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn write_pin_round_trips_through_the_validated_editor() -> Result<(), Box<dyn std::error::Error>>
+    {
         let dir = tempfile::tempdir()?;
         std::fs::write(
             dir.path().join("pyproject.toml"),
             "# keep\n[project]\nname = \"demo\"\n\n[tool.basilisk]\n",
         )?;
-        write_pin(
-            dir.path(),
-            "83c2518a9e6abbda0c44592c3483de459198f887",
-        )?;
+        write_pin(dir.path(), "83c2518a9e6abbda0c44592c3483de459198f887")?;
         let written = std::fs::read_to_string(dir.path().join("pyproject.toml"))?;
         assert!(written.contains("# keep"));
         assert!(

@@ -326,6 +326,7 @@ dependencies = [
  "basilisk-resolver",
  "basilisk-stubs",
  "basilisk-test-utils",
+ "basilisk-typeshed-fetch",
  "basilisk-uv",
  "dashmap 6.2.1",
  "futures-util",

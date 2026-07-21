@@ -259,8 +259,7 @@ export class ScenarioHost {
   /** The writer's closed allowlist, in the same shape the TOML holds. */
   private write(mutation: EditorMutation): void {
     if (mutation.kind !== "SetTypeshedSetting" && mutation.kind !== "RemoveTypeshedSetting") { return; }
-    const value = mutation.kind === "SetTypeshedSetting" ? mutation.value : undefined;
-    const text = value?.kind === "Text" ? value.value : undefined;
+    const text = mutation.kind === "SetTypeshedSetting" ? mutation.value : undefined;
     const fields: Record<string, keyof HostConfig> = {
       TypeshedCommit: "commit",
       TypeshedPath: "path",

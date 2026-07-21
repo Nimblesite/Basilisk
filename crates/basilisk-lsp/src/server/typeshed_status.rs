@@ -59,9 +59,7 @@ impl TypeshedFailure {
             // Custom sources provide user-managed terms, so they never project
             // the official Typeshed license as changed.
             SelectionError::Custom(_) => TypeshedFailureKind::CustomUnavailable,
-            SelectionError::NoSource { reason, .. }
-                if *reason == BackendError::LicenseChanged =>
-            {
+            SelectionError::NoSource { reason, .. } if *reason == BackendError::LicenseChanged => {
                 TypeshedFailureKind::LicenseChanged
             }
             SelectionError::NoSource { .. } => TypeshedFailureKind::NoSource,

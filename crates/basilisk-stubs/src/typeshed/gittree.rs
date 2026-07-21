@@ -1,4 +1,4 @@
-//! Implements [STUBRES-TYPESHED-ACQUIRE] Content gate. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE
+//! Implements [STUBRES-TYPESHED-PIN] content addressing. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-PIN
 //!
 //! Git object-ID reconstruction.
 //!
@@ -217,7 +217,8 @@ pub fn commit_root_tree(content: &[u8]) -> Result<Oid, CommitParseError> {
     if terminator.first() != Some(&b'\n') {
         return Err(CommitParseError::MissingTreeHeader);
     }
-    let sha = std::str::from_utf8(sha_bytes).map_err(|_error| CommitParseError::MissingTreeHeader)?;
+    let sha =
+        std::str::from_utf8(sha_bytes).map_err(|_error| CommitParseError::MissingTreeHeader)?;
     Oid::from_hex(sha).map_err(CommitParseError::BadTreeSha)
 }
 

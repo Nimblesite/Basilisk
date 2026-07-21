@@ -272,7 +272,7 @@ suite("Configuration editor — typed mutation routing", () => {
       { kind: "RemoveTag", tag: "basilisk" },
     ];
     const typeshedMutations: EditorMutation[] = [
-      { kind: "SetTypeshedSetting", key: { kind: "TypeshedStorePath" }, value: { kind: "Text", value: "/stores/typeshed" } },
+      { kind: "SetTypeshedSetting", key: { kind: "TypeshedStorePath" }, value: "/stores/typeshed" },
       { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedCommit" } },
     ];
     for (const mutation of [...ruleMutations, ...typeshedMutations]) {

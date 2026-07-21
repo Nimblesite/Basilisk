@@ -65,9 +65,7 @@ fn assemble(payload: &str, signature: Option<&str>) -> Result<Vec<u8>, CommitErr
     };
     // Headers end at the first blank line; the signature header goes last,
     // directly before it, exactly where git puts it.
-    let boundary = payload
-        .find("\n\n")
-        .ok_or(CommitError::MalformedPayload)?;
+    let boundary = payload.find("\n\n").ok_or(CommitError::MalformedPayload)?;
     let mut raw = String::with_capacity(payload.len() + signature.len() + 16);
     raw.push_str(&payload[..=boundary]);
     raw.push_str("gpgsig ");

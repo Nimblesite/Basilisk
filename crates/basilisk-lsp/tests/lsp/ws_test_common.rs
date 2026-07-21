@@ -153,6 +153,19 @@ python-version = \"3.12\"\n\
 
         let response = self.recv().await.ok_or("no response to initialize")?;
 
+        // Typeshed resolution is a local read completed during `initialize`
+        // ([STUBRES-TYPESHED-OFFLINE]): the response payload itself carries
+        // each root's terminal status, so there is no startup notification to
+        // await — and nothing intermediate a client could ever render.
+        if !response.contains("typeshedStatuses")
+            || !response.contains("\"lifecycle\":{\"kind\":\"Ready\"}")
+        {
+            return Err(format!(
+                "initialize payload must carry a terminal Ready Typeshed status: {response}"
+            )
+            .into());
+        }
+
         self.send_json(&serde_json::json!({
             "jsonrpc": "2.0",
             "method": "initialized",
@@ -160,21 +173,7 @@ python-version = \"3.12\"\n\
         }))
         .await?;
 
-        // `initialized` acquires and gates Typeshed before analysis. Await the
-        // typed Ready notification so subsequent document opens can never
-        // observe the deliberately empty blocked-root publication.
-        for _ in 0..20 {
-            let message = self
-                .recv()
-                .await
-                .ok_or("no terminal Typeshed status after initialized")?;
-            if message.contains("\"method\":\"basilisk/typeshedStatusChanged\"")
-                && message.contains("\"lifecycle\":{\"kind\":\"Ready\"}")
-            {
-                return Ok(response);
-            }
-        }
-        Err("Typeshed did not become ready during initialization".into())
+        Ok(response)
     }
 
     /// Send `textDocument/didOpen`.

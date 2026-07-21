@@ -35,10 +35,10 @@ Inputs that can affect the diagnostics for `basilisk check <file>`:
 6. **Standard-library typeshed identity** — the exact
    [`python/typeshed`](https://github.com/python/typeshed) commit SHA, custom-tree
    content identity, or bundled-ZIP identity
-   ([`STUBRES-TYPESHED-ACQUIRE`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE),
+   ([`STUBRES-TYPESHED-PIN`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-PIN),
    [`STUBRES-TYPESHED-BASELINE`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-BASELINE)).
-   The selected identity moves **independently of the binary**: a fresh unpinned
-   acquisition or a `typeshed-commit` change swaps the stdlib `.pyi` bodies under a fixed
+   The selected identity moves **independently of the binary**: a
+   `typeshed-commit` change swaps the stdlib `.pyi` bodies under a fixed
    `CARGO_PKG_VERSION`, so keying only on the checker version would serve a stale
    entry across a typeshed update. The fingerprint MUST therefore key on the
    exact selected source identity as well

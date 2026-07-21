@@ -1,4 +1,4 @@
-//! Implements [STUBRES-TYPESHED-ACQUIRE] gate errors. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE
+//! Implements [STUBRES-TYPESHED-DOWNLOAD] gate errors. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-DOWNLOAD
 //!
 //! The rejection taxonomy for the four activation gates.
 

@@ -171,14 +171,20 @@ async fn test_ws_initialize_advertises_typeshed_status() -> TestResult<()> {
         .get("status")
         .ok_or("missing typed Typeshed state in initialize response")?;
 
+    // [LSPCFGED-TYPESHED]: resolution is a local read completed during
+    // `initialize`, so the payload carries the TERMINAL generation — there is
+    // no acquiring state for any client to render as a blocking overlay.
     assert_eq!(
         status
             .pointer("/lifecycle/kind")
             .and_then(serde_json::Value::as_str),
-        Some("Acquiring"),
-        "initialize must expose the pre-analysis Acquiring generation: {status}"
+        Some("Ready"),
+        "initialize must expose the terminal resolved generation: {status}"
     );
-    assert!(status.get("activeSource").is_none());
+    assert!(
+        status.get("activeSource").is_some(),
+        "a Ready status names its active source: {status}"
+    );
     assert!(status
         .get("warnings")
         .is_some_and(serde_json::Value::is_array));

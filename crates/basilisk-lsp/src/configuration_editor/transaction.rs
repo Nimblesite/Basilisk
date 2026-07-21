@@ -35,7 +35,7 @@ pub(crate) struct ConfigurationRefreshHandles {
     pub(crate) workspace_roots: Arc<tokio::sync::RwLock<Vec<std::path::PathBuf>>>,
     /// Explicit interpreter supplied by the editor initialization options.
     pub(crate) python_interpreter: Arc<tokio::sync::RwLock<Option<std::path::PathBuf>>>,
-    /// Root-keyed active/acquiring/blocked Typeshed generations.
+    /// Root-keyed terminal (Ready/NoSource) Typeshed generations.
     pub(crate) typeshed_generations:
         Arc<tokio::sync::RwLock<crate::server::typeshed_status::TypeshedGenerations>>,
     /// Whether every workspace root has completed its first ready scan.
@@ -166,9 +166,12 @@ pub(super) async fn apply_prepared_patch(
     reason: &str,
 ) -> LspResult<ConfigDocument> {
     let edit = replacement_edit(document, patch, document_version)?;
-    let staged =
-        super::typeshed_resolution::stage_configuration_change(root, &document.config, &patch.config)
-            .await;
+    let staged = super::typeshed_resolution::stage_configuration_change(
+        root,
+        &document.config,
+        &patch.config,
+    )
+    .await;
     let response = server.client.apply_edit(edit).await.map_err(|error| {
         rpc_error_data(
             "clientRejectedEdit",

@@ -106,8 +106,8 @@ fn cli_activation_uses_custom_snapshot_and_target() -> Result<(), Box<dyn std::e
 /// production activation path itself surfaces the terminal `NO SOURCE`
 /// failure and the checked project's config reaches it verbatim.
 #[test]
-fn a_missing_pin_tanks_the_check_instead_of_downloading(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn a_missing_pin_tanks_the_check_instead_of_downloading() -> Result<(), Box<dyn std::error::Error>>
+{
     let project = unique_project_dir("basilisk_cli_typeshed_no_source");
     std::fs::create_dir_all(&project)?;
     let store = project.join("empty-store");

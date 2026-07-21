@@ -13,6 +13,7 @@ basilisk-checker.workspace  = true
 basilisk-common.workspace   = true
 basilisk-uv.workspace       = true
 basilisk-stubs.workspace    = true
+basilisk-typeshed-fetch.workspace = true
 basilisk-profiler-protocol.workspace = true
 salsa.workspace   = true
 
