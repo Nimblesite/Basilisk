@@ -84,18 +84,22 @@ while a config table may grade one of them down to `warning`/`info`, none may
 switch it off. `analyze` reports the non-`pep` house rules, which stay silent
 until a table selects them. Only `analyze` emits `BSK-` diagnostics.
 
-## Standard-library types, online or offline
+## Standard-library types, always offline
 
-Basilisk resolves the standard library from [typeshed](https://github.com/python/typeshed).
-By default it verifies `python/typeshed@main` over HTTPS once per run, gates and
-caches the archive for up to 24 hours, and reports the source as unpinned. With no
-network — or on any download failure — it falls back to the complete typeshed
-`stdlib/` snapshot compiled into the binary, so stdlib types still work offline.
+Basilisk resolves the standard library from [typeshed](https://github.com/python/typeshed),
+and checking **never downloads anything**. Out of the box it uses the complete
+typeshed `stdlib/` snapshot compiled into the binary, reporting the source as
+unpinned — so stdlib types work on a plane, behind a firewall, or in an
+air-gapped CI runner, with no configuration.
 
 Pin an exact commit with `typeshed-commit = "<40-char sha>"` under
-`[tool.basilisk]`; its cache is re-hashed on every reuse and remains until eviction
-or caching is disabled. The pin fails closed rather than substituting another
-commit. Alternatively, point `typeshed-path` at your own typeshed tree. Full options:
+`[tool.basilisk]`. A pin does exactly one thing: it verifies, offline, that the
+typeshed tree in the local store hashes to that commit. If the commit is not on
+this machine the run fails hard with `NO SOURCE` rather than substituting
+another source — bring it down first with `basilisk typeshed download`
+(no `--commit` downloads the latest and writes the pin for you), or use the
+editor's **Download latest** button. Alternatively, point `typeshed-path` at
+your own typeshed tree. Full options:
 [configuration guide](https://www.basilisk-python.dev/docs/configuration/).
 
 

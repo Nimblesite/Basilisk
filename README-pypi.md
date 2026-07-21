@@ -44,13 +44,14 @@ basilisk check path/to/your_code.py --output json --color never
 
 ## Standard-library types
 
-Standard-library types come from [typeshed](https://github.com/python/typeshed).
-By default Basilisk verifies `python/typeshed@main` over HTTPS once per run and
-caches the gated archive for 24 hours; with no network it falls back to the
-complete typeshed `stdlib/` snapshot compiled into the binary, so offline and
-air-gapped runs still get stdlib types. Pin an exact commit with
-`typeshed-commit` under `[tool.basilisk]` in `pyproject.toml`, or skip the cache
-for a single run with `--no-typeshed-cache`.
+Standard-library types come from [typeshed](https://github.com/python/typeshed),
+and checking never downloads anything. By default Basilisk uses the complete
+typeshed `stdlib/` snapshot compiled into the binary, so offline and air-gapped
+runs get stdlib types with no configuration. Pin an exact commit with
+`typeshed-commit` under `[tool.basilisk]` in `pyproject.toml`; the pin is
+verified offline against the local store, and a commit that is not on the
+machine fails the run with `NO SOURCE` instead of silently substituting
+another. Download one explicitly with `basilisk typeshed download`.
 
 ## Acknowledgments
 
