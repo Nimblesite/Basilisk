@@ -1,20 +1,15 @@
-// Implements [LSPCFGED-TYPESHED] standard-library source controls.
+// Implements [LSPCFGED-TYPESHED] / [LSPCFGED-TYPESHED-DOWNLOAD] standard-library source controls.
 /** Typeshed fragment of the dependency-free webview runtime. */
 
 export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
-    // The three mutually exclusive sources. The server states which one is
-    // ACTIVE (carrying the value that defines it) and whether a commit can be
-    // pinned; the copy below is client presentation, not server state.
+    // The two mutually exclusive sources and no third ([LSPCFGED-TYPESHED]).
+    // The server states which one is ACTIVE (carrying the value that defines
+    // it); the copy below is client presentation, not server state.
     const SOURCE_CHOICES = [
-      {
-        mode: 'Latest',
-        label: 'Latest',
-        description: 'Track the newest python/typeshed commit on every acquisition.',
-      },
       {
         mode: 'ExactCommit',
         label: 'Pinned commit',
-        description: 'Freeze the active commit so every machine resolves the identical standard library.',
+        description: 'Freeze one python/typeshed commit so every machine resolves the identical standard library.',
       },
       {
         mode: 'CustomFolder',
@@ -24,35 +19,42 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
     ];
     const COMMIT_PATTERN = /^[0-9a-f]{40}$/i;
     let advancedOpen = false;
-    const ACQUIRING_HINT = 'A standard library is being acquired; the source is locked until it settles.';
+    // Which download button is waiting on the server, so the running
+    // download's spinner lands on the button that started it and on nothing
+    // else ([LSPCFGED-TYPESHED-DOWNLOAD]).
+    let pendingDownload;
 
     function typeshedState() { return snapshot.typeshed; }
-    function typeshedSourceMode() { return kind(typeshedState().source, 'Latest'); }
-    function typeshedAcquiring() {
-      return kind(typeshedState().status.lifecycle, 'Ready') === 'Acquiring';
-    }
+    function typeshedSourceMode() { return kind(typeshedState().source, 'ExactCommit'); }
+    function typeshedLifecycle() { return kind(typeshedState().status.lifecycle, 'Ready'); }
+    function typeshedDownloading() { return typeshedLifecycle() === 'Downloading'; }
     function shortCommit(commit) { return commit ? commit.slice(0, 12) : ''; }
-    // Why a source cannot be chosen right now, or '' when it can. Pinning
-    // writes the ACTIVE commit, so it needs one to exist.
-    function sourceUnavailable(mode) {
-      if (typeshedAcquiring()) return ACQUIRING_HINT;
-      if (mode !== 'ExactCommit' || typeshedSourceMode() === 'ExactCommit') return '';
-      if (typeshedState().pinnableCommit) return '';
-      return typeshedSourceMode() === 'CustomFolder'
-        ? 'A custom folder has no upstream commit to pin. Choose Latest first.'
-        : 'Available once a downloaded standard library is active.';
-    }
+    // The active source is the whole trust story — there are no separate
+    // transport or provenance rows ([LSPCFGED-TYPESHED-SERVICE-INFO]).
     function statusRows() {
       const status = typeshedState().status;
-      const lifecycle = kind(status.lifecycle, 'Acquiring');
       const commit = status.commitIdentity;
       return [
-        ['State', status.blockedReason ? lifecycle + ' — ' + status.blockedReason : lifecycle],
-        ['Active source', kind(status.activeSource, 'Acquiring') + (commit ? ' · ' + shortCommit(commit) : '')],
-        ['Delivery', kind(status.transport, 'Pending') + ' · ' + kind(status.provenance, 'Pending')
-          + (status.signedRelease ? ' · signed release' : '')],
-        ['License', kind(status.licenseStatus, 'Acquiring')],
+        ['State', typeshedLifecycle()],
+        ['Active source', kind(status.activeSource, 'Pending') + (commit ? ' · ' + shortCommit(commit) : '')],
+        ['License', kind(status.licenseStatus, 'Unavailable')],
       ];
+    }
+    // A missing source is a persistent row IN the panel carrying its own fix —
+    // never an overlay, never a lock screen ([LSPCFGED-TYPESHED-DOWNLOAD]).
+    // The row survives while the fix itself downloads, so the busy button
+    // keeps its home until the source settles.
+    function noSourceRow() {
+      const row = document.createElement('div');
+      row.className = 'typeshed-no-source';
+      row.setAttribute('role', 'alert');
+      row.append(
+        textNode('strong', 'NO SOURCE'),
+        textNode('span', typeshedState().status.noSourceReason
+          || 'The pinned commit is not on this machine; analysis is paused until it is downloaded.'),
+        downloadButton('DownloadPinned', 'Download pinned'),
+      );
+      return row;
     }
     function renderTypeshedStatus() {
       const target = byId('typeshed-status');
@@ -65,7 +67,12 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
         row.dataset.severity = kind(warning.severity, 'Advisory').toLowerCase();
         target.append(row);
       });
+      if (typeshedLifecycle() === 'NoSource' || (typeshedDownloading() && pendingDownload === 'DownloadPinned')) {
+        target.append(noSourceRow());
+      }
     }
+    // Both sources stay choosable at all times: reading and writing
+    // configuration never waits on the network ([LSPCFGED-TYPESHED-DOWNLOAD]).
     function sourceChoice(choice) {
       const label = document.createElement('label');
       label.className = 'source-choice';
@@ -75,10 +82,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
       input.value = choice.mode;
       input.dataset.typeshedSource = choice.mode;
       input.checked = typeshedSourceMode() === choice.mode;
-      const unavailable = sourceUnavailable(choice.mode);
-      input.disabled = unavailable !== '' && !input.checked;
-      label.append(input, textNode('span', choice.label));
-      label.append(textNode('small', input.disabled ? unavailable : choice.description));
+      label.append(input, textNode('span', choice.label), textNode('small', choice.description));
       return label;
     }
     function renderSourceChoices(target) {
@@ -94,9 +98,9 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
     // other source's field exists in the DOM ([LSPCFGED-TYPESHED]).
     function renderSourceValue(target) {
       const source = typeshedState().source;
-      const mode = kind(source, 'Latest');
-      if (mode === 'ExactCommit') { target.append(commitField(source.commit)); return; }
-      if (mode === 'CustomFolder') { target.append(folderField('TypeshedPath', 'Folder', source.path)); }
+      const mode = kind(source, 'ExactCommit');
+      if (mode === 'CustomFolder') { target.append(folderField('TypeshedPath', 'Folder', source.path)); return; }
+      target.append(commitField(source.commit));
     }
     function commitField(commit) {
       const field = document.createElement('label');
@@ -105,7 +109,6 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
       const input = document.createElement('input');
       input.type = 'text';
       input.value = commit || '';
-      input.disabled = typeshedAcquiring();
       input.dataset.typeshedCommit = 'TypeshedCommit';
       input.autocomplete = 'off';
       input.spellcheck = false;
@@ -129,24 +132,15 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
       input.dataset.typeshedPath = key;
       const choose = textNode('button', value ? 'Change…' : 'Choose folder…', 'secondary');
       choose.type = 'button';
-      choose.disabled = typeshedAcquiring();
       choose.dataset.pickTypeshedFolder = key;
       picker.append(input, choose);
       field.append(picker);
       return field;
     }
-    function toggleField(key, label, description, checked) {
-      const field = document.createElement('label');
-      field.className = 'typeshed-toggle';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.checked = checked;
-      input.disabled = typeshedAcquiring();
-      input.dataset.typeshedBoolean = key;
-      field.append(input, textNode('span', label), textNode('small', description));
-      return field;
-    }
-    function advancedDownloads(downloads) {
+    // A custom folder downloads nothing, so it has no store folder and the
+    // Advanced disclosure does not exist ([LSPCFGED-TYPESHED]).
+    function renderStore(target) {
+      if (typeshedSourceMode() !== 'ExactCommit') return;
       const details = document.createElement('details');
       details.className = 'typeshed-advanced';
       // Every write re-renders from the fresh snapshot, so the disclosure has
@@ -156,31 +150,8 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
       const summary = document.createElement('summary');
       summary.textContent = 'Advanced';
       details.append(summary);
-      const url = document.createElement('label');
-      url.className = 'typeshed-field';
-      url.append(textNode('span', 'Archive mirror'), textNode('small', 'HTTPS template containing exactly one {sha}.'));
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = downloads.archiveUrl || '';
-      input.placeholder = 'https://example.test/{sha}.zip';
-      input.disabled = typeshedAcquiring();
-      input.dataset.typeshedText = 'TypeshedUrl';
-      input.autocomplete = 'off';
-      input.spellcheck = false;
-      url.append(input);
-      details.append(url, folderField('TypeshedCachePath', 'Cache folder', downloads.cacheFolder));
-      return details;
-    }
-    // A user-managed folder downloads nothing, so the server sends no download
-    // policy and none of these controls exists.
-    function renderDownloads(target) {
-      const downloads = typeshedState().downloads;
-      if (!downloads) return;
-      target.append(
-        toggleField('TypeshedCache', 'Reuse downloads', 'Off re-downloads, validates, and discards.', downloads.reuseDownloads),
-        toggleField('TypeshedVerify', 'Verify content', 'Attest content to the selected Git tree.', downloads.verifyContent),
-        advancedDownloads(downloads),
-      );
+      details.append(folderField('TypeshedStorePath', 'Store folder', typeshedState().storeFolder));
+      target.append(details);
     }
     function typeshedActionButton(action, label, enabled) {
       const button = textNode('button', label, 'secondary');
@@ -189,34 +160,82 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
       button.dataset.typeshedAction = action;
       return button;
     }
+    function markBusy(button) {
+      button.classList.add('busy');
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+    }
+    // A running download shows progress ON the button that started it; a
+    // second download cannot start, and nothing else is blocked
+    // ([LSPCFGED-TYPESHED-DOWNLOAD]).
+    function downloadButton(action, label) {
+      const button = typeshedActionButton(action, label, !typeshedDownloading());
+      if (typeshedDownloading() && (pendingDownload || 'DownloadLatest') === action) markBusy(button);
+      return button;
+    }
+    /** The spinner must appear at once — before the server's Downloading state lands. */
+    function typeshedActionStarted(action, button) {
+      if (action !== 'DownloadLatest' && action !== 'DownloadPinned') return;
+      pendingDownload = action;
+      markBusy(button);
+    }
+    // A Typeshed write re-renders this section from the fresh snapshot; the
+    // rebuild must not eat the user's focus or caret ([LSPCFGED-TYPESHED]).
+    function typeshedFocusSelector(active) {
+      if (!active || !active.dataset) return undefined;
+      if (active.dataset.typeshedSource) return '[data-typeshed-source="' + active.dataset.typeshedSource + '"]';
+      if (active.dataset.typeshedCommit) return '[data-typeshed-commit]';
+      if (active.dataset.pickTypeshedFolder) return '[data-pick-typeshed-folder="' + active.dataset.pickTypeshedFolder + '"]';
+      if (active.dataset.typeshedAction) return '[data-typeshed-action="' + active.dataset.typeshedAction + '"]';
+      return undefined;
+    }
+    function saveTypeshedFocus() {
+      const active = document.activeElement;
+      const selector = typeshedFocusSelector(active);
+      if (!selector) return undefined;
+      const caret = typeof active.selectionStart === 'number';
+      return {
+        selector,
+        start: caret ? active.selectionStart : undefined,
+        end: caret ? active.selectionEnd : undefined,
+      };
+    }
+    function restoreTypeshedFocus(saved) {
+      if (!saved) return;
+      const control = document.querySelector(saved.selector);
+      if (!control) return;
+      control.focus({ preventScroll: true });
+      if (saved.start !== undefined && typeof control.setSelectionRange === 'function') {
+        control.setSelectionRange(saved.start, saved.end === undefined ? saved.start : saved.end);
+      }
+    }
     function renderTypeshedControls() {
+      if (!typeshedDownloading()) pendingDownload = undefined;
+      const focus = saveTypeshedFocus();
       renderTypeshedStatus();
       const controls = byId('typeshed-controls');
       clear(controls);
       renderSourceChoices(controls);
       renderSourceValue(controls);
-      renderDownloads(controls);
+      renderStore(controls);
       const actions = byId('typeshed-actions');
       clear(actions);
       actions.append(
-        typeshedActionButton('AcquireFresh', 'Acquire fresh', !typeshedAcquiring()),
+        downloadButton('DownloadLatest', 'Download latest'),
         typeshedActionButton('ViewLicense', 'View license', typeshedState().licenseAvailable),
       );
+      restoreTypeshedFocus(focus);
     }
-    // Choosing a source is one atomic transition, so no combination of source
-    // values can ever be written: Latest CLEARS both pins, pinning writes the
-    // active commit and clears any folder, and a folder clears the pin.
+    // Choosing a source is one atomic transition ([LSPCFGED-TYPESHED]):
+    // pinning clears any folder and a folder clears the pin, so no
+    // combination of source values can ever be written. Nothing locks while
+    // the mutation round-trips — every control re-renders from the snapshot
+    // the write returns.
     function chooseTypeshedSource(mode) {
-      // Acquisition is one atomic source transition: nothing may race it.
-      if (typeshedAcquiring() || mode === typeshedSourceMode()) return;
-      if (mode === 'Latest') {
-        postPreview([typeshedRemove('TypeshedCommit'), typeshedRemove('TypeshedPath')]);
-        announce('Following the latest python/typeshed commit');
-        return;
-      }
+      if (mode === typeshedSourceMode()) return;
       if (mode === 'ExactCommit') {
-        vscode.postMessage({ type: 'typeshedAction', action: 'PinCurrent' });
-        announce('Pinning the active commit');
+        postPreview([typeshedRemove('TypeshedPath')]);
+        announce('Using the pinned standard-library commit');
         return;
       }
       vscode.postMessage({ type: 'pickTypeshedFolder', key: 'TypeshedPath' });
@@ -243,17 +262,6 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
     function typeshedChanged(target) {
       if (target.dataset.typeshedSource) { chooseTypeshedSource(target.value); return true; }
       if (target.dataset.typeshedCommit) { commitEdited(target); return true; }
-      if (target.dataset.typeshedBoolean) {
-        postPreview([typeshedSetBoolean(target.dataset.typeshedBoolean, target.checked)]);
-        return true;
-      }
-      if (target.dataset.typeshedText) {
-        const value = target.value.trim();
-        postPreview(value === ''
-          ? [typeshedRemove(target.dataset.typeshedText)]
-          : [typeshedSetText(target.dataset.typeshedText, value)]);
-        return true;
-      }
       return false;
     }
 `;

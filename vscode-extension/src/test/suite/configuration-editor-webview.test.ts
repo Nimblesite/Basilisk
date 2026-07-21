@@ -26,23 +26,26 @@ suite("Configuration editor — untrusted intent decoder", () => {
     assert.strictEqual(decodeConfigurationEditorIntent({
       type: "preview", mutations: [{ kind: "RemoveTag", tag: "basilisk" }],
     })?.type, "preview");
-    for (const key of ["TypeshedPath", "TypeshedCommit", "TypeshedUrl", "TypeshedCachePath"]) {
+    // [LSPCFGED-TYPESHED]: the three surviving keys are all text-typed.
+    for (const key of ["TypeshedPath", "TypeshedCommit", "TypeshedStorePath"]) {
       assert.strictEqual(decodeConfigurationEditorIntent({
         type: "preview",
         mutations: [{ kind: "SetTypeshedSetting", key: { kind: key }, value: { kind: "Text", value: "configured" } }],
       })?.type, "preview");
     }
-    for (const key of ["TypeshedCache", "TypeshedVerify"]) {
-      assert.strictEqual(decodeConfigurationEditorIntent({
-        type: "preview",
-        mutations: [{ kind: "SetTypeshedSetting", key: { kind: key }, value: { kind: "Boolean", value: false } }],
-      })?.type, "preview");
-    }
     assert.strictEqual(decodeConfigurationEditorIntent({
-      type: "preview", mutations: [{ kind: "RemoveTypeshedSetting", key: { kind: "TypeshedUrl" } }],
+      type: "preview", mutations: [{ kind: "RemoveTypeshedSetting", key: { kind: "TypeshedStorePath" } }],
     })?.type, "preview");
-    assert.strictEqual(decodeConfigurationEditorIntent({ type: "typeshedAction", action: "PinCurrent" })?.type, "typeshedAction");
-    assert.strictEqual(decodeConfigurationEditorIntent({ type: "pickTypeshedFolder", key: "TypeshedPath" })?.type, "pickTypeshedFolder");
+    for (const download of ["DownloadLatest", "DownloadPinned", "ViewLicense"]) {
+      assert.strictEqual(
+        decodeConfigurationEditorIntent({ type: "typeshedAction", action: download })?.type,
+        "typeshedAction",
+        `${download} is the complete action vocabulary`,
+      );
+    }
+    for (const key of ["TypeshedPath", "TypeshedStorePath"]) {
+      assert.strictEqual(decodeConfigurationEditorIntent({ type: "pickTypeshedFolder", key })?.type, "pickTypeshedFolder");
+    }
   });
 
   // [CONFIGEDITOR-ACCEPTANCE]: selector mutations, Inherit/Native settings,
@@ -67,14 +70,35 @@ suite("Configuration editor — untrusted intent decoder", () => {
     assert.strictEqual(decodeConfigurationEditorIntent({
       type: "preview", mutations: [{ kind: "SetTag", tag: "", severity: { kind: "Error" } }],
     }), undefined);
+    // [LSPCFGED-TYPESHED]: the cache/verify toggles, the cache-path key, and
+    // the alternate-URL key are deleted from the contract entirely.
+    for (const key of ["TypeshedCache", "TypeshedVerify", "TypeshedCachePath", "TypeshedUrl", "ArbitraryKey"]) {
+      assert.strictEqual(decodeConfigurationEditorIntent({
+        type: "preview",
+        mutations: [{ kind: "SetTypeshedSetting", key: { kind: key }, value: { kind: "Text", value: "x" } }],
+      }), undefined, `${key} was removed from the contract`);
+      assert.strictEqual(decodeConfigurationEditorIntent({
+        type: "preview",
+        mutations: [{ kind: "RemoveTypeshedSetting", key: { kind: key } }],
+      }), undefined, `${key} must not be removable either`);
+    }
+    // A surviving key never accepts a boolean value.
     assert.strictEqual(decodeConfigurationEditorIntent({
       type: "preview",
-      mutations: [{ kind: "SetTypeshedSetting", key: { kind: "TypeshedVerify" }, value: { kind: "Text", value: "false" } }],
+      mutations: [{ kind: "SetTypeshedSetting", key: { kind: "TypeshedCommit" }, value: { kind: "Boolean", value: true } }],
     }), undefined);
-    assert.strictEqual(decodeConfigurationEditorIntent({
-      type: "preview",
-      mutations: [{ kind: "SetTypeshedSetting", key: { kind: "ArbitraryKey" }, value: { kind: "Text", value: "x" } }],
-    }), undefined);
+    // The pin-current/acquire-fresh actions and the cache-path picker are gone.
+    for (const legacyAction of ["PinCurrent", "AcquireFresh"]) {
+      assert.strictEqual(
+        decodeConfigurationEditorIntent({ type: "typeshedAction", action: legacyAction }),
+        undefined,
+        `${legacyAction} was removed from the contract`,
+      );
+    }
+    assert.strictEqual(
+      decodeConfigurationEditorIntent({ type: "pickTypeshedFolder", key: "TypeshedCachePath" }),
+      undefined,
+    );
   });
 
   // [CONFIGEDITOR-OPERATIONS]: occurrence reads use only the all/codes/tags

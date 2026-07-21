@@ -27,6 +27,8 @@ export const CONFIGURATION_EDITOR_STYLES = `
   html, body { height: 100%; }
   body {
     margin: 0;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     background: var(--bg);
     color: var(--text);
@@ -145,7 +147,23 @@ export const CONFIGURATION_EDITOR_STYLES = `
   .primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
   .primary:hover { background: var(--vscode-button-hoverBackground); }
 
-  #shell { height: calc(100vh - 74px); display: grid; grid-template-columns: 190px minmax(0, 1fr); }
+  #state-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 9px 20px;
+    background: var(--bsk-sky-soft);
+    border-bottom: 1px solid var(--border);
+  }
+  #state-notice[hidden] { display: none; }
+  #state-notice[data-phase="error"],
+  #state-notice[data-phase="conflict"],
+  #state-notice[data-phase="unsupported"] { background: var(--bsk-orange-soft); }
+  #notice-message { color: var(--muted); }
+  .notice-actions { display: flex; gap: 8px; margin-left: auto; }
+
+  #shell { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr); }
   #section-nav { padding: 16px 10px; overflow-y: auto; background: var(--surface); border-right: 1px solid var(--border); }
   #section-nav button { width: 100%; display: flex; align-items: center; gap: 10px; margin-bottom: 3px; padding: 8px 10px; background: transparent; border-color: transparent; border-radius: 7px; color: var(--muted); text-align: left; }
   #section-nav button:hover { background: var(--vscode-list-hoverBackground); color: var(--text); }
@@ -292,35 +310,31 @@ export const CONFIGURATION_EDITOR_STYLES = `
     border-radius: var(--radius);
     box-shadow: 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
   }
-  #state-overlay {
-    position: fixed;
-    z-index: 30;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    padding: 24px;
-    background: color-mix(in srgb, var(--bg) 94%, transparent);
-  }
-  #state-overlay[hidden] { display: none; }
-  #state-card { width: min(480px, 100%); padding: 26px; text-align: center; }
-  #state-symbol { width: 44px; height: 44px; display: grid; place-items: center; margin: 0 auto 12px; border-radius: 50%; background: var(--bsk-orange-soft); color: var(--bsk-orange); font-size: 20px; }
-  #state-card h2 { margin: 0 0 5px; }
-  #state-card p { margin: 0 0 14px; color: var(--muted); }
-  .overlay-actions { justify-content: center; }
   #typeshed-status dl { display: grid; grid-template-columns: minmax(100px, auto) minmax(0, 1fr); gap: 4px 12px; }
   #typeshed-status dt { color: var(--muted); }
   #typeshed-status dd { margin: 0; overflow-wrap: anywhere; }
   .typeshed-warning { padding: 8px 10px; border-left: 3px solid var(--bsk-orange); background: var(--bsk-orange-soft); }
   .typeshed-warning[data-severity="high"] { border-left-color: var(--vscode-errorForeground); }
+  .typeshed-no-source {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--vscode-errorForeground);
+    background: color-mix(in srgb, var(--vscode-errorForeground) 10%, transparent);
+  }
+  .typeshed-no-source strong { font-size: 11px; letter-spacing: .06em; }
+  .typeshed-no-source span { flex: 1 1 220px; }
   #typeshed-controls { display: grid; gap: 14px; max-width: 620px; margin: 16px 0; }
-  .typeshed-source { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 0; }
+  .typeshed-source { display: grid; gap: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin: 0; }
   .typeshed-source legend { padding: 0 6px; color: var(--muted); }
-  .source-choice, .typeshed-toggle {
+  .source-choice {
     display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: baseline;
   }
-  .source-choice input, .typeshed-toggle input { grid-row: 1 / span 2; align-self: center; margin: 0; }
-  .source-choice small, .typeshed-toggle small { grid-column: 2; color: var(--muted); }
-  .source-choice:has(input:disabled) span, .typeshed-toggle:has(input:disabled) span { color: var(--muted); }
+  .source-choice input { grid-row: 1 / span 2; align-self: center; margin: 0; }
+  .source-choice small { grid-column: 2; color: var(--muted); }
   .typeshed-field { display: grid; gap: 5px; }
   .typeshed-field > span { font-weight: 600; }
   .typeshed-field > small { color: var(--muted); }
@@ -328,12 +342,25 @@ export const CONFIGURATION_EDITOR_STYLES = `
   .typeshed-field input[aria-invalid="true"] { outline: 1px solid var(--vscode-errorForeground); }
   .field-error { color: var(--vscode-errorForeground); }
   .field-error[hidden] { display: none; }
-  .typeshed-advanced { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 12px; }
+  .typeshed-advanced { border-top: 1px solid var(--border); padding-top: 10px; display: grid; gap: 12px; }
   .typeshed-advanced summary { cursor: pointer; color: var(--muted); }
   .typeshed-advanced[open] summary { margin-bottom: 2px; }
   .path-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  .busy::after {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-left: 7px;
+    vertical-align: -1px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
 
   @keyframes breathe { 50% { opacity: .25; transform: scale(.75); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
   }
@@ -355,7 +382,7 @@ export const CONFIGURATION_EDITOR_STYLES = `
   @media (max-width: 720px) {
     body > header { min-height: 64px; padding: 9px 12px; }
     #status-pill { display: none; }
-    #shell { height: calc(100vh - 64px); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+    #shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
     #section-nav { display: flex; gap: 4px; padding: 7px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); }
     #section-nav button { width: auto; flex: 0 0 auto; justify-content: center; margin: 0; }
     .preview-change { grid-template-columns: minmax(0, 1fr); }

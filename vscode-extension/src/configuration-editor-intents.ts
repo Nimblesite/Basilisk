@@ -30,7 +30,7 @@ export type ConfigurationEditorIntent =
   | { readonly type: "occurrences"; readonly request: Omit<RuleOccurrencesRequest, "rootUri"> }
   | { readonly type: "openDocs"; readonly uri: string }
   | { readonly type: "openOccurrence"; readonly uri: string; readonly line: number; readonly character: number }
-  | { readonly type: "pickTypeshedFolder"; readonly key: "TypeshedPath" | "TypeshedCachePath" }
+  | { readonly type: "pickTypeshedFolder"; readonly key: "TypeshedPath" | "TypeshedStorePath" }
   | { readonly type: "typeshedAction"; readonly action: TypeshedAction };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -84,10 +84,7 @@ function decodeTypeshedKey(value: unknown): TypeshedSettingKey | undefined {
   switch (value.kind) {
     case "TypeshedPath": return { kind: "TypeshedPath" };
     case "TypeshedCommit": return { kind: "TypeshedCommit" };
-    case "TypeshedUrl": return { kind: "TypeshedUrl" };
-    case "TypeshedCachePath": return { kind: "TypeshedCachePath" };
-    case "TypeshedCache": return { kind: "TypeshedCache" };
-    case "TypeshedVerify": return { kind: "TypeshedVerify" };
+    case "TypeshedStorePath": return { kind: "TypeshedStorePath" };
     default: return undefined;
   }
 }
@@ -103,9 +100,9 @@ function decodeTypeshedValue(value: unknown): TypeshedSettingValue | undefined {
     : undefined;
 }
 
-function typeshedValueMatches(key: TypeshedSettingKey, value: TypeshedSettingValue): boolean {
-  const booleanKey = key.kind === "TypeshedCache" || key.kind === "TypeshedVerify";
-  return booleanKey ? value.kind === "Boolean" : value.kind === "Text";
+/** Every surviving Typeshed key is text-typed ([LSPCFGED-TYPESHED]). */
+function typeshedValueMatches(_key: TypeshedSettingKey, value: TypeshedSettingValue): boolean {
+  return value.kind === "Text";
 }
 
 /**
@@ -161,8 +158,8 @@ function decodeMutation(value: unknown): EditorMutation | undefined {
 
 function decodeTypeshedAction(value: unknown): TypeshedAction | undefined {
   switch (value) {
-    case "PinCurrent": return { kind: "PinCurrent" };
-    case "AcquireFresh": return { kind: "AcquireFresh" };
+    case "DownloadLatest": return { kind: "DownloadLatest" };
+    case "DownloadPinned": return { kind: "DownloadPinned" };
     case "ViewLicense": return { kind: "ViewLicense" };
     default: return undefined;
   }
@@ -228,7 +225,7 @@ export function decodeConfigurationEditorIntent(value: unknown): ConfigurationEd
     return uri === undefined ? undefined : { type: "openConfigFile", uri };
   }
   if (value.type === "pickTypeshedFolder") {
-    return value.key === "TypeshedPath" || value.key === "TypeshedCachePath"
+    return value.key === "TypeshedPath" || value.key === "TypeshedStorePath"
       ? { type: "pickTypeshedFolder", key: value.key }
       : undefined;
   }

@@ -11,8 +11,7 @@
 //! 3. **License** — the discovered `LICENSE*`/`NOTICE*` path+SHA-256 set must
 //!    exactly match a build-approved identity ([STUBRES-TYPESHED-LICENSE]).
 //! 4. **Content** — reconstruct the Git root tree and match the trusted
-//!    root-tree SHA. **Only this gate may be waived**; waiving it emits
-//!    [`TypeshedWarning::Unverified`] and never disables the first three.
+//!    root-tree SHA. No gate can be waived ([STUBRES-TYPESHED-PIN]).
 
 pub mod errors;
 pub mod manifest;
@@ -24,7 +23,6 @@ use std::collections::HashSet;
 
 use super::archive::{Archive, ArchiveVfs};
 use super::gittree::{FileMode, Oid};
-use super::warning::TypeshedWarning;
 
 /// Byte and count limits enforced by the Safety gate.
 #[derive(Debug, Clone, Copy)]
@@ -225,26 +223,21 @@ pub struct GateConfig {
     pub approved_license: LicenseManifest,
     /// The trusted root-tree SHA to attest against.
     pub expected_root_tree: Oid,
-    /// Whether to run the Content gate; `false` waives only content attestation.
-    pub verify_content: bool,
 }
 
-/// A successfully activated archive: its VFS, any status warnings, and the
-/// verified tree SHA (absent when content verification was waived).
+/// A successfully activated archive: its VFS and the verified tree SHA.
 #[derive(Debug, Clone)]
 pub struct Activation {
     /// The archive VFS the resolver reads through.
     pub vfs: ArchiveVfs,
-    /// Composable status warnings raised during activation.
-    pub warnings: Vec<TypeshedWarning>,
-    /// The verified root-tree SHA, or `None` when content verification was off.
-    pub root_tree: Option<Oid>,
+    /// The verified root-tree SHA.
+    pub root_tree: Oid,
 }
 
 /// Run all four gates in order and produce an [`Activation`].
 ///
-/// Safety, Shape, and License always run; Content runs unless waived, in which
-/// case [`TypeshedWarning::Unverified`] is raised.
+/// Every gate always runs. There is no waiver: a pin you can switch off is a
+/// pin that does nothing ([STUBRES-TYPESHED-PIN]).
 ///
 /// # Errors
 ///
@@ -257,16 +250,9 @@ pub fn run_activation(
     safety_gate(&archive, &config.limits).map_err(GateError::Safety)?;
     shape_gate(&archive).map_err(GateError::Shape)?;
     license_gate(&archive, &config.approved_license).map_err(GateError::License)?;
-    let mut warnings = Vec::new();
-    let root_tree = if config.verify_content {
-        Some(content_gate(&archive, &config.expected_root_tree).map_err(GateError::Content)?)
-    } else {
-        warnings.push(TypeshedWarning::Unverified);
-        None
-    };
+    let root_tree = content_gate(&archive, &config.expected_root_tree).map_err(GateError::Content)?;
     Ok(Activation {
         vfs: ArchiveVfs::new(identity, archive),
-        warnings,
         root_tree,
     })
 }
@@ -297,32 +283,35 @@ mod tests {
         ]
     }
 
-    fn config_for(archive: &Archive, verify: bool) -> GateConfig {
+    fn config_for(archive: &Archive) -> GateConfig {
         GateConfig {
             limits: SafetyLimits::default(),
             approved_license: LicenseManifest::discover(archive),
             expected_root_tree: archive.root_tree_oid().unwrap(),
-            verify_content: verify,
         }
     }
 
     #[test]
     fn valid_archive_activates_and_verifies() {
         let archive = Archive::new(valid_entries());
-        let config = config_for(&archive, true);
+        let config = config_for(&archive);
+        let root = config.expected_root_tree;
         let activation = run_activation(archive, &config, "83c2518").unwrap();
-        assert!(activation.warnings.is_empty());
-        assert!(activation.root_tree.is_some());
+        assert_eq!(activation.root_tree, root);
         assert_eq!(activation.vfs.identity(), "83c2518");
     }
 
+    /// Content verification always runs — there is no waiver field, flag, or
+    /// mode; a mutated tree is terminal ([STUBRES-TYPESHED-PIN] no-waiver).
     #[test]
-    fn waived_content_emits_unverified_only() {
+    fn content_verification_cannot_be_waived() {
         let archive = Archive::new(valid_entries());
-        let config = config_for(&archive, false);
-        let activation = run_activation(archive, &config, "83c2518").unwrap();
-        assert_eq!(activation.warnings, vec![TypeshedWarning::Unverified]);
-        assert!(activation.root_tree.is_none());
+        let mut config = config_for(&archive);
+        config.expected_root_tree = crate::typeshed::gittree::git_blob_oid(b"not the tree");
+        assert!(matches!(
+            run_activation(archive, &config, "83c2518"),
+            Err(GateError::Content(ContentViolation::TreeMismatch { .. }))
+        ));
     }
 
     #[test]

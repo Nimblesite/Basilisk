@@ -80,8 +80,8 @@ Git-tree verification binds VFS-consumed bytes to that tree
 - [ ] **No waiver:** assert there is no configuration key, CLI flag, or wire field that disables pin verification.
 - [ ] **Store is inert:** the checker never creates, repairs, or evicts a store entry; a deleted entry stays deleted until a download recreates it; entries never expire with age.
 - [ ] **Atomic download:** interrupt at metadata, mid-archive, at each gate, and at commit-object reconstruction; assert no partial or unverified store entry and no `typeshed-commit` write survives any of them.
-- [x] **License drift:** change the approved path+SHA-256 manifest for any relevant root/nested `LICENSE*`/`NOTICE*` on the pin and mirror paths; block and report `LICENSE CHANGED`.
-- [x] **Mirror:** known SHA downloads through `{sha}` and verifies; a mirror cannot resolve `main`.
+- [ ] **License drift:** change the approved path+SHA-256 manifest for any relevant root/nested `LICENSE*`/`NOTICE*` on the download and store-read paths; block and report `LICENSE CHANGED`.
+- [ ] **GitHub only:** there is no mirror setting; the download contacts only `api.github.com` and `codeload.github.com`, and the credential goes nowhere else.
 - [ ] **Status routing:** compose `UNPINNED` + `USER-MANAGED SOURCE`, and `NO SOURCE` alone; assert CLI uses stderr, LSP uses `showMessage`/Service Info (not `publishDiagnostics`), and MCP returns the same ordered structured warnings.
 
 ### [TYPESHEDRT-ACCEPTANCE-OVERRIDES] Explicit user sources {#TYPESHEDRT-ACCEPTANCE-OVERRIDES}
@@ -141,7 +141,7 @@ redistributor ([§STUBRES-TYPESHED-LICENSE](../specs/CHECKER-STUB-RESOLUTION-SPE
 
 - [ ] **Every artifact:** exact bundled-SHA composite LICENSE (including MIT notice), conditional root/nested NOTICE/license files, retained notices, and modified-file marks ship in every binary/package/VSIX.
 - [x] **Policy metadata:** `THIRD-PARTY-LICENSES`/`NOTICES` record typeshed, licenses, URL, exact SHA, derived indexes, and repackaging; any license identity/NOTICE change fails for human review.
-- [x] **MCP provenance:** structured status includes active source, full commit/tree identity, transport, license status/reference (custom may say `not supplied`), and ordered warnings.
+- [ ] **MCP provenance:** structured status includes active source, full commit/tree identity, license status/reference (custom may say `not supplied`), and ordered warnings; there are no separate transport/provenance fields — the active source is the trust story.
 - [x] **Conformance:** run the unmodified `python/typing@main` conformance harness against the clean release binary; require 100% and zero false positives, including no source-status diagnostics.
 - [x] **Docs integrity:** validate the six-step Mermaid flow, anchors, links, and the full `6ef9f7719ecfff09dad8724ef42b621fd994fb5e` pin in every touched typeshed section.
 - [ ] **No forbidden policy:** reject any network call on the analysis path, any

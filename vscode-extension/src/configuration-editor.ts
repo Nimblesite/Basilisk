@@ -25,8 +25,6 @@ import type {
   TypeshedActionResult,
 } from "./configuration-editor-model";
 import {
-  confirmVerificationOff,
-  disablesTypeshedVerification,
   isTypeshedOnly,
   pickTypeshedFolder,
   TypeshedEditorUi,
@@ -279,12 +277,6 @@ export class ConfigurationEditorController implements vscode.Disposable {
     const state = this.store.configurationEditor.value;
     const snapshot = state.snapshot;
     if (snapshot === undefined || state.phase === "applying") { return; }
-    if (disablesTypeshedVerification(intent)) {
-      if (!await confirmVerificationOff()) {
-        void this.panel.postMessage({ type: "state", state });
-        return;
-      }
-    }
     const generation = this.loadGeneration;
     const previewGeneration = ++this.previewGeneration;
     this.store.beginConfigurationPreview();
@@ -307,7 +299,7 @@ export class ConfigurationEditorController implements vscode.Disposable {
     }
   }
 
-  private async pickTypeshedFolder(key: "TypeshedPath" | "TypeshedCachePath"): Promise<void> {
+  private async pickTypeshedFolder(key: "TypeshedPath" | "TypeshedStorePath"): Promise<void> {
     const state = this.store.configurationEditor.value;
     if (state.snapshot === undefined) { return; }
     const intent = await pickTypeshedFolder(state.snapshot, key);
@@ -328,10 +320,11 @@ export class ConfigurationEditorController implements vscode.Disposable {
         action,
       });
       if (this.requestIsStale(generation, snapshot.rootUri)) { return; }
-      if (result.kind === "Preview") {
-        // PinCurrent writes the active commit: a source choice, applied now.
-        await this.applyPreview(result.preview);
-      } else if (result.kind === "Snapshot") {
+      // A download returns the refreshed snapshot at once (lifecycle
+      // Downloading); completion arrives as ordinary server notifications.
+      // No action returns a preview — a download is not a configuration edit
+      // ([LSPCFGED-TYPESHED-DOWNLOAD]).
+      if (result.kind === "Snapshot") {
         this.store.acceptConfigurationSnapshot(result.snapshot);
       } else {
         await this.typeshedUi.showLicense(result.license);

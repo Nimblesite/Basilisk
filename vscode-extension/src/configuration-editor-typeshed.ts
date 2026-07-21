@@ -31,24 +31,21 @@ export class TypeshedEditorUi implements vscode.Disposable {
   public dispose(): void { this.registration.dispose(); this.provider.dispose(); }
 }
 
-export async function confirmVerificationOff(): Promise<boolean> {
-  const accepted = await vscode.window.showWarningMessage(
-    "Disable Typeshed content verification? Safety, shape, and license gates will still run, but source status will report UNVERIFIED.",
-    { modal: true },
-    "Disable verification",
-  );
-  return accepted === "Disable verification";
-}
-
+/**
+ * The two directory-typed settings render with a native folder-picker rather
+ * than free text ([LSPCFGED-TYPESHED]). Choosing the source folder is one
+ * atomic transition — it also clears the pin; a cancelled picker writes
+ * nothing at all.
+ */
 export async function pickTypeshedFolder(
   snapshot: ConfigurationSnapshot,
-  key: "TypeshedPath" | "TypeshedCachePath",
+  key: "TypeshedPath" | "TypeshedStorePath",
 ): Promise<Extract<ConfigurationEditorIntent, { type: "preview" }> | undefined> {
   const selected = await vscode.window.showOpenDialog({
     canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
     defaultUri: vscode.Uri.parse(snapshot.rootUri, true),
-    openLabel: key === "TypeshedPath" ? "Use Typeshed folder" : "Use cache folder",
-    title: key === "TypeshedPath" ? "Choose a Typeshed tree containing stdlib/" : "Choose the Typeshed cache folder",
+    openLabel: key === "TypeshedPath" ? "Use Typeshed folder" : "Use store folder",
+    title: key === "TypeshedPath" ? "Choose a Typeshed tree containing stdlib/" : "Choose the Typeshed store folder",
   });
   const folder = selected?.[0];
   if (folder === undefined) { return undefined; }
@@ -72,14 +69,4 @@ export function isTypeshedOnly(
 ): boolean {
   return intent.mutations.every((mutation) =>
     mutation.kind === "SetTypeshedSetting" || mutation.kind === "RemoveTypeshedSetting");
-}
-
-export function disablesTypeshedVerification(
-  intent: Extract<ConfigurationEditorIntent, { type: "preview" }>,
-): boolean {
-  return intent.mutations.some((mutation) =>
-    mutation.kind === "SetTypeshedSetting"
-    && mutation.key.kind === "TypeshedVerify"
-    && mutation.value.kind === "Boolean"
-    && !mutation.value.value);
 }

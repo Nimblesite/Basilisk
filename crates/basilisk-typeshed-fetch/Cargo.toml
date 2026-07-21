@@ -1,0 +1,29 @@
+[package]
+name        = "basilisk-typeshed-fetch"
+description = "The ONLY typeshed network code: user-invoked download into the content-addressed store"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+publish = false
+
+# Implements [TYPESHEDRT-SEGREGATION]: this crate is the only place typeshed
+# bytes may arrive from the network. `basilisk-stubs` and `basilisk-checker`
+# must NEVER depend on it (scripts/check-dependency-shape.sh asserts that);
+# only `basilisk-cli` and `basilisk-lsp` may, and only behind an explicit
+# user action ([STUBRES-TYPESHED-DOWNLOAD]).
+
+[dependencies]
+basilisk-stubs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+# Authenticated-HTTPS adapter for GitHub metadata and codeload archives.
+# `https_only` is also enforced by the adapter.
+ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

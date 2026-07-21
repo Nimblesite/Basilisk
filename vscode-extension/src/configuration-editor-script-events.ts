@@ -89,7 +89,13 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
       const folderKey = target.dataset.pickTypeshedFolder;
       if (folderKey) { vscode.postMessage({ type: 'pickTypeshedFolder', key: folderKey }); return; }
       const typeshedAction = target.dataset.typeshedAction;
-      if (typeshedAction) { vscode.postMessage({ type: 'typeshedAction', action: typeshedAction }); return; }
+      if (typeshedAction) {
+        // The invoking button goes busy at once; nothing else changes
+        // ([LSPCFGED-TYPESHED-DOWNLOAD]).
+        typeshedActionStarted(typeshedAction, target);
+        vscode.postMessage({ type: 'typeshedAction', action: typeshedAction });
+        return;
+      }
       const tag = target.dataset.tag;
       if (tag) { selectTag(tag); return; }
       const code = target.dataset.showRule;

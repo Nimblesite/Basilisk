@@ -267,7 +267,7 @@ checker and written only by the download action:
 ```
 <typeshed-store-path>/<40-hex commit sha>/
   commit-object   # raw Git commit object; hashes to the directory name
-  manifest.json   # tree SHA, per-path SHA-256, license identity, transport
+  manifest.json   # the commit's full Git tree listing (path, blob SHA, mode)
   stdlib/… LICENSE NOTICE…
 ```
 
@@ -291,11 +291,12 @@ else's pin; without it a shared pin is unusable on a machine that never
 downloaded it.
 
 Basilisk still never clones: resolve official commit → root-tree metadata over
-authenticated HTTPS, download that SHA from GitHub codeload or a `typeshed-url`
-`{sha}` mirror, run the gates below, reconstruct the commit object and assert it
-hashes to the requested SHA, then dump the accepted tree into the store. A mirror
-cannot resolve `main`. A download that fails at any step writes **nothing** — no
-partial entry, no unverified entry, no config change. URLs are redacted in logs.
+authenticated HTTPS, download that SHA from GitHub codeload, run the gates
+below, reconstruct the commit object and assert it hashes to the requested SHA,
+then dump the accepted tree into the store. There is no mirror setting — an
+air-gapped or firewalled machine uses a custom folder. A download that fails at
+any step writes **nothing** — no partial entry, no unverified entry, no config
+change. URLs are redacted in logs.
 
 | Gate | Rule |
 |---|---|
@@ -311,9 +312,8 @@ callers share GitHub's unauthenticated rate limit, which a shared CI egress IP
 exhausts; an authenticated caller gets a much larger per-token budget
 ([GitHub rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)).
 The credential is sent ONLY to `api.github.com` and `codeload.github.com`, matched
-on the parsed authority. A `typeshed-url` mirror is third-party infrastructure and
-is always contacted anonymously. The token value is never logged, never rendered
-in debug output, and never included in an error; only its presence is recorded.
+on the parsed authority. The token value is never logged, never rendered in
+debug output, and never included in an error; only its presence is recorded.
 
 #### Bundled ZIP snapshot {#STUBRES-TYPESHED-BASELINE}
 
@@ -362,8 +362,11 @@ uses `window/showMessage` plus persistent Service Info, never
 `publishDiagnostics`; MCP returns structured status. These warnings therefore
 cannot create conformance false positives. All surfaces show the full SHA when
 known; the UI also provides a safe View License action. MCP fields are
-`active_source`, commit/tree identity, transport, provenance, `license_status`,
-immutable license reference (or custom `not supplied`), and ordered `warnings[]`.
+`active_source`, commit/tree identity, `license_status`, immutable license
+reference (or custom `not supplied`), and ordered `warnings[]`. The active
+source already names the trust story (custom = user-managed, bundled =
+build-vetted, exact commit = attested at download and re-proven offline), so
+there are no separate transport or provenance fields.
 
 #### Config keys {#STUBRES-TYPESHED-CONFIG}
 
@@ -379,11 +382,12 @@ open. Every one is exposed as a control in the configuration UI
 | `typeshed-commit` | full SHA | unset _(= the bundled commit)_ | The pinned commit, verified offline. | checker |
 | `typeshed-path` | `string` | _(unset)_ | The canonical custom step-3 tree; excludes the pin and the bundle. | checker |
 | `typeshed-store-path` | path | OS cache | Where downloads are dumped and pins are resolved. | both |
-| `typeshed-url` | URL template | GitHub codeload | Codeload-compatible `{sha}` archive mirror; cannot resolve `main`. | download only |
 
-There are no cache-reuse, expiry, or verification-waiver settings, and no
-one-run flags: nothing is cached, nothing expires, and a pin always verifies
-([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)).
+That is the whole surface: three keys. There are no cache-reuse, expiry,
+verification-waiver, or mirror settings, and no one-run flags: nothing is
+cached, nothing expires, a pin always verifies
+([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)), and downloads come only from
+GitHub ([§STUBRES-TYPESHED-DOWNLOAD]).
 
 #### Target Python version {#STUBRES-TYPESHED-VERSION}
 

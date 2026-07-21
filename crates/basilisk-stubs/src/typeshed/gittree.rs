@@ -175,6 +175,52 @@ pub fn git_blob_oid(content: &[u8]) -> Oid {
     git_object_oid(b"blob", content)
 }
 
+/// Compute a Git **commit** object ID for raw commit-object content (the bytes
+/// `git cat-file commit` prints, without the `commit {len}\0` framing).
+///
+/// This is the offline anchor of a pin: the stored commit object must hash to
+/// the pinned SHA before its tree SHA is trusted ([STUBRES-TYPESHED-PIN]).
+#[must_use]
+pub fn git_commit_oid(content: &[u8]) -> Oid {
+    git_object_oid(b"commit", content)
+}
+
+/// Error reading the root-tree SHA out of a raw commit object.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum CommitParseError {
+    /// The content did not begin with a `tree <40-hex>\n` header.
+    #[error("commit object does not begin with a tree header")]
+    MissingTreeHeader,
+    /// The tree header's SHA was not valid hex.
+    #[error("commit object tree header is not a valid object id: {0}")]
+    BadTreeSha(OidParseError),
+}
+
+/// Read the root-tree SHA from raw commit-object content.
+///
+/// Git guarantees the first header of a commit object is `tree <sha>`
+/// ([Git `commit-tree`](https://git-scm.com/docs/git-commit-tree)), so this
+/// parses exactly that shape and nothing else — a malformed object fails
+/// rather than being guessed at.
+///
+/// # Errors
+///
+/// Returns [`CommitParseError`] when the content does not start with a
+/// well-formed tree header.
+pub fn commit_root_tree(content: &[u8]) -> Result<Oid, CommitParseError> {
+    let rest = content
+        .strip_prefix(b"tree ")
+        .ok_or(CommitParseError::MissingTreeHeader)?;
+    let (sha_bytes, terminator) = rest
+        .split_at_checked(40)
+        .ok_or(CommitParseError::MissingTreeHeader)?;
+    if terminator.first() != Some(&b'\n') {
+        return Err(CommitParseError::MissingTreeHeader);
+    }
+    let sha = std::str::from_utf8(sha_bytes).map_err(|_error| CommitParseError::MissingTreeHeader)?;
+    Oid::from_hex(sha).map_err(CommitParseError::BadTreeSha)
+}
+
 /// Reconstruct the Git **root-tree** object ID for a flat set of archived files.
 ///
 /// An empty set yields Git's canonical empty-tree ID. Reconstruction is exact
@@ -429,5 +475,42 @@ mod tests {
             reconstruct_root_tree_oid(&files),
             Err(TreeError::DuplicatePath(_))
         ));
+    }
+
+    /// Pinned Git constant: `printf 'tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\nauthor a <a@a> 0 +0000\ncommitter a <a@a> 0 +0000\n\nx\n' | git hash-object -t commit --stdin`.
+    #[test]
+    fn commit_oid_matches_git() {
+        let raw = b"tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\nauthor a <a@a> 0 +0000\ncommitter a <a@a> 0 +0000\n\nx\n";
+        assert_eq!(
+            git_commit_oid(raw).to_hex(),
+            "1f575658d4ebb47930907abae76eec9e594fa80d"
+        );
+    }
+
+    #[test]
+    fn commit_root_tree_reads_exactly_the_leading_tree_header() {
+        let raw = b"tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\nauthor a <a@a> 0 +0000\n\nmsg\n";
+        assert_eq!(
+            commit_root_tree(raw).map(|oid| oid.to_hex()),
+            Ok(EMPTY_TREE.to_owned())
+        );
+        // A parent header first, a truncated SHA, or non-hex all fail closed.
+        assert_eq!(
+            commit_root_tree(b"parent 4b825dc642cb6eb9a060e54bf8d69288fbee4904\n"),
+            Err(CommitParseError::MissingTreeHeader)
+        );
+        assert_eq!(
+            commit_root_tree(b"tree 4b825dc6\n"),
+            Err(CommitParseError::MissingTreeHeader)
+        );
+        assert!(matches!(
+            commit_root_tree(b"tree zz825dc642cb6eb9a060e54bf8d69288fbee4904\n"),
+            Err(CommitParseError::BadTreeSha(_))
+        ));
+        assert_eq!(
+            commit_root_tree(b"tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904"),
+            Err(CommitParseError::MissingTreeHeader),
+            "a tree header without its newline terminator is malformed"
+        );
     }
 }

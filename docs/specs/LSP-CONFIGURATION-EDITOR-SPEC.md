@@ -98,9 +98,10 @@ is editable here.
 There are **two** sources and no third. The snapshot carries ONE active source
 holding the value that defines it — `ExactCommit { commit }` or
 `CustomFolder { path }` — so "a pin plus a custom folder" cannot be described at
-all. Alongside it the server sends where downloads land, and whether a license
-document exists to open. There are no per-control widget, label, or enabled
-descriptors: copy is client presentation, availability is the data itself.
+all. Alongside it the server sends the store folder (absent for a custom
+folder), and whether a license document exists to open. There are no per-control
+widget, label, or enabled descriptors: copy is client presentation, availability
+is the data itself.
 
 | Source | Chosen by | Writes | Step-3 effect |
 |---|---|---|---|
@@ -114,7 +115,6 @@ field and never reaches the configuration.
 | Control | Key | Widget |
 |---|---|---|
 | Store folder | `typeshed-store-path` | folder-picker, under Advanced |
-| Alternate archive URL | `typeshed-url` | text (`{sha}` template), under Advanced |
 | License | active source | **View license**, or `not supplied` for custom |
 
 A Typeshed edit has no rule-severity impact to weigh, so it is written as soon as

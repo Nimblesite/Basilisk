@@ -20,7 +20,6 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     let activeTag;
     let selectedRuleCode;
     let lastFocusedRule;
-    let overlayWasBlocking = false;
     // Which navigation view is visible. Rules is the default so the editor
     // opens on the tag-first rule browser exactly as before.
     let activeSection = 'rules';
@@ -109,9 +108,6 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     }
     function typeshedSetText(name, value) {
       return { kind: 'SetTypeshedSetting', key: typeshedKey(name), value: { kind: 'Text', value } };
-    }
-    function typeshedSetBoolean(name, value) {
-      return { kind: 'SetTypeshedSetting', key: typeshedKey(name), value: { kind: 'Boolean', value } };
     }
     function selectedRule() {
       return snapshot && snapshot.rules.find((rule) => rule.descriptor.code === selectedRuleCode);

@@ -109,15 +109,13 @@ function isTypeshedWarning(value: unknown): boolean {
 }
 
 function hasTypeshedStateKinds(fields: Record<string, unknown>): boolean {
-  return hasKind(fields.lifecycle, ["Acquiring", "Ready", "Blocked"])
-    && hasKind(fields.licenseStatus, ["Acquiring", "Unavailable", "Approved", "Changed", "NotSupplied"])
-    && hasKind(fields.provenance, ["Pending", "GithubTlsAttested", "Unverified", "BundleVetted", "UserManaged"])
-    && hasOptionalKind(fields.activeSource, ["Custom", "ExactCommit", "Latest", "Bundled"])
-    && hasOptionalKind(fields.transport, ["CustomPath", "EmbeddedZip", "Codeload", "Mirror"]);
+  return hasKind(fields.lifecycle, ["Downloading", "Ready", "NoSource"])
+    && hasKind(fields.licenseStatus, ["Unavailable", "Approved", "Changed", "NotSupplied"])
+    && hasOptionalKind(fields.activeSource, ["Custom", "ExactCommit", "Bundled"]);
 }
 
 function hasTypeshedIdentityFields(fields: Record<string, unknown>): boolean {
-  return isOptionalString(fields.blockedReason)
+  return isOptionalString(fields.noSourceReason)
     && isOptionalString(fields.commitIdentity);
 }
 
@@ -126,7 +124,6 @@ function isTypeshedStatus(value: unknown): boolean {
   const fields = value as Record<string, unknown>;
   return hasTypeshedStateKinds(fields)
     && hasTypeshedIdentityFields(fields)
-    && typeof fields.signedRelease === "boolean"
     && Array.isArray(fields.warnings)
     && fields.warnings.every(isTypeshedWarning);
 }

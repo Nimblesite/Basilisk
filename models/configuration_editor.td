@@ -26,12 +26,12 @@ union TagKind {
   Descriptive
 }
 
-# The Typeshed acquisition keys are a closed allowlist. The wire never accepts
-# an arbitrary TOML key or an untyped value ([LSPCFGED-TYPESHED]).
+# The Typeshed keys are a closed allowlist — the whole surface is three keys.
+# The wire never accepts an arbitrary TOML key or an untyped value
+# ([LSPCFGED-TYPESHED]).
 union TypeshedSettingKey {
   TypeshedPath
   TypeshedCommit
-  TypeshedUrl
   TypeshedStorePath
 }
 
@@ -60,13 +60,6 @@ union TypeshedSource {
   CustomFolder { path: String }
 }
 
-# Where downloads land and where pins resolve from. A custom folder uses
-# neither, so it has none.
-type TypeshedStorePolicy {
-  archiveUrl: Option<String>
-  storeFolder: Option<String>
-}
-
 # Downloading is the only long-running state, and it is always user-invoked
 # ([LSPCFGED-TYPESHED-DOWNLOAD]). NoSource = the selected source is not on this
 # machine, so analysis does not run.
@@ -82,32 +75,20 @@ union TypeshedAction {
   ViewLicense
 }
 
+# The active source is the whole trust story (custom = user-managed, bundled =
+# build-vetted, exact commit = attested at download, re-proven offline), so
+# there are no separate transport or provenance fields ([STUBRES-TYPESHED-WARN]).
 union TypeshedActiveSource {
   Custom
   ExactCommit
   Bundled
 }
 
-union TypeshedTransport {
-  CustomPath
-  EmbeddedZip
-  Codeload
-  Mirror
-}
-
 union TypeshedLicenseStatus {
-  Acquiring
   Unavailable
   Approved
   Changed
   NotSupplied
-}
-
-union TypeshedProvenance {
-  Pending
-  GithubTlsAttested
-  BundleVetted
-  UserManaged
 }
 
 union TypeshedWarningSeverity {
@@ -126,20 +107,17 @@ type TypeshedStatusState {
   noSourceReason: Option<String>
   activeSource: Option<TypeshedActiveSource>
   commitIdentity: Option<String>
-  transport: Option<TypeshedTransport>
   licenseStatus: TypeshedLicenseStatus
-  provenance: TypeshedProvenance
-  signedRelease: Bool
   warnings: List<TypeshedWarningState>
 }
 
 # Everything the editor needs, and nothing it can misrender: the one active
-# source, the store policy that source has (none for a custom folder), and
+# source, the store folder pins resolve from (none for a custom folder), and
 # whether a license document exists to open. Labels are client copy, not server
 # state.
 type TypeshedConfigurationState {
   source: TypeshedSource
-  store: Option<TypeshedStorePolicy>
+  storeFolder: Option<String>
   licenseAvailable: Bool
   status: TypeshedStatusState
 }
@@ -340,8 +318,10 @@ type TypeshedLicenseDocument {
   readOnly: Bool
 }
 
+# Downloads return the refreshed snapshot immediately (lifecycle Downloading);
+# completion arrives as TypeshedStatusChanged + ConfigurationChanged. No action
+# returns a preview — a download is not a configuration edit.
 union TypeshedActionResult {
-  Preview { preview: ConfigurationPreview }
   Snapshot { snapshot: ConfigurationSnapshot }
   License { license: TypeshedLicenseDocument }
 }

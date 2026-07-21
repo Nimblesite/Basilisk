@@ -15,7 +15,7 @@ import type {
   EditorMutation,
   TypeshedConfigurationState,
 } from "../../configuration-editor-model";
-import { ACTIVE_COMMIT, typeshedFixture } from "./typeshed-fixture";
+import { ACTIVE_COMMIT, LATEST_COMMIT, typeshedFixture } from "./typeshed-fixture";
 
 export const RESULT_TIMEOUT_MS = 30_000;
 const PEP_RULE_COUNT = 40;
@@ -43,28 +43,26 @@ export interface ScenarioOutcome {
 export interface HostConfig {
   commit?: string;
   path?: string;
-  archiveUrl?: string;
-  cacheFolder?: string;
-  reuseDownloads?: boolean;
-  verifyContent?: boolean;
+  storeFolder?: string;
 }
 
-function typeshedFor(config: HostConfig, acquiring: boolean): TypeshedConfigurationState {
+/** The lifecycle facts the fake server holds beside the configuration. */
+interface HostLifecycle {
+  readonly downloading: boolean;
+  readonly noSourceReason: string | undefined;
+}
+
+// With neither key configured the bundled commit is serving: the source is
+// still ExactCommit — there is no "Latest" source at all ([LSPCFGED-TYPESHED]).
+function typeshedFor(config: HostConfig, lifecycle: HostLifecycle): TypeshedConfigurationState {
   const source = config.path !== undefined
     ? ({ kind: "CustomFolder", path: config.path } as const)
-    : config.commit !== undefined
-      ? ({ kind: "ExactCommit", commit: config.commit } as const)
-      : ({ kind: "Latest" } as const);
+    : ({ kind: "ExactCommit", commit: config.commit ?? ACTIVE_COMMIT } as const);
   return typeshedFixture({
     source,
-    acquiring,
-    downloads: source.kind === "CustomFolder" ? undefined : {
-      reuseDownloads: config.reuseDownloads ?? true,
-      verifyContent: config.verifyContent ?? true,
-      archiveUrl: config.archiveUrl,
-      cacheFolder: config.cacheFolder,
-    },
-    pinnableCommit: !acquiring && source.kind === "Latest" ? ACTIVE_COMMIT : undefined,
+    storeFolder: config.storeFolder,
+    downloading: lifecycle.downloading,
+    noSourceReason: lifecycle.downloading ? undefined : lifecycle.noSourceReason,
   });
 }
 
@@ -142,7 +140,9 @@ function isTypeshedMutation(mutation: EditorMutation): boolean {
 export class ScenarioHost {
   public readonly intents: Record<string, unknown>[] = [];
   private readonly config: HostConfig;
-  private acquiring: boolean;
+  private downloading: boolean;
+  private noSourceReason: string | undefined;
+  private pendingDownload: "DownloadLatest" | "DownloadPinned" | undefined;
   private revision = 0;
   private pending: EditorMutation[] = [];
   private ruleEntries = new Map<string, string>();
@@ -152,26 +152,34 @@ export class ScenarioHost {
 
   constructor(options: {
     config?: HostConfig;
-    acquiring?: boolean;
+    downloading?: boolean;
+    noSourceReason?: string;
     folders?: (string | undefined)[];
     focusRule?: string | null;
   } = {}) {
     this.config = { ...options.config };
-    this.acquiring = options.acquiring === true;
+    this.downloading = options.downloading === true;
+    this.noSourceReason = options.noSourceReason;
     this.folders = [...(options.folders ?? [])];
     this.focusRule = options.focusRule ?? null;
   }
 
-  /** Settle an in-flight acquisition, as the server's status notification does. */
+  /** Complete an in-flight download, as the server's status notification does. */
   public settle(): Record<string, unknown> {
-    this.acquiring = false;
+    if (this.pendingDownload === "DownloadLatest") {
+      this.config.commit = LATEST_COMMIT;
+      this.config.path = undefined;
+    }
+    this.pendingDownload = undefined;
+    this.downloading = false;
+    this.noSourceReason = undefined;
     return this.readyState();
   }
 
   public snapshot(): ConfigurationSnapshot {
     this.revision += 1;
     const snapshot = fixtureSnapshot(
-      typeshedFor(this.config, this.acquiring),
+      typeshedFor(this.config, { downloading: this.downloading, noSourceReason: this.noSourceReason }),
       `fnv1a64:${this.revision}`,
     );
     return {
@@ -253,26 +261,24 @@ export class ScenarioHost {
     if (mutation.kind !== "SetTypeshedSetting" && mutation.kind !== "RemoveTypeshedSetting") { return; }
     const value = mutation.kind === "SetTypeshedSetting" ? mutation.value : undefined;
     const text = value?.kind === "Text" ? value.value : undefined;
-    const flag = value?.kind === "Boolean" ? value.value : undefined;
     const fields: Record<string, keyof HostConfig> = {
       TypeshedCommit: "commit",
       TypeshedPath: "path",
-      TypeshedUrl: "archiveUrl",
-      TypeshedCachePath: "cacheFolder",
-      TypeshedCache: "reuseDownloads",
-      TypeshedVerify: "verifyContent",
+      TypeshedStorePath: "storeFolder",
     };
     const field = fields[mutation.key.kind];
     if (field === undefined) { return; }
-    Object.assign(this.config, { [field]: text ?? flag });
+    Object.assign(this.config, { [field]: text });
   }
 
+  // A download is not a configuration edit: the action returns the refreshed
+  // snapshot at once (lifecycle Downloading) and completion arrives later as
+  // a status notification — settle() ([LSPCFGED-TYPESHED-DOWNLOAD]).
   private typeshedAction(action: string): Record<string, unknown> | undefined {
-    if (action !== "PinCurrent") { return undefined; }
-    // The server pins the ACTIVE commit and clears any custom folder.
-    this.config.commit = ACTIVE_COMMIT;
-    this.config.path = undefined;
-    return this.readyState("Applied");
+    if (action !== "DownloadLatest" && action !== "DownloadPinned") { return undefined; }
+    this.pendingDownload = action;
+    this.downloading = true;
+    return this.readyState("Downloading the standard library…");
   }
 
   private pickFolder(key: string): Record<string, unknown> {
@@ -284,7 +290,7 @@ export class ScenarioHost {
       this.config.path = folder;
       this.config.commit = undefined;
     } else {
-      this.config.cacheFolder = folder;
+      this.config.storeFolder = folder;
     }
     return this.readyState("Applied");
   }
@@ -415,10 +421,9 @@ export const DRIVER_PRELUDE = String.raw`
     const commit = el('[data-typeshed-commit]');
     const commitError = document.getElementById('typeshed-commit-error');
     const path = el('[data-typeshed-path="TypeshedPath"]');
-    const reuse = el('[data-typeshed-boolean="TypeshedCache"]');
-    const verify = el('[data-typeshed-boolean="TypeshedVerify"]');
-    const url = el('[data-typeshed-text="TypeshedUrl"]');
-    const cacheFolder = el('[data-typeshed-path="TypeshedCachePath"]');
+    const storeFolder = el('[data-typeshed-path="TypeshedStorePath"]');
+    const pickFolder = el('[data-pick-typeshed-folder="TypeshedPath"]');
+    const noSource = el('.typeshed-no-source');
     const status = {};
     const rows = all('#typeshed-status dt');
     rows.forEach((dt, index) => { status[text(dt)] = text(all('#typeshed-status dd')[index]); });
@@ -436,22 +441,28 @@ export const DRIVER_PRELUDE = String.raw`
       commitError: commitError && !commitError.hidden ? text(commitError) : null,
       pathPresent: path !== null,
       pathValue: path ? path.value : null,
-      reusePresent: reuse !== null,
-      reuseChecked: reuse ? reuse.checked : null,
-      reuseDisabled: reuse ? reuse.disabled : null,
-      verifyPresent: verify !== null,
-      verifyChecked: verify ? verify.checked : null,
+      pickFolderDisabled: pickFolder ? pickFolder.disabled : null,
+      storePickerDisabled: el('[data-pick-typeshed-folder="TypeshedStorePath"]')
+        ? el('[data-pick-typeshed-folder="TypeshedStorePath"]').disabled : null,
+      textControls: all('[data-typeshed-text]').length,
       advancedPresent: el('.typeshed-advanced') !== null,
       advancedOpen: el('.typeshed-advanced') ? el('.typeshed-advanced').open : null,
-      urlValue: url ? url.value : null,
-      cacheFolderValue: cacheFolder ? cacheFolder.value : null,
+      storeFolderValue: storeFolder ? storeFolder.value : null,
+      booleanControls: all('[data-typeshed-boolean]').length,
       actions: all('[data-typeshed-action]').map((button) => ({
         action: button.dataset.typeshedAction,
         label: text(button),
         disabled: button.disabled,
+        busy: button.classList.contains('busy'),
       })),
       status,
       warnings: all('.typeshed-warning').map(text),
+      noSourcePresent: noSource !== null,
+      noSourceText: text(noSource),
+      // The deleted lock screen must stay deleted: no overlay node, no inert
+      // shell, ever ([LSPCFGED-TYPESHED-DOWNLOAD]).
+      overlayPresent: document.getElementById('state-overlay') !== null,
+      shellInert: document.getElementById('shell').inert === true,
       dialogOpen: document.getElementById('preview-dialog').open,
       dialogChanges: text(document.getElementById('preview-changes')),
     };

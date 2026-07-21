@@ -42,10 +42,7 @@ export type TagKind =
 export type TypeshedSettingKey =
   | { kind: "TypeshedPath" }
   | { kind: "TypeshedCommit" }
-  | { kind: "TypeshedUrl" }
-  | { kind: "TypeshedCachePath" }
-  | { kind: "TypeshedCache" }
-  | { kind: "TypeshedVerify" };
+  | { kind: "TypeshedStorePath" };
 
 export type TypeshedSettingValue =
   | { kind: "Text"; value: string }
@@ -60,57 +57,39 @@ export type EditorMutation =
   | { kind: "RemoveTypeshedSetting"; key: TypeshedSettingKey };
 
 /**
- * The active source carries the value that defines it: "latest with a pin" and
- * "a pinned commit plus a custom folder" are unrepresentable ([LSPCFGED-TYPESHED]).
+ * There are exactly two sources, each carrying the value that defines it:
+ * "a pinned commit plus a custom folder" is unrepresentable, and there is no
+ * "track latest" source at all ([LSPCFGED-TYPESHED]).
  */
 export type TypeshedSource =
-  | { kind: "Latest" }
   | { kind: "ExactCommit"; commit: string }
   | { kind: "CustomFolder"; path: string };
 
-/** Download policy of a downloaded source; a custom folder has none. */
-export interface TypeshedDownloadPolicy {
-  reuseDownloads: boolean;
-  verifyContent: boolean;
-  archiveUrl: string | undefined;
-  cacheFolder: string | undefined;
-}
-
 export type TypeshedLifecycle =
-  | { kind: "Acquiring" }
+  | { kind: "Downloading" }
   | { kind: "Ready" }
-  | { kind: "Blocked" };
+  | { kind: "NoSource" };
 
 export type TypeshedAction =
-  | { kind: "PinCurrent" }
-  | { kind: "AcquireFresh" }
+  | { kind: "DownloadLatest" }
+  | { kind: "DownloadPinned" }
   | { kind: "ViewLicense" };
 
+/**
+ * The active source is the whole trust story (custom = user-managed, bundled =
+ * build-vetted, exact commit = attested at download, re-proven offline), so
+ * there are no separate transport or provenance fields ([STUBRES-TYPESHED-WARN]).
+ */
 export type TypeshedActiveSource =
   | { kind: "Custom" }
   | { kind: "ExactCommit" }
-  | { kind: "Latest" }
   | { kind: "Bundled" };
 
-export type TypeshedTransport =
-  | { kind: "CustomPath" }
-  | { kind: "EmbeddedZip" }
-  | { kind: "Codeload" }
-  | { kind: "Mirror" };
-
 export type TypeshedLicenseStatus =
-  | { kind: "Acquiring" }
   | { kind: "Unavailable" }
   | { kind: "Approved" }
   | { kind: "Changed" }
   | { kind: "NotSupplied" };
-
-export type TypeshedProvenance =
-  | { kind: "Pending" }
-  | { kind: "GithubTlsAttested" }
-  | { kind: "Unverified" }
-  | { kind: "BundleVetted" }
-  | { kind: "UserManaged" };
 
 export type TypeshedWarningSeverity =
   | { kind: "Advisory" }
@@ -124,25 +103,21 @@ export interface TypeshedWarningState {
 
 export interface TypeshedStatusState {
   lifecycle: TypeshedLifecycle;
-  blockedReason: string | undefined;
+  noSourceReason: string | undefined;
   activeSource: TypeshedActiveSource | undefined;
   commitIdentity: string | undefined;
-  transport: TypeshedTransport | undefined;
   licenseStatus: TypeshedLicenseStatus;
-  provenance: TypeshedProvenance;
-  signedRelease: boolean;
   warnings: TypeshedWarningState[];
 }
 
 /**
  * Everything the editor needs and nothing it can misrender: the one active
- * source, the download policy that source has, the commit `PinCurrent` would
- * write when pinning is possible, and whether a license document exists.
+ * source, the store folder pins resolve from (none for a custom folder), and
+ * whether a license document exists to open.
  */
 export interface TypeshedConfigurationState {
   source: TypeshedSource;
-  downloads: TypeshedDownloadPolicy | undefined;
-  pinnableCommit: string | undefined;
+  storeFolder: string | undefined;
   licenseAvailable: boolean;
   status: TypeshedStatusState;
 }
@@ -315,8 +290,12 @@ export interface TypeshedLicenseDocument {
   readOnly: boolean;
 }
 
+/**
+ * Downloads return the refreshed snapshot immediately (lifecycle Downloading);
+ * completion arrives as TypeshedStatusChanged + ConfigurationChanged. No action
+ * returns a preview — a download is not a configuration edit.
+ */
 export type TypeshedActionResult =
-  | { kind: "Preview"; preview: ConfigurationPreview }
   | { kind: "Snapshot"; snapshot: ConfigurationSnapshot }
   | { kind: "License"; license: TypeshedLicenseDocument };
 

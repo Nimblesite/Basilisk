@@ -3,73 +3,55 @@
 
 import type {
   TypeshedConfigurationState,
-  TypeshedDownloadPolicy,
   TypeshedSource,
   TypeshedStatusState,
 } from "../../configuration-editor-model";
 
 export const ACTIVE_COMMIT = "83c2518a9e6abbda0c44592c3483de459198f887";
 export const OTHER_COMMIT = "1f2e3d4c5b6a798877665544332211000ffeeddc";
+/** What resolving python/typeshed@main yields for a Download latest run. */
+export const LATEST_COMMIT = "aaaabbbbccccddddeeeeffff0000111122223333";
 
 export interface TypeshedFixtureOptions {
   readonly source?: TypeshedSource;
-  readonly downloads?: TypeshedDownloadPolicy | undefined;
-  readonly pinnableCommit?: string | undefined;
+  readonly storeFolder?: string | undefined;
   readonly licenseAvailable?: boolean;
-  readonly acquiring?: boolean;
+  readonly downloading?: boolean;
+  readonly noSourceReason?: string;
   readonly warnings?: TypeshedStatusState["warnings"];
 }
 
-export const DEFAULT_DOWNLOADS: TypeshedDownloadPolicy = {
-  reuseDownloads: true,
-  verifyContent: true,
-  archiveUrl: undefined,
-  cacheFolder: undefined,
-};
-
-function defaultDownloads(
-  source: TypeshedSource,
-  options: TypeshedFixtureOptions,
-): TypeshedDownloadPolicy | undefined {
-  if ("downloads" in options) { return options.downloads; }
-  return source.kind === "CustomFolder" ? undefined : DEFAULT_DOWNLOADS;
+function fixtureLifecycle(options: TypeshedFixtureOptions): TypeshedStatusState["lifecycle"] {
+  if (options.downloading === true) { return { kind: "Downloading" }; }
+  return options.noSourceReason === undefined ? { kind: "Ready" } : { kind: "NoSource" };
 }
 
-function defaultPin(
-  source: TypeshedSource,
-  acquiring: boolean,
-  options: TypeshedFixtureOptions,
-): string | undefined {
-  if ("pinnableCommit" in options) { return options.pinnableCommit; }
-  return !acquiring && source.kind === "Latest" ? ACTIVE_COMMIT : undefined;
-}
-
-function fixtureStatus(acquiring: boolean, warnings: TypeshedStatusState["warnings"]): TypeshedStatusState {
+function fixtureStatus(options: TypeshedFixtureOptions): TypeshedStatusState {
+  const lifecycle = fixtureLifecycle(options);
+  const ready = lifecycle.kind === "Ready";
   return {
-    lifecycle: { kind: acquiring ? "Acquiring" : "Ready" },
-    blockedReason: undefined,
-    activeSource: acquiring ? undefined : { kind: "Bundled" },
-    commitIdentity: acquiring ? undefined : ACTIVE_COMMIT,
-    transport: acquiring ? undefined : { kind: "EmbeddedZip" },
-    licenseStatus: { kind: acquiring ? "Acquiring" : "Approved" },
-    provenance: { kind: acquiring ? "Pending" : "BundleVetted" },
-    signedRelease: false,
-    warnings,
+    lifecycle,
+    noSourceReason: lifecycle.kind === "NoSource" ? options.noSourceReason : undefined,
+    activeSource: ready ? { kind: "Bundled" } : undefined,
+    commitIdentity: ready ? ACTIVE_COMMIT : undefined,
+    licenseStatus: { kind: ready ? "Approved" : "Unavailable" },
+    warnings: options.warnings ?? [],
   };
 }
 
 /**
- * The server's projection for a settled root. Callers pass only what their
- * scenario changes; every other field stays the realistic default.
+ * The server's projection for one root. Callers pass only what their scenario
+ * changes; every other field stays the realistic default: the pinned-commit
+ * source (the only default source — there is no "Latest") with no store
+ * folder configured.
  */
 export function typeshedFixture(options: TypeshedFixtureOptions = {}): TypeshedConfigurationState {
-  const acquiring = options.acquiring === true;
-  const source = options.source ?? { kind: "Latest" };
+  const source = options.source ?? { kind: "ExactCommit", commit: ACTIVE_COMMIT };
   return {
     source,
-    downloads: defaultDownloads(source, options),
-    pinnableCommit: defaultPin(source, acquiring, options),
-    licenseAvailable: options.licenseAvailable ?? !acquiring,
-    status: fixtureStatus(acquiring, options.warnings ?? []),
+    // A custom folder downloads nothing, so it has no store folder at all.
+    storeFolder: source.kind === "CustomFolder" ? undefined : options.storeFolder,
+    licenseAvailable: options.licenseAvailable ?? source.kind !== "CustomFolder",
+    status: fixtureStatus(options),
   };
 }

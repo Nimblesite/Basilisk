@@ -212,9 +212,11 @@ function statusKind(value: { readonly kind: string } | undefined): string {
   return value?.kind ?? "Pending";
 }
 
+// The spinner belongs to the running download only; NO SOURCE is a persistent
+// error state, never a spinner ([LSPCFGED-TYPESHED-SERVICE-INFO]).
 function typeshedLifecycleIcon(status: TypeshedStatusState): string {
-  if (status.lifecycle.kind === "Acquiring") { return "loading~spin"; }
-  if (status.lifecycle.kind === "Blocked") { return "error"; }
+  if (status.lifecycle.kind === "Downloading") { return "loading~spin"; }
+  if (status.lifecycle.kind === "NoSource") { return "error"; }
   return "database";
 }
 
@@ -227,15 +229,14 @@ function rootLabel(rootUri: string): string {
   }
 }
 
+// The active source IS the whole trust story — there are no separate
+// transport or provenance facts to repeat ([LSPCFGED-TYPESHED-SERVICE-INFO]).
 function typeshedTooltip(rootUri: string, status: TypeshedStatusState): string {
   return [
     `Root: ${rootUri}`,
     `State: ${statusKind(status.lifecycle)}`,
     `Source: ${statusKind(status.activeSource)}`,
     `Commit: ${status.commitIdentity ?? "not available"}`,
-    `Transport: ${statusKind(status.transport)}`,
-    `Provenance: ${statusKind(status.provenance)}`,
-    `Signed release: ${status.signedRelease ? "yes" : "no"}`,
     `License: ${statusKind(status.licenseStatus)}`,
   ].join("\n");
 }
@@ -258,9 +259,9 @@ function typeshedSourceItem(
 /**
  * One typeshed warning row ([LSPCFGED-TYPESHED-SERVICE-INFO]).
  *
- * A warning's message names its own fix (`UNPINNED` names **Pin current**), and
- * every one of those fixes lives in the Configuration Editor — so the row
- * carries a single navigation-only command that opens it. This is the ONE
+ * A warning's message names its own fix (`NO SOURCE` names **Download
+ * pinned**), and every one of those fixes lives in the Configuration Editor —
+ * so the row carries a single navigation-only command that opens it. This is the ONE
  * documented exception to [EXTACT-INFO-AFFORDANCE]'s "read-only rows have no
  * command": it navigates, it never mutates configuration.
  *
@@ -292,6 +293,27 @@ function typeshedWarningItem(
   return item;
 }
 
+/**
+ * The persistent NO SOURCE row ([LSPCFGED-TYPESHED-SERVICE-INFO]): the pinned
+ * commit is absent from this machine (or failed verification), analysis does
+ * not run, and no substitute source is used. Its message names its fix —
+ * **Download pinned** — which lives in the Configuration Editor, so the row
+ * navigates there exactly like a warning row.
+ */
+function typeshedNoSourceItems(
+  prefix: string,
+  status: TypeshedStatusState,
+  editorSupported: boolean,
+): InfoTextItem[] {
+  if (status.lifecycle.kind !== "NoSource") { return []; }
+  const reason = status.noSourceReason ?? "The pinned commit is not available on this machine";
+  return [typeshedWarningItem(prefix, {
+    code: "NO SOURCE",
+    message: `${reason} — use Download pinned to restore it`,
+    severity: { kind: "High" },
+  }, editorSupported)];
+}
+
 function typeshedInfoItems(
   statuses: ReadonlyMap<string, TypeshedStatusState>,
   editorSupported: boolean,
@@ -306,9 +328,7 @@ function typeshedInfoItems(
         typeshedLifecycleIcon(status),
       ),
       typeshedSourceItem(prefix, rootUri, status),
-      ...(status.blockedReason === undefined
-        ? []
-        : [new InfoTextItem(`${prefix} Blocked`, status.blockedReason, "error")]),
+      ...typeshedNoSourceItems(prefix, status, editorSupported),
       ...status.warnings.map((warning) => typeshedWarningItem(prefix, warning, editorSupported)),
     ];
     return rows;

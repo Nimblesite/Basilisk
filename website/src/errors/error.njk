@@ -50,6 +50,17 @@ eleventyComputed:
      alt="basilisk check output reporting {{ rule.code }} — {{ rule.summary }}" loading="lazy">
 {% endif %}
 
+{# Implements [WEBSITE-ERROR-PAGES-REFERENCES]: every page deep-links the
+   authoritative typing-spec chapter and canonical PEP(s) for its rule. #}
+{% if rule.references.length %}
+<h2>Canonical documentation</h2>
+<ul class="error-references">
+  {% for ref in rule.references %}
+  <li><a href="{{ ref.url }}" rel="noopener">{{ ref.label }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
 <h2>How to handle it</h2>
 {% if rule.provenance == "basilisk" %}
 <p>
