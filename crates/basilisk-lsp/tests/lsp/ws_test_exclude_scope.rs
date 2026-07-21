@@ -35,13 +35,40 @@ fn seed(dir: &std::path::Path, rel: &str) -> TestResult<()> {
     Ok(())
 }
 
+/// How long to wait for the startup scan's FIRST publish. The server boots,
+/// resolves its stub snapshot and indexes the workspace before anything reaches
+/// the wire, and on a cold CI runner that is orders of magnitude slower than on
+/// a warm laptop.
+const FIRST_PUBLISH_TIMEOUT: Duration = Duration::from_mins(1);
+
+/// How long the stream must stay silent AFTER the sentinel before the scan
+/// counts as finished. Generous, because it is paid once per test and a scan
+/// that publishes its files a beat apart must not be cut in half.
+const QUIET_AFTER_SENTINEL: Duration = Duration::from_secs(3);
+
 /// Drain the startup scan and report which of `names` got a NON-EMPTY
-/// `publishDiagnostics`. Reads until the stream goes quiet so an absent
-/// notification is a genuine absence rather than an unread message.
-async fn scanned_files(fixture: &mut WsTestFixture, names: &[&str]) -> Vec<String> {
-    let mut seen = Vec::new();
-    for _ in 0..40 {
-        let next = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+/// `publishDiagnostics`.
+///
+/// `sentinel` names the one file the configuration under test must always
+/// scan. Waiting for it is what makes an ABSENCE meaningful: "excluded" and
+/// "not published yet" are the same thing on the wire — silence — so a fixed
+/// quiet period cannot tell them apart. It only encodes a guess about how fast
+/// the machine is, and that guess is wrong on the run that matters. So wait as
+/// long as it takes for the scan to prove it is alive, and only then treat
+/// silence as the answer.
+async fn scanned_files(fixture: &mut WsTestFixture, names: &[&str], sentinel: &str) -> Vec<String> {
+    let mut seen: Vec<String> = Vec::new();
+    let start = std::time::Instant::now();
+    loop {
+        let patience = if seen.iter().any(|found| found == sentinel) {
+            QUIET_AFTER_SENTINEL
+        } else {
+            FIRST_PUBLISH_TIMEOUT.saturating_sub(start.elapsed())
+        };
+        if patience.is_zero() {
+            break;
+        }
+        let next = tokio::time::timeout(patience, fixture.ws_read.next()).await;
         let Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))) = next else {
             break;
         };
@@ -81,6 +108,7 @@ async fn test_ws_configured_exclude_replaces_defaults_like_the_cli() -> TestResu
     let seen = scanned_files(
         &mut fixture,
         &["build/generated.py", "vendor/thirdparty.py", "app.py"],
+        "app.py",
     )
     .await;
 
@@ -120,6 +148,7 @@ async fn test_ws_unset_exclude_still_skips_default_excluded_trees() -> TestResul
     let seen = scanned_files(
         &mut fixture,
         &["build/generated.py", "node_modules/dep.py", "app.py"],
+        "app.py",
     )
     .await;
 
