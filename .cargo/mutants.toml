@@ -53,14 +53,23 @@ gitignore = true
 # Timeout into the killed total, so a timeout caused by slowness would launder an
 # untested mutant into a "kill". The timeout ratchet there enforces the invariant.
 #
-# MEASURED (2026-07-21, this workspace, `cargo test` warm):
-#   - Worst-case test phase = the FULL killing suite with no early exit, which is
-#     exactly what a mutant no test kills must run: 29 binaries, 25s.
+# MEASURED (2026-07-21, this workspace):
+#   - Serial and warm, the FULL killing suite — what a mutant no test kills must
+#     run, with no early exit — is 29 binaries in ~25s.
 #   - Build phase (the per-mutant incremental rebuild): ~54s median.
-# `--timeout 120` therefore has ~4.8x headroom over the worst-case test phase,
-# and `--build-timeout 600` covers the build phase separately. `--jobs` is capped
-# to min(4, cores/2) so concurrent rebuilds don't starve each other. All three are
-# TEST-execution settings, not code exclusions — every mutant still runs.
+#   - That 25s does NOT describe the per-mutant test phase under `--jobs 4`. Each
+#     job works in its own copied tree, so a mutated lib relinks all 29 test
+#     binaries in every concurrent job; that link cost, not test execution, is
+#     what the ceiling has to cover.
+#   - At `--timeout 120` this produced 30 TIMEOUTs across 144 mutants (0 MISSED).
+#     Re-running those same mutants over the full 29-binary set at `--timeout 400
+#     --jobs 1` caught every one of them, ~27s each — so they were always
+#     killable, and the ceiling rather than the code was what failed them.
+# `--timeout 400` therefore sizes the ceiling to the link-bound worst case rather
+# than the serial warm one, and `--build-timeout 600` covers the build phase
+# separately. `--jobs` is capped to min(4, cores/2) so concurrent rebuilds don't
+# starve each other. All three are TEST-execution settings, not code exclusions —
+# every mutant still runs.
 #
 # HISTORY — why the baseline once showed 29 timeouts and 0 missed. A global
 # `test_package` list (removed above) unioned basilisk-lsp into every
@@ -70,11 +79,14 @@ gitignore = true
 # mutants that blew it were, by construction, the ones NO test killed: a killed
 # mutant exits at the first failing binary, while a survivor runs every binary to
 # the end. So the slowest mutants were precisely the would-be survivors, and
-# timeout-as-kill recorded them as caught. Scoping the test package fixed the
-# cause; the timeout ratchet stops the symptom from ever being silent again.
+# timeout-as-kill recorded them as caught. Scoping the test package REDUCED that
+# cost but did not remove it — 30 timeouts survived the scoping — because the
+# per-mutant relink described above remained. Raising the ceiling is what
+# actually cleared them; the timeout ratchet stops the symptom from ever being
+# silent again.
 #
 # The residual policy, for any GENUINE infinite-loop mutant (one that would run
-# FOREVER, far past any 120s run): it has been DETECTED — a terminating suite
+# FOREVER, far past any 400s run): it has been DETECTED — a terminating suite
 # became non-terminating, an observable behaviour change — so a Timeout counts as
 # a KILL, exactly as PIT and Stryker do. That remains true. What changed is that
 # a RISE in the timeout count is now itself a gate failure, so the kill credit
