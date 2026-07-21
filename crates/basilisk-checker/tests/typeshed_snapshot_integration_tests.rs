@@ -20,9 +20,7 @@ use basilisk_stubs::types::{StubTarget, StubTargetPlatform};
 use basilisk_stubs::typeshed::archive::{Archive, ArchiveEntry, ArchiveVfs};
 use basilisk_stubs::typeshed::gittree::FileMode;
 use basilisk_stubs::typeshed::snapshot::Snapshot;
-use basilisk_stubs::typeshed::source::{
-    LicenseStatus, Provenance, SourceIdentity, SourceKind, Transport, TypeshedStatus,
-};
+use basilisk_stubs::typeshed::source::{LicenseStatus, SourceIdentity, SourceKind, TypeshedStatus};
 use basilisk_test_utils::EventDb;
 
 fn entry(path: &str, source: &str) -> ArchiveEntry {
@@ -59,11 +57,8 @@ fn micropython_snapshot() -> Arc<Snapshot> {
         active_source: SourceKind::Custom,
         commit: None,
         tree: None,
-        transport: Transport::CustomPath,
         license_status: LicenseStatus::NotSupplied,
         license_reference: None,
-        provenance: Provenance::UserManaged,
-        signed_release: false,
         warnings: Vec::new(),
     };
     Arc::new(

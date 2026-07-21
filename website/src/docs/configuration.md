@@ -47,9 +47,10 @@ anywhere on the walk:
 - The target Python version is resolved from your project files:
   `.python-version`, then the `[project].requires-python` lower bound, then
   the `uv.lock` `requires-python` lower bound.
-- Standard-library stubs are acquired at runtime from the latest
-  [python/typeshed](https://github.com/python/typeshed) commit, with a
-  bundled snapshot as the offline fallback — see
+- Standard-library stubs come from the bundled
+  [python/typeshed](https://github.com/python/typeshed) snapshot compiled into
+  the binary — fully offline, with an `UNPINNED` advisory until you pin a
+  commit — see
   [Standard-library stubs](#standard-library-stubs-typeshed).
 
 > **In an editor, that state is seeded once — the CLI never writes
@@ -320,15 +321,32 @@ Basilisk selects exactly **one** step-3 source:
 | Source | What it resolves to |
 | --- | --- |
 | Custom folder | your `typeshed-path` directory, verbatim |
-| Pinned commit | the `typeshed-commit` SHA, downloaded as a verified archive (fails closed if unavailable) |
-| Latest _(default)_ | the current `python/typeshed@main` commit, resolved once per run/session; if it cannot be resolved, the compiled-in bundled snapshot, with `UNPINNED` and `DOWNLOAD FAILED` warnings |
+| Pinned commit | the `typeshed-commit` SHA, verified offline against the on-disk store (fails closed if that commit is not on this machine) |
 
-Latest keeps you fresh but is not reproducible day-to-day — the editor's
-Server Info panel reports it as an `UNPINNED` row, and choosing **Pinned
-commit** in the Configuration Editor writes the resolved SHA as
-`typeshed-commit` (and clears any `typeshed-path`).
-Downloaded archives pass safety, shape, license, and content-verification
-gates before activation, and are cached as immutable ZIPs. Full detail:
+Resolution is **fully offline**: `basilisk check`, `basilisk analyze`, and the
+LSP never download anything. A pin does exactly one thing — it verifies that
+the typeshed tree on disk matches the SHA of that commit. If the pinned commit
+has not been downloaded to this machine, the check tanks hard with a
+`NO SOURCE` error (exit code 3) naming the recovery command; it never silently
+substitutes another source.
+
+Typeshed bytes arrive on a machine only through explicit download actions,
+which live entirely outside the checker. There are exactly two download
+contracts, each reachable from the Configuration Editor and from the CLI:
+
+- **Download latest** — the Configuration Editor button (offered whenever no
+  download is running), or `basilisk typeshed download` with no `--commit`.
+  Downloads the current `python/typeshed@main` commit and writes the resolved
+  SHA as your `typeshed-commit` pin (clearing any `typeshed-path`).
+- **Download pinned** — the Configuration Editor button on the `NO SOURCE` row
+  (offered when the pinned commit is not on this machine), or
+  `basilisk typeshed download --commit <sha>`. Materialises that exact,
+  already-configured pin into the store and writes no configuration.
+
+Every download passes safety, shape, license, and content-verification gates
+before anything lands in the content-addressed store; entries are immutable
+once written, and every later resolution re-hashes the stored tree against
+the pin's commit object — offline. Full detail:
 [`STUBRES-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED).
 
 The bundled snapshot is compiled into the binary, so stdlib types work with no
@@ -337,23 +355,20 @@ is the **complete set of typeshed `stdlib/` `.pyi` stubs** (third-party `stubs/`
 and typeshed's own non-stub `stdlib/` files excluded) at commit
 [`83c2518`](https://github.com/python/typeshed/tree/83c2518a9e6abbda0c44592c3483de459198f887/stdlib):
 752 `.pyi` files plus `stdlib/VERSIONS` and `LICENSE`, ~2.85 MB uncompressed.
-It is a fallback, not a pin — when it is in use Basilisk always says so.
+When `typeshed-commit` is unset, the bundled commit is the effective pin and
+the editor's Server Info panel shows an `UNPINNED` advisory; pinning any
+commit explicitly — the bundled `83c2518…` included — clears it.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `typeshed-commit` | full 40-char SHA | _(unset — Latest)_ | Exact `python/typeshed` commit to use. A pin **fails closed** — it never silently substitutes another commit. Abbreviated SHAs are rejected. |
-| `typeshed-url` | URL template | GitHub codeload | HTTPS archive mirror containing exactly one `{sha}` placeholder. A mirror cannot resolve Latest. |
-| `typeshed-cache-path` | path | OS cache dir | Where gate-accepted ZIPs are cached. |
-| `typeshed-cache` | bool | `true` | Reuse re-hashed cached ZIPs until explicitly evicted for an exact pin, or for 24 hours with Latest; `false` downloads, validates, and discards every run. |
-| `typeshed-verify` | bool | `true` | Content-attest the archive against the trusted git tree; `false` reports `UNVERIFIED` and never bypasses the safety, shape, or license gates. |
-| `typeshed-path` | path | _(unset)_ | Your own stdlib stub tree — disables both download and the bundled snapshot. |
+| `typeshed-commit` | full 40-char SHA | _(unset — the bundled commit, with an `UNPINNED` advisory)_ | Exact `python/typeshed` commit the on-disk tree must match. A pin **fails closed** — it never silently substitutes another commit. Abbreviated SHAs are rejected. |
+| `typeshed-store-path` | path | OS cache dir | Root of the verified, content-addressed store that `basilisk typeshed download` writes into and pins resolve from. |
+| `typeshed-path` | path | _(unset)_ | Your own stdlib stub tree — replaces the store and the bundled snapshot entirely. |
 
-Two of these have one-off CLI equivalents on `basilisk check` and
-`basilisk analyze`, for a single CI run you don't want to encode in the file:
-`--no-typeshed-cache` (equivalent to `typeshed-cache = false`) and
-`--no-typeshed-verification` (equivalent to `typeshed-verify = false`).
-Unrelated despite the name: `basilisk stubs` generates stubs for untyped
-**third-party** packages and has nothing to do with typeshed acquisition.
+That is the whole surface: there are no download-policy keys and no
+download-related CLI flags on `check` or `analyze` — downloading is never part
+of a check run. Unrelated despite the name: `basilisk stubs` generates stubs
+for untyped **third-party** packages and has nothing to do with typeshed.
 
 `typeshed-path` and `typeshed-commit` are **one source selection**: a nested
 config file that sets either replaces the inherited choice as a unit, never
@@ -362,7 +377,7 @@ mixing a path from one file with a pin from another.
 ### `typeshed-path`
 
 **Type:** `string`
-**Default:** _(unset — typeshed is acquired at runtime as above)_
+**Default:** _(unset — the pinned or bundled commit is used, as above)_
 **Example:** `"vendor/typeshed"`
 **Spec:** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
 
@@ -371,7 +386,7 @@ standard-library stubs. When set, this directory becomes the **canonical
 source for standard-library types** — the typing spec states that type
 checkers "SHOULD use this as the canonical source for standard-library types
 in this step." A stdlib module absent from the directory falls through to the
-remaining resolution steps — it is **not** rescued by a downloaded or bundled
+remaining resolution steps — it is **not** rescued by the store or the bundled
 typeshed.
 
 ## How to use a custom typeshed

@@ -1,5 +1,5 @@
 //! Tests for [CHKCACHE-READSET-FS] / [CHKCACHE-READSET-GUARD].
-//! See docs/specs/CHECKER-CACHE-SPEC.md#chkcache-readset
+//! See docs/specs/CHECKER-CACHE-SPEC.md#CHKCACHE-READSET
 #![allow(clippy::allow_attributes, clippy::unwrap_used, clippy::expect_used)]
 //! Crate-boundary tests for the read-tracking filesystem layer.
 

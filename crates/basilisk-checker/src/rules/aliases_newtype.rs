@@ -1,4 +1,4 @@
-//! Implements [`aliases_newtype`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! Implements [`aliases_newtype`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! `aliases_newtype`: Invalid `NewType(...)` call.
 //!
 //! PEP 484 places restrictions on `NewType`:

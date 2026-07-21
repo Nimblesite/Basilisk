@@ -1,4 +1,4 @@
-//! Implements [`classes_override_2`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`classes_override_2`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `classes_override_2`: Incompatible class attribute override.
 //!
 //! When a child class declares an attribute that also exists in a same-module

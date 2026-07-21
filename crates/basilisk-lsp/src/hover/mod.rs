@@ -11,6 +11,8 @@ use std::fmt::Write as _;
 use basilisk_resolver::{ImportInfo, ImportResolution, PackageDepKind, ResolvedModule};
 use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 
+use render::{SymbolCard, SymbolKind};
+
 use crate::util::{
     find_definition_by_name, find_symbol_at_offset, format_type_signature, identifier_at_offset,
     SymbolHit,
@@ -18,10 +20,16 @@ use crate::util::{
 
 /// Compute hover information at a byte offset.
 ///
-/// Searches definition sites first, then tries name-based lookup for
-/// reference sites (call sites, variable uses). Also shows import resolution
-/// details when the cursor is on an import statement, and any diagnostics
-/// covering the cursor position.
+/// A definition site (the cursor directly on a symbol's `name_span`) always
+/// answers for itself. Otherwise the answer depends on how the identifier is
+/// reached: a member access (`logger.error`) is resolved through its receiver,
+/// while a free name is resolved against the module's own bindings. The two
+/// must not be mixed — `imported_symbols` is keyed by bare name, so consulting
+/// it for a member would answer `logger.error` with whichever imported module
+/// happened to export the word `error`.
+///
+/// Import resolution details are added when the cursor is on an import
+/// statement, and any diagnostics covering the cursor position are appended.
 #[must_use]
 pub fn hover_at(
     resolved: &ResolvedModule,
@@ -31,82 +39,15 @@ pub fn hover_at(
 ) -> Option<Hover> {
     let mut sections: Vec<String> = Vec::new();
 
-    // 1. Definition site: cursor directly on a symbol's name_span.
+    // 1. Definition site: cursor directly on a symbol's name_span. This is
+    // span-exact, so it answers for a member's own declaration too
+    // (`self.attr = ...`).
     let hit = find_symbol_at_offset(resolved, byte_offset);
-
-    // 2. Reference site: cursor on an identifier, look up by name.
-    let hit = hit.or_else(|| {
-        let name = identifier_at_offset(source, byte_offset)?;
-        find_definition_by_name(resolved, &name)
-    });
 
     if let Some(ref hit) = hit {
         push_symbol_sections(resolved, source, hit, &mut sections);
-    }
-
-    // 2b. Imported symbol with no local definition (e.g. a function/class from a
-    // `.pyi` stub or a py.typed package): show its signature/type from
-    // cross-module resolution so stub types surface on hover. When cross-module
-    // resolution has not (yet) populated `imported_symbols`, fall back to the
-    // import declaration itself, which is always available from the same-file
-    // parse — so hovering a usage of an imported name is deterministic and never
-    // races cross-file indexing.
-    if hit.is_none() {
-        if let Some(name) = identifier_at_offset(source, byte_offset) {
-            let mut pushed = false;
-            if let Some(ext_sym) = resolved.imported_symbols.get(&name) {
-                let mut md = if let Some(sig) = &ext_sym.signature {
-                    format!("```python\n{sig}\n```")
-                } else if let Some(ty) = &ext_sym.type_annotation {
-                    format!("```python\n{name}: {ty}\n```")
-                } else {
-                    String::new()
-                };
-                if let Some(label) = ext_sym
-                    .provenance
-                    .and_then(basilisk_stubs::TypeProvenance::hover_label)
-                {
-                    if !md.is_empty() {
-                        md.push_str("\n\n");
-                    }
-                    let _ = write!(md, "*{label}*");
-                }
-                if !md.is_empty() {
-                    sections.push(md);
-                    pushed = true;
-                }
-                // An imported class also shows its constructor, resolved from the
-                // real `.pyi` via the flattened MRO methods — its own or inherited
-                // `__init__`/`__new__` (GitHub #289). Never a hand table.
-                if ext_sym.kind == basilisk_resolver::scope::ExternalSymbolKind::Class {
-                    for ctor in external_constructor_signatures(ext_sym) {
-                        sections.push(format!("```python\n{ctor}\n```"));
-                        pushed = true;
-                    }
-                }
-            }
-            if !pushed {
-                if let Some(imp) = crate::util::find_import_by_bound_name(resolved, &name) {
-                    let sig = format_type_signature(&SymbolHit::Import(imp), source);
-                    sections.push(format!("```python\n{sig}\n```"));
-                }
-            }
-        }
-    }
-
-    // 2c. Dot-access on a member of an external class (GitHub #287): e.g.
-    // `Model.model_validate(...)` where `Model` subclasses an imported stub
-    // class. Nothing local or top-level matched, so resolve the receiver to an
-    // external class — directly or through local base chains — and show the
-    // member's signature from the stub. Failing that, type the receiver as a
-    // builtin (`" ".join(...)` — GitHub #288) and use the curated builtin
-    // method signatures.
-    if hit.is_none() && sections.is_empty() {
-        if let Some(md) = external_member_hover(resolved, source, byte_offset)
-            .or_else(|| builtin_member_hover(resolved, source, byte_offset))
-        {
-            sections.push(md);
-        }
+    } else {
+        push_reference_sections(resolved, source, byte_offset, &mut sections);
     }
 
     // 3. Import resolution details when the cursor is on an import statement.
@@ -144,6 +85,100 @@ pub fn hover_at(
     })
 }
 
+/// Push the hover sections for a *reference* to a symbol — a use, not its
+/// declaration.
+///
+/// A member access answers through its receiver; a free name answers from the
+/// module's own bindings. Keeping the two apart is what stops a plain
+/// `import os` — which publishes every member of `os` into `imported_symbols`
+/// under its bare name — from answering `logger.error(...)` with `os.error`.
+fn push_reference_sections(
+    resolved: &ResolvedModule,
+    source: &str,
+    byte_offset: usize,
+    sections: &mut Vec<String>,
+) {
+    let access = access::access_at(source, byte_offset);
+    if access.is_member() {
+        if let Some(md) = members::member_hover(resolved, source, byte_offset, &access) {
+            sections.push(md);
+        }
+        return;
+    }
+    let Some(name) = identifier_at_offset(source, byte_offset) else {
+        return;
+    };
+    if let Some(hit) = find_definition_by_name(resolved, &name) {
+        push_symbol_sections(resolved, source, &hit, sections);
+        return;
+    }
+    push_imported_name_sections(resolved, source, &name, sections);
+}
+
+/// Push the sections for a free name that only cross-module resolution knows:
+/// a function or class from a `.pyi` stub or a `py.typed` package.
+///
+/// When cross-module resolution has not (yet) populated `imported_symbols`,
+/// this falls back to the import declaration itself, which is always available
+/// from the same-file parse — so hovering a usage of an imported name is
+/// deterministic and never races cross-file indexing (GitHub #200).
+fn push_imported_name_sections(
+    resolved: &ResolvedModule,
+    source: &str,
+    name: &str,
+    sections: &mut Vec<String>,
+) {
+    let mut pushed = false;
+    if let Some(ext_sym) = resolved.imported_symbols.get(name) {
+        let module = crate::util::find_import_by_bound_name(resolved, name)
+            .map(|import| import.module.clone());
+        if let Some(md) = external_symbol_card(ext_sym, module).render() {
+            sections.push(md);
+            pushed = true;
+        }
+        // An imported class also shows its constructor, resolved from the
+        // real `.pyi` via the flattened MRO methods — its own or inherited
+        // `__init__`/`__new__` (GitHub #289). Never a hand table.
+        if ext_sym.kind == basilisk_resolver::scope::ExternalSymbolKind::Class {
+            for ctor in external_constructor_signatures(ext_sym) {
+                sections.push(format!("```python\n(method) {ctor}\n```"));
+                pushed = true;
+            }
+        }
+    }
+    if !pushed {
+        if let Some(imp) = crate::util::find_import_by_bound_name(resolved, name) {
+            let sig = format_type_signature(&SymbolHit::Import(imp), source);
+            sections.push(format!("```python\n{sig}\n```"));
+        }
+    }
+}
+
+/// The hover card for an imported symbol: what it is, its declared shape, its
+/// documentation, and where the declaration was read from.
+pub(super) fn external_symbol_card(
+    symbol: &basilisk_resolver::scope::ExternalSymbol,
+    module: Option<String>,
+) -> SymbolCard {
+    let signature = symbol.signature.clone().or_else(|| {
+        symbol
+            .type_annotation
+            .as_ref()
+            .map(|ty| format!("{}: {ty}", symbol.name))
+    });
+    SymbolCard {
+        kind: SymbolKind::of_external(&symbol.kind),
+        signatures: signature.into_iter().collect(),
+        ..SymbolCard::default()
+    }
+    .documented(symbol.docstring.clone())
+    .declared_in(
+        module,
+        symbol.provenance.as_ref(),
+        Some(symbol.source_path.as_path()),
+    )
+}
+
 /// Push the hover sections for a resolved symbol hit: its signature, the
 /// constructor hint for classes (GitHub #289), its docstring, and the
 /// provenance annotation for imported symbols.
@@ -176,14 +211,19 @@ fn push_symbol_sections(
         sections.push(ds.to_owned());
     }
 
-    // Show provenance annotation for imported symbols.
+    // Show the provenance annotation for imported symbols. The name must
+    // actually be *bound* by an import: a plain `import os` publishes every
+    // member of `os` into `imported_symbols` under its bare name, so a local
+    // `def error(...)` would otherwise be labelled as coming from Typeshed.
     let hit_name = match hit {
         SymbolHit::Function(f) => Some(f.name.as_str()),
         SymbolHit::Class(c) => Some(c.name.as_str()),
         SymbolHit::Variable(v) => Some(v.name.as_str()),
         _ => None,
     };
-    if let Some(name) = hit_name {
+    if let Some(name) =
+        hit_name.filter(|name| crate::util::find_import_by_bound_name(resolved, name).is_some())
+    {
         if let Some(ext_sym) = resolved.imported_symbols.get(name) {
             if let Some(label) = ext_sym
                 .provenance
@@ -356,9 +396,11 @@ fn configure_severity_link(code: &str) -> Option<String> {
     ))
 }
 
+pub(crate) mod access;
 pub(crate) mod members;
+mod render;
 
-use members::{builtin_member_hover, external_member_hover, find_class_init};
+use members::find_class_init;
 
 #[cfg(test)]
 #[expect(

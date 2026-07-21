@@ -1,4 +1,4 @@
-//! Implements [`generics_syntax_declarations`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_syntax_declarations`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_syntax_declarations`: Invalid PEP 695 type parameter bound or constraint.
 //!
 //! PEP 695 introduced a new syntax for declaring type parameters in class and

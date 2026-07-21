@@ -271,12 +271,13 @@ No workspace scan; the server waits for `didOpen` notifications.
 
 ### wholeModule Startup {#ANALYSIS-STARTUP-WHOLE}
 
-On `initialized`, Basilisk acquires the selected step-3 stdlib source and gates
-the first check on it ([STUBRES-TYPESHED-ACQUIRE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
+During `initialize`, Basilisk resolves the selected step-3 stdlib source from
+local sources only and gates the first check on it
+([STUBRES-TYPESHED-OFFLINE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-OFFLINE)).
 This implements "Typeshed stubs for the standard library" in the pinned typing
 order ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
-The source is the custom path, an exact-SHA archive for an explicit commit or
-current `main`, or the bundled stdlib ZIP; no previous unpinned archive is eligible. The scan
+The source is the custom path or the pinned commit verified offline from the
+store/bundle; a missing pin is a terminal `NO SOURCE`, never a substitute. The scan
 then builds import paths, primes Salsa, analyzes each workspace file once, and
 publishes diagnostics. Open buffers are re-analyzed from editor text. Progress
 and the selected source appear in Service Info
@@ -301,7 +302,7 @@ The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk rel
 The cached `ImportSearchPaths` include the selected typeshed path and exact source
 identity. A `typeshed-path` or `typeshed-commit` change invalidates them and
 rebuilds step 3 before rechecking
-([STUBRES-TYPESHED-ACQUIRE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE)).
+([STUBRES-TYPESHED-PIN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-PIN)).
 This derived cache changes performance only; it preserves the pinned resolution
 order ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 It is reused across keystrokes, never across a source or configuration change.
@@ -425,19 +426,34 @@ panel-payload gating, header/row neutrality, and zero-diagnostics refresh).
 
 ## LSP Capabilities {#ANALYSIS-CAPS}
 
-When `analysisMode` is `wholeModule` or `crossModule`, the server advertises:
+Workspace capabilities are **mode-independent**. `build_capabilities`
+(`crates/basilisk-lsp/src/server/init.rs`) is parameterised only by whether the
+formatter engine is enabled ([LSPFMT-CAPABILITIES](LSP-FORMATTING-SPEC.md#LSPFMT-CAPABILITIES)),
+so the `initialize` response advertises the same workspace block in every
+`analysisMode`, `openFilesOnly` included:
 
 ```json
 "workspace": {
+  "workspaceFolders": { "supported": true, "changeNotifications": true },
   "fileOperations": {
-    "didCreate": { "filters": [{ "pattern": { "glob": "**/*.py" } }] },
-    "didDelete": { "filters": [{ "pattern": { "glob": "**/*.py" } }] },
-    "didRename": { "filters": [{ "pattern": { "glob": "**/*.py" } }] }
+    "willRename": {
+      "filters": [
+        { "scheme": "file", "pattern": { "glob": "**/*.py", "matches": "file" } }
+      ]
+    }
   }
 }
 ```
 
-When `analysisMode` is `openFilesOnly`, these capabilities are omitted.
+`workspace/willRenameFiles` is the only file-operation method the server serves
+(`crates/basilisk-lsp/src/server/handlers/file_operations.rs`): renaming a module
+returns a `WorkspaceEdit` rewriting the imports that pointed at it
+([REFACTOR-RENAMEMOD](LSP-REFACTORING-SPEC.md#REFACTOR-RENAMEMOD)). The
+`didCreate` / `didDelete` / `didRename` notifications are neither advertised nor
+handled — creations and deletions reach the index through
+`workspace/didChangeWatchedFiles`, which is where the mode gate actually lives:
+that handler returns early in `openFilesOnly` after refreshing configuration
+([ANALYSIS-INCR-WATCH]).
 
 ---
 

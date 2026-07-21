@@ -1,4 +1,4 @@
-//! Implements [`typeddicts_readonly`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! Implements [`typeddicts_readonly`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! `typeddicts_readonly`: Mutation of `ReadOnly` `TypedDict` fields
 //!
 //! Fields marked as `ReadOnly` in `TypedDict`s cannot be mutated through:

@@ -2,7 +2,7 @@
 layout: layouts/docs.njk
 title: "Basilisk: The Only 100% PEP-Conformant Python Language Server"
 description: "Install, configure, and use Basilisk: an open-source Python type checker and language server with refactoring, debugging, profiling, and editor integrations."
-keywords: basilisk, python, language server, lsp, type checker, vs code, cursor, zed, neovim, strict, rust
+keywords: basilisk, best python type checker, python, language server, lsp, type checker, vs code, cursor, zed, neovim, strict, rust
 date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project
@@ -15,7 +15,7 @@ eleventyNavigation:
 
 Basilisk is a **complete, open-source Python language server**. Everything you rely on a modern Python extension for — autocomplete, go-to-definition, hover information, refactoring, diagnostics, integrated debugging, profiling — Basilisk does too, fully open source and conformant to the Python typing spec by default.
 
-It is also the **only Python type checker with a perfect 100% score** on the [official `python/typing` conformance results]({{ conformanceOfficial.snapshot.source }}) — published on the Python typing repository's own leaderboard, ahead of Pyright, mypy, Pyrefly and ty. See [how we measure it](/docs/conformance/).
+It is also the **only Python type checker with a perfect 100% score** on the [official `python/typing` conformance results]({{ conformanceOfficial.snapshot.source }}) — published on the Python typing repository's own leaderboard, ahead of Pyright, mypy, Pyrefly and ty. See [how we measure it](/docs/conformance/), or weigh up the [best Python type checker](/docs/comparison/) for your project in the comparison.
 
 It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Cursor**, **Windsurf**, **Zed**, and **Neovim** — plus any other editor that speaks the Language Server Protocol. JetBrains support is planned. No proprietary extension, no Node.js — a single Rust binary, the same experience in every editor.
 
@@ -35,7 +35,7 @@ Basilisk takes a different position. Its default *is* the typing spec — full P
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
 - An **integrated profiler** — sampling CPU profiler with inline heatmap annotations, flame graphs, memory leak detection, and reference graph visualization, all inside your editor
 - A **PEP-conformant type checker by default** — the core spec rule set out of the box, with opt-in Basilisk rules for checking stricter than the spec
-- **Standard-library types out of the box** — typeshed stubs are acquired at runtime from `python/typeshed@main`, verified, and cached; a complete typeshed `stdlib/` tree is compiled into the binary as the offline fallback, so stdlib types work with no network and no configuration
+- **Standard-library types out of the box** — a complete typeshed `stdlib/` tree is compiled into the binary and checking never downloads anything, so stdlib types work with no network and no configuration; pin an exact `python/typeshed` commit and it is verified offline against your local store
 - A **CLI tool** for CI integration — exits with code 1 when errors are found
 - A **migration assistant** that reads your existing `pyrightconfig.json` or `mypy.ini`
 - **uv integration** — workspace detection, lock file parsing, and package management commands
@@ -84,12 +84,14 @@ Basilisk is under **active development** — the core checker, LSP server, and e
 
 ## Architecture
 
-Basilisk is a Cargo workspace with 18 Rust crates, each owning one layer of the system:
+Basilisk is a Cargo workspace with 19 Rust crates, each owning one layer of the system:
 
 | Layer | Crates |
 |-------|--------|
 | **Analysis pipeline** | `basilisk-parser` &rarr; `basilisk-resolver` &rarr; `basilisk-checker` &rarr; `basilisk-cli` |
-| **LSP & infrastructure** | `basilisk-lsp`, `basilisk-db`, `basilisk-config`, `basilisk-stubs`, `basilisk-uv`, `basilisk-common`, `basilisk-test-utils`, `basilisk-profiler-helper` |
+| **LSP & infrastructure** | `basilisk-lsp`, `basilisk-db`, `basilisk-config`, `basilisk-stubs`, `basilisk-uv`, `basilisk-common`, `basilisk-buildinfo`, `basilisk-profiler-helper`, `basilisk-profiler-protocol` |
+| **Typeshed downloads** | `basilisk-typeshed-fetch` — the workspace's only HTTP client; it downloads typeshed on an explicit user action, strictly segregated from checking |
+| **Test infrastructure** | `basilisk-test-utils`, `basilisk-test-macros` |
 | **Editor extensions** | VS Code (`vscode-extension`), Neovim (`basilisk.nvim`), Zed (`basilisk-zed`) |
 | **Future** | `basilisk-mojo` (ownership), `basilisk-compiler` (native), WASM plugins |
 

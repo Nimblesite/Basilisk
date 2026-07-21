@@ -144,31 +144,7 @@ pub(crate) fn collect_and_check(
     stats: &mut cache_check::CacheStats,
     scope: DiagnosticScope,
 ) -> Result<CheckOutcome, PipelineError> {
-    collect_and_check_with_overrides(paths, cache, stats, scope, TypeshedOverrides::default())
-}
-
-/// One-run command-line overrides for Typeshed acquisition policy.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct TypeshedOverrides {
-    pub(crate) no_cache: bool,
-    pub(crate) no_verification: bool,
-}
-
-pub(crate) fn collect_and_check_with_overrides(
-    paths: &[String],
-    cache: &cache_check::CacheOptions,
-    stats: &mut cache_check::CacheStats,
-    scope: DiagnosticScope,
-    overrides: TypeshedOverrides,
-) -> Result<CheckOutcome, PipelineError> {
-    collect_and_check_with_typeshed(
-        paths,
-        cache,
-        stats,
-        scope,
-        overrides,
-        activate_production_typeshed,
-    )
+    collect_and_check_with_typeshed(paths, cache, stats, scope, activate_production_typeshed)
 }
 
 fn collect_and_check_with_typeshed<F>(
@@ -176,7 +152,6 @@ fn collect_and_check_with_typeshed<F>(
     cache: &cache_check::CacheOptions,
     stats: &mut cache_check::CacheStats,
     scope: DiagnosticScope,
-    overrides: TypeshedOverrides,
     activate_typeshed: F,
 ) -> Result<CheckOutcome, PipelineError>
 where
@@ -203,7 +178,7 @@ where
             basilisk_uv::python_version::resolve_target_python_version(&project_root);
     }
 
-    let mut workspace_config =
+    let workspace_config =
         load_cli_workspace_config(&project_root, config.python_version.as_deref());
     if config.python_platform.is_none() {
         config
@@ -222,12 +197,6 @@ where
     // pyproject.toml, uv.lock, and .venv live at the discovered project root,
     // not necessarily in the checked path.
     let roots = analysis_roots(paths, &project_root);
-    if overrides.no_cache {
-        workspace_config.typeshed_cache = false;
-    }
-    if overrides.no_verification {
-        workspace_config.typeshed_verify = false;
-    }
     let mut search_paths = if crate::import_search::files_might_import(&python_files) {
         build_import_search_paths_with_config(roots, &workspace_config)
     } else {

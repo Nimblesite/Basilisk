@@ -1,4 +1,4 @@
-//! Implements [`generics_typevartuple_basic`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! Implements [`generics_typevartuple_basic`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! `generics_typevartuple_basic`: Invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword argument combination.
 //!
 //! PEP 484 / PEP 695 forbid certain combinations of keyword arguments in

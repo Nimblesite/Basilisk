@@ -10,13 +10,11 @@ use basilisk_stubs::typeshed::warning::{
 };
 
 #[test]
-fn fallback_verification_and_unpinned_warnings_compose() {
+fn unpinned_user_managed_and_license_warnings_compose() {
     let mut warnings = vec![
-        TypeshedWarning::Unverified,
-        TypeshedWarning::DownloadFailed {
-            bundled_sha: "83c2518a9e6abbda0c44592c3483de459198f887".to_owned(),
-        },
-        TypeshedWarning::Unpinned(UnpinnedKind::LatestOrBundled),
+        TypeshedWarning::LicenseChanged,
+        TypeshedWarning::UserManaged,
+        TypeshedWarning::Unpinned(UnpinnedKind::BundledDefault),
     ];
     canonicalize(&mut warnings);
 
@@ -25,7 +23,7 @@ fn fallback_verification_and_unpinned_warnings_compose() {
             .iter()
             .map(TypeshedWarning::code)
             .collect::<Vec<_>>(),
-        vec!["UNPINNED", "DOWNLOAD FAILED", "UNVERIFIED"]
+        vec!["UNPINNED", "USER-MANAGED SOURCE", "LICENSE CHANGED"]
     );
     assert_eq!(warnings[0].severity(), WarningSeverity::Advisory);
     assert_eq!(warnings[2].severity(), WarningSeverity::High);
@@ -59,9 +57,10 @@ fn custom_source_is_unpinned_and_user_managed() {
 
 #[test]
 fn warnings_serialize_without_losing_their_variant() {
-    let warning = TypeshedWarning::DownloadFailed {
-        bundled_sha: "83c2518a9e6abbda0c44592c3483de459198f887".to_owned(),
-    };
+    let warning = TypeshedWarning::Unpinned(UnpinnedKind::CustomFolder);
     let value = serde_json::to_value(&warning).expect("warning serializes");
-    assert!(value.get("DownloadFailed").is_some());
+    assert_eq!(
+        value.get("Unpinned").and_then(serde_json::Value::as_str),
+        Some("CustomFolder")
+    );
 }

@@ -20,7 +20,6 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     let activeTag;
     let selectedRuleCode;
     let lastFocusedRule;
-    let overlayWasBlocking = false;
     // Which navigation view is visible. Rules is the default so the editor
     // opens on the tag-first rule browser exactly as before.
     let activeSection = 'rules';
@@ -107,11 +106,13 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     function typeshedRemove(name) {
       return { kind: 'RemoveTypeshedSetting', key: typeshedKey(name) };
     }
+    // 'value' is a bare String in the model ([LSPCFGED-TYPESHED],
+    // models/configuration_editor.td). It was a tagged union while typeshed
+    // settings had non-text kinds; every surviving key is text-valued, so a
+    // { kind: 'Text', ... } wrapper is now an unknown shape the decoder drops,
+    // silently discarding the user's edit.
     function typeshedSetText(name, value) {
-      return { kind: 'SetTypeshedSetting', key: typeshedKey(name), value: { kind: 'Text', value } };
-    }
-    function typeshedSetBoolean(name, value) {
-      return { kind: 'SetTypeshedSetting', key: typeshedKey(name), value: { kind: 'Boolean', value } };
+      return { kind: 'SetTypeshedSetting', key: typeshedKey(name), value };
     }
     function selectedRule() {
       return snapshot && snapshot.rules.find((rule) => rule.descriptor.code === selectedRuleCode);

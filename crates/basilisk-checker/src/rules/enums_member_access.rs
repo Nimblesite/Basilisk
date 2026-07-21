@@ -1,4 +1,4 @@
-//! Implements [`enums_definition`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`enums_definition`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `enums_definition`: access to an enum member that does not exist for the target.
 //!
 //! Enum members may be defined conditionally on a statically-known check such as

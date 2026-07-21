@@ -1,4 +1,4 @@
-//! Implements [`protocols_variance`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`protocols_variance`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `protocols_variance`: Protocol variance violation.
 //!
 //! Detects when a Protocol class declares `TypeVar`s with incorrect variance

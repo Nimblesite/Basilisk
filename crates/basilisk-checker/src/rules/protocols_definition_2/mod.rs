@@ -1,4 +1,4 @@
-//! Implements [`protocols_definition_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`protocols_definition_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `protocols_definition_2`: Protocol conformance violation in annotated assignment.
 //!
 //! Detects errors in annotated assignments at module level:

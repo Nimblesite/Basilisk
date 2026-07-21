@@ -109,61 +109,27 @@ pub(crate) async fn refresh_root_from_disk(
     let document = handles.configuration_editor.effective_document(root);
     let result = match document {
         Ok(document) => {
-            match super::typeshed_acquisition::stage_watched_configuration_change(
-                handles,
+            let staged = super::typeshed_resolution::stage_configuration_change(
                 root,
                 &before,
                 &document.config,
             )
-            .await
-            {
-                Ok(Some(staged)) => {
-                    let refreshed = super::transaction::refresh_with_document_and_typeshed(
-                        handles,
-                        root,
-                        reason,
-                        &document,
-                        Some(staged.candidate()),
-                    )
-                    .await;
-                    match refreshed {
-                        Ok(()) => {
-                            staged.activate_with(handles, root).await;
-                            Ok(())
-                        }
-                        Err(error) => {
-                            let cleanup = super::transaction::refresh_with_document(
-                                handles,
-                                root,
-                                "typeshedWatchedConfigurationBlocked",
-                                &document,
-                            )
-                            .await;
-                            staged
-                                .block_with(handles, root, "configuration refresh failed")
-                                .await;
-                            if let Err(cleanup_error) = cleanup {
-                                tracing::warn!(root = %root.display(), error = %cleanup_error, "failed to clear analysis after watched Typeshed activation failure");
-                            }
-                            Err(error)
-                        }
-                    }
-                }
-                Ok(None) => {
-                    super::transaction::refresh_with_document(handles, root, reason, &document)
-                        .await
-                }
-                Err(error) => {
-                    let rpc_error = error.rpc_error();
-                    let refresh =
-                        super::transaction::refresh_with_document(handles, root, reason, &document)
-                            .await;
-                    if let Some(failure) = error.into_failure() {
-                        super::typeshed_acquisition::publish_failure(handles, root, failure).await;
-                    }
-                    refresh.and(Err(rpc_error))
-                }
+            .await;
+            let candidate = staged
+                .as_ref()
+                .and_then(super::typeshed_resolution::StagedResolution::candidate)
+                .cloned();
+            if let Some(staged) = staged {
+                staged.publish(handles, root).await;
             }
+            super::transaction::refresh_with_document_and_typeshed(
+                handles,
+                root,
+                reason,
+                &document,
+                candidate.as_ref(),
+            )
+            .await
         }
         Err(error) => Err(super::protocol::config_error(error)),
     };
@@ -309,16 +275,16 @@ pub(super) fn workspace_config_for_basilisk(
         }
     });
     config.typeshed_commit.clone_from(&basilisk.typeshed_commit);
-    config.typeshed_url.clone_from(&basilisk.typeshed_url);
-    config.typeshed_cache_path = basilisk.typeshed_cache_path.as_ref().map(|path| {
+    config.typeshed_store_path = basilisk.typeshed_store_path.as_ref().map(|path| {
         if path.is_absolute() {
             path.clone()
         } else {
             root.join(path)
         }
     });
-    config.typeshed_cache = basilisk.typeshed_cache.unwrap_or(true);
-    config.typeshed_verify = basilisk.typeshed_verify.unwrap_or(true);
+    // The supplied checker config is authoritative for all three Typeshed
+    // keys, so a stale on-disk type error must not leak into resolution.
+    config.typeshed_configuration_error = None;
     if basilisk.python_version.is_some() {
         config.python_version.clone_from(&basilisk.python_version);
     }

@@ -3,7 +3,9 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use basilisk_config::{build_rule_patch, ConfigDocument, ConfigPatch, RuleConfigUpdate};
+use basilisk_config::{
+    build_configuration_patch, ConfigDocument, ConfigPatch, ConfigurationUpdate, RuleConfigUpdate,
+};
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CreateFile, CreateFileOptions, DocumentChangeOperation, DocumentChanges, OneOf,
@@ -33,7 +35,7 @@ pub(crate) struct ConfigurationRefreshHandles {
     pub(crate) workspace_roots: Arc<tokio::sync::RwLock<Vec<std::path::PathBuf>>>,
     /// Explicit interpreter supplied by the editor initialization options.
     pub(crate) python_interpreter: Arc<tokio::sync::RwLock<Option<std::path::PathBuf>>>,
-    /// Root-keyed active/acquiring/blocked Typeshed generations.
+    /// Root-keyed terminal (Ready/NoSource) Typeshed generations.
     pub(crate) typeshed_generations:
         Arc<tokio::sync::RwLock<crate::server::typeshed_status::TypeshedGenerations>>,
     /// Whether every workspace root has completed its first ready scan.
@@ -107,12 +109,26 @@ fn replacement_edit(
     })
 }
 
-/// Apply one validated entry update through the same client-edit service
-/// used by the typed preview/apply protocol.
+/// Apply one validated rule-entry update through the shared transaction.
 pub(crate) async fn apply_rule_updates(
     server: &LspServer,
     root: &Path,
     update: &RuleConfigUpdate,
+    reason: &str,
+) -> LspResult<ConfigDocument> {
+    let update = ConfigurationUpdate {
+        rules: update.clone(),
+        typeshed: basilisk_config::TypeshedConfigUpdate::default(),
+    };
+    apply_configuration_update(server, root, &update, reason).await
+}
+
+/// Apply one validated configuration update through the same client-edit
+/// service used by the typed preview/apply protocol.
+pub(crate) async fn apply_configuration_update(
+    server: &LspServer,
+    root: &Path,
+    update: &ConfigurationUpdate,
     reason: &str,
 ) -> LspResult<ConfigDocument> {
     let effective = server
@@ -123,7 +139,7 @@ pub(crate) async fn apply_rule_updates(
     let disk_revision = server
         .configuration_editor
         .disk_revision_for(root, &document.revision);
-    let patch = build_rule_patch(&document, update).map_err(config_error)?;
+    let patch = build_configuration_patch(&document, update).map_err(config_error)?;
     apply_prepared_patch(
         server,
         root,
@@ -136,6 +152,10 @@ pub(crate) async fn apply_rule_updates(
     .await
 }
 
+/// The transaction order is the whole UI fix ([LSPCFGED-TYPESHED]): compute
+/// the next terminal generation locally, land the edit, then publish — a
+/// rejected edit drops the staged value with nothing ever published, so
+/// clients never observe an intermediate state.
 pub(super) async fn apply_prepared_patch(
     server: &LspServer,
     root: &Path,
@@ -146,30 +166,20 @@ pub(super) async fn apply_prepared_patch(
     reason: &str,
 ) -> LspResult<ConfigDocument> {
     let edit = replacement_edit(document, patch, document_version)?;
-    let staged = super::typeshed_acquisition::stage_configuration_change(
-        server,
+    let staged = super::typeshed_resolution::stage_configuration_change(
         root,
         &document.config,
         &patch.config,
     )
-    .await?;
-    let response = match server.client.apply_edit(edit).await {
-        Ok(response) => response,
-        Err(error) => {
-            if let Some(staged) = staged {
-                staged.rollback(server, root).await;
-            }
-            return Err(rpc_error_data(
-                "clientRejectedEdit",
-                "client failed to apply configuration edit",
-                serde_json::json!({ "error": error.to_string() }),
-            ));
-        }
-    };
+    .await;
+    let response = server.client.apply_edit(edit).await.map_err(|error| {
+        rpc_error_data(
+            "clientRejectedEdit",
+            "client failed to apply configuration edit",
+            serde_json::json!({ "error": error.to_string() }),
+        )
+    })?;
     if !response.applied {
-        if let Some(staged) = staged {
-            staged.rollback(server, root).await;
-        }
         return Err(rpc_error_data(
             "clientRejectedEdit",
             "client rejected configuration edit",
@@ -191,33 +201,15 @@ pub(super) async fn apply_prepared_patch(
         );
     }
     let handles = server.refresh_handles();
-    let refresh = refresh_with_document_and_typeshed(
-        &handles,
-        root,
-        reason,
-        &applied,
-        staged
-            .as_ref()
-            .map(super::typeshed_acquisition::StagedGeneration::candidate),
-    )
-    .await;
-    if let Err(error) = refresh {
-        if let Some(staged) = staged {
-            let cleanup =
-                refresh_with_document(&handles, root, "typeshedConfigurationBlocked", &applied)
-                    .await;
-            staged
-                .block(server, root, "configuration refresh failed")
-                .await;
-            if let Err(cleanup_error) = cleanup {
-                tracing::warn!(root = %root.display(), error = %cleanup_error, "failed to clear analysis after Typeshed configuration failure");
-            }
-        }
-        return Err(error);
-    }
+    let candidate = staged
+        .as_ref()
+        .and_then(super::typeshed_resolution::StagedResolution::candidate)
+        .cloned();
     if let Some(staged) = staged {
-        staged.activate(server, root).await;
+        staged.publish(&handles, root).await;
     }
+    refresh_with_document_and_typeshed(&handles, root, reason, &applied, candidate.as_ref())
+        .await?;
     Ok(applied)
 }
 
@@ -263,10 +255,7 @@ pub(super) async fn refresh_with_document_and_typeshed(
     let generation_unavailable = candidate.is_none()
         && matches!(
             handles.typeshed_generations.read().await.get(root),
-            Some(
-                crate::server::typeshed_status::TypeshedGeneration::Acquiring
-                    | crate::server::typeshed_status::TypeshedGeneration::Blocked { .. }
-            )
+            Some(crate::server::typeshed_status::TypeshedGeneration::NoSource { .. })
         );
     if generation_unavailable {
         return commit_without_analysis(handles, root, reason, document).await;

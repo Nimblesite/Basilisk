@@ -1,4 +1,4 @@
-//! Implements [`namedtuples_type_compat`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! Implements [`namedtuples_type_compat`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 //! `namedtuples_type_compat`: `NamedTuple`-to-tuple type incompatibility.
 //!
 //! When a `NamedTuple` instance is assigned to a variable annotated with a

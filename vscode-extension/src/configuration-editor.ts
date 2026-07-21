@@ -3,7 +3,6 @@
 
 import { effect } from "@preact/signals-core";
 import * as vscode from "vscode";
-import type { LanguageClient } from "vscode-languageclient/node";
 import { buildConfigurationEditorDocument } from "./configuration-editor-document";
 import {
   configurationError,
@@ -15,18 +14,15 @@ import {
   type ConfigurationEditorIntent,
 } from "./configuration-editor-intents";
 import type {
-  ApplyConfigurationRequest,
   ConfigurationPreview,
-  ConfigurationSnapshot,
-  PreviewConfigurationRequest,
   RuleOccurrencesRequest,
-  RuleOccurrencesResponse,
   TypeshedActionRequest,
-  TypeshedActionResult,
 } from "./configuration-editor-model";
 import {
-  confirmVerificationOff,
-  disablesTypeshedVerification,
+  clientTransport,
+  type ConfigurationEditorTransport,
+} from "./configuration-editor-transport";
+import {
   isTypeshedOnly,
   pickTypeshedFolder,
   TypeshedEditorUi,
@@ -39,90 +35,17 @@ export const CONFIGURATION_EDITOR_COMMAND = "basilisk.openConfigurationEditor";
 /** Explorer context-menu entry on pyproject.toml ("Edit Config"). */
 export const EDIT_CONFIG_COMMAND = "basilisk.editConfig";
 export const CONFIGURATION_EDITOR_CONTEXT = "basilisk.configurationEditorSupported";
-const SNAPSHOT_METHOD = "basilisk/configurationSnapshot";
-const PREVIEW_METHOD = "basilisk/previewConfigurationChange";
-const APPLY_METHOD = "basilisk/applyConfigurationChange";
-const OCCURRENCES_METHOD = "basilisk/ruleOccurrences";
-const TYPESHED_ACTION_METHOD = "basilisk/typeshedAction";
-const EXECUTE_COMMAND_METHOD = "workspace/executeCommand";
 const ADOPT_WORKSPACE_COMMAND = "basilisk.adoptWorkspace";
 const FIX_WORKSPACE_COMMAND = "basilisk.fixWorkspace";
 const CONFIGURATION_VIEW_TYPE = "basilisk.configurationEditor";
 export { configurationRepairUri } from "./configuration-editor-errors";
-
-/** Typed transport seam: production uses LanguageClient; tests can inject a fake. */
-export interface ConfigurationEditorTransport {
-  snapshot(rootUri: string): Promise<ConfigurationSnapshot>;
-  preview(request: PreviewConfigurationRequest): Promise<ConfigurationPreview>;
-  apply(request: ApplyConfigurationRequest): Promise<ConfigurationSnapshot>;
-  occurrences(request: RuleOccurrencesRequest): Promise<RuleOccurrencesResponse>;
-  typeshedAction(request: TypeshedActionRequest): Promise<TypeshedActionResult>;
-  executeCommand(command: string, args: readonly unknown[]): Promise<void>;
-}
-
-interface ExperimentalCapabilities {
-  readonly basilisk?: {
-    readonly configurationEditor?: unknown;
-  };
-}
-
-/**
- * [LSPARCH-CONFIG-EDITOR-PROTOCOL]: the editor ships with the server, so the
- * capability is pure presence — `configurationEditor` advertised truthy.
- */
-export function supportsConfigurationEditor(client: LanguageClient | undefined): boolean {
-  const experimental = client?.initializeResult?.capabilities.experimental as unknown;
-  if (typeof experimental !== "object" || experimental === null) { return false; }
-  const capability = (experimental as ExperimentalCapabilities).basilisk?.configurationEditor;
-  return capability !== undefined && capability !== null && capability !== false;
-}
-
-function clientTransport(store: Store): ConfigurationEditorTransport {
-  function runningClient(): LanguageClient {
-    const client = store.client.value;
-    if (client?.isRunning() !== true) { throw new Error("The Basilisk language server is not running."); }
-    return client;
-  }
-  return {
-    async snapshot(rootUri: string): Promise<ConfigurationSnapshot> {
-      return runningClient().sendRequest<ConfigurationSnapshot>(SNAPSHOT_METHOD, { rootUri });
-    },
-    async preview(request: PreviewConfigurationRequest): Promise<ConfigurationPreview> {
-      return runningClient().sendRequest<ConfigurationPreview>(PREVIEW_METHOD, request);
-    },
-    async apply(request: ApplyConfigurationRequest): Promise<ConfigurationSnapshot> {
-      return runningClient().sendRequest<ConfigurationSnapshot>(APPLY_METHOD, request);
-    },
-    async occurrences(request: RuleOccurrencesRequest): Promise<RuleOccurrencesResponse> {
-      return runningClient().sendRequest<RuleOccurrencesResponse>(OCCURRENCES_METHOD, request);
-    },
-    async typeshedAction(request: TypeshedActionRequest): Promise<TypeshedActionResult> {
-      return runningClient().sendRequest<TypeshedActionResult>(TYPESHED_ACTION_METHOD, request);
-    },
-    async executeCommand(command: string, args: readonly unknown[]): Promise<void> {
-      await runningClient().sendRequest(EXECUTE_COMMAND_METHOD, { command, arguments: args });
-    },
-  };
-}
-
-function fileWorkspaceRoot(): vscode.WorkspaceFolder | undefined {
-  const uri = vscode.window.activeTextEditor?.document.uri;
-  return uri === undefined ? undefined : vscode.workspace.getWorkspaceFolder(uri);
-}
-
-/** Choose an explicit root; active-editor ownership wins in a multi-root workspace. */
-export async function selectConfigurationRoot(): Promise<string | undefined> {
-  const activeRoot = fileWorkspaceRoot();
-  if (activeRoot !== undefined) { return activeRoot.uri.toString(); }
-  const roots = vscode.workspace.workspaceFolders ?? [];
-  if (roots.length === 1) { return roots[0]?.uri.toString(); }
-  if (roots.length === 0) { return undefined; }
-  const choice = await vscode.window.showQuickPick(
-    roots.map((root) => ({ label: root.name, detail: root.uri.fsPath, rootUri: root.uri.toString() })),
-    { title: "Basilisk Configuration", placeHolder: "Choose the workspace configuration to edit" },
-  );
-  return choice?.rootUri;
-}
+// The LSP seam lives next door ([VSIX-CONFIGURATION-EDITOR-FILES]); re-exported
+// here so callers keep importing the editor's public surface from one module.
+export {
+  selectConfigurationRoot,
+  supportsConfigurationEditor,
+  type ConfigurationEditorTransport,
+} from "./configuration-editor-transport";
 
 /** Singleton editor tab and intent router; all configuration state remains in Store. */
 export class ConfigurationEditorController implements vscode.Disposable {
@@ -279,12 +202,6 @@ export class ConfigurationEditorController implements vscode.Disposable {
     const state = this.store.configurationEditor.value;
     const snapshot = state.snapshot;
     if (snapshot === undefined || state.phase === "applying") { return; }
-    if (disablesTypeshedVerification(intent)) {
-      if (!await confirmVerificationOff()) {
-        void this.panel.postMessage({ type: "state", state });
-        return;
-      }
-    }
     const generation = this.loadGeneration;
     const previewGeneration = ++this.previewGeneration;
     this.store.beginConfigurationPreview();
@@ -307,7 +224,7 @@ export class ConfigurationEditorController implements vscode.Disposable {
     }
   }
 
-  private async pickTypeshedFolder(key: "TypeshedPath" | "TypeshedCachePath"): Promise<void> {
+  private async pickTypeshedFolder(key: "TypeshedPath" | "TypeshedStorePath"): Promise<void> {
     const state = this.store.configurationEditor.value;
     if (state.snapshot === undefined) { return; }
     const intent = await pickTypeshedFolder(state.snapshot, key);
@@ -328,10 +245,11 @@ export class ConfigurationEditorController implements vscode.Disposable {
         action,
       });
       if (this.requestIsStale(generation, snapshot.rootUri)) { return; }
-      if (result.kind === "Preview") {
-        // PinCurrent writes the active commit: a source choice, applied now.
-        await this.applyPreview(result.preview);
-      } else if (result.kind === "Snapshot") {
+      // A download returns the refreshed snapshot at once (lifecycle
+      // Downloading); completion arrives as ordinary server notifications.
+      // No action returns a preview — a download is not a configuration edit
+      // ([LSPCFGED-TYPESHED-DOWNLOAD]).
+      if (result.kind === "Snapshot") {
         this.store.acceptConfigurationSnapshot(result.snapshot);
       } else {
         await this.typeshedUi.showLicense(result.license);

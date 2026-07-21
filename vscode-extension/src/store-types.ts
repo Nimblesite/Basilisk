@@ -1,3 +1,4 @@
+// Implements [VSIX-ARCHITECTURE]. See docs/specs/VSIX-SPEC.md#VSIX-ARCHITECTURE
 /** Public and mutable backing types for the centralized extension store. */
 
 import type { ReadonlySignal, Signal } from "@preact/signals-core";

@@ -1,4 +1,4 @@
-//! Implements [`callables_annotation`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`callables_annotation`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `callables_annotation`: Invalid type argument count or form.
 //!
 //! Certain generic types accept a fixed number of type arguments.  This rule

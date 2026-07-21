@@ -1,4 +1,4 @@
-//! Implements [`annotations_generators_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`annotations_generators_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Annotation parsing for `annotations_generators_2`.
 //!
 //! Provides utilities for recognising and decomposing generator-like return

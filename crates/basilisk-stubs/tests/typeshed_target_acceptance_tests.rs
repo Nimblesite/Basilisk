@@ -18,24 +18,16 @@ use std::sync::Arc;
 use basilisk_stubs::pyi_parser::parse_pyi_source_for_target;
 use basilisk_stubs::types::{StubSource, StubTarget, StubTargetPlatform, StubTier};
 use basilisk_stubs::typeshed::bundle::bundled_snapshot;
-use basilisk_stubs::typeshed::source::{SourceSelection, Transport as SourceTransport};
+use basilisk_stubs::typeshed::runtime::production_manager;
+use basilisk_stubs::typeshed::store::StoreEntry;
 use serde_json::Value;
-use support::{
-    fixture, fixture_from_files, manager, request, untrusted_fixture, Fixture, Operation,
-    RecordingTransport, A_SHA,
-};
+use support::{approved_license, entry_from_files, install, pinned_request};
 
 /// One immutable generation whose `VERSIONS` and guarded declarations differ
-/// across explicit targets without changing the acquired commit.
-fn target_fixture(commit: &str) -> Fixture {
-    let license = bundled_snapshot()
-        .expect("bundled snapshot")
-        .vfs
-        .read("LICENSE")
-        .expect("approved license")
-        .to_vec();
+/// across explicit targets without changing the pinned commit.
+fn target_entry() -> StoreEntry {
     let files = vec![
-        ("LICENSE".to_owned(), license),
+        ("LICENSE".to_owned(), approved_license()),
         (
             "stdlib/VERSIONS".to_owned(),
             b"guarded: 3.8-\nlegacy_only: 3.8-3.10\nmodern_only: 3.11-\n".to_vec(),
@@ -63,7 +55,7 @@ else:
             b"MODERN: int\n".to_vec(),
         ),
     ];
-    fixture_from_files(commit, &files)
+    entry_from_files(&files)
 }
 
 fn targets() -> (StubTarget, StubTarget) {
@@ -81,27 +73,19 @@ fn targets() -> (StubTarget, StubTarget) {
 
 fn active_target_fixture() -> (
     Arc<basilisk_stubs::typeshed::snapshot::Snapshot>,
-    Arc<RecordingTransport>,
+    tempfile::TempDir,
 ) {
-    let fixture = target_fixture(A_SHA);
-    let transport = Arc::new(RecordingTransport::new(
-        Some(fixture.metadata.commit),
-        std::slice::from_ref(&fixture),
-        SourceTransport::Codeload,
-    ));
-    let snapshot = manager(
-        request(SourceSelection::Latest, true, false),
-        Arc::clone(&transport),
-        None,
-    )
-    .snapshot()
-    .expect("target fixture acquisition");
-    (snapshot, transport)
+    let store = tempfile::tempdir().expect("store root");
+    let commit = install(store.path(), &target_entry());
+    let snapshot = production_manager(pinned_request(commit, store.path()))
+        .snapshot()
+        .expect("target fixture resolution");
+    (snapshot, store)
 }
 
 #[test]
 fn same_sha_different_targets_use_the_active_versions_index() {
-    let (snapshot, _transport) = active_target_fixture();
+    let (snapshot, _store) = active_target_fixture();
     let identity = snapshot.identity.clone();
     let (legacy, modern) = targets();
 
@@ -123,8 +107,8 @@ fn same_sha_different_targets_use_the_active_versions_index() {
 
 #[test]
 fn target_changes_never_infer_or_fetch_a_different_commit() {
-    let (snapshot, transport) = active_target_fixture();
-    let operations_before_target_selection = transport.operations();
+    let (snapshot, _store) = active_target_fixture();
+    let pinned_identity = snapshot.identity.clone();
     let (legacy, modern) = targets();
     let (_, body) = snapshot.read_stub("guarded").expect("guarded body");
 
@@ -156,26 +140,15 @@ fn target_changes_never_infer_or_fetch_a_different_commit() {
     assert!(!modern_stub.variables.contains_key("legacy_name"));
     assert!(!modern_stub.variables.contains_key("posix_name"));
 
-    assert_eq!(transport.operations(), operations_before_target_selection);
-    assert!(matches!(
-        operations_before_target_selection.as_slice(),
-        [
-            Operation::ResolveLatest,
-            Operation::FetchTree(_),
-            Operation::FetchArchive(commit)
-        ] if commit.to_hex() == A_SHA
-    ));
+    // The target selection changed NOTHING about the source: the identity is
+    // still the one pinned commit, and there is no seam through which a
+    // target could fetch or infer a different generation.
+    assert_eq!(snapshot.identity, pinned_identity);
+    assert_eq!(snapshot.status.commit, pinned_identity.commit());
 }
 
 #[test]
 fn runtime_and_bundled_policy_manufactures_no_python_target() {
-    let ordinary_fixture = fixture(A_SHA, "NO_TARGET");
-    let transport_fixture = untrusted_fixture(A_SHA, &[]);
-    assert_eq!(
-        ordinary_fixture.metadata.commit,
-        transport_fixture.metadata.commit
-    );
-
     let policy_sources = [
         include_str!("../src/lib.rs"),
         include_str!("../src/typeshed/bundle.rs"),

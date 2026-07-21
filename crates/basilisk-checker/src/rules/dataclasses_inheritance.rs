@@ -1,4 +1,4 @@
-//! Implements [`dataclasses_inheritance`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`dataclasses_inheritance`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! `dataclasses_inheritance`: Dataclass field without a default after a field with a default.
 //!
 //! A dataclass synthesizes an `__init__` whose parameters follow field

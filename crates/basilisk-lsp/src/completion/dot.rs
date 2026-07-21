@@ -27,7 +27,7 @@ pub(super) fn dot_completions(
     }
 
     if receiver.as_deref() == Some("self") {
-        enclosing_class(resolved, byte_offset)
+        crate::hover::access::enclosing_class(resolved, byte_offset)
             .map(|c| class_member_items(c, &prefix))
             .unwrap_or_default()
     } else if let Some(ref recv_name) = receiver {
@@ -75,26 +75,6 @@ fn builtin_class_member_items(
             ..Default::default()
         })
         .collect()
-}
-
-/// Find the innermost class that encloses `offset`.
-///
-/// A `self.` expression always sits inside a method body, which always
-/// follows its own `def` — so the enclosing class is the one owning the
-/// NEAREST PRECEDING method start, not the first method in the file
-/// (regression: members of the file's first class leaked into every later
-/// class).
-fn enclosing_class(
-    resolved: &basilisk_resolver::ResolvedModule,
-    offset: usize,
-) -> Option<&basilisk_resolver::scope::ClassInfo> {
-    let func = resolved
-        .functions
-        .iter()
-        .filter(|f| f.class_name.is_some() && f.def_span.start_usize() <= offset)
-        .max_by_key(|f| f.def_span.start_usize())?;
-    let class_name = func.class_name.as_ref()?;
-    resolved.classes.iter().find(|c| &c.name == class_name)
 }
 
 /// Build completion items for all attributes and methods of `class`.

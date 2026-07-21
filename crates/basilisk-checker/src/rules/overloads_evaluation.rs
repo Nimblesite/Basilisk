@@ -1,4 +1,4 @@
-//! Implements [`overloads_evaluation`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! Implements [`overloads_evaluation`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 //! `overloads_evaluation`: Overload union expansion failure.
 //!
 //! When a function-body call passes a union-typed argument to an overloaded

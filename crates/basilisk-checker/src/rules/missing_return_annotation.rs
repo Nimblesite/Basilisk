@@ -1,4 +1,4 @@
-//! Implements [BSK-0002] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
+//! Implements [BSK-0002] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
 //! BSK-0002: Missing return type annotation.
 //!
 //! Never fires where the current engine already infers the return type

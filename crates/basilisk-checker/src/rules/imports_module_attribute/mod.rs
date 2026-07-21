@@ -1,4 +1,4 @@
-//! Implements [`imports_module_attribute`] from [CHKARCH-DIAG] / [CHKARCH-DIAG-STUB-MEMBER]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-stub-member
+//! Implements [`imports_module_attribute`] from [CHKARCH-DIAG] / [CHKARCH-DIAG-STUB-MEMBER]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STUB-MEMBER
 //! `imports_module_attribute`: Access to a module attribute the local stub does not declare.
 //!
 //! When `import X` resolves to an authoritative user/local or selected Typeshed

@@ -1,4 +1,4 @@
-//! Implements [`aliases_recursive`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`aliases_recursive`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `aliases_recursive`: Cyclical type alias reference.
 //!
 //! A `TypeAlias`-annotated assignment whose RHS contains a forward-reference

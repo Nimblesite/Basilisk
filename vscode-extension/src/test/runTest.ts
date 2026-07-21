@@ -140,6 +140,14 @@ async function main(): Promise<void> {
         // bundled VSIX path. A bare temp workspace silently disarms every
         // diagnostics assertion (no config → house rules off → zero
         // diagnostics → timeouts).
+        //
+        // That settings file deliberately carries NO `basilisk.enabled` key.
+        // `enabled` defaults to `true`, and `type-checking-toggle.test.ts`
+        // restores it with `cfg.update('enabled', original)` — VS Code DELETES
+        // a workspace setting written back to its default rather than writing
+        // it out, so a committed `"basilisk.enabled": true` is stripped by
+        // every full run and leaves the tree dirty. Absent is the stable
+        // state, and it means exactly the same thing.
         const workspace = path.join(extensionDevelopmentPath, 'test-fixtures', 'workspace');
 
         await runTests({

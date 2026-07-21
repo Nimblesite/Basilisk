@@ -1,5 +1,5 @@
 //! Tests for [CHKCACHE-ENTRY] / [CHKCACHE-FINGERPRINT] / [CHKCACHE-CONTRACT].
-//! See docs/specs/CHECKER-CACHE-SPEC.md#chkcache-entry
+//! See docs/specs/CHECKER-CACHE-SPEC.md#CHKCACHE-ENTRY
 #![allow(clippy::allow_attributes, clippy::unwrap_used, clippy::expect_used)]
 //! Crate-boundary tests for the result cache, covering every soundness branch:
 //! a hit is returned only when the fingerprint and every recorded file match.

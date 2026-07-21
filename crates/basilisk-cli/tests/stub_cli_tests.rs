@@ -179,3 +179,18 @@ fn generate_all_with_no_untyped_imports_succeeds() -> Result<(), Box<dyn std::er
     );
     Ok(())
 }
+
+/// [STUBRES-AUTOGEN]: `stubs status` on a project that never generated stubs
+/// reports cleanly instead of erroring.
+#[test]
+fn status_reports_cleanly_when_nothing_was_generated() -> Result<(), Box<dyn std::error::Error>> {
+    let project = TestProject::new("status_empty")?;
+    let output = project.command().args(["stubs", "status"]).output()?;
+    assert!(output.status.success(), "{}", output_text(&output));
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("No generated stubs found"),
+        "{}",
+        output_text(&output)
+    );
+    Ok(())
+}

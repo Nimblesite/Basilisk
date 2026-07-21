@@ -15,9 +15,10 @@ and the nearest table that decides a rule wins outright; non-rule scalar
 fields merge additively, nearest directory winning per key
 ([CHKARCH-CONFIG-DISCOVERY]). A stray legacy `basilisk.json` is never read and
 is wholly inert — the configuration editor does not surface it at all
-([LSPCFGED-CONTRACT] excludes shadowed-source reporting, and tests assert its
-absence). LSP/editor settings such as analysis mode live in `basilisk-lsp`
-today and are not parsed by this crate.
+([CONFIGEDITOR-SOURCES](../../docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES)
+excludes shadowed-source reporting, and tests assert its absence). LSP/editor
+settings such as analysis mode live in `basilisk-lsp` today and are not parsed
+by this crate.
 
 ## Key concepts
 
@@ -40,15 +41,14 @@ today and are not parsed by this crate.
   [STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
   `typeshed-commit` pins an exact 40-character SHA and fails closed — an
   abbreviated SHA is rejected and another commit is never substituted;
-  `typeshed-url` is a `{sha}` archive-mirror template, which cannot resolve
-  Latest; `typeshed-cache-path` relocates automatic storage; `typeshed-cache`
-  (default `true`) reuses re-hashed downloaded ZIP bytes, which expire after 24
-  hours; `typeshed-verify` (default `true`) attests content against the trusted
-  git tree, reporting `UNVERIFIED` when disabled without ever waiving the
-  safety, shape, or license gates. Unpinned acquisition verifies `main` each run
-  or session and never substitutes an older cached commit; the pin identity
-  itself never expires
-  ([STUBRES-TYPESHED-CONFIG](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)).
+  `typeshed-store-path` relocates the content-addressed store that pins are
+  verified against. Those three keys are the whole typeshed surface: there are
+  no download-policy keys, because resolution never downloads — a pin missing
+  from the store is a terminal `NO SOURCE` failure, and leaving
+  `typeshed-commit` unset simply pins the bundled commit with an `UNPINNED`
+  advisory
+  ([STUBRES-TYPESHED-CONFIG](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG),
+  [STUBRES-TYPESHED-OFFLINE](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-OFFLINE)).
 - **Adoption target** — `basilisk adopt` records current error debt as ordinary
   warning-severity `[tool.basilisk.rules]` entries in the config file of the
   nearest folder governing each affected file. The adoption state *is* that set

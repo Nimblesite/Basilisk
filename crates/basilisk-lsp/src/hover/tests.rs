@@ -70,6 +70,7 @@ fn test_hover_on_imported_stub_symbol_shows_signature() {
             source_path: std::path::PathBuf::from("/venv/.../acme-stubs/__init__.pyi"),
             source_span: Span::new(0, 0),
             signature: Some("def fetch(url: str) -> bytes".to_owned()),
+            docstring: None,
             provenance: Some(basilisk_stubs::TypeProvenance::StubTier1),
             methods: Vec::new(),
             bases: Vec::new(),
@@ -115,10 +116,12 @@ fn test_hover_on_imported_class_shows_inherited_constructor() {
             source_path: std::path::PathBuf::from("/typeshed/stdlib/unittest/mock.pyi"),
             source_span: Span::new(0, 0),
             signature: Some("class Mock".to_owned()),
+            docstring: None,
             provenance: Some(basilisk_stubs::TypeProvenance::StubTier1),
             methods: vec![ExternalMethod {
                 name: "__init__".to_owned(),
                 signature: "def __init__(spec: Any, side_effect: Any) -> None".to_owned(),
+                docstring: None,
             }],
             bases: vec!["CallableMixin".to_owned(), "NonCallableMock".to_owned()],
             metaclass: None,
@@ -567,6 +570,104 @@ fn test_hover_infers_generic_type_args_for_dict_literal() {
             .value
             .contains("language_timezone_mapping: dict[LiteralString, LiteralString]"),
         "hover should show the precise parameterized generic: {}",
+        markup.value
+    );
+}
+
+/// A member access resolves through its receiver, so `self.attr` still finds
+/// the attribute the enclosing class declares — the receiver-aware path must
+/// not have traded one broken lookup for another.
+///
+/// The attribute is declared in the class body: an attribute that only ever
+/// appears as `self.x = ...` inside a method is not recorded by the resolver
+/// at all (`ClassInfo::attributes` stays empty), so no hover consumer can
+/// reach it. That gap predates the receiver-aware path and is not what this
+/// test pins.
+#[test]
+fn test_hover_on_self_attribute_resolves_through_the_enclosing_class() {
+    let source =
+        "class Point:\n    x: int = 0\n\n    def show(self) -> None:\n        print(self.x)\n";
+    let resolved = parse_and_resolve(source);
+
+    let offset = source.rfind("self.x").expect("the read must be present") + "self.".len();
+    let hover = hover_at(&resolved, source, offset, &[]).expect("`self.x` must have hover");
+    let HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected Markup hover contents");
+    };
+
+    assert!(
+        markup.value.contains("Point.x") && markup.value.contains("int"),
+        "hover must show the attribute the enclosing class declares: {}",
+        markup.value
+    );
+}
+
+/// A local method reached through a variable typed by its constructor call.
+/// Nothing binds `instance` to `Greeter` except the call, so this only
+/// resolves once the receiver is typed from the call site.
+#[test]
+fn test_hover_on_method_of_constructor_typed_receiver() {
+    let source = "class Greeter:\n    def greet(self, name: str) -> str:\n        return name\n\ninstance = Greeter()\nvalue = instance.greet(\"x\")\n";
+    let resolved = parse_and_resolve(source);
+
+    let offset = source.rfind("greet").expect("the call must be present") + 1;
+    let hover = hover_at(&resolved, source, offset, &[]).expect("the method call must have hover");
+    let HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected Markup hover contents");
+    };
+
+    assert!(
+        markup.value.contains("Greeter.greet") && markup.value.contains("name: str"),
+        "hover must resolve the method through the receiver's constructed type: {}",
+        markup.value
+    );
+}
+
+/// A plain `import os` publishes every member of `os` into `imported_symbols`
+/// under its bare name, so a *local* symbol that happens to share one of those
+/// names was being labelled as coming from Typeshed. Provenance may only be
+/// claimed for a name an import actually binds.
+#[test]
+fn test_hover_on_local_symbol_is_not_labelled_with_import_provenance() {
+    use basilisk_resolver::scope::{ExternalSymbol, ExternalSymbolKind};
+    use basilisk_resolver::Span;
+
+    let source = "import os\n\n\ndef error(message: str) -> None:\n    print(message)\n\n\nerror(\"boom\")\n";
+    let mut resolved = parse_and_resolve(source);
+
+    // Exactly what a plain `import os` produces for typeshed's `error = OSError`.
+    let _ = resolved.imported_symbols.insert(
+        "error".to_owned(),
+        ExternalSymbol {
+            name: "error".to_owned(),
+            kind: ExternalSymbolKind::Variable,
+            type_annotation: Some("OSError".to_owned()),
+            source_path: std::path::PathBuf::from("typeshed:bundled/stdlib/os/__init__.pyi"),
+            source_span: Span::new(0, 0),
+            signature: None,
+            docstring: None,
+            provenance: Some(basilisk_stubs::TypeProvenance::StubTier1),
+            methods: Vec::new(),
+            bases: Vec::new(),
+            metaclass: None,
+            metaclass_calls: Vec::new(),
+        },
+    );
+
+    let offset = source.rfind("error").expect("the call must be present") + 1;
+    let hover = hover_at(&resolved, source, offset, &[]).expect("the local call must have hover");
+    let HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected Markup hover contents");
+    };
+
+    assert!(
+        markup.value.contains("def error(message: str)"),
+        "hover must show the local definition: {}",
+        markup.value
+    );
+    assert!(
+        !markup.value.contains("(typeshed)"),
+        "a local symbol must not be attributed to an import that never bound it: {}",
         markup.value
     );
 }

@@ -40,9 +40,8 @@ their installation flows in their editor specs.
 The server configuration model is `crates/basilisk-lsp/src/config.rs`. Editor manifests and
 settings must map to that model rather than maintaining a second semantic configuration.
 The stable shared surface includes the executable and Python paths, analysis mode, stub
-paths, the typeshed source, mirror, cache, and verification settings
-(`typeshed-path`, `typeshed-commit`, `typeshed-url`, `typeshed-cache-path`,
-`typeshed-cache`, `typeshed-verify` —
+paths, the three typeshed source settings
+(`typeshed-path`, `typeshed-commit`, `typeshed-store-path` —
 [STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)),
 formatter selection, inlay-hint switches, debugger settings, and the uv, test, profiling,
 and memory namespaces. The custom path implements the pinned typing specification's
@@ -288,7 +287,36 @@ navigation and display features.
 ### Hover {#LSPARCH-FEATURES-HOVER}
 
 Hover presents the resolved symbol signature and relevant Basilisk diagnostics; unknown
-inferred pieces are represented explicitly rather than fabricated. A non-PEP diagnostic's
+inferred pieces are represented explicitly rather than fabricated.
+
+**A hover answers for the symbol the cursor is actually on.** How the identifier is reached
+decides how it is resolved, and the two forms must never be mixed:
+
+- A **free name** (`getLogger`, `MyClass`) resolves against the module's own bindings —
+  local definitions first, then the names its imports bind.
+- A **member access** (`logger.error`, `os.getcwd`, `" ".join`) resolves *through its
+  receiver*: the module the receiver binds, a class in the local hierarchy, an external
+  (stub or `py.typed`) class, then a built-in type. The receiver is typed from its own
+  declaration only — its annotation, the literal assigned to it, or the return type of the
+  call that produced it.
+
+`ResolvedModule::imported_symbols` is keyed by bare name and a plain `import os` publishes
+every member of `os` into it, so consulting it for a member access would answer
+`logger.error` with whichever imported module last exported the word `error`. It may
+therefore only be consulted for a name the module genuinely **binds** — verified by the
+resolved file the binding import points at, not by the name alone. The same rule governs
+the provenance annotation: a symbol is attributed to an import only when an import bound
+it. **A receiver nothing can type yields no hover** — silence is correct where a confident
+wrong answer is not.
+
+Each rendered symbol states, in order, what kind of thing it is (`(function)`, `(method)`,
+`(class)`, `(variable)` — the same vocabulary local and imported symbols share), its exact
+declared shape (every overload of an overload set, and a class's declared bases), its own
+documentation when the defining module carries any (`.pyi` stubs, Typeshed included, carry
+none), and where the declaration was read from: its module, its provenance, and its source
+path. Absent pieces are omitted, never invented.
+
+A non-PEP diagnostic's
 hover section additionally carries a **Configure Severity** command link
 (`command:basilisk.openConfigurationEditor` with a `{ "rule": <code> }` argument) that
 deep-links into the configuration editor focused on the rule

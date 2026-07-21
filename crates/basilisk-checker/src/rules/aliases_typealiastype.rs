@@ -1,4 +1,4 @@
-//! Implements [`aliases_typealiastype`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`aliases_typealiastype`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `aliases_typealiastype`: Invalid `TypeAliasType(...)` call.
 //!
 //! Detects violations in `TypeAliasType(...)` calls:

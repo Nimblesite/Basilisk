@@ -1,4 +1,4 @@
-//! Implements [`generics_self_attributes`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! Implements [`generics_self_attributes`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 //! `generics_self_attributes`: Incompatible type for `Self`-typed attribute.
 //!
 //! When a class declares an attribute annotated with `Self` (or `Self | None`,

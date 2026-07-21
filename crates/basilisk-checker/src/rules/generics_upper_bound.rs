@@ -1,4 +1,4 @@
-//! Implements [`generics_upper_bound`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_upper_bound`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_upper_bound`: `TypeVar` upper bound violation at call site.
 //!
 //! When a function parameter is annotated with a `TypeVar` that has an upper

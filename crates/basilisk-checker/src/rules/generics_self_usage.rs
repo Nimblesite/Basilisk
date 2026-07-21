@@ -1,4 +1,4 @@
-//! Implements [`generics_self_usage`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_self_usage`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_self_usage`: `Self` type used in an invalid location.
 //!
 //! PEP 673 defines `Self` as a special type that refers to the current class.

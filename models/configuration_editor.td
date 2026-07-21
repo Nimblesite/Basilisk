@@ -26,20 +26,13 @@ union TagKind {
   Descriptive
 }
 
-# The Typeshed acquisition keys are a closed allowlist. The wire never accepts
-# an arbitrary TOML key or an untyped value ([LSPCFGED-TYPESHED]).
+# The Typeshed keys are a closed allowlist — the whole surface is three keys,
+# every one of them a string (a path or a full commit SHA). The wire never
+# accepts an arbitrary TOML key or an untyped value ([LSPCFGED-TYPESHED]).
 union TypeshedSettingKey {
   TypeshedPath
   TypeshedCommit
-  TypeshedUrl
-  TypeshedCachePath
-  TypeshedCache
-  TypeshedVerify
-}
-
-union TypeshedSettingValue {
-  Text { value: String }
-  Boolean { value: Bool }
+  TypeshedStorePath
 }
 
 # The only six things the editor can ask for: four rule/tag mutations plus
@@ -50,68 +43,47 @@ union EditorMutation {
   RemoveRule { code: RuleCode }
   SetTag { tag: RuleTag, severity: RuleSeverity }
   RemoveTag { tag: RuleTag }
-  SetTypeshedSetting { key: TypeshedSettingKey, value: TypeshedSettingValue }
+  SetTypeshedSetting { key: TypeshedSettingKey, value: String }
   RemoveTypeshedSetting { key: TypeshedSettingKey }
 }
 
-# The ACTIVE source carries the value that defines it, so "latest with a pin"
-# and "a pinned commit plus a custom folder" cannot be expressed at all
-# ([LSPCFGED-TYPESHED]).
+# The ACTIVE source carries the value that defines it, so "a pinned commit plus
+# a custom folder" cannot be expressed at all. There are exactly two sources:
+# there is no "track latest" source ([LSPCFGED-TYPESHED]).
 union TypeshedSource {
-  Latest
   ExactCommit { commit: String }
   CustomFolder { path: String }
 }
 
-# Download policy exists only for a downloaded source: a user-managed folder
-# downloads nothing, so it has none.
-type TypeshedDownloadPolicy {
-  reuseDownloads: Bool
-  verifyContent: Bool
-  archiveUrl: Option<String>
-  cacheFolder: Option<String>
-}
-
+# Downloading is the only long-running state, and it is always user-invoked
+# ([LSPCFGED-TYPESHED-DOWNLOAD]). NoSource = the selected source is not on this
+# machine, so analysis does not run.
 union TypeshedLifecycle {
-  Acquiring
+  Downloading
   Ready
-  Blocked
+  NoSource
 }
 
 union TypeshedAction {
-  PinCurrent
-  AcquireFresh
+  DownloadLatest
+  DownloadPinned
   ViewLicense
 }
 
+# The active source is the whole trust story (custom = user-managed, bundled =
+# build-vetted, exact commit = attested at download, re-proven offline), so
+# there are no separate transport or provenance fields ([STUBRES-TYPESHED-WARN]).
 union TypeshedActiveSource {
   Custom
   ExactCommit
-  Latest
   Bundled
 }
 
-union TypeshedTransport {
-  CustomPath
-  EmbeddedZip
-  Codeload
-  Mirror
-}
-
 union TypeshedLicenseStatus {
-  Acquiring
   Unavailable
   Approved
   Changed
   NotSupplied
-}
-
-union TypeshedProvenance {
-  Pending
-  GithubTlsAttested
-  Unverified
-  BundleVetted
-  UserManaged
 }
 
 union TypeshedWarningSeverity {
@@ -127,24 +99,20 @@ type TypeshedWarningState {
 
 type TypeshedStatusState {
   lifecycle: TypeshedLifecycle
-  blockedReason: Option<String>
+  noSourceReason: Option<String>
   activeSource: Option<TypeshedActiveSource>
   commitIdentity: Option<String>
-  transport: Option<TypeshedTransport>
   licenseStatus: TypeshedLicenseStatus
-  provenance: TypeshedProvenance
-  signedRelease: Bool
   warnings: List<TypeshedWarningState>
 }
 
 # Everything the editor needs, and nothing it can misrender: the one active
-# source, the download policy that source has (none for a custom folder), the
-# commit PinCurrent would write when pinning is possible, and whether a license
-# document exists to open. Labels are client copy, not server state.
+# source, the store folder pins resolve from (none for a custom folder), and
+# whether a license document exists to open. Labels are client copy, not server
+# state.
 type TypeshedConfigurationState {
   source: TypeshedSource
-  downloads: Option<TypeshedDownloadPolicy>
-  pinnableCommit: Option<String>
+  storeFolder: Option<String>
   licenseAvailable: Bool
   status: TypeshedStatusState
 }
@@ -286,8 +254,8 @@ type ConfigurationPreview {
 
 type TypeshedSettingChange {
   key: TypeshedSettingKey
-  before: Option<TypeshedSettingValue>
-  after: Option<TypeshedSettingValue>
+  before: Option<String>
+  after: Option<String>
 }
 
 # rootUri + previewId fully identify the cached preview, which already pins
@@ -345,8 +313,10 @@ type TypeshedLicenseDocument {
   readOnly: Bool
 }
 
+# Downloads return the refreshed snapshot immediately (lifecycle Downloading);
+# completion arrives as TypeshedStatusChanged + ConfigurationChanged. No action
+# returns a preview — a download is not a configuration edit.
 union TypeshedActionResult {
-  Preview { preview: ConfigurationPreview }
   Snapshot { snapshot: ConfigurationSnapshot }
   License { license: TypeshedLicenseDocument }
 }

@@ -1,4 +1,4 @@
-//! Implements [`specialtypes_type`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`specialtypes_type`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! AST utility helpers and predicate functions for `specialtypes_type`.
 
 use ruff_python_ast::Expr;

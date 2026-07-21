@@ -1,4 +1,4 @@
-//! Implements [`generics_defaults_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_defaults_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_defaults_2`: Incompatible `TypeVar` bound or constraint with its default.
 //!
 //! PEP 696 specifies two constraints on `TypeVar` defaults:

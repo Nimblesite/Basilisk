@@ -1,69 +1,188 @@
 //! Implements [LSPARCH-FEATURES-HOVER]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-HOVER
 //! Implements the shared-declaration consumer half of [TYPESHEDRT-ACCEPTANCE-HOVER].
 //!
-//! Dot-access member hover lookups: methods inherited from external
-//! (stub/py.typed) base classes (GitHub #287), builtin-typed receivers like
-//! `" ".join(...)` (GitHub #288), and the class-constructor hint (GitHub #289).
-
-use std::fmt::Write as _;
+//! Member-access hover: `receiver.member`.
+//!
+//! The receiver decides the answer. It may name an imported module
+//! (`os.getcwd`), a class (`Model.model_validate` — GitHub #287), or a value
+//! whose type comes from its annotation, its literal, or the call that
+//! produced it (`logger = logging.getLogger(...)` → `Logger`). A receiver
+//! nothing can type yields no hover: answering from the flat `imported_symbols`
+//! map by bare name would name whichever module happened to export the same
+//! word last.
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::util::{find_definition_by_name, identifier_at_offset, SymbolHit};
+use super::access::{self, Access};
+use super::render::{SymbolCard, SymbolKind};
+use crate::util::identifier_at_offset;
 
-/// Hover markdown for `Receiver.member` where `member` lives on an external
-/// class — the receiver itself or a (transitive) base of a local class.
+/// Hover markdown for the member access at `byte_offset`.
 ///
-/// Implements the dot-access member lookup for GitHub #287: methods inherited
-/// from stub/py.typed base classes have no local definition, so the standard
-/// symbol lookups find nothing.
-pub(super) fn external_member_hover(
+/// The first resolution that names a real declaration wins: the module the
+/// receiver binds, a class in the local hierarchy, an external (stub or
+/// `py.typed`) class, then a built-in type.
+pub(super) fn member_hover(
     resolved: &ResolvedModule,
     source: &str,
     byte_offset: usize,
+    access: &Access,
 ) -> Option<String> {
     let member = identifier_at_offset(source, byte_offset)?;
-    let receiver = crate::completion::prefix::dot_receiver(source, byte_offset)?;
-    let (class, method) = find_external_member(resolved, &receiver, &member)?;
+    let receiver = access.receiver();
+    let class_name =
+        receiver.and_then(|receiver| receiver_class_name(resolved, source, byte_offset, receiver));
 
-    // Stub signatures render as `def name(...)`; qualify with the class name
-    // to match the local-method hover style `(method) def Class.name(...)`.
-    let qualified = method.signature.strip_prefix("def ").map_or_else(
-        || method.signature.clone(),
-        |rest| format!("def {}.{rest}", class.name),
-    );
-    let mut md = format!("```python\n(method) {qualified}\n```");
-    if let Some(label) = class
-        .provenance
-        .and_then(basilisk_stubs::TypeProvenance::hover_label)
-    {
-        let _ = write!(md, "\n\n*{label}*");
-    }
-    Some(md)
+    receiver
+        .and_then(|receiver| module_member_hover(resolved, receiver, &member))
+        .or_else(|| local_member_hover(resolved, class_name.as_deref(), &member))
+        .or_else(|| external_member_hover(resolved, receiver, class_name.as_deref(), &member))
+        .or_else(|| builtin_member_hover(resolved, source, byte_offset, &member))
 }
 
-/// Find `member` on an external class reachable from `receiver`.
+/// The class whose members a receiver exposes.
 ///
-/// `receiver` may name an imported class directly, or a local class whose
-/// (transitive) bases include one.
+/// `self`/`cls` expose the enclosing class; a receiver naming a local class
+/// exposes that class's own members (`Model.model_validate`); anything else is
+/// a value, typed from its own declaration.
+fn receiver_class_name(
+    resolved: &ResolvedModule,
+    source: &str,
+    byte_offset: usize,
+    receiver: &str,
+) -> Option<String> {
+    if matches!(receiver, "self" | "cls") {
+        return access::enclosing_class(resolved, byte_offset).map(|class| class.name.clone());
+    }
+    if resolved.classes.iter().any(|class| class.name == receiver) {
+        return Some(receiver.to_owned());
+    }
+    access::receiver_type_name(resolved, source, receiver).map(|(name, _)| name)
+}
+
+/// Hover for `module.member`, e.g. `os.getcwd`.
+fn module_member_hover(resolved: &ResolvedModule, receiver: &str, member: &str) -> Option<String> {
+    let symbol = access::module_member(resolved, receiver, member)?;
+    super::external_symbol_card(symbol, Some(receiver.to_owned())).render()
+}
+
+/// Hover for a member declared by a class in the *local* hierarchy — its own
+/// method or attribute, or one inherited from a local base.
+fn local_member_hover(
+    resolved: &ResolvedModule,
+    class_name: Option<&str>,
+    member: &str,
+) -> Option<String> {
+    let start = class_name?;
+    let hit = walk_class_hierarchy(resolved, start, |name| {
+        resolved
+            .functions
+            .iter()
+            .find(|func| func.name == member && func.class_name.as_deref() == Some(name))
+            .map(crate::util::SymbolHit::Function)
+            .or_else(|| {
+                resolved
+                    .classes
+                    .iter()
+                    .find(|class| class.name == name)
+                    .and_then(|class| {
+                        class
+                            .attributes
+                            .iter()
+                            .find(|attr| attr.name == member)
+                            .map(|attr| crate::util::SymbolHit::Attribute { class, attr })
+                    })
+            })
+    })?;
+    let signature = crate::util::format_type_signature(&hit, &resolved.source);
+    let docstring = match hit {
+        crate::util::SymbolHit::Function(func) => func.docstring.clone(),
+        _ => None,
+    };
+    // `format_type_signature` already labels local symbols with their kind, so
+    // the card contributes no second prefix.
+    SymbolCard::new(None, signature)
+        .documented(docstring)
+        .render()
+}
+
+/// Hover markdown for a member declared on an external (stub or `py.typed`)
+/// class — the receiver's own class, or a (transitive) base of it.
+///
+/// Implements the dot-access member lookup for GitHub #287: methods inherited
+/// from stub base classes have no local definition, so the standard symbol
+/// lookups find nothing. Every overload of the member is shown, matching the
+/// built-in path.
+fn external_member_hover(
+    resolved: &ResolvedModule,
+    receiver: Option<&str>,
+    class_name: Option<&str>,
+    member: &str,
+) -> Option<String> {
+    let (class, methods) = receiver
+        .and_then(|receiver| find_external_member(resolved, receiver, member))
+        .or_else(|| class_name.and_then(|name| find_external_member(resolved, name, member)))?;
+
+    // Stub signatures render as `def name(...)`; qualify with the class name
+    // so the hover names the type that declares the member.
+    let signatures = methods
+        .iter()
+        .map(|method| {
+            method.signature.strip_prefix("def ").map_or_else(
+                || method.signature.clone(),
+                |rest| format!("def {}.{rest}", class.name),
+            )
+        })
+        .collect();
+    SymbolCard {
+        kind: Some(SymbolKind::Method),
+        signatures,
+        ..SymbolCard::default()
+    }
+    .documented(methods.iter().find_map(|method| method.docstring.clone()))
+    .declared_in(
+        declaring_module(resolved, class.source_path.as_path()),
+        class.provenance.as_ref(),
+        Some(class.source_path.as_path()),
+    )
+    .render()
+}
+
+/// Find `member` on an external class reachable from `start`.
+///
+/// `start` may name an imported class directly, or a local class whose
+/// (transitive) bases include one. Returns every overload of the member.
 fn find_external_member<'a>(
     resolved: &'a ResolvedModule,
-    receiver: &str,
+    start: &'a str,
     member: &str,
 ) -> Option<(
     &'a basilisk_resolver::scope::ExternalSymbol,
-    &'a basilisk_resolver::scope::ExternalMethod,
+    Vec<&'a basilisk_resolver::scope::ExternalMethod>,
 )> {
     use basilisk_resolver::scope::ExternalSymbolKind;
 
-    walk_class_hierarchy(resolved, receiver, |class_name| {
+    walk_class_hierarchy(resolved, start, |class_name| {
         let ext = resolved.imported_symbols.get(class_name)?;
         if ext.kind != ExternalSymbolKind::Class {
             return None;
         }
-        let method = ext.methods.iter().find(|m| m.name == member)?;
-        Some((ext, method))
+        let methods: Vec<_> = ext.methods.iter().filter(|m| m.name == member).collect();
+        (!methods.is_empty()).then_some((ext, methods))
     })
+}
+
+/// The module an external declaration was read from, for the origin line.
+///
+/// Matched by resolved file, not by name: a class reached through a receiver's
+/// type (`Logger` from `logging.getLogger(...)`) is never itself a bound name,
+/// so a name lookup would find nothing.
+fn declaring_module(resolved: &ResolvedModule, source_path: &std::path::Path) -> Option<String> {
+    resolved
+        .imports
+        .iter()
+        .find(|import| import.resolved_path.as_deref() == Some(source_path))
+        .map(|import| import.module.clone())
 }
 
 /// Find the `__init__` a class would run: its own, else the nearest one in
@@ -107,6 +226,14 @@ fn walk_class_hierarchy<'r, T>(
                     .map(|base| base.split('[').next().unwrap_or(base)),
             );
         }
+        if let Some(external) = resolved.imported_symbols.get(class_name) {
+            queue.extend(
+                external
+                    .bases
+                    .iter()
+                    .map(|base| base.split('[').next().unwrap_or(base)),
+            );
+        }
     }
     None
 }
@@ -114,31 +241,32 @@ fn walk_class_hierarchy<'r, T>(
 /// Hover markdown for `recv.member` where `recv` is a builtin-typed receiver.
 /// Every overload comes from the structured declaration indexed from the
 /// active snapshot's real `builtins.pyi` body (GitHub #288).
-pub(super) fn builtin_member_hover(
+fn builtin_member_hover(
     resolved: &ResolvedModule,
     source: &str,
     byte_offset: usize,
+    member: &str,
 ) -> Option<String> {
-    let member = identifier_at_offset(source, byte_offset)?;
-    let (class, declarations) =
-        builtin_member_declarations(resolved, source, byte_offset, &member)?;
+    let (class, declarations) = builtin_member_declarations(resolved, source, byte_offset, member)?;
     let signatures = declarations
         .iter()
         .map(|declaration| basilisk_stubs::render_stub_signature(declaration))
         .map(|signature| {
             format!(
-                "(method) def {}.{rest}",
+                "def {}.{rest}",
                 class.declaration.name,
                 rest = signature.strip_prefix("def ").unwrap_or(&signature)
             )
         })
-        .collect::<Vec<_>>()
-        .join("\n");
-    let mut markdown = format!("```python\n{signatures}\n```");
-    if let Some(label) = class.provenance.hover_label() {
-        let _ = write!(markdown, "\n\n*{label}* — `{}`", class.source_identity);
-    }
-    Some(markdown)
+        .collect();
+    let mut card = SymbolCard {
+        kind: Some(SymbolKind::Method),
+        signatures,
+        ..SymbolCard::default()
+    };
+    card.provenance = class.provenance.hover_label().map(str::to_owned);
+    card.source_path = Some(class.source_identity.clone());
+    card.render()
 }
 
 /// Active structured declarations for the built-in member at an editor offset.
@@ -186,7 +314,7 @@ pub(crate) fn dot_receiver_builtin_type(
         }
         c if c.is_alphanumeric() || c == '_' => {
             let receiver = crate::completion::prefix::dot_receiver(source, byte_offset)?;
-            variable_builtin_type(resolved, source, &receiver)
+            access::receiver_type_name(resolved, source, &receiver)
         }
         _ => None,
     }
@@ -203,35 +331,4 @@ fn str_literal_receiver(receiver_text: &str, quote: char) -> bool {
     !body[..open]
         .trim_end_matches(['r', 'R'])
         .ends_with(['b', 'B'])
-}
-
-/// The builtin type of a named variable or parameter: its annotation when it
-/// names a builtin type, else its inferred right-hand-side type.
-fn variable_builtin_type(
-    resolved: &ResolvedModule,
-    source: &str,
-    receiver: &str,
-) -> Option<(String, bool)> {
-    let (annotation_span, rhs_kind) = match find_definition_by_name(resolved, receiver)? {
-        SymbolHit::Variable(var) => (var.annotation_span, Some(&var.rhs_kind)),
-        SymbolHit::Parameter { param, .. } => (param.annotation_span, None),
-        _ => return None,
-    };
-    if let Some(annotation) = crate::util::annotation_text(annotation_span, source) {
-        let literal = annotation == "LiteralString" || annotation == "typing.LiteralString";
-        let type_name = if literal {
-            "str".to_owned()
-        } else {
-            annotation
-        };
-        return Some((type_name, literal));
-    }
-    let inferred = crate::util::rhs_type_display(rhs_kind?);
-    if inferred.is_empty() {
-        None
-    } else {
-        let literal =
-            inferred == "str" && matches!(rhs_kind, Some(basilisk_resolver::RhsKind::StrLiteral));
-        Some((inferred, literal))
-    }
 }

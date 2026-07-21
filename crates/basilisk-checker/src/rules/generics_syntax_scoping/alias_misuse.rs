@@ -1,4 +1,4 @@
-//! Implements [`generics_syntax_scoping`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_syntax_scoping`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! PEP 695 type-alias misuse (violation 7) and type-argument bound checks
 //! (violation 8) for `generics_syntax_scoping`.
 //!

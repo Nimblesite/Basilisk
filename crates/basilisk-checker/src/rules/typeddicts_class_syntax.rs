@@ -1,4 +1,4 @@
-//! Implements [`typeddicts_class_syntax`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`typeddicts_class_syntax`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `typeddicts_class_syntax`: Method defined inside a `TypedDict` class.
 //!
 //! `TypedDict` classes (PEP 589) are restricted to key declarations only.

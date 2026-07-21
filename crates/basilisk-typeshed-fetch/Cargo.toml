@@ -1,0 +1,39 @@
+[package]
+name        = "basilisk-typeshed-fetch"
+description = "The ONLY typeshed network code: user-invoked download into the content-addressed store"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+publish = false
+
+# Implements [TYPESHEDRT-SEGREGATION]: this crate is the only place typeshed
+# bytes may arrive from the network. `basilisk-stubs` and `basilisk-checker`
+# must NEVER depend on it (scripts/check-dependency-shape.sh asserts that);
+# only `basilisk-cli` and `basilisk-lsp` may, and only behind an explicit
+# user action ([STUBRES-TYPESHED-DOWNLOAD]).
+
+[features]
+# Exposes `basilisk_typeshed_fetch::testing` — the offline fake-GitHub fixture —
+# so consumers (`basilisk-cli`) can test their download-invoking surfaces
+# without a network or a duplicated fixture.
+test-support = ["dep:zip"]
+
+[dependencies]
+basilisk-stubs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+# Authenticated-HTTPS adapter for GitHub metadata and codeload archives.
+# `https_only` is also enforced by the adapter.
+ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
+# `test-support` only: encode synthetic codeload zipballs for the fixture.
+zip = { version = "5.1.1", default-features = false, features = ["deflate"], optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+# The crate's own tests always build the fixture module.
+zip = { version = "5.1.1", default-features = false, features = ["deflate"] }
+
+[lints]
+workspace = true

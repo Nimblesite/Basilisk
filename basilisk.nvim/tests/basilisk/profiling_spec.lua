@@ -11,6 +11,8 @@
 --- 8. Heat Map Extmarks — apply/clear/highlight groups/multi-file
 --- 9. Flamegraph Export — speedscope JSON temp file, edge cases
 
+local command_desc = require("tests.command_desc")
+
 local function close_all_floats()
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     local config = vim.api.nvim_win_get_config(win)
@@ -1263,7 +1265,7 @@ describe("profiler — command registration", function()
       local entry = all_cmds[cmd]
       assert.truthy(entry, "command '" .. cmd .. "' should exist")
       assert.truthy(
-        entry.definition and #entry.definition > 0,
+        command_desc.of(entry),
         "command '" .. cmd .. "' should have a description"
       )
     end

@@ -31,7 +31,6 @@ fn collect_uncached(
         &no_cache(),
         &mut cache_check::CacheStats::default(),
         scope,
-        TypeshedOverrides::default(),
         activate_bundled_typeshed,
     )
 }
@@ -69,7 +68,6 @@ fn cli_activation_uses_custom_snapshot_and_target() -> Result<(), Box<dyn std::e
     std::fs::write(stdlib.join("sentinel.pyi"), "VALUE: str\n")?;
     let config = basilisk_lsp::config::WorkspaceConfig {
         typeshed_path: Some(project.join("typeshed")),
-        typeshed_cache: false,
         python_version: Some("3.12".to_owned()),
         python_platform: Some("Linux".to_owned()),
         ..basilisk_lsp::config::WorkspaceConfig::default()
@@ -103,14 +101,25 @@ fn cli_activation_uses_custom_snapshot_and_target() -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+/// [STUBRES-TYPESHED-OFFLINE]: a pinned commit that is not on this machine
+/// tanks the run hard — no download, no bundle fallback, no diagnostics. The
+/// production activation path itself surfaces the terminal `NO SOURCE`
+/// failure and the checked project's config reaches it verbatim.
 #[test]
-fn one_run_typeshed_overrides_reach_activation_without_mutating_config(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let project = unique_project_dir("basilisk_cli_typeshed_overrides");
+fn a_missing_pin_tanks_the_check_instead_of_downloading() -> Result<(), Box<dyn std::error::Error>>
+{
+    let project = unique_project_dir("basilisk_cli_typeshed_no_source");
     std::fs::create_dir_all(&project)?;
+    let store = project.join("empty-store");
+    std::fs::create_dir_all(&store)?;
+    // A valid full-SHA pin that no store on this machine holds.
+    let missing = "0123456789abcdef0123456789abcdef01234567";
     std::fs::write(
         project.join("pyproject.toml"),
-        "[tool.basilisk]\ntypeshed-cache = true\ntypeshed-verify = true\n",
+        format!(
+            "[tool.basilisk]\ntypeshed-commit = \"{missing}\"\ntypeshed-store-path = \"{}\"\n",
+            store.display()
+        ),
     )?;
     let source = project.join("clean.py");
     std::fs::write(&source, "value: int = 1\n")?;
@@ -121,21 +130,22 @@ fn one_run_typeshed_overrides_reach_activation_without_mutating_config(
         &no_cache(),
         &mut cache_check::CacheStats::default(),
         DiagnosticScope::Check,
-        TypeshedOverrides {
-            no_cache: true,
-            no_verification: true,
-        },
-        |_search_paths, config| {
-            assert!(!config.typeshed_cache);
-            assert!(!config.typeshed_verify);
-            Ok(())
-        },
+        super::typeshed::activate_production_typeshed,
     );
-    let persisted = std::fs::read_to_string(project.join("pyproject.toml"))?;
+    // The store stays byte-for-byte inert: resolution never writes, repairs,
+    // or downloads ([STUBRES-TYPESHED-STORE]).
+    let store_entries = std::fs::read_dir(&store)?.count();
     let _ = std::fs::remove_dir_all(project);
-    assert!(result.is_ok());
-    assert!(persisted.contains("typeshed-cache = true"));
-    assert!(persisted.contains("typeshed-verify = true"));
+    let Err(PipelineError::Internal(message)) = result else {
+        return Err("a missing pin must tank the run".into());
+    };
+    assert!(message.contains("NO SOURCE"), "got: {message}");
+    assert!(message.contains(missing), "got: {message}");
+    assert!(
+        message.contains("basilisk typeshed download"),
+        "the failure must say how to materialise the pin: {message}"
+    );
+    assert_eq!(store_entries, 0, "resolution must never write to the store");
     Ok(())
 }
 
@@ -161,7 +171,6 @@ fn nested_file_inherits_project_python_target_for_analysis(
         &no_cache(),
         &mut cache_check::CacheStats::default(),
         DiagnosticScope::Check,
-        TypeshedOverrides::default(),
         |_search_paths, config| {
             assert_eq!(config.python_version.as_deref(), Some("3.12"));
             Ok(())

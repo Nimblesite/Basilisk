@@ -99,8 +99,12 @@ jobs:
               website/*|benchmarks/status/*|crates/basilisk-checker/src/rules/*) website=true ;;
               # The conformance score + graded python/typing commit are stamped
               # into these by scripts/gen_conformance_reference.py — editing
-              # them re-runs the website job's stamp drift guard.
-              README.md|README.zh.md|docs/specs/CHECKER-ARCHITECTURE-SPEC.md) website=true ;;
+              # them re-runs the website job's stamp drift guard. The published
+              # READMEs are generated from docs/readme/ ([README]), so touching
+              # a source OR a generated copy must re-run that guard too.
+              docs/readme/*|docs/specs/CHECKER-ARCHITECTURE-SPEC.md) website=true ;;
+              README.md|README.zh.md|README-pypi.md) website=true ;;
+              vscode-extension/README.md|vscode-extension/README.zh.md) website=true ;;
             esac
             # Route each changed path to the NARROWEST code scope that needs it.
             # Pure docs / static site / benchmark tooling / CI YAML never reach a
@@ -174,11 +178,14 @@ jobs:
           diff -u website/src/_data/rules.json /tmp/rules.json \
             || { echo "::error::rules.json is stale — run: python3 scripts/gen_rules_reference.py --data"; exit 1; }
 
-      # The README/spec quote the live score + graded python/typing commit,
-      # stamped by scripts/gen_conformance_reference.py on every scorer run;
-      # fail if the committed text drifted from conformance_report.json so a
-      # quoted commit can never go stale ([CHKARCH-CONFORMANCE]).
-      - name: Check stamped conformance references are in sync with the report
+      # The README source/spec quote the live score + graded python/typing
+      # commit, stamped by scripts/gen_conformance_reference.py on every scorer
+      # run; fail if the committed text drifted from conformance_report.json so
+      # a quoted commit can never go stale ([CHKARCH-CONFORMANCE]). The same
+      # command then verifies that every published README still renders from
+      # docs/readme/ unchanged ([README-DRIFT]) — GitHub, the VSIX (Marketplace
+      # AND Open VSX), and PyPI cannot drift apart or be edited in place.
+      - name: Check stamped conformance references and generated READMEs
         run: python3 scripts/gen_conformance_reference.py --check
 
       - name: Build site
@@ -548,9 +555,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install pytest and luarocks
+      - name: Install pytest, debugpy and luarocks
         run: |
-          pip install pytest==9.1.1
+          # debugpy is a real dependency of this job, not a nicety: the
+          # tests/dap specs drive basilisk's debug adapter end to end, and
+          # without it every one of them fails with "debugpy not found".
+          # Pinned to the same version as test-vscode and the devcontainer.
+          pip install pytest==9.1.1 debugpy==1.8.14
           sudo apt-get install -y luarocks
           luarocks install --local luacov
 

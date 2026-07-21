@@ -1,4 +1,4 @@
-//! Implements [CHKTAG] from [CHKARCH-DIAG]. See docs/specs/CHECKER-RULE-TAGGING-SPEC.md#chktag
+//! Implements [CHKTAG] from [CHKARCH-DIAG]. See docs/specs/CHECKER-RULE-TAGGING-SPEC.md#CHKTAG
 //!
 //! Rule tagging. Basilisk classifies every rule with a flat set of string
 //! *tags*, not a hierarchical category system. Each rule carries exactly one

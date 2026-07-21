@@ -1,4 +1,4 @@
-//! Implements [`dataclasses_kwonly`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! Implements [`dataclasses_kwonly`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 //! `dataclasses_kwonly`: Dataclass constructor argument violations.
 //!
 //! Reports errors when:

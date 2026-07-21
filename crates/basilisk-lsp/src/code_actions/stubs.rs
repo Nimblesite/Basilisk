@@ -1,4 +1,4 @@
-//! Implements [STUBRES-CREATE-LOCAL]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#stubres-create-local
+//! Implements [STUBRES-CREATE-LOCAL]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL
 //!
 //! Quick fix for BSK-0152 (missing type stubs): scaffold a local `.pyi` stub.
 //!

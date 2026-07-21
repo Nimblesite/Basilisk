@@ -1,4 +1,4 @@
-//! Implements [`protocols_merging`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`protocols_merging`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `protocols_merging`: Non-Protocol base class in a Protocol definition.
 //!
 //! Per PEP 544, a Protocol class may only inherit from other Protocol classes

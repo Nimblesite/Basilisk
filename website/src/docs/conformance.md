@@ -2,7 +2,7 @@
 layout: layouts/docs.njk
 title: "Basilisk Scores 100% on the Official Python Typing Conformance Suite"
 description: "Basilisk is the only Python type checker with a perfect 100% score — published on the official python/typing conformance results page, ahead of Pyright, mypy, Pyrefly and ty. Here's the proof and how it's measured."
-keywords: pep conformance, python typing conformance results, 100% conformant type checker, basilisk conformance score, python/typing results
+keywords: pep conformance, python typing conformance results, 100% conformant type checker, best python type checker, basilisk conformance score, python/typing results
 date: 2026-06-23
 dateModified: 2026-07-07
 author: The Basilisk Project

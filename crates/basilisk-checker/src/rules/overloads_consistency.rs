@@ -1,4 +1,4 @@
-//! Implements [`overloads_consistency`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`overloads_consistency`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `overloads_consistency`: Overlapping `@overload` signatures.
 //!
 //! Within a group of `@overload` functions for the same name, every overload

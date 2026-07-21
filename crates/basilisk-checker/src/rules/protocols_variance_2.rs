@@ -1,4 +1,4 @@
-//! Implements [`protocols_variance_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`protocols_variance_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `protocols_variance_2`: Protocol `TypeVar` variance mismatch.
 //!
 //! When a generic protocol class declares a `TypeVar` as invariant but the

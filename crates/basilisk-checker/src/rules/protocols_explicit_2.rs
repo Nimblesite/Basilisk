@@ -1,4 +1,4 @@
-//! Implements [`protocols_explicit_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`protocols_explicit_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `protocols_explicit_2`: Calling `super().method()` on an abstract method with no default
 //! implementation.
 //!

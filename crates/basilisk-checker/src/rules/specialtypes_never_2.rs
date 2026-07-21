@@ -1,4 +1,4 @@
-//! Implements [`specialtypes_never_2`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! Implements [`specialtypes_never_2`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 //! `specialtypes_never_2`: `Never` type compatibility violations.
 //!
 //! Detects type compatibility errors involving the `Never` bottom type:

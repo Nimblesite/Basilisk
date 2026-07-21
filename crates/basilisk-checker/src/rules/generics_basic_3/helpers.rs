@@ -1,4 +1,4 @@
-//! Implements [`generics_basic_3`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_basic_3`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! All internal types, parsing, and checking logic for `generics_basic_3`.
 
 use std::collections::HashMap;

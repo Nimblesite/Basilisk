@@ -1,4 +1,4 @@
-//! Implements [`generics_type_erasure`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_type_erasure`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_type_erasure`: Access to instance attribute on a class object.
 //!
 //! Instance attributes (annotations without `ClassVar` in the class body that

@@ -2,7 +2,7 @@
 layout: layouts/docs.njk
 title: "Quick Start — Type-Check Your First File in 5 Minutes"
 description: "Get started with Basilisk in 5 minutes. Install the VS Code extension, run your first type check, and see PEP-conformant Python diagnostics in action."
-keywords: basilisk, quick start, python language server, type checking, tutorial, vs code
+keywords: basilisk, quick start, best python type checker, python language server, type checking, tutorial, vs code
 date: 2026-02-28
 dateModified: 2026-07-14
 author: The Basilisk Project
@@ -240,15 +240,16 @@ result: Any = legacy_sdk_call()  # type: ignore[returns_compatibility]
 
 Suppressions without reasons are themselves flagged. This is intentional: if you need to suppress a diagnostic, you should be able to explain why.
 
-## Step 8 — Check stats
+## Step 8 — Check type coverage
 
-Get a type coverage report for your project:
+Type coverage is reported live in the editor. Open the **Basilisk** icon in the
+activity bar and expand **Module Explorer**: every package and file carries a
+coverage bar and percentage — the share of its symbols that are annotated —
+alongside its error and warning counts, and icons are tinted by coverage so the
+untyped corners of a project stand out at a glance. Selecting a module opens it.
 
-```bash
-basilisk stats src/
-```
-
-Output includes: total functions, typed functions, type coverage percentage, files with no annotations.
+Coverage aggregates up the tree, so a package shows the combined figure for
+everything beneath it.
 
 ## Step 9 — Profile a running script
 

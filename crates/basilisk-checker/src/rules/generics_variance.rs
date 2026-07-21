@@ -1,4 +1,4 @@
-//! Implements [`generics_variance`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_variance`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_variance`: Variance incompatibility in base class parameterisation.
 //!
 //! When a class inherits from a generic base class (directly or through a type

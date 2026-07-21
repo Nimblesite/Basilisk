@@ -1,4 +1,4 @@
-//! Implements [`generics_syntax_compatibility`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! Implements [`generics_syntax_compatibility`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 //! `generics_syntax_compatibility`: PEP 695 type parameter syntax mixed with traditional `TypeVars`.
 //!
 //! PEP 695 introduced a new syntax for declaring type parameters (`class Foo[T]`

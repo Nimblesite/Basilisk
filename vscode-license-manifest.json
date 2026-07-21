@@ -1,5 +1,5 @@
 {
-  "carrier_sha256": "1d9f60c90143c251d0b48c53a9da4858f36c9d4d092d7fe6914b96d1dc213d12",
+  "carrier_sha256": "c4dca1716c57de4fc4fb03abb305ad354667cb0f19990ebaa0beb57841b7145f",
   "dependencies": [
     {
       "name": "@nimblesite/shipwright-core",
@@ -63,11 +63,11 @@
     },
     {
       "name": "brace-expansion",
-      "version": "5.0.6",
+      "version": "5.0.7",
       "license": "MIT",
-      "repository": "git+ssh://git@github.com/juliangruber/brace-expansion.git",
-      "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.6.tgz",
-      "integrity": "sha512-kLpxurY4Z4r9sgMsyG0Z9uzsBlgiU/EFKhj/h91/8yHu0edo7XuixOIH3VcJ8kkxs6/jPzoI6U9Vj3WqbMQ94g==",
+      "repository": "git+https://github.com/juliangruber/brace-expansion.git",
+      "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.7.tgz",
+      "integrity": "sha512-7oFy703dxfY3/NLxC1fh2SUCQ0H9rmAY+5EpDVfXjUTTs+HEwR2nYaqLv+GWcTsumwxPfiz6CzCNkwXwBUwqCA==",
       "legal_files": [
         {
           "label": "LICENSE",
@@ -202,5 +202,5 @@
       ]
     }
   ],
-  "production_graph_sha256": "0cde329d95c6111d14152a9e04f4bd890377383c0fa5994f216c19b3834a0767"
+  "production_graph_sha256": "43f5f5fd0daae31342024112becb94923452b92c929a2820b1eb50eca7f9f186"
 }

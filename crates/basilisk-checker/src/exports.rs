@@ -46,6 +46,7 @@ pub fn extract_exports(
                 source_path: source_path.to_path_buf(),
                 source_span: func.name_span,
                 signature: Some(signature),
+                docstring: func.docstring.clone(),
                 provenance: Some(TypeProvenance::Source),
                 methods: Vec::new(),
                 bases: Vec::new(),
@@ -66,6 +67,7 @@ pub fn extract_exports(
             .map(|func| ExternalMethod {
                 name: func.name.clone(),
                 signature: build_function_signature(func, &resolved.source),
+                docstring: func.docstring.clone(),
             })
             .collect();
         exports.push((
@@ -76,7 +78,8 @@ pub fn extract_exports(
                 type_annotation: None,
                 source_path: source_path.to_path_buf(),
                 source_span: class.name_span,
-                signature: Some(format!("class {}", class.name)),
+                signature: Some(class_signature(&class.name, &class.bases)),
+                docstring: class.docstring.clone(),
                 provenance: Some(TypeProvenance::Source),
                 methods,
                 bases: class.bases.clone(),
@@ -101,6 +104,7 @@ pub fn extract_exports(
                 source_path: source_path.to_path_buf(),
                 source_span: var.name_span,
                 signature: None,
+                docstring: None,
                 provenance: Some(TypeProvenance::Source),
                 methods: Vec::new(),
                 bases: Vec::new(),
@@ -191,6 +195,19 @@ fn parse_stub_source(
     .ok()
 }
 
+/// The `class` line hover shows for an exported class.
+///
+/// The declared bases are part of the class's shape — they are what tells a
+/// reader where its inherited members come from — so they are rendered rather
+/// than dropped ([LSPARCH-FEATURES-HOVER]).
+fn class_signature(name: &str, bases: &[String]) -> String {
+    if bases.is_empty() {
+        format!("class {name}")
+    } else {
+        format!("class {name}({})", bases.join(", "))
+    }
+}
+
 fn stub_module_exports(
     stub: &StubModule,
     stub_path: &Path,
@@ -210,6 +227,7 @@ fn stub_module_exports(
                 source_path: stub_path.to_path_buf(),
                 source_span: Span::new(0, 0),
                 signature: Some(basilisk_stubs::render_stub_signature(func)),
+                docstring: None,
                 provenance,
                 methods: Vec::new(),
                 bases: Vec::new(),
@@ -228,6 +246,7 @@ fn stub_module_exports(
             .map(|method| ExternalMethod {
                 name: method.name.clone(),
                 signature: basilisk_stubs::render_stub_signature(method),
+                docstring: None,
             })
             .collect();
         exports.push((
@@ -238,7 +257,8 @@ fn stub_module_exports(
                 type_annotation: None,
                 source_path: stub_path.to_path_buf(),
                 source_span: Span::new(0, 0),
-                signature: Some(format!("class {}", class.name)),
+                signature: Some(class_signature(&class.name, &class.bases)),
+                docstring: None,
                 provenance,
                 methods,
                 bases: class.bases.clone(),
@@ -258,6 +278,7 @@ fn stub_module_exports(
                 source_path: stub_path.to_path_buf(),
                 source_span: Span::new(0, 0),
                 signature: None,
+                docstring: None,
                 provenance,
                 methods: Vec::new(),
                 bases: Vec::new(),
@@ -457,6 +478,7 @@ pub fn load_external_module_from_source_with_loader(
                 source_path: logical_path.to_path_buf(),
                 source_span: Span::new(0, 0),
                 signature: None,
+                docstring: None,
                 provenance,
                 methods: Vec::new(),
                 bases: Vec::new(),

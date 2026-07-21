@@ -1,8 +1,14 @@
 //! Implements [STUBRES-TYPESHED-WARN] LSP routing.
 //!
-//! Typeshed transport status is editor metadata. It is merged into the
+//! Typeshed source status is editor metadata. It is merged into the
 //! initialize payload for persistent Service Info and elevated warnings are
 //! sent with `window/showMessage`; none of it is a Python diagnostic.
+//!
+//! There is **no acquiring state**: resolution is a local read
+//! ([STUBRES-TYPESHED-OFFLINE]), so a root's generation is always terminal —
+//! `Ready` or `NoSource`. The only long-running lifecycle is a user-invoked
+//! download, which never replaces the generation until it has finished and
+//! re-resolved locally ([LSPCFGED-TYPESHED-DOWNLOAD]).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -20,19 +26,17 @@ use tower_lsp::Client;
 use crate::configuration_editor::model::{
     TypeshedLicenseStatus, TypeshedLifecycle, TypeshedStatusChanged, TypeshedStatusState,
 };
-use crate::configuration_editor::snapshot_typeshed::status_projection;
+use crate::configuration_editor::snapshot_typeshed::ready_projection;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TypeshedFailureKind {
     LicenseChanged,
     CustomUnavailable,
-    ExactUnavailable,
-    LatestUnavailable,
-    InconsistentIdentity,
-    AcquisitionFailed,
+    NoSource,
+    ResolutionFailed,
 }
 
-/// One redacted terminal acquisition failure with the selection category kept
+/// One redacted terminal resolution failure with the selection category kept
 /// intact for typed RPC/status projection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TypeshedFailure {
@@ -42,9 +46,9 @@ pub(crate) struct TypeshedFailure {
 
 impl TypeshedFailure {
     #[must_use]
-    pub(crate) fn acquisition(reason: impl Into<String>) -> Self {
+    pub(crate) fn resolution(reason: impl Into<String>) -> Self {
         Self {
-            kind: TypeshedFailureKind::AcquisitionFailed,
+            kind: TypeshedFailureKind::ResolutionFailed,
             reason: reason.into(),
         }
     }
@@ -55,18 +59,11 @@ impl TypeshedFailure {
             // Custom sources provide user-managed terms, so they never project
             // the official Typeshed license as changed.
             SelectionError::Custom(_) => TypeshedFailureKind::CustomUnavailable,
-            SelectionError::Exact { reason, .. } if *reason == BackendError::LicenseChanged => {
+            SelectionError::NoSource { reason, .. } if *reason == BackendError::LicenseChanged => {
                 TypeshedFailureKind::LicenseChanged
             }
-            SelectionError::Exact { .. } => TypeshedFailureKind::ExactUnavailable,
-            SelectionError::LatestAndBundle { latest, bundle }
-                if *latest == BackendError::LicenseChanged
-                    || *bundle == BackendError::LicenseChanged =>
-            {
-                TypeshedFailureKind::LicenseChanged
-            }
-            SelectionError::LatestAndBundle { .. } => TypeshedFailureKind::LatestUnavailable,
-            SelectionError::InconsistentIdentity => TypeshedFailureKind::InconsistentIdentity,
+            SelectionError::NoSource { .. } => TypeshedFailureKind::NoSource,
+            SelectionError::InconsistentIdentity => TypeshedFailureKind::ResolutionFailed,
         };
         Self {
             kind,
@@ -79,10 +76,8 @@ impl TypeshedFailure {
         match self.kind {
             TypeshedFailureKind::LicenseChanged => "typeshedLicenseChanged",
             TypeshedFailureKind::CustomUnavailable => "typeshedCustomUnavailable",
-            TypeshedFailureKind::ExactUnavailable => "typeshedExactUnavailable",
-            TypeshedFailureKind::LatestUnavailable => "typeshedLatestUnavailable",
-            TypeshedFailureKind::InconsistentIdentity => "typeshedInconsistentIdentity",
-            TypeshedFailureKind::AcquisitionFailed => "typeshedAcquisitionFailed",
+            TypeshedFailureKind::NoSource => "typeshedNoSource",
+            TypeshedFailureKind::ResolutionFailed => "typeshedResolutionFailed",
         }
     }
 
@@ -100,20 +95,19 @@ impl TypeshedFailure {
     }
 }
 
-/// One workspace root's acquisition generation.
+/// One workspace root's terminal resolution generation.
 ///
 /// A candidate is never exposed as Ready until every activation gate passes.
-/// Reacquisition replaces this value atomically; in-flight requests may keep
-/// their old [`Arc<Snapshot>`], while new analysis observes only the terminal
-/// generation selected for its root.
+/// A configuration change replaces this value atomically with the *next*
+/// terminal generation — there is no intermediate state to render, which is
+/// what keeps the editor free of blocking overlays ([LSPCFGED-TYPESHED]).
 #[derive(Debug, Clone)]
 pub(crate) enum TypeshedGeneration {
-    /// Acquisition is in progress; analysis for this root must not start.
-    Acquiring,
     /// One complete immutable source is active.
     Ready(Arc<Snapshot>),
-    /// No candidate activated. The reason is redacted and safe for UI/MCP.
-    Blocked { failure: TypeshedFailure },
+    /// The selected source is not on this machine; analysis does not run.
+    /// The reason is redacted and safe for UI/MCP.
+    NoSource { failure: TypeshedFailure },
 }
 
 impl TypeshedGeneration {
@@ -122,7 +116,7 @@ impl TypeshedGeneration {
     pub(crate) fn ready_snapshot(&self) -> Option<&Arc<Snapshot>> {
         match self {
             Self::Ready(snapshot) => Some(snapshot),
-            Self::Acquiring | Self::Blocked { .. } => None,
+            Self::NoSource { .. } => None,
         }
     }
 
@@ -136,16 +130,32 @@ impl TypeshedGeneration {
     #[must_use]
     pub(crate) fn status_state(&self) -> TypeshedStatusState {
         match self {
-            Self::Acquiring => status_projection(None),
-            Self::Ready(snapshot) => status_projection(Some(&snapshot.status)),
-            Self::Blocked { failure } => {
-                let mut state = status_projection(None);
-                state.lifecycle = TypeshedLifecycle::Blocked;
-                state.blocked_reason = Some(failure.reason().to_owned());
-                state.license_status = failure.license_status();
-                state
-            }
+            Self::Ready(snapshot) => ready_projection(&snapshot.status),
+            Self::NoSource { failure } => TypeshedStatusState {
+                lifecycle: TypeshedLifecycle::NoSource,
+                no_source_reason: Some(failure.reason().to_owned()),
+                active_source: None,
+                commit_identity: None,
+                license_status: failure.license_status(),
+                warnings: Vec::new(),
+            },
         }
+    }
+}
+
+/// The transient status shown while a user-invoked download runs. The
+/// generation map is untouched — the previous source keeps serving analysis —
+/// so this state can only ever appear on the invoking control, never as a
+/// panel-blocking mode ([LSPCFGED-TYPESHED-DOWNLOAD]).
+#[must_use]
+pub(crate) fn downloading_state(commit: Option<&str>) -> TypeshedStatusState {
+    TypeshedStatusState {
+        lifecycle: TypeshedLifecycle::Downloading,
+        no_source_reason: None,
+        active_source: None,
+        commit_identity: commit.map(str::to_owned),
+        license_status: TypeshedLicenseStatus::Unavailable,
+        warnings: Vec::new(),
     }
 }
 
@@ -181,7 +191,7 @@ pub(super) fn experimental_payload(
     Value::Object(root)
 }
 
-/// Typed terminal/acquiring status notification.
+/// Typed terminal/downloading status notification.
 pub(crate) enum TypeshedStatusChangedNotification {}
 
 impl Notification for TypeshedStatusChangedNotification {
@@ -195,6 +205,11 @@ pub(crate) async fn notify_generation(
     root: &Path,
     generation: &TypeshedGeneration,
 ) {
+    notify_status(client, root, generation.status_state()).await;
+}
+
+/// Notify clients of one root's status DTO (terminal or download-transient).
+pub(crate) async fn notify_status(client: &Client, root: &Path, status: TypeshedStatusState) {
     let Ok(root_uri) = Url::from_file_path(root) else {
         tracing::warn!(root = %root.display(), "cannot publish Typeshed status for non-file root");
         return;
@@ -202,7 +217,7 @@ pub(crate) async fn notify_generation(
     client
         .send_notification::<TypeshedStatusChangedNotification>(TypeshedStatusChanged {
             root_uri: root_uri.to_string(),
-            status: generation.status_state(),
+            status,
         })
         .await;
 }
@@ -232,32 +247,24 @@ fn object_or_empty(value: Option<Value>) -> Map<String, Value> {
 #[cfg(test)]
 mod tests {
     use basilisk_stubs::typeshed::gittree::Oid;
-    use basilisk_stubs::typeshed::source::{
-        LicenseStatus, Provenance, SourceKind, StatusWarning, Transport,
-    };
+    use basilisk_stubs::typeshed::source::{LicenseStatus, SourceKind, StatusWarning};
     use basilisk_stubs::typeshed::warning::{TypeshedWarning, UnpinnedKind};
 
     use super::*;
 
-    fn fallback_status() -> TypeshedStatus {
+    fn bundled_default_status() -> TypeshedStatus {
         TypeshedStatus {
             active_source: SourceKind::Bundled,
             commit: Oid::from_hex("83c2518a9e6abbda0c44592c3483de459198f887").ok(),
             tree: Oid::from_hex("66408ffce2750980efc6da09e8a6652733f852e4").ok(),
-            transport: Transport::EmbeddedZip,
             license_status: LicenseStatus::Approved,
             license_reference: Some(
                 "https://github.com/python/typeshed/blob/83c2518a9e6abbda0c44592c3483de459198f887/LICENSE"
                     .to_owned(),
             ),
-            provenance: Provenance::BundleVetted,
-            signed_release: false,
             warnings: StatusWarning::list(&[
-                TypeshedWarning::Unpinned(UnpinnedKind::LatestOrBundled),
-                TypeshedWarning::DownloadFailed {
-                    bundled_sha: "83c2518a9e6abbda0c44592c3483de459198f887".to_owned(),
-                },
-                TypeshedWarning::Unverified,
+                TypeshedWarning::LicenseChanged,
+                TypeshedWarning::Unpinned(UnpinnedKind::BundledDefault),
             ]),
         }
     }
@@ -267,7 +274,7 @@ mod tests {
         let Ok(mut snapshot) = basilisk_stubs::typeshed::bundle::bundled_snapshot() else {
             return;
         };
-        snapshot.status = fallback_status();
+        snapshot.status = bundled_default_status();
         let generations = BTreeMap::from([(
             PathBuf::from("/workspace"),
             TypeshedGeneration::Ready(Arc::new(snapshot)),
@@ -290,59 +297,87 @@ mod tests {
         );
         assert_eq!(
             payload.pointer("/basilisk/typeshedStatuses/0/status/warnings/1/code"),
-            Some(&Value::String("DOWNLOAD FAILED".to_owned()))
+            Some(&Value::String("LICENSE CHANGED".to_owned()))
         );
-        assert_eq!(
-            payload.pointer("/basilisk/typeshedStatuses/0/status/warnings/2/code"),
-            Some(&Value::String("UNVERIFIED".to_owned()))
-        );
-        assert_eq!(
-            payload.pointer("/basilisk/typeshedStatuses/0/status/provenance/kind"),
-            Some(&Value::String("BundleVetted".to_owned()))
-        );
-        assert_eq!(
-            payload.pointer("/basilisk/typeshedStatuses/0/status/transport/kind"),
-            Some(&Value::String("EmbeddedZip".to_owned()))
-        );
-        assert_eq!(
-            payload.pointer("/basilisk/typeshedStatuses/0/status/signedRelease"),
-            Some(&Value::Bool(false))
-        );
+        // The retired trust-bijection fields must never reappear on the wire:
+        // the active source IS the trust story ([STUBRES-TYPESHED-WARN]).
+        for retired in ["transport", "provenance", "signedRelease", "blockedReason"] {
+            assert_eq!(
+                payload.pointer(&format!("/basilisk/typeshedStatuses/0/status/{retired}")),
+                None,
+                "retired wire field: {retired}"
+            );
+        }
     }
 
+    /// [LSPCFGED-TYPESHED]: the lifecycle union has NO acquiring/blocked
+    /// panel state — a generation is always terminal, so there is nothing a
+    /// client could render as a blocking overlay between config changes.
     #[test]
-    fn blocked_generation_has_no_candidate_source_or_provenance() {
-        let state = TypeshedGeneration::Blocked {
-            failure: TypeshedFailure::acquisition("exact commit unavailable"),
+    fn generation_states_are_terminal_ready_or_no_source() {
+        let no_source = TypeshedGeneration::NoSource {
+            failure: TypeshedFailure::resolution("NO SOURCE — pin is not on this machine"),
         }
         .status_state();
-        assert_eq!(state.lifecycle, TypeshedLifecycle::Blocked);
+        assert_eq!(no_source.lifecycle, TypeshedLifecycle::NoSource);
         assert_eq!(
-            state.blocked_reason.as_deref(),
-            Some("exact commit unavailable")
+            no_source.no_source_reason.as_deref(),
+            Some("NO SOURCE — pin is not on this machine")
         );
-        assert_eq!(state.license_status, TypeshedLicenseStatus::Unavailable);
+        assert_eq!(no_source.license_status, TypeshedLicenseStatus::Unavailable);
+        assert!(no_source.active_source.is_none());
+        assert!(no_source.commit_identity.is_none());
+
+        // Serde-level proof the retired states are gone from the wire union.
+        for retired in ["Acquiring", "Blocked"] {
+            let json = format!("{{\"kind\":\"{retired}\"}}");
+            assert!(
+                serde_json::from_str::<TypeshedLifecycle>(&json).is_err(),
+                "retired lifecycle must not deserialize: {retired}"
+            );
+        }
+    }
+
+    /// [LSPCFGED-TYPESHED-DOWNLOAD]: the transient download status carries the
+    /// requested pin but never a source — it is button state, not a panel mode.
+    #[test]
+    fn downloading_state_is_transient_button_state() {
+        let state = downloading_state(Some("83c2518a9e6abbda0c44592c3483de459198f887"));
+        assert_eq!(state.lifecycle, TypeshedLifecycle::Downloading);
+        assert_eq!(
+            state.commit_identity.as_deref(),
+            Some("83c2518a9e6abbda0c44592c3483de459198f887")
+        );
         assert!(state.active_source.is_none());
-        assert!(state.commit_identity.is_none());
+        assert!(state.no_source_reason.is_none());
     }
 
     #[test]
-    fn exact_license_drift_projects_changed_while_custom_failure_does_not() {
+    fn no_source_license_drift_projects_changed_while_custom_failure_does_not() {
         let Ok(commit) = basilisk_stubs::typeshed::gittree::Oid::from_hex(
             "0123456789012345678901234567890123456789",
         ) else {
             return;
         };
-        let exact = TypeshedFailure::from_selection(&SelectionError::Exact {
+        let drifted = TypeshedFailure::from_selection(&SelectionError::NoSource {
             commit,
             reason: BackendError::LicenseChanged,
         });
-        let exact_state = TypeshedGeneration::Blocked { failure: exact }.status_state();
-        assert_eq!(exact_state.license_status, TypeshedLicenseStatus::Changed);
+        assert_eq!(drifted.rpc_code(), "typeshedLicenseChanged");
+        let drifted_state = TypeshedGeneration::NoSource { failure: drifted }.status_state();
+        assert_eq!(drifted_state.license_status, TypeshedLicenseStatus::Changed);
+
+        let missing = TypeshedFailure::from_selection(&SelectionError::NoSource {
+            commit,
+            reason: BackendError::Missing,
+        });
+        assert_eq!(missing.rpc_code(), "typeshedNoSource");
+        assert!(missing.reason().contains("NO SOURCE"));
 
         let custom =
             TypeshedFailure::from_selection(&SelectionError::Custom(BackendError::LicenseChanged));
-        let custom_state = TypeshedGeneration::Blocked { failure: custom }.status_state();
+        assert_eq!(custom.rpc_code(), "typeshedCustomUnavailable");
+        let custom_state = TypeshedGeneration::NoSource { failure: custom }.status_state();
         assert_eq!(
             custom_state.license_status,
             TypeshedLicenseStatus::Unavailable
@@ -351,14 +386,11 @@ mod tests {
 
     #[test]
     fn show_message_projection_contains_only_high_warnings() {
-        let messages = high_warning_messages(&fallback_status());
-        assert_eq!(messages.len(), 2);
+        let messages = high_warning_messages(&bundled_default_status());
+        assert_eq!(messages.len(), 1);
         assert!(messages
             .first()
-            .is_some_and(|message| message.contains("DOWNLOAD FAILED")));
-        assert!(messages
-            .get(1)
-            .is_some_and(|message| message.contains("UNVERIFIED")));
+            .is_some_and(|message| message.contains("LICENSE CHANGED")));
         assert!(messages.iter().all(|message| !message.contains("UNPINNED")));
 
         let source = include_str!("typeshed_status.rs");

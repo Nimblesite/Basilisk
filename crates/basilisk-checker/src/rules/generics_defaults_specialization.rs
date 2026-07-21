@@ -1,4 +1,4 @@
-//! Implements [`generics_defaults_specialization`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_defaults_specialization`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_defaults_specialization`: Wrong number of type arguments to a generic class or type alias.
 //!
 //! When a user-defined generic class has both required (non-default) and optional

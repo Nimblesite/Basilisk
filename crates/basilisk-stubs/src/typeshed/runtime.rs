@@ -1,234 +1,56 @@
-//! Production acquisition backend over injected HTTPS transport and disk cache.
-//! Implements the source model and work contract in [TYPESHEDRT-MODEL],
-//! [TYPESHEDRT-WORK], and [TYPESHEDRT-ACCEPTANCE].
+//! Production source backend over the embedded bundle, the local store, and
+//! user-managed custom trees. Implements the source model and work contract in
+//! [TYPESHEDRT-MODEL], [TYPESHEDRT-WORK], and [TYPESHEDRT-SEGREGATION].
+//!
+//! Everything here is a local read: this crate carries no HTTP client, so the
+//! analysis path cannot reach the network even by mistake
+//! ([STUBRES-TYPESHED-OFFLINE]). Downloading lives in the separate
+//! `basilisk-typeshed-fetch` crate, invoked only by explicit user action.
 
 mod custom;
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::archive::{Archive, ArchiveEntry};
-use super::bundle::{approved_license_manifest, bundled_snapshot};
-use super::cache::{CacheKey, CacheRecord, CachedArchive, CachedTreeFile, DiskCache};
-use super::codec::{decode_zip, DecodeLimits, ZipLayout};
-use super::gate::manifest::sha256_hex;
-use super::gate::{run_activation, GateConfig, GateError, SafetyLimits};
-use super::gittree::{git_blob_oid, reconstruct_root_tree_oid, FileMode, GitFile, Oid};
+use super::bundle::bundled_snapshot;
+use super::gittree::Oid;
 use super::manager::TypeshedManager;
-use super::selector::{AcquisitionBackend, BackendError};
+use super::selector::{BackendError, SourceBackend};
 use super::snapshot::Snapshot;
-use super::source::{
-    LicenseStatus, Provenance, SourceIdentity, SourceKind, StatusWarning,
-    Transport as SourceTransport, TypeshedRequest, TypeshedStatus,
-};
-use super::transport::{CommitMetadata, HttpsTransport, Transport, TransportError, TreeEntry};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct TrustedTree {
-    root: Oid,
-    files: BTreeMap<String, TreeEntry>,
-}
+use super::source::TypeshedRequest;
+use super::store::{self, StoreError};
 
 /// Production policy backend shared by CLI/LSP/MCP managers.
+#[derive(Debug)]
 pub struct RuntimeBackend {
-    transport: Arc<dyn Transport>,
-    cache: Option<DiskCache>,
-}
-
-impl std::fmt::Debug for RuntimeBackend {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("RuntimeBackend")
-            .field("cache_enabled", &self.cache.is_some())
-            .finish_non_exhaustive()
-    }
+    store_root: Option<PathBuf>,
 }
 
 impl RuntimeBackend {
-    /// Construct a backend from the concrete HTTPS adapter and optional cache.
+    /// Construct a backend resolving pins from `store_root`, or the per-user
+    /// OS default when `None`.
     #[must_use]
-    pub fn new(transport: Arc<dyn Transport>, cache: Option<DiskCache>) -> Self {
-        Self { transport, cache }
-    }
-
-    fn load_resolved(
-        &self,
-        metadata: &CommitMetadata,
-        request: &TypeshedRequest,
-        pinned: bool,
-    ) -> Result<Snapshot, BackendError> {
-        if request.use_cache {
-            if let Some(cached) = self.load_cache(metadata.commit, pinned) {
-                let cached_result = validate_cache_record(metadata.commit, metadata.tree, &cached)
-                    .and_then(|()| trusted_from_cache(metadata.commit, &cached))
-                    .and_then(|trusted| {
-                        activate_zip(
-                            metadata.commit,
-                            &cached.zip,
-                            &trusted,
-                            request,
-                            cached_transport(&cached)?,
-                            pinned,
-                        )
-                    });
-                if let Ok(snapshot) = cached_result {
-                    return Ok(snapshot);
-                }
-                tracing::warn!("typeshed cached candidate failed gates; reacquiring archive");
-            }
-        }
-        let retain_tree_metadata =
-            request.verify_content || (request.use_cache && self.cache.is_some());
-        let trusted = if retain_tree_metadata {
-            let entries = self
-                .transport
-                .fetch_tree(metadata.tree)
-                .map_err(|_error| BackendError::Metadata)?;
-            trusted_from_entries(metadata.tree, entries)?
-        } else {
-            TrustedTree {
-                root: metadata.tree,
-                files: BTreeMap::new(),
-            }
-        };
-        let bytes = self
-            .transport
-            .fetch_archive(metadata.commit)
-            .map_err(|_error| BackendError::Download)?;
-        let source_transport = self.transport.archive_transport();
-        if !matches!(
-            source_transport,
-            SourceTransport::Codeload | SourceTransport::Mirror
-        ) {
-            return Err(BackendError::Validation);
-        }
-        let snapshot = activate_zip(
-            metadata.commit,
-            &bytes,
-            &trusted,
-            request,
-            source_transport,
-            pinned,
-        )?;
-        self.store_cache(metadata.commit, &trusted, &bytes, request, source_transport);
-        Ok(snapshot)
-    }
-
-    /// Look up `commit` in the cache.
-    ///
-    /// `pinned` selects the reuse window. An explicit `typeshed-commit` pin is
-    /// content-addressed and re-hashed on every load, so age tells us nothing
-    /// and expiring it would only force a needless network round-trip. `Latest`
-    /// resolves the moving `main` reference, where stale bytes really would
-    /// misrepresent the selection, so it keeps the 24-hour window
-    /// ([STUBRES-TYPESHED-ACQUIRE]).
-    fn load_cache(&self, commit: Oid, pinned: bool) -> Option<CachedArchive> {
-        let Some(cache) = &self.cache else {
-            return None;
-        };
-        let key = cache_key(commit);
-        let found = if pinned {
-            cache.load_pinned(&key)
-        } else {
-            cache.load_fresh(&key, unix_seconds_now())
-        };
-        match found {
-            Ok(cached) => cached,
-            Err(_error) => {
-                // A cache is an optimization, never an alternate trust root.
-                // Corrupt/incomplete generations are ignored and acquisition
-                // obtains fresh official bytes through the normal gates.
-                tracing::warn!("typeshed cache reuse failed; reacquiring archive");
-                None
-            }
-        }
-    }
-
-    fn store_cache(
-        &self,
-        commit: Oid,
-        trusted: &TrustedTree,
-        zip: &[u8],
-        request: &TypeshedRequest,
-        source_transport: SourceTransport,
-    ) {
-        if !request.use_cache {
-            return;
-        }
-        let Some(cache) = &self.cache else {
-            return;
-        };
-        let record = CacheRecord {
-            commit: Some(commit.to_hex()),
-            tree: Some(trusted.root.to_hex()),
-            zip_sha256: sha256_hex(zip),
-            verified: request.verify_content,
-            transport: Some(transport_label(source_transport).to_owned()),
-            acquired_at_unix_seconds: unix_seconds_now(),
-            tree_files: trusted
-                .files
-                .values()
-                .map(|entry| CachedTreeFile {
-                    path: entry.path.clone(),
-                    oid: entry.oid.to_hex(),
-                    mode: entry.mode.as_str().to_owned(),
-                })
-                .collect(),
-        };
-        if cache.store(&cache_key(commit), zip, &record).is_err() {
-            tracing::warn!("typeshed cache store failed");
-        }
+    pub const fn new(store_root: Option<PathBuf>) -> Self {
+        Self { store_root }
     }
 }
 
-impl AcquisitionBackend for RuntimeBackend {
+impl SourceBackend for RuntimeBackend {
     fn load_custom(&self, path: &str) -> Result<Snapshot, BackendError> {
         custom::load_custom_snapshot(path)
     }
 
-    fn load_commit(
-        &self,
-        commit: Oid,
-        request: &TypeshedRequest,
-    ) -> Result<Snapshot, BackendError> {
-        if request.use_cache {
-            if let Some(cached) = self.load_cache(commit, true) {
-                let cached_result = trusted_from_cache(commit, &cached).and_then(|trusted| {
-                    activate_zip(
-                        commit,
-                        &cached.zip,
-                        &trusted,
-                        request,
-                        cached_transport(&cached)?,
-                        true,
-                    )
-                });
-                if let Ok(snapshot) = cached_result {
-                    return Ok(snapshot);
-                }
-                tracing::warn!("typeshed exact cache failed gates; reacquiring metadata");
-            }
-        }
-        let metadata = self
-            .transport
-            .resolve_commit(commit)
-            .map_err(|_error| BackendError::Metadata)?;
-        if metadata.commit != commit {
-            return Err(BackendError::Metadata);
-        }
-        self.load_resolved(&metadata, request, true)
-    }
-
-    fn load_latest(&self, request: &TypeshedRequest) -> Result<Snapshot, BackendError> {
-        // Resolve B before any cache lookup. Therefore cached unpinned A can
-        // never be selected when Latest moves or metadata resolution fails.
-        let resolved = self
-            .transport
-            .resolve_latest()
-            .map_err(|_error| BackendError::Metadata)?;
-        self.load_resolved(&resolved, request, false)
+    fn load_pinned(&self, commit: Oid, explicit: bool) -> Result<Snapshot, BackendError> {
+        let root = self
+            .store_root
+            .clone()
+            .or_else(default_store_path)
+            .ok_or(BackendError::Missing)?;
+        store::read_snapshot(&root, commit, explicit).map_err(|error| match error {
+            StoreError::Missing => BackendError::Missing,
+            StoreError::Corrupt => BackendError::Corrupt,
+            StoreError::LicenseChanged => BackendError::LicenseChanged,
+        })
     }
 
     fn load_bundled(&self) -> Result<Snapshot, BackendError> {
@@ -240,252 +62,24 @@ impl AcquisitionBackend for RuntimeBackend {
 #[must_use]
 pub fn manager_for_request(
     request: TypeshedRequest,
-    transport: Arc<dyn Transport>,
-    cache: Option<DiskCache>,
+    backend: Arc<dyn SourceBackend>,
 ) -> TypeshedManager {
-    TypeshedManager::new(request, Arc::new(RuntimeBackend::new(transport, cache)))
+    TypeshedManager::new(request, backend)
 }
 
-/// Construct a production manager with authenticated HTTPS and the canonical
-/// per-user OS cache when caching is enabled.
-///
-/// # Errors
-///
-/// Returns a redacted transport configuration error for an invalid mirror.
-pub fn production_manager(
-    request: TypeshedRequest,
-    cache_path: Option<PathBuf>,
-) -> Result<TypeshedManager, TransportError> {
-    let cache = select_cache(request.use_cache, cache_path);
-    let transport = Arc::new(HttpsTransport::new(request.url_template.clone())?);
-    Ok(manager_for_request(request, transport, cache))
-}
-
-/// Resolve which disk cache an acquisition may use.
-///
-/// Separated from [`production_manager`] so the choice is reachable without
-/// constructing an HTTPS transport, which the surrounding function does and
-/// which no unit test can exercise offline.
-///
-/// `typeshed-cache = false` disables reuse outright and outranks any configured
-/// directory — otherwise a project that had switched caching off would silently
-/// keep reusing bytes from a path it also configured. `typeshed-cache-path`
-/// then relocates storage, and only its absence falls back to the canonical
-/// per-user OS cache ([STUBRES-TYPESHED-CONFIG]).
+/// Construct the production manager. Resolution is local and infallible to
+/// build — a failing source surfaces from [`TypeshedManager::snapshot`].
 #[must_use]
-pub fn select_cache(use_cache: bool, cache_path: Option<PathBuf>) -> Option<DiskCache> {
-    if !use_cache {
-        return None;
-    }
-    cache_path.map(DiskCache::new).or_else(default_cache)
+pub fn production_manager(request: TypeshedRequest) -> TypeshedManager {
+    let backend = Arc::new(RuntimeBackend::new(request.store_path.clone()));
+    manager_for_request(request, backend)
 }
 
-/// Canonical per-user typeshed cache directory for this platform.
+/// Canonical per-user typeshed store directory for this platform
+/// ([STUBRES-TYPESHED-STORE]).
 #[must_use]
-pub fn default_cache_path() -> Option<PathBuf> {
+pub fn default_store_path() -> Option<PathBuf> {
     platform_cache_base().map(|base| base.join("basilisk").join("typeshed"))
-}
-
-/// Canonical disk cache, or `None` when the platform exposes no user cache
-/// location in the current environment.
-#[must_use]
-pub fn default_cache() -> Option<DiskCache> {
-    default_cache_path().map(DiskCache::new)
-}
-
-fn activate_zip(
-    commit: Oid,
-    zip: &[u8],
-    trusted: &TrustedTree,
-    request: &TypeshedRequest,
-    transport: SourceTransport,
-    pinned: bool,
-) -> Result<Snapshot, BackendError> {
-    let decoded = decode_zip(zip, ZipLayout::CodeloadPrefixed, &DecodeLimits::default())
-        .map_err(|_error| BackendError::Validation)?;
-    let archive = if request.verify_content {
-        bind_trusted_files(decoded, trusted)?
-    } else {
-        decoded
-    };
-    let approved = approved_license_manifest().map_err(|_error| BackendError::Bundle)?;
-    let identity = SourceIdentity::Commit { commit, pinned };
-    let config = GateConfig {
-        limits: SafetyLimits::default(),
-        approved_license: approved,
-        expected_root_tree: trusted.root,
-        verify_content: request.verify_content,
-    };
-    let activation = run_activation(archive, &config, identity.uri_component())
-        .map_err(|error| gate_error(&error))?;
-    let provenance = if request.verify_content {
-        Provenance::GithubTlsAttested
-    } else {
-        Provenance::Unverified
-    };
-    let status = TypeshedStatus {
-        active_source: if pinned {
-            SourceKind::ExactCommit
-        } else {
-            SourceKind::Latest
-        },
-        commit: Some(commit),
-        tree: activation.root_tree,
-        transport,
-        license_status: LicenseStatus::Approved,
-        license_reference: Some(format!(
-            "https://github.com/python/typeshed/blob/{commit}/LICENSE"
-        )),
-        provenance,
-        signed_release: false,
-        warnings: StatusWarning::list(&activation.warnings),
-    };
-    Snapshot::build(identity, status, activation.vfs, None)
-        .map_err(|_error| BackendError::Validation)
-}
-
-fn bind_trusted_files(archive: Archive, trusted: &TrustedTree) -> Result<Archive, BackendError> {
-    if trusted.files.is_empty() {
-        return Ok(archive);
-    }
-    if archive.len() != trusted.files.len() {
-        return Err(BackendError::Validation);
-    }
-    let mut seen = BTreeSet::new();
-    let mut entries = Vec::with_capacity(archive.len());
-    for entry in archive.entries() {
-        let metadata = trusted
-            .files
-            .get(&entry.path)
-            .ok_or(BackendError::Validation)?;
-        if !matches!(metadata.mode, FileMode::Regular | FileMode::Executable)
-            || git_blob_oid(&entry.data) != metadata.oid
-            || !seen.insert(entry.path.clone())
-        {
-            return Err(BackendError::Validation);
-        }
-        entries.push(ArchiveEntry {
-            path: entry.path.clone(),
-            mode: metadata.mode,
-            data: entry.data.clone(),
-        });
-    }
-    if seen.len() != trusted.files.len() {
-        return Err(BackendError::Validation);
-    }
-    Ok(Archive::new(entries))
-}
-
-fn validate_cache_record(
-    commit: Oid,
-    tree: Oid,
-    cached: &CachedArchive,
-) -> Result<(), BackendError> {
-    let expected_commit = commit.to_hex();
-    let expected_tree = tree.to_hex();
-    if cached.record.commit.as_deref() != Some(expected_commit.as_str())
-        || cached.record.tree.as_deref() != Some(expected_tree.as_str())
-    {
-        return Err(BackendError::Validation);
-    }
-    Ok(())
-}
-
-fn trusted_from_cache(commit: Oid, cached: &CachedArchive) -> Result<TrustedTree, BackendError> {
-    let expected_commit = commit.to_hex();
-    if cached.record.commit.as_deref() != Some(expected_commit.as_str()) {
-        return Err(BackendError::Validation);
-    }
-    let tree = cached
-        .record
-        .tree
-        .as_deref()
-        .ok_or(BackendError::Validation)
-        .and_then(|value| Oid::from_hex(value).map_err(|_error| BackendError::Validation))?;
-    let entries = cached
-        .record
-        .tree_files
-        .iter()
-        .map(|file| {
-            let oid = Oid::from_hex(&file.oid).map_err(|_error| BackendError::Validation)?;
-            let mode = match file.mode.as_str() {
-                "100644" => FileMode::Regular,
-                "100755" => FileMode::Executable,
-                "120000" => FileMode::Symlink,
-                "160000" => FileMode::Submodule,
-                _ => return Err(BackendError::Validation),
-            };
-            Ok(TreeEntry {
-                path: file.path.clone(),
-                oid,
-                mode,
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    if entries.is_empty() {
-        return Ok(TrustedTree {
-            root: tree,
-            files: BTreeMap::new(),
-        });
-    }
-    trusted_from_entries(tree, entries)
-}
-
-fn trusted_from_entries(root: Oid, entries: Vec<TreeEntry>) -> Result<TrustedTree, BackendError> {
-    let mut files = BTreeMap::new();
-    for entry in entries {
-        if files.insert(entry.path.clone(), entry).is_some() {
-            return Err(BackendError::Validation);
-        }
-    }
-    let git_files: Vec<_> = files
-        .values()
-        .map(|entry| GitFile {
-            path: entry.path.clone(),
-            oid: entry.oid,
-            mode: entry.mode,
-        })
-        .collect();
-    let reconstructed =
-        reconstruct_root_tree_oid(&git_files).map_err(|_error| BackendError::Validation)?;
-    if reconstructed != root {
-        return Err(BackendError::Validation);
-    }
-    Ok(TrustedTree { root, files })
-}
-
-fn cache_key(commit: Oid) -> CacheKey {
-    CacheKey::from_identity(&commit.to_hex())
-}
-
-fn unix_seconds_now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs())
-}
-
-fn cached_transport(cached: &CachedArchive) -> Result<SourceTransport, BackendError> {
-    match cached.record.transport.as_deref() {
-        Some("codeload") => Ok(SourceTransport::Codeload),
-        Some("mirror") => Ok(SourceTransport::Mirror),
-        _ => Err(BackendError::Validation),
-    }
-}
-
-fn transport_label(transport: SourceTransport) -> &'static str {
-    match transport {
-        SourceTransport::Codeload => "codeload",
-        SourceTransport::Mirror => "mirror",
-        SourceTransport::CustomPath | SourceTransport::EmbeddedZip => "invalid",
-    }
-}
-
-fn gate_error(error: &GateError) -> BackendError {
-    if matches!(error, GateError::License(_)) {
-        BackendError::LicenseChanged
-    } else {
-        BackendError::Validation
-    }
 }
 
 #[cfg(target_os = "windows")]
@@ -514,6 +108,6 @@ fn platform_cache_base() -> Option<PathBuf> {
 #[cfg(test)]
 #[expect(
     clippy::expect_used,
-    reason = "test-only acquisition fixtures use fixed ZIPs and SHA constants"
+    reason = "test-only resolution fixtures use fixed embedded assets and SHA constants"
 )]
 mod tests;

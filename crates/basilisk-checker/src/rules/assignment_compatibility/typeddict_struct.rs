@@ -1,5 +1,5 @@
 //! Implements [`assignment_compatibility`] from [CHKARCH-DIAG]. See
-//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //!
 //! PEP 705-aware structural assignability for `TypedDict`-to-`TypedDict`
 //! assignments. E0014's default `Named`-vs-`Named` comparison is name equality,

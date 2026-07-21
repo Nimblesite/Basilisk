@@ -296,6 +296,7 @@ mod imported_globals_tests {
             source_path: std::path::PathBuf::from("other.py"),
             source_span: Span::new(0, 0),
             signature: None,
+            docstring: None,
             provenance: None,
             methods: Vec::new(),
             bases: Vec::new(),

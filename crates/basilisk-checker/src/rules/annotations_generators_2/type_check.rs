@@ -1,4 +1,4 @@
-//! Implements [`annotations_generators_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`annotations_generators_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Type checking helpers for `annotations_generators_2`.
 //!
 //! Contains compatibility checks for yield/send/return types and the

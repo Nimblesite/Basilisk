@@ -1,4 +1,4 @@
-//! Implements [`literals_parameterizations`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! Implements [`literals_parameterizations`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! `literals_parameterizations`: Invalid `Literal` parameterization.
 //!
 //! PEP 586 restricts what values may appear inside `Literal[...]`.

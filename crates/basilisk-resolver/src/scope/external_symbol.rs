@@ -36,6 +36,13 @@ pub struct ExternalMethod {
     pub name: String,
     /// The rendered `def` signature for hover display.
     pub signature: String,
+    /// The method's docstring, when the defining module has one.
+    ///
+    /// `.pyi` stubs (typeshed included) carry no docstrings, so this is `None`
+    /// for them; workspace and PEP 561 `py.typed` sources do carry them, and
+    /// hover shows the prose it finds rather than dropping it
+    /// ([LSPARCH-FEATURES-HOVER]).
+    pub docstring: Option<String>,
 }
 
 /// One class declaration indexed from the active standard-library snapshot.
@@ -76,6 +83,13 @@ pub struct ExternalSymbol {
     pub source_span: Span,
     /// The full function/class signature for hover display.
     pub signature: Option<String>,
+    /// The symbol's docstring, when the defining module has one.
+    ///
+    /// `.pyi` stubs (typeshed included) carry no docstrings, so this is `None`
+    /// for them; workspace and PEP 561 `py.typed` sources do carry them, and
+    /// hover shows the prose it finds rather than dropping it
+    /// ([LSPARCH-FEATURES-HOVER]).
+    pub docstring: Option<String>,
     /// Where this symbol's type information came from.
     ///
     /// Set during cross-module resolution based on how the import was resolved.

@@ -1,4 +1,4 @@
-//! Implements [`constructors_call_init`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`constructors_call_init`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Helper functions for `constructors_call_init`: Constructor call errors.
 
 use std::collections::HashMap;

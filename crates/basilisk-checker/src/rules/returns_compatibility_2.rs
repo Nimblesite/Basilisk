@@ -1,4 +1,4 @@
-//! Implements [`returns_compatibility_2`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`returns_compatibility_2`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `returns_compatibility_2`: Return type mismatch — inferred return type incompatible with annotation.
 //!
 //! When a function has a return type annotation, the inferred return type must be

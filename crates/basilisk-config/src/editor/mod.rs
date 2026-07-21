@@ -20,7 +20,7 @@ use crate::BasiliskConfig;
 
 pub use patch::{
     build_configuration_patch, build_rule_patch, ConfigurationUpdate, RuleConfigUpdate,
-    TypeshedConfigKey, TypeshedConfigUpdate, TypeshedConfigValue,
+    TypeshedConfigKey, TypeshedConfigUpdate,
 };
 pub use write::apply_config_patch;
 
@@ -230,19 +230,9 @@ fn validate_typeshed_settings(
     path: &Path,
     basilisk: &toml::Table,
 ) -> Result<(), ConfigDocumentError> {
-    for key in [
-        "typeshed-path",
-        "typeshed-commit",
-        "typeshed-url",
-        "typeshed-cache-path",
-    ] {
+    for key in ["typeshed-path", "typeshed-commit", "typeshed-store-path"] {
         if basilisk.get(key).is_some_and(|value| !value.is_str()) {
             return invalid(path, &format!("`{key}` must be a string"));
-        }
-    }
-    for key in ["typeshed-cache", "typeshed-verify"] {
-        if basilisk.get(key).is_some_and(|value| !value.is_bool()) {
-            return invalid(path, &format!("`{key}` must be a boolean"));
         }
     }
     if basilisk.contains_key("typeshed-path") && basilisk.contains_key("typeshed-commit") {
@@ -259,14 +249,6 @@ fn validate_typeshed_settings(
             return invalid(
                 path,
                 "`typeshed-commit` must be a full 40-character hexadecimal SHA",
-            );
-        }
-    }
-    if let Some(url) = basilisk.get("typeshed-url").and_then(toml::Value::as_str) {
-        if !crate::is_valid_typeshed_url_template(url) {
-            return invalid(
-                path,
-                "`typeshed-url` must be HTTPS with exactly one {sha} placeholder",
             );
         }
     }

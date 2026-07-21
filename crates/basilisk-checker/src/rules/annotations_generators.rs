@@ -1,4 +1,4 @@
-//! Implements [`annotations_generators`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`annotations_generators`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `annotations_generators`: Generator return type and yield type violations.
 //!
 //! A generator function (one containing `yield` or `yield from`) must declare

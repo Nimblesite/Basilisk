@@ -30,7 +30,7 @@ requires a failing behavior test before the implementation change.
 
 | Spec ID | Current deviation | Location |
 |---|---|---|
-| `CHKARCH-CLI-EXITCODES` | Malformed configuration falls back to defaults, so configuration exit code `2` is never produced. | `basilisk-cli/src/main.rs`, `basilisk-config/src/lib.rs` |
+| `CHKARCH-CLI-EXITCODES` | A `pyproject.toml` that fails to parse is silently discarded and the run falls back to defaults, so that flavour of invalid configuration never reaches exit code `2`. (A `pep` rule resolved to `disabled` does exit `2` — `pipeline/mod.rs` raises `PipelineError::Config` and `main.rs` maps it.) | `basilisk-config/src/lib.rs`, `basilisk-config/src/parse.rs` |
 
 ## Verification {#CONFAUDIT-VERIFICATION}
 

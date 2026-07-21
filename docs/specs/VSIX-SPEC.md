@@ -31,14 +31,32 @@ flowchart LR
 
 ## Extension Structure {#VSIX-EXTENSION-STRUCTURE}
 
+`src/` is flat and file-per-concern (63 `.ts` files); the groups below are naming
+prefixes, not directories. Files carry an `// Implements [ID]` header pointing at
+the spec section they realise.
+
 ```
 vscode-extension/
 ├── src/
-│   ├── extension.ts        # Activation, LanguageClient setup, command registration
-│   └── dap-proxy.ts        # DebugAdapterProxy (TypeScript, in-process)
-├── package.json            # Commands, settings, keybindings, debugger contribution
-├── tsconfig.json
-└── .vscode-test.mjs
+│   ├── extension.ts                  # Activation entry: wires every group below
+│   ├── lsp-client.ts, lsp-document-selector.ts,  # Client construction, selector,
+│   │   lsp-trace.ts, subprocess-mode.ts          #   trace channel, CLI fallback
+│   ├── store*.ts, reactive-refresh.ts  # THE single Signals state container
+│   ├── logger.ts                     # Output channel + log file [VSIX-OUTPUT-CHANNELS]
+│   ├── result.ts, timeouts.ts, progress-ops.ts, shipwright-runtime.ts
+│   ├── configuration-editor*.ts      # Config editor [VSIX-CONFIGURATION-EDITOR-FILES]
+│   ├── dap-proxy.ts, dap-evaluate.ts, dap-output.ts, debug-adapter.ts
+│   ├── profiler*.ts, profile-server.ts  # CPU profiler: webview, flamegraph, decorations
+│   ├── memory-*.ts                   # Memory profiler: dashboard, ref graph, autopilot
+│   ├── process-*.ts, processes-state.ts,  # Process Explorer, Module Explorer,
+│   │   module-explorer*.ts, info-panel.ts #   sidebar info panel [EXTACT-INFO]
+│   ├── test-explorer.ts,             # TestController [VSIX-TEST-EXPLORER-INTEGRATION]
+│   │   coverage-decorations.ts       #   + coverage gutter decorations
+│   └── test/                         # runTest.ts, suite/*.test.ts, fixtures/, real-world/
+├── package.json                      # Commands, settings, keybindings, views, debuggers
+├── tsconfig.json, eslint.config.mjs, eslint-rules.cjs, .vscode-test.mjs
+├── shipwright.json                   # Release manifest (scripts/sync-shipwright-manifest.mjs)
+└── scripts/, resources/, images/     # Build/staging helpers, activity-bar icon, art
 ```
 
 ---
@@ -74,19 +92,35 @@ client.start();
 
 ### `package.json` contribution {#VSIX-COMMANDS-PACKAGE-JSON-CONTRIBUTION}
 
-```json
-"commands": [
-    { "command": "basilisk.restartServer", "title": "Basilisk: Restart Language Server" },
-    { "command": "basilisk.showOutput", "title": "Basilisk: Show Output" },
-    { "command": "basilisk.openConfigurationEditor", "title": "Basilisk: Open Configuration Editor" },
-    { "command": "basilisk.organizeImports", "title": "Basilisk: Organize Imports" },
-    { "command": "basilisk.runTests", "title": "Basilisk: Run Tests" },
-    { "command": "basilisk.runTestFile", "title": "Basilisk: Run Tests in Current File" },
-    { "command": "basilisk.debugTest", "title": "Basilisk: Debug Test" },
-    { "command": "basilisk.debugFile", "title": "Basilisk: Debug Current File" },
-    { "command": "basilisk.toggleTypeBreakpoints", "title": "Basilisk: Toggle Type Mismatch Breakpoints" }
-]
-```
+`contributes.commands` holds the **client-side** commands only — every entry
+carries `"category": "Basilisk"`. Server-advertised commands — `basilisk.runTests`,
+`basilisk.runTestFile`, `basilisk.debugTest`, `basilisk.runTestsCoverage` and the
+rest declared in `crates/basilisk-common/src/lib.rs` — are deliberately **absent**:
+`vscode-languageclient` registers them from `executeCommandProvider`, per the rule
+above.
+
+| Group | Commands (`basilisk.` prefix elided) |
+|---|---|
+| Server & status | `restartServer`, `showOutput`, `statusMenu`, `openWalkthrough` |
+| Configuration editor | `openConfigurationEditor`, `editConfig` |
+| Fixes & adoption | `organizeImports`, `fixFile`, `fixFileAll`, `fixWorkspace`, `fixWorkspaceAll`, `adoptFile`, `adoptWorkspace`, `unadoptFile` |
+| uv | `uv.sync`, `uv.add`, `uv.addDev`, `uv.remove`, `uv.lock`, `uv.createEnv` |
+| Module Explorer | `refreshModuleExplorer`, `sortModuleExplorer`, `toggleModuleExplorerView`, `filterModuleExplorer`, `copyImportPath`, `copyQualifiedName` |
+| CPU profiler | `profileStart`, `profileStop`, `profileSnapshot`, `profileAttachToDebug`, `profileShowResults`, `profileCurrentFileCpu`, `profileProcess` |
+| Memory profiler | `memoryMenu`, `memoryStart`, `memorySnapshot`, `memoryStop`, `memoryDiff`, `memoryGcCollect`, `memoryReferences`, `trackMemoryCurrentFile`, `memoryTrackProcess` |
+| Process Explorer | `refreshProcesses`, `sortProcesses`, `groupProcesses`, `filterProcesses`, `copyProcessPid`, `revealProcessScript` |
+| Info panel | `info.runAction` |
+
+Palette visibility is narrowed in `contributes.menus.commandPalette`:
+
+- `openConfigurationEditor` appears only under `basilisk.configurationEditorSupported` (the same context key gates its `enablement`, as it does `editConfig`'s);
+- `editConfig`, `info.runAction`, `profileProcess`, `memoryTrackProcess`, `copyProcessPid` and `revealProcessScript` are `"when": false` — context-menu / view-title actions only;
+- the seven in-session memory commands — `memoryMenu`, `memoryStart`,
+  `memorySnapshot`, `memoryDiff`, `memoryGcCollect`, `memoryReferences`,
+  `memoryStop` — are gated on `basilisk.debugging`, so the palette offers them
+  only while a debug session is live. `trackMemoryCurrentFile` is deliberately
+  ungated: it *starts* the tracked session, so gating it on `basilisk.debugging`
+  would make it unreachable. (`memoryTrackProcess` is `"when": false`, above.)
 
 ---
 
@@ -165,15 +199,28 @@ impact makes the consequence visible before apply.
 
 ### Implementation files and tests {#VSIX-CONFIGURATION-EDITOR-FILES}
 
-Implementation is split into focused files under 500 LOC:
+Implementation lives in `vscode-extension/src/`, split into focused files each
+kept under the repository's 500-LOC ceiling:
 
 - `configuration-editor.ts` — panel lifecycle and intent routing;
+- `configuration-editor-transport.ts` — the LSP seam: capability probe, the
+  `ConfigurationEditorTransport` request wrapper, and workspace-root selection
+  (re-exported from `configuration-editor.ts`, so callers still import the
+  editor's public surface from one module);
+- `configuration-editor-registration.ts` — capability-gated command registration
+  (`basilisk.openConfigurationEditor` / `basilisk.editConfig` + context key);
 - `configuration-editor-document.ts` — CSP HTML document;
 - `configuration-editor-model.ts` — generated wire DTOs/projections;
 - `configuration-editor-state.ts` — store actions and immutable state;
 - `configuration-editor-intents.ts` — runtime decoder for untrusted messages;
-- `configuration-editor-styles.ts` and `configuration-editor-script-*.ts` —
-  dependency-free visual/runtime fragments.
+- `configuration-editor-errors.ts` — structured error routing, including
+  revision-conflict classification;
+- `configuration-editor-typeshed.ts` — native typeshed controls and the
+  read-only license document provider
+  ([LSPCFGED-TYPESHED](LSP-CONFIGURATION-EDITOR-SPEC.md#LSPCFGED-TYPESHED));
+- `configuration-editor-styles.ts` and `configuration-editor-script*.ts`
+  (`-core`, `-events`, `-render`, `-typeshed`, assembled by
+  `configuration-editor-script.ts`) — dependency-free visual/runtime fragments.
 
 Focused VSIX tests exercise all four persisted severities plus entry removal,
 tag/all selectors, exact preview/apply identity, paged

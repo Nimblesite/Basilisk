@@ -73,16 +73,23 @@ const RULES_SECTION = `
     </div>
   </section>`;
 
-const OVERLAYS = `
+// The impact dialog for rule/tag entries is the ONLY modal surface. Editor
+// lifecycle (loading, failure, conflict) renders as a non-blocking inline
+// notice row — there is no full-panel overlay, no spinner view, and no lock
+// screen anywhere in this document ([LSPCFGED-TYPESHED-DOWNLOAD]).
+const DIALOGS = `
   <dialog id="preview-dialog" aria-labelledby="preview-title"><header><h2 id="preview-title">Review exact impact</h2></header><div id="preview-body"><div id="impact-grid"></div><h3>Exact resolved changes</h3><div id="preview-changes"></div></div><footer><button type="button" class="secondary" data-action="close-preview">Cancel</button><button type="button" class="primary" data-action="apply-preview">Apply change</button></footer></dialog>
-  <div id="state-overlay" role="dialog" aria-modal="true" aria-labelledby="state-title" aria-describedby="state-message" tabindex="-1" hidden><div id="state-card" class="card"><div id="state-symbol" aria-hidden="true">B</div><h2 id="state-title">Loading configuration</h2><p id="state-message"></p><div class="action-row overlay-actions"><button id="state-open-raw" type="button" class="secondary" data-action="open-raw" hidden>Open raw configuration</button><button id="state-action" type="button" class="primary" data-action="refresh" hidden>Try again</button></div></div></div>
   <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>`;
+
+const STATE_NOTICE = `
+  <div id="state-notice" role="status" aria-live="polite" hidden><strong id="notice-title"></strong><span id="notice-message"></span><span class="notice-actions"><button id="notice-open-raw" type="button" class="secondary" data-action="open-raw" hidden>Open raw configuration</button><button id="notice-retry" type="button" class="primary" data-action="refresh" hidden>Try again</button></span></div>`;
 
 const BODY = `
   <a id="skip-link" href="#configuration-main">Skip to configuration</a>
   <header><div id="identity"><div id="mark" aria-hidden="true">B</div><div><h1>Basilisk Configuration</h1><div id="root-label">Waiting for workspace…</div></div></div><div id="source-block"><span id="source-label">No active source</span></div><div id="header-actions"><span id="status-pill" data-phase="idle">Connecting…</span><button type="button" class="icon-button" data-action="refresh" aria-label="Refresh configuration">↻</button><button type="button" class="secondary" data-action="open-raw">Open raw</button></div></header>
+  ${STATE_NOTICE}
   <div id="shell">${SECTION_NAV}<main id="configuration-main">${OVERVIEW_SECTION}${RULES_SECTION}${ADOPTION_SECTION}${PATHS_SECTION}${PROJECT_SECTION}</main></div>
-  ${OVERLAYS}`;
+  ${DIALOGS}`;
 
 /** Build the complete CSP-locked document; no workspace data is interpolated. */
 export function buildConfigurationEditorDocument(): string {

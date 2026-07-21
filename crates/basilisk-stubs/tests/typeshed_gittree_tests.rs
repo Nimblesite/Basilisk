@@ -1,4 +1,4 @@
-//! Acceptance tests for [STUBRES-TYPESHED-ACQUIRE] Git-tree binding.
+//! Acceptance tests for [STUBRES-TYPESHED-PIN] Git-tree binding.
 #![expect(clippy::expect_used, reason = "acceptance test: expect is acceptable")]
 
 use basilisk_stubs::typeshed::gittree::{

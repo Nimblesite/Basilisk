@@ -1,4 +1,4 @@
-//! Implements [`generics_typevartuple_args`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_typevartuple_args`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_typevartuple_args`: `TypeVarTuple` argument count mismatch.
 //!
 //! When a constructor with `TypeVarTuple` parameters is called, the number of

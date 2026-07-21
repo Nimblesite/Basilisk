@@ -1,4 +1,4 @@
-//! Implements [`qualifiers_final_annotation_2`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! Implements [`qualifiers_final_annotation_2`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! `qualifiers_final_annotation_2`: `Final` type qualifier annotation violations.
 //!
 //! Detects violations of PEP 591's rules for the `Final` qualifier, beyond the

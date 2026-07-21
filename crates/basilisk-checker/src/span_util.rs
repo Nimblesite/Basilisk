@@ -1,4 +1,4 @@
-//! Implements [CHKARCH-DIAG-PHILOSOPHY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-philosophy
+//! Implements [CHKARCH-DIAG-PHILOSOPHY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-PHILOSOPHY
 //! Safe source-text slicing helpers for [`basilisk_resolver::Span`].
 
 /// Extract the source text covered by a [`basilisk_resolver::Span`].

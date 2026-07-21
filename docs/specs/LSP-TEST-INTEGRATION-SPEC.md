@@ -14,7 +14,11 @@ Same subprocess-delegation pattern as debugging (debugpy) — note formatting is
 2. **Execution** — delegate to a `pytest` subprocess (or `unittest` runner), using `uv run` when a uv project is detected
 3. **Result streaming** — stream pass/fail/skip/error results to the editor's test UI
 
-Rust implementation: `crates/basilisk-lsp/src/test_discovery.rs`.
+Rust implementation: `crates/basilisk-lsp/src/test_discovery/` — `mod.rs` (the
+`TestItem` data model below), `discovery.rs` (AST scan), `runner.rs` (pytest
+subprocess + output parsing). The LSP request/command handlers that drive it,
+including the pytest-availability diagnostic, live in
+`crates/basilisk-lsp/src/server/test_handlers.rs`.
 
 ---
 
@@ -159,13 +163,13 @@ pub fn build_test_command(
 
 The `PackageRegistry` (built from `uv.lock`) enables test dependency diagnostics:
 
-| Condition | Diagnostic | Severity | Code | Code Action |
+| Condition | Surface + message | Severity | Code | Code Action |
 |-----------|-----------|----------|------|-------------|
-| pytest not in `uv.lock` | `Test runner \"pytest\" is not installed. Run \"uv add --dev pytest\" to install.` | Warning | `BSK-0015` | `basilisk.uv.addDev` with `pytest` |
-| `pytest-cov` not in `uv.lock` (coverage requested) | `Coverage plugin \"pytest-cov\" is not installed.` | Info | — | `basilisk.uv.addDev` with `pytest-cov` |
-| Test imports unresolved package | Standard imports_unresolved with uv context (see [LSP-UV-INTEGRATION-SPEC.md §5](LSP-UV-INTEGRATION-SPEC.md)) | Error | — | `basilisk.uv.add` |
+| pytest not in `uv.lock` | Diagnostic on the test file: `Test runner \"pytest\" is not installed. Run \"uv add --dev pytest\" to install.` | Warning | `BSK-0015` | `basilisk.uv.addDev` with `pytest` |
+| `pytest-cov` not in `uv.lock` (coverage requested) | `window/logMessage`: `Basilisk: pytest-cov not found in uv.lock — install it for coverage support` | Info | — | — (no diagnostic, so no quick fix) |
+| Test imports unresolved package | Standard imports_unresolved diagnostic with uv context (see [LSP-UV-INTEGRATION-SPEC.md §5](LSP-UV-INTEGRATION-SPEC.md)) | Error | — | `basilisk.uv.add` |
 
-These diagnostics are only emitted in uv projects and respect the existing `basilisk.uv.enabled` setting.
+These signals are only emitted in uv projects and respect the existing `basilisk.uv.enabled` setting.
 
 ### Coverage with `uv run` {#LSPTEST-UV-INTEGRATION-COVERAGE}
 
@@ -247,4 +251,4 @@ logged for diagnostics but is not authoritative.
 
 ### Interaction with uv Commands {#LSPTEST-LSP-PROTOCOL-UV-INTERACTION}
 
-Test code actions invoking uv (e.g. "Add pytest" on a missing test runner) reuse `basilisk.uv.addDev`. Its post-command hook ([LSP-UV-INTEGRATION-SPEC.md §7.2](LSP-UV-INTEGRATION-SPEC.md)) re-parses the lock and rebuilds the registry, updating test runner availability.
+Test code actions invoking uv reuse `basilisk.uv.addDev`. The one shipped today is the quick fix attached to the `BSK-0015` "pytest not installed" diagnostic above — titled **"Install pytest (uv add --dev pytest)"**, `CodeActionKind::QUICKFIX`, `isPreferred`, running `basilisk.uv.addDev` with the single argument `"pytest"` (`crates/basilisk-lsp/src/code_actions/mod.rs`). The command's post-command hook ([LSP-UV-INTEGRATION-SPEC.md §7.2](LSP-UV-INTEGRATION-SPEC.md)) re-parses the lock and rebuilds the registry, updating test runner availability.

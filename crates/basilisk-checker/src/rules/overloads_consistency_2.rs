@@ -1,4 +1,4 @@
-//! Implements [`overloads_consistency_2`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`overloads_consistency_2`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! `overloads_consistency_2`: Inconsistent decorators across an overloaded method.
 //!
 //! The typing spec constrains how decorators may be spread across an

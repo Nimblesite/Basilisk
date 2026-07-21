@@ -1,4 +1,4 @@
-//! Implements [TYPEINF-COLLECTIONS-TUPLES]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-collections
+//! Implements [TYPEINF-COLLECTIONS-TUPLES]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-COLLECTIONS
 //! Homogeneous (`tuple[X, ...]`) and PEP 646 unpacked (`*tuple[...]`/`*Ts`)
 //! tuple matching, used by [`InferredType::is_assignable_to`]
 //! ([TYPEINF-SUBTYPING-IMPL]).

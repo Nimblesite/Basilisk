@@ -44,9 +44,116 @@ RULES_DIR = ROOT / "crates" / "basilisk-checker" / "src" / "rules"
 DEFAULT_DATA_OUT = ROOT / "website" / "src" / "_data" / "rules.json"
 CONFORMANCE_STATUS = ROOT / "conformance" / "conformance_status.csv"
 ERRORS_BASE_URL = "https://www.basilisk-python.dev/errors"
+TYPING_SPEC_BASE_URL = "https://typing.python.org/en/latest/spec"
+
+# [WEBSITE-ERROR-PAGES-REFERENCES]: canonical documentation for every code.
+# Each code-name prefix maps to its chapter of the maintained typing spec
+# (https://typing.python.org/en/latest/spec/ — titles and filenames taken from
+# that index verbatim). Conformance categories are named after these chapters
+# upstream; the trailing entries cover Basilisk's general soundness rules whose
+# prefix is not a conformance category.
+SPEC_CHAPTER_BY_PREFIX = {
+    "aliases": ("Type aliases", "aliases.html"),
+    "annotations": ("Type annotations", "annotations.html"),
+    "callables": ("Callables", "callables.html"),
+    "classes": ("Class type assignability", "class-compat.html"),
+    "constructors": ("Constructors", "constructors.html"),
+    "dataclasses": ("Dataclasses", "dataclasses.html"),
+    "directives": ("Type checker directives", "directives.html"),
+    "enums": ("Enumerations", "enums.html"),
+    "exceptions": ("Exceptions", "exceptions.html"),
+    "generics": ("Generics", "generics.html"),
+    "historical": ("Historical and deprecated features", "historical.html"),
+    "literals": ("Literals", "literal.html"),
+    "namedtuples": ("Named Tuples", "namedtuples.html"),
+    "narrowing": ("Type narrowing", "narrowing.html"),
+    "overloads": ("Overloads", "overload.html"),
+    "protocols": ("Protocols", "protocol.html"),
+    "qualifiers": ("Type qualifiers", "qualifiers.html"),
+    "specialtypes": ("Special types in annotations", "special-types.html"),
+    "tuples": ("Tuples", "tuples.html"),
+    "typeddicts": ("Typed dictionaries", "typeddict.html"),
+    "typeforms": ("Type forms", "type-forms.html"),
+    "assignment": ("Type system concepts", "concepts.html"),
+    "calls": ("Callables", "callables.html"),
+    "dict": ("Type system concepts", "concepts.html"),
+    "imports": ("Distributing type information", "distributing.html"),
+    "match": ("Type narrowing", "narrowing.html"),
+    "returns": ("Type system concepts", "concepts.html"),
+    "version": ("Generics", "generics.html"),
+}
+
+# The accepted typing PEPs each spec chapter incorporates — every rule under
+# the prefix links these on top of any PEP its own doc comment cites. Numbers
+# only; labels stay "PEP NNN" so nothing here can drift from peps.python.org.
+PEPS_BY_PREFIX = {
+    "aliases": (484, 613, 695),
+    "annotations": (3107, 484, 526),
+    "callables": (484, 612, 692),
+    "classes": (484, 526, 698),
+    "constructors": (484,),
+    "dataclasses": (557, 681),
+    "directives": (484, 702),
+    "enums": (435,),
+    "generics": (484, 612, 646, 673, 695, 696),
+    "historical": (484,),
+    "literals": (586, 675),
+    "namedtuples": (484,),
+    "narrowing": (647, 742),
+    "overloads": (484,),
+    "protocols": (544,),
+    "qualifiers": (526, 591, 593),
+    "specialtypes": (484,),
+    "tuples": (484, 646),
+    "typeddicts": (589, 655, 705, 728),
+    "typeforms": (747,),
+    "assignment": (484,),
+    "calls": (484,),
+    "imports": (561,),
+    "match": (634,),
+    "returns": (484,),
+    "packaging": (621,),
+}
+
+# Rules governed by something other than the typing spec link that authority
+# instead: the Python language reference, or a tool's own documentation.
+LANGUAGE_REFS_BY_PREFIX = {
+    "names": (
+        {
+            "label": "Python language reference: Naming and binding",
+            "url": "https://docs.python.org/3/reference/executionmodel.html#naming-and-binding",
+        },
+    ),
+    "uv": (
+        {
+            "label": "uv: Locking and syncing",
+            "url": "https://docs.astral.sh/uv/concepts/projects/sync/",
+        },
+    ),
+}
+
+# House rules (BSK codes) carry no conformance-category prefix; each maps to
+# the chapter/PEPs documenting the mechanism it polices. The suppression rules
+# (BSK-0060..0063) police Basilisk's own directives — no upstream doc exists —
+# and BSK-0025's doc comment already cites PEP 698 directly.
+REFERENCE_PREFIX_BY_BSK_CODE = {
+    "BSK-0001": "annotations",
+    "BSK-0002": "annotations",
+    "BSK-0003": "annotations",
+    "BSK-0004": "annotations",
+    "BSK-0005": "annotations",
+    "BSK-0011": "packaging",
+    "BSK-0012": "packaging",
+    "BSK-0013": "uv",
+    "BSK-0014": "specialtypes",
+    "BSK-0040": "annotations",
+    "BSK-0050": "annotations",
+    "BSK-0152": "imports",
+}
 
 HEADER = re.compile(r"//!\s*(BSK-\d{4}|`[a-z0-9_]+`):\s*(.*)")
 DOC = re.compile(r"//!\s?(.*)")
+PEP_MENTION = re.compile(r"\bPEP (\d{1,4})\b")
 DOCS_URL = re.compile(r'docs_url:\s*"([^"]+)"')
 SPEC_REF = re.compile(r"^Implements ")
 # A rule is Basilisk-original (off by default, opt-in only) iff it overrides
@@ -125,14 +232,49 @@ def group_for(code: str, free_form_tags: list[str]) -> str:
     return "Type System"
 
 
+def pep_url(number: int) -> str:
+    return f"https://peps.python.org/pep-{number:04d}/"
+
+
+def link_peps(text: str) -> str:
+    """Turn every `PEP NNN` mention into a link to its canonical page."""
+    return PEP_MENTION.sub(
+        lambda m: f'<a href="{pep_url(int(m.group(1)))}">PEP {int(m.group(1))}</a>',
+        text,
+    )
+
+
 def inline_html(text: str) -> str:
     """Render a rustdoc line as safe inline HTML: intra-doc links unwrapped,
-    `code` spans and *emphasis* preserved."""
+    `code` spans and *emphasis* preserved, PEP mentions linked
+    ([WEBSITE-ERROR-PAGES-REFERENCES])."""
     text = re.sub(r"\[`?([^`\]]+)`?\]", r"\1", text)  # [`Foo`] / [BSK-X] -> Foo
     text = html.escape(text)
     text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
     text = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", text)
-    return text
+    return link_peps(text)
+
+
+# Implements [WEBSITE-ERROR-PAGES-REFERENCES]: the canonical-documentation list
+# for one code — its typing-spec chapter, then the chapter's PEPs merged with
+# every PEP the rule's own doc comment cites, then any language-reference link.
+def references_for(code: str, doc_text: str) -> list[dict]:
+    prefix = REFERENCE_PREFIX_BY_BSK_CODE.get(code, code.partition("_")[0])
+    refs: list[dict] = []
+    chapter = SPEC_CHAPTER_BY_PREFIX.get(prefix)
+    if chapter:
+        title, page = chapter
+        refs.append(
+            {
+                "label": f"Typing spec: {title}",
+                "url": f"{TYPING_SPEC_BASE_URL}/{page}",
+            }
+        )
+    mentioned = {int(n) for n in PEP_MENTION.findall(doc_text)}
+    for number in sorted(mentioned.union(PEPS_BY_PREFIX.get(prefix, ()))):
+        refs.append({"label": f"PEP {number}", "url": pep_url(number)})
+    refs.extend(LANGUAGE_REFS_BY_PREFIX.get(prefix, ()))
+    return refs
 
 
 ENDS_SENTENCE = (".", "!", ")", ":")
@@ -240,6 +382,7 @@ def extract() -> list[dict]:
                 "docsUrl": file_docs_url.group(1)
                 if file_docs_url
                 else f"{ERRORS_BASE_URL}/{code}",
+                "references": references_for(code, " ".join([summary, *body_lines])),
             }
     return [records[c] for c in sorted(records, key=sort_key)]
 

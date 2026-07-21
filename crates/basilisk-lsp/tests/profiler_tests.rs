@@ -267,6 +267,95 @@ fn scaffolding_frames_are_stripped_from_every_surface() {
     assert_eq!(hot.self_samples, 1, "the user leaf keeps its self sample");
 }
 
+/// A debugpy housekeeping thread, leaf-first: debugpy's own code sitting on
+/// the stdlib `threading.py` bootstrap spine that started it. Nothing here is
+/// the user's.
+fn debugger_housekeeping_thread_stack() -> Vec<(&'static str, &'static str, i32)> {
+    vec![
+        ("_on_run", "/site-packages/debugpy/adapter/servers.py", 191),
+        ("run", "/usr/lib/python3.14/threading.py", 1012),
+        ("_bootstrap_inner", "/usr/lib/python3.14/threading.py", 1075),
+        ("_bootstrap", "/usr/lib/python3.14/threading.py", 1032),
+    ]
+}
+
+/// The user's OWN worker thread, leaf-first: real user code on top of the same
+/// stdlib bootstrap spine.
+fn user_worker_thread_stack() -> Vec<(&'static str, &'static str, i32)> {
+    vec![
+        ("crunch", "/home/user/proj/cpu_hotspot.py", 52),
+        ("worker", "/home/user/proj/cpu_hotspot.py", 60),
+        ("run", "/usr/lib/python3.14/threading.py", 1012),
+        ("_bootstrap_inner", "/usr/lib/python3.14/threading.py", 1075),
+        ("_bootstrap", "/usr/lib/python3.14/threading.py", 1032),
+    ]
+}
+
+// Exercises [PROFILE-AGGREGATION-SCAFFOLD]. The spec requires that "a
+// machinery-only thread (debugger housekeeping, the injected sampler) is
+// dropped entirely". A debugpy housekeeping thread is started by the stdlib,
+// so once its debugpy frames are stripped what remains is the `threading.py`
+// bootstrap spine — non-empty, so the thread survived and surfaced as a
+// top-level row in the .cpuprofile flame chart, which is exactly the launcher
+// scaffolding this section exists to remove.
+#[test]
+fn a_debugger_housekeeping_thread_is_dropped_entirely() {
+    let mut data = ProfileData::default();
+    data.ingest_traces(
+        &[make_trace(7, true, debugger_housekeeping_thread_stack())],
+        0.01,
+        false,
+    );
+
+    assert!(
+        !data.thread_stacks.contains_key(&7),
+        "a thread whose only surviving frames are the stdlib bootstrap spine \
+         is pure machinery and must not register, got: {:?}",
+        data.thread_stacks.get(&7)
+    );
+    assert!(
+        data.frames.is_empty(),
+        "no machinery frame may reach the export, got: {:?}",
+        data.frames
+    );
+}
+
+// Exercises [PROFILE-AGGREGATION-SCAFFOLD] — the other half of the contract:
+// dropping bootstrap frames must NOT drop the user's own worker threads. The
+// spine is stripped so the thread roots at the user's code, and the user's
+// frames and attribution survive intact.
+#[test]
+fn a_user_worker_thread_survives_and_roots_at_user_code() {
+    let mut data = ProfileData::default();
+    data.ingest_traces(
+        &[make_trace(9, true, user_worker_thread_stack())],
+        0.01,
+        false,
+    );
+
+    let stacks = data
+        .thread_stacks
+        .get(&9)
+        .expect("the user's worker thread must be retained");
+    let root_frame = &data.frames[stacks[0][0]];
+    assert_eq!(
+        root_frame.file, "/home/user/proj/cpu_hotspot.py",
+        "the worker thread must root at the user's file, not the bootstrap spine"
+    );
+    assert_eq!(
+        root_frame.name, "worker",
+        "the worker thread must root at the user's own entry function"
+    );
+    assert_eq!(stacks[0].len(), 2, "only the two user frames survive");
+
+    let hot = data
+        .function_stats
+        .get("/home/user/proj/cpu_hotspot.py")
+        .and_then(|by_fn| by_fn.get("crunch"))
+        .expect("crunch must keep its stats");
+    assert_eq!(hot.self_samples, 1, "the user leaf keeps its self sample");
+}
+
 #[test]
 fn leaf_tracer_frames_attribute_to_the_traced_user_line() {
     // Under debugpy line-tracing, pydevd's trace_dispatch can own the leaf;
