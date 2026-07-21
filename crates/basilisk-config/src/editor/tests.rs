@@ -11,7 +11,7 @@ use super::{
     active_config_path, apply_config_patch, build_configuration_patch, build_rule_patch,
     content_revision, discover_config_document, discover_config_document_with_content,
     ConfigDocument, ConfigDocumentError, ConfigPatch, ConfigurationUpdate, RuleConfigUpdate,
-    TypeshedConfigKey, TypeshedConfigUpdate, TypeshedConfigValue,
+    TypeshedConfigKey, TypeshedConfigUpdate,
 };
 use crate::{BasiliskConfig, RuleSeverity};
 
@@ -97,9 +97,8 @@ fn malformed_typeshed_settings_are_invalid() {
     let root = temp_root("bad_typeshed_settings");
     for content in [
         "[tool.basilisk]\ntypeshed-commit = 42\n",
-        "[tool.basilisk]\ntypeshed-cache = \"false\"\n",
         "[tool.basilisk]\ntypeshed-commit = \"short\"\n",
-        "[tool.basilisk]\ntypeshed-url = \"http://mirror/{sha}.zip\"\n",
+        "[tool.basilisk]\ntypeshed-store-path = false\n",
         "[tool.basilisk]\ntypeshed-path = \"custom\"\ntypeshed-commit = \"83c2518a9e6abbda0c44592c3483de459198f887\"\n",
     ] {
         let result = discover_config_document_with_content(&root, content.to_owned());
@@ -378,23 +377,18 @@ fn wrong_shaped_mutation_targets_fail_to_patch() {
 #[test]
 fn typeshed_settings_patch_atomically_and_preserve_project_content() {
     let root = temp_root("typeshed_patch");
-    let document = document_for(
-        &root,
-        "# keep\n[project]\nname = \"demo\"\n\n[tool.basilisk]\ntypeshed-cache = true\n",
-    );
+    let document = document_for(&root, "# keep\n[project]\nname = \"demo\"\n\n[tool.basilisk]\n");
     let update = ConfigurationUpdate {
         rules: set_rule("BSK-0001", RuleSeverity::Warning),
         typeshed: TypeshedConfigUpdate {
             entries: BTreeMap::from([
                 (
                     TypeshedConfigKey::TypeshedCommit,
-                    Some(TypeshedConfigValue::Text(
-                        "83c2518a9e6abbda0c44592c3483de459198f887".to_owned(),
-                    )),
+                    Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
                 ),
                 (
-                    TypeshedConfigKey::TypeshedCache,
-                    Some(TypeshedConfigValue::Boolean(false)),
+                    TypeshedConfigKey::TypeshedStorePath,
+                    Some(".cache/typeshed-store".to_owned()),
                 ),
             ]),
         },
@@ -405,8 +399,13 @@ fn typeshed_settings_patch_atomically_and_preserve_project_content() {
     assert!(patch
         .content
         .contains("typeshed-commit = \"83c2518a9e6abbda0c44592c3483de459198f887\""));
-    assert!(patch.content.contains("typeshed-cache = false"));
-    assert_eq!(patch.config.typeshed_cache, Some(false));
+    assert!(patch
+        .content
+        .contains("typeshed-store-path = \".cache/typeshed-store\""));
+    assert_eq!(
+        patch.config.typeshed_store_path,
+        Some(std::path::PathBuf::from(".cache/typeshed-store"))
+    );
     assert_eq!(
         patch.config.typeshed_commit.as_deref(),
         Some("83c2518a9e6abbda0c44592c3483de459198f887")
@@ -421,19 +420,19 @@ fn typeshed_setting_removal_is_allowlisted_and_narrow() {
     let root = temp_root("typeshed_remove");
     let document = document_for(
         &root,
-        "[tool.basilisk]\n# keep mirror\ntypeshed-url = \"https://mirror.invalid/{sha}.zip\"\ntypeshed-verify = false\n",
+        "[tool.basilisk]\n# keep store\ntypeshed-store-path = \".cache/store\"\ntypeshed-commit = \"83c2518a9e6abbda0c44592c3483de459198f887\"\n",
     );
     let update = ConfigurationUpdate {
         rules: RuleConfigUpdate::default(),
         typeshed: TypeshedConfigUpdate {
-            entries: BTreeMap::from([(TypeshedConfigKey::TypeshedVerify, None)]),
+            entries: BTreeMap::from([(TypeshedConfigKey::TypeshedCommit, None)]),
         },
     };
     let patch = build_configuration_patch(&document, &update).unwrap();
-    assert!(!patch.content.contains("typeshed-verify"));
-    assert!(patch.content.contains("# keep mirror"));
-    assert!(patch.content.contains("typeshed-url"));
-    assert!(patch.config.typeshed_verify.is_none());
+    assert!(!patch.content.contains("typeshed-commit"));
+    assert!(patch.content.contains("# keep store"));
+    assert!(patch.content.contains("typeshed-store-path"));
+    assert!(patch.config.typeshed_commit.is_none());
     let _ = std::fs::remove_dir_all(&root);
 }
 

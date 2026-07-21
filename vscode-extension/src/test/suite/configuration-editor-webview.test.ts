@@ -127,7 +127,7 @@ suite("Configuration editor — untrusted intent decoder", () => {
 });
 
 suite("Configuration editor — hardened, accessible document", () => {
-  test("is CSP locked, theme-native, zoom resilient, inert while blocked, and keyboard traversable", () => {
+  test("is CSP locked, theme-native, zoom resilient, never self-blocking, and keyboard traversable", () => {
     const html = buildConfigurationEditorDocument();
     assert.ok(html.includes("default-src 'none'"));
     assert.ok(/style-src 'nonce-[^']+'/.test(html));
@@ -146,8 +146,13 @@ suite("Configuration editor — hardened, accessible document", () => {
     assert.ok(html.includes("vscode-high-contrast"));
     assert.ok(html.includes("prefers-reduced-motion"));
     assert.ok(html.includes('id="announcer" class="sr-only" aria-live="polite"'));
-    assert.ok(html.includes(".inert = blocking"));
-    assert.ok(html.includes('aria-modal="true"'));
+    // The full-panel lock screen is DELETED ([LSPCFGED-TYPESHED-DOWNLOAD]):
+    // no overlay node, no code that makes the shell inert, no modal state
+    // card — editor lifecycle renders as the non-blocking inline notice.
+    assert.ok(!html.includes("state-overlay"), "no full-panel overlay element may exist");
+    assert.ok(!html.includes("inert"), "no code path may make the panel inert");
+    assert.ok(!html.includes("aria-modal"), "the native impact dialog is the only modal surface");
+    assert.ok(html.includes('id="state-notice" role="status"'), "lifecycle renders as an inline notice row");
     assert.ok(html.includes("max-height: calc(100vh - 32px)"));
     assert.ok(html.includes("function moveVirtualRuleFocus(event)"));
     assert.ok(html.includes('id="rule-spacer" role="list"'));
@@ -156,6 +161,26 @@ suite("Configuration editor — hardened, accessible document", () => {
     assert.ok(html.includes("row.setAttribute('aria-setsize'"));
     assert.ok(html.includes("['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']"));
     assert.ok(html.includes("viewport.scrollTop = target * ROW_HEIGHT"));
+  });
+
+  // [LSPCFGED-TYPESHED] / [LSPCFGED-TYPESHED-DOWNLOAD]: two sources and no
+  // third, download buttons instead of lifecycle locks, and none of the
+  // deleted cache/verify/URL controls.
+  test("ships the two-source Typeshed panel with download buttons and no deleted controls", () => {
+    const html = buildConfigurationEditorDocument();
+    assert.ok(html.includes("'Pinned commit'"), "the pinned-commit radio exists");
+    assert.ok(html.includes("'Custom folder'"), "the custom-folder radio exists");
+    assert.ok(!html.includes("'Latest'"), "no Latest source radio may ever render");
+    assert.ok(html.includes("'DownloadLatest', 'Download latest'"), "Download latest is a real button");
+    assert.ok(html.includes("'DownloadPinned', 'Download pinned'"), "Download pinned is the NO SOURCE fix");
+    assert.ok(html.includes("typeshed-no-source"), "the missing source renders as an inline row");
+    assert.ok(!html.includes("PinCurrent"), "the PinCurrent action is deleted");
+    assert.ok(!html.includes("AcquireFresh"), "the AcquireFresh action is deleted");
+    assert.ok(!html.includes("TypeshedCache"), "the cache toggle and cache path are deleted");
+    assert.ok(!html.includes("TypeshedVerify"), "the verify toggle is deleted");
+    assert.ok(!html.includes("TypeshedUrl"), "the alternate-URL setting is deleted");
+    assert.ok(html.includes("TypeshedStorePath"), "the store folder picker remains under Advanced");
+    assert.ok(html.includes("COMMIT_PATTERN"), "the 40-hex SHA gate remains client-side");
   });
 
   // [CONFIGEDITOR-VSIX-EXPERIENCE]: the tag-first Rules view is the whole

@@ -110,16 +110,12 @@ pub struct WorkspaceConfig {
     /// [STUBRES-CUSTOM-TYPESHED](../../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
     /// `None` uses the bundled typeshed.
     pub typeshed_path: Option<PathBuf>,
-    /// Exact full `python/typeshed` commit; unset selects Latest.
+    /// Exact full `python/typeshed` commit pin; unset resolves to the bundled
+    /// commit with an `UNPINNED` warning ([STUBRES-TYPESHED-CONFIG]).
     pub typeshed_commit: Option<String>,
-    /// Optional `{sha}` archive mirror used only after a SHA is known.
-    pub typeshed_url: Option<String>,
-    /// Optional directory for gate-accepted immutable archive cache entries.
-    pub typeshed_cache_path: Option<PathBuf>,
-    /// Whether accepted archives may be reused during this run.
-    pub typeshed_cache: bool,
-    /// Whether consumed bytes must be bound to the selected Git tree.
-    pub typeshed_verify: bool,
+    /// Optional verified content-addressed store directory
+    /// ([STUBRES-TYPESHED-STORE]); unset uses the per-user OS default.
+    pub typeshed_store_path: Option<PathBuf>,
     /// Redacted parse error for an explicitly malformed Typeshed key.
     /// Acquisition fails closed instead of silently applying a default.
     pub typeshed_configuration_error: Option<String>,
@@ -153,10 +149,7 @@ impl Default for WorkspaceConfig {
             stub_paths: Vec::new(),
             typeshed_path: None,
             typeshed_commit: None,
-            typeshed_url: None,
-            typeshed_cache_path: None,
-            typeshed_cache: true,
-            typeshed_verify: true,
+            typeshed_store_path: None,
             typeshed_configuration_error: None,
             formatter: FormatterEngine::Ruff,
             format_style: FormatStyle::default(),
@@ -164,17 +157,21 @@ impl Default for WorkspaceConfig {
     }
 }
 
-/// Build the config-free acquisition request shared by CLI, LSP, and MCP.
+/// Build the config-free resolution request shared by CLI, LSP, and MCP.
 /// Invalid or mutually exclusive raw settings fail closed here, including when
 /// a file bypassed the configuration editor's stronger source validation.
 ///
+/// There are exactly two sources ([STUBRES-TYPESHED]): a pinned commit or a
+/// custom folder. An unset `typeshed-commit` resolves to the bundled commit as
+/// an implicit pin (still `UNPINNED`); resolution never downloads.
+///
 /// # Errors
 ///
-/// Returns a redacted, user-facing reason for an invalid source, pin, or
-/// mirror template. The configured mirror value itself is never echoed.
+/// Returns a redacted, user-facing reason for an invalid source or pin.
 pub fn typeshed_request(
     config: &WorkspaceConfig,
 ) -> Result<basilisk_stubs::typeshed::source::TypeshedRequest, String> {
+    use basilisk_stubs::typeshed::bundle::bundled_commit_sha;
     use basilisk_stubs::typeshed::gittree::Oid;
     use basilisk_stubs::typeshed::source::{SourceSelection, TypeshedRequest};
 
@@ -185,13 +182,6 @@ pub fn typeshed_request(
     if config.typeshed_path.is_some() && config.typeshed_commit.is_some() {
         return Err("typeshed-path and typeshed-commit are mutually exclusive".to_owned());
     }
-    if config
-        .typeshed_url
-        .as_deref()
-        .is_some_and(|url| !basilisk_config::is_valid_typeshed_url_template(url))
-    {
-        return Err("typeshed-url must be HTTPS with exactly one {sha} placeholder".to_owned());
-    }
     let selection = if let Some(path) = config.typeshed_path.as_deref() {
         SourceSelection::Custom {
             path: path
@@ -200,19 +190,22 @@ pub fn typeshed_request(
                 .to_owned(),
         }
     } else if let Some(commit) = config.typeshed_commit.as_deref() {
-        SourceSelection::ExactCommit {
+        SourceSelection::Pinned {
             commit: Oid::from_hex(commit).map_err(|_invalid_oid| {
                 "typeshed-commit must be a full 40-character hex SHA".to_owned()
             })?,
+            explicit: true,
         }
     } else {
-        SourceSelection::Latest
+        SourceSelection::Pinned {
+            commit: Oid::from_hex(bundled_commit_sha())
+                .map_err(|_invalid_oid| "bundled typeshed identity is unreadable".to_owned())?,
+            explicit: false,
+        }
     };
     Ok(TypeshedRequest {
         selection,
-        verify_content: config.typeshed_verify,
-        use_cache: config.typeshed_cache,
-        url_template: config.typeshed_url.clone(),
+        store_path: config.typeshed_store_path.clone(),
     })
 }
 
@@ -252,8 +245,8 @@ pub fn load_analysis_config(root: &Path) -> WorkspaceConfig {
     cfg.typeshed_path = cfg
         .typeshed_path
         .map(|p| if p.is_absolute() { p } else { root.join(p) });
-    cfg.typeshed_cache_path =
-        cfg.typeshed_cache_path
+    cfg.typeshed_store_path =
+        cfg.typeshed_store_path
             .map(|p| if p.is_absolute() { p } else { root.join(p) });
     cfg
 }
@@ -404,32 +397,11 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
         cfg.typeshed_commit = Some(v.to_owned());
     }
     if let Some(v) = obj
-        .get("typeshedUrl")
-        .or_else(|| obj.get("typeshed-url"))
+        .get("typeshedStorePath")
+        .or_else(|| obj.get("typeshed-store-path"))
         .and_then(|v| v.as_str())
     {
-        cfg.typeshed_url = Some(v.to_owned());
-    }
-    if let Some(v) = obj
-        .get("typeshedCachePath")
-        .or_else(|| obj.get("typeshed-cache-path"))
-        .and_then(|v| v.as_str())
-    {
-        cfg.typeshed_cache_path = Some(PathBuf::from(v));
-    }
-    if let Some(v) = obj
-        .get("typeshedCache")
-        .or_else(|| obj.get("typeshed-cache"))
-        .and_then(serde_json::Value::as_bool)
-    {
-        cfg.typeshed_cache = v;
-    }
-    if let Some(v) = obj
-        .get("typeshedVerify")
-        .or_else(|| obj.get("typeshed-verify"))
-        .and_then(serde_json::Value::as_bool)
-    {
-        cfg.typeshed_verify = v;
+        cfg.typeshed_store_path = Some(PathBuf::from(v));
     }
 
     Some(cfg)

@@ -24,6 +24,8 @@ ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
 
 [dev-dependencies]
 tempfile = "3"
+# Test-only: encode synthetic codeload zipballs (same spec as basilisk-stubs).
+zip = { version = "5.1.1", default-features = false, features = ["deflate"] }
 
 [lints]
 workspace = true

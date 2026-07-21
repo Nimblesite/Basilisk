@@ -29,21 +29,16 @@ pub struct RuleConfigUpdate {
     pub rule_tags: BTreeMap<String, Option<RuleSeverity>>,
 }
 
-/// Closed persistence allowlist for Typeshed acquisition settings.
+/// Closed persistence allowlist for typeshed settings — the whole runtime
+/// surface is these three keys ([STUBRES-TYPESHED-CONFIG]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TypeshedConfigKey {
-    /// Custom canonical step-3 folder.
+    /// Custom typeshed folder.
     TypeshedPath,
-    /// Exact full commit SHA.
+    /// Exact full commit SHA pin.
     TypeshedCommit,
-    /// Known-SHA archive mirror template.
-    TypeshedUrl,
-    /// Immutable ZIP cache directory.
-    TypeshedCachePath,
-    /// Whether accepted downloads are reused.
-    TypeshedCache,
-    /// Whether the content gate is enabled.
-    TypeshedVerify,
+    /// Verified content-addressed store directory.
+    TypeshedStorePath,
 }
 
 impl TypeshedConfigKey {
@@ -51,28 +46,17 @@ impl TypeshedConfigKey {
         match self {
             Self::TypeshedPath => "typeshed-path",
             Self::TypeshedCommit => "typeshed-commit",
-            Self::TypeshedUrl => "typeshed-url",
-            Self::TypeshedCachePath => "typeshed-cache-path",
-            Self::TypeshedCache => "typeshed-cache",
-            Self::TypeshedVerify => "typeshed-verify",
+            Self::TypeshedStorePath => "typeshed-store-path",
         }
     }
 }
 
-/// A TOML scalar accepted by a Typeshed setting update.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypeshedConfigValue {
-    /// A path, URL template, or full SHA.
-    Text(String),
-    /// A cache or verification toggle.
-    Boolean(bool),
-}
-
-/// Atomic Typeshed setting updates. `None` removes the explicit key.
+/// Atomic typeshed setting updates. Every key holds a TOML string (a path or
+/// a full SHA); `None` removes the explicit key.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TypeshedConfigUpdate {
-    /// Key to replacement scalar, or `None` to remove the explicit key.
-    pub entries: BTreeMap<TypeshedConfigKey, Option<TypeshedConfigValue>>,
+    /// Key to replacement string, or `None` to remove the explicit key.
+    pub entries: BTreeMap<TypeshedConfigKey, Option<String>>,
 }
 
 /// One atomic configuration-editor transaction.
@@ -170,14 +154,10 @@ fn patch_toml(
     })
 }
 
-fn apply_typeshed_updates(
-    table: &mut Table,
-    entries: &BTreeMap<TypeshedConfigKey, Option<TypeshedConfigValue>>,
-) {
+fn apply_typeshed_updates(table: &mut Table, entries: &BTreeMap<TypeshedConfigKey, Option<String>>) {
     for (key, setting) in entries {
         match setting {
-            Some(TypeshedConfigValue::Text(text)) => table[key.as_str()] = value(text.as_str()),
-            Some(TypeshedConfigValue::Boolean(enabled)) => table[key.as_str()] = value(*enabled),
+            Some(text) => table[key.as_str()] = value(text.as_str()),
             None => {
                 let _ = table.remove(key.as_str());
             }
