@@ -10,14 +10,15 @@ mod snapshot;
 pub(crate) mod snapshot_typeshed;
 mod state;
 mod transaction;
-mod typeshed_acquisition;
+mod typeshed_resolution;
 mod watch;
 
 pub(crate) use state::ConfigurationEditorState;
 pub(crate) use transaction::{
-    apply_rule_updates, configuration_document, refresh_after_configuration_change,
-    ConfigurationRefreshHandles,
+    apply_configuration_update, apply_rule_updates, configuration_document,
+    refresh_after_configuration_change, ConfigurationRefreshHandles,
 };
+pub(crate) use typeshed_resolution::{resolve_and_activate, resolve_workspace};
 pub(crate) use watch::{
     refresh_environment_from_disk, refresh_root_from_disk, spawn_configuration_watcher,
 };

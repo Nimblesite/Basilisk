@@ -44,16 +44,12 @@ export type TypeshedSettingKey =
   | { kind: "TypeshedCommit" }
   | { kind: "TypeshedStorePath" };
 
-export type TypeshedSettingValue =
-  | { kind: "Text"; value: string }
-  | { kind: "Boolean"; value: boolean };
-
 export type EditorMutation =
   | { kind: "SetRule"; code: RuleCode; severity: RuleSeverity }
   | { kind: "RemoveRule"; code: RuleCode }
   | { kind: "SetTag"; tag: RuleTag; severity: RuleSeverity }
   | { kind: "RemoveTag"; tag: RuleTag }
-  | { kind: "SetTypeshedSetting"; key: TypeshedSettingKey; value: TypeshedSettingValue }
+  | { kind: "SetTypeshedSetting"; key: TypeshedSettingKey; value: string }
   | { kind: "RemoveTypeshedSetting"; key: TypeshedSettingKey };
 
 /**
@@ -234,8 +230,8 @@ export interface ConfigurationPreview {
 
 export interface TypeshedSettingChange {
   key: TypeshedSettingKey;
-  before: TypeshedSettingValue | undefined;
-  after: TypeshedSettingValue | undefined;
+  before: string | undefined;
+  after: string | undefined;
 }
 
 export interface ApplyConfigurationRequest {

@@ -8,7 +8,6 @@ import type {
   RuleSeverity,
   TypeshedAction,
   TypeshedSettingKey,
-  TypeshedSettingValue,
 } from "./configuration-editor-model";
 
 const MAX_MUTATIONS = 512;
