@@ -1,4 +1,4 @@
 {
-    "basilisk.analysisMode": "openFilesOnly",
+    "basilisk.analysisMode": "wholeModule",
     "basilisk.enabled": true
 }
