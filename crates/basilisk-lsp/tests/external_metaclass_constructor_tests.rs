@@ -9,11 +9,7 @@
 
 use std::sync::Arc;
 
-use basilisk_checker::imports::{ActiveTypeshed, ImportSearchPaths};
-use basilisk_checker::{
-    cross_resolved_module, BasiliskDatabase, FileRegistry, ResolvedFile, SearchPathsInput,
-    SourceFile, WorkspaceFiles,
-};
+use basilisk_checker::imports::ActiveTypeshed;
 use basilisk_lsp::hover::hover_at;
 use basilisk_stubs::types::{StubTarget, StubTargetPlatform};
 use basilisk_stubs::typeshed::archive::{Archive, ArchiveEntry, ArchiveVfs};
@@ -79,31 +75,18 @@ fn metaclass_snapshot() -> Arc<Snapshot> {
 }
 
 fn resolve(source: &str) -> Arc<basilisk_resolver::ResolvedModule> {
-    let search_paths = ImportSearchPaths {
-        roots: Vec::new(),
-        extra_paths: Vec::new(),
-        stub_paths: Vec::new(),
-        workspace_members: Vec::new(),
-        site_packages: None,
-        registry: None,
-        typeshed_snapshot: Some(ActiveTypeshed::new(
+    let search_paths = basilisk_test_utils::typeshed_search_paths(
+        ActiveTypeshed::new(
             metaclass_snapshot(),
             Some(StubTarget {
                 python_version: (3, 12),
                 platform: StubTargetPlatform::Concrete("linux".to_owned()),
             }),
-        )),
-    };
-    let database = BasiliskDatabase::default();
-    let search_input = SearchPathsInput::new(&database, search_paths);
-    let workspace = WorkspaceFiles::new(&database, FileRegistry::default());
-    let file = SourceFile::new(&database, "main.py".to_owned(), source.to_owned());
-    let ResolvedFile::Resolved(resolved) =
-        cross_resolved_module(&database, file, search_input, workspace)
-    else {
-        panic!("fixture source must parse and resolve");
-    };
-    Arc::clone(resolved)
+        ),
+        Vec::new(),
+    );
+    basilisk_test_utils::cross_resolve(source, search_paths)
+        .expect("fixture source must parse and resolve")
 }
 
 fn hover_markdown(
