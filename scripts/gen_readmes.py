@@ -176,9 +176,17 @@ class Variant:
         return f"<!--v:{','.join(self.keys)}-->"
 
     def is_identity_paragraph(self) -> bool:
-        """One blockquote line saying which artifact the reader is looking at."""
+        """One blockquote line saying which artifact the reader is looking at.
+
+        The bold opener is load-bearing, not cosmetic: [README-IDENTITY] allows a
+        variant block to say *which* artifact this is and nothing else, and every
+        identity paragraph in `docs/readme/` opens `> **You are reading …`.
+        Accepting any `> ` line would let target-specific prose ride along inside
+        a blockquote — exactly the per-target divergence this guard exists to
+        stop — so the bold form is required.
+        """
         lines = [line for line in self.body.splitlines() if line.strip()]
-        return len(lines) == 1 and lines[0].startswith("> ")
+        return len(lines) == 1 and lines[0].startswith("> **")
 
 
 def variants(source_text: str) -> tuple[Variant, ...]:

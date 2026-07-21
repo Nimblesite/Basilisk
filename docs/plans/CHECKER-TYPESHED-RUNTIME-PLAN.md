@@ -5,10 +5,12 @@
 
 This supplies the real standard-library `.pyi` bodies missing in [#324](https://github.com/Nimblesite/Basilisk/issues/324), so [#289](https://github.com/Nimblesite/Basilisk/issues/289) and [#288](https://github.com/Nimblesite/Basilisk/issues/288) can be fixed — offline and online alike — without changing the typing specification's resolution order.
 
-**Two acceptance items remain open**, both in [§TYPESHEDRT-ACCEPTANCE](#TYPESHEDRT-ACCEPTANCE):
-socket-instrumented proof that checking is offline across CLI/LSP/MCP, and
-byte-exact per-artifact licensing verification inside the VSIX. Everything else
-below is settled contract, retained because the implementation cites its anchor.
+**Seventeen acceptance items remain open**, all in
+[§TYPESHEDRT-ACCEPTANCE](#TYPESHEDRT-ACCEPTANCE): two on source acquisition and
+identity, seven on offline verification and the store, four on explicit user
+sources, and four on licensing and release gates. Each is an independent
+automated test that does not exist yet; the surrounding prose is settled contract
+retained because the implementation cites its anchor.
 
 ## Contract {#TYPESHEDRT-MODEL}
 

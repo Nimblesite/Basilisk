@@ -43,7 +43,6 @@ if ! command -v pytest &>/dev/null; then
 fi
 ok "pytest: $(pytest --version 2>&1 | head -1)"
 
-header "Neovim extension — real LSP e2e tests"
 cd "$REPO_ROOT/basilisk.nvim"
 
 # Ensure plenary.nvim is available.
@@ -61,9 +60,45 @@ fi
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
+# Run one plenary spec directory and gate on PARSED results, exactly as the LSP
+# suite below does — every spec file must run AND summarise with zero
+# failures/errors/tracebacks. See common.sh
+# [LSPTEST-EDITOR-SPECIFIC-INTEGRATION-NEOVIM-E2E-GATE].
+run_plenary_dir() {
+    local dir="$1" label="$2" expected out
+    expected="$(find "$dir" -name '*_spec.lua' | wc -l | tr -d ' ')"
+    out="$(mktemp)"
+    # No LUACOV here on purpose: the LSP suite below deletes luacov.stats.out
+    # before a retry, so stats gathered by an earlier suite would silently
+    # vanish on the retry path and make the coverage threshold non-deterministic.
+    # The LSP e2e run remains the single, reproducible coverage input.
+    set +e
+    nvim --headless -u tests/minimal_init.lua \
+        -c "PlenaryBustedDirectory ${dir} {minimal_init = 'tests/minimal_init.lua', sequential = true, timeout = 300000}" 2>&1 \
+        | tee "$out"
+    set -e
+    if ! assert_plenary_pass "$out" "$expected" "$label"; then
+        rm -f "$out"
+        exit 1
+    fi
+    rm -f "$out"
+    ok "$label passed"
+}
+
 if command -v nvim &>/dev/null; then
     # Remove stale luacov data so coverage reflects this run only.
     rm -f luacov.stats.out luacov.report.out
+
+    # The unit and DAP specs run BEFORE the LSP e2e suite: they need no binary
+    # round-trip, so a broken module surfaces in seconds instead of after the
+    # multi-minute e2e pass. They are gated identically — these 15 spec files
+    # were previously executed by nothing at all.
+    header "Neovim extension — unit specs"
+    run_plenary_dir tests/basilisk "Neovim unit tests"
+    header "Neovim extension — DAP specs"
+    run_plenary_dir tests/dap "Neovim DAP tests"
+
+    header "Neovim extension — real LSP e2e tests"
 
     # Plenary spawns a child nvim per test file. With coverage enabled,
     # children must run sequentially so luacov stats files merge correctly

@@ -23,6 +23,7 @@
             { "title": "Overview", "titleZh": "概览", "url": "/docs/installation/" },
             { "title": "VS Code & Cursor", "titleZh": "VS Code 与 Cursor", "url": "/docs/install-vscode/" },
             { "title": "Zed", "titleZh": "Zed", "url": "/docs/install-zed/" },
+            { "title": "Neovim", "titleZh": "Neovim", "url": "/docs/install-neovim/" },
             { "title": "CLI & package managers", "titleZh": "CLI 与包管理器", "url": "/docs/install-cli/" }
           ]
         },

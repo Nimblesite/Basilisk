@@ -262,7 +262,11 @@ fn main() -> ExitCode {
             Ok(code) => code,
             Err(err) => {
                 error!(%err, "analysis thread failed");
-                1
+                // 3 = internal failure ([CHKARCH-CLI-EXITCODES]). This path is
+                // the analysis thread failing to run at all, which is never a
+                // finding about the user's code — reporting 1 here would tell a
+                // CI consumer "error diagnostics were found" when none were.
+                3
             }
         };
     ExitCode::from(exit_code)

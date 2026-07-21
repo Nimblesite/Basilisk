@@ -417,11 +417,11 @@ require('lspconfig').basilisk.setup({})
 
 ### CI {#NVIM-DISTRIBUTION-CI}
 
-GitHub Actions: the `test-nvim` job in `ci.yml` runs `scripts/test-nvim.sh` (the plenary.nvim suite plus the screenshot specs) over a two-leg matrix — a pinned `v0.11.6` (the supported floor) and `nightly` (forward-compat tip) — with `fail-fast: false`, so one leg's failure never masks the other's result.
+GitHub Actions: the `test-nvim` job in `ci.yml` runs `scripts/test-nvim.sh` — the `tests/basilisk` unit specs, the `tests/dap` debug-adapter specs, the `tests/lsp` real-binary e2e suite, and the `tests/ui` screenshot specs, in that order — over a two-leg matrix — a pinned `v0.11.6` (the supported floor) and `nightly` (forward-compat tip) — with `fail-fast: false`, so one leg's failure never masks the other's result.
 
 Because the matrix legs report as `Neovim Extension (0.11)` / `(nightly)` rather than the pre-matrix job name, a fan-in job `nvim-gate` (display name `Neovim Extension`) is the required branch-protection context: it runs `if: always()` and passes only when `needs.test-nvim.result` is `success` or `skipped`, so a failed or cancelled leg fails the gate. This mirrors the `mutation-test-shard` → `mutation-test` pattern.
 
-Both jobs are change-scoped (`needs.changes.outputs.core == 'true' || needs.changes.outputs.nvim == 'true'`): a core checker/LSP change re-runs the suite, because the e2e harness drives the real binary over LSP/DAP.
+Only the matrix job is change-scoped (`needs.changes.outputs.core == 'true' || needs.changes.outputs.nvim == 'true'`): a core checker/LSP change re-runs the suite, because the e2e harness drives the real binary over LSP/DAP. `nvim-gate` deliberately carries no scope condition at all — it does not even `needs: changes` — because a required context that skips never reports, and `skipped` is one of the two results it accepts.
 
 ### Release & Versioning {#NVIM-DISTRIBUTION-RELEASE}
 

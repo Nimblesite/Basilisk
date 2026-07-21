@@ -68,14 +68,19 @@ variables, no thresholds in CI YAML, and no hardcoded fallbacks in the scripts.
 | `default_threshold` | The threshold for any project without its own entry. |
 | `projects.<name>.threshold` | The threshold for that project, overriding the default. |
 
-`coverage_threshold_for <project>` in `scripts/common.sh` is the one reader: it
-resolves the repository root from its own path, loads the JSON, and prints
-`projects.<name>.threshold` when the project is listed and `default_threshold`
-otherwise. Consumers call that helper rather than reading the file themselves —
+`coverage_threshold_for <project>` in `scripts/common.sh` is the reader for
+every consumer that can source the shell helpers: it resolves the repository
+root from its own path, loads the JSON, and prints `projects.<name>.threshold`
+when the project is listed and `default_threshold` otherwise.
 `scripts/test-rust.sh` calls it once per Rust crate before comparing measured
-line coverage, and `scripts/test-nvim.sh` calls it for the `nvim` project. The
-`vsix` threshold is read from the same file by the Makefile's VSIX coverage
-recipe.
+line coverage, and `scripts/test-nvim.sh` calls it for the `nvim` project.
+
+The Makefile's VSIX coverage recipe is the one exception: it is an inline make
+recipe that never sources `scripts/common.sh`, so it reads
+`projects.vsix.threshold` out of the same file with its own `python3 -c`
+one-liner. That is a second **reader**, not a second **source** — both paths
+resolve every threshold from `coverage-thresholds.json` and nothing else, which
+is what the "sole source" rule above requires.
 
 ### Enforcement {#COVERAGE-THRESHOLDS-JSON-ENFORCEMENT}
 
