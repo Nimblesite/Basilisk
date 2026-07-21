@@ -1,8 +1,8 @@
 # basilisk-stubs
 
-Standard-library type resolution for Basilisk: a custom or downloaded
-`python/typeshed` tree, with a bundled full-`stdlib/` ZIP snapshot as the offline
-floor.
+Standard-library type resolution for Basilisk: a custom `python/typeshed`
+tree, or a pinned commit verified offline against the on-disk store, with a
+bundled full-`stdlib/` ZIP snapshot as the default pin.
 
 ## Role in Basilisk
 

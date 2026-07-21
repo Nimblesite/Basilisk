@@ -79,8 +79,7 @@ fn a_pin_missing_from_the_store_does_not_fall_back() -> Result<(), Box<dyn std::
         "stdout={stdout}; stderr={stderr}"
     );
     assert!(
-        stderr.contains("NO SOURCE")
-            && stderr.contains("0000000000000000000000000000000000000000"),
+        stderr.contains("NO SOURCE") && stderr.contains("0000000000000000000000000000000000000000"),
         "the failure must carry the spec's NO SOURCE line naming the pin: {stderr}"
     );
     assert!(

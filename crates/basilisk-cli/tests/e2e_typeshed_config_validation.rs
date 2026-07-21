@@ -160,7 +160,8 @@ fn retired_download_policy_keys_are_inert_and_never_echoed() {
         "retired keys must not alter the bundled-default check, stdout: {stdout}, stderr: {stderr}"
     );
     assert!(
-        !stderr.contains("internal-host.corp.example") && !stdout.contains("internal-host.corp.example"),
+        !stderr.contains("internal-host.corp.example")
+            && !stdout.contains("internal-host.corp.example"),
         "a retired mirror value must never be echoed back, stderr: {stderr}"
     );
     let _ = std::fs::remove_dir_all(&dir);

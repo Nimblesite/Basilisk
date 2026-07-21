@@ -15,9 +15,10 @@ and the nearest table that decides a rule wins outright; non-rule scalar
 fields merge additively, nearest directory winning per key
 ([CHKARCH-CONFIG-DISCOVERY]). A stray legacy `basilisk.json` is never read and
 is wholly inert — the configuration editor does not surface it at all
-([LSPCFGED-CONTRACT] excludes shadowed-source reporting, and tests assert its
-absence). LSP/editor settings such as analysis mode live in `basilisk-lsp`
-today and are not parsed by this crate.
+([CONFIGEDITOR-SOURCES](../../docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES)
+excludes shadowed-source reporting, and tests assert its absence). LSP/editor
+settings such as analysis mode live in `basilisk-lsp` today and are not parsed
+by this crate.
 
 ## Key concepts
 
