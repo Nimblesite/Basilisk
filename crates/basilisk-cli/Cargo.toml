@@ -19,6 +19,9 @@ basilisk-common.workspace   = true
 basilisk-db.workspace       = true
 basilisk-uv.workspace       = true
 basilisk-stubs.workspace    = true
+# The user-invoked download surface ([STUBRES-TYPESHED-DOWNLOAD]); reachable
+# only from `basilisk typeshed download`, never from check/analyze.
+basilisk-typeshed-fetch.workspace = true
 clap.workspace              = true
 # Shipwright `--version` / `--version --json` contract emitter.
 shipwright                  = "0.10.0"

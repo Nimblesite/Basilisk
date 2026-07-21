@@ -260,6 +260,7 @@ dependencies = [
  "basilisk-resolver",
  "basilisk-stubs",
  "basilisk-test-utils",
+ "basilisk-typeshed-fetch",
  "basilisk-uv",
  "clap",
  "colored",

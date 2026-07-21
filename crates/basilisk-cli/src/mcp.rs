@@ -229,7 +229,7 @@ fn initialize_response(id: Value, params: Option<&Value>, lifecycle: &mut Lifecy
                 "version": env!("CARGO_PKG_VERSION"),
                 "description": "Read-only Basilisk service status"
             },
-            "instructions": "Use basilisk_typeshed_status to inspect the active standard-library source and its provenance warnings."
+            "instructions": "Use basilisk_typeshed_status to inspect the active standard-library source and its status warnings."
         }),
     )
 }
@@ -239,7 +239,7 @@ fn tools_result() -> Value {
         "tools": [{
             "name": STATUS_TOOL,
             "title": "Typeshed source status",
-            "description": "Return the active typeshed source, exact commit/tree identities, transport, licensing state, and ordered warnings.",
+            "description": "Return the active typeshed source, exact commit/tree identities, licensing state, and ordered warnings.",
             "inputSchema": {
                 "type": "object",
                 "additionalProperties": false
@@ -262,7 +262,7 @@ fn status_schema() -> Value {
         "properties": {
             "active_source": {
                 "type": "string",
-                "enum": ["custom", "exact-commit", "latest", "bundled"]
+                "enum": ["custom", "exact-commit", "bundled"]
             },
             "commit_identity": {
                 "anyOf": [
@@ -276,20 +276,11 @@ fn status_schema() -> Value {
                     { "type": "null" }
                 ]
             },
-            "transport": {
-                "type": "string",
-                "enum": ["custom-path", "embedded-zip", "codeload", "mirror"]
-            },
-            "provenance": {
-                "type": "string",
-                "enum": ["github-tls-attested", "bundle-vetted", "unverified", "user-managed"]
-            },
             "license_status": {
                 "type": "string",
                 "enum": ["approved", "changed", "not supplied"]
             },
             "license_reference": { "type": ["string", "null"] },
-            "signed_release": { "type": "boolean" },
             "warnings": {
                 "type": "array",
                 "items": {
@@ -304,8 +295,8 @@ fn status_schema() -> Value {
             }
         },
         "required": [
-            "active_source", "commit_identity", "tree_identity", "transport",
-            "provenance", "license_status", "license_reference", "signed_release", "warnings"
+            "active_source", "commit_identity", "tree_identity",
+            "license_status", "license_reference", "warnings"
         ],
         "additionalProperties": false
     })
@@ -377,30 +368,20 @@ fn error_response(id: Value, code: i64, message: &str) -> Value {
 fn status_for_workspace(workspace: &Path) -> Result<Value, String> {
     let config = basilisk_lsp::config::load_analysis_config(workspace);
     let request = basilisk_lsp::config::typeshed_request(&config)?;
-    let manager =
-        basilisk_stubs::typeshed::runtime::production_manager(request, config.typeshed_cache_path)
-            .map_err(|error| error.to_string())?;
+    let manager = basilisk_stubs::typeshed::runtime::production_manager(request);
     let status = manager.status().map_err(|error| error.to_string())?;
     Ok(status_document(&status))
 }
 
+/// The active source IS the trust story — custom = user-managed, bundled =
+/// build-vetted, exact commit = attested at download and re-proven offline —
+/// so there are no separate transport/provenance fields to drift out of sync
+/// ([STUBRES-TYPESHED-WARN]).
 fn status_document(status: &basilisk_stubs::typeshed::source::TypeshedStatus) -> Value {
-    let transport = match status.transport {
-        basilisk_stubs::typeshed::source::Transport::CustomPath => "custom-path",
-        basilisk_stubs::typeshed::source::Transport::EmbeddedZip => "embedded-zip",
-        basilisk_stubs::typeshed::source::Transport::Codeload => "codeload",
-        basilisk_stubs::typeshed::source::Transport::Mirror => "mirror",
-    };
     let license_status = match status.license_status {
         basilisk_stubs::typeshed::source::LicenseStatus::Approved => "approved",
         basilisk_stubs::typeshed::source::LicenseStatus::Changed => "changed",
         basilisk_stubs::typeshed::source::LicenseStatus::NotSupplied => "not supplied",
-    };
-    let provenance = match status.provenance {
-        basilisk_stubs::typeshed::source::Provenance::GithubTlsAttested => "github-tls-attested",
-        basilisk_stubs::typeshed::source::Provenance::Unverified => "unverified",
-        basilisk_stubs::typeshed::source::Provenance::BundleVetted => "bundle-vetted",
-        basilisk_stubs::typeshed::source::Provenance::UserManaged => "user-managed",
     };
     let warnings: Vec<Value> = status
         .warnings
@@ -415,11 +396,8 @@ fn status_document(status: &basilisk_stubs::typeshed::source::TypeshedStatus) ->
         "active_source": status.active_source.as_str(),
         "commit_identity": commit.as_deref(),
         "tree_identity": tree.as_deref(),
-        "transport": transport,
-        "provenance": provenance,
         "license_status": license_status,
         "license_reference": status.license_reference.as_deref(),
-        "signed_release": status.signed_release,
         "warnings": warnings
     })
 }

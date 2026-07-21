@@ -478,17 +478,8 @@ fn workspace_config_from_toml(section: &toml::Table) -> WorkspaceConfig {
     if let Some(v) = toml_str(section, &["typeshed-commit", "typeshedCommit"]) {
         cfg.typeshed_commit = Some(v.to_owned());
     }
-    if let Some(v) = toml_str(section, &["typeshed-url", "typeshedUrl"]) {
-        cfg.typeshed_url = Some(v.to_owned());
-    }
-    if let Some(v) = toml_str(section, &["typeshed-cache-path", "typeshedCachePath"]) {
-        cfg.typeshed_cache_path = Some(PathBuf::from(v));
-    }
-    if let Some(v) = toml_bool(section, &["typeshed-cache", "typeshedCache"]) {
-        cfg.typeshed_cache = v;
-    }
-    if let Some(v) = toml_bool(section, &["typeshed-verify", "typeshedVerify"]) {
-        cfg.typeshed_verify = v;
+    if let Some(v) = toml_str(section, &["typeshed-store-path", "typeshedStorePath"]) {
+        cfg.typeshed_store_path = Some(PathBuf::from(v));
     }
     cfg
 }
@@ -499,66 +490,28 @@ fn toml_str<'a>(table: &'a toml::Table, keys: &[&str]) -> Option<&'a str> {
         .find_map(|key| table.get(*key).and_then(toml::Value::as_str))
 }
 
-/// First boolean value found among the given key spellings.
-fn toml_bool(table: &toml::Table, keys: &[&str]) -> Option<bool> {
-    keys.iter()
-        .find_map(|key| table.get(*key).and_then(toml::Value::as_bool))
-}
+/// Every typeshed key holds a string ([STUBRES-TYPESHED-CONFIG]).
+const TYPESHED_STRING_KEYS: [&str; 6] = [
+    "typeshed-path",
+    "typeshedPath",
+    "typeshed-commit",
+    "typeshedCommit",
+    "typeshed-store-path",
+    "typeshedStorePath",
+];
 
 fn toml_typeshed_type_error(table: &toml::Table) -> Option<String> {
-    for key in [
-        "typeshed-path",
-        "typeshedPath",
-        "typeshed-commit",
-        "typeshedCommit",
-        "typeshed-url",
-        "typeshedUrl",
-        "typeshed-cache-path",
-        "typeshedCachePath",
-    ] {
-        if table.get(key).is_some_and(|value| !value.is_str()) {
-            return Some(format!("{key} must be a string"));
-        }
-    }
-    for key in [
-        "typeshed-cache",
-        "typeshedCache",
-        "typeshed-verify",
-        "typeshedVerify",
-    ] {
-        if table.get(key).is_some_and(|value| !value.is_bool()) {
-            return Some(format!("{key} must be a boolean"));
-        }
-    }
-    None
+    TYPESHED_STRING_KEYS
+        .iter()
+        .find(|key| table.get(**key).is_some_and(|value| !value.is_str()))
+        .map(|key| format!("{key} must be a string"))
 }
 
 fn json_typeshed_type_error(object: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
-    for key in [
-        "typeshed-path",
-        "typeshedPath",
-        "typeshed-commit",
-        "typeshedCommit",
-        "typeshed-url",
-        "typeshedUrl",
-        "typeshed-cache-path",
-        "typeshedCachePath",
-    ] {
-        if object.get(key).is_some_and(|value| !value.is_string()) {
-            return Some(format!("{key} must be a string"));
-        }
-    }
-    for key in [
-        "typeshed-cache",
-        "typeshedCache",
-        "typeshed-verify",
-        "typeshedVerify",
-    ] {
-        if object.get(key).is_some_and(|value| !value.is_boolean()) {
-            return Some(format!("{key} must be a boolean"));
-        }
-    }
-    None
+    TYPESHED_STRING_KEYS
+        .iter()
+        .find(|key| object.get(**key).is_some_and(|value| !value.is_string()))
+        .map(|key| format!("{key} must be a string"))
 }
 
 /// First array value found among the given key spellings, as `PathBuf`s.
@@ -605,7 +558,7 @@ mod tests {
         assert!(cfg.typeshed_path.is_none());
     }
 
-    /// [STUBRES-TYPESHED-CONFIG]: the LSP consumes the same complete source
+    /// [STUBRES-TYPESHED-CONFIG]: the LSP consumes the same three-key source
     /// policy as the CLI/config crate; path fields are rooted at the workspace.
     #[test]
     fn test_load_runtime_typeshed_policy_from_pyproject() {
@@ -616,10 +569,7 @@ mod tests {
             concat!(
                 "[tool.basilisk]\n",
                 "typeshed-commit = \"83c2518a9e6abbda0c44592c3483de459198f887\"\n",
-                "typeshed-url = \"https://mirror.invalid/{sha}.zip\"\n",
-                "typeshed-cache-path = \".cache/typeshed\"\n",
-                "typeshed-cache = false\n",
-                "typeshed-verify = false\n",
+                "typeshed-store-path = \".cache/typeshed-store\"\n",
             ),
         )
         .unwrap();
@@ -630,12 +580,9 @@ mod tests {
             Some("83c2518a9e6abbda0c44592c3483de459198f887")
         );
         assert_eq!(
-            cfg.typeshed_url.as_deref(),
-            Some("https://mirror.invalid/{sha}.zip")
+            cfg.typeshed_store_path,
+            Some(dir.join(".cache/typeshed-store"))
         );
-        assert_eq!(cfg.typeshed_cache_path, Some(dir.join(".cache/typeshed")));
-        assert!(!cfg.typeshed_cache);
-        assert!(!cfg.typeshed_verify);
         assert_eq!(cfg.python_version, None);
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -853,7 +800,7 @@ mod tests {
     }
 
     #[test]
-    fn typeshed_request_rejects_raw_source_conflict_and_bad_mirror() {
+    fn typeshed_request_rejects_raw_source_conflict() {
         let conflict = WorkspaceConfig {
             typeshed_path: Some(PathBuf::from("custom")),
             typeshed_commit: Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
@@ -862,28 +809,16 @@ mod tests {
         assert!(typeshed_request(&conflict)
             .expect_err("conflicting source settings must fail closed")
             .contains("mutually exclusive"));
-
-        let mirror = WorkspaceConfig {
-            typeshed_url: Some("http://secret.invalid/{sha}.zip".to_owned()),
-            ..WorkspaceConfig::default()
-        };
-        let error = typeshed_request(&mirror).expect_err("HTTP mirror must fail closed");
-        assert!(error.contains("HTTPS"));
-        assert!(
-            !error.contains("secret.invalid"),
-            "mirror URL must be redacted"
-        );
     }
 
-    /// [STUBRES-TYPESHED-CONFIG]: an explicitly malformed acquisition key
-    /// cannot disappear into a default Latest/verified/cache-on request.
+    /// [STUBRES-TYPESHED-CONFIG]: an explicitly malformed typeshed key cannot
+    /// disappear into the default bundled-pin request.
     #[test]
     fn malformed_typeshed_setting_types_fail_closed() {
         for source in [
             "typeshed-commit = 42",
             "typeshed-path = false",
-            "typeshed-cache = \"false\"",
-            "typeshed-verify = \"true\"",
+            "typeshed-store-path = false",
         ] {
             let table: toml::Table = source.parse().expect("fixture TOML");
             let config = workspace_config_from_toml(&table);
@@ -896,8 +831,7 @@ mod tests {
         for (key, value) in [
             ("typeshedCommit", serde_json::json!(42)),
             ("typeshedPath", serde_json::json!(false)),
-            ("typeshedCache", serde_json::json!("false")),
-            ("typeshedVerify", serde_json::json!("true")),
+            ("typeshedStorePath", serde_json::json!(false)),
         ] {
             let mut object = serde_json::Map::new();
             let _ = object.insert(key.to_owned(), value);
@@ -912,21 +846,39 @@ mod tests {
         }
     }
 
+    /// [STUBRES-TYPESHED]: an explicit pin is an explicit `Pinned` selection;
+    /// unset keys resolve to the bundled commit as an implicit pin — the
+    /// request has no download, cache, or verification knobs at all.
     #[test]
-    fn typeshed_request_preserves_exact_policy_controls() {
+    fn typeshed_request_resolves_explicit_and_default_pins() {
+        use basilisk_stubs::typeshed::source::SourceSelection;
+
         let config = WorkspaceConfig {
             typeshed_commit: Some("83C2518A9E6ABBDA0C44592C3483DE459198F887".to_owned()),
-            typeshed_url: Some("https://mirror.invalid/{sha}.zip".to_owned()),
-            typeshed_cache: false,
-            typeshed_verify: false,
+            typeshed_store_path: Some(PathBuf::from("/stores/typeshed")),
             ..WorkspaceConfig::default()
         };
         let request = typeshed_request(&config).expect("valid exact request");
         assert!(matches!(
             request.selection,
-            basilisk_stubs::typeshed::source::SourceSelection::ExactCommit { .. }
+            SourceSelection::Pinned { explicit: true, .. }
         ));
-        assert!(!request.use_cache);
-        assert!(!request.verify_content);
+        assert_eq!(request.store_path, Some(PathBuf::from("/stores/typeshed")));
+
+        let default_request =
+            typeshed_request(&WorkspaceConfig::default()).expect("default request");
+        match default_request.selection {
+            SourceSelection::Pinned { commit, explicit } => {
+                assert!(!explicit, "an unset pin must stay UNPINNED");
+                assert_eq!(
+                    commit.to_hex(),
+                    basilisk_stubs::typeshed::bundle::bundled_commit_sha()
+                );
+            }
+            SourceSelection::Custom { .. } => {
+                unreachable!("an unset config must resolve to the bundled pin")
+            }
+        }
+        assert_eq!(default_request.store_path, None);
     }
 }

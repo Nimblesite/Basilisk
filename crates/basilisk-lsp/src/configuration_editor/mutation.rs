@@ -8,15 +8,13 @@
 
 use std::collections::HashSet;
 
-use basilisk_config::{
-    BasiliskConfig, ConfigDocument, ConfigurationUpdate, TypeshedConfigKey, TypeshedConfigValue,
-};
+use basilisk_config::{BasiliskConfig, ConfigDocument, ConfigurationUpdate, TypeshedConfigKey};
 use tower_lsp::jsonrpc::{Error, Result as LspResult};
 
 use super::catalog::{descriptors, effective_severity, wire_to_config, SelectionError};
 use super::model::{
     ConfigurationImpact, EditorMutation, ResolvedRuleChange, RuleDescriptor, RuleSeverity,
-    TypeshedSettingChange, TypeshedSettingKey, TypeshedSettingValue,
+    TypeshedSettingChange, TypeshedSettingKey,
 };
 use super::protocol::{path_uri, rpc_error, rpc_error_data};
 use super::snapshot::{count_i64, Inventory};
@@ -107,48 +105,27 @@ fn typeshed_config_key(key: TypeshedSettingKey) -> TypeshedConfigKey {
     match key {
         TypeshedSettingKey::TypeshedPath => TypeshedConfigKey::TypeshedPath,
         TypeshedSettingKey::TypeshedCommit => TypeshedConfigKey::TypeshedCommit,
-        TypeshedSettingKey::TypeshedUrl => TypeshedConfigKey::TypeshedUrl,
-        TypeshedSettingKey::TypeshedCachePath => TypeshedConfigKey::TypeshedCachePath,
-        TypeshedSettingKey::TypeshedCache => TypeshedConfigKey::TypeshedCache,
-        TypeshedSettingKey::TypeshedVerify => TypeshedConfigKey::TypeshedVerify,
+        TypeshedSettingKey::TypeshedStorePath => TypeshedConfigKey::TypeshedStorePath,
     }
 }
 
-fn validate_typeshed_value(
-    key: TypeshedSettingKey,
-    value: &TypeshedSettingValue,
-) -> LspResult<TypeshedConfigValue> {
-    match (key, value) {
-        (TypeshedSettingKey::TypeshedCommit, TypeshedSettingValue::Text { value })
-            if basilisk_config::is_full_commit_sha(value) =>
-        {
-            Ok(TypeshedConfigValue::Text(value.clone()))
+fn validate_typeshed_value(key: TypeshedSettingKey, value: &str) -> LspResult<String> {
+    match key {
+        TypeshedSettingKey::TypeshedCommit if basilisk_config::is_full_commit_sha(value) => {
+            Ok(value.to_owned())
         }
-        (TypeshedSettingKey::TypeshedCommit, _) => Err(invalid_typeshed_setting(
+        TypeshedSettingKey::TypeshedCommit => Err(invalid_typeshed_setting(
             key,
             "typeshed-commit must be a full 40-character hexadecimal SHA",
         )),
-        (TypeshedSettingKey::TypeshedUrl, TypeshedSettingValue::Text { value })
-            if basilisk_config::is_valid_typeshed_url_template(value) =>
+        TypeshedSettingKey::TypeshedPath | TypeshedSettingKey::TypeshedStorePath
+            if !value.trim().is_empty() =>
         {
-            Ok(TypeshedConfigValue::Text(value.clone()))
+            Ok(value.to_owned())
         }
-        (TypeshedSettingKey::TypeshedUrl, _) => Err(invalid_typeshed_setting(
-            key,
-            "typeshed-url must be HTTPS with exactly one {sha} placeholder",
-        )),
-        (
-            TypeshedSettingKey::TypeshedPath | TypeshedSettingKey::TypeshedCachePath,
-            TypeshedSettingValue::Text { value },
-        ) if !value.trim().is_empty() => Ok(TypeshedConfigValue::Text(value.clone())),
-        (
-            TypeshedSettingKey::TypeshedCache | TypeshedSettingKey::TypeshedVerify,
-            TypeshedSettingValue::Boolean { value },
-        ) => Ok(TypeshedConfigValue::Boolean(*value)),
-        _ => Err(invalid_typeshed_setting(
-            key,
-            "Typeshed setting has the wrong value type or an empty value",
-        )),
+        TypeshedSettingKey::TypeshedPath | TypeshedSettingKey::TypeshedStorePath => Err(
+            invalid_typeshed_setting(key, "Typeshed setting requires a non-empty path"),
+        ),
     }
 }
 
@@ -254,41 +231,17 @@ pub(super) fn resolved_changes(
         .collect()
 }
 
-fn config_typeshed_value(
-    config: &BasiliskConfig,
-    key: TypeshedSettingKey,
-) -> Option<TypeshedSettingValue> {
+fn config_typeshed_value(config: &BasiliskConfig, key: TypeshedSettingKey) -> Option<String> {
     match key {
-        TypeshedSettingKey::TypeshedPath => {
-            config
-                .typeshed_path
-                .as_ref()
-                .map(|path| TypeshedSettingValue::Text {
-                    value: path.to_string_lossy().into_owned(),
-                })
-        }
-        TypeshedSettingKey::TypeshedCommit => config
-            .typeshed_commit
-            .clone()
-            .map(|value| TypeshedSettingValue::Text { value }),
-        TypeshedSettingKey::TypeshedUrl => config
-            .typeshed_url
-            .clone()
-            .map(|value| TypeshedSettingValue::Text { value }),
-        TypeshedSettingKey::TypeshedCachePath => {
-            config
-                .typeshed_cache_path
-                .as_ref()
-                .map(|path| TypeshedSettingValue::Text {
-                    value: path.to_string_lossy().into_owned(),
-                })
-        }
-        TypeshedSettingKey::TypeshedCache => config
-            .typeshed_cache
-            .map(|value| TypeshedSettingValue::Boolean { value }),
-        TypeshedSettingKey::TypeshedVerify => config
-            .typeshed_verify
-            .map(|value| TypeshedSettingValue::Boolean { value }),
+        TypeshedSettingKey::TypeshedPath => config
+            .typeshed_path
+            .as_ref()
+            .map(|path| path.to_string_lossy().into_owned()),
+        TypeshedSettingKey::TypeshedCommit => config.typeshed_commit.clone(),
+        TypeshedSettingKey::TypeshedStorePath => config
+            .typeshed_store_path
+            .as_ref()
+            .map(|path| path.to_string_lossy().into_owned()),
     }
 }
 
@@ -300,10 +253,7 @@ pub(super) fn resolved_typeshed_changes(
     [
         TypeshedSettingKey::TypeshedPath,
         TypeshedSettingKey::TypeshedCommit,
-        TypeshedSettingKey::TypeshedUrl,
-        TypeshedSettingKey::TypeshedCachePath,
-        TypeshedSettingKey::TypeshedCache,
-        TypeshedSettingKey::TypeshedVerify,
+        TypeshedSettingKey::TypeshedStorePath,
     ]
     .into_iter()
     .filter_map(|key| {

@@ -1,28 +1,26 @@
 //! Server-described Typeshed controls and typed lifecycle projection.
 
 use basilisk_config::BasiliskConfig;
-use basilisk_stubs::typeshed::source::{
-    LicenseStatus, Provenance, SourceKind, Transport, TypeshedStatus,
-};
+use basilisk_stubs::typeshed::bundle::bundled_commit_sha;
+use basilisk_stubs::typeshed::source::{LicenseStatus, SourceKind, TypeshedStatus};
 use basilisk_stubs::typeshed::warning::WarningSeverity;
 
 use super::model::{
-    TypeshedActiveSource, TypeshedConfigurationState, TypeshedDownloadPolicy,
-    TypeshedLicenseStatus, TypeshedLifecycle, TypeshedProvenance, TypeshedSource,
-    TypeshedStatusState, TypeshedTransport, TypeshedWarningSeverity, TypeshedWarningState,
+    TypeshedActiveSource, TypeshedConfigurationState, TypeshedLicenseStatus, TypeshedLifecycle,
+    TypeshedSource, TypeshedStatusState, TypeshedWarningSeverity, TypeshedWarningState,
 };
 use crate::server::typeshed_status::TypeshedGeneration;
 
-/// Project the one active source, carrying the value that defines it.
+/// Project the one active source, carrying the value that defines it. An
+/// unset pin IS the bundled commit ([STUBRES-TYPESHED]): the picker shows the
+/// effective SHA and the `UNPINNED` warning says it is not yet reproducible.
 fn source(config: &BasiliskConfig) -> TypeshedSource {
     config.typeshed_path.as_ref().map_or_else(
-        || {
-            config
+        || TypeshedSource::ExactCommit {
+            commit: config
                 .typeshed_commit
                 .clone()
-                .map_or(TypeshedSource::Latest, |commit| {
-                    TypeshedSource::ExactCommit { commit }
-                })
+                .unwrap_or_else(|| bundled_commit_sha().to_owned()),
         },
         |path| TypeshedSource::CustomFolder {
             path: path.to_string_lossy().into_owned(),
@@ -30,63 +28,28 @@ fn source(config: &BasiliskConfig) -> TypeshedSource {
     )
 }
 
-/// The download policy of a downloaded source. A user-managed folder
-/// downloads nothing, so it has none ([LSPCFGED-TYPESHED]).
-fn downloads(config: &BasiliskConfig, source: &TypeshedSource) -> Option<TypeshedDownloadPolicy> {
+/// The store directory pins resolve from. A custom folder resolves nothing
+/// from the store, so it has none ([STUBRES-TYPESHED-STORE]).
+fn store_folder(config: &BasiliskConfig, source: &TypeshedSource) -> Option<String> {
     if matches!(source, TypeshedSource::CustomFolder { .. }) {
         return None;
     }
-    Some(TypeshedDownloadPolicy {
-        reuse_downloads: config.typeshed_cache.unwrap_or(true),
-        verify_content: config.typeshed_verify.unwrap_or(true),
-        archive_url: config.typeshed_url.clone(),
-        cache_folder: config
-            .typeshed_cache_path
-            .as_ref()
-            .map(|path| path.to_string_lossy().into_owned()),
-    })
+    config
+        .typeshed_store_path
+        .clone()
+        .or_else(basilisk_stubs::typeshed::runtime::default_store_path)
+        .map(|path| path.to_string_lossy().into_owned())
 }
 
-/// The commit `PinCurrent` would write, present only when pinning is possible:
-/// the source must be an unpinned download and a gate-accepted commit must be
-/// active. A source the user can select but never reach does not exist.
-fn pinnable_commit(
-    source: &TypeshedSource,
-    acquiring: bool,
-    status: Option<&TypeshedStatus>,
-) -> Option<String> {
-    if acquiring || !matches!(source, TypeshedSource::Latest) {
-        return None;
+fn license_available(source: &TypeshedSource, generation: Option<&TypeshedGeneration>) -> bool {
+    match source {
+        // A custom folder always answers `ViewLicense` — with "not supplied".
+        TypeshedSource::CustomFolder { .. } => true,
+        TypeshedSource::ExactCommit { commit } => generation
+            .and_then(TypeshedGeneration::ready_status)
+            .and_then(|status| status.commit)
+            .is_some_and(|active| active.to_hex() == *commit),
     }
-    status
-        .and_then(|current| current.commit)
-        .map(|commit| commit.to_hex())
-}
-
-fn license_available(
-    config: &BasiliskConfig,
-    source: &TypeshedSource,
-    lifecycle: TypeshedLifecycle,
-    status: Option<&TypeshedStatus>,
-) -> bool {
-    if matches!(source, TypeshedSource::CustomFolder { .. }) {
-        return lifecycle != TypeshedLifecycle::Acquiring;
-    }
-    lifecycle == TypeshedLifecycle::Ready
-        && status.is_some_and(|current| match source {
-            TypeshedSource::ExactCommit { .. } => {
-                config.typeshed_commit.as_deref().is_some_and(|commit| {
-                    current
-                        .commit
-                        .is_some_and(|active| active.to_hex() == commit)
-                })
-            }
-            TypeshedSource::Latest => matches!(
-                current.active_source,
-                SourceKind::Latest | SourceKind::Bundled
-            ),
-            TypeshedSource::CustomFolder { .. } => false,
-        })
 }
 
 pub(super) fn typeshed_configuration(
@@ -94,66 +57,43 @@ pub(super) fn typeshed_configuration(
     generation: Option<&TypeshedGeneration>,
 ) -> TypeshedConfigurationState {
     let source = source(config);
-    let ready_status = generation.and_then(TypeshedGeneration::ready_status);
-    let status =
-        generation.map_or_else(|| status_projection(None), TypeshedGeneration::status_state);
-    let acquiring = status.lifecycle == TypeshedLifecycle::Acquiring;
+    let status = generation.map_or_else(
+        || TypeshedStatusState {
+            lifecycle: TypeshedLifecycle::NoSource,
+            no_source_reason: Some("typeshed resolution has not run for this root".to_owned()),
+            active_source: None,
+            commit_identity: None,
+            license_status: TypeshedLicenseStatus::Unavailable,
+            warnings: Vec::new(),
+        },
+        TypeshedGeneration::status_state,
+    );
     TypeshedConfigurationState {
-        downloads: downloads(config, &source),
-        pinnable_commit: pinnable_commit(&source, acquiring, ready_status),
-        license_available: license_available(config, &source, status.lifecycle, ready_status),
+        store_folder: store_folder(config, &source),
+        license_available: license_available(&source, generation),
         source,
         status,
     }
 }
 
-pub(crate) fn status_projection(status: Option<&TypeshedStatus>) -> TypeshedStatusState {
-    let Some(status) = status else {
-        return TypeshedStatusState {
-            lifecycle: TypeshedLifecycle::Acquiring,
-            blocked_reason: None,
-            active_source: None,
-            commit_identity: None,
-            transport: None,
-            license_status: TypeshedLicenseStatus::Acquiring,
-            provenance: TypeshedProvenance::Pending,
-            signed_release: false,
-            warnings: Vec::new(),
-        };
-    };
+/// Project an active snapshot's status. A snapshot only exists after every
+/// activation gate passed, so its lifecycle is always `Ready` — a blocked or
+/// missing source is a [`TypeshedGeneration::NoSource`], never a snapshot.
+pub(crate) fn ready_projection(status: &TypeshedStatus) -> TypeshedStatusState {
     TypeshedStatusState {
-        lifecycle: if status.license_status == LicenseStatus::Changed {
-            TypeshedLifecycle::Blocked
-        } else {
-            TypeshedLifecycle::Ready
-        },
-        blocked_reason: (status.license_status == LicenseStatus::Changed)
-            .then(|| "Typeshed license identity changed; activation requires review".to_owned()),
+        lifecycle: TypeshedLifecycle::Ready,
+        no_source_reason: None,
         active_source: Some(match status.active_source {
             SourceKind::Custom => TypeshedActiveSource::Custom,
             SourceKind::ExactCommit => TypeshedActiveSource::ExactCommit,
-            SourceKind::Latest => TypeshedActiveSource::Latest,
             SourceKind::Bundled => TypeshedActiveSource::Bundled,
         }),
         commit_identity: status.commit.map(|oid| oid.to_hex()),
-        transport: Some(match status.transport {
-            Transport::CustomPath => TypeshedTransport::CustomPath,
-            Transport::EmbeddedZip => TypeshedTransport::EmbeddedZip,
-            Transport::Codeload => TypeshedTransport::Codeload,
-            Transport::Mirror => TypeshedTransport::Mirror,
-        }),
         license_status: match status.license_status {
             LicenseStatus::Approved => TypeshedLicenseStatus::Approved,
             LicenseStatus::Changed => TypeshedLicenseStatus::Changed,
             LicenseStatus::NotSupplied => TypeshedLicenseStatus::NotSupplied,
         },
-        provenance: match status.provenance {
-            Provenance::GithubTlsAttested => TypeshedProvenance::GithubTlsAttested,
-            Provenance::Unverified => TypeshedProvenance::Unverified,
-            Provenance::BundleVetted => TypeshedProvenance::BundleVetted,
-            Provenance::UserManaged => TypeshedProvenance::UserManaged,
-        },
-        signed_release: status.signed_release,
         warnings: status
             .warnings
             .iter()

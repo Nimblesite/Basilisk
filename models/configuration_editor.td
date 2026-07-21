@@ -26,18 +26,13 @@ union TagKind {
   Descriptive
 }
 
-# The Typeshed keys are a closed allowlist — the whole surface is three keys.
-# The wire never accepts an arbitrary TOML key or an untyped value
-# ([LSPCFGED-TYPESHED]).
+# The Typeshed keys are a closed allowlist — the whole surface is three keys,
+# every one of them a string (a path or a full commit SHA). The wire never
+# accepts an arbitrary TOML key or an untyped value ([LSPCFGED-TYPESHED]).
 union TypeshedSettingKey {
   TypeshedPath
   TypeshedCommit
   TypeshedStorePath
-}
-
-union TypeshedSettingValue {
-  Text { value: String }
-  Boolean { value: Bool }
 }
 
 # The only six things the editor can ask for: four rule/tag mutations plus
@@ -48,7 +43,7 @@ union EditorMutation {
   RemoveRule { code: RuleCode }
   SetTag { tag: RuleTag, severity: RuleSeverity }
   RemoveTag { tag: RuleTag }
-  SetTypeshedSetting { key: TypeshedSettingKey, value: TypeshedSettingValue }
+  SetTypeshedSetting { key: TypeshedSettingKey, value: String }
   RemoveTypeshedSetting { key: TypeshedSettingKey }
 }
 
@@ -259,8 +254,8 @@ type ConfigurationPreview {
 
 type TypeshedSettingChange {
   key: TypeshedSettingKey
-  before: Option<TypeshedSettingValue>
-  after: Option<TypeshedSettingValue>
+  before: Option<String>
+  after: Option<String>
 }
 
 # rootUri + previewId fully identify the cached preview, which already pins

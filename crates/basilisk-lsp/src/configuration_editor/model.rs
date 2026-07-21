@@ -40,24 +40,14 @@ pub enum TagKind {
     Descriptive,
 }
 
-/// Closed allowlist of runtime Typeshed configuration keys.
+/// Closed allowlist of runtime Typeshed configuration keys — the whole
+/// surface is three keys, every one a string ([LSPCFGED-TYPESHED]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum TypeshedSettingKey {
     TypeshedPath,
     TypeshedCommit,
-    TypeshedUrl,
-    TypeshedCachePath,
-    TypeshedCache,
-    TypeshedVerify,
-}
-
-/// Typed values accepted by Typeshed setting mutations.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind")]
-pub enum TypeshedSettingValue {
-    Text { value: String },
-    Boolean { value: bool },
+    TypeshedStorePath,
 }
 
 /// The six operations the editor may ask the configuration service to apply.
@@ -80,7 +70,7 @@ pub enum EditorMutation {
     },
     SetTypeshedSetting {
         key: TypeshedSettingKey,
-        value: TypeshedSettingValue,
+        value: String,
     },
     RemoveTypeshedSetting {
         key: TypeshedSettingKey,
