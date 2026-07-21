@@ -26,7 +26,7 @@ All configuration-editor requests require an explicit active-workspace `rootUri`
 - `basilisk/previewConfigurationChange` validates the base revision, builds a validated in-memory patch from the requested mutations, and reruns checking against that hypothetical config, returning the resolved per-rule effective-severity changes and before/after impact.
 - `basilisk/applyConfigurationChange` consumes a cached preview identified by root and preview ID; the server rejects it if the preview's pinned base revision no longer matches the current document. It asks the client to apply one configuration edit, reloads and rechecks the root, republishes diagnostics, emits `basilisk/configurationChanged`, and returns a fresh snapshot.
 - `basilisk/ruleOccurrences` returns URI/range/code-ordered pages selected by the all/codes/tags selectors. The opaque cursor resumes the stable result and the server accepts limits from 1 to 1000.
-- `basilisk/typeshedAction` accepts only `PinCurrent`, `AcquireFresh`, or `ViewLicense`; it returns an ordinary config preview, refreshed snapshot, or safe read-only license document respectively.
+- `basilisk/typeshedAction` accepts only `DownloadLatest`, `DownloadPinned`, or `ViewLicense`; it returns an ordinary config preview (the new pin), a refreshed snapshot, or a safe read-only license document respectively.
 
 A mutation is `SetRule`, `RemoveRule`, `SetTag`, `RemoveTag`, `SetTypeshedSetting`, or `RemoveTypeshedSetting`; the latter two accept only the typed keys in [§LSPCFGED-TYPESHED](#LSPCFGED-TYPESHED). Requesting `disabled` for a `pep`-tagged rule is an error: PEP rules are graded, never disabled ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 
@@ -44,7 +44,7 @@ The protocol is deliberately small:
 
 - a snapshot is the root, config URI/revision, the active source (URI/exists/read-only), rule/tag states, the discovered per-folder path overrides, a server-computed debt summary (the errors/warnings/infos partition plus adopted/disabled rule counts), the real configuration problems, and server-described Typeshed settings/status;
 - `EditorMutation` adds allowlisted `SetTypeshedSetting` / `RemoveTypeshedSetting` to the four rule/tag variants;
-- `TypeshedAction` is the closed `PinCurrent` / `AcquireFresh` / `ViewLicense` union;
+- `TypeshedAction` is the closed `DownloadLatest` / `DownloadPinned` / `ViewLicense` union;
 - a preview is the resolved per-rule effective-severity changes (`Disabled` = does not run, never present on a `pep` rule) plus a complete errors/warnings/infos before/after partition; and
 - occurrences are paged locations with the severity that produced them.
 
@@ -95,37 +95,26 @@ Freshness is the default; determinism is one control away. Every key in
 [STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)
 is editable here.
 
-The wire model makes an impossible source unrepresentable: the snapshot carries
-ONE active source that holds the value defining it — `Latest`,
-`ExactCommit { commit }`, or `CustomFolder { path }` — so "latest with a pin" or
-"a pin plus a custom folder" cannot be described at all. Alongside it the server
-sends the download policy that source HAS (absent for a custom folder, which
-downloads nothing), the commit `PinCurrent` would write when pinning is possible,
-and whether a license document exists to open. There are no per-control widget,
-label, or enabled descriptors: copy is client presentation, and availability is
-the data itself.
+There are **two** sources and no third. The snapshot carries ONE active source
+holding the value that defines it — `ExactCommit { commit }` or
+`CustomFolder { path }` — so "a pin plus a custom folder" cannot be described at
+all. Alongside it the server sends where downloads land, and whether a license
+document exists to open. There are no per-control widget, label, or enabled
+descriptors: copy is client presentation, availability is the data itself.
 
 | Source | Chosen by | Writes | Step-3 effect |
 |---|---|---|---|
-| **Latest** *(default)* | selecting it | clears `typeshed-commit` + `typeshed-path` | resolves & downloads the newest `main` SHA |
-| **Pinned commit** | selecting it (`PinCurrent`), or editing the SHA | full `typeshed-commit`, clears `typeshed-path` | selected SHA; verified unless disabled; failure closes unless bundle matches |
-| **Custom folder** | selecting it (folder-picker) | `typeshed-path`, clears `typeshed-commit` | canonical user-managed tree; no download/bundle |
+| **Pinned commit** *(default)* | editing the SHA, or **Download latest** | full `typeshed-commit`, clears `typeshed-path` | that SHA, verified offline; fails closed if it is not on this machine |
+| **Custom folder** | selecting it (folder-picker) | `typeshed-path`, clears `typeshed-commit` | canonical user-managed tree |
 
 Selecting a source is one atomic transition, and only the ACTIVE source's own
-field is rendered. Pinning is the source choice itself — never a second button —
-and is offered only when there is an active commit to pin; otherwise the choice
-states why (an in-flight acquisition, or a custom folder with no upstream commit).
-A SHA that is not 40 hexadecimal characters is refused in the field and never
-reaches the configuration.
-
-Download policy (Latest and Pinned commit only):
+field is rendered. A SHA that is not 40 hexadecimal characters is refused in the
+field and never reaches the configuration.
 
 | Control | Key | Widget |
 |---|---|---|
-| Reuse downloads | `typeshed-cache` | toggle + one-run fresh-download action |
-| Verify content | `typeshed-verify` | toggle; disabling requires confirmation |
+| Store folder | `typeshed-store-path` | folder-picker, under Advanced |
 | Alternate archive URL | `typeshed-url` | text (`{sha}` template), under Advanced |
-| Cache folder | `typeshed-cache-path` | folder-picker, under Advanced |
 | License | active source | **View license**, or `not supplied` for custom |
 
 A Typeshed edit has no rule-severity impact to weigh, so it is written as soon as
@@ -134,19 +123,12 @@ and every control re-renders from the snapshot that results. The impact dialog
 remains for rule and tag entries; dismissing it discards the change and returns
 every control to the configuration that still holds.
 
-The URL downloads only a known SHA; Latest still needs official metadata.
-Downloaded cached ZIP bytes are re-hashed every time; exact pins are reused
-regardless of age until explicitly evicted, while Latest downloads expire after 24 hours.
-Cache off downloads, validates, and discards—it is not labelled hermetic.
-Verification off leaves safety, shape, and license gates active and displays `UNVERIFIED`.
-Only a pinned commit suppresses `UNPINNED`; Latest/bundled offer the pinned source,
-while Custom says its folder can change and should be versioned or content-addressed externally.
-Custom shows user-managed terms, never the typeshed composite license
+Only a pinned commit suppresses `UNPINNED`; Custom says its folder can change and
+should be versioned or content-addressed externally, and shows user-managed terms
+rather than the typeshed composite license
 ([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
-`PinCurrent` returns a preview that writes the active SHA; `AcquireFresh` performs
-one cache-bypassing acquisition, or re-snapshots the selected custom tree;
 `ViewLicense` returns the active immutable license document, or `not supplied`
-for custom. Clients execute none locally.
+for custom. Clients execute nothing locally.
 
 The two directory keys render with a native folder-picker rather than free text;
 they are the only path-typed settings the editor exposes, distinct from the
@@ -156,8 +138,24 @@ Folder selection feeds the ordinary validated transaction in
 [§CONFIGEDITOR-SOURCES](#CONFIGEDITOR-SOURCES); cancellation writes nothing and
 restores the controls to the active source.
 
-While a candidate is being acquired every source, control, and action is inert:
-acquisition is one atomic transition and nothing may race it.
+### Download {#LSPCFGED-TYPESHED-DOWNLOAD}
+
+Downloading is **not configuration**: it is a button, backed by a component that
+lives outside the editor
+([STUBRES-TYPESHED-DOWNLOAD](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-DOWNLOAD)).
+The editor never downloads to satisfy an edit, and no configuration change ever
+triggers one.
+
+| Button | Offered when | Does |
+|---|---|---|
+| **Download latest** | always, except while a download is running | resolves `main`, acquires it, writes that SHA as `typeshed-commit` |
+| **Download pinned** | the pinned commit is not on this machine | acquires exactly that SHA; writes no configuration |
+
+A running download shows progress **on the button that started it**. Nothing
+else is blocked: there is no full-panel overlay, no modal, and no lock screen —
+every other control stays live, because reading and writing configuration never
+waited on the network in the first place. Changing the pin re-resolves locally
+and takes effect immediately.
 
 ### Service Info tree {#LSPCFGED-TYPESHED-SERVICE-INFO}
 
@@ -166,17 +164,15 @@ from [STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WA
 
 | State | Row |
 |---|---|
-| acquiring | spinner until the source is ready |
-| exact pin unavailable or rejected | persistent `BLOCKED`; no substitute source |
-| no explicit commit | persistent `UNPINNED`, including Custom and bundled |
-| automatic fallback | persistent high-severity bundled-SHA warning |
+| pin absent from this machine, or verification failed | persistent `NO SOURCE`; analysis does not run; no substitute source |
+| no explicit commit (the bundled commit is serving) | persistent `UNPINNED` |
 | license drift | persistent `LICENSE CHANGED`; activation blocked |
-| verification waived | persistent `UNVERIFIED` |
-| custom | persistent `USER-MANAGED SOURCE` |
+| custom | persistent `UNPINNED` + `USER-MANAGED SOURCE` |
+| download running | spinner, on that action only |
 
 Rows may coexist, never poll, and never mutate; fixes remain in the editable
-section. A warning row's message names its fix (e.g. `UNPINNED`'s **Pin
-current**), so the row carries exactly one navigation-only command that opens
+section. A warning row's message names its fix (e.g. `NO SOURCE`'s **Download
+pinned**), so the row carries exactly one navigation-only command that opens
 the configuration editor — attached only while the server is running and
 advertises the editor capability, because the open command is gated on that
 same pair and a shown-but-dead command is forbidden. Other rows carry no

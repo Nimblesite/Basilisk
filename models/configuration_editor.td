@@ -32,9 +32,7 @@ union TypeshedSettingKey {
   TypeshedPath
   TypeshedCommit
   TypeshedUrl
-  TypeshedCachePath
-  TypeshedCache
-  TypeshedVerify
+  TypeshedStorePath
 }
 
 union TypeshedSettingValue {
@@ -54,40 +52,39 @@ union EditorMutation {
   RemoveTypeshedSetting { key: TypeshedSettingKey }
 }
 
-# The ACTIVE source carries the value that defines it, so "latest with a pin"
-# and "a pinned commit plus a custom folder" cannot be expressed at all
-# ([LSPCFGED-TYPESHED]).
+# The ACTIVE source carries the value that defines it, so "a pinned commit plus
+# a custom folder" cannot be expressed at all. There are exactly two sources:
+# there is no "track latest" source ([LSPCFGED-TYPESHED]).
 union TypeshedSource {
-  Latest
   ExactCommit { commit: String }
   CustomFolder { path: String }
 }
 
-# Download policy exists only for a downloaded source: a user-managed folder
-# downloads nothing, so it has none.
-type TypeshedDownloadPolicy {
-  reuseDownloads: Bool
-  verifyContent: Bool
+# Where downloads land and where pins resolve from. A custom folder uses
+# neither, so it has none.
+type TypeshedStorePolicy {
   archiveUrl: Option<String>
-  cacheFolder: Option<String>
+  storeFolder: Option<String>
 }
 
+# Downloading is the only long-running state, and it is always user-invoked
+# ([LSPCFGED-TYPESHED-DOWNLOAD]). NoSource = the selected source is not on this
+# machine, so analysis does not run.
 union TypeshedLifecycle {
-  Acquiring
+  Downloading
   Ready
-  Blocked
+  NoSource
 }
 
 union TypeshedAction {
-  PinCurrent
-  AcquireFresh
+  DownloadLatest
+  DownloadPinned
   ViewLicense
 }
 
 union TypeshedActiveSource {
   Custom
   ExactCommit
-  Latest
   Bundled
 }
 
@@ -109,7 +106,6 @@ union TypeshedLicenseStatus {
 union TypeshedProvenance {
   Pending
   GithubTlsAttested
-  Unverified
   BundleVetted
   UserManaged
 }
@@ -127,7 +123,7 @@ type TypeshedWarningState {
 
 type TypeshedStatusState {
   lifecycle: TypeshedLifecycle
-  blockedReason: Option<String>
+  noSourceReason: Option<String>
   activeSource: Option<TypeshedActiveSource>
   commitIdentity: Option<String>
   transport: Option<TypeshedTransport>
@@ -138,13 +134,12 @@ type TypeshedStatusState {
 }
 
 # Everything the editor needs, and nothing it can misrender: the one active
-# source, the download policy that source has (none for a custom folder), the
-# commit PinCurrent would write when pinning is possible, and whether a license
-# document exists to open. Labels are client copy, not server state.
+# source, the store policy that source has (none for a custom folder), and
+# whether a license document exists to open. Labels are client copy, not server
+# state.
 type TypeshedConfigurationState {
   source: TypeshedSource
-  downloads: Option<TypeshedDownloadPolicy>
-  pinnableCommit: Option<String>
+  store: Option<TypeshedStorePolicy>
   licenseAvailable: Bool
   status: TypeshedStatusState
 }

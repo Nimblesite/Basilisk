@@ -125,7 +125,7 @@ reorder a resolution step.
 |---|---|---|
 | 1 — manual path head | User `.pyi` in `stub-paths`, generated `.basilisk/stubs/`, and `.pyi` or Python source in manual `extra-paths`; `.pyi` precedes `.py` at each location. These MAY shadow every later step. | `stub-paths`, `extra-paths` |
 | 2 — user code | Workspace `.pyi`/`.py` under roots / `include`, with `.pyi` first. | roots, `include` |
-| 3 — stdlib typeshed | One selected source: a custom `typeshed-path`; otherwise the pinned or latest commit downloaded as an archive; otherwise the bundled stdlib ZIP — the complete typeshed `stdlib/` tree, third-party `stubs/` excluded ([§STUBRES-TYPESHED](#STUBRES-TYPESHED)). | `typeshed-path`, `typeshed-commit`, `typeshed-url`, `typeshed-cache-path`, `typeshed-cache`, `typeshed-verify` |
+| 3 — stdlib typeshed | One selected source, always already on this machine: a custom `typeshed-path`, or the pinned commit — the complete typeshed `stdlib/` tree, third-party `stubs/` excluded ([§STUBRES-TYPESHED](#STUBRES-TYPESHED)). Checking never downloads ([§STUBRES-TYPESHED-OFFLINE](#STUBRES-TYPESHED-OFFLINE)). | `typeshed-path`, `typeshed-commit`, `typeshed-store-path` |
 | 4 — stub-only packages | Installed `foopkg-stubs` / typeshed `types-foopkg` distributions, discovered in site-packages. They supersede an inline-typed install of the same package. | (auto) |
 | 5 — `py.typed` packages | Installed packages shipping a `py.typed` marker (stubs in `.pyi` or inline in `.py`). | (auto) |
 | 6 — vendored third-party stubs | Basilisk vendors none for resolution. The typeshed distribution map drives only the "install stubs" quick fix ([§STUBRES-CODEACTIONS](#STUBRES-CODEACTIONS)). | — |
@@ -153,11 +153,11 @@ Basilisk exposes that source as `typeshed-path`:
 typeshed-path = "typeshed-micropython"
 ```
 
-That directory is the sole step-3 source and disables archive download and the
-bundled ZIP. A missing module continues at step 4; it never falls back
-to another typeshed. Relative paths resolve from the workspace root and stdlib
-stubs live at `<typeshed-path>/stdlib/<module>.pyi`. `stub-paths` remains the
-separate step-1 override; `typeshed-cache-path` only relocates cached downloads.
+That directory is the sole step-3 source and excludes the pin and the bundled
+ZIP. A missing module continues at step 4; it never falls back to another
+typeshed. Relative paths resolve from the workspace root and stdlib stubs live at
+`<typeshed-path>/stdlib/<module>.pyi`. `stub-paths` remains the separate step-1
+override.
 
 ### Resolution flow {#STUBRES-RESOLUTION-FLOW}
 
@@ -173,7 +173,7 @@ flowchart LR
     S1 -- miss --> S2{"2 · user code?"}
     S2 -- hit --> R2["Source"]
     S2 -- miss --> S3{"3 · selected stdlib source?"}
-    S3 -- hit --> R3["Typeshed resolved (custom / archive / bundled ZIP)"]
+    S3 -- hit --> R3["Typeshed resolved (custom folder / pinned local tree)"]
     S3 -- miss --> S4{"4 · stub package?"}
     S4 -- module hit --> R4["StubPackage"]
     S4 -- none --> S5{"5 · py.typed package?"}
@@ -212,27 +212,97 @@ Pyright “ships with a bundled copy of typeshed type stubs”
 ([`microsoft/pyright@1bec65c`](https://github.com/microsoft/pyright/blob/1bec65c15fba26016281d44d977bf667b89b9d30/docs/configuration.md#L23)).
 Basilisk likewise never mixes a source's names, bodies, `VERSIONS`, or indexes.
 
-| Mode | Active source | Failure rule |
+There are exactly **two** sources, both already on this machine when checking
+starts. There is no "track latest" source: freshness is an action a person takes
+([§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD)), never something the
+checker does on their behalf.
+
+| Source | Selected by | Active data |
 |---|---|---|
-| Custom folder | `typeshed-path` verbatim | miss continues to step 4; no other step-3 source |
-| Exact commit | the bundle when it is exactly that SHA (embedded bytes are content-addressed, so no acquisition runs); otherwise the selected archive (content-attested unless waived) | otherwise fail closed |
-| Latest (default) | current `python/typeshed@main`, once per run/session | never reuse old unpinned data; warn and use bundled ZIP |
+| Pinned commit *(default)* | `typeshed-commit`; unset selects the bundled commit | the local tree carrying exactly that SHA — the embedded ZIP when the SHA is the bundled one, else that commit's store entry |
+| Custom folder | `typeshed-path` | that tree verbatim, user-managed |
 
-Latest defaults to freshness and is one source choice — **Pinned commit** — from determinism.
-Custom and bundled are also reported unpinned
-([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)).
+Both fail closed. Custom is reported unpinned
+([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)); a *module* miss in a custom
+tree still continues to step 4.
 
-#### Archive acquisition {#STUBRES-TYPESHED-ACQUIRE}
+#### The checker never downloads {#STUBRES-TYPESHED-OFFLINE}
 
-Basilisk never clones. A pin naming the bundled commit is served from the
-embedded ZIP without any network activity: the commit is content-addressed, so
-the vetted embedded bytes are that source, and consulting the network first
-would only add failure modes and spend rate-limited metadata calls. Every
-other selection resolves official commit → root-tree metadata over
-authenticated HTTPS, then downloads that SHA from GitHub codeload or a
-`typeshed-url` `{sha}` archive mirror. A mirror cannot resolve Latest; if official
-metadata is unavailable and no pin exists, Latest warns and uses the bundled ZIP.
-URLs are redacted in logs.
+Analysis performs no network activity of any kind — structurally, not by
+discipline: the crate the checker links against contains no HTTP client, so the
+analysis path cannot reach the network even by mistake. Step 3 is a local
+lookup: the source is present and verifies, or it is missing/corrupt and the
+checker **fails hard** — it refuses to analyse, names the SHA it needed, and
+never substitutes another source or degrades to an untyped stdlib. That failure
+is service status (CLI stderr, LSP `showMessage` + Service Info, MCP), never a
+Python diagnostic, so it can never create a conformance false positive.
+
+#### A pin is a verification {#STUBRES-TYPESHED-PIN}
+
+A pin does exactly one thing at check time: **proves the local tree is that
+commit**, offline, by hashing bytes already on disk.
+
+1. hash the store entry's saved commit object — it MUST equal the pinned SHA;
+2. read the tree SHA out of that verified commit object;
+3. re-hash the stored tree into Git tree objects — the root MUST equal that SHA.
+
+Verification is **not waivable**: a pin you can switch off is a pin that does
+nothing. The bundle cannot be tree-reconstructed (it is a `stdlib/` subset), so
+it keeps its build-time proof — embedded ZIP SHA-256 plus license manifest
+([§STUBRES-TYPESHED-BASELINE](#STUBRES-TYPESHED-BASELINE)) — and satisfies a pin
+naming its commit.
+
+**Trust boundary.** This proves integrity since acquisition and binds commit→tree
+cryptographically; it cannot prove offline that the SHA is an official typeshed
+commit. That authenticity rests on GitHub/TLS at download time, and typeshed
+publishes no signed release ([Git `commit-tree`](https://git-scm.com/docs/git-commit-tree),
+[GitHub Git-commit API](https://docs.github.com/en/rest/git/commits)). Whoever can
+rewrite the store can rewrite its commit object with it.
+
+#### The store {#STUBRES-TYPESHED-STORE}
+
+One immutable directory per commit under `typeshed-store-path`, read by the
+checker and written only by the download action:
+
+```
+<typeshed-store-path>/<40-hex commit sha>/
+  commit-object   # raw Git commit object; hashes to the directory name
+  manifest.json   # tree SHA, per-path SHA-256, license identity, transport
+  stdlib/… LICENSE NOTICE…
+```
+
+No expiry, no reuse policy, no cache-off mode: an entry is a commit and bytes do
+not go stale. Deleting a directory is the only eviction, and only a download
+recreates it.
+
+#### Downloading is a separate component {#STUBRES-TYPESHED-DOWNLOAD}
+
+Acquisition lives outside the checker and outside the configuration editor. It
+is the only typeshed code that opens a connection, it runs only when a person
+invokes it, and nothing on the analysis path can call it.
+
+| Invocation | Does |
+|---|---|
+| `basilisk typeshed download` / **Download latest** / `DownloadLatest` | resolve `main` → SHA, acquire it, **write that SHA as `typeshed-commit`** |
+| `basilisk typeshed download --commit <sha>` / `DownloadPinned` | acquire the SHA the config already names; writes no config |
+
+Download-pinned is how a teammate or a fresh CI machine materialises someone
+else's pin; without it a shared pin is unusable on a machine that never
+downloaded it.
+
+Basilisk still never clones: resolve official commit → root-tree metadata over
+authenticated HTTPS, download that SHA from GitHub codeload or a `typeshed-url`
+`{sha}` mirror, run the gates below, reconstruct the commit object and assert it
+hashes to the requested SHA, then dump the accepted tree into the store. A mirror
+cannot resolve `main`. A download that fails at any step writes **nothing** — no
+partial entry, no unverified entry, no config change. URLs are redacted in logs.
+
+| Gate | Rule |
+|---|---|
+| Safety | reject absolute/`..` paths, escaping links, duplicate entries, and entry/decompressed-size limits |
+| Shape | require one coherent stdlib tree, `VERSIONS`, and license metadata |
+| License | path+SHA-256 manifest for relevant root/nested `LICENSE*`/`NOTICE*` must match a build-approved identity; drift blocks activation for review |
+| Content | reconstruct Git trees and match the commit's root-tree SHA |
 
 **Credential.** Requests carry `Authorization: Bearer` from `GITHUB_TOKEN` or
 `GH_TOKEN` when either is set to a non-blank value — the names GitHub Actions and
@@ -242,40 +312,8 @@ exhausts; an authenticated caller gets a much larger per-token budget
 ([GitHub rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)).
 The credential is sent ONLY to `api.github.com` and `codeload.github.com`, matched
 on the parsed authority. A `typeshed-url` mirror is third-party infrastructure and
-is always contacted anonymously, so the token is never disclosed outside the trust
-boundary it was issued for. The token value is never logged, never rendered in
-debug output, and never included in an error; only its presence is recorded.
-
-**Security boundary.** A pin is not an archive checksum or provenance proof:
-Git defines a commit from a tree object ([Git `commit-tree`](https://git-scm.com/docs/git-commit-tree)),
-and GitHub reports commit and tree SHAs separately ([GitHub Git-commit API](https://docs.github.com/en/rest/git/commits)).
-Initial verification therefore authenticates GitHub commit→tree metadata and
-reconstructs that tree from the consumed bytes. Cache rehashing proves only
-local consistency; a hostile cache can replace ZIP and metadata, and typeshed
-has no signed release. Custom or verification-disabled sources are `UNVERIFIED`,
-never represented as official.
-
-Decompression enforces entry and size caps before four activation gates run.
-Accepted bytes are cached as an immutable ZIP and read through an archive VFS:
-
-| Gate | Rule |
-|---|---|
-| Safety | reject absolute/`..` paths, escaping links, duplicate entries, and entry/decompressed-size limits |
-| Shape | require one coherent stdlib tree, `VERSIONS`, and license metadata |
-| License | path+SHA-256 manifest for relevant root/nested `LICENSE*`/`NOTICE*` must match a build-approved identity; drift blocks activation for review |
-| Content | reconstruct Git trees and match the trusted root-tree SHA; only this gate may be waived |
-
-First acquisition records the accepted ZIP's SHA-256. Reuse hashes the cached
-ZIP, detecting mutation without extraction; `.pyi` is read from that same ZIP.
-Cache metadata records whether content verification ran; enabling it later MUST
-rerun the content gate before the archive can be reported as verified.
-The exact commit identity never expires. The 24-hour expiry bounds reuse of
-unpinned downloaded ZIP bytes only. Bytes for an explicitly pinned exact commit
-are reused regardless of age because the commit is content-addressed, and every
-reuse re-hashes the ZIP against its recorded SHA-256. Expiry, explicit eviction,
-or `typeshed-cache = false` reacquires the same selected SHA and reruns all gates. Disabling verification reports
-`UNVERIFIED` and never disables safety, shape, or license review. A fresh
-unpinned download is not hermetic.
+is always contacted anonymously. The token value is never logged, never rendered
+in debug output, and never included in an error; only its presence is recorded.
 
 #### Bundled ZIP snapshot {#STUBRES-TYPESHED-BASELINE}
 
@@ -313,12 +351,11 @@ Basilisk reports `active_source` plus an ordered `warnings[]`; warnings compose.
 
 | Condition | Persistent status |
 |---|---|
-| Latest or bundled without explicit commit | `UNPINNED — choose the pinned-commit source to make this reproducible` |
-| Custom folder | `UNPINNED — folder contents can change; version or content-address the folder externally` |
-| Latest could not resolve, download, or validate | `DOWNLOAD FAILED — using bundled <sha>; may be behind upstream` |
+| no explicit `typeshed-commit` (the bundled commit is a build-time pin, not a user pin) | `UNPINNED — pin a commit to make this reproducible` |
+| custom folder | `UNPINNED — folder contents can change; version or content-address the folder externally` |
+| custom folder | `USER-MANAGED SOURCE — license and contents supplied by user` |
 | approved license/NOTICE identity changed | `LICENSE CHANGED — Basilisk update/review required` |
-| content verification disabled | `UNVERIFIED — contents were not checked against the selected tree` |
-| custom path | `USER-MANAGED SOURCE — license and contents supplied by user` |
+| pinned commit absent from the store, or verification failed | `NO SOURCE — <sha> is not on this machine; run Download latest or basilisk typeshed download --commit <sha>` — analysis does not run |
 
 CLI uses a stderr status banner without contaminating machine diagnostics; LSP
 uses `window/showMessage` plus persistent Service Info, never
@@ -333,20 +370,20 @@ immutable license reference (or custom `not supplied`), and ordered `warnings[]`
 The only typing-spec-facing setting is the custom canonical path named by pinned
 step 3
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst));
-the rest govern download, caching, and verification, which the specification
-leaves open. Every one is exposed as a control in the configuration UI
+the rest govern the pin and where downloads land, which the specification leaves
+open. Every one is exposed as a control in the configuration UI
 ([§LSPCFGED-TYPESHED](LSP-CONFIGURATION-EDITOR-SPEC.md#LSPCFGED-TYPESHED)).
 
-| Config key / flag | Type | Default | Meaning |
-|---|---|---|---|
-| `typeshed-commit` | full SHA | unset | Exact commit; unset selects Latest. |
-| `typeshed-url` | URL template | GitHub codeload | Codeload-compatible archive mirror containing `{sha}` and one common top-level directory; does not resolve Latest. |
-| `typeshed-cache-path` | path | OS cache | Cached gate-accepted ZIPs. |
-| `typeshed-cache` | bool | `true` | Reuse a re-hashed accepted downloaded ZIP for 24 hours when unpinned, or until evicted when pinned to an exact commit; false downloads, validates, and discards. |
-| `typeshed-path` | `string` | _(unset)_ | Supply the canonical custom step-3 tree; disables download and the bundled ZIP. |
-| `typeshed-verify` | bool | `true` | Content attestation; false reports `UNVERIFIED`. |
-| `--no-typeshed-cache` | flag | off | One-run `typeshed-cache = false`. |
-| `--no-typeshed-verification` | flag | off | One-run `typeshed-verify = false`; never bypasses other gates. |
+| Config key | Type | Default | Meaning | Read by |
+|---|---|---|---|---|
+| `typeshed-commit` | full SHA | unset _(= the bundled commit)_ | The pinned commit, verified offline. | checker |
+| `typeshed-path` | `string` | _(unset)_ | The canonical custom step-3 tree; excludes the pin and the bundle. | checker |
+| `typeshed-store-path` | path | OS cache | Where downloads are dumped and pins are resolved. | both |
+| `typeshed-url` | URL template | GitHub codeload | Codeload-compatible `{sha}` archive mirror; cannot resolve `main`. | download only |
+
+There are no cache-reuse, expiry, or verification-waiver settings, and no
+one-run flags: nothing is cached, nothing expires, and a pin always verifies
+([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)).
 
 #### Target Python version {#STUBRES-TYPESHED-VERSION}
 
