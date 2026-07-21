@@ -43,6 +43,17 @@ if ! command -v pytest &>/dev/null; then
 fi
 ok "pytest: $(pytest --version 2>&1 | head -1)"
 
+# The tests/dap specs drive the real debug adapter, which launches debugpy.
+# Without it the LSP answers every startDebugSession with "debugpy not found"
+# and ~20 specs fail on assertions that look unrelated to the missing package.
+# Fail here instead, with the fix in the message.
+if ! python3 -c "import debugpy" &>/dev/null; then
+    echo -e "${RED}${BOLD}FATAL: debugpy not found — the DAP specs cannot run.${RESET}"
+    echo -e "${RED}Install it: python3 -m pip install debugpy==1.8.14${RESET}"
+    exit 1
+fi
+ok "debugpy: $(python3 -c 'import debugpy; print(debugpy.__version__)' 2>&1)"
+
 cd "$REPO_ROOT/basilisk.nvim"
 
 # Ensure plenary.nvim is available.

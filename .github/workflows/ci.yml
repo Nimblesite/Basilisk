@@ -555,9 +555,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install pytest and luarocks
+      - name: Install pytest, debugpy and luarocks
         run: |
-          pip install pytest==9.1.1
+          # debugpy is a real dependency of this job, not a nicety: the
+          # tests/dap specs drive basilisk's debug adapter end to end, and
+          # without it every one of them fails with "debugpy not found".
+          # Pinned to the same version as test-vscode and the devcontainer.
+          pip install pytest==9.1.1 debugpy==1.8.14
           sudo apt-get install -y luarocks
           luarocks install --local luacov
 
