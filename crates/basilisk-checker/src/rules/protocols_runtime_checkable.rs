@@ -1,4 +1,4 @@
-//! Implements [`protocols_runtime_checkable`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`protocols_runtime_checkable`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `protocols_runtime_checkable`: Protocol `isinstance`/`issubclass` violations.
 //!
 //! Per PEP 544:

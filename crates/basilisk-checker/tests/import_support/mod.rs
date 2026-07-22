@@ -17,9 +17,7 @@ use basilisk_resolver::scope::{ImportKind, ImportResolution};
 use basilisk_stubs::typeshed::archive::{Archive, ArchiveEntry, ArchiveVfs};
 use basilisk_stubs::typeshed::gittree::FileMode;
 use basilisk_stubs::typeshed::snapshot::Snapshot;
-use basilisk_stubs::typeshed::source::{
-    LicenseStatus, Provenance, SourceIdentity, SourceKind, Transport, TypeshedStatus,
-};
+use basilisk_stubs::typeshed::source::{LicenseStatus, SourceIdentity, SourceKind, TypeshedStatus};
 
 static TEST_CTR: AtomicU64 = AtomicU64::new(0);
 
@@ -89,11 +87,8 @@ pub fn custom_typeshed_snapshot(files: &[(&str, &str)]) -> ActiveTypeshed {
         active_source: SourceKind::Custom,
         commit: None,
         tree: None,
-        transport: Transport::CustomPath,
         license_status: LicenseStatus::NotSupplied,
         license_reference: None,
-        provenance: Provenance::UserManaged,
-        signed_release: false,
         warnings: Vec::new(),
     };
     let uri_identity = identity.uri_component();

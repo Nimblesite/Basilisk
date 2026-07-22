@@ -1,4 +1,4 @@
-//! Implements [BSK-0025] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [BSK-0025] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! BSK-0025: Missing `@override` decorator.
 //!
 //! When a class overrides a method that is also defined in one of its base

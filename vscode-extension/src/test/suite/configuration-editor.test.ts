@@ -272,8 +272,8 @@ suite("Configuration editor — typed mutation routing", () => {
       { kind: "RemoveTag", tag: "basilisk" },
     ];
     const typeshedMutations: EditorMutation[] = [
-      { kind: "SetTypeshedSetting", key: { kind: "TypeshedCache" }, value: { kind: "Boolean", value: true } },
-      { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedUrl" } },
+      { kind: "SetTypeshedSetting", key: { kind: "TypeshedStorePath" }, value: "/stores/typeshed" },
+      { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedCommit" } },
     ];
     for (const mutation of [...ruleMutations, ...typeshedMutations]) {
       const store = createStore();
@@ -313,18 +313,18 @@ suite("Configuration editor — typed mutation routing", () => {
     }
   });
 
-  test("routes Typeshed actions with the snapshot revision", async () => {
+  test("routes Typeshed download actions with the snapshot revision", async () => {
     const store = createStore();
     const transport = new RecordingTransport();
     const controller = new ConfigurationEditorController(store, transport);
     try {
       controller.open(ROOT_URI);
       await pollUntil(() => store.configurationEditor.value.phase === "ready");
-      await controller.receive({ type: "typeshedAction", action: "AcquireFresh" });
+      await controller.receive({ type: "typeshedAction", action: "DownloadPinned" });
       assert.deepStrictEqual(transport.typeshedActionRequests, [{
         rootUri: ROOT_URI,
         baseRevision: "revision-1",
-        action: { kind: "AcquireFresh" },
+        action: { kind: "DownloadPinned" },
       }]);
       assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-typeshed");
     } finally {
@@ -341,7 +341,7 @@ suite("Configuration editor — typed mutation routing", () => {
     try {
       controller.open(ROOT_URI);
       await pollUntil(() => store.configurationEditor.value.phase === "ready");
-      const action = controller.receive({ type: "typeshedAction", action: "AcquireFresh" });
+      const action = controller.receive({ type: "typeshedAction", action: "DownloadLatest" });
       await pollUntil(() => transport.typeshedActionRequests.length === 1);
       transport.snapshotResult = configurationSnapshot("revision-newer");
       await controller.receive({ type: "refresh" });
@@ -349,6 +349,82 @@ suite("Configuration editor — typed mutation routing", () => {
       await action;
       assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-newer");
     } finally {
+      controller.dispose();
+    }
+  });
+
+  // The reported failure ("I tapped Download pinned and it didn't do shit"):
+  // the server sends the transient Downloading status BEFORE it downloads, and
+  // that notification triggers a snapshot refresh which bumps the load
+  // generation — so when the download subsequently FAILED, the stale-generation
+  // guard swallowed the error and the panel silently snapped back to NO
+  // SOURCE. A failed download must never be indistinguishable from a dead
+  // button: the failure must reach the user regardless of any racing refresh.
+  test("a Typeshed download failure is surfaced even when a status refresh raced the action", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    let failAction: ((error: Error) => void) | undefined;
+    transport.typeshedActionHandler = async () =>
+      new Promise((_resolve, reject) => { failAction = reject; });
+    const shownErrors: string[] = [];
+    const originalShowError = vscode.window.showErrorMessage;
+    (vscode.window as { showErrorMessage: unknown }).showErrorMessage = async (
+      message: string,
+    ): Promise<undefined> => { shownErrors.push(message); return undefined; };
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      const action = controller.receive({ type: "typeshedAction", action: "DownloadPinned" });
+      await pollUntil(() => transport.typeshedActionRequests.length === 1);
+      // The server's Downloading notification triggers exactly this refresh
+      // while the download is still running ([LSPCFGED-TYPESHED-DOWNLOAD]).
+      await controller.receive({ type: "refresh" });
+      failAction?.(new Error("the typeshed download failed: connection reset"));
+      await action;
+      assert.strictEqual(shownErrors.length, 1, "the download failure must be shown to the user");
+      assert.ok(
+        shownErrors[0]?.includes("connection reset"),
+        `the shown error must carry the failure reason: ${shownErrors[0] ?? "<none>"}`,
+      );
+    } finally {
+      (vscode.window as { showErrorMessage: unknown }).showErrorMessage = originalShowError;
+      controller.dispose();
+    }
+  });
+});
+
+suite("Configuration editor — Typeshed action failure classification", () => {
+  test("a Typeshed revision conflict routes to the soft conflict phase and pops no hard error toast", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    // A revision conflict is a retryable state, not a failure: the base
+    // revision moved under the action. It must NOT surface as a hard error
+    // toast — only genuine failures do ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+    transport.typeshedActionHandler = async () =>
+      Promise.reject(
+        Object.assign(new Error("configuration changed since preview"), {
+          data: { kind: "revisionConflict" },
+        }),
+      );
+    const shownErrors: string[] = [];
+    const originalShowError = vscode.window.showErrorMessage;
+    (vscode.window as { showErrorMessage: unknown }).showErrorMessage = async (
+      message: string,
+    ): Promise<undefined> => { shownErrors.push(message); return undefined; };
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      await controller.receive({ type: "typeshedAction", action: "DownloadPinned" });
+      await pollUntil(() => store.configurationEditor.value.phase === "conflict");
+      assert.strictEqual(
+        shownErrors.length,
+        0,
+        `a revision conflict must not pop a hard error toast: ${shownErrors[0] ?? "<none>"}`,
+      );
+    } finally {
+      (vscode.window as { showErrorMessage: unknown }).showErrorMessage = originalShowError;
       controller.dispose();
     }
   });
@@ -384,25 +460,39 @@ suite("Configuration editor — direct Typeshed writes and discarded previews", 
     }
   });
 
-  // Pinning is a source choice: the server's preview is applied at once, so
-  // the pinned source the user selected is the source they get.
-  test("PinCurrent applies the server's pin preview without a review step", async () => {
+  // A download is not a configuration edit ([LSPCFGED-TYPESHED-DOWNLOAD]):
+  // the action returns the refreshed snapshot at once (lifecycle Downloading)
+  // with no preview, no apply, and no review step — the editor stays fully
+  // interactive while the download runs.
+  test("DownloadLatest accepts the refreshed Downloading snapshot without preview or apply", async () => {
     const store = createStore();
     const transport = new RecordingTransport();
-    transport.typeshedActionResult = { kind: "Preview", preview: configurationPreview() };
+    transport.typeshedActionResult = {
+      kind: "Snapshot",
+      snapshot: {
+        ...configurationSnapshot("revision-downloading"),
+        typeshed: typeshedFixture({ downloading: true }),
+      },
+    };
     const controller = new ConfigurationEditorController(store, transport);
     try {
       controller.open(ROOT_URI);
       await pollUntil(() => store.configurationEditor.value.phase === "ready");
-      await controller.receive({ type: "typeshedAction", action: "PinCurrent" });
+      await controller.receive({ type: "typeshedAction", action: "DownloadLatest" });
       assert.deepStrictEqual(transport.typeshedActionRequests, [{
         rootUri: ROOT_URI,
         baseRevision: "revision-1",
-        action: { kind: "PinCurrent" },
+        action: { kind: "DownloadLatest" },
       }]);
-      assert.deepStrictEqual(transport.applyRequests, [{ rootUri: ROOT_URI, previewId: "preview-1" }]);
-      assert.strictEqual(store.configurationEditor.value.phase, "ready");
-      assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-2");
+      assert.deepStrictEqual(transport.previewRequests, [], "a download never opens a preview");
+      assert.deepStrictEqual(transport.applyRequests, [], "a download never applies a configuration edit");
+      assert.strictEqual(store.configurationEditor.value.phase, "ready", "the editor stays interactive");
+      assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-downloading");
+      assert.strictEqual(
+        store.configurationEditor.value.snapshot?.typeshed.status.lifecycle.kind,
+        "Downloading",
+        "the snapshot carries the running download for the button spinner",
+      );
       assert.strictEqual(store.configurationEditor.value.preview, undefined);
     } finally {
       controller.dispose();
@@ -584,15 +674,15 @@ suite("Configuration editor — transaction lifecycle", () => {
   test("a Typeshed source choice survives the apply invalidation that precedes its response", async () => {
     const store = createStore();
     const transport = new RecordingTransport();
-    const pinned = {
+    const custom = {
       ...configurationSnapshot("revision-1"),
-      typeshed: typeshedFixture({ source: { kind: "ExactCommit", commit: "83c2518a9e6abbda0c44592c3483de459198f887" } }),
+      typeshed: typeshedFixture({ source: { kind: "CustomFolder", path: "/workspace/vendor/typeshed" } }),
     };
-    const latest = {
+    const pinned = {
       ...configurationSnapshot("revision-2"),
-      typeshed: typeshedFixture({ source: { kind: "Latest" } }),
+      typeshed: typeshedFixture(),
     };
-    transport.snapshotResult = pinned;
+    transport.snapshotResult = custom;
     transport.previewResult = { ...configurationPreview(), typeshedChanges: [] };
     let finishApply: ((snapshot: ConfigurationSnapshot) => void) | undefined;
     transport.applyHandler = async () => new Promise<ConfigurationSnapshot>((resolve) => { finishApply = resolve; });
@@ -601,10 +691,9 @@ suite("Configuration editor — transaction lifecycle", () => {
       controller.open(ROOT_URI);
       await pollUntil(() => store.configurationEditor.value.phase === "ready");
 
-      const chooseLatest = controller.receive({
+      const choosePinned = controller.receive({
         type: "preview",
         mutations: [
-          { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedCommit" } },
           { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedPath" } },
         ],
       });
@@ -612,12 +701,12 @@ suite("Configuration editor — transaction lifecycle", () => {
 
       store.markConfigurationChanged({ rootUri: ROOT_URI, revision: "revision-2" });
       await pollUntil(() => transport.snapshotRequests.length === 2);
-      finishApply?.(latest);
-      await chooseLatest;
+      finishApply?.(pinned);
+      await choosePinned;
 
       assert.strictEqual(store.configurationEditor.value.phase, "ready");
       assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-2");
-      assert.strictEqual(store.configurationEditor.value.snapshot?.typeshed.source.kind, "Latest");
+      assert.strictEqual(store.configurationEditor.value.snapshot?.typeshed.source.kind, "ExactCommit");
     } finally {
       controller.dispose();
     }

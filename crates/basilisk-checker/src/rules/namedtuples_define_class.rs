@@ -1,4 +1,4 @@
-//! Implements [`namedtuples_define_class`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`namedtuples_define_class`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `namedtuples_define_class`: `NamedTuple` class definition errors.
 //!
 //! Detects several categories of `NamedTuple` definition errors:

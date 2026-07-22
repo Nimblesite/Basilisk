@@ -1,4 +1,4 @@
-//! Implements [`dataclasses_postinit`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`dataclasses_postinit`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `dataclasses_postinit`: `InitVar` field validation in dataclasses.
 //!
 //! Detects two categories of `InitVar` violations:

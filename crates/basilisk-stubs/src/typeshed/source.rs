@@ -4,11 +4,14 @@
 //!
 //! `basilisk-stubs` never depends on `basilisk-config`: the CLI/LSP build a
 //! config-free [`TypeshedRequest`] from `[tool.basilisk]` and hand it to the
-//! acquisition orchestrator. The orchestrator produces a [`SourceIdentity`]
+//! resolution layer, which only ever reads sources already on this machine
+//! ([STUBRES-TYPESHED-OFFLINE]). Resolution produces a [`SourceIdentity`]
 //! (shared by status, cache fingerprinting, and the VFS) and a
 //! [`TypeshedStatus`] reported verbatim by every surface — CLI banner, LSP
 //! Service Info, and MCP. Status is **never a Python diagnostic**, so it can
 //! never create a conformance false positive ([STUBRES-TYPESHED-WARN]).
+
+use std::path::PathBuf;
 
 use serde::Serialize;
 
@@ -21,10 +24,8 @@ use super::warning::{canonicalize, TypeshedWarning, WarningSeverity};
 pub enum SourceKind {
     /// A custom `typeshed-path` folder (user-managed).
     Custom,
-    /// An explicit `typeshed-commit` archive (reproducible).
+    /// An explicit `typeshed-commit` served from the local store (reproducible).
     ExactCommit,
-    /// The latest `python/typeshed@main` archive (unpinned).
-    Latest,
     /// The bundled offline snapshot (unpinned unless it equals a user pin).
     Bundled,
 }
@@ -36,24 +37,9 @@ impl SourceKind {
         match self {
             Self::Custom => "custom",
             Self::ExactCommit => "exact-commit",
-            Self::Latest => "latest",
             Self::Bundled => "bundled",
         }
     }
-}
-
-/// How the active source's bytes were obtained.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Transport {
-    /// A user-managed filesystem tree selected by `typeshed-path`.
-    CustomPath,
-    /// The build-vetted ZIP embedded in the Basilisk artifact.
-    EmbeddedZip,
-    /// GitHub codeload archive over HTTPS.
-    Codeload,
-    /// A configured `typeshed-url` `{sha}` archive mirror over HTTPS.
-    Mirror,
 }
 
 /// The license standing of the active source ([STUBRES-TYPESHED-LICENSE]).
@@ -68,36 +54,17 @@ pub enum LicenseStatus {
     NotSupplied,
 }
 
-/// The provenance strength behind the active source.
-///
-/// Integrity (bytes match a SHA) is never authenticity (the SHA is an official
-/// typeshed release): no typeshed release signature exists, so official
-/// provenance ultimately rests on GitHub/TLS ([STUBRES-TYPESHED-ACQUIRE]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Provenance {
-    /// Content attested against a tree bound to a commit by GitHub/TLS metadata.
-    /// There is no signed typeshed release, so authenticity rests on GitHub/TLS.
-    GithubTlsAttested,
-    /// Content was not attested against the selected tree.
-    Unverified,
-    /// A build-vetted bundled snapshot (verified by embedded ZIP digest + manifest).
-    BundleVetted,
-    /// A user-managed custom source; Basilisk attests nothing about it.
-    UserManaged,
-}
-
 /// The immutable identity of the active step-3 source, shared by status, cache
 /// fingerprinting, and the VFS. Two sources are the same iff their identity is
 /// equal, so it is a valid cache key and a safe URI component.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "kebab-case", tag = "kind")]
 pub enum SourceIdentity {
-    /// An explicit or resolved commit, identified by its full commit SHA.
+    /// A pinned commit, identified by its full commit SHA.
     Commit {
         /// The full 40-hex commit SHA.
         commit: Oid,
-        /// Whether the user pinned it (`true`) or it was resolved from `main`.
+        /// Whether the user pinned it (`true`) or it is the bundled default.
         pinned: bool,
     },
     /// The bundled snapshot, identified by its build-time commit SHA.
@@ -143,6 +110,10 @@ impl SourceIdentity {
 }
 
 /// Which source the user configured, free of any `basilisk-config` type.
+///
+/// There are exactly **two** sources ([STUBRES-TYPESHED]): a pinned commit or a
+/// custom folder. There is no "track latest" selection — freshness is the
+/// separate, user-invoked download component ([STUBRES-TYPESHED-DOWNLOAD]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceSelection {
     /// A custom `typeshed-path` folder (resolved, absolute).
@@ -150,38 +121,29 @@ pub enum SourceSelection {
         /// The resolved custom path.
         path: String,
     },
-    /// An explicit `typeshed-commit`.
-    ExactCommit {
-        /// The pinned full commit SHA.
+    /// A pinned commit, verified offline ([STUBRES-TYPESHED-PIN]).
+    Pinned {
+        /// The full commit SHA.
         commit: Oid,
+        /// `true` for an explicit `typeshed-commit`; `false` when the pin is
+        /// the bundled default an unset key resolves to (still `UNPINNED`).
+        explicit: bool,
     },
-    /// No pin — resolve and download the latest `main`.
-    Latest,
 }
 
-/// A config-free acquisition request the CLI/LSP builds from `[tool.basilisk]`.
-#[derive(Clone, PartialEq, Eq)]
+/// A config-free resolution request the CLI/LSP builds from `[tool.basilisk]`.
+///
+/// Everything named here is already on this machine: resolution never opens a
+/// network connection ([STUBRES-TYPESHED-OFFLINE]). There are no cache-reuse,
+/// expiry, or verification-waiver fields — a pin always verifies
+/// ([STUBRES-TYPESHED-PIN]).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeshedRequest {
-    /// Which source to use.
+    /// Which source to resolve.
     pub selection: SourceSelection,
-    /// Run the Content gate (`false` waives only content attestation).
-    pub verify_content: bool,
-    /// Reuse the on-disk immutable-ZIP cache.
-    pub use_cache: bool,
-    /// A `typeshed-url` `{sha}` archive-mirror template, if configured.
-    pub url_template: Option<String>,
-}
-
-impl std::fmt::Debug for TypeshedRequest {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("TypeshedRequest")
-            .field("selection", &self.selection)
-            .field("verify_content", &self.verify_content)
-            .field("use_cache", &self.use_cache)
-            .field("mirror_configured", &self.url_template.is_some())
-            .finish()
-    }
+    /// The content-addressed store to resolve pins from
+    /// ([STUBRES-TYPESHED-STORE]); `None` selects the per-user OS default.
+    pub store_path: Option<PathBuf>,
 }
 
 /// A warning projected into `{code, message, severity}` for machine surfaces.
@@ -216,6 +178,11 @@ impl StatusWarning {
 }
 
 /// The complete, serializable typeshed source status shared by CLI, LSP, and MCP.
+///
+/// The active source is the whole trust story — custom = user-managed, bundled
+/// = build-vetted, exact commit = attested at download and re-proven offline —
+/// so there are no separate transport or provenance fields
+/// ([STUBRES-TYPESHED-WARN]).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TypeshedStatus {
     /// Which source is serving step 3.
@@ -226,25 +193,16 @@ pub struct TypeshedStatus {
     /// The verified root-tree SHA, when content was attested.
     #[serde(rename = "tree_identity")]
     pub tree: Option<Oid>,
-    /// How the bytes were transported.
-    pub transport: Transport,
     /// License standing.
     pub license_status: LicenseStatus,
     /// Immutable license reference (a pinned URL), or `None` for `not supplied`.
     pub license_reference: Option<String>,
-    /// Provenance strength and trust boundary.
-    pub provenance: Provenance,
-    /// Whether the activated source was authenticated as a signed release.
-    ///
-    /// Typeshed currently publishes commits and archives rather than signed
-    /// releases, so every built-in acquisition path reports `false`.
-    pub signed_release: bool,
     /// Ordered, composable status warnings.
     pub warnings: Vec<StatusWarning>,
 }
 
 impl TypeshedStatus {
-    /// Whether any warning is elevated (fallback, blocked, or unverified).
+    /// Whether any warning is elevated (e.g. blocked license drift).
     #[must_use]
     pub fn has_high_severity(&self) -> bool {
         self.warnings
@@ -268,6 +226,7 @@ mod tests {
     fn source_kind_labels_are_stable() {
         assert_eq!(SourceKind::ExactCommit.as_str(), "exact-commit");
         assert_eq!(SourceKind::Bundled.as_str(), "bundled");
+        assert_eq!(SourceKind::Custom.as_str(), "custom");
     }
 
     #[test]
@@ -307,21 +266,18 @@ mod tests {
     #[test]
     fn status_projects_and_orders_warnings() {
         let warnings = StatusWarning::list(&[
-            TypeshedWarning::Unpinned(UnpinnedKind::LatestOrBundled),
-            TypeshedWarning::Unverified,
+            TypeshedWarning::LicenseChanged,
+            TypeshedWarning::Unpinned(UnpinnedKind::BundledDefault),
         ]);
-        // Canonical spec-table order: UNPINNED precedes UNVERIFIED.
+        // Canonical spec-table order: UNPINNED precedes LICENSE CHANGED.
         let codes: Vec<&str> = warnings.iter().map(|w| w.code.as_str()).collect();
-        assert_eq!(codes, vec!["UNPINNED", "UNVERIFIED"]);
+        assert_eq!(codes, vec!["UNPINNED", "LICENSE CHANGED"]);
         let status = TypeshedStatus {
-            active_source: SourceKind::Latest,
-            commit: None,
+            active_source: SourceKind::Bundled,
+            commit: oid(),
             tree: None,
-            transport: Transport::Codeload,
             license_status: LicenseStatus::Approved,
             license_reference: None,
-            provenance: Provenance::Unverified,
-            signed_release: false,
             warnings,
         };
         assert!(status.has_high_severity());
@@ -333,13 +289,10 @@ mod tests {
             active_source: SourceKind::ExactCommit,
             commit: oid(),
             tree: None,
-            transport: Transport::Codeload,
             license_status: LicenseStatus::Approved,
             license_reference: Some(
                 "https://github.com/python/typeshed/blob/83c2518/LICENSE".to_owned(),
             ),
-            provenance: Provenance::GithubTlsAttested,
-            signed_release: false,
             warnings: vec![],
         };
         let value = serde_json::to_value(&status);
@@ -354,15 +307,11 @@ mod tests {
                 json.get("commit_identity").and_then(|v| v.as_str()),
                 Some(FULL_SHA)
             );
-            assert_eq!(
-                json.get("provenance").and_then(|v| v.as_str()),
-                Some("github-tls-attested")
-            );
-            assert_eq!(
-                json.get("signed_release")
-                    .and_then(serde_json::Value::as_bool),
-                Some(false)
-            );
+            // The active source IS the trust story: no transport/provenance/
+            // signed-release fields exist to drift out of sync with it.
+            for retired in ["transport", "provenance", "signed_release"] {
+                assert!(json.get(retired).is_none(), "retired field: {retired}");
+            }
         }
     }
 }

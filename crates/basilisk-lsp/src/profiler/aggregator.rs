@@ -135,6 +135,17 @@ fn is_runtime_scaffolding(filename: &str, function: &str) -> bool {
     {
         return true;
     }
+    // The stdlib thread-bootstrap spine. Every non-main thread starts inside
+    // `Thread._bootstrap`, so keeping it roots each thread's flame chart three
+    // rows above the code the user wrote, and — because the debugger's own
+    // housekeeping threads are started by the stdlib too — leaves a
+    // debugpy-only thread non-empty, so it survives as pure machinery instead
+    // of being dropped. Only the bootstrap trio qualifies: a genuine
+    // `threading` wait (`join`, `acquire`) is behaviour the user asked about,
+    // and a user's own `run` override lives in the user's file, not here.
+    if basename == "threading.py" {
+        return matches!(function, "_bootstrap" | "_bootstrap_inner" | "run");
+    }
     normalized
         .split('/')
         .any(|segment| segment == "debugpy" || segment == "pydevd")

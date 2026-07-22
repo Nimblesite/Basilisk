@@ -1,4 +1,5 @@
-//! Unit tests for configuration-editor protocol guards.
+//! Unit tests for configuration-editor protocol guards and the atomic
+//! Typeshed configuration transaction ([LSPCFGED-TYPESHED]).
 
 use basilisk_config::{BasiliskConfig, ConfigDocument};
 
@@ -58,47 +59,15 @@ fn snapshot_guards_reject_cross_mode_and_cross_commit_actions() {
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
-fn latest_snapshot(
-    commit: basilisk_stubs::typeshed::gittree::Oid,
-) -> TestResult<basilisk_stubs::typeshed::snapshot::Snapshot> {
-    use basilisk_stubs::typeshed::archive::ArchiveVfs;
-    use basilisk_stubs::typeshed::snapshot::Snapshot;
-    use basilisk_stubs::typeshed::source::{
-        Provenance, SourceIdentity, SourceKind, StatusWarning, Transport,
-    };
-    use basilisk_stubs::typeshed::warning::{TypeshedWarning, UnpinnedKind};
+type ClientMessages = tokio::sync::mpsc::UnboundedReceiver<(String, serde_json::Value)>;
 
-    let bundled = basilisk_stubs::typeshed::bundle::bundled_snapshot()?;
-    let archive = bundled.vfs.archive().clone();
-    let tree = archive.root_tree_oid()?;
-    let identity = SourceIdentity::Commit {
-        commit,
-        pinned: false,
-    };
-    let mut status = bundled.status.clone();
-    status.active_source = SourceKind::Latest;
-    status.commit = Some(commit);
-    status.tree = Some(tree);
-    status.transport = Transport::Codeload;
-    status.provenance = Provenance::GithubTlsAttested;
-    status.license_reference = Some(format!(
-        "https://github.com/python/typeshed/blob/{}/LICENSE",
-        commit.to_hex()
-    ));
-    status.warnings =
-        StatusWarning::list(&[TypeshedWarning::Unpinned(UnpinnedKind::LatestOrBundled)]);
-    let identity_key = identity.uri_component();
-    Ok(Snapshot::build(
-        identity,
-        status,
-        ArchiveVfs::new(identity_key, archive),
-        None,
-    )?)
-}
-
-async fn initialized_test_service() -> TestResult<(
+/// Spin up an initialized in-process server whose client pump records every
+/// client-bound message and answers `workspace/applyEdit` with `approve`.
+async fn initialized_test_service(
+    approve_edits: bool,
+) -> TestResult<(
     tower_lsp::LspService<crate::server::LspServer>,
-    tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>,
+    ClientMessages,
     tokio::task::JoinHandle<()>,
 )> {
     use futures_util::{SinkExt as _, StreamExt as _};
@@ -106,17 +75,17 @@ async fn initialized_test_service() -> TestResult<(
 
     let (mut service, socket) = tower_lsp::LspService::new(crate::server::LspServer::new);
     let (mut requests, mut responses) = socket.split();
-    let (apply_tx, apply_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
     let pump = tokio::spawn(async move {
         while let Some(request) = requests.next().await {
+            let method = request.method().to_owned();
+            let params = request.params().cloned().unwrap_or(serde_json::Value::Null);
+            let _ = message_tx.send((method.clone(), params));
             let Some(id) = request.id().cloned() else {
                 continue;
             };
-            let result = if request.method() == "workspace/applyEdit" {
-                if let Some(params) = request.params().cloned() {
-                    let _ = apply_tx.send(params);
-                }
-                serde_json::json!({ "applied": true })
+            let result = if method == "workspace/applyEdit" {
+                serde_json::json!({ "applied": approve_edits })
             } else {
                 serde_json::Value::Null
             };
@@ -153,44 +122,274 @@ async fn initialized_test_service() -> TestResult<(
     if let Some(watcher) = service.inner().config_watcher.lock().await.take() {
         watcher.abort();
     }
-    Ok((service, apply_rx, pump))
+    Ok((service, message_rx, pump))
 }
 
-async fn pin_current_round_trip(
-    snapshot: basilisk_stubs::typeshed::snapshot::Snapshot,
-) -> TestResult<()> {
+/// Register one temporary workspace root with an active bundled generation.
+async fn install_bundled_root(
+    server: &crate::server::LspServer,
+) -> TestResult<(tempfile::TempDir, String, std::path::PathBuf)> {
     use std::sync::Arc;
 
-    use super::super::model::{
-        ApplyConfigurationRequest, TypeshedAction, TypeshedActionRequest, TypeshedActionResult,
-    };
     use crate::config::AnalysisMode;
     use crate::server::typeshed_status::TypeshedGeneration;
     use crate::workspace::WorkspaceIndex;
 
-    let expected = snapshot
-        .status
-        .commit
-        .ok_or("active snapshot has no commit")?
-        .to_hex();
     let root = tempfile::tempdir()?;
     std::fs::write(root.path().join("pyproject.toml"), "[tool.basilisk]\n")?;
     let root_path = root.path().to_path_buf();
     let root_uri = tower_lsp::lsp_types::Url::from_file_path(&root_path)
         .map_err(|()| "temporary root has no file URI")?
         .to_string();
-    let (service, mut apply_rx, pump) = initialized_test_service().await?;
-    let server = service.inner();
     *server.workspace_roots.write().await = vec![root_path.clone()];
     *server.index.write().await = Some(WorkspaceIndex::new(
         vec![root_path.clone()],
         AnalysisMode::WholeModule,
         BasiliskConfig::default(),
     ));
+    let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot()?;
     let _ = server.typeshed_generations.write().await.insert(
         root_path.clone(),
         TypeshedGeneration::Ready(Arc::new(snapshot)),
     );
+    Ok((root, root_uri, root_path))
+}
+
+/// Drain recorded client messages until `method` is seen or the budget ends.
+async fn drain_messages_until(
+    messages: &mut ClientMessages,
+    method: &str,
+) -> Vec<(String, serde_json::Value)> {
+    let mut seen = Vec::new();
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(3);
+    loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        match tokio::time::timeout(remaining, messages.recv()).await {
+            Ok(Some(message)) => {
+                let matched = message.0 == method;
+                seen.push(message);
+                if matched {
+                    return seen;
+                }
+            }
+            Ok(None) | Err(_) => return seen,
+        }
+    }
+}
+
+fn status_lifecycles(messages: &[(String, serde_json::Value)]) -> Vec<String> {
+    messages
+        .iter()
+        .filter(|(method, _)| {
+            method == basilisk_common::configuration_editor::TYPESHED_STATUS_CHANGED
+        })
+        .filter_map(|(_, params)| params.pointer("/status/lifecycle/kind"))
+        .filter_map(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .collect()
+}
+
+async fn preview_and_apply(
+    server: &crate::server::LspServer,
+    root_uri: &str,
+    mutations: Vec<super::super::model::EditorMutation>,
+) -> tower_lsp::jsonrpc::Result<super::super::model::ConfigurationSnapshot> {
+    use super::super::model::{ApplyConfigurationRequest, PreviewConfigurationRequest};
+
+    let current = server
+        .configuration_snapshot(ConfigurationSnapshotRequest {
+            root_uri: root_uri.to_owned(),
+        })
+        .await?;
+    let preview = server
+        .preview_configuration_change(PreviewConfigurationRequest {
+            root_uri: root_uri.to_owned(),
+            base_revision: current.revision,
+            mutations,
+        })
+        .await?;
+    server
+        .apply_configuration_change(ApplyConfigurationRequest {
+            root_uri: root_uri.to_owned(),
+            preview_id: preview.preview_id,
+        })
+        .await
+}
+
+/// [LSPCFGED-TYPESHED] — the UI-glitch proof: setting the pin lands the edit
+/// and publishes ONLY the terminal Ready status. No acquiring, blocked, or
+/// downloading state ever reaches the wire on a configuration change.
+#[tokio::test]
+async fn pin_edit_applies_atomically_without_intermediate_states() -> TestResult<()> {
+    use super::super::model::{EditorMutation, TypeshedLifecycle, TypeshedSettingKey};
+
+    let expected = basilisk_stubs::typeshed::bundle::bundled_commit_sha();
+    let (service, mut messages, pump) = initialized_test_service(true).await?;
+    let server = service.inner();
+    let (_root, root_uri, root_path) = install_bundled_root(server).await?;
+
+    let applied = preview_and_apply(
+        server,
+        &root_uri,
+        vec![EditorMutation::SetTypeshedSetting {
+            key: TypeshedSettingKey::TypeshedCommit,
+            value: expected.to_owned(),
+        }],
+    )
+    .await?;
+    assert_eq!(applied.typeshed.status.lifecycle, TypeshedLifecycle::Ready);
+
+    let seen = drain_messages_until(
+        &mut messages,
+        basilisk_common::configuration_editor::TYPESHED_STATUS_CHANGED,
+    )
+    .await;
+    let edit_text = seen
+        .iter()
+        .find(|(method, _)| method == "workspace/applyEdit")
+        .and_then(|(_, params)| params.pointer("/edit/documentChanges/0/edits/0/newText"))
+        .and_then(serde_json::Value::as_str)
+        .ok_or("pin apply sent no workspace edit")?;
+    assert!(
+        edit_text.contains(&format!("typeshed-commit = \"{expected}\"")),
+        "workspace edit must write the pin: {edit_text}"
+    );
+    let lifecycles = status_lifecycles(&seen);
+    assert_eq!(
+        lifecycles,
+        vec!["Ready".to_owned()],
+        "one terminal publish, nothing intermediate"
+    );
+    let document = server.configuration_editor.effective_document(&root_path)?;
+    assert_eq!(document.config.typeshed_commit.as_deref(), Some(expected));
+    pump.abort();
+    Ok(())
+}
+
+/// [STUBRES-TYPESHED-PIN]: a valid pin that is not on this machine is VALID
+/// configuration — the edit lands, nothing downloads, and the root publishes
+/// the terminal NO SOURCE state naming the recovery commands.
+#[tokio::test]
+async fn missing_pin_tanks_to_terminal_no_source_without_downloading() -> TestResult<()> {
+    use super::super::model::{EditorMutation, TypeshedLifecycle, TypeshedSettingKey};
+
+    let missing = "0123456789012345678901234567890123456789";
+    let empty_store = tempfile::tempdir()?;
+    let (service, mut messages, pump) = initialized_test_service(true).await?;
+    let server = service.inner();
+    let (_root, root_uri, root_path) = install_bundled_root(server).await?;
+
+    let applied = preview_and_apply(
+        server,
+        &root_uri,
+        vec![
+            EditorMutation::SetTypeshedSetting {
+                key: TypeshedSettingKey::TypeshedCommit,
+                value: missing.to_owned(),
+            },
+            EditorMutation::SetTypeshedSetting {
+                key: TypeshedSettingKey::TypeshedStorePath,
+                value: empty_store.path().to_string_lossy().into_owned(),
+            },
+        ],
+    )
+    .await?;
+    assert_eq!(
+        applied.typeshed.status.lifecycle,
+        TypeshedLifecycle::NoSource
+    );
+
+    let seen = drain_messages_until(
+        &mut messages,
+        basilisk_common::configuration_editor::TYPESHED_STATUS_CHANGED,
+    )
+    .await;
+    let lifecycles = status_lifecycles(&seen);
+    assert_eq!(
+        lifecycles,
+        vec!["NoSource".to_owned()],
+        "a missing pin publishes exactly one terminal state and never Downloading"
+    );
+    let reason = seen
+        .iter()
+        .rev()
+        .find(|(method, _)| {
+            method == basilisk_common::configuration_editor::TYPESHED_STATUS_CHANGED
+        })
+        .and_then(|(_, params)| params.pointer("/status/noSourceReason"))
+        .and_then(serde_json::Value::as_str)
+        .ok_or("NoSource status carried no reason")?;
+    assert!(reason.contains("NO SOURCE"), "loud reason: {reason}");
+    assert!(reason.contains(missing), "reason names the pin: {reason}");
+    assert!(
+        reason.contains("basilisk typeshed download"),
+        "reason names the recovery command: {reason}"
+    );
+    // The store stayed byte-empty: nothing attempted a download.
+    assert_eq!(
+        std::fs::read_dir(empty_store.path())?.count(),
+        0,
+        "resolution must never write or fetch"
+    );
+    let document = server.configuration_editor.effective_document(&root_path)?;
+    assert_eq!(document.config.typeshed_commit.as_deref(), Some(missing));
+    pump.abort();
+    Ok(())
+}
+
+/// A rejected client edit publishes NOTHING: the staged generation is
+/// dropped, the previous source keeps serving, and no status flickers.
+#[tokio::test]
+async fn rejected_edit_publishes_no_status_change() -> TestResult<()> {
+    use super::super::model::{EditorMutation, TypeshedSettingKey};
+    use crate::server::typeshed_status::TypeshedGeneration;
+
+    let (service, mut messages, pump) = initialized_test_service(false).await?;
+    let server = service.inner();
+    let (_root, root_uri, root_path) = install_bundled_root(server).await?;
+
+    let result = preview_and_apply(
+        server,
+        &root_uri,
+        vec![EditorMutation::SetTypeshedSetting {
+            key: TypeshedSettingKey::TypeshedCommit,
+            value: "0123456789012345678901234567890123456789".to_owned(),
+        }],
+    )
+    .await;
+    assert!(result.is_err(), "a rejected edit must fail the apply");
+
+    let seen = drain_messages_until(&mut messages, "workspace/applyEdit").await;
+    assert!(
+        status_lifecycles(&seen).is_empty(),
+        "no status may be published for an unapplied edit"
+    );
+    let generation = server
+        .typeshed_generations
+        .read()
+        .await
+        .get(&root_path)
+        .cloned();
+    assert!(
+        generation
+            .as_ref()
+            .and_then(TypeshedGeneration::ready_snapshot)
+            .is_some(),
+        "the previous Ready generation must survive a rejected edit"
+    );
+    pump.abort();
+    Ok(())
+}
+
+/// [LSPCFGED-TYPESHED]: `ViewLicense` returns the active immutable license
+/// document for the effective bundled pin.
+#[tokio::test]
+async fn view_license_returns_the_active_immutable_license() -> TestResult<()> {
+    use super::super::model::{TypeshedAction, TypeshedActionRequest, TypeshedActionResult};
+
+    let (service, mut messages, pump) = initialized_test_service(true).await?;
+    let server = service.inner();
+    let (_root, root_uri, _root_path) = install_bundled_root(server).await?;
 
     let current = server
         .configuration_snapshot(ConfigurationSnapshotRequest {
@@ -199,54 +398,21 @@ async fn pin_current_round_trip(
         .await?;
     let action = server
         .typeshed_action(TypeshedActionRequest {
-            root_uri: root_uri.clone(),
-            base_revision: current.revision,
-            action: TypeshedAction::PinCurrent,
-        })
-        .await?;
-    let TypeshedActionResult::Preview { preview } = action else {
-        return Err("Pin current did not return a preview".into());
-    };
-    let _applied = server
-        .apply_configuration_change(ApplyConfigurationRequest {
             root_uri,
-            preview_id: preview.preview_id,
+            base_revision: current.revision,
+            action: TypeshedAction::ViewLicense,
         })
         .await?;
-
-    let apply_edit = tokio::time::timeout(std::time::Duration::from_secs(2), apply_rx.recv())
-        .await?
-        .ok_or("Pin current sent no workspace edit")?;
-    let edited_text = apply_edit
-        .pointer("/edit/documentChanges/0/edits/0/newText")
-        .and_then(serde_json::Value::as_str)
-        .ok_or("Pin current workspace edit carried no replacement text")?;
+    let TypeshedActionResult::License { license } = action else {
+        return Err("ViewLicense did not return a license document".into());
+    };
+    assert_eq!(license.title, "Typeshed License");
+    assert!(license.read_only);
     assert!(
-        edited_text.contains(&format!("typeshed-commit = \"{expected}\"")),
-        "workspace edit must write the active commit: {edited_text}"
+        !license.content.trim().is_empty(),
+        "bundled license text must be present"
     );
-    let document = server.configuration_editor.effective_document(&root_path)?;
-    assert_eq!(
-        document.config.typeshed_commit.as_deref(),
-        Some(expected.as_str())
-    );
-    assert!(document
-        .content
-        .contains(&format!("typeshed-commit = \"{expected}\"")));
+    messages.close();
     pump.abort();
     Ok(())
-}
-
-#[tokio::test]
-async fn pin_current_applies_the_latest_active_commit() -> TestResult<()> {
-    let commit = basilisk_stubs::typeshed::gittree::Oid::from_hex(
-        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    )?;
-    pin_current_round_trip(latest_snapshot(commit)?).await
-}
-
-#[tokio::test]
-async fn pin_current_offline_applies_the_bundled_commit() -> TestResult<()> {
-    let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot()?;
-    pin_current_round_trip(snapshot).await
 }

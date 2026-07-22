@@ -1,4 +1,4 @@
-//! Implements [`tuples_type_form_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`tuples_type_form_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `tuples_type_form_2`: Invalid tuple type syntax.
 //!
 //! Validates tuple type annotations according to PEP 646 rules:

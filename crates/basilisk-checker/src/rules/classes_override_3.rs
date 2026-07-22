@@ -1,4 +1,4 @@
-//! Implements [`classes_override_3`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`classes_override_3`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! `classes_override_3`: `@override` on a method with no matching ancestor method.
 //!
 //! PEP 698 — a method decorated `@override` (or `typing.override`) must actually

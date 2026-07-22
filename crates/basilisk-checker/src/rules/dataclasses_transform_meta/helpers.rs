@@ -1,4 +1,4 @@
-//! Implements [`dataclasses_transform_meta`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`dataclasses_transform_meta`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Helper types and AST collection functions for `dataclasses_transform_meta`.
 //!
 //! Contains data types describing `@dataclass_transform` metaclasses and

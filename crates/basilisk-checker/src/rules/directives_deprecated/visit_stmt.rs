@@ -1,4 +1,4 @@
-//! Implements [`directives_deprecated`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`directives_deprecated`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Statement visitor for `directives_deprecated`.
 //!
 //! Contains `visit_stmt_for_usage` and helpers for assignment-related

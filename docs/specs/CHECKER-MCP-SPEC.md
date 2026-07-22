@@ -7,17 +7,18 @@ Basilisk ships one deliberately narrow Model Context Protocol surface:
 binary already carried by the binary archives, wheels, editor packages, and
 other release artifacts; it is not a second executable or workspace index.
 The server exposes source status only. It MUST NOT perform type-checking,
-publish diagnostics, or invent a second typeshed acquisition state.
+publish diagnostics, or invent a second typeshed resolution state.
 
-The tool invokes the shared typeshed startup gate and serializes its canonical
+The tool invokes the shared typeshed resolution and serializes its canonical
 status object ([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 The underlying step-3 source is the custom canonical tree or typeshed stdlib
 defined by the pinned typing specification
 ([`python/typing@6ef9f7719ecfff09dad8724ef42b621fd994fb5e`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst));
 MCP changes only status transport, never that resolution order.
-It is read-only with respect to user projects. Shared Latest acquisition may
-contact the configured upstream and populate Basilisk's internal immutable
-cache before status is available; MCP MUST NOT add another fetch or cache path.
+It is read-only with respect to user projects and fully offline
+([STUBRES-TYPESHED-OFFLINE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-OFFLINE)):
+resolution never contacts an upstream, and a pin missing from the store is a
+status failure, never a fetch. MCP MUST NOT add a fetch or store-write path.
 
 ## Stdio lifecycle {#MCP-STDIO}
 
@@ -39,8 +40,9 @@ There is no MCP-over-HTTP transport and no server-to-client request surface.
 
 `tools/list` declares exactly one tool, `basilisk_typeshed_status`, with an empty
 object input schema and read-only, non-destructive, idempotent annotations. Its
-`openWorldHint` is true because shared Latest acquisition can access the
-configured upstream. The result follows MCP
+`openWorldHint` is `false`: resolution is offline by construction
+([STUBRES-TYPESHED-OFFLINE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-OFFLINE)),
+so the tool never touches an open world. The result follows MCP
 [structured tool output](https://modelcontextprotocol.io/specification/2025-11-25/server/tools):
 the same JSON object appears as `structuredContent` and as serialized JSON in a
 text content block.
@@ -49,25 +51,24 @@ The closed output schema contains:
 
 | Field | Contract |
 |---|---|
-| `active_source` | Active custom, exact, latest, or bundled source label. |
+| `active_source` | `custom`, `exact-commit`, or `bundled` — the active source IS the trust story; there are no separate transport/provenance fields. |
 | `commit_identity` | Full commit SHA, or `null` when the source has none. |
 | `tree_identity` | Full Git tree identity, or `null` when unavailable. |
-| `transport` | Shared source transport, such as custom path or embedded ZIP. |
-| `provenance` | `github-tls-attested`, `bundle-vetted`, `unverified`, or `user-managed`; attested does not imply a signed typeshed release. |
-| `license_status` | Approved/review state; custom may say `not supplied`. |
+| `license_status` | `approved`, `changed`, or `not supplied` (custom). |
 | `license_reference` | Safe immutable license reference, or `null` for custom. |
-| `signed_release` | Always `false`: current typeshed sources are commits/archives, not signed releases. |
 | `warnings` | Canonically ordered `{code, message}` status warnings. |
 
 Field values and warning order MUST match the CLI and LSP status produced for
-the same acquired source. Warning codes are stable display codes including
-`UNPINNED`, `DOWNLOAD FAILED`, `LICENSE CHANGED`, `UNVERIFIED`, and
-`USER-MANAGED SOURCE`. They are service status, never Python diagnostics.
+the same resolved source. Warning codes are the stable display codes
+`UNPINNED`, `USER-MANAGED SOURCE`, and `LICENSE CHANGED`, in that canonical
+order ([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
+They are service status, never Python diagnostics.
 
 Unknown methods/tools and invalid arguments return JSON-RPC errors. A shared
-acquisition/status failure returns a tool result with `isError: true`; it MUST
-NOT return partial provenance or substitute stale state. Responses contain no
-archive bytes, source text, credentials, configured mirror URL, or user files.
+resolution/status failure (including a pin missing from the store) returns a
+tool result with `isError: true`; it MUST NOT return partial status or
+substitute stale state. Responses contain no archive bytes, source text,
+credentials, or user files.
 
 ## Acceptance {#MCP-ACCEPTANCE}
 

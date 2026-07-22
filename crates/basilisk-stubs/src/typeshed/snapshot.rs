@@ -273,9 +273,7 @@ fn is_pyi_path(path: &str) -> bool {
 mod tests {
     use super::super::archive::{Archive, ArchiveEntry};
     use super::super::gittree::FileMode;
-    use super::super::source::{
-        LicenseStatus, Provenance, SourceKind, StatusWarning, Transport, TypeshedStatus,
-    };
+    use super::super::source::{LicenseStatus, SourceKind, StatusWarning, TypeshedStatus};
     use super::*;
 
     fn reg(path: &str, data: &[u8]) -> ArchiveEntry {
@@ -299,11 +297,8 @@ mod tests {
             active_source: SourceKind::Custom,
             commit: None,
             tree: None,
-            transport: Transport::CustomPath,
             license_status: LicenseStatus::NotSupplied,
             license_reference: None,
-            provenance: Provenance::UserManaged,
-            signed_release: false,
             warnings: StatusWarning::list(&[]),
         };
         Snapshot::build(

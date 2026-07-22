@@ -156,16 +156,16 @@ that Basilisk reports.
 
 **Target:** 2,100 words · 7 pages · 3 visuals
 
-**Reader outcome:** Use control flow to turn a broad type into a useful one and
-recognize when a branch has not handled every case.
+**Reader outcome:** Distinguish normative narrowing guarantees from
+checker-specific inference, then write and test every runtime path.
 
-- What Basilisk can infer and why explicit boundaries still help
-- Narrowing with `is None`, `isinstance`, membership, and equality
-- User-defined guards with `TypeGuard`
-- Pattern matching and exhaustiveness
-- Reachability and values that never return
+- Why the normative specification leaves general inference largely unspecified
+- Declared boundaries and the specified `is None` union case
+- Normative user-defined guards with `TypeGuard` and `TypeIs`
+- Runtime branching where exact static narrowing is not specified
+- Pattern matching and `assert_never` as guidance, not a portable guarantee
 - Checkpoint: route all reading variants without a blind cast
-- Visuals: control-flow narrowing tree; `TypeGuard` before/after; match coverage
+- Visuals: normative boundary map; `TypeGuard` before/after; runtime case map
 - Source keys: `python-typing-spec-narrowing`, `python-typing-docs`,
   `pep-647`, `python-match-statement`
 

@@ -1,4 +1,4 @@
-//! Implements [`namedtuples_define_functional`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! Implements [`namedtuples_define_functional`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 //! `namedtuples_define_functional`: Invalid argument in a `NamedTuple` constructor call.
 //!
 //! When a `NamedTuple` is instantiated using keyword arguments, Basilisk

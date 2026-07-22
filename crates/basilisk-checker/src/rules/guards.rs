@@ -1,4 +1,4 @@
-//! Implements helpers for [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements helpers for [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Shared guard predicates used across multiple rules.
 //!
 //! These predicates identify Python typing patterns where strict annotation

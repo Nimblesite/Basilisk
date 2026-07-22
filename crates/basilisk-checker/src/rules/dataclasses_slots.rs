@@ -1,4 +1,4 @@
-//! Implements [`dataclasses_slots`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`dataclasses_slots`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `dataclasses_slots`: Dataclass slots violations.
 //!
 //! Reports errors when:

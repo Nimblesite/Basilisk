@@ -1,773 +1,165 @@
-use std::collections::HashMap;
-use std::io::{Cursor, Write as _};
-use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+//! Backend and manager wiring over real local sources: the embedded bundle, a
+//! temp-dir store, and custom trees. The verification chain itself is covered
+//! in `store::tests`; these tests prove the production wiring resolves only
+//! from this machine and fails hard when a source is absent
+//! ([STUBRES-TYPESHED-OFFLINE], [TYPESHEDRT-ACCEPTANCE]).
 
-use zip::write::{SimpleFileOptions, ZipWriter};
-use zip::CompressionMethod;
+use std::fs;
 
-use super::super::bundle::{bundled_commit_sha, bundled_snapshot};
-use super::super::gittree::{git_blob_oid, reconstruct_root_tree_oid, GitFile};
-use super::super::source::{SourceIdentity, SourceSelection};
+use super::super::gittree::Oid;
+use super::super::selector::{BackendError, SelectionError};
+use super::super::source::{SourceKind, SourceSelection, TypeshedRequest};
 use super::*;
 
-mod integrity;
+const OTHER_SHA: &str = "0123456789012345678901234567890123456789";
 
-const A_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const B_SHA: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-
-#[derive(Debug, Clone)]
-struct Fixture {
-    metadata: CommitMetadata,
-    tree: Vec<TreeEntry>,
-    zip: Vec<u8>,
-}
-
-#[derive(Debug)]
-struct FakeTransport {
-    latest: Option<CommitMetadata>,
-    commits: HashMap<Oid, CommitMetadata>,
-    trees: HashMap<Oid, Vec<TreeEntry>>,
-    archives: HashMap<Oid, Vec<u8>>,
-    origin: SourceTransport,
-    latest_calls: AtomicUsize,
-    commit_calls: AtomicUsize,
-    tree_calls: AtomicUsize,
-    archive_calls: AtomicUsize,
-    fetched: Mutex<Vec<Oid>>,
-}
-
-impl FakeTransport {
-    fn new(latest: Option<Oid>, fixtures: &[Fixture], origin: SourceTransport) -> Self {
-        let commits = fixtures
-            .iter()
-            .map(|fixture| (fixture.metadata.commit, fixture.metadata.clone()))
-            .collect();
-        let trees = fixtures
-            .iter()
-            .map(|fixture| (fixture.metadata.tree, fixture.tree.clone()))
-            .collect();
-        let archives = fixtures
-            .iter()
-            .map(|fixture| (fixture.metadata.commit, fixture.zip.clone()))
-            .collect();
-        let latest = latest.and_then(|commit| {
-            fixtures
-                .iter()
-                .find(|fixture| fixture.metadata.commit == commit)
-                .map(|fixture| fixture.metadata.clone())
-        });
-        Self {
-            latest,
-            commits,
-            trees,
-            archives,
-            origin,
-            latest_calls: AtomicUsize::new(0),
-            commit_calls: AtomicUsize::new(0),
-            tree_calls: AtomicUsize::new(0),
-            archive_calls: AtomicUsize::new(0),
-            fetched: Mutex::new(Vec::new()),
-        }
-    }
-
-    fn offline() -> Self {
-        Self::new(None, &[], SourceTransport::Codeload)
-    }
-}
-
-impl Transport for FakeTransport {
-    fn resolve_latest(&self) -> Result<CommitMetadata, TransportError> {
-        let _ = self.latest_calls.fetch_add(1, Ordering::SeqCst);
-        self.latest.clone().ok_or(TransportError::Metadata)
-    }
-
-    fn resolve_commit(&self, commit: Oid) -> Result<CommitMetadata, TransportError> {
-        let _ = self.commit_calls.fetch_add(1, Ordering::SeqCst);
-        self.commits
-            .get(&commit)
-            .cloned()
-            .ok_or(TransportError::Metadata)
-    }
-
-    fn fetch_tree(&self, root_tree: Oid) -> Result<Vec<TreeEntry>, TransportError> {
-        let _ = self.tree_calls.fetch_add(1, Ordering::SeqCst);
-        self.trees
-            .get(&root_tree)
-            .cloned()
-            .ok_or(TransportError::Metadata)
-    }
-
-    fn fetch_archive(&self, commit: Oid) -> Result<Vec<u8>, TransportError> {
-        let _ = self.archive_calls.fetch_add(1, Ordering::SeqCst);
-        self.fetched.lock().expect("fetched lock").push(commit);
-        self.archives
-            .get(&commit)
-            .cloned()
-            .ok_or(TransportError::Download)
-    }
-
-    fn archive_transport(&self) -> SourceTransport {
-        self.origin
-    }
-}
-
-fn oid(value: &str) -> Oid {
-    Oid::from_hex(value).expect("fixture oid")
-}
-
-fn request(selection: SourceSelection, verify_content: bool) -> TypeshedRequest {
+fn pinned_request(commit: Oid, explicit: bool, store: &std::path::Path) -> TypeshedRequest {
     TypeshedRequest {
-        selection,
-        verify_content,
-        use_cache: true,
-        url_template: None,
+        selection: SourceSelection::Pinned { commit, explicit },
+        store_path: Some(store.to_path_buf()),
     }
 }
 
-fn fixture(commit: &str, marker: &str) -> Fixture {
-    let license = bundled_snapshot()
-        .expect("bundle")
-        .vfs
-        .read("LICENSE")
-        .expect("bundle license")
-        .to_vec();
-    fixture_with_license(commit, marker, license)
-}
-
-fn fixture_with_license(commit: &str, marker: &str, license: Vec<u8>) -> Fixture {
-    let lowercase = marker.to_ascii_lowercase();
-    let files = vec![
-        ("LICENSE".to_owned(), license, FileMode::Regular, 0o644),
-        (
-            "stdlib/VERSIONS".to_owned(),
-            format!("sentinel: 3.0-\n# {marker}\n").into_bytes(),
-            FileMode::Regular,
-            0o644,
-        ),
-        (
-            "stdlib/sentinel.pyi".to_owned(),
-            format!("VALUE: str  # {marker}\n").into_bytes(),
-            FileMode::Regular,
-            0o644,
-        ),
-        (
-            format!("stdlib/{lowercase}_only.pyi"),
-            b"ONLY: int\n".to_vec(),
-            FileMode::Regular,
-            0o644,
-        ),
-        (
-            format!("stubs/{lowercase}_demo/demo.pyi"),
-            b"VALUE: int\n".to_vec(),
-            FileMode::Regular,
-            0o644,
-        ),
-    ];
-    make_fixture(commit, files)
-}
-
-fn make_fixture(commit: &str, files: Vec<(String, Vec<u8>, FileMode, u32)>) -> Fixture {
-    make_fixture_with_compression(commit, files, CompressionMethod::Stored)
-}
-
-fn make_fixture_with_compression(
-    commit: &str,
-    files: Vec<(String, Vec<u8>, FileMode, u32)>,
-    compression: CompressionMethod,
-) -> Fixture {
-    let tree: Vec<_> = files
-        .iter()
-        .map(|(path, data, mode, _zip_mode)| TreeEntry {
-            path: path.clone(),
-            oid: git_blob_oid(data),
-            mode: *mode,
-        })
-        .collect();
-    let git_files: Vec<_> = tree
-        .iter()
-        .map(|entry| GitFile {
-            path: entry.path.clone(),
-            oid: entry.oid,
-            mode: entry.mode,
-        })
-        .collect();
-    let root = reconstruct_root_tree_oid(&git_files).expect("fixture root");
-    let mut zip = Vec::new();
-    {
-        let mut writer = ZipWriter::new(Cursor::new(&mut zip));
-        for (path, data, _trusted_mode, zip_mode) in files {
-            let options = SimpleFileOptions::default()
-                .compression_method(compression)
-                .unix_permissions(zip_mode);
-            writer
-                .start_file(format!("typeshed-{commit}/{path}"), options)
-                .expect("zip entry");
-            writer.write_all(&data).expect("zip bytes");
-        }
-        let _ = writer.finish().expect("zip finish");
-    }
-    Fixture {
-        metadata: CommitMetadata {
-            commit: oid(commit),
-            tree: root,
-        },
-        tree,
-        zip,
-    }
-}
-
-fn manager(
-    request: TypeshedRequest,
-    fake: Arc<FakeTransport>,
-    cache: Option<DiskCache>,
-) -> TypeshedManager {
-    let transport: Arc<dyn Transport> = fake;
-    manager_for_request(request, transport, cache)
-}
-
+/// The out-of-the-box conformance path: no configuration, no store entry, no
+/// network — the bundled commit resolves offline and reports UNPINNED.
 #[test]
-fn latest_resolves_b_before_cache_and_all_views_come_from_b() {
-    let cache_dir = tempfile::tempdir().expect("cache dir");
-    let cache = DiskCache::new(cache_dir.path());
-    let a = fixture(A_SHA, "A");
-    let seed = Arc::new(FakeTransport::new(
-        Some(a.metadata.commit),
-        std::slice::from_ref(&a),
-        SourceTransport::Codeload,
-    ));
-    let _ = manager(
-        request(SourceSelection::Latest, true),
-        seed,
-        Some(cache.clone()),
-    )
-    .snapshot()
-    .expect("seed A");
-
-    let b = fixture(B_SHA, "B");
-    let remote = Arc::new(FakeTransport::new(
-        Some(b.metadata.commit),
-        std::slice::from_ref(&b),
-        SourceTransport::Codeload,
-    ));
-    let snapshot = manager(
-        request(SourceSelection::Latest, true),
-        Arc::clone(&remote),
-        Some(cache),
-    )
-    .snapshot()
-    .expect("activate B");
-    assert_eq!(snapshot.status.commit, Some(b.metadata.commit));
-    assert!(snapshot.versions().is_some_and(|text| text.contains("# B")));
-    assert!(snapshot.module_index.path("b_only").is_some());
-    assert!(snapshot.module_index.path("a_only").is_none());
-    assert_eq!(
-        snapshot.read_stub("sentinel").map(|(_, body)| body),
-        Some("VALUE: str  # B\n")
-    );
-    assert_eq!(
-        snapshot.distribution_index.distribution("demo"),
-        Some("types-b_demo")
-    );
-    assert_eq!(remote.latest_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(
-        *remote.fetched.lock().expect("fetched"),
-        vec![b.metadata.commit]
-    );
-}
-
-#[test]
-fn exact_pin_reuses_cache_offline_and_remains_pinned() {
-    let cache_dir = tempfile::tempdir().expect("cache dir");
-    let cache = DiskCache::new(cache_dir.path());
-    let a = fixture(A_SHA, "A");
-    let online = Arc::new(FakeTransport::new(
-        None,
-        std::slice::from_ref(&a),
-        SourceTransport::Codeload,
-    ));
-    let exact = SourceSelection::ExactCommit {
-        commit: a.metadata.commit,
-    };
-    let _ = manager(
-        request(exact.clone(), true),
-        Arc::clone(&online),
-        Some(cache.clone()),
-    )
-    .snapshot()
-    .expect("online pin");
-    let offline = Arc::new(FakeTransport::offline());
-    let snapshot = manager(request(exact, true), Arc::clone(&offline), Some(cache))
-        .snapshot()
-        .expect("offline cached pin");
-    assert!(matches!(
-        snapshot.identity,
-        SourceIdentity::Commit { pinned: true, .. }
-    ));
-    assert_eq!(offline.commit_calls.load(Ordering::SeqCst), 0);
-    assert_eq!(offline.tree_calls.load(Ordering::SeqCst), 0);
-    assert_eq!(offline.archive_calls.load(Ordering::SeqCst), 0);
-}
-
-/// Age out every generation under `key` by stamping the oldest possible
-/// timestamp onto its record. Zero is the legacy-record sentinel, so this also
-/// covers entries written before the field existed.
-fn age_out_cached_bytes(cache_dir: &Path, key: &str) {
-    let generations = cache_dir.join(key).join("generations");
-    for entry in std::fs::read_dir(&generations).expect("generations dir") {
-        let meta = entry.expect("generation entry").path().join("meta.json");
-        let mut record: CacheRecord =
-            serde_json::from_slice(&std::fs::read(&meta).expect("cache metadata"))
-                .expect("valid metadata");
-        record.acquired_at_unix_seconds = 0;
-        std::fs::write(
-            &meta,
-            serde_json::to_vec_pretty(&record).expect("serialize metadata"),
-        )
-        .expect("age out cached bytes");
-    }
-}
-
-/// A pinned commit is content-addressed, so its archive can never change
-/// meaning and age carries no information about it. Reuse is guarded by the
-/// per-load re-hash, not by a clock. Expiring such an entry would buy nothing
-/// and would stop a pinned, reproducible project from typechecking offline or
-/// while GitHub is rate-limiting ([STUBRES-TYPESHED-ACQUIRE]).
-#[test]
-fn aged_out_cached_bytes_are_still_reused_for_an_exact_pin() {
-    let cache_dir = tempfile::tempdir().expect("cache dir");
-    let cache = DiskCache::new(cache_dir.path());
-    let a = fixture(A_SHA, "A");
-    let exact = SourceSelection::ExactCommit {
-        commit: a.metadata.commit,
-    };
-    let seed = Arc::new(FakeTransport::new(
-        None,
-        std::slice::from_ref(&a),
-        SourceTransport::Codeload,
-    ));
-    let _ = manager(request(exact.clone(), true), seed, Some(cache.clone()))
-        .snapshot()
-        .expect("seed exact cache");
-    age_out_cached_bytes(cache_dir.path(), A_SHA);
-
-    let offline = Arc::new(FakeTransport::offline());
-    let snapshot = manager(request(exact, true), Arc::clone(&offline), Some(cache))
-        .snapshot()
-        .expect("an aged-out exact pin still activates offline");
-    assert_eq!(snapshot.status.commit, Some(a.metadata.commit));
-    assert!(matches!(
-        snapshot.identity,
-        SourceIdentity::Commit { pinned: true, .. }
-    ));
-    assert_eq!(
-        offline.commit_calls.load(Ordering::SeqCst),
-        0,
-        "an immutable pin must not be re-resolved because its bytes aged"
-    );
-    assert_eq!(offline.tree_calls.load(Ordering::SeqCst), 0);
-    assert_eq!(offline.archive_calls.load(Ordering::SeqCst), 0);
-}
-
-/// The counterpart to the pin exemption: `Latest` tracks the moving `main`
-/// reference, so aged bytes really could misrepresent the selection and the
-/// 24-hour window still applies. Dropping expiry wholesale would silently
-/// pin users to whatever `main` was the day they first ran.
-#[test]
-fn expired_cached_bytes_are_reacquired_for_the_moving_latest_reference() {
-    let cache_dir = tempfile::tempdir().expect("cache dir");
-    let cache = DiskCache::new(cache_dir.path());
-    let a = fixture(A_SHA, "A");
-    let seed = Arc::new(FakeTransport::new(
-        Some(a.metadata.commit),
-        std::slice::from_ref(&a),
-        SourceTransport::Codeload,
-    ));
-    let _ = manager(
-        request(SourceSelection::Latest, true),
-        seed,
-        Some(cache.clone()),
-    )
-    .snapshot()
-    .expect("seed latest cache");
-    age_out_cached_bytes(cache_dir.path(), A_SHA);
-
-    let retry = Arc::new(FakeTransport::new(
-        Some(a.metadata.commit),
-        std::slice::from_ref(&a),
-        SourceTransport::Codeload,
-    ));
-    let snapshot = manager(
-        request(SourceSelection::Latest, true),
-        Arc::clone(&retry),
-        Some(cache),
-    )
-    .snapshot()
-    .expect("reacquire expired latest bytes");
-    assert_eq!(snapshot.status.commit, Some(a.metadata.commit));
-    assert_eq!(retry.latest_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(
-        retry.archive_calls.load(Ordering::SeqCst),
-        1,
-        "expired bytes for a moving reference must be redownloaded"
-    );
-}
-
-#[test]
-fn exact_bundle_commit_restarts_offline_without_a_download_cache() {
-    let commit = oid(bundled_commit_sha());
-    let offline = Arc::new(FakeTransport::offline());
-    let snapshot = manager(
-        request(SourceSelection::ExactCommit { commit }, true),
-        Arc::clone(&offline),
-        None,
-    )
-    .snapshot()
-    .expect("the embedded ZIP is the exact pinned source after restart");
+fn the_bundled_default_resolves_offline_with_unpinned() {
+    let store = tempfile::tempdir().expect("tempdir");
+    let commit = Oid::from_hex(super::super::bundle::bundled_commit_sha()).expect("bundled sha");
+    let manager = production_manager(pinned_request(commit, false, store.path()));
+    let snapshot = manager.snapshot().expect("bundled default resolves");
     assert_eq!(snapshot.status.active_source, SourceKind::Bundled);
-    assert_eq!(snapshot.status.commit, Some(commit));
+    let codes: Vec<&str> = snapshot
+        .status
+        .warnings
+        .iter()
+        .map(|warning| warning.code.as_str())
+        .collect();
+    assert_eq!(codes, vec!["UNPINNED"]);
+    // Real bodies, offline.
+    assert!(snapshot.read_stub("os").is_some());
+}
+
+/// An explicit pin of the bundled commit is deterministic: same bytes, no
+/// UNPINNED, still zero store/network involvement.
+#[test]
+fn an_explicit_pin_of_the_bundled_commit_suppresses_unpinned() {
+    let store = tempfile::tempdir().expect("tempdir");
+    let commit = Oid::from_hex(super::super::bundle::bundled_commit_sha()).expect("bundled sha");
+    let manager = production_manager(pinned_request(commit, true, store.path()));
+    let snapshot = manager.snapshot().expect("explicit bundled pin resolves");
     assert!(snapshot.status.warnings.is_empty());
-    // The bundle satisfies its own pin before any acquisition, so an offline
-    // restart makes no transport call at all ([STUBRES-TYPESHED-ACQUIRE]).
-    assert_eq!(offline.commit_calls.load(Ordering::SeqCst), 0);
-    assert_eq!(offline.archive_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(snapshot.status.active_source, SourceKind::Bundled);
 }
 
+/// Implements the **Fails hard** acceptance item: a pin with no store entry
+/// refuses to analyse, names the missing SHA and its fix, and never
+/// substitutes another source ([STUBRES-TYPESHED-OFFLINE]).
 #[test]
-fn cache_off_writes_nothing_and_eviction_redownloads_the_same_pin() {
-    let cache_dir = tempfile::tempdir().expect("cache dir");
-    let cache = DiskCache::new(cache_dir.path());
-    let a = fixture(A_SHA, "A");
-    let exact = SourceSelection::ExactCommit {
-        commit: a.metadata.commit,
-    };
-
-    let mut no_cache_request = request(exact.clone(), true);
-    no_cache_request.use_cache = false;
-    let no_cache_transport = Arc::new(FakeTransport::new(
-        None,
-        std::slice::from_ref(&a),
-        SourceTransport::Codeload,
-    ));
-    let _ = manager(no_cache_request, no_cache_transport, Some(cache.clone()))
-        .snapshot()
-        .expect("cache-off acquisition");
+fn a_pin_absent_from_this_machine_is_terminal_no_source() {
+    let store = tempfile::tempdir().expect("tempdir");
+    let commit = Oid::from_hex(OTHER_SHA).expect("valid oid");
+    let manager = production_manager(pinned_request(commit, true, store.path()));
+    let error = manager.snapshot().expect_err("missing pin must fail");
     assert_eq!(
-        std::fs::read_dir(cache_dir.path())
-            .expect("cache root")
-            .count(),
+        error,
+        SelectionError::NoSource {
+            commit,
+            reason: BackendError::Missing,
+        }
+    );
+    assert!(error.to_string().contains(OTHER_SHA));
+    assert!(error.to_string().contains("Download latest"));
+    // The store is inert: the failed read created nothing.
+    assert_eq!(
+        fs::read_dir(store.path()).expect("readdir").count(),
         0,
-        "cache-off must validate and discard without a generation directory"
+        "resolution must never write the store"
     );
-
-    let seed = Arc::new(FakeTransport::new(
-        None,
-        std::slice::from_ref(&a),
-        SourceTransport::Codeload,
-    ));
-    let _ = manager(request(exact.clone(), true), seed, Some(cache.clone()))
-        .snapshot()
-        .expect("seed exact cache");
-    std::fs::remove_dir_all(cache_dir.path().join(A_SHA)).expect("explicit cache eviction");
-
-    let retry = Arc::new(FakeTransport::new(
-        None,
-        std::slice::from_ref(&a),
-        SourceTransport::Codeload,
-    ));
-    let snapshot = manager(request(exact, true), Arc::clone(&retry), Some(cache))
-        .snapshot()
-        .expect("same pin reacquired");
-    assert_eq!(snapshot.status.commit, Some(a.metadata.commit));
-    assert_eq!(retry.commit_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(retry.archive_calls.load(Ordering::SeqCst), 1);
 }
 
+/// A present-but-corrupt entry is the same terminal failure with its reason.
 #[test]
-fn license_drift_blocks_exact_and_mirror_and_latest_falls_back_loudly() {
-    let drifted = fixture_with_license(A_SHA, "DRIFT", b"changed license identity\n".to_vec());
-    let exact = SourceSelection::ExactCommit {
-        commit: drifted.metadata.commit,
-    };
-
-    for origin in [SourceTransport::Codeload, SourceTransport::Mirror] {
-        let transport = Arc::new(FakeTransport::new(
-            None,
-            std::slice::from_ref(&drifted),
-            origin,
-        ));
-        let error = manager(request(exact.clone(), true), transport, None)
-            .snapshot()
-            .expect_err("license drift must fail an exact source");
-        assert!(matches!(
-            error,
-            super::super::selector::SelectionError::Exact {
-                reason: BackendError::LicenseChanged,
-                ..
-            }
-        ));
-    }
-
-    let latest_transport = Arc::new(FakeTransport::new(
-        Some(drifted.metadata.commit),
-        std::slice::from_ref(&drifted),
-        SourceTransport::Codeload,
-    ));
-    let fallback = manager(
-        request(SourceSelection::Latest, true),
-        latest_transport,
-        None,
-    )
-    .snapshot()
-    .expect("Latest may use only the vetted bundle after drift");
-    assert_eq!(fallback.status.active_source, SourceKind::Bundled);
+fn a_corrupt_store_entry_is_terminal_no_source() {
+    let store = tempfile::tempdir().expect("tempdir");
+    let commit = Oid::from_hex(OTHER_SHA).expect("valid oid");
+    let dir = store.path().join(OTHER_SHA);
+    fs::create_dir_all(&dir).expect("entry dir");
+    fs::write(dir.join("commit-object"), b"not a commit object").expect("garbage");
+    let manager = production_manager(pinned_request(commit, true, store.path()));
     assert_eq!(
-        fallback
-            .status
-            .warnings
-            .iter()
-            .map(|warning| warning.code.as_str())
-            .collect::<Vec<_>>(),
-        vec!["UNPINNED", "DOWNLOAD FAILED", "LICENSE CHANGED"]
+        manager.snapshot().err(),
+        Some(SelectionError::NoSource {
+            commit,
+            reason: BackendError::Corrupt,
+        })
     );
+    // The checker never repairs or evicts: the corrupt entry stays on disk
+    // until a download replaces it ([STUBRES-TYPESHED-STORE]).
+    assert!(dir.join("commit-object").exists());
 }
 
+/// A missing custom folder is the custom source's own hard failure; a custom
+/// module miss (folder exists, module absent) is step-4 fallthrough and is
+/// covered by the resolver tests, not a source substitution.
 #[test]
-fn cache_mutation_is_rejected_and_reacquired() {
-    let cache_dir = tempfile::tempdir().expect("cache dir");
-    let cache = DiskCache::new(cache_dir.path());
-    let a = fixture(A_SHA, "A");
-    let online = Arc::new(FakeTransport::new(
-        None,
-        std::slice::from_ref(&a),
-        SourceTransport::Codeload,
-    ));
-    let exact = SourceSelection::ExactCommit {
-        commit: a.metadata.commit,
-    };
-    let _ = manager(request(exact.clone(), true), online, Some(cache.clone()))
-        .snapshot()
-        .expect("seed cache");
-    let cached_zip = cache_dir
-        .path()
-        .join(A_SHA)
-        .join("generations")
-        .join(sha256_hex(&a.zip))
-        .join("archive.zip");
-    std::fs::write(cached_zip, b"mutated").expect("mutate cache");
-    let retry = Arc::new(FakeTransport::new(
-        None,
-        std::slice::from_ref(&a),
-        SourceTransport::Codeload,
-    ));
-    let transport: Arc<dyn Transport> = Arc::<FakeTransport>::clone(&retry);
-    let backend = RuntimeBackend::new(transport, Some(cache));
-    let snapshot = backend
-        .load_commit(a.metadata.commit, &request(exact, true))
-        .expect("reacquired valid archive");
-    assert_eq!(
-        snapshot.read_stub("sentinel").map(|(_, body)| body),
-        Some("VALUE: str  # A\n")
-    );
-    assert_eq!(retry.archive_calls.load(Ordering::SeqCst), 1);
-}
-
-#[test]
-fn verification_on_rehashes_cached_archive_offline() {
-    let cache_dir = tempfile::tempdir().expect("cache dir");
-    let cache = DiskCache::new(cache_dir.path());
-    let a = fixture(A_SHA, "A");
-    let online = Arc::new(FakeTransport::new(
-        None,
-        std::slice::from_ref(&a),
-        SourceTransport::Codeload,
-    ));
-    let exact = SourceSelection::ExactCommit {
-        commit: a.metadata.commit,
-    };
-    let unverified = manager(request(exact.clone(), false), online, Some(cache.clone()))
-        .snapshot()
-        .expect("unverified");
-    assert_eq!(unverified.status.provenance, Provenance::Unverified);
-    assert!(unverified.status.tree.is_none());
-    let offline = Arc::new(FakeTransport::offline());
-    let verified_snapshot = manager(request(exact, true), Arc::clone(&offline), Some(cache))
-        .snapshot()
-        .expect("verify cached bytes");
-    assert_eq!(
-        verified_snapshot.status.provenance,
-        Provenance::GithubTlsAttested
-    );
-    assert_eq!(verified_snapshot.status.tree, Some(a.metadata.tree));
-    assert_eq!(offline.commit_calls.load(Ordering::SeqCst), 0);
-    assert_eq!(offline.archive_calls.load(Ordering::SeqCst), 0);
-}
-
-#[test]
-fn cache_preserves_mirror_origin_across_configuration_changes() {
-    let cache_dir = tempfile::tempdir().expect("cache dir");
-    let cache = DiskCache::new(cache_dir.path());
-    let a = fixture(A_SHA, "A");
-    let mirror = Arc::new(FakeTransport::new(
-        None,
-        std::slice::from_ref(&a),
-        SourceTransport::Mirror,
-    ));
-    let exact = SourceSelection::ExactCommit {
-        commit: a.metadata.commit,
-    };
-    let _ = manager(request(exact.clone(), true), mirror, Some(cache.clone()))
-        .snapshot()
-        .expect("mirror");
-    let authenticated = Arc::new(FakeTransport::new(
-        None,
-        std::slice::from_ref(&a),
-        SourceTransport::Codeload,
-    ));
-    let reused = manager(request(exact, true), authenticated, Some(cache))
-        .snapshot()
-        .expect("cached mirror");
-    assert_eq!(reused.status.transport, SourceTransport::Mirror);
-}
-
-#[test]
-fn trusted_git_modes_override_zip_modes_and_blob_mutation_fails() {
-    let license = bundled_snapshot()
-        .expect("bundle")
-        .vfs
-        .read("LICENSE")
-        .expect("license")
-        .to_vec();
-    let files = vec![
-        ("LICENSE".to_owned(), license, FileMode::Regular, 0o644),
-        (
-            "stdlib/VERSIONS".to_owned(),
-            b"sentinel: 3.0-\n".to_vec(),
-            FileMode::Regular,
-            0o644,
-        ),
-        (
-            "stdlib/sentinel.pyi".to_owned(),
-            b"VALUE: str\n".to_vec(),
-            FileMode::Executable,
-            0o644,
-        ),
-    ];
-    let valid = make_fixture(A_SHA, files);
-    let fake = Arc::new(FakeTransport::new(
-        None,
-        std::slice::from_ref(&valid),
-        SourceTransport::Codeload,
-    ));
-    let cache_dir = tempfile::tempdir().expect("cache dir");
-    let cache = DiskCache::new(cache_dir.path());
-    let cached_request = request(
-        SourceSelection::ExactCommit {
-            commit: valid.metadata.commit,
+fn a_missing_custom_folder_fails_without_fallback() {
+    let manager = production_manager(TypeshedRequest {
+        selection: SourceSelection::Custom {
+            path: "/nonexistent/custom-typeshed".to_owned(),
         },
-        true,
-    );
-    let backend = RuntimeBackend::new(fake, Some(cache.clone()));
-    assert!(backend
-        .load_commit(valid.metadata.commit, &cached_request)
-        .is_ok());
-    let authenticated = RuntimeBackend::new(
-        Arc::new(FakeTransport::new(
-            None,
-            std::slice::from_ref(&valid),
-            SourceTransport::Codeload,
-        )),
-        Some(cache),
-    );
-    assert!(authenticated
-        .load_commit(valid.metadata.commit, &cached_request)
-        .is_ok());
-
-    let mut no_cache = cached_request;
-    no_cache.use_cache = false;
-
-    let mut mutated = valid.clone();
-    let needle = b"VALUE: str";
-    let position = mutated
-        .zip
-        .windows(needle.len())
-        .position(|window| window == needle)
-        .expect("stored body");
-    let byte = mutated.zip.get_mut(position).expect("stored body position");
-    *byte = b'X';
-    let bad = RuntimeBackend::new(
-        Arc::new(FakeTransport::new(
-            None,
-            &[mutated],
-            SourceTransport::Codeload,
-        )),
-        None,
-    );
+        store_path: None,
+    });
     assert_eq!(
-        bad.load_commit(valid.metadata.commit, &no_cache).err(),
-        Some(BackendError::Validation)
+        manager.snapshot().err(),
+        Some(SelectionError::Custom(BackendError::Custom))
     );
 }
 
-// `typeshed-cache-path` selection ([STUBRES-TYPESHED-CONFIG]). The wiring in
-// `production_manager` was previously unreachable from a test, because that
-// function also builds an HTTPS transport; `select_cache` isolates the choice.
-
-/// A configured `typeshed-cache-path` must be the directory that actually
-/// receives cached bytes. Asserting the cache is merely `Some` would pass even
-/// if the configured path were dropped and the per-user OS cache silently used
-/// instead — which would write outside the project while appearing to work.
+/// A real custom tree activates verbatim and reports user-managed status.
 #[test]
-fn configured_cache_path_is_the_directory_actually_written_to() {
-    let dir = tempfile::tempdir().expect("cache dir");
-    let cache = select_cache(true, Some(dir.path().to_path_buf())).expect("cache enabled");
-
-    let zip = b"not-a-real-zip-but-hashed-consistently";
-    let key = CacheKey::from_identity(A_SHA);
-    let record = CacheRecord {
-        commit: Some(A_SHA.to_owned()),
-        tree: None,
-        zip_sha256: sha256_hex(zip),
-        verified: false,
-        transport: None,
-        acquired_at_unix_seconds: 1,
-        tree_files: Vec::new(),
-    };
-    cache.store(&key, zip, &record).expect("store into cache");
-
-    let generation = dir
-        .path()
-        .join(key.dir_name())
-        .join("generations")
-        .join(&record.zip_sha256);
-    assert!(
-        generation.is_dir(),
-        "cached bytes must land under the configured typeshed-cache-path, \
-         found nothing at {}",
-        generation.display()
-    );
-}
-
-/// `typeshed-cache = false` outranks a configured path. Were it not to, a
-/// project that switched caching off would keep reusing archives from the very
-/// directory it also named, and the setting would be a no-op.
-#[test]
-fn disabling_the_cache_outranks_a_configured_cache_path() {
-    let dir = tempfile::tempdir().expect("cache dir");
-    assert!(select_cache(false, Some(dir.path().to_path_buf())).is_none());
-    assert!(select_cache(false, None).is_none());
-}
-
-/// With caching on and no path configured, selection falls back to the
-/// canonical per-user OS cache rather than disabling reuse. Compared against
-/// `default_cache_path` so the test states the same thing on a platform that
-/// exposes no user cache directory, without writing to the real one.
-#[test]
-fn caching_without_a_configured_path_falls_back_to_the_os_cache() {
+fn a_custom_tree_activates_verbatim() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let stdlib = root.path().join("stdlib");
+    fs::create_dir(&stdlib).expect("stdlib");
+    fs::write(stdlib.join("VERSIONS"), "os: 3.0-\n").expect("versions");
+    fs::write(stdlib.join("os.pyi"), "name: str\n").expect("stub");
+    let manager = production_manager(TypeshedRequest {
+        selection: SourceSelection::Custom {
+            path: root.path().to_string_lossy().into_owned(),
+        },
+        store_path: None,
+    });
+    let snapshot = manager.snapshot().expect("custom tree resolves");
+    assert_eq!(snapshot.status.active_source, SourceKind::Custom);
+    let codes: Vec<&str> = snapshot
+        .status
+        .warnings
+        .iter()
+        .map(|warning| warning.code.as_str())
+        .collect();
+    assert_eq!(codes, vec!["UNPINNED", "USER-MANAGED SOURCE"]);
     assert_eq!(
-        select_cache(true, None).is_some(),
-        default_cache_path().is_some(),
-        "an unconfigured cache must fall back to the per-user OS cache"
+        snapshot.read_stub("os").map(|(_, body)| body),
+        Some("name: str\n")
+    );
+}
+
+/// The store location is honoured: an entry in a configured store resolves,
+/// and the same pin against an empty default-shaped store does not.
+#[test]
+fn pins_resolve_from_the_configured_store_root() {
+    let configured = tempfile::tempdir().expect("tempdir");
+    let elsewhere = tempfile::tempdir().expect("tempdir");
+    let commit = Oid::from_hex(OTHER_SHA).expect("valid oid");
+    let backend = RuntimeBackend::new(Some(configured.path().to_path_buf()));
+    assert_eq!(
+        backend.load_pinned(commit, true).err(),
+        Some(BackendError::Missing)
+    );
+    let other_backend = RuntimeBackend::new(Some(elsewhere.path().to_path_buf()));
+    assert_eq!(
+        other_backend.load_pinned(commit, true).err(),
+        Some(BackendError::Missing)
     );
 }

@@ -48,6 +48,32 @@ header "Installing Python packages"
 python3 -c 'import debugpy' &>/dev/null || python3 -m pip install --quiet --break-system-packages debugpy
 ok "debugpy"
 
+# ruff is a hard requirement of `make test` (scripts/audit.sh fails without it)
+# and of `make fmt`. Pin it to the version CI installs, which is also the
+# ruff_* crate tag in Cargo.toml — a mismatched CLI formats differently from the
+# formatter embedded in the binary ([LSPFMT-ENGINE]).
+command -v ruff &>/dev/null || python3 -m pip install --quiet --break-system-packages ruff==0.15.17
+ok "ruff"
+
+# pytest drives the Neovim e2e harness; scripts/test-nvim.sh aborts without it.
+command -v pytest &>/dev/null || python3 -m pip install --quiet --break-system-packages pytest==9.1.1
+ok "pytest"
+
+header "Installing Neovim (basilisk.nvim e2e tests)"
+
+# `make test` runs the basilisk.nvim suite and scripts/audit.sh gates on Neovim
+# 0.11+ — the floor basilisk.nvim/lua/basilisk/health.lua enforces. Ask Neovim
+# itself, with the same has() predicate health.lua uses, so an under-version
+# install is upgraded instead of silently accepted.
+if nvim --clean --headless -c "lua io.write(vim.fn.has('nvim-0.11'))" -c quit 2>/dev/null | grep -q 1; then
+    ok "neovim"
+elif command -v brew &>/dev/null; then
+    brew install neovim || brew upgrade neovim
+    ok "neovim"
+else
+    fail "Neovim 0.11+ not found and Homebrew is unavailable — install it: https://neovim.io"
+fi
+
 header "Installing deslop (duplication gate)"
 
 bash "$REPO_ROOT/scripts/install-deslop.sh"

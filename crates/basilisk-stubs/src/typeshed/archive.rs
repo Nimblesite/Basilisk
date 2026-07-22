@@ -1,4 +1,4 @@
-//! Implements [STUBRES-TYPESHED-ACQUIRE] archive model + VFS. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE
+//! Implements [STUBRES-TYPESHED] archive model + VFS. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED
 //!
 //! In-memory archive model and archive VFS.
 //!
@@ -11,7 +11,7 @@
 //! [`ArchiveVfs`] is the read side the resolver consumes. It returns a **stable
 //! logical URI** plus bytes for `parse_pyi_source` ([STUBRES-PYI]) — there is no
 //! temp extraction and no real filesystem path, so a cached immutable ZIP is
-//! never trusted through a mutable extracted tree ([STUBRES-TYPESHED-ACQUIRE]).
+//! never trusted through a mutable extracted tree ([STUBRES-TYPESHED-PIN]).
 
 use std::collections::HashMap;
 use std::sync::Arc;

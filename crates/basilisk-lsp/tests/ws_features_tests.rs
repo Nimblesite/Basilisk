@@ -54,3 +54,5 @@ mod ws_test_refactoring;
 mod ws_test_semantic_tokens;
 #[path = "lsp/ws_test_signature_help.rs"]
 mod ws_test_signature_help;
+#[path = "lsp/ws_test_typeshed_no_source.rs"]
+mod ws_test_typeshed_no_source;

@@ -1,4 +1,4 @@
-//! Implements [`generics_syntax_scoping`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_syntax_scoping`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! AST-driven PEP 695 scoping checks (violations 1-6) for `generics_syntax_scoping`.
 //!
 //! Every check consumes [`basilisk_resolver::Pep695Scoping`] — facts derived

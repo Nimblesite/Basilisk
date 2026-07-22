@@ -13,50 +13,31 @@
 
 use std::sync::Arc;
 
-use basilisk_checker::imports::{ActiveTypeshed, ImportSearchPaths};
-use basilisk_checker::{
-    cross_resolved_module, BasiliskDatabase, FileRegistry, ResolvedFile, SearchPathsInput,
-    SourceFile, WorkspaceFiles,
-};
+use basilisk_checker::imports::ActiveTypeshed;
 use basilisk_lsp::hover::hover_at;
 use basilisk_stubs::types::{StubTarget, StubTargetPlatform};
 use basilisk_stubs::typeshed::archive::{Archive, ArchiveEntry, ArchiveVfs};
 use basilisk_stubs::typeshed::gittree::FileMode;
 use basilisk_stubs::typeshed::snapshot::Snapshot;
-use basilisk_stubs::typeshed::source::{
-    LicenseStatus, Provenance, SourceIdentity, SourceKind, Transport, TypeshedStatus,
-};
+use basilisk_stubs::typeshed::source::{LicenseStatus, SourceIdentity, SourceKind, TypeshedStatus};
 use tower_lsp::lsp_types::HoverContents;
 
 fn resolve_with_snapshot(
     snapshot: Arc<Snapshot>,
     source: &str,
 ) -> Arc<basilisk_resolver::ResolvedModule> {
-    let search_paths = ImportSearchPaths {
-        roots: Vec::new(),
-        extra_paths: Vec::new(),
-        stub_paths: Vec::new(),
-        workspace_members: Vec::new(),
-        site_packages: None,
-        registry: None,
-        typeshed_snapshot: Some(ActiveTypeshed::new(
+    let search_paths = basilisk_test_utils::typeshed_search_paths(
+        ActiveTypeshed::new(
             snapshot,
             Some(StubTarget {
                 python_version: (3, 12),
                 platform: StubTargetPlatform::Concrete("linux".to_owned()),
             }),
-        )),
-    };
-    let database = BasiliskDatabase::default();
-    let search_input = SearchPathsInput::new(&database, search_paths);
-    let workspace = WorkspaceFiles::new(&database, FileRegistry::default());
-    let file = SourceFile::new(&database, "main.py".to_owned(), source.to_owned());
-    let ResolvedFile::Resolved(resolved) =
-        cross_resolved_module(&database, file, search_input, workspace)
-    else {
-        panic!("the Mock fixture must parse and resolve");
-    };
-    Arc::clone(resolved)
+        ),
+        Vec::new(),
+    );
+    basilisk_test_utils::cross_resolve(source, search_paths)
+        .expect("the Mock fixture must parse and resolve")
 }
 
 fn custom_mock_snapshot() -> Arc<Snapshot> {
@@ -80,11 +61,8 @@ fn custom_mock_snapshot() -> Arc<Snapshot> {
         active_source: SourceKind::Custom,
         commit: None,
         tree: None,
-        transport: Transport::CustomPath,
         license_status: LicenseStatus::NotSupplied,
         license_reference: None,
-        provenance: Provenance::UserManaged,
-        signed_release: false,
         warnings: Vec::new(),
     };
     Arc::new(

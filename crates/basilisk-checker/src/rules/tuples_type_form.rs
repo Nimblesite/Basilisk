@@ -1,4 +1,4 @@
-//! Implements [`tuples_type_form`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! Implements [`tuples_type_form`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 //! `tuples_type_form`: Multiple unbounded tuple components in a single tuple type.
 //!
 //! A `tuple[...]` type annotation may contain at most one unbounded component.

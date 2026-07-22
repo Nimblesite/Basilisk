@@ -1,4 +1,4 @@
-//! Implements [BSK-0152] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [BSK-0152] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! BSK-0152: Missing type stubs for installed package.
 //!
 //! Fires when a package is imported and resolves to a `.py` source file (not

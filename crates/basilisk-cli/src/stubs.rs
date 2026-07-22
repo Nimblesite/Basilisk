@@ -297,16 +297,19 @@ pub(super) fn find_package_source(package: &str, python_path: &Path) -> Option<P
 
 fn run_status() -> u8 {
     let project_root = crate::pipeline::find_project_root(Path::new("."));
-    let cache_dir = project_root.join(generate::cache::DEFAULT_CACHE_DIR);
+    print_status(&project_root.join(generate::cache::DEFAULT_CACHE_DIR))
+}
+
+fn print_status(cache_dir: &Path) -> u8 {
     if !cache_dir.exists() {
         println!("No generated stubs found ({})", cache_dir.display());
         return 0;
     }
-    let modules: Vec<String> = walkdir::WalkDir::new(&cache_dir)
+    let modules: Vec<String> = walkdir::WalkDir::new(cache_dir)
         .into_iter()
         .filter_map(Result::ok)
         .filter(|entry| entry.file_type().is_file())
-        .filter_map(|entry| stub_module_name(entry.path(), &cache_dir))
+        .filter_map(|entry| stub_module_name(entry.path(), cache_dir))
         .collect();
     for module in &modules {
         println!("  {} {module}", "✓".green());
@@ -333,4 +336,79 @@ fn stub_module_name(path: &Path, cache_dir: &Path) -> Option<String> {
             .collect::<Vec<_>>()
             .join(".")
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// [STUBRES-AUTOGEN]: `stubs status` succeeds whether or not anything was
+    /// ever generated — an empty project is a clean report, not an error.
+    #[test]
+    fn status_reports_cleanly_with_and_without_generated_stubs(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let project = tempfile::tempdir()?;
+        let cache_dir = project.path().join(generate::cache::DEFAULT_CACHE_DIR);
+        assert_eq!(print_status(&cache_dir), 0, "missing cache dir is clean");
+
+        std::fs::create_dir_all(cache_dir.join("pkg"))?;
+        assert_eq!(print_status(&cache_dir), 0, "empty cache dir is clean");
+
+        std::fs::write(cache_dir.join("pkg").join("mod.pyi"), "x: int\n")?;
+        std::fs::write(cache_dir.join("notes.txt"), "not a stub\n")?;
+        assert_eq!(print_status(&cache_dir), 0, "generated stubs list cleanly");
+        Ok(())
+    }
+
+    /// Stub paths render as dotted module names relative to the cache root;
+    /// non-`.pyi` files are not stubs.
+    #[test]
+    fn stub_module_names_are_dotted_and_cache_relative() {
+        let cache = Path::new("/cache");
+        assert_eq!(
+            stub_module_name(Path::new("/cache/pkg/mod.pyi"), cache),
+            Some("pkg.mod".to_owned())
+        );
+        assert_eq!(
+            stub_module_name(Path::new("elsewhere/solo.pyi"), cache),
+            Some("elsewhere.solo".to_owned())
+        );
+        assert_eq!(stub_module_name(Path::new("/cache/notes.txt"), cache), None);
+        assert_eq!(
+            stub_module_name(Path::new("/cache/no_extension"), cache),
+            None
+        );
+    }
+    /// The three CLI mode spellings map one-to-one onto generator modes.
+    #[test]
+    fn generation_mode_arguments_map_to_generator_modes() {
+        assert!(matches!(
+            StubGenMode::from(StubGenModeArg::Runtime),
+            StubGenMode::Runtime
+        ));
+        assert!(matches!(
+            StubGenMode::from(StubGenModeArg::Ast),
+            StubGenMode::Ast
+        ));
+        assert!(matches!(
+            StubGenMode::from(StubGenModeArg::Hybrid),
+            StubGenMode::Hybrid
+        ));
+    }
+
+    /// [STUBRES-AUTOGEN]: contradictory or empty selections are rejected
+    /// before any interpreter or filesystem work happens.
+    #[test]
+    fn generation_target_selection_rejects_contradictory_requests() {
+        let root = Path::new("/nonexistent-project-root");
+        let python = Path::new("python3");
+        assert!(
+            generation_targets(&["requests".to_owned()], true, python, root).is_err(),
+            "--all plus explicit packages must be rejected"
+        );
+        assert!(
+            generation_targets(&[], false, python, root).is_err(),
+            "no packages and no --all must be rejected"
+        );
+    }
 }

@@ -1,6 +1,6 @@
 [package]
 name        = "basilisk-stubs"
-description = "Runtime python/typeshed archive acquisition, cache, and bundled snapshot for Basilisk"
+description = "Offline python/typeshed source resolution (bundle, store, custom) for Basilisk"
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
@@ -17,21 +17,21 @@ ruff_python_ast.workspace = true
 ruff_text_size.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-# Content attestation for the typeshed acquisition core ([STUBRES-TYPESHED-ACQUIRE]):
-# `sha1` reconstructs Git blob/tree object IDs to bind analysed bytes to the
-# trusted root-tree SHA; `sha2` fingerprints the cached immutable ZIP. Both are
-# pure-Rust RustCrypto crates with no system dependencies (no Dockerfile/CI change).
+# Offline pin verification ([STUBRES-TYPESHED-PIN]): `sha1` reconstructs Git
+# commit/blob/tree object IDs to bind analysed bytes to the pinned commit SHA;
+# `sha2` fingerprints the embedded bundle and legal files. Both are pure-Rust
+# RustCrypto crates with no system dependencies (no Dockerfile/CI change).
 sha1 = "0.10"
 sha2 = "0.10"
-# Decode the bundled stdlib ZIP and the downloaded GitHub zipball into the
-# in-memory archive model ([STUBRES-TYPESHED-ACQUIRE]). Deflate read only — no
-# bzip2/zstd/aes surface, and never a `git` transport.
+# Decode the bundled stdlib ZIP into the in-memory archive model
+# ([STUBRES-TYPESHED-BASELINE]). Deflate read only — no bzip2/zstd/aes surface.
 zip = { version = "5.1.1", default-features = false, features = ["deflate"] }
 thiserror.workspace = true
 tracing.workspace = true
-# Production authenticated-HTTPS adapter for GitHub metadata/codeload and
-# configured archive mirrors. `https_only` is also enforced by the adapter.
-ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
+# NO HTTP client may ever appear here: the checker links this crate, and "the
+# checker never downloads" is a property of the build ([TYPESHEDRT-SEGREGATION],
+# enforced by scripts/check-dependency-shape.sh). Downloading lives in
+# `basilisk-typeshed-fetch`.
 
 [dev-dependencies]
 serde_json.workspace = true

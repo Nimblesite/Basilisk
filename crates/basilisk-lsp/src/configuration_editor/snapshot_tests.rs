@@ -7,9 +7,7 @@ use std::sync::Arc;
 
 use basilisk_config::{BasiliskConfig, RuleSeverity as ConfigSeverity};
 use basilisk_stubs::typeshed::gittree::Oid;
-use basilisk_stubs::typeshed::source::{
-    LicenseStatus, Provenance, SourceKind, Transport, TypeshedStatus,
-};
+use basilisk_stubs::typeshed::source::{LicenseStatus, SourceKind, TypeshedStatus};
 use basilisk_stubs::typeshed::warning::WarningSeverity;
 
 use super::{build_snapshot, hypothetical_inventory, inventory, occurrences, page_occurrences};
@@ -170,9 +168,15 @@ fn snapshot_reports_rule_entries_effective_severities_and_tag_entries() {
     let _ = std::fs::remove_dir_all(root);
 }
 
-/// The settled, unpinned download the fixture root resolves to.
-fn assert_downloaded_latest(snapshot: &crate::configuration_editor::model::ConfigurationSnapshot) {
-    assert_eq!(snapshot.typeshed.source, TypeshedSource::Latest);
+/// The bundled default the fixture root resolves to: an unset pin IS the
+/// bundled commit ([STUBRES-TYPESHED]), still explicitly `UNPINNED`.
+fn assert_bundled_default(snapshot: &crate::configuration_editor::model::ConfigurationSnapshot) {
+    assert_eq!(
+        snapshot.typeshed.source,
+        TypeshedSource::ExactCommit {
+            commit: "83c2518a9e6abbda0c44592c3483de459198f887".to_owned(),
+        }
+    );
     assert_eq!(snapshot.typeshed.status.lifecycle, TypeshedLifecycle::Ready);
     assert_eq!(
         snapshot.typeshed.status.commit_identity.as_deref(),
@@ -187,29 +191,16 @@ fn assert_downloaded_latest(snapshot: &crate::configuration_editor::model::Confi
             .map(|warning| warning.code.as_str()),
         Some("UNPINNED")
     );
-    // A downloaded source states its complete download policy — explicit
-    // entries and defaults resolved, no per-control widget descriptions.
-    let downloads = snapshot.typeshed.downloads.clone();
-    assert_eq!(
-        downloads.as_ref().map(|policy| policy.reuse_downloads),
-        Some(false)
-    );
-    assert_eq!(
-        downloads.as_ref().map(|policy| policy.verify_content),
-        Some(false)
-    );
-    // Pinning is offered because a gate-accepted commit is active, and the
-    // offer carries the exact SHA it would write.
-    assert_eq!(
-        snapshot.typeshed.pinnable_commit.as_deref(),
-        Some("83c2518a9e6abbda0c44592c3483de459198f887")
-    );
     assert!(snapshot.typeshed.license_available);
+    assert!(
+        snapshot.typeshed.store_folder.is_some(),
+        "a pinned source states the store folder it resolves from"
+    );
 }
 
-/// [LSPCFGED-TYPESHED]: the snapshot's Typeshed source, download policy, and
-/// status come entirely from the server's parsed config plus one shared
-/// terminal runtime status.
+/// [LSPCFGED-TYPESHED]: the snapshot's Typeshed source and status come
+/// entirely from the server's parsed config plus one shared terminal runtime
+/// status — there are exactly two sources and no download-policy knobs.
 #[test]
 fn snapshot_describes_typeshed_controls_and_terminal_status() {
     let Some((root, index)) = indexed_root("typeshed") else {
@@ -218,8 +209,6 @@ fn snapshot_describes_typeshed_controls_and_terminal_status() {
     let Ok(mut document) = basilisk_config::discover_config_document(&root) else {
         unreachable!("fixture configuration must parse");
     };
-    document.config.typeshed_cache = Some(false);
-    document.config.typeshed_verify = Some(false);
     let Ok(commit) = Oid::from_hex("83c2518a9e6abbda0c44592c3483de459198f887") else {
         unreachable!("fixture SHA must parse");
     };
@@ -227,11 +216,8 @@ fn snapshot_describes_typeshed_controls_and_terminal_status() {
         active_source: SourceKind::Bundled,
         commit: Some(commit),
         tree: None,
-        transport: Transport::EmbeddedZip,
         license_status: LicenseStatus::Approved,
         license_reference: Some("typeshed://license/83c2518".to_owned()),
-        provenance: Provenance::BundleVetted,
-        signed_release: false,
         warnings: vec![basilisk_stubs::typeshed::source::StatusWarning {
             code: "UNPINNED".to_owned(),
             message: "UNPINNED — choose the pinned-commit source to make this reproducible"
@@ -245,9 +231,9 @@ fn snapshot_describes_typeshed_controls_and_terminal_status() {
     runtime_snapshot.status = status;
     let generation = TypeshedGeneration::Ready(Arc::new(runtime_snapshot));
     let snapshot = build_snapshot(&index, &root, &document, Some(&generation));
-    assert_downloaded_latest(&snapshot);
-    // A pinned commit is carried BY the active source, and an already-pinned
-    // source offers no second pin.
+    assert_bundled_default(&snapshot);
+    // A pinned commit is carried BY the active source; the matching active
+    // generation keeps its license reachable.
     document.config.typeshed_commit = Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned());
     let pinned = build_snapshot(&index, &root, &document, Some(&generation));
     assert_eq!(
@@ -256,14 +242,11 @@ fn snapshot_describes_typeshed_controls_and_terminal_status() {
             commit: "83c2518a9e6abbda0c44592c3483de459198f887".to_owned(),
         }
     );
-    assert_eq!(pinned.typeshed.pinnable_commit, None);
-    assert!(
-        pinned.typeshed.downloads.is_some(),
-        "a pinned commit is still downloaded, so it keeps its download policy"
-    );
+    assert!(pinned.typeshed.license_available);
     document.config.typeshed_commit = None;
 
-    // A user-managed folder downloads nothing and has no upstream commit.
+    // A user-managed folder resolves nothing from the store and states its
+    // own terms.
     document.config.typeshed_path = Some(root.join("custom-typeshed"));
     let custom = build_snapshot(&index, &root, &document, Some(&generation));
     assert_eq!(
@@ -272,63 +255,57 @@ fn snapshot_describes_typeshed_controls_and_terminal_status() {
             path: root.join("custom-typeshed").to_string_lossy().into_owned(),
         }
     );
-    assert_eq!(custom.typeshed.downloads, None);
-    assert_eq!(custom.typeshed.pinnable_commit, None);
+    assert_eq!(custom.typeshed.store_folder, None);
     assert!(
         custom.typeshed.license_available,
         "a custom tree still reports its user-managed terms"
     );
     document.config.typeshed_path = None;
 
-    let blocked = TypeshedGeneration::Blocked {
-        failure: TypeshedFailure::acquisition("exact commit unavailable"),
+    let no_source = TypeshedGeneration::NoSource {
+        failure: TypeshedFailure::resolution("NO SOURCE — the pin is not on this machine"),
     };
-    let snapshot = build_snapshot(&index, &root, &document, Some(&blocked));
+    let snapshot = build_snapshot(&index, &root, &document, Some(&no_source));
     assert_eq!(
         snapshot.typeshed.status.lifecycle,
-        TypeshedLifecycle::Blocked
+        TypeshedLifecycle::NoSource
     );
     assert_eq!(
         snapshot.typeshed.status.license_status,
         TypeshedLicenseStatus::Unavailable
     );
     assert_eq!(
-        snapshot.typeshed.status.blocked_reason.as_deref(),
-        Some("exact commit unavailable")
+        snapshot.typeshed.status.no_source_reason.as_deref(),
+        Some("NO SOURCE — the pin is not on this machine")
     );
     let _ = std::fs::remove_dir_all(root);
 }
 
-/// [LSPCFGED-TYPESHED]: acquisition is an atomic source transition. While a
-/// candidate is being acquired, no source-policy control may start a second
-/// mutation against the in-flight generation.
+/// [LSPCFGED-TYPESHED]: a root whose resolution has not run projects the
+/// terminal `NoSource` state — the wire model holds no acquiring/blocked
+/// lifecycle a client could render as a panel overlay.
 #[test]
-fn acquiring_typeshed_offers_no_source_transition() {
-    let Some((root, index)) = indexed_root("typeshed-acquiring") else {
+fn missing_generation_projects_terminal_no_source() {
+    let Some((root, index)) = indexed_root("typeshed-unresolved") else {
         unreachable!("indexed fixture must produce diagnostics");
     };
     let Ok(document) = basilisk_config::discover_config_document(&root) else {
         unreachable!("fixture configuration must parse");
     };
 
-    let snapshot = build_snapshot(
-        &index,
-        &root,
-        &document,
-        Some(&TypeshedGeneration::Acquiring),
-    );
+    let snapshot = build_snapshot(&index, &root, &document, None);
 
     assert_eq!(
         snapshot.typeshed.status.lifecycle,
-        TypeshedLifecycle::Acquiring
+        TypeshedLifecycle::NoSource
     );
     assert_eq!(
-        snapshot.typeshed.pinnable_commit, None,
-        "an in-flight generation has no settled commit to pin"
+        snapshot.typeshed.status.no_source_reason.as_deref(),
+        Some("typeshed resolution has not run for this root")
     );
     assert!(
         !snapshot.typeshed.license_available,
-        "no license document exists until the candidate settles"
+        "no license document exists without an active generation"
     );
 
     let _ = std::fs::remove_dir_all(root);

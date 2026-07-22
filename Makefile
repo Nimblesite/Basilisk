@@ -94,7 +94,7 @@ test: _audit
 	echo -e '\n\033[0;32m✓ All tests passed.\033[0m'
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.
-lint: _lint_rust _lint_vsix _lint_deslop
+lint: _lint_rust _lint_vsix _lint_deslop _lint_docs
 
 ## fmt: Format all code in-place
 fmt: _fmt_rust _fmt_python _fmt_vsix
@@ -396,6 +396,7 @@ _lint_rust:
 	cargo check --workspace --all-targets && \
 	cargo clippy --workspace --all-targets -- -D warnings && \
 	cargo audit && \
+	bash scripts/check-dependency-shape.sh && \
 	echo -e '\033[0;32m✓ Rust lint passed\033[0m'
 
 _lint_vsix:
@@ -410,6 +411,19 @@ _lint_deslop:
 	@echo -e '\033[1m\033[0;36m▶ Deslop duplication gate\033[0m' && \
 	deslop . && \
 	echo -e '\033[0;32m✓ Deslop duplication gate passed\033[0m'
+
+# Generated-documentation drift gates. The published READMEs (GitHub, the VSIX
+# on both Marketplace and Open VSX, PyPI) are rendered from docs/readme/
+# ([README]), and the diagnostic reference data is generated from the checker
+# rule sources ([WEBSITE-ERROR-PAGES-DRIFT]) — editing either output by hand,
+# or editing a source without regenerating, fails here as it does in CI.
+_lint_docs:
+	@echo -e '\033[1m\033[0;36m▶ Checking generated documentation\033[0m' && \
+	python3 scripts/gen_readmes.py --check && \
+	python3 scripts/gen_rules_reference.py --data /tmp/basilisk-rules.json && \
+	diff -u website/src/_data/rules.json /tmp/basilisk-rules.json > /dev/null || \
+		{ echo 'rules.json is stale — run: python3 scripts/gen_rules_reference.py --data'; exit 1; } && \
+	echo -e '\033[0;32m✓ Generated documentation is in sync\033[0m'
 
 _fmt_rust:
 	@echo -e '\033[1m\033[0;36m▶ Formatting Rust\033[0m' && \

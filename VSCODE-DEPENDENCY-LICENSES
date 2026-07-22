@@ -2,7 +2,7 @@ Basilisk VS Code Production Dependency Licenses
 =================================================
 
 Generated from the exact npm production graph selected by package-lock.json.
-Production graph SHA-256: 0cde329d95c6111d14152a9e04f4bd890377383c0fa5994f216c19b3834a0767
+Production graph SHA-256: 43f5f5fd0daae31342024112becb94923452b92c929a2820b1eb50eca7f9f186
 Regenerate with: npm run licenses:update
 
 ===============================================================================
@@ -124,9 +124,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ===============================================================================
-brace-expansion 5.0.6
+brace-expansion 5.0.7
 License: MIT
-Repository: git+ssh://git@github.com/juliangruber/brace-expansion.git
+Repository: git+https://github.com/juliangruber/brace-expansion.git
 Source: LICENSE
 SHA-256: 9c63a23124d68cd30cd316a94a1a0bca34f032786df6df69fc4b5f136bac8d2e
 

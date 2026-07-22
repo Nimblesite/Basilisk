@@ -1,4 +1,4 @@
-//! Implements [`protocols_explicit_3`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`protocols_explicit_3`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `protocols_explicit_3`: `super()` call on abstract protocol method with no default implementation.
 //!
 //! When a class explicitly implements a `Protocol` and one of its methods

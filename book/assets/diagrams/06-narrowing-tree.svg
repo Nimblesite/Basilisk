@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">The normative boundary around narrowing</title>
+  <desc id="desc">Specified None, TypeGuard, and TypeIs behavior appears inside a solid boundary. General expression, equality, loop, closure, attribute, and match inference appears outside as checker-specific behavior.</desc>
+  <rect width="1600" height="1000" fill="#0a0c12"/><rect x="34" y="34" width="1532" height="932" rx="30" fill="#10141d" stroke="#252d3f" stroke-width="3"/>
+  <text x="82" y="112" fill="#e8500a" font-family="monospace" font-size="28" font-weight="700" letter-spacing="5">NORMATIVE BOUNDARY</text>
+  <text x="82" y="180" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="58" font-weight="800">Say only what the specification says</text>
+  <rect x="92" y="260" width="650" height="590" rx="28" fill="#123128" stroke="#34d399" stroke-width="5"/>
+  <text x="417" y="330" text-anchor="middle" fill="#a7f3d0" font-family="system-ui,sans-serif" font-size="36" font-weight="800">Specified here</text>
+  <text x="150" y="430" fill="#f0f2f7" font-family="monospace" font-size="34">x is None</text><text x="150" y="478" fill="#a7f3d0" font-family="system-ui,sans-serif" font-size="27">two sides of a union</text>
+  <text x="150" y="585" fill="#f0f2f7" font-family="monospace" font-size="34">TypeGuard[T]</text><text x="150" y="633" fill="#a7f3d0" font-family="system-ui,sans-serif" font-size="27">positive path only</text>
+  <text x="150" y="740" fill="#f0f2f7" font-family="monospace" font-size="34">TypeIs[T]</text><text x="150" y="788" fill="#a7f3d0" font-family="system-ui,sans-serif" font-size="27">positive and negative paths</text>
+  <rect x="858" y="260" width="650" height="590" rx="28" fill="#191d27" stroke="#8892a4" stroke-width="4" stroke-dasharray="16 12"/>
+  <text x="1183" y="330" text-anchor="middle" fill="#cbd5e1" font-family="system-ui,sans-serif" font-size="36" font-weight="800">Do not promise exact results</text>
+  <text x="925" y="420" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="30">• expression inference</text><text x="925" y="492" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="30">• equality and membership</text><text x="925" y="564" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="30">• loops and reassignment</text><text x="925" y="636" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="30">• closures and attributes</text><text x="925" y="708" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="30">• match remainders</text>
+  <text x="1183" y="798" text-anchor="middle" fill="#fbbf24" font-family="system-ui,sans-serif" font-size="27">Observe tools; do not invent a standard.</text>
+  <text x="800" y="920" text-anchor="middle" fill="#8892a4" font-family="system-ui,sans-serif" font-size="27">The maintained specification says general narrowing remains largely unspecified.</text>
+</svg>

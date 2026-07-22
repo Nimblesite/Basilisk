@@ -2,7 +2,7 @@
 layout: layouts/docs.njk
 title: "Install Basilisk — VS Code, Cursor, Zed, Neovim, or CLI"
 description: "Install the Basilisk Python language server for your editor — VS Code, Cursor, Windsurf, Zed, or Neovim — or as a standalone CLI via PyPI (uv tool install or pipx), Homebrew, Scoop, or pre-built binaries. Single Rust binary, no runtime dependencies."
-keywords: basilisk, install, vs code, cursor, windsurf, zed, neovim, pypi, pip, uv, pipx, homebrew, scoop, open vsx, python language server, rust
+keywords: basilisk, install, best python type checker, vs code, cursor, windsurf, zed, neovim, pypi, pip, uv, pipx, homebrew, scoop, open vsx, python language server, rust
 date: 2026-02-28
 dateModified: 2026-07-19
 author: The Basilisk Project

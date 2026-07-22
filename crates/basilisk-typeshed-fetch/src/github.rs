@@ -1,27 +1,24 @@
-//! Implements [STUBRES-TYPESHED-ACQUIRE] transport. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-ACQUIRE
+//! Implements [STUBRES-TYPESHED-DOWNLOAD] transport. See
+//! docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-DOWNLOAD.
 //!
-//! Authenticated-HTTPS GitHub metadata and archive adapter.
-//!
-//! "Authenticated" is load-bearing: requests to official GitHub hosts carry a
-//! `GITHUB_TOKEN`/`GH_TOKEN` bearer credential when the environment supplies
-//! one. A user-configured mirror never does — see [`CREDENTIAL_HOSTS`].
+//! Authenticated-HTTPS GitHub metadata and archive adapter — the only typeshed
+//! network code in the workspace ([TYPESHEDRT-SEGREGATION]). There is no
+//! mirror setting: downloads come only from `api.github.com` and
+//! `codeload.github.com`, and the credential goes nowhere else.
 
 use std::time::Duration;
 
+use basilisk_stubs::typeshed::gittree::{FileMode, Oid};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
-
-use super::{CommitMetadata, Transport, TransportError, TreeEntry};
-use crate::typeshed::gittree::{FileMode, Oid};
-use crate::typeshed::source::Transport as SourceTransport;
 
 const API_ROOT: &str = "https://api.github.com/repos/python/typeshed";
 const CODELOAD_ROOT: &str = "https://codeload.github.com/python/typeshed/zip";
 const METADATA_LIMIT: usize = 32 * 1024 * 1024;
 const ARCHIVE_LIMIT: usize = 128 * 1024 * 1024;
 
-/// Hosts the GitHub credential may be presented to. Anything else — including
-/// every user-configured mirror — is contacted anonymously.
+/// Hosts the GitHub credential may be presented to — nothing else exists in
+/// this crate to contact.
 const CREDENTIAL_HOSTS: [&str; 2] = ["api.github.com", "codeload.github.com"];
 
 /// Environment variables carrying a GitHub token, in precedence order. These are
@@ -29,48 +26,98 @@ const CREDENTIAL_HOSTS: [&str; 2] = ["api.github.com", "codeload.github.com"];
 /// shells are authenticated without any Basilisk-specific setup.
 const TOKEN_VARIABLES: [&str; 2] = ["GITHUB_TOKEN", "GH_TOKEN"];
 
-/// Production transport for official GitHub metadata and either codeload or a
-/// configured authenticated-HTTPS `{sha}` archive mirror.
-pub struct HttpsTransport {
+/// A transport failure. URLs and credentials are redacted before this crosses
+/// the download boundary; raw detail belongs only in redacted tracing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum TransportError {
+    /// Commit or tree metadata could not be resolved.
+    #[error("metadata resolution failed")]
+    Metadata,
+    /// The archive could not be downloaded.
+    #[error("archive download failed")]
+    Download,
+}
+
+/// Commit metadata with the raw material for offline re-verification: the
+/// signed payload and signature reconstruct the raw commit object
+/// ([STUBRES-TYPESHED-PIN]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitInfo {
+    /// The resolved full commit SHA.
+    pub commit: Oid,
+    /// The commit's root-tree SHA as reported by the API (cross-checked
+    /// against the reconstructed commit object).
+    pub tree: Oid,
+    /// The commit content GitHub attests (raw object minus any signature header).
+    pub payload: String,
+    /// The PGP/SSH signature, when the commit is signed.
+    pub signature: Option<String>,
+}
+
+/// One trusted recursive-tree entry: a repo-relative path, its blob object ID,
+/// and its Git mode. These trusted modes and OIDs drive content attestation
+/// because codeload archives do not preserve them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeEntry {
+    /// Repo-relative path.
+    pub path: String,
+    /// The blob (or submodule commit) object ID.
+    pub oid: Oid,
+    /// The Git file mode.
+    pub mode: FileMode,
+}
+
+/// Production GitHub client. Injectable via [`GithubApi`] so the download
+/// pipeline is testable offline.
+pub struct GithubClient {
     agent: ureq::Agent,
-    mirror_template: Option<String>,
-    /// A GitHub token, when one was present in the environment. Anonymous
-    /// requests share a 60/hour/IP budget that CI and busy networks exhaust,
-    /// which surfaces as an opaque metadata failure; a token raises that to
-    /// 5000/hour. Never logged, never rendered in `Debug`, and never sent
-    /// anywhere but [`CREDENTIAL_HOSTS`].
     token: Option<String>,
 }
 
-impl std::fmt::Debug for HttpsTransport {
+impl std::fmt::Debug for GithubClient {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
-            .debug_struct("HttpsTransport")
-            .field("mirror_configured", &self.mirror_template.is_some())
+            .debug_struct("GithubClient")
             .field("credential", &credential_state(self.token.as_deref()))
             .finish_non_exhaustive()
     }
 }
 
-impl HttpsTransport {
-    /// Build the production HTTPS adapter. Mirror URLs and credentials are
-    /// retained privately and never included in public errors or debug output.
+/// The GitHub surface the download pipeline consumes.
+pub trait GithubApi: Send + Sync {
+    /// Resolve a reference (`main` or a full SHA) to commit metadata carrying
+    /// the raw commit-object material.
     ///
     /// # Errors
     ///
-    /// Returns [`TransportError::InvalidMirror`] unless a mirror is an HTTPS
-    /// URL containing exactly one `{sha}` placeholder.
-    pub fn new(mirror_template: Option<String>) -> Result<Self, TransportError> {
-        Self::with_token(mirror_template, token_from_environment())
+    /// Returns [`TransportError`] when official metadata cannot be resolved.
+    fn resolve(&self, reference: &str) -> Result<CommitInfo, TransportError>;
+
+    /// Fetch the trusted recursive tree for a commit (path → blob OID + mode).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] when the tree metadata cannot be fetched.
+    fn fetch_tree(&self, root_tree: Oid) -> Result<Vec<TreeEntry>, TransportError>;
+
+    /// Fetch a commit's archive (zipball) bytes from codeload.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] when the archive cannot be downloaded.
+    fn fetch_archive(&self, commit: Oid) -> Result<Vec<u8>, TransportError>;
+}
+
+impl GithubClient {
+    /// Build the production HTTPS adapter, reading the credential from the
+    /// environment. The token is retained privately and never appears in
+    /// errors, logs, or `Debug` output.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::with_token(token_from_environment())
     }
 
-    fn with_token(
-        mirror_template: Option<String>,
-        token: Option<String>,
-    ) -> Result<Self, TransportError> {
-        if let Some(template) = mirror_template.as_deref() {
-            validate_mirror(template)?;
-        }
+    fn with_token(token: Option<String>) -> Self {
         // A blank credential is normalized away here rather than at the
         // environment boundary, so no future caller can reintroduce
         // `Authorization: Bearer ` — which 401s a request that would have
@@ -80,24 +127,21 @@ impl HttpsTransport {
             .https_only(true)
             .max_redirects(5)
             .max_redirects_will_error(true)
-            .timeout_global(Some(Duration::from_mins(1)))
-            .user_agent("basilisk-typeshed-runtime")
+            .timeout_global(Some(Duration::from_mins(2)))
+            .user_agent("basilisk-typeshed-fetch")
             .build();
         tracing::debug!(
             credential = credential_state(token.as_deref()),
-            mirror_configured = mirror_template.is_some(),
-            "typeshed https transport configured"
+            "typeshed download transport configured"
         );
-        Ok(Self {
+        Self {
             agent: config.into(),
-            mirror_template,
             token,
-        })
+        }
     }
 
     /// Attach the GitHub credential when — and only when — `url` addresses an
-    /// official GitHub host. A mirror is operated by a third party, so sending
-    /// the user's token there would disclose it outside its trust boundary.
+    /// official GitHub host.
     fn authorize(
         &self,
         request: ureq::RequestBuilder<ureq::typestate::WithoutBody>,
@@ -111,15 +155,6 @@ impl HttpsTransport {
             Some(token) => request.header("Authorization", &format!("Bearer {token}")),
             None => request,
         }
-    }
-
-    fn metadata(&self, reference: &str) -> Result<CommitMetadata, TransportError> {
-        let url = format!("{API_ROOT}/commits/{reference}");
-        let response: CommitResponse = self.get_json(&url)?;
-        let commit = Oid::from_hex(&response.sha).map_err(|_error| TransportError::Metadata)?;
-        let tree =
-            Oid::from_hex(&response.commit.tree.sha).map_err(|_error| TransportError::Metadata)?;
-        Ok(CommitMetadata { commit, tree })
     }
 
     fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T, TransportError> {
@@ -150,24 +185,32 @@ impl HttpsTransport {
         }
         serde_json::from_slice(&bytes).map_err(|_error| TransportError::Metadata)
     }
+}
 
-    fn archive_url(&self, commit: Oid) -> String {
-        let sha = commit.to_hex();
-        self.mirror_template.as_ref().map_or_else(
-            || format!("{CODELOAD_ROOT}/{sha}"),
-            |template| template.replace("{sha}", &sha),
-        )
+impl Default for GithubClient {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-impl Transport for HttpsTransport {
-    fn resolve_latest(&self) -> Result<CommitMetadata, TransportError> {
-        self.metadata("main")
-    }
-
-    fn resolve_commit(&self, commit: Oid) -> Result<CommitMetadata, TransportError> {
-        let expected = commit.to_hex();
-        confirm_requested_commit(self.metadata(&expected)?, commit)
+impl GithubApi for GithubClient {
+    fn resolve(&self, reference: &str) -> Result<CommitInfo, TransportError> {
+        let url = format!("{API_ROOT}/commits/{reference}");
+        let response: CommitResponse = self.get_json(&url)?;
+        let commit = Oid::from_hex(&response.sha).map_err(|_error| TransportError::Metadata)?;
+        let tree =
+            Oid::from_hex(&response.commit.tree.sha).map_err(|_error| TransportError::Metadata)?;
+        let payload = response
+            .commit
+            .verification
+            .payload
+            .ok_or(TransportError::Metadata)?;
+        Ok(CommitInfo {
+            commit,
+            tree,
+            payload,
+            signature: response.commit.verification.signature,
+        })
     }
 
     fn fetch_tree(&self, root_tree: Oid) -> Result<Vec<TreeEntry>, TransportError> {
@@ -176,7 +219,7 @@ impl Transport for HttpsTransport {
     }
 
     fn fetch_archive(&self, commit: Oid) -> Result<Vec<u8>, TransportError> {
-        let url = self.archive_url(commit);
+        let url = format!("{CODELOAD_ROOT}/{}", commit.to_hex());
         let request = self.agent.get(&url);
         let mut response = self.authorize(request, &url).call().map_err(|error| {
             tracing::warn!(
@@ -197,14 +240,6 @@ impl Transport for HttpsTransport {
         }
         Ok(bytes)
     }
-
-    fn archive_transport(&self) -> SourceTransport {
-        if self.mirror_template.is_some() {
-            SourceTransport::Mirror
-        } else {
-            SourceTransport::Codeload
-        }
-    }
 }
 
 #[derive(Deserialize)]
@@ -216,6 +251,14 @@ struct CommitResponse {
 #[derive(Deserialize)]
 struct CommitDetails {
     tree: TreeIdentity,
+    #[serde(default)]
+    verification: Verification,
+}
+
+#[derive(Deserialize, Default)]
+struct Verification {
+    payload: Option<String>,
+    signature: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -237,23 +280,6 @@ struct ApiTreeEntry {
     #[serde(rename = "type")]
     kind: String,
     sha: String,
-}
-
-/// Confirm the API returned the commit that was asked for.
-///
-/// GitHub resolves a `commits/{ref}` request against branches and tags as well
-/// as SHAs, so a pin must be re-checked against the response rather than
-/// assumed. Substituting a different commit under a pin would silently break
-/// the reproducibility the pin exists to provide.
-fn confirm_requested_commit(
-    metadata: CommitMetadata,
-    requested: Oid,
-) -> Result<CommitMetadata, TransportError> {
-    if metadata.commit == requested {
-        Ok(metadata)
-    } else {
-        Err(TransportError::Metadata)
-    }
 }
 
 /// Convert a recursive-tree response into trusted leaves.
@@ -309,9 +335,6 @@ fn convert_tree_entry(entry: ApiTreeEntry) -> Option<Result<TreeEntry, Transport
 /// and sending `Authorization: Bearer ` would turn an anonymous-but-working
 /// request into a hard 401.
 fn token_from_environment() -> Option<String> {
-    // Selection is split from the environment read so precedence and the
-    // blank-skip rule are testable without mutating process-wide state, which
-    // would race every other test in the binary.
     first_non_blank(TOKEN_VARIABLES.iter().map(|name| std::env::var(name).ok()))
 }
 
@@ -350,20 +373,6 @@ fn status_of(error: &ureq::Error) -> u16 {
     }
 }
 
-fn validate_mirror(template: &str) -> Result<(), TransportError> {
-    if template.matches("{sha}").count() != 1 {
-        return Err(TransportError::InvalidMirror);
-    }
-    let candidate = template.replace("{sha}", "0000000000000000000000000000000000000000");
-    let uri = candidate
-        .parse::<ureq::http::Uri>()
-        .map_err(|_error| TransportError::InvalidMirror)?;
-    if uri.scheme_str() != Some("https") || uri.host().is_none() {
-        return Err(TransportError::InvalidMirror);
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -381,61 +390,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn mirror_requires_one_https_sha_placeholder() {
-        assert!(HttpsTransport::new(Some("https://mirror.test/{sha}.zip".to_owned())).is_ok());
-        assert_eq!(
-            HttpsTransport::new(Some("http://mirror.test/{sha}.zip".to_owned())).err(),
-            Some(TransportError::InvalidMirror)
-        );
-        assert_eq!(
-            HttpsTransport::new(Some("https://mirror.test/archive.zip".to_owned())).err(),
-            Some(TransportError::InvalidMirror)
-        );
-        assert_eq!(
-            HttpsTransport::new(Some(
-                "https://mirror.test/{sha}/duplicate-{sha}.zip".to_owned()
-            ))
-            .err(),
-            Some(TransportError::InvalidMirror)
-        );
-        assert_eq!(
-            HttpsTransport::new(Some("https:///{sha}.zip".to_owned())).err(),
-            Some(TransportError::InvalidMirror)
-        );
-    }
-
-    #[test]
-    fn archive_identity_and_transport_follow_the_configured_source() -> Result<(), TransportError> {
-        let commit = Oid::from_hex(SHA).map_err(|_error| TransportError::Metadata)?;
-        let official = HttpsTransport::new(None)?;
-        assert_eq!(
-            official.archive_url(commit),
-            format!("{CODELOAD_ROOT}/{SHA}")
-        );
-        assert_eq!(official.archive_transport(), SourceTransport::Codeload);
-
-        let mirror_template = "https://mirror.test/private/{sha}.zip";
-        let mirror = HttpsTransport::new(Some(mirror_template.to_owned()))?;
-        assert_eq!(
-            mirror.archive_url(commit),
-            "https://mirror.test/private/0123456789abcdef0123456789abcdef01234567.zip"
-        );
-        assert_eq!(mirror.archive_transport(), SourceTransport::Mirror);
-
-        let debug = format!("{mirror:?}");
-        assert!(debug.contains("mirror_configured: true"));
-        assert!(
-            !debug.contains("private"),
-            "mirror URLs must remain redacted"
-        );
-        Ok(())
-    }
-
-    /// The credential boundary. A mirror is third-party infrastructure, so a
-    /// token that leaked into a mirror request would be disclosed outside the
-    /// trust boundary it was issued for. Substring matching would be the easy
-    /// way to get this wrong, so lookalike authorities are asserted explicitly.
+    /// The credential boundary. Substring matching would be the easy way to
+    /// get this wrong, so lookalike authorities are asserted explicitly.
     #[test]
     fn the_github_credential_is_confined_to_official_github_hosts() {
         for official in [
@@ -450,7 +406,6 @@ mod tests {
         }
 
         for foreign in [
-            "https://mirror.test/private/0123456789abcdef.zip",
             "https://api.github.com.evil.test/repos/python/typeshed",
             "https://evil.test/proxy?upstream=api.github.com",
             "https://notapi.github.com/repos/python/typeshed",
@@ -467,8 +422,8 @@ mod tests {
     /// Read the `Authorization` header value that `authorize` actually put on
     /// a request for `url`, so the boundary is asserted on the real outgoing
     /// header rather than on the host predicate alone.
-    fn authorization_for(transport: &HttpsTransport, url: &str) -> Option<String> {
-        let request = transport.authorize(transport.agent.get(url), url);
+    fn authorization_for(client: &GithubClient, url: &str) -> Option<String> {
+        let request = client.authorize(client.agent.get(url), url);
         request
             .headers_ref()
             .and_then(|headers| headers.get("Authorization"))
@@ -477,39 +432,33 @@ mod tests {
     }
 
     /// The security boundary, asserted end-to-end on the outgoing header.
-    /// A leaked token would be disclosed to whoever operates the mirror, so
-    /// "no Authorization header on a mirror request" is the property that
-    /// actually matters — not merely that a helper returns false.
     #[test]
-    fn the_bearer_header_reaches_github_and_never_a_mirror() -> Result<(), TransportError> {
+    fn the_bearer_header_reaches_github_and_nothing_else() {
         let secret = "ghp_boundary_probe";
-        let mirror = "https://mirror.test/private/{sha}.zip";
-        let transport =
-            HttpsTransport::with_token(Some(mirror.to_owned()), Some(secret.to_owned()))?;
+        let client = GithubClient::with_token(Some(secret.to_owned()));
 
         assert_eq!(
-            authorization_for(&transport, &format!("{API_ROOT}/commits/main")),
+            authorization_for(&client, &format!("{API_ROOT}/commits/main")),
             Some(format!("Bearer {secret}")),
             "official metadata requests must be authenticated"
         );
         assert_eq!(
-            authorization_for(&transport, &format!("{CODELOAD_ROOT}/{SHA}")),
+            authorization_for(&client, &format!("{CODELOAD_ROOT}/{SHA}")),
             Some(format!("Bearer {secret}")),
             "official archive requests must be authenticated"
         );
         assert_eq!(
-            authorization_for(&transport, &mirror.replace("{sha}", SHA)),
+            authorization_for(&client, "https://mirror.test/private/archive.zip"),
             None,
-            "a third-party mirror must never receive the GitHub credential"
+            "a third-party host must never receive the GitHub credential"
         );
 
-        let anonymous = HttpsTransport::with_token(None, None)?;
+        let anonymous = GithubClient::with_token(None);
         assert_eq!(
             authorization_for(&anonymous, &format!("{API_ROOT}/commits/main")),
             None,
             "with no credential the request stays anonymous rather than sending an empty bearer"
         );
-        Ok(())
     }
 
     /// Precedence and the blank-skip rule, asserted without mutating the
@@ -531,66 +480,27 @@ mod tests {
 
     /// A blank token is worse than none: `Authorization: Bearer ` is rejected
     /// with 401, turning a working anonymous request into a hard failure.
-    /// CI runners export `GITHUB_TOKEN=` for credential-less jobs, so this is
-    /// the common case, not an edge case.
     #[test]
-    fn a_blank_credential_is_treated_as_absent() -> Result<(), TransportError> {
-        let blank = HttpsTransport::with_token(None, Some("   ".to_owned()))?;
+    fn a_blank_credential_is_treated_as_absent() {
+        let blank = GithubClient::with_token(Some("   ".to_owned()));
         assert_eq!(credential_state(blank.token.as_deref()), "absent");
 
-        let real = HttpsTransport::with_token(None, Some("ghp_example".to_owned()))?;
+        let real = GithubClient::with_token(Some("ghp_example".to_owned()));
         assert_eq!(credential_state(real.token.as_deref()), "present");
-        Ok(())
     }
 
     /// `Debug` is reachable from tracing and error reporting, so it must expose
     /// only whether a credential exists — never its value.
     #[test]
-    fn debug_output_reveals_credential_presence_but_never_its_value() -> Result<(), TransportError>
-    {
+    fn debug_output_reveals_credential_presence_but_never_its_value() {
         let secret = "ghp_thismustnotappearanywhere";
-        let transport = HttpsTransport::with_token(None, Some(secret.to_owned()))?;
-        let debug = format!("{transport:?}");
+        let client = GithubClient::with_token(Some(secret.to_owned()));
+        let debug = format!("{client:?}");
         assert!(debug.contains("credential: \"present\""), "got: {debug}");
         assert!(!debug.contains(secret), "the token must never be rendered");
 
-        let anonymous = HttpsTransport::with_token(None, None)?;
+        let anonymous = GithubClient::with_token(None);
         assert!(format!("{anonymous:?}").contains("credential: \"absent\""));
-        Ok(())
-    }
-
-    /// A pin must be re-checked against what the API actually returned:
-    /// `commits/{ref}` resolves branches and tags too, so accepting the
-    /// response unverified would let a pin silently drift to another commit.
-    #[test]
-    fn a_resolved_commit_must_be_the_one_that_was_requested() -> Result<(), TransportError> {
-        let requested = Oid::from_hex(SHA).map_err(|_error| TransportError::Metadata)?;
-        let other = Oid::from_hex(OTHER_SHA).map_err(|_error| TransportError::Metadata)?;
-        let tree = Oid::from_hex(TREE_SHA).map_err(|_error| TransportError::Metadata)?;
-
-        let matching = CommitMetadata {
-            commit: requested,
-            tree,
-        };
-        assert_eq!(
-            confirm_requested_commit(matching, requested),
-            Ok(CommitMetadata {
-                commit: requested,
-                tree
-            })
-        );
-        assert_eq!(
-            confirm_requested_commit(
-                CommitMetadata {
-                    commit: other,
-                    tree
-                },
-                requested
-            ),
-            Err(TransportError::Metadata),
-            "a substituted commit must fail closed"
-        );
-        Ok(())
     }
 
     /// A truncated listing or a mismatched root would under-report files, and
@@ -629,25 +539,11 @@ mod tests {
             Err(TransportError::Metadata),
             "a listing with no root SHA must fail closed"
         );
-        assert_eq!(
-            tree_entries(
-                TreeResponse {
-                    sha: Some(TREE_SHA.to_owned()),
-                    truncated: false,
-                    tree: vec![api_entry("blob", "160000", SHA)],
-                },
-                root
-            ),
-            Err(TransportError::Metadata),
-            "one noncanonical leaf rejects the whole listing"
-        );
         Ok(())
     }
 
     /// Rate limiting surfaces as 403 and was previously indistinguishable from
-    /// a parse failure, which is exactly how it got misdiagnosed. The status
-    /// must be recoverable for the log line; transport-level failures with no
-    /// response report 0 rather than inventing one.
+    /// a parse failure, which is exactly how it got misdiagnosed.
     #[test]
     fn failed_requests_expose_a_status_for_diagnostics() {
         assert_eq!(status_of(&ureq::Error::StatusCode(403)), 403);

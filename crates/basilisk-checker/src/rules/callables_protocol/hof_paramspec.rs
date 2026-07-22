@@ -1,4 +1,4 @@
-//! Implements [`callables_protocol`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`callables_protocol`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Higher-order `ParamSpec` argument validation (PEP 612).
 //! Implements [TYPEINF-GENERICS-PARAMSPEC].
 //!

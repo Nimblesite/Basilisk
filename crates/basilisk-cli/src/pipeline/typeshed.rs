@@ -53,19 +53,19 @@ pub(super) fn build_import_search_paths_with_config(
     search_paths
 }
 
+/// Resolve the configured typeshed source — a local read, never a download
+/// ([STUBRES-TYPESHED-OFFLINE]). A pin that is not on this machine is the
+/// terminal `NO SOURCE` failure: analysis does not run, and the error itself
+/// says how to materialise the pin (`basilisk typeshed download`).
 pub(super) fn activate_production_typeshed(
     search_paths: &mut basilisk_lsp::import_resolver::ImportSearchPaths,
     config: &basilisk_lsp::config::WorkspaceConfig,
 ) -> Result<(), PipelineError> {
     let request = basilisk_lsp::config::typeshed_request(config).map_err(PipelineError::Config)?;
-    let manager = basilisk_stubs::typeshed::runtime::production_manager(
-        request,
-        config.typeshed_cache_path.clone(),
-    )
-    .map_err(|error| PipelineError::Config(error.to_string()))?;
-    let snapshot = manager.snapshot().map_err(|error| {
-        PipelineError::Internal(format!("typeshed acquisition failed: {error}"))
-    })?;
+    let manager = basilisk_stubs::typeshed::runtime::production_manager(request);
+    let snapshot = manager
+        .snapshot()
+        .map_err(|error| PipelineError::Internal(error.to_string()))?;
     report_typeshed_status(&snapshot.status);
     search_paths.typeshed_snapshot = Some(basilisk_checker::imports::ActiveTypeshed::new(
         snapshot,
@@ -89,11 +89,8 @@ fn report_typeshed_status(status: &basilisk_stubs::typeshed::source::TypeshedSta
         active_source = status.active_source.as_str(),
         commit_identity,
         tree_identity,
-        transport = ?status.transport,
         license_status = ?status.license_status,
         license_reference,
-        provenance = ?status.provenance,
-        signed_release = status.signed_release,
         "typeshed source status"
     );
     for warning in &status.warnings {
@@ -299,20 +296,15 @@ mod tests {
     }
 
     #[test]
-    fn latest_fallback_status_is_loud_and_ordered() -> Result<(), Box<dyn std::error::Error>> {
+    fn composed_status_warnings_are_loud_and_ordered() -> Result<(), Box<dyn std::error::Error>> {
         use basilisk_stubs::typeshed::source::StatusWarning;
         use basilisk_stubs::typeshed::warning::{TypeshedWarning, UnpinnedKind};
 
         let mut status = basilisk_stubs::typeshed::bundle::bundled_snapshot()?.status;
         status.warnings = StatusWarning::list(&[
-            TypeshedWarning::DownloadFailed {
-                bundled_sha: status
-                    .commit
-                    .ok_or("bundled status is missing its commit identity")?
-                    .to_hex(),
-            },
-            TypeshedWarning::Unpinned(UnpinnedKind::LatestOrBundled),
-            TypeshedWarning::Unverified,
+            TypeshedWarning::LicenseChanged,
+            TypeshedWarning::UserManaged,
+            TypeshedWarning::Unpinned(UnpinnedKind::CustomFolder),
         ]);
         let capture = Capture::default();
         let subscriber = tracing_subscriber::fmt()
@@ -325,16 +317,15 @@ mod tests {
 
         let stderr = capture.text()?;
         assert!(stderr.contains("typeshed source status"), "{stderr}");
-        assert!(stderr.contains("signed_release=false"), "{stderr}");
         let unpinned = stderr.find("warning_code=\"UNPINNED\"");
-        let failed = stderr.find("warning_code=\"DOWNLOAD FAILED\"");
-        let unverified = stderr.find("warning_code=\"UNVERIFIED\"");
+        let user_managed = stderr.find("warning_code=\"USER-MANAGED SOURCE\"");
+        let license = stderr.find("warning_code=\"LICENSE CHANGED\"");
         assert!(
             unpinned
-                .zip(failed)
-                .zip(unverified)
+                .zip(user_managed)
+                .zip(license)
                 .is_some_and(|((first, second), third)| first < second && second < third),
-            "Latest fallback warnings must remain loud and canonical: {stderr}"
+            "status warnings must stay loud and in canonical order: {stderr}"
         );
         Ok(())
     }

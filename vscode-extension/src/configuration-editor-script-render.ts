@@ -334,36 +334,25 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       if (!dialog.open) dialog.showModal();
       announce('Preview ready: ' + formatNumber(preview.changes.length + preview.typeshedChanges.length) + ' setting(s) change');
     }
-    function renderOverlay() {
-      const overlay = byId('state-overlay');
-      const blocking = !snapshot || ['loading', 'applying', 'error', 'conflict', 'unsupported'].includes(editorState.phase);
-      overlay.hidden = !blocking;
-      byId('shell').inert = blocking;
-      document.querySelector('body > header').inert = blocking;
-      document.querySelector('main').setAttribute('aria-busy', String(blocking));
-      if (!blocking) {
-        if (overlayWasBlocking) {
-          const recovery = activeSection === 'rules'
-            ? byId('rule-search')
-            : document.querySelector('[data-section="' + activeSection + '"] h2');
-          if (recovery) window.requestAnimationFrame(() => recovery.focus());
-        }
-        overlayWasBlocking = false;
-        return;
-      }
-      const previewDialog = byId('preview-dialog');
-      if (previewDialog.open) previewDialog.close();
+    // The editor never blocks itself: failures and first loads render as an
+    // inline notice row while every control on screen stays live. There is no
+    // full-panel overlay, no modal, and no lock screen
+    // ([LSPCFGED-TYPESHED-DOWNLOAD]).
+    function renderNotice() {
+      const notice = byId('state-notice');
+      const phase = editorState.phase;
+      const attention = ['error', 'conflict', 'unsupported'].includes(phase);
+      notice.hidden = !attention && snapshot !== undefined;
+      notice.dataset.phase = phase;
+      if (notice.hidden) return;
       const titles = {
-        loading: 'Reading project configuration', applying: 'Applying configuration', error: 'Configuration unavailable',
+        loading: 'Reading project configuration', error: 'Configuration unavailable',
         conflict: 'The project changed', unsupported: 'Update Basilisk to continue', idle: 'Connecting to Basilisk',
       };
-      byId('state-title').textContent = titles[editorState.phase] || 'Working…';
-      byId('state-message').textContent = editorState.message || 'Waiting for the language server.';
-      byId('state-symbol').textContent = editorState.phase === 'conflict' ? '↻' : editorState.phase === 'error' ? '!' : 'B';
-      byId('state-action').hidden = !['error', 'conflict'].includes(editorState.phase);
-      byId('state-open-raw').hidden = !editorState.repairUri;
-      if (!overlayWasBlocking) window.requestAnimationFrame(() => overlay.focus());
-      overlayWasBlocking = true;
+      byId('notice-title').textContent = titles[phase] || 'Working…';
+      byId('notice-message').textContent = editorState.message || 'Waiting for the language server.';
+      byId('notice-retry').hidden = !['error', 'conflict'].includes(phase);
+      byId('notice-open-raw').hidden = !editorState.repairUri;
     }
     function renderState(nextState) {
       editorState = nextState || { phase: 'error', message: 'Invalid editor state' };
@@ -374,7 +363,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       status.dataset.phase = editorState.phase;
       status.textContent = editorState.message || editorState.phase;
       if (snapshot) renderSnapshot();
-      renderOverlay();
+      renderNotice();
       if (preview && editorState.phase === 'preview') renderPreview();
       const dialog = byId('preview-dialog');
       if (editorState.phase !== 'preview' && dialog.open) dialog.close();

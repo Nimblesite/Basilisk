@@ -2,87 +2,57 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{
-    ConfigurationPreview, ConfigurationSnapshot, Revision, TypeshedSettingKey,
-    TypeshedSettingValue, Uri,
-};
+use super::{ConfigurationSnapshot, Revision, TypeshedSettingKey, Uri};
 
-/// The active source and the value that defines it. A pinned commit and a
-/// custom folder cannot coexist, and `Latest` cannot carry a pin — the wire
-/// model makes those states unrepresentable ([LSPCFGED-TYPESHED]).
+/// The active source and the value that defines it. There are exactly two
+/// sources ([LSPCFGED-TYPESHED]): a pinned commit or a custom folder. There is
+/// no "track latest" source — freshness is the user-invoked download action.
+/// An unset pin reports the bundled default commit (still `UNPINNED`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all_fields = "camelCase")]
 pub enum TypeshedSource {
-    Latest,
     ExactCommit { commit: String },
     CustomFolder { path: String },
 }
 
-/// Download policy of a downloaded source. A user-managed folder downloads
-/// nothing, so it has none at all.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TypeshedDownloadPolicy {
-    pub reuse_downloads: bool,
-    pub verify_content: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub archive_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_folder: Option<String>,
-}
-
+/// Downloading is the only long-running state, and it is always user-invoked
+/// ([LSPCFGED-TYPESHED-DOWNLOAD]). `NoSource` = the selected source is not on
+/// this machine, so analysis does not run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum TypeshedLifecycle {
-    Acquiring,
+    Downloading,
     Ready,
-    Blocked,
+    NoSource,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum TypeshedAction {
-    PinCurrent,
-    AcquireFresh,
+    DownloadLatest,
+    DownloadPinned,
     ViewLicense,
 }
 
+/// The active source is the whole trust story (custom = user-managed, bundled
+/// = build-vetted, exact commit = attested at download, re-proven offline), so
+/// there are no separate transport or provenance fields
+/// ([STUBRES-TYPESHED-WARN]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum TypeshedActiveSource {
     Custom,
     ExactCommit,
-    Latest,
     Bundled,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
-pub enum TypeshedTransport {
-    CustomPath,
-    EmbeddedZip,
-    Codeload,
-    Mirror,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind")]
 pub enum TypeshedLicenseStatus {
-    Acquiring,
     Unavailable,
     Approved,
     Changed,
     NotSupplied,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind")]
-pub enum TypeshedProvenance {
-    Pending,
-    GithubTlsAttested,
-    Unverified,
-    BundleVetted,
-    UserManaged,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,31 +75,25 @@ pub struct TypeshedWarningState {
 pub struct TypeshedStatusState {
     pub lifecycle: TypeshedLifecycle,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub blocked_reason: Option<String>,
+    pub no_source_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub active_source: Option<TypeshedActiveSource>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub commit_identity: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transport: Option<TypeshedTransport>,
     pub license_status: TypeshedLicenseStatus,
-    pub provenance: TypeshedProvenance,
-    pub signed_release: bool,
     pub warnings: Vec<TypeshedWarningState>,
 }
 
+/// Everything the editor needs, and nothing it can misrender: the one active
+/// source, the store folder pins resolve from (none for a custom folder), and
+/// whether a license document exists to open. Labels are client copy, not
+/// server state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-/// Everything the editor needs and nothing it can misrender: the one active
-/// source, the download policy that source has, the commit
-/// [`TypeshedAction::PinCurrent`] would write when pinning is possible, and
-/// whether a license document exists to open. Labels are client copy.
 pub struct TypeshedConfigurationState {
     pub source: TypeshedSource,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub downloads: Option<TypeshedDownloadPolicy>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pinnable_commit: Option<String>,
+    pub store_folder: Option<String>,
     pub license_available: bool,
     pub status: TypeshedStatusState,
 }
@@ -139,9 +103,9 @@ pub struct TypeshedConfigurationState {
 pub struct TypeshedSettingChange {
     pub key: TypeshedSettingKey,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub before: Option<TypeshedSettingValue>,
+    pub before: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub after: Option<TypeshedSettingValue>,
+    pub after: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -169,7 +133,6 @@ pub struct TypeshedLicenseDocument {
 )]
 #[serde(tag = "kind")]
 pub enum TypeshedActionResult {
-    Preview { preview: ConfigurationPreview },
     Snapshot { snapshot: ConfigurationSnapshot },
     License { license: TypeshedLicenseDocument },
 }

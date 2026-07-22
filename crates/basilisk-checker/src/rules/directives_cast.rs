@@ -1,4 +1,4 @@
-//! Implements [`directives_cast`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`directives_cast`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! `directives_cast`: Invalid `cast()` call.
 //!
 //! `typing.cast(typ, val)` must be called with exactly two positional arguments,

@@ -132,8 +132,9 @@ fn typeshed_path_full_lifecycle_through_pyproject() {
     seed_typeshed(&dir, "ts", &[("os.pyi", "def uname() -> str: ...\n")]);
     write(&dir, "app.py", APP_OS_AND_FRACTIONS);
 
-    // ── Interaction 1: NO typeshed-path → the default Latest-first runtime
-    // source resolves both stdlib modules, so the project is clean. ──
+    // ── Interaction 1: NO typeshed-path → the default pinned source (an unset
+    // `typeshed-commit` selects the bundled commit, served from the embedded
+    // ZIP) resolves both stdlib modules, so the project is clean. ──
     write(
         &dir,
         "pyproject.toml",
@@ -182,8 +183,9 @@ fn typeshed_path_full_lifecycle_through_pyproject() {
         .expect("remove fractions stub");
     assert_flags_unresolved(&check(&dir), "fractions", &["os", "uname"]);
 
-    // ── Interaction 5: remove typeshed-path entirely → the default Latest-first
-    // runtime source becomes active again, so the project is clean once more. ──
+    // ── Interaction 5: remove typeshed-path entirely → the default pinned
+    // source (the bundled commit) becomes active again, so the project is clean
+    // once more. ──
     write(
         &dir,
         "pyproject.toml",

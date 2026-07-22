@@ -58,7 +58,7 @@ function snapshotWithRule(): ConfigurationSnapshot {
       disabledRules: 0,
     },
     problems: [],
-    typeshed: typeshedFixture({ acquiring: true }),
+    typeshed: typeshedFixture({ downloading: true }),
   };
 }
 

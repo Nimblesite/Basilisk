@@ -1,4 +1,4 @@
-//! Implements [`generics_variance_inference`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_variance_inference`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Variance inference for `generics_variance_inference`.
 //! Implements [TYPEINF-GENERICS-VARIANCE].
 //!

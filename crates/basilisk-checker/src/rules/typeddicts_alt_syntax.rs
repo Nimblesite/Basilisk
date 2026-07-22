@@ -1,4 +1,4 @@
-//! Implements [`typeddicts_alt_syntax`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`typeddicts_alt_syntax`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! `typeddicts_alt_syntax`: Invalid `TypedDict(...)` functional-syntax call.
 //!
 //! The `TypedDict(name, {...})` functional syntax has several constraints:

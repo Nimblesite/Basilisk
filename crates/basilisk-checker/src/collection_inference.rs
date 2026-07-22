@@ -1,4 +1,4 @@
-//! Implements [TYPEINF-COLLECTIONS] / [TYPEINF-EXCEEDS-CONTAINERS]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-collections
+//! Implements [TYPEINF-COLLECTIONS] / [TYPEINF-EXCEEDS-CONTAINERS]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-COLLECTIONS
 //! Collection type inference for lists, dicts, sets, and tuples.
 //!
 //! [TYPEINF-EXCEEDS-CONTAINERS]: the union-of-element-types inference below is

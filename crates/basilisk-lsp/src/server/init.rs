@@ -119,19 +119,14 @@ pub(super) async fn initialize(
         .and_then(parse_python_interpreter);
     (*server.python_interpreter.write().await).clone_from(&python_interpreter);
 
-    // Every root starts in an explicit non-ready generation. The
-    // `initialized` notification acquires one fully gated source before any
-    // workspace analysis starts, and publishes the matching root-keyed status.
-    {
-        let mut generations = server.typeshed_generations.write().await;
-        generations.clear();
-        for root in &roots {
-            let _ = generations.insert(
-                root.clone(),
-                super::typeshed_status::TypeshedGeneration::Acquiring,
-            );
-        }
-    }
+    // Resolve every root's terminal Typeshed generation BEFORE answering
+    // `initialize`: resolution is a local store/bundle read
+    // ([STUBRES-TYPESHED-OFFLINE]), so the initialize payload below carries
+    // real Ready/NoSource statuses and no client ever renders an
+    // intermediate state ([LSPCFGED-TYPESHED]). Statuses ride the payload;
+    // change notifications only flow for later generation changes.
+    server.typeshed_generations.write().await.clear();
+    resolve_typeshed_for_roots(server, roots.clone(), false).await;
 
     // Load project-level checker config (pyproject.toml [tool.basilisk]) so
     // that rule severity overrides, per-module, and per-path settings match
@@ -324,7 +319,6 @@ pub(super) async fn initialized(server: &LspServer) {
         .log_message(MessageType::INFO, "Basilisk LSP initialized")
         .await;
 
-    acquire_initial_typeshed(server).await;
     install_initial_search_paths(server).await;
 
     let statuses = server
@@ -392,11 +386,10 @@ pub(super) async fn initialized(server: &LspServer) {
     match mode {
         // Implements [ANALYSIS-STARTUP-OPEN]
         AnalysisMode::OpenFilesOnly => {
-            // `didOpen` may arrive while the initial Typeshed generation is
-            // still Acquiring.  The document handler preserves that buffer's
-            // authoritative text without analysing it; once acquisition has
-            // completed, this is the convergence point that analyses and
-            // publishes every deferred open file owned by a ready root.
+            // `didOpen` may arrive before this notification. The document
+            // handler preserves that buffer's authoritative text; this is the
+            // convergence point that analyses and publishes every deferred
+            // open file owned by a root with a Ready generation.
             let guard = server.index.read().await;
             let Some(index) = guard.as_ref() else { return };
             let results = index.refresh_open_files_for_roots(&ready_roots);
@@ -438,55 +431,42 @@ pub(super) async fn initialized(server: &LspServer) {
     spawn_initial_test_discovery(server);
 }
 
-async fn acquire_typeshed_snapshot(
-    root: &std::path::Path,
-    config: crate::config::WorkspaceConfig,
-) -> Result<
-    Arc<basilisk_stubs::typeshed::snapshot::Snapshot>,
-    super::typeshed_status::TypeshedFailure,
-> {
-    let cache_path = config.typeshed_cache_path.clone();
-    let request = crate::config::typeshed_request(&config)
-        .map_err(super::typeshed_status::TypeshedFailure::acquisition)?;
-    let manager = basilisk_stubs::typeshed::runtime::production_manager(request, cache_path)
-        .map_err(|error| super::typeshed_status::TypeshedFailure::acquisition(error.to_string()))?;
-    let result = tokio::task::spawn_blocking(move || manager.snapshot())
-        .await
-        .map_err(|_join_error| {
-            super::typeshed_status::TypeshedFailure::acquisition("Typeshed acquisition task failed")
-        })?
-        .map_err(|error| super::typeshed_status::TypeshedFailure::from_selection(&error));
-    if result.is_err() {
-        tracing::warn!(root = %root.display(), "initial Typeshed acquisition failed");
-    }
-    result
-}
-
-/// Acquire each root's immutable generation before the first scan. Identical
-/// root policies may hit the same immutable cache entry, but each result is
-/// still published under the owning root so later configuration changes can
-/// replace one generation without cross-root bleed.
-async fn acquire_initial_typeshed(server: &LspServer) {
-    let mut roots = server.workspace_roots.read().await.clone();
-    roots.sort();
-    acquire_typeshed_for_roots(server, roots).await;
-}
-
-async fn acquire_typeshed_for_roots(server: &LspServer, roots: Vec<std::path::PathBuf>) {
+/// Resolve each root's terminal generation from local sources only — never
+/// the network ([STUBRES-TYPESHED-OFFLINE]). Identical root policies may
+/// resolve the same immutable store entry, but each result is still keyed by
+/// its owning root so later configuration changes can replace one generation
+/// without cross-root bleed.
+async fn resolve_typeshed_for_roots(
+    server: &LspServer,
+    roots: Vec<std::path::PathBuf>,
+    notify: bool,
+) {
     let interpreter = server.python_interpreter.read().await.clone();
     for root in roots {
         let mut config = crate::config::load_config(&root);
         config.python_interpreter.clone_from(&interpreter);
-        let generation = match acquire_typeshed_snapshot(&root, config).await {
-            Ok(snapshot) => super::typeshed_status::TypeshedGeneration::Ready(snapshot),
-            Err(failure) => super::typeshed_status::TypeshedGeneration::Blocked { failure },
-        };
+        let generation = crate::configuration_editor::resolve_workspace(config).await;
+        if let Some(failure) = generation.no_source_failure() {
+            // A NoSource root produces NO diagnostics, so a silent trace-log line
+            // would leave the user believing a clean workspace is being checked.
+            // Drive an immediate, client-agnostic error — on the initialize path
+            // too (`notify` only gates the status *change* notification, which the
+            // initialize payload already carries). [STUBRES-TYPESHED-WARN]
+            tracing::warn!(
+                root = %root.display(),
+                reason = failure.reason(),
+                "Typeshed source is not on this machine; analysis will not run for this root"
+            );
+            super::typeshed_status::show_no_source_error(&server.client, &root, failure).await;
+        }
         let _ = server
             .typeshed_generations
             .write()
             .await
             .insert(root.clone(), generation.clone());
-        super::typeshed_status::notify_generation(&server.client, &root, &generation).await;
+        if notify {
+            super::typeshed_status::notify_generation(&server.client, &root, &generation).await;
+        }
     }
 }
 
@@ -717,22 +697,8 @@ pub(super) async fn did_change_workspace_folders(
         for root in &removed_roots {
             let _ = generations.remove(root);
         }
-        for root in &added_roots {
-            let _ = generations.insert(
-                root.clone(),
-                super::typeshed_status::TypeshedGeneration::Acquiring,
-            );
-        }
     }
-    for root in &added_roots {
-        super::typeshed_status::notify_generation(
-            &server.client,
-            root,
-            &super::typeshed_status::TypeshedGeneration::Acquiring,
-        )
-        .await;
-    }
-    acquire_typeshed_for_roots(server, added_roots).await;
+    resolve_typeshed_for_roots(server, added_roots, true).await;
 
     let interpreter = server.python_interpreter.read().await.clone();
     let checker_config = updated_roots
@@ -1626,7 +1592,7 @@ mod explicit_python_tests {
     }
 
     #[tokio::test]
-    async fn startup_acquires_custom_typeshed_before_analysis() {
+    async fn startup_resolves_custom_typeshed_before_analysis() {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |duration| duration.as_nanos());
@@ -1649,9 +1615,13 @@ mod explicit_python_tests {
             typeshed_path: Some(custom),
             ..crate::config::WorkspaceConfig::default()
         };
-        let snapshot = acquire_typeshed_snapshot(&root, config).await;
-        assert!(snapshot.is_ok(), "custom startup acquisition: {snapshot:?}");
-        let Ok(snapshot) = snapshot else {
+        let generation = crate::configuration_editor::resolve_workspace(config).await;
+        let snapshot = generation.ready_snapshot();
+        assert!(
+            snapshot.is_some(),
+            "custom startup resolution: {generation:?}"
+        );
+        let Some(snapshot) = snapshot.cloned() else {
             let _ = std::fs::remove_dir_all(&base);
             return;
         };
@@ -1696,7 +1666,7 @@ mod explicit_python_tests {
         let _ = std::fs::remove_dir_all(&base);
     }
 
-    /// [STUBRES-TYPESHED-ACQUIRE]: readiness follows the longest owning root;
+    /// [STUBRES-TYPESHED-OFFLINE]: readiness follows the longest owning root;
     /// a ready parent must not authorize analysis inside its blocked child.
     #[test]
     fn nested_workspace_typeshed_readiness_uses_the_longest_owner() {

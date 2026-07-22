@@ -12,9 +12,7 @@ use std::sync::Arc;
 use basilisk_stubs::typeshed::archive::{Archive, ArchiveEntry, ArchiveVfs};
 use basilisk_stubs::typeshed::gittree::FileMode;
 use basilisk_stubs::typeshed::snapshot::Snapshot;
-use basilisk_stubs::typeshed::source::{
-    LicenseStatus, Provenance, SourceIdentity, SourceKind, Transport, TypeshedStatus,
-};
+use basilisk_stubs::typeshed::source::{LicenseStatus, SourceIdentity, SourceKind, TypeshedStatus};
 
 use super::{resolve_module, resolve_module_with_importer, ActiveTypeshed, ImportSearchPaths};
 
@@ -65,11 +63,8 @@ fn custom_snapshot(modules: &[(&str, &str)]) -> ActiveTypeshed {
         active_source: SourceKind::Custom,
         commit: None,
         tree: None,
-        transport: Transport::CustomPath,
         license_status: LicenseStatus::NotSupplied,
         license_reference: None,
-        provenance: Provenance::UserManaged,
-        signed_release: false,
         warnings: Vec::new(),
     };
     let snapshot = Snapshot::build(

@@ -1,79 +1,117 @@
 //! Tests for the server-described Typeshed source projection.
 
 use std::path::PathBuf;
+use std::sync::Arc;
+
+use basilisk_stubs::typeshed::bundle::{bundled_commit_sha, bundled_snapshot};
 
 use super::*;
 
-/// [LSPCFGED-TYPESHED]: a blocked official source has no immutable license
-/// document to show, while a user-managed tree always states its own terms.
+/// [STUBRES-TYPESHED]: an unset pin IS the bundled commit — the picker shows
+/// the effective SHA, never a third "latest" source.
 #[test]
-fn blocked_official_source_cannot_offer_a_stale_license() {
-    let exact = BasiliskConfig {
+fn unset_pin_reports_the_bundled_commit_as_the_effective_source() {
+    let unset = BasiliskConfig::default();
+    assert_eq!(
+        source(&unset),
+        TypeshedSource::ExactCommit {
+            commit: bundled_commit_sha().to_owned(),
+        }
+    );
+
+    let pinned = BasiliskConfig {
         typeshed_commit: Some("a".repeat(40)),
         ..BasiliskConfig::default()
     };
-    let exact_source = source(&exact);
     assert_eq!(
-        exact_source,
+        source(&pinned),
         TypeshedSource::ExactCommit {
             commit: "a".repeat(40),
         }
     );
-    assert!(!license_available(
-        &exact,
-        &exact_source,
-        TypeshedLifecycle::Blocked,
-        None,
-    ));
 
     let custom = BasiliskConfig {
         typeshed_path: Some(PathBuf::from("/user/typeshed")),
         ..BasiliskConfig::default()
     };
-    let custom_source = source(&custom);
-    assert!(matches!(custom_source, TypeshedSource::CustomFolder { .. }));
-    assert!(license_available(
-        &custom,
-        &custom_source,
-        TypeshedLifecycle::Blocked,
-        None,
+    assert!(matches!(
+        source(&custom),
+        TypeshedSource::CustomFolder { .. }
     ));
+}
+
+/// [STUBRES-TYPESHED-STORE]: pins resolve from a store folder (configured or
+/// canonical); a custom folder resolves nothing from the store.
+#[test]
+fn store_folder_exists_only_for_pinned_sources() {
+    let configured = BasiliskConfig {
+        typeshed_store_path: Some(PathBuf::from("/stores/typeshed")),
+        ..BasiliskConfig::default()
+    };
     assert_eq!(
-        downloads(&custom, &custom_source),
-        None,
-        "a user-managed folder downloads nothing"
+        store_folder(&configured, &source(&configured)).as_deref(),
+        Some("/stores/typeshed")
+    );
+
+    let custom = BasiliskConfig {
+        typeshed_path: Some(PathBuf::from("/user/typeshed")),
+        typeshed_store_path: Some(PathBuf::from("/stores/typeshed")),
+        ..BasiliskConfig::default()
+    };
+    assert_eq!(store_folder(&custom, &source(&custom)), None);
+}
+
+/// [LSPCFGED-TYPESHED]: a pin without a matching active generation has no
+/// immutable license document to show, while a user-managed tree always
+/// answers `ViewLicense` with its own terms.
+#[test]
+fn license_availability_tracks_the_matching_active_generation() {
+    let custom_source = TypeshedSource::CustomFolder {
+        path: "/user/typeshed".to_owned(),
+    };
+    assert!(license_available(&custom_source, None));
+
+    let bundled_pin = TypeshedSource::ExactCommit {
+        commit: bundled_commit_sha().to_owned(),
+    };
+    assert!(!license_available(&bundled_pin, None));
+
+    let Ok(snapshot) = bundled_snapshot() else {
+        unreachable!("release bundle must activate");
+    };
+    let ready = TypeshedGeneration::Ready(Arc::new(snapshot));
+    assert!(license_available(&bundled_pin, Some(&ready)));
+
+    let other_pin = TypeshedSource::ExactCommit {
+        commit: "a".repeat(40),
+    };
+    assert!(
+        !license_available(&other_pin, Some(&ready)),
+        "a pin must not surface a different commit's license"
     );
 }
 
-/// A source that cannot be reached is never offered: pinning requires an
-/// unpinned download with a settled commit behind it.
+/// [LSPCFGED-TYPESHED]: every projection is terminal. A snapshot is always
+/// `Ready`; an unresolved root is `NoSource` with its reason — there is no
+/// intermediate state for a client to render as a blocking overlay.
 #[test]
-fn pinning_is_offered_only_for_an_unpinned_settled_download() {
-    let latest = BasiliskConfig::default();
-    let latest_source = source(&latest);
-    assert_eq!(latest_source, TypeshedSource::Latest);
-    assert_eq!(pinnable_commit(&latest_source, false, None), None);
-    assert_eq!(
-        pinnable_commit(&latest_source, true, None),
-        None,
-        "an in-flight acquisition offers no pin"
-    );
-
-    let pinned = BasiliskConfig {
-        typeshed_commit: Some("b".repeat(40)),
-        ..BasiliskConfig::default()
+fn projections_are_always_terminal() {
+    let Ok(snapshot) = bundled_snapshot() else {
+        unreachable!("release bundle must activate");
     };
-    assert_eq!(pinnable_commit(&source(&pinned), false, None), None);
+    let ready = ready_projection(&snapshot.status);
+    assert_eq!(ready.lifecycle, TypeshedLifecycle::Ready);
+    assert!(ready.no_source_reason.is_none());
+    assert_eq!(ready.active_source, Some(TypeshedActiveSource::Bundled));
 
-    // Defaults resolve on the wire so the client never re-derives them.
-    let policy = downloads(&latest, &latest_source);
+    let unresolved = typeshed_configuration(&BasiliskConfig::default(), None);
+    assert_eq!(unresolved.status.lifecycle, TypeshedLifecycle::NoSource);
     assert_eq!(
-        policy.as_ref().map(|policy| policy.reuse_downloads),
-        Some(true)
+        unresolved.status.no_source_reason.as_deref(),
+        Some("typeshed resolution has not run for this root")
     );
     assert_eq!(
-        policy.as_ref().map(|policy| policy.verify_content),
-        Some(true)
+        unresolved.status.license_status,
+        TypeshedLicenseStatus::Unavailable
     );
-    assert_eq!(policy.and_then(|policy| policy.archive_url), None);
 }

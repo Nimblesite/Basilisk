@@ -43,6 +43,12 @@ basilisk.nvim/
 │       ├── profiling.lua         # Profiling commands (see LSP-ARCHITECTURE-SPEC.md for LSP commands)
 │       ├── memory.lua            # Memory commands (see LSP-ARCHITECTURE-SPEC.md for LSP commands)
 │       ├── testing.lua           # Test discovery, tree UI, run/debug
+│       ├── codelens.lua          # Version-compatible code lens activation
+│       ├── modules.lua           # Module Explorer panel (basilisk.workspaceModules)
+│       ├── info.lua              # Info float: status, versions, integrations
+│       ├── type_health.lua       # Type Health panel (per-module coverage)
+│       ├── tab_tracking.lua      # Buffer/tab tracking for openFilesOnly mode
+│       ├── ui.lua                # Shared floating-window + client-lookup helpers
 │       ├── statusline.lua        # Status line component (lualine compat)
 │       ├── health.lua            # :checkhealth basilisk
 │       └── log.lua               # Logger (vim.notify + optional file)
@@ -51,14 +57,17 @@ basilisk.nvim/
 ├── after/
 │   └── lsp/
 │       └── basilisk.lua          # Neovim 0.11+ native LSP config (fallback for non-setup users)
+├── lspconfig/
+│   └── basilisk.lua              # Standalone nvim-lspconfig server definition, for
+│                                 #   upstream PR [NVIM-DISTRIBUTION-SECONDARY-LSPCONFIG-PR]
 ├── doc/
 │   └── basilisk.txt              # Vim help file
 └── tests/
     ├── minimal_init.lua          # Isolated test init
-    └── basilisk/
-        ├── binary_spec.lua
-        ├── config_spec.lua
-        └── lsp_spec.lua
+    ├── basilisk/                 # Unit specs for lua/basilisk/ modules
+    ├── lsp/                      # e2e specs driving the real binary over LSP
+    ├── dap/                      # e2e debug specs (nvim-dap ↔ debugpy)
+    └── ui/                       # Screenshot/statusline/testing UI specs
 ```
 
 ---
@@ -397,7 +406,9 @@ require('basilisk').setup({})  -- zero-config, works out of the box
 
 ### Secondary: nvim-lspconfig PR {#NVIM-DISTRIBUTION-SECONDARY-LSPCONFIG-PR}
 
-Submit `lsp/basilisk.lua` to nvim-lspconfig for users wanting basic LSP only:
+`lspconfig/basilisk.lua` is the server definition to submit to nvim-lspconfig for
+users wanting basic LSP only. It is standalone — plugin users never load it,
+because the plugin uses native `vim.lsp.config`/`vim.lsp.enable`:
 
 ```lua
 -- Minimal nvim-lspconfig setup (no DAP, no test explorer, no profiling)
@@ -406,12 +417,16 @@ require('lspconfig').basilisk.setup({})
 
 ### CI {#NVIM-DISTRIBUTION-CI}
 
-GitHub Actions: the `test-nvim` job in `ci.yml` runs the plenary.nvim suite on a pinned Neovim 0.11.x (the minimum supported version).
+GitHub Actions: the `test-nvim` job in `ci.yml` runs `scripts/test-nvim.sh` — the `tests/basilisk` unit specs, the `tests/dap` debug-adapter specs, the `tests/lsp` real-binary e2e suite, and the `tests/ui` screenshot specs, in that order — over a two-leg matrix — a pinned `v0.11.6` (the supported floor) and `nightly` (forward-compat tip) — with `fail-fast: false`, so one leg's failure never masks the other's result.
+
+Because the matrix legs report as `Neovim Extension (0.11)` / `(nightly)` rather than the pre-matrix job name, a fan-in job `nvim-gate` (display name `Neovim Extension`) is the required branch-protection context: it runs `if: always()` and passes only when `needs.test-nvim.result` is `success` or `skipped`, so a failed or cancelled leg fails the gate. This mirrors the `mutation-test-shard` → `mutation-test` pattern.
+
+Only the matrix job is change-scoped (`needs.changes.outputs.core == 'true' || needs.changes.outputs.nvim == 'true'`): a core checker/LSP change re-runs the suite, because the e2e harness drives the real binary over LSP/DAP. `nvim-gate` deliberately carries no scope condition at all — it does not even `needs: changes` — because a required context that skips never reports, and `skipped` is one of the two results it accepts.
 
 ### Release & Versioning {#NVIM-DISTRIBUTION-RELEASE}
 
-`basilisk.nvim/` is canonical in the `Nimblesite/Basilisk` monorepo, but plugin managers (and `vim.pack`) install only a repo whose root *is* the plugin — none install from a subdirectory. On each `vX.Y.Z` tag, the `publish-nvim` job in `release.yml` mirrors the `basilisk.nvim/` tree to the standalone repo **`Nimblesite/basilisk.nvim`** (the repo users install), using the same convention as `publish-homebrew` / `publish-scoop`: clone the sibling repo with the shared `BREW_SCOOP_PAT` via `x-access-token`, replace its content with the plugin tree, commit as `github-actions[bot]` (`basilisk ${VERSION}`), and push.
+`basilisk.nvim/` is canonical in the `Nimblesite/Basilisk` monorepo, but plugin managers (and `vim.pack`) install only a repo whose root *is* the plugin — none install from a subdirectory. On each `vX.Y.Z` tag, the `publish-nvim` job in `release.yml` mirrors the `basilisk.nvim/` tree to the standalone repo **`Nimblesite/basilisk.nvim`** (the repo users install), using the same convention as `publish-homebrew` / `publish-scoop`: clone the sibling repo with the shared `BREW_SCOOP_PAT` via `x-access-token`, replace its content with the plugin tree (preserving the mirror's own `.git`), commit as `github-actions[bot]` (`basilisk ${VERSION}`, the tag with its leading `v` stripped), and push. The job `needs: release` and both the push and the tag are idempotent — an unchanged tree or an existing tag is a no-op, not a failure.
 
 The mirror is tagged with the identical `vX.Y.Z`, so the plugin version matches the binary that `binary.lua` auto-downloads from `Nimblesite/Basilisk` releases and that version-pinned installs (`vim.pack` / lazy.nvim) resolve. Versioning is **tag-only** — no embedded version string; `:BasiliskInfo` and `:checkhealth basilisk` report the binary version, which equals the tag.
 
-The core plugin is shipped. Registry submission and mirror publication remain external release follow-ups in the [roadmap](../plans/ROADMAP-NEXT-STEPS-PLAN.md#NEXTSTEPS-DISTRIBUTION).
+The core plugin is shipped and the mirror push is automated by `publish-nvim`. What remains are the human-gated upstream registry submissions (starting with the `lspconfig/basilisk.lua` PR to nvim-lspconfig) and one end-to-end tagged-release validation with the real credentials; both tracked in the [roadmap](../plans/ROADMAP-NEXT-STEPS-PLAN.md#NEXTSTEPS-DISTRIBUTION).

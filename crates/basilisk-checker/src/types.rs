@@ -1,6 +1,6 @@
 //! Implements [TYPEINF-OVERVIEW], [TYPEINF-SUBTYPING], and
 //! [TYPEINF-SPECIAL]. See
-//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-overview
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVIEW
 //! Type representation for Basilisk's type inference engine.
 //!
 //! Annotation parsing logic lives in [`super::types_parsing`].

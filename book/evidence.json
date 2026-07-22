@@ -91,7 +91,28 @@
       ],
       "blocker": "The current build identifies itself as 0.0.0-PLACEHOLDER. Pin a released Basilisk version, rerun the Chapter 5 static evidence, and capture any release-specific output before setting decision to publish."
     },
-    {"section": "06", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {
+      "section": "06",
+      "decision": "withhold-until-versioned-release",
+      "governingSpecs": [
+        "https://typing.python.org/en/latest/spec/narrowing.html",
+        "https://typing.python.org/en/latest/spec/annotations.html",
+        "https://typing.python.org/en/latest/guides/unreachable.html"
+      ],
+      "releaseImplementation": [],
+      "workingTreeImplementation": [],
+      "executableEvidence": [
+        "Python 3.14.6 ran the Chapter 6 Signal Box checkpoint: 3 tests passed on 2026-07-22",
+        "The Chapter 6 runtime tests exercised absent, textual, and numeric normalization paths; valid and invalid TypeGuard inputs; and every member of the closed status set on 2026-07-22"
+      ],
+      "omitted": [
+        "Exact inferred types for literals, expressions, calls, isinstance branches, equality, membership, truthiness, reassignment, loops, closures, attributes, and match remainders are omitted because the normative typing specification does not fully specify them.",
+        "The working-tree inference specification and implementation are not used as authority for normative Python typing behaviour.",
+        "Exact diagnostic wording and identifiers are omitted until the edition pins a released Basilisk binary.",
+        "A match-coverage diagnostic screenshot is not planned because it would encourage readers to mistake one release's inference result for a normative guarantee."
+      ],
+      "blocker": "The book edition has not pinned its Basilisk release. Before publication, pin the release and verify its TypeGuard, TypeIs, and is-None behaviour against the normative typing specification. Do not publish implementation-specific inference results as normative rules."
+    },
     {"section": "07", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {"section": "08", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {

@@ -21,9 +21,9 @@ pub use editor::{
     active_config_path, apply_config_patch, build_configuration_patch, build_rule_patch,
     discover_config_document, discover_config_document_with_content, ConfigDocument,
     ConfigDocumentError, ConfigPatch, ConfigurationUpdate, RuleConfigUpdate, TypeshedConfigKey,
-    TypeshedConfigUpdate, TypeshedConfigValue,
+    TypeshedConfigUpdate,
 };
-pub use parse::{is_full_commit_sha, is_valid_typeshed_url_template, BasiliskConfig, RuleTables};
+pub use parse::{is_full_commit_sha, BasiliskConfig, RuleTables};
 pub use paths::{is_virtualenv_dir, path_matches_pattern};
 pub use severity::RuleSeverity;
 
@@ -248,8 +248,8 @@ typeshed-path = "typeshed-mp"
         );
     }
 
-    /// [STUBRES-TYPESHED-CONFIG]: every runtime Typeshed setting is parsed
-    /// without manufacturing a Python target or mapping it to a commit.
+    /// [STUBRES-TYPESHED-CONFIG]: the whole runtime typeshed surface is three
+    /// string keys, parsed verbatim.
     #[test]
     fn runtime_typeshed_settings_parse_as_one_source_policy() {
         with_temp_cfg_dir(
@@ -260,10 +260,7 @@ typeshed-path = "typeshed-mp"
 [tool.basilisk]
 typeshed-path = "custom-typeshed"
 typeshed-commit = "83c2518a9e6abbda0c44592c3483de459198f887"
-typeshed-url = "https://mirror.invalid/typeshed-{sha}.zip"
-typeshed-cache-path = ".cache/typeshed"
-typeshed-cache = false
-typeshed-verify = false
+typeshed-store-path = ".cache/typeshed-store"
 "#,
             )],
             |cfg| {
@@ -276,23 +273,17 @@ typeshed-verify = false
                     Some("83c2518a9e6abbda0c44592c3483de459198f887")
                 );
                 assert_eq!(
-                    cfg.typeshed_url.as_deref(),
-                    Some("https://mirror.invalid/typeshed-{sha}.zip")
+                    cfg.typeshed_store_path,
+                    Some(std::path::PathBuf::from(".cache/typeshed-store"))
                 );
-                assert_eq!(
-                    cfg.typeshed_cache_path,
-                    Some(std::path::PathBuf::from(".cache/typeshed"))
-                );
-                assert_eq!(cfg.typeshed_cache, Some(false));
-                assert_eq!(cfg.typeshed_verify, Some(false));
                 assert_eq!(cfg.python_version, None);
             },
         );
     }
 
-    /// [STUBRES-TYPESHED-CONFIG]: unset acquisition keys stay `None`, so the
-    /// selector applies Latest (no pin), default codeload URL, OS cache, and
-    /// cache/verify on.
+    /// [STUBRES-TYPESHED-CONFIG]: unset keys stay `None`, so the runtime uses
+    /// the bundled commit (with `UNPINNED`) and the OS store directory —
+    /// never a download.
     #[test]
     fn typeshed_acquisition_keys_default_to_none() {
         with_temp_cfg_dir(
@@ -300,10 +291,8 @@ typeshed-verify = false
             &[("pyproject.toml", "[tool.basilisk]\n")],
             |cfg| {
                 assert!(cfg.typeshed_commit.is_none());
-                assert!(cfg.typeshed_url.is_none());
-                assert!(cfg.typeshed_cache_path.is_none());
-                assert!(cfg.typeshed_cache.is_none());
-                assert!(cfg.typeshed_verify.is_none());
+                assert!(cfg.typeshed_path.is_none());
+                assert!(cfg.typeshed_store_path.is_none());
             },
         );
     }

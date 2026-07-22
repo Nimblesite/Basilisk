@@ -1,4 +1,4 @@
-//! Implements [`enums_behaviors`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! Implements [`enums_behaviors`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 //! `enums_behaviors`: Invalid Enum subclassing.
 //!
 //! An Enum class with one or more defined members is implicitly final and

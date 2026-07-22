@@ -6,9 +6,10 @@
 //! and the composite `LICENSE`) is embedded with `include_bytes!`. Because the
 //! bundle is a **stdlib subset**, it cannot reconstruct the full-repository Git
 //! root tree, so it is verified by its **embedded ZIP SHA-256 plus the license
-//! manifest**, never by tree reconstruction ([STUBRES-TYPESHED-BASELINE]). Its
-//! provenance is [`Provenance::BundleVetted`], and it always reports `UNPINNED`
-//! (a build-time pin is not a user pin) until the user pins that commit.
+//! manifest**, never by tree reconstruction ([STUBRES-TYPESHED-BASELINE]). It
+//! is the data an unset `typeshed-commit` resolves to; the selector reports
+//! that default `UNPINNED` (a build-time pin is not a user pin) and an explicit
+//! pin of the same commit as pinned ([STUBRES-TYPESHED-WARN]).
 
 use std::sync::OnceLock;
 
@@ -23,10 +24,7 @@ use super::gate::{
 };
 use super::gittree::{Oid, OidParseError};
 use super::snapshot::{Snapshot, SnapshotError};
-use super::source::{
-    LicenseStatus, Provenance, SourceIdentity, SourceKind, StatusWarning, Transport, TypeshedStatus,
-};
-use super::warning::{TypeshedWarning, UnpinnedKind};
+use super::source::{LicenseStatus, SourceIdentity, SourceKind, TypeshedStatus};
 
 /// The embedded bundle ZIP.
 static BUNDLE_ZIP: &[u8] = include_bytes!(concat!(
@@ -176,17 +174,15 @@ fn build_bundled_snapshot() -> Result<Snapshot, BundleError> {
     let commit = Oid::from_hex(&manifest.source.commit_sha).map_err(BundleError::BadSha)?;
     let tree = Oid::from_hex(&manifest.source.tree_sha).map_err(BundleError::BadSha)?;
     let identity = SourceIdentity::Bundled { commit };
+    // Warnings are set by the selector, which knows whether an explicit pin
+    // selected this bundle (suppressing UNPINNED) or the default did not.
     let status = TypeshedStatus {
         active_source: SourceKind::Bundled,
         commit: Some(commit),
         tree: Some(tree),
-        transport: Transport::EmbeddedZip,
         license_status: LicenseStatus::Approved,
         license_reference: Some(license_reference(&manifest.source.commit_sha)),
-        provenance: Provenance::BundleVetted,
-        signed_release: false,
-        // A build-time pin is not a user pin ([STUBRES-TYPESHED-WARN]).
-        warnings: StatusWarning::list(&[TypeshedWarning::Unpinned(UnpinnedKind::LatestOrBundled)]),
+        warnings: Vec::new(),
     };
     let vfs = ArchiveVfs::new(identity.uri_component(), archive);
     Snapshot::build(identity, status, vfs, Some(BUNDLE_DISTRIBUTIONS_TSV))
@@ -244,14 +240,14 @@ mod tests {
         };
         // Identity + status honesty.
         assert_eq!(snapshot.status.active_source, SourceKind::Bundled);
-        assert_eq!(snapshot.status.provenance, Provenance::BundleVetted);
         assert_eq!(snapshot.status.license_status, LicenseStatus::Approved);
-        // Build-time pin is not a user pin: still UNPINNED.
-        assert!(snapshot
-            .status
-            .warnings
-            .iter()
-            .any(|warning| warning.code == "UNPINNED"));
+        // Warnings belong to the selector, which knows whether an explicit pin
+        // chose this bundle; the raw bundle carries none of its own.
+        assert!(snapshot.status.warnings.is_empty());
+        assert_eq!(
+            snapshot.status.commit.map(|oid| oid.to_hex()).as_deref(),
+            Some(bundled_commit_sha())
+        );
     }
 
     #[test]

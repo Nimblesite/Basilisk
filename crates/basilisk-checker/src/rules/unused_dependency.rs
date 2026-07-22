@@ -1,4 +1,4 @@
-//! Implements [BSK-0012] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [BSK-0012] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! BSK-0012: Unused dependency.
 //!
 //! Fires when a package is declared in `[project.dependencies]` but no module

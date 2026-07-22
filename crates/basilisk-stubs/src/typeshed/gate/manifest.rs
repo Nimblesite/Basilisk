@@ -61,8 +61,11 @@ impl LicenseManifest {
 /// Whether a path names a legal file (`LICENSE*`/`NOTICE*`, case-insensitive)
 /// within the **relevant scope** — the archive root or under `stdlib/`. This
 /// matches the bundle updater, so a full archive's unrelated `stubs/**` legal
-/// files never register as drift.
-fn is_legal_file(path: &str) -> bool {
+/// files never register as drift. Public because the store writer and reader
+/// share this exact rule for which paths a store entry materializes
+/// ([STUBRES-TYPESHED-STORE]).
+#[must_use]
+pub fn is_legal_file(path: &str) -> bool {
     let relevant = !path.contains('/') || path.starts_with("stdlib/");
     if !relevant {
         return false;

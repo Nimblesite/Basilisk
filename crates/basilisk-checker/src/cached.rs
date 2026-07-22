@@ -1,5 +1,5 @@
 //! Implements [CHKCACHE-DIAG] / [CHKCACHE-DIAG-INTERN].
-//! See docs/specs/CHECKER-CACHE-SPEC.md#chkcache-entry
+//! See docs/specs/CHECKER-CACHE-SPEC.md#CHKCACHE-ENTRY
 //!
 //! Owned, serde-serialisable projection of [`Diagnostic`] for the result cache.
 //!

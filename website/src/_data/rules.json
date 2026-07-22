@@ -25,7 +25,25 @@
       }
     ],
     "group": "Missing Annotations",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0001"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0001",
+    "references": [
+      {
+        "label": "Typing spec: Type annotations",
+        "url": "https://typing.python.org/en/latest/spec/annotations.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 3107",
+        "url": "https://peps.python.org/pep-3107/"
+      }
+    ]
   },
   {
     "code": "BSK-0002",
@@ -49,7 +67,25 @@
       }
     ],
     "group": "Missing Annotations",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0002"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0002",
+    "references": [
+      {
+        "label": "Typing spec: Type annotations",
+        "url": "https://typing.python.org/en/latest/spec/annotations.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 3107",
+        "url": "https://peps.python.org/pep-3107/"
+      }
+    ]
   },
   {
     "code": "BSK-0003",
@@ -68,7 +104,25 @@
       }
     ],
     "group": "Missing Annotations",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0003"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0003",
+    "references": [
+      {
+        "label": "Typing spec: Type annotations",
+        "url": "https://typing.python.org/en/latest/spec/annotations.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 3107",
+        "url": "https://peps.python.org/pep-3107/"
+      }
+    ]
   },
   {
     "code": "BSK-0004",
@@ -87,7 +141,25 @@
       }
     ],
     "group": "Missing Annotations",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0004"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0004",
+    "references": [
+      {
+        "label": "Typing spec: Type annotations",
+        "url": "https://typing.python.org/en/latest/spec/annotations.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 3107",
+        "url": "https://peps.python.org/pep-3107/"
+      }
+    ]
   },
   {
     "code": "BSK-0005",
@@ -110,7 +182,25 @@
       }
     ],
     "group": "Missing Annotations",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0005"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0005",
+    "references": [
+      {
+        "label": "Typing spec: Type annotations",
+        "url": "https://typing.python.org/en/latest/spec/annotations.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 3107",
+        "url": "https://peps.python.org/pep-3107/"
+      }
+    ]
   },
   {
     "code": "BSK-0011",
@@ -139,7 +229,13 @@
       }
     ],
     "group": "Dependencies",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0011"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0011",
+    "references": [
+      {
+        "label": "PEP 621",
+        "url": "https://peps.python.org/pep-0621/"
+      }
+    ]
   },
   {
     "code": "BSK-0012",
@@ -162,7 +258,13 @@
       }
     ],
     "group": "Dependencies",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0012"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0012",
+    "references": [
+      {
+        "label": "PEP 621",
+        "url": "https://peps.python.org/pep-0621/"
+      }
+    ]
   },
   {
     "code": "BSK-0013",
@@ -185,7 +287,13 @@
       }
     ],
     "group": "Dependencies",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0013"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0013",
+    "references": [
+      {
+        "label": "uv: Locking and syncing",
+        "url": "https://docs.astral.sh/uv/concepts/projects/sync/"
+      }
+    ]
   },
   {
     "code": "BSK-0014",
@@ -214,7 +322,17 @@
       }
     ],
     "group": "Style",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0014"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0014",
+    "references": [
+      {
+        "label": "Typing spec: Special types in annotations",
+        "url": "https://typing.python.org/en/latest/spec/special-types.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "BSK-0025",
@@ -229,7 +347,7 @@
     "body": [
       {
         "type": "text",
-        "html": "When a class overrides a method that is also defined in one of its base classes (both defined within the same module), the overriding method must carry the <code>@override</code> decorator (PEP 698 / <code>typing.override</code>)."
+        "html": "When a class overrides a method that is also defined in one of its base classes (both defined within the same module), the overriding method must carry the <code>@override</code> decorator (<a href=\"https://peps.python.org/pep-0698/\">PEP 698</a> / <code>typing.override</code>)."
       },
       {
         "type": "text",
@@ -241,11 +359,17 @@
       },
       {
         "type": "text",
-        "html": "Version gate (issue #171): <code>@override</code> (PEP 698 / <code>typing.override</code>) was introduced in Python 3.12, so suggesting it on an older configured target is a false positive \u2014 the decorator cannot be imported there. BSK-0025 is silent when the configured <code>python_version</code> is below 3.12."
+        "html": "Version gate (issue #171): <code>@override</code> (<a href=\"https://peps.python.org/pep-0698/\">PEP 698</a> / <code>typing.override</code>) was introduced in Python 3.12, so suggesting it on an older configured target is a false positive \u2014 the decorator cannot be imported there. BSK-0025 is silent when the configured <code>python_version</code> is below 3.12."
       }
     ],
     "group": "Missing Annotations",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0025"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0025",
+    "references": [
+      {
+        "label": "PEP 698",
+        "url": "https://peps.python.org/pep-0698/"
+      }
+    ]
   },
   {
     "code": "BSK-0040",
@@ -269,7 +393,25 @@
       }
     ],
     "group": "Missing Annotations",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0040"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0040",
+    "references": [
+      {
+        "label": "Typing spec: Type annotations",
+        "url": "https://typing.python.org/en/latest/spec/annotations.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 3107",
+        "url": "https://peps.python.org/pep-3107/"
+      }
+    ]
   },
   {
     "code": "BSK-0050",
@@ -294,7 +436,25 @@
       }
     ],
     "group": "Redundancy",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0050"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0050",
+    "references": [
+      {
+        "label": "Typing spec: Type annotations",
+        "url": "https://typing.python.org/en/latest/spec/annotations.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 3107",
+        "url": "https://peps.python.org/pep-3107/"
+      }
+    ]
   },
   {
     "code": "BSK-0060",
@@ -313,7 +473,8 @@
       }
     ],
     "group": "Suppressions",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0060"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0060",
+    "references": []
   },
   {
     "code": "BSK-0061",
@@ -332,7 +493,8 @@
       }
     ],
     "group": "Suppressions",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0061"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0061",
+    "references": []
   },
   {
     "code": "BSK-0062",
@@ -351,7 +513,8 @@
       }
     ],
     "group": "Suppressions",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0062"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0062",
+    "references": []
   },
   {
     "code": "BSK-0063",
@@ -370,7 +533,8 @@
       }
     ],
     "group": "Suppressions",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0063"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0063",
+    "references": []
   },
   {
     "code": "BSK-0152",
@@ -394,7 +558,17 @@
       }
     ],
     "group": "Stubs",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0152"
+    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-0152",
+    "references": [
+      {
+        "label": "Typing spec: Distributing type information",
+        "url": "https://typing.python.org/en/latest/spec/distributing.html"
+      },
+      {
+        "label": "PEP 561",
+        "url": "https://peps.python.org/pep-0561/"
+      }
+    ]
   },
   {
     "code": "aliases_implicit",
@@ -409,7 +583,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 613 requires that the RHS of an explicit <code>TypeAlias</code> annotation must be a valid type expression. The following are errors:"
+        "html": "<a href=\"https://peps.python.org/pep-0613/\">PEP 613</a> requires that the RHS of an explicit <code>TypeAlias</code> annotation must be a valid type expression. The following are errors:"
       },
       {
         "type": "text",
@@ -422,7 +596,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_implicit"
+    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_implicit",
+    "references": [
+      {
+        "label": "Typing spec: Type aliases",
+        "url": "https://typing.python.org/en/latest/spec/aliases.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 613",
+        "url": "https://peps.python.org/pep-0613/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      }
+    ]
   },
   {
     "code": "aliases_newtype",
@@ -437,7 +629,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 484 places restrictions on <code>NewType</code>:"
+        "html": "<a href=\"https://peps.python.org/pep-0484/\">PEP 484</a> places restrictions on <code>NewType</code>:"
       },
       {
         "type": "text",
@@ -450,7 +642,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_newtype"
+    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_newtype",
+    "references": [
+      {
+        "label": "Typing spec: Type aliases",
+        "url": "https://typing.python.org/en/latest/spec/aliases.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 613",
+        "url": "https://peps.python.org/pep-0613/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      }
+    ]
   },
   {
     "code": "aliases_recursive",
@@ -474,7 +684,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_recursive"
+    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_recursive",
+    "references": [
+      {
+        "label": "Typing spec: Type aliases",
+        "url": "https://typing.python.org/en/latest/spec/aliases.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 613",
+        "url": "https://peps.python.org/pep-0613/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      }
+    ]
   },
   {
     "code": "aliases_type_statement",
@@ -485,11 +713,11 @@
       "aliases"
     ],
     "summary": "Invalid RHS in a PEP 695 `type X = rhs` statement",
-    "summaryHtml": "Invalid RHS in a PEP 695 <code>type X = rhs</code> statement",
+    "summaryHtml": "Invalid RHS in a <a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> <code>type X = rhs</code> statement",
     "body": [
       {
         "type": "text",
-        "html": "PEP 695 requires the RHS of a <code>type</code> statement to be a valid type expression. The same restrictions as <code>TypeAlias</code> (<code>aliases_implicit</code>) apply."
+        "html": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> requires the RHS of a <code>type</code> statement to be a valid type expression. The same restrictions as <code>TypeAlias</code> (<code>aliases_implicit</code>) apply."
       },
       {
         "type": "code",
@@ -498,7 +726,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_type_statement"
+    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_type_statement",
+    "references": [
+      {
+        "label": "Typing spec: Type aliases",
+        "url": "https://typing.python.org/en/latest/spec/aliases.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 613",
+        "url": "https://peps.python.org/pep-0613/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      }
+    ]
   },
   {
     "code": "aliases_typealiastype",
@@ -538,7 +784,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_typealiastype"
+    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_typealiastype",
+    "references": [
+      {
+        "label": "Typing spec: Type aliases",
+        "url": "https://typing.python.org/en/latest/spec/aliases.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 613",
+        "url": "https://peps.python.org/pep-0613/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      }
+    ]
   },
   {
     "code": "annotations_forward_refs",
@@ -553,7 +817,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 484 requires that annotations contain valid type expressions. Only certain expression forms are valid as types:"
+        "html": "<a href=\"https://peps.python.org/pep-0484/\">PEP 484</a> requires that annotations contain valid type expressions. Only certain expression forms are valid as types:"
       },
       {
         "type": "text",
@@ -574,7 +838,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/annotations_forward_refs"
+    "docsUrl": "https://www.basilisk-python.dev/errors/annotations_forward_refs",
+    "references": [
+      {
+        "label": "Typing spec: Type annotations",
+        "url": "https://typing.python.org/en/latest/spec/annotations.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 3107",
+        "url": "https://peps.python.org/pep-3107/"
+      }
+    ]
   },
   {
     "code": "annotations_generators",
@@ -606,7 +888,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/annotations_generators"
+    "docsUrl": "https://www.basilisk-python.dev/errors/annotations_generators",
+    "references": [
+      {
+        "label": "Typing spec: Type annotations",
+        "url": "https://typing.python.org/en/latest/spec/annotations.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 3107",
+        "url": "https://peps.python.org/pep-3107/"
+      }
+    ]
   },
   {
     "code": "annotations_generators_2",
@@ -630,7 +930,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/annotations_generators_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/annotations_generators_2",
+    "references": [
+      {
+        "label": "Typing spec: Type annotations",
+        "url": "https://typing.python.org/en/latest/spec/annotations.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 3107",
+        "url": "https://peps.python.org/pep-3107/"
+      }
+    ]
   },
   {
     "code": "annotations_typeexpr",
@@ -654,7 +972,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/annotations_typeexpr"
+    "docsUrl": "https://www.basilisk-python.dev/errors/annotations_typeexpr",
+    "references": [
+      {
+        "label": "Typing spec: Type annotations",
+        "url": "https://typing.python.org/en/latest/spec/annotations.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 3107",
+        "url": "https://peps.python.org/pep-3107/"
+      }
+    ]
   },
   {
     "code": "assignment_compatibility",
@@ -685,7 +1021,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/assignment_compatibility"
+    "docsUrl": "https://www.basilisk-python.dev/errors/assignment_compatibility",
+    "references": [
+      {
+        "label": "Typing spec: Type system concepts",
+        "url": "https://typing.python.org/en/latest/spec/concepts.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "callables_annotation",
@@ -712,7 +1058,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/callables_annotation"
+    "docsUrl": "https://www.basilisk-python.dev/errors/callables_annotation",
+    "references": [
+      {
+        "label": "Typing spec: Callables",
+        "url": "https://typing.python.org/en/latest/spec/callables.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 692",
+        "url": "https://peps.python.org/pep-0692/"
+      }
+    ]
   },
   {
     "code": "callables_kwargs",
@@ -731,7 +1095,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/callables_kwargs"
+    "docsUrl": "https://www.basilisk-python.dev/errors/callables_kwargs",
+    "references": [
+      {
+        "label": "Typing spec: Callables",
+        "url": "https://typing.python.org/en/latest/spec/callables.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 692",
+        "url": "https://peps.python.org/pep-0692/"
+      }
+    ]
   },
   {
     "code": "callables_protocol",
@@ -750,7 +1132,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/callables_protocol"
+    "docsUrl": "https://www.basilisk-python.dev/errors/callables_protocol",
+    "references": [
+      {
+        "label": "Typing spec: Callables",
+        "url": "https://typing.python.org/en/latest/spec/callables.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 692",
+        "url": "https://peps.python.org/pep-0692/"
+      }
+    ]
   },
   {
     "code": "callables_protocol_2",
@@ -769,7 +1169,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/callables_protocol_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/callables_protocol_2",
+    "references": [
+      {
+        "label": "Typing spec: Callables",
+        "url": "https://typing.python.org/en/latest/spec/callables.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 692",
+        "url": "https://peps.python.org/pep-0692/"
+      }
+    ]
   },
   {
     "code": "callables_subtyping",
@@ -801,7 +1219,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/callables_subtyping"
+    "docsUrl": "https://www.basilisk-python.dev/errors/callables_subtyping",
+    "references": [
+      {
+        "label": "Typing spec: Callables",
+        "url": "https://typing.python.org/en/latest/spec/callables.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 692",
+        "url": "https://peps.python.org/pep-0692/"
+      }
+    ]
   },
   {
     "code": "calls_argument_count",
@@ -828,7 +1264,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/calls_argument_count"
+    "docsUrl": "https://www.basilisk-python.dev/errors/calls_argument_count",
+    "references": [
+      {
+        "label": "Typing spec: Callables",
+        "url": "https://typing.python.org/en/latest/spec/callables.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "calls_argument_type",
@@ -851,7 +1297,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/calls_argument_type"
+    "docsUrl": "https://www.basilisk-python.dev/errors/calls_argument_type",
+    "references": [
+      {
+        "label": "Typing spec: Callables",
+        "url": "https://typing.python.org/en/latest/spec/callables.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "classes_classvar",
@@ -866,7 +1322,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 526 and the typing spec restrict <code>ClassVarT</code> to:"
+        "html": "<a href=\"https://peps.python.org/pep-0526/\">PEP 526</a> and the typing spec restrict <code>ClassVarT</code> to:"
       },
       {
         "type": "text",
@@ -895,7 +1351,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/classes_classvar"
+    "docsUrl": "https://www.basilisk-python.dev/errors/classes_classvar",
+    "references": [
+      {
+        "label": "Typing spec: Class type assignability",
+        "url": "https://typing.python.org/en/latest/spec/class-compat.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 698",
+        "url": "https://peps.python.org/pep-0698/"
+      }
+    ]
   },
   {
     "code": "classes_override",
@@ -923,7 +1397,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/classes_override"
+    "docsUrl": "https://www.basilisk-python.dev/errors/classes_override",
+    "references": [
+      {
+        "label": "Typing spec: Class type assignability",
+        "url": "https://typing.python.org/en/latest/spec/class-compat.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 698",
+        "url": "https://peps.python.org/pep-0698/"
+      }
+    ]
   },
   {
     "code": "classes_override_2",
@@ -947,7 +1439,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/classes_override_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/classes_override_2",
+    "references": [
+      {
+        "label": "Typing spec: Class type assignability",
+        "url": "https://typing.python.org/en/latest/spec/class-compat.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 698",
+        "url": "https://peps.python.org/pep-0698/"
+      }
+    ]
   },
   {
     "code": "classes_override_3",
@@ -962,7 +1472,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 698 \u2014 a method decorated <code>@override</code> (or <code>typing.override</code>) must actually override a method declared in a base class. When no ancestor declares a method of that name, the decorator is a lie and the type checker should report it."
+        "html": "<a href=\"https://peps.python.org/pep-0698/\">PEP 698</a> \u2014 a method decorated <code>@override</code> (or <code>typing.override</code>) must actually override a method declared in a base class. When no ancestor declares a method of that name, the decorator is a lie and the type checker should report it."
       },
       {
         "type": "text",
@@ -975,7 +1485,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/classes_override_3"
+    "docsUrl": "https://www.basilisk-python.dev/errors/classes_override_3",
+    "references": [
+      {
+        "label": "Typing spec: Class type assignability",
+        "url": "https://typing.python.org/en/latest/spec/class-compat.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 698",
+        "url": "https://peps.python.org/pep-0698/"
+      }
+    ]
   },
   {
     "code": "constructors_call_init",
@@ -1014,7 +1542,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/constructors_call_init"
+    "docsUrl": "https://www.basilisk-python.dev/errors/constructors_call_init",
+    "references": [
+      {
+        "label": "Typing spec: Constructors",
+        "url": "https://typing.python.org/en/latest/spec/constructors.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "constructors_call_new",
@@ -1050,7 +1588,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/constructors_call_new"
+    "docsUrl": "https://www.basilisk-python.dev/errors/constructors_call_new",
+    "references": [
+      {
+        "label": "Typing spec: Constructors",
+        "url": "https://typing.python.org/en/latest/spec/constructors.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "constructors_call_type",
@@ -1081,7 +1629,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/constructors_call_type"
+    "docsUrl": "https://www.basilisk-python.dev/errors/constructors_call_type",
+    "references": [
+      {
+        "label": "Typing spec: Constructors",
+        "url": "https://typing.python.org/en/latest/spec/constructors.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "constructors_callable",
@@ -1122,7 +1680,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/constructors_callable"
+    "docsUrl": "https://www.basilisk-python.dev/errors/constructors_callable",
+    "references": [
+      {
+        "label": "Typing spec: Constructors",
+        "url": "https://typing.python.org/en/latest/spec/constructors.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "dataclasses_frozen",
@@ -1146,7 +1714,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_frozen"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_frozen",
+    "references": [
+      {
+        "label": "Typing spec: Dataclasses",
+        "url": "https://typing.python.org/en/latest/spec/dataclasses.html"
+      },
+      {
+        "label": "PEP 557",
+        "url": "https://peps.python.org/pep-0557/"
+      },
+      {
+        "label": "PEP 681",
+        "url": "https://peps.python.org/pep-0681/"
+      }
+    ]
   },
   {
     "code": "dataclasses_hash",
@@ -1170,11 +1752,25 @@
       },
       {
         "type": "text",
-        "html": "PEP 557 specifies the <code>__hash__</code> synthesis rules: - If <code>eq</code> is true and <code>frozen</code> is false, <code>__hash__</code> is set to <code>None</code>. - If <code>eq</code> is true and <code>frozen</code> is true, Python synthesises a <code>__hash__</code>. - If <code>unsafe_hash</code> is true, Python synthesises a <code>__hash__</code> regardless. - If <code>eq</code> is false, <code>__hash__</code> is left untouched (inherited from parent). - If the class defines <code>__hash__</code> explicitly, that definition is used."
+        "html": "<a href=\"https://peps.python.org/pep-0557/\">PEP 557</a> specifies the <code>__hash__</code> synthesis rules: - If <code>eq</code> is true and <code>frozen</code> is false, <code>__hash__</code> is set to <code>None</code>. - If <code>eq</code> is true and <code>frozen</code> is true, Python synthesises a <code>__hash__</code>. - If <code>unsafe_hash</code> is true, Python synthesises a <code>__hash__</code> regardless. - If <code>eq</code> is false, <code>__hash__</code> is left untouched (inherited from parent). - If the class defines <code>__hash__</code> explicitly, that definition is used."
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_hash"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_hash",
+    "references": [
+      {
+        "label": "Typing spec: Dataclasses",
+        "url": "https://typing.python.org/en/latest/spec/dataclasses.html"
+      },
+      {
+        "label": "PEP 557",
+        "url": "https://peps.python.org/pep-0557/"
+      },
+      {
+        "label": "PEP 681",
+        "url": "https://peps.python.org/pep-0681/"
+      }
+    ]
   },
   {
     "code": "dataclasses_inheritance",
@@ -1198,7 +1794,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_inheritance"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_inheritance",
+    "references": [
+      {
+        "label": "Typing spec: Dataclasses",
+        "url": "https://typing.python.org/en/latest/spec/dataclasses.html"
+      },
+      {
+        "label": "PEP 557",
+        "url": "https://peps.python.org/pep-0557/"
+      },
+      {
+        "label": "PEP 681",
+        "url": "https://peps.python.org/pep-0681/"
+      }
+    ]
   },
   {
     "code": "dataclasses_kwonly",
@@ -1222,7 +1832,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_kwonly"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_kwonly",
+    "references": [
+      {
+        "label": "Typing spec: Dataclasses",
+        "url": "https://typing.python.org/en/latest/spec/dataclasses.html"
+      },
+      {
+        "label": "PEP 557",
+        "url": "https://peps.python.org/pep-0557/"
+      },
+      {
+        "label": "PEP 681",
+        "url": "https://peps.python.org/pep-0681/"
+      }
+    ]
   },
   {
     "code": "dataclasses_match_args",
@@ -1246,7 +1870,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_match_args"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_match_args",
+    "references": [
+      {
+        "label": "Typing spec: Dataclasses",
+        "url": "https://typing.python.org/en/latest/spec/dataclasses.html"
+      },
+      {
+        "label": "PEP 557",
+        "url": "https://peps.python.org/pep-0557/"
+      },
+      {
+        "label": "PEP 681",
+        "url": "https://peps.python.org/pep-0681/"
+      }
+    ]
   },
   {
     "code": "dataclasses_order",
@@ -1274,7 +1912,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_order"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_order",
+    "references": [
+      {
+        "label": "Typing spec: Dataclasses",
+        "url": "https://typing.python.org/en/latest/spec/dataclasses.html"
+      },
+      {
+        "label": "PEP 557",
+        "url": "https://peps.python.org/pep-0557/"
+      },
+      {
+        "label": "PEP 681",
+        "url": "https://peps.python.org/pep-0681/"
+      }
+    ]
   },
   {
     "code": "dataclasses_postinit",
@@ -1306,7 +1958,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_postinit"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_postinit",
+    "references": [
+      {
+        "label": "Typing spec: Dataclasses",
+        "url": "https://typing.python.org/en/latest/spec/dataclasses.html"
+      },
+      {
+        "label": "PEP 557",
+        "url": "https://peps.python.org/pep-0557/"
+      },
+      {
+        "label": "PEP 681",
+        "url": "https://peps.python.org/pep-0681/"
+      }
+    ]
   },
   {
     "code": "dataclasses_slots",
@@ -1330,7 +1996,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_slots"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_slots",
+    "references": [
+      {
+        "label": "Typing spec: Dataclasses",
+        "url": "https://typing.python.org/en/latest/spec/dataclasses.html"
+      },
+      {
+        "label": "PEP 557",
+        "url": "https://peps.python.org/pep-0557/"
+      },
+      {
+        "label": "PEP 681",
+        "url": "https://peps.python.org/pep-0681/"
+      }
+    ]
   },
   {
     "code": "dataclasses_transform_class",
@@ -1358,7 +2038,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_transform_class"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_transform_class",
+    "references": [
+      {
+        "label": "Typing spec: Dataclasses",
+        "url": "https://typing.python.org/en/latest/spec/dataclasses.html"
+      },
+      {
+        "label": "PEP 557",
+        "url": "https://peps.python.org/pep-0557/"
+      },
+      {
+        "label": "PEP 681",
+        "url": "https://peps.python.org/pep-0681/"
+      }
+    ]
   },
   {
     "code": "dataclasses_transform_meta",
@@ -1386,7 +2080,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_transform_meta"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_transform_meta",
+    "references": [
+      {
+        "label": "Typing spec: Dataclasses",
+        "url": "https://typing.python.org/en/latest/spec/dataclasses.html"
+      },
+      {
+        "label": "PEP 557",
+        "url": "https://peps.python.org/pep-0557/"
+      },
+      {
+        "label": "PEP 681",
+        "url": "https://peps.python.org/pep-0681/"
+      }
+    ]
   },
   {
     "code": "dataclasses_usage",
@@ -1410,7 +2118,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_usage"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_usage",
+    "references": [
+      {
+        "label": "Typing spec: Dataclasses",
+        "url": "https://typing.python.org/en/latest/spec/dataclasses.html"
+      },
+      {
+        "label": "PEP 557",
+        "url": "https://peps.python.org/pep-0557/"
+      },
+      {
+        "label": "PEP 681",
+        "url": "https://peps.python.org/pep-0681/"
+      }
+    ]
   },
   {
     "code": "dict_key_hashable",
@@ -1433,7 +2155,13 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/dict_key_hashable"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dict_key_hashable",
+    "references": [
+      {
+        "label": "Typing spec: Type system concepts",
+        "url": "https://typing.python.org/en/latest/spec/concepts.html"
+      }
+    ]
   },
   {
     "code": "directives_assert_type",
@@ -1456,7 +2184,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/directives_assert_type"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_assert_type",
+    "references": [
+      {
+        "label": "Typing spec: Type checker directives",
+        "url": "https://typing.python.org/en/latest/spec/directives.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 702",
+        "url": "https://peps.python.org/pep-0702/"
+      }
+    ]
   },
   {
     "code": "directives_assert_type_2",
@@ -1480,7 +2222,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/directives_assert_type_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_assert_type_2",
+    "references": [
+      {
+        "label": "Typing spec: Type checker directives",
+        "url": "https://typing.python.org/en/latest/spec/directives.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 702",
+        "url": "https://peps.python.org/pep-0702/"
+      }
+    ]
   },
   {
     "code": "directives_cast",
@@ -1503,7 +2259,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/directives_cast"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_cast",
+    "references": [
+      {
+        "label": "Typing spec: Type checker directives",
+        "url": "https://typing.python.org/en/latest/spec/directives.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 702",
+        "url": "https://peps.python.org/pep-0702/"
+      }
+    ]
   },
   {
     "code": "directives_deprecated",
@@ -1518,7 +2288,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 702 introduces <code>@deprecated</code> from <code>typing</code> / <code>typing_extensions</code>. Using a deprecated entity (calling, importing, accessing) should produce a diagnostic so that developers migrate away from the deprecated API."
+        "html": "<a href=\"https://peps.python.org/pep-0702/\">PEP 702</a> introduces <code>@deprecated</code> from <code>typing</code> / <code>typing_extensions</code>. Using a deprecated entity (calling, importing, accessing) should produce a diagnostic so that developers migrate away from the deprecated API."
       },
       {
         "type": "code",
@@ -1527,7 +2297,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/directives_deprecated"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_deprecated",
+    "references": [
+      {
+        "label": "Typing spec: Type checker directives",
+        "url": "https://typing.python.org/en/latest/spec/directives.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 702",
+        "url": "https://peps.python.org/pep-0702/"
+      }
+    ]
   },
   {
     "code": "directives_disjoint_base",
@@ -1538,11 +2322,11 @@
       "directives"
     ],
     "summary": "PEP 800 disjoint bases",
-    "summaryHtml": "PEP 800 disjoint bases",
+    "summaryHtml": "<a href=\"https://peps.python.org/pep-0800/\">PEP 800</a> disjoint bases",
     "body": [
       {
         "type": "text",
-        "html": "PEP 800 introduces <code>typing.disjoint_base</code>. A class is a <em>disjoint base</em> when it is decorated <code>@disjoint_base</code> or defines a non-empty <code>__slots__</code>. A class definition must have a single <em>dominating</em> disjoint base among its bases:"
+        "html": "<a href=\"https://peps.python.org/pep-0800/\">PEP 800</a> introduces <code>typing.disjoint_base</code>. A class is a <em>disjoint base</em> when it is decorated <code>@disjoint_base</code> or defines a non-empty <code>__slots__</code>. A class definition must have a single <em>dominating</em> disjoint base among its bases:"
       },
       {
         "type": "code",
@@ -1555,7 +2339,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/directives_disjoint_base"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_disjoint_base",
+    "references": [
+      {
+        "label": "Typing spec: Type checker directives",
+        "url": "https://typing.python.org/en/latest/spec/directives.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 702",
+        "url": "https://peps.python.org/pep-0702/"
+      },
+      {
+        "label": "PEP 800",
+        "url": "https://peps.python.org/pep-0800/"
+      }
+    ]
   },
   {
     "code": "directives_reveal_type",
@@ -1578,7 +2380,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/directives_reveal_type"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_reveal_type",
+    "references": [
+      {
+        "label": "Typing spec: Type checker directives",
+        "url": "https://typing.python.org/en/latest/spec/directives.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 702",
+        "url": "https://peps.python.org/pep-0702/"
+      }
+    ]
   },
   {
     "code": "directives_version_platform",
@@ -1602,7 +2418,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/directives_version_platform"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_version_platform",
+    "references": [
+      {
+        "label": "Typing spec: Type checker directives",
+        "url": "https://typing.python.org/en/latest/spec/directives.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 702",
+        "url": "https://peps.python.org/pep-0702/"
+      }
+    ]
   },
   {
     "code": "enums_behaviors",
@@ -1626,7 +2456,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/enums_behaviors"
+    "docsUrl": "https://www.basilisk-python.dev/errors/enums_behaviors",
+    "references": [
+      {
+        "label": "Typing spec: Enumerations",
+        "url": "https://typing.python.org/en/latest/spec/enums.html"
+      },
+      {
+        "label": "PEP 435",
+        "url": "https://peps.python.org/pep-0435/"
+      }
+    ]
   },
   {
     "code": "enums_definition",
@@ -1654,7 +2494,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/enums_definition"
+    "docsUrl": "https://www.basilisk-python.dev/errors/enums_definition",
+    "references": [
+      {
+        "label": "Typing spec: Enumerations",
+        "url": "https://typing.python.org/en/latest/spec/enums.html"
+      },
+      {
+        "label": "PEP 435",
+        "url": "https://peps.python.org/pep-0435/"
+      }
+    ]
   },
   {
     "code": "enums_expansion",
@@ -1678,7 +2528,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/enums_expansion"
+    "docsUrl": "https://www.basilisk-python.dev/errors/enums_expansion",
+    "references": [
+      {
+        "label": "Typing spec: Enumerations",
+        "url": "https://typing.python.org/en/latest/spec/enums.html"
+      },
+      {
+        "label": "PEP 435",
+        "url": "https://peps.python.org/pep-0435/"
+      }
+    ]
   },
   {
     "code": "enums_member_values",
@@ -1702,7 +2562,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/enums_member_values"
+    "docsUrl": "https://www.basilisk-python.dev/errors/enums_member_values",
+    "references": [
+      {
+        "label": "Typing spec: Enumerations",
+        "url": "https://typing.python.org/en/latest/spec/enums.html"
+      },
+      {
+        "label": "PEP 435",
+        "url": "https://peps.python.org/pep-0435/"
+      }
+    ]
   },
   {
     "code": "enums_members",
@@ -1730,7 +2600,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/enums_members"
+    "docsUrl": "https://www.basilisk-python.dev/errors/enums_members",
+    "references": [
+      {
+        "label": "Typing spec: Enumerations",
+        "url": "https://typing.python.org/en/latest/spec/enums.html"
+      },
+      {
+        "label": "PEP 435",
+        "url": "https://peps.python.org/pep-0435/"
+      }
+    ]
   },
   {
     "code": "enums_members_2",
@@ -1754,7 +2634,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/enums_members_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/enums_members_2",
+    "references": [
+      {
+        "label": "Typing spec: Enumerations",
+        "url": "https://typing.python.org/en/latest/spec/enums.html"
+      },
+      {
+        "label": "PEP 435",
+        "url": "https://peps.python.org/pep-0435/"
+      }
+    ]
   },
   {
     "code": "generics_base_class",
@@ -1769,11 +2659,41 @@
     "body": [
       {
         "type": "text",
-        "html": "Each type parameter in <code>GenericT1, T2, ...</code> must be unique. <code>GenericT, T</code> is an error per PEP 484."
+        "html": "Each type parameter in <code>GenericT1, T2, ...</code> must be unique. <code>GenericT, T</code> is an error per <a href=\"https://peps.python.org/pep-0484/\">PEP 484</a>."
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_base_class"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_base_class",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_base_class_2",
@@ -1801,7 +2721,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_base_class_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_base_class_2",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_base_class_3",
@@ -1825,7 +2775,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_base_class_3"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_base_class_3",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_basic",
@@ -1840,11 +2820,41 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 484 requires a <code>TypeVar</code> to have either zero constraints (unconstrained) or two or more constraints.  A single constraint makes no sense because it would be equivalent to using the type directly."
+        "html": "<a href=\"https://peps.python.org/pep-0484/\">PEP 484</a> requires a <code>TypeVar</code> to have either zero constraints (unconstrained) or two or more constraints.  A single constraint makes no sense because it would be equivalent to using the type directly."
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_basic"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_basic",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_basic_2",
@@ -1859,7 +2869,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 484 requires that all arguments to <code>Generic...</code> and <code>Protocol...</code> be type variable names (<code>TypeVar</code>, <code>TypeVarTuple</code>, or <code>ParamSpec</code>). Passing a concrete type (e.g. <code>Genericint</code>) is a type error."
+        "html": "<a href=\"https://peps.python.org/pep-0484/\">PEP 484</a> requires that all arguments to <code>Generic...</code> and <code>Protocol...</code> be type variable names (<code>TypeVar</code>, <code>TypeVarTuple</code>, or <code>ParamSpec</code>). Passing a concrete type (e.g. <code>Genericint</code>) is a type error."
       },
       {
         "type": "code",
@@ -1868,7 +2878,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_basic_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_basic_2",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_basic_3",
@@ -1903,7 +2943,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_basic_3"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_basic_3",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_defaults",
@@ -1918,7 +2988,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 696 \u00a7Ordering defines two ordering rules for type parameters in <code>Generic...</code>:"
+        "html": "<a href=\"https://peps.python.org/pep-0696/\">PEP 696</a> \u00a7Ordering defines two ordering rules for type parameters in <code>Generic...</code>:"
       },
       {
         "type": "text",
@@ -1930,7 +3000,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_defaults_2",
@@ -1945,7 +3045,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 696 specifies two constraints on <code>TypeVar</code> defaults:"
+        "html": "<a href=\"https://peps.python.org/pep-0696/\">PEP 696</a> specifies two constraints on <code>TypeVar</code> defaults:"
       },
       {
         "type": "text",
@@ -1962,7 +3062,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults_2",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_defaults_referential",
@@ -1977,7 +3107,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 696 specifies constraints on <code>TypeVar</code> defaults that reference other <code>TypeVars</code>:"
+        "html": "<a href=\"https://peps.python.org/pep-0696/\">PEP 696</a> specifies constraints on <code>TypeVar</code> defaults that reference other <code>TypeVars</code>:"
       },
       {
         "type": "text",
@@ -1990,7 +3120,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults_referential"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults_referential",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_defaults_referential_2",
@@ -2005,7 +3165,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 696 defines rules for when a <code>TypeVar</code> default references another <code>TypeVar</code>:"
+        "html": "<a href=\"https://peps.python.org/pep-0696/\">PEP 696</a> defines rules for when a <code>TypeVar</code> default references another <code>TypeVar</code>:"
       },
       {
         "type": "text",
@@ -2018,7 +3178,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults_referential_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults_referential_2",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_defaults_specialization",
@@ -2050,7 +3240,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults_specialization"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults_specialization",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_scoping",
@@ -2065,7 +3285,7 @@
     "body": [
       {
         "type": "text",
-        "html": "A type variable used in a type annotation must be &quot;in scope&quot; \u2014 i.e. it must be bound by a surrounding generic class (<code>GenericT</code>), PEP 695 type parameter, or function signature parameter."
+        "html": "A type variable used in a type annotation must be &quot;in scope&quot; \u2014 i.e. it must be bound by a surrounding generic class (<code>GenericT</code>), <a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> type parameter, or function signature parameter."
       },
       {
         "type": "text",
@@ -2078,7 +3298,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_scoping"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_scoping",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_self_attributes",
@@ -2106,7 +3356,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_self_attributes"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_self_attributes",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_self_basic",
@@ -2138,7 +3418,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_self_basic"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_self_basic",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_self_protocols",
@@ -2162,7 +3472,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_self_protocols"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_self_protocols",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_self_usage",
@@ -2177,7 +3517,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 673 defines <code>Self</code> as a special type that refers to the current class. It is only valid in specific locations:"
+        "html": "<a href=\"https://peps.python.org/pep-0673/\">PEP 673</a> defines <code>Self</code> as a special type that refers to the current class. It is only valid in specific locations:"
       },
       {
         "type": "text",
@@ -2198,7 +3538,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_self_usage"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_self_usage",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_syntax_compatibility",
@@ -2209,11 +3579,11 @@
       "generics"
     ],
     "summary": "PEP 695 type parameter syntax mixed with traditional `TypeVars`",
-    "summaryHtml": "PEP 695 type parameter syntax mixed with traditional <code>TypeVars</code>",
+    "summaryHtml": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> type parameter syntax mixed with traditional <code>TypeVars</code>",
     "body": [
       {
         "type": "text",
-        "html": "PEP 695 introduced a new syntax for declaring type parameters (<code>class FooT</code> and <code>def fooT()</code>). When a class or function uses this new syntax, it must not reference traditional <code>TypeVar</code> instances from an outer scope in its base classes or parameter annotations."
+        "html": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> introduced a new syntax for declaring type parameters (<code>class FooT</code> and <code>def fooT()</code>). When a class or function uses this new syntax, it must not reference traditional <code>TypeVar</code> instances from an outer scope in its base classes or parameter annotations."
       },
       {
         "type": "code",
@@ -2222,7 +3592,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_syntax_compatibility"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_syntax_compatibility",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_syntax_declarations",
@@ -2233,11 +3633,11 @@
       "generics"
     ],
     "summary": "Invalid PEP 695 type parameter bound or constraint",
-    "summaryHtml": "Invalid PEP 695 type parameter bound or constraint",
+    "summaryHtml": "Invalid <a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> type parameter bound or constraint",
     "body": [
       {
         "type": "text",
-        "html": "PEP 695 introduced a new syntax for declaring type parameters in class and function definitions.  The bound/constraint expression after <code>:</code> is restricted to specific forms; invalid forms are caught by this rule."
+        "html": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> introduced a new syntax for declaring type parameters in class and function definitions.  The bound/constraint expression after <code>:</code> is restricted to specific forms; invalid forms are caught by this rule."
       },
       {
         "type": "code",
@@ -2246,7 +3646,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_syntax_declarations"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_syntax_declarations",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_syntax_declarations_2",
@@ -2261,7 +3691,7 @@
     "body": [
       {
         "type": "text",
-        "html": "When a PEP 695 type parameter has a bound (e.g., <code>T: str</code>), attribute accesses on parameters typed as <code>T</code> must be valid for the bound type."
+        "html": "When a <a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> type parameter has a bound (e.g., <code>T: str</code>), attribute accesses on parameters typed as <code>T</code> must be valid for the bound type."
       },
       {
         "type": "code",
@@ -2270,7 +3700,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_syntax_declarations_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_syntax_declarations_2",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_syntax_scoping",
@@ -2281,11 +3741,11 @@
       "generics"
     ],
     "summary": "PEP 695 generic type parameter scoping violations",
-    "summaryHtml": "PEP 695 generic type parameter scoping violations",
+    "summaryHtml": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> generic type parameter scoping violations",
     "body": [
       {
         "type": "text",
-        "html": "Detects violations of PEP 695 type-parameter scoping rules, driven entirely by <code>ruff_python_ast</code> nodes (via basilisk_resolver::Pep695Scoping) \u2014 never by raw <code>source.lines()</code> scanning, so docstring/comment/string content is never mistaken for real <code>class</code> / <code>def</code> / <code>type</code> declarations."
+        "html": "Detects violations of <a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> type-parameter scoping rules, driven entirely by <code>ruff_python_ast</code> nodes (via basilisk_resolver::Pep695Scoping) \u2014 never by raw <code>source.lines()</code> scanning, so docstring/comment/string content is never mistaken for real <code>class</code> / <code>def</code> / <code>type</code> declarations."
       },
       {
         "type": "text",
@@ -2302,7 +3762,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_syntax_scoping"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_syntax_scoping",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_type_erasure",
@@ -2326,7 +3816,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_type_erasure"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_type_erasure",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_typevartuple_args",
@@ -2350,7 +3870,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_args"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_args",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_typevartuple_basic",
@@ -2365,7 +3915,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 484 / PEP 695 forbid certain combinations of keyword arguments in <code>TypeVar(...)</code> calls, and PEP 646 / PEP 612 restrict what kwargs <code>TypeVarTuple</code> and <code>ParamSpec</code> accept:"
+        "html": "<a href=\"https://peps.python.org/pep-0484/\">PEP 484</a> / <a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> forbid certain combinations of keyword arguments in <code>TypeVar(...)</code> calls, and <a href=\"https://peps.python.org/pep-0646/\">PEP 646</a> / <a href=\"https://peps.python.org/pep-0612/\">PEP 612</a> restrict what kwargs <code>TypeVarTuple</code> and <code>ParamSpec</code> accept:"
       },
       {
         "type": "text",
@@ -2378,7 +3928,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_basic"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_basic",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_typevartuple_basic_2",
@@ -2393,7 +3973,7 @@
     "body": [
       {
         "type": "text",
-        "html": "When a <code>TypeVarTuple</code> is used in a generic class base list or as a direct type annotation, it must be unpacked using the <code>*</code> operator.  Using a <code>TypeVarTuple</code> without unpacking is invalid per PEP 646."
+        "html": "When a <code>TypeVarTuple</code> is used in a generic class base list or as a direct type annotation, it must be unpacked using the <code>*</code> operator.  Using a <code>TypeVarTuple</code> without unpacking is invalid per <a href=\"https://peps.python.org/pep-0646/\">PEP 646</a>."
       },
       {
         "type": "code",
@@ -2402,7 +3982,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_basic_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_basic_2",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_typevartuple_basic_3",
@@ -2426,7 +4036,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_basic_3"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_basic_3",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_typevartuple_callable",
@@ -2450,7 +4090,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_callable"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_callable",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_typevartuple_specialization",
@@ -2474,7 +4144,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_specialization"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_specialization",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_typevartuple_specialization_2",
@@ -2511,7 +4211,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_specialization_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_specialization_2",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_typevartuple_unpack",
@@ -2535,7 +4265,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_unpack"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_unpack",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_upper_bound",
@@ -2559,7 +4319,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_upper_bound"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_upper_bound",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_upper_bound_2",
@@ -2583,7 +4373,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_upper_bound_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_upper_bound_2",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_variance",
@@ -2607,7 +4427,37 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_variance"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_variance",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "generics_variance_inference",
@@ -2630,11 +4480,41 @@
       },
       {
         "type": "text",
-        "html": "Per PEP 484: &quot;A generic class nested in another generic class cannot use the same type variables.&quot;"
+        "html": "Per <a href=\"https://peps.python.org/pep-0484/\">PEP 484</a>: &quot;A generic class nested in another generic class cannot use the same type variables.&quot;"
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/generics_variance_inference"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_variance_inference",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      },
+      {
+        "label": "PEP 673",
+        "url": "https://peps.python.org/pep-0673/"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
+      {
+        "label": "PEP 696",
+        "url": "https://peps.python.org/pep-0696/"
+      }
+    ]
   },
   {
     "code": "historical_positional",
@@ -2649,7 +4529,7 @@
     "body": [
       {
         "type": "text",
-        "html": "Before PEP 570 (Python 3.8), the convention for marking parameters as positional-only was to prefix their names with <code>__</code> (double underscore) without a trailing <code>__</code>. Type checkers must support this historical mechanism."
+        "html": "Before <a href=\"https://peps.python.org/pep-0570/\">PEP 570</a> (Python 3.8), the convention for marking parameters as positional-only was to prefix their names with <code>__</code> (double underscore) without a trailing <code>__</code>. Type checkers must support this historical mechanism."
       },
       {
         "type": "text",
@@ -2657,7 +4537,7 @@
       },
       {
         "type": "text",
-        "html": "1. **<code>PositionalOnlyAfterKeyword</code>**: A <code>__</code>-prefixed positional-only    parameter appears after a regular positional-or-keyword parameter    in a function that does not use PEP 570 <code>/</code> syntax."
+        "html": "1. **<code>PositionalOnlyAfterKeyword</code>**: A <code>__</code>-prefixed positional-only    parameter appears after a regular positional-or-keyword parameter    in a function that does not use <a href=\"https://peps.python.org/pep-0570/\">PEP 570</a> <code>/</code> syntax."
       },
       {
         "type": "text",
@@ -2670,7 +4550,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/historical_positional"
+    "docsUrl": "https://www.basilisk-python.dev/errors/historical_positional",
+    "references": [
+      {
+        "label": "Typing spec: Historical and deprecated features",
+        "url": "https://typing.python.org/en/latest/spec/historical.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 570",
+        "url": "https://peps.python.org/pep-0570/"
+      }
+    ]
   },
   {
     "code": "imports_module_attribute",
@@ -2701,7 +4595,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/imports_module_attribute"
+    "docsUrl": "https://www.basilisk-python.dev/errors/imports_module_attribute",
+    "references": [
+      {
+        "label": "Typing spec: Distributing type information",
+        "url": "https://typing.python.org/en/latest/spec/distributing.html"
+      },
+      {
+        "label": "PEP 561",
+        "url": "https://peps.python.org/pep-0561/"
+      }
+    ]
   },
   {
     "code": "imports_unresolved",
@@ -2723,7 +4627,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/imports_unresolved"
+    "docsUrl": "https://www.basilisk-python.dev/errors/imports_unresolved",
+    "references": [
+      {
+        "label": "Typing spec: Distributing type information",
+        "url": "https://typing.python.org/en/latest/spec/distributing.html"
+      },
+      {
+        "label": "PEP 561",
+        "url": "https://peps.python.org/pep-0561/"
+      }
+    ]
   },
   {
     "code": "literals_literalstring",
@@ -2755,7 +4669,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/literals_literalstring"
+    "docsUrl": "https://www.basilisk-python.dev/errors/literals_literalstring",
+    "references": [
+      {
+        "label": "Typing spec: Literals",
+        "url": "https://typing.python.org/en/latest/spec/literal.html"
+      },
+      {
+        "label": "PEP 586",
+        "url": "https://peps.python.org/pep-0586/"
+      },
+      {
+        "label": "PEP 675",
+        "url": "https://peps.python.org/pep-0675/"
+      }
+    ]
   },
   {
     "code": "literals_parameterizations",
@@ -2770,7 +4698,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 586 restricts what values may appear inside <code>Literal...</code>. Only these are legal:   - Integer literals (decimal, hex, binary, octal; optionally signed)   - String literals (<code>str</code> and <code>bytes</code>)   - Boolean literals (<code>True</code>, <code>False</code>)   - <code>None</code>   - Enum member access (<code>Color.RED</code>)   - Nested <code>Literal...</code>"
+        "html": "<a href=\"https://peps.python.org/pep-0586/\">PEP 586</a> restricts what values may appear inside <code>Literal...</code>. Only these are legal:   - Integer literals (decimal, hex, binary, octal; optionally signed)   - String literals (<code>str</code> and <code>bytes</code>)   - Boolean literals (<code>True</code>, <code>False</code>)   - <code>None</code>   - Enum member access (<code>Color.RED</code>)   - Nested <code>Literal...</code>"
       },
       {
         "type": "text",
@@ -2778,7 +4706,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/literals_parameterizations"
+    "docsUrl": "https://www.basilisk-python.dev/errors/literals_parameterizations",
+    "references": [
+      {
+        "label": "Typing spec: Literals",
+        "url": "https://typing.python.org/en/latest/spec/literal.html"
+      },
+      {
+        "label": "PEP 586",
+        "url": "https://peps.python.org/pep-0586/"
+      },
+      {
+        "label": "PEP 675",
+        "url": "https://peps.python.org/pep-0675/"
+      }
+    ]
   },
   {
     "code": "literals_parameterizations_2",
@@ -2802,7 +4744,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/literals_parameterizations_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/literals_parameterizations_2",
+    "references": [
+      {
+        "label": "Typing spec: Literals",
+        "url": "https://typing.python.org/en/latest/spec/literal.html"
+      },
+      {
+        "label": "PEP 586",
+        "url": "https://peps.python.org/pep-0586/"
+      },
+      {
+        "label": "PEP 675",
+        "url": "https://peps.python.org/pep-0675/"
+      }
+    ]
   },
   {
     "code": "literals_semantics",
@@ -2830,7 +4786,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/literals_semantics"
+    "docsUrl": "https://www.basilisk-python.dev/errors/literals_semantics",
+    "references": [
+      {
+        "label": "Typing spec: Literals",
+        "url": "https://typing.python.org/en/latest/spec/literal.html"
+      },
+      {
+        "label": "PEP 586",
+        "url": "https://peps.python.org/pep-0586/"
+      },
+      {
+        "label": "PEP 675",
+        "url": "https://peps.python.org/pep-0675/"
+      }
+    ]
   },
   {
     "code": "literals_semantics_2",
@@ -2849,7 +4819,7 @@
       },
       {
         "type": "text",
-        "html": "1. **<code>Literal0</code> vs <code>LiteralFalse</code> non-equivalence (PEP 586)**:    <code>Literal0</code> and <code>LiteralFalse</code> are distinct types despite <code>0 == False</code> in    Python.  Assigning a <code>Literal0</code>-typed parameter to a <code>LiteralFalse</code> local    (or vice versa) is a type error."
+        "html": "1. **<code>Literal0</code> vs <code>LiteralFalse</code> non-equivalence (<a href=\"https://peps.python.org/pep-0586/\">PEP 586</a>)**:    <code>Literal0</code> and <code>LiteralFalse</code> are distinct types despite <code>0 == False</code> in    Python.  Assigning a <code>Literal0</code>-typed parameter to a <code>LiteralFalse</code> local    (or vice versa) is a type error."
       },
       {
         "type": "text",
@@ -2862,7 +4832,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/literals_semantics_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/literals_semantics_2",
+    "references": [
+      {
+        "label": "Typing spec: Literals",
+        "url": "https://typing.python.org/en/latest/spec/literal.html"
+      },
+      {
+        "label": "PEP 586",
+        "url": "https://peps.python.org/pep-0586/"
+      },
+      {
+        "label": "PEP 675",
+        "url": "https://peps.python.org/pep-0675/"
+      }
+    ]
   },
   {
     "code": "match_exhaustiveness",
@@ -2884,7 +4868,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/match_exhaustiveness"
+    "docsUrl": "https://www.basilisk-python.dev/errors/match_exhaustiveness",
+    "references": [
+      {
+        "label": "Typing spec: Type narrowing",
+        "url": "https://typing.python.org/en/latest/spec/narrowing.html"
+      },
+      {
+        "label": "PEP 634",
+        "url": "https://peps.python.org/pep-0634/"
+      }
+    ]
   },
   {
     "code": "namedtuples_define_class",
@@ -2919,7 +4913,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_define_class"
+    "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_define_class",
+    "references": [
+      {
+        "label": "Typing spec: Named Tuples",
+        "url": "https://typing.python.org/en/latest/spec/namedtuples.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "namedtuples_define_functional",
@@ -2951,7 +4955,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_define_functional"
+    "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_define_functional",
+    "references": [
+      {
+        "label": "Typing spec: Named Tuples",
+        "url": "https://typing.python.org/en/latest/spec/namedtuples.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "namedtuples_type_compat",
@@ -2979,7 +4993,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_type_compat"
+    "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_type_compat",
+    "references": [
+      {
+        "label": "Typing spec: Named Tuples",
+        "url": "https://typing.python.org/en/latest/spec/namedtuples.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "namedtuples_usage",
@@ -3007,7 +5031,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_usage"
+    "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_usage",
+    "references": [
+      {
+        "label": "Typing spec: Named Tuples",
+        "url": "https://typing.python.org/en/latest/spec/namedtuples.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "names_unbound",
@@ -3030,7 +5064,13 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/names_unbound"
+    "docsUrl": "https://www.basilisk-python.dev/errors/names_unbound",
+    "references": [
+      {
+        "label": "Python language reference: Naming and binding",
+        "url": "https://docs.python.org/3/reference/executionmodel.html#naming-and-binding"
+      }
+    ]
   },
   {
     "code": "names_undefined",
@@ -3053,7 +5093,13 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/names_undefined"
+    "docsUrl": "https://www.basilisk-python.dev/errors/names_undefined",
+    "references": [
+      {
+        "label": "Python language reference: Naming and binding",
+        "url": "https://docs.python.org/3/reference/executionmodel.html#naming-and-binding"
+      }
+    ]
   },
   {
     "code": "narrowing_typeguard",
@@ -3072,7 +5118,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/narrowing_typeguard"
+    "docsUrl": "https://www.basilisk-python.dev/errors/narrowing_typeguard",
+    "references": [
+      {
+        "label": "Typing spec: Type narrowing",
+        "url": "https://typing.python.org/en/latest/spec/narrowing.html"
+      },
+      {
+        "label": "PEP 647",
+        "url": "https://peps.python.org/pep-0647/"
+      },
+      {
+        "label": "PEP 742",
+        "url": "https://peps.python.org/pep-0742/"
+      }
+    ]
   },
   {
     "code": "narrowing_typeis",
@@ -3096,7 +5156,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/narrowing_typeis"
+    "docsUrl": "https://www.basilisk-python.dev/errors/narrowing_typeis",
+    "references": [
+      {
+        "label": "Typing spec: Type narrowing",
+        "url": "https://typing.python.org/en/latest/spec/narrowing.html"
+      },
+      {
+        "label": "PEP 647",
+        "url": "https://peps.python.org/pep-0647/"
+      },
+      {
+        "label": "PEP 742",
+        "url": "https://peps.python.org/pep-0742/"
+      }
+    ]
   },
   {
     "code": "narrowing_typeis_2",
@@ -3115,7 +5189,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/narrowing_typeis_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/narrowing_typeis_2",
+    "references": [
+      {
+        "label": "Typing spec: Type narrowing",
+        "url": "https://typing.python.org/en/latest/spec/narrowing.html"
+      },
+      {
+        "label": "PEP 647",
+        "url": "https://peps.python.org/pep-0647/"
+      },
+      {
+        "label": "PEP 742",
+        "url": "https://peps.python.org/pep-0742/"
+      }
+    ]
   },
   {
     "code": "overloads_basic",
@@ -3139,7 +5227,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_basic"
+    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_basic",
+    "references": [
+      {
+        "label": "Typing spec: Overloads",
+        "url": "https://typing.python.org/en/latest/spec/overload.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "overloads_consistency",
@@ -3162,7 +5260,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_consistency"
+    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_consistency",
+    "references": [
+      {
+        "label": "Typing spec: Overloads",
+        "url": "https://typing.python.org/en/latest/spec/overload.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "overloads_consistency_2",
@@ -3185,7 +5293,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_consistency_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_consistency_2",
+    "references": [
+      {
+        "label": "Typing spec: Overloads",
+        "url": "https://typing.python.org/en/latest/spec/overload.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "overloads_consistency_3",
@@ -3208,7 +5326,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_consistency_3"
+    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_consistency_3",
+    "references": [
+      {
+        "label": "Typing spec: Overloads",
+        "url": "https://typing.python.org/en/latest/spec/overload.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "overloads_definitions",
@@ -3231,7 +5359,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_definitions"
+    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_definitions",
+    "references": [
+      {
+        "label": "Typing spec: Overloads",
+        "url": "https://typing.python.org/en/latest/spec/overload.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "overloads_evaluation",
@@ -3255,7 +5393,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_evaluation"
+    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_evaluation",
+    "references": [
+      {
+        "label": "Typing spec: Overloads",
+        "url": "https://typing.python.org/en/latest/spec/overload.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "protocols_class_objects",
@@ -3283,7 +5431,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_class_objects"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_class_objects",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_class_objects_2",
@@ -3315,7 +5473,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_class_objects_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_class_objects_2",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_definition",
@@ -3343,7 +5511,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_definition"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_definition",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_definition_2",
@@ -3379,7 +5557,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_definition_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_definition_2",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_explicit",
@@ -3403,7 +5591,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_explicit"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_explicit",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_explicit_2",
@@ -3427,7 +5625,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_explicit_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_explicit_2",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_explicit_3",
@@ -3451,7 +5659,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_explicit_3"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_explicit_3",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_generic",
@@ -3487,11 +5705,21 @@
       },
       {
         "type": "text",
-        "html": "PEP 544: &lt;https://typing.readthedocs.io/en/latest/spec/protocol.html#generic-protocols&gt;"
+        "html": "<a href=\"https://peps.python.org/pep-0544/\">PEP 544</a>: &lt;https://typing.readthedocs.io/en/latest/spec/protocol.html#generic-protocols&gt;"
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_generic"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_generic",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_merging",
@@ -3506,7 +5734,7 @@
     "body": [
       {
         "type": "text",
-        "html": "Per PEP 544, a Protocol class may only inherit from other Protocol classes (with the exception of <code>object</code>). Inheriting from a non-Protocol concrete class is a violation."
+        "html": "Per <a href=\"https://peps.python.org/pep-0544/\">PEP 544</a>, a Protocol class may only inherit from other Protocol classes (with the exception of <code>object</code>). Inheriting from a non-Protocol concrete class is a violation."
       },
       {
         "type": "code",
@@ -3515,7 +5743,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_merging"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_merging",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_modules",
@@ -3547,7 +5785,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_modules"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_modules",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_runtime_checkable",
@@ -3562,7 +5810,7 @@
     "body": [
       {
         "type": "text",
-        "html": "Per PEP 544: - A protocol can be used as the second argument to <code>isinstance()</code> or   <code>issubclass()</code> **only** if it is decorated with <code>@runtime_checkable</code>. - <code>issubclass()</code> can only be used with **non-data** protocols (protocols   that define only methods, not data attributes)."
+        "html": "Per <a href=\"https://peps.python.org/pep-0544/\">PEP 544</a>: - A protocol can be used as the second argument to <code>isinstance()</code> or   <code>issubclass()</code> **only** if it is decorated with <code>@runtime_checkable</code>. - <code>issubclass()</code> can only be used with **non-data** protocols (protocols   that define only methods, not data attributes)."
       },
       {
         "type": "code",
@@ -3571,7 +5819,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_runtime_checkable"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_runtime_checkable",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_runtime_checkable_2",
@@ -3586,7 +5844,7 @@
     "body": [
       {
         "type": "text",
-        "html": "Per PEP 544: - A protocol can be used as the second argument to <code>isinstance()</code> or   <code>issubclass()</code> **only** if it is decorated with <code>@runtime_checkable</code>. - <code>issubclass()</code> can only be used with **non-data** protocols (protocols   that define only methods, not data attributes). - Type checkers should reject an <code>isinstance()</code> or <code>issubclass()</code> call if   there is an unsafe overlap between the type of the first argument and   the protocol."
+        "html": "Per <a href=\"https://peps.python.org/pep-0544/\">PEP 544</a>: - A protocol can be used as the second argument to <code>isinstance()</code> or   <code>issubclass()</code> **only** if it is decorated with <code>@runtime_checkable</code>. - <code>issubclass()</code> can only be used with **non-data** protocols (protocols   that define only methods, not data attributes). - Type checkers should reject an <code>isinstance()</code> or <code>issubclass()</code> call if   there is an unsafe overlap between the type of the first argument and   the protocol."
       },
       {
         "type": "code",
@@ -3595,7 +5853,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_runtime_checkable_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_runtime_checkable_2",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_subtyping",
@@ -3619,7 +5887,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_subtyping"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_subtyping",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_variance",
@@ -3646,7 +5924,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_variance"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_variance",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "protocols_variance_2",
@@ -3665,7 +5953,7 @@
       },
       {
         "type": "text",
-        "html": "PEP 544 specifies that type checkers should warn when the inferred variance of a type variable used in a protocol differs from its declared variance."
+        "html": "<a href=\"https://peps.python.org/pep-0544/\">PEP 544</a> specifies that type checkers should warn when the inferred variance of a type variable used in a protocol differs from its declared variance."
       },
       {
         "type": "code",
@@ -3674,7 +5962,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_variance_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_variance_2",
+    "references": [
+      {
+        "label": "Typing spec: Protocols",
+        "url": "https://typing.python.org/en/latest/spec/protocol.html"
+      },
+      {
+        "label": "PEP 544",
+        "url": "https://peps.python.org/pep-0544/"
+      }
+    ]
   },
   {
     "code": "qualifiers_annotated",
@@ -3689,7 +5987,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 593 requires that the first argument to <code>Annotated...</code> be a valid type expression. The following are errors:"
+        "html": "<a href=\"https://peps.python.org/pep-0593/\">PEP 593</a> requires that the first argument to <code>Annotated...</code> be a valid type expression. The following are errors:"
       },
       {
         "type": "text",
@@ -3706,7 +6004,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_annotated"
+    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_annotated",
+    "references": [
+      {
+        "label": "Typing spec: Type qualifiers",
+        "url": "https://typing.python.org/en/latest/spec/qualifiers.html"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 591",
+        "url": "https://peps.python.org/pep-0591/"
+      },
+      {
+        "label": "PEP 593",
+        "url": "https://peps.python.org/pep-0593/"
+      }
+    ]
   },
   {
     "code": "qualifiers_annotated_2",
@@ -3721,7 +6037,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 593 requires <code>Annotated</code> to be subscripted with at least two arguments: a type and one or more metadata values. <code>Annotatedint</code> with only a single argument is a type error."
+        "html": "<a href=\"https://peps.python.org/pep-0593/\">PEP 593</a> requires <code>Annotated</code> to be subscripted with at least two arguments: a type and one or more metadata values. <code>Annotatedint</code> with only a single argument is a type error."
       },
       {
         "type": "code",
@@ -3730,7 +6046,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_annotated_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_annotated_2",
+    "references": [
+      {
+        "label": "Typing spec: Type qualifiers",
+        "url": "https://typing.python.org/en/latest/spec/qualifiers.html"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 591",
+        "url": "https://peps.python.org/pep-0591/"
+      },
+      {
+        "label": "PEP 593",
+        "url": "https://peps.python.org/pep-0593/"
+      }
+    ]
   },
   {
     "code": "qualifiers_final_annotation",
@@ -3745,7 +6079,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 591 restricts <code>FinalT</code> to:"
+        "html": "<a href=\"https://peps.python.org/pep-0591/\">PEP 591</a> restricts <code>FinalT</code> to:"
       },
       {
         "type": "text",
@@ -3766,7 +6100,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_final_annotation"
+    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_final_annotation",
+    "references": [
+      {
+        "label": "Typing spec: Type qualifiers",
+        "url": "https://typing.python.org/en/latest/spec/qualifiers.html"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 591",
+        "url": "https://peps.python.org/pep-0591/"
+      },
+      {
+        "label": "PEP 593",
+        "url": "https://peps.python.org/pep-0593/"
+      }
+    ]
   },
   {
     "code": "qualifiers_final_annotation_2",
@@ -3781,7 +6133,7 @@
     "body": [
       {
         "type": "text",
-        "html": "Detects violations of PEP 591&#x27;s rules for the <code>Final</code> qualifier, beyond the positional errors handled by E0044. Specifically:"
+        "html": "Detects violations of <a href=\"https://peps.python.org/pep-0591/\">PEP 591</a>&#x27;s rules for the <code>Final</code> qualifier, beyond the positional errors handled by E0044. Specifically:"
       },
       {
         "type": "text",
@@ -3821,7 +6173,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_final_annotation_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_final_annotation_2",
+    "references": [
+      {
+        "label": "Typing spec: Type qualifiers",
+        "url": "https://typing.python.org/en/latest/spec/qualifiers.html"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 591",
+        "url": "https://peps.python.org/pep-0591/"
+      },
+      {
+        "label": "PEP 593",
+        "url": "https://peps.python.org/pep-0593/"
+      }
+    ]
   },
   {
     "code": "qualifiers_final_decorator",
@@ -3852,7 +6222,25 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_final_decorator"
+    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_final_decorator",
+    "references": [
+      {
+        "label": "Typing spec: Type qualifiers",
+        "url": "https://typing.python.org/en/latest/spec/qualifiers.html"
+      },
+      {
+        "label": "PEP 526",
+        "url": "https://peps.python.org/pep-0526/"
+      },
+      {
+        "label": "PEP 591",
+        "url": "https://peps.python.org/pep-0591/"
+      },
+      {
+        "label": "PEP 593",
+        "url": "https://peps.python.org/pep-0593/"
+      }
+    ]
   },
   {
     "code": "returns_compatibility",
@@ -3875,7 +6263,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/returns_compatibility"
+    "docsUrl": "https://www.basilisk-python.dev/errors/returns_compatibility",
+    "references": [
+      {
+        "label": "Typing spec: Type system concepts",
+        "url": "https://typing.python.org/en/latest/spec/concepts.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "returns_compatibility_2",
@@ -3893,7 +6291,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/returns_compatibility_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/returns_compatibility_2",
+    "references": [
+      {
+        "label": "Typing spec: Type system concepts",
+        "url": "https://typing.python.org/en/latest/spec/concepts.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "specialtypes_never",
@@ -3933,7 +6341,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/specialtypes_never"
+    "docsUrl": "https://www.basilisk-python.dev/errors/specialtypes_never",
+    "references": [
+      {
+        "label": "Typing spec: Special types in annotations",
+        "url": "https://typing.python.org/en/latest/spec/special-types.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "specialtypes_never_2",
@@ -3961,7 +6379,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/specialtypes_never_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/specialtypes_never_2",
+    "references": [
+      {
+        "label": "Typing spec: Special types in annotations",
+        "url": "https://typing.python.org/en/latest/spec/special-types.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "specialtypes_promotions",
@@ -3976,7 +6404,7 @@
     "body": [
       {
         "type": "text",
-        "html": "The Python typing spec (PEP 484 / typing spec \u00a7Special cases for float and complex) states that <code>int</code> is not a subtype of <code>float</code> for static type-checking purposes. Attributes such as <code>numerator</code> and <code>denominator</code> are defined on <code>int</code> but NOT on <code>float</code>.  Accessing them on a parameter declared as <code>float</code> is therefore a static type error."
+        "html": "The Python typing spec (<a href=\"https://peps.python.org/pep-0484/\">PEP 484</a> / typing spec \u00a7Special cases for float and complex) states that <code>int</code> is not a subtype of <code>float</code> for static type-checking purposes. Attributes such as <code>numerator</code> and <code>denominator</code> are defined on <code>int</code> but NOT on <code>float</code>.  Accessing them on a parameter declared as <code>float</code> is therefore a static type error."
       },
       {
         "type": "text",
@@ -3989,7 +6417,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/specialtypes_promotions"
+    "docsUrl": "https://www.basilisk-python.dev/errors/specialtypes_promotions",
+    "references": [
+      {
+        "label": "Typing spec: Special types in annotations",
+        "url": "https://typing.python.org/en/latest/spec/special-types.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "specialtypes_type",
@@ -4024,7 +6462,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/specialtypes_type"
+    "docsUrl": "https://www.basilisk-python.dev/errors/specialtypes_type",
+    "references": [
+      {
+        "label": "Typing spec: Special types in annotations",
+        "url": "https://typing.python.org/en/latest/spec/special-types.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      }
+    ]
   },
   {
     "code": "tuples_index",
@@ -4057,7 +6505,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_index"
+    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_index",
+    "references": [
+      {
+        "label": "Typing spec: Tuples",
+        "url": "https://typing.python.org/en/latest/spec/tuples.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      }
+    ]
   },
   {
     "code": "tuples_index_2",
@@ -4081,7 +6543,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_index_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_index_2",
+    "references": [
+      {
+        "label": "Typing spec: Tuples",
+        "url": "https://typing.python.org/en/latest/spec/tuples.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      }
+    ]
   },
   {
     "code": "tuples_type_compat",
@@ -4121,7 +6597,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_type_compat"
+    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_type_compat",
+    "references": [
+      {
+        "label": "Typing spec: Tuples",
+        "url": "https://typing.python.org/en/latest/spec/tuples.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      }
+    ]
   },
   {
     "code": "tuples_type_form",
@@ -4149,7 +6639,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_type_form"
+    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_type_form",
+    "references": [
+      {
+        "label": "Typing spec: Tuples",
+        "url": "https://typing.python.org/en/latest/spec/tuples.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      }
+    ]
   },
   {
     "code": "tuples_type_form_2",
@@ -4164,7 +6668,7 @@
     "body": [
       {
         "type": "text",
-        "html": "Validates tuple type annotations according to PEP 646 rules:"
+        "html": "Validates tuple type annotations according to <a href=\"https://peps.python.org/pep-0646/\">PEP 646</a> rules:"
       },
       {
         "type": "text",
@@ -4177,7 +6681,21 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_type_form_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_type_form_2",
+    "references": [
+      {
+        "label": "Typing spec: Tuples",
+        "url": "https://typing.python.org/en/latest/spec/tuples.html"
+      },
+      {
+        "label": "PEP 484",
+        "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 646",
+        "url": "https://peps.python.org/pep-0646/"
+      }
+    ]
   },
   {
     "code": "typeddicts_alt_syntax",
@@ -4200,7 +6718,29 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_alt_syntax"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_alt_syntax",
+    "references": [
+      {
+        "label": "Typing spec: Typed dictionaries",
+        "url": "https://typing.python.org/en/latest/spec/typeddict.html"
+      },
+      {
+        "label": "PEP 589",
+        "url": "https://peps.python.org/pep-0589/"
+      },
+      {
+        "label": "PEP 655",
+        "url": "https://peps.python.org/pep-0655/"
+      },
+      {
+        "label": "PEP 705",
+        "url": "https://peps.python.org/pep-0705/"
+      },
+      {
+        "label": "PEP 728",
+        "url": "https://peps.python.org/pep-0728/"
+      }
+    ]
   },
   {
     "code": "typeddicts_class_syntax",
@@ -4215,11 +6755,33 @@
     "body": [
       {
         "type": "text",
-        "html": "<code>TypedDict</code> classes (PEP 589) are restricted to key declarations only. Defining methods (other than <code>__init__</code> which is synthesised) is an error."
+        "html": "<code>TypedDict</code> classes (<a href=\"https://peps.python.org/pep-0589/\">PEP 589</a>) are restricted to key declarations only. Defining methods (other than <code>__init__</code> which is synthesised) is an error."
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_class_syntax"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_class_syntax",
+    "references": [
+      {
+        "label": "Typing spec: Typed dictionaries",
+        "url": "https://typing.python.org/en/latest/spec/typeddict.html"
+      },
+      {
+        "label": "PEP 589",
+        "url": "https://peps.python.org/pep-0589/"
+      },
+      {
+        "label": "PEP 655",
+        "url": "https://peps.python.org/pep-0655/"
+      },
+      {
+        "label": "PEP 705",
+        "url": "https://peps.python.org/pep-0705/"
+      },
+      {
+        "label": "PEP 728",
+        "url": "https://peps.python.org/pep-0728/"
+      }
+    ]
   },
   {
     "code": "typeddicts_class_syntax_2",
@@ -4234,7 +6796,7 @@
     "body": [
       {
         "type": "text",
-        "html": "<code>TypedDict</code> class syntax only accepts <code>total=True/False</code> as a keyword argument. Using <code>metaclass=</code> or any unrecognised keyword is an error per PEP 589."
+        "html": "<code>TypedDict</code> class syntax only accepts <code>total=True/False</code> as a keyword argument. Using <code>metaclass=</code> or any unrecognised keyword is an error per <a href=\"https://peps.python.org/pep-0589/\">PEP 589</a>."
       },
       {
         "type": "text",
@@ -4242,7 +6804,29 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_class_syntax_2"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_class_syntax_2",
+    "references": [
+      {
+        "label": "Typing spec: Typed dictionaries",
+        "url": "https://typing.python.org/en/latest/spec/typeddict.html"
+      },
+      {
+        "label": "PEP 589",
+        "url": "https://peps.python.org/pep-0589/"
+      },
+      {
+        "label": "PEP 655",
+        "url": "https://peps.python.org/pep-0655/"
+      },
+      {
+        "label": "PEP 705",
+        "url": "https://peps.python.org/pep-0705/"
+      },
+      {
+        "label": "PEP 728",
+        "url": "https://peps.python.org/pep-0728/"
+      }
+    ]
   },
   {
     "code": "typeddicts_extra_items",
@@ -4253,15 +6837,37 @@
       "typeddicts"
     ],
     "summary": "`TypedDict` `extra_items` / `closed` (PEP 728) violations",
-    "summaryHtml": "<code>TypedDict</code> <code>extra_items</code> / <code>closed</code> (PEP 728) violations",
+    "summaryHtml": "<code>TypedDict</code> <code>extra_items</code> / <code>closed</code> (<a href=\"https://peps.python.org/pep-0728/\">PEP 728</a>) violations",
     "body": [
       {
         "type": "text",
-        "html": "Validates class-definition legality, dict-literal construction, assignability between <code>TypedDict</code>s, and constructor calls against the PEP 728 rules. Operates on the module AST and is independent of resolver state."
+        "html": "Validates class-definition legality, dict-literal construction, assignability between <code>TypedDict</code>s, and constructor calls against the <a href=\"https://peps.python.org/pep-0728/\">PEP 728</a> rules. Operates on the module AST and is independent of resolver state."
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_extra_items"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_extra_items",
+    "references": [
+      {
+        "label": "Typing spec: Typed dictionaries",
+        "url": "https://typing.python.org/en/latest/spec/typeddict.html"
+      },
+      {
+        "label": "PEP 589",
+        "url": "https://peps.python.org/pep-0589/"
+      },
+      {
+        "label": "PEP 655",
+        "url": "https://peps.python.org/pep-0655/"
+      },
+      {
+        "label": "PEP 705",
+        "url": "https://peps.python.org/pep-0705/"
+      },
+      {
+        "label": "PEP 728",
+        "url": "https://peps.python.org/pep-0728/"
+      }
+    ]
   },
   {
     "code": "typeddicts_inheritance",
@@ -4276,7 +6882,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 589 and the typing spec place constraints on <code>TypedDict</code> inheritance:"
+        "html": "<a href=\"https://peps.python.org/pep-0589/\">PEP 589</a> and the typing spec place constraints on <code>TypedDict</code> inheritance:"
       },
       {
         "type": "text",
@@ -4284,7 +6890,7 @@
       },
       {
         "type": "text",
-        "html": "2. A <code>TypedDict</code> subclass cannot change the type of a field declared in a    parent <code>TypedDict</code> class. PEP 705 refines this for the <code>ReadOnly</code>,    <code>Required</code>, and <code>NotRequired</code> qualifiers:    - A writable (non-<code>ReadOnly</code>) item may not be redeclared <code>ReadOnly</code>.    - A required item may not be redeclared as not-required.    - A writable item&#x27;s value type is invariant; a <code>ReadOnly</code> item&#x27;s value      type may be narrowed to a subtype."
+        "html": "2. A <code>TypedDict</code> subclass cannot change the type of a field declared in a    parent <code>TypedDict</code> class. <a href=\"https://peps.python.org/pep-0705/\">PEP 705</a> refines this for the <code>ReadOnly</code>,    <code>Required</code>, and <code>NotRequired</code> qualifiers:    - A writable (non-<code>ReadOnly</code>) item may not be redeclared <code>ReadOnly</code>.    - A required item may not be redeclared as not-required.    - A writable item&#x27;s value type is invariant; a <code>ReadOnly</code> item&#x27;s value      type may be narrowed to a subtype."
       },
       {
         "type": "text",
@@ -4292,7 +6898,29 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_inheritance"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_inheritance",
+    "references": [
+      {
+        "label": "Typing spec: Typed dictionaries",
+        "url": "https://typing.python.org/en/latest/spec/typeddict.html"
+      },
+      {
+        "label": "PEP 589",
+        "url": "https://peps.python.org/pep-0589/"
+      },
+      {
+        "label": "PEP 655",
+        "url": "https://peps.python.org/pep-0655/"
+      },
+      {
+        "label": "PEP 705",
+        "url": "https://peps.python.org/pep-0705/"
+      },
+      {
+        "label": "PEP 728",
+        "url": "https://peps.python.org/pep-0728/"
+      }
+    ]
   },
   {
     "code": "typeddicts_operations",
@@ -4307,7 +6935,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 589 defines <code>TypedDict</code> as a typed dict with a fixed set of keys and associated types. This rule detects:"
+        "html": "<a href=\"https://peps.python.org/pep-0589/\">PEP 589</a> defines <code>TypedDict</code> as a typed dict with a fixed set of keys and associated types. This rule detects:"
       },
       {
         "type": "text",
@@ -4320,7 +6948,29 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_operations"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_operations",
+    "references": [
+      {
+        "label": "Typing spec: Typed dictionaries",
+        "url": "https://typing.python.org/en/latest/spec/typeddict.html"
+      },
+      {
+        "label": "PEP 589",
+        "url": "https://peps.python.org/pep-0589/"
+      },
+      {
+        "label": "PEP 655",
+        "url": "https://peps.python.org/pep-0655/"
+      },
+      {
+        "label": "PEP 705",
+        "url": "https://peps.python.org/pep-0705/"
+      },
+      {
+        "label": "PEP 728",
+        "url": "https://peps.python.org/pep-0728/"
+      }
+    ]
   },
   {
     "code": "typeddicts_readonly",
@@ -4344,7 +6994,29 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_readonly"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_readonly",
+    "references": [
+      {
+        "label": "Typing spec: Typed dictionaries",
+        "url": "https://typing.python.org/en/latest/spec/typeddict.html"
+      },
+      {
+        "label": "PEP 589",
+        "url": "https://peps.python.org/pep-0589/"
+      },
+      {
+        "label": "PEP 655",
+        "url": "https://peps.python.org/pep-0655/"
+      },
+      {
+        "label": "PEP 705",
+        "url": "https://peps.python.org/pep-0705/"
+      },
+      {
+        "label": "PEP 728",
+        "url": "https://peps.python.org/pep-0728/"
+      }
+    ]
   },
   {
     "code": "typeddicts_required",
@@ -4359,7 +7031,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 655 and the typing spec restrict <code>RequiredT</code> and <code>NotRequiredT</code> to:"
+        "html": "<a href=\"https://peps.python.org/pep-0655/\">PEP 655</a> and the typing spec restrict <code>RequiredT</code> and <code>NotRequiredT</code> to:"
       },
       {
         "type": "text",
@@ -4380,7 +7052,29 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_required"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_required",
+    "references": [
+      {
+        "label": "Typing spec: Typed dictionaries",
+        "url": "https://typing.python.org/en/latest/spec/typeddict.html"
+      },
+      {
+        "label": "PEP 589",
+        "url": "https://peps.python.org/pep-0589/"
+      },
+      {
+        "label": "PEP 655",
+        "url": "https://peps.python.org/pep-0655/"
+      },
+      {
+        "label": "PEP 705",
+        "url": "https://peps.python.org/pep-0705/"
+      },
+      {
+        "label": "PEP 728",
+        "url": "https://peps.python.org/pep-0728/"
+      }
+    ]
   },
   {
     "code": "typeddicts_usage",
@@ -4395,7 +7089,7 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 589 defines constraints on what you can do with <code>TypedDict</code> type objects at runtime:"
+        "html": "<a href=\"https://peps.python.org/pep-0589/\">PEP 589</a> defines constraints on what you can do with <code>TypedDict</code> type objects at runtime:"
       },
       {
         "type": "text",
@@ -4408,7 +7102,29 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_usage"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_usage",
+    "references": [
+      {
+        "label": "Typing spec: Typed dictionaries",
+        "url": "https://typing.python.org/en/latest/spec/typeddict.html"
+      },
+      {
+        "label": "PEP 589",
+        "url": "https://peps.python.org/pep-0589/"
+      },
+      {
+        "label": "PEP 655",
+        "url": "https://peps.python.org/pep-0655/"
+      },
+      {
+        "label": "PEP 705",
+        "url": "https://peps.python.org/pep-0705/"
+      },
+      {
+        "label": "PEP 728",
+        "url": "https://peps.python.org/pep-0728/"
+      }
+    ]
   },
   {
     "code": "version_target_syntax",
@@ -4418,11 +7134,11 @@
       "pep"
     ],
     "summary": "PEP 695 syntax used below the configured target version",
-    "summaryHtml": "PEP 695 syntax used below the configured target version",
+    "summaryHtml": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> syntax used below the configured target version",
     "body": [
       {
         "type": "text",
-        "html": "<code>type X = ...</code> aliases and <code>class FooT</code> / <code>def fT()</code> type-parameter lists are Python 3.12+ syntax (PEP 695). When the configured <code>python_version</code> targets anything older, the file cannot even be parsed by the target interpreter, so this fires as an error (issue #93)."
+        "html": "<code>type X = ...</code> aliases and <code>class FooT</code> / <code>def fT()</code> type-parameter lists are Python 3.12+ syntax (<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a>). When the configured <code>python_version</code> targets anything older, the file cannot even be parsed by the target interpreter, so this fires as an error (issue #93)."
       },
       {
         "type": "code",
@@ -4431,6 +7147,16 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/version_target_syntax"
+    "docsUrl": "https://www.basilisk-python.dev/errors/version_target_syntax",
+    "references": [
+      {
+        "label": "Typing spec: Generics",
+        "url": "https://typing.python.org/en/latest/spec/generics.html"
+      },
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      }
+    ]
   }
 ]

@@ -1,4 +1,4 @@
-//! Implements [`overloads_basic`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! Implements [`overloads_basic`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 //! `overloads_basic`: No matching overload for subscript indexing.
 //!
 //! When a class defines overloaded `__getitem__` methods and a module-level

@@ -1,4 +1,4 @@
-//! Tests for [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Tests for [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! Coarse e2e tests locking in the `assignment_compatibility` false-positive eliminations from
 //! the completed false-positive elimination campaign.
 //!

@@ -1,4 +1,4 @@
-//! Implements [`constructors_call_type`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`constructors_call_type`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Helper types and functions for `constructors_call_type`.
 //!
 //! Contains constructor signature resolution, argument type checking,

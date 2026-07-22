@@ -10,9 +10,7 @@ use super::super::gate::{safety_gate, SafetyLimits};
 use super::super::gittree::FileMode;
 use super::super::selector::BackendError;
 use super::super::snapshot::Snapshot;
-use super::super::source::{
-    LicenseStatus, Provenance, SourceIdentity, SourceKind, Transport, TypeshedStatus,
-};
+use super::super::source::{LicenseStatus, SourceIdentity, SourceKind, TypeshedStatus};
 
 /// Load a custom tree into one immutable, content-identified snapshot.
 pub(super) fn load_custom_snapshot(path: &str) -> Result<Snapshot, BackendError> {
@@ -40,11 +38,8 @@ pub(super) fn load_custom_snapshot(path: &str) -> Result<Snapshot, BackendError>
         active_source: SourceKind::Custom,
         commit: None,
         tree: None,
-        transport: Transport::CustomPath,
         license_status: LicenseStatus::NotSupplied,
         license_reference: None,
-        provenance: Provenance::UserManaged,
-        signed_release: false,
         warnings: Vec::new(),
     };
     let uri_identity = identity.uri_component();

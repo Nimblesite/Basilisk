@@ -184,8 +184,7 @@ suite("Typeshed status reactivity (issue #58)", () => {
       handles.fireNotification("basilisk/typeshedStatusChanged", {
         rootUri: "file:///other",
         status: {
-          lifecycle: { kind: "Ready" }, licenseStatus: { kind: "Approved" },
-          provenance: { kind: "BundleVetted" }, signedRelease: false, warnings: [],
+          lifecycle: { kind: "Ready" }, licenseStatus: { kind: "Approved" }, warnings: [],
         },
       });
       assert.strictEqual(store.typeshedStatuses.value.has("file:///other"), true);
@@ -193,8 +192,7 @@ suite("Typeshed status reactivity (issue #58)", () => {
       handles.fireNotification("basilisk/typeshedStatusChanged", {
         rootUri: "file:///workspace",
         status: {
-          lifecycle: { kind: "Ready" }, licenseStatus: { kind: "Approved" },
-          provenance: { kind: "BundleVetted" }, signedRelease: false, warnings: [],
+          lifecycle: { kind: "Ready" }, licenseStatus: { kind: "Approved" }, warnings: [],
         },
       });
       assert.strictEqual(
@@ -210,9 +208,8 @@ suite("Typeshed status reactivity (issue #58)", () => {
       const initial = {
         rootUri: "file:///workspace",
         status: {
-          lifecycle: { kind: "Blocked" }, blockedReason: "exact unavailable",
-          licenseStatus: { kind: "Changed" }, provenance: { kind: "Pending" },
-          signedRelease: false, warnings: [],
+          lifecycle: { kind: "NoSource" }, noSourceReason: "exact unavailable",
+          licenseStatus: { kind: "Changed" }, warnings: [],
         },
       };
       const { store, handles } = storeWithFakeClient([initial]);
@@ -225,7 +222,7 @@ suite("Typeshed status reactivity (issue #58)", () => {
         rootUri: "file:///workspace", status: { lifecycle: { kind: "invented" } },
       });
       assert.strictEqual(
-        store.typeshedStatuses.value.get("file:///workspace")?.blockedReason,
+        store.typeshedStatuses.value.get("file:///workspace")?.noSourceReason,
         "exact unavailable",
       );
     });

@@ -69,13 +69,11 @@ function verifyTypeshedInfoRows(): void {
     "file:///workspace",
     {
       lifecycle: { kind: "Ready" }, activeSource: { kind: "Bundled" },
-      blockedReason: undefined,
+      noSourceReason: undefined,
       commitIdentity: "83c2518a9e6abbda0c44592c3483de459198f887",
-      transport: { kind: "EmbeddedZip" }, licenseStatus: { kind: "Approved" },
-      provenance: { kind: "BundleVetted" },
-      signedRelease: false,
+      licenseStatus: { kind: "Approved" },
       warnings: [{
-        code: "UNPINNED", message: "Pin current to make this reproducible",
+        code: "UNPINNED", message: "Pin a commit to make this reproducible",
         severity: { kind: "Advisory" },
       }],
     },
@@ -88,21 +86,19 @@ function verifyTypeshedInfoRows(): void {
     assert.ok(String(source?.description).includes("83c2518a9e6abbda0c44592c3483de459198f887"));
     const sourceTooltip = tooltipOf(source ?? new vscode.TreeItem("missing"));
     assert.ok(sourceTooltip.includes("Commit: 83c2518a9e6abbda0c44592c3483de459198f887"));
-    assert.ok(sourceTooltip.includes("Transport: EmbeddedZip"));
-    assert.ok(sourceTooltip.includes("Provenance: BundleVetted"));
-    assert.ok(sourceTooltip.includes("Signed release: no"));
+    assert.ok(sourceTooltip.includes("Source: Bundled"));
     assert.ok(sourceTooltip.includes("License: Approved"));
     assert.ok(!byLabel.has("Typeshed Transport"), "trust details belong in one source tooltip");
     assert.strictEqual(
       byLabel.get("Typeshed UNPINNED")?.description,
-      "Pin current to make this reproducible",
+      "Pin a commit to make this reproducible",
     );
   } finally {
     typeshedProvider.dispose();
   }
 }
 
-function verifyAcquiringTypeshedSpinner(): void {
+function verifyDownloadingTypeshedSpinner(): void {
   const store = createStore();
   const writable = store.typeshedStatuses as unknown as {
     value: ReadonlyMap<string, TypeshedStatusState>;
@@ -110,10 +106,10 @@ function verifyAcquiringTypeshedSpinner(): void {
   writable.value = new Map([[
     "file:///workspace",
     {
-      lifecycle: { kind: "Acquiring" }, blockedReason: undefined, activeSource: undefined,
-      commitIdentity: undefined, transport: undefined,
-      licenseStatus: { kind: "Acquiring" },
-      provenance: { kind: "Pending" }, signedRelease: false, warnings: [],
+      lifecycle: { kind: "Downloading" }, noSourceReason: undefined, activeSource: undefined,
+      commitIdentity: undefined,
+      licenseStatus: { kind: "Unavailable" },
+      warnings: [],
     },
   ]]);
   const typeshedProvider = new InfoPanelProvider(store);
@@ -137,14 +133,12 @@ function storeWithUnpinnedWarning(): ReturnType<typeof createStore> {
   writable.value = new Map([[
     "file:///workspace",
     {
-      lifecycle: { kind: "Ready" }, activeSource: { kind: "Latest" },
-      blockedReason: undefined,
+      lifecycle: { kind: "Ready" }, activeSource: { kind: "Bundled" },
+      noSourceReason: undefined,
       commitIdentity: "6fb14c98ee340a07eea807a4c804e20a849eb92b",
-      transport: { kind: "Codeload" }, licenseStatus: { kind: "Approved" },
-      provenance: { kind: "GithubTlsAttested" },
-      signedRelease: false,
+      licenseStatus: { kind: "Approved" },
       warnings: [{
-        code: "UNPINNED", message: "Pin current to make this reproducible",
+        code: "UNPINNED", message: "Pin a commit to make this reproducible",
         severity: { kind: "Advisory" },
       }],
     },
@@ -345,7 +339,7 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
 
   test("Server Info renders the root-keyed Typeshed source and trust state", verifyTypeshedInfoRows);
 
-  test("Server Info shows an acquiring Typeshed spinner", verifyAcquiringTypeshedSpinner);
+  test("Server Info shows a downloading Typeshed spinner", verifyDownloadingTypeshedSpinner);
 
   test(
     "the UNPINNED warning row opens the configuration editor where Pin current lives",

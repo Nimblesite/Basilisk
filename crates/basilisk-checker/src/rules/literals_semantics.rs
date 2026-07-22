@@ -1,4 +1,4 @@
-//! Implements [`literals_semantics`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`literals_semantics`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `literals_semantics`: Augmented assignment widens `Literal` type.
 //!
 //! Implements the supported annotated slice of [TYPEINF-VARS-AUGMENTED]:

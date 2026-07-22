@@ -1,4 +1,4 @@
-//! Implements [`narrowing_typeis_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`narrowing_typeis_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `narrowing_typeis_2`: `TypeIs` narrows to a type inconsistent with the input type.
 //!
 //! Per the typing spec: "It is an error to narrow to a type that is not

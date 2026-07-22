@@ -1,4 +1,4 @@
-//! Implements [`constructors_callable`] from [CHKARCH-DIAG-CTOR-CALLABLE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ctor-callable
+//! Implements [`constructors_callable`] from [CHKARCH-DIAG-CTOR-CALLABLE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CTOR-CALLABLE
 //! `constructors_callable`: Invalid call to a constructor-derived callable.
 //!
 //! Implements the typing spec rule "Converting a constructor to callable"

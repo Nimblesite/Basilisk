@@ -948,10 +948,10 @@ stub-resolution spec and `basilisk-stubs`.
 Pinned typing step 3 says a configured custom typeshed is the "canonical source"
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 Accordingly, `typeshed-path` is the sole step-3 tree when set. Otherwise Basilisk
-uses an exact-SHA archive for an explicit `typeshed-commit` or current `main`, or
-the bundled stdlib ZIP. Step-3 sources never mix; failed unpinned acquisition
-never reuses an earlier archive.
-`typeshed-cache-path` only relocates automatic storage, while `stub-paths`
+resolves the pinned `typeshed-commit` (unset = the bundled commit) from the
+local store or the bundled stdlib ZIP — always offline, never a download.
+Step-3 sources never mix and a missing pin never substitutes another source.
+`typeshed-store-path` only relocates the local store, while `stub-paths`
 remains the separate step-1 override
 ([STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)).
 
@@ -1044,12 +1044,9 @@ Project TOML example:
 [tool.basilisk]
 python-platform = "All"          # Explicit cross-platform analysis
 stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
-# Unpinned acquisition resolves current python/typeshed@main on startup:
+# An unset pin IS the bundled commit; `basilisk typeshed download` updates it:
 # typeshed-commit = "<full commit SHA>"  # optional explicit immutable source
-# typeshed-url = "https://mirror.example/typeshed/{sha}.zip"
-# typeshed-cache-path = ".cache/typeshed"
-# typeshed-cache = true
-# typeshed-verify = true
+# typeshed-store-path = ".cache/typeshed"  # optional: relocate the local store
 # typeshed-path = "typeshed-x"   # resolution step 3: your sole custom stdlib tree
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]
@@ -1235,9 +1232,21 @@ Every error has at least one associated code action:
 
 ### Parallelism {#CHKARCH-PERF-PARALLEL}
 
-- File-level parallelism using Rayon (work-stealing)
-- Module dependency graph partitioned into independent subgraphs
-- Cross-module dependencies resolved first in dependency-ordered pass
+Analysis is single-threaded, by design and in fact. `check` / `analyze` / `fix` /
+`adopt` all run on one dedicated large-stack thread (`run_with_analysis_stack`,
+[LSPARCH-ARCH-STACK]) because the AST walk recurses deeply enough to overflow the
+default main-thread stack. No Basilisk crate calls Rayon — `rayon` reaches the
+lockfile only as a transitive dependency of `salsa` and `ruff_db`.
+
+Concurrency lives in the LSP server instead, on Tokio: request multiplexing, plus
+`spawn_blocking` for the genuinely blocking work (typeshed download, debug-adapter
+accept loop, process enumeration). What keeps an edit sub-10ms is Salsa's
+incremental invalidation ([CHKARCH-INCREMENTAL]), not thread count.
+
+File-level parallelism stays a future option. It is not implemented, and no
+benchmark number in this repository depends on it — so a change that adds it must
+still clear the benchmark ratchet on its own merits
+([CHKARCH-TESTING-BENCH-RATCHET]).
 
 ### Memory {#CHKARCH-PERF-MEMORY}
 

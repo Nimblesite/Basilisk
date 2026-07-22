@@ -1,4 +1,4 @@
-//! Implements [`namedtuples_usage`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`namedtuples_usage`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `namedtuples_usage`: `NamedTuple` usage violations.
 //!
 //! Detects invalid usage of `NamedTuple` instances:

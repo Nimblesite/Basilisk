@@ -179,6 +179,14 @@
       "topics": ["typing runtime API", "annotation runtime limits"]
     },
     {
+      "key": "python-typing-assert-never",
+      "title": "typing.assert_never",
+      "url": "https://docs.python.org/3/library/typing.html#typing.assert_never",
+      "authority": "Python Software Foundation",
+      "versionScope": "current Python 3 documentation; states assert_never was added in Python 3.11",
+      "topics": ["assert_never", "exhaustiveness", "version availability"]
+    },
+    {
       "key": "python-annotations",
       "title": "Python annotation best practices",
       "url": "https://docs.python.org/3/howto/annotations.html",

@@ -67,25 +67,29 @@ class TypeshedDocumentationTests(unittest.TestCase):
         self.assertLess(flow.index("5 ·"), flow.index("6 ·"))
 
     def test_cache_pin_and_python_target_contract_has_no_contradiction(self) -> None:
-        """The reuse window is split by whether the selection can move.
+        """Store entries are commits, so age and the network carry no meaning.
 
-        `Latest` tracks the moving `main` reference, so its bytes must keep a
-        stated expiry — documenting unbounded reuse there would promise a
-        freshness the checker does not deliver. An exact pin is
+        The checker never downloads: the only sources are a pinned store entry
+        and a custom folder, so no document may describe a moving `latest`
+        selection, a refresh TTL, or any expiry window. A store entry is
         content-addressed and re-hashed on every load, so age carries no
-        information about it and the docs must say so rather than implying a
-        pinned project needs the network. Both halves are asserted here so
-        neither can be dropped silently.
+        information about it — reuse is unbounded and re-verified, and the pin
+        itself never expires or changes. Both the ban on freshness language and
+        the positive store contract are asserted here so neither can be
+        dropped silently.
         """
         combined = "\n".join(document.read_text() for document in DOCUMENTS)
         normalized = re.sub(r"\s+", " ", combined).lower()
         for forbidden in (
-            # Unqualified claims that caching never expires. The pin exemption
-            # is always stated as scoped to a pin, never as a blanket property.
+            # Freshness/TTL language: with no downloads there is nothing to
+            # refresh, so any expiry window is a contradiction.
             "without a refresh ttl",
+            "refresh ttl",
+            "24-hour",
+            "24 hours",
             "cached indefinitely",
             # A pin must never be presented as expiring: that was the defect
-            # this contract now guards against.
+            # this contract originally guarded against.
             "pins expire after 24 hours",
             "an exact pin expires",
             # Commit selection is never derived from the Python target.
@@ -94,21 +98,18 @@ class TypeshedDocumentationTests(unittest.TestCase):
             "default 3.12",
         ):
             self.assertNotIn(forbidden, normalized)
-        # The moving reference keeps a stated 24-hour bound.
-        self.assertIn(
-            "the 24-hour expiry bounds reuse of unpinned downloaded zip bytes only",
-            normalized,
-        )
-        self.assertIn("latest expires after 24 hours", normalized)
-        self.assertIn("after 24 hours", normalized)
-        # The pin is exempt, and the reason is stated rather than asserted.
+        # The checker is offline: no download path exists at check time.
+        self.assertIn("the checker never downloads", normalized)
+        # Store reuse is unbounded, and the reason is stated rather than
+        # asserted: every load re-verifies the content address.
         self.assertIn("reused regardless of age", normalized)
+        self.assertIn("re-verified by hashing every time", normalized)
+        self.assertIn("no expiry, no reuse policy, no cache-off mode", normalized)
         self.assertIn(
-            "every reuse re-hashes the zip against its recorded sha-256", normalized
+            "nothing is cached, nothing expires, a pin always verifies", normalized
         )
         # Identity stability is unchanged by any of the above.
         self.assertIn("the pin never expires or changes", normalized)
-        self.assertIn("exact commit identity never expires", normalized)
 
 
 if __name__ == "__main__":

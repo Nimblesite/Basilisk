@@ -18,9 +18,7 @@ use shipwright_manifest::{ExecutableKind, Language};
 use tracing::error;
 
 use crate::output::{render_diagnostics, render_diagnostics_json, ColorMode, OutputFormat};
-use crate::pipeline::{
-    collect_and_check_with_overrides, pluralise, DiagnosticScope, PipelineError, TypeshedOverrides,
-};
+use crate::pipeline::{collect_and_check, pluralise, DiagnosticScope, PipelineError};
 
 mod adopt;
 mod cache_check;
@@ -31,6 +29,7 @@ mod mcp;
 mod output;
 mod pipeline;
 mod stubs;
+mod typeshed_cli;
 
 #[cfg(test)]
 use stubs::{cache_stub, find_package_source, run as run_stubs, StubAction, StubGenModeArg};
@@ -80,19 +79,6 @@ struct CheckArgs {
     /// Print cache hit/miss counts to stderr after checking.
     #[arg(long)]
     cache_stats: bool,
-    #[command(flatten)]
-    typeshed: TypeshedArgs,
-}
-
-#[derive(clap::Args, Default)]
-struct TypeshedArgs {
-    /// Download and validate Typeshed afresh for this run, then discard it.
-    #[arg(long)]
-    no_typeshed_cache: bool,
-    /// Waive Git-tree content attestation for this run. Safety, shape, and
-    /// license gates still run and the source is reported as UNVERIFIED.
-    #[arg(long)]
-    no_typeshed_verification: bool,
 }
 
 // Implements [CHKARCH-CLI-COMMANDS]: the `check`/`analyze` core commands
@@ -167,6 +153,13 @@ enum Command {
         /// Workspace whose project configuration selects the typeshed source.
         #[arg(long, default_value = ".", value_name = "DIR")]
         workspace: std::path::PathBuf,
+    },
+    /// Manage the verified typeshed store. Downloading happens ONLY here (and
+    /// via the editor's Download buttons) — checking never downloads
+    /// ([STUBRES-TYPESHED-DOWNLOAD]).
+    Typeshed {
+        #[command(subcommand)]
+        action: typeshed_cli::TypeshedAction,
     },
     /// Manage type stubs for untyped packages.
     Stubs {
@@ -270,7 +263,11 @@ fn main() -> ExitCode {
             Ok(code) => code,
             Err(err) => {
                 error!(%err, "analysis thread failed");
-                1
+                // 3 = internal failure ([CHKARCH-CLI-EXITCODES]). This path is
+                // the analysis thread failing to run at all, which is never a
+                // finding about the user's code — reporting 1 here would tell a
+                // CI consumer "error diagnostics were found" when none were.
+                3
             }
         };
     ExitCode::from(exit_code)
@@ -319,6 +316,7 @@ fn run_command(command: Command) -> u8 {
                 1
             }
         },
+        Command::Typeshed { action } => typeshed_cli::run(action),
         Command::Stubs { action } => stubs::run(action),
         Command::CreateStub(args) => stubs::run_create_stub(args),
     }
@@ -340,16 +338,7 @@ fn run_scoped_check(args: &CheckArgs, scope: DiagnosticScope) -> u8 {
         stats: args.cache_stats,
     };
     let mut stats = cache_check::CacheStats::default();
-    let result = collect_and_check_with_overrides(
-        &args.paths,
-        &cache,
-        &mut stats,
-        scope,
-        TypeshedOverrides {
-            no_cache: args.typeshed.no_typeshed_cache,
-            no_verification: args.typeshed.no_typeshed_verification,
-        },
-    );
+    let result = collect_and_check(&args.paths, &cache, &mut stats, scope);
     if cache.stats {
         stats.report();
     }
@@ -470,25 +459,54 @@ mod tests {
             cache: false,
             cache_dir: None,
             cache_stats: false,
-            typeshed: TypeshedArgs::default(),
         }
     }
 
+    /// [STUBRES-TYPESHED-OFFLINE]: the retired one-run waiver flags are gone —
+    /// there is no cache to skip and no verification to switch off, so a
+    /// command using them must fail to parse rather than silently no-op.
     #[test]
-    fn check_cli_accepts_one_run_typeshed_cache_and_verification_overrides() {
-        let cli = Cli::try_parse_from([
-            "basilisk",
-            "check",
-            "example.py",
-            "--no-typeshed-cache",
-            "--no-typeshed-verification",
-        ])
-        .expect("documented Typeshed flags must parse");
-        let Command::Check { args } = cli.command else {
-            panic!("expected check command");
+    fn check_cli_rejects_retired_typeshed_waiver_flags() {
+        for flag in ["--no-typeshed-cache", "--no-typeshed-verification"] {
+            assert!(
+                Cli::try_parse_from(["basilisk", "check", "example.py", flag]).is_err(),
+                "retired flag must be rejected: {flag}"
+            );
+        }
+    }
+
+    /// [STUBRES-TYPESHED-DOWNLOAD]: the download surface parses — latest by
+    /// default, or one exact `--commit`.
+    #[test]
+    fn typeshed_download_cli_parses_latest_and_exact_forms() {
+        let latest = Cli::try_parse_from(["basilisk", "typeshed", "download"])
+            .expect("download latest must parse");
+        let Command::Typeshed {
+            action: typeshed_cli::TypeshedAction::Download { commit, .. },
+        } = latest.command
+        else {
+            panic!("expected typeshed download");
         };
-        assert!(args.typeshed.no_typeshed_cache);
-        assert!(args.typeshed.no_typeshed_verification);
+        assert!(commit.is_none(), "no --commit means latest");
+
+        let exact = Cli::try_parse_from([
+            "basilisk",
+            "typeshed",
+            "download",
+            "--commit",
+            "83c2518a9e6abbda0c44592c3483de459198f887",
+        ])
+        .expect("download --commit must parse");
+        let Command::Typeshed {
+            action: typeshed_cli::TypeshedAction::Download { commit, .. },
+        } = exact.command
+        else {
+            panic!("expected typeshed download");
+        };
+        assert_eq!(
+            commit.as_deref(),
+            Some("83c2518a9e6abbda0c44592c3483de459198f887")
+        );
     }
 
     /// An isolated project that opts the annotation house rule in, holding
@@ -852,7 +870,6 @@ mod tests {
                 cache: false,
                 cache_dir: None,
                 cache_stats: false,
-                typeshed: TypeshedArgs::default(),
             },
         });
         let _ = std::fs::remove_dir_all(&dir);
@@ -875,7 +892,6 @@ mod tests {
                 cache: true,
                 cache_dir: Some(cache_dir),
                 cache_stats: true,
-                typeshed: TypeshedArgs::default(),
             },
         });
         let _ = std::fs::remove_dir_all(&dir);

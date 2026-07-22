@@ -19,11 +19,12 @@ behavior.
 ## Typeshed and the standard library
 
 Explain typeshed's role and which source the documented release actually used.
-By default Basilisk verifies `python/typeshed@main` at run time and reports the
-result as unpinned; the complete `stdlib/` snapshot compiled into the release is
-the offline fallback, not the normal source. Show `typeshed-commit` as the way a
-project makes standard-library information reproducible, and state that the pin
-fails closed rather than silently substituting another commit.
+Checking is offline: by default Basilisk uses the complete `stdlib/` snapshot
+compiled into the release and reports it as unpinned. Show `typeshed-commit` as
+the way a project makes standard-library information reproducible — a pin
+verifies, offline, that the tree in the local store hashes to that commit — and
+state that it fails closed with `NO SOURCE` rather than downloading anything or
+silently substituting another commit.
 
 ## Typed distributions and `py.typed`
 

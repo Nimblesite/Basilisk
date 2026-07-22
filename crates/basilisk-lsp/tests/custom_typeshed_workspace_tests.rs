@@ -81,8 +81,7 @@ fn lsp_threads_custom_typeshed_into_imported_symbols() {
     let mut search_paths =
         basilisk_lsp::import_resolver::search_paths_from_config(&roots, &config, None);
     let request = basilisk_lsp::config::typeshed_request(&config).expect("custom request");
-    let manager = basilisk_stubs::typeshed::runtime::production_manager(request, None)
-        .expect("custom manager");
+    let manager = basilisk_stubs::typeshed::runtime::production_manager(request);
     let snapshot = manager.snapshot().expect("custom snapshot");
     search_paths.typeshed_snapshot = Some(basilisk_lsp::import_resolver::ActiveTypeshed::new(
         snapshot,

@@ -1,4 +1,4 @@
-//! Implements [`callables_protocol`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`callables_protocol`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `ParamSpec` component rules (PEP 612): `P.args` / `P.kwargs` placement,
 //! scoping, and transmission through `*args` / `**kwargs` forwarding calls.
 

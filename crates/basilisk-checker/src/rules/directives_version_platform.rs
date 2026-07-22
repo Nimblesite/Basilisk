@@ -1,4 +1,4 @@
-//! Implements [`directives_version_platform`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`directives_version_platform`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `directives_version_platform`: Variable defined only in dead version/platform branch.
 //!
 //! When `sys.version_info`, `sys.platform`, or `os.name` is compared against

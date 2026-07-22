@@ -45,9 +45,9 @@ it must not reuse an unstructured prompt as an implicit API.
   ([CHECKER-STUB-RESOLUTION-SPEC §STUBRES-TYPESHED-WARN](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 - [ ] Every AI result is visibly provider-originated and unsafe until reviewed.
 - [ ] No **AI-provider** network request occurs unless a user enables a provider — no provider is
-  contacted in the default configuration or in deterministic test suites. (The default typeshed
-  archive download is a separate, expected default network operation; tests select an explicit `typeshed-commit` or
-  run against the bundled stdlib ZIP —
-  [CHECKER-STUB-RESOLUTION-SPEC §STUBRES-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED),
+  contacted in the default configuration or in deterministic test suites. (Nothing else contacts the
+  network either: typeshed resolution is offline by construction, so a provider request is the ONLY
+  network traffic an enabled provider can introduce —
+  [CHECKER-STUB-RESOLUTION-SPEC §STUBRES-TYPESHED-OFFLINE](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-OFFLINE),
   applying pinned typing step 3 at [`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst).)
 - [ ] Cancellation prevents stale edits from being offered after the document changes.

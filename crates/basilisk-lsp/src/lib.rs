@@ -61,6 +61,7 @@ pub mod symbols;
 pub mod test_discovery;
 pub mod type_definition;
 pub mod type_hierarchy;
+pub(crate) mod typeshed_download;
 pub mod util;
 pub mod uv_commands;
 pub mod uv_failure;

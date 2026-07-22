@@ -260,6 +260,7 @@ dependencies = [
  "basilisk-resolver",
  "basilisk-stubs",
  "basilisk-test-utils",
+ "basilisk-typeshed-fetch",
  "basilisk-uv",
  "clap",
  "colored",
@@ -325,6 +326,7 @@ dependencies = [
  "basilisk-resolver",
  "basilisk-stubs",
  "basilisk-test-utils",
+ "basilisk-typeshed-fetch",
  "basilisk-uv",
  "dashmap 6.2.1",
  "futures-util",
@@ -417,7 +419,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
- "ureq",
  "zip",
 ]
 
@@ -441,6 +442,20 @@ dependencies = [
  "basilisk-resolver",
  "salsa",
  "serde_json",
+]
+
+[[package]]
+name = "basilisk-typeshed-fetch"
+version = "0.0.0-PLACEHOLDER"
+dependencies = [
+ "basilisk-stubs",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tracing",
+ "ureq",
+ "zip",
 ]
 
 [[package]]

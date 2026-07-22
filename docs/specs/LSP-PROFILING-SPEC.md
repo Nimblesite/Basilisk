@@ -157,6 +157,15 @@ Anchored basename/path-segment checks remove runpy/debugpy/pydevd and Basilisk s
 at the common ingest point. Machinery-only threads are dropped, while user paths that merely
 contain those strings remain.
 
+The stdlib thread-bootstrap spine (`threading.py`'s `_bootstrap`, `_bootstrap_inner`, `run`)
+is stripped on the same terms, because every non-main thread starts there. Stripping it roots
+each worker thread's flame chart at the user's own entry function, and it is what makes the
+"machinery-only threads are dropped" rule actually reach the debugger's housekeeping threads —
+started by the stdlib, they would otherwise survive on that spine once their debugpy frames
+were removed. Only the bootstrap trio qualifies: a genuine `threading` wait (`join`,
+`acquire`) is behaviour the user asked about, and a user's own `run` override lives in the
+user's file, so the basename check never reaches it.
+
 ### Thresholds {#PROFILE-AGGREGATION-THRESHOLD}
 
 Defaults are 1% for hot lines, 2% for hot functions, and 20 diagnostics per file.

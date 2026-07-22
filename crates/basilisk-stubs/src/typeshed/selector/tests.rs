@@ -10,8 +10,7 @@ const BUNDLE_SHA: &str = "83c2518a9e6abbda0c44592c3483de459198f887";
 #[derive(Default)]
 struct FakeBackend {
     custom: Mutex<Option<Result<Snapshot, BackendError>>>,
-    commit: Mutex<Option<Result<Snapshot, BackendError>>>,
-    latest: Mutex<Option<Result<Snapshot, BackendError>>>,
+    pinned: Mutex<Option<Result<Snapshot, BackendError>>>,
     bundle: Mutex<Option<Result<Snapshot, BackendError>>>,
     calls: Mutex<Vec<&'static str>>,
 }
@@ -21,9 +20,9 @@ impl FakeBackend {
         slot: &Mutex<Option<Result<Snapshot, BackendError>>>,
     ) -> Result<Snapshot, BackendError> {
         let Ok(mut value) = slot.lock() else {
-            return Err(BackendError::Validation);
+            return Err(BackendError::Corrupt);
         };
-        value.take().unwrap_or(Err(BackendError::Validation))
+        value.take().unwrap_or(Err(BackendError::Corrupt))
     }
 
     fn record(&self, call: &'static str) {
@@ -33,24 +32,15 @@ impl FakeBackend {
     }
 }
 
-impl AcquisitionBackend for FakeBackend {
+impl SourceBackend for FakeBackend {
     fn load_custom(&self, _path: &str) -> Result<Snapshot, BackendError> {
         self.record("custom");
         Self::take(&self.custom)
     }
 
-    fn load_commit(
-        &self,
-        _commit: Oid,
-        _request: &TypeshedRequest,
-    ) -> Result<Snapshot, BackendError> {
-        self.record("commit");
-        Self::take(&self.commit)
-    }
-
-    fn load_latest(&self, _request: &TypeshedRequest) -> Result<Snapshot, BackendError> {
-        self.record("latest");
-        Self::take(&self.latest)
+    fn load_pinned(&self, _commit: Oid, _explicit: bool) -> Result<Snapshot, BackendError> {
+        self.record("pinned");
+        Self::take(&self.pinned)
     }
 
     fn load_bundled(&self) -> Result<Snapshot, BackendError> {
@@ -62,34 +52,24 @@ impl AcquisitionBackend for FakeBackend {
 fn request(selection: SourceSelection) -> TypeshedRequest {
     TypeshedRequest {
         selection,
-        verify_content: true,
-        use_cache: true,
-        url_template: None,
+        store_path: None,
     }
 }
 
 fn bundle() -> Snapshot {
     let commit = Oid::from_hex(BUNDLE_SHA).expect("valid bundle oid");
-    fixture_snapshot(
-        SourceIdentity::Bundled { commit },
-        SourceKind::Bundled,
-        Provenance::BundleVetted,
-    )
+    fixture_snapshot(SourceIdentity::Bundled { commit }, SourceKind::Bundled)
 }
 
-fn downloaded(commit: Oid) -> Snapshot {
+fn stored(commit: Oid, explicit: bool) -> Snapshot {
     let identity = SourceIdentity::Commit {
         commit,
-        pinned: false,
+        pinned: explicit,
     };
-    fixture_snapshot(identity, SourceKind::Latest, Provenance::GithubTlsAttested)
+    fixture_snapshot(identity, SourceKind::ExactCommit)
 }
 
-fn fixture_snapshot(
-    identity: SourceIdentity,
-    active_source: SourceKind,
-    provenance: Provenance,
-) -> Snapshot {
+fn fixture_snapshot(identity: SourceIdentity, active_source: SourceKind) -> Snapshot {
     let commit = identity.commit();
     let archive = Archive::new(vec![
         ArchiveEntry {
@@ -107,18 +87,9 @@ fn fixture_snapshot(
         active_source,
         commit,
         tree: commit,
-        transport: if active_source == SourceKind::Bundled {
-            Transport::EmbeddedZip
-        } else if active_source == SourceKind::Custom {
-            Transport::CustomPath
-        } else {
-            Transport::Codeload
-        },
         license_status: LicenseStatus::Approved,
         license_reference: commit
             .map(|oid| format!("https://github.com/python/typeshed/blob/{oid}/LICENSE")),
-        provenance,
-        signed_release: false,
         warnings: Vec::new(),
     };
     let uri_identity = identity.uri_component();
@@ -132,7 +103,7 @@ fn fixture_snapshot(
 }
 
 #[test]
-fn custom_failure_never_consults_bundle() {
+fn custom_failure_never_consults_another_source() {
     let backend = FakeBackend {
         custom: Mutex::new(Some(Err(BackendError::Custom))),
         bundle: Mutex::new(Some(Ok(bundle()))),
@@ -154,51 +125,28 @@ fn custom_failure_never_consults_bundle() {
     );
 }
 
+/// Implements [STUBRES-TYPESHED]: a pin naming the bundled commit is already
+/// complete inside the binary — content-addressed identity makes the embedded
+/// bytes exact — so selection activates the bundle without touching the store,
+/// and an explicit pin of it suppresses UNPINNED.
 #[test]
-fn exact_failure_accepts_only_equal_bundle_and_suppresses_unpinned() {
-    let matching = bundle();
-    let commit = matching.identity.commit().expect("bundle commit");
-    let backend = FakeBackend {
-        commit: Mutex::new(Some(Err(BackendError::Download))),
-        bundle: Mutex::new(Some(Ok(matching))),
-        ..FakeBackend::default()
-    };
-    let selected = select_snapshot(&request(SourceSelection::ExactCommit { commit }), &backend)
-        .expect("matching bundle is eligible");
-    assert_eq!(selected.status.active_source, SourceKind::Bundled);
-    assert!(selected.status.warnings.is_empty());
-
-    let other = Oid::from_hex(OTHER_SHA).expect("valid test oid");
-    let mismatch = FakeBackend {
-        commit: Mutex::new(Some(Err(BackendError::Download))),
-        bundle: Mutex::new(Some(Ok(bundle()))),
-        ..FakeBackend::default()
-    };
-    assert!(matches!(
-        select_snapshot(&request(SourceSelection::ExactCommit { commit: other }), &mismatch),
-        Err(SelectionError::Exact { commit, .. }) if commit == other
-    ));
-}
-
-#[test]
-fn exact_pin_of_the_bundled_commit_never_consults_the_network() {
-    // Implements [STUBRES-TYPESHED-ACQUIRE]: a pin naming the bundled commit
-    // is already complete inside the binary — content-addressed identity makes
-    // the embedded bytes exact — so selection must activate the bundle without
-    // consulting the network-backed commit loader. Reaching for rate-limited
-    // metadata first is what let a 403 block a root whose pinned stdlib was
-    // sitting embedded in the very binary that refused to activate it.
+fn exact_pin_of_the_bundled_commit_is_served_from_the_binary() {
     let matching = bundle();
     let commit = matching.identity.commit().expect("bundle commit");
     let backend = FakeBackend {
         bundle: Mutex::new(Some(Ok(matching))),
         ..FakeBackend::default()
     };
-    let selected = select_snapshot(&request(SourceSelection::ExactCommit { commit }), &backend)
-        .expect("embedded bundle satisfies its own pinned commit offline");
+    let selected = select_snapshot(
+        &request(SourceSelection::Pinned {
+            commit,
+            explicit: true,
+        }),
+        &backend,
+    )
+    .expect("embedded bundle satisfies its own pinned commit");
     assert_eq!(selected.status.active_source, SourceKind::Bundled);
     assert_eq!(selected.status.commit, Some(commit));
-    assert_eq!(selected.status.transport, Transport::EmbeddedZip);
     assert!(selected.status.warnings.is_empty());
     assert_eq!(
         backend.calls.lock().ok().map(|calls| calls.clone()),
@@ -206,65 +154,137 @@ fn exact_pin_of_the_bundled_commit_never_consults_the_network() {
     );
 }
 
+/// Implements [STUBRES-TYPESHED-WARN]: the bundled default (no explicit
+/// `typeshed-commit`) serves the same bytes but stays UNPINNED — a build-time
+/// pin is not a user pin.
 #[test]
-fn exact_license_drift_survives_an_unavailable_bundle_fallback() {
-    let commit = Oid::from_hex(OTHER_SHA).expect("valid test oid");
+fn the_bundled_default_reports_unpinned() {
+    let matching = bundle();
+    let commit = matching.identity.commit().expect("bundle commit");
     let backend = FakeBackend {
-        commit: Mutex::new(Some(Err(BackendError::LicenseChanged))),
-        bundle: Mutex::new(Some(Err(BackendError::Bundle))),
+        bundle: Mutex::new(Some(Ok(matching))),
         ..FakeBackend::default()
     };
-    assert_eq!(
-        select_snapshot(&request(SourceSelection::ExactCommit { commit }), &backend).err(),
-        Some(SelectionError::Exact {
+    let selected = select_snapshot(
+        &request(SourceSelection::Pinned {
             commit,
-            reason: BackendError::LicenseChanged,
-        })
-    );
+            explicit: false,
+        }),
+        &backend,
+    )
+    .expect("bundled default");
+    let codes: Vec<&str> = selected
+        .status
+        .warnings
+        .iter()
+        .map(|warning| warning.code.as_str())
+        .collect();
+    assert_eq!(codes, vec!["UNPINNED"]);
 }
 
+/// Implements [STUBRES-TYPESHED-OFFLINE]: a pin that is not on this machine is
+/// terminal NO SOURCE — no bundle substitution, no network, no degraded mode.
 #[test]
-fn latest_failure_uses_bundle_with_ordered_composable_warnings() {
+fn a_missing_pin_fails_hard_with_the_no_source_message() {
+    let commit = Oid::from_hex(OTHER_SHA).expect("valid test oid");
     let backend = FakeBackend {
-        latest: Mutex::new(Some(Err(BackendError::LicenseChanged))),
+        pinned: Mutex::new(Some(Err(BackendError::Missing))),
         bundle: Mutex::new(Some(Ok(bundle()))),
         ..FakeBackend::default()
     };
-    let selected =
-        select_snapshot(&request(SourceSelection::Latest), &backend).expect("bundle fallback");
-    let codes: Vec<&str> = selected
-        .status
-        .warnings
-        .iter()
-        .map(|warning| warning.code.as_str())
-        .collect();
+    let error = select_snapshot(
+        &request(SourceSelection::Pinned {
+            commit,
+            explicit: true,
+        }),
+        &backend,
+    )
+    .expect_err("missing pin must fail");
     assert_eq!(
-        codes,
-        vec!["UNPINNED", "DOWNLOAD FAILED", "LICENSE CHANGED"]
+        error,
+        SelectionError::NoSource {
+            commit,
+            reason: BackendError::Missing,
+        }
     );
+    // The message is the spec's NO SOURCE status line verbatim, naming the fix.
+    let message = error.to_string();
+    assert_eq!(
+        message,
+        format!(
+            "NO SOURCE — {OTHER_SHA} is not on this machine; run Download latest or basilisk typeshed download --commit {OTHER_SHA}"
+        )
+    );
+    // The bundle is a different commit and must never be consulted.
     assert_eq!(
         backend.calls.lock().ok().map(|calls| calls.clone()),
-        Some(vec!["latest", "bundle"])
+        Some(vec!["pinned"])
     );
 }
 
+/// A corrupt store entry (failed offline verification) is the same terminal
+/// failure with its reason preserved for status classification.
 #[test]
-fn verification_off_waives_only_download_content_status() {
+fn a_corrupt_store_entry_fails_hard_and_keeps_its_reason() {
+    let commit = Oid::from_hex(OTHER_SHA).expect("valid test oid");
+    for reason in [BackendError::Corrupt, BackendError::LicenseChanged] {
+        let backend = FakeBackend {
+            pinned: Mutex::new(Some(Err(reason))),
+            ..FakeBackend::default()
+        };
+        assert_eq!(
+            select_snapshot(
+                &request(SourceSelection::Pinned {
+                    commit,
+                    explicit: true,
+                }),
+                &backend,
+            )
+            .err(),
+            Some(SelectionError::NoSource { commit, reason })
+        );
+    }
+}
+
+#[test]
+fn a_verified_store_entry_activates_for_an_explicit_pin() {
     let commit = Oid::from_hex(OTHER_SHA).expect("valid test oid");
     let backend = FakeBackend {
-        latest: Mutex::new(Some(Ok(downloaded(commit)))),
+        pinned: Mutex::new(Some(Ok(stored(commit, true)))),
         ..FakeBackend::default()
     };
-    let mut request = request(SourceSelection::Latest);
-    request.verify_content = false;
-    let selected = select_snapshot(&request, &backend).expect("latest snapshot");
-    let codes: Vec<&str> = selected
-        .status
-        .warnings
-        .iter()
-        .map(|warning| warning.code.as_str())
-        .collect();
-    assert_eq!(codes, vec!["UNPINNED", "UNVERIFIED"]);
-    assert_eq!(selected.status.provenance, Provenance::Unverified);
-    assert!(selected.status.tree.is_none());
+    let selected = select_snapshot(
+        &request(SourceSelection::Pinned {
+            commit,
+            explicit: true,
+        }),
+        &backend,
+    )
+    .expect("verified store entry");
+    assert_eq!(selected.status.active_source, SourceKind::ExactCommit);
+    assert_eq!(selected.status.commit, Some(commit));
+    assert!(selected.status.warnings.is_empty());
+}
+
+/// The backend must return exactly the requested identity; anything else is a
+/// wiring bug and fails closed rather than mislabeling the active source.
+#[test]
+fn an_inconsistent_backend_identity_fails_closed() {
+    let commit = Oid::from_hex(OTHER_SHA).expect("valid test oid");
+    let other = Oid::from_hex(BUNDLE_SHA).expect("valid bundle oid");
+    let backend = FakeBackend {
+        pinned: Mutex::new(Some(Ok(stored(other, true)))),
+        ..FakeBackend::default()
+    };
+    assert_eq!(
+        select_snapshot(
+            &request(SourceSelection::Pinned {
+                commit,
+                explicit: true,
+            }),
+            &backend,
+        )
+        .err(),
+        Some(SelectionError::InconsistentIdentity)
+    );
 }

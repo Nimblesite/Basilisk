@@ -145,13 +145,9 @@ fn custom_builtins_mutation_replaces_every_consumer_without_bundle_mixing() {
         selection: basilisk_stubs::typeshed::source::SourceSelection::Custom {
             path: root.path().to_string_lossy().into_owned(),
         },
-        verify_content: true,
-        use_cache: false,
-        url_template: None,
+        store_path: None,
     };
-    let manager = basilisk_stubs::typeshed::runtime::production_manager(request, None);
-    assert!(manager.is_ok(), "custom manager must initialize");
-    let Ok(manager) = manager else { return };
+    let manager = basilisk_stubs::typeshed::runtime::production_manager(request);
     let snapshot = manager.snapshot();
     assert!(
         snapshot.is_ok(),

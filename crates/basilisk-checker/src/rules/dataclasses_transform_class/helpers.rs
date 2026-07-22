@@ -1,4 +1,4 @@
-//! Implements [`dataclasses_transform_class`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`dataclasses_transform_class`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Helper types and functions for `dataclasses_transform_class`.
 //!
 //! Contains data types for transform-class settings, source text parsing
