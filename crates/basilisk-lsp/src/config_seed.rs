@@ -4,10 +4,15 @@
 //! One-time strict-by-default configuration seeding.
 //!
 //! When a workspace root's ancestor walk finds no `[tool.basilisk]` table,
-//! the LSP writes the two-line seed into the root's `pyproject.toml`
-//! (creating the file when absent) BEFORE first analysis:
+//! the LSP writes the strict-by-default seed into the root's
+//! `pyproject.toml` (creating the file when absent) BEFORE first analysis —
+//! the rule tag plus the binary's bundled typeshed pin, so the workspace is
+//! reproducible out of the box ([STUBRES-TYPESHED-WARN]):
 //!
 //! ```toml
+//! [tool.basilisk]
+//! typeshed-commit = "<bundled 40-hex sha>"
+//!
 //! [tool.basilisk.rule-tags]
 //! "basilisk" = "error"
 //! ```
@@ -22,8 +27,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use basilisk_config::{
-    apply_config_patch, build_rule_patch, discover_config_document, load_basilisk_config,
-    RuleConfigUpdate, RuleSeverity,
+    apply_config_patch, build_configuration_patch, discover_config_document, load_basilisk_config,
+    ConfigurationUpdate, RuleConfigUpdate, RuleSeverity, TypeshedConfigKey, TypeshedConfigUpdate,
 };
 
 /// Seed `root`'s `pyproject.toml` when the ancestor walk finds no
@@ -45,7 +50,7 @@ pub(crate) fn seed_root_if_unconfigured(root: &Path) -> bool {
         Ok(()) => {
             tracing::info!(
                 root = %root.display(),
-                "seeded strict-by-default configuration ([tool.basilisk.rule-tags] basilisk = error)"
+                "seeded strict-by-default configuration (rule-tags basilisk = error, typeshed-commit = bundled)"
             );
             true
         }
@@ -62,14 +67,29 @@ pub(crate) fn seed_root_if_unconfigured(root: &Path) -> bool {
 
 fn write_seed(root: &Path) -> Result<(), basilisk_config::ConfigDocumentError> {
     let document = discover_config_document(root)?;
-    let update = RuleConfigUpdate {
-        rules: BTreeMap::new(),
-        rule_tags: BTreeMap::from([(
-            basilisk_checker::rule_tags::BASILISK.to_owned(),
-            Some(RuleSeverity::Error),
-        )]),
+    let update = ConfigurationUpdate {
+        rules: RuleConfigUpdate {
+            rules: BTreeMap::new(),
+            rule_tags: BTreeMap::from([(
+                basilisk_checker::rule_tags::BASILISK.to_owned(),
+                Some(RuleSeverity::Error),
+            )]),
+        },
+        // Pin the binary's bundled typeshed commit so the workspace is
+        // reproducible from the moment it is opened — never `UNPINNED`
+        // ([STUBRES-TYPESHED-WARN]). The bundle is complete inside the
+        // binary, so the pin needs no network access and cannot produce a
+        // `NO SOURCE` state. The seed only runs when the ancestor walk found
+        // no `[tool.basilisk]` table, so no `typeshed-path` can exist for
+        // the pin to conflict with ([STUBRES-TYPESHED]).
+        typeshed: TypeshedConfigUpdate {
+            entries: BTreeMap::from([(
+                TypeshedConfigKey::TypeshedCommit,
+                Some(basilisk_stubs::typeshed::bundle::bundled_commit_sha().to_owned()),
+            )]),
+        },
     };
-    let patch = build_rule_patch(&document, &update)?;
+    let patch = build_configuration_patch(&document, &update)?;
     apply_config_patch(&patch)
 }
 
@@ -111,6 +131,26 @@ mod tests {
             config.resolve_severity("BSK-0050", &["basilisk"]),
             Some(basilisk_config::RuleSeverity::Error),
             "the seed must turn every basilisk-tagged rule on at error"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    /// [LSPARCH-CONFIG-SEEDING]: the seed stamps the binary's bundled
+    /// typeshed commit alongside the rule tag, so a freshly-opened workspace
+    /// is pinned and reproducible — never `UNPINNED`
+    /// ([STUBRES-TYPESHED-WARN]) — without any network access (GitHub #343).
+    #[test]
+    fn seed_stamps_the_bundled_typeshed_commit() {
+        let root = temp_root("pin");
+        assert!(seed_root_if_unconfigured(&root));
+        let content = std::fs::read_to_string(root.join("pyproject.toml")).unwrap();
+        let expected_pin = format!(
+            "typeshed-commit = \"{}\"",
+            basilisk_stubs::typeshed::bundle::bundled_commit_sha()
+        );
+        assert!(
+            content.contains(&expected_pin),
+            "the seed must pin the bundled typeshed commit; got:\n{content}"
         );
         let _ = std::fs::remove_dir_all(root);
     }

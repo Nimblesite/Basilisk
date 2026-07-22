@@ -137,9 +137,10 @@ async fn analyze_opt_out_filters_published_diagnostics_to_pep_only() -> TestResu
 }
 
 // Implements [LSPARCH-CONFIG-SEEDING]: opening a workspace root whose
-// ancestor walk finds no [tool.basilisk] table writes the two-line
-// strict-by-default seed into the root's pyproject.toml before first
-// analysis — exactly once, never resurrecting a deleted entry.
+// ancestor walk finds no [tool.basilisk] table writes the
+// strict-by-default seed — the rule tag plus the bundled typeshed pin —
+// into the root's pyproject.toml before first analysis — exactly once,
+// never resurrecting a deleted entry.
 #[tokio::test]
 async fn initialization_seeds_an_unconfigured_root_exactly_once() -> TestResult<()> {
     let root = unique_temp_dir("bsk_seed_e2e");
@@ -159,6 +160,15 @@ async fn initialization_seeds_an_unconfigured_root_exactly_once() -> TestResult<
         assert!(
             seeded.contains("basilisk") && seeded.contains("error"),
             "the seed is the one strict-by-default tag entry: {seeded}"
+        );
+        let expected_pin = format!(
+            "typeshed-commit = \"{}\"",
+            basilisk_stubs::typeshed::bundle::bundled_commit_sha()
+        );
+        assert!(
+            seeded.contains(&expected_pin),
+            "the seed pins the bundled typeshed commit so a fresh workspace \
+             is never UNPINNED (GitHub #343): {seeded}"
         );
     }
 
