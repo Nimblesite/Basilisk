@@ -103,7 +103,6 @@
       "workingTreeImplementation": [],
       "executableEvidence": [
         "Python 3.14.6 ran the Chapter 6 Signal Box checkpoint: 3 tests passed on 2026-07-22",
-        "Basilisk 0.35.0 check --color never . reported no issue across the Chapter 6 source and tests on 2026-07-22; this is recorded only as an observation and is not authority for unspecified inference behaviour",
         "The Chapter 6 runtime tests exercised absent, textual, and numeric normalization paths; valid and invalid TypeGuard inputs; and every member of the closed status set on 2026-07-22"
       ],
       "omitted": [

@@ -126,7 +126,7 @@ impl TypeshedGeneration {
         self.ready_snapshot().map(|snapshot| &snapshot.status)
     }
 
-    /// The terminal failure, only in the NoSource state — the seam the LSP uses
+    /// The terminal failure, only in the `NoSource` state — the seam the LSP uses
     /// to raise an immediate, client-visible error when analysis will not run.
     #[must_use]
     pub(crate) const fn no_source_failure(&self) -> Option<&TypeshedFailure> {
@@ -241,7 +241,7 @@ pub(crate) async fn show_high_warnings(client: &Client, status: &TypeshedStatus)
 
 /// Raise an immediate, client-visible error for a root whose typeshed did not
 /// resolve. The LSP DRIVES this signal with `window/showMessage` rather than
-/// trusting each editor to render the status payload: a NoSource root runs no
+/// trusting each editor to render the status payload: a `NoSource` root runs no
 /// analysis at all, so a trace-log line alone would let a broken deployment
 /// masquerade as a clean workspace. Every client — VS Code, Neovim, Zed — gets
 /// the same unmissable error. [STUBRES-TYPESHED-WARN]
@@ -251,7 +251,7 @@ pub(crate) async fn show_no_source_error(client: &Client, root: &Path, failure: 
         .await;
 }
 
-/// The actionable NoSource error text: what broke, what it means, and the fix.
+/// The actionable `NoSource` error text: what broke, what it means, and the fix.
 fn no_source_error_message(root: &Path, failure: &TypeshedFailure) -> String {
     format!(
         "Basilisk: type checking is disabled for {} — the typeshed type stubs could not be \
@@ -432,7 +432,7 @@ mod tests {
         assert!(!source.contains(&diagnostic_method));
     }
 
-    /// A NoSource generation must expose its failure so the LSP can raise an
+    /// A `NoSource` generation must expose its failure so the LSP can raise an
     /// immediate error; a Ready generation must not (there is nothing to raise).
     #[test]
     fn no_source_generation_exposes_its_failure_but_ready_does_not() {
@@ -453,9 +453,7 @@ mod tests {
     /// deployment masquerade as a clean workspace.
     #[test]
     fn no_source_error_message_is_loud_and_actionable() {
-        let Ok(commit) =
-            Oid::from_hex("0123456789012345678901234567890123456789")
-        else {
+        let Ok(commit) = Oid::from_hex("0123456789012345678901234567890123456789") else {
             return;
         };
         let failure = TypeshedFailure::from_selection(&SelectionError::NoSource {
@@ -481,7 +479,7 @@ mod tests {
         );
     }
 
-    /// The LSP DRIVES the NoSource error itself ([DESIGN] — editors only react
+    /// The LSP DRIVES the `NoSource` error itself ([DESIGN] — editors only react
     /// to LSP signals), so resolution must call `show_no_source_error`. This
     /// guards against a regression back to a trace-only warning that no editor
     /// surfaces.

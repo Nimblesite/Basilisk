@@ -15,5 +15,8 @@ From this directory, run:
 
 ```console
 PYTHONPATH=src python3 -m unittest discover -s tests
-basilisk check .
 ```
+
+This checkpoint intentionally makes no claim about Basilisk's current
+inference output. Chapter 6 uses normative typing rules only and leaves
+unspecified or incompletely implemented inference detail out.

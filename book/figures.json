@@ -47,7 +47,8 @@
       "id": "fig-02-install-chooser",
       "section": "02",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/06-narrowing-tree.svg",
       "path": "assets/diagrams/02-installation-paths.png",
       "title": "Choose the integration that matches your editor",
       "alt": "A decision map routes VS Code-family, Neovim, Zed, and command-line readers to the appropriate Basilisk installation path."
@@ -92,7 +93,8 @@
       "id": "fig-03-evidence-loop",
       "section": "03",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/06-typeguard.svg",
       "path": "assets/diagrams/03-diagnostic-evidence-loop.png",
       "title": "Observe before you change",
       "alt": "A feedback loop moves from source evidence to a type relationship, a deliberate code change, and a repeated Basilisk check."
@@ -161,7 +163,8 @@
       "id": "fig-06-narrowing-tree",
       "section": "06",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/06-narrowing-tree.svg",
       "path": "assets/diagrams/06-narrowing-tree.png",
       "title": "The normative boundary around narrowing",
       "alt": "Specified None and user-defined guard behavior sits apart from general inference behavior that the typing specification leaves open."
@@ -170,7 +173,8 @@
       "id": "fig-06-typeguard",
       "section": "06",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/06-typeguard.svg",
       "path": "assets/diagrams/06-typeguard.png",
       "title": "A TypeGuard gives a checker-readable positive test",
       "alt": "A user-defined predicate checks dictionary evidence and narrows the true branch to the SignalReading TypedDict."
@@ -179,7 +183,8 @@
       "id": "fig-06-runtime-cases",
       "section": "06",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/06-runtime-cases.svg",
       "path": "assets/diagrams/06-runtime-cases.png",
       "title": "Write and test every runtime case",
       "alt": "Three status values route to three explicit runtime outcomes without claiming a portable match-inference result."

@@ -25,6 +25,12 @@ silent, this chapter teaches the runtime branch and leaves the exact inferred
 type unstated. Basilisk's current implementation is not used to fill those
 gaps.
 
+![Specified None and user-defined guard behaviour is separated from general inference behaviour that the typing specification leaves open.](../assets/diagrams/06-narrowing-tree.png)
+
+*Figure 6.1 — The solid boundary is the chapter's boundary. Behaviour outside
+it may be useful in a particular checker, but it is not presented as a shared
+Python typing guarantee.*
+
 The examples use `T | None` and `match`, both runtime syntax available from
 Python 3.10. That is an example boundary, not a Basilisk-wide version target.
 The union spelling is defined by [PEP 604](https://peps.python.org/pep-0604/),
@@ -66,6 +72,20 @@ prove that a sensor is accurate. They also remain separate from a project
 policy that requires annotations in selected locations. Keep important
 boundaries explicit while inference behaviour is still being implemented and
 standardized.
+
+This gives you a conservative reading method when a checker reports something
+surprising. First, identify the written parameter, return, or variable
+annotation that provides the boundary. Second, find the exact normative rule
+that changes the type, if one exists. Third, separate that rule from additional
+precision supplied by the tool. If the second step has no clear answer in the
+maintained specification, describe the runtime condition and the declared
+contract rather than inventing an inferred type.
+
+That method intentionally produces fewer claims. It is better for a book to
+say “this branch handles strings at runtime” than to freeze a revealed type
+that follows from an unfinished implementation or an unspecified analysis
+choice. The smaller statement remains true across compliant tools and gives
+the reader something they can verify with a test.
 
 ## Conditions change what remains possible
 
@@ -151,6 +171,12 @@ its validation complete, and avoid using a guard merely to silence an
 incompatibility. At an external boundary, parsing into a domain object may be a
 better design; Chapter 7 compares those data shapes.
 
+![An object passes through a runtime predicate; true establishes ReadingEvent while false preserves the original object type.](../assets/diagrams/06-typeguard.png)
+
+*Figure 6.2 — `TypeGuard` has a deliberately one-sided normative promise. The
+positive path receives the declared guard type; the negative path does not
+receive its complement.*
+
 The normative specification also defines `TypeIs`, but it has a different
 contract. `TypeIs[T]` requires `T` to be assignable to the function's input
 type. On a `True` result, the specified result combines the argument's previous
@@ -207,6 +233,11 @@ of the typing rule. When the edition pins a Basilisk release, the book can show
 only the behaviour verified for that release. Until then, the portable lesson
 is to list the closed cases visibly and test each runtime route.
 
+![Ready, offline, and fault statuses each route to one explicit and independently tested runtime outcome.](../assets/diagrams/06-runtime-cases.png)
+
+*Figure 6.3 — Complete runtime tests do not depend on a checker proving an
+exhaustive match. Each declared status is paired with an observable result.*
+
 ## Signal Box checkpoint
 
 The executable snapshot for this chapter is
@@ -234,25 +265,24 @@ tool:
 5. Predict which function and test need a new branch if `"maintenance"` joins
    `Status`.
 
-Run runtime and static evidence separately:
+Run the runtime evidence:
 
 ```console
 cd book/examples/ch06-narrowing
 PYTHONPATH=src python3 -m unittest discover -s tests
-basilisk check .
 ```
 
-The tests execute representative paths and validate observable results. The
-static check records what the installed Basilisk build currently accepts; it
-does not establish a normative inference rule. Neither establishes that a real
-sensor sent accurate data.
+The tests execute representative paths and validate observable results. This
+chapter deliberately does not ask the current Basilisk implementation to
+demonstrate unspecified inference behaviour. Passing tests still do not
+establish that a real sensor sent accurate data.
 
 For a partially guided variation, add `"maintenance"` to `Status` and a test
 that expects `"pause scheduled work"`. Run the runtime test before editing the
 match. Explain the value that can now reach the final assertion, add the
 missing case, and rerun the tests. You may also observe the static check, but
-do not treat its result as portable unless the normative specification
-requires it.
+do not turn its result into a book claim unless the normative specification
+requires it and the edition's pinned implementation agrees.
 
 For an independent variation, find a function in your own code that accepts an
 optional or union value. Draw its paths, label the type remaining after each
