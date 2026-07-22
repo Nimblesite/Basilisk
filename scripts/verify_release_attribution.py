@@ -76,8 +76,19 @@ def _normalized_section(text: str, start: str, end: str) -> str:
     return "".join(section.split())
 
 
+# Byte-compared by the VSIX pipeline: vscode-extension/scripts/
+# update-dependency-licenses.mjs --check regenerates the carrier + manifest and
+# requires the committed bytes to match exactly, and the release workflow packs
+# VSCODE-DISTRIBUTION-LICENSE verbatim into the VSIX as LICENSE.txt.
+VSIX_LEGAL_FILES = (
+    "VSCODE-DISTRIBUTION-LICENSE",
+    "VSCODE-DEPENDENCY-LICENSES",
+    "vscode-license-manifest.json",
+)
+
+
 def _byte_exact_repo_paths(repo_root: Path) -> tuple[str, ...]:
-    """Working-tree files whose exact bytes this script asserts."""
+    """Working-tree files whose exact bytes the release pipeline asserts."""
     crate_root = PurePosixPath("crates/basilisk-stubs")
     manifest = json.loads(
         (repo_root / crate_root / "data" / "typeshed" / "manifest.json").read_text()
@@ -88,6 +99,7 @@ def _byte_exact_repo_paths(repo_root: Path) -> tuple[str, ...]:
     )
     return (
         *LEGAL_FILES,
+        *VSIX_LEGAL_FILES,
         str(crate_root / "data" / "typeshed" / "stdlib.zip"),
         *derived,
     )

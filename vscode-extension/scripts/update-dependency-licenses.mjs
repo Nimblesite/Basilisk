@@ -17,9 +17,14 @@ function sha256(value) {
 }
 
 function productionPackageDirs() {
-  return execFileSync("npm", ["ls", "--omit=dev", "--parseable", "--all"], {
+  // On Windows npm is npm.cmd, which Node can only spawn through a shell
+  // (spawning it directly fails ENOENT/EINVAL). The arguments are static, so
+  // the shell path takes no untrusted input.
+  const windows = process.platform === "win32";
+  return execFileSync(windows ? "npm.cmd" : "npm", ["ls", "--omit=dev", "--parseable", "--all"], {
     cwd: extensionRoot,
     encoding: "utf8",
+    shell: windows,
   })
     .split("\n")
     .map((entry) => entry.trim())
