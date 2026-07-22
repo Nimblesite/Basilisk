@@ -126,6 +126,16 @@ impl TypeshedGeneration {
         self.ready_snapshot().map(|snapshot| &snapshot.status)
     }
 
+    /// The terminal failure, only in the `NoSource` state — the seam the LSP uses
+    /// to raise an immediate, client-visible error when analysis will not run.
+    #[must_use]
+    pub(crate) const fn no_source_failure(&self) -> Option<&TypeshedFailure> {
+        match self {
+            Self::Ready(_) => None,
+            Self::NoSource { failure } => Some(failure),
+        }
+    }
+
     /// Project this generation into the one typed editor/status DTO.
     #[must_use]
     pub(crate) fn status_state(&self) -> TypeshedStatusState {
@@ -227,6 +237,29 @@ pub(crate) async fn show_high_warnings(client: &Client, status: &TypeshedStatus)
     for message in high_warning_messages(status) {
         client.show_message(MessageType::WARNING, message).await;
     }
+}
+
+/// Raise an immediate, client-visible error for a root whose typeshed did not
+/// resolve. The LSP DRIVES this signal with `window/showMessage` rather than
+/// trusting each editor to render the status payload: a `NoSource` root runs no
+/// analysis at all, so a trace-log line alone would let a broken deployment
+/// masquerade as a clean workspace. Every client — VS Code, Neovim, Zed — gets
+/// the same unmissable error. [STUBRES-TYPESHED-WARN]
+pub(crate) async fn show_no_source_error(client: &Client, root: &Path, failure: &TypeshedFailure) {
+    client
+        .show_message(MessageType::ERROR, no_source_error_message(root, failure))
+        .await;
+}
+
+/// The actionable `NoSource` error text: what broke, what it means, and the fix.
+fn no_source_error_message(root: &Path, failure: &TypeshedFailure) -> String {
+    format!(
+        "Basilisk: type checking is disabled for {} — the typeshed type stubs could not be \
+loaded ({}). Run `basilisk typeshed download` to materialise the pinned source, or correct the \
+typeshed configuration; until then no Python diagnostics are produced for this folder.",
+        root.display(),
+        failure.reason()
+    )
 }
 
 fn high_warning_messages(status: &TypeshedStatus) -> Vec<String> {
@@ -397,5 +430,75 @@ mod tests {
         assert!(source.contains("client.show_message"));
         let diagnostic_method = ["publish", "diagnostics"].join("_");
         assert!(!source.contains(&diagnostic_method));
+    }
+
+    /// A `NoSource` generation must expose its failure so the LSP can raise an
+    /// immediate error; a Ready generation must not (there is nothing to raise).
+    #[test]
+    fn no_source_generation_exposes_its_failure_but_ready_does_not() {
+        let failure = TypeshedFailure::resolution("NO SOURCE — pin is not on this machine");
+        let no_source = TypeshedGeneration::NoSource { failure };
+        assert!(no_source.no_source_failure().is_some());
+
+        let Ok(snapshot) = basilisk_stubs::typeshed::bundle::bundled_snapshot() else {
+            return;
+        };
+        let ready = TypeshedGeneration::Ready(Arc::new(snapshot));
+        assert!(ready.no_source_failure().is_none());
+    }
+
+    /// [STUBRES-TYPESHED-WARN]: a root whose typeshed did not resolve runs NO
+    /// analysis, so the user must be told at once — with the impact, the reason,
+    /// and the fix. A silent trace-log line (the pre-fix behaviour) let a broken
+    /// deployment masquerade as a clean workspace.
+    #[test]
+    fn no_source_error_message_is_loud_and_actionable() {
+        let Ok(commit) = Oid::from_hex("0123456789012345678901234567890123456789") else {
+            return;
+        };
+        let failure = TypeshedFailure::from_selection(&SelectionError::NoSource {
+            commit,
+            reason: BackendError::Missing,
+        });
+        let message = no_source_error_message(Path::new("/work/project"), &failure);
+        assert!(
+            message.contains("/work/project"),
+            "must name the affected root: {message}"
+        );
+        assert!(
+            message.contains("type checking is disabled"),
+            "must state the impact: {message}"
+        );
+        assert!(
+            message.contains("basilisk typeshed download"),
+            "must give the remedy: {message}"
+        );
+        assert!(
+            message.contains(failure.reason()),
+            "must carry the underlying reason: {message}"
+        );
+    }
+
+    /// The LSP DRIVES the `NoSource` error itself ([STUBRES-TYPESHED-WARN] —
+    /// editors only react to LSP signals), so BOTH activation seams must call
+    /// `show_no_source_error`: the initialize/folder-add path in `init.rs` and
+    /// the shared `StagedResolution::publish` seam that the config-editor
+    /// transaction, the watched on-disk config edit, and post-download
+    /// re-resolution all route through. This guards against a regression back
+    /// to a trace-only warning on either seam; the end-to-end message contract
+    /// is pinned behaviorally in `ws_test_typeshed_no_source.rs`
+    /// (`missing_pin_*_raises_an_error_toast`).
+    #[test]
+    fn every_no_source_activation_seam_raises_an_immediate_error() {
+        assert!(
+            include_str!("init.rs").contains("show_no_source_error"),
+            "resolve_typeshed_for_roots must surface NoSource as a window/showMessage error"
+        );
+        assert!(
+            include_str!("../configuration_editor/typeshed_resolution.rs")
+                .contains("show_no_source_error"),
+            "StagedResolution::publish must surface NoSource as a window/showMessage error — \
+config edits and post-download re-resolution land here, not in init.rs"
+        );
     }
 }

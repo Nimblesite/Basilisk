@@ -446,8 +446,18 @@ async fn resolve_typeshed_for_roots(
         let mut config = crate::config::load_config(&root);
         config.python_interpreter.clone_from(&interpreter);
         let generation = crate::configuration_editor::resolve_workspace(config).await;
-        if generation.ready_snapshot().is_none() {
-            tracing::warn!(root = %root.display(), "Typeshed source is not on this machine; analysis will not run for this root");
+        if let Some(failure) = generation.no_source_failure() {
+            // A NoSource root produces NO diagnostics, so a silent trace-log line
+            // would leave the user believing a clean workspace is being checked.
+            // Drive an immediate, client-agnostic error — on the initialize path
+            // too (`notify` only gates the status *change* notification, which the
+            // initialize payload already carries). [STUBRES-TYPESHED-WARN]
+            tracing::warn!(
+                root = %root.display(),
+                reason = failure.reason(),
+                "Typeshed source is not on this machine; analysis will not run for this root"
+            );
+            super::typeshed_status::show_no_source_error(&server.client, &root, failure).await;
         }
         let _ = server
             .typeshed_generations

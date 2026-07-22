@@ -323,6 +323,18 @@ pertinent nested license/notice files. It is a complete offline step-3 source,
 not a names-only baseline; it supplies the bodies and snapshot-derived indexes
 needed by #289/#288 offline.
 
+The bundle's manifest digests are enforced twice, and never by a `build.rs`:
+the forbidden-policy guard ([§TYPESHEDRT-ACCEPTANCE-GATES](../plans/CHECKER-TYPESHED-RUNTIME-PLAN.md#TYPESHEDRT-ACCEPTANCE-GATES),
+`crates/basilisk-stubs/tests/typeshed_forbidden_policy_tests.rs`) bans build
+scripts on this crate. Instead, `crates/basilisk-stubs/tests/typeshed_baseline_tests.rs`
+verifies `stdlib.zip` and the distribution sidecar against
+`data/typeshed/manifest.json` **in the test suite `test-rust.sh` runs before any
+release build**, so a corrupt, truncated, or stale asset fails CI — no basilisk
+binary (CLI, LSP, or any packaged artifact) is produced without a verified
+typeshed standard library. `src/typeshed/bundle.rs` re-checks the same
+identities at **runtime** before activation, defending against post-build
+corruption of an already-shipped binary.
+
 #### License and attribution {#STUBRES-TYPESHED-LICENSE}
 
 The reviewed typeshed `LICENSE`

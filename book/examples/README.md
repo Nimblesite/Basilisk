@@ -8,7 +8,9 @@ PEP or language boundary.
 Chapter 4's executable checkpoint lives in
 [`ch04-type-vocabulary/`](ch04-type-vocabulary/). Chapter 5 continues with
 assignment, function, collection, and callback compatibility in
-[`ch05-compatibility/`](ch05-compatibility/). Chapter 9 uses
+[`ch05-compatibility/`](ch05-compatibility/). Chapter 6 follows inference,
+narrowing, a user-defined type guard, and exhaustive routing in
+[`ch06-narrowing/`](ch06-narrowing/). Chapter 9 uses
 [`signal-box/`](signal-box/) with its explicit annotation policy and
 deliberately incomplete functions to capture the real configuration editor and
 its path preview. Run that capture reproducibly with `make -C book screenshots`

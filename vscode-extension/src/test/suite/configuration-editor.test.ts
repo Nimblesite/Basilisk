@@ -352,6 +352,82 @@ suite("Configuration editor — typed mutation routing", () => {
       controller.dispose();
     }
   });
+
+  // The reported failure ("I tapped Download pinned and it didn't do shit"):
+  // the server sends the transient Downloading status BEFORE it downloads, and
+  // that notification triggers a snapshot refresh which bumps the load
+  // generation — so when the download subsequently FAILED, the stale-generation
+  // guard swallowed the error and the panel silently snapped back to NO
+  // SOURCE. A failed download must never be indistinguishable from a dead
+  // button: the failure must reach the user regardless of any racing refresh.
+  test("a Typeshed download failure is surfaced even when a status refresh raced the action", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    let failAction: ((error: Error) => void) | undefined;
+    transport.typeshedActionHandler = async () =>
+      new Promise((_resolve, reject) => { failAction = reject; });
+    const shownErrors: string[] = [];
+    const originalShowError = vscode.window.showErrorMessage;
+    (vscode.window as { showErrorMessage: unknown }).showErrorMessage = async (
+      message: string,
+    ): Promise<undefined> => { shownErrors.push(message); return undefined; };
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      const action = controller.receive({ type: "typeshedAction", action: "DownloadPinned" });
+      await pollUntil(() => transport.typeshedActionRequests.length === 1);
+      // The server's Downloading notification triggers exactly this refresh
+      // while the download is still running ([LSPCFGED-TYPESHED-DOWNLOAD]).
+      await controller.receive({ type: "refresh" });
+      failAction?.(new Error("the typeshed download failed: connection reset"));
+      await action;
+      assert.strictEqual(shownErrors.length, 1, "the download failure must be shown to the user");
+      assert.ok(
+        shownErrors[0]?.includes("connection reset"),
+        `the shown error must carry the failure reason: ${shownErrors[0] ?? "<none>"}`,
+      );
+    } finally {
+      (vscode.window as { showErrorMessage: unknown }).showErrorMessage = originalShowError;
+      controller.dispose();
+    }
+  });
+});
+
+suite("Configuration editor — Typeshed action failure classification", () => {
+  test("a Typeshed revision conflict routes to the soft conflict phase and pops no hard error toast", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    // A revision conflict is a retryable state, not a failure: the base
+    // revision moved under the action. It must NOT surface as a hard error
+    // toast — only genuine failures do ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+    transport.typeshedActionHandler = async () =>
+      Promise.reject(
+        Object.assign(new Error("configuration changed since preview"), {
+          data: { kind: "revisionConflict" },
+        }),
+      );
+    const shownErrors: string[] = [];
+    const originalShowError = vscode.window.showErrorMessage;
+    (vscode.window as { showErrorMessage: unknown }).showErrorMessage = async (
+      message: string,
+    ): Promise<undefined> => { shownErrors.push(message); return undefined; };
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      await controller.receive({ type: "typeshedAction", action: "DownloadPinned" });
+      await pollUntil(() => store.configurationEditor.value.phase === "conflict");
+      assert.strictEqual(
+        shownErrors.length,
+        0,
+        `a revision conflict must not pop a hard error toast: ${shownErrors[0] ?? "<none>"}`,
+      );
+    } finally {
+      (vscode.window as { showErrorMessage: unknown }).showErrorMessage = originalShowError;
+      controller.dispose();
+    }
+  });
 });
 
 suite("Configuration editor — direct Typeshed writes and discarded previews", () => {

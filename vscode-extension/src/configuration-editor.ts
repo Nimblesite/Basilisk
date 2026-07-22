@@ -255,8 +255,20 @@ export class ConfigurationEditorController implements vscode.Disposable {
         await this.typeshedUi.showLicense(result.license);
       }
     } catch (error: unknown) {
-      if (this.requestIsStale(generation, snapshot.rootUri)) { return; }
       const details = configurationError(error, snapshot.rootUri);
+      // A genuine action FAILURE must be a HARD error — to the user AND the
+      // log — and NOT gated on the stale check: the server's transient
+      // Downloading notification triggers a refresh that bumps the load
+      // generation on EVERY download, so a stale-gated catch would swallow
+      // every real failure and make a failed download indistinguishable from a
+      // dead button. But a revision conflict is NOT a failure: it is a soft,
+      // retryable state the store routes to the "conflict" phase, so it must
+      // never pop a hard error toast ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+      if (!details.conflict) {
+        Logger.error(`Typeshed action ${action.kind} failed: ${details.message}`);
+        void vscode.window.showErrorMessage(`Basilisk: ${details.message}`);
+      }
+      if (this.requestIsStale(generation, snapshot.rootUri)) { return; }
       this.store.failConfigurationEditor(details.message, details.conflict, details.repairUri);
     }
   }
