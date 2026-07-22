@@ -163,8 +163,8 @@
       "kind": "diagram",
       "status": "planned",
       "path": "assets/diagrams/06-narrowing-tree.png",
-      "title": "Each branch carries more specific information",
-      "alt": "A broad reading union splits across None, numeric, and error branches, with the remaining type labelled on every path."
+      "title": "The normative boundary around narrowing",
+      "alt": "Specified None and user-defined guard behavior sits apart from general inference behavior that the typing specification leaves open."
     },
     {
       "id": "fig-06-typeguard",
@@ -176,13 +176,13 @@
       "alt": "A user-defined predicate checks dictionary evidence and narrows the true branch to the SignalReading TypedDict."
     },
     {
-      "id": "fig-06-match-coverage",
+      "id": "fig-06-runtime-cases",
       "section": "06",
-      "kind": "annotated-screenshot",
+      "kind": "diagram",
       "status": "planned",
-      "path": "assets/screenshots/06-match-coverage.png",
-      "title": "A missing case leaves a visible path",
-      "alt": "A real Basilisk match diagnostic points to an unhandled alert variant, followed by a clean exhaustive match."
+      "path": "assets/diagrams/06-runtime-cases.png",
+      "title": "Write and test every runtime case",
+      "alt": "Three status values route to three explicit runtime outcomes without claiming a portable match-inference result."
     },
     {
       "id": "fig-07-boundary-transformation",
