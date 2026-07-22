@@ -255,8 +255,15 @@ export class ConfigurationEditorController implements vscode.Disposable {
         await this.typeshedUi.showLicense(result.license);
       }
     } catch (error: unknown) {
-      if (this.requestIsStale(generation, snapshot.rootUri)) { return; }
       const details = configurationError(error, snapshot.rootUri);
+      // A failed download must be a HARD error — to the user AND the log —
+      // never gated on the stale check: the server's transient Downloading
+      // notification triggers a refresh that bumps the load generation on
+      // EVERY download, so a stale-gated catch swallows every failure and a
+      // failed download becomes indistinguishable from a dead button.
+      Logger.error(`Typeshed action ${action.kind} failed: ${details.message}`);
+      void vscode.window.showErrorMessage(`Basilisk: ${details.message}`);
+      if (this.requestIsStale(generation, snapshot.rootUri)) { return; }
       this.store.failConfigurationEditor(details.message, details.conflict, details.repairUri);
     }
   }

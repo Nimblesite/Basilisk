@@ -1,3 +1,4 @@
 {
-    "basilisk.analysisMode": "wholeModule"
+    "basilisk.analysisMode": "wholeModule",
+    "basilisk.enabled": true
 }

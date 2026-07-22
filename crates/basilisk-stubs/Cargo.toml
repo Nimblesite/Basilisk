@@ -33,6 +33,14 @@ tracing.workspace = true
 # enforced by scripts/check-dependency-shape.sh). Downloading lives in
 # `basilisk-typeshed-fetch`.
 
+[build-dependencies]
+# Build-time enforcement of [STUBRES-TYPESHED-BASELINE] (build.rs): the
+# embedded bundle's manifest digests are verified BEFORE compilation embeds
+# the bytes, so a corrupt or stale asset is a build failure, never a shipped
+# binary.
+serde_json.workspace = true
+sha2 = "0.10"
+
 [dev-dependencies]
 serde_json.workspace = true
 tempfile = "3"

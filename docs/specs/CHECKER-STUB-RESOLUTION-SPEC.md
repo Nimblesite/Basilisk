@@ -323,6 +323,14 @@ pertinent nested license/notice files. It is a complete offline step-3 source,
 not a names-only baseline; it supplies the bodies and snapshot-derived indexes
 needed by #289/#288 offline.
 
+The bundle's manifest digests are enforced twice. `crates/basilisk-stubs/build.rs`
+verifies `stdlib.zip` and the distribution sidecar against
+`data/typeshed/manifest.json` at **compile time**, so a corrupt, truncated, or
+stale asset is a hard BUILD failure — no basilisk binary (CLI, LSP, or any
+packaged artifact) can be produced without a verified typeshed standard
+library. `src/typeshed/bundle.rs` re-checks the same identities at **runtime**
+before activation, defending against post-build binary corruption.
+
 #### License and attribution {#STUBRES-TYPESHED-LICENSE}
 
 The reviewed typeshed `LICENSE`
