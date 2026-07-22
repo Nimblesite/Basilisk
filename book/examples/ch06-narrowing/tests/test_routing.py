@@ -14,9 +14,7 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(normalize(18.0), 18.0)
 
     def test_type_guard_checks_the_boundary_shape(self) -> None:
-        self.assertTrue(
-            is_reading_event({"sensor_id": "roof-2", "celsius": 21.5})
-        )
+        self.assertTrue(is_reading_event({"sensor_id": "roof-2", "celsius": 21.5}))
         self.assertFalse(is_reading_event({"sensor_id": "roof-2"}))
 
     def test_route_status_handles_the_closed_set(self) -> None:
