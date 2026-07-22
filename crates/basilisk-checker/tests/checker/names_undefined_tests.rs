@@ -369,3 +369,82 @@ fn function_local_aliased_import_attribute_in_return_no_false_positive(
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Issue #339 — the walrus operator (`:=`, PEP 572) binds its target
+// ---------------------------------------------------------------------------
+
+#[test]
+fn walrus_in_if_test_binds_the_name_for_a_return_inside_the_branch(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #339 (headline repro): `if item := mapping.get(key):` binds `item`
+    // for the branch body, so `return item` references a defined name. PEP 572
+    // assignment expressions bind in the *enclosing* scope exactly like `=`.
+    let source = "\
+def get_price(prices: dict[str, float], asset: str) -> float | None:
+    if item := prices.get(asset):
+        return item
+    return None
+";
+    let diags = run(source)?;
+    let fired: Vec<&str> = codes(&diags)
+        .into_iter()
+        .filter(|c| *c == "names_undefined" || *c == "names_unbound")
+        .collect();
+    assert!(
+        fired.is_empty(),
+        "a walrus target used in a return inside the guarded branch must fire neither \
+         E0018 nor E0019, got: {fired:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn walrus_in_while_test_binds_the_name_for_a_return_inside_the_loop(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #339 (loop shape): the other canonical walrus site is a `while`
+    // test, where the binding is equally visible to the loop body.
+    let source = "\
+def first_line(lines: list[str]) -> str | None:
+    while line := lines.pop():
+        return line
+    return None
+";
+    let diags = run(source)?;
+    let fired: Vec<&str> = codes(&diags)
+        .into_iter()
+        .filter(|c| *c == "names_undefined" || *c == "names_unbound")
+        .collect();
+    assert!(
+        fired.is_empty(),
+        "a walrus target bound by a `while` test must fire neither E0018 nor E0019, \
+         got: {fired:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn walrus_in_if_test_binds_the_name_for_a_later_top_level_return(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #339 (post-branch shape): an `if` test always evaluates, so a walrus
+    // inside it binds unconditionally — the name is live after the statement,
+    // whichever way the branch went. Recognising the binding must therefore not
+    // merely trade E0018 ("not defined") for E0019 ("may be unbound").
+    let source = "\
+def lookup(items: dict[str, int], key: str) -> int | None:
+    if hit := items.get(key):
+        print(hit)
+    return hit
+";
+    let diags = run(source)?;
+    let fired: Vec<&str> = codes(&diags)
+        .into_iter()
+        .filter(|c| *c == "names_undefined" || *c == "names_unbound")
+        .collect();
+    assert!(
+        fired.is_empty(),
+        "an `if`-test walrus binds unconditionally, so a later top-level return of the \
+         name must fire neither E0018 nor E0019, got: {fired:?}"
+    );
+    Ok(())
+}
