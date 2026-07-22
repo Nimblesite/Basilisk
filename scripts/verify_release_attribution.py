@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 import tarfile
 import tomllib
 import zipfile
@@ -73,6 +74,61 @@ def _normalized_section(text: str, start: str, end: str) -> str:
     if not separator:
         raise ValueError(f"THIRD-PARTY-LICENSES section {start} has no end marker")
     return "".join(section.split())
+
+
+# Byte-compared by the VSIX pipeline: vscode-extension/scripts/
+# update-dependency-licenses.mjs --check regenerates the carrier + manifest and
+# requires the committed bytes to match exactly, and the release workflow packs
+# VSCODE-DISTRIBUTION-LICENSE verbatim into the VSIX as LICENSE.txt.
+VSIX_LEGAL_FILES = (
+    "VSCODE-DISTRIBUTION-LICENSE",
+    "VSCODE-DEPENDENCY-LICENSES",
+    "vscode-license-manifest.json",
+)
+
+
+def _byte_exact_repo_paths(repo_root: Path) -> tuple[str, ...]:
+    """Working-tree files whose exact bytes the release pipeline asserts."""
+    crate_root = PurePosixPath("crates/basilisk-stubs")
+    manifest = json.loads(
+        (repo_root / crate_root / "data" / "typeshed" / "manifest.json").read_text()
+    )
+    derived = tuple(
+        str(crate_root / index["path"])
+        for index in manifest["derived_indexes"].values()
+    )
+    return (
+        *LEGAL_FILES,
+        *VSIX_LEGAL_FILES,
+        str(crate_root / "data" / "typeshed" / "stdlib.zip"),
+        *derived,
+    )
+
+
+def _verify_checkout_byte_stability(repo_root: Path) -> None:
+    """Every byte-verified file must be pinned against checkout rewriting.
+
+    Git-for-Windows defaults to core.autocrlf=true, so a byte-verified file
+    left eligible for text conversion checks out with CRLF endings on the
+    windows-latest runners and its bytes no longer match the recorded
+    sidecar/notice (the v0.36.0/v0.37.0 release failures). `text` must
+    resolve to `unset` for these paths (`-text` or `binary` in .gitattributes).
+    """
+    paths = _byte_exact_repo_paths(repo_root)
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "check-attr", "text", "--", *paths],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    attributes = dict(line.rsplit(": text: ", 1) for line in result.stdout.splitlines())
+    for path in paths:
+        if attributes.get(path) != "unset":
+            raise ValueError(
+                f"{path} is byte-verified but not pinned '-text' in .gitattributes "
+                f"(text={attributes.get(path)!r}); a core.autocrlf=true checkout "
+                "would rewrite its bytes and break attribution verification"
+            )
 
 
 def _verify_typeshed_policy_metadata(repo_root: Path) -> None:
@@ -332,6 +388,7 @@ def main() -> None:
         "--repo-root", type=Path, default=Path(__file__).resolve().parents[1]
     )
     args = parser.parse_args()
+    _verify_checkout_byte_stability(args.repo_root)
     _verify_typeshed_policy_metadata(args.repo_root)
     _verify_release_package_metadata(args.repo_root)
     if args.policy_only:

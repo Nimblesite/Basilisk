@@ -21,6 +21,21 @@ basilisk-zed/LICENSE     -text
 basilisk.nvim/LICENSE    -text
 vscode-extension/LICENSE.txt -text
 
+# The VSIX legal pipeline is byte-exact too: update-dependency-licenses.mjs
+# --check requires the committed carrier + manifest to equal the regenerated
+# LF bytes, and VSCODE-DISTRIBUTION-LICENSE ships verbatim into the VSIX as
+# LICENSE.txt. All three ran CRLF-converted on the windows-latest VSIX jobs.
+VSCODE-DISTRIBUTION-LICENSE  -text
+VSCODE-DEPENDENCY-LICENSES   -text
+vscode-license-manifest.json -text
+
 # The embedded Typeshed snapshot is verified by SHA-256 against its sidecar
 # manifest; any conversion would break the hash.
 crates/basilisk-stubs/data/typeshed/stdlib.zip binary
+
+# Derived typeshed indexes are likewise SHA-256-pinned by the manifest's
+# derived_indexes sidecar ([STUBRES-TYPESHED-LICENSE]); a CRLF checkout on
+# windows-latest changes their bytes and failed the v0.36.0/v0.37.0 releases.
+# verify_release_attribution.py now refuses any byte-verified file that is not
+# pinned here, so new derived indexes fail PR CI instead of the release.
+crates/basilisk-stubs/data/typeshed_stub_distributions.tsv -text

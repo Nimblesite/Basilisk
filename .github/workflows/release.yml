@@ -201,7 +201,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tar -xzf artifacts/basilisk-*-linux-x64.tar.gz basilisk
+          # The linux-x64 archive from the build matrix, by its exact name —
+          # the archives are named by target triple, and a glob that matches
+          # nothing fails only at release time (first hit: v0.37.1).
+          tar -xzf artifacts/basilisk-x86_64-unknown-linux-gnu.tar.gz basilisk
           chmod +x basilisk
           python3 scripts/gen_release_notes.py ./basilisk "$GITHUB_REF_NAME" > release-notes-block.md
 
@@ -871,9 +874,16 @@ jobs:
             target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             manylinux: auto
+          # Native ARM runner, not cross-compilation: the typeshed download
+          # runtime ([STUBRES-TYPESHED]) pulls in `ring`, whose pregenerated
+          # aarch64 assembly does not build under the old cross-gcc in
+          # maturin-action's manylinux cross container ("#error ARM assembler
+          # must define __ARM_ARCH" — failed the v0.36.0/v0.37.0 releases).
+          # The native manylinux aarch64 image carries a modern toolchain and
+          # keeps the widest manylinux2014 wheel tag.
           - platform: linux-arm64
             target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
             manylinux: auto
           - platform: darwin-arm64
             target: aarch64-apple-darwin
