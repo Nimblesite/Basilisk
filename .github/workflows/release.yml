@@ -201,7 +201,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tar -xzf artifacts/basilisk-*-linux-x64.tar.gz basilisk
+          # The linux-x64 archive from the build matrix, by its exact name —
+          # the archives are named by target triple, and a glob that matches
+          # nothing fails only at release time (first hit: v0.37.1).
+          tar -xzf artifacts/basilisk-x86_64-unknown-linux-gnu.tar.gz basilisk
           chmod +x basilisk
           python3 scripts/gen_release_notes.py ./basilisk "$GITHUB_REF_NAME" > release-notes-block.md
 
