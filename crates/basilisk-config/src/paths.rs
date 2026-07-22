@@ -67,6 +67,24 @@ fn segments_match(pattern: &[&str], path: &[&str]) -> bool {
     }
 }
 
+/// Whether `dir` is the root of a Python virtual environment.
+///
+/// Implements [CHKARCH-CONFIG-EXCLUDE] (GitHub #341). A venv holds installed
+/// third-party packages — never the user's own code to check, and never code a
+/// file-mutating `fix` may rewrite. Configuring `exclude` *replaces*
+/// [`crate::DEFAULT_EXCLUDES`], so the `venv`/`.venv`/`site-packages` entries
+/// that used to prune one vanish the moment a project sets its own list. This
+/// check is therefore structural and unconditional, like the hidden-directory
+/// skip both walkers already apply.
+///
+/// The marker is [PEP 405](https://peps.python.org/pep-0405/#specification)'s
+/// `pyvenv.cfg`, which every venv root carries whatever it is named — so `env/`
+/// and `.direnv/python-3.13/` are recognised exactly like `.venv/`.
+#[must_use]
+pub fn is_virtualenv_dir(dir: &std::path::Path) -> bool {
+    dir.join("pyvenv.cfg").is_file()
+}
+
 /// Check whether a file path matches a glob path pattern (gitignore-style).
 ///
 /// Implements [CHKARCH-CONFIG-EXCLUDE]. See

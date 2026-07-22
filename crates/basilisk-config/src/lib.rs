@@ -24,7 +24,7 @@ pub use editor::{
     TypeshedConfigUpdate, TypeshedConfigValue,
 };
 pub use parse::{is_full_commit_sha, is_valid_typeshed_url_template, BasiliskConfig, RuleTables};
-pub use paths::path_matches_pattern;
+pub use paths::{is_virtualenv_dir, path_matches_pattern};
 pub use severity::RuleSeverity;
 
 use std::path::Path;

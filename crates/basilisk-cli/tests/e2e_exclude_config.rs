@@ -9,6 +9,8 @@
 //! - Setting `exclude` REPLACES the defaults entirely — it does not extend
 //!   them. A project that still wants `node_modules` skipped must re-add it.
 //! - Hidden (`.`-prefixed) directories are always skipped regardless.
+//! - Virtualenvs are skipped structurally, by their PEP 405 `pyvenv.cfg`
+//!   marker, regardless of directory name or `exclude` configuration.
 //! - Patterns are gitignore-style: a bare name matches at any depth; an
 //!   anchored `dir/**` pattern excludes the whole subtree.
 #![allow(
@@ -233,6 +235,111 @@ fn anchored_glob_excludes_the_whole_subtree() {
         output.status.code(),
         Some(0),
         "the only defect sits inside the excluded subtree, so the check must pass, stdout: {stdout}, stderr: {stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Lay down a project whose custom `exclude` replaces the defaults (so no
+/// `venv`/`site-packages` entry survives) with a real virtualenv beside the
+/// sources, marked by PEP 405's `pyvenv.cfg`.
+fn write_project_with_virtualenv(dir: &Path, vendored: &str) {
+    pyproject_with(
+        dir,
+        "exclude = [\"generated\"]\n\n[tool.basilisk.rules]\n\"BSK-0050\" = \"warning\"\n",
+    );
+    write(dir, "venv/pyvenv.cfg", "home = /usr\n");
+    write(
+        dir,
+        "venv/lib/python3.13/site-packages/dep/mod.py",
+        vendored,
+    );
+    write(dir, "src/main.py", "x: int = 42\n");
+}
+
+/// Issue #341: a virtualenv is skipped today only because `venv`/`.venv`/
+/// `site-packages` happen to be literal entries in `DEFAULT_EXCLUDES` — and any
+/// custom `exclude` replaces that list wholesale. `fix` mutates files, so the
+/// gap rewrites third-party installed packages. The venv must be pruned
+/// structurally, by its `pyvenv.cfg` marker, whatever `exclude` says.
+#[test]
+fn fix_never_rewrites_inside_a_virtualenv_when_custom_exclude_replaces_defaults() {
+    let dir = unique_dir("venv_fix");
+    write_project_with_virtualenv(&dir, "y: int = 42\n");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_basilisk"))
+        .arg("fix")
+        .args(["--rules", "BSK-0050"])
+        .current_dir(&dir)
+        .env_remove("VIRTUAL_ENV")
+        .output()
+        .expect("spawn basilisk");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert_eq!(
+        std::fs::read_to_string(dir.join("venv/lib/python3.13/site-packages/dep/mod.py"))
+            .expect("read vendored"),
+        "y: int = 42\n",
+        "`fix` must never mutate third-party sources inside a virtualenv, however \
+         `exclude` is configured, stdout: {}, stderr: {stderr}",
+        stdout_of(&output)
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("src/main.py")).expect("read src"),
+        "x = 42\n",
+        "the project's own sources must still be fixed, stderr: {stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The read-only half of the same walk: `check` must not report diagnostics
+/// from inside a virtualenv either, or the editor and CLI disagree about which
+/// files exist ([CHKARCH-CONFIG-EXCLUDE]).
+#[test]
+fn check_does_not_scan_inside_a_virtualenv_when_custom_exclude_replaces_defaults() {
+    let dir = unique_dir("venv_check");
+    write_project_with_virtualenv(&dir, BAD_PY);
+
+    let output = check_dot(&dir);
+    let stdout = stdout_of(&output);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        !stdout.contains("returns_compatibility"),
+        "a defect inside a virtualenv must never be reported, stdout: {stdout}, stderr: {stderr}"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "the only defect sits inside the virtualenv, so the check must pass, \
+         stdout: {stdout}, stderr: {stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The structural skip prunes *traversal into* a virtualenv; it does not
+/// override an explicit request. Pointing the CLI straight at a path inside one
+/// still checks it, mirroring the walk's existing depth-0 root exemption.
+#[test]
+fn an_explicit_path_inside_a_virtualenv_is_still_checked() {
+    let dir = unique_dir("venv_explicit");
+    write_project_with_virtualenv(&dir, BAD_PY);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_basilisk"))
+        .arg("check")
+        .arg("venv/lib/python3.13/site-packages/dep")
+        .current_dir(&dir)
+        .env_remove("VIRTUAL_ENV")
+        .output()
+        .expect("spawn basilisk");
+    let stdout = stdout_of(&output);
+
+    assert!(
+        stdout.contains("returns_compatibility"),
+        "an explicitly requested path must still be checked, stdout: {stdout}, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
 
     let _ = std::fs::remove_dir_all(&dir);

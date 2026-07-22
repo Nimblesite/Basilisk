@@ -1168,7 +1168,21 @@ excluded (`basilisk_config::DEFAULT_EXCLUDES`: `node_modules`, `site-packages`,
 `.venv`, `__pycache__`, `build`, `dist`, the extension's `bundled` /
 `_vendored` trees, and friends). Setting `exclude` **replaces** those defaults
 entirely — re-add any default entries explicitly if they are still needed.
-Hidden directories (`.`-prefixed) are always skipped regardless. The single canonical matcher
+Two **structural** skips sit outside `exclude` entirely and no configuration can
+switch them off, because both surfaces must agree on them file-for-file:
+
+- hidden directories (`.`-prefixed); and
+- **virtualenv roots**, identified by [PEP 405](https://peps.python.org/pep-0405/#specification)'s
+  `pyvenv.cfg` marker (`basilisk_config::is_virtualenv_dir`) rather than by
+  directory name, so `env/` and `.direnv/python-3.13/` are pruned exactly like
+  `.venv/`. A venv holds installed third-party packages — never the user's code.
+  Without this, a project that sets any custom `exclude` loses the
+  `venv`/`site-packages` default entries and `basilisk fix` **rewrites installed
+  packages** (GitHub #341). The skip prunes *traversal into* a venv; an explicit
+  CLI path pointing inside one is still checked, matching the walk's depth-0 root
+  exemption.
+
+The single canonical matcher
 `basilisk_config::path_matches_pattern` is shared by every entry point so they
 exclude identically:
 

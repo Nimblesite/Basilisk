@@ -555,6 +555,13 @@ pub(crate) fn collect_python_files(
                     if name.starts_with('.') {
                         return false;
                     }
+                    // Virtualenvs are pruned structurally by their `pyvenv.cfg`
+                    // marker, whatever `exclude` says ([CHKARCH-CONFIG-EXCLUDE],
+                    // GitHub #341). The depth-0 exemption above still lets an
+                    // explicit `basilisk check ./venv` in.
+                    if basilisk_config::is_virtualenv_dir(e.path()) {
+                        return false;
+                    }
                     !is_excluded_path(e.path(), root_path, excluded)
                 })
                 .filter_map(Result::ok)
