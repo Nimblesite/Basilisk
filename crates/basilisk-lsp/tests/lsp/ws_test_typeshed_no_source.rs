@@ -130,11 +130,25 @@ async fn missing_pin_at_initialize_raises_an_error_toast() -> TestResult<()> {
 /// [STUBRES-TYPESHED-WARN]: editing the on-disk configuration to a pin absent
 /// from this machine — through NO LSP channel — must raise the same ERROR
 /// toast via the shared `StagedResolution::publish` seam. Guards the gap where
-/// only the initialize path was wired and every later NoSource stayed silent.
+/// only the initialize path was wired and every later `NoSource` stayed silent.
 #[tokio::test]
 async fn missing_pin_disk_edit_raises_an_error_toast() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
+
+    // Open a file and await its diagnostics before editing: this gives the
+    // server-owned watcher time to seed its baseline from the ORIGINAL
+    // pyproject, so the pin edit below is unambiguously a content change and
+    // not swallowed by a seed-vs-edit race. Mirrors the reliable pattern in
+    // `disk_config_edit_without_client_watcher_republishes_and_notifies`.
+    let uri = format!(
+        "file://{}/no_source_edit_app.py",
+        fixture.workspace_root.to_string_lossy()
+    );
+    fixture
+        .did_open(&uri, "def handler(value):\n    return value\n")
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await?;
 
     let store = fixture.workspace_root.join("empty_typeshed_store");
     std::fs::create_dir_all(&store)?;

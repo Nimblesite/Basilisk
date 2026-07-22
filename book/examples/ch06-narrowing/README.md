@@ -7,9 +7,11 @@ The final checkpoint is deliberately clean. The incomplete branches in the
 chapter are short variations to try and then repair; they are not hidden with
 casts or suppressions.
 
-The checkpoint uses `T | None` syntax and structural pattern matching, so its
-runtime interpreter must be Python 3.10 or later. That is a syntax boundary for
-this example, not a Basilisk-wide support target.
+The checkpoint uses `T | None` syntax, structural pattern matching, and
+`typing.assert_never`. The last of these was added to `typing` in Python 3.11
+([`typing.assert_never`](https://docs.python.org/3/library/typing.html#typing.assert_never)),
+so its runtime interpreter must be Python 3.11 or later. That is a syntax
+boundary for this example, not a Basilisk-wide support target.
 
 From this directory, run:
 

@@ -394,6 +394,42 @@ suite("Configuration editor — typed mutation routing", () => {
   });
 });
 
+suite("Configuration editor — Typeshed action failure classification", () => {
+  test("a Typeshed revision conflict routes to the soft conflict phase and pops no hard error toast", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    // A revision conflict is a retryable state, not a failure: the base
+    // revision moved under the action. It must NOT surface as a hard error
+    // toast — only genuine failures do ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+    transport.typeshedActionHandler = async () =>
+      Promise.reject(
+        Object.assign(new Error("configuration changed since preview"), {
+          data: { kind: "revisionConflict" },
+        }),
+      );
+    const shownErrors: string[] = [];
+    const originalShowError = vscode.window.showErrorMessage;
+    (vscode.window as { showErrorMessage: unknown }).showErrorMessage = async (
+      message: string,
+    ): Promise<undefined> => { shownErrors.push(message); return undefined; };
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      await controller.receive({ type: "typeshedAction", action: "DownloadPinned" });
+      await pollUntil(() => store.configurationEditor.value.phase === "conflict");
+      assert.strictEqual(
+        shownErrors.length,
+        0,
+        `a revision conflict must not pop a hard error toast: ${shownErrors[0] ?? "<none>"}`,
+      );
+    } finally {
+      (vscode.window as { showErrorMessage: unknown }).showErrorMessage = originalShowError;
+      controller.dispose();
+    }
+  });
+});
+
 suite("Configuration editor — direct Typeshed writes and discarded previews", () => {
   // The reported failure: a dismissed dialog left the control showing a value
   // the configuration never held. Discarding must restore the snapshot state

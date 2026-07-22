@@ -31,10 +31,13 @@ gaps.
 it may be useful in a particular checker, but it is not presented as a shared
 Python typing guarantee.*
 
-The examples use `T | None` and `match`, both runtime syntax available from
-Python 3.10. That is an example boundary, not a Basilisk-wide version target.
-The union spelling is defined by [PEP 604](https://peps.python.org/pep-0604/),
-and the [`match` statement](https://docs.python.org/3/reference/compound_stmts.html#the-match-statement)
+The examples use `T | None`, `match`, and `typing.assert_never`. The first two
+are runtime syntax available from Python 3.10; `assert_never` was added to
+`typing` in Python 3.11 ([`typing.assert_never`](https://docs.python.org/3/library/typing.html#typing.assert_never)),
+so the checkpoint's runtime interpreter must be Python 3.11 or later. That is an
+example boundary, not a Basilisk-wide version target. The union spelling is
+defined by [PEP 604](https://peps.python.org/pep-0604/), and the
+[`match` statement](https://docs.python.org/3/reference/compound_stmts.html#the-match-statement)
 is part of Python's compound-statement grammar.
 
 ## Start from declared boundaries
@@ -118,8 +121,9 @@ def add_offset(value: float | None, offset: float) -> float:
 ```
 
 The `raise` prevents the `None` path from reaching the final expression. The
-normative `is None` rule leaves the other union member, `float`, on the
-continuing path. The same shape works with an early `return`.
+`is None` union case the specification explicitly describes leaves the other
+union member, `float`, on the continuing path. The same shape works with an
+early `return`.
 
 Do not generalize this one specified rule into a promise about every condition.
 Equality, membership, truthiness, reassignment, loops, captured variables, and

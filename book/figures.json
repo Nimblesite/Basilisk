@@ -47,8 +47,7 @@
       "id": "fig-02-install-chooser",
       "section": "02",
       "kind": "diagram",
-      "status": "ready",
-      "master": "assets/diagrams/06-narrowing-tree.svg",
+      "status": "planned",
       "path": "assets/diagrams/02-installation-paths.png",
       "title": "Choose the integration that matches your editor",
       "alt": "A decision map routes VS Code-family, Neovim, Zed, and command-line readers to the appropriate Basilisk installation path."
@@ -93,8 +92,7 @@
       "id": "fig-03-evidence-loop",
       "section": "03",
       "kind": "diagram",
-      "status": "ready",
-      "master": "assets/diagrams/06-typeguard.svg",
+      "status": "planned",
       "path": "assets/diagrams/03-diagnostic-evidence-loop.png",
       "title": "Observe before you change",
       "alt": "A feedback loop moves from source evidence to a type relationship, a deliberate code change, and a repeated Basilisk check."
@@ -177,7 +175,7 @@
       "master": "assets/diagrams/06-typeguard.svg",
       "path": "assets/diagrams/06-typeguard.png",
       "title": "A TypeGuard gives a checker-readable positive test",
-      "alt": "A user-defined predicate checks dictionary evidence and narrows the true branch to the SignalReading TypedDict."
+      "alt": "A user-defined predicate checks dictionary evidence and narrows the true branch to the ReadingEvent TypedDict."
     },
     {
       "id": "fig-06-runtime-cases",
