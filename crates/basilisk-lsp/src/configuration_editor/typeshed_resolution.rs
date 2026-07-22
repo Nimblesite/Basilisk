@@ -33,7 +33,14 @@ impl StagedResolution {
     }
 
     /// Atomically replace the root's generation and notify clients. Elevated
-    /// source warnings surface here, once, on activation.
+    /// source warnings surface here, once, on activation — and so does the
+    /// `NoSource` error: this seam is shared by the config-editor transaction,
+    /// the watched on-disk config edit, and post-download re-resolution, so a
+    /// pin edited to a commit that is not on this machine raises the same
+    /// unmissable `window/showMessage` error as a broken initialize
+    /// ([STUBRES-TYPESHED-WARN]). Without it, analysis silently stops for the
+    /// root and only clients implementing the custom status notification would
+    /// ever know.
     pub(super) async fn publish(self, handles: &ConfigurationRefreshHandles, root: &Path) {
         let next = self.next;
         let status = next.ready_status().cloned();
@@ -43,6 +50,9 @@ impl StagedResolution {
             .await
             .insert(root.to_path_buf(), next.clone());
         typeshed_status::notify_generation(&handles.client, root, &next).await;
+        if let Some(failure) = next.no_source_failure() {
+            typeshed_status::show_no_source_error(&handles.client, root, failure).await;
+        }
         if let Some(status) = status {
             typeshed_status::show_high_warnings(&handles.client, &status).await;
         }

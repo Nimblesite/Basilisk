@@ -479,16 +479,26 @@ mod tests {
         );
     }
 
-    /// The LSP DRIVES the `NoSource` error itself ([DESIGN] — editors only react
-    /// to LSP signals), so resolution must call `show_no_source_error`. This
-    /// guards against a regression back to a trace-only warning that no editor
-    /// surfaces.
+    /// The LSP DRIVES the `NoSource` error itself ([STUBRES-TYPESHED-WARN] —
+    /// editors only react to LSP signals), so BOTH activation seams must call
+    /// `show_no_source_error`: the initialize/folder-add path in `init.rs` and
+    /// the shared `StagedResolution::publish` seam that the config-editor
+    /// transaction, the watched on-disk config edit, and post-download
+    /// re-resolution all route through. This guards against a regression back
+    /// to a trace-only warning on either seam; the end-to-end message contract
+    /// is pinned behaviorally in `ws_test_typeshed_no_source.rs`
+    /// (`missing_pin_*_raises_an_error_toast`).
     #[test]
-    fn resolution_raises_an_immediate_error_for_a_no_source_root() {
-        let source = include_str!("init.rs");
+    fn every_no_source_activation_seam_raises_an_immediate_error() {
         assert!(
-            source.contains("show_no_source_error"),
+            include_str!("init.rs").contains("show_no_source_error"),
             "resolve_typeshed_for_roots must surface NoSource as a window/showMessage error"
+        );
+        assert!(
+            include_str!("../configuration_editor/typeshed_resolution.rs")
+                .contains("show_no_source_error"),
+            "StagedResolution::publish must surface NoSource as a window/showMessage error — \
+config edits and post-download re-resolution land here, not in init.rs"
         );
     }
 }
