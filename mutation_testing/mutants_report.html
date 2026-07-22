@@ -62,7 +62,7 @@
 <body>
 <header>
   <h1>Basilisk Mutation Report <span>cargo-mutants v27.1.0</span></h1>
-  <div class="meta">2026-07-21T01:48:25.113674Z → 2026-07-21T02:35:18.402279Z</div>
+  <div class="meta">2026-07-22T19:22:35.318154Z → 2026-07-22T19:57:32.98043Z</div>
 </header>
 
 <div class="stats">
@@ -116,7 +116,7 @@
       <td class='loc'>crates/basilisk-checker/src/context.rs:59:13</td>
       <td><code>CheckContext::from_config_with_source</code> -> Self <span class='badge genre'>StructField</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>82.8s</td>
+      <td class='dur'>79.8s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-0')">▶ show diff</div>
@@ -147,7 +147,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:61:5</td>
       <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>vec![]</code></td>
-      <td class='dur'>109.5s</td>
+      <td class='dur'>97.9s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-1')">▶ show diff</div>
@@ -201,67 +201,41 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:61:5</td>
-      <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>FnValue</span></td>
-      <td><code class='replacement'>vec![String::new()]</code></td>
-      <td class='dur'>122.1s</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:63:24</td>
+      <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>==</code></td>
+      <td class='dur'>55.7s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-2')">▶ show diff</div>
         <pre id='diff-2' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
-+++ replace collect_type_alias_names -&gt; Vec&lt;String&gt; with vec![String::new()]
-@@ -53,43 +53,17 @@
- 
- /// Collect all local names that refer to `typing.TypeAlias` in this module.
++++ replace != with == in collect_type_alias_names
+@@ -55,17 +55,17 @@
  ///
  /// Handles:
  /// - `from typing import TypeAlias`
  /// - `from typing import TypeAlias as TA`
  /// - `import typing` (used as `typing.TypeAlias`)
  fn collect_type_alias_names(module: &amp;ResolvedModule) -&gt; Vec&lt;String&gt; {
--    let mut names = vec![&quot;TypeAlias&quot;.to_owned()];
--    for import in &amp;module.imports {
+     let mut names = vec![&quot;TypeAlias&quot;.to_owned()];
+     for import in &amp;module.imports {
 -        if import.kind != ImportKind::From {
--            continue;
--        }
--        if import.module != &quot;typing&quot; &amp;&amp; import.module != &quot;typing_extensions&quot; {
--            continue;
--        }
--        // Scan the raw import source text for `TypeAlias as &lt;alias&gt;` patterns.
--        let Some(import_text) = slice_span(&amp;module.source, import.span) else {
--            continue;
--        };
--        // Find all occurrences of `TypeAlias as &lt;identifier&gt;`. `match_indices`
--        // advances structurally past each match, so the loop cannot be turned
--        // into an infinite loop by mutating an arithmetic advance step.
--        for (pos, marker) in import_text.match_indices(&quot;TypeAlias as &quot;) {
--            let after = &amp;import_text[pos + marker.len()..];
--            let alias: String = after
--                .chars()
--                .take_while(|c| c.is_alphanumeric() || *c == '_')
--                .collect();
--            if !alias.is_empty() &amp;&amp; alias != &quot;TypeAlias&quot; {
--                names.push(alias);
--            }
--        }
--    }
--    names
-+    vec![String::new()] /* ~ changed by cargo-mutants ~ */
- }
- 
- /// Returns `true` when the annotation text matches one of the known `TypeAlias` names.
- fn is_type_alias_annotation(ann: &amp;str, type_alias_names: &amp;[String]) -&gt; bool {
-     let ann = ann.trim();
-     type_alias_names.iter().any(|n| ann == n) || ann.ends_with(&quot;.TypeAlias&quot;)
- }
- 
++        if import.kind == /* ~ changed by cargo-mutants ~ */ ImportKind::From {
+             continue;
+         }
+         if import.module != &quot;typing&quot; &amp;&amp; import.module != &quot;typing_extensions&quot; {
+             continue;
+         }
+         // Scan the raw import source text for `TypeAlias as &lt;alias&gt;` patterns.
+         let Some(import_text) = slice_span(&amp;module.source, import.span) else {
+             continue;
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:61:5</td>
       <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>vec![&quot;xyzzy&quot;.into()]</code></td>
-      <td class='dur'>124.4s</td>
+      <td class='dur'>142.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-3')">▶ show diff</div>
@@ -315,41 +289,67 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:63:24</td>
-      <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>==</code></td>
-      <td class='dur'>59.7s</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:61:5</td>
+      <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>FnValue</span></td>
+      <td><code class='replacement'>vec![String::new()]</code></td>
+      <td class='dur'>144.5s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-4')">▶ show diff</div>
         <pre id='diff-4' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
-+++ replace != with == in collect_type_alias_names
-@@ -55,17 +55,17 @@
++++ replace collect_type_alias_names -&gt; Vec&lt;String&gt; with vec![String::new()]
+@@ -53,43 +53,17 @@
+ 
+ /// Collect all local names that refer to `typing.TypeAlias` in this module.
  ///
  /// Handles:
  /// - `from typing import TypeAlias`
  /// - `from typing import TypeAlias as TA`
  /// - `import typing` (used as `typing.TypeAlias`)
  fn collect_type_alias_names(module: &amp;ResolvedModule) -&gt; Vec&lt;String&gt; {
-     let mut names = vec![&quot;TypeAlias&quot;.to_owned()];
-     for import in &amp;module.imports {
+-    let mut names = vec![&quot;TypeAlias&quot;.to_owned()];
+-    for import in &amp;module.imports {
 -        if import.kind != ImportKind::From {
-+        if import.kind == /* ~ changed by cargo-mutants ~ */ ImportKind::From {
-             continue;
-         }
-         if import.module != &quot;typing&quot; &amp;&amp; import.module != &quot;typing_extensions&quot; {
-             continue;
-         }
-         // Scan the raw import source text for `TypeAlias as &lt;alias&gt;` patterns.
-         let Some(import_text) = slice_span(&amp;module.source, import.span) else {
-             continue;
+-            continue;
+-        }
+-        if import.module != &quot;typing&quot; &amp;&amp; import.module != &quot;typing_extensions&quot; {
+-            continue;
+-        }
+-        // Scan the raw import source text for `TypeAlias as &lt;alias&gt;` patterns.
+-        let Some(import_text) = slice_span(&amp;module.source, import.span) else {
+-            continue;
+-        };
+-        // Find all occurrences of `TypeAlias as &lt;identifier&gt;`. `match_indices`
+-        // advances structurally past each match, so the loop cannot be turned
+-        // into an infinite loop by mutating an arithmetic advance step.
+-        for (pos, marker) in import_text.match_indices(&quot;TypeAlias as &quot;) {
+-            let after = &amp;import_text[pos + marker.len()..];
+-            let alias: String = after
+-                .chars()
+-                .take_while(|c| c.is_alphanumeric() || *c == '_')
+-                .collect();
+-            if !alias.is_empty() &amp;&amp; alias != &quot;TypeAlias&quot; {
+-                names.push(alias);
+-            }
+-        }
+-    }
+-    names
++    vec![String::new()] /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ /// Returns `true` when the annotation text matches one of the known `TypeAlias` names.
+ fn is_type_alias_annotation(ann: &amp;str, type_alias_names: &amp;[String]) -&gt; bool {
+     let ann = ann.trim();
+     type_alias_names.iter().any(|n| ann == n) || ann.ends_with(&quot;.TypeAlias&quot;)
+ }
+ 
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:66:38</td>
       <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>||</code></td>
-      <td class='dur'>57.6s</td>
+      <td class='dur'>51.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-5')">▶ show diff</div>
@@ -380,7 +380,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:66:26</td>
       <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>==</code></td>
-      <td class='dur'>59.2s</td>
+      <td class='dur'>44.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-6')">▶ show diff</div>
@@ -411,7 +411,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:66:55</td>
       <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>==</code></td>
-      <td class='dur'>65.6s</td>
+      <td class='dur'>49.0s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-7')">▶ show diff</div>
@@ -441,43 +441,12 @@
       <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:77:42</td>
       <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>-</code></td>
-      <td class='dur'>54.3s</td>
+      <td><code class='replacement'>*</code></td>
+      <td class='dur'>52.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-8')">▶ show diff</div>
         <pre id='diff-8' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
-+++ replace + with - in collect_type_alias_names
-@@ -69,17 +69,17 @@
-         // Scan the raw import source text for `TypeAlias as &lt;alias&gt;` patterns.
-         let Some(import_text) = slice_span(&amp;module.source, import.span) else {
-             continue;
-         };
-         // Find all occurrences of `TypeAlias as &lt;identifier&gt;`. `match_indices`
-         // advances structurally past each match, so the loop cannot be turned
-         // into an infinite loop by mutating an arithmetic advance step.
-         for (pos, marker) in import_text.match_indices(&quot;TypeAlias as &quot;) {
--            let after = &amp;import_text[pos + marker.len()..];
-+            let after = &amp;import_text[pos - /* ~ changed by cargo-mutants ~ */ marker.len()..];
-             let alias: String = after
-                 .chars()
-                 .take_while(|c| c.is_alphanumeric() || *c == '_')
-                 .collect();
-             if !alias.is_empty() &amp;&amp; alias != &quot;TypeAlias&quot; {
-                 names.push(alias);
-             }
-         }
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:77:42</td>
-      <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>*</code></td>
-      <td class='dur'>57.0s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-9')">▶ show diff</div>
-        <pre id='diff-9' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
 +++ replace + with * in collect_type_alias_names
 @@ -69,17 +69,17 @@
          // Scan the raw import source text for `TypeAlias as &lt;alias&gt;` patterns.
@@ -501,10 +470,41 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:77:42</td>
+      <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>-</code></td>
+      <td class='dur'>61.0s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-9')">▶ show diff</div>
+        <pre id='diff-9' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
++++ replace + with - in collect_type_alias_names
+@@ -69,17 +69,17 @@
+         // Scan the raw import source text for `TypeAlias as &lt;alias&gt;` patterns.
+         let Some(import_text) = slice_span(&amp;module.source, import.span) else {
+             continue;
+         };
+         // Find all occurrences of `TypeAlias as &lt;identifier&gt;`. `match_indices`
+         // advances structurally past each match, so the loop cannot be turned
+         // into an infinite loop by mutating an arithmetic advance step.
+         for (pos, marker) in import_text.match_indices(&quot;TypeAlias as &quot;) {
+-            let after = &amp;import_text[pos + marker.len()..];
++            let after = &amp;import_text[pos - /* ~ changed by cargo-mutants ~ */ marker.len()..];
+             let alias: String = after
+                 .chars()
+                 .take_while(|c| c.is_alphanumeric() || *c == '_')
+                 .collect();
+             if !alias.is_empty() &amp;&amp; alias != &quot;TypeAlias&quot; {
+                 names.push(alias);
+             }
+         }
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:80:53</td>
       <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>&amp;&amp;</code></td>
-      <td class='dur'>56.0s</td>
+      <td class='dur'>51.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-10')">▶ show diff</div>
@@ -535,7 +535,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:80:59</td>
       <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>!=</code></td>
-      <td class='dur'>61.5s</td>
+      <td class='dur'>49.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-11')">▶ show diff</div>
@@ -563,14 +563,45 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:166:5</td>
-      <td><code>has_top_level_token</code> -> bool <span class='badge genre'>FnValue</span></td>
-      <td><code class='replacement'>true</code></td>
-      <td class='dur'>20.7s</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:82:16</td>
+      <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>UnaryOperator</span></td>
+      <td><code class='replacement'></code></td>
+      <td class='dur'>53.7s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-12')">▶ show diff</div>
         <pre id='diff-12' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
++++ delete ! in collect_type_alias_names
+@@ -74,17 +74,17 @@
+         // advances structurally past each match, so the loop cannot be turned
+         // into an infinite loop by mutating an arithmetic advance step.
+         for (pos, marker) in import_text.match_indices(&quot;TypeAlias as &quot;) {
+             let after = &amp;import_text[pos + marker.len()..];
+             let alias: String = after
+                 .chars()
+                 .take_while(|c| c.is_alphanumeric() || *c == '_')
+                 .collect();
+-            if !alias.is_empty() &amp;&amp; alias != &quot;TypeAlias&quot; {
++            if  /* ~ changed by cargo-mutants ~ */alias.is_empty() &amp;&amp; alias != &quot;TypeAlias&quot; {
+                 names.push(alias);
+             }
+         }
+     }
+     names
+ }
+ 
+ /// Returns `true` when the annotation text matches one of the known `TypeAlias` names.
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:166:5</td>
+      <td><code>has_top_level_token</code> -> bool <span class='badge genre'>FnValue</span></td>
+      <td><code class='replacement'>true</code></td>
+      <td class='dur'>20.9s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-13')">▶ show diff</div>
+        <pre id='diff-13' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
 +++ replace has_top_level_token -&gt; bool with true
 @@ -158,33 +158,17 @@
          return true;
@@ -610,41 +641,10 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:82:16</td>
-      <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>UnaryOperator</span></td>
-      <td><code class='replacement'></code></td>
-      <td class='dur'>54.9s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-13')">▶ show diff</div>
-        <pre id='diff-13' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
-+++ delete ! in collect_type_alias_names
-@@ -74,17 +74,17 @@
-         // advances structurally past each match, so the loop cannot be turned
-         // into an infinite loop by mutating an arithmetic advance step.
-         for (pos, marker) in import_text.match_indices(&quot;TypeAlias as &quot;) {
-             let after = &amp;import_text[pos + marker.len()..];
-             let alias: String = after
-                 .chars()
-                 .take_while(|c| c.is_alphanumeric() || *c == '_')
-                 .collect();
--            if !alias.is_empty() &amp;&amp; alias != &quot;TypeAlias&quot; {
-+            if  /* ~ changed by cargo-mutants ~ */alias.is_empty() &amp;&amp; alias != &quot;TypeAlias&quot; {
-                 names.push(alias);
-             }
-         }
-     }
-     names
- }
- 
- /// Returns `true` when the annotation text matches one of the known `TypeAlias` names.
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:82:43</td>
       <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>==</code></td>
-      <td class='dur'>54.9s</td>
+      <td class='dur'>45.8s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-14')">▶ show diff</div>
@@ -675,7 +675,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:82:34</td>
       <td><code>collect_type_alias_names</code> -> Vec<String> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>||</code></td>
-      <td class='dur'>101.3s</td>
+      <td class='dur'>86.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-15')">▶ show diff</div>
@@ -706,7 +706,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:176:18</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>MatchArmGuard</span></td>
       <td><code class='replacement'>true</code></td>
-      <td class='dur'>24.7s</td>
+      <td class='dur'>22.5s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-16')">▶ show diff</div>
@@ -737,7 +737,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:166:5</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>false</code></td>
-      <td class='dur'>57.4s</td>
+      <td class='dur'>54.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-17')">▶ show diff</div>
@@ -784,7 +784,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:174:13</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>MatchArm</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>58.6s</td>
+      <td class='dur'>55.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-18')">▶ show diff</div>
@@ -815,7 +815,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:175:13</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>MatchArm</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>61.8s</td>
+      <td class='dur'>49.5s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-19')">▶ show diff</div>
@@ -846,7 +846,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:176:18</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>MatchArmGuard</span></td>
       <td><code class='replacement'>false</code></td>
-      <td class='dur'>64.8s</td>
+      <td class='dur'>52.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-20')">▶ show diff</div>
@@ -877,7 +877,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:174:41</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>-=</code></td>
-      <td class='dur'>66.4s</td>
+      <td class='dur'>55.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-21')">▶ show diff</div>
@@ -908,7 +908,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:174:41</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>*=</code></td>
-      <td class='dur'>64.4s</td>
+      <td class='dur'>56.0s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-22')">▶ show diff</div>
@@ -939,7 +939,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:175:41</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>+=</code></td>
-      <td class='dur'>67.5s</td>
+      <td class='dur'>53.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-23')">▶ show diff</div>
@@ -970,7 +970,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:176:29</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>||</code></td>
-      <td class='dur'>30.1s</td>
+      <td class='dur'>17.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-24')">▶ show diff</div>
@@ -998,45 +998,14 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:175:41</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:176:47</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>/=</code></td>
-      <td class='dur'>58.9s</td>
+      <td><code class='replacement'>-</code></td>
+      <td class='dur'>14.8s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-25')">▶ show diff</div>
         <pre id='diff-25' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
-+++ replace -= with /= in has_top_level_token
-@@ -167,17 +167,17 @@
-     let bytes = s.as_bytes();
-     let tok = token.as_bytes();
-     let tok_len = tok.len();
-     // `enumerate` yields each index exactly once — forward progress is
-     // structural, so mutating the loop counter is impossible.
-     for (i, &amp;byte) in bytes.iter().enumerate() {
-         match byte {
-             b'[' | b'(' | b'{' =&gt; depth += 1,
--            b']' | b')' | b'}' =&gt; depth -= 1,
-+            b']' | b')' | b'}' =&gt; depth /= /* ~ changed by cargo-mutants ~ */ 1,
-             _ if depth == 0 &amp;&amp; bytes.get(i..i + tok_len) == Some(tok) =&gt; {
-                 return true;
-             }
-             _ =&gt; {}
-         }
-     }
-     false
- }
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:176:47</td>
-      <td><code>has_top_level_token</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>-</code></td>
-      <td class='dur'>21.2s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-26')">▶ show diff</div>
-        <pre id='diff-26' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
 +++ replace + with - in has_top_level_token
 @@ -168,17 +168,17 @@
      let tok = token.as_bytes();
@@ -1063,11 +1032,11 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:176:58</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>!=</code></td>
-      <td class='dur'>32.3s</td>
+      <td class='dur'>23.9s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-27')">▶ show diff</div>
-        <pre id='diff-27' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
+        <div class='diff-toggle' onclick="toggle('diff-26')">▶ show diff</div>
+        <pre id='diff-26' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
 +++ replace == with != in has_top_level_token
 @@ -168,17 +168,17 @@
      let tok = token.as_bytes();
@@ -1091,10 +1060,41 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:175:41</td>
+      <td><code>has_top_level_token</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>/=</code></td>
+      <td class='dur'>46.8s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-27')">▶ show diff</div>
+        <pre id='diff-27' class='diff hidden'>--- crates/basilisk-checker/src/rules/aliases_implicit.rs
++++ replace -= with /= in has_top_level_token
+@@ -167,17 +167,17 @@
+     let bytes = s.as_bytes();
+     let tok = token.as_bytes();
+     let tok_len = tok.len();
+     // `enumerate` yields each index exactly once — forward progress is
+     // structural, so mutating the loop counter is impossible.
+     for (i, &amp;byte) in bytes.iter().enumerate() {
+         match byte {
+             b'[' | b'(' | b'{' =&gt; depth += 1,
+-            b']' | b')' | b'}' =&gt; depth -= 1,
++            b']' | b')' | b'}' =&gt; depth /= /* ~ changed by cargo-mutants ~ */ 1,
+             _ if depth == 0 &amp;&amp; bytes.get(i..i + tok_len) == Some(tok) =&gt; {
+                 return true;
+             }
+             _ =&gt; {}
+         }
+     }
+     false
+ }
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:176:24</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>!=</code></td>
-      <td class='dur'>61.0s</td>
+      <td class='dur'>47.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-28')">▶ show diff</div>
@@ -1125,7 +1125,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:277:5</td>
       <td><code>check_vars</code>  <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>()</code></td>
-      <td class='dur'>41.6s</td>
+      <td class='dur'>34.9s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-29')">▶ show diff</div>
@@ -1315,7 +1315,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/aliases_implicit.rs:176:47</td>
       <td><code>has_top_level_token</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>*</code></td>
-      <td class='dur'>58.4s</td>
+      <td class='dur'>47.7s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-30')">▶ show diff</div>
@@ -1343,14 +1343,45 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:311:21</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:278:42</td>
       <td><code>check_vars</code>  <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>&amp;&amp;</code></td>
-      <td class='dur'>80.7s</td>
+      <td><code class='replacement'>||</code></td>
+      <td class='dur'>85.1s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-31')">▶ show diff</div>
         <pre id='diff-31' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
++++ replace &amp;&amp; with || in check_vars
+@@ -270,17 +270,17 @@
+     path: &amp;str,
+     diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
+     params: &amp;ParamMaps,
+     skip: &amp;SkipNames,
+     functions: &amp;[basilisk_resolver::FunctionInfo],
+     call_index: &amp;callable_check::CallIndex,
+ ) {
+     vars.iter()
+-        .filter(|var| var.has_annotation &amp;&amp; var.rhs_span.is_some())
++        .filter(|var| var.has_annotation || /* ~ changed by cargo-mutants ~ */ var.rhs_span.is_some())
+         .filter_map(|var| {
+             let annotation_text = extract_annotation(source, var.name_span)?;
+ 
+             // Quoted forward-reference annotations (e.g. `&quot;Literal[Color.RED]&quot;`)
+             // are not evaluated as value types here; skip to avoid false positives.
+             if annotation_text.starts_with('&quot;') || annotation_text.starts_with('\'') {
+                 return None;
+             }
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:311:21</td>
+      <td><code>check_vars</code>  <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>&amp;&amp;</code></td>
+      <td class='dur'>61.3s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-32')">▶ show diff</div>
+        <pre id='diff-32' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
 +++ replace || with &amp;&amp; in check_vars
 @@ -303,17 +303,17 @@
              }
@@ -1377,11 +1408,11 @@
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:284:49</td>
       <td><code>check_vars</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>&amp;&amp;</code></td>
-      <td class='dur'>118.3s</td>
+      <td class='dur'>82.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-32')">▶ show diff</div>
-        <pre id='diff-32' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
+        <div class='diff-toggle' onclick="toggle('diff-33')">▶ show diff</div>
+        <pre id='diff-33' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
 +++ replace || with &amp;&amp; in check_vars
 @@ -276,17 +276,17 @@
  ) {
@@ -1408,11 +1439,11 @@
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:310:21</td>
       <td><code>check_vars</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>&amp;&amp;</code></td>
-      <td class='dur'>80.7s</td>
+      <td class='dur'>53.9s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-33')">▶ show diff</div>
-        <pre id='diff-33' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
+        <div class='diff-toggle' onclick="toggle('diff-34')">▶ show diff</div>
+        <pre id='diff-34' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
 +++ replace || with &amp;&amp; in check_vars
 @@ -302,17 +302,17 @@
                  ));
@@ -1436,41 +1467,10 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:278:42</td>
-      <td><code>check_vars</code>  <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>||</code></td>
-      <td class='dur'>133.9s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-34')">▶ show diff</div>
-        <pre id='diff-34' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
-+++ replace &amp;&amp; with || in check_vars
-@@ -270,17 +270,17 @@
-     path: &amp;str,
-     diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
-     params: &amp;ParamMaps,
-     skip: &amp;SkipNames,
-     functions: &amp;[basilisk_resolver::FunctionInfo],
-     call_index: &amp;callable_check::CallIndex,
- ) {
-     vars.iter()
--        .filter(|var| var.has_annotation &amp;&amp; var.rhs_span.is_some())
-+        .filter(|var| var.has_annotation || /* ~ changed by cargo-mutants ~ */ var.rhs_span.is_some())
-         .filter_map(|var| {
-             let annotation_text = extract_annotation(source, var.name_span)?;
- 
-             // Quoted forward-reference annotations (e.g. `&quot;Literal[Color.RED]&quot;`)
-             // are not evaluated as value types here; skip to avoid false positives.
-             if annotation_text.starts_with('&quot;') || annotation_text.starts_with('\'') {
-                 return None;
-             }
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:309:30</td>
       <td><code>check_vars</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>!=</code></td>
-      <td class='dur'>24.1s</td>
+      <td class='dur'>17.0s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-35')">▶ show diff</div>
@@ -1501,7 +1501,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:323:21</td>
       <td><code>check_vars</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>&amp;&amp;</code></td>
-      <td class='dur'>32.4s</td>
+      <td class='dur'>25.5s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-36')">▶ show diff</div>
@@ -1532,7 +1532,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:412:17</td>
       <td><code>check_vars</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>&amp;&amp;</code></td>
-      <td class='dur'>37.4s</td>
+      <td class='dur'>25.5s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-37')">▶ show diff</div>
@@ -1563,7 +1563,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:576:5</td>
       <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>None</code></td>
-      <td class='dur'>34.8s</td>
+      <td class='dur'>30.1s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-38')">▶ show diff</div>
@@ -1615,7 +1615,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:576:5</td>
       <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>Some(&quot;&quot;)</code></td>
-      <td class='dur'>35.7s</td>
+      <td class='dur'>30.9s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-39')">▶ show diff</div>
@@ -1664,14 +1664,45 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:577:75</td>
+      <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>-</code></td>
+      <td class='dur'>17.5s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-40')">▶ show diff</div>
+        <pre id='diff-40' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
++++ replace + with - in extract_annotation
+@@ -569,17 +569,17 @@
+ /// Extract the annotation text from the source line containing `name_span`.
+ ///
+ /// Looks for `: &lt;annotation&gt;` on the same source line as the variable name,
+ /// stopping at the `=` sign that introduces the RHS.  Returns `None` if no
+ /// such pattern is found.
+ pub(super) fn extract_annotation(source: &amp;str, name_span: Span) -&gt; Option&lt;&amp;str&gt; {
+     // Find the byte offset of the start of the line containing the name.
+     let start = usize::try_from(name_span.start).ok()?;
+-    let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos + 1);
++    let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos - /* ~ changed by cargo-mutants ~ */ 1);
+     let line_end = source
+         .get(start..)?
+         .find('\n')
+         .map_or(source.len(), |pos| start + pos);
+ 
+     let line = source.get(line_start..line_end)?;
+ 
+     // Position of the name within the line.
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:576:5</td>
       <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>Some(&quot;xyzzy&quot;)</code></td>
       <td class='dur'>31.1s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-40')">▶ show diff</div>
-        <pre id='diff-40' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
+        <div class='diff-toggle' onclick="toggle('diff-41')">▶ show diff</div>
+        <pre id='diff-41' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
 +++ replace extract_annotation -&gt; Option&lt;&amp;str&gt; with Some(&quot;xyzzy&quot;)
 @@ -568,38 +568,10 @@
  
@@ -1716,45 +1747,45 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:577:75</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:581:43</td>
       <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>-</code></td>
-      <td class='dur'>26.8s</td>
+      <td><code class='replacement'>*</code></td>
+      <td class='dur'>25.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-41')">▶ show diff</div>
-        <pre id='diff-41' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
-+++ replace + with - in extract_annotation
-@@ -569,17 +569,17 @@
- /// Extract the annotation text from the source line containing `name_span`.
- ///
- /// Looks for `: &lt;annotation&gt;` on the same source line as the variable name,
- /// stopping at the `=` sign that introduces the RHS.  Returns `None` if no
+        <div class='diff-toggle' onclick="toggle('diff-42')">▶ show diff</div>
+        <pre id='diff-42' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
++++ replace + with * in extract_annotation
+@@ -573,17 +573,17 @@
  /// such pattern is found.
  pub(super) fn extract_annotation(source: &amp;str, name_span: Span) -&gt; Option&lt;&amp;str&gt; {
      // Find the byte offset of the start of the line containing the name.
      let start = usize::try_from(name_span.start).ok()?;
--    let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos + 1);
-+    let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos - /* ~ changed by cargo-mutants ~ */ 1);
+     let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos + 1);
      let line_end = source
          .get(start..)?
          .find('\n')
-         .map_or(source.len(), |pos| start + pos);
+-        .map_or(source.len(), |pos| start + pos);
++        .map_or(source.len(), |pos| start * /* ~ changed by cargo-mutants ~ */ pos);
  
      let line = source.get(line_start..line_end)?;
  
      // Position of the name within the line.
+     let name_offset = start.checked_sub(line_start)?;
+ 
+     // Find `: ` after the name position on this line.
+     let colon_pos = line.get(name_offset..)?.find(&quot;: &quot;)? + name_offset;
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:581:43</td>
       <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>-</code></td>
-      <td class='dur'>35.9s</td>
+      <td class='dur'>28.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-42')">▶ show diff</div>
-        <pre id='diff-42' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
+        <div class='diff-toggle' onclick="toggle('diff-43')">▶ show diff</div>
+        <pre id='diff-43' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
 +++ replace + with - in extract_annotation
 @@ -573,17 +573,17 @@
  /// such pattern is found.
@@ -1781,11 +1812,11 @@
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:589:58</td>
       <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>-</code></td>
-      <td class='dur'>34.5s</td>
+      <td class='dur'>26.7s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-43')">▶ show diff</div>
-        <pre id='diff-43' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
+        <div class='diff-toggle' onclick="toggle('diff-44')">▶ show diff</div>
+        <pre id='diff-44' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
 +++ replace + with - in extract_annotation
 @@ -581,17 +581,17 @@
          .map_or(source.len(), |pos| start + pos);
@@ -1809,76 +1840,14 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:581:43</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:590:33</td>
       <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>*</code></td>
-      <td class='dur'>44.3s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-44')">▶ show diff</div>
-        <pre id='diff-44' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
-+++ replace + with * in extract_annotation
-@@ -573,17 +573,17 @@
- /// such pattern is found.
- pub(super) fn extract_annotation(source: &amp;str, name_span: Span) -&gt; Option&lt;&amp;str&gt; {
-     // Find the byte offset of the start of the line containing the name.
-     let start = usize::try_from(name_span.start).ok()?;
-     let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos + 1);
-     let line_end = source
-         .get(start..)?
-         .find('\n')
--        .map_or(source.len(), |pos| start + pos);
-+        .map_or(source.len(), |pos| start * /* ~ changed by cargo-mutants ~ */ pos);
- 
-     let line = source.get(line_start..line_end)?;
- 
-     // Position of the name within the line.
-     let name_offset = start.checked_sub(line_start)?;
- 
-     // Find `: ` after the name position on this line.
-     let colon_pos = line.get(name_offset..)?.find(&quot;: &quot;)? + name_offset;
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:589:58</td>
-      <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>*</code></td>
-      <td class='dur'>35.3s</td>
+      <td><code class='replacement'>-</code></td>
+      <td class='dur'>16.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-45')">▶ show diff</div>
         <pre id='diff-45' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
-+++ replace + with * in extract_annotation
-@@ -581,17 +581,17 @@
-         .map_or(source.len(), |pos| start + pos);
- 
-     let line = source.get(line_start..line_end)?;
- 
-     // Position of the name within the line.
-     let name_offset = start.checked_sub(line_start)?;
- 
-     // Find `: ` after the name position on this line.
--    let colon_pos = line.get(name_offset..)?.find(&quot;: &quot;)? + name_offset;
-+    let colon_pos = line.get(name_offset..)?.find(&quot;: &quot;)? * /* ~ changed by cargo-mutants ~ */ name_offset;
-     let after_colon = colon_pos + 2; // skip ': '
- 
-     // Find `=` that ends the annotation (must be after the colon).
-     let annotation_end = line
-         .get(after_colon..)?
-         .find('=')
-         .map_or(line.len(), |p| after_colon + p);
- 
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:590:33</td>
-      <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>-</code></td>
-      <td class='dur'>23.3s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-46')">▶ show diff</div>
-        <pre id='diff-46' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
 +++ replace + with - in extract_annotation
 @@ -582,17 +582,17 @@
  
@@ -1902,16 +1871,17 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:590:33</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:589:58</td>
       <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>*</code></td>
-      <td class='dur'>30.6s</td>
+      <td class='dur'>31.0s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-47')">▶ show diff</div>
-        <pre id='diff-47' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
+        <div class='diff-toggle' onclick="toggle('diff-46')">▶ show diff</div>
+        <pre id='diff-46' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
 +++ replace + with * in extract_annotation
-@@ -582,17 +582,17 @@
+@@ -581,17 +581,17 @@
+         .map_or(source.len(), |pos| start + pos);
  
      let line = source.get(line_start..line_end)?;
  
@@ -1919,9 +1889,9 @@
      let name_offset = start.checked_sub(line_start)?;
  
      // Find `: ` after the name position on this line.
-     let colon_pos = line.get(name_offset..)?.find(&quot;: &quot;)? + name_offset;
--    let after_colon = colon_pos + 2; // skip ': '
-+    let after_colon = colon_pos * /* ~ changed by cargo-mutants ~ */ 2; // skip ': '
+-    let colon_pos = line.get(name_offset..)?.find(&quot;: &quot;)? + name_offset;
++    let colon_pos = line.get(name_offset..)?.find(&quot;: &quot;)? * /* ~ changed by cargo-mutants ~ */ name_offset;
+     let after_colon = colon_pos + 2; // skip ': '
  
      // Find `=` that ends the annotation (must be after the colon).
      let annotation_end = line
@@ -1929,49 +1899,17 @@
          .find('=')
          .map_or(line.len(), |p| after_colon + p);
  
-     let annotation = line.get(after_colon..annotation_end)?.trim();
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:577:75</td>
-      <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>*</code></td>
-      <td class='dur'>99.6s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-48')">▶ show diff</div>
-        <pre id='diff-48' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
-+++ replace + with * in extract_annotation
-@@ -569,17 +569,17 @@
- /// Extract the annotation text from the source line containing `name_span`.
- ///
- /// Looks for `: &lt;annotation&gt;` on the same source line as the variable name,
- /// stopping at the `=` sign that introduces the RHS.  Returns `None` if no
- /// such pattern is found.
- pub(super) fn extract_annotation(source: &amp;str, name_span: Span) -&gt; Option&lt;&amp;str&gt; {
-     // Find the byte offset of the start of the line containing the name.
-     let start = usize::try_from(name_span.start).ok()?;
--    let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos + 1);
-+    let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos * /* ~ changed by cargo-mutants ~ */ 1);
-     let line_end = source
-         .get(start..)?
-         .find('\n')
-         .map_or(source.len(), |pos| start + pos);
- 
-     let line = source.get(line_start..line_end)?;
- 
-     // Position of the name within the line.
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:596:45</td>
       <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>-</code></td>
-      <td class='dur'>24.5s</td>
+      <td class='dur'>17.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-49')">▶ show diff</div>
-        <pre id='diff-49' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
+        <div class='diff-toggle' onclick="toggle('diff-47')">▶ show diff</div>
+        <pre id='diff-47' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
 +++ replace + with - in extract_annotation
 @@ -588,17 +588,17 @@
      // Find `: ` after the name position on this line.
@@ -1995,14 +1933,45 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:590:33</td>
+      <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>*</code></td>
+      <td class='dur'>26.2s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-48')">▶ show diff</div>
+        <pre id='diff-48' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
++++ replace + with * in extract_annotation
+@@ -582,17 +582,17 @@
+ 
+     let line = source.get(line_start..line_end)?;
+ 
+     // Position of the name within the line.
+     let name_offset = start.checked_sub(line_start)?;
+ 
+     // Find `: ` after the name position on this line.
+     let colon_pos = line.get(name_offset..)?.find(&quot;: &quot;)? + name_offset;
+-    let after_colon = colon_pos + 2; // skip ': '
++    let after_colon = colon_pos * /* ~ changed by cargo-mutants ~ */ 2; // skip ': '
+ 
+     // Find `=` that ends the annotation (must be after the colon).
+     let annotation_end = line
+         .get(after_colon..)?
+         .find('=')
+         .map_or(line.len(), |p| after_colon + p);
+ 
+     let annotation = line.get(after_colon..annotation_end)?.trim();
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:596:45</td>
       <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>*</code></td>
-      <td class='dur'>30.7s</td>
+      <td class='dur'>19.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-50')">▶ show diff</div>
-        <pre id='diff-50' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
+        <div class='diff-toggle' onclick="toggle('diff-49')">▶ show diff</div>
+        <pre id='diff-49' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
 +++ replace + with * in extract_annotation
 @@ -588,17 +588,17 @@
      // Find `: ` after the name position on this line.
@@ -2026,10 +1995,41 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs:577:75</td>
+      <td><code>extract_annotation</code> -> Option<&str> <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>*</code></td>
+      <td class='dur'>90.4s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-50')">▶ show diff</div>
+        <pre id='diff-50' class='diff hidden'>--- crates/basilisk-checker/src/rules/assignment_compatibility/mod.rs
++++ replace + with * in extract_annotation
+@@ -569,17 +569,17 @@
+ /// Extract the annotation text from the source line containing `name_span`.
+ ///
+ /// Looks for `: &lt;annotation&gt;` on the same source line as the variable name,
+ /// stopping at the `=` sign that introduces the RHS.  Returns `None` if no
+ /// such pattern is found.
+ pub(super) fn extract_annotation(source: &amp;str, name_span: Span) -&gt; Option&lt;&amp;str&gt; {
+     // Find the byte offset of the start of the line containing the name.
+     let start = usize::try_from(name_span.start).ok()?;
+-    let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos + 1);
++    let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos * /* ~ changed by cargo-mutants ~ */ 1);
+     let line_end = source
+         .get(start..)?
+         .find('\n')
+         .map_or(source.len(), |pos| start + pos);
+ 
+     let line = source.get(line_start..line_end)?;
+ 
+     // Position of the name within the line.
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/classes_override.rs:145:5</td>
       <td><code>annotations_conflict</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>true</code></td>
-      <td class='dur'>31.9s</td>
+      <td class='dur'>28.5s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-51')">▶ show diff</div>
@@ -2063,7 +2063,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/classes_override.rs:145:5</td>
       <td><code>annotations_conflict</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>false</code></td>
-      <td class='dur'>43.4s</td>
+      <td class='dur'>26.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-52')">▶ show diff</div>
@@ -2097,7 +2097,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/classes_override.rs:147:59</td>
       <td><code>annotations_conflict</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>==</code></td>
-      <td class='dur'>42.8s</td>
+      <td class='dur'>21.9s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-53')">▶ show diff</div>
@@ -2128,7 +2128,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/directives_assert_type.rs:31:9</td>
       <td><code><impl Rule for InvalidAssertTypeCall>::check</code>  <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>()</code></td>
-      <td class='dur'>43.0s</td>
+      <td class='dur'>30.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-54')">▶ show diff</div>
@@ -2169,7 +2169,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/directives_assert_type.rs:31:76</td>
       <td><code><impl Rule for InvalidAssertTypeCall>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>==</code></td>
-      <td class='dur'>36.8s</td>
+      <td class='dur'>30.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-55')">▶ show diff</div>
@@ -2197,45 +2197,14 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/directives_reveal_type.rs:30:76</td>
-      <td><code><impl Rule for InvalidRevealTypeCall>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>==</code></td>
-      <td class='dur'>36.9s</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/directives_reveal_type.rs:30:9</td>
+      <td><code><impl Rule for InvalidRevealTypeCall>::check</code>  <span class='badge genre'>FnValue</span></td>
+      <td><code class='replacement'>()</code></td>
+      <td class='dur'>41.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-56')">▶ show diff</div>
         <pre id='diff-56' class='diff hidden'>--- crates/basilisk-checker/src/rules/directives_reveal_type.rs
-+++ replace != with == in &lt;impl Rule for InvalidRevealTypeCall&gt;::check
-@@ -22,17 +22,17 @@
- 
- impl Rule for InvalidRevealTypeCall {
-     fn check(
-         &amp;self,
-         module: &amp;ResolvedModule,
-         _ctx: &amp;super::CheckContext,
-         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
-     ) {
--        for call in module.reveal_type_calls.iter().filter(|c| c.arg_count != 1) {
-+        for call in module.reveal_type_calls.iter().filter(|c| c.arg_count == /* ~ changed by cargo-mutants ~ */ 1) {
-             let arg_count = call.arg_count;
-             diagnostics.push(error_diagnostic_owned(
-                 CODE.clone(),
-                 format!(
-                     &quot;`reveal_type()` requires exactly 1 argument, got {arg_count}&quot;
-                 ),
-                 call.span,
-                 &amp;module.path,
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/directives_reveal_type.rs:30:9</td>
-      <td><code><impl Rule for InvalidRevealTypeCall>::check</code>  <span class='badge genre'>FnValue</span></td>
-      <td><code class='replacement'>()</code></td>
-      <td class='dur'>52.8s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-57')">▶ show diff</div>
-        <pre id='diff-57' class='diff hidden'>--- crates/basilisk-checker/src/rules/directives_reveal_type.rs
 +++ replace &lt;impl Rule for InvalidRevealTypeCall&gt;::check with ()
 @@ -22,26 +22,11 @@
  
@@ -2268,10 +2237,41 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/directives_reveal_type.rs:30:76</td>
+      <td><code><impl Rule for InvalidRevealTypeCall>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>==</code></td>
+      <td class='dur'>36.7s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-57')">▶ show diff</div>
+        <pre id='diff-57' class='diff hidden'>--- crates/basilisk-checker/src/rules/directives_reveal_type.rs
++++ replace != with == in &lt;impl Rule for InvalidRevealTypeCall&gt;::check
+@@ -22,17 +22,17 @@
+ 
+ impl Rule for InvalidRevealTypeCall {
+     fn check(
+         &amp;self,
+         module: &amp;ResolvedModule,
+         _ctx: &amp;super::CheckContext,
+         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
+     ) {
+-        for call in module.reveal_type_calls.iter().filter(|c| c.arg_count != 1) {
++        for call in module.reveal_type_calls.iter().filter(|c| c.arg_count == /* ~ changed by cargo-mutants ~ */ 1) {
+             let arg_count = call.arg_count;
+             diagnostics.push(error_diagnostic_owned(
+                 CODE.clone(),
+                 format!(
+                     &quot;`reveal_type()` requires exactly 1 argument, got {arg_count}&quot;
+                 ),
+                 call.span,
+                 &amp;module.path,
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/generics_base_class.rs:28:9</td>
       <td><code><impl Rule for DuplicateTypeVarInGeneric>::check</code>  <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>()</code></td>
-      <td class='dur'>48.8s</td>
+      <td class='dur'>32.1s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-58')">▶ show diff</div>
@@ -2321,7 +2321,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/match_exhaustiveness.rs:39:9</td>
       <td><code><impl Rule for NonExhaustiveMatch>::check</code>  <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>()</code></td>
-      <td class='dur'>57.7s</td>
+      <td class='dur'>30.1s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-59')">▶ show diff</div>
@@ -2353,45 +2353,14 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/match_exhaustiveness.rs:42:28</td>
-      <td><code><impl Rule for NonExhaustiveMatch>::check</code>  <span class='badge genre'>UnaryOperator</span></td>
-      <td><code class='replacement'></code></td>
-      <td class='dur'>50.5s</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/match_exhaustiveness.rs:42:47</td>
+      <td><code><impl Rule for NonExhaustiveMatch>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>||</code></td>
+      <td class='dur'>32.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-60')">▶ show diff</div>
         <pre id='diff-60' class='diff hidden'>--- crates/basilisk-checker/src/rules/match_exhaustiveness.rs
-+++ delete ! in &lt;impl Rule for NonExhaustiveMatch&gt;::check
-@@ -34,17 +34,17 @@
-         &amp;self,
-         module: &amp;ResolvedModule,
-         _ctx: &amp;super::CheckContext,
-         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
-     ) {
-         module
-             .match_stmts
-             .iter()
--            .filter(|stmt| !stmt.has_wildcard &amp;&amp; !stmt.has_structural_pattern)
-+            .filter(|stmt|  /* ~ changed by cargo-mutants ~ */stmt.has_wildcard &amp;&amp; !stmt.has_structural_pattern)
-             .for_each(|stmt| diagnostics.push(make_diagnostic(stmt, &amp;module.path)));
-     }
- }
- 
- fn make_diagnostic(stmt: &amp;MatchStmtInfo, path: &amp;str) -&gt; Diagnostic {
-     error_diagnostic_owned(
-         CODE.clone(),
-         &quot;Non-exhaustive `match` statement — no wildcard `case _:` branch&quot;.to_owned(),
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/match_exhaustiveness.rs:42:47</td>
-      <td><code><impl Rule for NonExhaustiveMatch>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>||</code></td>
-      <td class='dur'>63.4s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-61')">▶ show diff</div>
-        <pre id='diff-61' class='diff hidden'>--- crates/basilisk-checker/src/rules/match_exhaustiveness.rs
 +++ replace &amp;&amp; with || in &lt;impl Rule for NonExhaustiveMatch&gt;::check
 @@ -34,17 +34,17 @@
          &amp;self,
@@ -2415,10 +2384,41 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/match_exhaustiveness.rs:42:28</td>
+      <td><code><impl Rule for NonExhaustiveMatch>::check</code>  <span class='badge genre'>UnaryOperator</span></td>
+      <td><code class='replacement'></code></td>
+      <td class='dur'>33.0s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-62')">▶ show diff</div>
+        <pre id='diff-62' class='diff hidden'>--- crates/basilisk-checker/src/rules/match_exhaustiveness.rs
++++ delete ! in &lt;impl Rule for NonExhaustiveMatch&gt;::check
+@@ -34,17 +34,17 @@
+         &amp;self,
+         module: &amp;ResolvedModule,
+         _ctx: &amp;super::CheckContext,
+         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
+     ) {
+         module
+             .match_stmts
+             .iter()
+-            .filter(|stmt| !stmt.has_wildcard &amp;&amp; !stmt.has_structural_pattern)
++            .filter(|stmt|  /* ~ changed by cargo-mutants ~ */stmt.has_wildcard &amp;&amp; !stmt.has_structural_pattern)
+             .for_each(|stmt| diagnostics.push(make_diagnostic(stmt, &amp;module.path)));
+     }
+ }
+ 
+ fn make_diagnostic(stmt: &amp;MatchStmtInfo, path: &amp;str) -&gt; Diagnostic {
+     error_diagnostic_owned(
+         CODE.clone(),
+         &quot;Non-exhaustive `match` statement — no wildcard `case _:` branch&quot;.to_owned(),
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/match_exhaustiveness.rs:42:50</td>
       <td><code><impl Rule for NonExhaustiveMatch>::check</code>  <span class='badge genre'>UnaryOperator</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>31.5s</td>
+      <td class='dur'>25.5s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-63')">▶ show diff</div>
@@ -2446,119 +2446,14 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:60:28</td>
-      <td><code><impl Rule for MissingParameterAnnotation>::check</code>  <span class='badge genre'>UnaryOperator</span></td>
-      <td><code class='replacement'></code></td>
-      <td class='dur'>29.3s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-64')">▶ show diff</div>
-        <pre id='diff-64' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
-+++ delete ! in &lt;impl Rule for MissingParameterAnnotation&gt;::check
-@@ -52,17 +52,17 @@
-         &amp;self,
-         module: &amp;ResolvedModule,
-         _ctx: &amp;super::CheckContext,
-         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
-     ) {
-         module
-             .functions
-             .iter()
--            .filter(|func| !is_stub_context(func, &amp;module.classes))
-+            .filter(|func|  /* ~ changed by cargo-mutants ~ */is_stub_context(func, &amp;module.classes))
-             .for_each(|func| check_function(func, &amp;module.path, diagnostics));
-     }
- }
- 
- // Implements [TYPEINF-FUNC-SELFCLS] — only the first conventional receiver of
- // an actual method is exempt. A free function parameter merely named `self` or
- // `cls` has no implicit receiver type.
- fn check_function(func: &amp;FunctionInfo, path: &amp;str, out: &amp;mut Vec&lt;Diagnostic&gt;) {
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:57:9</td>
-      <td><code><impl Rule for MissingParameterAnnotation>::check</code>  <span class='badge genre'>FnValue</span></td>
-      <td><code class='replacement'>()</code></td>
-      <td class='dur'>43.4s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-65')">▶ show diff</div>
-        <pre id='diff-65' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
-+++ replace &lt;impl Rule for MissingParameterAnnotation&gt;::check with ()
-@@ -49,21 +49,17 @@
-     }
- 
-     fn check(
-         &amp;self,
-         module: &amp;ResolvedModule,
-         _ctx: &amp;super::CheckContext,
-         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
-     ) {
--        module
--            .functions
--            .iter()
--            .filter(|func| !is_stub_context(func, &amp;module.classes))
--            .for_each(|func| check_function(func, &amp;module.path, diagnostics));
-+        () /* ~ changed by cargo-mutants ~ */
-     }
- }
- 
- // Implements [TYPEINF-FUNC-SELFCLS] — only the first conventional receiver of
- // an actual method is exempt. A free function parameter merely named `self` or
- // `cls` has no implicit receiver type.
- fn check_function(func: &amp;FunctionInfo, path: &amp;str, out: &amp;mut Vec&lt;Diagnostic&gt;) {
-     func.parameters
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:69:5</td>
-      <td><code>check_function</code>  <span class='badge genre'>FnValue</span></td>
-      <td><code class='replacement'>()</code></td>
-      <td class='dur'>36.4s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-66')">▶ show diff</div>
-        <pre id='diff-66' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
-+++ replace check_function with ()
-@@ -61,25 +61,17 @@
-             .for_each(|func| check_function(func, &amp;module.path, diagnostics));
-     }
- }
- 
- // Implements [TYPEINF-FUNC-SELFCLS] — only the first conventional receiver of
- // an actual method is exempt. A free function parameter merely named `self` or
- // `cls` has no implicit receiver type.
- fn check_function(func: &amp;FunctionInfo, path: &amp;str, out: &amp;mut Vec&lt;Diagnostic&gt;) {
--    func.parameters
--        .iter()
--        .enumerate()
--        .filter(|(index, p)| {
--            !p.has_annotation
--                &amp;&amp; !is_implicit_receiver(func, *index, p)
--                &amp;&amp; !default_determines_type(p)
--        })
--        .for_each(|(_, p)| out.push(make_diagnostic(p, path)));
-+    () /* ~ changed by cargo-mutants ~ */
- }
- 
- fn is_implicit_receiver(func: &amp;FunctionInfo, index: usize, param: &amp;ParameterInfo) -&gt; bool {
-     if index != 0
-         || func.class_name.is_none()
-         || func.decorators.iter().any(|name| name == &quot;staticmethod&quot;)
-     {
-         return false;
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/generics_syntax_declarations_2.rs:35:9</td>
       <td><code><impl Rule for BoundedTypeVarAttrAccess>::check</code>  <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>()</code></td>
-      <td class='dur'>148.3s</td>
+      <td class='dur'>82.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-67')">▶ show diff</div>
-        <pre id='diff-67' class='diff hidden'>--- crates/basilisk-checker/src/rules/generics_syntax_declarations_2.rs
+        <div class='diff-toggle' onclick="toggle('diff-64')">▶ show diff</div>
+        <pre id='diff-64' class='diff hidden'>--- crates/basilisk-checker/src/rules/generics_syntax_declarations_2.rs
 +++ replace &lt;impl Rule for BoundedTypeVarAttrAccess&gt;::check with ()
 @@ -27,39 +27,11 @@
  
@@ -2604,10 +2499,115 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:57:9</td>
+      <td><code><impl Rule for MissingParameterAnnotation>::check</code>  <span class='badge genre'>FnValue</span></td>
+      <td><code class='replacement'>()</code></td>
+      <td class='dur'>30.5s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-65')">▶ show diff</div>
+        <pre id='diff-65' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
++++ replace &lt;impl Rule for MissingParameterAnnotation&gt;::check with ()
+@@ -49,21 +49,17 @@
+     }
+ 
+     fn check(
+         &amp;self,
+         module: &amp;ResolvedModule,
+         _ctx: &amp;super::CheckContext,
+         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
+     ) {
+-        module
+-            .functions
+-            .iter()
+-            .filter(|func| !is_stub_context(func, &amp;module.classes))
+-            .for_each(|func| check_function(func, &amp;module.path, diagnostics));
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ // Implements [TYPEINF-FUNC-SELFCLS] — only the first conventional receiver of
+ // an actual method is exempt. A free function parameter merely named `self` or
+ // `cls` has no implicit receiver type.
+ fn check_function(func: &amp;FunctionInfo, path: &amp;str, out: &amp;mut Vec&lt;Diagnostic&gt;) {
+     func.parameters
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:60:28</td>
+      <td><code><impl Rule for MissingParameterAnnotation>::check</code>  <span class='badge genre'>UnaryOperator</span></td>
+      <td><code class='replacement'></code></td>
+      <td class='dur'>31.4s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-66')">▶ show diff</div>
+        <pre id='diff-66' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
++++ delete ! in &lt;impl Rule for MissingParameterAnnotation&gt;::check
+@@ -52,17 +52,17 @@
+         &amp;self,
+         module: &amp;ResolvedModule,
+         _ctx: &amp;super::CheckContext,
+         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
+     ) {
+         module
+             .functions
+             .iter()
+-            .filter(|func| !is_stub_context(func, &amp;module.classes))
++            .filter(|func|  /* ~ changed by cargo-mutants ~ */is_stub_context(func, &amp;module.classes))
+             .for_each(|func| check_function(func, &amp;module.path, diagnostics));
+     }
+ }
+ 
+ // Implements [TYPEINF-FUNC-SELFCLS] — only the first conventional receiver of
+ // an actual method is exempt. A free function parameter merely named `self` or
+ // `cls` has no implicit receiver type.
+ fn check_function(func: &amp;FunctionInfo, path: &amp;str, out: &amp;mut Vec&lt;Diagnostic&gt;) {
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:69:5</td>
+      <td><code>check_function</code>  <span class='badge genre'>FnValue</span></td>
+      <td><code class='replacement'>()</code></td>
+      <td class='dur'>24.2s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-67')">▶ show diff</div>
+        <pre id='diff-67' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
++++ replace check_function with ()
+@@ -61,25 +61,17 @@
+             .for_each(|func| check_function(func, &amp;module.path, diagnostics));
+     }
+ }
+ 
+ // Implements [TYPEINF-FUNC-SELFCLS] — only the first conventional receiver of
+ // an actual method is exempt. A free function parameter merely named `self` or
+ // `cls` has no implicit receiver type.
+ fn check_function(func: &amp;FunctionInfo, path: &amp;str, out: &amp;mut Vec&lt;Diagnostic&gt;) {
+-    func.parameters
+-        .iter()
+-        .enumerate()
+-        .filter(|(index, p)| {
+-            !p.has_annotation
+-                &amp;&amp; !is_implicit_receiver(func, *index, p)
+-                &amp;&amp; !default_determines_type(p)
+-        })
+-        .for_each(|(_, p)| out.push(make_diagnostic(p, path)));
++    () /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ fn is_implicit_receiver(func: &amp;FunctionInfo, index: usize, param: &amp;ParameterInfo) -&gt; bool {
+     if index != 0
+         || func.class_name.is_none()
+         || func.decorators.iter().any(|name| name == &quot;staticmethod&quot;)
+     {
+         return false;
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:75:17</td>
       <td><code>check_function</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>||</code></td>
-      <td class='dur'>27.2s</td>
+      <td class='dur'>26.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-68')">▶ show diff</div>
@@ -2635,45 +2635,14 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:74:17</td>
-      <td><code>check_function</code>  <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>||</code></td>
-      <td class='dur'>19.9s</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:73:13</td>
+      <td><code>check_function</code>  <span class='badge genre'>UnaryOperator</span></td>
+      <td><code class='replacement'></code></td>
+      <td class='dur'>33.1s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-69')">▶ show diff</div>
         <pre id='diff-69' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
-+++ replace &amp;&amp; with || in check_function
-@@ -66,17 +66,17 @@
- // an actual method is exempt. A free function parameter merely named `self` or
- // `cls` has no implicit receiver type.
- fn check_function(func: &amp;FunctionInfo, path: &amp;str, out: &amp;mut Vec&lt;Diagnostic&gt;) {
-     func.parameters
-         .iter()
-         .enumerate()
-         .filter(|(index, p)| {
-             !p.has_annotation
--                &amp;&amp; !is_implicit_receiver(func, *index, p)
-+                || /* ~ changed by cargo-mutants ~ */ !is_implicit_receiver(func, *index, p)
-                 &amp;&amp; !default_determines_type(p)
-         })
-         .for_each(|(_, p)| out.push(make_diagnostic(p, path)));
- }
- 
- fn is_implicit_receiver(func: &amp;FunctionInfo, index: usize, param: &amp;ParameterInfo) -&gt; bool {
-     if index != 0
-         || func.class_name.is_none()
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:73:13</td>
-      <td><code>check_function</code>  <span class='badge genre'>UnaryOperator</span></td>
-      <td><code class='replacement'></code></td>
-      <td class='dur'>27.8s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-71')">▶ show diff</div>
-        <pre id='diff-71' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
 +++ delete ! in check_function
 @@ -65,17 +65,17 @@
  // Implements [TYPEINF-FUNC-SELFCLS] — only the first conventional receiver of
@@ -2697,44 +2666,72 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:40:9</td>
-      <td><code><impl Rule for MissingReturnAnnotation>::opt_in_spec</code> -> Option<crate::rule_tags::OptInSpec> <span class='badge genre'>FnValue</span></td>
-      <td><code class='replacement'>None</code></td>
-      <td class='dur'>17.1s</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:74:17</td>
+      <td><code>check_function</code>  <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>||</code></td>
+      <td class='dur'>37.1s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-70')">▶ show diff</div>
+        <pre id='diff-70' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
++++ replace &amp;&amp; with || in check_function
+@@ -66,17 +66,17 @@
+ // an actual method is exempt. A free function parameter merely named `self` or
+ // `cls` has no implicit receiver type.
+ fn check_function(func: &amp;FunctionInfo, path: &amp;str, out: &amp;mut Vec&lt;Diagnostic&gt;) {
+     func.parameters
+         .iter()
+         .enumerate()
+         .filter(|(index, p)| {
+             !p.has_annotation
+-                &amp;&amp; !is_implicit_receiver(func, *index, p)
++                || /* ~ changed by cargo-mutants ~ */ !is_implicit_receiver(func, *index, p)
+                 &amp;&amp; !default_determines_type(p)
+         })
+         .for_each(|(_, p)| out.push(make_diagnostic(p, path)));
+ }
+ 
+ fn is_implicit_receiver(func: &amp;FunctionInfo, index: usize, param: &amp;ParameterInfo) -&gt; bool {
+     if index != 0
+         || func.class_name.is_none()
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:74:20</td>
+      <td><code>check_function</code>  <span class='badge genre'>UnaryOperator</span></td>
+      <td><code class='replacement'></code></td>
+      <td class='dur'>37.1s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-73')">▶ show diff</div>
-        <pre id='diff-73' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_return_annotation.rs
-+++ replace &lt;impl Rule for MissingReturnAnnotation&gt;::opt_in_spec -&gt; Option&lt;crate::rule_tags::OptInSpec&gt; with None
-@@ -32,20 +32,17 @@
+        <pre id='diff-73' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
++++ delete ! in check_function
+@@ -66,17 +66,17 @@
+ // an actual method is exempt. A free function parameter merely named `self` or
+ // `cls` has no implicit receiver type.
+ fn check_function(func: &amp;FunctionInfo, path: &amp;str, out: &amp;mut Vec&lt;Diagnostic&gt;) {
+     func.parameters
+         .iter()
+         .enumerate()
+         .filter(|(index, p)| {
+             !p.has_annotation
+-                &amp;&amp; !is_implicit_receiver(func, *index, p)
++                &amp;&amp;  /* ~ changed by cargo-mutants ~ */is_implicit_receiver(func, *index, p)
+                 &amp;&amp; !default_determines_type(p)
+         })
+         .for_each(|(_, p)| out.push(make_diagnostic(p, path)));
+ }
  
- /// Emits BSK-0002 for every function without a return type annotation.
- ///
- /// Skipped for `@overload`, `@abstractmethod`, and `Protocol` methods.
- pub(crate) struct MissingReturnAnnotation;
- 
- impl Rule for MissingReturnAnnotation {
-     fn opt_in_spec(&amp;self) -&gt; Option&lt;crate::rule_tags::OptInSpec&gt; {
--        Some(crate::rule_tags::OptInSpec {
--            code: CODE.code,
--            tags: &amp;[&quot;strictness&quot;],
--        })
-+        None /* ~ changed by cargo-mutants ~ */
-     }
- 
-     fn check(
-         &amp;self,
-         module: &amp;ResolvedModule,
-         _ctx: &amp;super::CheckContext,
-         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
-     ) {
+ fn is_implicit_receiver(func: &amp;FunctionInfo, index: usize, param: &amp;ParameterInfo) -&gt; bool {
+     if index != 0
+         || func.class_name.is_none()
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:75:20</td>
       <td><code>check_function</code>  <span class='badge genre'>UnaryOperator</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>28.7s</td>
+      <td class='dur'>25.7s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-74')">▶ show diff</div>
@@ -2762,45 +2759,79 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:74:20</td>
-      <td><code>check_function</code>  <span class='badge genre'>UnaryOperator</span></td>
-      <td><code class='replacement'></code></td>
-      <td class='dur'>34.0s</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:40:9</td>
+      <td><code><impl Rule for MissingReturnAnnotation>::opt_in_spec</code> -> Option<crate::rule_tags::OptInSpec> <span class='badge genre'>FnValue</span></td>
+      <td><code class='replacement'>None</code></td>
+      <td class='dur'>15.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-75')">▶ show diff</div>
-        <pre id='diff-75' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
-+++ delete ! in check_function
-@@ -66,17 +66,17 @@
- // an actual method is exempt. A free function parameter merely named `self` or
- // `cls` has no implicit receiver type.
- fn check_function(func: &amp;FunctionInfo, path: &amp;str, out: &amp;mut Vec&lt;Diagnostic&gt;) {
-     func.parameters
-         .iter()
-         .enumerate()
-         .filter(|(index, p)| {
-             !p.has_annotation
--                &amp;&amp; !is_implicit_receiver(func, *index, p)
-+                &amp;&amp;  /* ~ changed by cargo-mutants ~ */is_implicit_receiver(func, *index, p)
-                 &amp;&amp; !default_determines_type(p)
-         })
-         .for_each(|(_, p)| out.push(make_diagnostic(p, path)));
+        <pre id='diff-75' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_return_annotation.rs
++++ replace &lt;impl Rule for MissingReturnAnnotation&gt;::opt_in_spec -&gt; Option&lt;crate::rule_tags::OptInSpec&gt; with None
+@@ -32,20 +32,17 @@
+ 
+ /// Emits BSK-0002 for every function without a return type annotation.
+ ///
+ /// Skipped for `@overload`, `@abstractmethod`, and `Protocol` methods.
+ pub(crate) struct MissingReturnAnnotation;
+ 
+ impl Rule for MissingReturnAnnotation {
+     fn opt_in_spec(&amp;self) -&gt; Option&lt;crate::rule_tags::OptInSpec&gt; {
+-        Some(crate::rule_tags::OptInSpec {
+-            code: CODE.code,
+-            tags: &amp;[&quot;strictness&quot;],
+-        })
++        None /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     fn check(
+         &amp;self,
+         module: &amp;ResolvedModule,
+         _ctx: &amp;super::CheckContext,
+         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
+     ) {
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:58:21</td>
+      <td><code><impl Rule for MissingReturnAnnotation>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>||</code></td>
+      <td class='dur'>27.3s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-76')">▶ show diff</div>
+        <pre id='diff-76' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_return_annotation.rs
++++ replace &amp;&amp; with || in &lt;impl Rule for MissingReturnAnnotation&gt;::check
+@@ -50,17 +50,17 @@
+         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
+     ) {
+         module
+             .functions
+             .iter()
+             .filter(|func| {
+                 !func.return_annotation.is_present()
+                     &amp;&amp; !is_stub_context(func, &amp;module.classes)
+-                    &amp;&amp; !return_type_is_inferable(func)
++                    || /* ~ changed by cargo-mutants ~ */ !return_type_is_inferable(func)
+             })
+             .for_each(|func| diagnostics.push(make_diagnostic(func, &amp;module.path)));
+     }
  }
  
- fn is_implicit_receiver(func: &amp;FunctionInfo, index: usize, param: &amp;ParameterInfo) -&gt; bool {
-     if index != 0
-         || func.class_name.is_none()
+ /// Implements [TYPEINF-FUNC-RETURN]: `true` when the current engine already
+ /// infers the full return type, making an annotation redundant.
+ ///
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:52:9</td>
       <td><code><impl Rule for MissingReturnAnnotation>::check</code>  <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>()</code></td>
-      <td class='dur'>35.6s</td>
+      <td class='dur'>35.8s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-76')">▶ show diff</div>
-        <pre id='diff-76' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_return_annotation.rs
+        <div class='diff-toggle' onclick="toggle('diff-77')">▶ show diff</div>
+        <pre id='diff-77' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_return_annotation.rs
 +++ replace &lt;impl Rule for MissingReturnAnnotation&gt;::check with ()
 @@ -44,25 +44,17 @@
      }
@@ -2832,76 +2863,14 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:58:21</td>
-      <td><code><impl Rule for MissingReturnAnnotation>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>||</code></td>
-      <td class='dur'>37.9s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-77')">▶ show diff</div>
-        <pre id='diff-77' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_return_annotation.rs
-+++ replace &amp;&amp; with || in &lt;impl Rule for MissingReturnAnnotation&gt;::check
-@@ -50,17 +50,17 @@
-         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
-     ) {
-         module
-             .functions
-             .iter()
-             .filter(|func| {
-                 !func.return_annotation.is_present()
-                     &amp;&amp; !is_stub_context(func, &amp;module.classes)
--                    &amp;&amp; !return_type_is_inferable(func)
-+                    || /* ~ changed by cargo-mutants ~ */ !return_type_is_inferable(func)
-             })
-             .for_each(|func| diagnostics.push(make_diagnostic(func, &amp;module.path)));
-     }
- }
- 
- /// Implements [TYPEINF-FUNC-RETURN]: `true` when the current engine already
- /// infers the full return type, making an annotation redundant.
- ///
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:57:21</td>
-      <td><code><impl Rule for MissingReturnAnnotation>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>||</code></td>
-      <td class='dur'>41.8s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-78')">▶ show diff</div>
-        <pre id='diff-78' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_return_annotation.rs
-+++ replace &amp;&amp; with || in &lt;impl Rule for MissingReturnAnnotation&gt;::check
-@@ -49,17 +49,17 @@
-         _ctx: &amp;super::CheckContext,
-         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
-     ) {
-         module
-             .functions
-             .iter()
-             .filter(|func| {
-                 !func.return_annotation.is_present()
--                    &amp;&amp; !is_stub_context(func, &amp;module.classes)
-+                    || /* ~ changed by cargo-mutants ~ */ !is_stub_context(func, &amp;module.classes)
-                     &amp;&amp; !return_type_is_inferable(func)
-             })
-             .for_each(|func| diagnostics.push(make_diagnostic(func, &amp;module.path)));
-     }
- }
- 
- /// Implements [TYPEINF-FUNC-RETURN]: `true` when the current engine already
- /// infers the full return type, making an annotation redundant.
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:56:17</td>
       <td><code><impl Rule for MissingReturnAnnotation>::check</code>  <span class='badge genre'>UnaryOperator</span></td>
       <td><code class='replacement'></code></td>
       <td class='dur'>39.8s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-79')">▶ show diff</div>
-        <pre id='diff-79' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_return_annotation.rs
+        <div class='diff-toggle' onclick="toggle('diff-78')">▶ show diff</div>
+        <pre id='diff-78' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_return_annotation.rs
 +++ delete ! in &lt;impl Rule for MissingReturnAnnotation&gt;::check
 @@ -48,17 +48,17 @@
          module: &amp;ResolvedModule,
@@ -2925,10 +2894,41 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:57:21</td>
+      <td><code><impl Rule for MissingReturnAnnotation>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>||</code></td>
+      <td class='dur'>43.6s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-79')">▶ show diff</div>
+        <pre id='diff-79' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_return_annotation.rs
++++ replace &amp;&amp; with || in &lt;impl Rule for MissingReturnAnnotation&gt;::check
+@@ -49,17 +49,17 @@
+         _ctx: &amp;super::CheckContext,
+         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
+     ) {
+         module
+             .functions
+             .iter()
+             .filter(|func| {
+                 !func.return_annotation.is_present()
+-                    &amp;&amp; !is_stub_context(func, &amp;module.classes)
++                    || /* ~ changed by cargo-mutants ~ */ !is_stub_context(func, &amp;module.classes)
+                     &amp;&amp; !return_type_is_inferable(func)
+             })
+             .for_each(|func| diagnostics.push(make_diagnostic(func, &amp;module.path)));
+     }
+ }
+ 
+ /// Implements [TYPEINF-FUNC-RETURN]: `true` when the current engine already
+ /// infers the full return type, making an annotation redundant.
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:57:24</td>
       <td><code><impl Rule for MissingReturnAnnotation>::check</code>  <span class='badge genre'>UnaryOperator</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>27.6s</td>
+      <td class='dur'>28.9s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-80')">▶ show diff</div>
@@ -2959,7 +2959,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:58:24</td>
       <td><code><impl Rule for MissingReturnAnnotation>::check</code>  <span class='badge genre'>UnaryOperator</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>35.8s</td>
+      <td class='dur'>28.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-81')">▶ show diff</div>
@@ -2990,7 +2990,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:73:5</td>
       <td><code>return_type_is_inferable</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>true</code></td>
-      <td class='dur'>42.4s</td>
+      <td class='dur'>36.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-82')">▶ show diff</div>
@@ -3025,7 +3025,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:73:5</td>
       <td><code>return_type_is_inferable</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>false</code></td>
-      <td class='dur'>43.9s</td>
+      <td class='dur'>38.5s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-83')">▶ show diff</div>
@@ -3060,7 +3060,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:74:9</td>
       <td><code>return_type_is_inferable</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>||</code></td>
-      <td class='dur'>31.8s</td>
+      <td class='dur'>41.8s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-84')">▶ show diff</div>
@@ -3091,7 +3091,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:73:5</td>
       <td><code>return_type_is_inferable</code> -> bool <span class='badge genre'>UnaryOperator</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>23.1s</td>
+      <td class='dur'>38.9s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-85')">▶ show diff</div>
@@ -3122,7 +3122,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:77:39</td>
       <td><code>return_type_is_inferable</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>&amp;&amp;</code></td>
-      <td class='dur'>24.8s</td>
+      <td class='dur'>26.7s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-88')">▶ show diff</div>
@@ -3150,14 +3150,45 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:26:9</td>
-      <td><code><impl Rule for MissingVariableType>::opt_in_spec</code> -> Option<crate::rule_tags::OptInSpec> <span class='badge genre'>FnValue</span></td>
-      <td><code class='replacement'>None</code></td>
-      <td class='dur'>17.9s</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:77:24</td>
+      <td><code>return_type_is_inferable</code> -> bool <span class='badge genre'>UnaryOperator</span></td>
+      <td><code class='replacement'></code></td>
+      <td class='dur'>32.0s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-89')">▶ show diff</div>
-        <pre id='diff-89' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
+        <pre id='diff-89' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_return_annotation.rs
++++ delete ! in return_type_is_inferable
+@@ -69,17 +69,17 @@
+ ///   the union of those types is inferred.
+ /// - Generators are excluded: their `Generator[...]` type is not inferable
+ ///   from `return` statements, so they still require an annotation.
+ fn return_type_is_inferable(func: &amp;FunctionInfo) -&gt; bool {
+     !func.is_generator
+         &amp;&amp; func
+             .return_stmts
+             .iter()
+-            .all(|ret| !ret.has_value || rhs_fully_determines_type(&amp;ret.rhs_kind))
++            .all(|ret|  /* ~ changed by cargo-mutants ~ */ret.has_value || rhs_fully_determines_type(&amp;ret.rhs_kind))
+ }
+ 
+ fn make_diagnostic(func: &amp;FunctionInfo, path: &amp;str) -&gt; Diagnostic {
+     error_diagnostic_owned(
+         CODE.clone(),
+         format!(
+             &quot;Missing return type annotation for function `{}`&quot;,
+             func.name
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:26:9</td>
+      <td><code><impl Rule for MissingVariableType>::opt_in_spec</code> -> Option<crate::rule_tags::OptInSpec> <span class='badge genre'>FnValue</span></td>
+      <td><code class='replacement'>None</code></td>
+      <td class='dur'>18.9s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-90')">▶ show diff</div>
+        <pre id='diff-90' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
 +++ replace &lt;impl Rule for MissingVariableType&gt;::opt_in_spec -&gt; Option&lt;crate::rule_tags::OptInSpec&gt; with None
 @@ -18,20 +18,17 @@
      docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-0003&quot;,
@@ -3184,45 +3215,45 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:77:24</td>
-      <td><code>return_type_is_inferable</code> -> bool <span class='badge genre'>UnaryOperator</span></td>
-      <td><code class='replacement'></code></td>
-      <td class='dur'>33.9s</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:41:47</td>
+      <td><code><impl Rule for MissingVariableType>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
+      <td><code class='replacement'>||</code></td>
+      <td class='dur'>33.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-90')">▶ show diff</div>
-        <pre id='diff-90' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_return_annotation.rs
-+++ delete ! in return_type_is_inferable
-@@ -69,17 +69,17 @@
- ///   the union of those types is inferred.
- /// - Generators are excluded: their `Generator[...]` type is not inferable
- ///   from `return` statements, so they still require an annotation.
- fn return_type_is_inferable(func: &amp;FunctionInfo) -&gt; bool {
-     !func.is_generator
-         &amp;&amp; func
-             .return_stmts
+        <div class='diff-toggle' onclick="toggle('diff-91')">▶ show diff</div>
+        <pre id='diff-91' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
++++ replace &amp;&amp; with || in &lt;impl Rule for MissingVariableType&gt;::check
+@@ -33,17 +33,17 @@
+         &amp;self,
+         module: &amp;ResolvedModule,
+         _ctx: &amp;super::CheckContext,
+         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
+     ) {
+         module
+             .module_vars
              .iter()
--            .all(|ret| !ret.has_value || rhs_fully_determines_type(&amp;ret.rhs_kind))
-+            .all(|ret|  /* ~ changed by cargo-mutants ~ */ret.has_value || rhs_fully_determines_type(&amp;ret.rhs_kind))
+-            .filter(|var| !var.has_annotation &amp;&amp; is_unresolvable(&amp;var.rhs_kind))
++            .filter(|var| !var.has_annotation || /* ~ changed by cargo-mutants ~ */ is_unresolvable(&amp;var.rhs_kind))
+             .for_each(|var| diagnostics.push(make_diagnostic(var, &amp;module.path)));
+     }
  }
  
- fn make_diagnostic(func: &amp;FunctionInfo, path: &amp;str) -&gt; Diagnostic {
-     error_diagnostic_owned(
-         CODE.clone(),
-         format!(
-             &quot;Missing return type annotation for function `{}`&quot;,
-             func.name
+ /// Returns `true` for RHS kinds whose element/value type cannot be inferred
+ /// from the literal alone.
+ fn is_unresolvable(rhs: &amp;RhsKind) -&gt; bool {
+     matches!(
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:38:9</td>
       <td><code><impl Rule for MissingVariableType>::check</code>  <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>()</code></td>
-      <td class='dur'>28.3s</td>
+      <td class='dur'>42.5s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-91')">▶ show diff</div>
-        <pre id='diff-91' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
+        <div class='diff-toggle' onclick="toggle('diff-92')">▶ show diff</div>
+        <pre id='diff-92' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
 +++ replace &lt;impl Rule for MissingVariableType&gt;::check with ()
 @@ -30,21 +30,17 @@
      }
@@ -3253,11 +3284,11 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:49:5</td>
       <td><code>is_unresolvable</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>true</code></td>
-      <td class='dur'>20.9s</td>
+      <td class='dur'>31.8s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-92')">▶ show diff</div>
-        <pre id='diff-92' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
+        <div class='diff-toggle' onclick="toggle('diff-93')">▶ show diff</div>
+        <pre id='diff-93' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
 +++ replace is_unresolvable -&gt; bool with true
 @@ -41,20 +41,17 @@
              .filter(|var| !var.has_annotation &amp;&amp; is_unresolvable(&amp;var.rhs_kind))
@@ -3284,14 +3315,45 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:41:27</td>
+      <td><code><impl Rule for MissingVariableType>::check</code>  <span class='badge genre'>UnaryOperator</span></td>
+      <td><code class='replacement'></code></td>
+      <td class='dur'>41.8s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-95')">▶ show diff</div>
+        <pre id='diff-95' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
++++ delete ! in &lt;impl Rule for MissingVariableType&gt;::check
+@@ -33,17 +33,17 @@
+         &amp;self,
+         module: &amp;ResolvedModule,
+         _ctx: &amp;super::CheckContext,
+         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
+     ) {
+         module
+             .module_vars
+             .iter()
+-            .filter(|var| !var.has_annotation &amp;&amp; is_unresolvable(&amp;var.rhs_kind))
++            .filter(|var|  /* ~ changed by cargo-mutants ~ */var.has_annotation &amp;&amp; is_unresolvable(&amp;var.rhs_kind))
+             .for_each(|var| diagnostics.push(make_diagnostic(var, &amp;module.path)));
+     }
+ }
+ 
+ /// Returns `true` for RHS kinds whose element/value type cannot be inferred
+ /// from the literal alone.
+ fn is_unresolvable(rhs: &amp;RhsKind) -&gt; bool {
+     matches!(
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:49:5</td>
       <td><code>is_unresolvable</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>false</code></td>
-      <td class='dur'>17.1s</td>
+      <td class='dur'>19.9s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-94')">▶ show diff</div>
-        <pre id='diff-94' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
+        <div class='diff-toggle' onclick="toggle('diff-96')">▶ show diff</div>
+        <pre id='diff-96' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
 +++ replace is_unresolvable -&gt; bool with false
 @@ -41,20 +41,17 @@
              .filter(|var| !var.has_annotation &amp;&amp; is_unresolvable(&amp;var.rhs_kind))
@@ -3318,72 +3380,10 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:41:47</td>
-      <td><code><impl Rule for MissingVariableType>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
-      <td><code class='replacement'>||</code></td>
-      <td class='dur'>41.7s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-95')">▶ show diff</div>
-        <pre id='diff-95' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
-+++ replace &amp;&amp; with || in &lt;impl Rule for MissingVariableType&gt;::check
-@@ -33,17 +33,17 @@
-         &amp;self,
-         module: &amp;ResolvedModule,
-         _ctx: &amp;super::CheckContext,
-         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
-     ) {
-         module
-             .module_vars
-             .iter()
--            .filter(|var| !var.has_annotation &amp;&amp; is_unresolvable(&amp;var.rhs_kind))
-+            .filter(|var| !var.has_annotation || /* ~ changed by cargo-mutants ~ */ is_unresolvable(&amp;var.rhs_kind))
-             .for_each(|var| diagnostics.push(make_diagnostic(var, &amp;module.path)));
-     }
- }
- 
- /// Returns `true` for RHS kinds whose element/value type cannot be inferred
- /// from the literal alone.
- fn is_unresolvable(rhs: &amp;RhsKind) -&gt; bool {
-     matches!(
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:41:27</td>
-      <td><code><impl Rule for MissingVariableType>::check</code>  <span class='badge genre'>UnaryOperator</span></td>
-      <td><code class='replacement'></code></td>
-      <td class='dur'>38.8s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-96')">▶ show diff</div>
-        <pre id='diff-96' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
-+++ delete ! in &lt;impl Rule for MissingVariableType&gt;::check
-@@ -33,17 +33,17 @@
-         &amp;self,
-         module: &amp;ResolvedModule,
-         _ctx: &amp;super::CheckContext,
-         diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
-     ) {
-         module
-             .module_vars
-             .iter()
--            .filter(|var| !var.has_annotation &amp;&amp; is_unresolvable(&amp;var.rhs_kind))
-+            .filter(|var|  /* ~ changed by cargo-mutants ~ */var.has_annotation &amp;&amp; is_unresolvable(&amp;var.rhs_kind))
-             .for_each(|var| diagnostics.push(make_diagnostic(var, &amp;module.path)));
-     }
- }
- 
- /// Returns `true` for RHS kinds whose element/value type cannot be inferred
- /// from the literal alone.
- fn is_unresolvable(rhs: &amp;RhsKind) -&gt; bool {
-     matches!(
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:57:9</td>
       <td><code>make_diagnostic</code> -> Diagnostic <span class='badge genre'>MatchArm</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>17.3s</td>
+      <td class='dur'>20.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-97')">▶ show diff</div>
@@ -3420,7 +3420,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:64:9</td>
       <td><code>make_diagnostic</code> -> Diagnostic <span class='badge genre'>MatchArm</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>23.9s</td>
+      <td class='dur'>30.7s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-98')">▶ show diff</div>
@@ -3457,7 +3457,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:71:9</td>
       <td><code>make_diagnostic</code> -> Diagnostic <span class='badge genre'>MatchArm</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>32.0s</td>
+      <td class='dur'>35.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-99')">▶ show diff</div>
@@ -3494,7 +3494,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_class_syntax.rs:28:9</td>
       <td><code><impl Rule for TypedDictMethodNotAllowed>::check</code>  <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>()</code></td>
-      <td class='dur'>39.8s</td>
+      <td class='dur'>56.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-100')">▶ show diff</div>
@@ -3548,7 +3548,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_class_syntax.rs:38:45</td>
       <td><code><impl Rule for TypedDictMethodNotAllowed>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>!=</code></td>
-      <td class='dur'>50.4s</td>
+      <td class='dur'>46.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-101')">▶ show diff</div>
@@ -3579,7 +3579,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_class_syntax.rs:38:77</td>
       <td><code><impl Rule for TypedDictMethodNotAllowed>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>!=</code></td>
-      <td class='dur'>45.2s</td>
+      <td class='dur'>35.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-103')">▶ show diff</div>
@@ -3610,7 +3610,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:90:5</td>
       <td><code>redeclaration_violation</code> -> Option<&'static str> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>None</code></td>
-      <td class='dur'>49.0s</td>
+      <td class='dur'>34.0s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-104')">▶ show diff</div>
@@ -3652,7 +3652,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/tuples_type_form.rs:40:9</td>
       <td><code><impl Rule for MultipleUnboundedTupleTypes>::check</code>  <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>()</code></td>
-      <td class='dur'>160.0s</td>
+      <td class='dur'>120.1s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-105')">▶ show diff</div>
@@ -3689,7 +3689,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_class_syntax.rs:38:66</td>
       <td><code><impl Rule for TypedDictMethodNotAllowed>::check</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>||</code></td>
-      <td class='dur'>178.3s</td>
+      <td class='dur'>116.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-106')">▶ show diff</div>
@@ -3720,7 +3720,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:90:5</td>
       <td><code>redeclaration_violation</code> -> Option<&'static str> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>Some(&quot;&quot;)</code></td>
-      <td class='dur'>176.0s</td>
+      <td class='dur'>108.9s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-107')">▶ show diff</div>
@@ -3762,7 +3762,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:90:5</td>
       <td><code>redeclaration_violation</code> -> Option<&'static str> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>Some(&quot;xyzzy&quot;)</code></td>
-      <td class='dur'>157.6s</td>
+      <td class='dur'>111.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-108')">▶ show diff</div>
@@ -3804,7 +3804,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:90:23</td>
       <td><code>redeclaration_violation</code> -> Option<&'static str> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>||</code></td>
-      <td class='dur'>154.4s</td>
+      <td class='dur'>121.8s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-109')">▶ show diff</div>
@@ -3835,7 +3835,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:90:8</td>
       <td><code>redeclaration_violation</code> -> Option<&'static str> <span class='badge genre'>UnaryOperator</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>168.6s</td>
+      <td class='dur'>111.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-110')">▶ show diff</div>
@@ -3866,7 +3866,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:98:18</td>
       <td><code>redeclaration_violation</code> -> Option<&'static str> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>==</code></td>
-      <td class='dur'>46.4s</td>
+      <td class='dur'>34.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-111')">▶ show diff</div>
@@ -3897,7 +3897,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:94:22</td>
       <td><code>redeclaration_violation</code> -> Option<&'static str> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>||</code></td>
-      <td class='dur'>185.5s</td>
+      <td class='dur'>112.7s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-112')">▶ show diff</div>
@@ -3928,7 +3928,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:94:25</td>
       <td><code>redeclaration_violation</code> -> Option<&'static str> <span class='badge genre'>UnaryOperator</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>172.0s</td>
+      <td class='dur'>110.0s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-113')">▶ show diff</div>
@@ -3959,7 +3959,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:98:32</td>
       <td><code>redeclaration_violation</code> -> Option<&'static str> <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>||</code></td>
-      <td class='dur'>165.9s</td>
+      <td class='dur'>105.7s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-114')">▶ show diff</div>
@@ -3990,7 +3990,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:110:5</td>
       <td><code>value_type_incompatible</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>false</code></td>
-      <td class='dur'>37.7s</td>
+      <td class='dur'>33.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-115')">▶ show diff</div>
@@ -4024,7 +4024,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:110:8</td>
       <td><code>value_type_incompatible</code> -> bool <span class='badge genre'>UnaryOperator</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>53.0s</td>
+      <td class='dur'>33.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-116')">▶ show diff</div>
@@ -4055,7 +4055,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:110:5</td>
       <td><code>value_type_incompatible</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>true</code></td>
-      <td class='dur'>150.9s</td>
+      <td class='dur'>102.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-117')">▶ show diff</div>
@@ -4089,7 +4089,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:113:51</td>
       <td><code>value_type_incompatible</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>||</code></td>
-      <td class='dur'>176.7s</td>
+      <td class='dur'>114.1s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-118')">▶ show diff</div>
@@ -4120,7 +4120,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:113:26</td>
       <td><code>value_type_incompatible</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>!=</code></td>
-      <td class='dur'>189.6s</td>
+      <td class='dur'>115.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-119')">▶ show diff</div>
@@ -4151,7 +4151,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:118:5</td>
       <td><code>type_head</code> -> &str <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>&quot;&quot;</code></td>
-      <td class='dur'>173.6s</td>
+      <td class='dur'>113.0s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-120')">▶ show diff</div>
@@ -4182,7 +4182,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:118:5</td>
       <td><code>type_head</code> -> &str <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>&quot;xyzzy&quot;</code></td>
-      <td class='dur'>175.3s</td>
+      <td class='dur'>108.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-121')">▶ show diff</div>
@@ -4213,7 +4213,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:124:5</td>
       <td><code>is_invariant_container</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>true</code></td>
-      <td class='dur'>196.2s</td>
+      <td class='dur'>115.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-122')">▶ show diff</div>
@@ -4247,7 +4247,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:124:5</td>
       <td><code>is_invariant_container</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>false</code></td>
-      <td class='dur'>182.6s</td>
+      <td class='dur'>114.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-123')">▶ show diff</div>
@@ -4281,7 +4281,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:133:5</td>
       <td><code>bases_conflict</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>true</code></td>
-      <td class='dur'>189.6s</td>
+      <td class='dur'>110.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-124')">▶ show diff</div>
@@ -4312,7 +4312,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:133:5</td>
       <td><code>bases_conflict</code> -> bool <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>false</code></td>
-      <td class='dur'>189.6s</td>
+      <td class='dur'>112.8s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-125')">▶ show diff</div>
@@ -4343,7 +4343,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:133:64</td>
       <td><code>bases_conflict</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>&amp;&amp;</code></td>
-      <td class='dur'>186.9s</td>
+      <td class='dur'>111.1s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-126')">▶ show diff</div>
@@ -4374,7 +4374,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:133:29</td>
       <td><code>bases_conflict</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>&amp;&amp;</code></td>
-      <td class='dur'>184.1s</td>
+      <td class='dur'>117.0s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-127')">▶ show diff</div>
@@ -4405,7 +4405,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:133:15</td>
       <td><code>bases_conflict</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>==</code></td>
-      <td class='dur'>177.4s</td>
+      <td class='dur'>120.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-128')">▶ show diff</div>
@@ -4436,7 +4436,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:133:46</td>
       <td><code>bases_conflict</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>==</code></td>
-      <td class='dur'>153.8s</td>
+      <td class='dur'>116.9s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-129')">▶ show diff</div>
@@ -4464,45 +4464,14 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:184:16</td>
-      <td><code>check_field_override</code>  <span class='badge genre'>UnaryOperator</span></td>
-      <td><code class='replacement'></code></td>
-      <td class='dur'>48.3s</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:179:5</td>
+      <td><code>check_field_override</code>  <span class='badge genre'>FnValue</span></td>
+      <td><code class='replacement'>()</code></td>
+      <td class='dur'>35.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-130')">▶ show diff</div>
         <pre id='diff-130' class='diff hidden'>--- crates/basilisk-checker/src/rules/typeddicts_inheritance.rs
-+++ delete ! in check_field_override
-@@ -176,17 +176,17 @@
-     path: &amp;str,
-     diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
- ) {
-     for base_name in typed_dict_bases {
-         let base_total = class_map
-             .get(base_name)
-             .is_none_or(|c| c.is_typeddict_total);
-         for child_attr in &amp;cls.attributes {
--            if !child_attr.has_annotation {
-+            if  /* ~ changed by cargo-mutants ~ */child_attr.has_annotation {
-                 continue;
-             }
-             let Some(base_attr) = attr_map.get(&amp;(base_name, child_attr.name.as_str())) else {
-                 continue;
-             };
-             if !base_attr.has_annotation {
-                 continue;
-             }
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:179:5</td>
-      <td><code>check_field_override</code>  <span class='badge genre'>FnValue</span></td>
-      <td><code class='replacement'>()</code></td>
-      <td class='dur'>63.7s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-131')">▶ show diff</div>
-        <pre id='diff-131' class='diff hidden'>--- crates/basilisk-checker/src/rules/typeddicts_inheritance.rs
 +++ replace check_field_override with ()
 @@ -171,52 +171,17 @@
      cls: &amp;ClassInfo,
@@ -4561,10 +4530,41 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:184:16</td>
+      <td><code>check_field_override</code>  <span class='badge genre'>UnaryOperator</span></td>
+      <td><code class='replacement'></code></td>
+      <td class='dur'>31.5s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-131')">▶ show diff</div>
+        <pre id='diff-131' class='diff hidden'>--- crates/basilisk-checker/src/rules/typeddicts_inheritance.rs
++++ delete ! in check_field_override
+@@ -176,17 +176,17 @@
+     path: &amp;str,
+     diagnostics: &amp;mut Vec&lt;Diagnostic&gt;,
+ ) {
+     for base_name in typed_dict_bases {
+         let base_total = class_map
+             .get(base_name)
+             .is_none_or(|c| c.is_typeddict_total);
+         for child_attr in &amp;cls.attributes {
+-            if !child_attr.has_annotation {
++            if  /* ~ changed by cargo-mutants ~ */child_attr.has_annotation {
+                 continue;
+             }
+             let Some(base_attr) = attr_map.get(&amp;(base_name, child_attr.name.as_str())) else {
+                 continue;
+             };
+             if !base_attr.has_annotation {
+                 continue;
+             }
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:190:16</td>
       <td><code>check_field_override</code>  <span class='badge genre'>UnaryOperator</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>64.5s</td>
+      <td class='dur'>37.7s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-132')">▶ show diff</div>
@@ -4595,7 +4595,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:133:81</td>
       <td><code>bases_conflict</code> -> bool <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>==</code></td>
-      <td class='dur'>194.2s</td>
+      <td class='dur'>108.5s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-133')">▶ show diff</div>
@@ -4626,7 +4626,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:227:5</td>
       <td><code>check_conflicting_bases</code>  <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>()</code></td>
-      <td class='dur'>178.5s</td>
+      <td class='dur'>136.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-134')">▶ show diff</div>
@@ -4689,7 +4689,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:227:31</td>
       <td><code>check_conflicting_bases</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>==</code></td>
-      <td class='dur'>189.7s</td>
+      <td class='dur'>134.0s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-135')">▶ show diff</div>
@@ -4720,7 +4720,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:227:31</td>
       <td><code>check_conflicting_bases</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>&gt;</code></td>
-      <td class='dur'>233.7s</td>
+      <td class='dur'>124.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-136')">▶ show diff</div>
@@ -4751,7 +4751,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:227:31</td>
       <td><code>check_conflicting_bases</code>  <span class='badge genre'>BinaryOperator</span></td>
       <td><code class='replacement'>&lt;=</code></td>
-      <td class='dur'>189.7s</td>
+      <td class='dur'>109.8s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-137')">▶ show diff</div>
@@ -4779,14 +4779,45 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_usage.rs:42:9</td>
-      <td><code><impl Rule for TypedDictRuntimeViolation>::check</code>  <span class='badge genre'>FnValue</span></td>
-      <td><code class='replacement'>()</code></td>
-      <td class='dur'>209.6s</td>
+      <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:236:16</td>
+      <td><code>check_conflicting_bases</code>  <span class='badge genre'>UnaryOperator</span></td>
+      <td><code class='replacement'></code></td>
+      <td class='dur'>138.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-138')">▶ show diff</div>
-        <pre id='diff-138' class='diff hidden'>--- crates/basilisk-checker/src/rules/typeddicts_usage.rs
+        <pre id='diff-138' class='diff hidden'>--- crates/basilisk-checker/src/rules/typeddicts_inheritance.rs
++++ delete ! in check_conflicting_bases
+@@ -228,17 +228,17 @@
+         return;
+     }
+     let mut seen: HashMap&lt;&amp;str, (&amp;str, FieldQualifiers&lt;'_&gt;)&gt; = HashMap::new();
+     for base_name in typed_dict_bases {
+         let Some(base_cls) = class_map.get(base_name) else {
+             continue;
+         };
+         for attr in &amp;base_cls.attributes {
+-            if !attr.has_annotation {
++            if  /* ~ changed by cargo-mutants ~ */attr.has_annotation {
+                 continue;
+             }
+             let Some(ann) = annotation_text(source, attr.annotation_span) else {
+                 continue;
+             };
+             let qualifiers = parse_field_qualifiers(ann, base_cls.is_typeddict_total);
+             if let Some((prev_base, prev_q)) =
+                 seen.insert(attr.name.as_str(), (base_name, qualifiers.clone()))
+</pre></td></tr>
+    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
+      <td><span class='status caught'>CAUGHT</span></td>
+      <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_usage.rs:42:9</td>
+      <td><code><impl Rule for TypedDictRuntimeViolation>::check</code>  <span class='badge genre'>FnValue</span></td>
+      <td><code class='replacement'>()</code></td>
+      <td class='dur'>148.1s</td>
+    </tr>
+    <tr class='diff-row'><td colspan='5'>
+        <div class='diff-toggle' onclick="toggle('diff-139')">▶ show diff</div>
+        <pre id='diff-139' class='diff hidden'>--- crates/basilisk-checker/src/rules/typeddicts_usage.rs
 +++ replace &lt;impl Rule for TypedDictRuntimeViolation&gt;::check with ()
 @@ -34,26 +34,11 @@
  
@@ -4819,41 +4850,10 @@
 </pre></td></tr>
     <tr class='row-caught' onclick="this.classList.toggle('expanded')">
       <td><span class='status caught'>CAUGHT</span></td>
-      <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:236:16</td>
-      <td><code>check_conflicting_bases</code>  <span class='badge genre'>UnaryOperator</span></td>
-      <td><code class='replacement'></code></td>
-      <td class='dur'>233.7s</td>
-    </tr>
-    <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-139')">▶ show diff</div>
-        <pre id='diff-139' class='diff hidden'>--- crates/basilisk-checker/src/rules/typeddicts_inheritance.rs
-+++ delete ! in check_conflicting_bases
-@@ -228,17 +228,17 @@
-         return;
-     }
-     let mut seen: HashMap&lt;&amp;str, (&amp;str, FieldQualifiers&lt;'_&gt;)&gt; = HashMap::new();
-     for base_name in typed_dict_bases {
-         let Some(base_cls) = class_map.get(base_name) else {
-             continue;
-         };
-         for attr in &amp;base_cls.attributes {
--            if !attr.has_annotation {
-+            if  /* ~ changed by cargo-mutants ~ */attr.has_annotation {
-                 continue;
-             }
-             let Some(ann) = annotation_text(source, attr.annotation_span) else {
-                 continue;
-             };
-             let qualifiers = parse_field_qualifiers(ann, base_cls.is_typeddict_total);
-             if let Some((prev_base, prev_q)) =
-                 seen.insert(attr.name.as_str(), (base_name, qualifiers.clone()))
-</pre></td></tr>
-    <tr class='row-caught' onclick="this.classList.toggle('expanded')">
-      <td><span class='status caught'>CAUGHT</span></td>
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/callable_check.rs:283:5</td>
       <td><code>specialize_sig</code> -> Option<Sig> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>None</code></td>
-      <td class='dur'>200.1s</td>
+      <td class='dur'>162.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-140')">▶ show diff</div>
@@ -4937,7 +4937,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/callable_check.rs:283:5</td>
       <td><code>specialize_sig</code> -> Option<Sig> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>Some(Default::default())</code></td>
-      <td class='dur'>195.4s</td>
+      <td class='dur'>156.4s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-141')">▶ show diff</div>
@@ -5021,7 +5021,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/callable_check.rs:307:13</td>
       <td><code>specialize_sig</code> -> Option<Sig> <span class='badge genre'>MatchArm</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>143.8s</td>
+      <td class='dur'>100.5s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-142')">▶ show diff</div>
@@ -5059,7 +5059,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/assignment_compatibility/callable_check.rs:324:17</td>
       <td><code>specialize_sig</code> -> Option<Sig> <span class='badge genre'>StructField</span></td>
       <td><code class='replacement'></code></td>
-      <td class='dur'>144.8s</td>
+      <td class='dur'>89.6s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-143')">▶ show diff</div>
@@ -5100,11 +5100,11 @@
       <td class='loc'>crates/basilisk-checker/src/rules/match_exhaustiveness.rs:48:5</td>
       <td><code>make_diagnostic</code> -> Diagnostic <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>Default::default()</code></td>
-      <td class='dur'>4.0s</td>
+      <td class='dur'>4.7s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-62')">▶ show diff</div>
-        <pre id='diff-62' class='diff hidden'>--- crates/basilisk-checker/src/rules/match_exhaustiveness.rs
+        <div class='diff-toggle' onclick="toggle('diff-61')">▶ show diff</div>
+        <pre id='diff-61' class='diff hidden'>--- crates/basilisk-checker/src/rules/match_exhaustiveness.rs
 +++ replace make_diagnostic -&gt; Diagnostic with Default::default()
 @@ -40,21 +40,10 @@
              .match_stmts
@@ -5135,11 +5135,11 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:103:5</td>
       <td><code>make_diagnostic</code> -> Diagnostic <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>Default::default()</code></td>
-      <td class='dur'>4.4s</td>
+      <td class='dur'>5.9s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-70')">▶ show diff</div>
-        <pre id='diff-70' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
+        <div class='diff-toggle' onclick="toggle('diff-71')">▶ show diff</div>
+        <pre id='diff-71' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_parameter_annotation.rs
 +++ replace make_diagnostic -&gt; Diagnostic with Default::default()
 @@ -95,21 +95,10 @@
  fn default_determines_type(param: &amp;ParameterInfo) -&gt; bool {
@@ -5170,7 +5170,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:40:9</td>
       <td><code><impl Rule for MissingReturnAnnotation>::opt_in_spec</code> -> Option<crate::rule_tags::OptInSpec> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>Some(Default::default())</code></td>
-      <td class='dur'>5.5s</td>
+      <td class='dur'>2.3s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-72')">▶ show diff</div>
@@ -5204,7 +5204,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_return_annotation.rs:81:5</td>
       <td><code>make_diagnostic</code> -> Diagnostic <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>Default::default()</code></td>
-      <td class='dur'>7.4s</td>
+      <td class='dur'>5.0s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-86')">▶ show diff</div>
@@ -5255,7 +5255,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:26:9</td>
       <td><code><impl Rule for MissingVariableType>::opt_in_spec</code> -> Option<crate::rule_tags::OptInSpec> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>Some(Default::default())</code></td>
-      <td class='dur'>3.8s</td>
+      <td class='dur'>5.2s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-87')">▶ show diff</div>
@@ -5289,11 +5289,11 @@
       <td class='loc'>crates/basilisk-checker/src/rules/missing_variable_type.rs:56:5</td>
       <td><code>make_diagnostic</code> -> Diagnostic <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>Default::default()</code></td>
-      <td class='dur'>5.1s</td>
+      <td class='dur'>6.7s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
-        <div class='diff-toggle' onclick="toggle('diff-93')">▶ show diff</div>
-        <pre id='diff-93' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
+        <div class='diff-toggle' onclick="toggle('diff-94')">▶ show diff</div>
+        <pre id='diff-94' class='diff hidden'>--- crates/basilisk-checker/src/rules/missing_variable_type.rs
 +++ replace make_diagnostic -&gt; Diagnostic with Default::default()
 @@ -48,57 +48,17 @@
  fn is_unresolvable(rhs: &amp;RhsKind) -&gt; bool {
@@ -5360,7 +5360,7 @@
       <td class='loc'>crates/basilisk-checker/src/rules/typeddicts_inheritance.rs:66:5</td>
       <td><code>parse_field_qualifiers</code> -> FieldQualifiers<'_> <span class='badge genre'>FnValue</span></td>
       <td><code class='replacement'>Default::default()</code></td>
-      <td class='dur'>5.4s</td>
+      <td class='dur'>3.0s</td>
     </tr>
     <tr class='diff-row'><td colspan='5'>
         <div class='diff-toggle' onclick="toggle('diff-102')">▶ show diff</div>
