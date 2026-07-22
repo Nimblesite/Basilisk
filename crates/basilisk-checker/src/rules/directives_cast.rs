@@ -2,10 +2,16 @@
 //! `directives_cast`: Invalid `cast()` call.
 //!
 //! `typing.cast(typ, val)` must be called with exactly two positional arguments,
-//! and the first argument must be a type expression, not a value literal.
+//! and the first argument must be a type expression, not a value literal. A
+//! *quoted* first argument (`cast("Widget", x)`) is NOT a value literal — it is
+//! the standard PEP 484 forward-reference spelling, which typeshed admits
+//! directly (`cast(typ: type[_T] | str | Any, val)`) and which ruff's `TC006`
+//! actively requires — so only genuine non-string value literals are rejected
+//! (issue #335).
 //!
 //! - `cast()` — too few arguments
-//! - `cast(1, x)` — first argument is a literal, not a type
+//! - `cast(1, x)` — first argument is a value literal, not a type
+//! - `cast("Widget", x)` — OK: string forward reference
 //! - `cast(int, x, y)` — too many arguments
 
 use basilisk_resolver::{ResolvedModule, RhsKind};
@@ -32,7 +38,11 @@ impl Rule for InvalidCastCall {
         for call in module.calls.iter().filter(|c| c.callee == "cast") {
             let arg_count = call.args.len();
             if arg_count == 2 {
-                // Exactly 2 args: check that first arg is not a plain value literal.
+                // Exactly 2 args: reject a first argument that is a genuine value
+                // literal (number, bool, bytes, or None). A string is deliberately
+                // NOT in this set — `cast("Widget", x)` is a forward reference, the
+                // spelling typeshed admits (`type[_T] | str | Any`) and ruff `TC006`
+                // requires, so flagging it would be a false positive (issue #335).
                 let Some((first_kind, first_span)) = call.args.first() else {
                     continue;
                 };
@@ -40,7 +50,6 @@ impl Rule for InvalidCastCall {
                     first_kind,
                     RhsKind::IntLiteral
                         | RhsKind::FloatLiteral
-                        | RhsKind::StrLiteral
                         | RhsKind::BoolLiteral
                         | RhsKind::BytesLiteral
                         | RhsKind::NoneValue

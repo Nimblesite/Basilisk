@@ -2251,11 +2251,11 @@
     "body": [
       {
         "type": "text",
-        "html": "<code>typing.cast(typ, val)</code> must be called with exactly two positional arguments, and the first argument must be a type expression, not a value literal."
+        "html": "<code>typing.cast(typ, val)</code> must be called with exactly two positional arguments, and the first argument must be a type expression, not a value literal. A <em>quoted</em> first argument (<code>cast(&quot;Widget&quot;, x)</code>) is NOT a value literal \u2014 it is the standard <a href=\"https://peps.python.org/pep-0484/\">PEP 484</a> forward-reference spelling, which typeshed admits directly (<code>cast(typ: type_T | str | Any, val)</code>) and which ruff&#x27;s <code>TC006</code> actively requires \u2014 so only genuine non-string value literals are rejected (issue #335)."
       },
       {
         "type": "text",
-        "html": "- <code>cast()</code> \u2014 too few arguments - <code>cast(1, x)</code> \u2014 first argument is a literal, not a type - <code>cast(int, x, y)</code> \u2014 too many arguments"
+        "html": "- <code>cast()</code> \u2014 too few arguments - <code>cast(1, x)</code> \u2014 first argument is a value literal, not a type - <code>cast(&quot;Widget&quot;, x)</code> \u2014 OK: string forward reference - <code>cast(int, x, y)</code> \u2014 too many arguments"
       }
     ],
     "group": "Type System",
