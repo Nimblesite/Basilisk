@@ -147,6 +147,50 @@ fn set_tag_writes_entry() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// [CONFIGEDITOR-SOURCES]: parent tables created only to hold a deeper
+/// mutation target stay implicit — the render never contains a bare
+/// `[tool]` (or, for a rule-only patch, a bare `[tool.basilisk]`) header
+/// with no entries of its own, exactly as if a human had written the
+/// dotted headers by hand.
+#[test]
+fn created_parent_tables_stay_implicit() {
+    let root = temp_root("implicit_parents");
+    let document = document_for(&root, "[project]\nname = \"demo\"\n");
+    let update = ConfigurationUpdate {
+        rules: set_tag("basilisk", RuleSeverity::Error),
+        typeshed: TypeshedConfigUpdate {
+            entries: BTreeMap::from([(
+                TypeshedConfigKey::TypeshedCommit,
+                Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
+            )]),
+        },
+    };
+    let patch = build_configuration_patch(&document, &update).unwrap();
+    assert!(
+        !patch.content.contains("[tool]"),
+        "the pure-parent [tool] header must stay implicit: {}",
+        patch.content
+    );
+    assert!(
+        patch.content.contains("[tool.basilisk]"),
+        "[tool.basilisk] holds typeshed-commit and must render: {}",
+        patch.content
+    );
+
+    let rule_only = build_rule_patch(
+        &document_for(&root, ""),
+        &set_tag("basilisk", RuleSeverity::Error),
+    )
+    .unwrap();
+    assert!(
+        !rule_only.content.contains("[tool]\n") && !rule_only.content.contains("[tool.basilisk]\n"),
+        "a rule-only patch renders just the two-line seed: {}",
+        rule_only.content
+    );
+    assert!(rule_only.content.contains("[tool.basilisk.rule-tags]"));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// [CONFIGEDITOR-SOURCES]: removing every entry leaves an explicitly empty
 /// table — never pruned, because a missing table would re-arm the seed.
 #[test]

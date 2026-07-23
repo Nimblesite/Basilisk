@@ -186,7 +186,17 @@ fn child_table_mut<'a>(
 ) -> Result<&'a mut Table, ConfigDocumentError> {
     table
         .entry(key)
-        .or_insert_with(|| Item::Table(Table::new()))
+        .or_insert_with(|| {
+            // Implicit, like the intermediates the parser creates for dotted
+            // headers: a table that only exists to hold a deeper mutation
+            // target renders no bare `[tool]`-style header of its own.
+            // toml_edit still renders it the moment it holds direct entries,
+            // and tables already present in the document keep their explicit
+            // headers ([CONFIGEDITOR-SOURCES] never prunes).
+            let mut created = Table::new();
+            created.set_implicit(true);
+            Item::Table(created)
+        })
         .as_table_mut()
         .ok_or_else(|| ConfigDocumentError::Invalid {
             path: source_path.to_path_buf(),
