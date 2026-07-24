@@ -11,17 +11,37 @@ name: Dependabot auto-merge
 #     triggers on `main` and folds the security bump into the SAME staging
 #     branch — nothing is ever left sitting on `main` waiting for a human.
 #
-# Merge strategy: the incoming branch ALWAYS clobbers what is already staged
-# (`git merge -X theirs`). Successive bumps of the same lock-file never conflict-
-# stall: the latest bump wins, every time. Nothing reaches `main` this way — the
-# full build/test (ci.yml) + CodeQL (codeql.yml) gate the single
-# `dependabot-upgrades -> main` consolidation PR, which is where review and the
-# expensive matrix actually run. ci.yml/codeql.yml deliberately SKIP Dependabot
-# PRs (they would only burn the matrix on a bump we immediately sweep away).
+# Sweep strategy: PATH-RESTRICTED, not a branch merge. Only the files the PR
+# itself changed (diff against its merge-base with the PR base) are copied from
+# the bump branch onto the staging tip. Two reasons:
+#
+#   * The GITHUB_TOKEN can NEVER push changes to `.github/workflows/*` — the
+#     `workflows` scope cannot be granted to it, not even via `permissions:`.
+#     A full `git merge` of a security bump (based on current `main`) into a
+#     staging branch that has drifted behind `main` drags main's newer commits
+#     along — including workflow-file edits — and the push is rejected
+#     (`refusing to allow a GitHub App to ... update workflow`). Copying only
+#     the bump's own files makes the sweep immune to staging-branch drift.
+#   * Clobber semantics survive: the latest bump overwrites the same manifest/
+#     lock files, so successive bumps never conflict-stall — no merge machinery
+#     left to conflict at all.
+#
+# If the bump ITSELF touches `.github/workflows/*` (a github-actions SECURITY
+# update — version updates of actions target the staging branch and merge on
+# GitHub's side, not here), the token cannot stage it by construction. The
+# sweep then leaves the PR open with a comment instead of failing: an actions
+# security bump warrants human eyes anyway.
+#
+# Nothing reaches `main` this way — the full build/test (ci.yml) + CodeQL
+# (codeql.yml) gate the single `dependabot-upgrades -> main` consolidation PR,
+# which is where review and the expensive matrix actually run. ci.yml/codeql.yml
+# deliberately SKIP Dependabot PRs (they would only burn the matrix on a bump we
+# immediately sweep away).
 #
 # Lives at the repo root so it is present on `dependabot-upgrades` (cut from
 # main): for `pull_request` the workflow is read from the PR's base branch, so
-# BOTH `main` and the staging branch must carry this file.
+# BOTH `main` and the staging branch must carry this file. Actions cannot push
+# workflow files, so updating the staging branch's copy is always a human push.
 #
 # ⚠️ SECURITY INVARIANT — the trigger MUST stay `pull_request`, NEVER
 # `pull_request_target`. Under `pull_request` a fork PR runs with a READ-ONLY
@@ -42,7 +62,7 @@ permissions:
 
 jobs:
   sweep:
-    name: Clobber-merge into dependabot-upgrades
+    name: Sweep bump files into dependabot-upgrades
     # Two independent gates, both required: the (unforgeable) Dependabot actor
     # AND a `dependabot/*` source branch. actor-AND-source keeps the trust
     # assumption explicit and resilient if the trigger set is ever widened.
@@ -58,34 +78,65 @@ jobs:
           ref: dependabot-upgrades
           fetch-depth: 0
 
-      - name: Clobber-merge the bump and retire the PR
+      - name: Sweep the bump's files and retire the PR
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_HEAD: ${{ github.event.pull_request.head.ref }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # Defense-in-depth: disable git hooks for every git op in this job, so
-          # merging attacker-influenced tree content can never execute a hook by
+          # staging attacker-influenced tree content can never execute a hook by
           # construction. No hook is reachable today (hooks live in .git, not the
           # tree), but this holds regardless of any future change.
           git config --global core.hooksPath /dev/null
-          # Pull the bump branch into a stable local ref we can re-merge.
-          git fetch origin "+refs/heads/${PR_HEAD}:refs/remotes/origin/${PR_HEAD}"
-          # Re-merge onto the LIVE staging tip and retry: concurrent Dependabot
-          # PRs race to push here, so each run rebases on whatever already landed
-          # and the incoming branch always wins conflicts (-X theirs).
+          # Pull the bump branch and its base into stable local refs.
+          git fetch origin \
+            "+refs/heads/${PR_HEAD}:refs/remotes/origin/${PR_HEAD}" \
+            "+refs/heads/${PR_BASE}:refs/remotes/origin/${PR_BASE}"
+          # The PR's OWN changes: diff against the merge-base with its base
+          # branch, so nothing the base has accumulated rides along.
+          merge_base="$(git merge-base "origin/${PR_BASE}" "origin/${PR_HEAD}")"
+          changed_list="${RUNNER_TEMP}/dependabot-sweep-paths.z"
+          git diff -z --name-only "${merge_base}" "origin/${PR_HEAD}" \
+            > "${changed_list}"
+          # The token cannot push workflow files at all; hand those to a human.
+          while IFS= read -r -d '' path; do
+            case "${path}" in
+              .github/workflows/*)
+                echo "::warning::bump edits ${path}; GITHUB_TOKEN cannot push workflow files — leaving the PR open"
+                gh pr comment "${PR_URL}" --body \
+                  "Not swept: this bump edits \`${path}\`, which the Actions token cannot push (no \`workflows\` scope). Please review and merge manually."
+                exit 0
+                ;;
+            esac
+          done < "${changed_list}"
+          # Re-apply onto the LIVE staging tip and retry: concurrent Dependabot
+          # PRs race to push here, so each run restarts from whatever already
+          # landed. Copying (not merging) the bump's paths keeps clobber
+          # semantics: the latest bump of a file wins, every time.
           for attempt in 1 2 3 4 5; do
             git fetch origin "+refs/heads/dependabot-upgrades:refs/remotes/origin/dependabot-upgrades"
             git reset --hard "origin/dependabot-upgrades"
-            git merge -X theirs --no-edit "origin/${PR_HEAD}" \
-              -m "build(deps): clobber-merge ${PR_HEAD} into dependabot-upgrades"
+            while IFS= read -r -d '' path; do
+              if git cat-file -e "origin/${PR_HEAD}:${path}" 2>/dev/null; then
+                git checkout "origin/${PR_HEAD}" -- "${path}"
+              else
+                git rm -q --ignore-unmatch -- "${path}"
+              fi
+            done < "${changed_list}"
+            if git diff --cached --quiet; then
+              echo "bump already staged on dependabot-upgrades; nothing to commit"
+              break
+            fi
+            git commit -q -m "build(deps): sweep ${PR_HEAD} into dependabot-upgrades"
             if git push origin "HEAD:dependabot-upgrades"; then
               break
             fi
-            if [ "$attempt" = "5" ]; then
+            if [ "${attempt}" = "5" ]; then
               echo "::error::could not push to dependabot-upgrades after 5 attempts"
               exit 1
             fi
@@ -94,6 +145,6 @@ jobs:
           # Retire the PR + its branch: the bump is already staged, so the PR
           # (whether it targeted main or the staging branch) has served its
           # purpose. `|| true` — GitHub may have auto-closed it on the push.
-          gh pr close "$PR_URL" --delete-branch \
-            --comment "Swept into \`dependabot-upgrades\` (latest bump clobbers previous)." \
-            || git push origin --delete "$PR_HEAD" || true
+          gh pr close "${PR_URL}" --delete-branch \
+            --comment "Swept into \`dependabot-upgrades\` (latest bump of a file clobbers the previous one)." \
+            || git push origin --delete "${PR_HEAD}" || true
