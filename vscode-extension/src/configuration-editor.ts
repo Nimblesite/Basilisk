@@ -171,6 +171,23 @@ export class ConfigurationEditorController implements vscode.Disposable {
       || (rootUri !== undefined && this.store.configurationEditor.value.rootUri !== rootUri);
   }
 
+  /**
+   * A completed Typeshed ACTION carries the authoritative post-action snapshot
+   * for its root: the server builds it LAST, after the download and pin land
+   * (`download_latest_and_pin` in `crates/basilisk-lsp/src/typeshed_download.rs`).
+   * Unlike a plain load it must NOT be gated on the load generation — the
+   * download's own transient `Downloading` notification triggers a same-root
+   * refresh that bumps the generation on EVERY run, so a generation gate would
+   * discard the freshly pinned result and strand the panel on the pre-download
+   * bundled/unpinned snapshot ([LSPCFGED-TYPESHED-DOWNLOAD]). Only a genuine
+   * context change — the panel closing/disposing or the user moving to another
+   * root — invalidates it.
+   */
+  private actionContextChanged(rootUri: string): boolean {
+    return this.disposed || !this.panel.isOpen()
+      || this.store.configurationEditor.value.rootUri !== rootUri;
+  }
+
   private async load(rootUri: string): Promise<void> {
     if (this.loadingRoot === rootUri || this.disposed) { return; }
     const generation = ++this.loadGeneration;
@@ -244,11 +261,15 @@ export class ConfigurationEditorController implements vscode.Disposable {
         baseRevision: snapshot.revision,
         action,
       });
-      if (this.requestIsStale(generation, snapshot.rootUri)) { return; }
-      // A download returns the refreshed snapshot at once (lifecycle
-      // Downloading); completion arrives as ordinary server notifications.
-      // No action returns a preview — a download is not a configuration edit
-      // ([LSPCFGED-TYPESHED-DOWNLOAD]).
+      // The action's result is authoritative for its root, so it is accepted
+      // even when the download's OWN transient Downloading notification bumped
+      // the load generation mid-flight — gating that on the generation dropped
+      // the freshly pinned snapshot and left the panel showing the pre-download
+      // bundled/unpinned source ([LSPCFGED-TYPESHED-DOWNLOAD]). Completion may
+      // also arrive via server notifications, but the returned snapshot is the
+      // definitive final state; a download is not a configuration edit, so no
+      // action returns a preview.
+      if (this.actionContextChanged(snapshot.rootUri)) { return; }
       if (result.kind === "Snapshot") {
         this.store.acceptConfigurationSnapshot(result.snapshot);
       } else {
