@@ -174,6 +174,7 @@ where
     F: Fn(
         &mut basilisk_lsp::import_resolver::ImportSearchPaths,
         &basilisk_lsp::config::WorkspaceConfig,
+        &basilisk_config::BasiliskConfig,
     ) -> Result<(), PipelineError>,
 {
     // [CHKARCH-CONFIG-DISCOVERY] The first path only anchors project-level
@@ -218,7 +219,10 @@ where
     } else {
         crate::import_search::roots_only(roots)
     };
-    activate_typeshed(&mut search_paths, &workspace_config)?;
+    // The typeshed source-status advisories resolve severity through the same
+    // project `[tool.basilisk]` tables as any rule ([STUBRES-TYPESHED-CONFIG]),
+    // so the project-root config is handed to the activation seam.
+    activate_typeshed(&mut search_paths, &workspace_config, &config)?;
 
     // Per-file rule config, memoized per directory ([CHKARCH-CONFIG-DISCOVERY]).
     // The cache fingerprint covers every directory's config so a child config

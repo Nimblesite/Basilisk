@@ -1,7 +1,10 @@
 //! CLI activation and reporting for [STUBRES-TYPESHED-WARN].
 //! See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN.
 
-use tracing::{info, warn};
+use std::io::Write as _;
+
+use basilisk_config::{BasiliskConfig, RuleSeverity};
+use tracing::{debug, info, warn};
 
 use super::PipelineError;
 
@@ -60,13 +63,14 @@ pub(super) fn build_import_search_paths_with_config(
 pub(super) fn activate_production_typeshed(
     search_paths: &mut basilisk_lsp::import_resolver::ImportSearchPaths,
     config: &basilisk_lsp::config::WorkspaceConfig,
+    rule_config: &BasiliskConfig,
 ) -> Result<(), PipelineError> {
     let request = basilisk_lsp::config::typeshed_request(config).map_err(PipelineError::Config)?;
     let manager = basilisk_stubs::typeshed::runtime::production_manager(request);
     let snapshot = manager
         .snapshot()
         .map_err(|error| PipelineError::Internal(error.to_string()))?;
-    report_typeshed_status(&snapshot.status);
+    report_typeshed_status(&snapshot.status, rule_config, &mut std::io::stderr().lock());
     search_paths.typeshed_snapshot = Some(basilisk_checker::imports::ActiveTypeshed::new(
         snapshot,
         basilisk_lsp::import_resolver::stub_target_from_config(config),
@@ -74,7 +78,24 @@ pub(super) fn activate_production_typeshed(
     Ok(())
 }
 
-fn report_typeshed_status(status: &basilisk_stubs::typeshed::source::TypeshedStatus) {
+/// Report the resolved typeshed source status.
+///
+/// Two distinct surfaces, never conflated ([STUBRES-TYPESHED-WARN]):
+/// * structured **telemetry** at `debug` for the log file / Output Channel —
+///   the machine `active_source`/identity fields, never a human banner;
+/// * a rustc-style **human banner** on `banner` (stderr in production) — one
+///   `<severity>[<code>]: <message>` block per advisory with a `= see:` link to
+///   its `/errors/<code>` page, rendered at the severity the project's
+///   `[tool.basilisk]` tables resolve for that code and skipped entirely when a
+///   table grades it `disabled` ([STUBRES-TYPESHED-CONFIG]).
+///
+/// Neither surface is stdout, so these advisories can never enter the JSON
+/// diagnostics a conformance run scores ([STUBRES-TYPESHED-WARN]).
+fn report_typeshed_status(
+    status: &basilisk_stubs::typeshed::source::TypeshedStatus,
+    rule_config: &BasiliskConfig,
+    banner: &mut impl std::io::Write,
+) {
     let commit_identity = status
         .commit
         .map_or_else(|| "not supplied".to_owned(), |identity| identity.to_hex());
@@ -85,7 +106,7 @@ fn report_typeshed_status(status: &basilisk_stubs::typeshed::source::TypeshedSta
         .license_reference
         .as_deref()
         .unwrap_or("not supplied");
-    warn!(
+    debug!(
         active_source = status.active_source.as_str(),
         commit_identity,
         tree_identity,
@@ -94,11 +115,14 @@ fn report_typeshed_status(status: &basilisk_stubs::typeshed::source::TypeshedSta
         "typeshed source status"
     );
     for warning in &status.warnings {
-        warn!(
-            warning_code = warning.code,
-            warning_message = warning.message,
-            "typeshed source warning"
-        );
+        let severity =
+            basilisk_lsp::config::resolve_status_severity(rule_config, &warning.code, warning.severity);
+        if severity == RuleSeverity::Disabled {
+            debug!(warning_code = warning.code, "typeshed source advisory silenced by config");
+            continue;
+        }
+        let _ = writeln!(banner, "{}[{}]: {}", severity.as_str(), warning.code, warning.message);
+        let _ = writeln!(banner, "   = see: {}", warning.docs_url);
     }
 }
 
@@ -295,8 +319,10 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn composed_status_warnings_are_loud_and_ordered() -> Result<(), Box<dyn std::error::Error>> {
+    fn composed_status() -> Result<
+        basilisk_stubs::typeshed::source::TypeshedStatus,
+        Box<dyn std::error::Error>,
+    > {
         use basilisk_stubs::typeshed::source::StatusWarning;
         use basilisk_stubs::typeshed::warning::{TypeshedWarning, UnpinnedKind};
 
@@ -306,55 +332,124 @@ mod tests {
             TypeshedWarning::UserManaged,
             TypeshedWarning::Unpinned(UnpinnedKind::CustomFolder),
         ]);
-        let capture = Capture::default();
-        let subscriber = tracing_subscriber::fmt()
-            .with_ansi(false)
-            .without_time()
-            .with_target(false)
-            .with_writer(capture.clone())
-            .finish();
-        tracing::subscriber::with_default(subscriber, || report_typeshed_status(&status));
+        Ok(status)
+    }
 
-        let stderr = capture.text()?;
-        assert!(stderr.contains("typeshed source status"), "{stderr}");
-        let unpinned = stderr.find("warning_code=\"UNPINNED\"");
-        let user_managed = stderr.find("warning_code=\"USER-MANAGED SOURCE\"");
-        let license = stderr.find("warning_code=\"LICENSE CHANGED\"");
+    /// [STUBRES-TYPESHED-WARN]: the human banner reads like every other Basilisk
+    /// diagnostic — `<severity>[<descriptive_code>]: <prose>` plus a `= see:`
+    /// deep link — in canonical status-table order, NOT `key="VALUE"` telemetry.
+    #[test]
+    fn composed_status_warnings_render_as_ordered_banner_diagnostics(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let status = composed_status()?;
+        let config = basilisk_config::BasiliskConfig::default();
+        let mut banner = Vec::new();
+        report_typeshed_status(&status, &config, &mut banner);
+        let banner = String::from_utf8(banner)?;
+
+        for code in [
+            "warning[typeshed_source_unpinned]:",
+            "warning[typeshed_source_user_managed]:",
+            "warning[typeshed_source_license_changed]:",
+        ] {
+            assert!(banner.contains(code), "missing banner header `{code}`: {banner}");
+        }
+        // Every advisory deep-links to its own /errors/<code> page.
+        assert!(
+            banner.matches("= see: https://www.basilisk-python.dev/errors/typeshed_source_")
+                .count()
+                == 3,
+            "each advisory must carry its own = see: link: {banner}"
+        );
+        // Canonical status-table order is preserved on the banner.
+        let unpinned = banner.find("typeshed_source_unpinned");
+        let user_managed = banner.find("typeshed_source_user_managed");
+        let license = banner.find("typeshed_source_license_changed");
         assert!(
             unpinned
                 .zip(user_managed)
                 .zip(license)
                 .is_some_and(|((first, second), third)| first < second && second < third),
-            "status warnings must stay loud and in canonical order: {stderr}"
+            "status warnings must stay in canonical order: {banner}"
+        );
+        // The old telemetry spelling must never resurface on the human banner.
+        assert!(
+            !banner.contains("warning_code=") && !banner.contains("UNPINNED"),
+            "banner must not read like CLI-arg telemetry: {banner}"
         );
         Ok(())
     }
 
+    /// [STUBRES-TYPESHED-CONFIG]: these advisories are configured exactly like
+    /// any Basilisk rule — a `[tool.basilisk.rules]` entry raises the severity
+    /// the banner prints, and grading a code `off` silences it entirely.
     #[test]
-    fn status_reporting_names_missing_optional_identities() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn config_tables_set_banner_severity_and_can_silence_advisories(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let status = composed_status()?;
+        let project = tempfile::tempdir()?;
+        std::fs::write(
+            project.path().join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\
+             \"typeshed_source_unpinned\" = \"error\"\n\
+             \"typeshed_source_user_managed\" = \"off\"\n",
+        )?;
+        let config = basilisk_config::load_basilisk_config(project.path());
+
+        let mut banner = Vec::new();
+        report_typeshed_status(&status, &config, &mut banner);
+        let banner = String::from_utf8(banner)?;
+
+        assert!(
+            banner.contains("error[typeshed_source_unpinned]:"),
+            "a `[tool.basilisk.rules]` entry must raise the banner severity: {banner}"
+        );
+        assert!(
+            !banner.contains("typeshed_source_user_managed"),
+            "grading a code `off` must silence its advisory: {banner}"
+        );
+        // A code with no entry keeps its intrinsic default (license drift = error).
+        assert!(
+            banner.contains("error[typeshed_source_license_changed]:"),
+            "an elevated advisory keeps its `error` default: {banner}"
+        );
+        Ok(())
+    }
+
+    /// [STUBRES-TYPESHED-WARN]: the machine identity fields stay on the
+    /// structured `debug` telemetry surface (log file / Output Channel), never
+    /// on the human banner.
+    #[test]
+    fn status_reporting_emits_structured_debug_telemetry(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut status = basilisk_stubs::typeshed::bundle::bundled_snapshot()?.status;
         status.commit = None;
         status.tree = None;
         status.license_reference = None;
         status.warnings.clear();
+        let config = basilisk_config::BasiliskConfig::default();
         let capture = Capture::default();
         let subscriber = tracing_subscriber::fmt()
             .with_ansi(false)
             .without_time()
             .with_target(false)
+            .with_max_level(tracing::Level::DEBUG)
             .with_writer(capture.clone())
             .finish();
 
-        tracing::subscriber::with_default(subscriber, || report_typeshed_status(&status));
+        let mut banner = Vec::new();
+        tracing::subscriber::with_default(subscriber, || {
+            report_typeshed_status(&status, &config, &mut banner);
+        });
 
-        let stderr = capture.text()?;
+        let telemetry = capture.text()?;
+        assert!(telemetry.contains("typeshed source status"), "{telemetry}");
         for field in [
             "commit_identity=\"not supplied\"",
             "tree_identity=\"not supplied\"",
             "license_reference=\"not supplied\"",
         ] {
-            assert!(stderr.contains(field), "missing `{field}` in: {stderr}");
+            assert!(telemetry.contains(field), "missing `{field}` in: {telemetry}");
         }
         Ok(())
     }

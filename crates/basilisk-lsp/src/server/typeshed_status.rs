@@ -326,11 +326,18 @@ mod tests {
         );
         assert_eq!(
             payload.pointer("/basilisk/typeshedStatuses/0/status/warnings/0/code"),
-            Some(&Value::String("UNPINNED".to_owned()))
+            Some(&Value::String("typeshed_source_unpinned".to_owned()))
         );
         assert_eq!(
             payload.pointer("/basilisk/typeshedStatuses/0/status/warnings/1/code"),
-            Some(&Value::String("LICENSE CHANGED".to_owned()))
+            Some(&Value::String("typeshed_source_license_changed".to_owned()))
+        );
+        // Each advisory deep-links to its own /errors/<code> page on the wire.
+        assert_eq!(
+            payload.pointer("/basilisk/typeshedStatuses/0/status/warnings/0/docsUrl"),
+            Some(&Value::String(
+                "https://www.basilisk-python.dev/errors/typeshed_source_unpinned".to_owned()
+            ))
         );
         // The retired trust-bijection fields must never reappear on the wire:
         // the active source IS the trust story ([STUBRES-TYPESHED-WARN]).

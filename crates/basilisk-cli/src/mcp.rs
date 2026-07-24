@@ -289,9 +289,10 @@ fn status_schema() -> Value {
                     "type": "object",
                     "properties": {
                         "code": { "type": "string" },
-                        "message": { "type": "string" }
+                        "message": { "type": "string" },
+                        "docs_url": { "type": "string" }
                     },
-                    "required": ["code", "message"],
+                    "required": ["code", "message", "docs_url"],
                     "additionalProperties": false
                 }
             }
@@ -388,9 +389,13 @@ fn status_document(status: &basilisk_stubs::typeshed::source::TypeshedStatus) ->
     let warnings: Vec<Value> = status
         .warnings
         .iter()
-        .map(
-            |warning| json!({ "code": warning.code.as_str(), "message": warning.message.as_str() }),
-        )
+        .map(|warning| {
+            json!({
+                "code": warning.code.as_str(),
+                "message": warning.message.as_str(),
+                "docs_url": warning.docs_url.as_str(),
+            })
+        })
         .collect();
     let commit = status.commit.map(|identity| identity.to_hex());
     let tree = status.tree.map(|identity| identity.to_hex());
