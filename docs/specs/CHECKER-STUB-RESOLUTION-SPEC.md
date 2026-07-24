@@ -454,6 +454,16 @@ name from only one branch. This follows the pinned directive that checkers are
 expected to understand those checks
 ([`python/typing@6ef9f77`, directives](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)).
 
+Star targets resolve **inside the re-exporting stub's own source root first**;
+a target absent there falls back to the active step-3 Typeshed source
+(GitHub #312 follow-up). A user stub may legitimately re-export from a module
+owned by a different stub source — MicroPython's `uio.pyi` is just
+`from io import *` with `io` in the custom typeshed's `stdlib/` tree — and the
+walk keeps recursing through whichever source resolved each target, so a
+stdlib package reached this way still follows its own relative re-exports
+within the snapshot. Local-first ordering means a sibling stub always shadows
+a same-named fallback module; the snapshot is a fallback, never an override.
+
 ---
 
 ## Type Provenance {#STUBRES-PROVENANCE}
