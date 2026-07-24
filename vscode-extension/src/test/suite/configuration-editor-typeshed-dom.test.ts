@@ -226,9 +226,11 @@ const dialogDriver = String.raw`
       const opened = record('dialog-open');
       opened.ruleValue = ruleValue();
       // ...and dismissing it discards the change: the control must snap back.
-      // Closing a dialog that is already open is what fires the close event, so
-      // the wait above is also what makes the discard reach the host at all.
-      dialog().close();
+      // Dismiss through the Cancel button exactly as a user would: the
+      // discard intent posts synchronously with the click. A programmatic
+      // dialog.close() would instead lean on the QUEUED 'close' event, which
+      // an occluded webview's throttled task queue may never deliver.
+      await click(el('[data-action="close-preview"]'));
       await waitUntil(() => !dialog().open);
       await sleep(settleDelay);
       const cancelled = record('dialog-cancelled');

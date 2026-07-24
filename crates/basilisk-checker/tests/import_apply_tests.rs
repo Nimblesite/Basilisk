@@ -188,6 +188,203 @@ fn captures_reexports_through_package_init_stub() {
     let _ = fs::remove_dir_all(&stub_dir);
 }
 
+/// Regression for GitHub #312 follow-up (comment 5053013115): a user stub may
+/// re-export names from a STDLIB stub that resolves through the active step-3
+/// Typeshed source — e.g. `MicroPython`'s `uio.pyi` is just `from io import *`,
+/// with `io` living in the custom typeshed's `stdlib/` tree. The star target
+/// is outside the user stub's own source root, so following the re-export
+/// graph must fall back to the active snapshot; otherwise every re-exported
+/// name is a false `imports_module_attribute` ("Module `uio` has no attribute
+/// `StringIO`").
+#[test]
+fn user_stub_star_reexport_from_stdlib_stub_is_captured() {
+    let stub_dir = make_tmp_dir("bsk_ir_reexport_stdlib");
+    // Mirrors micropython-esp32-stubs' uio.pyi verbatim.
+    fs::write(stub_dir.join("uio.pyi"), "from io import *\n").unwrap();
+
+    // `io` exists ONLY in the active custom typeshed, not under stub_dir.
+    let typeshed = make_custom_typeshed(&[("io.pyi", "class StringIO: ...\nclass BytesIO: ...\n")]);
+
+    let mut paths = make_search_paths(vec![]);
+    paths.stub_paths = vec![stub_dir.clone()];
+    paths.typeshed_snapshot = Some(ActiveTypeshed::new(typeshed, None));
+
+    let mut resolved = module_with_plain_import("uio");
+    resolve_module_imports(&mut resolved, &paths);
+
+    let api = resolved
+        .imported_modules
+        .get("uio")
+        .expect("user stub under stub-paths must be captured");
+    for name in ["StringIO", "BytesIO"] {
+        assert!(
+            api.member_names.contains(name),
+            "`{name}` is star-re-exported from the stdlib `io` stub and must be \
+             in the captured member API (GitHub #312 follow-up); got {:?}",
+            api.member_names
+        );
+    }
+
+    let _ = fs::remove_dir_all(&stub_dir);
+}
+
+/// The chained case from the same report: `uasyncio.pyi` is
+/// `from asyncio import *`, and the stdlib `asyncio` stub is a PACKAGE whose
+/// own API is built out of *relative* re-exports (`from .tasks import *`,
+/// `from .tasks import Task as Task`). After crossing into the snapshot, the
+/// re-export walk must keep resolving relative star targets *within* the
+/// snapshot.
+#[test]
+fn user_stub_star_reexport_follows_stdlib_package_reexports() {
+    let stub_dir = make_tmp_dir("bsk_ir_reexport_stdlib_pkg");
+    // Mirrors micropython-esp32-stubs' uasyncio.pyi verbatim.
+    fs::write(stub_dir.join("uasyncio.pyi"), "from asyncio import *\n").unwrap();
+
+    let typeshed = make_custom_typeshed(&[
+        (
+            "asyncio/__init__.pyi",
+            "from .tasks import *\nfrom .tasks import Task as Task\n",
+        ),
+        (
+            "asyncio/tasks.pyi",
+            "__all__ = (\"sleep\",)\n\nclass Task: ...\n\nasync def sleep(delay: float) -> None: ...\n",
+        ),
+    ]);
+
+    let mut paths = make_search_paths(vec![]);
+    paths.stub_paths = vec![stub_dir.clone()];
+    paths.typeshed_snapshot = Some(ActiveTypeshed::new(typeshed, None));
+
+    let mut resolved = module_with_plain_import("uasyncio");
+    resolve_module_imports(&mut resolved, &paths);
+
+    let api = resolved
+        .imported_modules
+        .get("uasyncio")
+        .expect("user stub under stub-paths must be captured");
+    for name in ["sleep", "Task"] {
+        assert!(
+            api.member_names.contains(name),
+            "`{name}` reaches uasyncio via stdlib asyncio/__init__.pyi's own \
+             re-exports and must be in the captured member API; got {:?}",
+            api.member_names
+        );
+    }
+
+    let _ = fs::remove_dir_all(&stub_dir);
+}
+
+/// Real stdlib stubs (`io`, `os`, …) define `__all__`; per runtime
+/// `import *` semantics it is authoritative. A cross-boundary star re-export
+/// must honour the stdlib stub's `__all__` — include exactly its entries, not
+/// every public definition.
+#[test]
+fn user_stub_star_reexport_honours_stdlib_dunder_all() {
+    let stub_dir = make_tmp_dir("bsk_ir_reexport_stdlib_all");
+    fs::write(stub_dir.join("uio.pyi"), "from io import *\n").unwrap();
+
+    let typeshed = make_custom_typeshed(&[(
+        "io.pyi",
+        "__all__ = (\"StringIO\",)\n\nclass StringIO: ...\nclass BytesIO: ...\n",
+    )]);
+
+    let mut paths = make_search_paths(vec![]);
+    paths.stub_paths = vec![stub_dir.clone()];
+    paths.typeshed_snapshot = Some(ActiveTypeshed::new(typeshed, None));
+
+    let mut resolved = module_with_plain_import("uio");
+    resolve_module_imports(&mut resolved, &paths);
+
+    let api = resolved
+        .imported_modules
+        .get("uio")
+        .expect("user stub under stub-paths must be captured");
+    assert!(
+        api.member_names.contains("StringIO"),
+        "`StringIO` is in the stdlib stub's __all__ and must be captured; got {:?}",
+        api.member_names
+    );
+    assert!(
+        !api.member_names.contains("BytesIO"),
+        "`BytesIO` is NOT in the stdlib stub's __all__, so `import *` must not \
+         export it; got {:?}",
+        api.member_names
+    );
+
+    let _ = fs::remove_dir_all(&stub_dir);
+}
+
+/// The redundant-alias convention crossing the same boundary:
+/// `from io import StringIO as StringIO` in a user stub re-exports the name
+/// regardless of where `io` resolves from.
+#[test]
+fn user_stub_alias_reexport_from_stdlib_stub_is_captured() {
+    let stub_dir = make_tmp_dir("bsk_ir_reexport_stdlib_alias");
+    fs::write(
+        stub_dir.join("uio.pyi"),
+        "from io import StringIO as StringIO\n",
+    )
+    .unwrap();
+
+    let typeshed = make_custom_typeshed(&[("io.pyi", "class StringIO: ...\n")]);
+
+    let mut paths = make_search_paths(vec![]);
+    paths.stub_paths = vec![stub_dir.clone()];
+    paths.typeshed_snapshot = Some(ActiveTypeshed::new(typeshed, None));
+
+    let mut resolved = module_with_plain_import("uio");
+    resolve_module_imports(&mut resolved, &paths);
+
+    let api = resolved
+        .imported_modules
+        .get("uio")
+        .expect("user stub under stub-paths must be captured");
+    assert!(
+        api.member_names.contains("StringIO"),
+        "a redundant-alias re-export from a stdlib stub must be captured; got {:?}",
+        api.member_names
+    );
+
+    let _ = fs::remove_dir_all(&stub_dir);
+}
+
+/// Guard: the snapshot is a FALLBACK, not an override. `umachine.pyi` star-
+/// imports `machine`, which exists as a sibling user stub in the same
+/// `stub-paths` dir — that local resolution must keep winning even when the
+/// active typeshed also happens to carry a module of the same name.
+#[test]
+fn user_stub_star_reexport_prefers_sibling_stub_over_snapshot() {
+    let stub_dir = make_tmp_dir("bsk_ir_reexport_sibling");
+    fs::write(stub_dir.join("umachine.pyi"), "from machine import *\n").unwrap();
+    fs::write(stub_dir.join("machine.pyi"), "def reset() -> None: ...\n").unwrap();
+
+    let typeshed = make_custom_typeshed(&[("machine.pyi", "def snapshot_only() -> None: ...\n")]);
+
+    let mut paths = make_search_paths(vec![]);
+    paths.stub_paths = vec![stub_dir.clone()];
+    paths.typeshed_snapshot = Some(ActiveTypeshed::new(typeshed, None));
+
+    let mut resolved = module_with_plain_import("umachine");
+    resolve_module_imports(&mut resolved, &paths);
+
+    let api = resolved
+        .imported_modules
+        .get("umachine")
+        .expect("user stub under stub-paths must be captured");
+    assert!(
+        api.member_names.contains("reset"),
+        "the sibling `machine.pyi` in the same stub dir must resolve first; got {:?}",
+        api.member_names
+    );
+    assert!(
+        !api.member_names.contains("snapshot_only"),
+        "the snapshot must not shadow a same-root sibling stub; got {:?}",
+        api.member_names
+    );
+
+    let _ = fs::remove_dir_all(&stub_dir);
+}
+
 #[test]
 fn does_not_capture_non_stub_import() {
     // A plain `.py` source resolution (not a user stub) is not captured.
@@ -299,10 +496,20 @@ fn make_custom_typeshed(stdlib_files: &[(&str, &str)]) -> Arc<Snapshot> {
     let identity = SourceIdentity::Custom {
         digest: "import-apply-custom".to_owned(),
     };
-    let versions = stdlib_files
+    // One VERSIONS line per TOP-LEVEL module: `os.pyi` → `os`,
+    // `asyncio/__init__.pyi` and `asyncio/tasks.pyi` both → `asyncio`.
+    let top_level_modules: std::collections::BTreeSet<&str> = stdlib_files
         .iter()
-        .fold(String::new(), |mut versions, (name, _)| {
-            let module = name.trim_end_matches(".pyi");
+        .map(|(name, _)| {
+            name.split('/')
+                .next()
+                .unwrap_or(name)
+                .trim_end_matches(".pyi")
+        })
+        .collect();
+    let versions = top_level_modules
+        .into_iter()
+        .fold(String::new(), |mut versions, module| {
             assert!(writeln!(&mut versions, "{module}: 3.0-").is_ok());
             versions
         });

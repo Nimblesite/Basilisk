@@ -364,6 +364,9 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       status.textContent = editorState.message || editorState.phase;
       if (snapshot) renderSnapshot();
       renderNotice();
+      // Each preview state re-arms the discard report: this preview has not
+      // been cancelled yet, whatever happened to the previous one.
+      if (editorState.phase === 'preview') previewCancelReported = false;
       if (preview && editorState.phase === 'preview') renderPreview();
       const dialog = byId('preview-dialog');
       if (editorState.phase !== 'preview' && dialog.open) dialog.close();

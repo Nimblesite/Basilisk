@@ -23,13 +23,32 @@ use crate::types::{
 /// sets of star-imported stubs resolved relative to the stub's path.
 #[must_use]
 pub fn reexported_member_names(stub: &StubModule) -> HashSet<String> {
+    reexported_member_names_with_fallback(stub, &mut |_| None)
+}
+
+/// Like [`reexported_member_names`], but with a `fallback` loader consulted
+/// for star targets that do not resolve inside the stub's own source root.
+///
+/// A user stub may re-export from a module owned by a DIFFERENT stub source —
+/// `MicroPython`'s `uio.pyi` is just `from io import *`, with `io` living in
+/// the active typeshed's `stdlib/` tree (GitHub #312 follow-up). The stub's
+/// own root always resolves first, so a sibling stub keeps shadowing any
+/// same-named fallback module.
+#[must_use]
+pub fn reexported_member_names_with_fallback(
+    stub: &StubModule,
+    fallback: &mut impl FnMut(&str) -> Option<StubModule>,
+) -> HashSet<String> {
     let root = source_root(stub);
     let source = stub.source;
     let tier = stub.tier;
     let target = stub.target.clone();
     let mut loader = |module_name: &str| {
-        let path = resolve_dotted_stub(&root, module_name)?;
-        parse_filesystem_stub(&path, module_name, source, tier, target.as_ref())
+        resolve_dotted_stub(&root, module_name)
+            .and_then(|path| {
+                parse_filesystem_stub(&path, module_name, source, tier, target.as_ref())
+            })
+            .or_else(|| fallback(module_name))
     };
     reexported_member_names_with_loader(stub, &mut loader)
 }

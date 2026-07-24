@@ -387,32 +387,47 @@ pub fn load_snapshot_stub_module(
         source_text,
         request,
         target,
-        |module_name| {
-            let (logical_uri, body) = match target {
-                Some(target) => snapshot.read_stub_for_target(module_name, target.python_version),
-                None => snapshot.read_stub(module_name),
-            }?;
-            match target {
-                Some(target) => basilisk_stubs::pyi_parser::parse_pyi_source_for_target(
-                    body,
-                    Path::new(&logical_uri),
-                    module_name,
-                    stub_source,
-                    basilisk_stubs::StubTier::Tier1,
-                    target,
-                )
-                .ok(),
-                None => basilisk_stubs::parse_pyi_source(
-                    body,
-                    Path::new(&logical_uri),
-                    module_name,
-                    stub_source,
-                    basilisk_stubs::StubTier::Tier1,
-                )
-                .ok(),
-            }
-        },
+        |module_name| parse_snapshot_stub(snapshot, target, module_name, stub_source),
     )
+}
+
+/// Read one module's stub body out of an active snapshot and parse it.
+///
+/// The single producer of a snapshot-backed [`StubModule`], shared by the
+/// cross-module loader above and by the user-stub re-export fallback
+/// ([STUBRES-PYI-REEXPORTS], GitHub #312 follow-up): a user stub's star
+/// re-export from a stdlib module must see the same target-filtered parse the
+/// snapshot's own modules get.
+#[must_use]
+pub fn parse_snapshot_stub(
+    snapshot: &basilisk_stubs::typeshed::snapshot::Snapshot,
+    target: Option<&StubTarget>,
+    module_name: &str,
+    stub_source: StubSource,
+) -> Option<StubModule> {
+    let (logical_uri, body) = match target {
+        Some(target) => snapshot.read_stub_for_target(module_name, target.python_version),
+        None => snapshot.read_stub(module_name),
+    }?;
+    match target {
+        Some(target) => basilisk_stubs::pyi_parser::parse_pyi_source_for_target(
+            body,
+            Path::new(&logical_uri),
+            module_name,
+            stub_source,
+            StubTier::Tier1,
+            target,
+        )
+        .ok(),
+        None => basilisk_stubs::parse_pyi_source(
+            body,
+            Path::new(&logical_uri),
+            module_name,
+            stub_source,
+            StubTier::Tier1,
+        )
+        .ok(),
+    }
 }
 
 /// Load a `.pyi` external module from immutable VFS text rather than disk.

@@ -20,6 +20,12 @@ export const CONFIGURATION_EDITOR_SCRIPT_CORE = String.raw`
     let activeTag;
     let selectedRuleCode;
     let lastFocusedRule;
+    // Whether the live preview's discard has already been reported to the
+    // host. The dialog's 'close' event arrives on a QUEUED task that a
+    // throttled (occluded) webview may never run, so every discard
+    // initiation point posts synchronously and this flag keeps the close
+    // event's fallback from double-posting. Re-armed on each preview state.
+    let previewCancelReported = false;
     // Which navigation view is visible. Rules is the default so the editor
     // opens on the tag-first rule browser exactly as before.
     let activeSection = 'rules';

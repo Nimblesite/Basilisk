@@ -111,6 +111,55 @@ fn cli_flags_a_member_the_active_typeshed_stub_does_not_declare() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Regression for the GitHub #312 follow-up (comment 5053013115), end to end
+/// through the real CLI with the reporter's exact configuration: `stub-paths`
+/// and `typeshed-path` both point at `typings/`, `typings/uio.pyi` is only
+/// `from io import *`, and `io` lives in `typings/stdlib/`. The user stub's
+/// star target resolves through the active custom typeshed — never a false
+/// "Module `uio` has no attribute `StringIO`".
+#[test]
+fn cli_accepts_user_stub_reexports_from_the_custom_typeshed_stdlib() {
+    let dir = unique_dir("user_stub_stdlib_reexport");
+    let typings = dir.join("typings");
+    let stdlib = typings.join("stdlib");
+    std::fs::create_dir_all(&stdlib).expect("create typings/stdlib");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\nstub-paths = [\"typings\"]\ntypeshed-path = \"typings\"\n",
+    )
+    .expect("write pyproject");
+    // Mirrors micropython-esp32-stubs' uio.pyi verbatim.
+    std::fs::write(typings.join("uio.pyi"), "from io import *\n").expect("write uio stub");
+    std::fs::write(
+        stdlib.join("io.pyi"),
+        "class StringIO: ...\nclass BytesIO: ...\n",
+    )
+    .expect("write io stub");
+    std::fs::write(stdlib.join("VERSIONS"), "io: 3.0-\n").expect("write VERSIONS");
+    std::fs::write(
+        dir.join("app.py"),
+        "import uio\n\nbuffer_1 = uio.StringIO()\nbuffer_2 = uio.BytesIO()\n",
+    )
+    .expect("write app");
+
+    let output = check_app(&dir);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        !stdout.contains("imports_module_attribute"),
+        "`StringIO`/`BytesIO` are star-re-exported from the custom typeshed's \
+         `io` stub and must not be flagged, stdout: {stdout}, stderr: {stderr}"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "spec-valid re-exports must let the CLI check pass, stdout: {stdout}, stderr: {stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The other half of GitHub #330, and the guard against re-introducing #312:
 /// members the active Typeshed stub DOES declare — including names it
 /// re-exports rather than defines — must never be flagged. Capturing the
