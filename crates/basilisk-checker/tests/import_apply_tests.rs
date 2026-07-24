@@ -203,10 +203,7 @@ fn user_stub_star_reexport_from_stdlib_stub_is_captured() {
     fs::write(stub_dir.join("uio.pyi"), "from io import *\n").unwrap();
 
     // `io` exists ONLY in the active custom typeshed, not under stub_dir.
-    let typeshed = make_custom_typeshed(&[(
-        "io.pyi",
-        "class StringIO: ...\nclass BytesIO: ...\n",
-    )]);
+    let typeshed = make_custom_typeshed(&[("io.pyi", "class StringIO: ...\nclass BytesIO: ...\n")]);
 
     let mut paths = make_search_paths(vec![]);
     paths.stub_paths = vec![stub_dir.clone()];
@@ -361,8 +358,7 @@ fn user_stub_star_reexport_prefers_sibling_stub_over_snapshot() {
     fs::write(stub_dir.join("umachine.pyi"), "from machine import *\n").unwrap();
     fs::write(stub_dir.join("machine.pyi"), "def reset() -> None: ...\n").unwrap();
 
-    let typeshed =
-        make_custom_typeshed(&[("machine.pyi", "def snapshot_only() -> None: ...\n")]);
+    let typeshed = make_custom_typeshed(&[("machine.pyi", "def snapshot_only() -> None: ...\n")]);
 
     let mut paths = make_search_paths(vec![]);
     paths.stub_paths = vec![stub_dir.clone()];
