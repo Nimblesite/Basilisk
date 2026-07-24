@@ -110,8 +110,9 @@ enum Command {
     },
     /// Apply autofixes to one or more files or directories.
     Fix {
-        /// Paths to fix. Directories are traversed recursively for `.py` files.
-        #[arg(default_value = ".")]
+        /// Paths to fix. Directories are traversed recursively for `.py`
+        /// files. Defaults to the configured `[tool.basilisk] include` roots,
+        /// else the current directory.
         paths: Vec<String>,
         /// Include unsafe (heuristic) fixes alongside safe fixes.
         #[arg(long)]
@@ -367,6 +368,30 @@ fn run_scoped_check(args: &CheckArgs, scope: DiagnosticScope) -> u8 {
     }
 }
 
+/// Tell the user which rules their configuration selected that this command
+/// never evaluated, and where to see them.
+///
+/// Implements [CHKARCH-CLI-SCOPE-NOTICE] (GitHub #334). `check` drops every
+/// analyze-scope diagnostic at the edge ([CHKARCH-COMMANDS]), so without this
+/// line a project that grades eight rule tags `error` reads "All checked. No
+/// issues found." while none of those rules ever ran. Text only: the JSON
+/// contract machine consumers parse is unchanged.
+fn print_scope_notice(unrun_selected_rules: usize) {
+    if unrun_selected_rules == 0 {
+        return;
+    }
+    println!(
+        "{}",
+        format!(
+            "Note: your configuration selects {unrun_selected_rules} rule{} that `check` \
+             never runs — they are not PEP typing-spec rules. Run `basilisk analyze` to \
+             evaluate them.",
+            pluralise(unrun_selected_rules),
+        )
+        .yellow()
+    );
+}
+
 /// Render diagnostics in the requested format; `1` when errors exist, else `0`.
 fn render_outcome(outcome: &pipeline::CheckOutcome, format: OutputFormat) -> u8 {
     match format {
@@ -382,7 +407,7 @@ fn render_outcome(outcome: &pipeline::CheckOutcome, format: OutputFormat) -> u8 
         OutputFormat::Text => {
             let error_count = render_diagnostics(&outcome.diagnostics, &outcome.sources);
             let total = outcome.diagnostics.len();
-            if total == 0 && outcome.failures.is_empty() {
+            let exit_code = if total == 0 && outcome.failures.is_empty() {
                 println!("{}", "All checked. No issues found.".green().bold());
                 0
             } else if total == 0 {
@@ -401,7 +426,9 @@ fn render_outcome(outcome: &pipeline::CheckOutcome, format: OutputFormat) -> u8 
                     println!("{}", summary.yellow().bold());
                 }
                 u8::from(error_count > 0)
-            }
+            };
+            print_scope_notice(outcome.unrun_selected_rules);
+            exit_code
         }
     }
 }

@@ -3,13 +3,13 @@
   "upstream": {
     "repo": "python/typing",
     "ref": "main",
-    "sha": "6ef9f7719ecfff09dad8724ef42b621fd994fb5e",
-    "shortSha": "6ef9f77",
-    "commitDate": "2026-07-11",
+    "sha": "39164cd2c5b4e2608cb8b5d2fc8af9ae6f0c0fe8",
+    "shortSha": "39164cd",
+    "commitDate": "2026-07-22",
     "stale": false
   },
   "calculator": {
-    "file": "python/typing@6ef9f77:conformance/src/main.py",
+    "file": "python/typing@39164cd:conformance/src/main.py",
     "sha256": "3cb2a27bfc689e89a541528f8bdaa8ed24ae8845ce048eaff69717ef0205b112",
     "bytes": 10810,
     "funcs": [

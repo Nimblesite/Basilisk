@@ -37,6 +37,16 @@ fn run(subcommand: &str, path: &Path) -> Output {
         .expect("spawn basilisk")
 }
 
+/// Run `basilisk <subcommand> <path> --color never` in the default text format.
+fn run_text(subcommand: &str, path: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_basilisk"))
+        .arg(subcommand)
+        .arg(path)
+        .args(["--color", "never"])
+        .output()
+        .expect("spawn basilisk")
+}
+
 fn stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
@@ -169,6 +179,77 @@ fn check_emits_pep_diagnostics_with_stable_json_shape() {
             "check must emit only pep-tagged codes, got: {code}"
         );
     }
+}
+
+// ── the check/analyze split is never silent ([CHKARCH-CLI-SCOPE-NOTICE]) ─────
+
+/// Refs #334. A clean `check` on a project whose configuration selects
+/// analyze-scope rules must say so. Otherwise a silent clean run is
+/// indistinguishable from a real one: the reporter's project graded eight rule
+/// tags `error`, ran `check` in CI, saw "All checked. No issues found." — and
+/// 66 configured errors were never evaluated for the life of the pipeline.
+#[test]
+fn check_reports_configured_rules_its_scope_did_not_run() {
+    let dir = unique_dir("noticeclean");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[tool.basilisk.rule-tags]\n\"basilisk\" = \"error\"\n",
+    )
+    .expect("write config");
+    let py = dir.join("m.py");
+    std::fs::write(&py, HOUSE_DEBT_ONLY).expect("write module");
+
+    let out = run_text("check", &py);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "the debt is analyze-scope, so check still exits 0, stdout: {}",
+        stdout(&out)
+    );
+    let text = stdout(&out);
+    assert!(
+        text.contains("All checked. No issues found."),
+        "check must still report its own clean result, got: {text}"
+    );
+    assert!(
+        text.contains("basilisk analyze"),
+        "a clean check must point at `basilisk analyze` when configuration \
+         selects rules this scope never ran ([CHKARCH-CLI-SCOPE-NOTICE]), got: {text}"
+    );
+}
+
+/// The notice is a fact about *this* project, not boilerplate: a bare tree
+/// selects no analyze-scope rule, so a clean `check` says nothing extra.
+#[test]
+fn check_stays_quiet_when_configuration_selects_no_analyze_rule() {
+    let dir = unique_dir("noticebare");
+    let py = dir.join("m.py");
+    std::fs::write(&py, HOUSE_DEBT_ONLY).expect("write module");
+
+    let text = stdout(&run_text("check", &py));
+    assert!(
+        !text.contains("basilisk analyze"),
+        "a bare tree selects nothing, so check must not advertise analyze, got: {text}"
+    );
+}
+
+/// `analyze` already ran those rules — it must never tell the user to run it.
+#[test]
+fn analyze_never_advertises_itself() {
+    let dir = unique_dir("noticeanalyze");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[tool.basilisk.rule-tags]\n\"basilisk\" = \"error\"\n",
+    )
+    .expect("write config");
+    let py = dir.join("m.py");
+    std::fs::write(&py, HOUSE_DEBT_ONLY).expect("write module");
+
+    let text = stdout(&run_text("analyze", &py));
+    assert!(
+        !text.contains("basilisk analyze"),
+        "analyze ran the configured rules; pointing at itself is noise, got: {text}"
+    );
 }
 
 /// [CHKARCH-CONFIG-MODEL]: a config resolving a pep rule to `disabled` is

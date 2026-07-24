@@ -10,15 +10,20 @@ use std::path::{Path, PathBuf};
 use tower_lsp::lsp_types::Url;
 
 /// Recursively collect all `.py` / `.pyi` files under `dir`, skipping hidden
-/// dirs and the caller's exclude patterns.
+/// dirs, virtualenvs, and the caller's exclude patterns.
 ///
-/// `exclude` is the whole truth about what gets skipped. It arrives already
-/// resolved to the effective list — [`basilisk_config::DEFAULT_EXCLUDES`] when
-/// the workspace configures nothing, and the configured patterns *instead of*
-/// those defaults once it does ([CHKARCH-CONFIG-EXCLUDE]). Applying a second,
-/// hardcoded default set here would make the editor skip trees that no
-/// configuration could re-enable, so `basilisk check` would report on files
-/// the editor silently ignored.
+/// `exclude` is the whole truth about which *configurable* trees are skipped. It
+/// arrives already resolved to the effective list —
+/// [`basilisk_config::DEFAULT_EXCLUDES`] when the workspace configures nothing,
+/// and the configured patterns *instead of* those defaults once it does
+/// ([CHKARCH-CONFIG-EXCLUDE]). Applying a second, hardcoded default set here
+/// would make the editor skip trees that no configuration could re-enable, so
+/// `basilisk check` would report on files the editor silently ignored.
+///
+/// Two structural skips sit outside that list and are not configurable in
+/// either surface: hidden (`.`-prefixed) directories, and virtualenv roots
+/// ([`basilisk_config::is_virtualenv_dir`]). The CLI walk applies exactly the
+/// same two, so the surfaces still agree file-for-file.
 pub fn collect_python_files(
     dir: &Path,
     out: &mut Vec<PathBuf>,
@@ -34,6 +39,13 @@ pub fn collect_python_files(
             // Hidden directories are always skipped, exactly as the CLI walk
             // does — that rule is not configurable in either surface.
             if entry.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
+            // Likewise for virtualenvs, pruned by their `pyvenv.cfg` marker so
+            // a configured `exclude` — which replaces the defaults that named
+            // `venv`/`site-packages` — cannot expose installed packages to the
+            // editor that `basilisk check` never reads (GitHub #341).
+            if basilisk_config::is_virtualenv_dir(&path) {
                 continue;
             }
             if is_excluded(&path, exclude, workspace_root) {
@@ -176,6 +188,30 @@ mod tests {
             vec!["src/app.py".to_owned()],
             "the default exclude list must skip every vendored tree, and hidden \
              directories are always skipped; got {found:?}"
+        );
+    }
+
+    // Issue #341: a virtualenv survives in the scan whenever the workspace
+    // configures its own `exclude`, because that replaces the `DEFAULT_EXCLUDES`
+    // entries (`venv`, `.venv`, `site-packages`) that were the only thing
+    // pruning it. PEP 405's `pyvenv.cfg` marker identifies one structurally,
+    // whatever the directory is named — and the CLI walk must agree, or the
+    // editor analyses third-party sources `basilisk check` never reads
+    // (crates/basilisk-cli/tests/e2e_exclude_config.rs).
+    #[test]
+    fn virtualenvs_are_pruned_by_pyvenv_cfg_regardless_of_configured_excludes() {
+        let root = unique_root("venv");
+        write(&root, "env/lib/python3.13/site-packages/dep/mod.py");
+        let _ = std::fs::write(root.join("env/pyvenv.cfg"), "home = /usr\n");
+        write(&root, "src/app.py");
+
+        let found = scan(&root, &["vendor"]);
+
+        assert_eq!(
+            found,
+            vec!["src/app.py".to_owned()],
+            "a `pyvenv.cfg`-marked directory must be skipped even though the configured \
+             `exclude` replaced the defaults that used to name it; got {found:?}"
         );
     }
 

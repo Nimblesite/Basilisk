@@ -96,22 +96,34 @@ ergonomics: project configuration grades rules and never selects commands.
 When the LSP opens a workspace root whose ancestor walk finds no
 `[tool.basilisk]` table
 ([CHKARCH-CONFIG-DISCOVERY](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY)),
-it writes exactly one thing into the root's `pyproject.toml` (creating the
-file when the project has none) — the two-line strict-by-default seed:
+it writes exactly one seed into the root's `pyproject.toml` (creating the
+file when the project has none) — the strict-by-default rule tag plus the
+binary's bundled typeshed pin:
 
 ```toml
+[tool.basilisk]
+typeshed-commit = "<bundled 40-hex sha>"
+
 [tool.basilisk.rule-tags]
 "basilisk" = "error"
 ```
 
 PEP rules need no seeding — `check` always runs them
 ([CHKARCH-COMMANDS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS)) — so this
-one tag entry is the entire out-of-the-box configuration: every house rule on,
-at `error`, in a file the user owns from that moment. Seeding happens once.
-The LSP never re-seeds while any `[tool.basilisk]` table exists on the walk,
-never edits the entry afterwards, and never resurrects anything the user
-deletes — deleting the tag entry switches the house rules back off. The CLI
-never seeds.
+is the entire out-of-the-box configuration: every house rule on, at `error`,
+and the workspace pinned to the typeshed commit the binary already bundles
+(`bundled_commit_sha()`), in a file the user owns from that moment. The pin
+makes a freshly-opened workspace reproducible — never `UNPINNED`
+([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN))
+— without changing which stubs are resolved and without network access: the
+bundled commit is complete inside the binary, so the pin cannot produce a
+`NO SOURCE` state. The seed only runs when no `[tool.basilisk]` table exists,
+so no user-set `typeshed-path` can be present for the pin to conflict with.
+Seeding happens once. The LSP never re-seeds while any `[tool.basilisk]`
+table exists on the walk, never edits the entries afterwards, and never
+resurrects anything the user deletes — deleting the tag entry switches the
+house rules back off, and deleting the pin returns the workspace to floating
+resolution. The CLI never seeds.
 
 ## Resolved environment reporting {#LSPARCH-RESOLVED-ENV}
 

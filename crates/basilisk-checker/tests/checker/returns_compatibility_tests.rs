@@ -253,3 +253,92 @@ fn empty_dict_return_is_checked_in_declared_context() -> Result<(), Box<dyn std:
     );
     Ok(())
 }
+
+#[test]
+fn empty_list_inside_returned_tuple_uses_declared_element_context(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Refs #337. [TYPEINF-SPECIAL-LITERAL-CONTEXT] must reach the tuple's element
+    // positions: `return [], "lit"` against `-> tuple[list[int], str]` constructs
+    // a `list[int]` instead of a `list[Never]` that then fails invariance. Locks
+    // the Tuple arm of `literal_collection_assignable_to` (inference.rs).
+    let source = "def f() -> tuple[list[int], str]:\n    return [], \"lit\"\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty list inside a returned tuple must be typed against tuple[list[int], str], got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_dict_inside_returned_tuple_uses_declared_element_context(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Refs #337. Same propagation for the `{}` display: `dict[Never, Never]`
+    // must never be synthesised when a declared element type is available.
+    let source = "def f() -> tuple[dict[str, int], str]:\n    return {}, \"a\"\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty dict inside a returned tuple must be typed against dict[str, int], got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn tuple_literal_nested_in_returned_list_uses_declared_context(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Refs #337. The propagation nests to arbitrary depth: the tuple context
+    // has to be reached through the enclosing list literal.
+    let source = "def f() -> list[tuple[list[int], str]]:\n    return [([], \"a\")]\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "tuple literal inside a returned list must be typed contextually, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_list_valid_for_homogeneous_tuple_return() -> Result<(), Box<dyn std::error::Error>> {
+    // Refs #337. The PEP 484 variable-length form `tuple[X, ...]` distributes
+    // the declared element type over every position of the literal.
+    let source = "def f() -> tuple[list[int], ...]:\n    return [], []\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty lists must be valid for a `tuple[list[int], ...]` return, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn tuple_literal_with_wrong_element_still_errors() -> Result<(), Box<dyn std::error::Error>> {
+    // Contextual tuple typing is covariant per position, not a blanket pass: a
+    // genuine element mismatch inside the tuple must still fire.
+    let source = "def f() -> tuple[list[str], str]:\n    return [1], \"a\"\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"returns_compatibility"),
+        "`list[int]` literal in a `tuple[list[str], str]` return must still error, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn homogeneous_tuple_literal_with_wrong_element_still_errors(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // The `tuple[X, ...]` arm must reject a position that does not fit `X`.
+    let source = "def f() -> tuple[int, ...]:\n    return 1, \"a\"\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"returns_compatibility"),
+        "a str element in a `tuple[int, ...]` return must still error, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

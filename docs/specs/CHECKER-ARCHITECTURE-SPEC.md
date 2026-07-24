@@ -264,7 +264,7 @@ configuration/editor behavior is specified by
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->6ef9f77<!--/g:short-->`](https://github.com/python/typing/tree/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
+Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->39164cd<!--/g:short-->`](https://github.com/python/typing/tree/39164cd2c5b4e2608cb8b5d2fc8af9ae6f0c0fe8/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -898,6 +898,22 @@ Compatibility anchors: supported methods {#CHKARCH-LSP-METHODS}; custom commands
 `check` and `analyze` support human-readable text and structured JSON. Other
 formats are not part of the current contract.
 
+#### Scope notice {#CHKARCH-CLI-SCOPE-NOTICE}
+
+`check` drops every analyze-scope diagnostic at the edge
+([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)), so on a project that grades non-`pep`
+rules it can report "All checked. No issues found." while none of those rules
+were ever evaluated. A silent clean run is indistinguishable from a clean
+project — the same class of failure as a skipped CI gate reporting success.
+
+A `check` run in text format therefore closes with one line naming how many
+rules the configuration selected that this command never runs, and pointing at
+`basilisk analyze`. The notice is a fact about the project, not boilerplate: a
+tree whose configuration selects no analyze-scope rule prints nothing extra,
+and `analyze` — which just ran them — never prints it. Exit codes
+([CHKARCH-CLI-EXITCODES](#CHKARCH-CLI-EXITCODES)) and the JSON contract are
+unchanged; machine consumers see no new field.
+
 ### Exit codes {#CHKARCH-CLI-EXITCODES}
 
 | Code | Meaning |
@@ -1149,7 +1165,21 @@ excluded (`basilisk_config::DEFAULT_EXCLUDES`: `node_modules`, `site-packages`,
 `.venv`, `__pycache__`, `build`, `dist`, the extension's `bundled` /
 `_vendored` trees, and friends). Setting `exclude` **replaces** those defaults
 entirely — re-add any default entries explicitly if they are still needed.
-Hidden directories (`.`-prefixed) are always skipped regardless. The single canonical matcher
+Two **structural** skips sit outside `exclude` entirely and no configuration can
+switch them off, because both surfaces must agree on them file-for-file:
+
+- hidden directories (`.`-prefixed); and
+- **virtualenv roots**, identified by [PEP 405](https://peps.python.org/pep-0405/#specification)'s
+  `pyvenv.cfg` marker (`basilisk_config::is_virtualenv_dir`) rather than by
+  directory name, so `env/` and `.direnv/python-3.13/` are pruned exactly like
+  `.venv/`. A venv holds installed third-party packages — never the user's code.
+  Without this, a project that sets any custom `exclude` loses the
+  `venv`/`site-packages` default entries and `basilisk fix` **rewrites installed
+  packages** (GitHub #341). The skip prunes *traversal into* a venv; an explicit
+  CLI path pointing inside one is still checked, matching the walk's depth-0 root
+  exemption.
+
+The single canonical matcher
 `basilisk_config::path_matches_pattern` is shared by every entry point so they
 exclude identically:
 
@@ -1341,7 +1371,7 @@ that official check did not run against a freshly cloned suite is a BUILD FAILUR
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
 - **Current score** — measured against `python/typing@main` at the exact graded
   commit recorded in `conformance_report.json`, currently
-  [`<!--g:short-->6ef9f77<!--/g:short-->`](https://github.com/python/typing/tree/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/conformance):
+  [`<!--g:short-->39164cd<!--/g:short-->`](https://github.com/python/typing/tree/39164cd2c5b4e2608cb8b5d2fc8af9ae6f0c0fe8/conformance):
   **<!--g:pass-->141<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->100.0%<!--/g:score-->**, **<!--g:fp-->0<!--/g:fp--> false positives**, **<!--g:missed-->0<!--/g:missed--> missed required errors**, with
   **<!--g:caught-->970<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
   PEP conformance set — over a fresh `python/typing` clone whose tree holds no

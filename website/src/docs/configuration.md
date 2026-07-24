@@ -146,6 +146,31 @@ hidden switch. The canonical tag vocabulary:
 The [rule reference](/docs/rules/) lists each rule's tags; the configuration
 editor's tag actions write these same `rule-tags` lines.
 
+### Which command runs what you configured
+
+Grading a rule does not decide *which command evaluates it*. The partition is
+fixed ([`CHKARCH-COMMANDS`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS)):
+
+- **`basilisk check`** runs the `pep`-tagged rules, always — and *only* those.
+- **`basilisk analyze`** runs every other rule — `basilisk`, `style`,
+  `redundancy`, `strictness`, `dependencies`, `imports`, `stubs`,
+  `suppressions` — and only where your configuration selects them.
+
+So a `[tool.basilisk.rule-tags]` line reading `"strictness" = "error"` is
+evaluated by `analyze`, not by `check`. A pipeline that runs only
+`basilisk check` will never fail on it. Run both:
+
+```bash
+basilisk check src/ tests/
+basilisk analyze src/ tests/
+```
+
+A text-mode `check` on a project that configures non-`pep` rules closes with a
+one-line note saying how many rules it did not run, so a clean `check` is never
+mistaken for a clean project
+([`CHKARCH-CLI-SCOPE-NOTICE`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-SCOPE-NOTICE)).
+The editor publishes both scopes at once, so this split is a CLI concern only.
+
 ### Severity resolution
 
 Per rule, per checked file — one walk, first decision wins:

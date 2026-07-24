@@ -113,8 +113,50 @@ pub fn literal_collection_assignable_to(rhs: &RhsKind, declared: &InferredType) 
             })),
             _ => None,
         },
+        InferredType::Tuple(declared_elems) => match rhs {
+            RhsKind::Tuple(elements) => tuple_literal_assignable_to(elements, declared_elems),
+            _ => None,
+        },
         _ => None,
     }
+}
+
+/// Contextual typing for a tuple display against a declared tuple type: each
+/// position carries the declared element type inward, so an empty `[]`/`{}`
+/// nested in the tuple constructs the declared container instead of a
+/// `list[Never]` / `dict[Never, Never]` that then fails invariance (#337).
+///
+/// Implements [TYPEINF-SPECIAL-LITERAL-CONTEXT] for the tuple shapes of
+/// [TYPEINF-COLLECTIONS-TUPLES]. Returns `None` for shapes this cannot judge —
+/// a PEP 646 unpacked segment or an arity mismatch — leaving those to the
+/// invariant fallback unchanged.
+fn tuple_literal_assignable_to(
+    elements: &[RhsKind],
+    declared_elems: &[InferredType],
+) -> Option<bool> {
+    if declared_elems
+        .iter()
+        .any(crate::types_star_tuples::is_unpacked_tuple_elem)
+    {
+        return None;
+    }
+    // `tuple[X, ...]` (PEP 484 homogeneous): every position is typed against `X`.
+    if let Some(elem) = crate::types_star_tuples::homogeneous_tuple_elem(declared_elems) {
+        return Some(
+            elements
+                .iter()
+                .all(|element| literal_element_assignable_to(element, elem)),
+        );
+    }
+    if elements.len() != declared_elems.len() {
+        return None;
+    }
+    Some(
+        elements
+            .iter()
+            .zip(declared_elems)
+            .all(|(element, declared)| literal_element_assignable_to(element, declared)),
+    )
 }
 
 /// Assignability of a single literal element: a nested collection literal stays

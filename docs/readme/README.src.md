@@ -40,8 +40,8 @@
 
 <p align="center">
   <a href="https://www.basilisk-python.dev/docs/conformance/"><strong><!--g:score-->100.0%<!--/g:score--> PEP conformance</strong></a> &mdash; <!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> tests in the official
-  <a href="https://github.com/python/typing/tree/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/conformance"><code>python/typing</code></a>
-  conformance suite (commit <code><!--g:short-->6ef9f77<!--/g:short--></code>), scored on the wheel-installed CLI in its default config by the real upstream harness.
+  <a href="https://github.com/python/typing/tree/39164cd2c5b4e2608cb8b5d2fc8af9ae6f0c0fe8/conformance"><code>python/typing</code></a>
+  conformance suite (commit <code><!--g:short-->39164cd<!--/g:short--></code>), scored on the wheel-installed CLI in its default config by the real upstream harness.
   We target <code>python/typing@main</code> and ratchet the score up only.
 </p>
 
