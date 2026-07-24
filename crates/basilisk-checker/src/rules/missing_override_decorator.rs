@@ -1,5 +1,5 @@
-//! Implements [BSK-E0025] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0025: Missing `@override` decorator.
+//! Implements [BSK-0025] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! BSK-0025: Missing `@override` decorator.
 //!
 //! When a class overrides a method that is also defined in one of its base
 //! classes (both defined within the same module), the overriding method must
@@ -14,7 +14,7 @@
 //!
 //! Version gate (issue #171): `@override` (PEP 698 / `typing.override`) was
 //! introduced in Python 3.12, so suggesting it on an older configured target is
-//! a false positive — the decorator cannot be imported there. BSK-E0025 is silent
+//! a false positive — the decorator cannot be imported there. BSK-0025 is silent
 //! when the configured `python_version` is below 3.12.
 
 use std::collections::HashMap;
@@ -26,14 +26,14 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::{guards::is_protocol_class, Rule};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0025",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0025",
+    code: "BSK-0025",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0025",
 };
 
 /// The first Python version with `typing.override` (PEP 698).
 const OVERRIDE_MIN_VERSION: (u32, u32) = (3, 12);
 
-/// Emits BSK-E0025 for methods that override a same-module base-class method
+/// Emits BSK-0025 for methods that override a same-module base-class method
 /// but are not decorated with `@override`.
 pub(crate) struct MissingOverrideDecorator;
 
@@ -53,7 +53,10 @@ impl Rule for MissingOverrideDecorator {
     ) {
         // `@override` (PEP 698) only exists from Python 3.12 — don't suggest it
         // on an older configured target (issue #171).
-        if ctx.target_version < OVERRIDE_MIN_VERSION {
+        let Some(target_version) = ctx.target_version else {
+            return;
+        };
+        if target_version < OVERRIDE_MIN_VERSION {
             return;
         }
 
@@ -160,7 +163,7 @@ fn check_class(
         // Overloaded methods: @override belongs on the implementation, not the
         // overload variants.  If any occurrence is decorated with @overload,
         // treat the whole group as present — the checker for override semantics
-        // on overload groups is handled by E0021/E0016, not BSK-E0025.
+        // on overload groups is handled by E0021/E0016, not BSK-0025.
         if method_has_decorator(&child.method_decorators, name, "overload") {
             continue;
         }

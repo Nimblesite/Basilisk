@@ -1,4 +1,4 @@
-//! Implements [CHKTAG] from [CHKARCH-DIAG]. See docs/specs/CHECKER-RULE-TAGGING-SPEC.md#chktag
+//! Implements [CHKTAG] from [CHKARCH-DIAG]. See docs/specs/CHECKER-RULE-TAGGING-SPEC.md#CHKTAG
 //!
 //! Rule tagging. Basilisk classifies every rule with a flat set of string
 //! *tags*, not a hierarchical category system. Each rule carries exactly one
@@ -58,13 +58,14 @@ pub const PEP_CATEGORIES: [&str; 21] = [
 /// The free-form descriptive tags Basilisk currently uses. Each is carefully
 /// named to avoid colliding with a reserved PEP-category name; the tagging test
 /// ([CHKTAG-TESTS]) asserts this for every entry. [CHKTAG-FREEFORM]
-pub const FREE_FORM_TAGS: [&str; 6] = [
+pub const FREE_FORM_TAGS: [&str; 7] = [
     "style",
     "redundancy",
     "strictness",
     "dependencies",
     "imports",
     "stubs",
+    "suppressions",
 ];
 
 /// The opt-in tag declaration a Basilisk-original rule attaches to itself.
@@ -82,7 +83,7 @@ pub const FREE_FORM_TAGS: [&str; 6] = [
 /// rules attach to themselves; the rest of this module is its public query API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OptInSpec {
-    /// The diagnostic code this opt-in rule emits (e.g. `"BSK-W0050"`).
+    /// The diagnostic code this opt-in rule emits (e.g. `"BSK-0050"`).
     pub code: &'static str,
     /// The free-form tags the rule carries, beyond its [`BASILISK`] provenance.
     pub tags: &'static [&'static str],
@@ -93,6 +94,17 @@ pub struct OptInSpec {
 fn opt_in_specs() -> &'static [OptInSpec] {
     static CACHE: std::sync::OnceLock<Vec<OptInSpec>> = std::sync::OnceLock::new();
     CACHE.get_or_init(crate::rules::opt_in_specs).as_slice()
+}
+
+/// Iterate over live opt-in rule declarations carrying `tag`.
+///
+/// This keeps tag-oriented consumers tied to the rule registry without a
+/// parallel code list or a per-file allocation. [CHKTAG-CONSUMERS]
+pub(crate) fn opt_in_specs_with_tag(tag: &str) -> impl Iterator<Item = OptInSpec> + use<'_> {
+    opt_in_specs()
+        .iter()
+        .copied()
+        .filter(move |spec| spec.tags.contains(&tag))
 }
 
 /// The [`OptInSpec`] a diagnostic `code` was declared with, if it is a Basilisk

@@ -1,4 +1,4 @@
-//! Implements [`directives_reveal_type`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`directives_reveal_type`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! `directives_reveal_type`: Invalid `reveal_type()` call.
 //!
 //! `reveal_type(expr)` must be called with exactly one positional argument.

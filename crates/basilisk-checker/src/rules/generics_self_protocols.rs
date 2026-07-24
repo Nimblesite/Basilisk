@@ -1,4 +1,4 @@
-//! Implements [`generics_self_protocols`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! Implements [`generics_self_protocols`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 //! `generics_self_protocols`: Protocol `Self`-return conformance violation.
 //!
 //! When a `Protocol` declares a method returning `Self`, any class passed where

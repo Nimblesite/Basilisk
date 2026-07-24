@@ -33,8 +33,19 @@ fn check(dir: &Path, args: &[&str]) -> Output {
 /// host interpreter's global site-packages (where e.g. Pillow may be installed
 /// and would mask the diagnostic under test).
 fn check_with_venv(dir: &Path, args: &[&str], venv: Option<&Path>) -> Output {
+    run_with_venv("check", dir, args, venv)
+}
+
+/// [`check_with_venv`] over `basilisk analyze` — for the opt-in
+/// dependency-hygiene diagnostics, which are analyze-scope
+/// ([CHKARCH-COMMANDS]).
+fn analyze_with_venv(dir: &Path, args: &[&str], venv: Option<&Path>) -> Output {
+    run_with_venv("analyze", dir, args, venv)
+}
+
+fn run_with_venv(subcommand: &str, dir: &Path, args: &[&str], venv: Option<&Path>) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_basilisk"));
-    let _ = cmd.arg("check").args(args).current_dir(dir);
+    let _ = cmd.arg(subcommand).args(args).current_dir(dir);
     match venv {
         Some(path) => {
             let _ = cmd.env("VIRTUAL_ENV", path);
@@ -176,13 +187,15 @@ fn py_typed_packages_not_flagged_untyped_ones_still_fire() {
     .expect("write orm");
     std::fs::write(site.join("untypedpkg_fake/__init__.py"), "").expect("write untyped");
     std::fs::create_dir_all(dir.join("src")).expect("mkdir src");
-    // The untyped-package stub suggestion (BSK-E0152) is off by default — the
-    // default config is pure PEP conformance. Opt in via project config beside
-    // the checked sources, exactly as a user would. No modes; this is
-    // configuration. See [CHKARCH-CONFIGURATION-ONLY].
+    // The untyped-package stub suggestion (BSK-0152) is off by default — the
+    // default config is pure PEP conformance. Opt in via the PROJECT ROOT
+    // `pyproject.toml`, one level above the checked `src/` root: config
+    // discovery walks ancestor directories ([CHKARCH-CONFIG-DISCOVERY]), so
+    // this deliberately proves the ancestor walk applies the rule to `src/`
+    // files. No modes; this is configuration. See [CHKARCH-CONFIGURATION-ONLY].
     std::fs::write(
-        dir.join("src/basilisk.json"),
-        "{\"uv\": {\"stubSuggestions\": true}}\n",
+        dir.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-0152\" = \"error\"\n",
     )
     .expect("write config");
     std::fs::write(
@@ -191,7 +204,8 @@ fn py_typed_packages_not_flagged_untyped_ones_still_fire() {
     )
     .expect("write app");
 
-    let output = check(&dir, &["src"]);
+    // BSK-0152 is analyze-scope ([CHKARCH-COMMANDS]) — drive `analyze`.
+    let output = analyze_with_venv(&dir, &["src"], Some(&dir.join(".venv")));
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     assert!(

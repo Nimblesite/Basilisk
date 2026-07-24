@@ -25,17 +25,18 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import {
-    DIAGNOSTIC_TIMEOUT_MS,
-    SUITE_SETUP_TIMEOUT_MS,
-    openPythonFile,
     closeAllEditors,
-    waitForLspReady,
-    replaceDocumentContent,
-    locate,
+    DIAGNOSTIC_TIMEOUT_MS,
     getInlayHints,
     inlayLabelsOnLine,
+    locate,
     normalizedInlayLabel,
+    openPythonFile,
+    removeTestDir,
+    replaceDocumentContent,
+    SUITE_SETUP_TIMEOUT_MS,
     waitForInlayLabel,
+    waitForLspReady,
 } from './test-helpers';
 
 /** Additional time (ms) added to DIAGNOSTIC_TIMEOUT_MS for individual test timeouts. */
@@ -90,7 +91,7 @@ suite('Inline Type Visibility (inlay hints)', () => {
     suiteTeardown(async () => {
         await closeAllEditors();
         if (tmpDir !== undefined && tmpDir !== '' && fs.existsSync(tmpDir)) {
-            fs.rmSync(tmpDir, { recursive: true, force: true });
+            removeTestDir(tmpDir);
         }
     });
 
@@ -128,10 +129,11 @@ suite('Inline Type Visibility (inlay hints)', () => {
             ['no_flag', ':bool'],
             ['some_bytes', ':bytes'],
             ['nothing', ':None'],
-            ['numbers', ':list'],
-            ['mapping', ':dict'],
-            ['uniques', ':set'],
-            ['pair', ':tuple'],
+            // Container literals surface their inferred generic args (#290).
+            ['numbers', ':list[int]'],
+            ['mapping', ':dict[str,str]'],
+            ['uniques', ':set[int]'],
+            ['pair', ':tuple[int,int]'],
         ];
 
         const hints = await getInlayHints(doc, cases.length);
@@ -333,10 +335,10 @@ suite('Inline Type Visibility (inlay hints)', () => {
         );
 
         assert.ok(await replaceDocumentContent(doc, 'value = [1, 2, 3]\n'), 'edit to list should apply');
-        const asList = await waitForInlayLabel({ doc, line: 0, label: ':list' });
+        const asList = await waitForInlayLabel({ doc, line: 0, label: ':list[int]' });
         assert.ok(
-            inlayLabelsOnLine(asList, 0).includes(':list'),
-            `Expected inline ":list" after reassigning to a list — got ${JSON.stringify(inlayLabelsOnLine(asList, 0))}`,
+            inlayLabelsOnLine(asList, 0).includes(':list[int]'),
+            `Expected inline ":list[int]" after reassigning to a list — got ${JSON.stringify(inlayLabelsOnLine(asList, 0))}`,
         );
     });
 
@@ -370,10 +372,11 @@ suite('Inline Type Visibility (inlay hints)', () => {
             ['quiet', ':bool'],
             ['threshold', ':float'],
             ['payload', ':bytes'],
-            ['tags', ':list'],
-            ['headers', ':dict'],
-            ['seen', ':set'],
-            ['coords', ':tuple'],
+            // Container literals surface their inferred generic args (#290).
+            ['tags', ':list[str]'],
+            ['headers', ':dict[str,str]'],
+            ['seen', ':set[int]'],
+            ['coords', ':tuple[int,int]'],
             ['placeholder', ':None'],
             ['retries', ':int'],
         ];

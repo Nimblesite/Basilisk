@@ -62,7 +62,7 @@ async fn test_ws_inlay_hints_variable_types() -> TestResult<()> {
         "should contain int hint: {all_labels}"
     );
     assert!(
-        all_labels.contains("str"),
+        all_labels.contains(": str"),
         "should contain str hint: {all_labels}"
     );
     assert!(
@@ -255,7 +255,7 @@ async fn test_ws_inlay_hint_no_hints_for_annotated_vars() -> TestResult<()> {
         .join(" ");
 
     assert!(
-        all_labels.contains("str"),
+        all_labels.contains(": str"),
         "should contain 'str' hint for unannotated y: {all_labels}"
     );
     assert!(

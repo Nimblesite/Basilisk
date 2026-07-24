@@ -247,27 +247,6 @@ fn canonicalize_tuple_member(arg: &str) -> String {
     }
 }
 
-/// If `ann` starts with `Annotated[`, return the first type argument (the actual type).
-pub(super) fn build_var_type_map<'a>(
-    stmts: &[Stmt],
-    td_readonly_fields: &'a std::collections::HashMap<String, std::collections::HashSet<String>>,
-) -> std::collections::HashMap<String, &'a str> {
-    let mut map = std::collections::HashMap::new();
-    for stmt in stmts {
-        let Stmt::AnnAssign(ann) = stmt else { continue };
-        let Some(var_name) = expr_simple_name(&ann.target) else {
-            continue;
-        };
-        let Expr::Name(type_name) = ann.annotation.as_ref() else {
-            continue;
-        };
-        if let Some((key, _)) = td_readonly_fields.get_key_value(type_name.id.as_str()) {
-            let _ = map.insert(var_name, key.as_str());
-        }
-    }
-    map
-}
-
 /// Collect `TypedDict` key/value violations from module-level statements and function bodies.
 ///
 /// Detects:

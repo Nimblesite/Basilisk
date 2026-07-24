@@ -1,4 +1,4 @@
-//! Implements [`classes_classvar`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`classes_classvar`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! Protocol `ClassVar` conformance checks for `classes_classvar`.
 //!
 //! When a variable is typed as a `Protocol` with `ClassVar` attributes, the RHS

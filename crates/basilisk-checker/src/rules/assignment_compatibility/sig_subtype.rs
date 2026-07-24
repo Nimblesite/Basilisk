@@ -1,4 +1,4 @@
-//! Implements [`assignment_compatibility`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`assignment_compatibility`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! The callable-subtyping algorithm from the typing spec: positional/keyword
 //! matching, `*args`/`**kwargs` contravariance, defaults, and gradual forms.
 

@@ -1,4 +1,4 @@
-//! Implements [`returns_compatibility`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`returns_compatibility`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `returns_compatibility`: Return type mismatch.
 //!
 //! Emitted as an `Error` when the literal value returned by a function is
@@ -15,7 +15,7 @@
 //!     return 42
 //! ```
 
-use crate::inference::infer_rhs;
+use crate::inference::{infer_rhs, literal_collection_assignable_to};
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
@@ -113,8 +113,12 @@ fn check_return_type_mismatch(
             continue;
         }
 
-        // Check assignability using inference system
-        if !inferred_type.is_assignable_to(&declared_type) {
+        // A returned collection literal is contextually typed against the
+        // declared type ([TYPEINF-SPECIAL-LITERAL-CONTEXT]); a stored value
+        // keeps invariant subtyping.
+        let is_assignable = literal_collection_assignable_to(&return_stmt.rhs_kind, &declared_type)
+            .unwrap_or_else(|| inferred_type.is_assignable_to(&declared_type));
+        if !is_assignable {
             out.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(

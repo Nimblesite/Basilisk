@@ -77,10 +77,26 @@ Default: `"wholeModule"`. The user must explicitly opt down to `openFilesOnly`.
 Resolution order (highest wins):
 
 1. Editor workspace setting (`basilisk.analysisMode`) — delivered as `initializationOptions.analysisMode` at startup and re-applied at runtime via `workspace/didChangeConfiguration` (top-level `analysisMode` or nested `basilisk.analysisMode`). Editors that always forward a value (the VS Code extension and basilisk.nvim both send their `wholeModule` default) pin the mode from the editor side; clients that send no value (e.g. the Zed extension) fall through to the file tier.
-2. The first parseable config file in the first workspace root, checked in this order: `basilisk.json`, then `pyrightconfig.json` (pyright compatibility), then `pyproject.toml` — `[tool.basilisk]` or, failing that, `[tool.pyright]`. The winning file supplies the entire workspace config: precedence is first-file-wins, NOT per-field merging, so a `basilisk.json` that omits `analysisMode` resolves to the default even if `pyproject.toml` sets one (mirroring [pyright's own whole-file precedence](https://microsoft.github.io/pyright/#/configuration) of `pyrightconfig.json` over `pyproject.toml`).
+2. The first parseable config file in the first workspace root, checked in this order: `pyrightconfig.json` (pyright compatibility), then `pyproject.toml` — `[tool.basilisk]` or, failing that, `[tool.pyright]`. The winning file supplies the entire workspace config: precedence is first-file-wins, NOT per-field merging, so a `pyrightconfig.json` that omits `analysisMode` resolves to the default even if `pyproject.toml` sets one (mirroring [pyright's own whole-file precedence](https://microsoft.github.io/pyright/#/configuration) of `pyrightconfig.json` over `pyproject.toml`). These pyright files are **compatibility inputs to this analysis tier only**, parsed into the one shared model — rule and tag entries live solely in `pyproject.toml` `[tool.basilisk]` ([CHKARCH-CONFIG-FILE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-FILE)), which the server watches live ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)); `pyrightconfig.json` is read at startup and registry rebuilds, and is not watched.
 3. Hard default: `wholeModule`.
 
 Tier 1 and the fallback are resolved by `resolve_analysis_mode` (`crates/basilisk-lsp/src/workspace_analysis.rs`); the file tier is `load_config` (`crates/basilisk-lsp/src/config.rs`), which the CLI shares.
+
+To be explicit about liveness ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)): the analysis **mode** is resolved when the index is (re)built — at `initialize`, on a `didChangeConfiguration` that supplies a mode, and on workspace-folder changes — it is a session-scoped structural choice, not hot-swapped per keystroke. **Rule** configuration, include/exclude, and the import environment are fully live: the server's own watcher refreshes them through the shared refresh tail without any client watcher support and without a restart.
+
+This tiering governs the **analysis-level** workspace config (mode, formatter,
+etc.) only. **Rule** config is resolved per file by walking ancestor
+directories, and it is deliberately *not* a cumulative merge: every ancestor
+`pyproject.toml` carrying a `[tool.basilisk]` table contributes to a
+nearest-first chain, and the nearest table that decides a rule wins that rule
+outright. Non-rule scalar fields do merge additively, nearest directory winning
+per key. There are no per-module or per-path override tables and no glob-keyed
+sections — the model is exactly two flat maps, `[tool.basilisk.rules]` and
+`[tool.basilisk.rule-tags]` ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
+Scoping a rule to part of the tree is done by placing a `pyproject.toml` in
+that folder. See
+[CHKARCH-CONFIG-DISCOVERY](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY)
+(GitHub #311) — identically in the CLI and the LSP.
 
 ---
 
@@ -114,6 +130,11 @@ A `FileEntry` is invalidated when:
 - Its on-disk content changes (file-watcher event) AND `source_hash` changes
 - The editor sends a `didChange` notification for it
 - A file it depends on changes in a way that affects its output (`crossModule` only)
+- The root configuration changes — config-editor apply, edit to an open config
+  buffer, or a disk change seen by the server-owned watcher: the shared refresh
+  tail replaces the root config, invalidates the per-directory config memo, and
+  rechecks every indexed file
+  ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG))
 
 When invalidated, the file is re-analysed **through the salsa engine**
 ([CHKARCH-INCREMENTAL-SALSA]), which re-runs only the queries whose inputs
@@ -250,7 +271,17 @@ No workspace scan; the server waits for `didOpen` notifications.
 
 ### wholeModule Startup {#ANALYSIS-STARTUP-WHOLE}
 
-On `initialized`: the import search paths are built first (uv registry, workspace members, stub dirs), then all `.py`/`.pyi` files under workspace roots are collected (respecting `include`/`exclude`), the salsa engine is primed with every file's text, and each file is analysed **exactly once through the memoized queries** ([CHKARCH-INCREMENTAL-SALSA]) — the same memos every subsequent edit hits. Diagnostics are published for every file; open files (skipped by the scan — editor text is authoritative) are re-analysed through the engine afterwards so they converge with the scanned workspace. Progress via `window/workDoneProgress`.
+During `initialize`, Basilisk resolves the selected step-3 stdlib source from
+local sources only and gates the first check on it
+([STUBRES-TYPESHED-OFFLINE](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-OFFLINE)).
+This implements "Typeshed stubs for the standard library" in the pinned typing
+order ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+The source is the custom path or the pinned commit verified offline from the
+store/bundle; a missing pin is a terminal `NO SOURCE`, never a substitute. The scan
+then builds import paths, primes Salsa, analyzes each workspace file once, and
+publishes diagnostics. Open buffers are re-analyzed from editor text. Progress
+and the selected source appear in Service Info
+([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 
 ### crossModule Startup {#ANALYSIS-STARTUP-CROSS}
 
@@ -266,7 +297,15 @@ Incremental edits are applied to the in-memory buffer, then parse → resolve �
 
 ### Import resolution on incremental re-check {#ANALYSIS-INCR-IMPORTS}
 
-The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, uv registry) the full scan used. The full scan builds and caches these on the workspace index; incremental re-checks reuse the cached value (site-packages discovery may touch the filesystem or spawn a subprocess and MUST NOT run per keystroke).
+The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, the resolved typeshed stdlib source, uv registry) the full scan used. The full scan builds and caches these on the workspace index; incremental re-checks reuse the cached value (site-packages discovery may touch the filesystem or spawn a subprocess and MUST NOT run per keystroke).
+
+The cached `ImportSearchPaths` include the selected typeshed path and exact source
+identity. A `typeshed-path` or `typeshed-commit` change invalidates them and
+rebuilds step 3 before rechecking
+([STUBRES-TYPESHED-PIN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-PIN)).
+This derived cache changes performance only; it preserves the pinned resolution
+order ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+It is reused across keystrokes, never across a source or configuration change.
 
 Otherwise the syntactic resolver marks every import `Unresolved`, resurrecting false `imports_unresolved` for packages that resolve cleanly on the CLI and at startup. The diagnostics an incremental re-check **publishes** MUST reflect import resolution — not just the cached symbol table used by navigation.
 
@@ -334,7 +373,7 @@ mid-scan must stay cleared).
 
 ## Type Checking Toggle {#ANALYSIS-ENABLED}
 
-The `basilisk.enabled` setting (surfaced as the **Type Checking** toggle in the
+The `basilisk.enabled` setting (surfaced as the **Diagnostics** toggle in the
 activity panel, [EXTACT-INFO-FEATURE-STATUS]) gates **all diagnostic
 publication**. The LSP is authoritative for diagnostics in every mode, so the
 toggle is honoured **server-side** — the editor's own
@@ -387,19 +426,34 @@ panel-payload gating, header/row neutrality, and zero-diagnostics refresh).
 
 ## LSP Capabilities {#ANALYSIS-CAPS}
 
-When `analysisMode` is `wholeModule` or `crossModule`, the server advertises:
+Workspace capabilities are **mode-independent**. `build_capabilities`
+(`crates/basilisk-lsp/src/server/init.rs`) is parameterised only by whether the
+formatter engine is enabled ([LSPFMT-CAPABILITIES](LSP-FORMATTING-SPEC.md#LSPFMT-CAPABILITIES)),
+so the `initialize` response advertises the same workspace block in every
+`analysisMode`, `openFilesOnly` included:
 
 ```json
 "workspace": {
+  "workspaceFolders": { "supported": true, "changeNotifications": true },
   "fileOperations": {
-    "didCreate": { "filters": [{ "pattern": { "glob": "**/*.py" } }] },
-    "didDelete": { "filters": [{ "pattern": { "glob": "**/*.py" } }] },
-    "didRename": { "filters": [{ "pattern": { "glob": "**/*.py" } }] }
+    "willRename": {
+      "filters": [
+        { "scheme": "file", "pattern": { "glob": "**/*.py", "matches": "file" } }
+      ]
+    }
   }
 }
 ```
 
-When `analysisMode` is `openFilesOnly`, these capabilities are omitted.
+`workspace/willRenameFiles` is the only file-operation method the server serves
+(`crates/basilisk-lsp/src/server/handlers/file_operations.rs`): renaming a module
+returns a `WorkspaceEdit` rewriting the imports that pointed at it
+([REFACTOR-RENAMEMOD](LSP-REFACTORING-SPEC.md#REFACTOR-RENAMEMOD)). The
+`didCreate` / `didDelete` / `didRename` notifications are neither advertised nor
+handled — creations and deletions reach the index through
+`workspace/didChangeWatchedFiles`, which is where the mode gate actually lives:
+that handler returns early in `openFilesOnly` after refreshing configuration
+([ANALYSIS-INCR-WATCH]).
 
 ---
 

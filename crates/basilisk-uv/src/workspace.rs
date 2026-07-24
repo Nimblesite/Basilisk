@@ -10,12 +10,8 @@ use crate::error::UvError;
 
 /// Parsed uv workspace configuration.
 //
-// Implements [LSPUV-WORKSPACE-MODEL] in a slimmed form: holds the resolved
-// member directory paths (the spec's `WorkspaceInfo.members`). The spec's
-// richer per-member shape (`WorkspaceMember { name, path, pyproject,
-// src_roots }`) is not modelled as a struct here — member src-roots are
-// derived later in `discover_workspace_members` / `add_source_root`. See
-// conformance audit (DEVIATION: simplified model).
+// Implements [LSPUV-WORKSPACE-MODEL]: resolved member directories plus the
+// parsed (currently unapplied) exclude patterns.
 #[derive(Debug, Clone)]
 pub struct UvWorkspace {
     /// Resolved member directory paths.
@@ -67,10 +63,8 @@ struct WorkspaceSection {
 //
 // Implements [LSPUV-WORKSPACE-DETECTION] — reads `[tool.uv.workspace] members`
 // (and `exclude`) from `pyproject.toml` and resolves glob patterns to member
-// directories. NOTE: the spec table shows `exclude` being honoured in spirit,
-// but `resolve_member_patterns` does NOT subtract `exclude` from the resolved
-// members (the field is parsed and surfaced, not applied). See conformance
-// audit (DEVIATION).
+// directories. `exclude` is parsed and surfaced but is not yet subtracted from
+// the resolved member list.
 pub fn parse_uv_workspace(root: &Path) -> Result<Option<UvWorkspace>, UvError> {
     let path = root.join("pyproject.toml");
 
@@ -116,8 +110,7 @@ fn resolve_member_patterns(root: &Path, patterns: &[String]) -> Vec<PathBuf> {
     let mut result = Vec::new();
 
     for pattern in patterns {
-        if pattern.ends_with("/*") {
-            let prefix = &pattern[..pattern.len() - 2];
+        if let Some(prefix) = pattern.strip_suffix("/*") {
             let parent = root.join(prefix);
             if let Ok(entries) = std::fs::read_dir(&parent) {
                 for entry in entries.filter_map(Result::ok) {
@@ -314,7 +307,15 @@ pub fn discover_workspace_members(roots: &[PathBuf]) -> Vec<PathBuf> {
         };
         for entry in entries.flatten() {
             let path = entry.path();
-            if !path.is_dir() || !path.join("pyproject.toml").is_file() {
+            // `DirEntry::file_type` uses directory-enumeration metadata on
+            // normal filesystems, avoiding one `stat` syscall for every child
+            // of every workspace root. Preserve the old symlink-following
+            // behaviour explicitly; only real directories take the fast path.
+            let is_directory = entry.file_type().map_or_else(
+                |_| path.is_dir(),
+                |file_type| file_type.is_dir() || (file_type.is_symlink() && path.is_dir()),
+            );
+            if !is_directory || !path.join("pyproject.toml").is_file() {
                 continue;
             }
 

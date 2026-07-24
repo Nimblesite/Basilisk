@@ -1,4 +1,5 @@
 //! Tests for [ANALYSIS-CROSSLSP-IMPORT]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-IMPORT
+//! Tests the source precedence required by [TYPESHEDRT-ACCEPTANCE-RESOLUTION].
 #![allow(
     clippy::allow_attributes,
     clippy::unwrap_used,
@@ -144,7 +145,7 @@ fn test_extra_paths_searched() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
-        typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("libmod", &paths).unwrap();
     assert!(result.path.ends_with("libmod.py"));
@@ -157,7 +158,10 @@ fn test_extra_paths_searched() {
 fn test_site_packages_searched() {
     let root = make_tmp_dir("bsk_ir_sp_root");
     let sp = make_tmp_dir("bsk_ir_sp_pkgs");
-    fs::write(sp.join("requests.py"), "").unwrap();
+    let requests = sp.join("requests");
+    fs::create_dir_all(&requests).unwrap();
+    fs::write(requests.join("py.typed"), "").unwrap();
+    fs::write(requests.join("__init__.py"), "").unwrap();
 
     let paths = ImportSearchPaths {
         roots: vec![root.clone()],
@@ -166,17 +170,17 @@ fn test_site_packages_searched() {
         workspace_members: vec![],
         site_packages: Some(sp.clone()),
         registry: None,
-        typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("requests", &paths).unwrap();
-    assert!(result.path.ends_with("requests.py"));
+    assert!(result.path.ends_with("requests/__init__.py"));
 
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&sp);
 }
 
 #[test]
-fn test_workspace_root_takes_priority() {
+fn test_manual_extra_path_takes_priority() {
     let root = make_tmp_dir("bsk_ir_prio_root");
     let extra = make_tmp_dir("bsk_ir_prio_extra");
     fs::write(root.join("dup.py"), "root\n").unwrap();
@@ -189,10 +193,10 @@ fn test_workspace_root_takes_priority() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
-        typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("dup", &paths).unwrap();
-    assert!(result.path.starts_with(&root));
+    assert!(result.path.starts_with(&extra));
 
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&extra);
@@ -310,7 +314,7 @@ fn test_stub_paths_searched_before_roots() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
-        typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("mymod", &paths).unwrap();
     // Stub-path .pyi should win over root .py
@@ -334,7 +338,7 @@ fn test_stub_paths_only_pyi() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
-        typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("mymod", &paths);
     assert!(
@@ -360,7 +364,7 @@ fn test_stub_package_resolution() {
         workspace_members: vec![],
         site_packages: Some(sp.clone()),
         registry: None,
-        typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("requests", &paths).unwrap();
     assert_eq!(result.resolution, ImportResolution::StubPyi);
@@ -383,7 +387,7 @@ fn test_stub_package_submodule() {
         workspace_members: vec![],
         site_packages: Some(sp.clone()),
         registry: None,
-        typeshed_path: None,
+        typeshed_snapshot: None,
     };
     let result = resolve_module("requests.api", &paths).unwrap();
     assert_eq!(result.resolution, ImportResolution::StubPyi);

@@ -1,8 +1,9 @@
-//! Implements [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Diagnostic data types for Basilisk.
 
 use basilisk_resolver::Span;
 use basilisk_stubs::TypeProvenance;
+use std::borrow::Cow;
 
 /// The severity level of a diagnostic.
 ///
@@ -56,7 +57,7 @@ pub enum RuleMode {
     Ignore,
 }
 
-/// A parsed inline suppression or mode override from a source comment.
+/// A parsed inline suppression or severity override from a source comment.
 ///
 /// The data shape behind [CHKARCH-STRICTNESS-SUPPRESSION] / the compat table in
 /// [CHKARCH-STRICTNESS-COMPAT] — a `# type: <mode>[codes]` or block/file
@@ -100,13 +101,14 @@ pub(crate) fn error_diagnostic(
     help: Option<&'static str>,
     note: Option<&'static str>,
 ) -> Diagnostic {
-    error_diagnostic_owned(
+    diagnostic(
         code,
+        Severity::Error,
         message,
         span,
         path,
-        help.map(str::to_owned),
-        note.map(str::to_owned),
+        help.map(Cow::Borrowed),
+        note.map(Cow::Borrowed),
     )
 }
 
@@ -121,7 +123,15 @@ pub(crate) fn error_diagnostic_owned(
     help: Option<String>,
     note: Option<String>,
 ) -> Diagnostic {
-    diagnostic_owned(code, Severity::Error, message, span, path, help, note)
+    diagnostic(
+        code,
+        Severity::Error,
+        message,
+        span,
+        path,
+        help.map(Cow::Owned),
+        note.map(Cow::Owned),
+    )
 }
 
 /// Convenience: build an `Error` diagnostic with a `format!`-produced `help`
@@ -135,7 +145,15 @@ pub(crate) fn error_diag_help_note(
     help: String,
     note: &'static str,
 ) -> Diagnostic {
-    error_diagnostic_owned(code, message, span, path, Some(help), Some(note.to_owned()))
+    diagnostic(
+        code,
+        Severity::Error,
+        message,
+        span,
+        path,
+        Some(Cow::Owned(help)),
+        Some(Cow::Borrowed(note)),
+    )
 }
 
 /// Build a `Warning`-severity diagnostic with `String`-owned `help`/`note` text.
@@ -147,7 +165,15 @@ pub(crate) fn warning_diagnostic_owned(
     help: Option<String>,
     note: Option<String>,
 ) -> Diagnostic {
-    diagnostic_owned(code, Severity::Warning, message, span, path, help, note)
+    diagnostic(
+        code,
+        Severity::Warning,
+        message,
+        span,
+        path,
+        help.map(Cow::Owned),
+        note.map(Cow::Owned),
+    )
 }
 
 /// Build an `Info`-severity diagnostic with `String`-owned `help`/`note` text.
@@ -159,17 +185,25 @@ pub(crate) fn info_diagnostic_owned(
     help: Option<String>,
     note: Option<String>,
 ) -> Diagnostic {
-    diagnostic_owned(code, Severity::Info, message, span, path, help, note)
+    diagnostic(
+        code,
+        Severity::Info,
+        message,
+        span,
+        path,
+        help.map(Cow::Owned),
+        note.map(Cow::Owned),
+    )
 }
 
-fn diagnostic_owned(
+fn diagnostic(
     code: ErrorCode,
     severity: Severity,
     message: String,
     span: Span,
     path: &str,
-    help: Option<String>,
-    note: Option<String>,
+    help: Option<Cow<'static, str>>,
+    note: Option<Cow<'static, str>>,
 ) -> Diagnostic {
     Diagnostic {
         code,
@@ -201,9 +235,9 @@ pub struct Diagnostic {
     /// The source file path.
     pub path: String,
     /// Optional help text shown after the snippet.
-    pub help: Option<String>,
+    pub help: Option<Cow<'static, str>>,
     /// Optional note shown after the snippet.
-    pub note: Option<String>,
+    pub note: Option<Cow<'static, str>>,
     /// Where the type information came from, if this diagnostic relates to
     /// an imported symbol.  Used for tier-based severity adjustment (Tier3
     /// diagnostics are downgraded to Info) and hover annotations.
@@ -245,19 +279,20 @@ impl Diagnostic {
 mod tests {
     use super::{Diagnostic, ErrorCode, Severity};
     use basilisk_resolver::Span;
+    use std::borrow::Cow;
 
     fn diag(help: Option<&str>, note: Option<&str>) -> Diagnostic {
         Diagnostic {
             code: ErrorCode {
-                code: "BSK-E0000",
+                code: "BSK-0000",
                 docs_url: "https://www.basilisk-python.dev",
             },
             severity: Severity::Error,
             message: "msg".to_owned(),
             span: Span::new(0, 1),
             path: "t.py".to_owned(),
-            help: help.map(str::to_owned),
-            note: note.map(str::to_owned),
+            help: help.map(|value| Cow::Owned(value.to_owned())),
+            note: note.map(|value| Cow::Owned(value.to_owned())),
             provenance: None,
         }
     }

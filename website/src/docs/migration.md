@@ -1,10 +1,10 @@
 ---
 layout: layouts/docs.njk
 title: "Migrate to Basilisk from Pyright or mypy"
-description: "Step-by-step migration guide from Pyright or mypy to Basilisk. Automatic config import, per-path overrides, and incremental adoption strategy."
+description: "Current, honest steps for moving a Python project to Basilisk with per-rule severity and gradual path-based adoption."
 keywords: migrate to basilisk, from pyright, from mypy, python type checker migration
 date: 2026-02-28
-dateModified: 2026-03-31
+dateModified: 2026-07-19
 author: The Basilisk Project
 eleventyNavigation:
   key: Migration
@@ -13,214 +13,190 @@ eleventyNavigation:
 
 # Migration Guide
 
-Basilisk includes tooling to help existing codebases adopt it gradually. A full migration can take weeks on large codebases; the tools below make the process tractable.
+Basilisk's unconfigured default enables its complete core PEP rule set. Extra
+Basilisk rules—required annotations, explicit-`Any` policy, required
+`@override`, style, redundancy, dependency hygiene, and stub hygiene—are opt-in.
+Migration therefore means choosing the policy you want, checking the project,
+and recording narrow exceptions for the debt you cannot resolve yet.
 
----
+> **Current tooling:** `basilisk migrate`, `basilisk stats`, and
+> `basilisk check --only` are planned but are not implemented. The steps below
+> use configuration and commands that exist today. The visual editor is
+> described at the end of this page.
 
-<h2 id="from-pyright">From Pyright</h2>
+## 1. Add canonical project configuration
 
-### Step 1 — Import your configuration
-
-If you have a `pyrightconfig.json`, Basilisk can read it and produce the equivalent `[tool.basilisk]` config:
-
-```bash
-basilisk migrate --from pyright
-```
-
-This reads `pyrightconfig.json` from the current directory and appends the equivalent settings to your `pyproject.toml`.
-
-**Example input (`pyrightconfig.json`):**
-
-```json
-{
-  "include": ["src"],
-  "exclude": ["**/migrations/**"],
-  "typeCheckingMode": "strict",
-  "pythonVersion": "3.12"
-}
-```
-
-**Generated output (`pyproject.toml`):**
+Start with the paths you own. Add `python-version` only when deliberately
+overriding project/interpreter evidence; the pinned typing specification defines
+how version checks behave, not a default target
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)):
 
 ```toml
 [tool.basilisk]
-python-version = "3.12"
-include = ["src/"]
-exclude = ["**/migrations/**"]
+include = ["src/", "tests/"]
+exclude = [
+  "__pycache__", ".venv", "site-packages", "build", "dist",
+  "**/migrations/**", "**/generated/**",
+]
 ```
 
-### Step 2 — Run Basilisk
+Setting `exclude` replaces Basilisk's built-in list, so retain every default you
+still need. See the complete [configuration reference](/docs/configuration/).
+
+A legacy root-level `basilisk.json` is not read by anything. If one still
+exists it is inert — no tool loads it, and the configuration editor does not
+surface it at all. Translate its keys into `[tool.basilisk]` (camelCase →
+kebab-case, e.g. `typeshedPath` → `typeshed-path`), move its per-rule and
+per-tag severities into `[tool.basilisk.rules]` and
+`[tool.basilisk.rule-tags]`, then delete the file.
+
+## 2. Choose the target policy
+
+The PEP rule set needs no switch. Opt into Basilisk rules individually, or
+grade a whole tag with one written line:
+
+```toml
+[tool.basilisk.rule-tags]
+"basilisk" = "error"     # every opt-in house rule on
+
+[tool.basilisk.rules]
+"BSK-0011" = "warning"   # then grade individual rules over their tag entry
+```
+
+Rules are organised by their live
+[provenance, PEP-category, and descriptive tags](/docs/rules/). Basilisk has no
+basic/standard/strict mode; the policy is exactly the rule and tag entries
+persisted in the file. See
+[Rules: two flat maps](/docs/configuration/#rules-two-flat-maps).
+
+## 3. Run the checker and fix safe debt first
 
 ```bash
-basilisk check src/
+basilisk check src/ tests/
+basilisk fix src/ tests/
 ```
 
-If you were already using Pyright with `typeCheckingMode = "strict"`, you will see relatively few new errors. The most common additions:
+`basilisk fix` applies deterministic Safe fixes by default. Re-run the checker
+afterward so the remaining list represents debt that still needs a decision.
 
-| Pyright rule | Basilisk equivalent |
-|---|---|
-| `reportMissingTypeArgument` | callables_annotation |
-| `reportReturnType` | BSK-E0002 |
-| `reportArgumentType` | calls_argument_type |
-| `reportAttributeAccessIssue` | aliases_newtype |
-| `reportUndefinedVariable` | names_undefined |
-| `reportOperatorIssue` | assignment_compatibility |
+## 4. Demote only what cannot be fixed now
 
-Basilisk adds errors that Pyright does not flag even in strict mode:
-- **returns_compatibility** — Implicit `Any` in parameter and return position
-- **match_exhaustiveness** — Non-exhaustive `match` statement (missing cases)
-- **BSK-E0025** — Missing `@override` decorator on overriding methods
+Prefer a visible warning/info over hiding a rule completely:
 
-### Step 3 — Handle `# type: ignore` comments
+```toml
+[tool.basilisk.rules]
+"returns_compatibility" = "warning"
+"imports_unresolved" = "info"
+```
 
-Pyright uses `# type: ignore` for inline suppressions. Basilisk requires a different format with a mandatory reason:
+Accepted severities are `error`, `warning`, `info`, and `disabled`. An explicit
+non-disabled severity also enables an opt-in rule; removing the entry returns it
+to inherited tag/default selection.
+
+For legacy areas, keep the exception local by placing a `pyproject.toml` with
+a `[tool.basilisk]` table in that folder — the nearest deciding table wins per
+rule, so the rest of the tree keeps the strict grading:
+
+```toml
+# legacy/pyproject.toml
+[tool.basilisk.rules]
+"returns_compatibility" = "warning"
+"imports_unresolved" = "info"
+```
+
+There are no glob path patterns or per-path override tables — scoped policy is
+always a config file in the scoped folder. A project-wide `disabled` entry
+hides future violations too (and is invalid for PEP rules, which can only be
+graded); `basilisk adopt` is the safer tool when the debt is confined to
+existing code.
+
+## 5. Preserve and audit inline ignores
+
+Basilisk recognises standard ignores:
 
 ```python
-# Pyright
-x = get_value()  # type: ignore[reportArgumentType]
-
-# Basilisk
-x = get_value()  # basilisk: ignore[calls_argument_type] -- third-party API mismatch, tracked in #456
+value = legacy_api()  # type: ignore[returns_compatibility]
 ```
 
-Basilisk will flag bare `# type: ignore` comments since it doesn't recognise them. The migration tool suggests the correct `# basilisk: ignore[CODE] -- reason` format.
+Bare `# type: ignore` suppresses everything on the line. A mypy/Pyright code
+that is not a Basilisk code also falls back to blanket PEP 484 behavior, so
+replace foreign codes with the matching Basilisk code where possible:
 
-### Step 4 — Adopt gradually with per-path overrides
+```python
+# Broad compatibility fallback
+value = legacy_api()  # type: ignore[arg-type]
 
-For a large codebase, soften or disable the noisiest rules in legacy directories and tighten them as you go:
-
-```toml
-[tool.basilisk]
-python-version = "3.12"
-include = ["src/"]
-
-[tool.basilisk.per-path-overrides."legacy/**"]
-rules."returns_compatibility" = "warning"   # demote the noisiest rule to a warning
+# Auditable Basilisk-specific suppression
+value = legacy_api()  # type: ignore[calls_argument_type]
 ```
 
-You can also drop `# basilisk: relaxed` at the top of an individual file to turn all of its errors into warnings while you work through it.
+You can demote without hiding:
 
-### Strict mode differences
-
-If you used Pyright with `typeCheckingMode = "basic"` or `"standard"`, you will see significantly more errors with Basilisk — because those modes allow untyped code. This is expected and is the point. Use per-path overrides to phase in enforcement on a directory-by-directory basis.
-
----
-
-<h2 id="from-mypy">From mypy</h2>
-
-### Step 1 — Import your configuration
-
-If you have a `mypy.ini` or `setup.cfg` with `[mypy]` section:
-
-```bash
-basilisk migrate --from mypy
+```python
+value = legacy_api()  # type: warning[calls_argument_type]
 ```
 
-**Example input (`mypy.ini`):**
+The `suppressions` tag contains opt-in diagnostics for active specific
+(`BSK-0060`), active blanket (`BSK-0061`), unused (`BSK-0062`), and malformed
+(`BSK-0063`) directives. They emit nothing by default; configure each rule at
+error, warning, info, or disabled to navigate ignores workspace-wide.
 
-```ini
-[mypy]
-python_version = 3.12
-strict = True
-ignore_missing_imports = True
-exclude = migrations/
-```
+## From Pyright
 
-**Generated output:**
+Copy the settings you actually use instead of translating a mode name. Typical
+manual mappings are:
 
-```toml
-[tool.basilisk]
-python-version = "3.12"
-exclude = ["**/migrations/**"]
-# note: ignore_missing_imports → imports_unresolved is still active;
-# use per-path overrides for specific packages without stubs
-```
+| Pyright | Basilisk |
+|---|---|
+| `pythonVersion` | `[tool.basilisk].python-version` |
+| `include` / `exclude` | `[tool.basilisk].include` / `exclude` |
+| `stubPath` | `[tool.basilisk].stub-paths` |
+| `typeshedPath` | `[tool.basilisk].typeshed-path` |
+| `report…` severity | `[tool.basilisk.rules]."RULE_CODE"` |
+| execution-environment exception | a `pyproject.toml` with `[tool.basilisk]` in that folder |
 
-### Step 2 — The mypy `--strict` flag is a subset
+Use the [Pyright configuration reference](https://microsoft.github.io/pyright/#/configuration)
+to inspect the source value and Basilisk's [rule reference](/docs/rules/) to
+choose the corresponding diagnostic. Do not mechanically map
+`typeCheckingMode`: Basilisk intentionally stores explicit rule policy instead
+of a mode.
 
-mypy's `--strict` enables a specific set of flags. Basilisk enforces all of them and more. When migrating from `mypy --strict`, expect:
+## From mypy
 
-- **More errors from returns_compatibility** — mypy permits `Any` in some positions that Basilisk does not
-- **More errors from match_exhaustiveness** — non-exhaustive `match` statements that mypy does not check
-- **More errors from BSK-E0025** — missing `@override` decorators that mypy does not require
+Typical manual mappings are:
 
-### Step 3 — mypy plugins
+| mypy | Basilisk |
+|---|---|
+| `python_version` | `[tool.basilisk].python-version` |
+| `exclude` | `[tool.basilisk].exclude` (gitignore-style patterns) |
+| `mypy_path` | `[tool.basilisk].stub-paths` when it contains stubs |
+| `custom_typeshed_dir` | `[tool.basilisk].typeshed-path` |
+| per-module relaxations | a folder-scoped `pyproject.toml` where the exception is source-path based |
+| `# type: ignore[code]` | keep the syntax, replace the foreign code with a Basilisk code |
 
-mypy plugins (Django, SQLAlchemy, Pydantic) do not work with Basilisk. Basilisk's WASM plugin system is planned for Phase 5. Until then, you may see errors for framework-specific patterns that mypy plugins previously suppressed.
+Consult the [mypy configuration reference](https://mypy.readthedocs.io/en/stable/config_file.html)
+for the exact meaning of each source option. Mypy plugins do not load into
+Basilisk; use targeted path/rule exceptions for framework-specific debt rather
+than disabling unrelated checks globally.
 
-Workaround while waiting for WASM plugins:
+## Visual strict-first migration
 
-```toml
-[tool.basilisk.per-path-overrides."models/**"]
-disabled = ["returns_compatibility"]  # Django model fields use Any extensively
-```
+The VS Code configuration editor provides this workflow as one review surface:
 
-### Step 4 — Update inline suppressions
+1. browse the canonical rule catalog by tags;
+2. turn a whole tag on with one `rule-tags` entry (e.g. `"basilisk" = "error"`)
+   and preview the effect before applying;
+3. run Safe fixes through the separate root-scoped LSP action;
+4. group remaining debt by tag and rule;
+5. grade selected rules down explicitly, or record the debt with
+   `basilisk adopt`;
+6. track exceptions and opt-in suppression diagnostics until they graduate.
 
-mypy uses `# type: ignore[error-code]`. Basilisk requires `# basilisk: ignore[BSK-EXXXX] -- reason`.
+Adoption debt is stored as ordinary warning-severity rule entries in the same
+active project config. It does not create a second config file or a persistent
+mode.
 
-The migration tool generates a list of every `# type: ignore` comment in your codebase with the suggested Basilisk equivalent and a reminder to add a reason.
-
-### Step 5 — Remove the daemon
-
-mypy's daemon (`dmypy`) is needed because mypy is slow. Basilisk's incremental computation is built-in. Replace your mypy CI step:
-
-```yaml
-# Old (mypy)
-- run: dmypy run -- src/
-
-# New (Basilisk)
-- run: basilisk check src/
-```
-
----
-
-## General migration advice
-
-### Start with missing annotations
-
-BSK-E0001 (missing parameter annotations) and BSK-E0002 (missing return annotations) tend to cascade. Fixing them first often resolves downstream errors automatically.
-
-Run with just these rules initially:
-
-```bash
-basilisk check --only E0001,E0002 src/
-```
-
-### Use per-path overrides for legacy directories
-
-Don't try to type everything at once. Soften the noisiest rules in legacy paths and keep new code strict:
-
-```toml
-[tool.basilisk.per-path-overrides."legacy/**"]
-rules."returns_compatibility" = "warning"
-
-[tool.basilisk.per-path-overrides."new_modules/**"]
-# Full strictness immediately for new code
-```
-
-### Track progress with `basilisk stats`
-
-```bash
-basilisk stats src/
-```
-
-Output:
-
-```
-Type coverage report — src/
-  Files:     142 total, 98 fully typed, 44 partially typed
-  Functions: 1,847 total, 1,203 typed (65%)
-  Classes:   318 total, 241 typed (76%)
-
-  Top offenders (most errors):
-    src/legacy/data_pipeline.py   — 47 errors
-    src/utils/converters.py       — 23 errors
-    src/models/legacy_models.py   — 19 errors
-```
-
-Use this report weekly to track migration progress.
-
-### Prioritise the critical path
-
-In practice, errors in the most-imported modules are the highest priority because they can cause type errors in callers too. Fix the deepest shared utilities first.
+It is [specified](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md)
+and tracked in the [implementation plan](https://github.com/Nimblesite/Basilisk/blob/main/docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md).
+The VSIX is a rendering shell; the reusable LSP owns catalog, preview, config
+writing, analysis, safe-fix execution, and adoption.

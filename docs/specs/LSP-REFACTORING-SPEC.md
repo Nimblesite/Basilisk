@@ -11,7 +11,7 @@ Deterministic, type-aware refactoring. Every refactoring is a structured transfo
 
 Invariants every refactoring must satisfy:
 
-1. **Deterministic** — a single, predictable result. AI-assisted variants live in [LSP-AI-SPEC.md §LSPAI-FEATURE-REFACTOR](LSP-AI-SPEC.md#LSPAI-FEATURE-REFACTOR), never here.
+1. **Deterministic** — a single, predictable result. Optional AI work, if pursued, remains outside this contract in the [AI plan](../plans/LSP-AI-PLAN.md).
 2. **Type-aware** — uses resolved types, import graph, call sites.
 3. **Cross-file** — operates across the workspace via the import graph.
 4. **Atomic undo** — returns a single `WorkspaceEdit` (one undo step).

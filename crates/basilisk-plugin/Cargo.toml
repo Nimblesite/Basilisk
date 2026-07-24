@@ -1,9 +1,0 @@
-[package]
-name        = "basilisk-plugin"
-description = "WASM plugin host for Basilisk (Phase 5+)"
-version.workspace    = true
-edition.workspace    = true
-license.workspace    = true
-
-[lints]
-workspace = true

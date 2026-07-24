@@ -4,7 +4,7 @@ Financial calculations — realistic fintech code with type violations.
 The violations here are subtle: wrong numeric types, shadowed names,
 conditional assignments in risk functions that may never bind.
 
-Run:  cargo run -- check examples/finance.py
+Run:  basilisk check examples/finance.py
 """
 
 from __future__ import annotations
@@ -12,32 +12,32 @@ from __future__ import annotations
 from typing import Any, overload
 
 
-# ── BSK-E0003: empty portfolio and ledger ────────────────────────────────────
-_open_positions = {}  # BSK-E0003: empty dict, no annotation
-_trade_log = []  # BSK-E0003: empty list, no annotation
+# ── BSK-0003: empty portfolio and ledger ────────────────────────────────────
+_open_positions = {}  # BSK-0003: empty dict, no annotation
+_trade_log = []  # BSK-0003: empty list, no annotation
 
 
-# ── BSK-E0001/E0002: core pricing functions missing all annotations ───────────
-def black_scholes(S, K, T, r, sigma):  # BSK-E0001: five untyped params
+# ── BSK-0001/0002: core pricing functions missing all annotations ───────────
+def black_scholes(S, K, T, r, sigma):  # BSK-0001: five untyped params
     """Call option price — classic formula."""
     import math
 
     d1 = (math.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
     _d2 = d1 - sigma * math.sqrt(T)
     # omit N(d1)/N(d2) for brevity
-    return S - K * math.exp(-r * T)  # BSK-E0002: no return type
+    return S - K * math.exp(-r * T)  # BSK-0002: no return type
 
 
-def present_value(cash_flows, discount_rate):  # BSK-E0001: untyped params
+def present_value(cash_flows, discount_rate):  # BSK-0001: untyped params
     total = 0.0
     for i, cf in enumerate(cash_flows):
         total += cf / (1 + discount_rate) ** i
-    return total  # BSK-E0002: no return type
+    return total  # BSK-0002: no return type
 
 
-def kelly_criterion(win_prob, win_amount, loss_amount):  # BSK-E0001
+def kelly_criterion(win_prob, win_amount, loss_amount):  # BSK-0001
     edge = win_prob * win_amount - (1 - win_prob) * loss_amount
-    return edge / win_amount  # BSK-E0002: no return type
+    return edge / win_amount  # BSK-0002: no return type
 
 
 # ── returns_compatibility: Any type with no justification ─────────────────────────────────
@@ -87,13 +87,13 @@ def compute_portfolio_risk(
 
 # ── overloads_consistency: unannotated params make overloads identical ───────────────────
 @overload
-def round_to_tick(price, tick) -> float: ...  # BSK-E0001: price, tick untyped
+def round_to_tick(price, tick) -> float: ...  # BSK-0001: price, tick untyped
 
 
 @overload
 def round_to_tick(
     price, tick
-) -> float: ...  # BSK-E0001 + overloads_consistency: duplicate
+) -> float: ...  # BSK-0001 + overloads_consistency: duplicate
 
 
 def round_to_tick(price: float, tick: int) -> float:
@@ -115,12 +115,12 @@ def apply_slippage(side: str, price: float, bps: float) -> float:
     # match_exhaustiveness: no wildcard — "short", "cover", etc. fall through
 
 
-# ── BSK-E0025: settlement override missing @override ────────────────────────
+# ── BSK-0025: settlement override missing @override ────────────────────────
 class BaseSettlement:
     def settle(self, amount: float, currency: str) -> str:
         return f"{amount} {currency}"
 
 
 class T2Settlement(BaseSettlement):
-    def settle(self, amount: float, currency: str) -> str:  # BSK-E0025
+    def settle(self, amount: float, currency: str) -> str:  # BSK-0025
         return f"T+2: {amount} {currency}"

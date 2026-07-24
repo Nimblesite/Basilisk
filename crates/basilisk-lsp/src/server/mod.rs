@@ -10,6 +10,8 @@ use tokio::task::AbortHandle;
 
 pub(super) mod activity_panel;
 pub(super) mod adoption;
+mod command_configuration;
+mod command_fixes;
 pub(super) mod commands;
 pub(super) mod document;
 pub(super) mod handlers;
@@ -17,9 +19,11 @@ pub(super) mod init;
 pub(super) mod memory_handlers;
 pub(super) mod profiler_handlers;
 pub(super) mod refactor_commands;
-pub(super) mod rule_override;
+pub(super) mod resolved_env;
 pub(super) mod stub_handlers;
 pub(super) mod test_handlers;
+pub(super) mod typeshed_document;
+pub(super) mod typeshed_status;
 pub(super) mod uv_handlers;
 
 macro_rules! diaglog {
@@ -123,8 +127,20 @@ pub struct LspServer {
     pub(super) client: Client,
     /// Workspace index (None until initialized).
     pub(super) index: Arc<RwLock<Option<WorkspaceIndex>>>,
-    /// Workspace root folders discovered during initialization.
-    pub(super) workspace_roots: RwLock<Vec<std::path::PathBuf>>,
+    /// Workspace root folders discovered during initialization. Shared as an
+    /// `Arc` so the server-owned configuration watcher ([LSPARCH-CONFIG])
+    /// follows root changes after the handler returns.
+    pub(super) workspace_roots: Arc<RwLock<Vec<std::path::PathBuf>>>,
+    /// Root-keyed runtime Typeshed generations shared by analysis and editor
+    /// surfaces. Acquisition populates each root before its analysis starts;
+    /// refreshes replace one entry only after every activation gate passes.
+    pub(super) typeshed_generations: Arc<
+        RwLock<std::collections::BTreeMap<std::path::PathBuf, typeshed_status::TypeshedGeneration>>,
+    >,
+    /// Editor-selected Python binary. This is kept separately from project
+    /// configuration because `initializationOptions.basilisk.python` has
+    /// higher precedence and must survive every search-path rebuild.
+    pub(super) python_interpreter: Arc<RwLock<Option<std::path::PathBuf>>>,
     // Implements [LSPDEBUG-WIRE] (DebugSessionManager added to LspServer)
     /// Debug session manager — spawns debugpy and tracks active sessions.
     pub(super) debug_manager: crate::debug::DebugSessionManager,
@@ -147,6 +163,13 @@ pub struct LspServer {
     // (file-watcher, startup scan) can read it after the handler returns.
     /// Whether type checking (diagnostic publication) is enabled.
     pub(super) type_checking_enabled: Arc<RwLock<bool>>,
+    // Implements [LSPARCH-DIAGNOSTIC-SCOPE]: the LSP publishes the union of
+    // both command scopes by default; the IDE-level initialization option
+    // `basilisk.analyze = false` restricts publication to check scope
+    // (`pep`-tagged rules only). Per-user editor ergonomics — project
+    // configuration grades rules and never selects commands.
+    /// Whether analyze-scope diagnostics are published (default true).
+    pub(super) analyze_enabled: Arc<std::sync::atomic::AtomicBool>,
     // Implements [LSPFMT-CONFIG] (`basilisk.formatter`): when the client or
     // config selects `"none"`, formatting capabilities are not advertised and
     // the handlers answer `None` even if a client calls them anyway.
@@ -159,6 +182,16 @@ pub struct LspServer {
     // spawned scan task can flip it after the handler returns.
     /// Whether the initial workspace scan has completed.
     pub(super) initial_scan_complete: Arc<std::sync::atomic::AtomicBool>,
+    /// Revision-checked configuration previews awaiting an explicit apply.
+    /// Shared as an `Arc` so the server-owned configuration watcher
+    /// ([LSPARCH-CONFIG]) runs the same refresh tail from its own task.
+    pub(crate) configuration_editor: Arc<crate::configuration_editor::ConfigurationEditorState>,
+    // Implements [LSPARCH-CONFIG]: the server watches the active
+    // configuration source itself — reactivity never depends on the client
+    // supporting `workspace/didChangeWatchedFiles` (Zed advertises no file
+    // watchers at all; see docs/specs/ZED-SPEC.md).
+    /// The server-owned configuration watcher task, aborted on shutdown.
+    pub(super) config_watcher: Mutex<Option<AbortHandle>>,
 }
 
 impl std::fmt::Debug for LspServer {
@@ -174,7 +207,9 @@ impl LspServer {
         Self {
             client,
             index: Arc::new(RwLock::new(None)),
-            workspace_roots: RwLock::new(Vec::new()),
+            workspace_roots: Arc::new(RwLock::new(Vec::new())),
+            typeshed_generations: Arc::new(RwLock::new(std::collections::BTreeMap::new())),
+            python_interpreter: Arc::new(RwLock::new(None)),
             debug_manager: crate::debug::DebugSessionManager::new(),
             profiler_manager: crate::profiler::ProfileSessionManager::new(),
             memory_manager: crate::profiler::memory::session::MemorySessionManager::new(),
@@ -184,12 +219,38 @@ impl LspServer {
             // Type checking is on by default; the client opts out via
             // `basilisk.enabled = false`. Implements [ANALYSIS-ENABLED].
             type_checking_enabled: Arc::new(RwLock::new(true)),
+            // Both scopes publish by default; the client opts out of analyze
+            // scope via `basilisk.analyze = false`. [LSPARCH-DIAGNOSTIC-SCOPE]
+            analyze_enabled: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             // Formatting is on by default (`basilisk.formatter = "ruff"`);
             // `initialize` flips this off for `"none"`. [LSPFMT-CONFIG]
             formatting_enabled: std::sync::atomic::AtomicBool::new(true),
             // No scan has run yet: zero-file rollups are NOT trustworthy until
             // the first scan completes. [EXTACT-MODULES-HEADER-LOADING], #144.
             initial_scan_complete: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            configuration_editor: Arc::new(
+                crate::configuration_editor::ConfigurationEditorState::default(),
+            ),
+            config_watcher: Mutex::new(None),
+        }
+    }
+
+    /// Cloneable handles for the shared configuration refresh tail, so the
+    /// server-owned configuration watcher can run it from a spawned task.
+    /// Implements [LSPARCH-CONFIG].
+    pub(crate) fn refresh_handles(
+        &self,
+    ) -> crate::configuration_editor::ConfigurationRefreshHandles {
+        crate::configuration_editor::ConfigurationRefreshHandles {
+            index: Arc::clone(&self.index),
+            client: self.client.clone(),
+            type_checking_enabled: Arc::clone(&self.type_checking_enabled),
+            analyze_enabled: Arc::clone(&self.analyze_enabled),
+            workspace_roots: Arc::clone(&self.workspace_roots),
+            python_interpreter: Arc::clone(&self.python_interpreter),
+            typeshed_generations: Arc::clone(&self.typeshed_generations),
+            initial_scan_complete: Arc::clone(&self.initial_scan_complete),
+            configuration_editor: Arc::clone(&self.configuration_editor),
         }
     }
 
@@ -224,7 +285,14 @@ impl LspServer {
     /// [`publish_diagnostics_gated`] with `force_clear`. Implements
     /// [ANALYSIS-ENABLED] / [ANALYSIS-PUBLISH].
     pub(super) async fn publish_diagnostics_if_enabled(&self, uri: Url, diags: Vec<Diagnostic>) {
-        publish_diagnostics_gated(&self.client, &self.type_checking_enabled, uri, diags).await;
+        publish_diagnostics_gated(
+            &self.client,
+            &self.type_checking_enabled,
+            &self.analyze_enabled,
+            uri,
+            diags,
+        )
+        .await;
     }
 
     /// Borrow the index and call `f` with it. Returns `None` if not yet
@@ -283,16 +351,37 @@ impl LspServer {
 pub(super) async fn publish_diagnostics_gated(
     client: &Client,
     enabled: &RwLock<bool>,
+    analyze: &std::sync::atomic::AtomicBool,
     uri: Url,
-    diags: Vec<Diagnostic>,
+    mut diags: Vec<Diagnostic>,
 ) {
     let is_enabled = *enabled.read().await;
+    // Implements [LSPARCH-DIAGNOSTIC-SCOPE]: with the analyze opt-out set,
+    // only check-scope (`pep`-tagged) diagnostics publish. The edge filter is
+    // `is_pep_rule` — project configuration never selects scope.
+    if !analyze.load(std::sync::atomic::Ordering::Relaxed) {
+        diags.retain(is_check_scope);
+    }
     diaglog!(
         "[DIAG] publish n={} enabled={is_enabled} uri={uri}",
         diags.len()
     );
     if is_enabled {
         client.publish_diagnostics(uri, diags, None).await;
+    }
+}
+
+/// Whether a published diagnostic belongs to check scope.
+///
+/// Implements [LSPARCH-DIAGNOSTIC-SCOPE] / [CHKARCH-COMMANDS]: `pep`-tagged
+/// rules are check scope. Diagnostics without a registry code (syntax errors,
+/// tooling notices) are never analyze-scope rules and always publish.
+fn is_check_scope(diagnostic: &Diagnostic) -> bool {
+    match &diagnostic.code {
+        Some(tower_lsp::lsp_types::NumberOrString::String(code)) => {
+            basilisk_checker::is_pep_rule(code)
+        }
+        Some(tower_lsp::lsp_types::NumberOrString::Number(_)) | None => true,
     }
 }
 
@@ -558,7 +647,32 @@ pub fn run_server() -> std::io::Result<()> {
     crate::runtime::block_on_with_analysis_stack("basilisk-lsp-stdio", || async {
         let stdin = tokio::io::stdin();
         let stdout = tokio::io::stdout();
-        let (service, socket) = LspService::new(LspServer::new);
+        let (service, socket) = LspService::build(LspServer::new)
+            .custom_method(
+                basilisk_common::configuration_editor::SNAPSHOT,
+                LspServer::configuration_snapshot,
+            )
+            .custom_method(
+                basilisk_common::configuration_editor::PREVIEW,
+                LspServer::preview_configuration_change,
+            )
+            .custom_method(
+                basilisk_common::configuration_editor::APPLY,
+                LspServer::apply_configuration_change,
+            )
+            .custom_method(
+                basilisk_common::configuration_editor::OCCURRENCES,
+                LspServer::rule_occurrences,
+            )
+            .custom_method(
+                basilisk_common::configuration_editor::TYPESHED_ACTION,
+                LspServer::typeshed_action,
+            )
+            .custom_method(
+                basilisk_common::configuration_editor::TYPESHED_DOCUMENT,
+                LspServer::typeshed_document,
+            )
+            .finish();
         Server::new(stdin, stdout, socket).serve(service).await;
         Ok(())
     })

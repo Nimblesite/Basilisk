@@ -1,4 +1,4 @@
-//! Implements [`generics_syntax_declarations_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_syntax_declarations_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_syntax_declarations_2`: Invalid attribute access on bounded type variable.
 //!
 //! When a PEP 695 type parameter has a bound (e.g., `T: str`), attribute

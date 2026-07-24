@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">One Basilisk analysis engine with CLI and editor surfaces</title>
+  <desc id="description">Python source and project configuration pass through parsing, resolution, and checking. Diagnostics reach the CLI and language server, while tests, debugging, and profiling use a separate Python runtime lane.</desc>
+  <defs>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="2" fill="#252d3f"/>
+    </pattern>
+    <marker id="arrow-orange" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#e8500a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#6ec5e9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="url(#dots)" stroke="#252d3f" stroke-width="3"/>
+
+  <text x="82" y="108" fill="#e8500a" font-family="'JetBrains Mono',monospace" font-size="25" font-weight="700" letter-spacing="5">THE BASILISK SYSTEM</text>
+  <text x="82" y="172" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="62" font-weight="800">One engine.&#x2002;Several developer surfaces.</text>
+  <text x="84" y="216" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="27">Static analysis and runtime investigation are connected—but they answer different questions.</text>
+
+  <g transform="translate(80 310)">
+    <text x="0" y="-32" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="22" letter-spacing="3">INPUTS</text>
+    <rect width="310" height="138" rx="20" fill="#141820" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="28" y="53" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="29">reading.py</text>
+    <text x="28" y="95" fill="#7dd3fc" font-family="'JetBrains Mono',monospace" font-size="23">normalize("18.4")</text>
+    <rect y="170" width="310" height="120" rx="20" fill="#141820" stroke="#8892a4" stroke-width="3"/>
+    <text x="28" y="217" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="26">pyproject.toml</text>
+    <text x="28" y="252" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="18">project context · rules</text>
+    <text x="28" y="278" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="18">project paths</text>
+  </g>
+
+  <path d="M410 448H492" fill="none" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow-orange)"/>
+
+  <g transform="translate(516 286)">
+    <rect width="492" height="382" rx="28" fill="#0f1218" stroke="#e8500a" stroke-width="6"/>
+    <rect x="18" y="18" width="456" height="68" rx="16" fill="#e8500a"/>
+    <text x="246" y="64" text-anchor="middle" fill="#0a0c12" font-family="'Space Grotesk',system-ui,sans-serif" font-size="31" font-weight="800" letter-spacing="2">BASILISK ANALYSIS</text>
+
+    <g transform="translate(38 122)">
+      <rect width="120" height="92" rx="18" fill="#141820" stroke="#4a5468" stroke-width="3"/>
+      <rect x="148" width="120" height="92" rx="18" fill="#141820" stroke="#4a5468" stroke-width="3"/>
+      <rect x="296" width="120" height="92" rx="18" fill="#141820" stroke="#4a5468" stroke-width="3"/>
+      <text x="60" y="57" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="23">parse</text>
+      <text x="208" y="57" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="23">resolve</text>
+      <text x="356" y="57" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="23">check</text>
+      <path d="M120 46h22M268 46h22" fill="none" stroke="#e8500a" stroke-width="4" marker-end="url(#arrow-orange)"/>
+    </g>
+
+    <rect x="38" y="248" width="416" height="96" rx="18" fill="#141820" stroke="#252d3f" stroke-width="3"/>
+    <circle cx="76" cy="281" r="10" fill="#6ec5e9"/>
+    <rect x="66" y="306" width="20" height="20" rx="3" fill="#e8500a"/>
+    <text x="100" y="289" fill="#dbeafe" font-family="'Space Grotesk',system-ui,sans-serif" font-size="23">Python typing-spec rules</text>
+    <text x="100" y="324" fill="#fed7aa" font-family="'Space Grotesk',system-ui,sans-serif" font-size="23">Opt-in project policy rules</text>
+  </g>
+
+  <path d="M1008 394H1080" fill="none" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow-orange)"/>
+  <path d="M1008 558H1080" fill="none" stroke="#6ec5e9" stroke-width="5" marker-end="url(#arrow-blue)"/>
+
+  <g transform="translate(1102 288)">
+    <text x="0" y="-18" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="22" letter-spacing="3">SURFACES</text>
+    <rect width="414" height="168" rx="24" fill="#141820" stroke="#e8500a" stroke-width="4"/>
+    <text x="30" y="49" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="30" font-weight="700">CLI / CI</text>
+    <text x="30" y="91" fill="#a3adbd" font-family="'JetBrains Mono',monospace" font-size="22">diagnostics · JSON · status</text>
+    <text x="30" y="128" fill="#fed7aa" font-family="'JetBrains Mono',monospace" font-size="21">basilisk check</text>
+
+    <rect y="204" width="414" height="198" rx="24" fill="#141820" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="30" y="253" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="30" font-weight="700">LANGUAGE SERVER</text>
+    <text x="30" y="297" fill="#a3adbd" font-family="'JetBrains Mono',monospace" font-size="21">diagnostics · hover · navigation</text>
+    <text x="30" y="333" fill="#a3adbd" font-family="'JetBrains Mono',monospace" font-size="21">completion · actions · formatting</text>
+    <text x="30" y="371" fill="#bae6fd" font-family="'JetBrains Mono',monospace" font-size="21">VS Code · Neovim · Zed</text>
+  </g>
+
+  <g transform="translate(80 748)">
+    <rect width="1436" height="150" rx="24" fill="#0f1218" stroke="#4a5468" stroke-width="3" stroke-dasharray="11 10"/>
+    <text x="28" y="47" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="21" letter-spacing="3">SEPARATE RUNTIME EVIDENCE</text>
+    <text x="28" y="100" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="29" font-weight="700">Python execution</text>
+    <g transform="translate(350 38)" font-family="'JetBrains Mono',monospace" font-size="23">
+      <rect width="192" height="74" rx="37" fill="#141820" stroke="#34d399" stroke-width="3"/><text x="96" y="47" text-anchor="middle" fill="#a7f3d0">tests</text>
+      <rect x="226" width="192" height="74" rx="37" fill="#141820" stroke="#6ec5e9" stroke-width="3"/><text x="322" y="47" text-anchor="middle" fill="#bae6fd">debug</text>
+      <rect x="452" width="192" height="74" rx="37" fill="#141820" stroke="#e8500a" stroke-width="3"/><text x="548" y="47" text-anchor="middle" fill="#fed7aa">profile</text>
+      <text x="700" y="34" fill="#8892a4" font-size="18">Requires a Python runtime</text>
+      <text x="700" y="62" fill="#8892a4" font-size="18">and observed execution.</text>
+    </g>
+  </g>
+</svg>

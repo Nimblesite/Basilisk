@@ -1,4 +1,4 @@
-//! Implements [`typeddicts_required`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`typeddicts_required`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! `typeddicts_required`: `Required` / `NotRequired` used in an invalid context.
 //!
 //! PEP 655 and the typing spec restrict `Required[T]` and `NotRequired[T]` to:

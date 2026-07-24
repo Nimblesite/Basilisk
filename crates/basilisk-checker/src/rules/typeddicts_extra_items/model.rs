@@ -101,13 +101,13 @@ fn parse_qualified(text: &str) -> (String, bool, Option<Qualifier>) {
 /// Collect every `TypedDict` in declaration order. A class is a `TypedDict` when
 /// it names `TypedDict` directly or inherits from a `TypedDict` collected
 /// earlier (Python requires a base be defined before use).
-pub(super) fn collect_models(stmts: &[Stmt], target: (u32, u32)) -> Vec<TdModel> {
+pub(super) fn collect_models(stmts: &[Stmt], target: Option<(u32, u32)>) -> Vec<TdModel> {
     let mut models: Vec<TdModel> = Vec::new();
     collect_into(stmts, &mut models, target);
     models
 }
 
-fn collect_into(stmts: &[Stmt], models: &mut Vec<TdModel>, target: (u32, u32)) {
+fn collect_into(stmts: &[Stmt], models: &mut Vec<TdModel>, target: Option<(u32, u32)>) {
     for stmt in stmts {
         match stmt {
             Stmt::ClassDef(cls) => {
@@ -138,7 +138,7 @@ fn is_typeddict_class(cls: &ast::StmtClassDef, known: &[TdModel]) -> bool {
 fn model_from_class(
     cls: &ast::StmtClassDef,
     known: &[TdModel],
-    target: (u32, u32),
+    target: Option<(u32, u32)>,
 ) -> Option<TdModel> {
     if !is_typeddict_class(cls, known) {
         return None;
@@ -172,7 +172,12 @@ fn model_from_class(
 /// (`sys.version_info`, `TYPE_CHECKING`) and admitting only branches that are not
 /// statically false at the target version — so a version-conditional item exists
 /// exactly when it would at runtime.
-fn collect_td_fields(stmts: &[Stmt], total: bool, target: (u32, u32), out: &mut Vec<TdField>) {
+fn collect_td_fields(
+    stmts: &[Stmt],
+    total: bool,
+    target: Option<(u32, u32)>,
+    out: &mut Vec<TdField>,
+) {
     for stmt in stmts {
         match stmt {
             Stmt::AnnAssign(_) => {
@@ -190,21 +195,22 @@ fn collect_td_fields(stmts: &[Stmt], total: bool, target: (u32, u32), out: &mut 
 fn collect_td_fields_in_if(
     if_stmt: &ast::StmtIf,
     total: bool,
-    target: (u32, u32),
+    target: Option<(u32, u32)>,
     out: &mut Vec<TdField>,
 ) {
     use basilisk_resolver::{evaluate, parse_static_condition, BranchTruth};
     let test = parse_static_condition(&if_stmt.test);
-    if evaluate(&test, target) != BranchTruth::AlwaysFalse {
+    let truth = target.map_or(BranchTruth::Unknown, |target| evaluate(&test, target));
+    if truth != BranchTruth::AlwaysFalse {
         collect_td_fields(&if_stmt.body, total, target, out);
     }
     for clause in &if_stmt.elif_else_clauses {
         let reachable = match &clause.test {
-            Some(elif) => {
+            Some(elif) => target.is_none_or(|target| {
                 evaluate(&parse_static_condition(elif), target) != BranchTruth::AlwaysFalse
-            }
+            }),
             // The `else` is reachable unless the `if` test is always taken.
-            None => evaluate(&test, target) != BranchTruth::AlwaysTrue,
+            None => truth != BranchTruth::AlwaysTrue,
         };
         if reachable {
             collect_td_fields(&clause.body, total, target, out);

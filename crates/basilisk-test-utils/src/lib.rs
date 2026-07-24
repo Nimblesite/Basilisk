@@ -15,6 +15,9 @@ mod resolver_helpers;
 #[cfg(feature = "checker")]
 mod checker_helpers;
 
+#[cfg(feature = "checker")]
+mod cross_module;
+
 #[cfg(feature = "salsa")]
 pub mod salsa_db;
 
@@ -31,6 +34,9 @@ pub use resolver_helpers::resolve_src;
 
 #[cfg(feature = "checker")]
 pub use checker_helpers::{assert_diagnostics, Expected};
+
+#[cfg(feature = "checker")]
+pub use cross_module::{cross_resolve, typeshed_search_paths};
 
 #[cfg(feature = "salsa")]
 pub use salsa_db::EventDb;

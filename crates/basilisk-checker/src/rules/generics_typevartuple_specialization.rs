@@ -1,4 +1,4 @@
-//! Implements [`generics_typevartuple_specialization`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_typevartuple_specialization`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_typevartuple_specialization`: Multiple `TypeVarTuple` unpacks in generic or tuple type.
 //!
 //! Only a single `TypeVarTuple` unpack (`*Ts`) may appear in a type parameter

@@ -3,10 +3,10 @@
 //! In-session Salsa analysis engine for the LSP.
 //!
 //! Holds a persistent [`basilisk_checker::BasiliskDatabase`] plus the salsa
-//! **input** handles (one [`SourceFile`] per file, one [`ConfigInput`] per root,
-//! one [`SearchPathsInput`] for the workspace). On each analysis it syncs those
+//! **input** handles (one [`SourceFile`] per file, one [`ConfigInput`] per config
+//! scope, one [`SearchPathsInput`] per workspace root). On each analysis it syncs those
 //! inputs to the current values and reads the memoized queries
-//! ([`resolved_module`] for navigation, [`file_diagnostics_resolved`] for
+//! ([`cross_resolved_module`] for navigation, [`file_diagnostics_resolved`] for
 //! diagnostics), so re-analysing an unchanged file is served from the memo and a
 //! config-only edit re-runs only the cheap `check` step. Input handles are
 //! reused across calls (salsa memoization is identity-based), and every write
@@ -21,9 +21,9 @@ use std::sync::{Arc, Mutex};
 
 use basilisk_checker::imports::ImportSearchPaths;
 use basilisk_checker::{
-    cross_resolved_module, file_diagnostics_cross, file_diagnostics_resolved, resolved_module,
-    BasiliskDatabase, ConfigInput, ConfigValue, Diagnostic, FileRegistry, ResolvedFile,
-    SearchPathsInput, SourceFile, WorkspaceFiles,
+    cross_resolved_module, file_diagnostics_cross, file_diagnostics_resolved, BasiliskDatabase,
+    ConfigInput, ConfigValue, Diagnostic, FileRegistry, ResolvedFile, SearchPathsInput, SourceFile,
+    WorkspaceFiles,
 };
 use basilisk_config::BasiliskConfig;
 use dashmap::DashMap;
@@ -40,16 +40,27 @@ pub(crate) struct EngineAnalysis {
     pub parse_error: Option<String>,
 }
 
+/// Root/config-scoped inputs that accompany one source analysis.
+#[derive(Clone, Copy)]
+pub(crate) struct AnalysisInputs<'a> {
+    pub config: &'a BasiliskConfig,
+    pub config_key: &'a Path,
+    pub search_paths_root: &'a Path,
+    pub search_paths: &'a ImportSearchPaths,
+}
+
 /// Persistent Salsa database + input handles backing the LSP's incremental
 /// single-file analysis.
 pub(crate) struct SalsaAnalysisEngine {
     db: Mutex<BasiliskDatabase>,
     /// Per-file source-text inputs, keyed by absolute path.
     sources: DashMap<PathBuf, SourceFile>,
-    /// Per-root configuration inputs, keyed by the file's owning root.
+    /// Per-directory configuration inputs, keyed by the file's config scope.
     config_inputs: DashMap<PathBuf, ConfigInput>,
-    /// The single workspace-wide import search-paths input.
-    search_paths_input: Mutex<Option<SearchPathsInput>>,
+    /// Per-root import search-path inputs. Distinct target interpreters must
+    /// keep distinct Salsa identities or alternating roots would invalidate
+    /// and overwrite a shared input.
+    search_paths_inputs: DashMap<PathBuf, SearchPathsInput>,
     /// The workspace file registry input for content-precise cross-file
     /// invalidation — a path → `SourceFile` map so a query can depend on the
     /// content of the files it imports (e.g. an edited user-stub `.pyi` updates
@@ -66,7 +77,7 @@ impl Default for SalsaAnalysisEngine {
             db: Mutex::new(BasiliskDatabase::default()),
             sources: DashMap::new(),
             config_inputs: DashMap::new(),
-            search_paths_input: Mutex::new(None),
+            search_paths_inputs: DashMap::new(),
             workspace_files: Mutex::new(None),
             registry_dirty: AtomicBool::new(false),
         }
@@ -85,20 +96,21 @@ impl SalsaAnalysisEngine {
     /// Analyse one file through the memoized salsa queries, resolving imports
     /// against `search_paths`.
     ///
-    /// `root_key` is the file's owning workspace root (the config-input key).
-    /// With `cross_module` set, analysis runs through the cross-module queries
-    /// ([`cross_resolved_module`] / [`file_diagnostics_cross`]): the resolved
-    /// module carries `imported_symbols` populated from the other tracked
-    /// files' **current** content, and editing an imported file's exports
-    /// invalidates exactly its importers. Without it, the plain queries keep
-    /// byte-for-byte CLI parity. [CHKARCH-INCREMENTAL-SALSA]
+    /// `config_key` identifies the file's merged configuration scope, while
+    /// `search_paths_root` identifies its owning workspace target environment.
+    /// The resolved module always comes from [`cross_resolved_module`] and so
+    /// always carries `imported_symbols` — external stub/py.typed enrichment
+    /// drives hover, completion, and navigation in every mode (GitHub #287).
+    /// `cross_module` gates only the **diagnostics** query: with it set,
+    /// [`file_diagnostics_cross`] sees other tracked files' current content
+    /// and editing an imported file's exports invalidates exactly its
+    /// importers; without it, the plain diagnostics query keeps byte-for-byte
+    /// CLI parity. [CHKARCH-INCREMENTAL-SALSA]
     pub(crate) fn analyse(
         &self,
         path: &Path,
         text: &str,
-        config: &BasiliskConfig,
-        root_key: &Path,
-        search_paths: &ImportSearchPaths,
+        inputs: AnalysisInputs<'_>,
         cross_module: bool,
     ) -> EngineAnalysis {
         let path_str = path.to_string_lossy().into_owned();
@@ -109,17 +121,19 @@ impl SalsaAnalysisEngine {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let source = self.source_for(&mut db, path, &path_str, text);
-        let config_input = self.config_for(&mut db, root_key, config);
-        let search_paths_input = self.search_paths_for(&mut db, search_paths);
+        let config_input = self.config_for(&mut db, inputs.config_key, inputs.config);
+        let search_paths_input =
+            self.search_paths_for(&mut db, inputs.search_paths_root, inputs.search_paths);
         let workspace = self.workspace_files_for(&mut db);
 
         // One memoized parse+resolve, whose outcome distinguishes a parse error
         // (→ BSK-PARSE) from a resolve error (→ nothing) from a resolved module.
-        let outcome = if cross_module {
-            cross_resolved_module(&*db, source, search_paths_input, workspace)
-        } else {
-            resolved_module(&*db, source, search_paths_input, workspace)
-        };
+        // The resolved view is always the cross-module one: its
+        // `imported_symbols` enrichment from stubs / py.typed packages drives
+        // hover, completion, and navigation for external symbols in every mode
+        // (GitHub #287). Diagnostics stay mode-gated below, so non-cross modes
+        // keep byte-for-byte CLI parity on what they report.
+        let outcome = cross_resolved_module(&*db, source, search_paths_input, workspace);
         match outcome {
             ResolvedFile::ParseError(message) => EngineAnalysis {
                 resolved: None,
@@ -286,33 +300,36 @@ impl SalsaAnalysisEngine {
         }
     }
 
-    /// Get-or-create the workspace [`SearchPathsInput`], synced to `search_paths`.
+    /// Get-or-create one root's [`SearchPathsInput`], synced to `search_paths`.
     ///
     /// Compare-before-set: re-setting unchanged search paths would re-resolve
     /// every file's imports on every analysis (see [`Self::source_for`]).
     fn search_paths_for(
         &self,
         db: &mut BasiliskDatabase,
+        root: &Path,
         search_paths: &ImportSearchPaths,
     ) -> SearchPathsInput {
-        let mut guard = self
-            .search_paths_input
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(input) = *guard {
+        if let Some(existing) = self.search_paths_inputs.get(root) {
+            let input = *existing;
+            drop(existing);
             if input.value(&*db) != search_paths {
                 let _ = input.set_value(db).to(search_paths.clone());
             }
             input
         } else {
             let input = SearchPathsInput::new(&*db, search_paths.clone());
-            *guard = Some(input);
+            let _ = self.search_paths_inputs.insert(root.to_path_buf(), input);
             input
         }
     }
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "test-only code: expect acceptable in unit tests"
+)]
 mod tests {
     use super::*;
 
@@ -324,8 +341,66 @@ mod tests {
             workspace_members: vec![],
             site_packages: None,
             registry: None,
-            typeshed_path: None,
+            typeshed_snapshot: None,
         }
+    }
+
+    /// Regression for #287, wiring layer: the default (non-cross-module)
+    /// analysis must still populate `imported_symbols` from external
+    /// stub/py.typed packages. Hover, completion, and navigation read the
+    /// engine's resolved view; gating the enrichment on the reserved
+    /// `crossModule` mode left dot-access hover on inherited external methods
+    /// dead in every real editor session.
+    #[test]
+    fn default_mode_analysis_populates_external_imported_symbols() {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let site = dir.path().join("site-packages");
+        let pkg = site.join("pydantic");
+        std::fs::create_dir_all(&pkg).expect("create package dir");
+        std::fs::write(pkg.join("py.typed"), "").expect("write py.typed marker");
+        std::fs::write(
+            pkg.join("__init__.py"),
+            "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from .main import *\n",
+        )
+        .expect("write __init__.py");
+        std::fs::write(
+            pkg.join("main.py"),
+            "class BaseModel:\n    @classmethod\n    def model_validate(cls, obj: object) -> 'BaseModel': ...\n",
+        )
+        .expect("write main.py");
+
+        let workspace = dir.path().join("ws");
+        std::fs::create_dir_all(&workspace).expect("create workspace dir");
+        let file = workspace.join("app.py");
+        let text = "from pydantic import BaseModel\n\nclass C(BaseModel):\n    name: str\n";
+        std::fs::write(&file, text).expect("write app.py");
+
+        let engine = SalsaAnalysisEngine::default();
+        let config = BasiliskConfig::default();
+        let mut search_paths = empty_search_paths();
+        search_paths.site_packages = Some(site);
+        search_paths.roots = vec![workspace.clone()];
+
+        let analysis = engine.analyse(
+            &file,
+            text,
+            AnalysisInputs {
+                config: &config,
+                config_key: &workspace,
+                search_paths_root: &workspace,
+                search_paths: &search_paths,
+            },
+            false,
+        );
+        let resolved = analysis.resolved.expect("module should resolve");
+        let base = resolved
+            .imported_symbols
+            .get("BaseModel")
+            .expect("default-mode analysis must populate external imported symbols (GitHub #287)");
+        assert!(
+            base.methods.iter().any(|m| m.name == "model_validate"),
+            "the re-exported class must carry its methods for dot-access hover"
+        );
     }
 
     /// A deleted file's `SourceFile` is dropped from the engine's map so its
@@ -338,7 +413,17 @@ mod tests {
         let path = Path::new("/tmp/bsk_engine_remove/a.py");
         let root = Path::new("/tmp/bsk_engine_remove");
 
-        let _ = engine.analyse(path, "x = 1\n", &config, root, &sp, false);
+        let _ = engine.analyse(
+            path,
+            "x = 1\n",
+            AnalysisInputs {
+                config: &config,
+                config_key: root,
+                search_paths_root: root,
+                search_paths: &sp,
+            },
+            false,
+        );
         assert_eq!(
             engine.tracked_source_count(),
             1,

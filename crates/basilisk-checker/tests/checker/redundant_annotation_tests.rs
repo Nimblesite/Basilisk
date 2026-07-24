@@ -1,7 +1,7 @@
 //! Tests for [CHKARCH-TESTING] / [TYPEINF-REDUNDANT]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 // Comprehensive tests for redundant type annotations.
 //
-// Tests the interaction between BSK-E0005 (missing annotation) and BSK-W0050 (redundant
+// Tests the interaction between BSK-0005 (missing annotation) and BSK-0050 (redundant
 // annotation) across all scenarios where type inference makes annotations
 // unnecessary: subclass overrides, scalar literals, class hierarchies, multiple
 // inheritance, deep inheritance chains, and edge cases.
@@ -15,13 +15,13 @@ fn count_code(diags: &[basilisk_checker::Diagnostic], code: &str) -> usize {
 fn missing_attribute_annotation_messages(diags: &[basilisk_checker::Diagnostic]) -> Vec<String> {
     diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0005")
+        .filter(|d| d.code.code == "BSK-0005")
         .map(|d| d.message.clone())
         .collect()
 }
 
 // ============================================================================
-// Subclass attribute overrides: BSK-E0005 should NOT fire when parent annotates
+// Subclass attribute overrides: BSK-0005 should NOT fire when parent annotates
 // ============================================================================
 
 #[test]
@@ -35,7 +35,7 @@ class Child(Base):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !has_code(&diags, "BSK-E0005"),
+        !has_code(&diags, "BSK-0005"),
         "inherited int attr should not need re-annotation, got: {:?}",
         missing_attribute_annotation_messages(&diags)
     );
@@ -53,7 +53,7 @@ class Child(Base):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !has_code(&diags, "BSK-E0005"),
+        !has_code(&diags, "BSK-0005"),
         "inherited str attr should not need re-annotation, got: {:?}",
         missing_attribute_annotation_messages(&diags)
     );
@@ -71,7 +71,7 @@ class Child(Base):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !has_code(&diags, "BSK-E0005"),
+        !has_code(&diags, "BSK-0005"),
         "inherited float attr should not need re-annotation, got: {:?}",
         missing_attribute_annotation_messages(&diags)
     );
@@ -89,7 +89,7 @@ class Child(Base):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !has_code(&diags, "BSK-E0005"),
+        !has_code(&diags, "BSK-0005"),
         "inherited bool attr should not need re-annotation, got: {:?}",
         missing_attribute_annotation_messages(&diags)
     );
@@ -107,7 +107,7 @@ class Child(Base):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !has_code(&diags, "BSK-E0005"),
+        !has_code(&diags, "BSK-0005"),
         "inherited bytes attr should not need re-annotation, got: {:?}",
         missing_attribute_annotation_messages(&diags)
     );
@@ -125,7 +125,7 @@ class Child(Base):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !has_code(&diags, "BSK-E0005"),
+        !has_code(&diags, "BSK-0005"),
         "inherited None attr should not need re-annotation, got: {:?}",
         missing_attribute_annotation_messages(&diags)
     );
@@ -199,7 +199,7 @@ class Combined(Mixin, Other):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !has_code(&diags, "BSK-E0005"),
+        !has_code(&diags, "BSK-0005"),
         "annotation from first base should suffice, got: {:?}",
         missing_attribute_annotation_messages(&diags)
     );
@@ -220,7 +220,7 @@ class Combined(First, Second):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !has_code(&diags, "BSK-E0005"),
+        !has_code(&diags, "BSK-0005"),
         "annotation from second base should suffice, got: {:?}",
         missing_attribute_annotation_messages(&diags)
     );
@@ -228,7 +228,7 @@ class Combined(First, Second):
 }
 
 // ============================================================================
-// Mixed: some attrs inherited, some new — only non-inferrable new ones should fire BSK-E0005
+// Mixed: some attrs inherited, some new — only non-inferrable new ones should fire BSK-0005
 // ============================================================================
 
 #[test]
@@ -253,14 +253,14 @@ class Child(Base):
     assert_eq!(
         e0005s.len(),
         1,
-        "only q (non-inferrable) should fire BSK-E0005; z and w are scalar literals, got: {e0005s:?}",
+        "only q (non-inferrable) should fire BSK-0005; z and w are scalar literals, got: {e0005s:?}",
     );
     assert!(e0005s.iter().any(|m| m.contains('q')), "should fire for q");
     Ok(())
 }
 
 // ============================================================================
-// Parent has attr without annotation — child should still fire BSK-E0005
+// Parent has attr without annotation — child should still fire BSK-0005
 // ============================================================================
 
 #[test]
@@ -277,12 +277,12 @@ class Child(Base):
     // Base.raw has no annotation and non-inferrable RHS, so Child.raw cannot inherit one
     let child_e0005s: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0005" && d.message.contains("Child"))
+        .filter(|d| d.code.code == "BSK-0005" && d.message.contains("Child"))
         .collect();
     assert_eq!(
         child_e0005s.len(),
         1,
-        "child overriding unannotated parent attr with non-inferrable RHS should still fire BSK-E0005, got: {:?}",
+        "child overriding unannotated parent attr with non-inferrable RHS should still fire BSK-0005, got: {:?}",
         child_e0005s.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
     Ok(())
@@ -303,7 +303,7 @@ class Child(Base):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !has_code(&diags, "BSK-E0005"),
+        !has_code(&diags, "BSK-0005"),
         "parent annotation-only decl should satisfy child, got: {:?}",
         missing_attribute_annotation_messages(&diags)
     );
@@ -331,9 +331,9 @@ class ProductionConfig(Config):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diags, "BSK-E0005"),
+        count_code(&diags, "BSK-0005"),
         0,
-        "all overrides should be exempt from BSK-E0005, got: {:?}",
+        "all overrides should be exempt from BSK-0005, got: {:?}",
         missing_attribute_annotation_messages(&diags)
     );
     Ok(())
@@ -362,7 +362,7 @@ class Snake(Animal):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diags, "BSK-E0005"),
+        count_code(&diags, "BSK-0005"),
         0,
         "all sibling overrides should inherit annotations, got: {:?}",
         missing_attribute_annotation_messages(&diags)
@@ -371,7 +371,7 @@ class Snake(Animal):
 }
 
 // ============================================================================
-// BSK-W0050 redundant annotation on subclass re-annotation (warns correctly)
+// BSK-0050 redundant annotation on subclass re-annotation (warns correctly)
 // ============================================================================
 
 #[test]
@@ -384,15 +384,15 @@ class Child(Base):
     priority: int = 100
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
-    // BSK-W0050 should fire — the annotation is redundant (int = 100 is obviously int)
+    // BSK-0050 should fire — the annotation is redundant (int = 100 is obviously int)
     assert!(
-        has_code(&diags, "BSK-W0050"),
-        "redundant re-annotation in subclass should fire BSK-W0050"
+        has_code(&diags, "BSK-0050"),
+        "redundant re-annotation in subclass should fire BSK-0050"
     );
-    // BSK-E0005 should NOT fire — there IS an annotation
+    // BSK-0005 should NOT fire — there IS an annotation
     assert!(
-        !has_code(&diags, "BSK-E0005"),
-        "annotated attr should not fire BSK-E0005"
+        !has_code(&diags, "BSK-0005"),
+        "annotated attr should not fire BSK-0005"
     );
     Ok(())
 }
@@ -411,15 +411,15 @@ class Bar:
     value = compute()
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
-    // Bar does NOT inherit from Foo, so BSK-E0005 should fire for Bar.value (non-inferrable RHS)
+    // Bar does NOT inherit from Foo, so BSK-0005 should fire for Bar.value (non-inferrable RHS)
     let bar_e0005: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0005" && d.message.contains("Bar"))
+        .filter(|d| d.code.code == "BSK-0005" && d.message.contains("Bar"))
         .collect();
     assert_eq!(
         bar_e0005.len(),
         1,
-        "unrelated class with non-inferrable attr should still fire BSK-E0005"
+        "unrelated class with non-inferrable attr should still fire BSK-0005"
     );
     Ok(())
 }
@@ -445,7 +445,7 @@ class Diamond(Left, Right):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        !has_code(&diags, "BSK-E0005"),
+        !has_code(&diags, "BSK-0005"),
         "diamond inheritance should find annotation through either path, got: {:?}",
         missing_attribute_annotation_messages(&diags)
     );
@@ -453,7 +453,7 @@ class Diamond(Left, Right):
 }
 
 // ============================================================================
-// Module-level BSK-W0050 redundant annotations (scalar literals)
+// Module-level BSK-0050 redundant annotations (scalar literals)
 // ============================================================================
 
 #[test]
@@ -469,9 +469,9 @@ g: None = None
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diags, "BSK-W0050"),
+        count_code(&diags, "BSK-0050"),
         7,
-        "all 7 scalar literals should fire BSK-W0050"
+        "all 7 scalar literals should fire BSK-0050"
     );
     Ok(())
 }
@@ -488,9 +488,9 @@ y: object = \"hello\"
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diags, "BSK-W0050"),
+        count_code(&diags, "BSK-0050"),
         0,
-        "widening annotations should not fire BSK-W0050"
+        "widening annotations should not fire BSK-0050"
     );
     Ok(())
 }
@@ -505,9 +505,27 @@ coords: tuple[int, int] = (1, 2)
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diags, "BSK-W0050"),
+        count_code(&diags, "BSK-0050"),
         0,
-        "collection annotations should not fire BSK-W0050"
+        "collection annotations should not fire BSK-0050"
+    );
+    Ok(())
+}
+
+#[test]
+fn module_level_collection_annotations_that_add_information_are_not_redundant(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = "\
+floats: list[float] = [1, 2, 3]
+objects: dict[str, object] = {\"a\": 1}
+union_items: set[int | str] = {1, 2}
+shorter: tuple[int] = (1, 2)
+";
+    let diags = run_with_config(source, &annotation_rules_config())?;
+    assert_eq!(
+        count_code(&diags, "BSK-0050"),
+        0,
+        "collection annotations that widen or reshape the inferred type must not fire BSK-0050"
     );
     Ok(())
 }
@@ -521,15 +539,15 @@ z: int = len([1, 2, 3])
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diags, "BSK-W0050"),
+        count_code(&diags, "BSK-0050"),
         0,
-        "call expression annotations should not fire BSK-W0050"
+        "call expression annotations should not fire BSK-0050"
     );
     Ok(())
 }
 
 // ============================================================================
-// Class-level BSK-W0050 redundant annotations (scalar literals in class body)
+// Class-level BSK-0050 redundant annotations (scalar literals in class body)
 // ============================================================================
 
 #[test]
@@ -545,15 +563,15 @@ class Settings:
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diags, "BSK-W0050"),
+        count_code(&diags, "BSK-0050"),
         6,
-        "all 6 scalar class attrs should fire BSK-W0050"
+        "all 6 scalar class attrs should fire BSK-0050"
     );
     Ok(())
 }
 
 // ============================================================================
-// TypedDict / Protocol / NamedTuple exempt from BSK-W0050
+// TypedDict / Protocol / NamedTuple exempt from BSK-0050
 // ============================================================================
 
 #[test]
@@ -567,9 +585,9 @@ class Point(TypedDict):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diags, "BSK-W0050"),
+        count_code(&diags, "BSK-0050"),
         0,
-        "TypedDict should be exempt from BSK-W0050"
+        "TypedDict should be exempt from BSK-0050"
     );
     Ok(())
 }
@@ -584,15 +602,15 @@ class HasName(Protocol):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diags, "BSK-W0050"),
+        count_code(&diags, "BSK-0050"),
         0,
-        "Protocol should be exempt from BSK-W0050"
+        "Protocol should be exempt from BSK-0050"
     );
     Ok(())
 }
 
 // ============================================================================
-// Function params and returns exempt from BSK-W0050
+// Function params and returns exempt from BSK-0050
 // ============================================================================
 
 #[test]
@@ -606,9 +624,9 @@ def add(a: int, b: int) -> int:
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diags, "BSK-W0050"),
+        count_code(&diags, "BSK-0050"),
         0,
-        "function param/return annotations should never fire BSK-W0050"
+        "function param/return annotations should never fire BSK-0050"
     );
     Ok(())
 }
@@ -623,11 +641,11 @@ fn negative_int_literal_redundant() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config(source, &annotation_rules_config())?;
     // Negative literals may or may not be detected depending on parser handling
     // This test documents the current behavior
-    let _w0050_count = count_code(&diags, "BSK-W0050");
-    // At minimum, BSK-E0005 should not fire (there IS an annotation)
+    let _w0050_count = count_code(&diags, "BSK-0050");
+    // At minimum, BSK-0005 should not fire (there IS an annotation)
     assert!(
-        !has_code(&diags, "BSK-E0005"),
-        "annotated variable should not fire BSK-E0005"
+        !has_code(&diags, "BSK-0005"),
+        "annotated variable should not fire BSK-0005"
     );
     Ok(())
 }
@@ -641,7 +659,7 @@ fn zero_int_redundant() -> Result<(), Box<dyn std::error::Error>> {
     let source = "x: int = 0\n";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        has_code(&diags, "BSK-W0050"),
+        has_code(&diags, "BSK-0050"),
         "x: int = 0 should be redundant"
     );
     Ok(())
@@ -652,7 +670,7 @@ fn empty_string_redundant() -> Result<(), Box<dyn std::error::Error>> {
     let source = "x: str = \"\"\n";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        has_code(&diags, "BSK-W0050"),
+        has_code(&diags, "BSK-0050"),
         "x: str = \"\" should be redundant"
     );
     Ok(())
@@ -663,7 +681,7 @@ fn zero_float_redundant() -> Result<(), Box<dyn std::error::Error>> {
     let source = "x: float = 0.0\n";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        has_code(&diags, "BSK-W0050"),
+        has_code(&diags, "BSK-0050"),
         "x: float = 0.0 should be redundant"
     );
     Ok(())
@@ -697,7 +715,7 @@ class ApiRoute(AuthenticatedRoute):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diags, "BSK-E0005"),
+        count_code(&diags, "BSK-0005"),
         0,
         "all overrides in route hierarchy should inherit annotations, got: {:?}",
         missing_attribute_annotation_messages(&diags)
@@ -706,14 +724,14 @@ class ApiRoute(AuthenticatedRoute):
 }
 
 // ============================================================================
-// [BSK-E0005] vs [BSK-W0050] catch-22 — issue #83
+// [BSK-0005] vs [BSK-0050] catch-22 — issue #83
 //
 // An annotated class attribute whose initializer is a NAME REFERENCE (not an
 // inline literal) carries `RhsKind::Other`; Basilisk cannot infer its type from
-// the RHS, so the annotation is informative — NOT redundant. BSK-W0050 must not
-// fire. Because BSK-E0005 (correctly) requires an annotation on a non-inferrable
+// the RHS, so the annotation is informative — NOT redundant. BSK-0050 must not
+// fire. Because BSK-0005 (correctly) requires an annotation on a non-inferrable
 // RHS, ANNOTATING is the single valid resolution. Before the fix the annotated
-// form fired BSK-W0050 ("remove it") while the unannotated form fired BSK-E0005 ("add
+// form fired BSK-0050 ("remove it") while the unannotated form fired BSK-0005 ("add
 // it") — an unsatisfiable contradiction.
 // ============================================================================
 
@@ -728,17 +746,17 @@ class DockerAgentWorkspaceHostConfig:
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     // The annotation supplies a type Basilisk cannot infer from the name
-    // reference, so it is NOT redundant — BSK-W0050 must stay silent.
+    // reference, so it is NOT redundant — BSK-0050 must stay silent.
     assert!(
-        !has_code(&diags, "BSK-W0050"),
-        "annotation on a non-inferrable name-reference RHS must not fire BSK-W0050 (issue #83), got: {:?}",
-        messages_for(&diags, "BSK-W0050")
+        !has_code(&diags, "BSK-0050"),
+        "annotation on a non-inferrable name-reference RHS must not fire BSK-0050 (issue #83), got: {:?}",
+        messages_for(&diags, "BSK-0050")
     );
-    // And since the attribute IS annotated, BSK-E0005 must not fire — proving the
+    // And since the attribute IS annotated, BSK-0005 must not fire — proving the
     // annotated form is a valid, contradiction-free resolution to the catch-22.
     assert!(
-        !has_code(&diags, "BSK-E0005"),
-        "annotated attr must not fire BSK-E0005, got: {:?}",
+        !has_code(&diags, "BSK-0005"),
+        "annotated attr must not fire BSK-0005, got: {:?}",
         missing_attribute_annotation_messages(&diags)
     );
     Ok(())
@@ -769,7 +787,7 @@ class StagingDB(DatabaseConfig):
 ";
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diags, "BSK-E0005"),
+        count_code(&diags, "BSK-0005"),
         0,
         "config hierarchy overrides should all inherit annotations, got: {:?}",
         missing_attribute_annotation_messages(&diags)

@@ -1,420 +1,582 @@
-# Type Narrowing and Full Inference — Plan {#NARROWPLAN}
-
-> **Spec**: [CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-OVERVIEW](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVIEW)
-> **Motivation**: [CHECK-ELIMINATE-FALSE-POSITIVES.md](CHECK-ELIMINATE-FALSE-POSITIVES.md) — ~125 FPs blocked on this work
-> **Architecture**: [CHECKER-ARCHITECTURE-SPEC.md §CHKARCH-INFERENCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INFERENCE)
-
----
-
-## Context {#NARROWPLAN-CONTEXT}
-
-The checker uses text-based annotation parsing and literal-only RHS inference, with no control-flow graph, type narrowing, or TypeVar constraint solving. ~125 of the remaining ~196 conformance false positives need this engine work. The target state is the spec ([CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-OVERVIEW](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVIEW)); this is the implementation roadmap.
-
-### Current State {#NARROWPLAN-CONTEXT-CURRENT-STATE}
-
-| Component | Spec Reference | Status |
-|-----------|---------------|--------|
-| `InferredType` enum (47 variants) | [§TYPEINF-INFERRED](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-INFERRED) | Implemented |
-| `is_assignable_to()` | [§TYPEINF-SUBTYPING](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING) | Implemented (covariance, contravariance, numeric widening) |
-| `from_annotation()` text parser | [§TYPEINF-VARS-ANNOTATED](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-VARS-ANNOTATED) | Implemented — falls back to `Named(String)` for complex types |
-| `infer_rhs()` | [§TYPEINF-VARS-SIMPLE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-VARS-SIMPLE) | Literal-only — skips function calls, attribute access, subscripts |
-| `FlowUnionTracker` | [§TYPEINF-VARS-FLOW](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-VARS-FLOW) | Basic implementation, unused by any rule |
-| `NarrowingEngine` | [§TYPEINF-NARROWING](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING) | **Stub** — `narrowing.rs` is 2 lines |
-| `ConstraintSolver` | [§TYPEINF-GENERICS-TYPEVAR](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-TYPEVAR) | **Not implemented** |
-| `OverloadResolver` | [§TYPEINF-FUNC-OVERLOADS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-FUNC-OVERLOADS) | **Not implemented** |
-
-### What This Unblocks {#NARROWPLAN-CONTEXT-UNBLOCKS}
-
-**assignment_compatibility (~98 FP)**: Assignment checks compare annotation text to RHS literal kind; non-literal RHS (function call, parameter reference, class instantiation) yields no RHS type. Named-to-Named subtyping (`x: Animal = Dog()`) needs class-hierarchy resolution and protocol structural conformance.
-
-**directives_assert_type_2 (~12 FP)**: `assert_type()` validation is disabled (source comment: "requires full type inference to avoid false positives"). Re-enabling needs the inferred type at every expression site, including after narrowing guards.
-
-**returns_compatibility_2 (~15 FP)**: Return type checking skips function-call RHS entirely. Protocol property return types, narrowing-function return types, and context-manager `__exit__` return types all need call-target resolution.
-
----
-
-## Phase 1: NarrowingEngine {#NARROWPLAN-ENGINE}
-
-**File**: `crates/basilisk-checker/src/narrowing.rs` (expand stub)
-**Spec**: [§TYPEINF-NARROWING-ISINSTANCE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ISINSTANCE) through [§TYPEINF-NARROWING-SCOPE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-SCOPE)
-
-Per-function narrowing engine that tracks type state through control flow.
-
-### 1a. Core Data Structure {#NARROWPLAN-ENGINE-DATA-STRUCTURE}
-
-```rust
-struct NarrowingContext {
-    /// Variable name -> narrowed type at this point in control flow
-    type_state: HashMap<String, InferredType>,
-    /// Stack of saved states for branch/join points
-    branch_stack: Vec<HashMap<String, InferredType>>,
-}
-
-impl NarrowingContext {
-    /// Fork state at a branch point (if/else, match/case)
-    fn push_branch(&mut self);
-    /// Join state from two branches (union of types)
-    fn pop_and_join(&mut self);
-    /// Narrow a variable's type within the current branch
-    fn narrow(&mut self, var: &str, narrowed: InferredType);
-    /// Query the current narrowed type of a variable
-    fn get_type(&self, var: &str) -> Option<&InferredType>;
-}
-```
-
-### 1b. Narrowing Patterns (in priority order) {#NARROWPLAN-ENGINE-PATTERNS}
-
-1. **isinstance narrowing** ([§TYPEINF-NARROWING-ISINSTANCE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ISINSTANCE)) — `isinstance(x, T)` narrows `x` to `T` in `if`, complement in `else`
-2. **None narrowing** ([§TYPEINF-NARROWING-NONE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-NONE)) — `x is None` / `x is not None`
-3. **Truthiness narrowing** ([§TYPEINF-NARROWING-TRUTHY](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-TRUTHY)) — `if x:` removes falsy types (`None`, `Literal[0]`, `Literal[""]`, `Literal[False]`)
-4. **Assignment narrowing** ([§TYPEINF-NARROWING-ASSIGN](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ASSIGN)) — `x = 42` narrows `x: int | str` to `int`
-5. **Assert narrowing** ([§TYPEINF-NARROWING-ASSERT](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ASSERT)) — `assert x is not None` narrows for all subsequent code
-6. **TypeGuard narrowing** ([§TYPEINF-NARROWING-TYPEGUARD](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-TYPEGUARD)) — positive branch only (per PEP 647)
-7. **TypeIs narrowing** ([§TYPEINF-NARROWING-TYPEIS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-TYPEIS)) — bidirectional, both branches (per PEP 742)
-8. **Pattern match narrowing** ([§TYPEINF-NARROWING-MATCH](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-MATCH)) — exhaustiveness checking
-
-### 1c. Approach {#NARROWPLAN-ENGINE-APPROACH}
-
-Walk the function body as a sequence of narrowing events: fork type state at branch points (`if`/`else`, `match`/`case`), union at join points. A structured AST walk suffices for Python's block-scoped control flow — no full CFG needed.
-
-### 1d. Scope Limitations ([§TYPEINF-NARROWING-SCOPE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-SCOPE)) {#NARROWPLAN-ENGINE-SCOPE}
-
-Narrowing does NOT persist across:
-- Function boundaries (inner functions capture the unnarrowed type)
-- Loop bodies (narrowed type before loop resets at each iteration)
-- After reassignment of the narrowed variable
-
-### 1e. Verification {#NARROWPLAN-ENGINE-VERIFICATION}
-
-- Re-enable E0053 `assert_type()` after narrowing guards
-- Conformance files: `narrowing_typeguard.py`, `narrowing_typeis.py`
-- Expected: ~15 FPs fixed
-
----
-
-## Phase 2: Expression Type Inference {#NARROWPLAN-EXPR-INFERENCE}
-
-**File**: `crates/basilisk-checker/src/inference.rs` (expand existing)
-**Spec**: [§TYPEINF-SUBTYPING](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING), [§TYPEINF-BIDIR](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-BIDIR)
-
-Extend `infer_rhs()` from literal-only to full expression inference.
-
-### 2a. Function Call Return Types (highest value) {#NARROWPLAN-EXPR-INFERENCE-CALLS}
-
-Resolve call target → function signature → return type annotation:
-- Same-module functions: `ResolvedModule::function_defs`
-- Cross-module functions: `ImportGraph` + target `ResolvedModule`
-- Constructor calls: `ClassName()` → `ClassName` (the class type itself)
-- Method calls: `obj.method()` → resolve `method` on class → return type
-
-Highest-value target: unblocks most E0014 FPs where the RHS is `Dog()`, `create_widget()`, etc.
-
-### 2b. Attribute Access {#NARROWPLAN-EXPR-INFERENCE-ATTRIBUTE}
-
-`x.attr` resolves via:
-- Class definition → attribute annotation type
-- `@property` → return type of the getter
-- Module-level → variable annotation type
-
-### 2c. Subscript {#NARROWPLAN-EXPR-INFERENCE-SUBSCRIPT}
-
-`x[key]` resolves via:
-- `list[T].__getitem__` → `T`
-- `dict[K, V].__getitem__` → `V`
-- TypedDict field access → field type
-- `tuple[A, B, C].__getitem__` with literal index → element type
-
-### 2d. Binary and Unary Operations {#NARROWPLAN-EXPR-INFERENCE-OPERATORS}
-
-`a + b` resolves via `__add__` return type. For builtins, use a hardcoded table:
-- `int + int` → `int`, `int + float` → `float`, `str + str` → `str`
-- `not x` → `bool`, `-x` on `int` → `int`
-
-### 2e. Conditional Expression {#NARROWPLAN-EXPR-INFERENCE-CONDITIONAL}
-
-`a if cond else b` → `Union[type(a), type(b)]`
-
-### 2f. Walrus Operator {#NARROWPLAN-EXPR-INFERENCE-WALRUS}
-
-`(x := expr)` has the type of `expr` ([§TYPEINF-VARS-WALRUS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-VARS-WALRUS))
-
-### 2g. Verification {#NARROWPLAN-EXPR-INFERENCE-VERIFICATION}
-
-- E0014: function call assignments should stop being flagged as FPs
-- E0013: return statements with function calls should be type-checked
-- Expected: ~40 FPs fixed
-
----
-
-## Phase 3: ConstraintSolver — TypeVar Resolution {#NARROWPLAN-SOLVER}
-
-**File**: `crates/basilisk-checker/src/constraint_solver.rs` (new)
-**Spec**: [§TYPEINF-GENERICS-TYPEVAR](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-TYPEVAR) through [§TYPEINF-GENERICS-DEFAULTS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-DEFAULTS)
-
-### 3a. Algorithm {#NARROWPLAN-SOLVER-ALGORITHM}
-
-1. Collect constraints from argument types against TypeVar-bearing parameter types
-2. Compute the join (union) of lower-bound constraints
-3. Use expected return type as additional bidirectional constraint
-4. Solve constrained TypeVars by matching against constraint set ([§TYPEINF-GENERICS-CONSTRAINED](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-CONSTRAINED))
-5. Handle bound TypeVars — upper bound check ([§TYPEINF-GENERICS-BOUND](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-BOUND))
-6. Handle TypeVar defaults ([§TYPEINF-GENERICS-DEFAULTS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-DEFAULTS), PEP 696)
-
-### 3b. Key Interface {#NARROWPLAN-SOLVER-INTERFACE}
-
-```rust
-struct ConstraintSolver {
-    constraints: HashMap<String, Vec<TypeConstraint>>,
-}
-
-enum TypeConstraint {
-    /// T must be a supertype of this
-    LowerBound(InferredType),
-    /// T must be a subtype of this
-    UpperBound(InferredType),
-    /// T must be exactly one of these (constrained TypeVar)
-    OneOf(Vec<InferredType>),
-}
-
-impl ConstraintSolver {
-    fn add_constraint(&mut self, typevar: &str, constraint: TypeConstraint);
-    fn solve(&self) -> Result<HashMap<String, InferredType>, SolveError>;
-}
-```
-
-### 3c. Deferred {#NARROWPLAN-SOLVER-DEFERRED}
-
-- ParamSpec solving ([§TYPEINF-GENERICS-PARAMSPEC](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-PARAMSPEC)) — address in follow-up
-- TypeVarTuple solving — address in follow-up
-
-### 3d. Verification {#NARROWPLAN-SOLVER-VERIFICATION}
-
-- Generic function calls: `first([1, 2, 3])` should resolve `T = int`
-- Conformance files: `generics_basic.py`, `generics_defaults.py`
-- Expected: ~10 FPs fixed
-
----
-
-## Phase 4: Class Hierarchy and Structural Subtyping {#NARROWPLAN-SUBTYPING}
-
-**File**: `crates/basilisk-checker/src/subtyping.rs` (new)
-**Spec**: [CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-SUBTYPING](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING)
-
-Single largest FP blocker (~80 of the remaining 177 FPs). `is_assignable_to()` in `types.rs` compares `Named` types by string name — it cannot see that `Dog` is a subtype of `Animal`, or that a class with `def draw(self)` satisfies a `Drawable` Protocol.
-
-### 4a. `SubtypeContext` — Core Data Structure {#NARROWPLAN-SUBTYPING-DATA-STRUCTURE}
-
-```rust
-struct SubtypeContext<'a> {
-    /// Class name → ordered MRO (C3 linearization)
-    mro_cache: HashMap<&'a str, Vec<&'a str>>,
-    /// Class name → ClassInfo (from ResolvedModule)
-    class_map: HashMap<&'a str, &'a ClassInfo>,
-    /// Class name → method signatures
-    method_map: HashMap<(&'a str, &'a str), &'a FunctionInfo>,
-    /// Protocol name → required members (name, kind, type)
-    protocol_members: HashMap<&'a str, Vec<ProtocolMember<'a>>>,
-}
-
-struct ProtocolMember<'a> {
-    name: &'a str,
-    kind: MemberKind,  // Method, Property, ReadWriteProperty, Attribute
-    type_sig: Option<&'a str>,  // Return type for methods/properties, type for attributes
-}
-```
-
-### 4b. Nominal Subtyping via MRO {#NARROWPLAN-SUBTYPING-NOMINAL}
-
-**Algorithm**: Given source class `S` and target class `T`:
-1. Look up `S` in `mro_cache`. If not cached, compute C3 linearization from `ClassInfo.bases`.
-2. Check if `T` appears anywhere in `S`'s MRO.
-3. If yes → subtype. If no → not a nominal subtype (may still be structural).
-
-**Builtin MRO** (hardcoded for types not defined in user code):
-- `bool` → `[bool, int, float, complex, object]`
-- `int` → `[int, float, complex, object]`
-- `list` → `[list, MutableSequence, Sequence, Reversible, Collection, Iterable, object]`
-- `dict` → `[dict, MutableMapping, Mapping, Collection, Iterable, object]`
-- `str` → `[str, Sequence, Hashable, object]`
-- `tuple` → `[tuple, Sequence, Hashable, object]`
-- `set` → `[set, MutableSet, AbstractSet, Collection, Iterable, object]`
-- `frozenset` → `[frozenset, AbstractSet, Collection, Iterable, object]`
-
-### 4c. Protocol Structural Subtyping (PEP 544) {#NARROWPLAN-SUBTYPING-PROTOCOL}
-
-**Algorithm**: Given source class `S` and protocol `P`:
-
-1. **Collect `P`'s members**: walk `P`'s class body + Protocol bases (NOT `object` or `Generic`). For each:
-   - `def method(self, ...) -> R` → `ProtocolMember { kind: Method, type_sig: signature }`
-   - `@property def prop(self) -> R` → `ProtocolMember { kind: Property, type_sig: R }`
-   - `attr: T` → `ProtocolMember { kind: Attribute, type_sig: T }`
-
-2. **For each protocol member**, search `S` for a matching member:
-   - Check `S.methods` (name match → compare signatures with [§TYPEINF-SUBTYPING-CALLABLE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-CALLABLE) callable subtyping)
-   - Check `S.attributes` (name match → check type compatibility)
-   - Check dataclass fields, `NamedTuple` fields (name match → attribute equivalent)
-   - Walk `S`'s MRO for inherited members
-
-3. **If ALL members matched** → `S` satisfies `P`. Otherwise → not a subtype.
-
-**Subtlety**: a plain attribute `x: int` satisfies a `@property` requirement `def x(self) -> int`; a mutable attribute satisfies a read-write property; an immutable attribute (or `@property` without setter) does NOT satisfy a read-write property.
-
-### 4d. Generic Subtyping with Variance {#NARROWPLAN-SUBTYPING-GENERIC}
-
-**Algorithm**: Given `Source[A1, A2]` and `Target[B1, B2]`:
-
-1. Check that `Source`'s base class (or MRO) includes `Target`'s base.
-2. Determine the TypeVar mapping: how `Source` specializes `Target`.
-3. For each TypeVar position:
-   - **Covariant**: `A_i` must be a subtype of `B_i`
-   - **Contravariant**: `B_i` must be a subtype of `A_i`
-   - **Invariant**: `A_i` must equal `B_i` (bidirectional subtype)
-
-### 4e. TypedDict Structural Subtyping {#NARROWPLAN-SUBTYPING-TYPEDDICT}
-
-**Algorithm**: Given TypedDict `S` assigned to TypedDict `T`:
-
-1. For each required field `f: U` in `T`:
-   - `S` must have field `f` with type `V` where `V` <: `U` (for `ReadOnly` fields) or `V` == `U` (for mutable fields)
-2. For each `NotRequired` field `f: U` in `T`:
-   - If `S` has field `f`, its type must be compatible as above
-   - If `S` lacks field `f`, that's OK (it's not required)
-3. If `T` has `extra_items=U`:
-   - Any field in `S` not declared in `T` must have type `V` <: `U`
-4. If `T` does NOT have `extra_items`:
-   - `S` must not have fields that `T` doesn't declare (closed schema)
-
-### 4f. Callable Subtyping ([§TYPEINF-SUBTYPING-CALLABLE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-CALLABLE)) {#NARROWPLAN-SUBTYPING-CALLABLE}
-
-Partially in `is_assignable_to()`. Extend for:
-- `*args`/`**kwargs` parameter compatibility
-- Default parameter arity tolerance (source can have more defaults than target)
-- `Protocol.__call__` ↔ `Callable` equivalence
-- `Concatenate[X, P]` parameter prepending
-
-### 4g. Wire Into `is_subtype_of()` {#NARROWPLAN-SUBTYPING-WIRE}
-
-Replace the current `is_assignable_to()` fallback:
-
-```rust
-// Current: Named-to-Named → compare base names (wrong for hierarchies)
-(InferredType::Named(a), InferredType::Named(b)) => a_base == b_base
-
-// New: dispatch to SubtypeContext
-(InferredType::Named(a), InferredType::Named(b)) =>
-    ctx.is_subtype(a, b)  // MRO lookup + protocol check + generic variance
-```
-
-### 4h. Verification {#NARROWPLAN-SUBTYPING-VERIFICATION}
-
-- E0014: `x: Animal = Dog()` should pass
-- E0014: `f: Standard2 = pos_only  # E` should still fail (not structurally compatible)
-- Conformance files: `protocols_subtyping.py`, `callables_subtyping.py`, `protocols_definition.py`
-- Expected: ~50 FPs fixed
-
----
-
-## Phase 5: Wire Into Rules {#NARROWPLAN-WIRE-RULES}
-
-### 5a. E0014 (Assignment Type Mismatch) {#NARROWPLAN-WIRE-RULES-E0014}
-
-Replace:
-- `infer_rhs()` → `inference_engine.infer_expr(rhs)`
-- `from_annotation()` → `inference_engine.resolve_type(annotation)`
-- `is_assignable_to()` → `subtyping.is_subtype_of()`
-
-### 5b. E0013 (Return Type Mismatch) {#NARROWPLAN-WIRE-RULES-E0013}
-
-- Infer return expression types including function calls
-- Use narrowing context for narrowed return values
-- Stop skipping call expressions
-
-### 5c. E0053 (assert_type) {#NARROWPLAN-WIRE-RULES-E0053}
-
-- Re-enable the rule (currently disabled with comment)
-- Use `inference_engine.infer_expr()` at the call site
-- Compare inferred type to expected type argument
-
-### 5d. Verification {#NARROWPLAN-WIRE-RULES-VERIFICATION}
-
-- Run full conformance suite
-- Expected: ~10 additional FPs fixed from edge cases
-- Total Phase 2 target: ~125 FPs eliminated
-
----
-
-## Execution Order {#NARROWPLAN-EXECUTION-ORDER}
-
-| Phase | Unblocks | Effort | Est. FPs Fixed | Dependencies |
-|-------|----------|--------|----------------|--------------|
-| 1. NarrowingEngine | E0053, E0013 narrowing | High | ~15 | None |
-| 2. Expression inference | E0014 calls, E0013 calls | High | ~40 | None |
-| 3. ConstraintSolver | Generic function calls | High | ~10 | Phase 2 |
-| 4. Class hierarchy + structural subtyping | Named-to-Named, protocols, TypedDict, callables | High | ~50 | Phase 2 |
-| 5. Wire into rules | All remaining | Medium | ~10 | Phases 1-4 |
-
-Phases 1 and 2 are independent (parallelizable). Phase 3 depends on Phase 2 (constraint collection needs expression inference). Phase 4 depends on Phase 2 (needs resolved types). Phase 5 depends on all prior phases.
-
----
-
-## Risks and Mitigations {#NARROWPLAN-RISKS}
-
-| Risk | Mitigation |
-|------|------------|
-| Expression inference introduces false negatives (misses real errors) | Gate behind feature flag initially; run conformance suite with flag on/off; missed count must not increase |
-| Narrowing state explosion in deeply nested control flow | Cap branch stack depth; fall back to unnarrowed type beyond limit |
-| MRO resolution is expensive for deep hierarchies | Cache per class in `ResolvedModule`; invalidate on file change via Salsa |
-| ConstraintSolver doesn't converge for complex generic chains | Bound recursion depth; emit diagnostic on unsolvable TypeVars rather than crash |
-| Cross-module type resolution adds latency | Keep same-module fast path; cross-module resolution is already cached by import graph |
-
----
-
-## TODO {#NARROWPLAN-TODO}
-
-- [ ] **Phase 1: NarrowingEngine** (~15 FPs)
-  - [ ] 1a. `NarrowingContext` data structure with push/pop/join — `crates/basilisk-checker/src/narrowing.rs`
-  - [ ] 1b. isinstance narrowing ([§TYPEINF-NARROWING-ISINSTANCE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ISINSTANCE)) — positive + complement branches
-  - [ ] 1c. None narrowing ([§TYPEINF-NARROWING-NONE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-NONE)) — `is None` / `is not None` with `remove_none()`
-  - [ ] 1d. Truthiness narrowing ([§TYPEINF-NARROWING-TRUTHY](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-TRUTHY)) — `remove_falsy()` / `keep_falsy()`
-  - [ ] 1e. Assignment narrowing ([§TYPEINF-NARROWING-ASSIGN](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ASSIGN)) — narrows to assigned type
-  - [ ] 1f. Assert narrowing ([§TYPEINF-NARROWING-ASSERT](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ASSERT)) — unwraps inner guard, applies unconditionally
-  - [ ] 1g. TypeGuard narrowing — positive branch only ([§TYPEINF-NARROWING-TYPEGUARD](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-TYPEGUARD))
-  - [ ] 1h. TypeIs narrowing — bidirectional ([§TYPEINF-NARROWING-TYPEIS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-TYPEIS)) — positive + complement
-  - [ ] 1i. Pattern match narrowing + exhaustiveness ([§TYPEINF-NARROWING-MATCH](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-MATCH)) — per-case + wildcard detection
-  - [ ] 1j. Scope limitations ([§TYPEINF-NARROWING-SCOPE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-SCOPE)) — `in_loop` flag, no recursion into nested functions
-  - [x] Resolver guard collection — `crates/basilisk-resolver/src/visitor/narrowing.rs` + `narrowing_types.rs`
-  - [x] `FunctionInfo.narrowing_guards` field wired into `function_info_from()`
-- [ ] **Phase 2: Expression Type Inference** (~40 FPs) — `crates/basilisk-checker/src/expr_inference.rs`
-  - [ ] 2a. Function call return type resolution (same-module) — `ExpressionInferrer::resolve_call_return_type()`
-  - [ ] 2b. Constructor call resolution (`ClassName()` → class type) — via `class_names` lookup
-  - [ ] 2c. Cross-module function call return types — via `imported_symbols` + `type_annotation`
-  - [ ] 2d. Method call resolution (`obj.method()`) — `resolve_method_return_type()`
-  - [ ] 2e. Attribute access type resolution — `resolve_attribute_type()` via class `annotation_span`
-  - [ ] 2f. Subscript type resolution (list/dict/TypedDict/tuple) — `resolve_subscript_type()`
-  - [ ] 2g. Binary/unary operation return types — `infer_binop_type()` / `infer_unaryop_type()` with builtin tables
-  - [ ] 2h. Conditional expression (`a if cond else b` → union) — `infer_conditional_type()`
-  - [ ] 2i. Walrus operator type propagation — pass-through (caller passes expr type)
-  - [ ] Builtin constructor table — 40+ builtins (`int`, `str`, `len`, `sorted`, `open`, etc.)
-  - [ ] Builtin method table — `str`, `list`, `dict`, `set`, `int`, `float`, `bytes`, `tuple` methods
-- [ ] **Phase 3: ConstraintSolver** (~10 FPs) — `crates/basilisk-checker/src/constraint_solver.rs`
-  - [ ] 3a. Constraint collection — `add_lower_bound()`, `add_upper_bound()`, `add_one_of()`
-  - [ ] 3b. Lower-bound join / upper-bound meet solving — `solve()` + `solve_one()`
-  - [ ] 3c. Bidirectional constraint from expected return type — `add_return_constraint()`
-  - [ ] 3d. Constrained TypeVar matching ([§TYPEINF-GENERICS-CONSTRAINED](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-CONSTRAINED)) — `solve_constrained()` with widening
-  - [ ] 3e. Bound TypeVar upper-bound check ([§TYPEINF-GENERICS-BOUND](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-BOUND)) — validates `is_assignable_to(bound)`
-  - [ ] 3f. TypeVar defaults (PEP 696, [§TYPEINF-GENERICS-DEFAULTS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-DEFAULTS)) — `set_default()` + fallback in `solve()`
-- [ ] **Phase 4: Class Hierarchy and Structural Subtyping** (~50 FPs) — `crates/basilisk-checker/src/subtyping.rs`
-  - [ ] 4a. `SubtypeContext` data structure with MRO cache, protocol member tables — `SubtypeContext::from_module()`
-  - [ ] 4b. Nominal subtyping via C3 MRO resolution ([§TYPEINF-SUBTYPING-NOMINAL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-NOMINAL)) + builtin MRO hardcoding — `compute_mro()` + `builtin_mro()`
-  - [ ] 4c. Protocol structural subtyping: member collection, method/attribute/property matching ([§TYPEINF-SUBTYPING-PROTOCOL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-PROTOCOL)) — `is_protocol_subtype()` + `source_has_member()`
-  - [ ] 4d. Generic subtyping with variance-aware TypeVar position checking ([§TYPEINF-SUBTYPING-GENERIC](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-GENERIC)) — `is_subtype_with_context()` Callable contravariance
-  - [ ] 4e. TypedDict structural subtyping: Required/NotRequired/ReadOnly/extra_items ([§TYPEINF-SUBTYPING-TYPEDDICT](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-TYPEDDICT)) — `is_typeddict_subtype()` + `parse_typeddict_field_flags()`
-  - [ ] 4f. Callable subtyping: contravariant params, covariant return, ellipsis ([§TYPEINF-SUBTYPING-CALLABLE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-CALLABLE)) — `is_subtype_with_context()` Callable arm
-  - [ ] 4g. Wire `is_subtype_of()` to replace Named-to-Named string comparison — `is_subtype_with_context()` dispatches Named→SubtypeContext
-  - [ ] 4h. Conformance verification — 57 FPs (under 71 target), 0 regressions
-- [ ] **Phase 5: Wire Into Rules** (~10 FPs)
-  - [ ] 5a. E0014 — `VarCheckContext` with `SubtypeContext`, uses `is_subtype_with_context()` for assignability
-  - [ ] 5b. E0013 — `SubtypeContext` passed to `check_function()`, removed `contains_named` early exit for Named types
-  - [ ] 5c. E0053 — `is_likely_narrowed()` heuristic suppresses narrowing-dependent FPs; Union normalization in `types_match()`
-  - [x] 5d. Full conformance suite verification — the unmodified `python/typing` scorer (pinned `268d0c4e`) reports **68 of 146 fixtures passing (46.6%)** with the `basilisk` binary, **EVERY rule enabled** — no config, no `basilisk.json`, no "spec-conformance mode". That score reflects **265 false positives and 0 missed required errors**: every required error is caught; every failing fixture is FPs from strict-by-default house rules (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code the spec treats as inferred. HISTORY: last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#185/#191 inflated it to a fake 100% via a `basilisk.json` that DISABLED those 6 house rules at score time — FPs hidden, checker never improved. That disabling is removed; disabling any conformance rule for scoring is now forbidden. Real progress over that span: 40.4% → 46.6%. The only legitimate path to 100% is making strict defaults stop firing on spec-valid code with every rule enabled — never by disabling a rule. Driving FPs down remains active work.
-  - [ ] Checker-side modules: `narrowing.rs` (NarrowingContext), `expr_inference.rs` (ExpressionInferrer), `constraint_solver.rs` (ConstraintSolver)
+# Type Narrowing and Inference Plan {#NARROWPLAN-INFERENCE}
+
+Specs: [TYPEINF-OVERVIEW](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVIEW),
+[TYPEINF-TARGET](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET), and
+[CHKARCH-INFERENCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INFERENCE).
+
+Basilisk already passes the typing conformance suite. This plan therefore has two
+tracks that share one implementation:
+
+1. **Consolidation** — merge duplicated rule-local inference into shared
+   components and improve editor/user behavior without weakening the
+   zero-false-positive gate.
+2. **A substantially more powerful inference engine** — bidirectional
+   (synthesis + checking) typing over a subtype-constraint solver, per the
+   target architecture in
+   [TYPEINF-TARGET](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET)
+   and the research grounding in
+   [TYPEINF-RESEARCH](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-RESEARCH).
+   This closes inference-gap issues like
+   [#317](https://github.com/MelbourneDeveloper/Basilisk/issues/317) and lays
+   the groundwork for PEP 827-style type manipulation.
+
+Current foundations include `InferredType`, annotation parsing, literal RHS
+inference, resolver-collected narrowing guards, and several rule-local
+Protocol/TypedDict/Callable algorithms. There is no shared checker-side flow
+environment, expression inferrer, constraint solver, or subtype context.
+
+## Goals and non-goals {#NARROWPLAN-GOALS}
+
+**Goals**
+
+- Inference powerful enough that annotations become recoverable from usage.
+  Issue [#317](https://github.com/MelbourneDeveloper/Basilisk/issues/317) is
+  the canonical example: in `def multiply(x, y) -> int: return x * y` called as
+  `multiply(4, 5)`, both parameters are recoverable from the body constraint
+  (`x * y` must produce `int` given `-> int`, via constraint-based inference
+  over the overloaded `__mul__`/`__rmul__` operator) and from the call site.
+  A constraint-based and/or call-site-driven engine types this with no
+  annotations, making a `BSK-0001` diagnostic unnecessary in such cases.
+- Everything is oriented toward
+  [PEP 827 – Type Manipulation](https://peps.python.org/pep-0827/): the engine
+  must become powerful enough (bidirectional context, constraint solving,
+  bounded type-level evaluation) that PEP 827's conditional/mapped types have a
+  sound home if adopted later.
+- Preserve the gradual guarantee as a testable invariant, keep the
+  zero-false-positive conformance gate, and hold both benchmark ratchets
+  ([CHKARCH-TESTING-BENCH-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET)).
+- **Superiority is the exit criterion, not an aspiration.** Basilisk MUST end
+  this plan with measurably better type inference than pyright, mypy, ty,
+  pyrefly, and zuban. The plan is not complete while any competitor leads any
+  axis in [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS); the mechanism that makes
+  the claim honest, enforceable, and permanent is the superiority gate in
+  [NARROWPLAN-SUPERIORITY](#NARROWPLAN-SUPERIORITY).
+
+**Non-goals**
+
+- **Not implementing PEP 827.** No `typing.IsAssignable`, Type Booleans,
+  conditional type expressions, or `RaiseError` surface syntax ships from this
+  plan. The type-level evaluation work in
+  [NARROWPLAN-TYPELEVEL](#NARROWPLAN-TYPELEVEL) is engine groundwork
+  (bounded normalization, memoization, divergence fallbacks) so the inference
+  engine is PEP 827-ready — nothing more.
+- No alternate checking mode
+  ([CHKARCH-CONFIGURATION-ONLY](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIGURATION-ONLY));
+  every shared component lands behind existing checker APIs.
+- No global Hindley–Milner/Algorithm W core — see
+  [TYPEINF-RESEARCH-THEORY](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-RESEARCH-THEORY)
+  for why unification-based HM does not fit Python's subtyping, mutation, and
+  gradual `Any`.
+
+## Staged delivery {#NARROWPLAN-STAGES}
+
+Delivery is staged so each stage is independently shippable and each carries an
+explicit decision threshold for changing course.
+
+- **Stage 0 — foundational commitments** (before writing the solver): the
+  two-mode bidirectional core and the two-stage constraint architecture with
+  deferred generalization, per
+  [TYPEINF-TARGET-BIDIRECTIONAL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-BIDIRECTIONAL)
+  and
+  [TYPEINF-TARGET-CONSTRAINTS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-CONSTRAINTS).
+  *Threshold:* if bidirectional `check` mode cannot be threaded cleanly through
+  Salsa queries without ballooning dependencies, fall back to Pyrefly-style
+  "peek-ahead" only for the specific constructs that fail.
+- **Stage 1 — incrementality**: match ty on granularity, exceed Pyrefly, per
+  [TYPEINF-TARGET-INCREMENTAL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-INCREMENTAL).
+  *Threshold:* if fine-grained queries cause memory blowup on a 1M+ LOC
+  target, adopt Pyrefly-style AST/binding eviction (drop intermediate state,
+  keep only interfaces) behind the query layer.
+- **Stage 2 — flow-sensitive narrowing that beats everyone**, per
+  [TYPEINF-TARGET-NARROWING](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-NARROWING),
+  together with the consolidation sections below.
+- **Stage 3 — type-level computation groundwork for PEP 827 readiness**, per
+  [TYPEINF-TARGET-TYPELEVEL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-TYPELEVEL).
+
+## Flow analysis {#NARROWPLAN-FLOW}
+
+Add a scoped narrowing environment with branch push, complement, join, and
+nested-function boundaries, consuming resolver guards (`isinstance`, `is None`,
+truthiness, `TypeGuard`, `TypeIs`, `assert`, pattern matching). Model
+assignment narrowing without changing the declared type used for assignment
+validation.
+
+The target formulation is occurrence typing
+(Tobin-Hochstadt–Felleisen; Castagna et al. — see
+[TYPEINF-RESEARCH-GRADUAL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-RESEARCH-GRADUAL))
+as **intersection-and-negation-based narrowing** (ty's model) over a
+Salsa-backed use-def map, with `phi`/join at control-flow merges (Pyrefly's
+binding DSL). Supported guards grow to include `issubclass`, `==`/`in` against
+literals, `hasattr` (synthetic protocol intersection), and
+exhaustiveness/implied-else. The **attribute-narrowing-across-calls** soundness
+tradeoff is decided explicitly per Pyrefly's lesson — default to Pyrefly's
+usable behavior but make it configurable for security-sensitive users.
+Reachability becomes **inference-driven** (ty's model) rather than
+pattern-matched idioms.
+
+## Expression inference {#NARROWPLAN-EXPRESSIONS}
+
+Infer same-module and imported function/method return types; constructor,
+attribute, subscript, binary/unary, conditional, and walrus expressions from
+structured AST data. Centralize builtin constructor/method signatures instead
+of adding rule-local string tables, and reuse the same inference results for
+diagnostics, hover, completions, and inlay hints.
+
+With the bidirectional core in place, `check` mode propagates expected types
+into container literals, comprehensions, lambda parameters, and call
+arguments; parameter types become recoverable from body constraints and call
+sites (issue #317).
+
+## Generic constraints {#NARROWPLAN-CONSTRAINTS}
+
+Collect lower, upper, constrained, default, and expected-return bounds for
+TypeVars; solve bounds deterministically and report ambiguity without
+guessing. Cover constrained/bound TypeVars, PEP 696 defaults, ParamSpec, and
+TypeVarTuple interactions before wiring the solver into rule decisions.
+
+Type variables carry explicit lower/upper bounds (like Pyright's type
+intervals and Pyrefly's `Var`) with the input/output polarity discipline
+borrowed from Dolan/Parreaux — **without** committing to full biunification
+(see the risk in [NARROWPLAN-RISKS](#NARROWPLAN-RISKS)). Generalization is
+deferred: infer `list[Var{lower=Literal[1]}]` and settle `Var` only at first
+constraining use, preserving `list[int]` vs `list[Literal[1]]` precision
+instead of eagerly widening `Literal[1] → int`. The Jane Street Q&A confirms
+Pyrefly's own team conceded the deferred "most general type" is "the correct
+type" and "might be more enjoyable" — Basilisk should ship it.
+
+## Shared subtyping {#NARROWPLAN-SUBTYPING}
+
+Build a context for nominal class relationships, Protocol members, TypedDict
+schemas, generic variance, and Callable parameter kinds. Replace duplicated
+rule-local subtype helpers only after parity tests pin their current
+accepted/rejected cases. Keep `Any`/`Unknown` gradual behavior and the numeric
+tower consistent across annotation parsing and inferred types.
+
+## Incrementality {#NARROWPLAN-INCREMENTAL}
+
+Use Salsa with **definition-level and expression-level tracked queries** (ty's
+model), not file-level (Pyrefly's). Compute a compact per-module
+**interface/signature** query as the cross-file dependency boundary (Pyrefly's
+"Interface" idea) to get early cutoff and prevent whole-program invalidation.
+Model cycles with **fixpoint iteration seeded by a divergent/bottom sentinel**
+and a hard iteration cap (ty's `Divergent`; Pyrefly's thunks). The Stage 1
+memory threshold in [NARROWPLAN-STAGES](#NARROWPLAN-STAGES) governs the
+eviction fallback.
+
+## Type-level evaluation groundwork (PEP 827 readiness) {#NARROWPLAN-TYPELEVEL}
+
+Build a **normalization-by-evaluation engine** for type-level functions
+(conditional/mapped types) as a set of memoized Salsa queries returning types
+in weak-head normal form (whnf). Enforce:
+
+- (a) **fuel/depth bounds** (TypeScript's instantiation-depth model);
+- (b) **memoization** of normalized results;
+- (c) a **`Divergent`/`@Todo` fallback** that preserves the gradual guarantee
+  when evaluation is truncated;
+- (d) **GHC-style acceptance conditions** (Paterson/Coverage analogues) that
+  statically reject obviously-nonterminating type-level definitions, with an
+  opt-in "undecidable" escape hatch.
+
+Represent mapped types as **kind `Type → Type` operators** and conditional
+types as guarded rewrites keyed on a consistency/assignability check
+(`IsAssignable` in PEP 827); evaluate lazily (call-by-need) so unused branches
+never diverge. Bounded evaluation is mandatory, not optional: type-level
+computation in this space is provably Turing-complete (see
+[TYPEINF-RESEARCH-TYPELEVEL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-RESEARCH-TYPELEVEL)).
+
+Scope reminder: this is **engine groundwork only** — no PEP 827 surface
+feature ships from this plan (see [NARROWPLAN-GOALS](#NARROWPLAN-GOALS)).
+
+## Integration {#NARROWPLAN-INTEGRATION}
+
+Introduce each shared component behind existing checker APIs; do not create an
+alternate checking mode. Migrate assignment, return, call, and `assert_type`
+rules incrementally, deleting the replaced local logic in the same change. Add
+spec-ID-linked mutation-resistant tests for each migrated behavior.
+
+## Measurable targets {#NARROWPLAN-TARGETS}
+
+The axes on which inference superiority is defined and measured. Each axis has
+a concrete metric so the lead is provable, not asserted:
+
+- **Bidirectional literal/generic inference:** deferred bounded type variables
+  preserve `list[int]` vs `list[Literal[1]]` precision *and* accept more
+  programs (measure against the typing-spec conformance suite + a curated
+  container/comprehension/lambda benchmark).
+- **Narrowing richness:** intersection+negation narrowing and
+  `hasattr`/pattern narrowing (measure against the utahplt/ifT-benchmark,
+  <https://github.com/utahplt/ift-benchmark>).
+- **Higher-order inference:** propagate expected types through
+  `map`/`filter`/decorators/`ParamSpec` (build a targeted higher-order
+  benchmark; Pyrefly is strong here, so this is the hardest win).
+- **Incremental latency:** aim for single-digit-millisecond keystroke updates
+  via definition-level Salsa queries (ty reports 4.7ms on a load-bearing
+  PyTorch edit) vs Pyrefly's file-level invalidation (measure p50/p99 re-check
+  latency on a 1M-LOC corpus).
+- **Gradual-guarantee conformance:** a differential test that strips
+  annotations and asserts no new errors — Pyrefly fails this by design;
+  Basilisk should pass.
+
+## Superiority gate {#NARROWPLAN-SUPERIORITY}
+
+Basilisk MUST have better type inference than every officially-recognized
+competitor. "Better" is defined operationally and enforced exactly the way
+this repo already enforces conformance and speed — self-measured,
+reproducible, write-always, ratcheted:
+
+- **Definition.** Basilisk is superior on an axis when it scores strictly
+  better than the LATEST official release of every officially-recognized
+  competitor (pyright, mypy, ty, pyrefly, zuban — the same set as the speed
+  benchmarks) on that axis's metric, measured by Basilisk's own harness with
+  the methodology stated in the results. Consistent with the documentation
+  honesty rules, we never claim a lead by comparing our numbers against
+  vendor-published figures — only same-harness, same-corpus, same-machine
+  measurements count.
+- **Inference scoreboard harness.** Mirror the `benchmarks/` design: every run
+  pulls the latest official release of each competitor and runs the full
+  corpus set against all checkers — the reveal_type-precision corpus
+  (containers/comprehensions/lambdas/literal-generic precision), the
+  utahplt/ifT narrowing benchmark, the higher-order corpus, the
+  gradual-guarantee differential suite, and the incremental-latency
+  measurement. Scores are written to a status file **immediately and
+  unconditionally** (WRITE-ALWAYS); a separate read-only gate compares against
+  the committed baseline (GATE-SEPARATELY). A run that measured a score but
+  didn't record it is a lie.
+- **Ratchet.** Once Basilisk takes the lead on an axis, the lead becomes a CI
+  gate: falling behind any competitor on a led axis is a build failure. Leads
+  only accumulate. The plan exits only when Basilisk leads **all five axes
+  simultaneously** while the 100%/0-FP conformance gate and the speed
+  benchmark gate stay green — inference superiority must never be bought by
+  regressing conformance or performance, and vice versa.
+- **Moving targets.** Because the harness pulls latest competitor releases,
+  superiority is continuously re-proven against competitors as they improve —
+  never against frozen versions. If a competitor release takes back an axis,
+  CI goes red and reclaiming that axis becomes the top-priority work item on
+  this plan.
+- **Claims discipline.** No "better inference than X" statement ships in
+  docs, website, or marketing unless the current committed scoreboard run
+  shows the lead, and the claim links to how it is measured.
+
+## Risks and decision thresholds {#NARROWPLAN-RISKS}
+
+- **Decidability wall.** With PEP 827 conditional/mapped types, type-level
+  evaluation is Turing-complete (proven for both TypeScript and Python type
+  hints — see
+  [TYPEINF-RESEARCH-TYPELEVEL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-RESEARCH-TYPELEVEL)).
+  Basilisk cannot be simultaneously complete and terminating; bounded
+  evaluation with explicit `Divergent`/`@Todo` fallbacks is mandatory, and
+  some legitimate type-level programs will hit the bound. This is an inherent
+  limitation, not an implementation gap.
+- **Algebraic subtyping may not transfer.** MLsub/Simple-sub assume
+  structural, fully-inferred types; Python's nominal classes, invariant
+  generics, overloads, and `Any` do not fit cleanly. Committing to full
+  biunification is a research risk; the safe path is to borrow polar types and
+  constraint simplification only. Flag this as unvalidated until a prototype
+  confirms it on real typeshed stubs.
+- **Soundness vs. practicality is unavoidable.** Pyrefly explicitly chose
+  usability over soundness (attribute narrowing across calls). Every such
+  choice trades false negatives for ergonomics. Basilisk must make these
+  choices *explicitly and configurably*, and document them, rather than
+  inheriting them implicitly.
+- **Gradual guarantee vs. aggressive inference are in direct tension.** You
+  cannot both (a) infer concrete types in unannotated code to catch bugs
+  (Pyrefly) and (b) guarantee that removing annotations never adds errors
+  (ty). Basilisk must pick a default and likely offer a strictness dial;
+  claiming to "beat Pyrefly on inference" while "preserving the gradual
+  guarantee" requires being precise about *which* mode is being compared.
+- **Incrementality vs. global inference.** The more Basilisk infers across
+  function/call boundaries (to beat Pyrefly), the larger its Salsa dependency
+  graph and the more a single edit invalidates. The interface/signature-boundary
+  technique mitigates but does not eliminate this; expect to tune the
+  granularity empirically.
+- **Stage thresholds.** The per-stage fallback triggers live in
+  [NARROWPLAN-STAGES](#NARROWPLAN-STAGES): peek-ahead fallback if `check` mode
+  balloons Salsa dependencies; eviction fallback if fine-grained queries blow
+  memory on a 1M+ LOC target.
+- **Source quality of competitor numbers.** Comparative figures quoted in
+  [TYPEINF-RESEARCH-COMPETITORS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-RESEARCH-COMPETITORS)
+  are vendor/benchmark claims, not independently audited; treat them as
+  directional. The only numbers Basilisk acts on are the ones its own
+  scoreboard harness produces ([NARROWPLAN-SUPERIORITY](#NARROWPLAN-SUPERIORITY)).
+- **Competitors are moving targets.** Pyrefly and ty ship fast and are well
+  funded; ty is actively closing its bidirectional gap. The superiority gate
+  is designed for this: leads are re-proven against latest releases on every
+  run, and a lost axis turns CI red rather than silently eroding the claim.
+
+## Acceptance {#NARROWPLAN-ACCEPTANCE}
+
+- Inference and narrowing have one shared implementation rather than diverging
+  rule-local approximations.
+- Hover/inlay results and checker diagnostics agree for the same expression.
+- The gradual-guarantee differential suite (strip annotations → assert no new
+  errors) passes.
+- The inference scoreboard ([NARROWPLAN-SUPERIORITY](#NARROWPLAN-SUPERIORITY))
+  shows Basilisk strictly ahead of the latest official releases of pyright,
+  mypy, ty, pyrefly, and zuban on **every** axis in
+  [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS), and the per-axis ratchet is wired
+  into CI so the lead cannot silently erode.
+- `make test`, mutation/coverage ratchets, benchmarks for touched hot paths, and
+  the live 141/141 conformance gate all pass with zero false positives.
+
+## Checklist {#NARROWPLAN-CHECKLIST}
+
+### Stage 0 — bidirectional + constraint foundations
+
+- [x] Add the two-mode bidirectional core: every AST expression node supports
+  `synth(e) → τ` and `check(e, τ)`, with `check` as the primary driver
+  ([TYPEINF-TARGET-BIDIRECTIONAL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-BIDIRECTIONAL)).
+  — `crates/basilisk-checker/src/bidir/{engine,check}.rs`.
+- [x] Thread expected types through container literals, comprehensions, lambda
+  parameters, and call arguments; verify Salsa dependency growth stays
+  acceptable, else fall back to peek-ahead for the failing constructs only.
+  — Verified by architecture: the engine is a pure function of one module's
+  AST inside the existing file-level tracked queries, so it adds zero Salsa
+  edges (see the Salsa note in `crates/basilisk-checker/src/bidir/mod.rs`);
+  re-evaluate per construct when Stage 1 moves to finer-grained queries.
+- [x] Add the two-stage constraint architecture: a constraint-generation pass
+  producing subtype constraints (`τ₁ <: τ₂`) and a separate solver
+  ([TYPEINF-TARGET-CONSTRAINTS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-CONSTRAINTS)).
+  — `crates/basilisk-checker/src/bidir/{constraints,solve}.rs`; every ground
+  leaf delegates to `InferredType::is_assignable_to`.
+- [x] Represent type variables with explicit lower/upper bounds and
+  input/output polarity; defer generalization to first constraining use
+  (`list[Var{lower=Literal[1]}]`, not eager `Literal[1] → int`).
+  — `crates/basilisk-checker/src/bidir/tyvar.rs`; the exact
+  `list[Var{lower=Literal[1]}]` case is a unit test.
+- [x] Build the gradual-guarantee differential test harness: strip annotations
+  from a corpus and assert no new errors appear.
+  — `crates/basilisk-checker/tests/gradual_guarantee_tests.rs` (curated
+  corpus + a sweep of all synced conformance fixtures); it immediately caught
+  and drove the fix of a real rule defect (`classes_override` treated an
+  absent annotation as a signature mismatch).
+- [x] Prototype-validate the borrowed algebraic-subtyping ideas (polar types,
+  constraint simplification) against real typeshed stubs before relying on
+  them.
+  — `crates/basilisk-checker/tests/bidir_typeshed_validation_tests.rs` over
+  five verbatim `python/typeshed` stubs (commit pinned in
+  `tests/fixtures/typeshed/TYPESHED_COMMIT.txt`): solver reflexivity,
+  projection idempotence, and polar-variable resolution over 300+ real
+  annotations.
+
+### Stage 1 — incrementality
+
+- [x] Move inference onto definition-level and expression-level Salsa tracked
+  queries (not file-level).
+  — `crates/basilisk-checker/src/incremental_defs.rs`: a tracked
+  `Definition` struct per top-level definition (keyed on the definition's own
+  source *slice*, so edits elsewhere leave its memos untouched), with
+  `definition_type` (per-definition) and `expression_types`
+  (per-expression) queries. Early cutoff is proven by salsa's `WillExecute`
+  log in `tests/incremental_defs_tests.rs`: editing one definition
+  re-executes exactly one `definition_type`.
+- [x] Compute a compact per-module interface/signature query as the cross-file
+  dependency boundary for early cutoff.
+  — `module_interface` returns a `PartialEq` `(name, type)` list; a
+  body-only edit backdates to "unchanged" (test:
+  `body_only_edit_backdates_the_module_interface`).
+- [x] Model inference cycles with fixpoint iteration seeded by a
+  divergent/bottom sentinel and a hard iteration cap.
+  — `definition_type` opts into salsa fixpoint iteration
+  (`cycle_initial` = `Unknown`, the divergent/bottom sentinel;
+  `cycle_fn` caps at `CYCLE_ITERATION_CAP = 16` and falls back to the
+  sentinel). `a = b; b = a` terminates and settles on `Unknown` (test).
+- [x] Measure memory on a 1M+ LOC target; if it blows up, add AST/binding
+  eviction behind the query layer (keep only interfaces).
+  — Self-measured via `examples/incremental_measure.rs` over the seeded
+  synthetic corpus from `scripts/gen_incremental_corpus.py` (2,100 files,
+  1,117,199 LOC, 268,800 definitions): RSS ≈ 312 MB after the cold pass and
+  a 200-edit keystroke loop — no blow-up, so eviction is not needed at this
+  stage (re-measure when the per-definition queries carry richer state).
+- [x] Measure p50/p99 keystroke re-check latency on a 1M-LOC corpus; target
+  single-digit milliseconds.
+  — Same harness, same corpus: **p50 0.16 ms, p99 0.22 ms** per keystroke
+  re-check of the edited file's definition-level queries (cold pass 0.99 s).
+  Scope caveat, stated plainly: this measures the Stage 1 definition-level
+  query layer, not the full 165-rule diagnostics pipeline, which remains
+  file-level until the Integration stage migrates it.
+
+### Stage 2 — flow analysis and narrowing
+
+- [x] Add a scoped narrowing environment with branch push, complement, join,
+  and nested-function boundaries.
+  — `crates/basilisk-checker/src/narrow/env.rs` (`NarrowEnv`: branch frames,
+  a whole-scope layer for `assert`/early-exit facts, `phi`-join at merges,
+  fresh-environment nested-function boundary) plus the statement-level
+  walker in `narrow/flow.rs` (early-exit complement persistence, loop and
+  try/except frames discarded).
+- [x] Consume resolver guards for `isinstance`, `is None`, truthiness,
+  `TypeGuard`, `TypeIs`, `assert`, and pattern matching.
+  — `narrow/guards.rs` (two-branch outcomes with PEP 647/742 asymmetry,
+  loop-guard suppression) + `narrow/flow.rs` (span-matched application,
+  `match` per-case subject narrowing with value-pattern conservatism).
+- [x] Model assignment narrowing without changing the declared type used for
+  assignment validation.
+  — `NarrowEnv` keeps the declared layer immutable (`declared()` is the
+  validation anchor); `x = expr` narrows only the flow layer via the
+  bidirectional engine's synthesized type (tests in
+  `tests/narrow_flow_tests.rs` and `narrow/env.rs`).
+- [x] Test positive/complement branches, loops, early exits, closures, and
+  unreachable branches through public checker behavior.
+  — `tests/narrow_flow_tests.rs` runs the real parse → resolve →
+  `analyse_function` pipeline over all six cases (unreachable branches via
+  the `Never` narrowing signal). Diagnostic-level surfacing of these
+  results lands with the Integration-stage rule migration.
+- [x] Reformulate narrowing as intersection-and-negation types over a
+  Salsa-backed use-def map with `phi`/join at control-flow merges.
+  — Intersection/negation: `narrow/set_ops.rs` (`intersect`/`subtract`
+  delegating atoms to `is_assignable_to`); `phi`/join: `NarrowEnv::join`;
+  Salsa backing: the tracked `narrowed_uses` query in
+  `incremental_defs.rs` keys the whole flow analysis on one definition's
+  source slice — editing one function re-executes only its own narrowing
+  (proven by `WillExecute` log in `tests/incremental_defs_tests.rs`).
+- [x] Extend guard support: `issubclass`, `==`/`in` against literals,
+  `hasattr` (synthetic protocol intersection), exhaustiveness/implied-else,
+  and TypedDict `"key" in td` narrowing.
+  — Resolver extraction for all five (`visitor/narrowing.rs`, new
+  `NarrowingGuardKind` variants with case-preserving literal capture) and
+  checker interpretation (`narrow/guards.rs`): `==`/`in` literal
+  narrowing with exact-literal complements, `"key" in td` union filtering
+  over a `NarrowContext` of `TypedDict` key sets (required vs optional),
+  and implied-else after fully-diverging `match` statements. `issubclass`
+  and `hasattr` interpretation is deliberately identity until `type[...]`
+  object modelling and synthetic-protocol intersections land with the
+  shared-subtyping work — extraction is live, so flipping them on is a
+  local change.
+- [x] Decide and document the attribute-narrowing-across-calls tradeoff;
+  default to the usable behavior, make it configurable.
+  — Decided and recorded in
+  [TYPEINF-NARROWING-ATTR-CALLS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ATTR-CALLS):
+  narrows survive calls by default (usable), and
+  `narrow-attributes-across-calls = false` in `[tool.basilisk]` opts into
+  the sound-but-strict behavior
+  (`BasiliskConfig::narrow_attributes_across_calls`, parsed + merged in
+  `crates/basilisk-config/src/parse.rs`).
+- [ ] Replace pattern-matched reachability idioms with inference-driven
+  reachability.
+- [x] Measure narrowing richness against the utahplt/ifT-benchmark
+  (<https://github.com/utahplt/ift-benchmark>).
+  — Harness: `crates/basilisk-checker/examples/ift_measure.rs` over a fresh
+  clone's `Pyright/main.py` (benchmark commit `cfb31ef` at measurement
+  time). Self-measured baseline, methodology stated in the harness header:
+  **11/37 functions (29%) produce a flow-narrowing signal** (the
+  `type(x) is C` positive/negative/`@final` families). The silent families
+  each map to a known pending guard form — boolean connectives in tests,
+  nested conditions, cross-function `TypeGuard` calls, attribute
+  narrowing ([TYPEINF-NARROWING-ATTR-CALLS]), and tuple element/length
+  narrowing — so this number is the ratchet floor, not a claim of
+  benchmark conformance (that needs the full diagnostics pipeline at the
+  Integration stage).
+
+### Stage 2 — expression inference
+
+- [x] Infer same-module and imported function/method return types.
+  — Same-module: unannotated returns synthesize from the body
+  (`incremental_defs::function_type`) and `x = f()` resolves through the
+  sibling's declared-or-synthesized return via the backdated
+  `callable_interface` query. Imported: `param_infer::imported_callable_globals`
+  maps the cross-module layer's `imported_symbols` (functions →
+  `Callable[..., R]` from their return annotation, classes → instance form,
+  variables → their annotation) into engine scope. Builtin METHOD returns
+  come from the centralized table.
+- [x] Infer constructor, attribute, subscript, binary/unary, conditional, and
+  walrus expressions from structured AST data.
+  — All in the bidirectional engine over the ruff AST: constructors
+  (`Named` callee → instance), plain attribute loads via per-module class
+  schemas (`class_attribute_interface`, backdated; `Point().x` → `float`),
+  subscripts (list/dict/tuple-position/str with literal-index precision),
+  the binary/unary tables, conditional unions, and walrus binding.
+  `self.attr` assignments in `__init__` extend the schema as a follow-up.
+- [x] Centralize builtin constructor/method signatures instead of adding
+  rule-local string tables.
+  — `crates/basilisk-checker/src/bidir/builtins.rs`: one table for builtin
+  call returns and `str`/`list`/`dict`/`set` method returns, consumed by
+  the engine's call synthesis; argument-dependent builtins deliberately
+  stay `Unknown` rather than guessed. Existing rule-local tables migrate
+  onto it at the Integration stage.
+- [ ] Reuse the same inference results for diagnostics, hover, completions, and
+  inlay hints.
+- [x] Infer unannotated parameter types from body constraints and call sites
+  so `BSK-0001` becomes unnecessary where types are recoverable (issue
+  [#317](https://github.com/MelbourneDeveloper/Basilisk/issues/317)).
+  — Pure core in `crates/basilisk-checker/src/param_infer.rs`: parameters
+  bind to input-polarity variables; BODY constraints (passing `p` to a
+  callee with a declared parameter type) accumulate demands, same-module
+  CALL SITES accumulate lower bounds, and resolution follows input
+  polarity (demand wins, else union of flows, else `Unknown` — never a
+  guess). Wiring into the `BSK-0001` exemption happens at the Integration
+  stage, where the [TYPEINF-EXCEEDS-REQUIRED] predicate widens in
+  lockstep with this inference.
+- [x] Build the curated container/comprehension/lambda benchmark and the
+  targeted higher-order (`map`/`filter`/decorators/`ParamSpec`) benchmark.
+  — `crates/basilisk-checker/tests/inference_corpus_tests.rs`: a ratcheted
+  precision corpus over the definition-level queries. Equivalence is
+  mutual assignability PLUS a gradual-honesty check (an `Unknown` answer
+  never silently matches a concrete expectation — the naive scorer
+  inflated 23/24; the honest score is **18/24**, `PRECISION_FLOOR = 18`,
+  up-only). The six misses are the documented gaps: nested-union
+  normalization, lambda parameter display, and the higher-order family
+  (`map`/`filter`/decorators) that the generic-constraints stage closes.
+
+### Stage 2 — generic constraints
+
+- [ ] Collect lower, upper, constrained, default, and expected-return bounds for
+  TypeVars.
+- [ ] Solve bounds deterministically and report ambiguity without guessing.
+- [ ] Cover constrained/bound TypeVars, PEP 696 defaults, ParamSpec, and
+  TypeVarTuple interactions before wiring the solver into rule decisions.
+
+### Stage 2 — shared subtyping
+
+- [ ] Build a context for nominal class relationships, Protocol members,
+  TypedDict schemas, generic variance, and Callable parameter kinds.
+- [ ] Replace duplicated rule-local subtype helpers only after parity tests pin
+  their current accepted/rejected cases.
+- [ ] Keep `Any`/`Unknown` gradual behavior and the numeric tower consistent
+  across annotation parsing and inferred types.
+
+### Stage 3 — type-level evaluation groundwork
+
+- [ ] Build the normalization-by-evaluation engine for type-level functions as
+  memoized Salsa queries returning whnf types.
+- [ ] Enforce fuel/depth bounds and memoization of normalized results.
+- [ ] Add the `Divergent`/`@Todo` fallback preserving the gradual guarantee on
+  truncated evaluation.
+- [ ] Add GHC-style (Paterson/Coverage-analogue) acceptance conditions with an
+  opt-in "undecidable" escape hatch.
+- [ ] Represent mapped types as kind `Type → Type` operators and conditional
+  types as guarded rewrites on assignability, evaluated lazily
+  (call-by-need).
+
+### Superiority gate
+
+- [ ] Build the inference scoreboard harness mirroring `benchmarks/`: pull the
+  latest official release of each competitor (pyright, mypy, ty, pyrefly,
+  zuban) every run; write scores to a status file immediately and
+  unconditionally; gate read-only against the committed baseline.
+- [ ] Build the reveal_type-precision corpus
+  (containers/comprehensions/lambdas/literal-generic precision) and score all
+  checkers on it.
+- [ ] Wire the utahplt/ifT narrowing benchmark, the higher-order corpus, the
+  gradual-guarantee differential suite, and the incremental-latency
+  measurement into the scoreboard.
+- [ ] Add per-axis ratchet entries: once Basilisk leads an axis, falling
+  behind any competitor on that axis fails CI; leads only accumulate.
+- [ ] Take and hold the lead on **all five axes simultaneously**, with the
+  100%/0-FP conformance gate and the speed benchmark gate green in the same
+  run.
+- [ ] Enforce claims discipline: every superiority statement in docs, website,
+  or marketing traces to the current committed scoreboard run and states the
+  methodology.
+
+### Integration and acceptance
+
+- [ ] Introduce each shared component behind existing checker APIs; do not
+  create an alternate checking mode.
+- [ ] Migrate assignment, return, call, and `assert_type` rules incrementally,
+  deleting the replaced local logic in the same change.
+- [ ] Add spec-ID-linked mutation-resistant tests for each migrated behavior.
+- [ ] Verify hover/inlay results and checker diagnostics agree for the same
+  expression.
+- [ ] `make test`, mutation/coverage ratchets, benchmarks for touched hot
+  paths, and the live 141/141 conformance gate all pass with zero false
+  positives.

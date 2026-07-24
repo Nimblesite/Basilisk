@@ -1,4 +1,4 @@
-//! Implements [`directives_assert_type`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`directives_assert_type`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! `directives_assert_type`: Invalid `assert_type()` call.
 //!
 //! `assert_type(expr, Type)` must be called with exactly 2 positional arguments.

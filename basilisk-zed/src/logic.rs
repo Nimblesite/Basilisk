@@ -516,9 +516,7 @@ pub fn default_workspace_config() -> Value {
         config_keys::UV: {
             config_keys::UV_ENABLED: true,
             config_keys::UV_EXECUTABLE_PATH: "",
-            config_keys::UV_AUTO_SYNC: false,
-            config_keys::UV_STUB_SUGGESTIONS: true,
-            config_keys::UV_DEPENDENCY_DIAGNOSTICS: true
+            config_keys::UV_AUTO_SYNC: false
         },
         config_keys::TEST_EXPLORER: {
             config_keys::TEST_EXPLORER_ENABLED: true,

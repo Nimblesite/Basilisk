@@ -1,44 +1,55 @@
-# Formatting & Import Hygiene — Implementation Plan {#LSPFMT-PLAN}
+# Formatting Follow-ups {#LSPFMT-PLAN}
 
-Implements [LSPFMT](../specs/LSP-FORMATTING-SPEC.md#LSPFMT). Goal: jettison the `ruff` CLI, embed the Ruff formatter crate in-process, reimplement import hygiene natively, and make the formatter's Ruff provenance/version visible everywhere. Ratchets and CLAUDE.md rules apply throughout (coverage/mutation up, benches down, no `unwrap`/`panic`, structured logging).
+Implements [LSPFMT](../specs/LSP-FORMATTING-SPEC.md#LSPFMT).
 
-## Phase 1 — Embed the Ruff formatter ([LSPFMT-ENGINE], [LSPFMT-CAPABILITIES]) — **DONE** (#254)
+The embedded Ruff formatter, native import hygiene, range formatting,
+`basilisk.formatter`, provenance/version reporting, no-`ruff` regression
+coverage, `basilisk format`, generated release-notes provenance, and the
+formatting docs page are complete. The `ruff` CLI is not a runtime
+dependency. Open: the VS Code default-formatter opt-in prompt and the two
+published-artifact verifications, which need a live editor/release.
 
-1. ~~Spike~~ `ruff_python_formatter` + `ruff_formatter` + `ruff_python_stdlib` added at the same pinned rev; `format_module_source`/`format_range` confirmed.
-2. ~~Rewrite~~ `crates/basilisk-lsp/src/formatting.rs` calls the crate in-process; the `Command::new("ruff")` subprocess is deleted. Failing-test-first e2e: `crates/basilisk-cli/tests/e2e_lsp_no_ruff.rs` drives the real binary over LSP stdio with an empty `PATH`. A live parity e2e (`ws_test_formatting.rs`) asserts byte-identical output vs `ruff format` where the binary exists.
-3. ~~Options~~ `FormatStyle` on `WorkspaceConfig` (`config.rs::load_format_style`) reads `[tool.ruff] line-length` + `[tool.ruff.format]` quote/indent style and magic trailing comma from `pyproject.toml`.
-4. ~~Capabilities~~ `document_range_formatting_provider` advertised; `range_formatting` handler added; whole-doc + range share the engine. (On-type remains a later, optional follow-up.)
+## Release provenance {#LSPFMT-PLAN-RELEASE}
 
-## Phase 2 — Native import hygiene ([LSPFMT-IMPORTS]) — **DONE** (#261)
+- [x] Generate a release-note component block from `shipwright.json` plus
+  `EMBEDDED_RUFF_FORMATTER_VERSION` (`scripts/gen_release_notes.py`, appended
+  to the auto-generated notes by the `release` job).
+- [x] Drift-test the generated block so release notes cannot claim different
+  formatter bytes from the build
+  (`crates/basilisk-cli/tests/e2e_release_notes_block.rs` runs the generator
+  against the freshly built binary).
 
-1. ~~Reimplement~~ The three fixers live in `crates/basilisk-lsp/src/import_hygiene/` (organize with isort semantics in `sort.rs`, expand-wildcard in `wildcard.rs`, split-multi-import in `mod.rs`); `run_ruff_fix` and the temp-file/`ruff check` path are deleted. Note: ruff has **no** F403 autofix, so expand-wildcard's behavior is defined natively (names used but never bound, minus builtins).
-2. ~~Parity tests~~ Fixer semantics were pinned against real `ruff check --fix` probes (0.15.17); the `ws_test_code_actions.rs` tests are unconditional and assert affirmatively; `e2e_lsp_no_ruff.rs` asserts exact organized output with no `ruff` on PATH.
+## Client wiring {#LSPFMT-PLAN-CLIENTS}
 
-## Phase 3 — Config & provenance ([LSPFMT-CONFIG], [LSPFMT-PROVENANCE]) — **DONE**
+- [ ] VS Code: offer a one-time, dismissible opt-in to set Basilisk as the Python
+  default formatter only when the user has not chosen another formatter.
+- [ ] Zed: verify the published extension selects the language-server formatter.
+- [x] Neovim: document and test `vim.lsp.buf.format({ name = "basilisk" })`
+  (`:h basilisk-formatting` in `doc/basilisk.txt`; real-LSP format call in
+  `tests/lsp/ui_spec.lua`).
 
-1. ~~Flag~~ `basilisk.formatter` honoured server-side: `FormatterEngine` on `WorkspaceConfig` (`basilisk.json` `"formatter"`, pyproject `formatter =`), overridden by `initializationOptions.formatter` (VS Code forwards it). `"none"` suppresses the formatting capabilities and the handlers answer null. Zed/Neovim reach it via `basilisk.json` in the workspace.
-2. ~~Version~~ `EMBEDDED_RUFF_FORMATTER_VERSION` derived at compile time (`crates/basilisk-lsp/build.rs` verifies the declared rev→version pair against `Cargo.lock` — drift fails the build) → plain `basilisk --version` engine line (the `--json` Shipwright contract is unchanged), LSP `serverInfo.version`, and a `tracing` log line on each format.
-3. ~~License~~ Ruff's MIT license shipped in `THIRD-PARTY-LICENSES` (covers parser + formatter + stdlib crates).
+## CLI {#LSPFMT-PLAN-CLI}
 
-## Phase 4 — Release-notes exposure ([LSPFMT-RELEASE-NOTES])
+- [x] Add `basilisk format [paths]` using the same embedded engine and project
+  Ruff-format options as the LSP (`crates/basilisk-cli/src/format.rs`, plus
+  `--check`).
+- [x] Cover check/write behavior, multiple paths, parse failures, and formatter
+  disablement with real-binary tests
+  (`crates/basilisk-cli/tests/e2e_format.rs`, run with an empty `PATH`).
 
-Generate (never hand-type) a release-notes block listing every `shipwright.json` component + version **and** the embedded Ruff formatter version, so a reader can tell exactly which formatter bytes shipped. Drift-guarded like the other generated artifacts.
+## Documentation {#LSPFMT-PLAN-DOCS}
 
-## Phase 5 — Per-client wiring ([LSPFMT-CLIENTS]) & CLI
+- [x] Document that formatting embeds Ruff while import hygiene is Basilisk's
+  native implementation; link to Ruff for formatter behavior rather than
+  duplicating its manual (`website/src/docs/formatting.md`,
+  `:h basilisk-formatting`).
+- [ ] Verify formatting and import actions in published VS Code, Zed, and Neovim
+  artifacts with no `ruff` executable on `PATH`.
 
-1. VS Code: format-on-save wiring; one-time, dismissible opt-in prompt to set `editor.defaultFormatter` to Basilisk — **never** hijack an existing default.
-2. Zed `"formatter": "language_server"`; Neovim `vim.lsp.buf.format({ name = "basilisk" })`.
-3. `basilisk format [paths]` CLI subcommand using the same embedded engine.
+## Acceptance {#LSPFMT-PLAN-ACCEPTANCE}
 
-## Phase 6 — Docs & governance
-
-1. Website/docs: a Formatting section stating plainly the formatter **is the embedded Ruff formatter** (no separate install), mostly linking to the [Ruff formatter docs](https://docs.astral.sh/ruff/formatter/) rather than re-documenting behavior we don't own ([LSPFMT-HONESTY]).
-2. Via reviewed PR, update the CLAUDE.md Architecture bullet ("Linting/formatting: Ruff CLI subprocess — not reimplemented") to reflect: formatting **embeds** the Ruff crate in-process; import hygiene is **reimplemented** natively; the `ruff` CLI is not a runtime dependency. (Governance rule: CLAUDE.md changes go through review, never silent capture.)
-
-## Acceptance
-
-- No `Command::new("ruff")` anywhere in shipping code; no `ruff` in dev-required PATH for formatting/imports.
-- Formatting + Format Selection work in all four consumers with no `ruff` installed.
-- `basilisk --version` and release notes both state the embedded Ruff formatter version.
-- Formatter output byte-identical to `ruff format` at the pinned rev on the fixture corpus; import fixers at parity.
-- Coverage/mutation ratchets up; bench gate green.
+- Release notes identify every shipped binary and the embedded Ruff version.
+- All three editors format without a `ruff` installation and preserve existing
+  user formatter choices.
+- `basilisk format` and LSP formatting are byte-identical for the same input and
+  configuration.

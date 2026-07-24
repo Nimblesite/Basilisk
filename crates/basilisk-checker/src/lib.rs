@@ -1,10 +1,13 @@
-//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-arch-pipeline
+//! Implements [CHKARCH-ARCH-PIPELINE] and integrates the modules specified by
+//! [TYPEINF] / [TYPEINF-IMPL]. See
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE and
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-IMPL.
 //! Type checker for Basilisk.
 //!
 //! The public API is [`check`] and [`check_with_config`], which take a
 //! [`ResolvedModule`] and return a list of [`Diagnostic`]s.
 //!
-//! ## Suppression and Mode Override
+//! ## Suppression and Severity Overrides
 //!
 //! Basilisk supports a rich set of inline directives for controlling diagnostic
 //! severity. See CHECKER-ARCHITECTURE-SPEC.md Section 4.1.3 for the full specification.
@@ -20,12 +23,15 @@
 //!
 //! ## Project-level configuration
 //!
-//! [`check_with_config`] applies project-level overrides from `pyproject.toml`
-//! or `basilisk.json`:
-//! - Global rule severity overrides (`rules."imports_unresolved" = "warning"`)
-//! - Per-module overrides (`per-module-overrides."fastmcp".ignore-missing-stubs`)
-//! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled`)
+//! [`check_with_config`] applies the configuration model from
+//! `pyproject.toml` `[tool.basilisk]` ([CHKARCH-CONFIG-MODEL]): per-rule
+//! entries (`rules."imports_unresolved" = "warning"`) and tag entries
+//! (`rule-tags."basilisk" = "error"`), resolved nearest-deciding-table-first.
+//! PEP rules always run and can never be disabled; every other rule runs only
+//! when configuration resolves it to a non-disabled severity
+//! ([CHKARCH-COMMANDS]).
 
+pub mod bidir;
 pub mod cached;
 pub mod collection_inference;
 pub mod context;
@@ -33,13 +39,24 @@ pub mod diagnostic;
 pub mod exports;
 pub mod imports;
 pub mod incremental;
+pub mod incremental_defs;
 pub mod inference;
+pub mod narrow;
+pub mod param_infer;
+pub mod rule_catalog;
 pub mod rule_tags;
 pub mod rules;
 pub mod span_util;
+pub mod stub_constructor;
 pub mod suppression;
+mod suppression_audit;
+/// Bounded type-level alias evaluation groundwork.
+///
+/// Implements [TYPEINF-TARGET] and [TYPEINF-TARGET-TYPELEVEL].
+pub mod tyeval;
 pub mod types;
 pub mod types_parsing;
+pub(crate) mod types_star_tuples;
 
 pub use cached::CachedDiagnostic;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
@@ -49,12 +66,13 @@ pub use incremental::{
     resolved_module, ConfigInput, ConfigValue, FileRegistry, ModuleExports, ResolvedFile,
     SearchPathsInput, WorkspaceFiles,
 };
+pub use rule_catalog::{rule_catalog, RuleDescriptor};
 
 // Re-export the incremental-database handles so consumers can drive the
 // memoized `checked_file` query without depending on `basilisk-db` directly.
 pub use basilisk_db::{BasiliskDatabase, Db, SourceFile};
 
-/// Run all rules and apply inline suppression / mode overrides.
+/// Run all rules and apply inline suppression and severity overrides.
 ///
 /// Uses default configuration (no project-level overrides).
 #[must_use]
@@ -64,77 +82,76 @@ pub fn check(module: &basilisk_resolver::ResolvedModule) -> Vec<Diagnostic> {
 
 /// Run all rules with project-level configuration applied.
 ///
-/// Applies overrides in this priority order (highest to lowest):
+/// Applies overrides in this priority order (highest to lowest) —
+/// [CHKARCH-STRICTNESS-PRECEDENCE]:
 /// 1. Inline source comments (`# type: ignore`, `# basilisk: relaxed`, etc.)
-/// 2. Per-path overrides (`per-path-overrides."vendor/**"`)
-/// 3. Per-module overrides (`per-module-overrides."fastmcp"`)
-/// 4. Global rule severity overrides (`rules."imports_unresolved" = "warning"`)
-/// 5. Cascade suppression (suppress downstream errors from untyped imports)
-/// 6. Default rule severity
+/// 2. Nearest deciding folder config — rule entry over tag entry, strictest
+///    matching tag ([CHKARCH-CONFIG-MODEL])
+/// 3. Cascade suppression (suppress downstream errors from untyped imports)
+/// 4. Scope default: `pep` rules run at `error`; everything else does not run
 #[must_use]
 pub fn check_with_config(
     module: &basilisk_resolver::ResolvedModule,
     config: &basilisk_config::BasiliskConfig,
 ) -> Vec<Diagnostic> {
-    let inline_overrides = suppression::parse_source_overrides(&module.source);
     let source = &module.source;
-    let file_path = std::path::Path::new(&module.path);
+    let effective_rules = EffectiveRuleConfig::new(config);
+    let audit_selected = suppression_audit_selected(effective_rules);
+    let inline_overrides = suppression::parse_source_overrides_with_comments(
+        &module.source,
+        &module.comment_ranges,
+        audit_selected,
+    );
+    let has_inline_overrides = !inline_overrides.is_empty();
     // [CHKARCH-VERSION-TARGET] every rule sees the configured target, plus a
     // shared line index so offset→line lookups (here and in rules) stay O(log n)
     // instead of rescanning the source per diagnostic / per function.
-    let ctx = context::CheckContext::from_config_with_source(config, source);
+    // Only starred-tuple analysis and inline suppression need byte→line
+    // lookups. Avoid allocating and populating an O(lines) index for the common
+    // case where neither feature appears.
+    let ctx = if has_inline_overrides || source.contains("*tuple[") {
+        context::CheckContext::from_config_with_source(config, source)
+    } else {
+        context::CheckContext::from_config(config)
+    };
     let raw = rules::run_all(module, &ctx);
 
     // Build the set of symbol names imported from unresolved modules.
     // Used for cascade suppression: downstream errors referencing these names
     // are suppressed since the root cause is the missing import (imports_unresolved).
-    let untyped_names: std::collections::HashSet<String> = module
-        .imports
+    let untyped_names: std::collections::HashSet<String> = if raw
         .iter()
-        .filter(|i| {
-            // A configured custom typeshed is canonical for step 3, so the
-            // bundled name-set no longer treats an absent stdlib module as typed
-            // ([STUBRES-CUSTOM-TYPESHED]); its imported names then participate in
-            // cascade suppression like any other unresolved import.
-            i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved
-                && !crate::imports::bundled_stdlib_recognized(
-                    &i.module,
-                    config.typeshed_path.is_some(),
-                )
-        })
-        .flat_map(|i| i.names.iter().cloned())
-        .collect();
+        .any(|diagnostic| is_cascade_suppressible(diagnostic.code.code))
+    {
+        module
+            .imports
+            .iter()
+            .filter(|i| i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved)
+            .flat_map(|i| i.names.iter().cloned())
+            .collect()
+    } else {
+        std::collections::HashSet::new()
+    };
 
-    // Diagnostic-independent, so computed once: scanning every import per
-    // emitted `imports_unresolved` diagnostic made import-heavy files O(n²).
-    let suppress_e0010 = should_suppress_e0010_for_module(module, config);
-
-    raw.into_iter()
+    // Apply every project-level decision first, retaining this pre-inline view
+    // for suppression auditing. Audit diagnostics are appended only after the
+    // ordinary diagnostics pass through inline suppression, so a directive can
+    // never hide the audit finding about itself.
+    let prepared = raw
+        .into_iter()
         .filter_map(|mut diag| {
             let code = diag.code.code;
 
-            // 0. Opt-in gating. Basilisk-original rules (provenance `basilisk`)
-            //    are off by default; each turns on only when the configuration
-            //    opts into one of its tags. PEP rules always run. Provenance and
-            //    tags come from the rule itself via the tagging layer — there is
-            //    no hand-maintained code list here. [CHKTAG-PROVENANCE]
-            if let Some(spec) = rule_tags::opt_in_spec_for_code(code) {
-                if !spec.tags.iter().any(|tag| opt_in_tag_enabled(tag, config)) {
-                    return None;
-                }
-            }
-
-            // 1. Per-path: check if rule is completely disabled for this file path.
-            if config.is_rule_disabled_for_path(code, file_path) {
+            // 0. Selection ([CHKARCH-CONFIG-MODEL]). `pep` rules always run;
+            //    every other rule runs only when configuration resolves it to
+            //    a non-disabled severity. Provenance comes from the rule
+            //    itself via the tagging layer — there is no hand-maintained
+            //    code list. [CHKTAG-PROVENANCE]
+            if !effective_rules.selected(code) {
                 return None;
             }
 
-            // 2. Per-module: suppress imports_unresolved for modules with ignore-missing-stubs.
-            if code == "imports_unresolved" && suppress_e0010 {
-                return None;
-            }
-
-            // 3. Cascade suppression: suppress downstream errors that reference
+            // 2. Cascade suppression: suppress downstream errors that reference
             //    symbols from unresolved imports. Only applies to type-checking
             //    rules whose results depend on resolved import types. Structural
             //    rules (Final, deprecated, Protocol, Generic params, etc.) fire
@@ -145,60 +162,197 @@ pub fn check_with_config(
                 return None;
             }
 
-            // 4. Tier-based severity adjustment: Tier3 (best-effort) stubs
+            // 3. Tier-based severity adjustment: Tier3 (best-effort) stubs
             //    produce info-level diagnostics, not errors.
             if diag.provenance == Some(basilisk_stubs::TypeProvenance::StubTier3) {
                 diag.severity = Severity::Info;
             }
 
-            // 5. Global rule severity override from config.
-            if let Some(severity) = config.rule_severity(code) {
-                match severity {
-                    basilisk_config::RuleSeverity::Disabled => return None,
-                    basilisk_config::RuleSeverity::Warning => diag.severity = Severity::Warning,
-                    basilisk_config::RuleSeverity::Info => diag.severity = Severity::Info,
-                    basilisk_config::RuleSeverity::Error => diag.severity = Severity::Error,
+            // 4. Effective configured severity from the nearest deciding
+            //    table. A `disabled` resolution never applies to a `pep` rule
+            //    ([CHKARCH-CONFIG-MODEL]) — such a config is invalid
+            //    ([`pep_disable_violations`]) and the rule keeps its own
+            //    severity here so `check` never loses a PEP diagnostic.
+            if let Some(severity) = effective_rules.severity(code) {
+                if severity == basilisk_config::RuleSeverity::Disabled && is_pep_rule(code) {
+                    return Some(diag);
                 }
+                apply_configured_severity(&mut diag, severity)?;
             }
 
-            // 6. Per-path rule severity override.
-            if let Some(path_severity) =
-                find_path_rule_severity(code, file_path, &config.per_path_overrides)
-            {
-                match path_severity {
-                    basilisk_config::RuleSeverity::Disabled => return None,
-                    basilisk_config::RuleSeverity::Warning => diag.severity = Severity::Warning,
-                    basilisk_config::RuleSeverity::Info => diag.severity = Severity::Info,
-                    basilisk_config::RuleSeverity::Error => diag.severity = Severity::Error,
-                }
-            }
+            Some(diag)
+        })
+        .collect::<Vec<_>>();
 
-            // 7. Inline source overrides (highest priority). The 0-based line is
-            //    the count of newlines before the span start — the shared line
-            //    index answers that in O(log n) instead of rescanning the prefix
-            //    for every diagnostic.
-            let diag_line = ctx
-                .line_index
-                .line(diag.span.start_usize())
-                .saturating_sub(1);
-            suppression::apply_overrides_at_line(diag, diag_line, &inline_overrides)
+    // 7. Inline source overrides (highest priority). The 0-based line is the
+    //    count of newlines before the span start — the shared line index answers
+    //    that in O(log n) instead of rescanning the prefix for every diagnostic.
+    let mut filtered = prepared
+        .iter()
+        .cloned()
+        .filter_map(|diag| {
+            finish_inline_override(diag, has_inline_overrides, &inline_overrides, &ctx)
+        })
+        .collect::<Vec<_>>();
+
+    if audit_selected {
+        filtered.extend(
+            suppression_audit::diagnostics(source, &inline_overrides, &prepared, &module.path)
+                .into_iter()
+                .filter_map(|diagnostic| configure_suppression_audit(diagnostic, effective_rules)),
+        );
+    }
+    filtered
+}
+
+/// Whether `code` is check-scope: it carries the `pep` provenance tag.
+///
+/// Implements [CHKARCH-COMMANDS]: a rule is check-scope iff it is `pep`;
+/// everything else is analyze-scope. Every rule belongs to exactly one
+/// command, and the registry's self-declared tags are the single source of
+/// the partition.
+#[must_use]
+pub fn is_pep_rule(code: &str) -> bool {
+    rule_tags::opt_in_spec_for_code(code).is_none()
+}
+
+/// PEP rules the configuration invalidly resolves to `disabled`.
+///
+/// Implements [CHKARCH-CONFIG-MODEL]: `disabled` never applies to a
+/// `pep`-tagged rule; a configuration that resolves one to `disabled` — by
+/// rule entry or tag entry — is invalid. Callers (CLI, LSP) surface the
+/// returned codes as a configuration error; the checker itself defensively
+/// keeps such rules running so `check` never loses a PEP diagnostic.
+#[must_use]
+pub fn pep_disable_violations(config: &basilisk_config::BasiliskConfig) -> Vec<&'static str> {
+    rule_catalog()
+        .into_iter()
+        .map(|descriptor| descriptor.code)
+        .filter(|code| is_pep_rule(code))
+        .filter(|code| {
+            let tags = rule_tags::tags_for_code(code);
+            config.resolve_severity(code, &tags) == Some(basilisk_config::RuleSeverity::Disabled)
         })
         .collect()
 }
 
-/// Whether a Basilisk rule's free-form `tag` is opted into by `config`.
+/// Analyze-scope rules this configuration selects — the rules `check` will
+/// never evaluate, however strictly they are graded.
 ///
-/// This is the single bridge from the configuration's opt-in switches to rule
-/// tags. Selection is by tag, so adding a Basilisk rule needs only a tag on the
-/// rule itself — never an entry in a code list here or in the tagging layer.
-/// [CHKARCH-CONFIGURATION-ONLY]
-fn opt_in_tag_enabled(tag: &str, config: &basilisk_config::BasiliskConfig) -> bool {
-    match tag {
-        "strictness" | "style" | "redundancy" => config.strict_annotations,
-        "dependencies" | "imports" => config.uv_dependency_diagnostics,
-        "stubs" => config.uv_stub_suggestions,
-        _ => false,
+/// Implements [CHKARCH-CLI-SCOPE-NOTICE] (GitHub #334). The counterpart to
+/// [`pep_disable_violations`]: a rule is analyze-scope iff it is not
+/// `pep`-tagged ([CHKARCH-COMMANDS]), and configuration selects it by
+/// resolving it to a non-disabled severity ([CHKARCH-CONFIG-MODEL]). Callers
+/// report the count so a clean `check` on such a project is never mistaken for
+/// a clean project.
+#[must_use]
+pub fn analyze_selected_rules(config: &basilisk_config::BasiliskConfig) -> Vec<&'static str> {
+    // Bare-tree fast path, as in [`EffectiveRuleConfig::severity`]: with no
+    // table anywhere nothing is selected, so the conformance and benchmark
+    // hot paths never walk the catalog.
+    if !config.has_config_table() {
+        return Vec::new();
     }
+    rule_catalog()
+        .into_iter()
+        .map(|descriptor| descriptor.code)
+        .filter(|code| !is_pep_rule(code))
+        .filter(|code| {
+            let tags = rule_tags::tags_for_code(code);
+            matches!(
+                config.resolve_severity(code, &tags),
+                Some(severity) if severity != basilisk_config::RuleSeverity::Disabled
+            )
+        })
+        .collect()
+}
+
+/// Per-file rule selection and grading over the configuration model.
+///
+/// Implements [CHKARCH-CONFIG-MODEL]: the nearest deciding table wins, a rule
+/// entry beats tag entries, the strictest matching tag entry wins; `pep`
+/// rules bottom out at their own (error) severity, everything else at
+/// disabled.
+#[derive(Clone, Copy)]
+struct EffectiveRuleConfig<'a> {
+    config: &'a basilisk_config::BasiliskConfig,
+}
+
+impl<'a> EffectiveRuleConfig<'a> {
+    const fn new(config: &'a basilisk_config::BasiliskConfig) -> Self {
+        Self { config }
+    }
+
+    fn severity(self, code: &str) -> Option<basilisk_config::RuleSeverity> {
+        // Bare tree fast path: with no table anywhere there is nothing to
+        // resolve — the conformance hot path never allocates tag vectors.
+        if !self.config.has_config_table() {
+            return None;
+        }
+        let tags = rule_tags::tags_for_code(code);
+        self.config.resolve_severity(code, &tags)
+    }
+
+    fn selected(self, code: &str) -> bool {
+        match self.severity(code) {
+            // No table decides the rule: pep runs (at its own severity),
+            // everything else is disabled. And a disabled resolution never
+            // applies to a pep rule — invalid config
+            // ([`pep_disable_violations`]); keep the rule running.
+            // [CHKARCH-CONFIG-MODEL]
+            None | Some(basilisk_config::RuleSeverity::Disabled) => is_pep_rule(code),
+            Some(_) => true,
+        }
+    }
+}
+
+/// Whether a rule is selected before it runs.
+///
+fn suppression_audit_selected(effective_rules: EffectiveRuleConfig<'_>) -> bool {
+    rule_tags::opt_in_specs_with_tag("suppressions").any(|spec| effective_rules.selected(spec.code))
+}
+
+fn configure_suppression_audit(
+    mut diagnostic: Diagnostic,
+    effective_rules: EffectiveRuleConfig<'_>,
+) -> Option<Diagnostic> {
+    let code = diagnostic.code.code;
+    if !effective_rules.selected(code) {
+        return None;
+    }
+    if let Some(severity) = effective_rules.severity(code) {
+        apply_configured_severity(&mut diagnostic, severity)?;
+    }
+    Some(diagnostic)
+}
+
+fn apply_configured_severity(
+    diagnostic: &mut Diagnostic,
+    severity: basilisk_config::RuleSeverity,
+) -> Option<()> {
+    diagnostic.severity = match severity {
+        basilisk_config::RuleSeverity::Disabled => return None,
+        basilisk_config::RuleSeverity::Warning => Severity::Warning,
+        basilisk_config::RuleSeverity::Info => Severity::Info,
+        basilisk_config::RuleSeverity::Error => Severity::Error,
+    };
+    Some(())
+}
+
+fn finish_inline_override(
+    diag: Diagnostic,
+    has_inline_overrides: bool,
+    inline_overrides: &suppression::SourceOverrides,
+    ctx: &context::CheckContext,
+) -> Option<Diagnostic> {
+    if !has_inline_overrides {
+        return Some(diag);
+    }
+    let diag_line = ctx
+        .line_index
+        .line(diag.span.start_usize())
+        .saturating_sub(1);
+    suppression::apply_overrides_at_line(diag, diag_line, inline_overrides)
 }
 
 /// Returns `true` if this diagnostic code can be cascade-suppressed.
@@ -291,30 +445,6 @@ const fn is_identifier_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
-/// Check whether `imports_unresolved` should be suppressed based on per-module overrides.
-///
-/// Iterates the module's imports to find which module triggered E0010,
-/// then checks if that module has `ignore-missing-stubs = true`.
-fn should_suppress_e0010_for_module(
-    module: &basilisk_resolver::ResolvedModule,
-    config: &basilisk_config::BasiliskConfig,
-) -> bool {
-    module.imports.iter().any(|import| {
-        import.resolution == basilisk_resolver::scope::ImportResolution::Unresolved
-            && config.should_ignore_missing_stubs(&import.module)
-    })
-}
-
-/// Look up per-path rule severity override for a specific rule code.
-fn find_path_rule_severity(
-    rule_code: &str,
-    file_path: &std::path::Path,
-    overrides: &std::collections::HashMap<String, basilisk_config::PathOverride>,
-) -> Option<basilisk_config::RuleSeverity> {
-    basilisk_config::overrides::find_path_override(file_path, overrides)
-        .and_then(|o| o.rule_overrides.get(rule_code).copied())
-}
-
 #[cfg(test)]
 #[expect(
     clippy::unwrap_used,
@@ -331,12 +461,63 @@ mod tests {
     #[test]
     fn contains_identifier_exact_match() {
         assert!(contains_identifier("Foo", "Foo"));
+        // Whole-string match at both bounds (start == 0 AND end == len): kills
+        // the boundary mutants on `start == 0` and `start + ident_len == len`.
+        assert!(contains_identifier("x", "x"));
+        assert!(contains_identifier("__init__", "__init__"));
+        // ident longer than text can never match — kills `ident_len > bytes.len()`
+        // becoming `<`/`==`/`>=` (the `-> false` early return must fire here).
+        assert!(!contains_identifier("Fo", "Foo"));
+        assert!(!contains_identifier("", "Foo"));
+        // A single-char text vs a 2-char ident (len boundary at exactly len-1).
+        assert!(!contains_identifier("F", "Fo"));
+    }
+
+    #[test]
+    fn explicit_suppression_tagged_rule_selects_audit_family_from_live_metadata() {
+        let specs = rule_tags::opt_in_specs_with_tag("suppressions").collect::<Vec<_>>();
+        assert!(
+            !specs.is_empty(),
+            "the live catalog must expose suppression rules"
+        );
+
+        for spec in specs {
+            let config = basilisk_config::BasiliskConfig {
+                rule_chain: vec![basilisk_config::RuleTables {
+                    rules: [(spec.code.to_owned(), basilisk_config::RuleSeverity::Info)]
+                        .into_iter()
+                        .collect(),
+                    rule_tags: std::collections::HashMap::new(),
+                }],
+                ..Default::default()
+            };
+            let effective = EffectiveRuleConfig::new(&config);
+            assert!(
+                suppression_audit_selected(effective),
+                "explicitly selecting live suppression rule {} must enable audit parsing",
+                spec.code
+            );
+        }
     }
 
     #[test]
     fn contains_identifier_within_text() {
         assert!(contains_identifier("x = Foo()", "Foo"));
         assert!(contains_identifier("bar.Foo.baz", "Foo"));
+        // Delimited by non-identifier chars on each side — proves before_ok AND
+        // after_ok must BOTH hold (kills `&& -> ||` in the boundary check, and
+        // the `!is_identifier_char` negation deletes).
+        assert!(contains_identifier("(Foo)", "Foo"));
+        assert!(contains_identifier(".Foo ", "Foo"));
+        assert!(contains_identifier("Foo=1", "Foo"));
+        // Match at the very end of the string (after_ok via end == len branch).
+        assert!(contains_identifier("call Foo", "Foo"));
+        // Match at the very start (before_ok via start == 0 branch).
+        assert!(contains_identifier("Foo bar", "Foo"));
+        // Second occurrence is the valid one — the loop must scan past the first
+        // (substring) hit; kills `start` arithmetic (`+`/`-`) and the `0..=len`
+        // range boundary.
+        assert!(contains_identifier("Foobar Foo", "Foo"));
     }
 
     #[test]
@@ -344,11 +525,28 @@ mod tests {
         assert!(!contains_identifier("FooBar", "Foo"));
         assert!(!contains_identifier("aFoo", "Foo"));
         assert!(!contains_identifier("Foo_bar", "Foo"));
+        // Trailing digit / underscore make it part of a longer identifier:
+        // is_identifier_char must return true for alphanumeric AND '_' — kills
+        // `is_identifier_char -> false`, the `||`->`&&`, and the `== '_'` flip.
+        assert!(!contains_identifier("Foo1", "Foo"));
+        assert!(!contains_identifier("_Foo", "Foo"));
+        assert!(!contains_identifier("1Foo", "Foo"));
+        // Surrounded on BOTH sides — neither before_ok nor after_ok holds.
+        assert!(!contains_identifier("xFooy", "Foo"));
+        // A separator that IS whitespace/punct passes, but a digit does not:
+        // pins is_identifier_char's alphanumeric branch precisely.
+        assert!(contains_identifier("a Foo b", "Foo"));
+        assert!(!contains_identifier("a9Foo9b", "Foo"));
     }
 
     #[test]
     fn contains_identifier_empty_ident() {
+        // Empty ident => `ident_len == 0` early-returns false: kills the
+        // `-> true` body-replacement and `ident_len == 0` -> `!=` flip.
         assert!(!contains_identifier("abc", ""));
+        assert!(!contains_identifier("", ""));
+        // Non-empty ident in empty text also false (len guard), for contrast.
+        assert!(!contains_identifier("", "x"));
     }
 
     #[test]
@@ -375,13 +573,103 @@ mod tests {
         // Should NOT have any downstream errors referencing `get`.
         let downstream = diagnostics
             .iter()
-            .filter(|d| d.code.code != "imports_unresolved" && d.code.code != "BSK-E0152")
+            .filter(|d| d.code.code != "imports_unresolved" && d.code.code != "BSK-0152")
             .filter(|d| d.message.contains("get"))
             .count();
         assert_eq!(
             downstream, 0,
             "downstream errors referencing 'get' should be suppressed"
         );
+
+        // Direct assertions on `should_suppress_cascade` pin its span/boundary
+        // logic (line 279 `>=`/`>`/`||` mutants) that the pipeline test above is
+        // too coarse to reach. `source` is the fixture text; craft spans that hit
+        // each guard branch precisely.
+        let mut names = std::collections::HashSet::new();
+        let _ = names.insert("get".to_owned());
+
+        // Safe usize -> u32 for span offsets into the small fixture text (no
+        // silent `as`, matching the crate's `u32::try_from(..).unwrap_or(0)` idiom).
+        let to_u32 = |value: usize| u32::try_from(value).unwrap_or(0);
+        let source_len = to_u32(source.len());
+
+        // Helper: a diagnostic whose span covers [start, end) of `source`.
+        let diag_over = |start: u32, end: u32, msg: &str| Diagnostic {
+            code: ErrorCode {
+                code: "assignment_compatibility",
+                docs_url: "https://www.basilisk-python.dev/errors/X",
+            },
+            severity: Severity::Error,
+            message: msg.to_owned(),
+            span: basilisk_resolver::Span::new(start, end),
+            path: "test.py".to_owned(),
+            help: None,
+            note: None,
+            provenance: None,
+        };
+
+        // `x = get('url')` — locate the `get` occurrence in the fixture.
+        // `.unwrap()` is allowed in this test module (see the module-level
+        // `#[expect(clippy::unwrap_used)]`); the fixture always contains `get(`.
+        let get_pos = to_u32(source.find("get(").unwrap());
+        let get_end = get_pos + 3;
+
+        // Span exactly over the whole-identifier `get` => suppressed. Kills the
+        // `>= -> <`, `> -> <`, and `start >= end` boundary flips: with a valid
+        // in-bounds span the guard must NOT early-return false.
+        assert!(
+            should_suppress_cascade(&diag_over(get_pos, get_end, "irrelevant"), &names, source),
+            "span over whole-identifier `get` must suppress"
+        );
+
+        // Empty untyped set => never suppress (kills the empty-check inversion).
+        let empty: std::collections::HashSet<String> = std::collections::HashSet::new();
+        assert!(!should_suppress_cascade(
+            &diag_over(get_pos, get_end, "get"),
+            &empty,
+            source
+        ));
+
+        // start == end (zero-width span) => guard returns false. Kills
+        // `start >= end` -> `start < end`/`==`.
+        assert!(!should_suppress_cascade(
+            &diag_over(get_pos, get_pos, "unrelated message"),
+            &names,
+            source
+        ));
+
+        // end > source.len() (out of bounds) => guard returns false, no panic.
+        // Kills `end > source.len()` -> `<`/`==` and the `||` -> `&&`.
+        let over_len = source_len + 10;
+        assert!(!should_suppress_cascade(
+            &diag_over(0, over_len, "unrelated"),
+            &names,
+            source
+        ));
+
+        // start >= source.len() => false. Kills `start >= source.len()` flip.
+        assert!(!should_suppress_cascade(
+            &diag_over(source_len, source_len + 1, "unrelated"),
+            &names,
+            source
+        ));
+
+        // Match via the MESSAGE (span text unrelated) => suppressed. Kills the
+        // `||` -> `&&` between the span-text and message checks (line 286).
+        assert!(should_suppress_cascade(
+            &diag_over(0, 4, "cannot resolve get here"),
+            &names,
+            source
+        ));
+
+        // Message contains `get` only as a substring (`getter`) => NOT a whole
+        // identifier => not suppressed. Proves whole-identifier matching holds
+        // through the message path too.
+        assert!(!should_suppress_cascade(
+            &diag_over(0, 4, "getter not found"),
+            &names,
+            source
+        ));
     }
 
     #[test]
@@ -389,7 +677,21 @@ mod tests {
         let source = "from os import path\nx = path.join('a', 'b')\n";
         let parsed =
             basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned()).unwrap();
-        let module = basilisk_resolver::resolve(&parsed).unwrap();
+        let mut module = basilisk_resolver::resolve(&parsed).unwrap();
+        let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot().unwrap();
+        let paths = imports::ImportSearchPaths {
+            roots: Vec::new(),
+            extra_paths: Vec::new(),
+            stub_paths: Vec::new(),
+            workspace_members: Vec::new(),
+            site_packages: None,
+            registry: None,
+            typeshed_snapshot: Some(imports::ActiveTypeshed::new(
+                std::sync::Arc::new(snapshot),
+                None,
+            )),
+        };
+        imports::resolve_module_imports(&mut module, &paths);
 
         let config = basilisk_config::BasiliskConfig::default();
         let diagnostics = check_with_config(&module, &config);

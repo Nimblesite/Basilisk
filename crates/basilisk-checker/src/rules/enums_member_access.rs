@@ -1,4 +1,4 @@
-//! Implements [`enums_definition`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`enums_definition`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `enums_definition`: access to an enum member that does not exist for the target.
 //!
 //! Enum members may be defined conditionally on a statically-known check such as
@@ -57,15 +57,13 @@ impl Rule for EnumMemberAccess {
         let Some(parsed) = parse_module(module) else {
             return;
         };
+        let Some(target_version) = ctx.target_version else {
+            return;
+        };
 
         // enum class name -> member names whose guard is statically false at the target.
         let mut excluded: HashMap<String, HashSet<String>> = HashMap::new();
-        collect_excluded_members(
-            &parsed.ast.body,
-            &enum_names,
-            ctx.target_version,
-            &mut excluded,
-        );
+        collect_excluded_members(&parsed.ast.body, &enum_names, target_version, &mut excluded);
         if excluded.is_empty() {
             return;
         }

@@ -1,4 +1,4 @@
-//! Implements [`imports_unresolved`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`imports_unresolved`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `imports_unresolved`: Unresolved import.
 //!
 //! Fires when an import cannot be resolved and the module is not part of the
@@ -6,6 +6,12 @@
 //! diagnostic message explains *why* the import failed (not installed,
 //! transitive-only, needs sync, wrong Python version).  Without that context a
 //! generic fallback message is used.
+//!
+//! This is where the static resolution model surfaces its terminal state
+//! ([STUBRES-STATIC-MODEL]): an import the static filesystem search could not
+//! follow — a missing dependency, but equally a computed/dynamic import or a
+//! module only a runtime `sys.meta_path` hook could supply — carries an implicit
+//! `Any`, and default-strict reports it here rather than silently accepting it.
 
 use basilisk_resolver::{ImportInfo, ImportResolution, ResolvedModule, UnresolvedReason};
 use basilisk_stubs::TypeProvenance;
@@ -22,41 +28,24 @@ const CODE: ErrorCode = ErrorCode {
 /// Emits `imports_unresolved` for imports from modules outside the known stdlib/typing
 /// ecosystem.
 ///
-/// Uses the compiled typeshed index from `basilisk-stubs` for O(1) module
-/// recognition.  Imports that resolved to workspace or stub files are skipped
-/// — they already have type information available.
+/// Imports that resolved to workspace or stub files are skipped — they already
+/// have type information available.
 /// Suppression is handled centrally by the `suppression` module.
-///
-/// The stdlib skip is gated on
-/// [`crate::imports::bundled_stdlib_recognized`], not the raw name-set: when a
-/// custom typeshed (`typeshed-path`) is canonical for step 3, a stdlib module
-/// absent from it is surfaced as unresolved rather than silently skipped
-/// ([STUBRES-CUSTOM-TYPESHED]).
 pub(crate) struct ImportFromUntypedModule;
 
 impl Rule for ImportFromUntypedModule {
     fn check(
         &self,
         module: &ResolvedModule,
-        ctx: &super::CheckContext,
+        _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         module
             .imports
             .iter()
-            // Skip modules the bundled stdlib name-set still vouches for. When a
-            // custom typeshed is configured it is canonical for step 3, so that
-            // name-set no longer rescues a stdlib module absent from it — the
-            // import must surface as unresolved instead of being silently
-            // swallowed here ([STUBRES-CUSTOM-TYPESHED]). Gating on
-            // `bundled_stdlib_recognized` keeps this decision identical to the
-            // resolver and cascade-suppression sites.
-            .filter(|import| {
-                !crate::imports::bundled_stdlib_recognized(
-                    &import.module,
-                    ctx.custom_typeshed_configured,
-                )
-            })
+            // Terminal state of the static search ([STUBRES-STATIC-MODEL]):
+            // whatever the search could not follow to a `.py`/`.pyi` is an
+            // implicit `Any` we surface here instead of silently accepting.
             .filter(|import| import.resolution == ImportResolution::Unresolved)
             .for_each(|import| diagnostics.push(make_diagnostic(import, &module.path)));
     }
@@ -78,10 +67,8 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
         message,
         span: import.span,
         path: path.to_owned(),
-        help: Some(help),
-        note: Some(
-            "Basilisk requires complete type information for all imported modules".to_owned(),
-        ),
+        help: Some(help.into()),
+        note: Some("Basilisk requires complete type information for all imported modules".into()),
         provenance: Some(TypeProvenance::Untyped),
     }
 }
@@ -156,12 +143,14 @@ mod tests {
             module: module.to_owned(),
             names: vec![],
             span: Span::new(0, 15),
+            name_spans: Vec::new(),
             kind: ImportKind::Plain,
             resolution: ImportResolution::Unresolved,
             resolved_path: None,
             package_dep_kind: None,
             package_version: None,
             package_name: None,
+            stub_distribution: None,
             unresolved_reason: reason,
         }
     }
@@ -244,30 +233,17 @@ mod tests {
     }
 
     #[test]
-    fn skips_stdlib_imports() {
-        assert!(run_check(make_import("os", None)).is_empty());
+    fn unresolved_stdlib_is_reported_without_an_active_snapshot() {
+        assert_eq!(run_check(make_import("os", None)).len(), 1);
     }
 
-    /// Run the rule with a custom typeshed configured in the context.
-    fn run_check_custom_typeshed(import: ImportInfo) -> Vec<crate::Diagnostic> {
-        let module = make_module(vec![import]);
-        let ctx = crate::context::CheckContext {
-            custom_typeshed_configured: true,
-            ..crate::context::CheckContext::default()
-        };
-        let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &ctx, &mut diagnostics);
-        diagnostics
-    }
-
-    /// [STUBRES-CUSTOM-TYPESHED]: with a custom typeshed configured the bundled
-    /// name-set is no longer canonical, so a stdlib module that failed to resolve
-    /// against it MUST surface as unresolved instead of being silently skipped.
+    /// [STUBRES-CUSTOM-TYPESHED]: a custom typeshed is the sole step-3 source, so
+    /// a stdlib module absent from it MUST surface as unresolved instead of being
+    /// mixed in from the bundled snapshot.
     /// Regression guard for the second suppression site the resolver fix missed.
     #[test]
     fn custom_typeshed_surfaces_absent_stdlib() {
-        let mut diags =
-            run_check_custom_typeshed(make_import("fractions", Some(UnresolvedReason::Unknown)));
+        let mut diags = run_check(make_import("fractions", Some(UnresolvedReason::Unknown)));
         assert_eq!(
             diags.len(),
             1,
@@ -285,7 +261,7 @@ mod tests {
             ..make_import("os", None)
         };
         assert!(
-            run_check_custom_typeshed(import).is_empty(),
+            run_check(import).is_empty(),
             "a stdlib module resolved via the custom typeshed must not be reported"
         );
     }
@@ -303,6 +279,18 @@ mod tests {
     fn diagnostic_has_correct_code() {
         let diag = check_single("numpy", None);
         assert_eq!(diag.code.code, "imports_unresolved");
+    }
+
+    /// [STUBRES-STATIC-MODEL]: a module the static filesystem search cannot follow
+    /// — the terminal state a computed/dynamic import or a `sys.meta_path`-only
+    /// module lands in — surfaces its implicit `Any` as `imports_unresolved`
+    /// rather than being silently accepted. Whatever the resolver could not reach
+    /// on disk arrives here as `ImportResolution::Unresolved`.
+    #[test]
+    fn static_model_surfaces_unresolvable_module() {
+        let diag = check_single("_runtime_only_module", None);
+        assert_eq!(diag.code.code, "imports_unresolved");
+        assert!(diag.message.contains("no type information available"));
     }
 
     #[test]

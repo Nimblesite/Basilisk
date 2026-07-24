@@ -1,37 +1,24 @@
 //! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
+#![allow(clippy::allow_attributes, dead_code)]
 //! Mutation-killing tests: assertion-heavy tests designed to catch specific
 //! mutants identified by cargo-mutants. Each test asserts BOTH that violations
 //! ARE caught and that correct code is NOT flagged.
 
-use basilisk_checker::check_with_config;
 use basilisk_config::BasiliskConfig;
-use basilisk_parser::parse_source;
-use basilisk_resolver::resolve;
 use basilisk_test_macros::mutation_safe;
 
-// Basilisk has no modes — config in, diagnostics out. `run` uses the default
-// config (every PEP rule, no house rules); `run_with_config` honors an explicit
-// config; `annotation_rules_config` is the config a project writes to opt into
-// the annotation house rules (E0001..E0005, E0025, W0014, W0040, W0050). See
-// [CHKARCH-CONFIGURATION-ONLY].
-fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
-    run_with_config(source, &BasiliskConfig::default())
-}
+mod common;
+use common::{annotation_rules_config, run, run_with_config};
 
-fn run_with_config(
+fn run_with_target_3_12_linux(
     source: &str,
-    config: &BasiliskConfig,
 ) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
-    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
-    let resolved = resolve(&parsed)?;
-    Ok(check_with_config(&resolved, config))
-}
-
-fn annotation_rules_config() -> BasiliskConfig {
-    BasiliskConfig {
-        strict_annotations: true,
-        ..BasiliskConfig::default()
-    }
+    let config = BasiliskConfig {
+        python_version: Some("3.12".to_owned()),
+        python_platform: Some("linux".to_owned()),
+        ..Default::default()
+    };
+    run_with_config(source, &config)
 }
 
 fn assignment_compatibility_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
@@ -335,7 +322,7 @@ def check():
     x = dead
     y = live
 "#;
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_target_3_12_linux(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")
@@ -366,7 +353,7 @@ def check():
     x = dead
     y = live
 "#;
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_target_3_12_linux(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")
@@ -395,7 +382,7 @@ def check():
         live = "live"
     x = dead
 "#;
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_target_3_12_linux(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")
@@ -419,7 +406,7 @@ def check():
         dead = "dead"
     x = dead
 "#;
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_target_3_12_linux(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "directives_version_platform")
@@ -622,16 +609,16 @@ bad: Json = {"a": 3j}
 fn missing_parameter_annotation_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
     diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
+        .filter(|d| d.code.code == "BSK-0001")
         .count()
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// BSK-E0001 check_function: !p.has_annotation guard
+// BSK-0001 check_function: !p.has_annotation guard
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Kills mutant: e0001.rs:33 `delete ! in check_function` and `replace != with ==`
-/// on the name guards. Asserts BOTH that an unannotated regular param fires BSK-E0001
+/// on the name guards. Asserts BOTH that an unannotated regular param fires BSK-0001
 /// AND that an annotated regular param does NOT — so flipping the polarity of the
 /// annotation check or the name guards produces an observable diagnostic count.
 #[mutation_safe(rule = "missing_parameter_annotation", fns = "check_function")]
@@ -647,11 +634,11 @@ def missing(unannotated, annotated: int) -> int:
     let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let e0001: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
+        .filter(|d| d.code.code == "BSK-0001")
         .collect();
     let [only] = e0001.as_slice() else {
         return Err(format!(
-            "exactly one BSK-E0001 expected for `unannotated` only, got {}: {e0001:?}",
+            "exactly one BSK-0001 expected for `unannotated` only, got {}: {e0001:?}",
             e0001.len()
         )
         .into());
@@ -665,12 +652,12 @@ def missing(unannotated, annotated: int) -> int:
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// BSK-E0001 check_function: self/cls guards (&& vs ||)
+// BSK-0001 check_function: self/cls guards (&& vs ||)
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Kills mutants: e0001.rs:33 `replace && with ||` (both occurrences).
 /// With `||` instead of `&&`, every parameter satisfies at least one branch,
-/// so unannotated `self`/`cls` would fire BSK-E0001 (false positive). This test
+/// so unannotated `self`/`cls` would fire BSK-0001 (false positive). This test
 /// asserts that unannotated `self` and `cls` do NOT fire while a sibling
 /// unannotated regular param DOES — exactly distinguishing && from ||.
 #[mutation_safe(rule = "missing_parameter_annotation", fns = "check_function")]
@@ -688,7 +675,7 @@ class Foo:
     let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let e0001: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
+        .filter(|d| d.code.code == "BSK-0001")
         .collect();
     assert_eq!(
         e0001.len(),
@@ -699,23 +686,23 @@ class Foo:
     let names: Vec<&str> = e0001.iter().map(|d| d.message.as_str()).collect();
     assert!(
         names.iter().any(|m| m.contains("`x`")),
-        "BSK-E0001 must fire for `x`, got: {names:?}"
+        "BSK-0001 must fire for `x`, got: {names:?}"
     );
     assert!(
         names.iter().any(|m| m.contains("`y`")),
-        "BSK-E0001 must fire for `y`, got: {names:?}"
+        "BSK-0001 must fire for `y`, got: {names:?}"
     );
     assert!(
         !names
             .iter()
             .any(|m| m.contains("`self`") || m.contains("`cls`")),
-        "BSK-E0001 must NOT fire for `self` or `cls`, got: {names:?}"
+        "BSK-0001 must NOT fire for `self` or `cls`, got: {names:?}"
     );
     Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// BSK-E0001 check (impl): is_stub_context filter (delete !)
+// BSK-0001 check (impl): is_stub_context filter (delete !)
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Kills mutant: e0001.rs:25 `delete ! in check`. Without the negation,
@@ -737,11 +724,11 @@ def regular(unannotated):
     let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let e0001: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
+        .filter(|d| d.code.code == "BSK-0001")
         .collect();
     let [only] = e0001.as_slice() else {
         return Err(format!(
-            "exactly one BSK-E0001 expected (for `unannotated` in regular fn), \
+            "exactly one BSK-0001 expected (for `unannotated` in regular fn), \
              got {}: {e0001:?}",
             e0001.len()
         )
@@ -756,7 +743,7 @@ def regular(unannotated):
 }
 
 /// Kills mutant: e0001.rs:22 `replace check with ()`. With the empty body,
-/// no BSK-E0001 ever fires. A simple presence-of-diagnostic assertion kills it.
+/// no BSK-0001 ever fires. A simple presence-of-diagnostic assertion kills it.
 #[mutation_safe(rule = "missing_parameter_annotation", fns = "check")]
 #[test]
 fn mutant_e0001_check_body_present() -> Result<(), Box<dyn std::error::Error>> {
@@ -768,7 +755,7 @@ def f(unannotated):
     let count = missing_parameter_annotation_count(&diagnostics);
     assert_eq!(
         count, 1,
-        "BSK-E0001 must fire exactly once for unannotated param, got {count}"
+        "BSK-0001 must fire exactly once for unannotated param, got {count}"
     );
     Ok(())
 }
@@ -776,7 +763,7 @@ def f(unannotated):
 /// Kills mutant: e0001.rs:38 `replace make_diagnostic -> Diagnostic with Default::default()`.
 /// `Default::default()` produces an empty Diagnostic (empty code, empty message).
 /// Asserting both code AND message content kills the mutant — `Default` cannot
-/// produce `BSK-E0001` and a parameter-named message simultaneously.
+/// produce `BSK-0001` and a parameter-named message simultaneously.
 #[mutation_safe(rule = "missing_parameter_annotation", fns = "make_diagnostic")]
 #[test]
 fn mutant_e0001_diagnostic_payload() -> Result<(), Box<dyn std::error::Error>> {
@@ -787,12 +774,12 @@ def f(specific_name):
     let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let e0001: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
+        .filter(|d| d.code.code == "BSK-0001")
         .collect();
     let [only] = e0001.as_slice() else {
-        return Err(format!("exactly one BSK-E0001 expected: {e0001:?}").into());
+        return Err(format!("exactly one BSK-0001 expected: {e0001:?}").into());
     };
-    assert_eq!(only.code.code, "BSK-E0001");
+    assert_eq!(only.code.code, "BSK-0001");
     assert!(
         only.message.contains("specific_name"),
         "message must name the parameter, got: {}",
@@ -821,8 +808,8 @@ def no_return_annotation(x: int):
 ";
     let diagnostics = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        count_code(&diagnostics, "BSK-E0002") >= 1,
-        "BSK-E0002 must fire for missing return annotation: {diagnostics:?}"
+        count_code(&diagnostics, "BSK-0002") >= 1,
+        "BSK-0002 must fire for missing return annotation: {diagnostics:?}"
     );
     Ok(())
 }
@@ -837,8 +824,8 @@ nothing = None
 ";
     let diagnostics = run_with_config(source, &annotation_rules_config())?;
     assert!(
-        count_code(&diagnostics, "BSK-E0003") >= 1,
-        "BSK-E0003 must fire for unannotated empty-collection vars: {diagnostics:?}"
+        count_code(&diagnostics, "BSK-0003") >= 1,
+        "BSK-0003 must fire for unannotated empty-collection vars: {diagnostics:?}"
     );
     Ok(())
 }
@@ -852,7 +839,7 @@ nothing = None
 #[mutation_safe(rule = "missing_return_annotation")]
 #[test]
 fn mutant_e0002_opt_in_gating() -> Result<(), Box<dyn std::error::Error>> {
-    // BSK-E0002 is an opt-in house rule (provenance basilisk): it must fire only
+    // BSK-0002 is an opt-in house rule (provenance basilisk): it must fire only
     // when the project opts in, and stay silent under the default (PEP-only)
     // config. The default-off assertion kills `opt_in_spec -> None`, which would
     // reclassify the rule as a default-on PEP rule.
@@ -860,14 +847,14 @@ fn mutant_e0002_opt_in_gating() -> Result<(), Box<dyn std::error::Error>> {
     assert!(
         count_code(
             &run_with_config(source, &annotation_rules_config())?,
-            "BSK-E0002"
+            "BSK-0002"
         ) >= 1,
-        "BSK-E0002 must fire when annotation house rules are enabled"
+        "BSK-0002 must fire when annotation house rules are enabled"
     );
     assert_eq!(
-        count_code(&run(source)?, "BSK-E0002"),
+        count_code(&run(source)?, "BSK-0002"),
         0,
-        "BSK-E0002 must be OFF under the default config (opt-in only)"
+        "BSK-0002 must be OFF under the default config (opt-in only)"
     );
     Ok(())
 }
@@ -875,19 +862,19 @@ fn mutant_e0002_opt_in_gating() -> Result<(), Box<dyn std::error::Error>> {
 #[mutation_safe(rule = "missing_variable_type")]
 #[test]
 fn mutant_e0003_opt_in_gating() -> Result<(), Box<dyn std::error::Error>> {
-    // As above for BSK-E0003; the default-off assertion kills `opt_in_spec -> None`.
+    // As above for BSK-0003; the default-off assertion kills `opt_in_spec -> None`.
     let source = "empty_list = []\n";
     assert!(
         count_code(
             &run_with_config(source, &annotation_rules_config())?,
-            "BSK-E0003"
+            "BSK-0003"
         ) >= 1,
-        "BSK-E0003 must fire when annotation house rules are enabled"
+        "BSK-0003 must fire when annotation house rules are enabled"
     );
     assert_eq!(
-        count_code(&run(source)?, "BSK-E0003"),
+        count_code(&run(source)?, "BSK-0003"),
         0,
-        "BSK-E0003 must be OFF under the default config (opt-in only)"
+        "BSK-0003 must be OFF under the default config (opt-in only)"
     );
     Ok(())
 }
@@ -1491,7 +1478,7 @@ def returns_nothing() -> None:
 ";
     let diagnostics = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diagnostics, "BSK-E0002"),
+        count_code(&diagnostics, "BSK-0002"),
         0,
         "annotated functions must not be flagged: {diagnostics:?}"
     );
@@ -1510,7 +1497,7 @@ resolvable_str = 'text'
 ";
     let diagnostics = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
-        count_code(&diagnostics, "BSK-E0003"),
+        count_code(&diagnostics, "BSK-0003"),
         0,
         "annotated or inferable variables must not be flagged: {diagnostics:?}"
     );
@@ -1528,7 +1515,7 @@ nothing = None
     let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let messages: Vec<&str> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0003")
+        .filter(|d| d.code.code == "BSK-0003")
         .map(|d| d.message.as_str())
         .collect();
     assert_eq!(
@@ -1649,6 +1636,97 @@ fn mutant_context_line_index_places_inline_suppression() -> Result<(), Box<dyn s
             .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Count `classes_override` diagnostics.
+fn classes_override_count(diags: &[basilisk_checker::Diagnostic]) -> usize {
+    diags
+        .iter()
+        .filter(|d| d.code.code == "classes_override")
+        .count()
+}
+
+/// `annotations_conflict`: an `@override` signature conflicts only when BOTH
+/// annotation sides are present and differ. Absent annotations are implicitly
+/// `Any` and can never prove incompatibility ([TYPEINF-TARGET-GRADUAL]) —
+/// stripping a child annotation must not create a new error.
+#[mutation_safe(rule = "classes_override", fns = "annotations_conflict")]
+#[test]
+fn mutant_classes_override_annotations_conflict() -> Result<(), Box<dyn std::error::Error>> {
+    // Differing parameter annotations must fire.
+    let param_mismatch = r"
+from typing import override
+
+class Base:
+    def process(self, value: int) -> int:
+        return value
+
+class Child(Base):
+    @override
+    def process(self, value: str) -> int:
+        return 0
+";
+    assert!(
+        classes_override_count(&run(param_mismatch)?) >= 1,
+        "str-vs-int parameter override must fire classes_override"
+    );
+
+    // Differing return annotations must fire.
+    let return_mismatch = r"
+from typing import override
+
+class Base:
+    def process(self, value: int) -> int:
+        return value
+
+class Child(Base):
+    @override
+    def process(self, value: int) -> str:
+        return ''
+";
+    assert!(
+        classes_override_count(&run(return_mismatch)?) >= 1,
+        "str-vs-int return override must fire classes_override"
+    );
+
+    // Identical signatures never fire.
+    let identical = r"
+from typing import override
+
+class Base:
+    def process(self, value: int) -> int:
+        return value
+
+class Child(Base):
+    @override
+    def process(self, value: int) -> int:
+        return value
+";
+    assert_eq!(
+        classes_override_count(&run(identical)?),
+        0,
+        "identical override signature must not fire"
+    );
+
+    // An UNANNOTATED override side is implicitly Any — never a conflict.
+    let unannotated_child = r"
+from typing import override
+
+class Base:
+    def process(self, value: int) -> int:
+        return value
+
+class Child(Base):
+    @override
+    def process(self, value):
+        return value
+";
+    assert_eq!(
+        classes_override_count(&run(unannotated_child)?),
+        0,
+        "absent child annotations are implicitly Any and must not fire"
     );
     Ok(())
 }

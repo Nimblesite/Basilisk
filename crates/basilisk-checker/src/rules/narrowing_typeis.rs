@@ -1,4 +1,4 @@
-//! Implements [`narrowing_typeis`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`narrowing_typeis`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `narrowing_typeis`: TypeGuard/TypeIs return type incompatibility in callable arguments.
 //!
 //! When a function returning `TypeGuard[X]` or `TypeIs[X]` is passed as an

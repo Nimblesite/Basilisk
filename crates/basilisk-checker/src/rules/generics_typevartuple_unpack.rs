@@ -1,4 +1,4 @@
-//! Implements [`generics_typevartuple_unpack`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_typevartuple_unpack`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_typevartuple_unpack`: `TypeVarTuple` unpack minimum type argument violation.
 //!
 //! When a function parameter has a type annotation containing a `TypeVarTuple`

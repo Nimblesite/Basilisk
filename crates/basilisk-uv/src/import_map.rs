@@ -93,10 +93,8 @@ const KNOWN_MISMATCHES: &[(&str, &str)] = &[
 /// assert_eq!(package_to_import_name("my-cool-lib"), "my_cool_lib");
 /// ```
 //
-// Implements [LSPUV-LOCK-IMPORT-MAPPING] mechanisms (2) known mappings and
-// (3) normalised fallback (lowercase, `-`→`_`). Mechanism (1) — scanning the
-// installed package's site-packages dir for top-level `__init__.py`/`.pyi` —
-// is NOT implemented here. See conformance audit (DEVIATION).
+// Implements [LSPUV-LOCK-IMPORT-MAPPING]: known mappings followed by the
+// normalized lowercase, hyphen-to-underscore fallback. No site-packages scan.
 #[must_use]
 pub fn package_to_import_name(package_name: &str) -> String {
     let normalised = package_name.to_lowercase();

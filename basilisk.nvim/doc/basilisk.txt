@@ -34,7 +34,7 @@ https://github.com/python/typing/blob/main/conformance/results/results.html
 
 Features:
 - Zero-config setup: works out of the box
-- All 21 LSP features native via Neovim 0.10+
+- All 21 LSP features native via Neovim 0.11+
 - Debug Adapter Protocol via nvim-dap
 - Test explorer with pytest integration
 - Python profiling with heat maps
@@ -45,16 +45,23 @@ Features:
 2. REQUIREMENTS                                         *basilisk-requirements*
 
 Required:
-- Neovim >= 0.10
-- `basilisk` binary (install: `cargo install basilisk-cli`)
+- Neovim >= 0.11 (the plugin uses |vim.lsp.config| / |vim.lsp.enable|)
+- curl (used once, to auto-download the `basilisk` binary)
+
+The `basilisk` binary itself is NOT a prerequisite: if none is found, the
+plugin downloads the latest GitHub release automatically (see
+|basilisk-binary|). Existing installs (Homebrew, Scoop, cargo, PATH) are
+picked up instead.
 
 Optional:
 - Python 3.12+ (for debugging, testing)
 - debugpy (for DAP debugging)
 - nvim-dap (for debug integration)
 - nvim-dap-ui (for debug UI)
-- ruff (for formatting)
 - uv (for package management)
+
+Formatting needs no external tool — the Ruff formatter is embedded in the
+basilisk binary.
 
 ==============================================================================
 3. INSTALLATION                                         *basilisk-installation*
@@ -90,6 +97,24 @@ Manual: Clone to your plugin directory and call: >lua
   require('basilisk').setup({})
 <
 
+THE BASILISK BINARY                                          *basilisk-binary*
+
+The plugin resolves the `basilisk` binary in this order: configured
+`binary_path` → `$BASILISK_PATH` → `~/.cargo/bin` → `/usr/local/bin` →
+`/opt/homebrew/bin` → `$PATH` → auto-download.
+
+If nothing is found, the latest GitHub release is downloaded into
+`stdpath("data")/basilisk/<version>/` and used automatically — installing
+the plugin is the whole setup. Trigger the download explicitly with
+|:BasiliskInstall|, and upgrade later with |:BasiliskUpdate|.
+
+Updating the plugin and updating the binary are separate: your plugin
+manager updates the Lua plugin (`:Lazy update`, `:PackerSync`,
+`:PlugUpdate`), while |:BasiliskUpdate| updates the binary. When a newer
+release exists, a startup notice names the command that performs the
+upgrade for your install (|:BasiliskUpdate|, or your package manager's own
+upgrade command — Homebrew/Scoop/cargo installs are never overwritten).
+
 ==============================================================================
 4. CONFIGURATION                                       *basilisk-configuration*
 
@@ -123,8 +148,6 @@ All options with defaults: >lua
       enabled = true,                -- enable uv integration
       executable_path = nil,         -- auto-detect
       auto_sync = false,             -- auto-run uv sync
-      stub_suggestions = true,       -- suggest type stub packages
-      dependency_diagnostics = false, -- dependency hygiene warnings
     },
     keymaps = {
       enabled = true,                -- set default keymaps
@@ -136,6 +159,15 @@ All options with defaults: >lua
     log_level = "info",              -- "trace"|"debug"|"info"|"warn"|"error"
   })
 <
+
+Formatting                                              *basilisk-formatting*
+
+Format the current buffer with the embedded Ruff formatter (no `ruff`
+install needed): >lua
+  vim.lsp.buf.format({ name = "basilisk" })
+<
+Style options come from `[tool.ruff]` / `[tool.ruff.format]` in the
+project's pyproject.toml. Set `formatter = "none"` in setup() to disable.
 
 ==============================================================================
 5. COMMANDS                                                 *basilisk-commands*
@@ -150,6 +182,18 @@ Core: ~
 
 :BasiliskOrganizeImports                              *:BasiliskOrganizeImports*
   Organize imports via Ruff.
+
+:BasiliskInstall                                            *:BasiliskInstall*
+  Download and install the latest `basilisk` binary from GitHub releases
+  (with confirmation) when none is installed yet. Points at
+  |:BasiliskUpdate| if one already exists.
+
+:BasiliskUpdate                                              *:BasiliskUpdate*
+  Update the `basilisk` binary to the latest release: confirms, downloads
+  into the plugin's cache, and restarts the LSP on the new version. No-op
+  when already up to date. Refuses to overwrite binaries owned by a package
+  manager (use `brew upgrade basilisk` / `scoop update basilisk` /
+  `cargo install basilisk-cli`) or a local dev build.
 
 Profiling: ~
 
@@ -371,7 +415,8 @@ Run `:checkhealth basilisk` to verify your setup.
 15. TROUBLESHOOTING                                   *basilisk-troubleshooting*
 
 Binary not found: ~
-  Install: `cargo install basilisk-cli`
+  Run `:BasiliskInstall` to download the latest release.
+  Or install: `cargo install basilisk-cli`
   Or set: `vim.env.BASILISK_PATH = "/path/to/basilisk"`
 
 LSP not starting: ~

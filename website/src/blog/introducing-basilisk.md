@@ -9,7 +9,10 @@ image: /assets/images/blog/introducing-basilisk.png
 imageAlt: "Abstract Basilisk type-checking pipeline with validation nodes and strict analysis panels"
 imageWidth: 1200
 imageHeight: 675
-tags: posts
+tags:
+  - Python typing
+  - type checking
+  - Basilisk
 category: announcements
 excerpt: "The Python type annotation ecosystem has a dirty secret: nobody enforces it by default. We built Basilisk to fix that."
 keywords: basilisk, python type checker, strict typing, rust, announcement
@@ -50,7 +53,7 @@ Basilisk's default *is* the Python typing spec — full PEP conformance, with no
 
 This is not about making Python developers' lives harder. It's about making the safe path easy to reach. The spec-conformant baseline is the default; stricter checking is there the moment a team decides they want it — switched on in config, scoped per-project or per-path, never forced.
 
-Turning that stricter checking on for an existing codebase does require work — but it's work that surfaces real bugs. With Basilisk's annotation rules switched on, every BSK-E0001 is a function where the type contract was never defined. A non-exhaustive `match` is a case silently ignored. These are not false positives — they are places where the type system was not being used.
+Turning that stricter checking on for an existing codebase does require work — but it's work that surfaces real bugs. With Basilisk's annotation rules switched on, every BSK-0001 is a function where the type contract was never defined. A non-exhaustive `match` is a case silently ignored. These are not false positives — they are places where the type system was not being used.
 
 ## Why Rust
 
@@ -92,13 +95,16 @@ Basilisk (alpha) implements Phase 1 of a seven-phase roadmap.
 ## Try it
 
 ```bash
+brew tap Nimblesite/tap && brew install basilisk   # Scoop and binaries: see the install docs
+
 git clone https://github.com/Nimblesite/Basilisk
-cd basilisk
-cargo build --release
-./target/release/basilisk check examples/bad.py
+cd Basilisk
+basilisk check examples/bad.py
 ```
 
-If you want to see the diagnostics in action, the repository includes `examples/bad.py` (with intentional errors), `examples/good.py` (clean), and `examples/mixed.py` (realistic mixed case).
+Or skip the CLI entirely — the [VS Code extension](/docs/install-vscode/) bundles the binary. All install options are in the [installation docs](/docs/install-cli/).
+
+If you want to see the diagnostics in action, the repository includes `examples/bad.py` (every error a genuine typing-spec violation), `examples/good.py` (clean), and `examples/mixed.py` (realistic mixed case).
 
 File issues on [GitHub](https://github.com/Nimblesite/Basilisk/issues). The specification is in `SPEC.md` if you want to understand the full design.
 

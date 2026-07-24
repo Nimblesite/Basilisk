@@ -1,4 +1,4 @@
-//! Implements [`qualifiers_annotated_2`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! Implements [`qualifiers_annotated_2`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! `qualifiers_annotated_2`: `Annotated[...]` requires at least two arguments.
 //!
 //! PEP 593 requires `Annotated` to be subscripted with at least two arguments:

@@ -1,5 +1,7 @@
 --- Tests for basilisk.commands module.
 
+local command_desc = require("tests.command_desc")
+
 describe("basilisk.commands", function()
   local commands = require("basilisk.commands")
   local config = require("basilisk.config")
@@ -50,6 +52,14 @@ describe("basilisk.commands", function()
 
     it("registers BasiliskShowOutput", function()
       assert_command_exists("BasiliskShowOutput")
+    end)
+
+    it("registers BasiliskUpdate", function()
+      assert_command_exists("BasiliskUpdate")
+    end)
+
+    it("registers BasiliskInstall", function()
+      assert_command_exists("BasiliskInstall")
     end)
   end)
 
@@ -152,14 +162,19 @@ describe("basilisk.commands", function()
   describe("command descriptions", function()
     it("all commands have descriptions", function()
       local user_commands = vim.api.nvim_get_commands({})
+      local checked = 0
       for name, cmd in pairs(user_commands) do
         if name:match("^Basilisk") then
-          assert.is_true(
-            cmd.definition ~= nil and cmd.definition ~= "",
+          assert.is_not_nil(
+            command_desc.of(cmd),
             name .. " should have a description"
           )
+          checked = checked + 1
         end
       end
+      -- Guard the guard: if the prefix match ever stops finding commands, the
+      -- loop above passes vacuously and the whole check silently disappears.
+      assert.is_true(checked > 0, "no Basilisk commands were found to check")
     end)
   end)
 end)

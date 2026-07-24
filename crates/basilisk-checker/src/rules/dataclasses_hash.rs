@@ -1,4 +1,4 @@
-//! Implements [`dataclasses_hash`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! Implements [`dataclasses_hash`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 //! `dataclasses_hash`: Non-hashable dataclass assigned to a `Hashable`-annotated variable.
 //!
 //! A `@dataclass` with `eq=True` (the default) sets `__hash__` to `None` unless

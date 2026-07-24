@@ -1,4 +1,4 @@
-//! Implements [`historical_positional`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! Implements [`historical_positional`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 //! `historical_positional`: Historical positional-only parameter violations.
 //!
 //! Before PEP 570 (Python 3.8), the convention for marking parameters as

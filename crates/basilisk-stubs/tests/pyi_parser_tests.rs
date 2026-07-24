@@ -11,7 +11,8 @@
 
 use std::path::Path;
 
-use basilisk_stubs::types::{StubParamKind, StubSource, StubTier};
+use basilisk_stubs::pyi_parser::parse_pyi_source_for_target;
+use basilisk_stubs::types::{StubParamKind, StubSource, StubTarget, StubTargetPlatform, StubTier};
 use basilisk_stubs::{parse_pyi_source, StubModule};
 
 fn parse_stub(source: &str) -> StubModule {
@@ -21,6 +22,18 @@ fn parse_stub(source: &str) -> StubModule {
         "test",
         StubSource::UserStub,
         StubTier::Tier1,
+    )
+    .expect("stub should parse")
+}
+
+fn parse_stub_for_target(source: &str, target: &StubTarget) -> StubModule {
+    parse_pyi_source_for_target(
+        source,
+        Path::new("test.pyi"),
+        "test",
+        StubSource::UserStub,
+        StubTier::Tier1,
+        target,
     )
     .expect("stub should parse")
 }
@@ -35,6 +48,22 @@ fn simple_function() {
     let p0 = func.params.first().expect("should have param 0");
     assert_eq!(p0.name, "name");
     assert_eq!(p0.annotation.as_deref(), Some("str"));
+}
+
+#[test]
+fn rejects_pyi_past_the_shared_parser_depth_limit() {
+    let source = format!("value = {}0{}\n", "(".repeat(201), ")".repeat(201));
+    let result = parse_pyi_source(
+        &source,
+        Path::new("deep.pyi"),
+        "deep",
+        StubSource::UserStub,
+        StubTier::Tier1,
+    );
+    assert!(
+        result.is_err(),
+        "stub parsing must use Basilisk's crash-safe parser boundary"
+    );
 }
 
 #[test]
@@ -84,6 +113,16 @@ fn class_with_bases() {
     let stub = parse_stub(source);
     let cls = stub.classes.get("MyList").expect("MyList should exist");
     assert_eq!(cls.bases, vec!["list[int]"]);
+}
+
+#[test]
+fn class_metaclass_is_indexed_separately_from_bases() {
+    let source = "class Built(metaclass=framework.Meta): ...\n";
+    let stub = parse_stub(source);
+    let cls = stub.classes.get("Built").expect("Built should exist");
+
+    assert_eq!(cls.metaclass.as_deref(), Some("framework.Meta"));
+    assert!(cls.bases.is_empty(), "metaclass is not a base class");
 }
 
 #[test]
@@ -215,11 +254,34 @@ class Util:
     let cls = stub.classes.get("Util").expect("Util should exist");
     let helper = cls.methods.first().expect("should have helper");
     assert!(helper.decorators.contains(&"staticmethod".to_owned()));
+    assert_eq!(helper.params.len(), 1, "staticmethod has no bound receiver");
+    assert_eq!(helper.params[0].name, "x");
     let create = cls.methods.get(1).expect("should have create");
     assert!(create.decorators.contains(&"classmethod".to_owned()));
+    assert_eq!(
+        create
+            .receiver
+            .as_ref()
+            .map(|receiver| receiver.name.as_str()),
+        Some("cls")
+    );
     assert_eq!(create.params.len(), 1);
     let p0 = create.params.first().expect("should have param 0");
     assert_eq!(p0.name, "name");
+}
+
+#[test]
+fn annotated_method_receiver_is_retained_for_binding_and_specialization() {
+    let stub = parse_stub(
+        "from typing import LiteralString\nclass Text:\n    def join(self: LiteralString, iterable: list[str], /) -> LiteralString: ...\n",
+    );
+    let method = &stub.classes["Text"].methods[0];
+    let receiver = method.receiver.as_ref().expect("self should be retained");
+
+    assert_eq!(receiver.name, "self");
+    assert_eq!(receiver.annotation.as_deref(), Some("LiteralString"));
+    assert_eq!(method.params.len(), 1);
+    assert_eq!(method.params[0].kind, StubParamKind::PositionalOnly);
 }
 
 #[test]
@@ -245,4 +307,193 @@ def expensive(n: int) -> int: ...
         .get("expensive")
         .expect("expensive should exist");
     assert!(func.decorators.contains(&"cache".to_owned()));
+}
+
+#[test]
+fn concrete_target_selects_one_version_and_platform_branch() {
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::Concrete("win32".to_owned()),
+    };
+    let stub = parse_stub_for_target(
+        "import sys\nif sys.version_info >= (3, 12):\n    def modern() -> int: ...\nelse:\n    def legacy() -> str: ...\nif sys.platform == \"win32\":\n    def platform_name() -> int: ...\nelse:\n    def posix_name() -> int: ...\n",
+        &target,
+    );
+
+    assert!(stub.functions.contains_key("modern"));
+    assert!(stub.functions.contains_key("platform_name"));
+    assert!(!stub.functions.contains_key("legacy"));
+    assert!(!stub.functions.contains_key("posix_name"));
+}
+
+#[test]
+fn type_checking_boolean_and_negation_guards_are_selected_statically() {
+    let stub = parse_stub(
+        "import typing\nimport typing_extensions\n\
+if TYPE_CHECKING:\n    direct: int\nelse:\n    direct_runtime: int\n\
+if typing.TYPE_CHECKING:\n    typing_attr: int\n\
+if typing_extensions.TYPE_CHECKING:\n    extensions_attr: int\n\
+if True and not False:\n    conjunction: int\n\
+if False or True:\n    disjunction: int\n",
+    );
+
+    for name in [
+        "direct",
+        "typing_attr",
+        "extensions_attr",
+        "conjunction",
+        "disjunction",
+    ] {
+        assert!(stub.variables.contains_key(name), "missing `{name}`");
+    }
+    assert!(!stub.variables.contains_key("direct_runtime"));
+}
+
+#[test]
+fn reversed_version_and_platform_guards_cover_every_ordering_operator() {
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::Concrete("win32".to_owned()),
+    };
+    let stub = parse_stub_for_target(
+        "import sys\n\
+if (3, 11) < sys.version_info:\n    reversed_version: int\n\
+if sys.version_info <= (3, 12):\n    less_equal: int\n\
+if sys.version_info > (3, 13):\n    impossible_greater: int\nelse:\n    greater_else: int\n\
+if sys.version_info >= (3, 12):\n    greater_equal: int\n\
+if sys.version_info == (3, 12):\n    equal: int\n\
+if sys.version_info != (3, 11):\n    not_equal: int\n\
+if \"win32\" == sys.platform:\n    reversed_platform: int\n",
+        &target,
+    );
+
+    for name in [
+        "reversed_version",
+        "less_equal",
+        "greater_else",
+        "greater_equal",
+        "equal",
+        "not_equal",
+        "reversed_platform",
+    ] {
+        assert!(stub.variables.contains_key(name), "missing `{name}`");
+    }
+    assert!(!stub.variables.contains_key("impossible_greater"));
+}
+
+#[test]
+fn malformed_and_unsupported_comparisons_intersect_all_feasible_branches() {
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::Concrete("linux".to_owned()),
+    };
+    let stub = parse_stub_for_target(
+        "import sys\n\
+if sys.version_info < (3, 12) < (4, 0):\n    chained_common: int\n    chained_left: int\nelse:\n    chained_common: int\n    chained_right: int\n\
+if sys.version_info >= \"3.12\":\n    version_common: int\n    version_left: int\nelse:\n    version_common: int\n    version_right: int\n\
+if sys.platform == 123:\n    platform_common: int\n    platform_left: int\nelse:\n    platform_common: int\n    platform_right: int\n\
+if project_feature == 1:\n    unknown_common: int\n    unknown_left: int\nelse:\n    unknown_common: int\n    unknown_right: int\n",
+        &target,
+    );
+
+    for name in [
+        "chained_common",
+        "version_common",
+        "platform_common",
+        "unknown_common",
+    ] {
+        assert!(stub.variables.contains_key(name), "missing `{name}`");
+    }
+    for name in [
+        "chained_left",
+        "chained_right",
+        "version_left",
+        "version_right",
+        "platform_left",
+        "platform_right",
+        "unknown_left",
+        "unknown_right",
+    ] {
+        assert!(!stub.variables.contains_key(name), "retained `{name}`");
+    }
+}
+
+#[test]
+fn false_elif_chain_without_else_contributes_no_declarations() {
+    let stub = parse_stub("if False:\n    first: int\nelif False:\n    second: int\n");
+
+    assert!(!stub.variables.contains_key("first"));
+    assert!(!stub.variables.contains_key("second"));
+}
+
+#[test]
+fn all_platform_target_intersects_guarded_declarations() {
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::All,
+    };
+    let stub = parse_stub_for_target(
+        "import sys\nif sys.platform == \"win32\":\n    def common() -> int: ...\n    def windows_only() -> int: ...\nelse:\n    def common() -> int: ...\n    def posix_only() -> int: ...\n",
+        &target,
+    );
+
+    assert!(stub.functions.contains_key("common"));
+    assert!(!stub.functions.contains_key("windows_only"));
+    assert!(!stub.functions.contains_key("posix_only"));
+}
+
+#[test]
+fn all_platform_target_rejects_a_class_with_different_guarded_metaclasses() {
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::All,
+    };
+    let stub = parse_stub_for_target(
+        "import sys\nclass WindowsMeta(type): ...\nclass PosixMeta(type): ...\nif sys.platform == \"win32\":\n    class API(metaclass=WindowsMeta): ...\nelse:\n    class API(metaclass=PosixMeta): ...\n",
+        &target,
+    );
+
+    assert!(
+        !stub.classes.contains_key("API"),
+        "a branch-specific metaclass is not valid across all target platforms"
+    );
+}
+
+#[test]
+fn all_platform_target_retains_a_class_with_the_same_guarded_metaclass() {
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::All,
+    };
+    let stub = parse_stub_for_target(
+        "import sys\nclass CommonMeta(type): ...\nif sys.platform == \"win32\":\n    class API(metaclass=CommonMeta): ...\nelse:\n    class API(metaclass=CommonMeta): ...\n",
+        &target,
+    );
+
+    assert_eq!(
+        stub.classes
+            .get("API")
+            .and_then(|class| class.metaclass.as_deref()),
+        Some("CommonMeta")
+    );
+}
+
+#[test]
+fn guarded_class_members_follow_the_same_target_selection() {
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::All,
+    };
+    let stub = parse_stub_for_target(
+        "import sys\nclass API:\n    if sys.platform == \"win32\":\n        def common(self) -> int: ...\n        def windows_only(self) -> int: ...\n    else:\n        def common(self) -> int: ...\n        def posix_only(self) -> int: ...\n",
+        &target,
+    );
+    let api = stub.classes.get("API").expect("API should exist");
+    let names: Vec<&str> = api
+        .methods
+        .iter()
+        .map(|method| method.name.as_str())
+        .collect();
+
+    assert_eq!(names, vec!["common"]);
 }

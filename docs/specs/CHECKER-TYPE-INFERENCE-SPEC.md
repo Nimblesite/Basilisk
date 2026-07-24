@@ -1,23 +1,21 @@
-# Basilisk Type Inference Specification {#TYPEINF}
+# Basilisk type inference {#TYPEINF}
 
-Basilisk infers types precisely and bidirectionally, and requires annotations only where inference cannot determine a type (or where an annotation changes the type). Where inference suffices, a redundant annotation is a diagnostic (see [TYPEINF-REDUNDANT]).
+Basilisk combines conservative shared inference with focused typing-rule algorithms. The default configuration follows the typing specification; optional house rules can require or discourage annotations without changing PEP behavior (see [TYPEINF-REDUNDANT]).
 
-> **Canonical Python version**: 3.12
->
-> **Authoritative references**: [PEP 484](https://peps.python.org/pep-0484/), [PEP 526](https://peps.python.org/pep-0526/), [Python Typing Spec](https://typing.readthedocs.io/en/latest/), [Python Typing Conformance Suite](https://github.com/python/typing/tree/main/conformance)
+> **Authoritative references**: [PEP 484](https://peps.python.org/pep-0484/), [PEP 526](https://peps.python.org/pep-0526/), [Python Typing Spec](https://typing.python.org/en/latest/spec/), [Python Typing Conformance Suite](https://github.com/python/typing/tree/main/conformance)
 >
 > **Implementation**: Core inference engine (`inference.rs`, `collection_inference.rs`, `types.rs`, `types_parsing.rs`) is wired into rules E0011, E0013, E0014, E0120, and W0050.
 
 ---
 
-## Redundant Annotation Principle {#TYPEINF-REDUNDANT}
+## [TYPEINF-REDUNDANT] Redundant Annotation Principle {#TYPEINF-REDUNDANT}
 
-Ignore this section when it conflicts with PEP conformance.
-
-**Rule**: If Basilisk can infer an expression's type unambiguously and the written annotation is identical, it emits `BSK-W0050: redundant type annotation — inferred type is identical; remove the annotation`. Annotation is required when it changes the type (widens, constrains, documents a contract); forbidden when it merely repeats inference.
+`BSK-0050` is an opt-in house rule. When the narrow syntactic inference engine can prove
+that an assignment annotation exactly repeats its RHS type, it may suggest removing the
+annotation. It never overrides typing-spec syntax or a semantic annotation purpose.
 
 ```python
-# BAD — BSK-W0050: annotation equals inferred type
+# BAD — BSK-0050: annotation equals inferred type
 x: int = 42                     # inferred: int
 z: list[int] = [1, 2, 3]        # inferred: list[int]
 
@@ -26,17 +24,15 @@ x: float = 42                   # widens int → float
 items: list[int | str] = [1]    # widens list[int] → list[int | str]
 ```
 
-Applies to:
-- Local variable assignments
-- Module-level variable assignments
-- Class body variable assignments
-- For-loop target variables
-- With-statement target variables
-- Walrus operator targets
+The current rule applies to module-level assignments and ordinary class-body
+attributes. Function-local declarations, loop/with targets, and walrus targets
+are outside its resolver model and therefore remain silent rather than
+guessing that an annotation is redundant.
 
-**Exceptions** — annotations are always permitted (and required) even when inference could theoretically determine the type:
-- Function parameters (§4.1) — annotation is always required, never redundant
-- Public function return types (§4.3) — annotation is always required, never redundant
+**Exceptions** — annotations are never considered redundant in these positions;
+separate opt-in rules may require them:
+- Function parameters (§4.1)
+- Public function return types (§4.3)
 - `TypedDict` fields — annotation is always required
 - `NamedTuple` fields — annotation is always required
 - `Protocol` member signatures — annotation is always required
@@ -49,75 +45,47 @@ This does not conflict with PEP 526 or the conformance suite, which tests that a
 
 ---
 
-## Governing PEPs {#TYPEINF-PEPS}
+## [TYPEINF-OVERVIEW] Type Inference Overview {#TYPEINF-OVERVIEW}
 
-PEPs defining ground truth for Basilisk's inference rules:
-
-| PEP | Title | Relevant to inference |
-|---|---|---|
-| [PEP 484](https://peps.python.org/pep-0484/) | Type Hints | Core type system, TypeVar, inference rules |
-| [PEP 526](https://peps.python.org/pep-0526/) | Variable Annotations | Annotated variable inference, `ClassVar`, `Final` |
-| [PEP 544](https://peps.python.org/pep-0544/) | Protocols | Structural subtyping and inferred protocol satisfaction |
-| [PEP 572](https://peps.python.org/pep-0572/) | Walrus Operator | Type of `:=` expression |
-| [PEP 585](https://peps.python.org/pep-0585/) | Generic Built-in Types | `list[int]` etc. at runtime |
-| [PEP 604](https://peps.python.org/pep-0604/) | `X \| Y` Union Syntax | Union inference from `\|` expressions |
-| [PEP 612](https://peps.python.org/pep-0612/) | ParamSpec | Callable parameter list capture |
-| [PEP 634](https://peps.python.org/pep-0634/) | Structural Pattern Matching | Match/case type narrowing |
-| [PEP 647](https://peps.python.org/pep-0647/) | TypeGuard | User-defined type narrowing |
-| [PEP 655](https://peps.python.org/pep-0655/) | `Required`/`NotRequired` | TypedDict field requiredness |
-| [PEP 673](https://peps.python.org/pep-0673/) | Self Type | `Self` in methods |
-| [PEP 675](https://peps.python.org/pep-0675/) | LiteralString | String literal type |
-| [PEP 681](https://peps.python.org/pep-0681/) | dataclass_transform | Framework-defined dataclass semantics |
-| [PEP 695](https://peps.python.org/pep-0695/) | Type Parameter Syntax | `[T]` generic syntax, `type` statement, inferred variance |
-| [PEP 696](https://peps.python.org/pep-0696/) | TypeVar Defaults | `TypeVar("T", default=int)` |
-| [PEP 698](https://peps.python.org/pep-0698/) | `@override` | Enforced override checking |
-| [PEP 705](https://peps.python.org/pep-0705/) | `ReadOnly` for TypedDict | Immutable TypedDict fields |
-| [PEP 728](https://peps.python.org/pep-0728/) | TypedDict Extra Items | `extra_items` parameter |
-| [PEP 742](https://peps.python.org/pep-0742/) | TypeIs | Bidirectional narrowing (Python 3.13+) |
-
----
-
-## Type Inference Overview {#TYPEINF-OVERVIEW}
-
-### What Is Inferred {#TYPEINF-INFERRED}
+### [TYPEINF-INFERRED] What Is Inferred {#TYPEINF-INFERRED}
 
 Basilisk infers types for:
 
 - **Local variable assignments** — `x = 42` → `x: int`
-- **Return types** — from the union of all `return` expression types (see §5)
+- **Return types** — for the expression forms supported by focused resolver/checker paths
 - **Container literals** — list, dict, set, tuple elements (see §6)
-- **`self` and `cls`** — always inferred, never annotated (see §4.4)
+- **Receiver positions** — recognized by annotation-policy and focused `Self`
+  rules; general receiver-result propagation is not yet an inference guarantee
 - **Walrus operator** — `(x := expr)` has the same type as `expr`
 - **Comprehensions** — element type from the expression, collection type from the form
-- **Generic instantiation** — `list[int]()` → `list[int]`; `Foo(x)` → `Foo[T]` solved from `x` (see §8)
-- **Narrowed types** — after guards (see §9)
+- **Generic instantiation** — in rule-specific TypeVar/bound/default cases
+- **Narrowed types** — in the implemented guard and flow paths (see §9)
 
-### What Is Never Inferred {#TYPEINF-REQUIRED}
+### [TYPEINF-REQUIRED] Annotation policy {#TYPEINF-REQUIRED}
 
-Basilisk **requires explicit annotations** for:
+Inference and annotation policy are separate. PEP rules consume inferred and
+declared types where available. Missing-annotation house rules are opt-in
+configuration ([CHKARCH-CONFIGURATION-ONLY](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIGURATION-ONLY));
+the default PEP configuration does not turn an unannotated parameter or return
+into an error merely because it is unannotated. `TypedDict`, `NamedTuple`,
+Protocol, and qualifier syntax still require annotations where the typing spec
+defines the annotation as part of the construct.
 
-- **All function parameters** (except `self`, `cls`) — E0001 if missing
-- **All public function return types** — E0002 if missing
-- **All class-level attributes** at the class body level — E0003 if missing
-- **TypedDict fields**, `NamedTuple` fields, `Protocol` members — always explicit
+### [TYPEINF-ALGO] Inference algorithm {#TYPEINF-ALGO}
 
-A missing annotation is a diagnostic, not an inference opportunity — Basilisk never silently falls back to an unresolved type.
+The shared engine is conservative and primarily bottom-up: literal and
+collection syntax produces an `InferredType`; unsupported expressions produce
+`Unknown` rather than a guessed type. Expected-type and flow reasoning live in
+focused rule/resolver paths, not in a general `infer_type(expr, expected)`
+engine. Consolidating those paths is tracked in
+[NARROWPLAN-INFERENCE](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-INFERENCE).
+The target architecture that supersedes this conservative core — bidirectional
+checking over a subtype-constraint solver — is specified in
+[TYPEINF-TARGET](#TYPEINF-TARGET).
 
-### Inference Algorithm {#TYPEINF-ALGO}
+## [TYPEINF-VARS] Variable Type Inference {#TYPEINF-VARS}
 
-Basilisk uses **bidirectional type inference**:
-
-```
-infer_type(expr, expected: Option<Type>) -> Type
-```
-
-The `expected` ("pushed") type flows from outer context into inner expressions, guiding inference of ambiguous constructs (empty containers, lambdas, integer literals that could be `Literal[N]`). This follows [Pierce & Turner, "Local Type Inference", 2000](https://www.cl.cam.ac.uk/~nk480/bidir.pdf).
-
----
-
-## Variable Type Inference {#TYPEINF-VARS}
-
-### Simple Assignment {#TYPEINF-VARS-SIMPLE}
+### [TYPEINF-VARS-SIMPLE] Simple Assignment {#TYPEINF-VARS-SIMPLE}
 
 ```python
 x = 42          # int
@@ -127,12 +95,13 @@ b = True        # bool
 n = None        # None
 ```
 
-**Literal inference rule**: Basilisk infers the most specific type (`Literal`) for constants at module or class scope; within function bodies, literals are widened to their base types unless used in a literal-sensitive context.
+The shared `infer_rhs` engine widens literal syntax to its base type. Focused typing rules may
+retain literal values where the typing specification requires literal-sensitive behavior.
 
 ```python
-# Module scope — literal inference
-STATUS = "active"   # Literal["active"]
-MAX = 100           # Literal[100]
+# Shared RHS inference
+STATUS = "active"   # str
+MAX = 100           # int
 
 # Function body — widened
 def f() -> None:
@@ -140,9 +109,12 @@ def f() -> None:
     y: Literal["active"] = "active"  # Literal["active"] (annotation drives it)
 ```
 
-### Multiple Assignment {#TYPEINF-VARS-FLOW}
+### [TYPEINF-VARS-FLOW] Multiple Assignment {#TYPEINF-VARS-FLOW}
 
-A variable assigned in multiple branches infers the **union** of all assigned types:
+A standalone `FlowUnionTracker` can join recorded assignments into a union, but it is not
+wired into the production resolver/checker control-flow graph. Full branch-sensitive
+inference is tracked in the narrowing plan; the following is target behavior, not a current
+general guarantee:
 
 ```python
 def f(cond: bool) -> None:
@@ -155,29 +127,29 @@ def f(cond: bool) -> None:
 
 > **Authority**: [PEP 484 §Union types](https://peps.python.org/pep-0484/#union-types), [typing spec — narrowing](https://typing.readthedocs.io/en/latest/spec/narrowing.html).
 
-### Annotated Variable {#TYPEINF-VARS-ANNOTATED}
+### [TYPEINF-VARS-ANNOTATED] Annotated Variable {#TYPEINF-VARS-ANNOTATED}
 
 When an annotation is present, the annotation **is** the declared type. The inferred RHS type must be assignable to it:
 
 ```python
 x: int = 42         # declared: int; RHS infers int ✓
 y: float = 42       # declared: float; RHS infers int; int is subtype of float ✓
-z: str = 42         # imports_unresolved: int is not assignable to str
+z: str = 42         # assignment mismatch: int is not assignable to str
 ```
 
 > **Authority**: [PEP 526 §Annotated assignment statements](https://peps.python.org/pep-0526/#annotated-assignment-statements):
 > "If a variable has been annotated, all assignments to that variable will be type-checked."
 
-### Augmented Assignment {#TYPEINF-VARS-AUGMENTED}
+### [TYPEINF-VARS-AUGMENTED] Augmented Assignment {#TYPEINF-VARS-AUGMENTED}
 
 ```python
 x = 1
 x += 2   # still int — the target keeps its existing type
 ```
 
-Augmented assignment (`x op= rhs`) does not re-type the target: `x` keeps its previously declared or inferred type. Basilisk does not resolve `__iadd__`/`__add__` return types to compute a new type; retaining the existing type is conservative and emits no diagnostics on spec-valid code (the conformance gate holds at 100% pass / 0 false positives, self-measured by `conformance/score.py`). Operator return-type inference is roadmap work — see [NARROWPLAN-EXPR-INFERENCE-OPERATORS](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-EXPR-INFERENCE-OPERATORS). Augmented assignment IS analyzed for `Final`/`ReadOnly` reassignment violations and literal-semantics checks.
+Augmented assignment (`x op= rhs`) does not re-type the target: `x` keeps its previously declared or inferred type. Basilisk does not resolve `__iadd__`/`__add__` return types to compute a new type. Operator return-type inference is tracked by [NARROWPLAN-EXPRESSIONS](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-EXPRESSIONS). Augmented assignment is still analyzed for `Final`/`ReadOnly` reassignment violations and literal semantics.
 
-### Walrus Operator {#TYPEINF-VARS-WALRUS}
+### [TYPEINF-VARS-WALRUS] Walrus Operator {#TYPEINF-VARS-WALRUS}
 
 ```python
 if (n := len(a)) > 10:
@@ -190,49 +162,89 @@ The walrus operator `:=` assigns the value and the **expression type equals the 
 
 ---
 
-## Function Type Inference {#TYPEINF-FUNC}
+## [TYPEINF-FUNC] Function Type Inference {#TYPEINF-FUNC}
 
-### Parameters {#TYPEINF-FUNC-PARAMS}
+### [TYPEINF-FUNC-PARAMS] Parameters {#TYPEINF-FUNC-PARAMS}
 
-**All parameters must be explicitly annotated** (no exceptions); missing fires `BSK-E0001`.
+When the opt-in annotation policy is enabled, an unannotated non-receiver parameter fires
+`BSK-0001` **only when the current engine cannot infer its type** — see
+[TYPEINF-EXCEEDS-REQUIRED](#TYPEINF-EXCEEDS-REQUIRED) for the governing
+principle. The unconfigured PEP default does not require annotations merely for style.
 
 ```python
-def process(data):          # BSK-E0001: parameter 'data' has no type annotation
+def process(data):          # BSK-0001: nothing to infer 'data' from
     pass
 
 def process(data: bytes):   # ✓
     pass
 ```
 
-The only parameters inferred rather than annotated are:
+Parameters exempt from the opt-in missing-annotation rule:
 
-- `self` in instance methods → inferred as `Self` (the containing class bound to `Self`)
-- `cls` in class methods → inferred as `type[Self]`
+- receiver-position `self` in instance methods
+- receiver-position `cls` in class methods
 - `__` (positional-only placeholder) → accepted as `Any` for compatibility
+- parameters whose literal default determines the type —
+  [TYPEINF-FUNC-DEFAULTS](#TYPEINF-FUNC-DEFAULTS)
 
 > **Authority**: [PEP 673 (Self type)](https://peps.python.org/pep-0673/) for `Self` semantics.
 
-### Default Parameters {#TYPEINF-FUNC-DEFAULTS}
+### [TYPEINF-FUNC-DEFAULTS] Default Parameters {#TYPEINF-FUNC-DEFAULTS}
 
-A parameter with a default but no annotation is **not** inferred from the default; the annotation is still required.
+A type-determining literal default infers the parameter type, so `BSK-0001`
+MUST NOT fire there — demanding an annotation the engine already knows is
+redundant. A default that does **not** determine the type (`None`, empty
+containers, calls, lambdas, arbitrary expressions) still requires one.
 
 ```python
-def connect(timeout=30):        # BSK-E0001 — annotation required even with default
+def connect(timeout=30):             # ✓ — inferred as int from the default
     pass
 
-def connect(timeout: int = 30): # ✓
+def connect(timeout: int = 30):      # ✓ — explicit annotation always accepted
+    pass
+
+def connect(timeout=None):           # BSK-0001 — None does not determine T | None
+    pass
+
+def connect(timeout=make_default()): # BSK-0001 — call results are not inferable
     pass
 ```
 
-### Return Types {#TYPEINF-FUNC-RETURN}
+The exemption is exactly as strong as the current engine
+(`rhs_fully_determines_type` in `crates/basilisk-checker/src/inference.rs`):
+scalar literals and non-empty containers of type-determining elements qualify;
+nothing else does.
 
-Return types are inferred from the body (the **union of all `return` expression types**), but an annotation is required for all non-trivial public functions (those not trivially `-> None`):
+### [TYPEINF-FUNC-RETURN] Return Types {#TYPEINF-FUNC-RETURN}
+
+Focused resolver/checker paths infer simple return expressions and validate them against a
+declared return type. The opt-in annotation policy can separately require a return
+annotation, but `BSK-0002` fires **only when the current engine cannot infer the
+return type** ([TYPEINF-EXCEEDS-REQUIRED](#TYPEINF-EXCEEDS-REQUIRED)); there is
+no universal PEP-default requirement.
 
 ```python
 def f(x: int) -> int | str:    # ✓ — annotation matches inference
     if x > 0:
         return x               # int
     return "negative"          # str
+```
+
+A function is exempt from `BSK-0002` when every `return` is bare or carries a
+type-determining literal, or the body has no `return` at all (inferred `None`):
+
+```python
+def answer():          # ✓ — inferred as int
+    return 42
+
+def log_it(msg: str):  # ✓ — no return: inferred as None
+    print(msg)
+
+def fetch(url: str):   # BSK-0002 — call result is not inferable
+    return download(url)
+
+def numbers():         # BSK-0002 — Generator[...] is not inferable from returns
+    yield 1
 ```
 
 If the annotated return type is **narrower** than the inferred union, Basilisk emits `returns_compatibility` (return type mismatch).
@@ -251,16 +263,14 @@ def sometimes_returns(x: int) -> int | None:
 
 > **Authority**: [PEP 484 §The `NoReturn` type](https://peps.python.org/pep-0484/#the-noreturn-type).
 
-### `self` and `cls` Inference {#TYPEINF-FUNC-SELFCLS}
+### [TYPEINF-FUNC-SELFCLS] `self` and `cls` Receiver Handling {#TYPEINF-FUNC-SELFCLS}
 
-| Parameter | Context | Inferred type |
-|---|---|---|
-| `self` | Instance method | `Self` (bound to the class) |
-| `cls` | Class method (`@classmethod`) | `type[Self]` |
-| `cls` | `__init_subclass__` | `type[Self]` |
-| `mcs` or `cls` | Metaclass `__new__`/`__init__` | `type[Self]` |
-
-`Self` participates in inheritance: a subclass calling an inherited method infers the subclass type, not the base class type.
+The annotation-policy rule recognizes conventional receiver positions and does
+not demand annotations for `self` or `cls`. Focused PEP 673 conformance rules
+validate explicit `Self` annotations and their legal locations. The shared
+expression engine does not yet synthesize a first-class receiver type or
+propagate a subclass through an inherited `Self`-returning call; that work is
+tracked by [NARROWPLAN-INFERENCE](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-INFERENCE).
 
 ```python
 class Builder:
@@ -271,22 +281,23 @@ class Builder:
 class AdvancedBuilder(Builder):
     pass
 
-b = AdvancedBuilder().set_name("x")
-reveal_type(b)  # AdvancedBuilder — not Builder
+b = AdvancedBuilder().set_name("x")  # target behavior: AdvancedBuilder
 ```
 
 > **Authority**: [PEP 673](https://peps.python.org/pep-0673/).
 
-### Lambda Inference {#TYPEINF-FUNC-LAMBDA}
+### [TYPEINF-FUNC-LAMBDA] Lambda Inference {#TYPEINF-FUNC-LAMBDA}
 
-Lambdas cannot have annotated parameters; Basilisk infers their parameter types exclusively from **bidirectional context** (the expected type pushed from the outer expression). Without one, it emits `BSK-W0040` rather than leaving them silently untyped.
+The shared engine represents a lambda as `Callable[..., Unknown]`; it does not infer lambda
+parameter or return types from an expected callable. The opt-in `BSK-0040` rule warns when a
+module/class variable is assigned a lambda without a target annotation.
 
 ```python
-transform: Callable[[int], str] = lambda x: str(x)  # x inferred as int from expected type
-f = lambda x: x + 1   # BSK-W0040: lambda parameter types unknown
+transform: Callable[[int], str] = lambda x: str(x)  # declared target accepted
+f = lambda x: x + 1   # BSK-0040 when the strictness tag is enabled
 ```
 
-### Overloads {#TYPEINF-FUNC-OVERLOADS}
+### [TYPEINF-FUNC-OVERLOADS] Overloads {#TYPEINF-FUNC-OVERLOADS}
 
 Overloaded functions require full annotation on every `@overload` variant. The implementation signature (without `@overload`) must be compatible with all variants.
 
@@ -305,11 +316,9 @@ A single `@overload` without an implementation is only valid in stub files (`.py
 
 ---
 
-## Collection Type Inference {#TYPEINF-COLLECTIONS}
+## [TYPEINF-COLLECTIONS] Collection Type Inference {#TYPEINF-COLLECTIONS}
 
-### Lists {#TYPEINF-COLLECTIONS-LISTS}
-
-Without bidirectional context:
+### [TYPEINF-COLLECTIONS-LISTS] Lists {#TYPEINF-COLLECTIONS-LISTS}
 
 ```python
 []              # list[Never]  — empty, element type is bottom
@@ -318,15 +327,10 @@ Without bidirectional context:
 [1, 2.0]        # list[int | float]
 ```
 
-With bidirectional context:
+An annotation is checked separately for assignability; it is not pushed into literal
+inference. Heterogeneous elements are joined as a union unconditionally.
 
-```python
-x: list[float] = [1, 2, 3]   # list[float] — ints widen to float via expected type
-```
-
-> **Container inference**: Basilisk always infers a **union** of element types for heterogeneous containers — no loose mode, no switch to disable.
-
-### Dicts {#TYPEINF-COLLECTIONS-DICTS}
+### [TYPEINF-COLLECTIONS-DICTS] Dicts {#TYPEINF-COLLECTIONS-DICTS}
 
 ```python
 {}                  # dict[Never, Never]
@@ -335,7 +339,7 @@ x: list[float] = [1, 2, 3]   # list[float] — ints widen to float via expected 
 {1: "a", "b": 2}   # dict[int | str, str | int]
 ```
 
-### Sets {#TYPEINF-COLLECTIONS-SETS}
+### [TYPEINF-COLLECTIONS-SETS] Sets {#TYPEINF-COLLECTIONS-SETS}
 
 ```python
 set()           # set[Never]
@@ -343,7 +347,7 @@ set()           # set[Never]
 {1, "hi"}       # set[int | str]
 ```
 
-### Tuples {#TYPEINF-COLLECTIONS-TUPLES}
+### [TYPEINF-COLLECTIONS-TUPLES] Tuples {#TYPEINF-COLLECTIONS-TUPLES}
 
 Tuples are **fixed-length by default**. Each element is typed independently:
 
@@ -362,7 +366,7 @@ def variadic(*args: int) -> None:
 
 > **Authority**: [Typing spec — Tuple types](https://typing.readthedocs.io/en/latest/spec/special-forms.html#tuple).
 
-### Comprehensions {#TYPEINF-COLLECTIONS-COMPREHENSIONS}
+### [TYPEINF-COLLECTIONS-COMPREHENSIONS] Comprehensions {#TYPEINF-COLLECTIONS-COMPREHENSIONS}
 
 ```python
 [x * 2 for x in range(10)]         # list[int]
@@ -373,16 +377,14 @@ def variadic(*args: int) -> None:
 
 ---
 
-## Generic Type Inference {#TYPEINF-GENERICS}
+## [TYPEINF-GENERICS] Generic Type Inference {#TYPEINF-GENERICS}
 
-### TypeVar Solving {#TYPEINF-GENERICS-TYPEVAR}
+### [TYPEINF-GENERICS-TYPEVAR] TypeVar Solving {#TYPEINF-GENERICS-TYPEVAR}
 
-When a generic function is called, Basilisk solves TypeVars using **bidirectional constraint propagation**:
-
-1. Collect all constraints from argument types against TypeVar-bearing parameter types
-2. Compute the **meet** (intersection) of upper-bound constraints and the **join** (union) of lower-bound constraints
-3. If ambiguous, use the expected return type as an additional constraint (bidirectional)
-4. If still ambiguous, emit an error rather than falling back to `Unknown`
+Focused call-resolution paths bind simple TypeVars from argument/parameter shapes and apply
+bounds, constraints, and defaults for the rules that own them. Basilisk does not yet have a
+general bidirectional constraint solver, meet/join engine, or expected-return-type feedback
+loop; consolidation is tracked by the narrowing plan.
 
 ```python
 T = TypeVar("T")
@@ -396,7 +398,12 @@ z: float = first([1, 2, 3])  # T solved to int; int assignable to float ✓
 
 > **Authority**: [PEP 484 §Generics](https://peps.python.org/pep-0484/#generics).
 
-### Constrained TypeVars {#TYPEINF-GENERICS-CONSTRAINED}
+### [TYPEINF-GENERICS-CONSTRAINED] Constrained TypeVars {#TYPEINF-GENERICS-CONSTRAINED}
+
+The current call-rule path validates that an argument is compatible with one
+of a constrained `TypeVar`'s alternatives. It does not yet expose a general
+solved-return query, so the result-type and subtype-widening comments below are
+typing-spec target semantics rather than a repository-wide inference claim.
 
 ```python
 AnyStr = TypeVar("AnyStr", str, bytes)
@@ -419,7 +426,7 @@ reveal_type(result)            # str
 
 > **Authority**: [Typing spec — Constrained TypeVars](https://typing.readthedocs.io/en/latest/spec/generics.html#constrained-type-variables), [Pyright type-inference docs](https://github.com/microsoft/pyright/blob/main/docs/type-inference.md).
 
-### Bound TypeVars {#TYPEINF-GENERICS-BOUND}
+### [TYPEINF-GENERICS-BOUND] Bound TypeVars {#TYPEINF-GENERICS-BOUND}
 
 ```python
 C = TypeVar("C", bound="Comparable")
@@ -429,7 +436,7 @@ def sort(items: list[C]) -> list[C]: ...
 
 TypeVar bound constraints are **upper bounds**: any subtype of `Comparable` satisfies `C`. The solved type is the argument type itself (not widened to the bound).
 
-### Variance Inference {#TYPEINF-GENERICS-VARIANCE}
+### [TYPEINF-GENERICS-VARIANCE] Variance Inference {#TYPEINF-GENERICS-VARIANCE}
 
 With PEP 695 generic syntax, Basilisk **automatically infers variance**:
 
@@ -458,7 +465,12 @@ class Consumer[T]:
 > **Authority**: [PEP 695 §Variance Inference](https://peps.python.org/pep-0695/#variance-inference).
 > [Conformance suite `generics_variance_inference.py`](https://github.com/python/typing/blob/main/conformance/tests/generics_variance_inference.py).
 
-### TypeVar Defaults {#TYPEINF-GENERICS-DEFAULTS}
+### [TYPEINF-GENERICS-DEFAULTS] TypeVar Defaults {#TYPEINF-GENERICS-DEFAULTS}
+
+Focused PEP 696 rules validate default declaration ordering, bounds, and
+constraints. The shared constructor-expression engine does not yet synthesize
+`Container[int]` from an omitted type argument; the example below states the
+typing-spec result accepted by those focused rules.
 
 ```python
 from typing import TypeVar
@@ -474,7 +486,12 @@ d = Container[str]()    # Container[str] — explicit wins
 
 > **Authority**: [PEP 696](https://peps.python.org/pep-0696/).
 
-### ParamSpec {#TYPEINF-GENERICS-PARAMSPEC}
+### [TYPEINF-GENERICS-PARAMSPEC] ParamSpec {#TYPEINF-GENERICS-PARAMSPEC}
+
+Focused callable rules recognize `ParamSpec`, `P.args`, and `P.kwargs` shapes
+and validate supported higher-order declarations. General decorator
+application does not yet synthesize a wrapper signature from `P`; the full
+signature-preservation example below is the PEP 612 target semantics.
 
 ```python
 from typing import ParamSpec, Callable
@@ -494,9 +511,9 @@ def logged(f: Callable[P, T]) -> Callable[P, T]:
 
 ---
 
-## Type Narrowing {#TYPEINF-NARROWING}
+## [TYPEINF-NARROWING] Type Narrowing {#TYPEINF-NARROWING}
 
-### `isinstance` Narrowing {#TYPEINF-NARROWING-ISINSTANCE}
+### [TYPEINF-NARROWING-ISINSTANCE] `isinstance` Narrowing {#TYPEINF-NARROWING-ISINSTANCE}
 
 ```python
 def f(x: int | str) -> None:
@@ -511,7 +528,7 @@ Narrowing `isinstance` against a union:
 - `else` branch: the **complement** — original type minus the checked type
 - `isinstance(x, (A, B))`: `if` branch narrows to `A | B`
 
-### `is None` / `is not None` {#TYPEINF-NARROWING-NONE}
+### [TYPEINF-NARROWING-NONE] `is None` / `is not None` {#TYPEINF-NARROWING-NONE}
 
 ```python
 def f(x: int | None) -> None:
@@ -521,7 +538,22 @@ def f(x: int | None) -> None:
         reveal_type(x)  # int
 ```
 
-### Truthiness Narrowing {#TYPEINF-NARROWING-TRUTHY}
+### [TYPEINF-NARROWING-TYPEOF] Exact `type(x) is C` Guards {#TYPEINF-NARROWING-TYPEOF}
+
+`type(x) is C` narrows the positive branch to `C`. The negative branch removes
+`C` only when `C` is known final; otherwise subclasses make exclusion unsound.
+
+### [TYPEINF-NARROWING-EQ-LITERAL] Literal Equality Guards {#TYPEINF-NARROWING-EQ-LITERAL}
+
+`x == literal` keeps that literal in the positive branch and removes it in the
+negative branch. `!=` swaps those outcomes.
+
+### [TYPEINF-NARROWING-IN-LITERAL] Literal Membership Guards {#TYPEINF-NARROWING-IN-LITERAL}
+
+`x in (literal, ...)` intersects with the listed literals; the complementary
+branch subtracts them. `not in` swaps those outcomes.
+
+### [TYPEINF-NARROWING-TRUTHY] Truthiness Narrowing {#TYPEINF-NARROWING-TRUTHY}
 
 ```python
 def f(x: str | None) -> None:
@@ -531,34 +563,37 @@ def f(x: str | None) -> None:
 
 Truthiness narrowing removes falsy types from the union (`None`, `Literal[0]`, `Literal[""]`, `Literal[False]`) in the truthy branch, and narrows to falsy types in the falsy branch.
 
-### Assignment Narrowing {#TYPEINF-NARROWING-ASSIGN}
+### [TYPEINF-NARROWING-ASSIGN] Assignment Narrowing {#TYPEINF-NARROWING-ASSIGN}
 
 ```python
 x: int | str = get_value()
-x = 42   # x keeps its declared type int | str
+x = 42   # declared type remains int | str; flow type becomes int
 ```
 
-Basilisk does not narrow a variable's type on assignment: the variable retains its declared type. The flow-narrowing environment used for `assert_type` checking (`crates/basilisk-resolver/src/visitor/assert_narrow.rs`) narrows only on single-class `isinstance` guards, enum `is` comparisons, and `TypeGuard`/`TypeIs` calls; assignment statements do not update it. Assignment narrowing is roadmap work — see [NARROWPLAN-ENGINE-PATTERNS](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-ENGINE-PATTERNS) item 4.
+Basilisk keeps the declared type for assignment validation, while its
+flow-sensitive environment updates later uses of a simple name to the
+synthesized RHS type. Complex targets stay conservative.
 
-### Pattern Matching Narrowing {#TYPEINF-NARROWING-MATCH}
+### [TYPEINF-NARROWING-MATCH] Pattern Matching Narrowing {#TYPEINF-NARROWING-MATCH}
 
 ```python
 def process(cmd: Command) -> None:
     match cmd:
         case Quit():
             reveal_type(cmd)  # Quit
-        case Move(x=x, y=y):
+        case Move():
             reveal_type(cmd)  # Move
-            reveal_type(x)    # int (from Move.x annotation)
         case _:
-            reveal_type(cmd)  # Command (remaining)
+            reveal_type(cmd)  # conservative remainder
 ```
 
-Basilisk performs **exhaustiveness checking** on match statements against union types: if all variants are handled, the `case _` branch (if present) has type `Never`.
+Basilisk narrows a simple union subject for supported class patterns and
+performs separate exhaustiveness checking. It does not yet infer types for
+pattern-bound attributes or generally rewrite a wildcard case to `Never`.
 
 > **Authority**: [PEP 634](https://peps.python.org/pep-0634/), [PEP 635](https://peps.python.org/pep-0635/).
 
-### TypeGuard {#TYPEINF-NARROWING-TYPEGUARD}
+### [TYPEINF-NARROWING-TYPEGUARD] TypeGuard {#TYPEINF-NARROWING-TYPEGUARD}
 
 ```python
 from typing import TypeGuard
@@ -577,7 +612,7 @@ def f(val: list[object]) -> None:
 
 > **Authority**: [PEP 647](https://peps.python.org/pep-0647/).
 
-### TypeIs {#TYPEINF-NARROWING-TYPEIS}
+### [TYPEINF-NARROWING-TYPEIS] TypeIs {#TYPEINF-NARROWING-TYPEIS}
 
 `TypeIs` is bidirectional: both branches are narrowed.
 
@@ -596,7 +631,7 @@ def f(val: int | str) -> None:
 
 > **Authority**: [PEP 742](https://peps.python.org/pep-0742/).
 
-### `assert` Narrowing {#TYPEINF-NARROWING-ASSERT}
+### [TYPEINF-NARROWING-ASSERT] `assert` Narrowing {#TYPEINF-NARROWING-ASSERT}
 
 ```python
 x: int | None = get()
@@ -606,101 +641,56 @@ reveal_type(x)  # int — narrowed after assert
 
 Assertions narrow the type for all code after the `assert` statement (within the same flow path).
 
-### Dict Key Existence Narrowing {#TYPEINF-NARROWING-DICTKEY}
+<a id="TYPEINF-NARROWING-DICTKEY"></a>
+
+### [TYPEINF-NARROWING-TYPEDDICT-KEY] TypedDict Key Existence Narrowing {#TYPEINF-NARROWING-TYPEDDICT-KEY}
 
 ```python
 class Movie(TypedDict, total=False):
     title: str
     year: int
 
-def f(m: Movie) -> None:
+class WithoutTitle(TypedDict):
+    year: int
+
+def f(m: Movie | WithoutTitle) -> None:
     if "title" in m:
-        m["title"]   # the TypedDict type is NOT narrowed by the `in` check
+        reveal_type(m)  # Movie
 ```
 
-Basilisk does not narrow `TypedDict` types via `"key" in td` checks; no `in`-comparison narrowing exists. Access checking for non-required keys is conservative, so no diagnostic depends on this narrowing — every `typeddicts_*` conformance file passes with zero false positives (self-measured, `conformance/conformance_status.csv`). Key-existence (`in`-guard) narrowing is roadmap work — see [NARROWPLAN](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md).
+For a union of modeled `TypedDict` schemas, the positive branch keeps members
+that declare the key. The negative branch removes a member only when the key is
+required (and therefore always present); optional-key members remain possible.
 
-### Narrowing Scope Limitations {#TYPEINF-NARROWING-SCOPE}
+### [TYPEINF-NARROWING-ISSUBCLASS] `issubclass` Guard Groundwork {#TYPEINF-NARROWING-ISSUBCLASS}
+
+The resolver records supported `issubclass(x, C)` guards. Until first-class
+`type[C]` object modeling lands, the checker deliberately returns the original
+type in both branches rather than inventing an unsound narrowing.
+
+### [TYPEINF-NARROWING-HASATTR] `hasattr` Guard Groundwork {#TYPEINF-NARROWING-HASATTR}
+
+The resolver records `hasattr(x, "name")` guards. Synthetic protocol
+intersection is not implemented yet, so both branches deliberately preserve
+the original type.
+
+### [TYPEINF-NARROWING-SCOPE] Narrowing Scope Limitations {#TYPEINF-NARROWING-SCOPE}
 
 Narrowing does **not** persist across:
 
 - Function boundaries (inner functions capture the unnarrowed type unless the narrowing condition is proven stable)
 - Loop bodies (a narrowed type before a loop is reset to the pre-loop type at each iteration)
-- After reassignment of the narrowed variable
+- After reassignment, the prior narrow is replaced by the simple RHS flow type
 
 ---
 
-## Bidirectional Inference {#TYPEINF-BIDIR}
-
-Bidirectional inference propagates the **expected type** from surrounding context into an expression, resolving ambiguity that bottom-up inference cannot.
-
-### Assignment with Annotation {#TYPEINF-BIDIR-ASSIGN}
-
-```python
-x: list[int] = []          # expected: list[int] → [] infers as list[int], not list[Never]
-y: dict[str, int] = {}     # expected: dict[str, int] → {} infers as dict[str, int]
-```
-
-### Function Call Arguments {#TYPEINF-BIDIR-CALLARGS}
-
-```python
-def accept(items: list[str]) -> None: ...
-
-accept([])          # expected: list[str] → [] infers as list[str]
-accept(["a", "b"])  # list[str] ✓
-```
-
-### Return Statements {#TYPEINF-BIDIR-RETURN}
-
-```python
-def f() -> list[int]:
-    return []   # expected: list[int] → [] infers as list[int]
-```
-
-### Lambda in Typed Context {#TYPEINF-BIDIR-LAMBDA}
-
-```python
-from typing import Callable
-
-def apply(f: Callable[[int, int], bool], x: int, y: int) -> bool:
-    return f(x, y)
-
-apply(lambda a, b: a < b, 1, 2)
-#     ^ a: int, b: int inferred from Callable[[int, int], bool]
-```
-
-> **Authority**: [Pyright docs on bidirectional inference](https://github.com/microsoft/pyright/blob/main/docs/type-inference.md#bidirectional-type-inference):
-> "If the LHS of an assignment has a declared type, it can influence the inferred type of the RHS."
-
-### Conditional Expressions {#TYPEINF-BIDIR-CONDITIONAL}
-
-```python
-x: str | int = "hello" if flag else 42
-#              ^ str                ^ int — both inferred; joined to str | int
-```
-
-### Overload Selection with Bidirectional Context {#TYPEINF-BIDIR-OVERLOAD}
-
-The expected return type narrows overload candidate selection:
-
-```python
-@overload
-def parse(s: str) -> int: ...
-@overload
-def parse(s: str) -> float: ...
-
-result: float = parse("3.14")  # selects float overload via expected type
-```
-
----
-
-## Subtyping {#TYPEINF-SUBTYPING}
+## [TYPEINF-SUBTYPING] Subtyping {#TYPEINF-SUBTYPING}
 
 Basilisk implements both **nominal** and **structural** subtyping. `is_assignable_to(source, target)` answers "can a value of type `source` be used where type `target` is expected?"
 
 > **Authority**: [PEP 484 §Subtype relationships](https://peps.python.org/pep-0484/), [PEP 544 §Protocols: Structural subtyping](https://peps.python.org/pep-0544/), [Python Typing Spec — Type system concepts](https://typing.readthedocs.io/en/latest/spec/concepts.html)
 
-### Nominal Subtyping {#TYPEINF-SUBTYPING-NOMINAL}
+### [TYPEINF-SUBTYPING-NOMINAL] Nominal Subtyping {#TYPEINF-SUBTYPING-NOMINAL}
 
 `A` is a nominal subtype of `B` if `B` appears in `A.__mro__` (Method Resolution Order) — Python's standard class inheritance model.
 
@@ -711,7 +701,9 @@ class Dog(Animal): ...
 x: Animal = Dog()  # OK — Dog is a nominal subtype of Animal
 ```
 
-**MRO resolution** is simplified: rules walk `ClassInfo.bases` transitively per class (no C3 linearization engine and no MRO cache in `ResolvedModule`); full C3 linearization remains future work ([NARROWPLAN-SUBTYPING-NOMINAL](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING-NOMINAL)).
+Nominal-subtyping rules may walk `ClassInfo.bases` transitively; the shared MRO
+model remains tracked by
+[NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING).
 
 **Builtin numeric tower.** The typing-spec promotions ([Special cases for float and complex](https://typing.python.org/en/latest/spec/special-types.html#special-cases-for-float-and-complex)) hold: `bool`/`int` are accepted where `float` is expected, and `bool`/`int`/`float` where `complex` is expected. Two layers implement this:
 
@@ -723,7 +715,7 @@ x: Animal = Dog()  # OK — Dog is a nominal subtype of Animal
 - `Never` <: everything (bottom type).
 - There is **no** `bytearray <: bytes` promotion: the [current typing spec](https://typing.python.org/en/latest/spec/special-types.html#special-cases-for-float-and-complex) defines promotions only for `float`/`complex` (the historical `bytes` shorthand was removed), and no conformance test requires it. `bytearray` parses to `Named("bytearray")` and is assignable essentially only to itself, `object`, and `Any`.
 
-### Protocol Structural Subtyping {#TYPEINF-SUBTYPING-PROTOCOL}
+### [TYPEINF-SUBTYPING-PROTOCOL] Protocol Structural Subtyping {#TYPEINF-SUBTYPING-PROTOCOL}
 
 `A` structurally satisfies a `Protocol` `P` if `A` provides **all members** declared in `P` with compatible types — no explicit inheritance required.
 
@@ -756,7 +748,7 @@ c: Drawable = Circle()  # OK — Circle structurally satisfies Drawable
 
 > **Authority**: [PEP 544 §Protocol members](https://peps.python.org/pep-0544/#protocol-members), [Typing spec — Protocols](https://typing.readthedocs.io/en/latest/spec/protocol.html)
 
-### TypedDict Structural Subtyping {#TYPEINF-SUBTYPING-TYPEDDICT}
+### [TYPEINF-SUBTYPING-TYPEDDICT] TypedDict Structural Subtyping {#TYPEINF-SUBTYPING-TYPEDDICT}
 
 TypedDict-to-TypedDict assignability is structural, not nominal:
 
@@ -780,7 +772,7 @@ m: MovieBase = Movie(name="Alien", year=1979)  # OK — Movie has all MovieBase 
 
 > **Authority**: [PEP 589 §TypedDict](https://peps.python.org/pep-0589/), [PEP 705 §ReadOnly](https://peps.python.org/pep-0705/), [PEP 728 §extra_items](https://peps.python.org/pep-0728/)
 
-### Generic Subtyping {#TYPEINF-SUBTYPING-GENERIC}
+### [TYPEINF-SUBTYPING-GENERIC] Generic Subtyping {#TYPEINF-SUBTYPING-GENERIC}
 
 Generic types combine nominal subtyping with variance:
 
@@ -788,8 +780,9 @@ Generic types combine nominal subtyping with variance:
 class Animal: ...
 class Dog(Animal): ...
 
-x: list[Animal] = [Dog()]  # ERROR — list is invariant
-y: Sequence[Animal] = [Dog()]  # OK — Sequence is covariant
+dogs: list[Dog] = []
+x: list[Animal] = dogs       # ERROR — two typed lists are invariant
+y: Sequence[Animal] = dogs   # OK — Sequence is covariant
 ```
 
 **Variance rules** for generic type parameters:
@@ -802,16 +795,16 @@ y: Sequence[Animal] = [Dog()]  # OK — Sequence is covariant
 2. Find the TypeVar substitution: how does the source specialize the target's TypeVars?
 3. Apply variance rules to each TypeVar position.
 
-### Union and Special-Form Subtyping {#TYPEINF-SUBTYPING-UNION}
+### [TYPEINF-SUBTYPING-UNION] Union and Special-Form Subtyping {#TYPEINF-SUBTYPING-UNION}
 
 - `A` <: `A | B` (always — a type is a subtype of any union containing it)
 - `A | B` <: `C` only if `A` <: `C` AND `B` <: `C`
 - `Optional[T]` = `T | None`
 - `Any` is bidirectionally compatible with all types (not a real subtype, an escape hatch)
 - `Never` <: everything (bottom type, assignable to all types)
-- `object` >: everything except `None` under strict subtyping
+- the simplified annotation parser treats `object` as a gradual `Any` spelling
 
-### Callable Subtyping {#TYPEINF-SUBTYPING-CALLABLE}
+### [TYPEINF-SUBTYPING-CALLABLE] Callable Subtyping {#TYPEINF-SUBTYPING-CALLABLE}
 
 Callable subtyping follows **parameter contravariance** and **return covariance**:
 
@@ -822,7 +815,7 @@ Callable subtyping follows **parameter contravariance** and **return covariance*
 f: Callable[[Animal], Dog]  # accepts Animal, returns Dog
 g: Callable[[Dog], Animal]  # accepts Dog, returns Animal
 
-# f is NOT assignable to g: Dog (param of g) is not supertype of Animal (param of f)
+# f IS assignable to g: it accepts every Dog and returns a Dog (an Animal)
 # g is NOT assignable to f: Animal (return of g) is not subtype of Dog (return of f)
 ```
 
@@ -835,14 +828,14 @@ g: Callable[[Dog], Animal]  # accepts Dog, returns Animal
 
 > **Authority**: [PEP 484 §Callable](https://peps.python.org/pep-0484/#callable), [Typing spec — Callables](https://typing.readthedocs.io/en/latest/spec/callables.html)
 
-### Implementation: `InferredType::is_assignable_to()` {#TYPEINF-SUBTYPING-IMPL}
+### [TYPEINF-SUBTYPING-IMPL] Implementation: `InferredType::is_assignable_to()` {#TYPEINF-SUBTYPING-IMPL}
 
 Subtyping is decided by `InferredType::is_assignable_to(&self, other)` in `crates/basilisk-checker/src/types.rs` — a pure structural match over the `InferredType` enum, called on production paths by the compatibility rules (e.g. `rules/assignment_compatibility`, `rules/returns_compatibility`). It implements:
 
 - `Any` / `Unknown` bidirectional compatibility and `Never` as bottom ([TYPEINF-SPECIAL-ANY](#TYPEINF-SPECIAL-ANY), [TYPEINF-SPECIAL-NEVER](#TYPEINF-SPECIAL-NEVER)).
 - Partial, literal-level numeric relations: `int` (and `Literal` ints/floats) <: `float`, `Literal[True/False]` <: `bool`/`int`, plus `Literal`/`LiteralString`/`str` relations ([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL), [TYPEINF-SPECIAL-LITERALSTRING](#TYPEINF-SPECIAL-LITERALSTRING)). The full `bool <: int <: float <: complex` tower lives in the annotation-text-level helpers used by the conformance rules.
 - `Optional`/`Union` decomposition: `A | B <: C` iff both sides do; `A <: A | B` ([TYPEINF-SUBTYPING-UNION](#TYPEINF-SUBTYPING-UNION)).
-- Element-assignability (covariant) checks for `list`/`set`/`dict`; fixed-length, homogeneous `tuple[X, ...]`, and PEP 646 unpacked (`*tuple[...]`/`*Ts`) tuple matching ([TYPEINF-SUBTYPING-GENERIC](#TYPEINF-SUBTYPING-GENERIC), [TYPEINF-COLLECTIONS-TUPLES](#TYPEINF-COLLECTIONS-TUPLES)).
+- Bidirectional element compatibility (invariance, with gradual `Any`/`Unknown` consistency) for mutable `list`/`set`/`dict`; fixed-length, homogeneous `tuple[X, ...]`, and PEP 646 unpacked (`*tuple[...]`/`*Ts`) tuple matching ([TYPEINF-SUBTYPING-GENERIC](#TYPEINF-SUBTYPING-GENERIC), [TYPEINF-COLLECTIONS-TUPLES](#TYPEINF-COLLECTIONS-TUPLES)).
 - Callable contravariant parameters / covariant return, with `...` params gradual ([TYPEINF-SUBTYPING-CALLABLE](#TYPEINF-SUBTYPING-CALLABLE)); `TypeForm` covariance.
 
 `Named` types (user classes and unparameterised imports) compare by base name before `[`: `Foo[int]` and `Foo[float]` are treated as compatible. This is deliberate — without whole-program generic variance analysis, stricter matching would emit false positives, and the conformance gate holds `max_false_positives` at zero.
@@ -851,15 +844,20 @@ Nominal MRO walking and structural Protocol/TypedDict compatibility are NOT cent
 
 ---
 
-## Special Types {#TYPEINF-SPECIAL}
+## [TYPEINF-SPECIAL] Special Types {#TYPEINF-SPECIAL}
 
-### `Any` {#TYPEINF-SPECIAL-ANY}
+### [TYPEINF-SPECIAL-ANY] `Any` {#TYPEINF-SPECIAL-ANY}
 
-`Any` is bidirectionally compatible with all types — an **explicit escape hatch**, never inferred as a fallback; it appears only when written. Unannotated parameters do **not** default to `Any`; they produce `BSK-E0001`.
+`Any` is bidirectionally compatible with all types. It arises from explicit
+`Any` and from typing-defined gradual spellings such as `object` and bare
+generics in the simplified annotation parser; it is never the fallback for a
+failed expression inference (that sentinel is `Unknown`). Unannotated
+parameters do not silently become explicit `Any`; the opt-in annotation policy
+may report `BSK-0001`.
 
 > **Authority**: [PEP 484 §The `Any` type](https://peps.python.org/pep-0484/#the-any-type): "Every type is consistent with `Any`."
 
-### `Never` / `NoReturn` {#TYPEINF-SPECIAL-NEVER}
+### [TYPEINF-SPECIAL-NEVER] `Never` / `NoReturn` {#TYPEINF-SPECIAL-NEVER}
 
 `Never` is the **bottom type**: no value has it, it is assignable to everything, and functions inferred to always raise return it.
 
@@ -880,9 +878,33 @@ def check(x: int | str) -> None:
         reveal_type(x)  # Never — exhaustive
 ```
 
-### `Self` {#TYPEINF-SPECIAL-SELF}
+### [TYPEINF-SPECIAL-LITERAL-CONTEXT] Contextually-typed collection literals {#TYPEINF-SPECIAL-LITERAL-CONTEXT}
 
-`Self` represents the current class in a method's return or parameter type. Inferred automatically for `self`/`cls`; written explicitly for factory methods:
+Mutable containers are **invariant** ([TYPEINF-SUBTYPING-GENERIC](#TYPEINF-SUBTYPING-GENERIC)): a stored `c: list[Never]` is **not** assignable to `list[int]`, and `specialtypes_never.py` requires that error. A *freshly-constructed collection literal*, however, has no aliasing, so in a `return`/`yield` position it is typed **against** the expected type rather than at its own narrow type:
+
+```python
+def make_bytes() -> list[bytes]:
+    return []                      # OK — [] constructs a list[bytes], not list[Never]
+
+def rows() -> Iterator[dict[str, int]]:
+    yield {"count": 1}             # OK — the literal is a dict[str, int], not dict[LiteralString, int]
+
+def pick() -> list[int] | list[str]:
+    return []                      # OK — [] fits either arm of the union
+
+def split() -> tuple[list[int], str]:
+    return [], "lit"               # OK — the declared type reaches each tuple position
+```
+
+Each literal element need only be assignable *to* the declared element type (covariant, recursing through nested literals and distributing over unions/`Optional`). A **tuple display** carries the declared type inward per position — positionally against a fixed-length `tuple[X, Y]`, and over every position against the homogeneous `tuple[X, ...]` form ([TYPEINF-COLLECTIONS-TUPLES](#TYPEINF-COLLECTIONS-TUPLES)); a PEP 646 unpacked segment or an arity mismatch is left to the invariant fallback. Genuine element mismatches still fire — `return [1]` against `list[str]`, or `return [1], "a"` against `tuple[list[str], str]`, is an error — so no required diagnostic is lost. Non-literal returns (a name, a call) keep the invariant check. Implemented by `literal_collection_assignable_to` in `crates/basilisk-checker/src/inference.rs`, consulted by `returns_compatibility`, `returns_compatibility_2`, and `annotations_generators` before their invariant fallback.
+
+### [TYPEINF-SPECIAL-SELF] `Self` {#TYPEINF-SPECIAL-SELF}
+
+`Self` represents the current class in a method's return or parameter type.
+Focused rules validate explicit PEP 673 uses. Receiver parameters are exempt
+from missing-annotation policy, but the shared engine does not yet synthesize a
+first-class automatic `Self`/`type[Self]` receiver type (see
+[TYPEINF-FUNC-SELFCLS](#TYPEINF-FUNC-SELFCLS)).
 
 ```python
 from typing import Self
@@ -895,7 +917,7 @@ class Node:
 
 > **Authority**: [PEP 673](https://peps.python.org/pep-0673/).
 
-### `LiteralString` {#TYPEINF-SPECIAL-LITERALSTRING}
+### [TYPEINF-SPECIAL-LITERALSTRING] `LiteralString` {#TYPEINF-SPECIAL-LITERALSTRING}
 
 A supertype of all `Literal[str]` types, enforcing that only string literals (not dynamically constructed strings) reach security-sensitive APIs:
 
@@ -912,81 +934,619 @@ query("SELECT * FROM " + table)    # callables_annotation — not LiteralString
 
 ---
 
-## Conformance Test Coverage {#TYPEINF-CONFORMANCE}
-
-The [Python typing conformance suite](https://github.com/python/typing/tree/main/conformance) is the canonical benchmark. Basilisk targets 100% conformance with every rule enabled (no config, no `basilisk.json`); the reproducible score is measured by the unmodified `python/typing` scorer in CI (`python3 conformance/score.py`). The remaining gap is false positives from strict house-style rules firing on spec-valid code, not missed required errors; the only legitimate fix is teaching the checker to stop firing — never disabling a rule. See [CHKARCH-CONFORMANCE].
-
-Inference-relevant conformance tests:
-
-| Test file | What it verifies |
-|---|---|
-| `generics_basic.py` | TypeVar solving from call arguments |
-| `generics_scoping.py` | TypeVar scope binding |
-| `generics_type_erasure.py` | Generic instantiation inference |
-| `generics_variance_inference.py` | Auto-variance from usage positions (PEP 695) |
-| `generics_self_*.py` | `Self` type in various positions |
-| `generics_defaults.py` | TypeVar defaults (PEP 696) |
-| `annotations_methods.py` | `self`/`cls` inference |
-| `narrowing_typeguard.py` | TypeGuard narrowing (positive branch only) |
-| `narrowing_typeis.py` | TypeIs bidirectional narrowing |
-| `directives_assert_type.py` | Checker must verify inferred types match `assert_type()` |
-| `directives_reveal_type.py` | Checker must emit inferred types via `reveal_type()` |
-| `overloads_evaluation.py` | 5-step overload resolution algorithm |
-| `specialtypes_any.py` | `Any` bidirectional assignability |
-| `specialtypes_never.py` | `Never` / exhaustiveness |
-| `literals_semantics.py` | Literal type subtyping |
-
----
-
-## Distinctive Inference Behaviors {#TYPEINF-EXCEEDS}
+## [TYPEINF-EXCEEDS] Distinctive Inference Behaviors {#TYPEINF-EXCEEDS}
 
 Deliberate, distinctive behaviors of Basilisk's inference engine:
 
-### Conservative `Unknown` Sentinel {#TYPEINF-EXCEEDS-NOUNKNOWN}
+### [TYPEINF-EXCEEDS-NOUNKNOWN] Conservative `Unknown` Sentinel {#TYPEINF-EXCEEDS-NOUNKNOWN}
 
-When syntactic RHS inference cannot determine a type (call expressions, `type(...)` calls, arbitrary expressions, lambda return types — `infer_rhs` in `crates/basilisk-checker/src/inference.rs`), it produces the internal sentinel `InferredType::Unknown` (`crates/basilisk-checker/src/types.rs`). `Unknown` is deliberately conservative: `is_assignable_to` treats it as bidirectionally compatible, and rules that encounter it generally suppress their diagnostic rather than guess — an unprovable mismatch is not reported (precision over recall, per [CHKARCH-CONFORMANCE-MODE]). Two deliberate positive-match exceptions exist where an `Unknown`-typed value still fires E0014 (and the word `Unknown` appears in the message): recursive value-alias matching and `TypeForm` RHS validation in `rules/assignment_compatibility` — there, treating `Unknown` as a non-match keeps genuinely incompatible assignments firing. `Unknown` never substitutes for a *required* annotation: missing annotations remain errors (E0001/E0002, see [TYPEINF-REQUIRED](#TYPEINF-REQUIRED)) and `Any` is never inferred as a fallback ([TYPEINF-SPECIAL-ANY](#TYPEINF-SPECIAL-ANY)).
+When syntactic RHS inference cannot determine a type (call expressions, `type(...)` calls, arbitrary expressions, lambda return types — `infer_rhs` in `crates/basilisk-checker/src/inference.rs`), it produces the internal sentinel `InferredType::Unknown` (`crates/basilisk-checker/src/types.rs`). `Unknown` is deliberately conservative: `is_assignable_to` treats it as bidirectionally compatible, and rules that encounter it generally suppress their diagnostic rather than guess. Recursive value-alias matching and `TypeForm` RHS validation are narrow exceptions that preserve real incompatibility diagnostics. `Unknown` never becomes explicit `Any` and does not alter the separately configured annotation policy.
 
-### Strict Container Inference Always On {#TYPEINF-EXCEEDS-CONTAINERS}
+### [TYPEINF-EXCEEDS-CONTAINERS] Strict Container Inference Always On {#TYPEINF-EXCEEDS-CONTAINERS}
 
 Union-of-element-types inference applies to all containers unconditionally — no loose mode, no switch to disable.
 
-### Exhaustive Pattern Matching Analysis {#TYPEINF-EXCEEDS-EXHAUSTIVE}
+### [TYPEINF-EXCEEDS-EXHAUSTIVE] Exhaustive Pattern Matching Analysis {#TYPEINF-EXCEEDS-EXHAUSTIVE}
 
 `match` statements on union types are checked for exhaustiveness with exact variant coverage.
 
-### Lambda Warnings {#TYPEINF-EXCEEDS-LAMBDA}
+### [TYPEINF-EXCEEDS-LAMBDA] Lambda Warnings {#TYPEINF-EXCEEDS-LAMBDA}
 
-A lambda whose parameter types cannot be inferred from context emits `BSK-W0040` rather than being silently untyped.
+With the `strictness` tag enabled, a module/class variable assigned a lambda without a target
+annotation emits `BSK-0040`. The diagnostic is an annotation nudge, not evidence that lambda
+parameters were otherwise contextually inferred.
 
-### Annotation Required, Not Optional {#TYPEINF-EXCEEDS-REQUIRED}
+### [TYPEINF-EXCEEDS-REQUIRED] Annotation Required Only Where Inference Fails {#TYPEINF-EXCEEDS-REQUIRED}
 
-Every missing annotation is an error; silent inference of public-API types is not permitted.
+When the require-annotation house rules are enabled, missing public-API annotations are
+diagnostics. They are not part of the unconfigured PEP default.
+
+**Inference-first principle:** a missing-annotation rule MUST NOT fire where the
+current engine already infers the type — demanding a type the checker knows is
+redundant noise (and contradicts `BSK-0050`, which flags exactly such
+annotations as redundant). Each rule fires only where inference fails:
+
+| Rule | Exempt (inferable today) | Still fires (not inferable today) |
+|---|---|---|
+| `BSK-0001` (parameter) | `self`/`cls`; type-determining literal default ([TYPEINF-FUNC-DEFAULTS](#TYPEINF-FUNC-DEFAULTS)) | no default; `None`/empty-container/call/lambda default |
+| `BSK-0002` (return) | all returns bare/literal, or no returns → `None` ([TYPEINF-FUNC-RETURN](#TYPEINF-FUNC-RETURN)) | any uninferable return; generators |
+| `BSK-0003` (module var) | any RHS except empty containers / `None` | `[]`, `{}`, `None` |
+| `BSK-0005` (class attr) | scalar/tuple literal RHS | everything else |
+| `BSK-0004` (`*args`/`**kwargs`), `BSK-0040` (lambda) | — (nothing inferable today) | always |
+
+The exemptions are exactly as strong as today's inference and MUST widen as the
+engine grows ([TYPEINF-TARGET](#TYPEINF-TARGET)) — never the reverse.
 
 ---
 
-## Implementation Notes {#TYPEINF-IMPL}
+## [TYPEINF-IMPL] Implementation notes {#TYPEINF-IMPL}
 
-The inference engine lives in the `basilisk-checker` crate as free functions and per-rule visitors, not named engine structs:
+Shared inference lives in `basilisk-checker`:
 
-- `src/inference.rs` — RHS expression inference (`infer_rhs`, [TYPEINF-ALGO])
-- `src/collection_inference.rs` — union-of-element-types container inference ([TYPEINF-COLLECTIONS])
-- `src/types.rs` — the `InferredType` model and `is_assignable_to` ([TYPEINF-SUBTYPING-IMPL](#TYPEINF-SUBTYPING-IMPL))
-- `src/types_parsing.rs` — annotation text → `InferredType`
-- Narrowing, overload resolution, and Literal handling are implemented inside the corresponding conformance rule modules (`rules/narrowing_typeguard.rs`, `rules/narrowing_typeis*.rs`, `rules/overloads_*.rs`, `rules/literals_*`).
+- `inference.rs` — conservative RHS inference.
+- `collection_inference.rs` — collection element joins.
+- `types.rs` and `types_parsing.rs` — `InferredType`, assignability, and
+  annotation parsing.
+- Focused resolver/rule modules — narrowing, overload, Literal, Protocol, and
+  TypedDict behavior.
 
-Incremental computation is currently a content-hash result cache in `basilisk-db` (`crates/basilisk-db`); the Salsa-backed database is planned Phase 2 work — see [CHKARCH-INCREMENTAL-SALSA](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA).
+The LSP analysis path is memoized by the Salsa database described in
+[CHKARCH-INCREMENTAL-SALSA](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA).
+A separate content-addressed cache serves opt-in cross-session CLI reuse.
 
 ---
 
-## References {#TYPEINF-REFS}
+## [TYPEINF-TARGET] Target inference architecture {#TYPEINF-TARGET}
 
-1. [PEP 484 — Type Hints](https://peps.python.org/pep-0484/)
-2. [PEP 526 — Variable Annotations](https://peps.python.org/pep-0526/)
-3. [PEP 695 — Type Parameter Syntax](https://peps.python.org/pep-0695/)
-4. [Python Typing Specification](https://typing.readthedocs.io/en/latest/)
-5. [Python Typing Conformance Suite](https://github.com/python/typing/tree/main/conformance)
-6. [Pyright Type Inference Documentation](https://github.com/microsoft/pyright/blob/main/docs/type-inference.md)
-7. [Pyright Type Concepts (Advanced)](https://github.com/microsoft/pyright/blob/main/docs/type-concepts-advanced.md)
-8. [Pierce & Turner — Local Type Inference (2000)](https://www.cl.cam.ac.uk/~nk480/bidir.pdf)
-9. [mypy — Type Inference and Annotations](https://mypy.readthedocs.io/en/stable/type_inference_and_annotations.html)
-10. [BasedPyright — Type Inference](https://docs.basedpyright.com/v1.38.0/usage/type-inference/)
+This section specifies the design of the next-generation inference engine.
+The current conservative core ([TYPEINF-ALGO](#TYPEINF-ALGO)) is superseded by
+this design; delivery is staged in
+[NARROWPLAN-INFERENCE](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-INFERENCE).
+The design is oriented toward
+[PEP 827 – Type Manipulation](https://peps.python.org/pep-0827/) — the engine
+must be powerful enough to host PEP 827-style conditional/mapped types — but
+implementing PEP 827 itself is out of scope; only the inference-engine
+groundwork is specified here. Every claim below is grounded in the research
+survey in [TYPEINF-RESEARCH](#TYPEINF-RESEARCH). The outcome requirement —
+inference measurably superior to every officially-recognized competitor,
+proven and held by a self-measured ratcheted scoreboard — is defined in
+[NARROWPLAN-SUPERIORITY](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUPERIORITY).
+
+### [TYPEINF-TARGET-BIDIRECTIONAL] Bidirectional core {#TYPEINF-TARGET-BIDIRECTIONAL}
+
+Bidirectional typing (Pierce–Turner *Local Type Inference*;
+Dunfield–Krishnaswami survey — see
+[TYPEINF-RESEARCH-THEORY](#TYPEINF-RESEARCH-THEORY)) is the backbone, layered
+over a subtyping-constraint solver rather than global Hindley–Milner. The
+Stage 0 engine exposes two total entry points (unsupported shapes return
+`Unknown` rather than panicking):
+
+- `synth(e) → τ` — *synthesis*: infer a type bottom-up;
+- `check(e, τ)` — *checking*: verify against an expected type propagated
+  top-down.
+
+`check` currently propagates expected types into supported container literals,
+comprehensions, lambda parameters, and known call arguments. General
+higher-order/generic propagation remains a later stage.
+This is deliberately where Basilisk aims to beat Pyrefly, whose context
+propagation is heuristic ("take one peek ahead"), and ty, which only recently
+added outside-in inference (see
+[TYPEINF-RESEARCH-COMPETITORS](#TYPEINF-RESEARCH-COMPETITORS)).
+
+### [TYPEINF-TARGET-CONSTRAINTS] Constraint architecture {#TYPEINF-TARGET-CONSTRAINTS}
+
+A **two-stage constraint architecture** (Pottier–Rémy) is implemented for the
+Stage 0 expression engine: a
+constraint-generation pass over the AST produces subtype constraints
+(`τ₁ <: τ₂`), and a separate solver resolves them.
+
+- Type variables are **bounded and polar**: each carries explicit lower/upper
+  bounds (like Pyright's type intervals and Pyrefly's `Var`), with the
+  input/output polarity discipline borrowed from Dolan's algebraic subtyping
+  and Parreaux's Simple-sub — **without** committing to full biunification
+  (see [TYPEINF-RESEARCH-THEORY](#TYPEINF-RESEARCH-THEORY) and the transfer
+  risk noted there).
+- **Generalization is deferred**: infer `list[Var{lower=Literal[1]}]` and
+  settle `Var` only at first constraining use. This preserves
+  literal/generic precision (`list[int]` vs `list[Literal[1]]`) instead of
+  Pyrefly's eager `Literal[1] → int` widening, while staying
+  gradual-guarantee-safe.
+
+### [TYPEINF-TARGET-GRADUAL] Gradual guarantee {#TYPEINF-TARGET-GRADUAL}
+
+The gradual guarantee (Siek, Vitousek, Cimini, Boyland, *Refined Criteria for
+Gradual Typing* — see [TYPEINF-RESEARCH-GRADUAL](#TYPEINF-RESEARCH-GRADUAL))
+is an explicit, testable invariant: consistency (`~`) replaces subtyping where
+`Any` is involved, and **removing an annotation must never introduce a new
+static error**. This forbids inferring over-precise types from unannotated
+code (Pyrefly's known risk) and is enforced by a differential test suite that
+strips annotations and asserts no new errors. This matches ty's design
+position and composes with the conservative-`Unknown` behavior in
+[TYPEINF-EXCEEDS-NOUNKNOWN](#TYPEINF-EXCEEDS-NOUNKNOWN).
+
+### [TYPEINF-TARGET-NARROWING] Flow-sensitive narrowing {#TYPEINF-TARGET-NARROWING}
+
+The current flow engine uses intersection/subtraction over a modeled set of
+guards documented in [TYPEINF-NARROWING](#TYPEINF-NARROWING). A future stage
+extends this into occurrence typing (Tobin-Hochstadt–Felleisen; Castagna et
+al.) over a Salsa-backed use-def map with `phi`/join operators, synthetic
+protocol intersections for `hasattr`, and inference-driven reachability.
+
+#### [TYPEINF-NARROWING-ATTR-CALLS] Attribute narrowing across calls {#TYPEINF-NARROWING-ATTR-CALLS}
+
+**Decision (Stage 2):** attribute narrowing (`if x.attr is not None:`)
+**survives intervening calls by default.** Any call *could* re-enter and
+mutate the attribute, so this default is deliberately unsound — but treating
+every call as an invalidation discards nearly every attribute narrow in real
+code, which is why the usable behavior is the ecosystem norm. Projects that
+want the sound-but-strict behavior set
+`narrow-attributes-across-calls = false` under `[tool.basilisk]`
+(`BasiliskConfig::narrow_attributes_across_calls`; `None`/unset means the
+usable default `true`). The knob is parsed and preserved by configuration now.
+Attribute narrowing itself is not implemented, so no checker path consults the
+knob yet; Stage 2 must wire it at every future attribute-narrowing application.
+
+### [TYPEINF-TARGET-INCREMENTAL] Incrementality {#TYPEINF-TARGET-INCREMENTAL}
+
+Definition-level Salsa queries are implemented. Expression-level tracked
+queries, a compact cross-file interface/signature boundary, and cycle fixpoint
+iteration are target work; they are not claimed by the current implementation.
+If fine-grained queries cause memory blowup on large targets, AST/binding
+eviction (keep only interfaces) sits behind the query layer — see the threshold in
+[NARROWPLAN-STAGES](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-STAGES).
+
+### [TYPEINF-TARGET-TYPELEVEL] Type-level evaluation (PEP 827 readiness) {#TYPEINF-TARGET-TYPELEVEL}
+
+`tyeval.rs` implements isolated Stage 3 groundwork: a bounded, memoized,
+call-by-need evaluator for ground/alias/parameter/list/tuple/union terms with a
+gradual `Divergent` fallback and guarded-recursion acceptance. It is not wired
+into annotation resolution and does not yet implement conditional or mapped
+types. The target extension is constrained as follows.
+
+Type-level computation with conditional/mapped types is Turing-complete
+territory (proven for both TypeScript and Python type hints — see
+[TYPEINF-RESEARCH-TYPELEVEL](#TYPEINF-RESEARCH-TYPELEVEL)), so the only safe
+engineering path is **bounded evaluation**: a call-by-need
+normalization-by-evaluation engine over type-level functions, built as
+memoized Salsa queries returning types in weak-head normal form (whnf), with:
+
+- **fuel/depth bounds** (TypeScript's instantiation-depth model);
+- **memoization** of normalized results;
+- a **`Divergent`/`@Todo`-style fallback** that preserves the gradual
+  guarantee when evaluation is truncated;
+- **GHC-style acceptance conditions** (Paterson/Coverage analogues) that
+  statically reject obviously-nonterminating type-level definitions, with an
+  opt-in "undecidable" escape hatch.
+
+Mapped types are **kind `Type → Type` operators**; conditional types are
+guarded rewrites keyed on a consistency/assignability check (`IsAssignable`
+in PEP 827), evaluated lazily so unused branches never diverge. Because
+bounded evaluation cannot be complete, some legitimate type-level programs
+will hit the bound — an inherent limitation, not an implementation gap.
+
+---
+
+## Research grounding (non-normative) {#TYPEINF-RESEARCH}
+
+The literature survey and competitor analysis behind
+[TYPEINF-TARGET](#TYPEINF-TARGET).
+
+### Key findings {#TYPEINF-RESEARCH-FINDINGS}
+
+1. **Global HM/Algorithm W is the wrong foundation for Python.** Damas–Milner
+   inference relies on unification (equational constraints) and
+   let-generalization, and it does not natively accommodate subtyping,
+   mutation (the value restriction problem), or gradual `Any`. Python has all
+   three. Every serious Python checker (Pyright, mypy, Pyrefly, ty) instead
+   uses **bidirectional checking plus local subtype-constraint solving**. Neil
+   Mitchell (Pyrefly) explicitly contrasts Python's origin with "let's pick a
+   really nice structure like Hindley-Milner"; Python "grafts types back onto"
+   existing programs, so subtype constraints, not unification, are the core.
+
+2. **Bidirectionality is the consensus architecture, and it is where inference
+   quality is won or lost.** Pierce & Turner introduced local type inference
+   with two modes — *synthesis* (infer a type bottom-up) and *checking*
+   (verify against an expected type propagated top-down). Pyright, Pyrefly,
+   and ty all use it. Crucially, ty only recently added bidirectional
+   ("outside-in") inference — for most of its life it did pure "inside-out"
+   inference — and Pyrefly's context propagation is present but heuristic
+   ("take one peek ahead"). This is Basilisk's single biggest opportunity.
+
+3. **Algebraic subtyping (MLsub / Dolan–Mycroft; Parreaux's Simple-sub) is the
+   state of the art for inference *with* subtyping** and is directly relevant,
+   but adopting it wholesale for Python is risky. It gives principal types and
+   compact type simplification via biunification and polar (input/output)
+   types, and Parreaux's Simple-sub "can be implemented efficiently in under
+   500 lines of code (including parsing, simplification, and pretty-printing)"
+   (Parreaux, ICFP 2020, <https://doi.org/10.1145/3409006>). However, Python's
+   nominal classes, invariant generics, overloads, and gradual `Any` do not
+   map cleanly onto MLsub's structural, fully-inferred model. The
+   recommendation is to **borrow its ideas (polar types, bounded type
+   variables, constraint simplification) selectively** rather than commit to
+   full biunification.
+
+4. **Pyrefly's concrete design is now well-documented and beatable on specific
+   axes.** Pyrefly compiles each file through six phases (Code → AST → Exports
+   → Bindings → Answers → Interface), works at **file-level** incremental
+   granularity (not expression/definition level), uses subtype constraints
+   with unification variables ("Vars") and cycle-breaking thunks, and
+   deliberately chooses **usability over soundness** (e.g., it allows
+   attribute narrowing across function calls that Pyre rejected). Its
+   inference is "aggressive": it infers concrete unions in unannotated code
+   and reports errors there, at the cost of false positives. Pyrefly's
+   official site advertises type checking "over 1.85 million lines of code per
+   second" (tested on Meta infrastructure, 166 cores / 228 GB RAM), and Meta
+   reports re-checking Instagram's ~20M-line codebase in ~13.4 seconds — in
+   Mitchell's words, "projects that used to take 14 minutes to type check that
+   are now down to more like five seconds."
+
+5. **ty (Astral) is the philosophical opposite and the more sophisticated
+   incremental engine.** ty is built on **Salsa with fine-grained,
+   multi-granularity queries** (scope-, definition-, expression-, and
+   statement-level), uses **fixpoint iteration with a `Divergent` type** for
+   recursive cycles, models types as a single `Type` enum with a nested
+   `DynamicType` (Any/Unknown/Todo/Divergent), has **first-class intersection
+   types** driving narrowing, does **reachability analysis based on type
+   inference** (not pattern matching), and enforces the **gradual guarantee**.
+   Its generics use an explicit constraint solver
+   (`SpecializationBuilder`/`ConstraintSetBuilder`). Astral reports that
+   "after editing a load-bearing file in the PyTorch repository, ty recomputes
+   diagnostics in 4.7ms: 80x faster than Pyright (386ms) and 500x faster than
+   Pyrefly (2.38 seconds)."
+
+6. **Type-level computation is provably unbounded.** TypeScript's type system
+   is Turing-complete (Microsoft/TypeScript issue #14833), and Python's type
+   hints are Turing-complete: Ori Roth (arXiv:2208.14755, submitted 31 Aug
+   2022; published ECOOP 2023, LIPIcs vol. 263, pp. 44:1–44:15) states,
+   "Grigore showed that Java generics are Turing complete by describing a
+   reduction from Turing machines to Java subtyping. We apply Grigore's
+   algorithm to Python type hints and deduce that they are Turing complete."
+   PEP 827 explicitly models conditional/mapped types on TypeScript. Therefore
+   Basilisk's type-level evaluator must be a bounded normalizer. The proven
+   engineering strategies come from Haskell type classes (GHC's Paterson
+   Conditions and Coverage Condition ensuring instance-resolution termination,
+   relaxed by `UndecidableInstances`) and from checkers' recursion/fuel
+   limits.
+
+7. **The gradual guarantee is a precise, mechanizable specification** (Siek,
+   Vitousek, Cimini, Boyland, SNAPL 2015): consistency (`~`) replaces
+   subtyping where `Any` is involved, and adding precision to annotations must
+   never turn a well-typed program ill-typed (static guarantee) nor change its
+   behavior except to surface errors (dynamic guarantee). ty treats this as a
+   design invariant; Basilisk should encode it as a differential test suite.
+
+### Foundational type-inference theory {#TYPEINF-RESEARCH-THEORY}
+
+**Hindley–Milner / Algorithm W.**
+
+- Robin Milner, "A Theory of Type Polymorphism in Programming," *JCSS* 17(3),
+  1978. Introduces Algorithm W and unification-based let-polymorphism.
+- Luis Damas & Robin Milner, "Principal Type-Schemes for Functional Programs,"
+  POPL 1982, pp. 207–212. <https://doi.org/10.1145/582153.582176> —
+  establishes principal types for the HM system.
+
+Why HM is a poor global fit for Python: (a) **Subtyping.** HM unification
+solves *equality* constraints (`τ₁ = τ₂`); subtyping requires *inequality*
+constraints (`τ₁ <: τ₂`) with upper/lower bounds, which unification cannot
+express without extension. Adding subtyping to HM is a decades-long research
+problem (Aiken & Wimmers 1993; Fuh & Mishra 1988; Mitchell 1991; Pottier 2001;
+Dolan & Mycroft 2017). (b) **Mutation.** Let-generalization is unsound with
+mutable references (the value restriction); Python is pervasively mutable, and
+invariant containers (`list[T]`) make naive generalization wrong — exactly the
+`list[Literal[1]]` vs `list[int]` problem Pyrefly demonstrates. (c) **Gradual
+types.** `Any` is neither a top nor bottom type under subtyping; it
+participates in *consistency*, not subtyping, so it cannot be modeled as an HM
+type variable.
+
+**Bidirectional typing.**
+
+- Benjamin C. Pierce & David N. Turner, "Local Type Inference," POPL 1998,
+  pp. 252–265 (<https://doi.org/10.1145/268946.268967>); full version *ACM
+  TOPLAS* 22(1):1–44, Jan 2000 (<https://doi.org/10.1145/345099.345100>).
+  PDF: <https://www.cis.upenn.edu/~bcpierce/papers/lti-toplas.pdf>. Recovers
+  annotations using only *locally* adjacent syntax-tree information; solves
+  type arguments in applications via a local constraint solver over
+  upper/lower bounds, and propagates expected types downward into
+  abstractions.
+- Jana Dunfield & Neel Krishnaswami, "Bidirectional Typing," *ACM Computing
+  Surveys* 54(5), Article 98, May 2021, 38 pp.
+  <https://doi.org/10.1145/3450952>. The canonical survey: *checking* mode
+  supports features whose full inference is undecidable; *synthesis* reduces
+  annotation burden; the split improves **error locality**. Documents the
+  "Pfenning recipe" for deriving bidirectional rules.
+- Jana Dunfield & Neelakantan R. Krishnaswami, "Complete and Easy
+  Bidirectional Typechecking for Higher-Rank Polymorphism," ICFP 2013,
+  pp. 429–442. <https://doi.org/10.1145/2500365.2500582>. Shows how a small,
+  implementable bidirectional algorithm with ordered existential-variable
+  contexts scales to higher-rank (rank-N) polymorphism — directly relevant to
+  Python's `Callable`/`ParamSpec` higher-order types.
+
+**Constraint-based inference.**
+
+- Martin Odersky, Martin Sulzmann & Martin Wehr, "Type Inference with
+  Constrained Types" (HM(X)), *Theory and Practice of Object Systems*
+  5(1):35–55, 1999. Parameterizes HM over a constraint domain X (subtyping,
+  records, type classes).
+- François Pottier & Didier Rémy, "The Essence of ML Type Inference,"
+  Chapter 10 of *Advanced Topics in Types and Programming Languages*
+  (B. Pierce, ed.), MIT Press, 2005, pp. 389–489.
+  PDF: <http://gallium.inria.fr/~fpottier/publis/emlti-final.pdf>. The
+  definitive treatment of **constraint generation + constraint solving as a
+  two-stage architecture**, with a built-in binary subtyping predicate `≤`.
+  This two-stage separation (generate constraints in one AST pass, solve
+  separately) is the architecture Basilisk adopts
+  ([TYPEINF-TARGET-CONSTRAINTS](#TYPEINF-TARGET-CONSTRAINTS)).
+- Stephen Dolan, "Algebraic Subtyping," PhD dissertation, University of
+  Cambridge, 2017. And Stephen Dolan & Alan Mycroft, "Polymorphism, Subtyping,
+  and Type Inference in MLsub," POPL 2017, pp. 60–72.
+  <https://doi.org/10.1145/3009837.3009882>. Combines subtyping with ML
+  polymorphism while keeping **principal types** and compact types, via
+  **biunification** over **polar types** (strict separation of input/output
+  types) and type simplification exploiting connections to regular-language
+  algebra.
+- Lionel Parreaux, "The Simple Essence of Algebraic Subtyping: Principal Type
+  Inference with Subtyping Made Easy (Functional Pearl)," *PACMPL* 4(ICFP),
+  Article 124, Aug 2020, 28 pp. <https://doi.org/10.1145/3409006>.
+  PDF: <https://infoscience.epfl.ch/record/278576>. Reformulates MLsub as
+  **Simple-sub**, "implemented efficiently in under 500 lines of code
+  (including parsing, simplification, and pretty-printing)," without
+  bisubstitution/abstract algebra — the practical entry point if Basilisk
+  adopts algebraic-subtyping ideas. Follow-on work extends it (MLstruct,
+  OOPSLA 2022, for a Boolean algebra of structural types; "When Subtyping
+  Constraints Liberate," POPL 2024, for first-class polymorphism).
+
+### Inference for dynamic and gradual languages {#TYPEINF-RESEARCH-GRADUAL}
+
+- Jeremy G. Siek & Walid Taha, "Gradual Typing for Functional Languages,"
+  Scheme and Functional Programming Workshop, 2006, pp. 81–92. Introduces the
+  **consistency relation** (`~`) and the gradually typed lambda calculus
+  (GTLC): `Any` (written `?`/`⋆`) is consistent with every type but subtyping
+  is not transitive through it.
+- Jeremy G. Siek, Michael M. Vitousek, Matteo Cimini & John Tang Boyland,
+  "Refined Criteria for Gradual Typing," SNAPL 2015, LIPIcs vol. 32,
+  pp. 274–293. <https://doi.org/10.4230/LIPIcs.SNAPL.2015.274>. Defines the
+  **gradual guarantee** (static + dynamic). Consistency-vs-subtyping
+  distinction: a gradual type system replaces `<:` with consistency `~` (or
+  "consistent subtyping"), so `int ~ Any` and `Any ~ str` but `int` is not
+  `~` `str`. For an inference engine, the guarantee demands: **removing an
+  annotation must never introduce a new static error**, which forbids
+  inferring over-precise types from unannotated code (exactly Pyrefly's
+  risk).
+- Sam Tobin-Hochstadt & Matthias Felleisen, "Logical Types for Untyped
+  Languages," ICFP 2010, pp. 117–128.
+  <https://doi.org/10.1145/1863543.1863561>.
+  PDF: <https://www2.ccs.neu.edu/racket/pubs/icfp10-thf.pdf>. Formalizes
+  **occurrence typing**: predicates in test positions (`isinstance`,
+  `is None`) produce *propositions* about variables that refine types in each
+  control-flow branch. Foundational for Typed Racket and for all Python
+  narrowing. Newer line: Giuseppe Castagna et al., "On type-cases, union
+  elimination, and occurrence typing," *PACMPL* 2022,
+  <https://doi.org/10.1145/3498674>, and "Revisiting occurrence typing,"
+  *Sci. Comput. Program.* 2022, recast narrowing via set-theoretic
+  union/intersection/negation types — the same intersection-based approach ty
+  uses.
+- Tobias Lindahl & Konstantinos Sagonas, "Practical Type Inference Based on
+  Success Typings," PPDP 2006, pp. 167–178.
+  <https://doi.org/10.1145/1140335.1140356>. The **"never wrong" philosophy**:
+  success typings over-approximate the set of terms that *can* succeed, so the
+  tool (Dialyzer) reports only *definite* errors — no false positives. This is
+  the correct model for the *optional/gradual* subset of Basilisk's
+  diagnostics: report an error only when *no* instantiation could succeed.
+- Python-specific / dynamic-language inference context: Giuseppe Castagna,
+  Mickaël Laurent & Kim Nguyễn, "Polymorphic Type Inference for Dynamic
+  Languages," *PACMPL* 8(POPL):1179–1210, 2024,
+  <https://doi.org/10.1145/3632882>
+  (arXiv: <https://arxiv.org/pdf/2311.10426>). ML-based inference (Typilus,
+  TypeWriter) is tangential and not recommended as an architecture.
+
+### Type-level computation, conditional/mapped types, decidability {#TYPEINF-RESEARCH-TYPELEVEL}
+
+- **PEP 827 – Type Manipulation** (<https://peps.python.org/pep-0827/>)
+  proposes type-level introspection and construction "inspired largely by
+  TypeScript's conditional and mapped types," using `typing.IsAssignable`,
+  "Type Booleans," conditional type expressions, and a `RaiseError` primitive
+  for custom compile-time errors. It is intended to be **fully statically
+  checkable** (a mypy proof-of-concept is referenced). The Vercel write-up
+  "Advancing Python typing"
+  (<https://vercel.com/blog/advancing-python-typing>) frames it as giving
+  Python "a programmable core."
+- **Turing-completeness / undecidability.** "TypeScript's Type System is
+  Turing Complete," microsoft/TypeScript issue #14833
+  (<https://github.com/microsoft/TypeScript/issues/14833>). Ori Roth, "Python
+  Type Hints are Turing Complete," arXiv:2208.14755, 2022
+  (<https://arxiv.org/pdf/2208.14755>; ECOOP 2023, LIPIcs vol. 263,
+  pp. 44:1–44:15) — proves it via nominal subtyping with variance (building on
+  Grigore, "Java Generics are Turing Complete," POPL 2017). Consequence:
+  **type-level evaluation cannot be both complete and guaranteed-terminating**;
+  Basilisk must bound it.
+- **Termination strategies from Haskell type classes.** GHC User's Guide
+  §6.8.8, "Instance declarations and resolution"
+  (<https://downloads.haskell.org/~ghc/9.2.8/docs/html/users_guide/exts/instances.html>):
+  the **Paterson Conditions** (each constraint must have no type variable
+  occurring more often than in the head, must have strictly fewer
+  constructors+variables than the head, and must mention no type functions)
+  plus the **Coverage Condition** ensure instance resolution terminates;
+  `UndecidableInstances` lifts these and can loop. This is the model for
+  bounding conditional-type recursion.
+- **Higher-kinded types / type operators.** Mapped types are type-level
+  functions (kind `Type → Type`), i.e., System Fω operators. Evaluating them
+  requires **normalization to weak-head normal form (whnf)**; decidability of
+  Fω type equality rests on strong normalization of the type-operator
+  calculus, which the general recursive PEP 827 setting does *not* enjoy —
+  hence bounded evaluation.
+- **Practical fast+terminating strategies:** memoization of normalized types
+  (Salsa queries are ideal), depth/fuel limits (TypeScript caps instantiation
+  depth and type-instantiation count; ty falls back to a widened type "after a
+  certain number of iterations"), and normalization to whnf with structural
+  caching. ty's `Divergent` type is exactly this fallback made explicit.
+
+### How existing Python checkers do inference {#TYPEINF-RESEARCH-COMPETITORS}
+
+**Pyrefly (Meta, Rust, MIT).**
+
+- Announcement: "Introducing Pyrefly," Engineering at Meta, 15 May 2025
+  (<https://engineering.fb.com/2025/05/15/developer-tools/introducing-pyrefly-a-new-type-checker-and-ide-experience-for-python/>).
+  Clean-slate successor to OCaml Pyre; aggressive inference of returns and
+  local variables.
+- Design detail (authoritative): Neil Mitchell, "Pyrefly: Type Checking 1.8
+  Million Lines of Python Per Second," Jane Street Tech Talk
+  (<https://www.janestreet.com/tech-talks/pyrefly/>). Six-phase per-file
+  pipeline: **Code → AST → Exports → Bindings → Answers → Interface**. The
+  **Bindings** phase desugars all control flow into a key→value map (with
+  `phi` join operators for control-flow merges and narrowing operators),
+  effectively a DSL for type checking. The **Answers** phase solves
+  per-binding, special-casing every Python type; recursion and generics are
+  handled with **`Var`** unification variables and **thunks** for cycles.
+  Incrementality is **file-level** ("if you press a keystroke, we invalidate
+  that entire file"); cycles up to depth 5 are re-checked incrementally before
+  falling back to whole-cycle invalidation. Constraint solving is "almost
+  always this type must be a subtype of this type," with unions making it "a
+  bit tricky"; Mitchell notes intersection types would push toward "SAT
+  solving" for subset checks. On the `x=[]; x.append(1)` example, Pyrefly
+  peeks one use ahead and infers `list[int]`, generalizing `Literal[1]` to
+  `int` before it enters an invariant container.
+- "Lessons from Pyre that Shaped Pyrefly," 18 Mar 2026
+  (<https://pyrefly.org/blog/lessons-from-pyre/>): Pyrefly's engine "embraces
+  cycles" with cycle detection + fixpoint resolution (Pyre's acyclic-phase
+  rule forced MRO recomputation); Pyrefly "chose usability over absolute
+  soundness," notably allowing attribute narrowing (`isinstance(c.x, int)`)
+  to survive an intervening function call that Pyre rejected as potentially
+  mutating.
+- Pyrefly team notes module-level (file) incrementality was chosen because it
+  "is already fast enough in Rust" and fine-grained is "much more complex" for
+  "minimal performance improvements" (Edward Li, PyCon 2025 Typing Summit
+  notes: <https://blog.edward-li.com/tech/comparing-pyrefly-vs-ty/>). Pyrefly
+  does **not** use Salsa; it keeps manual control over memory eviction
+  (<https://pyrefly.org/blog/speed-and-memory-comparison/>).
+- **Inference strengths:** aggressive whole-program-ish inference of
+  unannotated returns/locals (catches `None * 2` in untyped code), strong
+  generics/overloads/ParamSpec support (they "focused on hard problems
+  first"), higher typing-spec conformance than ty. **Weaknesses:** file-level
+  invalidation limits IDE incrementality granularity; heuristic ("peek one
+  ahead") context propagation rather than principled bidirectional checking;
+  usability-over-soundness introduces false negatives; aggressive inference
+  produces false positives that violate the gradual guarantee.
+
+**ty / red-knot (Astral, Rust, MIT).**
+
+- Built on **Salsa with fine-grained multi-granularity queries**:
+  `infer_scope_types`, `infer_definition_types`, `infer_expression_types`, and
+  statement-level inference are each memoized tracked queries (DeepWiki,
+  <https://deepwiki.com/astral-sh/ruff/5.2-type-inference-engine>, citing
+  `crates/ty_python_semantic/src/types/infer.rs`). Carl Meyer: "if you just
+  change one part of one file, Salsa can just flow that change through the
+  graph of queries and figure out exactly which queries…need to
+  re-execute…very fine-grained incrementality" (Talk Python #506,
+  <https://talkpython.fm/episodes/show/506/>). Astral reports 4.7ms recompute
+  after editing a load-bearing PyTorch file (astral.sh/blog/ty).
+- **Cycles:** fixpoint iteration seeded with a `Divergent` type until
+  convergence; falls back to a widened type after a bounded number of
+  iterations (ty docs: <https://docs.astral.sh/ty/features/type-system/>).
+- **Type representation:** single `Type<'db>` enum; dynamic types are a nested
+  `DynamicType` enum — `Any` (explicit), `Unknown` (implicit/inferred gap),
+  `Todo` (unimplemented feature), `Divergent` (non-converging recursion)
+  (ty Typing FAQ: <https://docs.astral.sh/ty/reference/typing-faq/>).
+  **First-class intersection types** with negation drive narrowing
+  (`isinstance` → `A & B`; `hasattr` → intersection with a synthetic
+  protocol).
+- **Reachability analysis is based on type inference** (Kleene/ternary
+  logic), not pattern-matching known idioms, letting ty prune unreachable
+  branches far more generally (ty docs).
+- **Bidirectional inference** was added via `TypeContext` after living for a
+  long time as pure "inside-out" inference; ty issue #168
+  (<https://github.com/astral-sh/ty/issues/168>) records the motivation and
+  Carl Meyer's judgment that type context is needed "to apply contextual
+  constraints that will help the generic solver find better solutions."
+  **Generics** use an explicit constraint solver (`SpecializationBuilder` +
+  `ConstraintSetBuilder`), with PEP 695 variance inference.
+- **Gradual guarantee** is a core design invariant ("adding type annotations
+  to working code never introduces new errors"); ty infers `Unknown` (not a
+  concrete type) for unannotated symbols and does not error on them. This is
+  the deliberate opposite of Pyrefly.
+- Astral reports ty is "consistently between 10x and 60x faster than mypy and
+  Pyright" without caching (astral.sh/blog/ty).
+- **Strengths:** best-in-class incrementality, principled gradual guarantee,
+  intersection types, inference-driven reachability. **Weaknesses:** lower
+  spec conformance than Pyrefly — roughly 15% for ty vs ~58% for Pyrefly on
+  the typing-spec conformance suite as of March 2026 (Pyrefly
+  typing-conformance comparison, via byteiota); some permissive behaviors
+  (e.g., `list.append` after inferred empty-container) are acknowledged
+  inference *limitations*, not intended design (per the ty team, via Edward
+  Li).
+
+**Pyright (Microsoft, TypeScript).**
+
+- Uses bidirectional inference ("bidirectional type inference is used to
+  determine the types of the argument expressions") and code-flow-based
+  **type narrowing / type guards**, documented in
+  `pyright/docs/type-concepts-advanced.md`
+  (<https://github.com/microsoft/pyright/blob/main/docs/type-concepts-advanced.md>):
+  narrowing on `isinstance`, `is None`, truthiness, discriminated unions, and
+  "narrowing for implied else" (limited to declared-type names for
+  performance). User-defined type guards: PEP 647 (`TypeGuard`, Eric Traut,
+  <https://peps.python.org/pep-0647/>), PEP 724 (stricter guards, withdrawn),
+  PEP 742 (`TypeIs`). Eric Traut's constraint solver for generics uses **type
+  intervals** (lower/upper bounds) with join at downward and meet at upward
+  inference directions (US patent filings describe the algorithm).
+  **Strength:** mature, high-conformance bidirectional inference and the
+  richest narrowing. **Weakness:** TypeScript implementation is not the
+  fastest; not Salsa-incremental.
+
+**mypy.**
+
+- Uses bidirectional checking with **join/meet** operations on the type
+  lattice and constraint solving for generics. Known limitation: join-based
+  inference "discards valuable type information and leads to many false
+  positives" (basedpyright's mypy comparison,
+  <https://docs.basedpyright.com/v1.25.0/usage/mypy-comparison/>); e.g.,
+  `isinstance` chains widen to `object`. Constraint inference for unions of
+  nested generics is incomplete (python/mypy#9435). Narrowing documented at
+  <https://mypy.readthedocs.io/en/latest/type_narrowing.html>. **Strength:**
+  reference semantics, mature. **Weakness:** slow, join-induced imprecision,
+  weaker bidirectional context propagation.
+
+**Inference-quality scorecard (where each is strong/weak):** generic
+inference — Pyright/Pyrefly strong, mypy weak (join loss), ty improving via
+constraint solver; literal inference — Pyright/Pyrefly strong; narrowing —
+Pyright richest, ty most principled (intersections), Pyrefly good, mypy
+join-limited; comprehensions/lambdas — all weak without bidirectional context
+(ty's `TypeContext` targets lambdas first); higher-order/`ParamSpec` — Pyrefly
+strongest; bidirectional context propagation — Pyright most complete, Pyrefly
+heuristic, ty catching up.
+
+**Source-quality note.** Competitor performance numbers (Pyrefly's "1.85M
+LOC/s" on 166-core Meta infrastructure; ty's "4.7ms" recompute and "10–60x
+faster than mypy/Pyright"; the ~58% vs ~15% conformance gap) are
+vendor/benchmark claims, not independently audited, and several figures come
+from 2026 vendor blogs and a community handbook (pydevtools); treat
+comparative percentages as directional. The DeepWiki ty internals are
+AI-generated but cite exact source files in astral-sh/ruff and should be
+verified against a pinned commit before being quoted further.
+
+### Incremental / demand-driven architecture {#TYPEINF-RESEARCH-INCREMENTAL}
+
+- **Salsa** (<https://github.com/salsa-rs/salsa>): "define your program as a
+  set of queries," inputs + memoized pure functions; recomputes on demand with
+  **early cutoff** when a recomputed query's result is unchanged. Used by
+  rust-analyzer and chalk. Architecture: rust-analyzer dev docs
+  (<https://github.com/rust-lang/rust-analyzer/blob/master/docs/dev/architecture.md>)
+  and "Durable Incrementality"
+  (<https://rust-analyzer.github.io/blog/2023/07/24/durable-incrementality.html>)
+  — a global revision counter, forward flooding to check dependencies,
+  backward flooding on change, with a **durability** system so
+  standard-library queries aren't rechecked on every keystroke.
+- Niko Matsakis, "Responsive Compilers," PLISS 2019 — the motivating talk for
+  demand-driven, incremental, query-based compiler architecture (referenced
+  widely, e.g., <https://rustc-dev-guide.rust-lang.org/queries/salsa.html>).
+- **The central tension:** whole-program/global inference conflicts with
+  incrementality. Every inferred type that depends on a distant call site
+  becomes a cross-file Salsa dependency, so a change invalidates a large query
+  subgraph. Pyrefly resolves this by (a) file-level granularity and (b)
+  computing a compact **Interface** (exported types only) that "shields"
+  downstream files. ty resolves it by fine-grained queries + Salsa early
+  cutoff + durability. Both compute a stable per-module *signature* boundary
+  so that intra-file changes don't cascade. Research: incremental type
+  checking via Salsa-style memoization is the de facto standard; Roslyn's
+  **red-green trees** (immutable "green" nodes + positioned "red" facades) are
+  the parallel technique in the C# compiler for incremental, persistent
+  syntax.

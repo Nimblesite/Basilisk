@@ -5,9 +5,10 @@
 Static docs (README.md, README.zh.md, the checker-architecture spec) quote the
 conformance score and the exact `python/typing` commit it was measured against.
 Those drift as the checker improves and `main` advances. This generator reads
-`website/src/_data/conformance_report.json` — written by `conformance/score.py`
-on every run — and refreshes the quoted values in place, so the docs can never
-silently contradict the self-measured number.
+`website/src/_data/conformance_report.json` — written by
+`conformance/run_conformance.py` on every run from the REAL python/typing harness
+output — and refreshes the quoted values in place, so the docs can never silently
+contradict the self-measured number.
 
 It updates two kinds of spot, both render-safe (the markers are invisible HTML
 comments, so they work mid-sentence, inside a list item, or inside a table cell):
@@ -28,17 +29,19 @@ import re
 import sys
 from pathlib import Path
 
+import gen_readmes
+
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / "website" / "src" / "_data" / "conformance_report.json"
 BENCH_STATUS_DIR = ROOT / "benchmarks" / "status"
+# Every published README quotes the same score, but only ONE file per language
+# is authored: the READMEs are generated from these sources ([README]), so the
+# markers are stamped here and `gen_readmes.py` propagates them to GitHub, the
+# VSIX (Marketplace + Open VSX), and PyPI.
 TARGETS = (
-    ROOT / "README.md",
-    ROOT / "README.zh.md",
+    ROOT / "docs" / "readme" / "README.src.md",
+    ROOT / "docs" / "readme" / "README.zh.src.md",
     ROOT / "docs" / "specs" / "CHECKER-ARCHITECTURE-SPEC.md",
-    # The VS Code marketplace READMEs boast the same score — keep them in lock
-    # step so the published listing can never quote a stale number.
-    ROOT / "vscode-extension" / "README.md",
-    ROOT / "vscode-extension" / "README.zh.md",
 )
 
 # The checkers whose median cold time the README bench table quotes. Key is the
@@ -167,7 +170,7 @@ def main(argv: list[str]) -> int:
     check = "--check" in argv
     if not REPORT.exists():
         print(
-            f"  ✗ {REPORT.relative_to(ROOT)} not found — run conformance/score.py first",
+            f"  ✗ {REPORT.relative_to(ROOT)} not found — run conformance/run_conformance.py first",
             file=sys.stderr,
         )
         return 1
@@ -199,7 +202,9 @@ def main(argv: list[str]) -> int:
                 print(f"    - {path.relative_to(ROOT)}", file=sys.stderr)
             return 1
         print("  conformance docs up to date.")
-        return 0
+        # A stamped source is only half the contract — the generated READMEs
+        # must carry the same figures ([README-STAMPED]).
+        return gen_readmes.main(["gen_readmes.py", "--check"])
 
     if stale:
         print(f"  Stamped conformance {vals['score']} (commit {vals['short']}) into:")
@@ -207,7 +212,9 @@ def main(argv: list[str]) -> int:
             print(f"    - {path.relative_to(ROOT)}")
     else:
         print("  conformance docs already up to date.")
-    return 0
+    # The published READMEs are rendered from the stamped sources ([README]);
+    # regenerating here keeps a stamp from ever landing without them.
+    return gen_readmes.main(["gen_readmes.py"])
 
 
 if __name__ == "__main__":

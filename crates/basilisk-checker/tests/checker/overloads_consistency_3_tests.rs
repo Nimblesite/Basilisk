@@ -1,4 +1,4 @@
-//! Tests for [`overloads_consistency_3`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Tests for [`overloads_consistency_3`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for overloads_consistency_3: overload implementation inconsistent with its signatures.
 
 use super::common::*;

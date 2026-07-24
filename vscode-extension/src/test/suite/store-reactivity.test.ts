@@ -13,16 +13,16 @@ import { ModuleExplorerProvider, wireReactiveRefresh } from "../../module-explor
 import { createStore, type Store } from "../../store";
 
 type StateListener = (event: { newState: State; oldState: State }) => void;
-type NotificationListener = () => void;
+type NotificationListener = (value?: unknown) => void;
 
 /** A fake client that exposes its state + notification listeners to the test. */
 interface FakeClientHandles {
   client: LanguageClient;
   fireState: (state: State) => void;
-  fireNotification: (method: string) => void;
+  fireNotification: (method: string, value?: unknown) => void;
 }
 
-function fakeClient(): FakeClientHandles {
+function fakeClient(typeshedStatuses: readonly unknown[] = []): FakeClientHandles {
   const stateListeners: StateListener[] = [];
   const notificationListeners = new Map<string, NotificationListener>();
   const client = {
@@ -36,7 +36,9 @@ function fakeClient(): FakeClientHandles {
       return { dispose: (): undefined => undefined };
     },
     sendRequest: async (): Promise<unknown> => ({ modules: [], workspace: undefined }),
-    initializeResult: { capabilities: {} },
+    initializeResult: {
+      capabilities: { experimental: { basilisk: { typeshedStatuses } } },
+    },
   } as unknown as LanguageClient;
   return {
     client,
@@ -45,37 +47,35 @@ function fakeClient(): FakeClientHandles {
         listener({ newState: state, oldState: State.Starting });
       }
     },
-    fireNotification: (method: string): void => {
-      notificationListeners.get(method)?.();
+    fireNotification: (method: string, value?: unknown): void => {
+      notificationListeners.get(method)?.(value);
     },
   };
 }
 
-function storeWithFakeClient(): { store: Store; handles: FakeClientHandles } {
+function storeWithFakeClient(
+  typeshedStatuses: readonly unknown[] = [],
+): { store: Store; handles: FakeClientHandles } {
   const store = createStore();
-  const handles = fakeClient();
+  const handles = fakeClient(typeshedStatuses);
   store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, handles.client);
   return { store, handles };
 }
 
-suite("Centralized analysis reactivity (issue #58)", () => {
-  /**
-   * Run fn with command registration stubbed: the store's Running handler
-   * registers real client commands, which the already-activated extension
-   * owns — the stub keeps this component test from colliding with it.
-   */
-  function withStubbedCommands(fn: () => void): void {
-    const original = vscode.commands.registerCommand;
-    (vscode.commands as { registerCommand: unknown }).registerCommand = (): vscode.Disposable => ({
-      dispose: (): undefined => undefined,
-    });
-    try {
-      fn();
-    } finally {
-      (vscode.commands as { registerCommand: unknown }).registerCommand = original;
-    }
+/** Avoid colliding with commands owned by the already-activated extension. */
+function withStubbedCommands(fn: () => void): void {
+  const original = vscode.commands.registerCommand;
+  (vscode.commands as { registerCommand: unknown }).registerCommand = (): vscode.Disposable => ({
+    dispose: (): undefined => undefined,
+  });
+  try {
+    fn();
+  } finally {
+    (vscode.commands as { registerCommand: unknown }).registerCommand = original;
   }
+}
 
+suite("Centralized analysis reactivity (issue #58)", () => {
   test("analysisRevision bumps when the server reaches Running", () => {
     withStubbedCommands(() => {
       const { store, handles } = storeWithFakeClient();
@@ -99,6 +99,30 @@ suite("Centralized analysis reactivity (issue #58)", () => {
       assert.ok(
         store.analysisRevision.value > before,
         "re-analysis completion must bump analysisRevision",
+      );
+    });
+  });
+
+  // [EXTACT-REACTIVE-STATE] / [LSPARCH-CONFIG]: applying a rule-severity change
+  // in the configuration editor rewrites every affected diagnostic's severity,
+  // so the Modules panel's health rollup is stale the moment the server
+  // confirms the change. `basilisk/configurationChanged` must therefore bump
+  // analysisRevision — relying on the debounced diagnostics listener alone
+  // leaves the panel rendering the PREVIOUS configuration's severities whenever
+  // the recheck republishes nothing the client can observe.
+  test("analysisRevision bumps on basilisk/configurationChanged", () => {
+    withStubbedCommands(() => {
+      const { store, handles } = storeWithFakeClient();
+      handles.fireState(State.Running);
+      const before = store.analysisRevision.value;
+      handles.fireNotification("basilisk/configurationChanged", {
+        rootUri: "file:///workspace",
+        revision: "fnv1a64:0000000000000001",
+      });
+      assert.ok(
+        store.analysisRevision.value > before,
+        "an applied configuration change must bump analysisRevision so the "
+          + "Modules panel stops showing the previous configuration's severities",
       );
     });
   });
@@ -147,3 +171,61 @@ suite("Centralized analysis reactivity (issue #58)", () => {
     }
   });
 });
+
+// Typeshed status is a distinct reactive channel from analysisRevision: it
+// targets a single root rather than repainting every panel, so it lives in its
+// own suite ([EXTACT-REACTIVE-STATE]).
+suite("Typeshed status reactivity (issue #58)", () => {
+  test("Typeshed status changes refresh only the matching open root", () => {
+    withStubbedCommands(() => {
+      const { store, handles } = storeWithFakeClient();
+      handles.fireState(State.Running);
+      store.beginConfigurationLoad("file:///workspace");
+      handles.fireNotification("basilisk/typeshedStatusChanged", {
+        rootUri: "file:///other",
+        status: {
+          lifecycle: { kind: "Ready" }, licenseStatus: { kind: "Approved" }, warnings: [],
+        },
+      });
+      assert.strictEqual(store.typeshedStatuses.value.has("file:///other"), true);
+      assert.strictEqual(store.configurationEditor.value.refreshRequested, false);
+      handles.fireNotification("basilisk/typeshedStatusChanged", {
+        rootUri: "file:///workspace",
+        status: {
+          lifecycle: { kind: "Ready" }, licenseStatus: { kind: "Approved" }, warnings: [],
+        },
+      });
+      assert.strictEqual(
+        store.typeshedStatuses.value.get("file:///workspace")?.licenseStatus.kind,
+        "Approved",
+      );
+      assert.strictEqual(store.configurationEditor.value.refreshRequested, true);
+    });
+  });
+
+  test("Typeshed statuses seed from initialize and invalid notifications cannot replace them", () => {
+    withStubbedCommands(() => {
+      const initial = {
+        rootUri: "file:///workspace",
+        status: {
+          lifecycle: { kind: "NoSource" }, noSourceReason: "exact unavailable",
+          licenseStatus: { kind: "Changed" }, warnings: [],
+        },
+      };
+      const { store, handles } = storeWithFakeClient([initial]);
+      handles.fireState(State.Running);
+      assert.strictEqual(
+        store.typeshedStatuses.value.get("file:///workspace")?.licenseStatus.kind,
+        "Changed",
+      );
+      handles.fireNotification("basilisk/typeshedStatusChanged", {
+        rootUri: "file:///workspace", status: { lifecycle: { kind: "invented" } },
+      });
+      assert.strictEqual(
+        store.typeshedStatuses.value.get("file:///workspace")?.noSourceReason,
+        "exact unavailable",
+      );
+    });
+  });
+});
+

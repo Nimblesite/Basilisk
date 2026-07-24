@@ -9,6 +9,8 @@
 --- 6. State Management — graceful degradation without LSP client
 --- 7. Realistic Scenarios — real-world memory leak patterns
 
+local command_desc = require("tests.command_desc")
+
 local function close_all_floats()
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     local config = vim.api.nvim_win_get_config(win)
@@ -342,7 +344,7 @@ describe("memory — command registration", function()
       local entry = all_cmds[cmd]
       assert.truthy(entry, "command '" .. cmd .. "' should exist")
       assert.truthy(
-        entry.definition and #entry.definition > 0,
+        command_desc.of(entry),
         "command '" .. cmd .. "' should have a description"
       )
     end
@@ -384,7 +386,7 @@ describe("memory — command registration", function()
     local all_cmds = vim.api.nvim_get_commands({})
     local entry = all_cmds["BasiliskMemLeak"]
     assert.truthy(entry)
-    local desc = entry.definition:lower()
+    local desc = assert(command_desc.of(entry), "BasiliskMemLeak has no description"):lower()
     assert.truthy(
       desc:find("memory") or desc:find("leak"),
       "description should mention memory or leak"
@@ -395,7 +397,7 @@ describe("memory — command registration", function()
     local all_cmds = vim.api.nvim_get_commands({})
     local entry = all_cmds["BasiliskMemRefs"]
     assert.truthy(entry)
-    local desc = entry.definition:lower()
+    local desc = assert(command_desc.of(entry), "BasiliskMemRefs has no description"):lower()
     assert.truthy(
       desc:find("reference") or desc:find("memory"),
       "description should mention references or memory"

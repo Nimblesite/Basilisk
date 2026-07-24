@@ -7,7 +7,7 @@ use super::ws_test_common::*;
 
 #[tokio::test]
 async fn test_ws_e0003_missing_variable_type_fires() -> TestResult<()> {
-    assert_rule_fires("file:///e0003.py", "items = []\n", "BSK-E0003", &["type"]).await
+    assert_rule_fires("file:///e0003.py", "items = []\n", "BSK-0003", &["type"]).await
 }
 
 #[tokio::test]
@@ -15,7 +15,7 @@ async fn test_ws_e0003_annotated_empty_list_is_clean() -> TestResult<()> {
     assert_rule_clean(
         "file:///e0003_clean.py",
         "items: list[int] = []\n",
-        "BSK-E0003",
+        "BSK-0003",
     )
     .await
 }
@@ -470,7 +470,7 @@ class Child(Base):
     assert_rule_fires(
         "file:///e0025.py",
         code,
-        "BSK-E0025",
+        "BSK-0025",
         &["override", "process", "decorator"],
     )
     .await
@@ -490,5 +490,5 @@ class Child(Base):
     def process(self, data: str) -> str:
         return data.upper()
 ";
-    assert_rule_clean("file:///e0025_clean.py", code, "BSK-E0025").await
+    assert_rule_clean("file:///e0025_clean.py", code, "BSK-0025").await
 }

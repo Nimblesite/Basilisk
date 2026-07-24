@@ -172,17 +172,19 @@ describe("basilisk commands with real LSP", function()
     basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
     require("basilisk.commands").register(basilisk.config)
 
-    local ok = pcall(vim.cmd, "BasiliskDisableRule BSK-E0001")
+    local ok = pcall(vim.cmd, "BasiliskDisableRule BSK-0001")
     assert.is_true(ok, ":BasiliskDisableRule should not error")
 
-    -- Verify pyproject.toml was modified.
+    -- Verify pyproject.toml was written. Writing the config is the command's
+    -- whole job, so the file MUST exist — never treat its absence as a pass.
     vim.wait(1000)
     local fh = io.open(tmpdir .. "/pyproject.toml", "r")
-    if fh then
-      local content = fh:read("*a")
-      fh:close()
-      assert.truthy(content:find("BSK%-E0001"), "pyproject.toml should contain the disabled rule")
-    end
+    assert.truthy(fh, "BasiliskDisableRule must write pyproject.toml")
+    local content = fh:read("*a")
+    fh:close()
+    -- Codes are letterless post-config-refactor: disabling BSK-0001 writes
+    -- exactly `BSK-0001` (never the pre-refactor `BSK-E0001`).
+    assert.truthy(content:find("BSK%-0001"), "pyproject.toml should contain the disabled rule BSK-0001")
   end)
 
   -- :BasiliskFixWorkspace — sends basilisk.fixWorkspace to real LSP

@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">Compatibility is a directed source-to-destination question</title>
+  <desc id="description">Three rows compare a source value and type with an annotated destination. A string reaches a string destination, an integer reaches a float destination through numeric compatibility, and a string stops before a float destination.</desc>
+  <defs>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="2" fill="#252d3f"/>
+    </pattern>
+    <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#6ec5e9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#f87171" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="url(#dots)" stroke="#252d3f" stroke-width="3"/>
+
+  <text x="82" y="110" fill="#e8500a" font-family="'JetBrains Mono',monospace" font-size="28" font-weight="700" letter-spacing="5">SOURCE → DESTINATION</text>
+  <text x="82" y="178" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="60" font-weight="800">Can this value be used here?</text>
+  <text x="84" y="226" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="29">Read every boundary in one direction; equal type spelling is not required.</text>
+
+  <text x="118" y="308" fill="#6ec5e9" font-family="'JetBrains Mono',monospace" font-size="28" font-weight="700" letter-spacing="4">SOURCE VALUE</text>
+  <text x="670" y="308" text-anchor="middle" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="28" font-weight="700" letter-spacing="4">RELATION</text>
+  <text x="1040" y="308" fill="#e8500a" font-family="'JetBrains Mono',monospace" font-size="28" font-weight="700" letter-spacing="4">DESTINATION</text>
+
+  <g transform="translate(82 340)">
+    <rect width="440" height="154" rx="24" fill="#141820" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="220" y="65" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="36">"roof-2"</text>
+    <text x="220" y="112" text-anchor="middle" fill="#bae6fd" font-family="'JetBrains Mono',monospace" font-size="28">source: str</text>
+    <path d="M466 77H668" fill="none" stroke="#6ec5e9" stroke-width="5" marker-end="url(#arrow-blue)"/>
+    <rect x="676" y="25" width="192" height="104" rx="52" fill="#123128" stroke="#34d399" stroke-width="4"/>
+    <text x="772" y="68" text-anchor="middle" fill="#a7f3d0" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28" font-weight="800">PASS</text>
+    <text x="772" y="101" text-anchor="middle" fill="#a7f3d0" font-family="'JetBrains Mono',monospace" font-size="28">str → str</text>
+    <path d="M894 77H936" fill="none" stroke="#34d399" stroke-width="5" marker-end="url(#arrow-blue)"/>
+    <rect x="958" width="476" height="154" rx="24" fill="#141820" stroke="#e8500a" stroke-width="4"/>
+    <text x="1196" y="68" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="34">sensor_id: str</text>
+    <text x="1196" y="112" text-anchor="middle" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">exact type match</text>
+  </g>
+
+  <g transform="translate(82 538)">
+    <rect width="440" height="154" rx="24" fill="#141820" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="220" y="65" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="36">21</text>
+    <text x="220" y="112" text-anchor="middle" fill="#bae6fd" font-family="'JetBrains Mono',monospace" font-size="28">source: int</text>
+    <path d="M466 77H668" fill="none" stroke="#6ec5e9" stroke-width="5" marker-end="url(#arrow-blue)"/>
+    <rect x="676" y="25" width="192" height="104" rx="52" fill="#123128" stroke="#34d399" stroke-width="4"/>
+    <text x="772" y="68" text-anchor="middle" fill="#a7f3d0" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28" font-weight="800">PASS</text>
+    <text x="772" y="101" text-anchor="middle" fill="#a7f3d0" font-family="'JetBrains Mono',monospace" font-size="28">int → float</text>
+    <path d="M894 77H936" fill="none" stroke="#34d399" stroke-width="5" marker-end="url(#arrow-blue)"/>
+    <rect x="958" width="476" height="154" rx="24" fill="#141820" stroke="#e8500a" stroke-width="4"/>
+    <text x="1196" y="68" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="34">celsius: float</text>
+    <text x="1196" y="112" text-anchor="middle" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">numeric compatibility</text>
+  </g>
+
+  <g transform="translate(82 736)">
+    <rect width="440" height="154" rx="24" fill="#141820" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="220" y="65" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="36">"21.5"</text>
+    <text x="220" y="112" text-anchor="middle" fill="#bae6fd" font-family="'JetBrains Mono',monospace" font-size="28">source: str</text>
+    <path d="M466 77H628" fill="none" stroke="#f87171" stroke-width="5" marker-end="url(#arrow-red)"/>
+    <line x1="660" y1="27" x2="660" y2="127" stroke="#f87171" stroke-width="11" stroke-linecap="round"/>
+    <rect x="682" y="25" width="240" height="104" rx="52" fill="#351b20" stroke="#f87171" stroke-width="4"/>
+    <text x="802" y="68" text-anchor="middle" fill="#fecaca" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28" font-weight="800">STOP</text>
+    <text x="802" y="101" text-anchor="middle" fill="#fecaca" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">not assignable</text>
+    <rect x="958" width="476" height="154" rx="24" fill="#141820" stroke="#e8500a" stroke-width="4"/>
+    <text x="1196" y="68" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="34">celsius: float</text>
+    <text x="1196" y="112" text-anchor="middle" fill="#fecaca" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">conversion still required</text>
+  </g>
+
+  <text x="800" y="912" text-anchor="middle" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">The destination defines the promise that each source must satisfy.</text>
+</svg>

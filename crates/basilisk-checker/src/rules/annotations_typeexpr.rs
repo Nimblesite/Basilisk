@@ -1,4 +1,4 @@
-//! Implements [`annotations_typeexpr`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`annotations_typeexpr`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `annotations_typeexpr`: Invalid type form — numeric literal used as type annotation.
 //!
 //! Type annotations must be type expressions, not literal values.  Using a

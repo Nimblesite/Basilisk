@@ -3,31 +3,18 @@
 //! Per-run context threaded into every rule (issue #93).
 //!
 //! The configured `python_version` / `python_platform` flow from
-//! `BasiliskConfig` (CLI: `pyproject.toml` / `basilisk.json`; LSP: the
+//! `BasiliskConfig` (CLI: `pyproject.toml` `[tool.basilisk]`; LSP: the
 //! `[LSPUV-PYTHON-VERSION-RESOLUTION-ORDER]` cascade) into [`CheckContext`],
 //! so rules evaluate version/platform conditionals against the *configured*
 //! target instead of a hardcoded constant.
 
-/// The single, centralized default target version (canonical Python 3.12).
-pub const DEFAULT_TARGET_VERSION: (u32, u32) = (3, 12);
-
 /// Per-run facts every rule may consult.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CheckContext {
     /// Target Python version as `(major, minor)`, e.g. `(3, 9)`.
-    pub target_version: (u32, u32),
+    pub target_version: Option<(u32, u32)>,
     /// Target platform (`"linux"`, `"darwin"`, `"win32"`), if configured.
     pub target_platform: Option<String>,
-    /// Whether a custom typeshed (`typeshed-path`) is configured.
-    ///
-    /// When set, that directory is the canonical source for standard-library
-    /// types ([STUBRES-CUSTOM-TYPESHED]): the bundled name-only stdlib set no
-    /// longer rescues a module absent from it, so rules that suppress on stdlib
-    /// membership must gate on
-    /// [`crate::imports::bundled_stdlib_recognized`] instead of calling
-    /// `is_stdlib_module` directly. Threaded here so every rule reads the same
-    /// canonicality decision the resolver already applied.
-    pub custom_typeshed_configured: bool,
     /// Line-start index over the module source, built once per check.
     ///
     /// Rules that need to map a byte offset to a line — or locate a function
@@ -39,23 +26,11 @@ pub struct CheckContext {
     pub line_index: basilisk_common::text::LineIndex,
 }
 
-impl Default for CheckContext {
-    fn default() -> Self {
-        Self {
-            target_version: DEFAULT_TARGET_VERSION,
-            target_platform: None,
-            custom_typeshed_configured: false,
-            line_index: basilisk_common::text::LineIndex::default(),
-        }
-    }
-}
-
 impl CheckContext {
     /// Build a context from project configuration, with an empty line index.
     ///
-    /// An absent or unparsable `python_version` falls back to
-    /// [`DEFAULT_TARGET_VERSION`] so a malformed config behaves exactly like
-    /// the default rather than panicking or disabling version gating.
+    /// An absent or unparsable `python_version` remains unknown. Rules that
+    /// require a concrete target must stay silent rather than manufacture one.
     ///
     /// The full check pipeline uses [`Self::from_config_with_source`] so rules
     /// get a populated [`line_index`](Self::line_index); this variant is for
@@ -66,10 +41,12 @@ impl CheckContext {
             target_version: config
                 .python_version
                 .as_deref()
-                .and_then(parse_target_version)
-                .unwrap_or(DEFAULT_TARGET_VERSION),
-            target_platform: config.python_platform.clone(),
-            custom_typeshed_configured: config.typeshed_path.is_some(),
+                .and_then(parse_target_version),
+            target_platform: config
+                .python_platform
+                .as_ref()
+                .filter(|platform| !platform.eq_ignore_ascii_case("all"))
+                .cloned(),
             line_index: basilisk_common::text::LineIndex::default(),
         }
     }
@@ -91,4 +68,60 @@ fn parse_target_version(raw: &str) -> Option<(u32, u32)> {
     let major = parts.next()?.parse::<u32>().ok()?;
     let minor = parts.next().map_or(Some(0), |m| m.parse::<u32>().ok())?;
     Some((major, minor))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_target_version, CheckContext};
+    use basilisk_config::BasiliskConfig;
+
+    /// [TYPESHEDRT-ACCEPTANCE-TARGET] "No manufactured target": with nothing
+    /// configured, the checker holds NO concrete Python target — a fixed
+    /// version never appears without project/interpreter evidence. Rules that
+    /// need a target stay silent instead of assuming e.g. 3.12.
+    #[test]
+    fn default_config_manufactures_no_target() {
+        let ctx = CheckContext::from_config(&BasiliskConfig::default());
+        assert_eq!(
+            ctx.target_version, None,
+            "an unconfigured project must have no manufactured Python target"
+        );
+        assert_eq!(ctx.target_platform, None);
+    }
+
+    /// An explicitly configured version IS honoured (evidence exists).
+    #[test]
+    fn configured_version_is_used_verbatim() {
+        let cfg = BasiliskConfig {
+            python_version: Some("3.9".to_owned()),
+            ..BasiliskConfig::default()
+        };
+        assert_eq!(CheckContext::from_config(&cfg).target_version, Some((3, 9)));
+    }
+
+    #[test]
+    fn all_platform_keeps_checker_target_cross_platform() {
+        let cfg = BasiliskConfig {
+            python_platform: Some("All".to_owned()),
+            ..BasiliskConfig::default()
+        };
+
+        assert_eq!(
+            CheckContext::from_config(&cfg).target_platform,
+            None,
+            "`All` is the cross-platform domain, never a literal sys.platform value"
+        );
+    }
+
+    /// A malformed `python-version` stays unknown rather than defaulting to a
+    /// manufactured target ([TYPESHEDRT-ACCEPTANCE-TARGET]).
+    #[test]
+    fn unparsable_version_stays_none() {
+        assert_eq!(parse_target_version("not-a-version"), None);
+        let cfg = BasiliskConfig {
+            python_version: Some("frobnicate".to_owned()),
+            ..BasiliskConfig::default()
+        };
+        assert_eq!(CheckContext::from_config(&cfg).target_version, None);
+    }
 }

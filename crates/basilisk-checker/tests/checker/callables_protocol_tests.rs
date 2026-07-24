@@ -1,4 +1,6 @@
-//! Tests for [`callables_protocol`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`callables_protocol`] from [CHKARCH-DIAG-CATEGORIES] and
+//! [TYPEINF-GENERICS-PARAMSPEC]. See
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for callables_protocol: Callable call-site arity violations.
 
 use super::common::*;
@@ -42,5 +44,35 @@ def invoke(cb: Callable[[int], bool]) -> bool:
 ";
     let diags = run(source)?;
     let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn paramspec_components_preserve_the_bound_callable_shape() -> Result<(), Box<dyn std::error::Error>>
+{
+    let source = r#"
+from typing import Callable, ParamSpec, TypeVar
+
+P = ParamSpec("P")
+T = TypeVar("T")
+
+def logged(f: Callable[P, T]) -> Callable[P, T]:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        return f(*args, **kwargs)
+    return wrapper
+
+def invalid_component(value: P.args) -> None:
+    pass
+"#;
+    let diags = run(source)?;
+    let paramspec_diags = diags
+        .iter()
+        .filter(|diag| diag.code.code == "callables_protocol")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        paramspec_diags.len(),
+        1,
+        "the valid wrapper must pass and the misplaced P.args must fail: {diags:?}"
+    );
     Ok(())
 }

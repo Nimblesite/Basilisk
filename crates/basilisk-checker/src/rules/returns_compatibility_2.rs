@@ -1,11 +1,11 @@
-//! Implements [`returns_compatibility_2`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`returns_compatibility_2`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `returns_compatibility_2`: Return type mismatch — inferred return type incompatible with annotation.
 //!
 //! When a function has a return type annotation, the inferred return type must be
 //! assignable to the declared type. This extends the original `-> None` check to
 //! handle all return type mismatches using the inference system.
 
-use crate::inference::infer_rhs;
+use crate::inference::{infer_rhs, literal_collection_assignable_to};
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnStmtInfo};
@@ -103,8 +103,12 @@ fn check_function(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Di
                 return;
             }
 
-            // Check assignability using inference system
-            if !inferred_type.is_assignable_to(&declared_type) {
+            // A returned collection literal is contextually typed against the
+            // declared type ([TYPEINF-SPECIAL-LITERAL-CONTEXT]); a stored value
+            // keeps invariant subtyping.
+            let is_assignable = literal_collection_assignable_to(&stmt.rhs_kind, &declared_type)
+                .unwrap_or_else(|| inferred_type.is_assignable_to(&declared_type));
+            if !is_assignable {
                 out.push(make_diagnostic(
                     stmt,
                     &func.name,

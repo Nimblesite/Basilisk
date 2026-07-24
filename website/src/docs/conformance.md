@@ -2,7 +2,7 @@
 layout: layouts/docs.njk
 title: "Basilisk Scores 100% on the Official Python Typing Conformance Suite"
 description: "Basilisk is the only Python type checker with a perfect 100% score — published on the official python/typing conformance results page, ahead of Pyright, mypy, Pyrefly and ty. Here's the proof and how it's measured."
-keywords: pep conformance, python typing conformance results, 100% conformant type checker, basilisk conformance score, python/typing results
+keywords: pep conformance, python typing conformance results, 100% conformant type checker, best python type checker, basilisk conformance score, python/typing results
 date: 2026-06-23
 dateModified: 2026-07-07
 author: The Basilisk Project
@@ -46,7 +46,7 @@ Every score below comes from **one identical run** of the [official `python/typi
 
 ## How it's measured
 
-We don't score ourselves against our own yardstick. The number above is produced by the **official `python/typing` harness**, run unmodified against the **wheel-installed `basilisk` command** — exactly the CLI you get from PyPI, in its **default configuration**, with **every PEP conformance rule on and nothing else configured**. A file passes only when the harness's diff is empty: every required error reported, and **nothing** reported on a line the suite doesn't mark. We count every diagnostic the checker emits — errors *and* warnings — so a single false positive fails the whole file.
+We don't score ourselves against our own yardstick. The number above is produced by the **official `python/typing` harness**, run unmodified against the `basilisk` CLI built straight from the current checkout (`cargo build --release`), in its **default configuration**, with **every PEP conformance rule on and nothing else configured** — the same binary every install channel ships. A file passes only when the harness's diff is empty: every required error reported, and **nothing** reported on a line the suite doesn't mark. We count every diagnostic the checker emits — errors *and* warnings — so a single false positive fails the whole file.
 
 Today that is **{{ conformance.scorePct }}%** — **{{ conformance.pass }} of {{ conformance.total }}** test files passing, {{ conformance.caught }} required errors caught, **{{ conformance.fp }} false positives**, **{{ conformance.missed }} missed errors**. We run in lock step with `python/typing@main` (graded at [`{{ conformance.pinnedRefShort }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance){% if conformance.commitDate %}, {{ conformance.commitDate }}{% endif %}); a ratchet gate keeps the score from ever regressing, and an upstream test we fail blocks merge and release.
 
@@ -54,16 +54,24 @@ Basilisk's **opt-in house-style rules** (require-annotation, redundant-annotatio
 
 ### Reproduce it yourself
 
+Basilisk is a **registered checker in the official suite** — `BasiliskTypeChecker`
+lives in `python/typing`'s [`conformance/src/type_checker.py`](https://github.com/python/typing/blob/main/conformance/src/type_checker.py) —
+so you run the real harness directly, with nothing to patch:
+
 ```bash
-# Patch a python/typing checkout, install basilisk from the wheel, run the
-# real upstream harness, and write a proof log.
-python3 scripts/prepare_typing_conformance_pr.py \
-  --typing-repo ../typing \
-  --verbose \
-  --write-proof
+# Clone python/typing FRESH, run its OWN harness against the basilisk binary,
+# and regenerate conformance/conformance_status.csv from the real results.
+python3 conformance/run_conformance.py --bin target/release/basilisk
 ```
 
-The submission workflow lives in [`scripts/prepare_typing_conformance_pr.py`](https://github.com/Nimblesite/Basilisk/blob/main/scripts/prepare_typing_conformance_pr.py); the expected upstream PR files are documented in [`docs/typing-conformance-pr.md`](https://github.com/Nimblesite/Basilisk/blob/main/docs/typing-conformance-pr.md).
+Or drive the upstream harness by hand against any `basilisk` on your PATH:
+
+```bash
+git clone --depth 1 https://github.com/python/typing
+BASILISK_BIN=$(which basilisk) python typing/conformance/src/main.py --only-run basilisk
+```
+
+The runner lives in [`conformance/run_conformance.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/run_conformance.py); it clones the suite fresh, runs the unmodified upstream harness, and never scores anything itself.
 
 ## How the score got honest
 

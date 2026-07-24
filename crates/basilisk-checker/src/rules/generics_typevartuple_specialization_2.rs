@@ -1,4 +1,4 @@
-//! Implements [`generics_typevartuple_specialization_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_typevartuple_specialization_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_typevartuple_specialization_2`: Invalid `TypeVarTuple` specialization of generic alias.
 //!
 //! Two related violations are detected:

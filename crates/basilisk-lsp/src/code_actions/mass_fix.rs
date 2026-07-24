@@ -16,22 +16,22 @@ use super::fixes;
 
 /// All diagnostic codes that have an autofix implementation.
 pub const ALL_FIXABLE_RULES: &[&str] = &[
-    "BSK-E0001", // Missing parameter type → `: Any`
-    "BSK-E0002", // Missing return type → `-> None`
-    "BSK-E0003", // Missing variable type → `: <inferred>`
-    "BSK-E0005", // Missing class attribute type → `: Any`
-    "BSK-W0050", // Redundant annotation → remove
+    "BSK-0001", // Missing parameter type → `: Any`
+    "BSK-0002", // Missing return type → `-> Any`
+    "BSK-0003", // Missing variable type → `: <inferred>`
+    "BSK-0005", // Missing class attribute type → `: Any`
+    "BSK-0050", // Redundant annotation → remove
 ];
 
 /// Rules classified as safe (guaranteed not to change runtime semantics).
 ///
-/// BSK-E0003 is intentionally excluded: its fix (adding `: Any`) conflicts
-/// with BSK-W0050's fix (removing redundant annotations), producing a
-/// non-idempotent cycle. Users who want BSK-E0003 auto-fixed must pass it
-/// explicitly via `--rules BSK-E0003` or use `--unsafe`.
+/// BSK-0003 is intentionally excluded: its fix (adding `: Any`) conflicts
+/// with BSK-0050's fix (removing redundant annotations), producing a
+/// non-idempotent cycle. Users who want BSK-0003 auto-fixed must pass it
+/// explicitly via `--rules BSK-0003` or use `--unsafe`.
 // Implements [AUTOFIX-CLASSIFY] — the Safe vs Unsafe tiers: SAFE_FIXABLE_RULES
 // is the "Safe only" (default) set; ALL_FIXABLE_RULES is the "All fixes" set.
-pub const SAFE_FIXABLE_RULES: &[&str] = &["BSK-E0001", "BSK-E0002", "BSK-E0005", "BSK-W0050"];
+pub const SAFE_FIXABLE_RULES: &[&str] = &["BSK-0001", "BSK-0002", "BSK-0005", "BSK-0050"];
 
 /// Custom `CodeActionKind` for "fix all safe diagnostics in this file".
 ///
@@ -221,11 +221,11 @@ fn single_fix_edit(uri: &Url, diag: &Diagnostic, source: &str) -> Option<TextEdi
     };
 
     let action = match code {
-        "BSK-E0001" => fixes::fix_missing_param_annotation(uri, diag),
-        "BSK-E0002" => fixes::fix_missing_return_annotation(uri, diag),
-        "BSK-E0003" => fixes::fix_missing_variable_annotation(uri, diag),
-        "BSK-W0050" => fixes::fix_remove_redundant_annotation(uri, diag, source),
-        "BSK-E0005" => fixes::fix_missing_attribute_annotation(uri, diag),
+        "BSK-0001" => fixes::fix_missing_param_annotation(uri, diag),
+        "BSK-0002" => fixes::fix_missing_return_annotation(uri, diag),
+        "BSK-0003" => fixes::fix_missing_variable_annotation(uri, diag),
+        "BSK-0050" => fixes::fix_remove_redundant_annotation(uri, diag, source),
+        "BSK-0005" => fixes::fix_missing_attribute_annotation(uri, diag),
         _ => return None,
     };
 
@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn test_fix_all_no_fixable_diagnostics() {
         let uri = Url::parse("file:///test.py").unwrap();
-        let diag = make_diag("BSK-E9999", 0, 0, 5); // Unknown code — no fix.
+        let diag = make_diag("BSK-9999", 0, 0, 5); // Unknown code — no fix.
         let result = fix_all_in_file(&uri, &[diag], "x = 42\n");
         assert!(result.is_none());
     }
@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn test_fix_all_single_w0050() {
         let uri = Url::parse("file:///test.py").unwrap();
-        let diag = make_diag("BSK-W0050", 0, 0, 1);
+        let diag = make_diag("BSK-0050", 0, 0, 1);
         let source = "x: int = 42\n";
         let action = fix_all_in_file(&uri, &[diag], source);
         assert!(action.is_some());
@@ -308,8 +308,8 @@ mod tests {
         let uri = Url::parse("file:///test.py").unwrap();
         let source = "x: int = 42\ny: str = 'hello'\n";
         let diags = vec![
-            make_diag("BSK-W0050", 0, 0, 1),
-            make_diag("BSK-W0050", 1, 0, 1),
+            make_diag("BSK-0050", 0, 0, 1),
+            make_diag("BSK-0050", 1, 0, 1),
         ];
         let action = fix_all_in_file(&uri, &diags, source);
         assert!(action.is_some());
@@ -323,25 +323,25 @@ mod tests {
         let uri = Url::parse("file:///test.py").unwrap();
         let source = "x: int = 42\ny: str = 'hello'\n";
         let diags = vec![
-            make_diag("BSK-W0050", 0, 0, 1),
-            make_diag("BSK-W0050", 1, 0, 1),
-            make_diag("BSK-E0001", 1, 5, 10), // different rule
+            make_diag("BSK-0050", 0, 0, 1),
+            make_diag("BSK-0050", 1, 0, 1),
+            make_diag("BSK-0001", 1, 5, 10), // different rule
         ];
-        let action = fix_all_by_rule(&uri, &diags, source, "BSK-W0050");
+        let action = fix_all_by_rule(&uri, &diags, source, "BSK-0050");
         assert!(action.is_some());
         let action = action.unwrap();
         assert!(
-            action.title.contains("BSK-W0050"),
+            action.title.contains("BSK-0050"),
             "title should include rule code: {}",
             action.title
         );
         assert!(action.title.contains("2 fixes"), "title: {}", action.title);
         assert_eq!(action.kind, Some(CodeActionKind::QUICKFIX));
-        // Verify only BSK-W0050 diagnostics are attached.
+        // Verify only BSK-0050 diagnostics are attached.
         let attached = action.diagnostics.unwrap();
         assert!(attached.iter().all(|d| matches!(
             &d.code,
-            Some(NumberOrString::String(c)) if c == "BSK-W0050"
+            Some(NumberOrString::String(c)) if c == "BSK-0050"
         )));
     }
 
@@ -349,9 +349,9 @@ mod tests {
     fn test_fix_all_by_rule_returns_none_for_single_instance() {
         let uri = Url::parse("file:///test.py").unwrap();
         let source = "x: int = 42\n";
-        let diags = vec![make_diag("BSK-W0050", 0, 0, 1)];
+        let diags = vec![make_diag("BSK-0050", 0, 0, 1)];
         // Only 1 instance — per-diagnostic fix is sufficient.
-        let action = fix_all_by_rule(&uri, &diags, source, "BSK-W0050");
+        let action = fix_all_by_rule(&uri, &diags, source, "BSK-0050");
         assert!(action.is_none());
     }
 
@@ -360,10 +360,10 @@ mod tests {
         let uri = Url::parse("file:///test.py").unwrap();
         let source = "x = 42\n";
         let diags = vec![
-            make_diag("BSK-E9999", 0, 0, 5),
-            make_diag("BSK-E9999", 0, 6, 10),
+            make_diag("BSK-9999", 0, 0, 5),
+            make_diag("BSK-9999", 0, 6, 10),
         ];
-        let action = fix_all_by_rule(&uri, &diags, source, "BSK-E9999");
+        let action = fix_all_by_rule(&uri, &diags, source, "BSK-9999");
         assert!(action.is_none());
     }
 
@@ -393,19 +393,19 @@ mod tests {
         let uri = Url::parse("file:///test.py").unwrap();
         let source = "x: int = 42\ny: str = 'hello'\n";
         let diags = vec![
-            make_diag("BSK-W0050", 0, 0, 1),
-            make_diag("BSK-W0050", 1, 0, 1),
-            make_diag("BSK-E0001", 1, 5, 10), // different rule
+            make_diag("BSK-0050", 0, 0, 1),
+            make_diag("BSK-0050", 1, 0, 1),
+            make_diag("BSK-0001", 1, 5, 10), // different rule
         ];
-        // Only allow BSK-W0050 — BSK-E0001 should be excluded.
-        let action = fix_filtered_in_file(&uri, &diags, source, &["BSK-W0050"]);
-        assert!(action.is_some(), "should produce a fix for BSK-W0050");
+        // Only allow BSK-0050 — BSK-0001 should be excluded.
+        let action = fix_filtered_in_file(&uri, &diags, source, &["BSK-0050"]);
+        assert!(action.is_some(), "should produce a fix for BSK-0050");
         let action = action.unwrap();
-        // All attached diagnostics must be BSK-W0050.
+        // All attached diagnostics must be BSK-0050.
         let attached = action.diagnostics.unwrap();
         assert!(attached.iter().all(|d| matches!(
             &d.code,
-            Some(NumberOrString::String(c)) if c == "BSK-W0050"
+            Some(NumberOrString::String(c)) if c == "BSK-0050"
         )));
     }
 
@@ -413,9 +413,9 @@ mod tests {
     fn test_fix_filtered_returns_none_for_no_matching_rules() {
         let uri = Url::parse("file:///test.py").unwrap();
         let source = "x: int = 42\n";
-        let diags = vec![make_diag("BSK-W0050", 0, 0, 1)];
-        // Only allow BSK-E0001 — BSK-W0050 should be filtered out.
-        let action = fix_filtered_in_file(&uri, &diags, source, &["BSK-E0001"]);
+        let diags = vec![make_diag("BSK-0050", 0, 0, 1)];
+        // Only allow BSK-0001 — BSK-0050 should be filtered out.
+        let action = fix_filtered_in_file(&uri, &diags, source, &["BSK-0001"]);
         assert!(
             action.is_none(),
             "should return None when no diagnostics match allowed rules"

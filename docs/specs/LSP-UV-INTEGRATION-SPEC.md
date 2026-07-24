@@ -1,423 +1,175 @@
-# Basilisk + uv Integration — Specification {#LSPUV}
+# Basilisk uv integration {#LSPUV}
 
-> **Plan**: [LSP-PLAN.md](../plans/LSP-PLAN.md)
-> **LSP Spec**: [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) — configuration, commands, binary resolution
+The uv integration detects projects from files, parses lock/project metadata in-process,
+enriches import analysis, and delegates package mutations to the `uv` executable.
 
----
+## Approach {#LSPUV-WHY}
 
-## 1. Approach {#LSPUV-WHY}
+Detection, lock parsing, registry lookup, and version selection do not spawn uv. Only explicit
+package-management commands start a subprocess. The Rust implementation is split between
+`basilisk-uv` and the LSP's uv handlers.
 
-Basilisk understands uv projects from local files only: `uv.lock` (TOML dependency graph — every package, version, platform marker — parsed in Rust with zero subprocess overhead), `.python-version`, `pyproject.toml [tool.uv]`, and uv workspace layouts. No external commands for detection or resolution.
+## Detection {#LSPUV-DETECTION}
 
----
+### Signals {#LSPUV-DETECTION-SIGNALS}
 
-## 2. Detection: Is This a uv Project? {#LSPUV-DETECTION}
+The first workspace root matching any signal is treated as a uv project:
 
-Basilisk MUST auto-detect uv projects with zero configuration, using filesystem signals only (no subprocess calls).
+- `uv.lock` exists;
+- `pyproject.toml` contains `[tool.uv]`;
+- `.venv/pyvenv.cfg` contains `uv = true`; or
+- `.python-version` exists and neither `poetry.lock` nor `Pipfile.lock` exists.
 
-### 2.1 Detection Signals {#LSPUV-DETECTION-SIGNALS}
+Detection is a filesystem/TOML check; it does not run `uv` or Python.
 
-A workspace is a uv project if **any** of these are true (checked in order):
+### Result {#LSPUV-DETECTION-RESULT}
 
-| Signal | File | Confidence |
-|--------|------|------------|
-| Lock file exists | `uv.lock` in workspace root | Definitive |
-| uv config section | `pyproject.toml` contains `[tool.uv]` | Definitive |
-| uv-created venv | `.venv/pyvenv.cfg` contains `uv = true` | High |
-| `.python-version` + no other manager | `.python-version` exists, no `poetry.lock` / `Pipfile.lock` | Medium |
+`UvProjectInfo` contains the root and four booleans: `has_lockfile`, `has_tool_uv`,
+`uv_managed_venv`, and `has_python_version`.
 
-### 2.2 Detection Result {#LSPUV-DETECTION-RESULT}
+### Fallback {#LSPUV-DETECTION-FALLBACK}
 
-`basilisk_uv::detect_uv_project(workspace_roots: &[PathBuf]) -> Option<UvProjectInfo>` scans the roots in order and returns info for the first directory matching a [detection signal](#LSPUV-DETECTION-SIGNALS); `None` means "not a uv project".
+When no signal matches, ordinary Basilisk project discovery continues. uv-specific registry
+enrichment and commands are not required for type checking.
 
-```rust
-pub struct UvProjectInfo {
-    pub root: PathBuf,          // matched workspace root
-    pub has_lockfile: bool,     // uv.lock exists at root
-    pub has_tool_uv: bool,      // pyproject.toml contains [tool.uv]
-    pub uv_managed_venv: bool,  // .venv/pyvenv.cfg contains `uv = true`
-}
-```
+## Lock-file intelligence {#LSPUV-LOCK}
 
-The result carries the raw boolean signals, not resolved paths — consumers derive paths from `root` (e.g. `root.join("uv.lock")` in the `build_uv_registry` functions in `crates/basilisk-lsp/src/server/init.rs` and `crates/basilisk-cli/src/main.rs`). Workspace members ([LSPUV-WORKSPACE-MODEL](#LSPUV-WORKSPACE-MODEL)), `.python-version` resolution ([LSPUV-PYTHON-VERSION](#LSPUV-PYTHON-VERSION)), and venv discovery ([LSPUV-DETECTION-FALLBACK](#LSPUV-DETECTION-FALLBACK)) are separate call paths, not fields on the detection result. There is no `EnvironmentManager` enum: `Option<UvProjectInfo>` is the whole environment-manager decision — `Some` enables the additive uv features (lock-file registry, uv-run test execution, uv status); `None` only skips them, and venv discovery via `find_venv_dir()` runs either way.
+### Parsed data {#LSPUV-LOCK-EXTRACT}
 
-### 2.3 Fallback {#LSPUV-DETECTION-FALLBACK}
+`parse_lock_file` deserializes lock version, `requires-python`, packages, package versions,
+sources, runtime dependencies, grouped dev dependencies, and per-dependency markers. Unknown
+fields are retained as TOML values for forward-compatible parsing. Top-level
+`resolution-markers` are not interpreted.
 
-If uv detection fails or signals are ambiguous, fall back to existing `find_venv_dir()` logic. uv integration is additive — it MUST NOT break non-uv projects.
+### Package registry {#LSPUV-LOCK-REGISTRY}
 
----
+`PackageRegistry` is keyed by Python import name. Each `PackageInfo` stores distribution name,
+version, import name, dependency kind (`Direct`, `Dev`, or `Transitive`), and whether its
+source is editable. Direct dependencies come from `[project].dependencies`; dev names come
+from lock-file dev groups; the remainder are transitive.
 
-## 3. Lock File Intelligence {#LSPUV-LOCK}
+### Import-name mapping {#LSPUV-LOCK-IMPORT-MAPPING}
 
-`uv.lock` is TOML, complete, and parsed in Rust at zero cost.
+Distribution names use a curated mismatch table first (for example Pillow → `PIL`) and
+otherwise lowercase and replace hyphens with underscores. The implementation does not scan
+site-packages to discover import roots, so unmapped multi-root distributions may be missed.
 
-### 3.1 What We Extract {#LSPUV-LOCK-EXTRACT}
+### Hot reload {#LSPUV-LOCK-HOT-RELOAD}
 
-| Field | Source in `uv.lock` | Use |
-|-------|---------------------|-----|
-| Package name | `[[package]].name` | Import resolution validation |
-| Package version | `[[package]].version` | Hover info, diagnostics |
-| Source (registry/git/path) | `[[package]].source` | Distinguish local vs remote |
-| Dependencies | `[[package]].dependencies` | Direct vs transitive classification |
-| Platform markers | `[[package]].resolution-markers` | Platform-aware resolution |
-| Python requires | `requires-python` | Validate `python_version` config |
+Relevant file changes and successful uv commands rebuild the full registry and recheck the
+workspace. There is no package-level diff path. Observation is server-owned: the LSP's own
+watcher covers each root's `pyproject.toml`, `uv.lock`, and `.python-version`
+([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)), so hot reload works
+identically on clients with no file watchers (Zed); client `didChangeWatchedFiles` events
+are only a latency optimization, deduplicated through the shared per-source disk baseline
+so one change rebuilds exactly once.
 
-### 3.2 Package Registry {#LSPUV-LOCK-REGISTRY}
+## Target Python version {#LSPUV-PYTHON-VERSION}
 
-Parsed lock data is stored in a lookup structure:
+### Resolution order {#LSPUV-PYTHON-VERSION-RESOLUTION-ORDER}
 
-```rust
-pub struct PackageRegistry {
-    /// All packages from uv.lock, keyed by normalized import name
-    packages: HashMap<String, PackageInfo>,
-    /// Direct dependencies (listed in pyproject.toml [project.dependencies])
-    direct_deps: HashSet<String>,
-    /// Dev dependencies ([dependency-groups] or [tool.uv.dev-dependencies])
-    dev_deps: HashSet<String>,
-    /// Python version constraint from lock file
-    requires_python: Option<String>,
-}
+An explicit Basilisk config value is applied by the consumer first. Otherwise
+`basilisk-uv` checks `.python-version`, then the lower bound of
+`[project].requires-python`, then the lock file's `requires-python`. If none exists, the
+resolver returns no project-version evidence. No interpreter subprocess is probed by this
+resolution path.
 
-pub struct PackageInfo {
-    pub name: String,
-    pub version: String,
-    pub is_direct: bool,
-    pub has_stubs: bool,           // types-X or X-stubs in registry
-    pub stub_package: Option<String>, // name of stub package if known
-    pub source: PackageSource,
-}
+Platform evidence is resolved separately. An explicit `python-platform` wins;
+otherwise the CLI/LSP query the selected interpreter for `sys.platform`. This
+probe does not invent a Python version and does not participate in Typeshed
+commit selection. Explicit `python-platform = "All"` retains every feasible
+platform branch instead of probing.
 
-pub enum PackageSource {
-    Registry { index: String },
-    Git { url: String, rev: String },
-    Path { path: PathBuf },
-    Editable { path: PathBuf },
-}
-```
+## Diagnostics {#LSPUV-DIAGNOSTICS}
 
-### 3.3 Import Name Mapping {#LSPUV-LOCK-IMPORT-MAPPING}
+### Unresolved imports {#LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND}
 
-Package names don't always match import names (e.g. `Pillow` → `PIL`, `scikit-learn` → `sklearn`). The registry maps via, in order:
+When an import cannot be resolved, registry knowledge can distinguish a missing dependency
+from a known installed distribution and offer `uv add` when appropriate. The checker rule
+catalog owns the diagnostic code and severity.
 
-1. **Top-level module detection** — scan the package's `site-packages` directory for top-level `__init__.py` / `.pyi` files.
-2. **Known mappings** — compiled table of common mismatches (Pillow/PIL, scikit-learn/sklearn, python-dateutil/dateutil, etc.).
-3. **Normalized fallback** — lowercase, replace `-` with `_`.
+### Missing stubs {#LSPUV-DIAGNOSTICS-MISSING-STUBS}
 
-### 3.4 Hot Reload {#LSPUV-LOCK-HOT-RELOAD}
+The stub-distribution index can offer `uv add --dev <stub-package>` for a known companion
+package. If no published mapping exists, the LSP can offer the local-stub command instead.
+Resolution and provenance are specified in
+[CHECKER-STUB-RESOLUTION-SPEC.md](CHECKER-STUB-RESOLUTION-SPEC.md).
 
-When `uv.lock` changes (LSP file watcher or `workspace/didChangeWatchedFiles`): re-parse, diff against the current `PackageRegistry`, invalidate affected import resolutions for added/removed packages, publish updated diagnostics. Log e.g. `"uv.lock changed: +3 packages, -1 package, re-resolving 12 files"`. No LSP restart or user interaction.
+## uv workspaces {#LSPUV-WORKSPACE}
 
----
+### Detection {#LSPUV-WORKSPACE-DETECTION}
 
-## 4. Python Version Detection {#LSPUV-PYTHON-VERSION}
+`parse_uv_workspace` reads `[tool.uv.workspace]`, expands literal members and simple trailing
+`/*` patterns, and returns sorted existing directories. It parses `exclude`, but currently
+does not subtract excluded members.
 
-### 4.1 Resolution Order (uv-aware) {#LSPUV-PYTHON-VERSION-RESOLUTION-ORDER}
+### Model {#LSPUV-WORKSPACE-MODEL}
 
-Highest wins:
+`UvWorkspace` contains only `members: Vec<PathBuf>` and `exclude: Vec<String>`. There is no
+rich member object or independent multi-root registry model.
 
-1. Explicit `python-version` in project config (`[tool.basilisk] python-version` in `pyproject.toml`, or `pythonVersion`/`python-version` in `basilisk.json`) — always wins
-2. `.python-version` file in the project root (uv standard; first non-empty, non-comment line)
-3. `[project].requires-python` in `pyproject.toml` — lower bound of the first `>=`/`==`/`~=` clause
-4. `uv.lock` top-level `requires-python` — same lower-bound extraction
-5. Default: `3.12` (the checker's centralized `DEFAULT_TARGET_VERSION`, [`[CHKARCH-VERSION-TARGET]`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET))
+### Import resolution {#LSPUV-WORKSPACE-IMPORT-RESOLUTION}
 
-Steps 2–4 are `basilisk_uv::python_version::resolve_target_python_version`; step 1 and the default belong to the consumers (`WorkspaceIndex::load_root_configs`, CLI `main.rs`, `CheckContext::from_config`). Resolution reads declared project metadata only — Basilisk deliberately never probes the venv interpreter (`python3 --version`): the resolved target stays deterministic across machines (a venv built with a different interpreter does not silently shift checker semantics) and version resolution adds no subprocess spawn. The `basilisk.python` VS Code setting is the interpreter *path* for the debugger/profiler and plays no role in version resolution.
+Discovered member directories and their conventional source roots can be added to import
+search. The helper that derives member folders is not currently wired into production LSP
+multi-root routing; this section does not promise per-member server ownership.
 
-### 4.2 Impact on Type Checking {#LSPUV-PYTHON-VERSION-IMPACT}
+## Code actions {#LSPUV-ACTIONS}
 
-The detected version flows into the checker as `CheckContext.target_version` — see [`[CHKARCH-VERSION-TARGET]`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET) for the typed context, the centralized 3.12 default, and the wiring (`basilisk_uv::python_version::resolve_target_python_version` → `WorkspaceIndex::new` / CLI `main.rs`).
+### Quick fixes {#LSPUV-ACTIONS-QUICK-FIXES}
 
-Implemented today:
+uv-aware actions invoke the shared server commands for adding a dependency, adding a dev
+stub package, or synchronizing the environment. Action availability is derived from current
+diagnostics and registry data.
 
-- `sys.version_info` branch narrowing (`directives_version_platform` dead-branch analysis)
-- PEP 695 syntax gating below 3.12 (`version_target_syntax`)
+### Execution {#LSPUV-ACTIONS-EXECUTION}
 
-Planned (not yet version-gated):
+Commands run with the workspace root as their working directory, capture stdout/stderr, and
+time out after 30 seconds. Output is returned after process completion rather than streamed.
+A successful command rebuilds project state before diagnostics are republished.
 
-- stdlib module availability (e.g., `tomllib` only in 3.11+)
-- further syntax feature support (e.g., `match` in 3.10+)
-- `typing_extensions` vs `typing` import suggestions
+## Hover {#LSPUV-HOVER}
 
----
+Import hover can add the resolved distribution name/version, direct/dev/transitive kind, and
+editable status from `PackageRegistry`.
 
-## 5. Enhanced Diagnostics {#LSPUV-DIAGNOSTICS}
+### Data flow {#LSPUV-HOVER-DATA-FLOW}
 
-### 5.1 Actionable "Module Not Found" (imports_unresolved) {#LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND}
+Lock/project files → `PackageRegistry` → import-name lookup → hover suffix. Missing
+registry entries leave ordinary hover unchanged.
 
-**Resolution contract — lock-only, never ambient (issue #252).** For a
-uv-locked project (a `PackageRegistry` exists), third-party imports resolve
-against the lock and the project's own venv (in-tree discovery or an
-explicitly activated `VIRTUAL_ENV`, issue #25) **only**. Basilisk never falls
-back to the ambient interpreter's site-packages (`python3` `sys.path` probe)
-for a locked project: a dependency missing from the lock must diagnose
-identically on every machine, regardless of what the host Python happens to
-have installed globally. Projects without a lock keep the ambient fallback as
-a convenience (`crates/basilisk-lsp/src/import_resolver.rs`,
-`resolve_site_packages_with_env`).
+## Commands {#LSPUV-COMMANDS}
 
-With uv integration, imports_unresolved becomes context-aware:
+| LSP command | Subprocess |
+|---|---|
+| `basilisk.uv.sync` | `uv sync` |
+| `basilisk.uv.add` | `uv add <package>` |
+| `basilisk.uv.addDev` | `uv add --dev <package>` |
+| `basilisk.uv.remove` | `uv remove <package>` |
+| `basilisk.uv.lock` | `uv lock` |
+| `basilisk.uv.createEnv` | `uv venv [--python <version>]` |
 
-| Scenario | Diagnostic Message | Code Action |
-|---|---|---|
-| Package not installed, not in `pyproject.toml` | `Import "requests" could not be resolved. Package is not a dependency.` | `uv add requests` |
-| Package in `pyproject.toml` but env not synced | `Import "requests" could not be resolved. Run "uv sync" to install dependencies.` | `uv sync` |
-| Package installed but no stubs | `Import "requests" resolves but has no type stubs.` | `uv add --dev types-requests` |
-| Stdlib module, wrong Python version | `Module "tomllib" requires Python >= 3.11 (project targets 3.10)` | — |
-| Workspace member, not in deps | `Import "my_lib" resolves as workspace member "packages/my_lib"` | — (info, not error) |
+### Failure UX {#LSPUV-COMMAND-FAILURE-UX}
 
-### 5.2 Missing Stub Suggestions (BSK-E0152) {#LSPUV-DIAGNOSTICS-MISSING-STUBS}
+Spawn failures and stderr are classified as package-not-found, resolution-conflict, network,
+uv-not-found, or generic. Clients receive a short remediation message while full captured
+output remains available in the Basilisk output channel.
 
-Strict-by-default error when a package is installed but has no type information (opt down with `"BSK-E0152" = "warning"`).
+## Binary resolution status {#LSPUV-CONFIG-BINARY-RESOLUTION}
 
-**When typeshed publishes a stub** (`requests` → `types-requests`):
+`basilisk-uv::find_uv_binary` implements a candidate-path helper, but LSP commands do not call
+it: they currently spawn bare `uv` through the process `PATH`. Editor settings named
+`enabled`, `executablePath`, and `autoSync` are declared but do not currently control this
+server path. Wiring these settings is tracked by the conformance-audit plan.
 
-```
-error[BSK-E0152]: Package `requests` is installed but has no type stubs available
-  --> src/app.py:3:1
-   |
- 3 | import requests
-   | ^^^^^^^^^^^^^^^^ types will be inferred as Unknown
-   |
-   = help: Type stubs available as `types-requests` — use quick fix to install
-   = note: Packages without type stubs or a PEP 561 `py.typed` marker provide no type information — https://peps.python.org/pep-0561/
-```
+## Watchers {#LSPUV-WATCHERS}
 
-**When no published stub exists** (private/first-party package) — the help points at the local-stub route and the official guide:
-
-```
-error[BSK-E0152]: Package `acme_internal` is installed but has no type stubs available
-  --> src/app.py:3:1
-   |
- 3 | import acme_internal
-   | ^^^^^^^^^^^^^^^^^^^^^ types will be inferred as Unknown
-   |
-   = help: No published type stubs for `acme_internal` — create a local stub (`acme_internal.pyi` in a `stub-paths` directory) or upstream a PEP 561 `py.typed` marker. Guide: https://typing.python.org/en/latest/guides/writing_stubs.html
-   = note: Packages without type stubs or a PEP 561 `py.typed` marker provide no type information — https://peps.python.org/pep-0561/
-```
-
-Per [STUBRES-CODEACTIONS](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CODEACTIONS) the help describes the fix and never embeds a shell command — the code action does the work. `help`/`note` lines are folded onto the LSP diagnostic message so editors (no `help`/`note` fields) still surface the guidance.
-
-The typeshed stub suggestion (and its `basilisk.uv.addDev` quick fix) is emitted only when the bundled typeshed index (`basilisk_stubs::typeshed_stub_distribution` — a committed TSV regenerated from python/typeshed's `stubs/<DIST>` tree, `crates/basilisk-stubs/data/typeshed_stub_distributions.tsv`, compiled into a phf map by `build.rs`) maps the import root to a real published `types-<DIST>` distribution (e.g. `yaml` → `types-PyYAML`). Stub names are never guessed by string concatenation — neither `types-{name}` nor `{name}-stubs` — so the quick fix never offers a package that does not exist on PyPI. The "stub already installed" case needs no lockfile check: an installed stub-only package (a `{name}-stubs` directory in site-packages — the install form of both typeshed `types-*` distributions and third-party stub packages such as `pandas-stubs`) resolves first in the PEP 561 order ([STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561) step 3), so the import no longer resolves to an untyped `.py` and BSK-E0152 does not fire at all.
-
-The **create-local-stub** quick fix (`basilisk.stubs.createLocal`, [STUBRES-CREATE-LOCAL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL)) is offered for **every** BSK-E0152 — the only fix when no typeshed stub exists, a fallback when one does.
-
-### 5.3 Dependency Hygiene Diagnostics {#LSPUV-DIAGNOSTICS-DEP-HYGIENE}
-
-New optional diagnostics (disabled by default, enabled via config):
-
-| Code | Severity | Description |
-|------|----------|-------------|
-| BSK-W0011 | Warning | Import of package not listed in `pyproject.toml` dependencies |
-| BSK-W0012 | Info | Package in `pyproject.toml` but never imported in project source |
-| BSK-W0013 | Warning | `uv.lock` is stale — `pyproject.toml` dependencies changed but lock not updated |
-
----
-
-## 6. uv Workspace Support {#LSPUV-WORKSPACE}
-
-uv workspaces define multi-package monorepos. Basilisk MUST understand them for correct import resolution.
-
-### 6.1 Workspace Detection {#LSPUV-WORKSPACE-DETECTION}
-
-Parse `pyproject.toml` for:
-
-```toml
-[tool.uv.workspace]
-members = ["packages/*", "libs/*"]
-```
-
-### 6.2 Workspace Model {#LSPUV-WORKSPACE-MODEL}
-
-```rust
-pub struct UvWorkspaceInfo {
-    pub root: PathBuf,
-    pub members: Vec<WorkspaceMember>,
-}
-
-pub struct WorkspaceMember {
-    pub name: String,
-    pub path: PathBuf,
-    pub pyproject: PathBuf,
-    pub src_roots: Vec<PathBuf>,  // typically ["src"] or ["."]
-}
-```
-
-### 6.3 Import Resolution for Workspaces {#LSPUV-WORKSPACE-IMPORT-RESOLUTION}
-
-When resolving imports in a workspace:
-
-1. Check if the import matches a workspace member name
-2. If yes, resolve to that member's source root (editable install semantics)
-3. Workspace members are always considered "typed" (no imports_unresolved for cross-member imports)
-4. The shared `uv.lock` at workspace root governs all third-party resolution
-
-### 6.4 LSP Multi-Root Mapping {#LSPUV-WORKSPACE-MULTI-ROOT}
-
-Each workspace member is an LSP workspace folder. The server keeps one `PackageRegistry` per workspace root, shared by all members under it.
-
----
-
-## 7. Code Actions {#LSPUV-ACTIONS}
-
-### 7.1 uv-Powered Quick Fixes {#LSPUV-ACTIONS-QUICK-FIXES}
-
-| Trigger | Code Action Title | Command |
-|---------|-------------------|---------|
-| imports_unresolved (unresolved, package available) | "Add dependency: `requests`" | `basilisk.uv.add` |
-| BSK-E0152 (typeshed stub exists) | "Install type stubs for `requests` (uv add --dev)" | `basilisk.uv.addDev` |
-| BSK-E0152 (any — esp. no typeshed stub) | "Create local type stub for `acme_internal`" | `basilisk.stubs.createLocal` |
-| BSK-W0013 (stale lock) | "Sync environment" | `basilisk.uv.sync` |
-
-`basilisk.stubs.createLocal` writes a permissive `.pyi` skeleton (no `uv` subprocess) — [STUBRES-CREATE-LOCAL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL).
-
-The imports_unresolved `basilisk.uv.add` quick fix is offered **only** when the unresolved import's top-level name is a valid PyPI distribution name (PEP 508/503: ASCII alphanumerics plus `.`, `-`, `_`, starting and ending alphanumeric). Internal/vendored modules like `_pydevd_bundle` (leading `_`) are not installable — `uv` rejects them, so the fix is suppressed (issue #84).
-
-### 7.2 Execution {#LSPUV-ACTIONS-EXECUTION}
-
-uv-invoking code actions run as **LSP commands** via `workspace/executeCommand`: the LSP spawns `uv`, streams output via `window/logMessage`, and re-parses the lock file on completion.
-
-Each command returns `{success, stdout, stderr}`. The client shows a success toast (e.g. "Added `requests`.") only when `success` is `true`. On failure the server surfaces an error toast, so the client shows nothing — never a success toast alongside the server's error toast for the same operation (issue #84).
-
-```rust
-// Subprocess execution — NOT inline. Runs uv in project root.
-// Output streamed to client. Lock file re-parsed on success.
-pub struct UvCommand {
-    pub args: Vec<String>,
-    pub cwd: PathBuf,
-}
-```
-
----
-
-## 8. Hover Enrichment {#LSPUV-HOVER}
-
-Hovering an import in a uv project appends package metadata to the popup:
-
-```
-requests (v2.31.0) — direct dependency
-Source: PyPI registry
-Stubs: types-requests (v2.31.0.20240311) installed
-```
-
-For workspace members:
-
-```
-my_lib — workspace member
-Source: packages/my_lib (editable)
-```
-
-### 8.1 Data Flow {#LSPUV-HOVER-DATA-FLOW}
-
-1. Hover handler resolves the import to a module path.
-2. Match the module path against `PackageRegistry`.
-3. If matched, append `PackageInfo` metadata to the hover markdown.
-4. If no match (stdlib, local file), standard hover applies.
-
----
-
-## 9. LSP Commands {#LSPUV-COMMANDS}
-
-Commands registered via `workspace/executeCommand`:
-
-| Command | Arguments | Description |
-|---------|-----------|-------------|
-| `basilisk.uv.sync` | `{}` | Run `uv sync` in project root |
-| `basilisk.uv.add` | `{package: string}` | Run `uv add <package>` |
-| `basilisk.uv.addDev` | `{package: string}` | Run `uv add --dev <package>` |
-| `basilisk.uv.remove` | `{package: string}` | Run `uv remove <package>` |
-| `basilisk.uv.lock` | `{}` | Run `uv lock` (resolve without installing) |
-| `basilisk.uv.createEnv` | `{pythonVersion?: string}` | Run `uv venv` (optionally with `--python`) |
-
-All commands:
-- Execute in the workspace root directory
-- Stream stdout/stderr to the client via `window/logMessage`
-- Trigger `uv.lock` re-parse on successful completion
-- Report failure via `window/showMessage` (error level), classified per
-  [9.1](#LSPUV-COMMAND-FAILURE-UX)
-
-### 9.1 Failure Classification & User-Facing Messaging {#LSPUV-COMMAND-FAILURE-UX}
-
-A failed uv command MUST NOT surface raw resolver stderr as the toast (issue #94). `crates/basilisk-lsp/src/uv_failure.rs` classifies the (ANSI-stripped, whitespace-normalized) stderr; the toast carries a plain-language headline plus a remediation hint:
-
-| Category | Detected from | Toast headline + action |
-|---|---|---|
-| `package_not_found` | `No solution found` + `was not found in the package registry` / `there are no versions of` | "Package `<pkg>` couldn't be found or has no compatible version. Check the package name for a typo, or confirm it exists on the configured index." |
-| `resolution_conflict` | `No solution found` (without not-found markers) | "`<pkg>` conflicts with your existing dependencies. Relax a version pin, or retry with `--frozen` to skip locking." |
-| `network_error` | connection refused / DNS / request-send errors | "Couldn't reach the package index. Check your network or index URL, then retry." |
-| `uv_not_found` | spawn `ErrorKind::NotFound` | "`uv` isn't installed or isn't on PATH." + install link |
-| `generic` | anything else | "`<label>` failed. See the Basilisk Output channel for the full uv output." |
-
-Requirements:
-- The **full** uv stderr always remains in the Output channel via
-  `window/logMessage` — only the toast is classified.
-- Structured logging on failure includes `command`, `package`, `exit_code`,
-  `failure_category`, and `duration_ms`. Never log index credentials.
-- Covered by the e2e tests in
-  `crates/basilisk-lsp/tests/lsp/ws_test_execute_uv.rs` (package-not-found and
-  generic cases).
-
----
-
-## 10. Configuration {#LSPUV-CONFIG}
-
-Settings added to the shared LSP configuration (extends [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)):
-
-| Setting Key | Type | Default | Description |
-|---|---|---|---|
-| `basilisk.uv.enabled` | `boolean` | `true` | Enable uv integration (auto-detected) |
-| `basilisk.uv.executablePath` | `string` | `""` (auto-detect) | Path to `uv` binary |
-| `basilisk.uv.autoSync` | `boolean` | `false` | Auto-run `uv sync` when `pyproject.toml` changes |
-| `basilisk.uv.stubSuggestions` | `boolean` | `true` | Suggest installing type stub packages |
-| `basilisk.uv.dependencyDiagnostics` | `boolean` | `false` | Enable BSK-W0011/W0012/W0013 |
-
-### 10.1 uv Binary Resolution {#LSPUV-CONFIG-BINARY-RESOLUTION}
-
-| Priority | Source |
-|----------|--------|
-| 1 | `basilisk.uv.executablePath` setting |
-| 2 | `UV_PATH` environment variable |
-| 3 | `~/.cargo/bin/uv` |
-| 4 | `~/.local/bin/uv` |
-| 5 | OS PATH search |
-
-The uv binary is needed only for **commands** (sync, add, remove). Lock-file parsing and environment detection are pure filesystem operations and work even without `uv` installed.
-
----
-
-## 11. File Watchers {#LSPUV-WATCHERS}
-
-The LSP registers additional file watchers for uv projects:
-
-| Pattern | Event | Action |
-|---------|-------|--------|
-| `uv.lock` | Create / Change | Reload checker config, rebuild `PackageRegistry`, re-resolve imports, re-check |
-| `.python-version` | Create / Change | Reload checker config (version-aware rules — [CHKARCH-VERSION-TARGET]), re-check |
-| `pyproject.toml` | Change | Reload checker config, re-detect workspace members, rebuild registry, re-check |
-| `basilisk.json` | Change | Reload checker config (severity overrides, `python-version`), re-check |
-| `.venv/pyvenv.cfg` | Create / Delete | Re-detect environment manager |
-
-On any of these, the LSP first re-reads each root's `BasiliskConfig` from disk (`WorkspaceIndex::reload_root_configs`) so a changed `python-version` or rule severity takes effect without an LSP restart, then re-checks every indexed file and republishes diagnostics.
-
----
-
-## 12. Logging {#LSPUV-LOGGING}
-
-uv integration logs (structured `tracing`):
-
-| Level | Event |
-|-------|-------|
-| `info` | Project detected; `uv.lock` parsed (package count) |
-| `debug` | Lock diff on reload; per-import resolution decisions |
-| `warn` | Stale `uv.lock`; `uv` binary not found (code actions disabled) |
-| `error` | `uv.lock` parse failure (invalid TOML) |
-
----
-
-## 13. Non-Goals {#LSPUV-NON-GOALS}
-
-Hard invariants for the implementation:
-
-- **uv.lock writing** — Basilisk is read-only on lock files; mutations go through the `uv` CLI.
-- **Network calls** — no PyPI queries or index lookups; every resolution input is local.
-- **Replacing uv** — package management is delegated, never reimplemented.
-- **Non-uv managers** — Poetry/Pipenv/PDM/pip have no dedicated path; they fall back to existing import resolution ([LSPUV-DETECTION-FALLBACK]).
+The server watches `uv.lock`, `pyproject.toml`, and `.python-version` at each workspace
+root **itself** — the server-owned poll in `configuration_editor/watch.rs`
+([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)) — and additionally registers
+client `**/uv.lock`, `**/.python-version`, and `**/pyproject.toml` watchers as a latency
+optimization that also covers nested workspace-member files. A `.python-version` change
+reloads root configs (target version); `uv.lock` and `pyproject.toml` changes rebuild the
+package registry and import search paths; every path ends in one recheck. Both observers
+share one per-source disk baseline, so a change refreshes exactly once.
+`.venv/pyvenv.cfg` participates in startup detection but is not watched.

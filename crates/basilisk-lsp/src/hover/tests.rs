@@ -1,7 +1,7 @@
 use super::*;
 
 /// Parse and resolve `source` as `test.py` for hover tests.
-fn parse_and_resolve(source: &str) -> ResolvedModule {
+pub(super) fn parse_and_resolve(source: &str) -> ResolvedModule {
     let parsed = basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned())
         .expect("test source should parse");
     basilisk_resolver::resolve(&parsed).expect("resolution should not fail")
@@ -70,8 +70,12 @@ fn test_hover_on_imported_stub_symbol_shows_signature() {
             source_path: std::path::PathBuf::from("/venv/.../acme-stubs/__init__.pyi"),
             source_span: Span::new(0, 0),
             signature: Some("def fetch(url: str) -> bytes".to_owned()),
+            docstring: None,
             provenance: Some(basilisk_stubs::TypeProvenance::StubTier1),
             methods: Vec::new(),
+            bases: Vec::new(),
+            metaclass: None,
+            metaclass_calls: Vec::new(),
         },
     );
 
@@ -86,6 +90,55 @@ fn test_hover_on_imported_stub_symbol_shows_signature() {
     assert!(
         markup.value.contains("def fetch(url: str) -> bytes"),
         "hover should show the stub signature: {}",
+        markup.value
+    );
+}
+
+/// [STUBRES-PYI] #289: hovering an imported class shows its constructor,
+/// resolved from the real flattened `.pyi` methods — its inherited `__init__`
+/// (e.g. `unittest.mock.Mock`'s from `CallableMixin`) — never a hand table.
+#[test]
+fn test_hover_on_imported_class_shows_inherited_constructor() {
+    use basilisk_resolver::scope::{ExternalMethod, ExternalSymbol, ExternalSymbolKind};
+    use basilisk_resolver::Span;
+
+    let source = "from unittest.mock import Mock\n\nm = Mock()\n";
+    let mut resolved = parse_and_resolve(source);
+
+    // As `populate_imported_symbols` would produce it: the bound `Mock` carries
+    // its inherited constructor flattened over the module's C3 MRO.
+    let _ = resolved.imported_symbols.insert(
+        "Mock".to_owned(),
+        ExternalSymbol {
+            name: "Mock".to_owned(),
+            kind: ExternalSymbolKind::Class,
+            type_annotation: None,
+            source_path: std::path::PathBuf::from("/typeshed/stdlib/unittest/mock.pyi"),
+            source_span: Span::new(0, 0),
+            signature: Some("class Mock".to_owned()),
+            docstring: None,
+            provenance: Some(basilisk_stubs::TypeProvenance::StubTier1),
+            methods: vec![ExternalMethod {
+                name: "__init__".to_owned(),
+                signature: "def __init__(spec: Any, side_effect: Any) -> None".to_owned(),
+                docstring: None,
+            }],
+            bases: vec!["CallableMixin".to_owned(), "NonCallableMock".to_owned()],
+            metaclass: None,
+            metaclass_calls: Vec::new(),
+        },
+    );
+
+    let offset = source.rfind("Mock").expect("usage present") + 1;
+    let hover = hover_at(&resolved, source, offset, &[]).expect("hover should be Some");
+    let HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected Markup hover contents");
+    };
+    assert!(
+        markup
+            .value
+            .contains("def Mock.__init__(spec: Any, side_effect: Any) -> None"),
+        "hover on an imported class must show its inherited constructor: {}",
         markup.value
     );
 }
@@ -112,7 +165,12 @@ fn test_hover_on_method_inherited_from_external_stub_base_shows_signature() {
         import.resolution = ImportResolution::StubPyi;
         import.resolved_path = Some(stub_path);
     }
-    basilisk_checker::exports::populate_imported_symbols(&mut resolved, |_| None, None);
+    basilisk_checker::exports::populate_imported_symbols(
+        &mut resolved,
+        |_| None,
+        basilisk_checker::exports::load_external_module,
+        &[],
+    );
     assert!(
         resolved.imported_symbols.contains_key("BaseModel"),
         "precondition: the stub base class resolved"
@@ -133,6 +191,66 @@ fn test_hover_on_method_inherited_from_external_stub_base_shows_signature() {
             .value
             .contains("BaseModel.model_validate(obj: object) -> BaseModel"),
         "hover should show the inherited method's stub signature: {}",
+        markup.value
+    );
+}
+
+/// Regression for #287, real-package shape: `pydantic/__init__.py` defines no
+/// classes — it re-exports everything from `.main` via a **star import**
+/// inside an `if TYPE_CHECKING:` block (`from .main import *`; runtime uses a
+/// lazy module `__getattr__`). Export extraction must follow that re-export
+/// into `main.py`, so hovering an inherited `model_validate` shows its
+/// signature. Before this, extraction only kept symbols *defined* in the
+/// resolved `__init__.py`, and the hover returned nothing against the real
+/// pydantic package.
+#[test]
+fn test_hover_on_method_reexported_through_py_typed_package_init() {
+    let source = "from pydantic import BaseModel\n\nclass ComposerSavePayload(BaseModel):\n    name: str\n\np = ComposerSavePayload.model_validate({})\n";
+    let mut resolved = parse_and_resolve(source);
+
+    // A real py.typed package on disk, shaped like pydantic v2.
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let pkg = dir.path().join("pydantic");
+    std::fs::create_dir(&pkg).expect("create package dir");
+    std::fs::write(pkg.join("py.typed"), "").expect("write py.typed marker");
+    std::fs::write(
+        pkg.join("__init__.py"),
+        "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from .main import *\n\n__all__ = ['BaseModel']\n",
+    )
+    .expect("write __init__.py");
+    std::fs::write(
+        pkg.join("main.py"),
+        "class BaseModel:\n    @classmethod\n    def model_validate(cls, obj: object) -> 'BaseModel': ...\n",
+    )
+    .expect("write main.py");
+    if let Some(import) = resolved.imports.first_mut() {
+        import.resolution = ImportResolution::SourcePy;
+        import.resolved_path = Some(pkg.join("__init__.py"));
+    }
+    basilisk_checker::exports::populate_imported_symbols(
+        &mut resolved,
+        |_| None,
+        basilisk_checker::exports::load_external_module,
+        &[],
+    );
+    assert!(
+        resolved.imported_symbols.contains_key("BaseModel"),
+        "the TYPE_CHECKING re-export in the package __init__ must surface \
+         `BaseModel` as an imported symbol"
+    );
+
+    // Hover on the `model_validate` call site.
+    let offset = source.rfind("model_validate").expect("usage present") + 1;
+    let hover = hover_at(&resolved, source, offset, &[]);
+    let hover =
+        hover.expect("hover should be Some for a method inherited through a re-exported base");
+    let HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected Markup hover contents");
+    };
+
+    assert!(
+        markup.value.contains("BaseModel.model_validate"),
+        "hover should show the re-exported method's signature: {}",
         markup.value
     );
 }
@@ -173,7 +291,22 @@ fn test_hover_on_class_shows_init_signature() {
 #[test]
 fn test_hover_on_str_literal_method_shows_signature() {
     let source = "words = [\"a\", \"b\"]\nx = \" \".join(words)\n";
-    let resolved = parse_and_resolve(source);
+    let mut resolved = parse_and_resolve(source);
+    let snapshot =
+        basilisk_stubs::typeshed::bundle::bundled_snapshot().expect("release bundle activates");
+    let paths = basilisk_checker::imports::ImportSearchPaths {
+        roots: vec![std::path::PathBuf::from("/workspace")],
+        extra_paths: Vec::new(),
+        stub_paths: Vec::new(),
+        workspace_members: Vec::new(),
+        site_packages: None,
+        registry: None,
+        typeshed_snapshot: Some(basilisk_checker::imports::ActiveTypeshed::new(
+            std::sync::Arc::new(snapshot),
+            None,
+        )),
+    };
+    basilisk_checker::imports::resolve_module_imports(&mut resolved, &paths);
 
     let offset = source.rfind("join").expect("usage present") + 1;
     let hover = hover_at(&resolved, source, offset, &[]);
@@ -187,6 +320,11 @@ fn test_hover_on_str_literal_method_shows_signature() {
         "hover should show the builtin method's signature: {}",
         markup.value
     );
+    assert!(markup.value.contains("Iterable[LiteralString]"));
+    assert!(markup.value.contains("LiteralString"));
+    assert!(markup.value.contains("Iterable[str]"));
+    assert!(markup.value.contains('/'));
+    assert!(markup.value.contains("bundled-"));
 }
 
 /// Regression for #200 (intermittent hover): hovering a *usage* of an
@@ -407,6 +545,129 @@ fn test_hover_on_source_py_import_shows_no_stubs_annotation() {
     assert!(
         markup.value.contains("no type stubs"),
         "source .py import should show 'no type stubs': {}",
+        markup.value
+    );
+}
+
+// Regression for GitHub #290: hovering a variable bound to a dict literal
+// showed the bare container name (`dict`) instead of the parameterized
+// generic inferred from its elements. String-literal elements retain their
+// PEP 675 precision as `LiteralString`.
+#[test]
+fn test_hover_infers_generic_type_args_for_dict_literal() {
+    let source = "language_timezone_mapping = {\"en\": \"UTC\", \"fr\": \"Europe/Paris\"}\n";
+    let resolved = parse_and_resolve(source);
+
+    // Cursor on `language_timezone_mapping` at its definition (offset 0).
+    let hover = hover_at(&resolved, source, 0, &[]);
+    let hover = hover.expect("hover should be Some for a dict-literal variable");
+    let HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected Markup hover contents");
+    };
+
+    assert!(
+        markup
+            .value
+            .contains("language_timezone_mapping: dict[LiteralString, LiteralString]"),
+        "hover should show the precise parameterized generic: {}",
+        markup.value
+    );
+}
+
+/// A member access resolves through its receiver, so `self.attr` still finds
+/// the attribute the enclosing class declares — the receiver-aware path must
+/// not have traded one broken lookup for another.
+///
+/// The attribute is declared in the class body: an attribute that only ever
+/// appears as `self.x = ...` inside a method is not recorded by the resolver
+/// at all (`ClassInfo::attributes` stays empty), so no hover consumer can
+/// reach it. That gap predates the receiver-aware path and is not what this
+/// test pins.
+#[test]
+fn test_hover_on_self_attribute_resolves_through_the_enclosing_class() {
+    let source =
+        "class Point:\n    x: int = 0\n\n    def show(self) -> None:\n        print(self.x)\n";
+    let resolved = parse_and_resolve(source);
+
+    let offset = source.rfind("self.x").expect("the read must be present") + "self.".len();
+    let hover = hover_at(&resolved, source, offset, &[]).expect("`self.x` must have hover");
+    let HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected Markup hover contents");
+    };
+
+    assert!(
+        markup.value.contains("Point.x") && markup.value.contains("int"),
+        "hover must show the attribute the enclosing class declares: {}",
+        markup.value
+    );
+}
+
+/// A local method reached through a variable typed by its constructor call.
+/// Nothing binds `instance` to `Greeter` except the call, so this only
+/// resolves once the receiver is typed from the call site.
+#[test]
+fn test_hover_on_method_of_constructor_typed_receiver() {
+    let source = "class Greeter:\n    def greet(self, name: str) -> str:\n        return name\n\ninstance = Greeter()\nvalue = instance.greet(\"x\")\n";
+    let resolved = parse_and_resolve(source);
+
+    let offset = source.rfind("greet").expect("the call must be present") + 1;
+    let hover = hover_at(&resolved, source, offset, &[]).expect("the method call must have hover");
+    let HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected Markup hover contents");
+    };
+
+    assert!(
+        markup.value.contains("Greeter.greet") && markup.value.contains("name: str"),
+        "hover must resolve the method through the receiver's constructed type: {}",
+        markup.value
+    );
+}
+
+/// A plain `import os` publishes every member of `os` into `imported_symbols`
+/// under its bare name, so a *local* symbol that happens to share one of those
+/// names was being labelled as coming from Typeshed. Provenance may only be
+/// claimed for a name an import actually binds.
+#[test]
+fn test_hover_on_local_symbol_is_not_labelled_with_import_provenance() {
+    use basilisk_resolver::scope::{ExternalSymbol, ExternalSymbolKind};
+    use basilisk_resolver::Span;
+
+    let source = "import os\n\n\ndef error(message: str) -> None:\n    print(message)\n\n\nerror(\"boom\")\n";
+    let mut resolved = parse_and_resolve(source);
+
+    // Exactly what a plain `import os` produces for typeshed's `error = OSError`.
+    let _ = resolved.imported_symbols.insert(
+        "error".to_owned(),
+        ExternalSymbol {
+            name: "error".to_owned(),
+            kind: ExternalSymbolKind::Variable,
+            type_annotation: Some("OSError".to_owned()),
+            source_path: std::path::PathBuf::from("typeshed:bundled/stdlib/os/__init__.pyi"),
+            source_span: Span::new(0, 0),
+            signature: None,
+            docstring: None,
+            provenance: Some(basilisk_stubs::TypeProvenance::StubTier1),
+            methods: Vec::new(),
+            bases: Vec::new(),
+            metaclass: None,
+            metaclass_calls: Vec::new(),
+        },
+    );
+
+    let offset = source.rfind("error").expect("the call must be present") + 1;
+    let hover = hover_at(&resolved, source, offset, &[]).expect("the local call must have hover");
+    let HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected Markup hover contents");
+    };
+
+    assert!(
+        markup.value.contains("def error(message: str)"),
+        "hover must show the local definition: {}",
+        markup.value
+    );
+    assert!(
+        !markup.value.contains("(typeshed)"),
+        "a local symbol must not be attributed to an import that never bound it: {}",
         markup.value
     );
 }

@@ -40,6 +40,7 @@ union StubTier {
 union TypeProvenance {
   Source
   StubTier1
+  StubUser
   StubCustomTypeshed
   StubTier2
   StubTier3

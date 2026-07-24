@@ -275,6 +275,12 @@ pub struct ResolvedModule {
     /// Populated by the workspace layer after import resolution, not during
     /// the initial `resolve()` pass. Maps import name → external symbol info.
     pub imported_symbols: std::collections::HashMap<String, ExternalSymbol>,
+    /// Structured built-in class declarations from the active Typeshed source.
+    ///
+    /// This is populated alongside imports from the same root-keyed snapshot,
+    /// so editor features and diagnostics never consult a compiled hand table
+    /// or another generation's `builtins.pyi`.
+    pub builtin_classes: std::sync::Arc<std::collections::HashMap<String, super::IndexedStubClass>>,
     /// Public member API of plain-imported modules backed by a user/local stub,
     /// keyed by local binding name (`X` for `import X`).
     ///
@@ -292,8 +298,93 @@ pub struct ResolvedModule {
     pub path: String,
     /// The original source text (forwarded from parser for span restoration).
     pub source: String,
+    /// Exact ranges of Python comment tokens used for safe inline suppression.
+    pub comment_ranges: Vec<Span>,
     /// Lazily-parsed AST shared by every rule that needs it (parsed at most once
     /// per module rather than once per rule). Excluded from equality — see
     /// [`LazyAst`].
     pub lazy_ast: LazyAst,
+}
+
+impl ResolvedModule {
+    /// Resolve a statically-known method-call receiver to its active Typeshed
+    /// built-in declaration and whether it is a literal receiver.
+    #[must_use]
+    pub fn builtin_class_for_receiver(
+        &self,
+        receiver: &super::CallReceiver,
+    ) -> Option<(&super::IndexedStubClass, bool)> {
+        let (type_name, literal) = match receiver {
+            super::CallReceiver::StringLiteral => ("str", true),
+            super::CallReceiver::BytesLiteral => ("bytes", true),
+            super::CallReceiver::Name(name) => self.builtin_type_of_name(name)?,
+        };
+        self.builtin_classes
+            .get(type_name)
+            .map(|declaration| (declaration, literal))
+    }
+
+    /// Applicable overload declarations for a bound built-in method call.
+    #[must_use]
+    pub fn builtin_methods_for_call(
+        &self,
+        call: &super::CallSite,
+    ) -> Vec<&basilisk_stubs::StubFunction> {
+        let Some(receiver) = call.receiver.as_ref() else {
+            return Vec::new();
+        };
+        let Some((class, literal_receiver)) = self.builtin_class_for_receiver(receiver) else {
+            return Vec::new();
+        };
+        class
+            .declaration
+            .methods
+            .iter()
+            .filter(|method| method.name == call.callee)
+            .filter(|method| {
+                literal_receiver
+                    || method
+                        .receiver
+                        .as_ref()
+                        .and_then(|receiver| receiver.annotation.as_deref())
+                        .is_none_or(|annotation| !annotation.contains("LiteralString"))
+            })
+            .collect()
+    }
+
+    fn builtin_type_of_name(&self, name: &str) -> Option<(&str, bool)> {
+        if let Some(variable) = self
+            .module_vars
+            .iter()
+            .find(|variable| variable.name == name)
+        {
+            if let Some(annotation) = variable
+                .annotation_span
+                .and_then(|span| span.slice_source(&self.source))
+            {
+                return builtin_annotation(annotation);
+            }
+            return match variable.rhs_kind {
+                super::RhsKind::StrLiteral => Some(("str", true)),
+                super::RhsKind::BytesLiteral => Some(("bytes", true)),
+                _ => None,
+            };
+        }
+        self.functions
+            .iter()
+            .flat_map(|function| &function.parameters)
+            .find(|parameter| parameter.name == name)
+            .and_then(|parameter| parameter.annotation_span)
+            .and_then(|span| span.slice_source(&self.source))
+            .and_then(builtin_annotation)
+    }
+}
+
+fn builtin_annotation(annotation: &str) -> Option<(&str, bool)> {
+    match annotation.trim() {
+        "str" => Some(("str", false)),
+        "LiteralString" | "typing.LiteralString" => Some(("str", true)),
+        "bytes" => Some(("bytes", false)),
+        _ => None,
+    }
 }

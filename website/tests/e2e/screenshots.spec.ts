@@ -69,6 +69,7 @@ test.describe("CLI screenshots render", () => {
     { path: "/docs/refactoring/", image: "vscode-quickfix.png" },
     { path: "/docs/", image: "vscode-module-explorer.png" },
     { path: "/docs/quick-start/", image: "vscode-hover.png" },
+    { path: "/docs/configuration/", image: "vscode-configuration-editor.png" },
   ];
 
   for (const { path, image } of EDITOR_SHOTS) {

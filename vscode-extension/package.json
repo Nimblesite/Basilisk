@@ -1,10 +1,10 @@
 {
   "name": "basilisk",
   "displayName": "Basilisk",
-  "description": "The only Python type checker with a perfect 100% score on the official python/typing conformance results. Open-source Pylance replacement — complete language server with type checking, completions, go-to-definition, refactoring, debugging & profiling. Built in Rust.",
+  "description": "The only Python type checker scoring 100% on the official python/typing conformance suite — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default.",
   "version": "0.0.0-PLACEHOLDER",
   "publisher": "Nimblesite",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "icon": "images/basilisk-logo.png",
   "galleryBanner": {
     "color": "#0a0c12",
@@ -120,6 +120,25 @@
         "command": "basilisk.showOutput",
         "title": "Basilisk: Show Output",
         "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.statusMenu",
+        "title": "Basilisk: Status Menu",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.openConfigurationEditor",
+        "title": "Basilisk: Open Configuration Editor",
+        "category": "Basilisk",
+        "icon": "$(settings-gear)",
+        "enablement": "basilisk.configurationEditorSupported"
+      },
+      {
+        "command": "basilisk.editConfig",
+        "title": "Edit Config",
+        "category": "Basilisk",
+        "icon": "$(settings-gear)",
+        "enablement": "basilisk.configurationEditorSupported"
       },
       {
         "command": "basilisk.organizeImports",
@@ -307,9 +326,9 @@
       },
       {
         "command": "basilisk.info.runAction",
-        "title": "Run Action",
+        "title": "Toggle Diagnostics",
         "category": "Basilisk",
-        "icon": "$(play)"
+        "icon": "$(arrow-swap)"
       },
       {
         "command": "basilisk.refreshProcesses",
@@ -373,6 +392,14 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "basilisk.openConfigurationEditor",
+          "when": "basilisk.configurationEditorSupported"
+        },
+        {
+          "command": "basilisk.editConfig",
+          "when": "false"
+        },
+        {
           "command": "basilisk.info.runAction",
           "when": "false"
         },
@@ -421,6 +448,13 @@
           "when": "basilisk.debugging"
         }
       ],
+      "explorer/context": [
+        {
+          "command": "basilisk.editConfig",
+          "when": "resourceFilename == pyproject.toml && basilisk.configurationEditorSupported",
+          "group": "navigation@1"
+        }
+      ],
       "debug/toolBar": [
         {
           "command": "basilisk.memorySnapshot",
@@ -439,6 +473,21 @@
         }
       ],
       "view/title": [
+        {
+          "command": "basilisk.openConfigurationEditor",
+          "when": "view == basilisk.info && basilisk.configurationEditorSupported",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.openConfigurationEditor",
+          "when": "view == basilisk.moduleExplorer && basilisk.configurationEditorSupported",
+          "group": "z_config@1"
+        },
+        {
+          "command": "basilisk.openConfigurationEditor",
+          "when": "view == basilisk.pythonProcesses && basilisk.configurationEditorSupported",
+          "group": "z_config@1"
+        },
         {
           "command": "basilisk.refreshModuleExplorer",
           "when": "view == basilisk.moduleExplorer",
@@ -732,7 +781,12 @@
         "basilisk.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable or disable the Basilisk type checker."
+          "description": "Enable or disable diagnostic publication from both Basilisk check and analyze rule sets."
+        },
+        "basilisk.analyze": {
+          "type": "boolean",
+          "default": true,
+          "description": "Publish analyze-scope diagnostics (configured non-PEP rules) in addition to the always-on PEP check scope. Disable to restrict the editor to check scope; project configuration is unaffected. See LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE."
         },
         "basilisk.useLsp": {
           "type": "boolean",
@@ -779,16 +833,6 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically run 'uv sync' when pyproject.toml changes"
-        },
-        "basilisk.uv.stubSuggestions": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show suggestions to install type stubs for untyped packages"
-        },
-        "basilisk.uv.dependencyDiagnostics": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show diagnostics for dependency hygiene (undeclared imports, unused deps)"
         },
         "basilisk.testExplorer.enabled": {
           "type": "boolean",
@@ -964,15 +1008,20 @@
     ]
   },
   "scripts": {
+    "licenses:update": "node scripts/update-dependency-licenses.mjs",
+    "licenses:check": "node scripts/update-dependency-licenses.mjs --check",
     "sync:shipwright": "node scripts/sync-shipwright-manifest.mjs",
+    "stage:attribution": "node scripts/verify-shipwright.mjs stage-attribution",
     "compile": "tsc -p ./ && node -e \"const fs=require('fs');fs.mkdirSync('out/src/test/fixtures',{recursive:true});fs.readdirSync('src/test/fixtures').forEach(f=>fs.copyFileSync('src/test/fixtures/'+f,'out/src/test/fixtures/'+f));\"",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "test": "vscode-test",
-    "test:shipwright": "node scripts/verify-shipwright.mjs manifest",
-    "vscode:prepublish": "npm run sync:shipwright && npm run compile",
-    "package": "npm run sync:shipwright && vsce package",
+    "pretest": "node scripts/fetch-real-world-repos.mjs",
+    "test": "vscode-test --bail",
+    "test:real-world": "npm run compile && node scripts/fetch-real-world-repos.mjs && vscode-test --bail --label real-world-flask --label real-world-rich --label real-world-fastapi",
+    "test:shipwright": "node scripts/verify-shipwright.mjs manifest && npm run licenses:check",
+    "vscode:prepublish": "npm run stage:attribution && npm run sync:shipwright && npm run compile",
+    "package": "cd .. && make _release_vsix",
     "screenshots:editor": "node scripts/capture-screenshots.mjs"
   },
   "dependencies": {

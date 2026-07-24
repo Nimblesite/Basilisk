@@ -230,13 +230,10 @@ fn clean_stdlib_imports_are_silent() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn clean_concrete_annotations_no_any_warning() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("clean/typed_any_justified.py")?;
-    let any_warnings: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-W0014")
-        .collect();
+    let any_warnings: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0014").collect();
     assert!(
         any_warnings.is_empty(),
-        "concrete annotations must not produce the BSK-W0014 explicit-Any warning, got:\n{any_warnings:#?}"
+        "concrete annotations must not produce the BSK-0014 explicit-Any warning, got:\n{any_warnings:#?}"
     );
     Ok(())
 }
@@ -260,19 +257,16 @@ fn clean_match_with_wildcard_is_silent() -> Result<(), Box<dyn std::error::Error
 }
 
 // ---------------------------------------------------------------------------
-// override WITH @override must NOT trigger BSK-E0025
+// override WITH @override must NOT trigger BSK-0025
 // ---------------------------------------------------------------------------
 
 #[test]
 fn clean_override_with_decorator_is_silent() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("clean/typed_override.py")?;
-    let e0025: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0025")
-        .collect();
+    let e0025: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0025").collect();
     assert!(
         e0025.is_empty(),
-        "override with @override must not produce BSK-E0025, got:\n{e0025:#?}"
+        "override with @override must not produce BSK-0025, got:\n{e0025:#?}"
     );
     Ok(())
 }

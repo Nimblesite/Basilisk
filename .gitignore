@@ -33,11 +33,14 @@ target/
 node_modules/
 vscode-extension/out/
 vscode-extension/.vscode-test/
+vscode-extension/.real-world/
 vscode-extension/.screenshots/
 vscode-extension/coverage/
 vscode-extension/bin/
 vscode-extension/bundled/
 vscode-extension/shipwright.json
+vscode-extension/NOTICES
+vscode-extension/test-fixtures/workspace/wm_scan_target.py
 *.vsix
 *.tgz
 .npm/
@@ -103,12 +106,15 @@ deslop-*.log
 # =============================================================================
 # Benchmarks
 # =============================================================================
-benchmarks/results/
+benchmarks/results/.mypycache/
+benchmarks/results/.warmcache/
+
 
 # =============================================================================
-# Conformance test FIXTURES: downloaded on demand into conformance/tests/ (via
-# make conformance / score.py --fetch) — never committed. NOTE: the official
-# calculator conformance/upstream_main.py IS committed and is NOT ignored.
+# Conformance test FIXTURES: mirrored on demand into conformance/tests/ (via
+# make conformance / run_conformance.py --sync-tests) from a FRESH python/typing
+# clone — never committed. The fresh clone (target/typing-upstream) and the
+# harness venv (target/.conformance-venv) live under target/, already ignored above.
 # =============================================================================
 conformance/tests/
 
@@ -157,3 +163,11 @@ website/_verify/
 
 
 /*.png
+
+book/dist/
+
+# The analysisMode e2e writes this Python file into the VSIX fixture workspace
+# and unlinks it in its finally block. An interrupted run skips that cleanup, so
+# without this the residue gets committed and the next run type-checks a file
+# the suite believes it created fresh.
+vscode-extension/test-fixtures/workspace/ofo_no_scan_target.py

@@ -10,6 +10,11 @@ local M = {}
 M.DIAGNOSTIC_TIMEOUT_MS = 15000
 M.NO_DIAGNOSTIC_WAIT_MS = 5000
 M.SERVER_START_WAIT_MS = 10000
+--- Budget for the semantic model to finish indexing after the client attaches.
+--- Distinct from SERVER_START_WAIT_MS (client-attach): the ci-profile binary on
+--- a slow runner needs more headroom to build the symbol table than to accept
+--- the connection, so semantic readiness gets its own, larger budget.
+M.MODEL_READY_WAIT_MS = 20000
 
 --- Resolve the basilisk binary path.
 ---@return string? path
@@ -83,19 +88,25 @@ function M.replace_content(buf, content)
 end
 
 --- Poll until a condition is met, or timeout.
----@param condition fun(): boolean
+---@param condition fun(remaining_ms: integer): boolean
 ---@param timeout_ms integer
 ---@param desc? string Description for error message.
 ---@return boolean success
 function M.poll_until(condition, timeout_ms, desc)
   local interval = 100
-  local elapsed = 0
-  while elapsed < timeout_ms do
-    if condition() then
+  local deadline = vim.uv.hrtime() + timeout_ms * 1000000
+
+  while vim.uv.hrtime() < deadline do
+    local remaining_ms = math.max(1, math.ceil((deadline - vim.uv.hrtime()) / 1000000))
+    if condition(remaining_ms) then
       return true
     end
-    vim.wait(interval)
-    elapsed = elapsed + interval
+
+    local remaining_ns = deadline - vim.uv.hrtime()
+    if remaining_ns <= 0 then
+      break
+    end
+    vim.wait(math.min(interval, math.ceil(remaining_ns / 1000000)))
   end
   return false
 end
@@ -143,19 +154,28 @@ function M.wait_for_client(buf, timeout_ms)
   return client
 end
 
---- Wait for the LSP server to be fully ready (responds to documentSymbol).
+--- Wait for the LSP server to be fully ready to answer semantic queries.
+---
+--- Readiness means the semantic model is INDEXED, not merely that the client
+--- connection accepts requests. documentSymbol answers with an empty list while
+--- the model is still building, and during that window every semantic feature
+--- (rename / hover / definition / codeAction) returns null. Gating on a bare
+--- response therefore lets callers fire real queries too early — a race that is
+--- invisible on a fast release binary but fails reliably on the slower
+--- ci-profile binary and older Neovim (0.11). Require an ACTUAL non-empty
+--- symbol result so callers only proceed once the model can answer.
 ---@param buf integer
----@param timeout_ms? integer
+---@param timeout_ms? integer Budget for the model to finish indexing.
 ---@return boolean ready
 function M.wait_for_server_ready(buf, timeout_ms)
-  timeout_ms = timeout_ms or M.SERVER_START_WAIT_MS
-  local client = M.wait_for_client(buf, timeout_ms)
+  timeout_ms = timeout_ms or M.MODEL_READY_WAIT_MS
+  local client = M.wait_for_client(buf, M.SERVER_START_WAIT_MS)
   if not client then
     return false
   end
 
   local ready = false
-  M.poll_until(function()
+  M.poll_until(function(remaining_ms)
     local result = nil
     local done = false
     client:request("textDocument/documentSymbol", {
@@ -165,10 +185,13 @@ function M.wait_for_server_ready(buf, timeout_ms)
       done = true
     end, buf)
     -- Wait for the response.
-    vim.wait(3000, function()
+    vim.wait(math.min(3000, remaining_ms), function()
       return done
     end)
-    if done then
+    -- Only a non-empty symbol list proves the model is indexed and semantic
+    -- features will resolve; an empty/absent result means indexing is still in
+    -- flight, so keep polling.
+    if done and type(result) == "table" and not vim.tbl_isempty(result) then
       ready = true
       return true
     end

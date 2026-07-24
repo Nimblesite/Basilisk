@@ -1,4 +1,4 @@
-//! Implements [`generics_self_basic`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! Implements [`generics_self_basic`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 //! `generics_self_basic`: `Self` type violations in generics.
 //!
 //! This rule detects two kinds of `Self` type violations:

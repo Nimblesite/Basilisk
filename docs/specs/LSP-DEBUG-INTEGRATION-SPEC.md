@@ -90,7 +90,7 @@ Add `DebugSessionManager` to `LspServer` and handle `basilisk.startDebugSession`
 
 ## VS Code Extension {#LSPDEBUG-VSCODE}
 
-VS Code-specific DAP implementation: [VSIX-SPEC.md VSIX-DAP](VSIX-SPEC.md#VSIX-DAP).
+VS Code-specific DAP implementation: [VSIX-PYTHON-DEBUGGER-DAP](VSIX-SPEC.md#VSIX-PYTHON-DEBUGGER-DAP).
 
 ## Attach Session Flow {#LSPDEBUG-ATTACH}
 
@@ -137,4 +137,6 @@ When the Python interpreter can't be found, the error lists what was tried:
 
 ## Python Version Targeting {#LSPDEBUG-PYTHON}
 
-Primary target Python 3.12 (canonical Basilisk version), where debugpy's `sys.settrace`/pydevd path is fully supported.
+The session uses the interpreter resolved by [LSPDEBUG-PYRES](#LSPDEBUG-PYRES).
+Interpreter compatibility belongs to that runtime and debugpy; Basilisk does
+not declare one canonical Python release for debugging.

@@ -1,7 +1,7 @@
 //! Implements [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
 //! AST-based stub generation.
 //!
-//! Parses `.py` source files with `ruff_python_parser` and extracts
+//! Parses `.py` source files with `basilisk-parser` and extracts
 //! function signatures, class definitions, and module-level variables
 //! to produce `.pyi` stub content.  No subprocess needed.
 
@@ -31,16 +31,15 @@ pub fn generate_ast_stubs(
 ///
 /// Returns `StubGenError::Parse` if the source cannot be parsed.
 // Implements [STUBRES-AUTOGEN-MODES] "AST-based inference" — medium accuracy:
-// parses `.py` source with `ruff_python_parser`, no subprocess, misses dynamic
+// parses `.py` source with `basilisk-parser`, no subprocess, misses dynamic
 // patterns.
 pub fn generate_ast_stubs_from_source(
     module_name: &str,
     source: &str,
 ) -> Result<GeneratedStub, StubGenError> {
-    let parsed = ruff_python_parser::parse_module(source)
-        .map_err(|err| StubGenError::Parse(format!("{err}")))?;
-
-    let module_ast = parsed.into_syntax();
+    let module_ast = basilisk_parser::parse_source(source.to_owned(), format!("{module_name}.py"))
+        .map_err(|err| StubGenError::Parse(err.to_string()))?
+        .ast;
 
     let mut lines = Vec::new();
     lines.push(format!(
@@ -223,16 +222,15 @@ fn format_assign(assign: &ast::StmtAssign) -> Option<String> {
 }
 
 /// Extract source text for an expression node using its text range.
+///
+/// `str::get` is used instead of `source[start..end]` so an out-of-range or
+/// non-char-boundary span yields `None` rather than panicking.
 fn slice_expr(expr: &ast::Expr, source: &str) -> Option<String> {
     use ruff_text_size::Ranged;
     let range = expr.range();
     let start: usize = range.start().into();
     let end: usize = range.end().into();
-    if start < source.len() && end <= source.len() && start < end {
-        Some(source[start..end].to_owned())
-    } else {
-        None
-    }
+    source.get(start..end).map(str::to_owned)
 }
 
 #[cfg(test)]
@@ -308,5 +306,14 @@ def not_exported(): pass
         assert!(result
             .pyi_content
             .contains("async def fetch(url: str) -> bytes: ..."));
+    }
+
+    #[test]
+    fn rejects_source_past_the_shared_parser_depth_limit() {
+        let source = format!("value = {}0{}\n", "(".repeat(201), ")".repeat(201));
+        assert!(
+            generate_ast_stubs_from_source("deep", &source).is_err(),
+            "stub generation must use Basilisk's crash-safe parser boundary"
+        );
     }
 }

@@ -1,4 +1,4 @@
-//! Tests for [`classes_override_3`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Tests for [`classes_override_3`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for classes_override_3: @override with no matching ancestor method.
 
 use super::common::*;

@@ -1,4 +1,4 @@
-//! Implements [`annotations_generators`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`annotations_generators`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `annotations_generators`: Generator return type and yield type violations.
 //!
 //! A generator function (one containing `yield` or `yield from`) must declare
@@ -32,7 +32,7 @@ use super::annotations_generators_helpers::{
 };
 use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
-use crate::inference::infer_rhs;
+use crate::inference::{infer_rhs, literal_collection_assignable_to};
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 
@@ -175,14 +175,21 @@ fn check_yield_types(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec
             continue;
         }
 
-        let inferred = infer_yield_type(&yield_expr.rhs_kind, yield_expr.call_name.as_ref());
+        let inferred =
+            infer_yield_type(&yield_expr.rhs_kind, yield_expr.call_name.as_ref(), module);
 
         // Skip Unknown types - we can't prove incompatibility.
         if matches!(inferred, InferredType::Unknown) {
             continue;
         }
 
-        if !inferred.is_assignable_to(&declared_yield_type) {
+        // A yielded collection literal is contextually typed against the
+        // declared yield type ([TYPEINF-SPECIAL-LITERAL-CONTEXT]); a stored
+        // value keeps invariant subtyping.
+        let is_assignable =
+            literal_collection_assignable_to(&yield_expr.rhs_kind, &declared_yield_type)
+                .unwrap_or_else(|| inferred.is_assignable_to(&declared_yield_type));
+        if !is_assignable {
             out.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(

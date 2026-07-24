@@ -1,4 +1,4 @@
-//! Implements [`annotations_generators_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`annotations_generators_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Yield expression scanning for `annotations_generators_2`.
 //!
 //! Provides a byte-level scanner that finds `yield` and `yield from`

@@ -1,4 +1,6 @@
-//! Tests for [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
+//! Tests [STUBRES-OVERVIEW], [TYPESHEDRT-OVERVIEW], [STUBRES-TYPE-MODEL], and
+//! [STUBRES-ENGINE]. See
+//! docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-OVERVIEW
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,
@@ -9,130 +11,138 @@
 )]
 //! Integration tests for basilisk-stubs.
 
-// Exercises [STUBRES-TYPESHED] — `lookup_builtin` over the bundled typeshed index.
+fn bundled_builtins_source() -> String {
+    basilisk_stubs::typeshed::bundle::bundled_snapshot()
+        .expect("bundled snapshot")
+        .read_stub("builtins")
+        .map(|(_, source)| source.to_owned())
+        .expect("bundled builtins.pyi")
+}
+
+fn bundled_builtin_exists(name: &str) -> bool {
+    let source = bundled_builtins_source();
+    source.contains(&format!("class {name}")) || source.contains(&format!("{name}:"))
+}
+
+fn bundled_stub_distribution(module: &str) -> Option<String> {
+    basilisk_stubs::typeshed::bundle::bundled_snapshot()
+        .expect("bundled snapshot")
+        .distribution_index
+        .distribution(module)
+        .map(str::to_owned)
+}
+
+// Exercises [STUBRES-TYPESHED] against the exact bundled snapshot body.
 #[test]
-fn lookup_builtin_str_type() {
-    // Phase 5: the stubs library must know about Python built-in types.
-    // Currently returns None for all names (placeholder).
+fn bundled_builtin_str_type() {
     assert!(
-        basilisk_stubs::lookup_builtin("str").is_some(),
-        "str must be a known builtin type — Phase 5 stubs not yet implemented"
+        bundled_builtin_exists("str"),
+        "the bundled snapshot must declare str"
     );
 }
 
 #[test]
-fn lookup_builtin_int_type() {
-    // Phase 5: int must be a known built-in type.
+fn bundled_builtin_int_type() {
     assert!(
-        basilisk_stubs::lookup_builtin("int").is_some(),
-        "int must be a known builtin type — Phase 5 stubs not yet implemented"
+        bundled_builtin_exists("int"),
+        "the bundled snapshot must declare int"
     );
 }
 
 #[test]
-fn lookup_builtin_list_type() {
-    // Phase 5: list must be a known built-in type.
+fn bundled_builtin_list_type() {
     assert!(
-        basilisk_stubs::lookup_builtin("list").is_some(),
-        "list must be a known builtin type — Phase 5 stubs not yet implemented"
+        bundled_builtin_exists("list"),
+        "the bundled snapshot must declare list"
     );
 }
 
 #[test]
-fn lookup_unknown_name_returns_none() {
+fn bundled_unknown_name_is_absent() {
     // Unknown symbols must always return None.
     assert!(
-        basilisk_stubs::lookup_builtin("definitely_not_a_real_builtin").is_none(),
+        !bundled_builtin_exists("definitely_not_a_real_builtin"),
         "unknown names must return None"
     );
 }
 
 #[test]
-fn lookup_builtin_float_type() {
-    assert_eq!(basilisk_stubs::lookup_builtin("float"), Some("float"));
+fn bundled_builtin_float_type() {
+    assert!(bundled_builtin_exists("float"));
 }
 
 #[test]
-fn lookup_builtin_bytes_type() {
-    assert_eq!(basilisk_stubs::lookup_builtin("bytes"), Some("bytes"));
+fn bundled_builtin_bytes_type() {
+    assert!(bundled_builtin_exists("bytes"));
 }
 
 #[test]
-fn lookup_builtin_bool_type() {
-    assert_eq!(basilisk_stubs::lookup_builtin("bool"), Some("bool"));
+fn bundled_builtin_bool_type() {
+    assert!(bundled_builtin_exists("bool"));
 }
 
 #[test]
-fn lookup_builtin_dict_type() {
-    assert_eq!(basilisk_stubs::lookup_builtin("dict"), Some("dict"));
+fn bundled_builtin_dict_type() {
+    assert!(bundled_builtin_exists("dict"));
 }
 
 #[test]
-fn lookup_builtin_set_type() {
-    assert_eq!(basilisk_stubs::lookup_builtin("set"), Some("set"));
+fn bundled_builtin_set_type() {
+    assert!(bundled_builtin_exists("set"));
 }
 
 #[test]
-fn lookup_builtin_tuple_type() {
-    assert_eq!(basilisk_stubs::lookup_builtin("tuple"), Some("tuple"));
+fn bundled_builtin_tuple_type() {
+    assert!(bundled_builtin_exists("tuple"));
 }
 
 #[test]
-fn lookup_builtin_frozenset_type() {
-    assert_eq!(
-        basilisk_stubs::lookup_builtin("frozenset"),
-        Some("frozenset")
-    );
+fn bundled_builtin_frozenset_type() {
+    assert!(bundled_builtin_exists("frozenset"));
 }
 
 #[test]
-fn lookup_builtin_type_type() {
-    assert_eq!(basilisk_stubs::lookup_builtin("type"), Some("type"));
+fn bundled_builtin_type_type() {
+    assert!(bundled_builtin_exists("type"));
 }
 
 #[test]
-fn lookup_builtin_object_type() {
-    assert_eq!(basilisk_stubs::lookup_builtin("object"), Some("object"));
+fn bundled_builtin_object_type() {
+    assert!(bundled_builtin_exists("object"));
 }
 
 #[test]
-fn lookup_builtin_none_type() {
-    assert_eq!(basilisk_stubs::lookup_builtin("None"), Some("None"));
+fn bundled_builtin_none_type() {
+    assert!(bundled_builtins_source().contains("None"));
 }
 
 #[test]
-fn lookup_builtin_complex_type() {
-    assert_eq!(basilisk_stubs::lookup_builtin("complex"), Some("complex"));
+fn bundled_builtin_complex_type() {
+    assert!(bundled_builtin_exists("complex"));
 }
 
 #[test]
-fn lookup_builtin_range_type() {
-    assert_eq!(basilisk_stubs::lookup_builtin("range"), Some("range"));
+fn bundled_builtin_range_type() {
+    assert!(bundled_builtin_exists("range"));
 }
 
 #[test]
-fn lookup_builtin_bytearray_type() {
-    assert_eq!(
-        basilisk_stubs::lookup_builtin("bytearray"),
-        Some("bytearray")
-    );
+fn bundled_builtin_bytearray_type() {
+    assert!(bundled_builtin_exists("bytearray"));
 }
 
 #[test]
-fn lookup_builtin_memoryview_type() {
-    assert_eq!(
-        basilisk_stubs::lookup_builtin("memoryview"),
-        Some("memoryview")
-    );
+fn bundled_builtin_memoryview_type() {
+    assert!(bundled_builtin_exists("memoryview"));
 }
 
-// Regression for issue #46: BSK-E0152's quick fix must offer the *real*
+// Regression for issue #46: BSK-0152's quick fix must offer the *real*
 // typeshed distribution name, and nothing when no stub distribution exists.
 
 #[test]
 fn stub_distribution_maps_requests_to_types_requests() {
     assert_eq!(
-        basilisk_stubs::typeshed_stub_distribution("requests"),
+        bundled_stub_distribution("requests").as_deref(),
         Some("types-requests")
     );
 }
@@ -141,7 +151,7 @@ fn stub_distribution_maps_requests_to_types_requests() {
 fn stub_distribution_maps_import_root_not_distribution_name() {
     // The import root `yaml` is published as `types-PyYAML`, not `types-yaml`.
     assert_eq!(
-        basilisk_stubs::typeshed_stub_distribution("yaml"),
+        bundled_stub_distribution("yaml").as_deref(),
         Some("types-PyYAML")
     );
 }
@@ -149,7 +159,7 @@ fn stub_distribution_maps_import_root_not_distribution_name() {
 #[test]
 fn stub_distribution_uses_top_level_import_root_for_dotted_modules() {
     assert_eq!(
-        basilisk_stubs::typeshed_stub_distribution("requests.auth"),
+        bundled_stub_distribution("requests.auth").as_deref(),
         Some("types-requests")
     );
 }
@@ -157,10 +167,7 @@ fn stub_distribution_uses_top_level_import_root_for_dotted_modules() {
 #[test]
 fn stub_distribution_is_none_for_inline_typed_package() {
     // pydantic-ai ships inline `py.typed`; there is no `types-pydantic_ai`.
-    assert_eq!(
-        basilisk_stubs::typeshed_stub_distribution("pydantic_ai"),
-        None
-    );
+    assert_eq!(bundled_stub_distribution("pydantic_ai"), None);
 }
 
 // ── Auto-stub generation: mode dispatch + hybrid fallback ───────────────────

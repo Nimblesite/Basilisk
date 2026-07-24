@@ -25,15 +25,13 @@ describe("basilisk LSP integration", function()
     tmpdir = helpers.create_tmpdir()
 
     -- Write a pyproject.toml so basilisk finds a project root.
+    -- [tool.basilisk.rules] opts into the annotation house rules (off by
+    -- default) so untyped-parameter diagnostics fire — mirrors the Rust LSP
+    -- harness fixture (ws_test_common.rs).
     local fh = io.open(tmpdir .. "/pyproject.toml", "w")
     fh:write('[project]\nname = "test"\nversion = "0.1.0"\n')
+    fh:write('\n[tool.basilisk.rules]\n"BSK-0001" = "error"\n"BSK-0002" = "error"\n')
     fh:close()
-
-    -- Opt into the annotation house rules (off by default) so untyped-parameter
-    -- diagnostics fire — mirrors the Rust LSP harness fixture (ws_test_common.rs).
-    local cfg = io.open(tmpdir .. "/basilisk.json", "w")
-    cfg:write('{"strictAnnotations": true}\n')
-    cfg:close()
 
     -- Configure and start the LSP client directly (not via setup()).
     vim.lsp.config("basilisk", {
@@ -253,7 +251,13 @@ describe("basilisk LSP integration", function()
         ["end"] = { line = 0, character = 20 },
       },
       context = {
-        diagnostics = vim.lsp.diagnostic.get_line_diagnostics(buf, 0) or {},
+        -- vim.lsp.diagnostic.get_line_diagnostics was removed in Neovim nightly
+        -- (deprecated in 0.11/0.12). Use the stable vim.diagnostic.get API and
+        -- recover each diagnostic's original LSP shape from user_data.lsp, which
+        -- is what a codeAction context expects. Works on 0.11 and nightly alike.
+        diagnostics = vim.tbl_map(function(diagnostic)
+          return (diagnostic.user_data and diagnostic.user_data.lsp) or diagnostic
+        end, vim.diagnostic.get(buf, { lnum = 0 })),
       },
     }, buf)
 

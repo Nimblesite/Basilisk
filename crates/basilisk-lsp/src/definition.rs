@@ -39,6 +39,23 @@ pub fn goto_definition(
     // Cursor might be on a reference (call site, variable use).
     // Extract the identifier under the cursor and look up its definition.
     let name = identifier_at_offset(source, byte_offset)?;
+    if let Some((class, declarations)) =
+        crate::hover::members::builtin_member_declarations(resolved, source, byte_offset, &name)
+    {
+        let declaration = declarations.first()?;
+        let target_uri = Url::parse(&class.source_path.to_string_lossy()).ok()?;
+        let range = span_to_range(
+            &class.source_text,
+            basilisk_resolver::Span::new(
+                declaration.source_span.start,
+                declaration.source_span.end,
+            ),
+        );
+        return Some(GotoDefinitionResponse::Scalar(Location {
+            uri: target_uri,
+            range,
+        }));
+    }
     let hit = find_definition_by_name(resolved, &name)?;
 
     // Imports with resolved paths should be handled by cross-file lookup.

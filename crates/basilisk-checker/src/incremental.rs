@@ -33,7 +33,7 @@ pub struct ConfigValue(pub BasiliskConfig);
 /// The effective checker configuration as a Salsa **input**.
 ///
 /// Configuration is a genuine input of a check, exactly like the source text:
-/// toggling `strict_annotations` or changing a rule's severity must invalidate
+/// changing a rule's explicit severity must invalidate
 /// and recompute the affected files' diagnostics. Mutating it via `set_value`
 /// is what makes salsa re-execute the queries that read it — and only those.
 /// [CHKARCH-INCREMENTAL-SALSA]
@@ -313,9 +313,14 @@ pub fn cross_resolved_module(
     };
     let mut resolved = (**module).clone();
     let registry = workspace.files(db);
-    // Reading `search_paths.value(db)` registers the salsa dependency edge, so a
-    // changed `typeshed-path` re-runs this query and re-tags stub provenance.
-    let custom_typeshed = search_paths.value(db).typeshed_path.as_deref();
+    // Reading `search_paths.value(db)` registers the salsa dependency edge, so
+    // a changed active snapshot re-runs this query and re-tags stub provenance.
+    let paths = search_paths.value(db);
+    let typeshed_target = paths
+        .typeshed_snapshot
+        .as_ref()
+        .and_then(|active| active.for_importer(Some(std::path::Path::new(file.path(db)))))
+        .and_then(|(_, target)| target.cloned());
     crate::exports::populate_imported_symbols(
         &mut resolved,
         |path| {
@@ -324,9 +329,70 @@ pub fn cross_resolved_module(
                 .get(path)
                 .map(|imported| module_exports(db, *imported).0.as_slice())
         },
-        custom_typeshed,
+        |path, request| {
+            let key = ExternalModuleKey::new(
+                db,
+                path.to_string_lossy().into_owned(),
+                request.clone(),
+                typeshed_target.clone(),
+            );
+            std::sync::Arc::clone(external_module(db, key, search_paths))
+        },
+        &paths.stub_paths,
     );
     ResolvedFile::Resolved(std::sync::Arc::new(resolved))
+}
+
+/// Interned key for one external (non-workspace) type-bearing module file:
+/// its absolute path plus what to load from it.
+#[salsa::interned(debug)]
+pub struct ExternalModuleKey<'db> {
+    /// Absolute path of the external module file.
+    #[returns(ref)]
+    pub path: String,
+    /// What to load: `py.typed` module or `.pyi` stub (with provenance).
+    #[returns(ref)]
+    pub request: crate::exports::ExternalModuleRequest,
+    /// Python/platform evidence selecting guarded declarations. This is part
+    /// of the memo key because two workspace roots may share snapshot bytes
+    /// while targeting different interpreters.
+    #[returns(ref)]
+    pub target: Option<basilisk_stubs::types::StubTarget>,
+}
+
+/// Tracked query: the parsed view of one **external** module — its exports
+/// plus `py.typed` re-export edges — memoized per `(path, request)`.
+///
+/// This is the sharing layer that fixes GitHub #304: every importer in the
+/// workspace reads the same memo instead of re-parsing the external file, so
+/// a scan's external work is bounded by the number of external modules, not
+/// `files × imported names × package closure`. The read is untracked disk
+/// I/O, mirroring the [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)
+/// boundary; reading `search_paths.value(db)` registers the input edge, so a
+/// re-set `SearchPathsInput` (venv sync, `uv.lock` edit, config change)
+/// refreshes the memo from disk.
+#[salsa::tracked(returns(ref))]
+pub fn external_module<'db>(
+    db: &'db dyn Db,
+    key: ExternalModuleKey<'db>,
+    search_paths: SearchPathsInput,
+) -> crate::exports::SharedExternalModule {
+    let paths = search_paths.value(db);
+    let path = std::path::Path::new(key.path(db));
+    if let Some(active) = &paths.typeshed_snapshot {
+        if let Some((snapshot, target, source)) =
+            active.source_for_uri(key.path(db), key.target(db).as_ref())
+        {
+            return crate::exports::load_snapshot_stub_module(
+                path,
+                source,
+                key.request(db),
+                snapshot,
+                target,
+            );
+        }
+    }
+    crate::exports::load_external_module(path, key.request(db))
 }
 
 /// Tracked query: the **cross-module** diagnostics for one file — a thin

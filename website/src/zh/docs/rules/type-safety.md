@@ -37,7 +37,7 @@ from typing import Any
 
 # 警告——显式 `Any` 必须注明原因
 def handle(
-    data: Any,  # basilisk: ignore[returns_compatibility] -- awaiting stubs for third-party SDK
+    data: Any,  # type: ignore[returns_compatibility]  # 等待第三方 SDK 的存根
 ) -> bool:
     ...
 
@@ -182,7 +182,7 @@ y: int = 0  # 正确
 
 ---
 
-### BSK-E0025 — 缺少 `@override` 装饰器
+### BSK-0025 — 缺少 `@override` 装饰器
 
 覆盖父类方法的方法缺少 `@override` 装饰器（PEP 698）。
 

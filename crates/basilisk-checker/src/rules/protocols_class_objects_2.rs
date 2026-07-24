@@ -1,4 +1,4 @@
-//! Implements [`protocols_class_objects_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`protocols_class_objects_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `protocols_class_objects_2`: Protocol class object violations.
 //!
 //! Detects two related violations involving Protocol classes and class objects:

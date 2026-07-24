@@ -1,4 +1,4 @@
-//! Implements [`aliases_type_statement`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! Implements [`aliases_type_statement`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! `aliases_type_statement`: Invalid RHS in a PEP 695 `type X = rhs` statement.
 //!
 //! PEP 695 requires the RHS of a `type` statement to be a valid type expression.
@@ -113,7 +113,7 @@ fn paren_has_top_level_comma(s: &str) -> bool {
 }
 
 /// Collect names of module-level variables that are not valid types.
-fn collect_non_type_names(module: &ResolvedModule) -> HashSet<String> {
+fn collect_non_type_names(module: &ResolvedModule) -> HashSet<&str> {
     module
         .module_vars
         .iter()
@@ -131,12 +131,12 @@ fn collect_non_type_names(module: &ResolvedModule) -> HashSet<String> {
                     | RhsKind::NoneValue
             )
         })
-        .map(|v| v.name.clone())
+        .map(|v| v.name.as_str())
         .collect()
 }
 
 /// Returns `true` when the RHS text is a bare identifier bound to a non-type variable.
-fn is_non_type_name(rhs: &str, non_type_names: &HashSet<String>) -> bool {
+fn is_non_type_name(rhs: &str, non_type_names: &HashSet<&str>) -> bool {
     let rhs = rhs.trim();
     if rhs.contains('[') || rhs.contains('.') || rhs.contains('(') || rhs.contains(' ') {
         return false;

@@ -1,78 +1,78 @@
-//! Tests for [BSK-W0050] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
-// E2E tests for BSK-W0050: Redundant annotation warning
+//! Tests for [BSK-0050] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+// E2E tests for BSK-0050: Redundant annotation warning
 
 use super::common::*;
 
 #[test]
 fn test_w0050_int_literal_redundant() {
     let diags = run_with_config("x: int = 42\n", &annotation_rules_config()).unwrap();
-    assert!(diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
 fn test_w0050_str_literal_redundant() {
     let diags = run_with_config("x: str = \"hello\"\n", &annotation_rules_config()).unwrap();
-    assert!(diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
 fn test_w0050_float_literal_redundant() {
     let diags = run_with_config("x: float = 3.14\n", &annotation_rules_config()).unwrap();
-    assert!(diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
 fn test_w0050_bool_literal_redundant() {
     let diags = run_with_config("x: bool = True\n", &annotation_rules_config()).unwrap();
-    assert!(diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
 fn test_w0050_bytes_literal_redundant() {
     let diags = run_with_config("x: bytes = b\"data\"\n", &annotation_rules_config()).unwrap();
-    assert!(diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
 fn test_w0050_none_literal_redundant() {
     let diags = run_with_config("x: None = None\n", &annotation_rules_config()).unwrap();
-    assert!(diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
 fn test_w0050_int_widening_no_warning() {
     let diags = run_with_config("x: float = 42\n", &annotation_rules_config()).unwrap();
-    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
 fn test_w0050_call_expression_no_warning() {
     let diags = run_with_config("x: int = some_function()\n", &annotation_rules_config()).unwrap();
-    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
 fn test_w0050_unknown_inference_no_warning() {
     let diags = run_with_config("x: int = unknown_var\n", &annotation_rules_config()).unwrap();
-    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
 fn test_w0050_function_param_exempt() {
     let diags = run_with_config("def f(x: int): pass\n", &annotation_rules_config()).unwrap();
-    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
 fn test_w0050_return_annotation_exempt() {
     let diags = run_with_config("def f() -> int: return 42\n", &annotation_rules_config()).unwrap();
-    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
 fn test_w0050_class_attribute_redundant() {
     let diags = run_with_config("class C:\n    x: int = 42\n", &annotation_rules_config()).unwrap();
-    assert!(diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn test_w0050_module_level_redundant() {
         &annotation_rules_config(),
     )
     .unwrap();
-    let w0050_count = diags.iter().filter(|d| d.code.code == "BSK-W0050").count();
+    let w0050_count = diags.iter().filter(|d| d.code.code == "BSK-0050").count();
     assert_eq!(w0050_count, 3);
 }
 
@@ -91,7 +91,7 @@ fn test_w0050_list_literal_no_warning() {
     let diags =
         run_with_config("items: list[int] = [1, 2, 3]\n", &annotation_rules_config()).unwrap();
     // Collection types rarely match exactly due to inference differences
-    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn test_w0050_dict_literal_no_warning() {
     )
     .unwrap();
     // Collection types rarely match exactly due to inference differences
-    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn test_w0050_set_literal_no_warning() {
     )
     .unwrap();
     // Collection types rarely match exactly due to inference differences
-    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
@@ -124,11 +124,11 @@ fn test_w0050_tuple_literal_no_warning() {
     )
     .unwrap();
     // Collection types rarely match exactly due to inference differences
-    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 // Issue #110: the annotation on a Pydantic/dataclass/attrs field is load-bearing —
-// removing it deletes the field. BSK-W0050 must never fire there.
+// removing it deletes the field. BSK-0050 must never fire there.
 
 #[test]
 fn test_w0050_pydantic_basemodel_field_not_flagged() {
@@ -142,8 +142,8 @@ fn test_w0050_pydantic_basemodel_field_not_flagged() {
     )
     .unwrap();
     assert!(
-        !diags.iter().any(|d| d.code.code == "BSK-W0050"),
-        "BSK-W0050 on a BaseModel field deletes the field when autofixed"
+        !diags.iter().any(|d| d.code.code == "BSK-0050"),
+        "BSK-0050 on a BaseModel field deletes the field when autofixed"
     );
 }
 
@@ -161,8 +161,8 @@ fn test_w0050_pydantic_basemodel_transitive_subclass_field_not_flagged() {
     )
     .unwrap();
     assert!(
-        !diags.iter().any(|d| d.code.code == "BSK-W0050"),
-        "BSK-W0050 on a transitive BaseModel subclass field deletes the field when autofixed"
+        !diags.iter().any(|d| d.code.code == "BSK-0050"),
+        "BSK-0050 on a transitive BaseModel subclass field deletes the field when autofixed"
     );
 }
 
@@ -179,8 +179,8 @@ fn test_w0050_dataclass_field_not_flagged() {
     )
     .unwrap();
     assert!(
-        !diags.iter().any(|d| d.code.code == "BSK-W0050"),
-        "BSK-W0050 on a dataclass field turns an init param into an inert class attribute"
+        !diags.iter().any(|d| d.code.code == "BSK-0050"),
+        "BSK-0050 on a dataclass field turns an init param into an inert class attribute"
     );
 }
 
@@ -196,7 +196,7 @@ fn test_w0050_dataclasses_dotted_decorator_field_not_flagged() {
         &annotation_rules_config(),
     )
     .unwrap();
-    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
@@ -211,7 +211,7 @@ fn test_w0050_attrs_define_field_not_flagged() {
         &annotation_rules_config(),
     )
     .unwrap();
-    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
@@ -226,7 +226,7 @@ fn test_w0050_attr_s_decorator_field_not_flagged() {
         &annotation_rules_config(),
     )
     .unwrap();
-    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
@@ -237,7 +237,7 @@ fn test_w0050_plain_class_attribute_still_flagged() {
         &annotation_rules_config(),
     )
     .unwrap();
-    assert!(diags.iter().any(|d| d.code.code == "BSK-W0050"));
+    assert!(diags.iter().any(|d| d.code.code == "BSK-0050"));
 }
 
 #[test]
@@ -255,7 +255,7 @@ fn test_w0050_pydantic_dataclasses_dotted_decorator_field_not_flagged() {
     )
     .unwrap();
     assert!(
-        !diags.iter().any(|d| d.code.code == "BSK-W0050"),
-        "BSK-W0050 must not fire on pydantic dataclass fields (issue #39)"
+        !diags.iter().any(|d| d.code.code == "BSK-0050"),
+        "BSK-0050 must not fire on pydantic dataclass fields (issue #39)"
     );
 }

@@ -6,7 +6,9 @@ use std::path::Path;
 
 use crate::workspace::WorkspaceIndex;
 
-use super::helpers::{byte_offset_to_line, coverage_percent, module_name_from_path};
+use super::helpers::{
+    byte_offset_to_character, byte_offset_to_line, coverage_percent, module_name_from_path,
+};
 use super::type_health::compute_file_health;
 
 /// Result of building the workspace module tree: the per-module nodes (each with
@@ -23,7 +25,6 @@ struct HealthTotals {
     annotated: usize,
     errors: usize,
     warnings: usize,
-    adopted: usize,
 }
 
 impl HealthTotals {
@@ -32,9 +33,6 @@ impl HealthTotals {
         self.annotated += health.annotated_symbols;
         self.errors += health.errors;
         self.warnings += health.warnings;
-        if health.adopted {
-            self.adopted += 1;
-        }
     }
 }
 
@@ -42,33 +40,26 @@ impl HealthTotals {
 /// Build the module tree from the workspace index.
 ///
 /// Implements the server side of [EXTACT-MODULES-MODULE-ROW] (each node carries
-/// the folded coverage %, error/warning counts, and adoption state rendered on
-/// the module row) and [EXTACT-MODULES-HEADER] (the `workspace` `HealthStats`
-/// summary that drives the view's message + badge).
+/// the folded coverage % and error/warning counts rendered on the module row)
+/// and [EXTACT-MODULES-HEADER] (the `workspace` `HealthStats` summary that
+/// drives the view's message + badge).
 ///
 /// Each file becomes a module node containing its top-level symbols and a folded
-/// health rollup (coverage %, error/warning counts, adoption state). The
+/// health rollup (coverage %, error/warning counts). The
 /// workspace-wide rollup is accumulated in the same single pass, so the merged
 /// Modules panel needs no separate `basilisk.typeHealth` round-trip.
 ///
 /// With type checking disabled ([ANALYSIS-ENABLED], GitHub #119) the payload
-/// carries NO grading data at all — no coverage %, no error/warning tallies, no
-/// adoption state — only the navigation tree plus `typeCheckingEnabled: false`.
+/// carries NO grading data at all — no coverage % and no error/warning tallies
+/// — only the navigation tree plus `typeCheckingEnabled: false`.
 /// The grading fields are OMITTED (not zeroed) so no client can render a
 /// "NN% typed" header or coverage-tinted rows while the toggle is off.
 pub(crate) fn build_module_tree(
     idx: &WorkspaceIndex,
     scope: &str,
-    project_root: Option<&Path>,
     type_checking_enabled: bool,
     scan_complete: bool,
 ) -> WorkspaceModulesResult {
-    let adoption_store = if type_checking_enabled {
-        project_root.and_then(|root| basilisk_config::AdoptionStore::load(root).ok())
-    } else {
-        None
-    };
-
     let mut modules = Vec::new();
     let mut totals = HealthTotals::default();
 
@@ -96,16 +87,19 @@ pub(crate) fn build_module_tree(
             "path": path.display().to_string(),
             "kind": module_kind(path),
             "symbols": build_symbol_list(resolved, &file_entry.text),
+            // The navigable drill-down behind the row's error/warning tally
+            // ([EXTACT-MODULES-DIAGNOSTICS], GitHub #235). EMPTY while type
+            // checking is disabled ([ANALYSIS-ENABLED]): possibly-stale
+            // diagnostics must not leak through the drill-down either.
+            "diagnostics": if type_checking_enabled {
+                diagnostic_nodes(&file_entry.diagnostics, &file_entry.text)
+            } else {
+                Vec::new()
+            },
         });
 
         if type_checking_enabled {
-            let health = compute_file_health(
-                resolved,
-                &file_entry.diagnostics,
-                path,
-                project_root,
-                adoption_store.as_ref(),
-            );
+            let health = compute_file_health(resolved, &file_entry.diagnostics);
             totals.accumulate(&health);
             attach_grading(&mut node, &health);
         }
@@ -129,6 +123,43 @@ pub(crate) fn build_module_tree(
     WorkspaceModulesResult { modules, workspace }
 }
 
+/// Serialize a file's diagnostics as the spec's `DiagnosticNode` rows —
+/// errors before warnings, then ascending line — so every count advertised on
+/// the module row is navigable ([EXTACT-MODULES-DIAGNOSTICS], GitHub #235).
+///
+/// Only exact `Error`/`Warning` severities are serialized — the same filter
+/// [`compute_file_health`] counts — so the spec invariant
+/// `errors == diagnostics.filter(d => d.severity == "error").length` holds
+/// (`Info` and the opt-in `SafetyViolation` are excluded from both).
+fn diagnostic_nodes(
+    diagnostics: &[basilisk_checker::Diagnostic],
+    text: &str,
+) -> Vec<serde_json::Value> {
+    let mut rows: Vec<(bool, usize, serde_json::Value)> = diagnostics
+        .iter()
+        .filter_map(|diagnostic| {
+            let severity = match diagnostic.severity {
+                basilisk_checker::Severity::Error => "error",
+                basilisk_checker::Severity::Warning => "warning",
+                basilisk_checker::Severity::Info | basilisk_checker::Severity::SafetyViolation => {
+                    return None;
+                }
+            };
+            let line = byte_offset_to_line(text, diagnostic.span.start);
+            let node = serde_json::json!({
+                "severity": severity,
+                "code": diagnostic.code.code,
+                "message": diagnostic.message,
+                "line": line,
+                "character": byte_offset_to_character(text, diagnostic.span.start),
+            });
+            Some((severity != "error", line, node))
+        })
+        .collect();
+    rows.sort_by_key(|&(is_warning, line, _)| (is_warning, line));
+    rows.into_iter().map(|(_, _, node)| node).collect()
+}
+
 /// Node kind: `__init__.py(i)` files are packages, everything else a module.
 fn module_kind(path: &Path) -> &'static str {
     if path
@@ -143,12 +174,16 @@ fn module_kind(path: &Path) -> &'static str {
 
 /// Fold the per-file grading rollup into a module node — enabled path only
 /// ([ANALYSIS-ENABLED]): while disabled these fields are absent by construction.
+/// The raw symbol counts ride along so clients can roll folder/package coverage
+/// up symbol-weighted — matching the workspace header — instead of averaging
+/// pre-divided percentages ([EXTACT-MODULES-TREE-STRUCTURE]).
 fn attach_grading(node: &mut serde_json::Value, health: &super::type_health::FileHealth) {
     if let Some(obj) = node.as_object_mut() {
         let _ = obj.insert("coveragePercent".into(), health.coverage_percent.into());
+        let _ = obj.insert("totalSymbols".into(), health.total_symbols.into());
+        let _ = obj.insert("annotatedSymbols".into(), health.annotated_symbols.into());
         let _ = obj.insert("errors".into(), health.errors.into());
         let _ = obj.insert("warnings".into(), health.warnings.into());
-        let _ = obj.insert("adopted".into(), health.adopted.into());
     }
 }
 
@@ -177,7 +212,6 @@ fn workspace_rollup(
         "coveragePercent": coverage_percent(totals.annotated, totals.symbols),
         "errors": totals.errors,
         "warnings": totals.warnings,
-        "adoptedFiles": totals.adopted,
         "totalFiles": total_files,
         "scanComplete": scan_complete,
     })
@@ -341,7 +375,7 @@ mod tests {
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_b, "y: str = 'hi'\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "", true, true);
         assert_eq!(tree.modules.len(), 2, "expected 2 modules in the tree");
 
         let names: Vec<&str> = tree
@@ -369,7 +403,7 @@ mod tests {
         let uri = make_uri("/workspace/pkg/__init__.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "", true, true);
         assert_eq!(tree.modules.len(), 1);
         let kind = tree.modules[0]
             .get("kind")
@@ -385,7 +419,7 @@ mod tests {
         let uri = make_uri("/workspace/mod.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "", true, true);
         assert_eq!(tree.modules.len(), 1);
         let kind = tree.modules[0]
             .get("kind")
@@ -403,7 +437,7 @@ mod tests {
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_b, "y: int = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "pkg", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "pkg", true, true);
         assert_eq!(tree.modules.len(), 1, "scope filter should keep only pkg.a");
         let name = tree.modules[0]
             .get("name")
@@ -424,11 +458,11 @@ mod tests {
         let uri = make_uri("/workspace/untyped.py");
         let _ = idx.set_open(&uri, "def bare(a):\n    return a\n\nb = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), false, true);
+        let tree = build_module_tree(&idx, "", false, true);
 
         assert_eq!(tree.modules.len(), 1, "module list stays for navigation");
         let module = &tree.modules[0];
-        for field in ["coveragePercent", "errors", "warnings", "adopted"] {
+        for field in ["coveragePercent", "errors", "warnings"] {
             assert!(
                 module.get(field).is_none(),
                 "disabled toggle must omit grading field '{field}' from module nodes, got {module}"
@@ -464,7 +498,7 @@ mod tests {
         let uri = make_uri("/workspace/mod.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "", true, true);
         assert_eq!(
             tree.workspace
                 .get("typeCheckingEnabled")
@@ -478,6 +512,205 @@ mod tests {
         );
     }
 
+    // Server side of [EXTACT-MODULES-TREE-STRUCTURE] coverage rollup: each
+    // module node must carry its symbol counts (`totalSymbols` /
+    // `annotatedSymbols`) so the client can roll folder/package coverage up
+    // symbol-weighted — matching the workspace header — instead of having only
+    // the pre-divided per-file percentage with no weights.
+    #[test]
+    fn test_module_nodes_carry_symbol_counts_for_folder_rollup() {
+        let root = PathBuf::from("/workspace");
+        let idx = make_index_with_roots(vec![root.clone()]);
+        // Half-annotated file: 1 of 2 symbols annotated.
+        let uri = make_uri("/workspace/pkg/partial.py");
+        let _ = idx.set_open(&uri, "a: int = 1\nb = 2\n", 1);
+
+        let tree = build_module_tree(&idx, "", true, true);
+        assert_eq!(tree.modules.len(), 1);
+        let module = &tree.modules[0];
+        assert_eq!(
+            module
+                .get("totalSymbols")
+                .and_then(serde_json::Value::as_u64),
+            Some(2),
+            "module node must carry totalSymbols as the client's rollup weight, got {module}"
+        );
+        assert_eq!(
+            module
+                .get("annotatedSymbols")
+                .and_then(serde_json::Value::as_u64),
+            Some(1),
+            "module node must carry annotatedSymbols for the client's rollup, got {module}"
+        );
+
+        // Disabled toggle omits the counts like every other grading field
+        // ([ANALYSIS-ENABLED], #119).
+        let disabled = build_module_tree(&idx, "", false, true);
+        for field in ["totalSymbols", "annotatedSymbols"] {
+            assert!(
+                disabled.modules[0].get(field).is_none(),
+                "disabled toggle must omit '{field}' from module nodes"
+            );
+        }
+    }
+
+    // Tests [EXTACT-MODULES-DIAGNOSTICS] (GitHub #235): every module node must
+    // carry its diagnostics as a navigable list so the `errors`/`warnings`
+    // tallies rendered on the row are reachable, not dead. The wire shape is the
+    // spec's DiagnosticNode: severity/code/message/line/character, with the
+    // count invariant `errors == diagnostics.filter(severity == "error").len()`.
+    #[test]
+    fn test_module_nodes_carry_navigable_diagnostics() {
+        let root = PathBuf::from("/workspace");
+        let idx = make_index_with_roots(vec![root.clone()]);
+        let uri = make_uri("/workspace/broken.py");
+        let _ = idx.set_open(&uri, "x: int = \"not an int\"\n", 1);
+
+        let tree = build_module_tree(&idx, "", true, true);
+        assert_eq!(tree.modules.len(), 1);
+        let module = &tree.modules[0];
+
+        // Precondition: the fixture really produces a type error, so the test
+        // exercises a non-empty drill-down (not a vacuously-empty list).
+        let errors = module
+            .get("errors")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap();
+        assert!(
+            errors > 0,
+            "fixture must produce a type error, got {module}"
+        );
+
+        assert!(
+            module.get("diagnostics").is_some(),
+            "module node must carry a `diagnostics` array so the `errors` tally \
+             is navigable ([EXTACT-MODULES-DIAGNOSTICS], #235), got {module}"
+        );
+        let diagnostics = module
+            .get("diagnostics")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+
+        // Count invariant from [EXTACT-DATA-MODEL].
+        let error_rows = diagnostics
+            .iter()
+            .filter(|d| d.get("severity").and_then(serde_json::Value::as_str) == Some("error"))
+            .count();
+        assert_eq!(
+            u64::try_from(error_rows).unwrap(),
+            errors,
+            "errors tally must equal the number of error-severity diagnostic rows"
+        );
+
+        // Each row is the spec's DiagnosticNode shape.
+        for entry in diagnostics {
+            for field in ["severity", "code", "message", "line", "character"] {
+                assert!(
+                    entry.get(field).is_some(),
+                    "diagnostic row missing `{field}`: {entry}"
+                );
+            }
+        }
+
+        // Single-line fixture: the error anchors to line 0 (zero-based).
+        assert_eq!(
+            diagnostics[0]
+                .get("line")
+                .and_then(serde_json::Value::as_u64),
+            Some(0),
+            "diagnostic line must be the zero-based source line"
+        );
+    }
+
+    // [ANALYSIS-ENABLED] × [EXTACT-MODULES-DIAGNOSTICS]: with type checking
+    // disabled the drill-down carries nothing — an empty array, mirroring the
+    // omitted count fields, so no client can render stale diagnostics while
+    // the toggle is off.
+    #[test]
+    fn test_disabled_toggle_serves_empty_diagnostics() {
+        let root = PathBuf::from("/workspace");
+        let idx = make_index_with_roots(vec![root.clone()]);
+        let uri = make_uri("/workspace/broken.py");
+        let _ = idx.set_open(&uri, "x: int = \"not an int\"\n", 1);
+
+        let tree = build_module_tree(&idx, "", false, true);
+        assert_eq!(tree.modules.len(), 1);
+        assert_eq!(
+            tree.modules[0].get("diagnostics"),
+            Some(&serde_json::json!([])),
+            "disabled toggle must serve an EMPTY diagnostics list, got {}",
+            tree.modules[0]
+        );
+    }
+
+    /// Hand-built diagnostic for the ordering/filtering tests below.
+    fn make_diag(
+        severity: basilisk_checker::Severity,
+        start: u32,
+        message: &str,
+    ) -> basilisk_checker::Diagnostic {
+        basilisk_checker::Diagnostic {
+            code: basilisk_checker::ErrorCode {
+                code: "test_rule",
+                docs_url: "https://example.invalid/test_rule",
+            },
+            severity,
+            message: message.to_owned(),
+            span: basilisk_resolver::Span::new(start, start + 1),
+            path: "/workspace/x.py".to_owned(),
+            help: None,
+            note: None,
+            provenance: None,
+        }
+    }
+
+    // Tests the ordering + severity-filter rules of [EXTACT-MODULES-DIAGNOSTICS]:
+    // errors before warnings, then ascending line; Info and the opt-in
+    // SafetyViolation stay off the wire so the count invariant against
+    // compute_file_health holds exactly.
+    #[test]
+    fn test_diagnostic_nodes_sorts_errors_first_then_line_and_filters_severities() {
+        use basilisk_checker::Severity;
+        // Offsets land on lines 0..4 of this 5-line text (6 bytes per line).
+        let text = "aaaaa\nbbbbb\nccccc\nddddd\neeeee\n";
+        let diagnostics = vec![
+            make_diag(Severity::Warning, 0, "warning on line 0"),
+            make_diag(Severity::Error, 18, "error on line 3"),
+            make_diag(Severity::Info, 6, "info stays off the wire"),
+            make_diag(Severity::Error, 6, "error on line 1"),
+            make_diag(Severity::SafetyViolation, 12, "safety stays off the wire"),
+        ];
+
+        let rows = diagnostic_nodes(&diagnostics, text);
+
+        let rendered: Vec<(&str, u64)> = rows
+            .iter()
+            .map(|row| {
+                (
+                    row.get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap(),
+                    row.get("line").and_then(serde_json::Value::as_u64).unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            rendered,
+            vec![
+                ("error on line 1", 1),
+                ("error on line 3", 3),
+                ("warning on line 0", 0),
+            ],
+            "errors before warnings, then ascending line; Info/SafetyViolation excluded"
+        );
+        // Every row carries the full DiagnosticNode shape.
+        for row in &rows {
+            for field in ["severity", "code", "message", "line", "character"] {
+                assert!(row.get(field).is_some(), "row missing `{field}`: {row}");
+            }
+        }
+    }
+
     #[test]
     fn test_build_module_tree_folds_health_rollup() {
         let root = PathBuf::from("/workspace");
@@ -488,11 +721,11 @@ mod tests {
         let _ = idx.set_open(&uri_full, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_partial, "a: int = 1\nb = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true, true);
+        let tree = build_module_tree(&idx, "", true, true);
 
         // Every module node carries its folded health fields.
         for module in &tree.modules {
-            for field in ["coveragePercent", "errors", "warnings", "adopted"] {
+            for field in ["coveragePercent", "errors", "warnings"] {
                 assert!(
                     module.get(field).is_some(),
                     "module node missing folded health field '{field}'"

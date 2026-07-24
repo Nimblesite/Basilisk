@@ -4,9 +4,33 @@ pub use basilisk_parser::parse_source;
 pub use basilisk_resolver::resolve;
 
 pub fn run(source: &str) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
-    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
-    let resolved = resolve(&parsed)?;
+    let resolved = resolve_test_module(source)?;
     Ok(check(&resolved))
+}
+
+/// Resolve a test module with the release-bundled immutable Typeshed generation.
+fn resolve_test_module(
+    source: &str,
+) -> Result<basilisk_resolver::ResolvedModule, Box<dyn std::error::Error>> {
+    use std::sync::Arc;
+
+    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
+    let mut resolved = resolve(&parsed)?;
+    let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot()?;
+    let paths = basilisk_checker::imports::ImportSearchPaths {
+        roots: Vec::new(),
+        extra_paths: Vec::new(),
+        stub_paths: Vec::new(),
+        workspace_members: Vec::new(),
+        site_packages: None,
+        registry: None,
+        typeshed_snapshot: Some(basilisk_checker::imports::ActiveTypeshed::new(
+            Arc::new(snapshot),
+            None,
+        )),
+    };
+    basilisk_checker::imports::resolve_module_imports(&mut resolved, &paths);
+    Ok(resolved)
 }
 
 /// Run the checker honoring an explicit project configuration.
@@ -23,26 +47,38 @@ pub fn run_with_config(
     source: &str,
     config: &basilisk_config::BasiliskConfig,
 ) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
-    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
-    let resolved = resolve(&parsed)?;
+    let resolved = resolve_test_module(source)?;
     Ok(basilisk_checker::check_with_config(&resolved, config))
 }
 
-/// The project configuration that opts into Basilisk's annotation house rules:
-/// `strict_annotations = true` (BSK-E0001..BSK-E0005, BSK-E0025, BSK-W0014,
-/// BSK-W0040, BSK-W0050).
+/// A project configuration with explicit native severities for Basilisk's
+/// annotation house rules.
 ///
 /// This is configuration **data** — the exact thing a project writes in
-/// `basilisk.toml` to enable these off-by-default rules — not a checker "mode".
+/// config file to enable these off-by-default rules — not a checker "mode".
 /// Suites covering those opt-in rules pass it to [`run_with_config`] so the
 /// rules under test fire exactly as they would for a user who set that key, and
 /// nothing else turns on. See [CHKARCH-CONFIGURATION-ONLY].
 #[must_use]
 pub fn annotation_rules_config() -> basilisk_config::BasiliskConfig {
-    basilisk_config::BasiliskConfig {
-        strict_annotations: true,
-        ..basilisk_config::BasiliskConfig::default()
-    }
+    use basilisk_config::RuleSeverity::{Error, Warning};
+
+    basilisk_config::BasiliskConfig::with_rule_entries(
+        [
+            ("BSK-0001", Error),
+            ("BSK-0002", Error),
+            ("BSK-0003", Error),
+            ("BSK-0004", Error),
+            ("BSK-0005", Error),
+            ("BSK-0025", Error),
+            ("BSK-0014", Warning),
+            ("BSK-0040", Warning),
+            ("BSK-0050", Warning),
+        ]
+        .into_iter()
+        .map(|(code, severity)| (code.to_owned(), severity))
+        .collect(),
+    )
 }
 
 pub fn codes(diags: &[Diagnostic]) -> Vec<&str> {

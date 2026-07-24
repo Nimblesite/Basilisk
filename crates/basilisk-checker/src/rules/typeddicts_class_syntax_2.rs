@@ -1,4 +1,4 @@
-//! Implements [`typeddicts_class_syntax_2`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Implements [`typeddicts_class_syntax_2`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! `typeddicts_class_syntax_2`: Invalid keyword argument in `TypedDict` class definition.
 //!
 //! `TypedDict` class syntax only accepts `total=True/False` as a keyword argument.

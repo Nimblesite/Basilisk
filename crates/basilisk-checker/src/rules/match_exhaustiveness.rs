@@ -1,4 +1,4 @@
-//! Implements [`match_exhaustiveness`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`match_exhaustiveness`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `match_exhaustiveness`: Non-exhaustive `match` statement.
 //!
 //! A value-dispatch `match` statement that has no irrefutable branch may fail

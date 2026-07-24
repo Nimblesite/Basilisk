@@ -8,6 +8,7 @@ use crate::scope::VariableInfo;
 
 use super::class_info_ext::{alias_name, expr_simple_name};
 use super::core::{classify_rhs, text_range_to_span};
+use super::walrus::{collect_walrus_targets, Reach};
 
 /// Names a plain `import` statement binds into the enclosing scope.
 /// `import a.b.c` binds the top-level package `a`; `import a.b as d` binds `d`.
@@ -45,6 +46,13 @@ pub(super) fn extract_target_names(expr: &Expr) -> Vec<String> {
 
 /// Collect all names assigned anywhere in the function body (not in nested functions).
 pub(super) fn collect_all_assigns(stmts: &[Stmt]) -> Vec<String> {
+    let mut out = collect_walrus_targets(stmts, Reach::Any);
+    out.extend(collect_statement_assigns(stmts));
+    out
+}
+
+/// The statement-shaped half of [`collect_all_assigns`].
+fn collect_statement_assigns(stmts: &[Stmt]) -> Vec<String> {
     let mut out = Vec::new();
     for stmt in stmts {
         match stmt {
@@ -58,8 +66,8 @@ pub(super) fn collect_all_assigns(stmts: &[Stmt]) -> Vec<String> {
             }
             Stmt::For(node) => {
                 out.extend(extract_target_names(&node.target));
-                out.extend(collect_all_assigns(&node.body));
-                out.extend(collect_all_assigns(&node.orelse));
+                out.extend(collect_statement_assigns(&node.body));
+                out.extend(collect_statement_assigns(&node.orelse));
             }
             Stmt::FunctionDef(func) => {
                 // Nested function name is defined in enclosing scope.
@@ -80,14 +88,14 @@ pub(super) fn collect_all_assigns(stmts: &[Stmt]) -> Vec<String> {
                 out.extend(from_import_bound_names(node));
             }
             Stmt::If(node) => {
-                out.extend(collect_all_assigns(&node.body));
+                out.extend(collect_statement_assigns(&node.body));
                 for clause in &node.elif_else_clauses {
-                    out.extend(collect_all_assigns(&clause.body));
+                    out.extend(collect_statement_assigns(&clause.body));
                 }
             }
             Stmt::While(node) => {
-                out.extend(collect_all_assigns(&node.body));
-                out.extend(collect_all_assigns(&node.orelse));
+                out.extend(collect_statement_assigns(&node.body));
+                out.extend(collect_statement_assigns(&node.orelse));
             }
             Stmt::With(node) => {
                 for item in &node.items {
@@ -95,19 +103,19 @@ pub(super) fn collect_all_assigns(stmts: &[Stmt]) -> Vec<String> {
                         out.extend(extract_target_names(var));
                     }
                 }
-                out.extend(collect_all_assigns(&node.body));
+                out.extend(collect_statement_assigns(&node.body));
             }
             Stmt::Try(node) => {
-                out.extend(collect_all_assigns(&node.body));
+                out.extend(collect_statement_assigns(&node.body));
                 for handler in &node.handlers {
                     let ExceptHandler::ExceptHandler(h) = handler;
                     if let Some(exc_name) = &h.name {
                         out.push(exc_name.to_string());
                     }
-                    out.extend(collect_all_assigns(&h.body));
+                    out.extend(collect_statement_assigns(&h.body));
                 }
-                out.extend(collect_all_assigns(&node.orelse));
-                out.extend(collect_all_assigns(&node.finalbody));
+                out.extend(collect_statement_assigns(&node.orelse));
+                out.extend(collect_statement_assigns(&node.finalbody));
             }
             _ => {}
         }
@@ -117,7 +125,10 @@ pub(super) fn collect_all_assigns(stmts: &[Stmt]) -> Vec<String> {
 
 /// Collect names assigned at the top level of a function body (unconditionally).
 pub(super) fn collect_unconditional_assigns(stmts: &[Stmt]) -> Vec<String> {
-    let mut assignments = Vec::new();
+    // A walrus in a statement's own expression — the `if`/`while` test, a `for`
+    // iterable, an assigned value — is evaluated whenever control reaches that
+    // statement, so it binds on every path past it just like a plain `=`.
+    let mut assignments = collect_walrus_targets(stmts, Reach::Definite);
 
     for stmt in stmts {
         match stmt {

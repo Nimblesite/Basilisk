@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">Type aliases name domain ideas without creating distinct types</title>
+  <desc id="description">RawReading and NormalizedReading appear as domain labels in a function signature, then both expand to the same dictionary type whose ReadingValue expands to string, float, or None.</desc>
+  <defs>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="2" fill="#252d3f"/>
+    </pattern>
+    <marker id="arrow-orange" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#e8500a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="url(#dots)" stroke="#252d3f" stroke-width="3"/>
+
+  <text x="82" y="112" fill="#e8500a" font-family="'JetBrains Mono',monospace" font-size="28" font-weight="700" letter-spacing="5">DOMAIN VOCABULARY</text>
+  <text x="82" y="178" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="60" font-weight="800">An alias clarifies; it does not separate</text>
+  <text x="84" y="226" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="29">Readable names can still expand to exactly the same underlying type.</text>
+
+  <rect x="130" y="298" width="1340" height="126" rx="24" fill="#141820" stroke="#e8500a" stroke-width="4"/>
+  <text x="800" y="377" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="34">normalize_reading(raw: RawReading) -&gt; NormalizedReading</text>
+
+  <g transform="translate(112 480)">
+    <rect width="475" height="142" rx="26" fill="#141820" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="237" y="58" text-anchor="middle" fill="#bae6fd" font-family="'JetBrains Mono',monospace" font-size="36">RawReading</text>
+    <text x="237" y="105" text-anchor="middle" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">name at the input boundary</text>
+
+    <rect x="789" width="475" height="142" rx="26" fill="#141820" stroke="#34d399" stroke-width="4"/>
+    <text x="1026" y="58" text-anchor="middle" fill="#a7f3d0" font-family="'JetBrains Mono',monospace" font-size="36">NormalizedReading</text>
+    <text x="1026" y="105" text-anchor="middle" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">name at the output boundary</text>
+
+    <path d="M237 160V205H544" fill="none" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow-orange)"/>
+    <path d="M1026 160V205H720" fill="none" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow-orange)"/>
+
+    <rect x="390" y="230" width="486" height="110" rx="55" fill="#0f1218" stroke="#e8500a" stroke-width="5"/>
+    <text x="633" y="298" text-anchor="middle" fill="#fed7aa" font-family="'JetBrains Mono',monospace" font-size="30">dict[str, ReadingValue]</text>
+  </g>
+
+  <g transform="translate(296 916)">
+    <text x="0" y="0" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="28">ReadingValue</text>
+    <text x="270" y="0" fill="#e8500a" font-family="'JetBrains Mono',monospace" font-size="32">=</text>
+    <rect x="330" y="-42" width="760" height="70" rx="35" fill="#141820" stroke="#6ec5e9" stroke-width="3"/>
+    <text x="710" y="2" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="31">str | float | None</text>
+  </g>
+</svg>

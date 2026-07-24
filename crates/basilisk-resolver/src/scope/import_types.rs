@@ -15,13 +15,20 @@ pub enum ImportKind {
 }
 
 /// How an import was resolved (source file type).
+///
+/// Resolution is a purely static filesystem search ([STUBRES-STATIC-MODEL]): the
+/// interpreter is never executed, so a computed/dynamic import or a module only a
+/// runtime `sys.meta_path` hook could supply cannot be followed and ends in
+/// [`ImportResolution::Unresolved`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImportResolution {
     /// Import resolved from a .py source file.
     SourcePy,
     /// Import resolved from a .pyi stub file.
     StubPyi,
-    /// Import resolution failed or not yet resolved.
+    /// Import resolution failed or not yet resolved. Terminal state of the static
+    /// search ([STUBRES-STATIC-MODEL]); the bound names carry an implicit `Any`
+    /// that `imports_unresolved` surfaces rather than silently accepting.
     Unresolved,
 }
 
@@ -72,6 +79,10 @@ pub struct ImportInfo {
     pub names: Vec<String>,
     /// The source span of the import statement.
     pub span: Span,
+    /// Spans of the identifier tokens in the statement — the module path and
+    /// each imported/alias name — excluding the `import`/`from`/`as` keywords.
+    /// Semantic highlighting paints exactly these spans (GitHub #286).
+    pub name_spans: Vec<Span>,
     /// The kind of import.
     pub kind: ImportKind,
     /// How the import was resolved (source file type).
@@ -93,6 +104,13 @@ pub struct ImportInfo {
     /// Populated during workspace import resolution when a uv registry is
     /// available. `None` for stdlib, local, or non-uv imports.
     pub package_name: Option<String>,
+    /// Published stub-only distribution for this import, when the active
+    /// Typeshed generation's distribution index names one.
+    ///
+    /// This is resolved alongside the import instead of consulting a global
+    /// bundled table later, so diagnostics and code actions cannot mix source
+    /// generations.
+    pub stub_distribution: Option<String>,
     /// Why the import could not be resolved, when known.
     ///
     /// Populated during workspace import resolution when a uv registry is
@@ -104,11 +122,10 @@ pub struct ImportInfo {
 /// The public member API of a module imported via a plain `import X`, captured
 /// from its type stub so the checker can flag access to undeclared attributes.
 ///
-/// Populated during workspace import resolution. Phase 1 only captures **user /
-/// local stubs** (`stub-paths` / `.basilisk/stubs`), which the developer
-/// controls and wants to be authoritative — so mere presence in
-/// [`super::ResolvedModule::imported_modules`] is the gate, and third-party
-/// typeshed / `py.typed` packages are deliberately not captured here yet.
+/// Populated for authoritative user/local stubs and for the one selected
+/// standard-library Typeshed source. Mere presence in
+/// [`super::ResolvedModule::imported_modules`] is the gate; untyped and inline
+/// third-party packages are not captured.
 /// Consumed by `imports_module_attribute`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImportedModuleApi {

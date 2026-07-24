@@ -9,7 +9,7 @@
 //! load-bearing consequence of a custom typeshed being *canonical for stdlib
 //! resolution* (typing-spec import-resolution step 3): a stdlib module absent
 //! from the configured typeshed is surfaced as unresolved instead of being
-//! silently rescued by the bundled name-set.
+//! mixed with the bundled snapshot.
 #![allow(
     clippy::allow_attributes,
     clippy::expect_used,
@@ -132,8 +132,9 @@ fn typeshed_path_full_lifecycle_through_pyproject() {
     seed_typeshed(&dir, "ts", &[("os.pyi", "def uname() -> str: ...\n")]);
     write(&dir, "app.py", APP_OS_AND_FRACTIONS);
 
-    // ── Interaction 1: NO typeshed-path → bundled name-set rescues both stdlib
-    // modules, so the project is clean even though nothing resolves on disk. ──
+    // ── Interaction 1: NO typeshed-path → the default pinned source (an unset
+    // `typeshed-commit` selects the bundled commit, served from the embedded
+    // ZIP) resolves both stdlib modules, so the project is clean. ──
     write(
         &dir,
         "pyproject.toml",
@@ -143,7 +144,7 @@ fn typeshed_path_full_lifecycle_through_pyproject() {
 
     // ── Interaction 2: add typeshed-path. The custom typeshed is now canonical
     // for step 3: `os` resolves from its stdlib/, but `fractions` — absent from
-    // it — is no longer rescued by the bundled name-set and surfaces unresolved. ──
+    // it — cannot be mixed in from the bundled snapshot and surfaces unresolved. ──
     write(
         &dir,
         "pyproject.toml",
@@ -182,8 +183,9 @@ fn typeshed_path_full_lifecycle_through_pyproject() {
         .expect("remove fractions stub");
     assert_flags_unresolved(&check(&dir), "fractions", &["os", "uname"]);
 
-    // ── Interaction 5: remove typeshed-path entirely → the bundled name-set
-    // rescues stdlib modules again, so the project is clean once more. ──
+    // ── Interaction 5: remove typeshed-path entirely → the default pinned
+    // source (the bundled commit) becomes active again, so the project is clean
+    // once more. ──
     write(
         &dir,
         "pyproject.toml",
@@ -194,51 +196,78 @@ fn typeshed_path_full_lifecycle_through_pyproject() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// `basilisk.json` `typeshedPath` (camelCase) and `pyproject.toml` `typeshed-path`
-/// (kebab-case) are the SAME setting in two casings: given identical typesheds
-/// and sources they must produce byte-for-byte identical diagnostics.
+/// `pyproject.toml [tool.basilisk]` is the ONLY config source: a stray
+/// `basilisk.json` sitting next to it is NEVER read. The stray file points at a
+/// typeshed that would flip the outcome (it ships `fractions.pyi`, so honoring
+/// it would make the project clean); the run must instead match the
+/// pyproject-only baseline byte for byte — proving the JSON file has NO effect.
 #[test]
-fn typeshed_path_camelcase_json_matches_kebab_pyproject() {
+fn stray_basilisk_json_is_ignored() {
     let run = |dir: &Path| -> Output {
         seed_typeshed(dir, "ts", &[("os.pyi", "def uname() -> str: ...\n")]);
         write(dir, "app.py", APP_OS_AND_FRACTIONS);
         check(dir)
     };
 
-    // pyproject.toml, kebab-case.
-    let toml_dir = unique_dir("json_vs_toml_toml");
+    // Baseline: pyproject.toml only, kebab-case `typeshed-path`.
+    let baseline_dir = unique_dir("stray_json_baseline");
     write(
-        &toml_dir,
+        &baseline_dir,
         "pyproject.toml",
         "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\ntypeshed-path = \"ts\"\n",
     );
-    let toml_out = run(&toml_dir);
+    let baseline_out = run(&baseline_dir);
 
-    // basilisk.json, camelCase (takes priority over pyproject, per config loader).
-    let json_dir = unique_dir("json_vs_toml_json");
-    write(&json_dir, "basilisk.json", "{ \"typeshedPath\": \"ts\" }\n");
-    let json_out = run(&json_dir);
+    // Same project PLUS a stray `basilisk.json` whose camelCase `typeshedPath`
+    // points at a DIFFERENT typeshed that also ships `fractions.pyi`. If the
+    // JSON were read (it used to take priority over pyproject), `fractions`
+    // would resolve and the run would be clean — a visible behaviour flip.
+    let stray_dir = unique_dir("stray_json_present");
+    seed_typeshed(
+        &stray_dir,
+        "wrong_ts",
+        &[
+            ("os.pyi", "def uname() -> str: ...\n"),
+            (
+                "fractions.pyi",
+                "class Fraction:\n    def __init__(self, a: int, b: int) -> None: ...\n",
+            ),
+        ],
+    );
+    write(
+        &stray_dir,
+        "basilisk.json",
+        "{ \"typeshedPath\": \"wrong_ts\" }\n",
+    );
+    write(
+        &stray_dir,
+        "pyproject.toml",
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\ntypeshed-path = \"ts\"\n",
+    );
+    let stray_out = run(&stray_dir);
 
-    // Both must flag `fractions` (absent) while resolving `os` (present).
-    assert_flags_unresolved(&toml_out, "fractions", &["os", "uname"]);
-    assert_flags_unresolved(&json_out, "fractions", &["os", "uname"]);
+    // Both must flag `fractions` (absent from the REAL typeshed) while
+    // resolving `os` — the stray JSON's fractions-bearing typeshed is ignored.
+    assert_flags_unresolved(&baseline_out, "fractions", &["os", "uname"]);
+    assert_flags_unresolved(&stray_out, "fractions", &["os", "uname"]);
 
-    // …and the two config surfaces must agree exactly on exit code and on the
-    // diagnostic body (temp-dir path prefixes are the only permitted difference,
-    // and app.py is relative so the diagnostic text itself matches).
+    // …and the stray file must have NO effect at all: exit code and diagnostic
+    // body match the baseline exactly (temp-dir path prefixes are the only
+    // permitted difference, and app.py is relative so the diagnostic text
+    // itself matches).
     assert_eq!(
-        toml_out.status.code(),
-        json_out.status.code(),
-        "camelCase JSON and kebab TOML must share an exit code"
+        baseline_out.status.code(),
+        stray_out.status.code(),
+        "a stray basilisk.json must not change the exit code"
     );
     assert_eq!(
-        stdout_of(&toml_out),
-        stdout_of(&json_out),
-        "camelCase JSON and kebab TOML must produce identical diagnostics"
+        stdout_of(&baseline_out),
+        stdout_of(&stray_out),
+        "a stray basilisk.json must not change the diagnostics"
     );
 
-    let _ = std::fs::remove_dir_all(&toml_dir);
-    let _ = std::fs::remove_dir_all(&json_dir);
+    let _ = std::fs::remove_dir_all(&baseline_dir);
+    let _ = std::fs::remove_dir_all(&stray_dir);
 }
 
 /// `stub-paths` (import-resolution step 1) is consulted BEFORE the custom
@@ -282,16 +311,18 @@ fn typeshed_path_leaves_third_party_imports_untouched() {
         "pyproject.toml",
         "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\ntypeshed-path = \"ts\"\n",
     );
-    // `os` resolves from the custom typeshed; `requests` is a genuinely missing
-    // third-party package and must still be flagged.
+    // `os` resolves from the custom typeshed; the third-party import must
+    // still be flagged. The package name is deliberately one that can never
+    // be installed — a real name (e.g. `requests`) resolves from the
+    // developer's global site-packages and makes the test machine-dependent.
     write(
         &dir,
         "app.py",
-        "import requests\nfrom os import uname\n\nname: str = uname()\n",
+        "import bsk_test_missing_thirdparty_pkg\nfrom os import uname\n\nname: str = uname()\n",
     );
 
     let out = check(&dir);
-    assert_flags_unresolved(&out, "requests", &["os", "uname"]);
+    assert_flags_unresolved(&out, "bsk_test_missing_thirdparty_pkg", &["os", "uname"]);
     // The stdlib resolution must not leak into the third-party diagnostic.
     assert!(
         !stdout_of(&out).contains("fractions"),

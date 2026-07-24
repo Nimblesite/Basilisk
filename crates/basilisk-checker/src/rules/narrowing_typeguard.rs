@@ -1,4 +1,4 @@
-//! Implements [`narrowing_typeguard`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`narrowing_typeguard`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `narrowing_typeguard`: `TypeGuard` or `TypeIs` on method with no narrowing parameter.
 //!
 //! The typing spec requires that a `TypeGuard` or `TypeIs` function must have

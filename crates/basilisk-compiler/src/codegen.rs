@@ -18,12 +18,10 @@
 
 //! Tree-walking interpreter for typed Python.
 //!
-//! NOTE ON SPEC ALIGNMENT: [COMPILER-CODEGEN] specifies HIR → LLVM IR (via
-//! inkwell) → native machine code, and [COMPILER-MODES-JIT] an LLVM ORC JIT.
-//! Neither is implemented. This module is a tree-walking interpreter standing in
-//! for that back end — it executes the AST directly. It is a DEVIATION from the
-//! spec's codegen target (no LLVM, no native code, no monomorphized HIR), kept
-//! because it lets the e2e test suite exercise the front-end gate end to end.
+//! NOTE ON SPEC ALIGNMENT: [COMPILER-CODEGEN] specifies the shipped interpreter;
+//! native code and JIT/AOT remain [COMPILERPLAN-NATIVE-JIT] work. This module
+//! executes the AST directly and exists so the e2e suite can exercise the
+//! front-end gate end to end.
 //! It supports the constructs the e2e fixtures need: control flow, strings,
 //! lists, dicts, classes, closures, and more.
 
@@ -35,9 +33,8 @@ use crate::CompileError;
 
 /// Interpret a parsed module, returning captured stdout.
 ///
-/// Stands in for [COMPILER-CODEGEN] — the spec's LLVM codegen stage — by
-/// interpreting the AST instead of lowering it. DEVIATION: no LLVM IR, no
-/// native code. The name `jit_compile_and_run` is historical; it neither JIT-
+/// Implements [COMPILER-CODEGEN] by interpreting the AST. The name
+/// `jit_compile_and_run` is historical; it neither JIT-
 /// compiles nor produces machine code. `_resolved` (the checker's type info) is
 /// currently unused — the interpreter is dynamically typed at runtime.
 ///
@@ -867,9 +864,8 @@ impl Interpreter {
                     return Err(CompileError::Codegen("len() takes 1 argument".to_string()));
                 }
                 match &args[0] {
-                    // [COMPILER-TYPES-STR] DEVIATION: spec requires `len(s)` to
-                    // count Unicode code points; this returns the UTF-8 byte
-                    // length (`s.len()`), which differs for non-ASCII strings.
+                    // [COMPILER-TYPES-STR] Known prototype limit: `s.len()` is
+                    // UTF-8 byte length, so non-ASCII strings are miscounted.
                     Value::Str(s) => Ok(Some(Value::Int(s.len() as i64))),
                     Value::List(v) => Ok(Some(Value::Int(v.len() as i64))),
                     Value::Dict(v) => Ok(Some(Value::Int(v.len() as i64))),
@@ -1414,10 +1410,8 @@ impl Interpreter {
                 Ok(items[idx].clone())
             }
             Value::Str(s) => {
-                // Implements [COMPILER-TYPES-STR]: `s[i]` returns a one-element
-                // `str` (a character), per the spec. DEVIATION: the index bound
-                // uses `s.len()` (byte length), not the code-point count the spec
-                // requires, so multi-byte strings index incorrectly.
+                // [COMPILER-TYPES-STR] Known prototype limit: the index bound
+                // uses byte length before selecting a Unicode scalar.
                 let idx = self.resolve_index(key.as_int()?, s.len())?;
                 Ok(Value::Str(
                     s.chars().nth(idx).map_or(String::new(), |c| c.to_string()),
@@ -1538,12 +1532,9 @@ impl Interpreter {
             };
         }
 
-        // Int operations. Implements [COMPILER-TYPES-INT] partially: integers
-        // are 64-bit signed (`i64`), as the spec mandates. DEVIATIONS: arithmetic
-        // uses plain Rust ops, so overflow follows Rust's build profile (panic in
-        // debug, wrap in release) rather than an explicit trap; there is no
-        // `--big-int` arbitrary-precision mode, and an int literal exceeding i64
-        // is a runtime error (see `Number::Int` handling) not a compile error.
+        // [COMPILER-TYPES-INT]: integers are i64. Arithmetic follows Rust's
+        // build-profile overflow behavior and oversized literals are interpreter
+        // errors; the prototype has no arbitrary-precision mode.
         let a = lhs.as_int()?;
         let b = rhs.as_int()?;
         match op {

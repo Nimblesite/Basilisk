@@ -1,4 +1,5 @@
-//! Tests for [CHKARCH-CLI] / [CHKARCH-CONFIG-FILE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI
+//! Tests for [CHKARCH-CONFIG-MODEL] / [CHKARCH-COMMANDS]. See
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,
@@ -9,31 +10,25 @@
     unused_results,
     dead_code
 )]
-//! E2E tests for project-level config overrides through the full pipeline.
+//! E2E tests for the configuration model through the full pipeline.
 //!
 //! Pipeline: `parse_file` → `resolve` → `check_with_config`
 //!
-//! These tests verify that `BasiliskConfig` overrides (global rule severity,
-//! per-module, per-path) correctly suppress or demote diagnostics when wired
-//! through the real analyzer pipeline.
+//! The model is two flat maps ([CHKARCH-CONFIG-MODEL]): `[tool.basilisk.rules]`
+//! (code → severity) and `[tool.basilisk.rule-tags]` (tag → severity),
+//! resolved nearest-deciding-table-first; a rule entry beats tag entries and
+//! the strictest matching tag wins. There are no per-path globs, per-module
+//! overrides, or presets.
 
 mod common;
 
 use std::collections::HashMap;
 
 use basilisk_checker::{check_with_config, Diagnostic, Severity};
-use basilisk_config::{BasiliskConfig, ModuleOverride, PathOverride, RuleSeverity};
+use basilisk_config::{BasiliskConfig, RuleSeverity, RuleTables};
 use basilisk_parser::parse_file;
 use basilisk_resolver::resolve;
 use common::fixture;
-
-/// Return the fixtures directory path as a string suitable for per-path pattern matching.
-fn fixtures_path_prefix() -> String {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures")
-        .to_string_lossy()
-        .into_owned()
-}
 
 /// Parse + resolve + check with a given config.
 fn run_with_config(
@@ -46,98 +41,100 @@ fn run_with_config(
     Ok(check_with_config(&resolved, config))
 }
 
-/// Config that opts into the annotation house rules (`strict_annotations =
-/// true`). `BSK-E0001`/`BSK-E0002` are off by default — the default config is
-/// pure PEP conformance — so a project must enable them before any
-/// severity/path override has something to act on. These tests layer overrides
-/// on top via `..annotations_on()`. No modes; this is configuration. See
-/// [CHKARCH-CONFIGURATION-ONLY].
-fn annotations_on() -> BasiliskConfig {
+/// A config whose single nearest table holds these per-rule entries.
+fn rules_config(entries: &[(&str, RuleSeverity)]) -> BasiliskConfig {
+    BasiliskConfig::with_rule_entries(
+        entries
+            .iter()
+            .map(|(code, severity)| ((*code).to_owned(), *severity))
+            .collect(),
+    )
+}
+
+/// A config whose single nearest table holds these tag entries.
+fn tags_config(entries: &[(&str, RuleSeverity)]) -> BasiliskConfig {
     BasiliskConfig {
-        strict_annotations: true,
-        ..Default::default()
+        rule_chain: vec![RuleTables {
+            rules: HashMap::new(),
+            rule_tags: entries
+                .iter()
+                .map(|(tag, severity)| ((*tag).to_owned(), *severity))
+                .collect(),
+        }],
+        ..BasiliskConfig::default()
     }
 }
 
+/// Config with explicit severities for the opt-in rules used here.
+fn annotations_on() -> BasiliskConfig {
+    rules_config(&[
+        ("BSK-0001", RuleSeverity::Error),
+        ("BSK-0002", RuleSeverity::Error),
+    ])
+}
+
 // ---------------------------------------------------------------------------
-// Global rule severity overrides
+// Rule-entry selection and grading ([CHKARCH-CONFIG-MODEL])
 // ---------------------------------------------------------------------------
 
+/// A `disabled` entry deselects an analyze-scope rule entirely.
 #[test]
-fn global_severity_off_suppresses_e0001() -> Result<(), Box<dyn std::error::Error>> {
-    // missing_param_annotation.py triggers BSK-E0001 — should be suppressed
-    let mut rules = HashMap::new();
-    rules.insert("BSK-E0001".to_owned(), RuleSeverity::Disabled);
-    let config = BasiliskConfig {
-        rules,
-        ..annotations_on()
-    };
+fn rule_entry_disabled_suppresses_bsk_0001() -> Result<(), Box<dyn std::error::Error>> {
+    let config = rules_config(&[
+        ("BSK-0001", RuleSeverity::Disabled),
+        ("BSK-0002", RuleSeverity::Error),
+    ]);
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;
-    let has_e0001 = diags.iter().any(|d| d.code.code == "BSK-E0001");
+    let has_bsk_0001 = diags.iter().any(|d| d.code.code == "BSK-0001");
     assert!(
-        !has_e0001,
-        "BSK-E0001 should be suppressed by global rule override, got: {diags:#?}"
+        !has_bsk_0001,
+        "BSK-0001 must be deselected by a disabled rule entry, got: {diags:#?}"
     );
     Ok(())
 }
 
+/// A `warning` entry selects and grades the rule.
 #[test]
-fn global_severity_warning_demotes_e0001() -> Result<(), Box<dyn std::error::Error>> {
-    let mut rules = HashMap::new();
-    rules.insert("BSK-E0001".to_owned(), RuleSeverity::Warning);
-    let config = BasiliskConfig {
-        rules,
-        ..annotations_on()
-    };
+fn rule_entry_warning_demotes_bsk_0001() -> Result<(), Box<dyn std::error::Error>> {
+    let config = rules_config(&[("BSK-0001", RuleSeverity::Warning)]);
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;
-    let e0001_diags: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
-        .collect();
-    assert!(
-        !e0001_diags.is_empty(),
-        "should still emit BSK-E0001, just demoted"
-    );
-    for diag in &e0001_diags {
+    let bsk_0001: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0001").collect();
+    assert!(!bsk_0001.is_empty(), "should still emit BSK-0001, graded");
+    for diag in &bsk_0001 {
         assert_eq!(
             diag.severity,
             Severity::Warning,
-            "BSK-E0001 should be demoted to warning, got: {diag:?}"
+            "BSK-0001 should be graded to warning, got: {diag:?}"
         );
     }
     Ok(())
 }
 
+/// An `info` entry selects and grades the rule.
 #[test]
-fn global_severity_info_demotes_e0001() -> Result<(), Box<dyn std::error::Error>> {
-    let mut rules = HashMap::new();
-    rules.insert("BSK-E0001".to_owned(), RuleSeverity::Info);
-    let config = BasiliskConfig {
-        rules,
-        ..annotations_on()
-    };
+fn rule_entry_info_demotes_bsk_0001() -> Result<(), Box<dyn std::error::Error>> {
+    let config = rules_config(&[("BSK-0001", RuleSeverity::Info)]);
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;
-    let e0001_diags: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
-        .collect();
+    let bsk_0001: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0001").collect();
     assert!(
-        !e0001_diags.is_empty(),
-        "should still emit BSK-E0001, just demoted to info"
+        !bsk_0001.is_empty(),
+        "should still emit BSK-0001, graded to info"
     );
-    for diag in &e0001_diags {
+    for diag in &bsk_0001 {
         assert_eq!(
             diag.severity,
             Severity::Info,
-            "BSK-E0001 should be demoted to info, got: {diag:?}"
+            "BSK-0001 should be graded to info, got: {diag:?}"
         );
     }
     Ok(())
 }
 
+/// The default config selects nothing beyond the pep scope: `check()` and
+/// `check_with_config(default)` are identical. [CHKARCH-CONFIGURATION-ONLY]
 #[test]
 fn default_config_does_not_change_diagnostics() -> Result<(), Box<dyn std::error::Error>> {
     let config = BasiliskConfig::default();
@@ -158,167 +155,154 @@ fn default_config_does_not_change_diagnostics() -> Result<(), Box<dyn std::error
 }
 
 // ---------------------------------------------------------------------------
-// Per-module overrides: ignore-missing-stubs
+// Tag entries ([CHKARCH-CONFIG-MODEL])
 // ---------------------------------------------------------------------------
 
+/// One `"basilisk" = "error"` tag entry turns every house rule on: the
+/// annotation rules fire without any per-rule entry.
 #[test]
-fn per_module_override_suppresses_e0010() -> Result<(), Box<dyn std::error::Error>> {
-    // e0010_untyped_import.py imports `requests` → triggers E0010
-    let mut per_module = HashMap::new();
-    per_module.insert(
-        "requests".to_owned(),
-        ModuleOverride {
-            ignore_missing_stubs: true,
-        },
-    );
-    let config = BasiliskConfig {
-        per_module_overrides: per_module,
-        ..Default::default()
-    };
+fn basilisk_tag_entry_selects_house_rules() -> Result<(), Box<dyn std::error::Error>> {
+    let config = tags_config(&[("basilisk", RuleSeverity::Error)]);
 
-    let diags = run_with_config("errors/e0010_untyped_import.py", &config)?;
-    let has_e0010 = diags.iter().any(|d| d.code.code == "imports_unresolved");
+    let diags = run_with_config("missing_both.py", &config)?;
+    let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        !has_e0010,
-        "E0010 should be suppressed for 'requests' via per-module override, got: {diags:#?}"
+        codes.contains(&"BSK-0001") && codes.contains(&"BSK-0002"),
+        "the `basilisk` tag entry must select the annotation rules, got: {codes:?}"
+    );
+    assert!(
+        diags
+            .iter()
+            .filter(|d| d.code.code.starts_with("BSK-000"))
+            .all(|d| d.severity == Severity::Error),
+        "the tag entry's severity grades the selected rules"
     );
     Ok(())
 }
 
+/// Within one table a per-rule entry beats tag entries: the tag turns the
+/// house rules on at error, the rule entry re-grades one of them to info.
 #[test]
-fn per_module_wildcard_suppresses_e0010() -> Result<(), Box<dyn std::error::Error>> {
-    // Wildcard pattern should also suppress
-    let mut per_module = HashMap::new();
-    per_module.insert(
-        "requests.*".to_owned(),
-        ModuleOverride {
-            ignore_missing_stubs: true,
-        },
-    );
+fn rule_entry_beats_tag_entry() -> Result<(), Box<dyn std::error::Error>> {
     let config = BasiliskConfig {
-        per_module_overrides: per_module,
-        ..Default::default()
-    };
-
-    // The fixture imports `requests` directly — wildcard `requests.*` matches `requests`
-    let diags = run_with_config("errors/e0010_untyped_import.py", &config)?;
-    // Note: whether `requests.*` matches `requests` depends on the wildcard logic.
-    // The important thing is we exercise the full pipeline path.
-    // If the wildcard doesn't match bare `requests`, E0010 is still emitted.
-    let _has_e0010 = diags.iter().any(|d| d.code.code == "imports_unresolved");
-    // Just assert we didn't crash — the exact match behavior is tested in config unit tests.
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Per-path overrides
-// ---------------------------------------------------------------------------
-
-#[test]
-fn per_path_disabled_suppresses_all_diagnostics() -> Result<(), Box<dyn std::error::Error>> {
-    // Disable ALL rules for the fixture's path pattern
-    let mut path_overrides = HashMap::new();
-    let mut rule_overrides = HashMap::new();
-    rule_overrides.insert("BSK-E0001".to_owned(), RuleSeverity::Disabled);
-    rule_overrides.insert("BSK-E0002".to_owned(), RuleSeverity::Disabled);
-    path_overrides.insert(
-        fixtures_path_prefix(),
-        PathOverride {
-            disabled_rules: vec![],
-            rule_overrides,
-        },
-    );
-    let config = BasiliskConfig {
-        per_path_overrides: path_overrides,
-        ..annotations_on()
+        rule_chain: vec![RuleTables {
+            rules: [("BSK-0001".to_owned(), RuleSeverity::Info)]
+                .into_iter()
+                .collect(),
+            rule_tags: [("basilisk".to_owned(), RuleSeverity::Error)]
+                .into_iter()
+                .collect(),
+        }],
+        ..BasiliskConfig::default()
     };
 
     let diags = run_with_config("missing_both.py", &config)?;
-    let e0001_e0002: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0001" || d.code.code == "BSK-E0002")
-        .collect();
-    assert!(
-        e0001_e0002.is_empty(),
-        "BSK-E0001 and BSK-E0002 should be suppressed by per-path override, got: {e0001_e0002:#?}"
-    );
-    Ok(())
-}
-
-#[test]
-fn per_path_warning_demotes_severity() -> Result<(), Box<dyn std::error::Error>> {
-    let mut path_overrides = HashMap::new();
-    let mut rule_overrides = HashMap::new();
-    rule_overrides.insert("BSK-E0001".to_owned(), RuleSeverity::Warning);
-    path_overrides.insert(
-        fixtures_path_prefix(),
-        PathOverride {
-            disabled_rules: vec![],
-            rule_overrides,
-        },
-    );
-    let config = BasiliskConfig {
-        per_path_overrides: path_overrides,
-        ..annotations_on()
-    };
-
-    let diags = run_with_config("missing_param_annotation.py", &config)?;
-    let e0001_diags: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
-        .collect();
-    assert!(
-        !e0001_diags.is_empty(),
-        "BSK-E0001 should still be emitted as warning"
-    );
-    for diag in &e0001_diags {
-        assert_eq!(
-            diag.severity,
-            Severity::Warning,
-            "BSK-E0001 should be demoted to warning via per-path override"
-        );
-    }
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Combined: global + per-path (per-path takes priority over global)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn per_path_overrides_global_severity() -> Result<(), Box<dyn std::error::Error>> {
-    let mut rules = HashMap::new();
-    rules.insert("BSK-E0001".to_owned(), RuleSeverity::Warning);
-
-    let mut path_overrides = HashMap::new();
-    let mut rule_overrides = HashMap::new();
-    rule_overrides.insert("BSK-E0001".to_owned(), RuleSeverity::Info);
-    path_overrides.insert(
-        fixtures_path_prefix(),
-        PathOverride {
-            disabled_rules: vec![],
-            rule_overrides,
-        },
-    );
-
-    let config = BasiliskConfig {
-        rules,
-        per_path_overrides: path_overrides,
-        ..annotations_on()
-    };
-
-    let diags = run_with_config("missing_param_annotation.py", &config)?;
-    let e0001_diags: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code == "BSK-E0001")
-        .collect();
-    assert!(!e0001_diags.is_empty(), "BSK-E0001 should still be emitted");
-    for diag in &e0001_diags {
+    let bsk_0001: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-0001").collect();
+    assert!(!bsk_0001.is_empty(), "BSK-0001 must still be selected");
+    for diag in &bsk_0001 {
         assert_eq!(
             diag.severity,
             Severity::Info,
-            "per-path Info should override global Warning"
+            "the per-rule entry must beat the tag entry within one table"
         );
     }
+    assert!(
+        diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-0002")
+            .all(|d| d.severity == Severity::Error),
+        "rules without a per-rule entry keep the tag entry's grade"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Nearest-table resolution ([CHKARCH-CONFIG-MODEL])
+// ---------------------------------------------------------------------------
+
+/// The nearest table that decides a rule wins outright: a nearer `warning`
+/// entry beats an ancestor `error` entry — per rule, not per table.
+#[test]
+fn nearest_deciding_table_wins() -> Result<(), Box<dyn std::error::Error>> {
+    // rule_chain is nearest-first ([CHKARCH-CONFIG-DISCOVERY]).
+    let nearer = RuleTables {
+        rules: [("BSK-0001".to_owned(), RuleSeverity::Warning)]
+            .into_iter()
+            .collect(),
+        rule_tags: HashMap::new(),
+    };
+    let ancestor = RuleTables {
+        rules: [
+            ("BSK-0001".to_owned(), RuleSeverity::Error),
+            ("BSK-0002".to_owned(), RuleSeverity::Error),
+        ]
+        .into_iter()
+        .collect(),
+        rule_tags: HashMap::new(),
+    };
+    let config = BasiliskConfig {
+        rule_chain: vec![nearer, ancestor],
+        ..BasiliskConfig::default()
+    };
+
+    let diags = run_with_config("missing_both.py", &config)?;
+    assert!(
+        diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-0001")
+            .all(|d| d.severity == Severity::Warning),
+        "the nearest table's BSK-0001 grade must win"
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.code.code == "BSK-0002" && d.severity == Severity::Error),
+        "rules the nearest table does not decide fall through to the ancestor"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// PEP rules can be graded, never disabled ([CHKARCH-CONFIG-MODEL])
+// ---------------------------------------------------------------------------
+
+/// Grading a pep rule works like any entry.
+#[test]
+fn pep_rule_grades_to_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let config = rules_config(&[("returns_compatibility_2", RuleSeverity::Warning)]);
+    let diags = run_with_config("errors/e0013_return_mismatch.py", &config)?;
+    let graded: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "returns_compatibility_2")
+        .collect();
+    assert!(!graded.is_empty(), "the pep rule must still fire");
+    assert!(
+        graded.iter().all(|d| d.severity == Severity::Warning),
+        "a pep rule can be graded to warning, got: {graded:#?}"
+    );
+    Ok(())
+}
+
+/// A config resolving a pep rule to `disabled` is invalid —
+/// `pep_disable_violations` reports it, and the checker defensively keeps the
+/// rule running so `check` never loses a PEP diagnostic.
+#[test]
+fn pep_rule_disable_is_invalid_and_defensively_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let config = rules_config(&[("returns_compatibility_2", RuleSeverity::Disabled)]);
+
+    let violations = basilisk_checker::pep_disable_violations(&config);
+    assert_eq!(
+        violations,
+        vec!["returns_compatibility_2"],
+        "the invalid pep-disable must be reported"
+    );
+
+    let diags = run_with_config("errors/e0013_return_mismatch.py", &config)?;
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.code.code == "returns_compatibility_2"),
+        "the checker must defensively keep the pep rule running, got: {diags:#?}"
+    );
     Ok(())
 }

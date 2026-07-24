@@ -158,6 +158,10 @@ pub(crate) mod specialtypes_never_2;
 pub(crate) mod specialtypes_promotions;
 pub(crate) mod specialtypes_type;
 pub(crate) mod stale_lock_file;
+pub(crate) mod suppression_active_specific;
+pub(crate) mod suppression_blanket;
+pub(crate) mod suppression_malformed;
+pub(crate) mod suppression_unused;
 pub(crate) mod tuples_index;
 pub(crate) mod tuples_index_2;
 pub(crate) mod tuples_type_compat;
@@ -367,19 +371,49 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &undeclared_dependency_import::UndeclaredDependencyImport,
         &unused_dependency::UnusedDependency,
         &stale_lock_file::StaleLockFile,
+        &suppression_active_specific::ActiveSpecificSuppression,
+        &suppression_blanket::ActiveBlanketSuppression,
+        &suppression_unused::UnusedSuppression,
+        &suppression_malformed::MalformedSuppression,
         &explicit_any::ExplicitAny,
         &lambda_missing_annotations::LambdaMissingAnnotations,
         &redundant_annotation::RedundantAnnotationWarning,
     ]
 }
 
+/// Number of live entries in the rule registry.
+///
+/// Kept crate-private: public consumers use [`crate::rule_catalog`], while the
+/// generated catalog parity test uses this count as a drift guard.
+#[cfg(test)]
+pub(crate) fn registered_rule_count() -> usize {
+    all_rules().len()
+}
+
 /// Run all registered Phase 1 rules against a resolved module.
 #[must_use]
 pub fn run_all(module: &ResolvedModule, ctx: &CheckContext) -> Vec<Diagnostic> {
-    all_rules().iter().fold(Vec::new(), |mut acc, rule| {
-        rule.check(module, ctx, &mut acc);
-        acc
-    })
+    // Most diagnostics are one-per primary source construct. Reserving for the
+    // largest construct family avoids repeated growth and moves on files with
+    // thousands of homogeneous errors without summing unrelated families and
+    // over-allocating clean modules.
+    let expected = [
+        module.functions.len(),
+        module.classes.len(),
+        module.module_vars.len(),
+        module.imports.len(),
+        module.calls.len(),
+        module.type_statements.len(),
+    ]
+    .into_iter()
+    .max()
+    .unwrap_or(0);
+    all_rules()
+        .iter()
+        .fold(Vec::with_capacity(expected), |mut acc, rule| {
+            rule.check(module, ctx, &mut acc);
+            acc
+        })
 }
 
 /// Each Basilisk-original rule's self-declared [`crate::rule_tags::OptInSpec`],

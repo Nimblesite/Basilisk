@@ -1,4 +1,4 @@
-//! Implements [`directives_assert_type_2`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! Implements [`directives_assert_type_2`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! `directives_assert_type_2`: `assert_type()` type mismatch.
 //!
 //! `assert_type(expr, Type)` is a static-analysis directive that verifies the

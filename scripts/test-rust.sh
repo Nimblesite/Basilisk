@@ -7,7 +7,18 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+
+# The workflow rewrites shared coverage, mirrored-fixture, and report outputs.
+# Serialize whole-worktree runs so a second invocation cannot corrupt the first.
+LOCK_PATH="$REPO_ROOT/target/test-rust.lock"
+if [[ -z "${BASILISK_TEST_RUST_LOCK_FD:-}" ]] || \
+    ! python3 "$REPO_ROOT/conformance/worktree_lock.py" --check "$LOCK_PATH"; then
+    mkdir -p "$REPO_ROOT/target"
+    exec python3 "$REPO_ROOT/conformance/worktree_lock.py" \
+        "$LOCK_PATH" "$0" "$@"
+fi
+
 source "$REPO_ROOT/scripts/common.sh"
 cd "$REPO_ROOT"
 
@@ -20,19 +31,31 @@ done
 
 LCOV_FILE="$REPO_ROOT/lcov.info"
 HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
+TYPING_SUITE_BASE="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+case "$TYPING_SUITE_BASE/" in
+    "$REPO_ROOT/"*)
+        echo "FATAL: conformance temp directory must be outside the repository." >&2
+        exit 1
+        ;;
+esac
+TYPING_SUITE_PARENT="$(mktemp -d "$TYPING_SUITE_BASE/basilisk-conformance.XXXXXX")"
+TYPING_SUITE_DIR="$TYPING_SUITE_PARENT/typing"
+export BASILISK_CONFORMANCE_RUN_ID="${TYPING_SUITE_PARENT##*/}"
+
+cleanup_typing_suite() {
+    case "$TYPING_SUITE_PARENT" in
+        "$TYPING_SUITE_BASE"/basilisk-conformance.??????)
+            rm -rf -- "$TYPING_SUITE_PARENT"
+            ;;
+        *)
+            warn "refusing to remove unexpected conformance temp path"
+            ;;
+    esac
+}
+trap cleanup_typing_suite EXIT
 
 # Ensure llvm-tools-preview is installed so cargo-llvm-cov never prompts.
 rustup component add llvm-tools-preview 2>/dev/null || true
-
-# ── Fetch the (git-ignored) conformance fixtures BEFORE the tests ─────────────
-# score.py --fetch-only pulls the latest python/typing@main (resolves the tip and
-# re-downloads the fixtures + calculator; degrades to cache when offline). This
-# MUST run before the workspace test suite: some tests (e.g. rule_tags_tests'
-# `pep_categories_match_conformance_test_prefixes`) read `conformance/tests/*.py`,
-# which is git-ignored and absent on a fresh checkout. The gate below re-resolves
-# main and re-scores against the same tip.
-header "Ensuring PEP conformance fixtures are current"
-python3 "$REPO_ROOT/conformance/score.py" --fetch-only
 
 # ── Rust tests + conformance, one instrumented coverage pool ─────────────────
 # Coverage is gathered in TWO phases that share ONE profile pool, reported once:
@@ -51,6 +74,16 @@ python3 "$REPO_ROOT/conformance/score.py" --fetch-only
 
 header "Running tests with coverage instrumentation"
 cargo llvm-cov clean --workspace
+
+# Build the CLEAN release binary the conformance GATE scores — freshly built from
+# THIS checkout's source, un-instrumented, byte-for-byte what ships. Built BEFORE
+# the llvm-cov env is sourced so NO coverage flags touch it. Coverage for the
+# checker/resolver paths the suite exercises comes from a SEPARATE instrumented
+# pass further down. The gate must score what ships — never an instrumented build,
+# never a prior (PyPI) release. See [CHKARCH-CONFORMANCE].
+header "Freshly building the CLEAN release basilisk binary for the conformance gate"
+cargo build --release --bin basilisk
+
 eval "$(cargo llvm-cov show-env --export-prefix)"
 
 # macOS coverage-collection fix. cargo-llvm-cov's default `LLVM_PROFILE_FILE`
@@ -76,6 +109,18 @@ if [[ "$OSTYPE" == darwin* ]]; then
     export LLVM_PROFILE_FILE="${CARGO_LLVM_COV_TARGET_DIR:-$REPO_ROOT/target}/Basilisk-%p.profraw"
 fi
 
+# Sync the (git-ignored) conformance fixtures the Rust tests read, from the REAL
+# python/typing suite. `--sync-tests` clones python/typing@main FRESH — done AFTER
+# the coverage clean so the clone survives — and mirrors its graded fixtures into
+# conformance/tests/ (absent on a fresh checkout, read by e.g. rule_tags_tests'
+# `pep_categories_match_conformance_test_prefixes`). The conformance gate below
+# reuses this same fresh clone (--reuse-clone) to RUN the harness under this
+# instrumented env, so the binary's conformance run also feeds the coverage pool.
+header "Syncing PEP conformance fixtures from the real python/typing suite"
+python3 -m unittest discover -s "$REPO_ROOT/conformance" -p 'test_*.py'
+python3 -m unittest discover -s "$REPO_ROOT/benchmarks" -p 'test_*.py'
+python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_DIR" --sync-tests
+
 set +e
 cargo test --profile ci --workspace --exclude basilisk-compiler --all-targets
 TESTS_EXIT=$?
@@ -94,23 +139,32 @@ ok "All workspace tests passed"
 # binary whose objects the report reads — not a stale one from another target dir.
 export BASILISK_BIN="$REPO_ROOT/target/ci/basilisk"
 BASILISK_BIN=$(find_basilisk_bin) || {
-    echo -e "${RED}${BOLD}FATAL: basilisk binary not found after coverage build.${RESET}"
+    echo -e "${RED}${BOLD}FATAL: instrumented basilisk binary not found after coverage build.${RESET}"
     echo -e "${RED}Checked: target/ci/ and fallback paths${RESET}"
     exit 1
 }
-ok "basilisk binary ready: $BASILISK_BIN"
+ok "instrumented basilisk binary ready: $BASILISK_BIN"
 
-# ── PEP conformance gate (also contributes coverage) ──────────────────────────
-# Score the REAL compiled binary with the official python/typing calculator
-# (score.py runs upstream_main.py's get_expected_errors + diff_expected_errors,
-# fetched fresh from python/typing@main) and enforce the gate from
-# coverage-thresholds.json — 100% pass, 0 false positives, or the build fails. The
-# binary runs under the sourced llvm-cov env, so its profile data joins the test
-# pool and the checker/resolver paths these fixtures exercise count toward
-# coverage. The whole conformance system is these two Python files + the
-# gitignored fixtures, scored on the compiled binary — no Rust test.
-header "Enforcing PEP conformance gate (official python/typing calculator)"
-python3 "$REPO_ROOT/conformance/score.py" --bin "$BASILISK_BIN" --gate
+# ── PEP conformance — the REAL python/typing harness, run FRESH ───────────────
+# Two passes over the ONE freshly-cloned suite (reused, no re-clone):
+#   1. COVERAGE pass — the freshly-built INSTRUMENTED binary checks every fixture
+#      under the sourced llvm-cov env, so every `basilisk check` subprocess joins
+#      the coverage pool and the checker/resolver paths these fixtures exercise
+#      count toward coverage.
+#   2. GATE pass — the freshly-built CLEAN RELEASE binary (target/release/basilisk,
+#      un-instrumented, exactly what ships) is scored by the REAL harness and MUST
+#      hit 100% pass / 0 false positives (coverage-thresholds.json) or the build
+#      DIES. run_conformance.py regenerates conformance/conformance_status.csv from
+#      the harness's OWN results/basilisk/*.toml on each pass.
+# There is NO Rust conformance test, NO vendored calculator, and NO cached
+# fixtures: the score is the real suite's own verdict on the CLEAN RELEASE build —
+# never an instrumented one, never a prior (PyPI) release. If the real harness
+# cannot be cloned and run, this FAILS the build. See [CHKARCH-CONFORMANCE].
+header "Conformance coverage pass (instrumented binary over the real suite)"
+python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_DIR" --bin "$BASILISK_BIN" --reuse-clone
+
+header "Enforcing PEP conformance gate (freshly-built CLEAN RELEASE build vs the REAL harness)"
+python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_DIR" --bin "$REPO_ROOT/target/release/basilisk" --gate --reuse-clone
 
 # ── macOS: drop truncated profiles before the merge ──────────────────────────
 # Completes the `%p` fix above. All instrumented runs are done, so any profile
@@ -184,7 +238,7 @@ check_crate() {
 }
 RUST_CRATES=(
     basilisk-checker basilisk-cli basilisk-db basilisk-lsp basilisk-mojo
-    basilisk-parser basilisk-plugin basilisk-resolver basilisk-stubs basilisk-config
+    basilisk-parser basilisk-resolver basilisk-stubs basilisk-config
 )
 for crate in "${RUST_CRATES[@]}"; do
     check_crate "$crate" "$(coverage_threshold_for "$crate")"

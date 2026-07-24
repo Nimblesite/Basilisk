@@ -1,6 +1,6 @@
 //! Tests for [`returns_compatibility`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for returns_compatibility: Return type mismatch. (The explicit-`Any`
-// warning was split out to BSK-W0014 — see w0014_tests.rs.)
+// warning was split out to BSK-0014 — see w0014_tests.rs.)
 
 use super::common::*;
 
@@ -88,6 +88,256 @@ fn concrete_mismatch_still_fires_after_guard() -> Result<(), Box<dyn std::error:
     assert!(
         codes(&diags).contains(&"returns_compatibility"),
         "returning a value from -> None must still fire E0011, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_list_return_is_checked_in_declared_context() -> Result<(), Box<dyn std::error::Error>> {
+    // A literal expression is inferred in its expected return context. `list`
+    // remains invariant for already-typed values, but an empty literal can
+    // construct a `list[bytes]` without first becoming a `list[Never]` value.
+    let source = "def make_bytes() -> list[bytes]:\n    return []\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty list literal must be valid in a list[bytes] return context, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_list_return_is_valid_for_optional_list() -> Result<(), Box<dyn std::error::Error>> {
+    // Contextual typing distributes through `Optional` (`list[int] | None`): an
+    // empty literal fits the list arm (guards the `Optional` recursion arm).
+    let source = "def g() -> list[int] | None:\n    return []\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty list literal must be valid for a list[int] | None return, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn list_literal_with_wrong_element_still_errors() -> Result<(), Box<dyn std::error::Error>> {
+    // Contextual literal typing ([TYPEINF-SPECIAL-LITERAL-CONTEXT]) is covariant
+    // per element, not a blanket pass: a genuine element mismatch must still fire.
+    let source = "def f() -> list[str]:\n    return [1]\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"returns_compatibility"),
+        "list[int] literal must not satisfy a list[str] return, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn list_literal_with_one_bad_element_still_errors() -> Result<(), Box<dyn std::error::Error>> {
+    // Every element must match — one incompatible element fails the whole literal
+    // (guards the `all`, not `any`, semantics of the per-element check).
+    let source = "def f() -> list[str]:\n    return [\"ok\", 2]\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"returns_compatibility"),
+        "a list literal with a non-str element must not satisfy list[str], got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn list_literal_matching_no_union_member_still_errors() -> Result<(), Box<dyn std::error::Error>> {
+    // A literal that fits no arm of the union must still fail (guards the union
+    // fold that only returns `Some(true)` when a member accepts the literal).
+    let source = "def f() -> list[str] | None:\n    return [1]\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"returns_compatibility"),
+        "list[int] literal must not satisfy list[str] | None, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn dict_literal_with_wrong_value_still_errors() -> Result<(), Box<dyn std::error::Error>> {
+    // The dict key widens (LiteralString -> str) but a genuinely wrong value
+    // type must still fire, proving contextual typing is not a blanket pass.
+    let source = "def f() -> dict[str, int]:\n    return {\"k\": \"v\"}\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"returns_compatibility"),
+        "dict value mismatch must still fire against dict[str, int], got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn list_literal_valid_for_union_with_object_arm() -> Result<(), Box<dyn std::error::Error>> {
+    // `object` parses to `Any`, an UNJUDGEABLE union member: the literal-context
+    // check must DEFER (return `None`) rather than reject, so `[1]` is accepted
+    // via the `object` arm. Guards the Union `saw_unjudgeable` deferral —
+    // without it this was a false positive.
+    let source = "def f() -> list[str] | object:\n    return [1]\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "int literal must be accepted for `list[str] | object` via the object arm, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn nonempty_list_literal_widens_literalstring_to_str() -> Result<(), Box<dyn std::error::Error>> {
+    // A non-empty list of string literals infers `list[LiteralString]`; in a
+    // `-> list[str]` return context each element widens LiteralString -> str, so
+    // no error. Locks the covariant NON-EMPTY List arm.
+    let source = "def f() -> list[str]:\n    return [\"a\", \"b\"]\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "list[str] literal return must widen from LiteralString, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn set_literal_return_is_checked_in_declared_context() -> Result<(), Box<dyn std::error::Error>> {
+    // A `{1}` set literal infers `set[int]`; in a `-> set[float]` context each
+    // element widens int -> float. Locks the Set arm of
+    // `literal_collection_assignable_to`.
+    let source = "def f() -> set[float]:\n    return {1}\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "int set literal must widen to set[float], got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_list_return_valid_for_explicit_optional_list() -> Result<(), Box<dyn std::error::Error>> {
+    // The `Optional[list[int]]` spelling parses to `InferredType::Optional`
+    // (unlike `list[int] | None`, which is a Union), so this locks the Optional
+    // recursion arm specifically.
+    let source = "from typing import Optional\ndef f() -> Optional[list[int]]:\n    return []\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty list must be valid for `Optional[list[int]]` return, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_dict_return_is_checked_in_declared_context() -> Result<(), Box<dyn std::error::Error>> {
+    // An empty `{}` dict literal constructs a `dict[str, int]` directly in a
+    // return context rather than first becoming `dict[Never, Never]`. Locks the
+    // EmptyDict arm.
+    let source = "def f() -> dict[str, int]:\n    return {}\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty dict literal must be valid for `dict[str, int]` return, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_list_inside_returned_tuple_uses_declared_element_context(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Refs #337. [TYPEINF-SPECIAL-LITERAL-CONTEXT] must reach the tuple's element
+    // positions: `return [], "lit"` against `-> tuple[list[int], str]` constructs
+    // a `list[int]` instead of a `list[Never]` that then fails invariance. Locks
+    // the Tuple arm of `literal_collection_assignable_to` (inference.rs).
+    let source = "def f() -> tuple[list[int], str]:\n    return [], \"lit\"\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty list inside a returned tuple must be typed against tuple[list[int], str], got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_dict_inside_returned_tuple_uses_declared_element_context(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Refs #337. Same propagation for the `{}` display: `dict[Never, Never]`
+    // must never be synthesised when a declared element type is available.
+    let source = "def f() -> tuple[dict[str, int], str]:\n    return {}, \"a\"\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty dict inside a returned tuple must be typed against dict[str, int], got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn tuple_literal_nested_in_returned_list_uses_declared_context(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Refs #337. The propagation nests to arbitrary depth: the tuple context
+    // has to be reached through the enclosing list literal.
+    let source = "def f() -> list[tuple[list[int], str]]:\n    return [([], \"a\")]\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "tuple literal inside a returned list must be typed contextually, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_list_valid_for_homogeneous_tuple_return() -> Result<(), Box<dyn std::error::Error>> {
+    // Refs #337. The PEP 484 variable-length form `tuple[X, ...]` distributes
+    // the declared element type over every position of the literal.
+    let source = "def f() -> tuple[list[int], ...]:\n    return [], []\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"returns_compatibility"),
+        "empty lists must be valid for a `tuple[list[int], ...]` return, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn tuple_literal_with_wrong_element_still_errors() -> Result<(), Box<dyn std::error::Error>> {
+    // Contextual tuple typing is covariant per position, not a blanket pass: a
+    // genuine element mismatch inside the tuple must still fire.
+    let source = "def f() -> tuple[list[str], str]:\n    return [1], \"a\"\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"returns_compatibility"),
+        "`list[int]` literal in a `tuple[list[str], str]` return must still error, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn homogeneous_tuple_literal_with_wrong_element_still_errors(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // The `tuple[X, ...]` arm must reject a position that does not fit `X`.
+    let source = "def f() -> tuple[int, ...]:\n    return 1, \"a\"\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"returns_compatibility"),
+        "a str element in a `tuple[int, ...]` return must still error, got: {:?}",
         codes(&diags)
     );
     Ok(())

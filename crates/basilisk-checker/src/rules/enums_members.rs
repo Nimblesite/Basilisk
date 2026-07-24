@@ -1,4 +1,4 @@
-//! Implements [`enums_members`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! Implements [`enums_members`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 //! `enums_members`: Enum member annotated with an explicit type.
 //!
 //! In an Enum class, members should NOT carry explicit type annotations.

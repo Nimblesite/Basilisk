@@ -1,4 +1,4 @@
-//! Implements [`tuples_index`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`tuples_index`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `tuples_index`: Tuple index out of bounds.
 //!
 //! When a fixed-length `tuple[T1, T2, ...]` variable is indexed with a literal
@@ -9,6 +9,16 @@
 //! v: tuple[int, str, list[bool]] = (3, "hi", [True])
 //! v[4]   # E0103 — index 4 out of range for 3-element tuple
 //! v[-4]  # E0103 — index -4 out of range for 3-element tuple
+//! ```
+//!
+//! The parameter of a `key=` lambda passed to `sorted`/`min`/`max`/`list.sort`
+//! receives one element of the iterable, so when the iterable is provably a
+//! collection of fixed-length tuples — from its annotation or from a literal
+//! of uniform tuples — the same range check applies inside the lambda:
+//!
+//! ```python
+//! items = [("a", 1, 2), ("b", 3, 4)]
+//! sorted(items, key=lambda pair: pair[4])  # E — 4 out of range for 3-tuple
 //! ```
 
 use basilisk_resolver::ResolvedModule;

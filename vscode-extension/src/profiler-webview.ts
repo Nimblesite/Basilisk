@@ -48,7 +48,7 @@ export interface WebviewDocument {
  */
 export function buildWebviewDocument(doc: WebviewDocument): string {
   const nonce = randomBytes(CSP_NONCE_BYTES).toString("base64");
-  const csp = `default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';`;
+  const csp = `default-src 'none'; img-src data:; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -56,7 +56,7 @@ export function buildWebviewDocument(doc: WebviewDocument): string {
   <meta http-equiv="Content-Security-Policy" content="${csp}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${doc.title}</title>
-  <style>${doc.css}</style>
+  <style nonce="${nonce}">${doc.css}</style>
 </head>
 <body>${doc.body}
   <script nonce="${nonce}">${doc.script}</script>
@@ -71,6 +71,15 @@ export interface WebviewMessage {
   readonly type: string;
   readonly file?: string;
   readonly line?: number;
+}
+
+/** Lifecycle options for a singleton editor-area webview. */
+export interface SingletonWebviewPanelOptions {
+  readonly viewColumn?: vscode.ViewColumn;
+  readonly retainContextWhenHidden?: boolean;
+  readonly enableFindWidget?: boolean;
+  readonly onDidReveal?: () => void;
+  readonly onDidDispose?: () => void;
 }
 
 /**
@@ -97,31 +106,53 @@ export function handleSourceNavigation(msg: WebviewMessage): boolean {
  */
 export class SingletonWebviewPanel {
   private panel: vscode.WebviewPanel | undefined;
+  private visible = false;
 
   constructor(
     private readonly viewType: string,
     private readonly onMessage: (msg: WebviewMessage) => void,
+    private readonly options: SingletonWebviewPanelOptions = {},
   ) {}
 
   /** Open the panel (or reveal the existing one) and swap in the new document. */
   public show(title: string, html: string): void {
     if (this.panel !== undefined) {
       this.panel.title = title;
-      this.panel.reveal(vscode.ViewColumn.Beside);
+      this.panel.reveal(this.options.viewColumn ?? vscode.ViewColumn.Beside);
     } else {
       this.panel = vscode.window.createWebviewPanel(
         this.viewType,
         title,
-        vscode.ViewColumn.Beside,
-        { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] },
+        this.options.viewColumn ?? vscode.ViewColumn.Beside,
+        {
+          enableScripts: true,
+          retainContextWhenHidden: this.options.retainContextWhenHidden ?? true,
+          enableFindWidget: this.options.enableFindWidget ?? false,
+          localResourceRoots: [],
+        },
       );
       this.panel.onDidDispose(() => {
         this.panel = undefined;
+        this.visible = false;
+        this.options.onDidDispose?.();
       });
+      this.visible = this.panel.visible;
       // Bound once per panel instance — the whole reason this class exists.
       this.panel.webview.onDidReceiveMessage(this.onMessage);
+      this.panel.onDidChangeViewState((event) => {
+        const becameVisible = event.webviewPanel.visible && !this.visible;
+        this.visible = event.webviewPanel.visible;
+        if (becameVisible) {
+          this.options.onDidReveal?.();
+        }
+      });
     }
     this.panel.webview.html = html;
+  }
+
+  /** Post data to the open panel; false when no panel exists. */
+  public postMessage(message: unknown): Thenable<boolean> {
+    return this.panel?.webview.postMessage(message) ?? Promise.resolve(false);
   }
 
   /** Whether the panel is currently open (e2e seam). */
@@ -129,9 +160,15 @@ export class SingletonWebviewPanel {
     return this.panel !== undefined;
   }
 
+  /** Whether the live panel is already frontmost in an editor group. */
+  public isVisible(): boolean {
+    return this.visible;
+  }
+
   /** Close and forget the panel (extension teardown). */
   public dispose(): void {
     this.panel?.dispose();
     this.panel = undefined;
+    this.visible = false;
   }
 }

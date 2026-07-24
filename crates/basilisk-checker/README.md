@@ -4,28 +4,38 @@ Core type checking rules and diagnostic emission for Basilisk.
 
 ## Role in Basilisk
 
-This is the **third stage** of the analysis pipeline. After `basilisk-resolver` builds the scope tree and resolves names, the checker walks the AST with full type information and emits diagnostics for every violation.
+This is the **third stage** of the analysis pipeline. After
+`basilisk-resolver` builds the scope tree and resolves names, the checker walks
+the AST with resolved type information and emits configured diagnostics.
 
 ```
-AST + scopes ➜ [basilisk-checker] ➜ diagnostics (BSK-E0001 through BSK-E0025)
+AST + resolved scopes + effective config ➜ [basilisk-checker] ➜ diagnostics
 ```
 
 ## Key concepts
 
-- **Strict by default** — every rule is on. There is no gradual mode.
-- **25 diagnostic rules** — annotation enforcement (E0001-E0005), type correctness (E0010-E0025).
-- **Stub resolution** — resolves types from bundled stubs (`basilisk-stubs`) for stdlib and third-party modules.
-- **Configuration-aware** — reads per-path overrides from `basilisk-config` for gradual adoption.
+- **Configuration, not modes** — the unconfigured default enables the complete
+  core PEP rule set; Basilisk-specific house rules are opt-in by their live rule
+  tags. There is no basic/standard/strict mode.
+- **Per-rule severity** — enabled rules can report as error, warning, info, or
+  disabled globally and per path. Inline and per-file directives sit above
+  project configuration in the precedence ladder.
+- **Live tagged registry** — provenance, PEP-category, and descriptive tags are
+  attached to rules and drive selection/classification.
+- **Stub resolution** — resolves types via `basilisk-stubs`: the standard
+  library from the pinned step-3 typeshed source—a custom path, or a commit
+  verified offline against the local store, defaulting to the complete bundled
+  ZIP snapshot—followed by third-party packages in the specified order
+  ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+- **Gradual adoption** — project/path configuration and the LSP adoption store
+  let existing codebases record debt without changing the default rule set.
 
 ## Diagnostic rules
 
-### Annotations (E0001-E0005)
-
-Missing parameter types, return types, variable types, `*args`/`**kwargs` types, and class attribute types.
-
-### Type correctness (E0010-E0025)
-
-Untyped imports, implicit `Any`, argument/return/assignment mismatches, wrong type arguments, incompatible overrides, undefined names, use-before-assignment, overload issues, unhashable dict keys, non-exhaustive match, invalid type expressions, and missing `@override`.
+The registry is intentionally not copied into this README. See the generated
+[diagnostic reference](https://www.basilisk-python.dev/docs/rules/) and
+[`CHECKER-RULE-TAGGING-SPEC.md`](../../docs/specs/CHECKER-RULE-TAGGING-SPEC.md)
+for the canonical tag model.
 
 ## Dependencies
 
@@ -38,4 +48,7 @@ Untyped imports, implicit `Any`, argument/return/assignment mismatches, wrong ty
 
 ## Status
 
-Complete — all 25 rules implemented and tested.
+The checker and severity engine are shipped. The canonical rule-catalog API,
+strict-first adoption transaction, opt-in suppression diagnostics, and visual
+configuration editor are tracked in
+[`LSP-CONFIGURATION-EDITOR-PLAN.md`](../../docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md).

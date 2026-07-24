@@ -17,12 +17,13 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import {
+    closeAllEditors,
     DIAGNOSTIC_TIMEOUT_MS,
-    SUITE_SETUP_TIMEOUT_MS,
-    pollUntilResult,
     findBasiliskBinary,
     openPythonFile,
-    closeAllEditors,
+    pollUntilResult,
+    removeTestDir,
+    SUITE_SETUP_TIMEOUT_MS,
     waitForLspReady,
 } from './test-helpers';
 
@@ -77,7 +78,7 @@ suite('LSP Feature Tests', () => {
     suiteTeardown(async () => {
         await closeAllEditors();
         if (tmpDir !== undefined && tmpDir !== '' && fs.existsSync(tmpDir)) {
-            fs.rmSync(tmpDir, { recursive: true, force: true });
+            removeTestDir(tmpDir);
         }
     });
 

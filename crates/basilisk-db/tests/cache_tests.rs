@@ -1,5 +1,5 @@
 //! Tests for [CHKCACHE-ENTRY] / [CHKCACHE-FINGERPRINT] / [CHKCACHE-CONTRACT].
-//! See docs/specs/CHECKER-CACHE-SPEC.md#chkcache-entry
+//! See docs/specs/CHECKER-CACHE-SPEC.md#CHKCACHE-ENTRY
 #![allow(clippy::allow_attributes, clippy::unwrap_used, clippy::expect_used)]
 //! Crate-boundary tests for the result cache, covering every soundness branch:
 //! a hit is returned only when the fingerprint and every recorded file match.
@@ -25,6 +25,7 @@ fn fingerprint() -> Fingerprint {
         version: "1.2.3".to_owned(),
         config_hash: 42,
         env_hash: 7,
+        typeshed_id: "commit:6ef9f7719ecfff09dad8724ef42b621fd994fb5e".to_owned(),
     }
 }
 
@@ -100,10 +101,19 @@ fn fingerprint_mismatches_are_misses() {
         env_hash: 999,
         ..fingerprint()
     };
+    // [STUBRES-TYPESHED]: the active typeshed snapshot is part of the identity.
+    // A moved `main`, a bundled fallback, or a re-pinned commit resolves to a
+    // different snapshot under otherwise-identical inputs and MUST miss so
+    // cached diagnostics never outlive the stubs that produced them.
+    let bumped_typeshed = Fingerprint {
+        typeshed_id: "bundled:83c2518a9e6abbda0c44592c3483de459198f887".to_owned(),
+        ..fingerprint()
+    };
     for (label, fp) in [
         ("version", bumped_version),
         ("config", bumped_config),
         ("env", bumped_env),
+        ("typeshed", bumped_typeshed),
     ] {
         let miss: Option<Vec<String>> = cache.lookup(&target, &fp);
         assert_eq!(miss, None, "{label} change must force a miss");

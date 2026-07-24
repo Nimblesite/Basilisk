@@ -1,4 +1,4 @@
-//! Implements [`narrowing_typeis_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`narrowing_typeis_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `narrowing_typeis_2`: `TypeIs` narrows to a type inconsistent with the input type.
 //!
 //! Per the typing spec: "It is an error to narrow to a type that is not
@@ -8,7 +8,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
-use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::diagnostic::{error_diag_help_note, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
@@ -30,6 +30,12 @@ fn extract_inner_type(ann_text: &str) -> Option<&str> {
     let start = ann_text.find(prefix)?;
     let inner_start = start + prefix.len();
     let rest = ann_text.get(inner_start..)?;
+    // Parsed annotations overwhelmingly end at this subscript. This covers
+    // both simple and nested arguments (`TypeIs[list[int]]`) without a second
+    // bracket walk; retain the general matcher for qualified/trailing forms.
+    if let Some(inner) = rest.strip_suffix(']') {
+        return Some(inner);
+    }
     // Find matching closing bracket (handle nested brackets)
     let mut depth = 1u32;
     let mut end_pos = 0;
@@ -57,6 +63,9 @@ fn extract_inner_type(ann_text: &str) -> Option<&str> {
 /// or a known TypeVar-like name). When `TypeVars` are present, we can't statically
 /// determine consistency without full type inference, so we assume consistent.
 fn contains_typevar(type_text: &str) -> bool {
+    if !type_text.as_bytes().iter().any(u8::is_ascii_uppercase) {
+        return false;
+    }
     // Check for single-letter uppercase names that are TypeVars
     // Also check common TypeVar patterns like T, T_A, T_co, etc.
     for segment in type_text.split(&['[', ']', ',', ' ']) {
@@ -105,12 +114,6 @@ fn is_consistent(narrowed: &str, input: &str) -> bool {
         return true;
     }
 
-    // If either type contains TypeVars, we can't determine consistency
-    // without full type inference - assume consistent
-    if contains_typevar(narrowed) || contains_typevar(input) {
-        return true;
-    }
-
     // Check numeric tower: int <: float <: complex
     if input == "float" && (narrowed == "int" || narrowed == "bool") {
         return true;
@@ -122,11 +125,17 @@ fn is_consistent(narrowed: &str, input: &str) -> bool {
         return true;
     }
 
+    // If either type contains TypeVars, we can't determine consistency
+    // without full type inference - assume consistent. Keep this after the
+    // concrete scalar fast paths so ordinary lowercase builtins do no token
+    // splitting.
+    if contains_typevar(narrowed) || contains_typevar(input) {
+        return true;
+    }
+
     // For generic types like list[X] vs list[Y], check if it's the same base
     // Lists, sets, dicts are invariant, so list[int] is NOT a subtype of list[object]
-    if let (Some((n_base, _n_args)), Some((i_base, _i_args))) =
-        (split_generic(narrowed), split_generic(input))
-    {
+    if let (Some(n_base), Some(i_base)) = (generic_base(narrowed), generic_base(input)) {
         // Same generic base - invariant containers are not subtypes
         if n_base == i_base {
             // For invariant types (list, dict, set), exact match is required
@@ -142,31 +151,9 @@ fn is_consistent(narrowed: &str, input: &str) -> bool {
 }
 
 /// Split a generic type `Base[Args]` into `(base, args)` text.
-fn split_generic(type_text: &str) -> Option<(&str, &str)> {
+fn generic_base(type_text: &str) -> Option<&str> {
     let bracket = type_text.find('[')?;
-    let base = type_text.get(..bracket)?;
-    let rest = type_text.get(bracket + 1..)?;
-    // Find the matching close
-    let mut depth = 1u32;
-    let mut end = 0;
-    for (idx, ch) in rest.char_indices() {
-        match ch {
-            '[' => depth += 1,
-            ']' => {
-                depth -= 1;
-                if depth == 0 {
-                    end = idx;
-                    break;
-                }
-            }
-            _ => {}
-        }
-    }
-    if depth == 0 {
-        Some((base, rest.get(..end)?))
-    } else {
-        None
-    }
+    type_text.get(..bracket)
 }
 
 impl Rule for TypeIsInconsistentNarrowing {
@@ -220,21 +207,18 @@ impl Rule for TypeIsInconsistentNarrowing {
 
             // Check consistency.
             if !is_consistent(narrowed_type, param_type) {
-                diagnostics.push(error_diagnostic_owned(
+                diagnostics.push(error_diag_help_note(
                     CODE.clone(),
                     format!(
                         "`TypeIs[{narrowed_type}]` narrows to a type inconsistent with parameter type `{param_type}`"
                     ),
                     ann_span,
                     &module.path,
-                    Some(format!(
+                    format!(
                         "The narrowed type `{narrowed_type}` must be consistent with the input type `{param_type}`"
-                    )),
-                    Some(
-                        "Per the typing spec, TypeIs requires the narrowed type to be \
-                         consistent with the input type"
-                            .to_owned(),
                     ),
+                    "Per the typing spec, TypeIs requires the narrowed type to be \
+                     consistent with the input type",
                 ));
             }
         }

@@ -31,14 +31,17 @@ async fn test_ws_initialize() -> TestResult<()> {
 
 #[tokio::test]
 async fn test_ws_did_open_with_type_errors() -> TestResult<()> {
+    // `name` has no default to infer from (BSK-0001) and the returned method
+    // call is not inferable (BSK-0002) — an f-string return would infer
+    // `-> str` and silence BSK-0002 ([TYPEINF-FUNC-RETURN]).
     let (_fixture, diag) = open_and_diagnose(
         "file:///test.py",
-        "def greet(name):\n    return f\"Hello, {name}!\"",
+        "def greet(name):\n    return name.upper()",
     )
     .await?;
 
-    assert!(diag.contains("BSK-E0001"));
-    assert!(diag.contains("BSK-E0002"));
+    assert!(diag.contains("BSK-0001"));
+    assert!(diag.contains("BSK-0002"));
     assert!(diag.contains("Missing parameter type annotation"));
     assert!(diag.contains("Missing return type annotation"));
     Ok(())
@@ -145,7 +148,7 @@ async fn test_ws_hover_on_error_location() -> TestResult<()> {
         .ok_or("no hover response")?;
 
     assert!(hover.contains("\"jsonrpc\":\"2.0\""));
-    assert!(hover.contains("BSK-E0001"));
+    assert!(hover.contains("BSK-0001"));
     assert!(hover.contains("Missing parameter type annotation"));
     Ok(())
 }
@@ -222,7 +225,7 @@ async fn test_ws_concurrent_document_handling() -> TestResult<()> {
 
     assert!(combined.contains("file:///doc1.py"));
     assert!(combined.contains("file:///doc2.py"));
-    assert!(combined.contains("BSK-E0001"));
+    assert!(combined.contains("BSK-0001"));
     Ok(())
 }
 
@@ -242,7 +245,7 @@ async fn test_ws_large_file_handling() -> TestResult<()> {
     let diag = fixture.wait_for_diagnostics().await?;
 
     assert!(diag.contains("\"method\":\"textDocument/publishDiagnostics\""));
-    assert!(diag.matches("BSK-E0001").count() >= 50);
-    assert!(diag.matches("BSK-E0002").count() >= 50);
+    assert!(diag.matches("BSK-0001").count() >= 50);
+    assert!(diag.matches("BSK-0002").count() >= 50);
     Ok(())
 }

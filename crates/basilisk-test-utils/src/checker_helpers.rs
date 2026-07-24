@@ -8,7 +8,7 @@ use crate::line_col;
 /// A concise expected-diagnostic value constructed in tests.
 #[derive(Debug)]
 pub struct Expected {
-    /// Diagnostic code (e.g. `"BSK-E0001"`).
+    /// Diagnostic code (e.g. `"BSK-0001"`).
     pub code: &'static str,
     /// Expected severity.
     pub severity: Severity,
@@ -66,7 +66,7 @@ impl Expected {
 pub fn assert_diagnostics(source: &str, diags: &[Diagnostic], expected: &[Expected]) {
     let mut sorted = diags.to_vec();
     // Sort by span start, then by code for a stable order when two diagnostics
-    // share the same position (e.g. BSK-E0025 and BSK-E0002 on the same method line).
+    // share the same position (e.g. BSK-0025 and BSK-0002 on the same method line).
     sorted.sort_by(|a, b| {
         a.span
             .start

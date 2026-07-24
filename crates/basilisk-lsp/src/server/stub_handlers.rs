@@ -1,13 +1,14 @@
-//! Implements [STUBRES-CREATE-LOCAL]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#stubres-create-local
+//! Implements [STUBRES-CREATE-LOCAL]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL
 //!
 //! LSP command handler for `basilisk.stubs.createLocal`.
 //!
 //! Scaffolds a permissive local `.pyi` stub for an untyped package under the
 //! workspace's `.basilisk/stubs/` directory — the same Tier-3 stub cache the
 //! resolver auto-includes on its search path ([`basilisk_stubs::generate::cache`]).
-//! Writing it there means the import resolves on the next rebuild and BSK-E0152
+//! Writing it there means the import resolves on the next rebuild and BSK-0152
 //! clears with no config edit required.
 
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use tower_lsp::jsonrpc::Result as LspResult;
@@ -19,7 +20,7 @@ use super::LspServer;
 /// Permissive PEP 484 stub skeleton for `module`.
 ///
 /// **Strict by default**: the skeleton declares *nothing*, so once it exists the
-/// `BSK-E0152` "no stubs" error clears, and accessing any attribute the stub does
+/// `BSK-0152` "no stubs" error clears, and accessing any attribute the stub does
 /// not declare is a `imports_module_attribute` error — forcing the developer to type what they
 /// actually use. The opt-out (`def __getattr__(name: str) -> Any: ...`, the
 /// authoring guide's "incomplete stub" escape hatch that makes every attribute
@@ -39,20 +40,60 @@ fn skeleton_for(module: &str) -> String {
     )
 }
 
+/// Whether `module` is a dotted sequence of Python identifiers.
+fn is_valid_module_name(module: &str) -> bool {
+    module
+        .split('.')
+        .all(basilisk_resolver::is_simple_python_identifier)
+}
+
 /// Write `<root>/.basilisk/stubs/<module>.pyi` with a strict skeleton.
 ///
 /// Never clobbers an existing stub — if one is already present the developer's
 /// work is preserved and `created` is `false`. Returns the path either way so
 /// the caller can report where the stub lives.
 fn write_local_stub(root: &Path, module: &str) -> std::io::Result<(PathBuf, bool)> {
+    if !is_valid_module_name(module) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "module must be a dotted sequence of Python identifiers",
+        ));
+    }
+
     let dir = root.join(basilisk_stubs::generate::cache::DEFAULT_CACHE_DIR);
     std::fs::create_dir_all(&dir)?;
     let stub_path = dir.join(format!("{module}.pyi"));
-    if stub_path.exists() {
-        return Ok((stub_path, false));
-    }
-    std::fs::write(&stub_path, skeleton_for(module))?;
+    let mut stub = match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&stub_path)
+    {
+        Ok(stub) => stub,
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+            return Ok((stub_path, false));
+        }
+        Err(err) => return Err(err),
+    };
+    stub.write_all(skeleton_for(module).as_bytes())?;
     Ok((stub_path, true))
+}
+
+/// Resolve an existing `.pyi` and prove its target is inside a workspace root.
+fn canonical_workspace_stub_path(path: &Path, roots: &[PathBuf]) -> Option<PathBuf> {
+    if path.extension().is_none_or(|ext| ext != "pyi") {
+        return None;
+    }
+
+    let canonical_path = path.canonicalize().ok()?;
+    if !canonical_path.is_file() || canonical_path.extension().is_none_or(|ext| ext != "pyi") {
+        return None;
+    }
+
+    roots
+        .iter()
+        .filter_map(|root| root.canonicalize().ok())
+        .any(|root| canonical_path.starts_with(root))
+        .then_some(canonical_path)
 }
 
 /// Handle `basilisk.stubs.createLocal` (arg: module name).
@@ -84,7 +125,7 @@ pub(super) async fn execute_create_local_stub(
                 .client
                 .log_message(MessageType::INFO, format!("Basilisk: {msg}"))
                 .await;
-            // Re-resolve so the new stub is picked up and BSK-E0152 clears.
+            // Re-resolve so the new stub is picked up and BSK-0152 clears.
             super::init::rebuild_registry_and_resolve(server).await;
             Ok(Some(serde_json::json!({
                 "created": created,
@@ -138,19 +179,19 @@ pub(super) async fn execute_add_stub_member(
         return Ok(None);
     };
 
-    let path = PathBuf::from(stub_path);
-    // Safety: only ever append to an existing `.pyi` inside the workspace.
-    if path.extension().is_none_or(|ext| ext != "pyi") || !path.is_file() {
-        warn!(path = stub_path, "stubs.addMember: not an existing .pyi");
-        return Ok(None);
-    }
-    {
+    // Safety: canonicalize both sides before comparing so `..` and symlinks
+    // cannot redirect a lexically workspace-prefixed path outside the root.
+    let path = {
         let roots = server.workspace_roots.read().await;
-        if !roots.iter().any(|root| path.starts_with(root)) {
-            warn!(path = stub_path, "stubs.addMember: outside the workspace");
-            return Ok(None);
-        }
-    }
+        canonical_workspace_stub_path(Path::new(stub_path), &roots)
+    };
+    let Some(path) = path else {
+        warn!(
+            path = stub_path,
+            "stubs.addMember: not an existing workspace .pyi"
+        );
+        return Ok(None);
+    };
 
     let Ok(content) = std::fs::read_to_string(&path) else {
         return Ok(None);
@@ -256,5 +297,76 @@ mod tests {
         assert!(!created, "an existing stub must not be overwritten");
         assert_eq!(again, path);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "# hand-written\n");
+    }
+
+    // [STUBRES-CREATE-LOCAL] Module names are untrusted command arguments and
+    // must never become path components outside the local stub cache.
+    #[test]
+    fn rejects_module_names_that_escape_the_stub_cache() {
+        let sandbox = tempfile::tempdir().unwrap();
+        let root = sandbox.path().join("workspace");
+        std::fs::create_dir(&root).unwrap();
+
+        let result = write_local_stub(&root, "../../../escaped");
+
+        assert!(
+            result.is_err(),
+            "a parent-directory module name must be rejected"
+        );
+        assert!(
+            !sandbox.path().join("escaped.pyi").exists(),
+            "an invalid module name must not write outside the workspace"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_dotted_module_identifiers() {
+        for module in [
+            "",
+            "9package",
+            "package..child",
+            "package/child",
+            "package-child",
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let result = write_local_stub(dir.path(), module);
+            assert_eq!(
+                result.as_ref().err().map(std::io::Error::kind),
+                Some(std::io::ErrorKind::InvalidInput),
+                "an invalid dotted module identifier must be rejected: {module:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn accepts_valid_dotted_module_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, created) = write_local_stub(dir.path(), "acme.widgets").unwrap();
+
+        assert!(created);
+        assert!(path.ends_with("acme.widgets.pyi"));
+    }
+
+    // `create_new` must treat even a dangling symlink as an occupied path;
+    // checking `Path::exists` before a normal write follows it instead.
+    #[cfg(unix)]
+    #[test]
+    fn does_not_follow_a_dangling_symlink_when_creating_a_stub() {
+        let sandbox = tempfile::tempdir().unwrap();
+        let root = sandbox.path().join("workspace");
+        let cache = root.join(basilisk_stubs::generate::cache::DEFAULT_CACHE_DIR);
+        std::fs::create_dir_all(&cache).unwrap();
+        let outside = sandbox.path().join("outside.pyi");
+        let stub = cache.join("acme.pyi");
+        std::os::unix::fs::symlink(&outside, &stub).unwrap();
+
+        let (path, created) = write_local_stub(&root, "acme").unwrap();
+
+        assert_eq!(path, stub);
+        assert!(!created, "an occupied stub path must not be overwritten");
+        assert!(
+            !outside.exists(),
+            "stub creation must not follow a symlink outside the cache"
+        );
     }
 }

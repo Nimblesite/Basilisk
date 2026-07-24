@@ -1,4 +1,7 @@
-//! Tests for [`generics_basic_3`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`generics_basic_3`] from [CHKARCH-DIAG-CATEGORIES],
+//! [TYPEINF-GENERICS], [TYPEINF-GENERICS-TYPEVAR], and
+//! [TYPEINF-GENERICS-CONSTRAINED]. See
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for generics_basic_3: Generic type argument violations.
 
 use super::common::*;
@@ -16,7 +19,11 @@ def bad(s: str, b: bytes) -> None:
     concat(s, b)
 "#;
     let diags = run(source)?;
-    let _ = codes(&diags);
+    assert!(
+        codes(&diags).contains(&"generics_basic_3"),
+        "incompatible constraint groups should fire E0148, got: {:?}",
+        codes(&diags)
+    );
     Ok(())
 }
 

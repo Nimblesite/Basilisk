@@ -32,8 +32,12 @@ fn hover_on_custom_typeshed_symbol_shows_custom_annotation() -> Result<(), Strin
             source_path: std::path::PathBuf::from("/proj/ts/stdlib/os.pyi"),
             source_span: Span::new(0, 0),
             signature: Some("def uname() -> str".to_owned()),
+            docstring: None,
             provenance: Some(basilisk_stubs::TypeProvenance::StubCustomTypeshed),
             methods: Vec::new(),
+            bases: Vec::new(),
+            metaclass: None,
+            metaclass_calls: Vec::new(),
         },
     );
 

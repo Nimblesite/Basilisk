@@ -121,9 +121,13 @@ fn readonly_typeddict() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn pep695_type_alias_invalid() -> Result<(), Box<dyn std::error::Error>> {
-    // E0057 depends on type_statements being populated by the resolver,
-    // which is not yet implemented. Verify the fixture runs without crashing.
-    let _diags = run("errors/e0057_pep695_type_alias_invalid.py")?;
+    let diags = run("errors/e0057_pep695_type_alias_invalid.py")?;
+    assert!(
+        diags
+            .iter()
+            .any(|diagnostic| diagnostic.code.code == "aliases_type_statement"),
+        "expected aliases_type_statement for an invalid PEP 695 alias"
+    );
     Ok(())
 }
 

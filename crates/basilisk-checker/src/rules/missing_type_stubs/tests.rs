@@ -1,4 +1,4 @@
-//! Tests for [STUBRES-PEP561] step 6 (no stubs found → BSK-E0152) and the
+//! Tests for [STUBRES-PEP561] after all six steps miss (BSK-0152) and the
 //! [STUBRES-PROVENANCE-DIAG]/[STUBRES-CODEACTIONS] help-text contract for the
 //! `Untyped` provenance row. Exercises `MissingTypeStubs::check`,
 //! `make_diagnostic`, and `stub_help_text` in `super`.
@@ -9,6 +9,14 @@ use basilisk_resolver::scope::ImportKind;
 use basilisk_resolver::Span;
 use std::fs;
 use std::path::PathBuf;
+
+fn bundled_stub_distribution(module: &str) -> Option<String> {
+    basilisk_stubs::typeshed::bundle::bundled_snapshot()
+        .ok()?
+        .distribution_index
+        .distribution(module)
+        .map(str::to_owned)
+}
 
 fn make_module(imports: Vec<ImportInfo>) -> ResolvedModule {
     ResolvedModule {
@@ -30,12 +38,14 @@ fn make_import(
         module: module.to_owned(),
         names: vec![],
         span: Span::new(0, span_end),
+        name_spans: Vec::new(),
         kind: ImportKind::Plain,
         resolution,
         resolved_path: resolved_path.map(PathBuf::from),
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: bundled_stub_distribution(module),
         unresolved_reason: None,
     }
 }
@@ -61,11 +71,11 @@ fn fires_for_site_packages_source_py() {
     );
     let diagnostics = run_check(import);
     assert_eq!(diagnostics.len(), 1);
-    assert_eq!(diagnostics[0].code.code, "BSK-E0152");
+    assert_eq!(diagnostics[0].code.code, "BSK-0152");
 }
 
 /// When this opt-in rule fires, an untyped third-party import is a hard ERROR,
-/// not a warning. A project can soften it (`"BSK-E0152" = "warning"`) to import
+/// not a warning. A project can soften it (`"BSK-0152" = "warning"`) to import
 /// at its own risk; this asserts the rule's default severity is an error.
 #[test]
 fn defaults_to_error_severity() {
@@ -173,14 +183,18 @@ fn skips_workspace_source_py() {
 }
 
 #[test]
-fn skips_stdlib_modules() {
+fn name_only_bundle_table_does_not_override_an_actual_step_five_resolution() {
     let import = make_import(
         "os",
         9,
         ImportResolution::SourcePy,
         Some("/venv/lib/python3.12/site-packages/os/__init__.py"),
     );
-    assert!(run_check(import).is_empty());
+    assert_eq!(
+        run_check(import).len(),
+        1,
+        "once a canonical step-3 source misses, a same-named site-packages module is third-party"
+    );
 }
 
 #[test]
@@ -218,12 +232,14 @@ fn skips_site_packages_package_with_py_typed_marker() -> Result<(), Box<dyn std:
         module: "httpx_fake".to_owned(),
         names: vec![],
         span: Span::new(0, 16),
+        name_spans: Vec::new(),
         kind: ImportKind::Plain,
         resolution: ImportResolution::SourcePy,
         resolved_path: Some(init_path),
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: None,
         unresolved_reason: None,
     };
     let module = make_module(vec![import]);
@@ -237,7 +253,7 @@ fn skips_site_packages_package_with_py_typed_marker() -> Result<(), Box<dyn std:
 
     assert!(
         diagnostics.is_empty(),
-        "PEP 561 inline-typed packages must not emit BSK-E0152"
+        "PEP 561 inline-typed packages must not emit BSK-0152"
     );
     Ok(())
 }
@@ -269,12 +285,14 @@ fn skips_nested_submodule_when_root_package_has_py_typed() -> Result<(), Box<dyn
         module: "sqlalchemy_fake.orm".to_owned(),
         names: vec!["Session".to_owned()],
         span: Span::new(0, 32),
+        name_spans: Vec::new(),
         kind: ImportKind::From,
         resolution: ImportResolution::SourcePy,
         resolved_path: Some(sub_init),
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: None,
         unresolved_reason: None,
     };
     let module = make_module(vec![import]);
@@ -322,12 +340,14 @@ fn skips_flat_file_submodule_when_root_package_has_py_typed(
         module: "pydantic_ai_fake.direct".to_owned(),
         names: vec!["model_request".to_owned()],
         span: Span::new(0, 40),
+        name_spans: Vec::new(),
         kind: ImportKind::From,
         resolution: ImportResolution::SourcePy,
         resolved_path: Some(flat_module),
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: None,
         unresolved_reason: None,
     };
     let module = make_module(vec![import]);
@@ -372,12 +392,14 @@ fn skips_deeper_nested_submodule_when_root_package_has_py_typed(
         module: "deeppkg_fake.sub.deep".to_owned(),
         names: vec!["helper".to_owned()],
         span: Span::new(0, 40),
+        name_spans: Vec::new(),
         kind: ImportKind::From,
         resolution: ImportResolution::SourcePy,
         resolved_path: Some(deep_init),
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: None,
         unresolved_reason: None,
     };
     let module = make_module(vec![import]);
@@ -421,12 +443,14 @@ fn skips_httpx_underscore_flat_submodule_when_root_has_py_typed(
         module: "httpx_fake._client".to_owned(),
         names: vec!["Client".to_owned()],
         span: Span::new(0, 34),
+        name_spans: Vec::new(),
         kind: ImportKind::From,
         resolution: ImportResolution::SourcePy,
         resolved_path: Some(client),
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: None,
         unresolved_reason: None,
     };
     let module = make_module(vec![import]);

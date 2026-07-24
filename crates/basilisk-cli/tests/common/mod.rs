@@ -49,10 +49,33 @@ pub fn fixture(rel: &str) -> String {
 }
 
 pub fn run(rel: &str) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
+    let resolved = resolve_fixture(rel)?;
+    Ok(check(&resolved))
+}
+
+fn resolve_fixture(
+    rel: &str,
+) -> Result<basilisk_resolver::ResolvedModule, Box<dyn std::error::Error>> {
+    use std::sync::Arc;
+
     let path = fixture(rel);
     let parsed = parse_file(&path)?;
-    let resolved = resolve(&parsed)?;
-    Ok(check(&resolved))
+    let mut resolved = resolve(&parsed)?;
+    let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot()?;
+    let paths = basilisk_checker::imports::ImportSearchPaths {
+        roots: Vec::new(),
+        extra_paths: Vec::new(),
+        stub_paths: Vec::new(),
+        workspace_members: Vec::new(),
+        site_packages: None,
+        registry: None,
+        typeshed_snapshot: Some(basilisk_checker::imports::ActiveTypeshed::new(
+            Arc::new(snapshot),
+            None,
+        )),
+    };
+    basilisk_checker::imports::resolve_module_imports(&mut resolved, &paths);
+    Ok(resolved)
 }
 
 /// Run the checker over a fixture honoring an explicit project configuration.
@@ -67,23 +90,44 @@ pub fn run_with_config(
     rel: &str,
     config: &BasiliskConfig,
 ) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
-    let path = fixture(rel);
-    let parsed = parse_file(&path)?;
-    let resolved = resolve(&parsed)?;
+    let resolved = resolve_fixture(rel)?;
     Ok(check_with_config(&resolved, config))
 }
 
-/// The project configuration that opts into Basilisk's annotation house rules
-/// (`strict_annotations = true`): `BSK-E0001`..`BSK-E0005`, `BSK-E0025`,
-/// `BSK-W0014`, `BSK-W0040`, `BSK-W0050`.
+/// Project configuration with explicit native severities for Basilisk's
+/// annotation house rules.
 ///
 /// This is configuration **data** — exactly what a project writes in
-/// `basilisk.toml` to enable these off-by-default rules — not a checker "mode".
+/// config file to enable these off-by-default rules — not a checker "mode".
 /// See [CHKARCH-CONFIGURATION-ONLY].
 #[must_use]
 pub fn annotation_rules_config() -> BasiliskConfig {
+    use basilisk_config::RuleSeverity::{Error, Warning};
+
+    BasiliskConfig::with_rule_entries(
+        [
+            ("BSK-0001", Error),
+            ("BSK-0002", Error),
+            ("BSK-0003", Error),
+            ("BSK-0004", Error),
+            ("BSK-0005", Error),
+            ("BSK-0025", Error),
+            ("BSK-0014", Warning),
+            ("BSK-0040", Warning),
+            ("BSK-0050", Warning),
+        ]
+        .into_iter()
+        .map(|(code, severity)| (code.to_owned(), severity))
+        .collect(),
+    )
+}
+
+/// Annotation-rule configuration for checks whose semantics depend on a
+/// concrete Python target.
+#[must_use]
+pub fn annotation_rules_config_for_python(version: &str) -> BasiliskConfig {
     BasiliskConfig {
-        strict_annotations: true,
-        ..BasiliskConfig::default()
+        python_version: Some(version.to_owned()),
+        ..annotation_rules_config()
     }
 }

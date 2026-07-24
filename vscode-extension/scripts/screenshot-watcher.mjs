@@ -13,7 +13,9 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // vscode-extension/scripts -> repo root is two levels up.
 const repoRoot = path.resolve(__dirname, "../../");
-const outputDir = path.resolve(repoRoot, "website/src/assets/images");
+const outputDir = process.env.BASILISK_SCREENSHOT_OUTPUT_DIR
+  ? path.resolve(process.env.BASILISK_SCREENSHOT_OUTPUT_DIR)
+  : path.resolve(repoRoot, "website/src/assets/images");
 const CDP_PORT = Number.parseInt(process.env.BASILISK_SCREENSHOT_CDP_PORT ?? "9229", 10);
 const POLL_MS = 200;
 const TIMEOUT_MS = 600_000;
@@ -91,9 +93,10 @@ async function main() {
       const requested = fs.readFileSync(signalPath, "utf8").trim();
       const tempPath = path.join(outputDir, signal.replace(/\.signal$/, ""));
       const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
-      fs.writeFileSync(tempPath, Buffer.from(data, "base64"));
+      const screenshot = Buffer.from(data, "base64");
+      fs.writeFileSync(tempPath, screenshot);
       fs.unlinkSync(signalPath);
-      console.log(`[screenshots] ${requested} (${Math.round(fs.statSync(tempPath).size / 1024)}KB)`);
+      console.log(`[screenshots] ${requested} (${Math.round(screenshot.length / 1024)}KB)`);
     }
     await sleep(POLL_MS);
   }

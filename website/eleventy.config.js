@@ -2,20 +2,34 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import techdoc from "eleventy-plugin-techdoc";
+import markdownIt from "markdown-it";
+import markdownItAnchor from "markdown-it-anchor";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Patch the techdoc plugin's layouts with our custom versions. The plugin's
-// own templates dir wins layout resolution over src/_includes/layouts, so an
-// override has to be copied into the plugin (base.njk adds favicon + logo;
-// blog.njk adds the per-post hero banner + image-aware BlogPosting JSON-LD).
-const layoutOverrides = ["base.njk", "blog.njk"];
-for (const layout of layoutOverrides) {
-  const localOverride = join(__dirname, "src/_includes/layouts", layout);
+// Patch techdoc templates and behavior with project-owned versions. The plugin
+// reads these files after this config loads, so the copies survive a fresh npm
+// install without maintaining a fork of the package.
+const templateOverrides = [
+  ["src/assets/js/mobile-menu.js", "assets/js/mobile-menu.js"],
+  ["src/_includes/layouts/base.njk", "templates/layouts/base.njk"],
+  ["src/_includes/layouts/blog.njk", "templates/layouts/blog.njk"],
+  ["src/_includes/layouts/docs.njk", "templates/layouts/docs.njk"],
+  ["src/_includes/pages/feed.njk", "templates/pages/feed.njk"],
+  ["src/_includes/pages/robots.txt.njk", "templates/pages/robots.txt.njk"],
+  ["src/_includes/pages/sitemap.njk", "templates/pages/sitemap.njk"],
+  ["src/_includes/pages/blog/index.njk", "templates/pages/blog/index.njk"],
+  ["src/_includes/pages/blog/tags.njk", "templates/pages/blog/tags.njk"],
+  ["src/_includes/pages/blog/tags-pages.njk", "templates/pages/blog/tags-pages.njk"],
+  ["src/_includes/pages/blog/categories.njk", "templates/pages/blog/categories.njk"],
+  ["src/_includes/pages/blog/categories-pages.njk", "templates/pages/blog/categories-pages.njk"],
+];
+for (const [source, target] of templateOverrides) {
+  const localOverride = join(__dirname, source);
   const pluginTarget = join(
     __dirname,
-    "node_modules/eleventy-plugin-techdoc/templates/layouts",
-    layout
+    "node_modules/eleventy-plugin-techdoc",
+    target
   );
   if (existsSync(localOverride)) {
     writeFileSync(pluginTarget, readFileSync(localOverride, "utf-8"));
@@ -76,12 +90,30 @@ function patchIndexFrontMatter(path, content) {
     .replace(/^(title: .*)$/m, `$1\ndescription: "${meta.description}"`);
 }
 
+function addSharedProseClass(path, content) {
+  return path === "_includes/layouts/api.njk"
+    ? content.replace('class="docs-content"', 'class="docs-content prose"')
+    : content;
+}
+
+function addLocalizedTemplateLang(path, content) {
+  return path.startsWith("zh/blog/") && !content.includes("\nlang: zh\n")
+    ? content.replace("layout: layouts/base.njk", "layout: layouts/base.njk\nlang: zh")
+    : content;
+}
+
 export default function (eleventyConfig) {
   const originalAddTemplate = eleventyConfig.addTemplate.bind(eleventyConfig);
   eleventyConfig.addTemplate = (virtualInputPath, content, data) =>
     originalAddTemplate(
       virtualInputPath,
-      patchIndexFrontMatter(virtualInputPath, content),
+      patchIndexFrontMatter(
+        virtualInputPath,
+        addSharedProseClass(
+          virtualInputPath,
+          addLocalizedTemplateLang(virtualInputPath, content)
+        )
+      ),
       data
     );
 
@@ -98,7 +130,7 @@ export default function (eleventyConfig) {
       organization: {
         name: "Basilisk",
         url: "https://www.basilisk-python.dev",
-        logo: "/assets/images/logo.svg",
+        logo: "/assets/images/favicon.png",
         sameAs: [
           "https://github.com/Nimblesite/Basilisk",
         ],
@@ -120,9 +152,76 @@ export default function (eleventyConfig) {
     },
   });
 
+  // Preserve CJK headings in fragment identifiers. Techdoc's default slugger
+  // strips all non-ASCII letters, which produces empty and numeric-only IDs on
+  // Chinese prose pages and breaks their heading permalinks.
+  const markdown = markdownIt({ html: true, breaks: false, linkify: true }).use(
+    markdownItAnchor,
+    {
+      level: [1, 2, 3, 4],
+      permalink: markdownItAnchor.permalink.headerLink(),
+      slugify: (value) =>
+        value
+          .normalize("NFKC")
+          .toLowerCase()
+          .trim()
+          .replace(/[^\p{Letter}\p{Number}_-]+/gu, "-")
+          .replace(/^-+|-+$/g, ""),
+    }
+  );
+  // Eleventy executes plugins after the project config returns, so register
+  // this override as the next plugin to ensure it runs after techdoc's default.
+  eleventyConfig.addPlugin((config) => config.setLibrary("md", markdown));
+
   eleventyConfig.addPassthroughCopy("src/assets");
   eleventyConfig.addPassthroughCopy("src/CNAME");
-  eleventyConfig.addPassthroughCopy("src/robots.txt");
+
+  // [Author pages] Posts written by a given author, matched on the post's
+  // `author` front-matter string == the author's `name` in _data/authors.json.
+  // Newest first, English posts only (Chinese posts carry their own byline).
+  eleventyConfig.addFilter("authorPosts", (posts, authorName) =>
+    (posts || [])
+      .filter((p) => p.data.author === authorName && !p.url.startsWith("/zh/"))
+      .sort((a, b) => b.date - a.date)
+  );
+
+  // [Author pages] Plain-text truncation for meta descriptions built from a bio.
+  eleventyConfig.addFilter("truncate", (str, len) => {
+    const s = String(str || "");
+    if (s.length <= len) return s;
+    return s.slice(0, s.lastIndexOf(" ", len)).trimEnd() + "…";
+  });
+
+  const categoryLabels = {
+    en: { announcements: "Announcements", "deep-dives": "Deep dives" },
+    zh: { announcements: "公告", "deep-dives": "深度解析" },
+  };
+  eleventyConfig.addFilter("blogCategoryLabel", (category, lang = "en") =>
+    categoryLabels[lang]?.[category] ||
+    String(category || "").replaceAll("-", " ")
+  );
+
+  const docsNavActive = (node, currentUrl) => {
+    const current = String(currentUrl || "").replace(/^\/zh(?=\/)/, "");
+    if (
+      node?.kind === "rules" &&
+      (current.startsWith("/docs/rules/") || current.startsWith("/errors/"))
+    ) {
+      return true;
+    }
+    if (node?.url === current) return true;
+    return [...(node?.items || []), ...(node?.children || [])].some((child) =>
+      docsNavActive(child, current)
+    );
+  };
+  eleventyConfig.addFilter("docsNavActive", docsNavActive);
+
+  // Base layout guard: only advertise a language alternate when Eleventy
+  // actually generated that URL. This prevents hreflang and switcher 404s on
+  // English-only docs, author profiles, benchmarks, and diagnostic pages.
+  eleventyConfig.addFilter("hasPageUrl", (pages, url) =>
+    (pages || []).some((page) => page.url === url)
+  );
 
   return {
     dir: {

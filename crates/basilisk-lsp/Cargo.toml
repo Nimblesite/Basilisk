@@ -13,6 +13,7 @@ basilisk-checker.workspace  = true
 basilisk-common.workspace   = true
 basilisk-uv.workspace       = true
 basilisk-stubs.workspace    = true
+basilisk-typeshed-fetch.workspace = true
 basilisk-profiler-protocol.workspace = true
 salsa.workspace   = true
 
@@ -28,7 +29,7 @@ toml.workspace                  = true
 
 tower-lsp         = "0.20"
 tokio             = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util", "net", "sync", "time", "process", "fs"] }
-tokio-tungstenite = "0.30"
+tokio-tungstenite = "0.29"
 futures-util      = "0.3"
 serde             = { version = "1", features = ["derive"] }
 serde_json        = "1"
@@ -44,12 +45,13 @@ sysinfo           = { version = "0.39.3", default-features = false, features = [
 toml.workspace = true
 
 [dev-dependencies]
-tokio-tungstenite   = "0.30"
+tokio-tungstenite   = "0.29"
 futures-util        = "0.3"
 tokio               = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "net", "time"] }
 serde_json          = "1"
 tempfile            = "3"
-basilisk-test-utils = { workspace = true }
+basilisk-test-utils = { workspace = true, features = ["checker"] }
+tower-service       = "0.3"
 
 [lints]
 workspace = true

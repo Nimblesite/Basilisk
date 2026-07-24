@@ -1,4 +1,4 @@
-//! Implements [`callables_kwargs`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`callables_kwargs`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `callables_kwargs`: Unpack[`TypedDict`] kwargs violations.
 //!
 //! Detects invalid uses of `**kwargs: Unpack[TypedDict]` in function signatures:

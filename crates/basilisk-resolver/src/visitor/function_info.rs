@@ -161,6 +161,9 @@ pub(super) fn collect_local_unannotated_vars(stmts: &[Stmt]) -> Vec<VariableInfo
 pub(super) fn param_with_default_to_info(p: &ParameterWithDefault) -> ParameterInfo {
     let mut info = parameter_to_info(&p.parameter);
     info.has_default = p.default.is_some();
+    // Classified default kind feeds the BSK-0001 inference exemption
+    // ([TYPEINF-FUNC-DEFAULTS]): a literal default already determines the type.
+    info.default_rhs_kind = p.default.as_deref().map(classify_rhs);
     info
 }
 
@@ -177,6 +180,7 @@ pub(super) fn parameter_to_info(p: &Parameter) -> ParameterInfo {
         annotation_is_any,
         annotation_is_numeric_literal,
         has_default: false,
+        default_rhs_kind: None,
         name_span: text_range_to_span(p.name.range),
         annotation_span: p
             .annotation

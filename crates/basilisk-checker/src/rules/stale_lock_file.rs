@@ -1,5 +1,5 @@
-//! Implements [BSK-W0013] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-W0013: Stale uv lock file.
+//! Implements [BSK-0013] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! BSK-0013: Stale uv lock file.
 //!
 //! Fires when the `uv.lock` file is older than `pyproject.toml`, indicating
 //! that dependencies may have changed without re-locking. This can cause
@@ -14,7 +14,7 @@ use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
-/// Emits BSK-W0013 when the uv lock file appears stale relative to the
+/// Emits BSK-0013 when the uv lock file appears stale relative to the
 /// project configuration.
 ///
 /// This rule is a skeleton awaiting lock-file mtime comparison data from the
@@ -30,10 +30,10 @@ pub(crate) struct StaleLockFile;
     )
 )]
 impl StaleLockFile {
-    /// Diagnostic code for BSK-W0013.
+    /// Diagnostic code for BSK-0013.
     pub(crate) const CODE: ErrorCode = ErrorCode {
-        code: "BSK-W0013",
-        docs_url: "https://www.basilisk-python.dev/warnings/BSK-W0013",
+        code: "BSK-0013",
+        docs_url: "https://www.basilisk-python.dev/errors/BSK-0013",
     };
 
     /// Build the diagnostic for a stale lock file warning.
@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn make_diagnostic_produces_correct_code() {
         let diagnostic = StaleLockFile::make_diagnostic("test.py", Span::new(0, 10));
-        assert_eq!(diagnostic.code.code, "BSK-W0013");
+        assert_eq!(diagnostic.code.code, "BSK-0013");
         assert_eq!(diagnostic.severity, Severity::Warning);
     }
 }

@@ -38,10 +38,6 @@ pub(super) async fn execute_workspace_modules(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    let roots = server.workspace_roots.read().await;
-    let project_root = roots.first().cloned();
-    drop(roots);
-
     // The module tree's error/warning rollup mirrors the publish gate: with type
     // checking disabled the counts must read empty, just like the cleared editor
     // diagnostics ([ANALYSIS-ENABLED], GitHub #119).
@@ -58,7 +54,6 @@ pub(super) async fn execute_workspace_modules(
             Some(build_module_tree(
                 idx,
                 scope,
-                project_root.as_deref(),
                 type_checking_enabled,
                 scan_complete,
             ))
@@ -83,28 +78,18 @@ pub(super) async fn execute_workspace_modules(
 /// `:BasiliskHealth`); computed from the same per-file figures as the rollup
 /// folded into `basilisk.workspaceModules`.
 ///
-/// Computes type coverage statistics (annotated vs unannotated symbols),
-/// error/warning counts, and adoption state for each file in the workspace.
+/// Computes type coverage statistics (annotated vs unannotated symbols) and
+/// error/warning counts for each file in the workspace.
 /// Gated on the Type Checking toggle like `basilisk.workspaceModules`
 /// ([ANALYSIS-ENABLED], #119): while disabled it serves no grading.
 pub(super) async fn execute_type_health(
     server: &LspServer,
     _args: &[serde_json::Value],
 ) -> LspResult<Option<serde_json::Value>> {
-    let roots = server.workspace_roots.read().await;
-    let project_root = roots.first().cloned();
-    drop(roots);
-
     let type_checking_enabled = server.is_type_checking_enabled().await;
 
     let result: Option<serde_json::Value> = server
-        .with_index(|idx| {
-            Some(build_type_health(
-                idx,
-                project_root.as_deref(),
-                type_checking_enabled,
-            ))
-        })
+        .with_index(|idx| Some(build_type_health(idx, type_checking_enabled)))
         .await;
 
     let result = result.unwrap_or_else(|| {

@@ -1,4 +1,4 @@
-//! Implements [`constructors_call_init`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`constructors_call_init`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Helper functions for `constructors_call_init`: Constructor call errors.
 
 use std::collections::HashMap;
@@ -35,62 +35,27 @@ pub(super) fn all_base_names(class_info: &ClassInfo) -> Vec<&str> {
 }
 
 /// Recursively check if any base class defines `__init__` or `__new__`.
-/// Builtin types that have custom `__init__` or `__new__` accepting
-/// arguments.  Classes inheriting from these can always be constructed
-/// with arguments even though they don't define `__init__` in user code.
-const BUILTINS_WITH_INIT: &[&str] = &[
-    "str",
-    "int",
-    "float",
-    "bool",
-    "bytes",
-    "bytearray",
-    "complex",
-    "list",
-    "dict",
-    "set",
-    "frozenset",
-    "tuple",
-    "type",
-    "range",
-    "slice",
-    "memoryview",
-    "super",
-    "property",
-    "staticmethod",
-    "classmethod",
-    "Exception",
-    "BaseException",
-    "ValueError",
-    "TypeError",
-    "KeyError",
-    "IndexError",
-    "AttributeError",
-    "RuntimeError",
-    "StopIteration",
-    "OSError",
-    "IOError",
-    "UserDict",
-    "UserList",
-    "UserString",
-    "Mapping",
-    "MutableMapping",
-    "ABC",
-];
-
 pub(super) fn has_custom_init_in_bases(
     class_info: &ClassInfo,
     class_map: &HashMap<&str, &ClassInfo>,
     method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
 ) -> bool {
+    let mut visited = std::collections::HashSet::new();
+    let _ = visited.insert(class_info.name.as_str());
+    custom_init_walk(class_info, class_map, method_map, &mut visited)
+}
+
+/// Recursive body of [`has_custom_init_in_bases`]; `visited` breaks base-name
+/// cycles (GitHub #278).
+fn custom_init_walk<'a>(
+    class_info: &'a ClassInfo,
+    class_map: &HashMap<&str, &'a ClassInfo>,
+    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    visited: &mut std::collections::HashSet<&'a str>,
+) -> bool {
     for base_name in all_base_names(class_info) {
         if base_name == "object" || base_name == "Generic" || base_name == "Protocol" {
             continue;
-        }
-
-        // Builtin types always have custom __init__/__new__.
-        if BUILTINS_WITH_INIT.contains(&base_name) {
-            return true;
         }
 
         // Check if the base class itself defines __init__ or __new__.
@@ -101,9 +66,11 @@ pub(super) fn has_custom_init_in_bases(
         }
 
         // Recurse into the base's bases.
-        if let Some(base_class) = class_map.get(base_name) {
-            if has_custom_init_in_bases(base_class, class_map, method_map) {
-                return true;
+        if visited.insert(base_name) {
+            if let Some(base_class) = class_map.get(base_name) {
+                if custom_init_walk(base_class, class_map, method_map, visited) {
+                    return true;
+                }
             }
         }
     }
@@ -111,8 +78,8 @@ pub(super) fn has_custom_init_in_bases(
 }
 
 /// Returns `true` if the class has a base the checker cannot resolve to a known
-/// definition — i.e. a base that is not `object`/`Generic`/`Protocol`, not a
-/// known builtin, and not a class defined in this module.
+/// definition — i.e. a base that is not `object`/`Generic`/`Protocol` and not a
+/// class defined in this module.
 ///
 /// Such a base is an external import (e.g. pydantic `BaseModel`, attrs, msgspec)
 /// that may provide an argument-accepting constructor we cannot see. Callers
@@ -125,7 +92,6 @@ pub(super) fn has_unresolved_base(
         base_name != "object"
             && base_name != "Generic"
             && base_name != "Protocol"
-            && !BUILTINS_WITH_INIT.contains(&base_name)
             && !class_map.contains_key(base_name)
     })
 }
@@ -136,6 +102,20 @@ pub(super) fn find_init_in_hierarchy<'a>(
     class_info: &ClassInfo,
     class_map: &HashMap<&str, &ClassInfo>,
     method_map: &'a HashMap<(&str, &str), Vec<&'a basilisk_resolver::FunctionInfo>>,
+) -> Option<Vec<&'a basilisk_resolver::FunctionInfo>> {
+    let mut visited = std::collections::HashSet::new();
+    let _ = visited.insert(class_info.name.as_str());
+    find_init_walk(class_name, class_info, class_map, method_map, &mut visited)
+}
+
+/// Recursive body of [`find_init_in_hierarchy`]; `visited` breaks base-name
+/// cycles (GitHub #278).
+fn find_init_walk<'a, 'b>(
+    class_name: &str,
+    class_info: &'b ClassInfo,
+    class_map: &HashMap<&str, &'b ClassInfo>,
+    method_map: &'a HashMap<(&str, &str), Vec<&'a basilisk_resolver::FunctionInfo>>,
+    visited: &mut std::collections::HashSet<&'b str>,
 ) -> Option<Vec<&'a basilisk_resolver::FunctionInfo>> {
     // Check the class itself first.
     if let Some(funcs) = method_map.get(&(class_name, "__init__")) {
@@ -152,9 +132,12 @@ pub(super) fn find_init_in_hierarchy<'a>(
             return Some(funcs.clone());
         }
 
+        if !visited.insert(base_name) {
+            continue;
+        }
         if let Some(base_class) = class_map.get(base_name) {
             if let Some(funcs) =
-                find_init_in_hierarchy(base_name, base_class, class_map, method_map)
+                find_init_walk(base_name, base_class, class_map, method_map, visited)
             {
                 return Some(funcs);
             }
@@ -170,6 +153,19 @@ pub(super) fn is_subclass(
     base_name: &str,
     class_map: &HashMap<&str, &ClassInfo>,
 ) -> bool {
+    let mut visited = std::collections::HashSet::new();
+    let _ = visited.insert(class_name);
+    subclass_walk(class_name, base_name, class_map, &mut visited)
+}
+
+/// Recursive body of [`is_subclass`]; `visited` breaks base-name cycles
+/// (GitHub #278).
+fn subclass_walk<'a>(
+    class_name: &str,
+    base_name: &str,
+    class_map: &HashMap<&str, &'a ClassInfo>,
+    visited: &mut std::collections::HashSet<&'a str>,
+) -> bool {
     let Some(class_info) = class_map.get(class_name) else {
         return false;
     };
@@ -178,7 +174,7 @@ pub(super) fn is_subclass(
         if base == base_name {
             return true;
         }
-        if is_subclass(base, base_name, class_map) {
+        if visited.insert(base) && subclass_walk(base, base_name, class_map, visited) {
             return true;
         }
     }

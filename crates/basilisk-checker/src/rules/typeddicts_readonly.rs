@@ -1,4 +1,4 @@
-//! Implements [`typeddicts_readonly`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! Implements [`typeddicts_readonly`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! `typeddicts_readonly`: Mutation of `ReadOnly` `TypedDict` fields
 //!
 //! Fields marked as `ReadOnly` in `TypedDict`s cannot be mutated through:
@@ -20,7 +20,7 @@
 
 use basilisk_resolver::{ReadOnlyViolationKind, ResolvedModule};
 
-use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -55,14 +55,14 @@ impl Rule for ReadOnlyTypedDictMutation {
                     )
                 }
             };
-            diagnostics.push(error_diagnostic_owned(
+            diagnostics.push(error_diagnostic(
                 CODE.clone(),
                 message,
                 v.span,
                 &module.path,
-                Some("Remove the mutation or make the field writable".to_owned()),
+                Some("Remove the mutation or make the field writable"),
                 Some(
-                    "PEP 705: `ReadOnly` fields in a `TypedDict` may not be assigned after construction".to_owned(),
+                    "PEP 705: `ReadOnly` fields in a `TypedDict` may not be assigned after construction",
                 ),
             ));
         }

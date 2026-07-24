@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 title: "Basilisk: The Only 100% PEP-Conformant Python Language Server"
-description: "Get started with Basilisk — the only Python type checker with a perfect 100% score on the official python/typing conformance results. Open-source language server in Rust: type checking, refactoring, debugging, and profiling."
-keywords: basilisk, python, language server, lsp, type checker, vs code, cursor, zed, neovim, strict, rust
+description: "Install, configure, and use Basilisk: an open-source Python type checker and language server with refactoring, debugging, profiling, and editor integrations."
+keywords: basilisk, best python type checker, python, language server, lsp, type checker, vs code, cursor, zed, neovim, strict, rust
 date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project
@@ -15,9 +15,9 @@ eleventyNavigation:
 
 Basilisk is a **complete, open-source Python language server**. Everything you rely on a modern Python extension for — autocomplete, go-to-definition, hover information, refactoring, diagnostics, integrated debugging, profiling — Basilisk does too, fully open source and conformant to the Python typing spec by default.
 
-It is also the **only Python type checker with a perfect 100% score** on the [official `python/typing` conformance results]({{ conformanceOfficial.snapshot.source }}) — published on the Python typing repository's own leaderboard, ahead of Pyright, mypy, Pyrefly and ty. See [how we measure it](/docs/conformance/).
+It is also the **only Python type checker with a perfect 100% score** on the [official `python/typing` conformance results]({{ conformanceOfficial.snapshot.source }}) — published on the Python typing repository's own leaderboard, ahead of Pyright, mypy, Pyrefly and ty. See [how we measure it](/docs/conformance/), or weigh up the [best Python type checker](/docs/comparison/) for your project in the comparison.
 
-It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Zed**, and **Neovim** — plus any other editor that speaks the Language Server Protocol. **Cursor** and **Windsurf** (via Open VSX) are coming very soon, and JetBrains is on the way. No proprietary extension, no Node.js — a single Rust binary, the same experience in every editor.
+It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Cursor**, **Windsurf**, **Zed**, and **Neovim** — plus any other editor that speaks the Language Server Protocol. JetBrains support is planned. No proprietary extension, no Node.js — a single Rust binary, the same experience in every editor.
 
 ## The problem Basilisk solves
 
@@ -30,11 +30,12 @@ Basilisk takes a different position. Its default *is* the typing spec — full P
 ## What Basilisk is
 
 - A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, a full [refactoring suite](/docs/refactoring/), code actions, inlay hints
-- **Editor extensions for every major IDE** — VS Code, Neovim (0.10+), and Zed today; Cursor and Windsurf (via Open VSX) coming very soon, and JetBrains (IntelliJ / PyCharm) on the way
-- **Enrichment fixes** — one-click code actions that add the missing type annotations *for* you
+- **Editor extensions across major editors** — VS Code, Cursor, Windsurf, Neovim (0.10+), and Zed today; JetBrains (IntelliJ / PyCharm) is planned
+- **Annotation quick-fixes** — one-click code actions that insert a placeholder annotation (`: Any`, `-> None`) on unannotated code, so you can fill in the real type
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
 - An **integrated profiler** — sampling CPU profiler with inline heatmap annotations, flame graphs, memory leak detection, and reference graph visualization, all inside your editor
 - A **PEP-conformant type checker by default** — the core spec rule set out of the box, with opt-in Basilisk rules for checking stricter than the spec
+- **Standard-library types out of the box** — a complete typeshed `stdlib/` tree is compiled into the binary and checking never downloads anything, so stdlib types work with no network and no configuration; pin an exact `python/typeshed` commit and it is verified offline against your local store
 - A **CLI tool** for CI integration — exits with code 1 when errors are found
 - A **migration assistant** that reads your existing `pyrightconfig.json` or `mypy.ini`
 - **uv integration** — workspace detection, lock file parsing, and package management commands
@@ -56,44 +57,47 @@ Basilisk's behaviour is decided entirely by **configuration**, and the default c
 
 Stricter-than-spec checking is **opt-in**. Basilisk also ships extra rules the spec doesn't define — *require an annotation* on every parameter and return, a redundant-annotation warning, a missing-`@override` nudge, an explicit-`Any` nudge. They stay **off** until you enable them in config. Because they flag code the spec considers valid, turning them on deliberately trades strict spec conformance for a stricter standard of your team's choosing — a per-project choice, never a default.
 
-Configuration is also where you relax rules for the paths that need it — for example, softening or disabling a rule across a legacy directory:
+Configuration is also where you relax rules for the paths that need it — place a `pyproject.toml` with a `[tool.basilisk]` table in the folder, and the nearest deciding table wins for the files beneath it:
 
 ```toml
-[tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["returns_compatibility"]        # turn a rule off for legacy code
-rules."imports_unresolved" = "warning"   # or just soften its severity
+# legacy/pyproject.toml
+[tool.basilisk.rules]
+"returns_compatibility" = "warning"   # graded down for legacy code only
+"imports_unresolved" = "info"
 ```
 
 This keeps the default honest — pure spec conformance — while letting each team dial strictness exactly where they want it.
 
 ## Project status
 
-Basilisk is currently in **alpha** — the core checker, LSP server, and editor extensions are all working. Autocomplete, go-to-definition, hover, diagnostics, inlay hints, refactoring, debugging, and profiling are shipping today.
+Basilisk is under **active development** — the core checker, LSP server, and editor extensions are all working, and it is the only checker with a perfect score on the official python/typing conformance suite. Autocomplete, go-to-definition, hover, diagnostics, inlay hints, refactoring, debugging, and profiling are shipping today.
 
 | Phase | Milestone | Status |
 |---|---|---|
 | 1 | Parser, resolver, type checker, CLI | Complete |
 | 2 | LSP server, editor extensions (VS Code, Cursor, Zed, Neovim) | Complete |
-| 3 | Expanded rule set, PEP conformance ({{ conformance.scorePct }}% on the pinned suite), gradual adoption | In progress |
+| 3 | Expanded rule set, PEP conformance ({{ conformance.scorePct }}% against `python/typing@main`), gradual adoption | In progress |
 | 4 | Ownership & immutability analysis (Mojo-inspired) | Planned |
 | 5 | WASM plugins, Django/Pydantic/SQLAlchemy | Planned |
-| 6 | 95%+ PEP, SARIF/JUnit, JetBrains extension | Planned |
+| 6 | SARIF/JUnit output, JetBrains extension | Planned |
 | 7 | Plugin marketplace, community stubs, ecosystem | Planned |
 
 ## Architecture
 
-Basilisk is a Cargo workspace with 16 Rust crates, each owning one layer of the system:
+Basilisk is a Cargo workspace with 19 Rust crates, each owning one layer of the system:
 
 | Layer | Crates |
 |-------|--------|
 | **Analysis pipeline** | `basilisk-parser` &rarr; `basilisk-resolver` &rarr; `basilisk-checker` &rarr; `basilisk-cli` |
-| **LSP & infrastructure** | `basilisk-lsp`, `basilisk-db`, `basilisk-config`, `basilisk-stubs`, `basilisk-uv`, `basilisk-common`, `basilisk-test-utils`, `basilisk-profiler-helper` |
+| **LSP & infrastructure** | `basilisk-lsp`, `basilisk-db`, `basilisk-config`, `basilisk-stubs`, `basilisk-uv`, `basilisk-common`, `basilisk-buildinfo`, `basilisk-profiler-helper`, `basilisk-profiler-protocol` |
+| **Typeshed downloads** | `basilisk-typeshed-fetch` — the workspace's only HTTP client; it downloads typeshed on an explicit user action, strictly segregated from checking |
+| **Test infrastructure** | `basilisk-test-utils`, `basilisk-test-macros` |
 | **Editor extensions** | VS Code (`vscode-extension`), Neovim (`basilisk.nvim`), Zed (`basilisk-zed`) |
-| **Future** | `basilisk-mojo` (ownership), `basilisk-compiler` (native), `basilisk-plugin` (WASM plugins) |
+| **Future** | `basilisk-mojo` (ownership), `basilisk-compiler` (native), WASM plugins |
 
 ## Next steps
 
-- [Install Basilisk](/docs/installation/) — Homebrew, Scoop, your editor's marketplace, or build from source
+- [Install Basilisk](/docs/installation/) — PyPI (`uv tool install`), Homebrew, Scoop, your editor's marketplace, or build from source
 - [Quick Start](/docs/quick-start/) — your first type check in under 5 minutes
 - [Refactoring](/docs/refactoring/) — the full refactoring suite (extract, inline, move, rename, convert)
 - [Debugging](/docs/debugging/) — set breakpoints, step through code, inspect variables

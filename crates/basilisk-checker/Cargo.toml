@@ -13,6 +13,7 @@ basilisk-parser.workspace   = true
 basilisk-resolver.workspace = true
 basilisk-stubs.workspace    = true
 ruff_python_ast.workspace   = true
+ruff_python_parser.workspace = true
 ruff_text_size.workspace    = true
 basilisk-uv.workspace       = true
 salsa.workspace             = true

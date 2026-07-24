@@ -1,4 +1,4 @@
-//! Implements [`overloads_consistency_3`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`overloads_consistency_3`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `overloads_consistency_3`: Overload implementation is inconsistent with its signatures.
 //!
 //! When an overload implementation is present the spec requires:

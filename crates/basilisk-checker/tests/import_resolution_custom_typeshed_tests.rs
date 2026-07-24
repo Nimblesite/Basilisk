@@ -11,134 +11,88 @@
 
 use std::fs;
 
-use basilisk_checker::imports::{resolve_module, ImportSearchPaths};
+use basilisk_checker::imports::resolve_module;
 use basilisk_resolver::scope::ImportResolution;
 
 mod import_support;
-use import_support::make_tmp_dir;
+use import_support::{custom_typeshed_snapshot, make_search_paths, make_tmp_dir};
 
 #[test]
 fn test_typeshed_path_overrides_stdlib_module() {
     // A custom typeshed dir supplies `stdlib/os.pyi`; `import os` must resolve
     // to it as the canonical stdlib source (spec step 3), not the name-only
     // bundled recognition (which resolves stdlib to no file at all).
-    let typeshed = make_tmp_dir("bsk_ir_typeshed");
-    let stdlib = typeshed.join("stdlib");
-    fs::create_dir_all(&stdlib).unwrap();
-    fs::write(stdlib.join("os.pyi"), "def uname() -> str: ...\n").unwrap();
-
-    let paths = ImportSearchPaths {
-        roots: vec![],
-        extra_paths: vec![],
-        stub_paths: vec![],
-        workspace_members: vec![],
-        site_packages: None,
-        registry: None,
-        typeshed_path: Some(typeshed.clone()),
-    };
+    let mut paths = make_search_paths(vec![]);
+    paths.typeshed_snapshot = Some(custom_typeshed_snapshot(&[(
+        "os.pyi",
+        "def uname() -> str: ...\n",
+    )]));
     let result = resolve_module("os", &paths).expect("custom typeshed should resolve `os`");
     assert_eq!(result.resolution, ImportResolution::StubPyi);
     assert!(
-        result.path.starts_with(&stdlib),
-        "expected resolution under the custom typeshed stdlib dir, got {:?}",
+        result
+            .path
+            .to_string_lossy()
+            .starts_with("typeshed:custom-"),
+        "expected resolution through the custom Typeshed VFS, got {:?}",
         result.path
     );
-
-    let _ = fs::remove_dir_all(&typeshed);
 }
 
 #[test]
 fn test_typeshed_path_resolves_stdlib_package() {
     // Package-form stdlib module: `stdlib/os/__init__.pyi`.
-    let typeshed = make_tmp_dir("bsk_ir_typeshed_pkg");
-    let os_pkg = typeshed.join("stdlib").join("os");
-    fs::create_dir_all(&os_pkg).unwrap();
-    fs::write(os_pkg.join("__init__.pyi"), "def uname() -> str: ...\n").unwrap();
-
-    let paths = ImportSearchPaths {
-        roots: vec![],
-        extra_paths: vec![],
-        stub_paths: vec![],
-        workspace_members: vec![],
-        site_packages: None,
-        registry: None,
-        typeshed_path: Some(typeshed.clone()),
-    };
+    let mut paths = make_search_paths(vec![]);
+    paths.typeshed_snapshot = Some(custom_typeshed_snapshot(&[(
+        "os/__init__.pyi",
+        "def uname() -> str: ...\n",
+    )]));
     let result = resolve_module("os", &paths).expect("custom typeshed should resolve `os` package");
     assert_eq!(result.resolution, ImportResolution::StubPyi);
     assert!(result.path.ends_with("__init__.pyi"));
-
-    let _ = fs::remove_dir_all(&typeshed);
 }
 
 #[test]
-fn test_no_typeshed_path_leaves_stdlib_unresolved_to_file() {
-    // Without a custom typeshed, stdlib modules resolve to no file — the bundled
-    // recognition is name-only (`is_stdlib_module`), applied downstream.
-    let paths = ImportSearchPaths {
-        roots: vec![],
-        extra_paths: vec![],
-        stub_paths: vec![],
-        workspace_members: vec![],
-        site_packages: None,
-        registry: None,
-        typeshed_path: None,
-    };
+fn test_no_active_snapshot_leaves_stdlib_unresolved_to_file() {
+    // Without an active snapshot, configuration has supplied no step-3 source.
+    let paths = make_search_paths(vec![]);
     assert!(resolve_module("os", &paths).is_none());
 }
 
 #[test]
-fn test_typeshed_path_ignores_non_stdlib_modules() {
-    // `typeshed-path` is the canonical *standard-library* source only; a
-    // non-stdlib name present in the dir must not resolve through it.
-    let typeshed = make_tmp_dir("bsk_ir_typeshed_nonstd");
-    let stdlib = typeshed.join("stdlib");
-    fs::create_dir_all(&stdlib).unwrap();
-    fs::write(stdlib.join("requests.pyi"), "def get() -> None: ...\n").unwrap();
-
-    let paths = ImportSearchPaths {
-        roots: vec![],
-        extra_paths: vec![],
-        stub_paths: vec![],
-        workspace_members: vec![],
-        site_packages: None,
-        registry: None,
-        typeshed_path: Some(typeshed.clone()),
-    };
-    assert!(
-        resolve_module("requests", &paths).is_none(),
-        "typeshed-path must not resolve non-stdlib modules"
-    );
-
-    let _ = fs::remove_dir_all(&typeshed);
+fn test_typeshed_path_uses_custom_stdlib_verbatim() {
+    // A custom tree defines its own standard-library universe. It must not be
+    // filtered through Basilisk's compiled CPython baseline.
+    let mut paths = make_search_paths(vec![]);
+    paths.typeshed_snapshot = Some(custom_typeshed_snapshot(&[(
+        "requests.pyi",
+        "def get() -> None: ...\n",
+    )]));
+    let resolved = resolve_module("requests", &paths).expect("custom tree is canonical");
+    assert!(resolved
+        .path
+        .to_string_lossy()
+        .ends_with("stdlib/requests.pyi"));
 }
 
 #[test]
 fn test_stub_paths_shadow_custom_typeshed() {
     // Spec step 1 (stub-paths) sits at the head of the path and must win over
     // step 3 (typeshed-path) for the same stdlib module.
-    let typeshed = make_tmp_dir("bsk_ir_typeshed_shadow_ts");
-    let stdlib = typeshed.join("stdlib");
-    fs::create_dir_all(&stdlib).unwrap();
-    fs::write(stdlib.join("os.pyi"), "def uname() -> str: ...\n").unwrap();
     let stubs = make_tmp_dir("bsk_ir_typeshed_shadow_stubs");
     fs::write(stubs.join("os.pyi"), "def getcwd() -> str: ...\n").unwrap();
 
-    let paths = ImportSearchPaths {
-        roots: vec![],
-        extra_paths: vec![],
-        stub_paths: vec![stubs.clone()],
-        workspace_members: vec![],
-        site_packages: None,
-        registry: None,
-        typeshed_path: Some(typeshed.clone()),
-    };
+    let mut paths = make_search_paths(vec![]);
+    paths.stub_paths = vec![stubs.clone()];
+    paths.typeshed_snapshot = Some(custom_typeshed_snapshot(&[(
+        "os.pyi",
+        "def uname() -> str: ...\n",
+    )]));
     let result = resolve_module("os", &paths).unwrap();
     assert!(
         result.path.starts_with(&stubs),
         "stub-paths (step 1) must shadow typeshed-path (step 3)"
     );
 
-    let _ = fs::remove_dir_all(&typeshed);
     let _ = fs::remove_dir_all(&stubs);
 }

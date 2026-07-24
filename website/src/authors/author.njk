@@ -1,0 +1,81 @@
+---
+pagination:
+  data: authors.authors
+  size: 1
+  alias: author
+  addAllPagesToCollections: true
+permalink: /authors/{{ author.slug }}/
+layout: layouts/base.njk
+noTranslation: true
+eleventyComputed:
+  title: "{{ author.name }}, Basilisk Author"
+  description: "{{ author.bio | truncate(155) }}"
+---
+
+{% from "components/blog.njk" import postCard with context %}
+
+{% block head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "{% if author.slug == 'basilisk-team' %}Organization{% else %}Person{% endif %}",
+      "@id": "{{ site.url }}/authors/{{ author.slug }}/#author",
+      "name": {{ author.name | dump | safe }},
+      "url": "{{ site.url }}/authors/{{ author.slug }}/",
+      "description": {{ author.bio | dump | safe }},
+      {% if author.role %}"{% if author.slug == 'basilisk-team' %}slogan{% else %}jobTitle{% endif %}": {{ author.role | dump | safe }},{% endif %}
+      "image": "{{ site.url }}{{ author.avatar }}",
+      "sameAs": [
+        {% for u in author.sameAs %}"{{ u }}"{% if not loop.last %},{% endif %}{% endfor %}
+      ]
+    },
+    {
+      "@type": "ProfilePage",
+      "@id": "{{ site.url }}/authors/{{ author.slug }}/#webpage",
+      "url": "{{ site.url }}/authors/{{ author.slug }}/",
+      "name": {{ author.name | dump | safe }},
+      "mainEntity": { "@id": "{{ site.url }}/authors/{{ author.slug }}/#author" }
+    }
+  ]
+}
+</script>
+{% endblock %}
+
+<article class="blog-post">
+  <div class="blog-container">
+    <nav class="author-breadcrumb"><a href="/authors/">← All authors</a></nav>
+    <header class="author-header">
+      {% if author.avatar %}<img class="author-avatar" src="{{ author.avatar }}" alt="{{ author.name }}" width="96" height="96" loading="eager" decoding="async">{% endif %}
+      <div class="author-heading">
+        <h1>{{ author.name }}</h1>
+        {% if author.role %}<p class="author-role">{{ author.role }}</p>{% endif %}
+      </div>
+    </header>
+
+    <div class="blog-post-content prose">
+      <p>{{ author.bio }}</p>
+
+      {% if author.links %}
+      <ul class="author-links">
+        {% for link in author.links %}
+        <li><a href="{{ link.url }}" rel="noopener">{{ link.label }}</a></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+
+    {% set authorPosts = collections.posts | authorPosts(author.name) %}
+    {% if authorPosts.length %}
+    <section class="author-posts">
+      <h2>Posts by {{ author.shortName | default(author.name) }}</h2>
+      <div class="post-list">
+        {% for post in authorPosts %}
+          {{ postCard(post, "en", defaultLanguage, loop.first) }}
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+  </div>
+</article>

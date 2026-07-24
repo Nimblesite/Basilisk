@@ -105,6 +105,84 @@ pub enum NarrowingGuardKind {
         /// Whether a wildcard `case _:` is present (exhaustive).
         has_wildcard: bool,
     },
+    /// `issubclass(x, T)` — narrows a class-object variable (§7.9).
+    IsSubclass {
+        /// The variable being narrowed.
+        variable: String,
+        /// The class name(s) checked against.
+        type_names: Vec<String>,
+        /// Span of the `if` block.
+        if_body_span: Span,
+        /// Span of the `else` block (if present).
+        else_body_span: Option<Span>,
+    },
+    /// `x == <literal>` / `x != <literal>` — literal equality narrowing.
+    EqualsLiteral {
+        /// The variable being narrowed.
+        variable: String,
+        /// The literal's source-faithful text (case preserved; strings keep
+        /// their quotes, e.g. `"Red"`, `1`, `True`).
+        literal_text: String,
+        /// `true` for `==`, `false` for `!=`.
+        is_positive: bool,
+        /// Span of the `if` block.
+        if_body_span: Span,
+        /// Span of the `else` block (if present).
+        else_body_span: Option<Span>,
+    },
+    /// `x in (<literals>)` / `x not in (<literals>)` — membership narrowing.
+    InLiterals {
+        /// The variable being narrowed.
+        variable: String,
+        /// The literal texts of the container elements (case preserved).
+        literal_texts: Vec<String>,
+        /// `true` for `in`, `false` for `not in`.
+        is_positive: bool,
+        /// Span of the `if` block.
+        if_body_span: Span,
+        /// Span of the `else` block (if present).
+        else_body_span: Option<Span>,
+    },
+    /// `hasattr(x, "name")` — synthetic-protocol intersection groundwork.
+    HasAttr {
+        /// The variable being narrowed.
+        variable: String,
+        /// The attribute name checked for.
+        attribute: String,
+        /// Span of the `if` block.
+        if_body_span: Span,
+        /// Span of the `else` block (if present).
+        else_body_span: Option<Span>,
+    },
+    /// `type(x) is C` / `type(x) is not C` — exact-class narrowing. The
+    /// positive branch implies `isinstance(x, C)`; the negative branch can
+    /// exclude `C` only when `C` is `@final` (a subclass instance may still
+    /// answer `type(x) is not C`).
+    TypeOfIs {
+        /// The variable whose `type(...)` is compared.
+        variable: String,
+        /// The class name compared against.
+        type_name: String,
+        /// `true` for `is`, `false` for `is not`.
+        is_positive: bool,
+        /// Span of the `if` block.
+        if_body_span: Span,
+        /// Span of the `else` block (if present).
+        else_body_span: Option<Span>,
+    },
+    /// `"key" in td` / `"key" not in td` — `TypedDict` key-presence narrowing.
+    KeyInDict {
+        /// The variable (a `TypedDict`-typed name) being narrowed.
+        variable: String,
+        /// The key literal's value (unquoted).
+        key: String,
+        /// `true` for `in`, `false` for `not in`.
+        is_positive: bool,
+        /// Span of the `if` block.
+        if_body_span: Span,
+        /// Span of the `else` block (if present).
+        else_body_span: Option<Span>,
+    },
 }
 
 /// A single `case` branch in a match statement narrowing.

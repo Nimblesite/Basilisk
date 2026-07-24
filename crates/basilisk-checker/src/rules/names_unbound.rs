@@ -1,4 +1,4 @@
-//! Implements [`names_unbound`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Implements [`names_unbound`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `names_unbound`: Unbound variable on some code paths.
 //!
 //! When a function contains a `return <name>` statement and the name is

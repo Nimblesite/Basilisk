@@ -7,11 +7,17 @@
     reason = "each import test binary uses a subset of these shared fixtures"
 )]
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-use basilisk_checker::imports::ImportSearchPaths;
+use basilisk_checker::imports::{ActiveTypeshed, ImportSearchPaths};
 use basilisk_resolver::scope::{ImportKind, ImportResolution};
+use basilisk_stubs::typeshed::archive::{Archive, ArchiveEntry, ArchiveVfs};
+use basilisk_stubs::typeshed::gittree::FileMode;
+use basilisk_stubs::typeshed::snapshot::Snapshot;
+use basilisk_stubs::typeshed::source::{LicenseStatus, SourceIdentity, SourceKind, TypeshedStatus};
 
 static TEST_CTR: AtomicU64 = AtomicU64::new(0);
 
@@ -49,8 +55,51 @@ pub fn make_search_paths(roots: Vec<PathBuf>) -> ImportSearchPaths {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
-        typeshed_path: None,
+        typeshed_snapshot: None,
     }
+}
+
+/// Build a gate-equivalent immutable custom Typeshed snapshot from raw stdlib
+/// paths such as `os.pyi` or `os/__init__.pyi`.
+pub fn custom_typeshed_snapshot(files: &[(&str, &str)]) -> ActiveTypeshed {
+    let identity = SourceIdentity::Custom {
+        digest: "integration-custom".to_owned(),
+    };
+    let versions = files.iter().fold(String::new(), |mut versions, (path, _)| {
+        let module = path
+            .trim_end_matches("/__init__.pyi")
+            .trim_end_matches(".pyi")
+            .replace('/', ".");
+        assert!(writeln!(&mut versions, "{module}: 3.0-").is_ok());
+        versions
+    });
+    let mut entries = vec![ArchiveEntry {
+        path: "stdlib/VERSIONS".to_owned(),
+        mode: FileMode::Regular,
+        data: versions.into_bytes(),
+    }];
+    entries.extend(files.iter().map(|(path, body)| ArchiveEntry {
+        path: format!("stdlib/{path}"),
+        mode: FileMode::Regular,
+        data: body.as_bytes().to_vec(),
+    }));
+    let status = TypeshedStatus {
+        active_source: SourceKind::Custom,
+        commit: None,
+        tree: None,
+        license_status: LicenseStatus::NotSupplied,
+        license_reference: None,
+        warnings: Vec::new(),
+    };
+    let uri_identity = identity.uri_component();
+    let snapshot = Snapshot::build(
+        identity,
+        status,
+        ArchiveVfs::new(uri_identity, Archive::new(entries)),
+        None,
+    )
+    .unwrap();
+    ActiveTypeshed::new(Arc::new(snapshot), None)
 }
 
 /// Build a `ResolvedModule` with a single plain `import <module>` statement.
@@ -68,12 +117,14 @@ pub fn module_with_plain_imports(modules: &[&str]) -> basilisk_resolver::Resolve
                 module: (*module).to_owned(),
                 names: vec![],
                 span: basilisk_resolver::Span::new(0, 0),
+                name_spans: Vec::new(),
                 kind: ImportKind::Plain,
                 resolution: ImportResolution::Unresolved,
                 resolved_path: None,
                 package_dep_kind: None,
                 package_version: None,
                 package_name: None,
+                stub_distribution: None,
                 unresolved_reason: None,
             })
             .collect(),

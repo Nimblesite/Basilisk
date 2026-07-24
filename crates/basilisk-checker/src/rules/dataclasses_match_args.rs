@@ -1,4 +1,4 @@
-//! Implements [`dataclasses_match_args`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! Implements [`dataclasses_match_args`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! `dataclasses_match_args`: Access to `__match_args__` on a dataclass with `match_args=False`.
 //!
 //! When `@dataclass(match_args=False)` is specified, Python does **not** generate

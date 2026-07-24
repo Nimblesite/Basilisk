@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">A second mutable list view would break the original element promise</title>
+  <desc id="description">A list of integers is proposed as a list of floats. The wider reference appends a fractional value to the shared list, leaving the original list of integers reference pointing at a value that violates its annotation.</desc>
+  <defs>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="2" fill="#252d3f"/>
+    </pattern>
+    <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#6ec5e9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M1 1L12 7L1 13" fill="none" stroke="#f87171" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="url(#dots)" stroke="#252d3f" stroke-width="3"/>
+
+  <text x="82" y="110" fill="#e8500a" font-family="'JetBrains Mono',monospace" font-size="28" font-weight="700" letter-spacing="5">ONE OBJECT · TWO PROMISES · ONE UNSAFE WRITE</text>
+  <text x="82" y="178" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="60" font-weight="800">Mutation changes the answer</text>
+  <text x="84" y="226" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="29">Existing elements are only half the story; a mutable view also permits future writes.</text>
+
+  <g transform="translate(82 316)">
+    <rect width="430" height="174" rx="26" fill="#141820" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="215" y="61" text-anchor="middle" fill="#bae6fd" font-family="'JetBrains Mono',monospace" font-size="32">values: list[int]</text>
+    <text x="215" y="111" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="32">[18, 19]</text>
+    <text x="215" y="150" text-anchor="middle" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">promises integers only</text>
+  </g>
+
+  <path d="M536 403H672" fill="none" stroke="#6ec5e9" stroke-width="6" marker-end="url(#arrow-blue)"/>
+  <text x="604" y="376" text-anchor="middle" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">same object</text>
+
+  <g transform="translate(704 306)">
+    <rect width="362" height="194" rx="34" fill="#0f1218" stroke="#e8500a" stroke-width="5"/>
+    <text x="181" y="54" text-anchor="middle" fill="#e8500a" font-family="'JetBrains Mono',monospace" font-size="28" font-weight="700" letter-spacing="3">SHARED LIST</text>
+    <rect x="48" y="83" width="112" height="72" rx="18" fill="#141820" stroke="#34d399" stroke-width="3"/>
+    <text x="104" y="130" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="31">18</text>
+    <rect x="202" y="83" width="112" height="72" rx="18" fill="#141820" stroke="#34d399" stroke-width="3"/>
+    <text x="258" y="130" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="31">19</text>
+  </g>
+
+  <path d="M1090 403H1226" fill="none" stroke="#f87171" stroke-width="6" marker-end="url(#arrow-red)"/>
+  <line x1="1192" y1="347" x2="1192" y2="459" stroke="#f87171" stroke-width="11" stroke-linecap="round"/>
+  <text x="1152" y="324" text-anchor="middle" fill="#fecaca" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">reject alias</text>
+
+  <g transform="translate(1254 316)">
+    <rect width="264" height="174" rx="26" fill="#141820" stroke="#f87171" stroke-width="4"/>
+    <text x="132" y="61" text-anchor="middle" fill="#fecaca" font-family="'JetBrains Mono',monospace" font-size="28">writable:</text>
+    <text x="132" y="101" text-anchor="middle" fill="#fecaca" font-family="'JetBrains Mono',monospace" font-size="28">list[float]</text>
+    <text x="132" y="145" text-anchor="middle" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">would allow 0.5</text>
+  </g>
+
+  <g transform="translate(206 614)">
+    <rect width="1188" height="246" rx="30" fill="#141820" stroke="#4a5468" stroke-width="4"/>
+    <text x="42" y="53" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="28" letter-spacing="3">IF THE SECOND VIEW WERE ALLOWED</text>
+    <rect x="42" y="82" width="366" height="112" rx="22" fill="#351b20" stroke="#f87171" stroke-width="4"/>
+    <text x="225" y="128" text-anchor="middle" fill="#fecaca" font-family="'JetBrains Mono',monospace" font-size="28">writable.append(0.5)</text>
+    <text x="225" y="169" text-anchor="middle" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">permitted by list[float]</text>
+    <path d="M438 138H548" fill="none" stroke="#f87171" stroke-width="6" marker-end="url(#arrow-red)"/>
+    <rect x="576" y="82" width="280" height="112" rx="22" fill="#0f1218" stroke="#e8500a" stroke-width="4"/>
+    <text x="716" y="130" text-anchor="middle" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="30">[18, 19, 0.5]</text>
+    <text x="716" y="169" text-anchor="middle" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28">shared list changed</text>
+    <path d="M886 138H966" fill="none" stroke="#f87171" stroke-width="6" marker-end="url(#arrow-red)"/>
+    <rect x="994" y="82" width="152" height="112" rx="22" fill="#351b20" stroke="#f87171" stroke-width="4"/>
+    <text x="1070" y="127" text-anchor="middle" fill="#fecaca" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28" font-weight="800">BROKEN</text>
+    <text x="1070" y="168" text-anchor="middle" fill="#fecaca" font-family="'JetBrains Mono',monospace" font-size="28">list[int]</text>
+  </g>
+
+  <rect x="454" y="876" width="692" height="50" rx="25" fill="#123128" stroke="#34d399" stroke-width="3"/>
+  <text x="800" y="910" text-anchor="middle" fill="#a7f3d0" font-family="'Space Grotesk',system-ui,sans-serif" font-size="28" font-weight="750">Invariant list types prevent the unsafe second promise.</text>
+</svg>

@@ -41,7 +41,7 @@ assert(d.debugger.enabled and not d.debugger.type_checking)
 assert(d.test_explorer.enabled and d.test_explorer.framework == "auto")
 assert(d.test_explorer.pytest_path == "pytest" and d.test_explorer.auto_discover_on_save)
 assert(d.test_explorer.position == "right" and d.test_explorer.width == 40)
-assert(d.uv.enabled and not d.uv.auto_sync and d.uv.stub_suggestions)
+assert(d.uv.enabled and not d.uv.auto_sync)
 assert(d.keymaps.enabled and d.keymaps.prefix == "<leader>b")
 assert(d.statusline.enabled and d.log_level == "info")
 

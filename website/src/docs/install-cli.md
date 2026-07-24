@@ -1,15 +1,15 @@
 ---
 layout: layouts/docs.njk
-title: "Install the Basilisk CLI — Homebrew, Scoop & Binaries"
-description: "Install the Basilisk Python type checker as a standalone CLI via Homebrew, Scoop, pre-built binaries, or from source. A single Rust binary with no runtime dependencies — ideal for CI."
-keywords: basilisk, cli, homebrew, scoop, binary, install, rust, python type checker, ci, github actions
+title: "Install the Basilisk CLI — PyPI, Homebrew, Scoop & Binaries"
+description: "Install the Basilisk Python type checker as a standalone CLI via PyPI (uv tool install or pipx), Homebrew, Scoop, pre-built binaries, or from source. A single Rust binary with no runtime dependencies — ideal for CI."
+keywords: basilisk, cli, pypi, pip, uv, pipx, homebrew, scoop, binary, install, rust, python type checker, ci, github actions
 date: 2026-02-28
-dateModified: 2026-03-31
+dateModified: 2026-07-19
 author: The Basilisk Project
 eleventyNavigation:
   key: CLI & Package Managers
   parent: Installation
-  order: 3
+  order: 4
 ---
 
 # CLI & package managers
@@ -17,6 +17,18 @@ eleventyNavigation:
 Use these methods when you want the `basilisk` binary on its own — for the command line, for CI, or to back an editor that talks to a system install. Basilisk is a single Rust binary with no runtime dependencies: no Node.js, no Python interpreter, no package manager required after installation.
 
 > Using **VS Code, Cursor, or Windsurf**? The binary is bundled in the extension — see [VS Code & Cursor](/docs/install-vscode/). Using **Zed**? The binary downloads with the extension — see [Zed](/docs/install-zed/). Neither needs a separate CLI install.
+
+## PyPI (uv, pipx)
+
+The wheel [`basilisk-python`](https://pypi.org/project/basilisk-python/) bundles the same native `basilisk` CLI that ships via Homebrew, Scoop, and GitHub Releases — built from the same source at the same version, in its own release job. Install it as a standalone tool, so the `basilisk` command lands on your PATH without touching any project environment:
+
+```bash
+uv tool install basilisk-python
+# or
+pipx install basilisk-python
+```
+
+The installed command is `basilisk` (the distribution is named `basilisk-python` only because the [`basilisk`](https://pypi.org/project/basilisk/) name on PyPI is held by an unrelated project). Wheels are published for Linux (x86_64, aarch64), macOS (Apple Silicon), and Windows (x64, arm64). The wheel contains no Python code — no shim, no console-script entry point, just the standalone Rust binary — so it works on any CPython or PyPy meeting the distribution's `requires-python = ">=3.8"`. Intel macOS is not a published target on any channel — no wheel, no release archive, no Homebrew bottle — so build [from source](#build-from-source) there.
 
 ## Homebrew (macOS, Linux)
 
@@ -90,6 +102,8 @@ Basilisk integrates naturally into any CI pipeline. Download the binary in your 
 - name: Type check
   run: basilisk check src/
 ```
+
+In a pipeline that already has `uv` available, `uv tool install basilisk-python` works just as well as downloading the release binary.
 
 Exit codes:
 

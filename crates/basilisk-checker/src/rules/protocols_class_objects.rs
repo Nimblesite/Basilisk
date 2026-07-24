@@ -1,4 +1,4 @@
-//! Implements [`protocols_class_objects`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`protocols_class_objects`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `protocols_class_objects`: Protocol class used where `type[Proto]` is expected.
 //!
 //! The typing spec states: "Variables and parameters annotated with

@@ -1,4 +1,4 @@
-//! Implements [`assignment_compatibility`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`assignment_compatibility`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Member-based protocol satisfaction (PEP 544): a class satisfies a protocol
 //! when it provides every protocol member with a structurally compatible type.
 

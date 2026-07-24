@@ -12,7 +12,8 @@
 use std::io::Write;
 use std::path::Path;
 
-use basilisk_stubs::types::{StubParamKind, StubSource, StubTier};
+use basilisk_stubs::pyi_parser::parse_pyi_file_for_target;
+use basilisk_stubs::types::{StubParamKind, StubSource, StubTarget, StubTargetPlatform, StubTier};
 use basilisk_stubs::{parse_pyi_file, parse_pyi_source, StubModule, StubParseError};
 
 fn parse_stub(source: &str) -> StubModule {
@@ -41,18 +42,63 @@ fn parse_pyi_file_from_disk() {
 }
 
 #[test]
-fn parse_pyi_file_io_error() {
-    let result = parse_pyi_file(
-        Path::new("/nonexistent/path/to/file.pyi"),
-        "missing",
-        StubSource::UserStub,
-        StubTier::Tier1,
-    );
+fn parse_pyi_file_io_error() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let missing = dir.path().join("missing.pyi");
+    let result = parse_pyi_file(&missing, "missing", StubSource::UserStub, StubTier::Tier1);
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(matches!(err, StubParseError::Io { .. }));
     let msg = err.to_string();
     assert!(msg.contains("failed to read stub file"));
+    Ok(())
+}
+
+#[test]
+fn parse_pyi_file_for_target_selects_the_matching_guarded_branch() {
+    let mut tmp = tempfile::NamedTempFile::new().expect("create temp file");
+    writeln!(
+        tmp,
+        "if sys.version_info >= (3, 11):\n    modern: int\nelse:\n    legacy: str"
+    )
+    .expect("write");
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::Concrete("linux".to_owned()),
+    };
+
+    let module = parse_pyi_file_for_target(
+        tmp.path(),
+        "guarded",
+        StubSource::UserStub,
+        StubTier::Tier1,
+        &target,
+    )
+    .expect("targeted stub should parse from disk");
+
+    assert_eq!(module.target, Some(target));
+    assert!(module.variables.contains_key("modern"));
+    assert!(!module.variables.contains_key("legacy"));
+}
+
+#[test]
+fn parse_pyi_file_for_target_preserves_io_errors() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let missing = dir.path().join("missing-targeted.pyi");
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::All,
+    };
+    let result = parse_pyi_file_for_target(
+        &missing,
+        "missing",
+        StubSource::UserStub,
+        StubTier::Tier1,
+        &target,
+    );
+
+    assert!(matches!(result, Err(StubParseError::Io { .. })));
+    Ok(())
 }
 
 // ── Syntax error path ──

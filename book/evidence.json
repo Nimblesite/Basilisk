@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "policy": "A chapter is publishable only when its governing spec, pinned release implementation, and executable evidence agree.",
+  "chapters": [
+    {
+      "section": "01",
+      "decision": "withhold-until-versioned-release",
+      "governingSpecs": [
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS",
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET",
+        "docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-SYSTEM",
+        "docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-PIPELINE"
+      ],
+      "releaseImplementation": [],
+      "workingTreeImplementation": [
+        "crates/basilisk-cli/src/main.rs",
+        "crates/basilisk-cli/src/pipeline/",
+        "crates/basilisk-lsp/src/workspace_analysis.rs"
+      ],
+      "executableEvidence": [
+        "Python 3.14.6 executed the Signal Box normalization call and returned the documented dictionary on 2026-07-17",
+        "target/release/basilisk check --color never . reported the documented return incompatibility in Signal Box on 2026-07-17",
+        "target/release/basilisk analyze --color never . reported the configured missing-parameter policy in Signal Box on 2026-07-17"
+      ],
+      "blocker": "The current build identifies itself as 0.0.0-PLACEHOLDER, and the Chapter 1 editor screenshot is still planned. Pin a released Basilisk version, rerun the evidence, and capture the real editor surface before setting decision to publish."
+    },
+    {"section": "02", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {"section": "03", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {
+      "section": "04",
+      "decision": "withhold-until-versioned-release",
+      "governingSpecs": [
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE",
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET",
+        "https://typing.python.org/en/latest/spec/annotations.html",
+        "https://typing.python.org/en/latest/spec/concepts.html",
+        "https://typing.python.org/en/latest/spec/aliases.html"
+      ],
+      "releaseImplementation": [],
+      "workingTreeImplementation": [
+        "crates/basilisk-checker/src/types.rs",
+        "crates/basilisk-checker/src/types_parsing.rs",
+        "crates/basilisk-checker/src/inference.rs"
+      ],
+      "executableEvidence": [
+        "Python 3.14.6 ran the Chapter 4 Signal Box checkpoint: 3 tests passed on 2026-07-17",
+        "target/release/basilisk check --color never src reported no issue for the Chapter 4 checkpoint on 2026-07-17",
+        "The placeholder release binary rejected the Chapter 4 string-to-float assignment, mixed list element, and list-to-union incompatibilities on 2026-07-17"
+      ],
+      "omitted": [
+        "The planned object-versus-Any lesson is omitted because the working-tree assignment path currently collapses object into Any; the maintained typing specification distinguishes them."
+      ],
+      "blocker": "The current build identifies itself as 0.0.0-PLACEHOLDER. Pin a released Basilisk version, rerun the Chapter 4 static evidence, and capture any release-specific output before setting decision to publish."
+    },
+    {
+      "section": "05",
+      "decision": "withhold-until-versioned-release",
+      "governingSpecs": [
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-VARS-ANNOTATED",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-FUNC-PARAMS",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-FUNC-RETURN",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-NOMINAL",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-GENERIC",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-UNION",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-CALLABLE",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SPECIAL-LITERAL-CONTEXT",
+        "https://typing.python.org/en/latest/spec/concepts.html",
+        "https://typing.python.org/en/latest/spec/special-types.html",
+        "https://typing.python.org/en/latest/spec/callables.html",
+        "https://typing.python.org/en/latest/spec/generics.html"
+      ],
+      "releaseImplementation": [],
+      "workingTreeImplementation": [
+        "crates/basilisk-checker/src/types.rs",
+        "crates/basilisk-checker/src/rules/assignment_compatibility/",
+        "crates/basilisk-checker/src/rules/calls_argument_type.rs",
+        "crates/basilisk-checker/src/rules/returns_compatibility.rs",
+        "crates/basilisk-checker/src/rules/returns_compatibility_2.rs",
+        "crates/basilisk-checker/src/rules/callables_subtyping.rs"
+      ],
+      "executableEvidence": [
+        "Python 3.14.6 ran the Chapter 5 Signal Box checkpoint: 4 tests passed on 2026-07-20",
+        "target/debug/basilisk check --color never . reported no issue across the Chapter 5 source and tests on 2026-07-20",
+        "The placeholder working-tree binary rejected the verified scalar assignment, union narrowing, nominal reverse assignment, literal call, concrete return, typed-parameter list-invariance, and callable-parameter variance samples on 2026-07-20",
+        "The placeholder working-tree binary accepted the verified nominal subtype assignment, contextually typed list[float] literal, Sequence[float] read, and numeric callable-variance samples on 2026-07-20"
+      ],
+      "omitted": [
+        "Exact diagnostic wording and identifiers are omitted until the edition pins a released Basilisk binary.",
+        "A real release-specific Basilisk diagnostic capture and before-to-diagnostic-to-after sequence are omitted until the edition release is pinned.",
+        "The object-versus-Any lesson remains omitted because the working-tree assignment path does not yet preserve the distinction required by the maintained typing specification."
+      ],
+      "blocker": "The current build identifies itself as 0.0.0-PLACEHOLDER. Pin a released Basilisk version, rerun the Chapter 5 static evidence, and capture any release-specific output before setting decision to publish."
+    },
+    {
+      "section": "06",
+      "decision": "withhold-until-versioned-release",
+      "governingSpecs": [
+        "https://typing.python.org/en/latest/spec/narrowing.html",
+        "https://typing.python.org/en/latest/spec/annotations.html",
+        "https://typing.python.org/en/latest/guides/unreachable.html"
+      ],
+      "releaseImplementation": [],
+      "workingTreeImplementation": [],
+      "executableEvidence": [
+        "Python 3.14.6 ran the Chapter 6 Signal Box checkpoint: 3 tests passed on 2026-07-22",
+        "The Chapter 6 runtime tests exercised absent, textual, and numeric normalization paths; valid and invalid TypeGuard inputs; and every member of the closed status set on 2026-07-22"
+      ],
+      "omitted": [
+        "Exact inferred types for literals, expressions, calls, isinstance branches, equality, membership, truthiness, reassignment, loops, closures, attributes, and match remainders are omitted because the normative typing specification does not fully specify them.",
+        "The working-tree inference specification and implementation are not used as authority for normative Python typing behaviour.",
+        "Exact diagnostic wording and identifiers are omitted until the edition pins a released Basilisk binary.",
+        "A match-coverage diagnostic screenshot is not planned because it would encourage readers to mistake one release's inference result for a normative guarantee."
+      ],
+      "blocker": "The book edition has not pinned its Basilisk release. Before publication, pin the release and verify its TypeGuard, TypeIs, and is-None behaviour against the normative typing specification. Do not publish implementation-specific inference results as normative rules."
+    },
+    {"section": "07", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {"section": "08", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {
+      "section": "09",
+      "decision": "withhold-until-versioned-release",
+      "governingSpecs": [
+        "docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR",
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIGURATION-ONLY",
+        "docs/specs/CHECKER-RULE-TAGGING-SPEC.md#CHKTAG",
+        "docs/specs/VSIX-SPEC.md#VSIX-CONFIGURATION-EDITOR"
+      ],
+      "releaseImplementation": [],
+      "workingTreeImplementation": [
+        "crates/basilisk-config/src/editor/",
+        "crates/basilisk-lsp/src/configuration_editor/",
+        "vscode-extension/src/configuration-editor.ts",
+        "vscode-extension/src/configuration-editor-script-render.ts"
+      ],
+      "executableEvidence": [
+        "cargo test -p basilisk-config: 32 passed on 2026-07-12",
+        "cargo test -p basilisk-checker --test config_override_tests: 13 passed on 2026-07-12",
+        "cargo test -p basilisk-lsp configuration_editor: 18 passed on 2026-07-12",
+        "npx vscode-test --grep 'Configuration editor': 17 passed on 2026-07-12",
+        "make -C book screenshots: real Signal Box/LSP captures passed on 2026-07-12",
+        "target/debug/basilisk check --color never . from examples/signal-box: 3 expected diagnostics on 2026-07-12"
+      ],
+      "blocker": "The current build identifies itself as 0.0.0-PLACEHOLDER. Pin a released Basilisk version, rerun the evidence, and recapture both screenshots before setting decision to publish."
+    },
+    {"section": "10", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {"section": "11", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {"section": "12", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []}
+  ]
+}

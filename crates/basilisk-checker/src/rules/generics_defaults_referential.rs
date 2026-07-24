@@ -1,4 +1,4 @@
-//! Implements [`generics_defaults_referential`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_defaults_referential`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_defaults_referential`: Invalid `TypeVar` default referencing another `TypeVar`.
 //!
 //! PEP 696 specifies constraints on `TypeVar` defaults that reference other `TypeVars`:

@@ -1,299 +1,330 @@
-//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//! Root-aware adoption commands backed by folder-level plain rule entries.
 //!
-//! Adoption command handlers for gradual adoption mode.
-//!
-//! Implements `basilisk.adoptFile`, `basilisk.adoptWorkspace`, and
-//! `basilisk.unadoptFile` execute-command handlers.
+//! Implements [AUTOFIX-ADOPTION] / [AUTOFIX-ADOPTION-FLOW]: adoption records
+//! current error debt as ordinary warning-severity rule entries in the root's
+//! active configuration — plain code → severity entries in the one
+//! configuration model ([CHKARCH-CONFIG-MODEL]), with no exact-file
+//! overrides, ownership markers, or sidecar state. There is no post-save
+//! graduation; re-running adoption is the explicit, reviewable way to
+//! tighten ([AUTOFIX-ADOPTION-RULES]).
 
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+
+use basilisk_config::{RuleConfigUpdate, RuleSeverity};
 use tower_lsp::jsonrpc::Result as LspResult;
-use tower_lsp::lsp_types::MessageType;
-use tracing::{error, info, warn};
+use tower_lsp::lsp_types::{MessageType, Url};
+use tracing::{info, warn};
 
 use super::LspServer;
 
-/// Handle `basilisk.adoptFile`.
-///
-/// Records all current error codes for the given file in the adoption store,
-/// demoting them from errors to warnings until the user fixes them.
-// Implements [AUTOFIX-ADOPTION-FLOW] (Adopt File) + [AUTOFIX-ADOPTION-VSCODE]
-// command `basilisk.adoptFile`. DEVIATION vs spec step 2: this does NOT run
-// Mass Autofix (safe) first — it records the file's current error codes
-// directly, then re-publishes with demoted severities. See report.
+/// Adopt the current errors in one file as warning-severity rule entries in
+/// the owning root's configuration.
 pub(super) async fn execute_adopt_file(
     server: &LspServer,
     args: &[serde_json::Value],
 ) -> LspResult<Option<serde_json::Value>> {
-    let Some(uri_str) = args.first().and_then(|v| v.as_str()) else {
-        warn!("adoptFile: missing URI argument");
+    let Some(uri) = command_uri(args, "adoptFile") else {
         return Ok(None);
     };
-    let Ok(uri) = tower_lsp::lsp_types::Url::parse(uri_str) else {
-        warn!("adoptFile: invalid URI");
+    let Ok(path) = uri.to_file_path() else {
         return Ok(None);
     };
-
-    let roots = server.workspace_roots.read().await;
-    let Some(project_root) = roots.first().cloned() else {
-        warn!("adoptFile: no workspace root available");
+    let Some(root) = owning_root(server, &path).await else {
+        warn!(uri = %uri, "adoptFile: file is outside every workspace root");
         return Ok(None);
     };
-    drop(roots);
-
-    // Collect error codes from the file's current diagnostics.
-    let error_codes: Option<Vec<String>> = server
-        .with_index(|idx| {
-            let path = uri.to_file_path().ok()?;
-            let entry = idx.files.get(&path)?;
-            let codes: Vec<String> = entry
-                .diagnostics
-                .iter()
-                .filter(|d| d.severity == basilisk_checker::Severity::Error)
-                .map(|d| d.code.code.to_owned())
-                .collect();
-            Some(codes)
-        })
-        .await;
-
-    let Some(error_codes) = error_codes else {
+    let Some(codes) = error_codes_for_file(server, &path).await else {
         warn!(uri = %uri, "adoptFile: file not found in workspace index");
         return Ok(Some(serde_json::json!({ "adopted": false, "demoted": 0 })));
     };
-
-    let demoted_count = error_codes.len();
-
-    if error_codes.is_empty() {
-        info!(uri = %uri, "adoptFile: no errors to adopt");
+    if codes.is_empty() {
         return Ok(Some(serde_json::json!({ "adopted": true, "demoted": 0 })));
     }
-
-    // Load the adoption store, record the codes, and save.
-    let mut store = match basilisk_config::AdoptionStore::load(&project_root) {
-        Ok(s) => s,
-        Err(err) => {
-            error!(%err, "adoptFile: failed to load adoption store");
-            return Ok(None);
-        }
-    };
-
-    let Ok(file_path) = uri.to_file_path() else {
-        return Ok(None);
-    };
-    let relative = file_path.strip_prefix(&project_root).unwrap_or(&file_path);
-    store.adopt_file(relative, error_codes);
-
-    if let Err(err) = store.save() {
-        error!(%err, "adoptFile: failed to save adoption store");
-        return Ok(None);
-    }
-
-    // Re-publish diagnostics with demoted severities.
-    republish_diagnostics_for_uri(server, &uri, &project_root, &store).await;
-
-    info!(uri = %uri, demoted_count, "adoptFile: adopted file");
+    let update = adoption_update(&codes);
+    let _ = crate::configuration_editor::apply_rule_updates(server, &root, &update, "adoptFile")
+        .await?;
+    let demoted = codes.len();
+    info!(uri = %uri, demoted, "adopted file debt into active configuration");
     server
         .client
         .log_message(
             MessageType::INFO,
-            format!("Basilisk: adopted file with {demoted_count} demoted error(s)"),
+            format!("Basilisk: adopted file with {demoted} warning entr(ies)"),
         )
         .await;
-
     Ok(Some(
-        serde_json::json!({ "adopted": true, "demoted": demoted_count }),
+        serde_json::json!({ "adopted": true, "demoted": demoted }),
     ))
 }
 
-/// Handle `basilisk.adoptWorkspace`.
-///
-/// Adopts all files in the workspace that have errors, recording their error
-/// codes in the adoption store.
-// Implements [AUTOFIX-ADOPTION-FLOW] (Adopt Workspace) + [AUTOFIX-ADOPTION-VSCODE]
-// command `basilisk.adoptWorkspace`. Same step-2 deviation as adopt_file (no
-// pre-pass Mass Autofix).
+/// Adopt every indexed file's error debt, grouped by its owning workspace
+/// root — one folder-level update per root.
 pub(super) async fn execute_adopt_workspace(
     server: &LspServer,
     _args: &[serde_json::Value],
 ) -> LspResult<Option<serde_json::Value>> {
-    info!("adoptWorkspace: starting");
-
-    let roots = server.workspace_roots.read().await;
-    let Some(project_root) = roots.first().cloned() else {
-        warn!("adoptWorkspace: no workspace root available");
-        return Ok(None);
-    };
-    drop(roots);
-
-    // Collect error codes per file from all files in the workspace index.
-    let file_codes: Option<Vec<(std::path::PathBuf, Vec<String>)>> = server
-        .with_index(|idx| {
-            let mut results = Vec::new();
-            for entry in &idx.files {
-                let path = entry.key().clone();
-                let codes: Vec<String> = entry
-                    .value()
-                    .diagnostics
-                    .iter()
-                    .filter(|d| d.severity == basilisk_checker::Severity::Error)
-                    .map(|d| d.code.code.to_owned())
-                    .collect();
-                if !codes.is_empty() {
-                    results.push((path, codes));
-                }
-            }
-            Some(results)
-        })
-        .await;
-
-    let Some(file_codes) = file_codes else {
-        warn!("adoptWorkspace: workspace index not available");
-        return Ok(Some(
-            serde_json::json!({ "adopted": false, "files": 0, "demoted": 0 }),
-        ));
-    };
-
-    if file_codes.is_empty() {
-        info!("adoptWorkspace: no files with errors");
-        return Ok(Some(
-            serde_json::json!({ "adopted": true, "files": 0, "demoted": 0 }),
-        ));
-    }
-
-    let mut store = match basilisk_config::AdoptionStore::load(&project_root) {
-        Ok(s) => s,
-        Err(err) => {
-            error!(%err, "adoptWorkspace: failed to load adoption store");
-            return Ok(None);
-        }
-    };
-
-    let mut total_demoted: usize = 0;
-    let file_count = file_codes.len();
-
-    for (path, codes) in &file_codes {
-        let relative = path.strip_prefix(&project_root).unwrap_or(path);
-        total_demoted += codes.len();
-        store.adopt_file(relative, codes.clone());
-    }
-
-    if let Err(err) = store.save() {
-        error!(%err, "adoptWorkspace: failed to save adoption store");
+    let roots = server.workspace_roots.read().await.clone();
+    if roots.is_empty() {
+        warn!("adoptWorkspace: no workspace roots available");
         return Ok(None);
     }
-
-    // Re-publish diagnostics for all adopted files.
-    for (path, _) in &file_codes {
-        if let Ok(uri) = tower_lsp::lsp_types::Url::from_file_path(path) {
-            republish_diagnostics_for_uri(server, &uri, &project_root, &store).await;
-        }
+    let grouped = collect_workspace_adoptions(server, &roots).await;
+    let files = grouped
+        .values()
+        .map(|(file_count, _)| file_count)
+        .sum::<usize>();
+    let demoted = grouped
+        .values()
+        .map(|(_, update)| update.rules.len())
+        .sum::<usize>();
+    for (root, (_, update)) in grouped {
+        let _ = crate::configuration_editor::apply_rule_updates(
+            server,
+            &root,
+            &update,
+            "adoptWorkspace",
+        )
+        .await?;
     }
-
-    info!(file_count, total_demoted, "adoptWorkspace: completed");
+    info!(files, demoted, "adopted workspace debt");
     server
         .client
         .log_message(
             MessageType::INFO,
-            format!("Basilisk: adopted {file_count} file(s) with {total_demoted} demoted error(s)"),
+            format!("Basilisk: adopted {files} file(s) with {demoted} warning entr(ies)"),
         )
         .await;
-
-    Ok(Some(
-        serde_json::json!({ "adopted": true, "files": file_count, "demoted": total_demoted }),
-    ))
+    Ok(Some(serde_json::json!({
+        "adopted": true,
+        "files": files,
+        "demoted": demoted,
+    })))
 }
 
-/// Handle `basilisk.unadoptFile`.
-///
-/// Removes all adoption overrides for the given file, restoring full
-/// strictness.
-// Implements [AUTOFIX-ADOPTION-RULES] (Manual un-adoption) +
-// [AUTOFIX-ADOPTION-VSCODE] command `basilisk.unadoptFile`.
+/// Remove the folder-level warning entries covering one file's current
+/// diagnostics, restoring the surrounding severity ([AUTOFIX-ADOPTION-FLOW]).
 pub(super) async fn execute_unadopt_file(
     server: &LspServer,
     args: &[serde_json::Value],
 ) -> LspResult<Option<serde_json::Value>> {
-    let Some(uri_str) = args.first().and_then(|v| v.as_str()) else {
-        warn!("unadoptFile: missing URI argument");
+    let Some(uri) = command_uri(args, "unadoptFile") else {
         return Ok(None);
     };
-    let Ok(uri) = tower_lsp::lsp_types::Url::parse(uri_str) else {
-        warn!("unadoptFile: invalid URI");
+    let Ok(path) = uri.to_file_path() else {
         return Ok(None);
     };
-
-    let roots = server.workspace_roots.read().await;
-    let Some(project_root) = roots.first().cloned() else {
-        warn!("unadoptFile: no workspace root available");
+    let Some(root) = owning_root(server, &path).await else {
         return Ok(None);
     };
-    drop(roots);
-
-    let mut store = match basilisk_config::AdoptionStore::load(&project_root) {
-        Ok(s) => s,
-        Err(err) => {
-            error!(%err, "unadoptFile: failed to load adoption store");
-            return Ok(None);
-        }
+    let Some(codes) = diagnostic_codes_for_file(server, &path).await else {
+        return Ok(Some(serde_json::json!({ "unadopted": false })));
     };
-
-    let Ok(file_path) = uri.to_file_path() else {
-        return Ok(None);
-    };
-    let relative = file_path.strip_prefix(&project_root).unwrap_or(&file_path);
-    store.unadopt_file(relative);
-
-    if let Err(err) = store.save() {
-        error!(%err, "unadoptFile: failed to save adoption store");
-        return Ok(None);
+    let document = crate::configuration_editor::configuration_document(server, &root)?;
+    let adopted: BTreeMap<String, Option<RuleSeverity>> = document
+        .config
+        .nearest_tables()
+        .map(|tables| {
+            codes
+                .iter()
+                .filter(|code| tables.rules.get(*code).copied() == Some(RuleSeverity::Warning))
+                .map(|code| (code.clone(), None))
+                .collect()
+        })
+        .unwrap_or_default();
+    if adopted.is_empty() {
+        return Ok(Some(serde_json::json!({ "unadopted": false })));
     }
-
-    // Re-publish diagnostics with original severities (no demotions).
-    republish_diagnostics_for_uri(server, &uri, &project_root, &store).await;
-
-    info!(uri = %uri, "unadoptFile: un-adopted file");
-    server
-        .client
-        .log_message(MessageType::INFO, format!("Basilisk: un-adopted {uri}"))
-        .await;
-
+    let update = RuleConfigUpdate {
+        rules: adopted,
+        rule_tags: BTreeMap::new(),
+    };
+    let _ = crate::configuration_editor::apply_rule_updates(server, &root, &update, "unadoptFile")
+        .await?;
+    info!(uri = %uri, "removed adoption entries from active configuration");
     Ok(Some(serde_json::json!({ "unadopted": true })))
 }
 
-/// Re-publish LSP diagnostics for a single URI, applying adoption overrides.
-// Implements [AUTOFIX-ADOPTION-FLOW] step 5 — demote adopted codes to Warning
-// via `apply_adoptions`. DEVIATION: only invoked from these adopt/unadopt
-// command handlers; the normal diagnostic-publish path (server/document.rs,
-// server/init.rs) does NOT call apply_adoptions, so demotions are lost on the
-// next edit/re-check and `auto_graduate` ([AUTOFIX-ADOPTION-RULES]) never runs
-// in production. See report.
-async fn republish_diagnostics_for_uri(
-    server: &LspServer,
-    uri: &tower_lsp::lsp_types::Url,
-    project_root: &std::path::Path,
-    store: &basilisk_config::AdoptionStore,
-) {
-    let lsp_diags: Option<Vec<tower_lsp::lsp_types::Diagnostic>> = server
-        .with_index(|idx| {
-            let path = uri.to_file_path().ok()?;
-            let entry = idx.files.get(&path)?;
-            let mut checker_diags = entry.diagnostics.clone();
-            crate::workspace_analysis::apply_adoptions(
-                &mut checker_diags,
-                &path,
-                project_root,
-                store,
-            );
-            let diags = checker_diags
-                .iter()
-                .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
-                .collect();
-            Some(diags)
-        })
-        .await;
+fn command_uri(args: &[serde_json::Value], command: &str) -> Option<Url> {
+    let value = args.first().and_then(serde_json::Value::as_str);
+    let Some(value) = value else {
+        warn!(command, "missing URI argument");
+        return None;
+    };
+    match Url::parse(value) {
+        Ok(uri) => Some(uri),
+        Err(error) => {
+            warn!(command, %error, "invalid URI argument");
+            None
+        }
+    }
+}
 
-    if let Some(diags) = lsp_diags {
-        server
-            .client
-            .publish_diagnostics(uri.clone(), diags, None)
-            .await;
+async fn owning_root(server: &LspServer, path: &Path) -> Option<PathBuf> {
+    server
+        .workspace_roots
+        .read()
+        .await
+        .iter()
+        .filter(|root| path_is_within(path, root))
+        .max_by_key(|root| root.components().count())
+        .cloned()
+}
+
+async fn error_codes_for_file(server: &LspServer, path: &Path) -> Option<BTreeSet<String>> {
+    server
+        .with_index(|index| {
+            let entry = index.files.get(path).or_else(|| {
+                let canonical = path.canonicalize().ok()?;
+                index.files.get(&canonical)
+            })?;
+            Some(error_codes(&entry.diagnostics))
+        })
+        .await
+}
+
+async fn diagnostic_codes_for_file(server: &LspServer, path: &Path) -> Option<BTreeSet<String>> {
+    server
+        .with_index(|index| {
+            let entry = index.files.get(path).or_else(|| {
+                let canonical = path.canonicalize().ok()?;
+                index.files.get(&canonical)
+            })?;
+            Some(
+                entry
+                    .diagnostics
+                    .iter()
+                    .map(|diagnostic| diagnostic.code.code.to_owned())
+                    .collect(),
+            )
+        })
+        .await
+}
+
+fn error_codes(diagnostics: &[basilisk_checker::Diagnostic]) -> BTreeSet<String> {
+    diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            matches!(
+                diagnostic.severity,
+                basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation
+            )
+        })
+        .map(|diagnostic| diagnostic.code.code.to_owned())
+        .collect()
+}
+
+async fn collect_workspace_adoptions(
+    server: &LspServer,
+    roots: &[PathBuf],
+) -> BTreeMap<PathBuf, (usize, RuleConfigUpdate)> {
+    server
+        .with_index(|index| {
+            let mut grouped: BTreeMap<PathBuf, (usize, RuleConfigUpdate)> = BTreeMap::new();
+            for entry in &index.files {
+                let path = entry.key();
+                let Some(root) = roots
+                    .iter()
+                    .filter(|root| path_is_within(path, root))
+                    .max_by_key(|root| root.components().count())
+                else {
+                    continue;
+                };
+                let codes = error_codes(&entry.diagnostics);
+                if codes.is_empty() {
+                    continue;
+                }
+                let target = grouped.entry(root.clone()).or_default();
+                target.0 += 1;
+                for (code, severity) in adoption_update(&codes).rules {
+                    let _ = target.1.rules.insert(code, severity);
+                }
+            }
+            Some(grouped)
+        })
+        .await
+        .unwrap_or_default()
+}
+
+/// Demote every firing error code to a plain warning-severity rule entry —
+/// one visible line of configuration per code ([AUTOFIX-ADOPTION]).
+fn adoption_update(codes: &BTreeSet<String>) -> RuleConfigUpdate {
+    RuleConfigUpdate {
+        rules: codes
+            .iter()
+            .map(|code| (code.clone(), Some(RuleSeverity::Warning)))
+            .collect(),
+        rule_tags: BTreeMap::new(),
+    }
+}
+
+fn path_is_within(path: &Path, root: &Path) -> bool {
+    path.starts_with(root)
+        || path
+            .canonicalize()
+            .ok()
+            .zip(root.canonicalize().ok())
+            .is_some_and(|(path, root)| path.starts_with(root))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+    use std::path::Path;
+
+    use basilisk_config::RuleSeverity;
+
+    use super::{adoption_update, command_uri, path_is_within};
+
+    // Implements [AUTOFIX-ADOPTION-FLOW]: adoption commands take exactly one
+    // file URI; anything else is logged and refused, never guessed.
+    #[test]
+    fn command_uri_accepts_only_a_leading_string_uri() {
+        assert_eq!(command_uri(&[], "adoptFile"), None);
+        assert_eq!(command_uri(&[serde_json::json!(42)], "adoptFile"), None);
+        assert_eq!(
+            command_uri(&[serde_json::json!("not a uri")], "adoptFile"),
+            None
+        );
+        let parsed = command_uri(
+            &[serde_json::json!("file:///workspace/app.py")],
+            "adoptFile",
+        );
+        assert_eq!(
+            parsed.map(|uri| uri.to_string()),
+            Some("file:///workspace/app.py".to_owned())
+        );
+    }
+
+    // Implements [AUTOFIX-ADOPTION]: adoption writes plain folder-level
+    // warning entries — one per demoted rule code, no scopes, no markers.
+    #[test]
+    fn adoption_update_demotes_every_code_to_a_plain_warning_entry() {
+        let codes: BTreeSet<String> =
+            ["BSK-0001".to_owned(), "assignment_compatibility".to_owned()]
+                .into_iter()
+                .collect();
+        let update = adoption_update(&codes);
+        assert_eq!(update.rules.len(), 2);
+        assert!(update.rule_tags.is_empty());
+        assert!(update
+            .rules
+            .values()
+            .all(|severity| *severity == Some(RuleSeverity::Warning)));
+    }
+
+    #[test]
+    fn path_is_within_requires_a_real_ancestor() {
+        let root = Path::new("/workspace/project");
+        assert!(path_is_within(
+            Path::new("/workspace/project/src/app.py"),
+            root
+        ));
+        assert!(!path_is_within(Path::new("/workspace/other/app.py"), root));
+        // Missing paths cannot be rescued by canonicalization.
+        assert!(!path_is_within(
+            Path::new("/does/not/exist/app.py"),
+            Path::new("/does/not/exist-either")
+        ));
     }
 }

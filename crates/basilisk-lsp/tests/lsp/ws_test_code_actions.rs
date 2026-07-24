@@ -11,15 +11,15 @@ async fn test_ws_code_action_missing_param_annotation() -> TestResult<()> {
     let code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///ca_e0001.py", code).await?;
 
-    let resp = code_action_for(&mut fixture, "file:///ca_e0001.py", 200, "BSK-E0001").await?;
+    let resp = code_action_for(&mut fixture, "file:///ca_e0001.py", 200, "BSK-0001").await?;
 
     assert!(
         resp.contains(": Any"),
-        "BSK-E0001 action should insert ': Any': {resp}"
+        "BSK-0001 action should insert ': Any': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "BSK-E0001 action should be quickfix: {resp}"
+        "BSK-0001 action should be quickfix: {resp}"
     );
 
     // Hardened: parse and verify code action structure
@@ -83,18 +83,21 @@ async fn test_ws_code_action_missing_return_annotation() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
 
-    let code = "def greet(name: str):\n    return f\"Hello, {name}!\"";
+    // The returned method call is not inferable, so BSK-0002 fires — an
+    // f-string return would infer `-> str` and stay silent
+    // ([TYPEINF-FUNC-RETURN]).
+    let code = "def greet(name: str):\n    return name.upper()";
     fixture.did_open("file:///ca_e0002.py", code).await?;
 
-    let resp = code_action_for(&mut fixture, "file:///ca_e0002.py", 201, "BSK-E0002").await?;
+    let resp = code_action_for(&mut fixture, "file:///ca_e0002.py", 201, "BSK-0002").await?;
 
     assert!(
-        resp.contains("-> None"),
-        "BSK-E0002 action should insert '-> None': {resp}"
+        resp.contains("-> Any"),
+        "BSK-0002 action should insert '-> Any': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "BSK-E0002 action should be quickfix: {resp}"
+        "BSK-0002 action should be quickfix: {resp}"
     );
     Ok(())
 }
@@ -107,15 +110,15 @@ async fn test_ws_code_action_missing_variable_annotation_empty_list() -> TestRes
     let code = "items = []\n";
     fixture.did_open("file:///ca_e0003_list.py", code).await?;
 
-    let resp = code_action_for(&mut fixture, "file:///ca_e0003_list.py", 202, "BSK-E0003").await?;
+    let resp = code_action_for(&mut fixture, "file:///ca_e0003_list.py", 202, "BSK-0003").await?;
 
     assert!(
         resp.contains("list[Any]"),
-        "BSK-E0003 (empty list) action should insert 'list[Any]': {resp}"
+        "BSK-0003 (empty list) action should insert 'list[Any]': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "BSK-E0003 action should be quickfix: {resp}"
+        "BSK-0003 action should be quickfix: {resp}"
     );
     Ok(())
 }
@@ -128,15 +131,15 @@ async fn test_ws_code_action_missing_variable_annotation_empty_dict() -> TestRes
     let code = "mapping = {}\n";
     fixture.did_open("file:///ca_e0003_dict.py", code).await?;
 
-    let resp = code_action_for(&mut fixture, "file:///ca_e0003_dict.py", 203, "BSK-E0003").await?;
+    let resp = code_action_for(&mut fixture, "file:///ca_e0003_dict.py", 203, "BSK-0003").await?;
 
     assert!(
         resp.contains("dict[str, Any]"),
-        "BSK-E0003 (empty dict) action should insert 'dict[str, Any]': {resp}"
+        "BSK-0003 (empty dict) action should insert 'dict[str, Any]': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "BSK-E0003 action should be quickfix: {resp}"
+        "BSK-0003 action should be quickfix: {resp}"
     );
     Ok(())
 }
@@ -149,15 +152,15 @@ async fn test_ws_code_action_missing_variable_annotation_none() -> TestResult<()
     let code = "value = None\n";
     fixture.did_open("file:///ca_e0003_none.py", code).await?;
 
-    let resp = code_action_for(&mut fixture, "file:///ca_e0003_none.py", 204, "BSK-E0003").await?;
+    let resp = code_action_for(&mut fixture, "file:///ca_e0003_none.py", 204, "BSK-0003").await?;
 
     assert!(
         resp.contains(": Any"),
-        "BSK-E0003 (None) action should insert ': Any': {resp}"
+        "BSK-0003 (None) action should insert ': Any': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "BSK-E0003 action should be quickfix: {resp}"
+        "BSK-0003 action should be quickfix: {resp}"
     );
     Ok(())
 }
@@ -170,7 +173,7 @@ async fn test_ws_code_action_suppress_with_type_ignore() -> TestResult<()> {
     let code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///ca_suppress.py", code).await?;
 
-    let resp = code_action_for(&mut fixture, "file:///ca_suppress.py", 205, "BSK-E0001").await?;
+    let resp = code_action_for(&mut fixture, "file:///ca_suppress.py", 205, "BSK-0001").await?;
 
     assert!(
         resp.contains("# type: ignore"),
@@ -192,8 +195,7 @@ async fn test_ws_code_action_suppress_inserts_at_end_of_line() -> TestResult<()>
     let code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///ca_suppress_pos.py", code).await?;
 
-    let resp =
-        code_action_for(&mut fixture, "file:///ca_suppress_pos.py", 206, "BSK-E0001").await?;
+    let resp = code_action_for(&mut fixture, "file:///ca_suppress_pos.py", 206, "BSK-0001").await?;
 
     // The edit should be an insert (start == end), not a replace.
     let action_json: serde_json::Value = serde_json::from_str(&resp)?;
@@ -307,7 +309,7 @@ async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
 
-    // All three BSK-E0003 variants in one file: empty list, empty dict, None
+    // All three BSK-0003 variants in one file: empty list, empty dict, None
     let code = "items = []\nmapping = {}\nvalue = None\n";
     fixture
         .did_open("file:///ws_edge_ca_e0003.py", code)
@@ -320,18 +322,18 @@ async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
         .as_array()
         .ok_or("expected diagnostics array")?;
 
-    // Verify all three BSK-E0003 diagnostics are present.
+    // Verify all three BSK-0003 diagnostics are present.
     let e0003_diags: Vec<&serde_json::Value> = diagnostics
         .iter()
-        .filter(|d| d["code"].as_str() == Some("BSK-E0003"))
+        .filter(|d| d["code"].as_str() == Some("BSK-0003"))
         .collect();
     assert!(
         e0003_diags.len() >= 3,
-        "should have at least 3 BSK-E0003 diagnostics (list, dict, None), got {}: {diag_msg}",
+        "should have at least 3 BSK-0003 diagnostics (list, dict, None), got {}: {diag_msg}",
         e0003_diags.len()
     );
 
-    // Request code actions for each BSK-E0003 diagnostic.
+    // Request code actions for each BSK-0003 diagnostic.
     for (idx, target_diag) in e0003_diags.iter().enumerate() {
         let action_id = 410 + idx as u64;
         let resp = fixture
@@ -346,12 +348,12 @@ async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
             )
             .await?
             .ok_or(format!(
-                "no code action response for BSK-E0003 variant {idx}"
+                "no code action response for BSK-0003 variant {idx}"
             ))?;
 
         assert!(
             resp.contains("quickfix"),
-            "BSK-E0003 code action variant {idx} should be quickfix: {resp}"
+            "BSK-0003 code action variant {idx} should be quickfix: {resp}"
         );
     }
     Ok(())

@@ -1,50 +1,20 @@
-# Basilisk: Complete Type Safety for Python {#CHKARCH}
+# Basilisk checker architecture {#CHKARCH}
 
-**Version**: 0.1.0-draft
-**Status**: Specification Draft
-**License**: MIT
+## No "strict mode" — two commands, one config {#CHKARCH-CONFIGURATION-ONLY}
 
----
+Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` dial). One rule universe is partitioned exactly once, by provenance tag, into two commands ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)):
 
-## No "strict mode" — behaviour is configuration only {#CHKARCH-CONFIGURATION-ONLY}
+1. **`basilisk check` — the typing spec, always.** Every `pep`-tagged rule runs on every check, config or no config. Configuration can grade a PEP rule (`error`/`warning`/`info`) but can **never disable one**. A bare tree — exactly what the conformance scorer runs, no Basilisk config of any format, no "conformance mode" — is therefore every PEP rule at `error` ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
-Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` dial). Everything reported is decided by **configuration alone**: a flat set of per-rule severities set globally, per path, or per file.
+2. **`basilisk analyze` — the opt-in layer, tabula rasa.** Every rule *not* tagged `pep` — require-annotation (`BSK-0001`/`BSK-0002`/`BSK-0004`), require-`@override` (`BSK-0025`), redundant-annotation (`BSK-0050`), explicit-`Any` nudge (`BSK-0014`), suppression audit, uv dependency hygiene, stub suggestions — runs only when configuration resolves it to a non-disabled severity. No entry, no check. An empty or missing `[tool.basilisk]` table means `analyze` reports nothing.
 
-1. **The default configuration is pure PEP conformance.** With no config file, Basilisk enables **every rule that implements the Python typing specification, and nothing else**. This unconfigured default is exactly what the conformance scorer runs — no `basilisk.json`, no "conformance mode" ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
+Configuration **grades**; commands **select**. The config file never chooses commands, and there are no presets, mutation intents, or rule-family booleans. Strict-by-default is delivered by the LSP's one-time two-line seed — `"basilisk" = "error"` — never by hidden defaults ([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
 
-2. **Everything beyond the spec is opt-in configuration.** House-style rules — require-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), explicit-`Any` nudge (`BSK-W0014`), uv dependency hygiene, stub suggestions — are **off by default**, enabled only in configuration (`strict_annotations = true`, `uv_dependency_diagnostics = true`, …), never implicitly.
+No PEP rule may be disabled, deleted, or unregistered to move the conformance number ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
-"Strict" is a property of a chosen configuration, never a precondition of the conformance score. No PEP rule may be disabled, deleted, or unregistered to move that number ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
+### The partition {#CHKARCH-COMMANDS}
 
----
-
-## Capability Matrix {#CHKARCH-MATRIX}
-
-| Capability | Pyright | mypy | ty | Pyrefly | Zuban | Ruff | **Basilisk** |
-|---|---|---|---|---|---|---|---|
-| Implementation | TypeScript | Python/C | Rust | Rust | Rust | Rust | **Rust** |
-| License | MIT | MIT | MIT | MIT | AGPL | MIT | **MIT** |
-| Default strictness | Gradual | Gradual | Gradual | Gradual | Gradual | N/A | **PEP by default; strict opt-in** |
-| PEP conformance (current) | [live results][cf] | [cf] | [cf] | [cf] | [cf] | N/A | **<!--g:score-->100.0%<!--/g:score-->** (self-measured) |
-| PEP conformance target | — | — | — | — | — | N/A | **100%** |
-| LSP server | Yes | No | Yes | Yes | Yes | No | **Yes** |
-| Incremental computation | Lazy eval | Daemon | Salsa | Module-level | No | N/A | **Salsa** |
-| Ownership analysis | No | No | No | No | No | No | **Yes** |
-| Immutability enforcement | No | No | No | No | No | No | **Yes** |
-| Implicit coercion detection | No | No | No | No | No | No | **Yes** |
-| Linting | No | No | No | No | No | **Yes** | Native import hygiene ([LSPFMT-IMPORTS](LSP-FORMATTING-SPEC.md#LSPFMT-IMPORTS)) |
-| Formatting | No | No | No | No | No | **Yes** | Embeds Ruff formatter ([LSPFMT-ENGINE](LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE)) |
-| Plugin system | No | Python hooks | Planned | No | No | No | **WASM plugins** |
-| Auto-stub generation | No | stubgen (basic) | No | Inference | No | No | **Tiered stubs** |
-| CI output (SARIF/JUnit) | Limited | No | No | No | No | No | **SARIF + JUnit** |
-| Multi-threaded | No | No | Yes | Yes | No | Yes | **Yes** |
-| Migration tooling | N/A | N/A | No | No | No | N/A | **mypy + Pyright import** |
-| VS Code extension | Pylance (proprietary) | No | Yes | Yes | Yes | Yes | **Yes (open source)** |
-| No Microsoft dependency | No (Node.js) | Yes | Yes | Yes | Yes | Yes | **Yes** |
-
-> Rival conformance figures move as those tools evolve, so rather than freeze (and inevitably misstate) them here, the rival cells link to the official, continuously-updated scoreboard. Basilisk's **<!--g:score-->100.0%<!--/g:score-->** is self-measured by that same suite's calculator run over the unmodified binary in its default config, against `python/typing@main` at the exact commit recorded in `conformance_report.json` ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)); it is not directly comparable to numbers produced under a different methodology or grading.
-
-[cf]: https://github.com/python/typing/blob/main/conformance/results/results.html
+A rule is check-scope **iff** it carries the `pep` provenance tag; everything else is analyze-scope. Every rule belongs to exactly one command, and the registry's canonical tags are the single source of that partition. The LSP publishes the union of both scopes by default; an IDE-level client option — never project config — can restrict it to check ([LSPARCH-DIAGNOSTIC-SCOPE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE)).
 
 ---
 
@@ -58,28 +28,16 @@ Depend on established open-source tools rather than reimplementing them.
 |---|---|---|---|
 | **`ruff_python_formatter`** | Code formatting | MIT | Embedded in-process — the formatter is Ruff's, no `ruff` CLI. Pinned to the same rev as the parser ([LSPFMT-ENGINE](LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE)). |
 | **`ruff_python_parser`** | Python AST parsing | MIT | Battle-tested Rust crate. Powers Ruff. Our parser. |
-| **typeshed** | Standard library type stubs | Apache-2.0 | Community standard. We bundle it and extend it. |
+| **`python/typeshed` stdlib** | Standard-library `.pyi` and stub-distribution data | Apache-2.0; parts MIT | Implements "Typeshed stubs for the standard library" from pinned typing step 3 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). Step 3 uses one custom tree, exact-SHA archive, or bundled stdlib ZIP; sources never mix ([STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)). |
 | **Salsa** | Incremental computation framework | Apache-2.0/MIT | Powers rust-analyzer. Proven at scale. |
 | **`lsp-server`** / **`tower-lsp`** | LSP implementation | MIT | Standard Rust LSP crates. |
-
-### Tools We Do NOT Depend On {#CHKARCH-DEPS-EXCLUDED}
-
-| Tool | Why Not |
-|---|---|
-| Pyright/Pylance | TypeScript, Microsoft ecosystem. Cannot link. Cannot extend. |
-| mypy | Python, too slow for our architecture. Reference only. |
-| ty | MIT Rust, but we build our own checker with different philosophy (configuration-driven, PEP-conformant by default). We may contribute upstream or share crates where sensible. |
-| Pyrefly | MIT Rust, same reasoning as ty. Different design goals. |
-| Node.js | No JavaScript runtime dependency anywhere in the stack. |
 
 ### Interoperability {#CHKARCH-DEPS-INTEROP}
 
 | Tool | Interop Strategy |
 |---|---|
 | **Ruff** | Basilisk **embeds** the `ruff_python_formatter` crate in-process for formatting and reimplements import hygiene natively — the `ruff` CLI is never spawned ([LSPFMT-DECISION](LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)). Configuration unified in `pyproject.toml` (`[tool.ruff.format]`). |
-| **typeshed** | Bundled copy of typeshed stubs, updated with each Basilisk release. Users MAY prepend extra stubs via `stub-paths` (resolution step 1) or replace the bundled stdlib typeshed wholesale via `typeshed-path` (resolution step 3), per the typing-spec import-resolution ordering — see [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561). |
-| **mypy config** | `basilisk migrate --from mypy` reads `mypy.ini` / `setup.cfg` and produces `[tool.basilisk]` config. |
-| **Pyright config** | `basilisk migrate --from pyright` reads `pyrightconfig.json` and produces `[tool.basilisk]` config. |
+| **typeshed** | Step 3 selects a custom `typeshed-path`, an exact-SHA archive (explicit pin or current `main`), or the bundled stdlib ZIP. Basilisk adopts the pinned typing step-3 canonical-path SHOULD; step-3 sources never mix ([STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561), [`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)). |
 | **PEP 561** | Full support for `py.typed` packages, inline type annotations, and stub-only packages. |
 
 ---
@@ -90,25 +48,31 @@ How Basilisk decides what to report (configuration, not modes), the PEPs it cove
 
 ### Strictness Model {#CHKARCH-STRICTNESS}
 
-Behaviour is per-rule configuration. The subsections define the default (pure PEP conformance), suppression/override directives, and their precedence.
+Behaviour is per-rule configuration over the two-command partition ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)): `check` is pure PEP conformance, always; `analyze` is the explicit opt-in layer. The subsections define severity values, suppression/override directives, and their precedence.
 
 #### No Modes — Configuration Decides Everything {#CHKARCH-STRICTNESS-ONLY}
 
-The require-annotation house rules (`BSK-E0001`/`BSK-E0002`) fire **only once enabled in configuration** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)). Under the default config these snippets pass:
+The require-annotation house rules (`BSK-0001`/`BSK-0002`) are analyze-scope ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)): `basilisk check` never fires them, and `basilisk analyze` fires them only when configuration resolves them to a non-disabled severity. With no config these snippets pass everywhere:
 
 ```python
-# ERROR: Missing parameter type annotation [BSK-E0001]
+# Passes check always; fires BSK-0001 under analyze once configured
 def greet(name):
     return f"Hello, {name}"
 
-# ERROR: Missing return type annotation [BSK-E0002]
+# Passes check always; fires BSK-0002 under analyze once configured
+# (the returned call is not inferable — a literal/f-string return would
+# infer the type and stay silent, [TYPEINF-EXCEEDS-REQUIRED])
 def greet(name: str):
-    return f"Hello, {name}"
+    return build_greeting(name)
 
-# OK
+# OK under any configuration
 def greet(name: str) -> str:
     return f"Hello, {name}"
 ```
+
+Even when enabled, the require-annotation rules fire only where the type cannot
+be inferred — see
+[TYPEINF-EXCEEDS-REQUIRED](CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-EXCEEDS-REQUIRED).
 
 #### `Any` Is Explicit, Never Implicit {#CHKARCH-STRICTNESS-ANY}
 
@@ -122,24 +86,46 @@ from untyped_lib import do_stuff
 result: Any = do_stuff()  # basilisk: allow[imports_unresolved] -- untyped dependency, tracking in #1234
 
 # ERROR (when the explicit-Any house rule is enabled): Bare Any without justification
-def process(data: Any) -> Any:  # BSK-W0011: Explicit Any requires reason comment
+def process(data: Any) -> Any:  # BSK-0014: Explicit Any requires reason comment
     pass
 ```
 
-#### Diagnostic Severity Modes {#CHKARCH-STRICTNESS-SEVERITY}
+The "untyped import" case above is an **implicit `Any`** produced by the static
+resolution model: an import Basilisk cannot resolve by inspecting files on disk —
+including computed/dynamic imports and modules only a runtime `sys.meta_path`
+hook could supply — lands in a terminal unresolved state and is surfaced by
+`imports_unresolved` rather than silently accepted. The interpreter is never
+executed to follow an import. See the normative
+[§STUBRES-STATIC-MODEL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-STATIC-MODEL).
 
-Every rule has four severity modes:
+#### Diagnostic Severity Values {#CHKARCH-STRICTNESS-SEVERITY}
 
-| Mode | Behavior | Blocks CI | LSP Indicator |
+Every rule has four configurable severity values:
+
+| Severity | Behavior | Blocks CI | LSP Indicator |
 |---|---|---|---|
 | `error` | Full diagnostic with fix suggestions | Yes | Red squiggly |
 | `warning` | Diagnostic shown but does not block | No | Yellow squiggly |
 | `info` | Informational hint only | No | Blue hint |
-| `disabled` | Rule is not checked at all (zero cost) | No | Nothing |
+| `disabled` | Rule emits no diagnostic | No | Nothing |
 
-The default mode for each rule comes from its code prefix (`E` = error, `W` = warning). All modes can be overridden per-line, per-block, per-file, and per-project.
+Severity resolves through [CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL): the
+nearest deciding table wins, a rule entry beats tag entries, and the strictest
+matching tag entry wins. PEP rules bottom out at `error` and can never be
+disabled; analyze rules bottom out at disabled — no entry, no check. There are
+no default, inherited, or "native" severity values, and rule codes carry no
+severity class ([CHKARCH-DIAG-CODES](#CHKARCH-DIAG-CODES)). Inline directives
+can still override any running rule per line, block, or file
+([CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION)).
 
-#### Inline Suppression and Mode Override {#CHKARCH-STRICTNESS-SUPPRESSION}
+A rule that resolves to disabled must emit nothing; the current
+implementation still executes the shared rule registry and filters output
+afterwards, so disabled guarantees no diagnostic, not zero execution cost.
+Skipping execution entirely is an optimisation tracked by
+[CONFIGEDITOR-PLAN-DOMAIN](../plans/LSP-CONFIGURATION-EDITOR-PLAN.md#CONFIGEDITOR-PLAN-DOMAIN),
+not part of severity correctness.
+
+#### Inline Suppression and Severity Override {#CHKARCH-STRICTNESS-SUPPRESSION}
 
 Basilisk supports standard `# type: ignore` (mypy/Pyright compatible) plus its own comment directives.
 
@@ -176,9 +162,9 @@ from models import Platform, Credentials
 # type: end-disabled[imports_unresolved]
 ```
 
-Block directives work with all modes: `# type: warning[CODE]` / `# type: end-warning[CODE]`, `# type: info[CODE]` / `# type: end-info[CODE]`, `# type: disabled[CODE]` / `# type: end-disabled[CODE]`. Omitting the code applies to all rules.
+Block directives work with all severity values: `# type: warning[CODE]` / `# type: end-warning[CODE]`, `# type: info[CODE]` / `# type: end-info[CODE]`, `# type: disabled[CODE]` / `# type: end-disabled[CODE]`. Omitting the code applies to all rules.
 
-**Per-file: file-level mode at the top of the file**
+**Per-file: file-level directive at the top of the file**
 ```python
 # basilisk: relaxed
 # All errors become warnings in this file
@@ -194,37 +180,27 @@ Block directives work with all modes: `# type: warning[CODE]` / `# type: end-war
 # Demote E0010 and E0011 to warnings for the entire file
 ```
 
-**Per-directory configuration** in `pyproject.toml`:
+**Per-folder configuration** in `pyproject.toml` — the nearest deciding table
+wins per rule ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)):
 ```toml
-[tool.basilisk]
-# No "strict"/"mode" switch; opt into house-style rules by name:
-strict_annotations = true   # enable the require-annotation rules (BSK-E0001/E0002/E0004)
+# pyproject.toml at the project root
+[tool.basilisk.rule-tags]
+"basilisk" = "error"            # every house rule on — strict by default
 
-[tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["returns_compatibility"]              # disable rules entirely for legacy code
-
-[tool.basilisk.per-path-overrides."vendor/**"]
-disabled = ["imports_unresolved"]
-rules."BSK-E0001" = "warning"
-rules."BSK-E0002" = "warning"
-```
-
-**Per-module override** (for third-party imports):
-```toml
-[tool.basilisk.per-module-overrides."requests"]
-ignore-missing-stubs = true
-
-[tool.basilisk.per-module-overrides."django.*"]
-ignore-missing-stubs = true
-```
-
-**Global rule severity override**:
-```toml
 [tool.basilisk.rules]
-"imports_unresolved" = "warning"    # demote globally
-"BSK-W0050" = "error"      # promote globally
-"dataclasses_order" = "disabled"   # disable globally
+"BSK-0050" = "warning"         # ...except this one, graded down
 ```
+```toml
+# legacy/pyproject.toml — decides, per rule, for everything under legacy/
+[tool.basilisk.rules]
+"BSK-0001" = "disabled"        # house rules may be disabled
+"imports_unresolved" = "warning" # PEP rules may be graded — never disabled
+```
+
+Third-party import noise is handled the same way: grade `imports_unresolved`
+in the folder that contains the affected code, or use the inline directives
+above at the import site. There are no module-pattern or glob-path override
+tables.
 
 #### Suppression Precedence {#CHKARCH-STRICTNESS-PRECEDENCE}
 
@@ -233,10 +209,10 @@ When multiple overrides apply, the most specific wins:
 1. **Per-line comment** (highest priority)
 2. **Per-block comment**
 3. **Per-file directive**
-4. **Per-path override** in pyproject.toml
-5. **Per-module override** in pyproject.toml
-6. **Global rule override** in pyproject.toml
-7. **Rule default** (lowest priority)
+4. **Nearest deciding folder config** — rule entry over tag entry, strictest
+   matching tag ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL))
+5. **Scope default** (lowest): `pep` rules run at `error`; everything else
+   does not run ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS))
 
 #### Compatibility {#CHKARCH-STRICTNESS-COMPAT}
 
@@ -258,9 +234,37 @@ Recognized comment formats:
 
 The `# type:` prefix keeps compatibility with tools that recognize `# type: ignore`; others treat `# type: warning` as unknown and ignore it.
 
+#### Suppression Directives as Opt-In Diagnostics {#CHKARCH-STRICTNESS-SUPPRESSION-DIAGNOSTICS}
+
+Suppression auditing is a Basilisk-specific rule family and analyze-scope
+([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)): `basilisk check` never emits it, so a
+bare clone stays clean, and the standard seed's `"basilisk" = "error"` tag
+entry turns it on ([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
+Once a rule resolves to a non-disabled severity, every parsed source directive
+produces at most one audit diagnostic at the directive's comment span:
+
+| Rule | Classification |
+|---|---|
+| `BSK-0060` | A valid code-specific directive actively suppresses a diagnostic or changes its severity |
+| `BSK-0061` | An active blanket directive applies without a Basilisk rule selector |
+| `BSK-0062` | A syntactically valid directive matches nothing or changes no effective severity |
+| `BSK-0063` | The directive is malformed, names an unknown rule, conflicts with another directive, or has an unmatched block boundary |
+
+Classification precedence is malformed → unused → active blanket → active
+specific, so a directive never produces duplicate audit noise. The audit data
+records its kind, scope, selected codes, and matched-diagnostic count for LSP
+navigation. These diagnostics are appended **after** ordinary inline suppression
+and are not passed through that same directive set; an ignore cannot hide the
+audit diagnostic describing itself. Configuration can still set each audit rule
+to `error`, `warning`, `info`, or `disabled` normally.
+
+All four rules carry the tags `basilisk` and `suppressions`. Their workspace
+configuration/editor behavior is specified by
+[CONFIGEDITOR-SUPPRESSIONS](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SUPPRESSIONS).
+
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->f4f2952<!--/g:short-->`](https://github.com/python/typing/tree/f4f2952f3ac94d7af819c5c71b60a50a100370e0/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
+Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->39164cd<!--/g:short-->`](https://github.com/python/typing/tree/39164cd2c5b4e2608cb8b5d2fc8af9ae6f0c0fe8/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -296,7 +300,7 @@ Basilisk's **target** is 100% conformance with the Python typing specification. 
 
 ### Type Inference Engine {#CHKARCH-INFERENCE}
 
-Annotations are enforced on public APIs; local variable types are inferred:
+When the require-annotation rules (`BSK-0001`/`BSK-0002`/`BSK-0004`) have config entries, explicit annotations are required on public APIs **only where the type cannot be inferred** ([TYPEINF-EXCEEDS-REQUIRED](CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-EXCEEDS-REQUIRED)); local variable types are always inferred:
 
 ```python
 def process(items: list[str]) -> int:
@@ -306,7 +310,7 @@ def process(items: list[str]) -> int:
     return count
 ```
 
-- **Public APIs** (module-level functions/variables, class methods): explicit annotations required
+- **Public APIs** (module-level functions/variables, class methods): explicit annotations required when the require-annotation rules are enabled in configuration
 - **Local variables**: inferred from assignments, comprehensions, control flow
 - **Cross-module**: does NOT cross boundaries for public symbols; imports from typed modules resolve to declared types, from untyped modules produce `imports_unresolved`
 
@@ -327,31 +331,40 @@ Full support for:
 - Unreachable branch elimination
 - `NoReturn` propagation from `sys.exit()`, `raise`, and custom `NoReturn` functions
 - `assert_never()` for exhaustiveness checking
-- Platform-aware reachability (default: assume code may run on any platform)
+- Platform-aware reachability (an unknown target preserves every platform branch)
 
 ### Target Version and Platform {#CHKARCH-VERSION-TARGET}
 
-Every rule runs against the **configured** target Python version — never a
-hardcoded constant (issue #93).
+A rule consults the project's Python version only when the maintained typing
+specification, an accepted PEP, or Python language semantics makes its result
+version-dependent. A version-independent rule must not branch on a Python
+release. Basilisk has no canonical Python version.
 
-- `BasiliskConfig.python_version` / `python_platform` (from `basilisk.json`
-  `pythonVersion`/`pythonPlatform` or `pyproject.toml` `[tool.basilisk]`
-  `python-version`/`python-platform`) parse into a typed
+- `BasiliskConfig.python_version` / `python_platform` (from `pyproject.toml`
+  `[tool.basilisk]` `python-version`/`python-platform`) parse into a typed
   `CheckContext { target_version: (major, minor), target_platform }`
   (`crates/basilisk-checker/src/context.rs`).
-- The centralized default is `DEFAULT_TARGET_VERSION = (3, 12)` — the **only**
-  place the default version constant lives. A malformed version string falls
-  back to the default rather than panicking or disabling gating.
 - When the checker config does not pin a version, the CLI and LSP detect it
   from project files per
   [`[LSPUV-PYTHON-VERSION-RESOLUTION-ORDER]`](LSP-UV-INTEGRATION-SPEC.md):
   `.python-version` → `[project].requires-python` lower bound → `uv.lock`
   `requires-python` lower bound (`basilisk_uv::python_version::resolve_target_python_version`).
+- When `python-platform` is absent, the CLI and LSP ask the selected project
+  interpreter for `sys.platform` and thread that concrete evidence through
+  both Typeshed guard selection and checker rules. An explicit
+  `python-platform = "All"` keeps cross-platform intersection semantics. A
+  failed interpreter probe leaves the platform unknown; the checker never
+  manufactures a host or fixed-platform target.
 - `rules::run_all(module, ctx)` threads the context into every
-  `Rule::check(module, ctx, diagnostics)` — no rule may reference a literal
-  target version.
+  `Rule::check(module, ctx, diagnostics)`. Feature-version boundaries come from
+  their governing PEP or Python language rule, never from a book-wide or
+  product-wide support target.
 
 #### Version/Platform Narrowing {#CHKARCH-VERSION-NARROWING}
+
+The pinned stub syntax text specifically says the `type` keyword is "only
+accepted by the Python parser in Python 3.12 and later"
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 
 - `directives_version_platform` evaluates `sys.version_info` / `sys.platform` guards against
   `ctx.target_version`, so dead-branch analysis follows the project's real
@@ -364,96 +377,37 @@ Tests: `crates/basilisk-checker/tests/checker/version_target_tests.rs`.
 
 ---
 
-## Mojo-Inspired Safety Analysis {#CHKARCH-MOJO-SAFETY}
+## Mojo-inspired safety analysis {#CHKARCH-MOJO-SAFETY}
 
-> **Status: PLANNED (Phase 4 — see [CHKARCH-ROADMAP-P4](#CHKARCH-ROADMAP-P4)). Not yet implemented.**
-> Forward-looking design for the `basilisk-mojo` crate, which is a stub **not wired into the pipeline**. The `generics_defaults`–`specialtypes_never` codes below are **illustrative only** — those numeric codes are currently used by shipping PEP-typing rules (see the [complete diagnostic reference](#CHKARCH-DIAG-REFERENCE) for what each does today).
+Status: planned, opt-in, and not wired into the checker pipeline. The
+`basilisk-mojo` crate is scaffolding; shipping PEP rules must not reuse these
+anchors or diagnostic descriptions.
 
-When implemented, these are **opt-in** rules in the `basilisk-mojo` crate — off by default, enabled only via configuration ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)). They adapt Mojo's ownership, immutability, and coercion concepts as static analysis over standard Python using `typing.Annotated`, decorators, and `dataclass(frozen=True)`; no Mojo runtime required.
+### Ownership tracking {#CHKARCH-MOJO-OWNERSHIP}
 
-### Ownership and Lifetime Tracking {#CHKARCH-MOJO-OWNERSHIP}
+The target is explicit `Annotated[T, Borrowed|InOut|Owned]` analysis for
+mutation-of-borrowed and use-after-transfer diagnostics.
 
-Optional ownership annotations via `typing.Annotated`:
+### Parameter immutability {#CHKARCH-MOJO-IMMUTABLE}
 
-```python
-from typing import Annotated
-from basilisk.safety import Borrowed, Owned, InOut
+The target is an opt-in rule that treats mutable parameters as read-only unless
+marked `InOut`; it does not change Python runtime semantics.
 
-def process(
-    data: Annotated[list[int], Borrowed],     # read-only reference
-    buffer: Annotated[list[int], InOut],       # mutable reference
-    consumed: Annotated[list[int], Owned],     # ownership transferred
-) -> list[int]:
-    buffer.append(sum(data))  # OK: buffer is InOut
-    data.append(1)            # ERROR: mutation of Borrowed parameter [generics_defaults]
-    return consumed
+### Structural discipline {#CHKARCH-MOJO-STRUCTURAL}
 
-result = process(data=items, buffer=buf, consumed=temp)
-print(temp)  # ERROR: use after ownership transfer [directives_cast]
-```
+The target is opt-in checks for dynamic attributes and related typed-class
+structure. Existing PEP/dataclass rules remain separate.
 
-**Static analysis rules**:
-- `generics_defaults`: Mutation of `Borrowed` parameter
-- `directives_cast`: Use-after-move (value used after `Owned` transfer)
-- `typeddicts_class_syntax_2`: Implicit copy of large structure (suggest explicit `.copy()`)
-- `BSK-W0033`: Missing ownership annotation on mutable parameter (suggestion)
+### Explicit coercion {#CHKARCH-MOJO-COERCION}
 
-### Immutability by Default {#CHKARCH-MOJO-IMMUTABLE}
+The target is opt-in diagnostics for selected implicit conversions. It must not
+contradict the typing-spec numeric tower used by default PEP rules.
 
-Parameters are immutable by default; mutation produces a diagnostic unless annotated `InOut`:
+### Compatibility contract {#CHKARCH-MOJO-COMPAT}
 
-```python
-def bad(items: list[int]) -> None:
-    items.append(1)  # ERROR: mutation of parameter [enums_behaviors]
-    items = [1, 2]   # ERROR: reassignment of parameter [calls_argument_count]
-
-def good(items: Annotated[list[int], InOut]) -> None:
-    items.append(1)  # OK
-```
-
-A plain `@dataclass` warns `prefer frozen=True [BSK-W0042]`; `@dataclass(frozen=True)` is OK.
-
-### Structural Discipline {#CHKARCH-MOJO-STRUCTURAL}
-
-```python
-c = Config(host="localhost", port=8080)
-c.timeout = 30  # ERROR: dynamic attribute on typed structure [aliases_newtype]
-```
-
-**Rules**:
-- `aliases_newtype`: Dynamic attribute assignment on typed class
-- `literals_parameterizations`: Missing `__init__` on class with type annotations
-- `dataclasses_frozen`: Missing `__del__` on class managing resources (when detectable)
-- `BSK-W0053`: Class should use `__slots__` for performance (suggestion)
-
-### No Implicit Type Coercion {#CHKARCH-MOJO-COERCION}
-
-```python
-x: float = 1        # ERROR: implicit int-to-float coercion [dataclasses_order]
-y: int = True        # ERROR: implicit bool-to-int coercion [enums_expansion]
-z: str = b"hello"    # ERROR: implicit bytes-to-str [specialtypes_never]
-```
-
-Explicit conversions (`float(1)`, `int(True)`) are OK.
-
-### Mojo-Inspired Rule Mapping {#CHKARCH-MOJO-COMPAT}
-
-| Mojo Concept | Basilisk Equivalent | Syntax | Enforceable via Static Analysis? |
-|---|---|---|---|
-| `fn` (strict function) | All `def` is strict | `def f(x: int) -> int` | Yes |
-| `borrowed` (immutable ref) | Default parameter behavior | No annotation needed | Yes |
-| `inout` (mutable ref) | `Annotated[T, InOut]` | `from basilisk.safety import InOut` | Yes |
-| `owned` (ownership transfer) | `Annotated[T, Owned]` | `from basilisk.safety import Owned` | Yes |
-| `var` / `let` | Immutable by default | Mutation requires `InOut` | Yes |
-| `struct` (static type) | Class with annotations | `class Foo:` + typed fields | Yes |
-| `^` (transfer operator) | Use-after-move detection | Tracked via `Owned` annotation | Yes |
-| `Copyable` / `Movable` traits | Protocol-based | `class Foo(Copyable):` | Yes |
-| No implicit coercion | Explicit conversion required | `float(1)` not `1` | Yes |
-| SIMD types | Not applicable | N/A (runtime feature) | No |
-| Register-passable | Not applicable | N/A (compiler feature) | No |
-| Compile-time parameters | Not applicable | N/A (compiler feature) | No |
-
----
+All metadata uses standard Python typing constructs, all rules are off by
+default, and the implementation plan is
+[CHECKER-ADVANCED-FEATURES-PLAN.md](../plans/CHECKER-ADVANCED-FEATURES-PLAN.md).
 
 ## Diagnostic Rules {#CHKARCH-DIAG}
 
@@ -467,189 +421,32 @@ Every diagnostic must be:
 
 ### Error Code System {#CHKARCH-DIAG-CODES}
 
-Format: `BSK-Xnnnn` where X = default severity class:
-- `E` = Error (blocks CI by default)
-- `W` = Warning (does not block by default)
-- `I` = Info (suggestion by default)
+Format: `BSK-nnnn` for Basilisk-original rules; conformance-named PEP rules keep their `python/typing` snake_case names. A code carries **no severity class** — severity resolves through [CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL): PEP rules always run in `check` and bottom out at `error`; analyze rules run only when configuration decides them. Inline directives can still override per line, block, or file — see [CHKARCH-STRICTNESS-SEVERITY](#CHKARCH-STRICTNESS-SEVERITY) and [CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION).
 
-The prefix sets the **default** severity. Every rule can be overridden to any of the four modes (`error`, `warning`, `info`, `disabled`) at every scope level (line, block, file, path, global) — see [CHKARCH-STRICTNESS-SEVERITY](#CHKARCH-STRICTNESS-SEVERITY) and [CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION).
+### Generated rule index {#CHKARCH-DIAG-REFERENCE}
 
-### Rule Categories {#CHKARCH-DIAG-CATEGORIES}
+The checker rule source is authoritative. Run
+`python3 scripts/gen_rules_reference.py --data` to generate
+`website/src/_data/rules.json`, which drives the public
+[rule reference](https://www.basilisk-python.dev/docs/rules/) and per-code
+error pages. Do not maintain a second code/description table here.
 
-> **Classification is by tags, not categories.** The authoritative classification is the tagging system — provenance tags (`pep`/`basilisk`), PEP-category tags, free-form tags. The code-range groupings below are a coarse legacy convenience; source of truth is [Rule Tagging](CHECKER-RULE-TAGGING-SPEC.md#CHKTAG) ([CHKTAG]).
+Compatibility anchors used by existing implementation and test comments:
 
-#### Missing Annotations (BSK-E0001 -- BSK-E0009) {#CHKARCH-DIAG-MISSING}
-#### Type Safety (imports_unresolved -- typeddicts_class_syntax) {#CHKARCH-DIAG-TYPESAFETY}
+- Live rule modules and conformance categories {#CHKARCH-DIAG-CATEGORIES}
+- Historical test shard: quality {#CHKARCH-DIAG-QUALITY}
+- Historical test shard: unused {#CHKARCH-DIAG-UNUSED}
+- Missing-annotation rules {#CHKARCH-DIAG-MISSING}
+- Core type-safety rules {#CHKARCH-DIAG-TYPESAFETY}
+- Historical group: ownership {#CHKARCH-DIAG-OWNERSHIP}
+- Historical group: immutability {#CHKARCH-DIAG-IMMUTABILITY}
+- Historical group: structural typing {#CHKARCH-DIAG-STRUCTURAL}
+- Historical group: coercion {#CHKARCH-DIAG-COERCION}
+- Historical group: optional/special types {#CHKARCH-DIAG-OPTIONAL}
 
-These legacy code-range groupings are superseded by tagging and the complete reference below ([CHKARCH-DIAG-REFERENCE](#CHKARCH-DIAG-REFERENCE)); anchors retained for cross-reference continuity.
-
-#### Complete diagnostic reference {#CHKARCH-DIAG-REFERENCE}
-
-The full set of codes the checker emits — generated from rule source by `scripts/gen_rules_reference.py`, the authoritative list. Keep in sync after adding or renaming a rule.
-
-| Code | Description |
-|---|---|
-| `BSK-E0001` | Missing parameter type annotation |
-| `BSK-E0002` | Missing return type annotation |
-| `BSK-E0003` | Missing variable type annotation |
-| `BSK-E0004` | Missing `*args` / `**kwargs` type annotation |
-| `BSK-E0005` | Missing class attribute type annotation |
-| `imports_unresolved` | Unresolved import |
-| `returns_compatibility` | Return type mismatch (literal return value incompatible with the declared return type) |
-| `calls_argument_type` | Argument type mismatch at a call site |
-| `returns_compatibility_2` | Return type mismatch — inferred return type incompatible with annotation |
-| `assignment_compatibility` | Assignment type incompatibility (literal mismatches) |
-| `callables_annotation` | Invalid type argument count or form |
-| `classes_override` | Incompatible method override |
-| `classes_override_2` | Incompatible class attribute override |
-| `names_undefined` | Undefined variable used in a return statement |
-| `names_unbound` | Unbound variable on some code paths |
-| `overloads_definitions` | Missing `@overload` implementation |
-| `overloads_consistency` | Overlapping `@overload` signatures |
-| `dict_key_hashable` | Unhashable type used as a dict key |
-| `match_exhaustiveness` | Non-exhaustive `match` statement |
-| `annotations_typeexpr` | Invalid type form — numeric literal used as type annotation |
-| `BSK-E0025` | Missing `@override` decorator |
-| `generics_basic` | `TypeVar` declared with exactly one constraint |
-| `generics_base_class` | Duplicate `TypeVar` in a `Generic[...]` base |
-| `typeddicts_class_syntax` | Method defined inside a `TypedDict` class |
-| `generics_defaults` | Non-default `TypeVar` follows a default `TypeVar` in `Generic[...]` |
-| `directives_cast` | Invalid `cast()` call |
-| `typeddicts_class_syntax_2` | Invalid keyword argument in `TypedDict` class definition |
-| `directives_reveal_type` | Invalid `reveal_type()` call |
-| `qualifiers_final_decorator` | `@final` decorator violations |
-| `typeddicts_required` | `Required` / `NotRequired` used in an invalid context |
-| `classes_classvar` | `ClassVar` used in an invalid context |
-| `typeddicts_alt_syntax` | Invalid `TypedDict(...)` functional-syntax call |
-| `typeddicts_inheritance` | Invalid `TypedDict` inheritance |
-| `directives_assert_type` | Invalid `assert_type()` call |
-| `enums_behaviors` | Invalid Enum subclassing |
-| `calls_argument_count` | Too few arguments in a function call |
-| `generics_syntax_compatibility` | PEP 695 type parameter syntax mixed with traditional `TypeVars` |
-| `generics_basic_2` | Non-TypeVar argument in `Generic[...]` or `Protocol[...]` |
-| `qualifiers_final_annotation` | `Final` used in an invalid position |
-| `qualifiers_annotated` | Invalid first argument to `Annotated[...]` |
-| `enums_members` | Enum member annotated with an explicit type |
-| `annotations_forward_refs` | Invalid type expression in annotation |
-| `aliases_implicit` | Invalid right-hand side for a `TypeAlias` annotation |
-| `tuples_type_form` | Multiple unbounded tuple components in a single tuple type |
-| `aliases_newtype` | Invalid `NewType(...)` call |
-| `literals_parameterizations` | Invalid `Literal` parameterization |
-| `dataclasses_frozen` | Assignment to attribute of a frozen dataclass instance, or invalid frozen/non-frozen dataclass inheritance |
-| `directives_assert_type_2` | `assert_type()` type mismatch |
-| `qualifiers_final_annotation_2` | `Final` type qualifier annotation violations |
-| `generics_typevartuple_basic` | Invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword argument combination |
-| `typeddicts_readonly` | Mutation of `ReadOnly` `TypedDict` fields |
-| `aliases_type_statement` | Invalid RHS in a PEP 695 `type X = rhs` statement |
-| `qualifiers_annotated_2` | `Annotated[...]` requires at least two arguments |
-| `dataclasses_match_args` | Access to `__match_args__` on a dataclass with `match_args=False` |
-| `dataclasses_order` | Invalid ordering comparison of dataclass instances |
-| `enums_expansion` | `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param |
-| `specialtypes_never` | `-> NoReturn` / `-> Never` function can fall through |
-| `dataclasses_hash` | Non-hashable dataclass assigned to a `Hashable`-annotated variable |
-| `namedtuples_define_functional` | Invalid argument in a `NamedTuple` constructor call |
-| `specialtypes_promotions` | Access to an `int`-only attribute on a `float`-typed parameter |
-| `enums_member_values` | Enum member value incompatible with `_value_` type annotation |
-| `enums_members_2` | Non-member referenced in `Literal[EnumClass.X]` annotation |
-| `literals_parameterizations_2` | `Literal["EnumClass.MEMBER"]` (string) used where `Literal[EnumClass.MEMBER]` (enum member reference) is required |
-| `dataclasses_kwonly` | Dataclass constructor argument violations |
-| `specialtypes_never_2` | `Never` type compatibility violations |
-| `historical_positional` | Historical positional-only parameter violations |
-| `overloads_basic` | No matching overload for subscript indexing |
-| `namedtuples_type_compat` | `NamedTuple`-to-tuple type incompatibility |
-| `constructors_call_new` | Constructor call type mismatch with specialized generic class |
-| `generics_self_attributes` | Incompatible type for `Self`-typed attribute |
-| `overloads_evaluation` | Overload union expansion failure |
-| `generics_self_protocols` | Protocol `Self`-return conformance violation |
-| `generics_self_basic` | `Self` type violations in generics |
-| `protocols_modules` | Module assigned to incompatible protocol type |
-| `generics_upper_bound` | `TypeVar` upper bound violation at call site |
-| `generics_typevartuple_unpack` | `TypeVarTuple` unpack minimum type argument violation |
-| `generics_typevartuple_callable` | `TypeVarTuple` callable/tuple argument mismatch |
-| `generics_typevartuple_basic_2` | `TypeVarTuple` must be unpacked with `*` operator |
-| `generics_typevartuple_basic_3` | `TypeVarTuple` variance/bounds/constraints violation |
-| `generics_typevartuple_args` | `TypeVarTuple` argument count mismatch |
-| `generics_typevartuple_specialization` | Multiple `TypeVarTuple` unpacks in generic or tuple type |
-| `BSK-E0087` | Reserved for future PEP 695 type parameter checks |
-| `typeddicts_usage` | `TypedDict` runtime violation |
-| `generics_syntax_declarations` | Invalid PEP 695 type parameter bound or constraint |
-| `tuples_type_form_2` | Invalid tuple type syntax |
-| `generics_defaults_2` | Incompatible `TypeVar` bound or constraint with its default |
-| `generics_defaults_specialization` | Wrong number of type arguments to a generic class or type alias |
-| `typeddicts_operations` | Invalid key or value type in `TypedDict` assignment |
-| `generics_self_usage` | `Self` type used in an invalid location |
-| `dataclasses_postinit` | `InitVar` field validation in dataclasses |
-| `dataclasses_usage` | Type mismatch between a dataclass `field(default_factory=…)` and the field's declared type annotation |
-| `protocols_definition` | Protocol method body sets self-attributes not declared in Protocol |
-| `protocols_merging` | Non-Protocol base class in a Protocol definition |
-| `protocols_explicit` | Direct instantiation of a Protocol class |
-| `literals_semantics` | Augmented assignment widens `Literal` type |
-| `narrowing_typeguard` | `TypeGuard` or `TypeIs` on method with no narrowing parameter |
-| `generics_defaults_referential` | Invalid `TypeVar` default referencing another `TypeVar` |
-| `tuples_index` | Tuple index out of bounds |
-| `aliases_recursive` | Cyclical type alias reference |
-| `generics_syntax_declarations_2` | Invalid attribute access on bounded type variable |
-| `protocols_class_objects` | Protocol class used where `type[Proto]` is expected |
-| `generics_variance` | Variance incompatibility in base class parameterisation |
-| `dataclasses_slots` | Dataclass slots violations |
-| `generics_upper_bound_2` | `TypeVar` bound violation at call site |
-| `protocols_variance` | Protocol variance violation |
-| `constructors_call_init` | Constructor call errors via `__init__` method |
-| `narrowing_typeis` | TypeGuard/TypeIs return type incompatibility in callable arguments |
-| `narrowing_typeis_2` | `TypeIs` narrows to a type inconsistent with the input type |
-| `protocols_runtime_checkable` | Protocol `isinstance`/`issubclass` violations |
-| `directives_deprecated` | Use of deprecated class, function, or method |
-| `namedtuples_define_class` | `NamedTuple` class definition errors |
-| `generics_scoping` | Unbound type variable in scope |
-| `protocols_explicit_2` | Calling `super().method()` on an abstract method with no default implementation |
-| `protocols_runtime_checkable_2` | Protocol `isinstance`/`issubclass` violations |
-| `annotations_generators` | Generator return type and yield type violations |
-| `protocols_definition_2` | Protocol conformance violation in an annotated assignment or call argument |
-| `callables_protocol` | Callable call-site arity and argument validation |
-| `protocols_explicit_3` | `super()` call on abstract protocol method with no default implementation |
-| `protocols_subtyping` | Protocol attribute tuple element type mismatch |
-| `generics_type_erasure` | Access to instance attribute on a class object |
-| `literals_literalstring` | `LiteralString` and `Literal` assignment incompatibilities |
-| `tuples_index_2` | Tuple index out of range |
-| `generics_defaults_referential_2` | ```TypeVar``` default referential violations |
-| `literals_semantics_2` | Literal value assignment incompatibility |
-| `generics_variance_inference` | `TypeVar` scoping violation |
-| `annotations_generators_2` | Generator yield/send/return type mismatch |
-| `generics_base_class_2` | Inconsistent `TypeVar` ordering across base classes |
-| `protocols_variance_2` | Protocol `TypeVar` variance mismatch |
-| `generics_base_class_3` | Invariant generic type mismatch at call site |
-| `callables_subtyping` | Callable subtyping violations (covariance / contravariance) |
-| `protocols_generic` | Generic protocol violations |
-| `dataclasses_transform_meta` | `dataclass_transform` metaclass violations |
-| `generics_typevartuple_specialization_2` | Invalid `TypeVarTuple` specialization of generic alias |
-| `callables_protocol_2` | Callable and Protocol assignment compatibility |
-| `callables_kwargs` | Unpack[`TypedDict`] kwargs violations |
-| `dataclasses_transform_class` | `dataclass_transform` violations when the transform is applied via a base class |
-| `namedtuples_usage` | `NamedTuple` usage violations |
-| `constructors_call_type` | Invalid constructor call via `type[T]` parameter |
-| `specialtypes_type` | Invalid `type[X]` usage violations |
-| `protocols_class_objects_2` | Protocol class object violations |
-| `tuples_type_compat` | Tuple starred-unpack type compatibility violation |
-| `generics_basic_3` | Generic type argument violations |
-| `generics_syntax_scoping` | PEP 695 generic type parameter scoping violations |
-| `directives_version_platform` | Variable defined only in dead version/platform branch |
-| `aliases_typealiastype` | Invalid `TypeAliasType(...)` call |
-| `BSK-E0152` | Missing type stubs for installed package |
-| `constructors_callable` | Invalid call to a constructor-derived callable ([CHKARCH-DIAG-CTOR-CALLABLE](#CHKARCH-DIAG-CTOR-CALLABLE)) |
-| `imports_module_attribute` | Access to a module attribute a local stub does not declare ([CHKARCH-DIAG-STUB-MEMBER](#CHKARCH-DIAG-STUB-MEMBER)) |
-| `version_target_syntax` | PEP 695 syntax used below the configured target version ([CHKARCH-VERSION-TARGET](#CHKARCH-VERSION-TARGET)) |
-| `typeddicts_extra_items` | TypedDict `extra_items` / `closed` (PEP 728) violations ([CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS](#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS)) |
-| `dataclasses_inheritance` | Dataclass field without a default after one with a default ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
-| `overloads_consistency_2` | Inconsistent decorators across an `@overload` group — `@staticmethod`/`@classmethod` not uniform, or `@final`/`@override` on an overload signature ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
-| `classes_override_3` | `@override` on a method with no matching ancestor method (PEP 698) ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
-| `overloads_consistency_3` | Overload implementation inconsistent with its signatures (overload return not assignable to impl return, or impl parameter cannot accept an overload's) ([CHKARCH-DIAG-TYPESAFETY](#chkarch-diag-typesafety)) |
-| `BSK-W0011` | Undeclared dependency import |
-| `BSK-W0012` | Unused dependency |
-| `BSK-W0013` | Stale uv lock file |
-| `BSK-W0014` | Explicit `Any` annotation — prefer a concrete type (style nudge; split from `returns_compatibility`, see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)) |
-| `BSK-W0015` | Test runner `pytest` not installed in the uv project ([LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION](LSP-TEST-INTEGRATION-SPEC.md#LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION)) |
-| `BSK-W0040` | Lambda function missing type annotations |
-| `BSK-W0050` | Redundant type annotation warning |
+These group names are navigation anchors, not current rule classifications.
+Tags from [CHKTAG](CHECKER-RULE-TAGGING-SPEC.md#CHKTAG) are the only
+classification authority.
 
 #### Constructor-to-callable conversion {#CHKARCH-DIAG-CTOR-CALLABLE}
 
@@ -761,23 +558,6 @@ The qualifier rules are enforced across four codes:
 Conformance: flips `typeddicts_readonly_inheritance.py`. Benchmark fixture:
 `benchmarks/fixtures/typeddict_readonly_inheritance.py`.
 
-#### Planned analyses {#CHKARCH-DIAG-PLANNED}
-
-The following anchors are retained for historical/spec-ID continuity. The
-"ownership", "immutability", and "coercion" categories below describe a
-**planned** Mojo-inspired analysis layer (the `basilisk-mojo` crate, targeted
-for a future phase). They are **not yet shipping** — the codes that currently
-occupy these numeric ranges implement standard PEP-typing rules, listed in the
-[complete reference](#CHKARCH-DIAG-REFERENCE) above.
-
-- Ownership safety {#CHKARCH-DIAG-OWNERSHIP} — planned: `Borrowed` / `InOut` / `Owned` reference tracking, use-after-move.
-- Immutability {#CHKARCH-DIAG-IMMUTABILITY} — planned: mutation-of-immutable and `Final` enforcement beyond the shipping `Final` checks (qualifiers_final_annotation, qualifiers_final_annotation_2).
-- Structural discipline {#CHKARCH-DIAG-STRUCTURAL} — shipping codes in this range cover NewType, `Literal`, frozen-dataclass and related structural rules.
-- Coercion safety {#CHKARCH-DIAG-COERCION} — planned: implicit numeric / `bytes`↔`str` coercion detection.
-- Optional safety {#CHKARCH-DIAG-OPTIONAL} — narrowing and `Never`/`Optional` rules ship today (e.g. specialtypes_never_2); a dedicated optional-access pass is planned.
-
----
-
 ## Architecture {#CHKARCH-ARCH}
 
 ### High-Level Pipeline {#CHKARCH-ARCH-PIPELINE}
@@ -872,7 +652,6 @@ basilisk/
     basilisk-lsp/          # Language Server Protocol implementation
     basilisk-cli/          # Command-line interface
     basilisk-stubs/        # Stub generation, loading, registry client
-    basilisk-plugin/       # WASM-based plugin host
     basilisk-db/           # Salsa incremental computation database
     basilisk-safety/       # Python package: Borrowed, Owned, InOut annotations
   editors/
@@ -893,7 +672,6 @@ basilisk-db (foundation)
                       <- basilisk-cli (leaf: terminal)
 
 basilisk-stubs (standalone, used by basilisk-resolver)
-basilisk-plugin (standalone, used by basilisk-checker)
 ```
 
 ### Build System {#CHKARCH-ARCH-BUILD}
@@ -952,8 +730,7 @@ checking.
   (`crates/basilisk-checker/src/exports.rs`) over `resolved_module`, resolving
   workspace-tracked imports through `module_exports` and external `.pyi` /
   PEP 561 `py.typed` sources from disk. Granularity is **module-level**: each
-  pipeline is fused into one tracked query per file, matching the
-  `Module-level` granularity row in [CHKARCH-MATRIX]. Editing one file — or the
+  pipeline is fused into one tracked query per file. Editing one file — or the
   configuration, or the search paths — re-executes only the affected queries;
   unrelated files are served from their memos.
 
@@ -975,7 +752,7 @@ edited-but-unsaved stub (correct editor behaviour, but no longer byte-identical
 to disk). Both equalities are asserted directly with an empty registry
 (`crates/basilisk-checker/tests/incremental_tests.rs`
 `checked_file_is_equivalent_to_direct_check` +
-`checked_file_honours_strict_annotations`;
+`checked_file_honours_explicit_rule_severity`;
 `incremental_resolved_tests.rs`
 `resolved_query_equivalent_to_direct_import_pipeline` +
 `resolved_query_applies_import_resolution`), so salsa memoization can never
@@ -1093,205 +870,269 @@ makes *repeat invocations* incremental — and a hit in either is sound by
 construction (salsa via tracked dependencies, the result cache by re-verifying
 every recorded file).
 
-### Performance Targets {#CHKARCH-INCREMENTAL-PERF}
+## Language server and editors {#CHKARCH-LSP}
 
-These are design targets, not yet measured against the salsa path (the benchmark
-harness in [ROADMAP-NEXT-STEPS-PLAN](../plans/ROADMAP-NEXT-STEPS-PLAN.md) is the
-vehicle for validating them); they are not a claim of achieved numbers.
+The shared protocol, commands, configuration, binary resolution, and editor
+boundaries live in [LSPARCH](LSP-ARCHITECTURE-SPEC.md#LSPARCH). Editor-specific
+contracts live in [VSIX](VSIX-SPEC.md#VSIX), [NVIM](NEOVIM-SPEC.md#NVIM), and
+[ZED](ZED-SPEC.md#ZED). This checker spec does not duplicate those inventories.
 
-| Scenario | Target |
-|---|---|
-| Cold start, 100K LOC | < 5 seconds |
-| Cold start, 1M LOC | < 30 seconds |
-| Incremental (single file edit) | < 10ms |
-| Memory, 1M LOC | < 2 GB |
+Compatibility anchors: supported methods {#CHKARCH-LSP-METHODS}; custom commands
+{#CHKARCH-LSP-COMMANDS}; editor integrations {#CHKARCH-EDITORS}.
 
----
+## Command-line interface {#CHKARCH-CLI}
 
-## Language Server Protocol {#CHKARCH-LSP}
+### Commands {#CHKARCH-CLI-COMMANDS}
 
-The LSP server and the CLI are two front-ends over the same engine, so interactive and CI results are always consistent. For the complete LSP specification — features, custom commands, configuration settings, binary resolution, and DAP integration — see **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)**.
+- `basilisk check [paths]` / `basilisk analyze [paths]` — the two scopes of the
+  partition ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)), identical pipeline
+- `basilisk format [paths] [--check]` — the embedded Ruff formatter
+  ([LSPFMT-CLIENTS](LSP-FORMATTING-SPEC.md#LSPFMT-CLIENTS))
+- `basilisk fix [paths] [--unsafe] [--rules ...]`
+- `basilisk adopt|unadopt [paths]`
+- `basilisk lsp [--transport stdio|ws]`
+- `basilisk stubs generate|status` (plus the Pyright-compat `createstub` spelling)
 
-### Supported LSP Methods {#CHKARCH-LSP-METHODS}
+### Output {#CHKARCH-CLI-OUTPUT}
 
-See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES) for the complete specification. Summary:
+`check` and `analyze` support human-readable text and structured JSON. Other
+formats are not part of the current contract.
 
-| Method | Description |
-|---|---|
-| `textDocument/diagnostic` | Push diagnostics (all BSK rules) |
-| `textDocument/hover` | Type information, docstrings, ownership annotations |
-| `textDocument/completion` | Type-aware completions with auto-import |
-| `textDocument/definition` | Go to definition |
-| `textDocument/references` | Find all references |
-| `textDocument/rename` | Symbol rename across workspace |
-| `textDocument/codeAction` | Quick fixes for every diagnostic |
-| `textDocument/signatureHelp` | Parameter hints |
-| `textDocument/inlayHint` | Inferred types, parameter names, ownership |
-| `textDocument/semanticTokens` | Semantic highlighting |
-| `callHierarchy/incomingCalls` | Incoming call hierarchy |
-| `callHierarchy/outgoingCalls` | Outgoing call hierarchy |
-| `typeHierarchy` | Type inheritance navigation |
+#### Scope notice {#CHKARCH-CLI-SCOPE-NOTICE}
 
-### Custom LSP Commands {#CHKARCH-LSP-COMMANDS}
+`check` drops every analyze-scope diagnostic at the edge
+([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)), so on a project that grades non-`pep`
+rules it can report "All checked. No issues found." while none of those rules
+were ever evaluated. A silent clean run is indistinguishable from a clean
+project — the same class of failure as a skipped CI gate reporting success.
 
-See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for the complete specification.
+A `check` run in text format therefore closes with one line naming how many
+rules the configuration selected that this command never runs, and pointing at
+`basilisk analyze`. The notice is a fact about the project, not boilerplate: a
+tree whose configuration selects no analyze-scope rule prints nothing extra,
+and `analyze` — which just ran them — never prints it. Exit codes
+([CHKARCH-CLI-EXITCODES](#CHKARCH-CLI-EXITCODES)) and the JSON contract are
+unchanged; machine consumers see no new field.
 
----
-
-## Editor Integrations {#CHKARCH-EDITORS}
-
-Each editor has a dedicated specification document:
-
-| Editor | Spec | Status |
-|---|---|---|
-| **VS Code** | [`VSIX-SPEC.md`](VSIX-SPEC.md) | Primary integration |
-| **Zed** | [`ZED-SPEC.md`](ZED-SPEC.md) | First-class Zed extension |
-| **Neovim** | [`NEOVIM-SPEC.md`](NEOVIM-SPEC.md) | basilisk.nvim plugin |
-| **Helix** | Built-in LSP support. Language configuration provided. | Config only |
-| **Emacs** | `eglot` / `lsp-mode` configuration. | Config only |
-
-All editors connect to the same `basilisk lsp` binary via stdio; extensions are thin integration layers over the single LSP backend.
-
----
-
-## Command-Line Interface {#CHKARCH-CLI}
-
-### Core Commands {#CHKARCH-CLI-COMMANDS}
-
-```bash
-basilisk check [paths...]         # Type check files/directories
-basilisk check --watch            # Watch mode with incremental rechecks
-basilisk stats [paths...]         # Type coverage report
-basilisk stubs generate <package> # Generate stubs for installed package
-basilisk migrate --from mypy      # Import mypy configuration
-basilisk migrate --from pyright   # Import pyright configuration
-basilisk init                     # Generate starter pyproject.toml config
-```
-
-### Output Formats {#CHKARCH-CLI-OUTPUT}
-
-| Format | Flag | Use Case |
-|---|---|---|
-| Human-readable | Default | Terminal (color, source context, fix suggestions) |
-| JSON | `--output-format json` | Programmatic consumption |
-| SARIF | `--output-format sarif` | GitHub Code Scanning, Azure DevOps |
-| JUnit XML | `--output-format junit` | CI test result dashboards |
-
-### Exit Codes {#CHKARCH-CLI-EXITCODES}
+### Exit codes {#CHKARCH-CLI-EXITCODES}
 
 | Code | Meaning |
 |---|---|
-| 0 | Clean -- no errors |
-| 1 | Type errors found |
-| 2 | Configuration error |
-| 3 | Internal error |
+| 0 | Completed without error diagnostics |
+| 1 | Error diagnostics were found |
+| 2 | Invalid configuration (e.g. a `pep` rule resolved to `disabled`) |
+| 3 | Internal failure |
 
-### CI Integration {#CHKARCH-CLI-CI}
+### CI use {#CHKARCH-CLI-CI}
 
-**GitHub Actions**:
-```yaml
-- uses: MelbourneDeveloper/setup-basilisk@v1
-- run: basilisk check --output-format sarif > results.sarif
-- uses: github/codeql-action/upload-sarif@v3
-  with:
-    sarif_file: results.sarif
-```
-
-**pre-commit**:
-```yaml
-- repo: https://github.com/Nimblesite/Basilisk
-  rev: v0.1.0
-  hooks:
-    - id: basilisk-check
-```
-
----
+CI invokes the same `check` path as local use. Machine consumers should select
+JSON and branch on the documented exit code; no CI-only analysis mode exists.
 
 ## Stub System {#CHKARCH-STUBS}
 
-### Auto-Stub Generation {#CHKARCH-STUBS-AUTOGEN}
+### Auto-stub generation {#CHKARCH-STUBS-AUTOGEN}
 
-Stub generation engine with three modes:
+`basilisk stubs generate` supports runtime, AST, and hybrid discovery. Runtime mode imports
+the target package; AST mode does not execute it; hybrid mode combines both. Generated files
+are written under `.basilisk/stubs/`, at the head of the stub search path. The command and
+provenance contracts live in [CHECKER-STUB-RESOLUTION-SPEC.md](CHECKER-STUB-RESOLUTION-SPEC.md).
 
-1. **Runtime introspection**: import the package, inspect objects, generate `.pyi`
-2. **AST-based inference**: parse package source, infer signatures without importing
-3. **Hybrid**: both, preferring runtime data with AST fallback
+### Stub quality tiers {#CHKARCH-STUBS-TIERS}
 
-### Stub Quality Tiers {#CHKARCH-STUBS-TIERS}
+`StubTier` distinguishes trusted hand-written stubs, reviewed/generated stubs, and
+best-effort inference. The generated model and diagnostic behavior are canonical in the
+stub-resolution spec and `basilisk-stubs`.
 
-| Tier | Source | Trust Level | Diagnostic Behavior |
-|---|---|---|---|
-| Tier 1 | Hand-written, verified, typeshed | High | No warnings |
-| Tier 2 | Auto-generated, community reviewed | Medium | Info notes on potential inaccuracies |
-| Tier 3 | Best-effort inference | Low | Warnings that types may be incomplete |
+### typeshed compatibility {#CHKARCH-STUBS-TYPESHED}
 
-### typeshed Compatibility {#CHKARCH-STUBS-TYPESHED}
-
-Basilisk bundles typeshed as the Tier 1 baseline for standard-library stubs
-(import-resolution step 3 — [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561)).
-Per the typing spec, "type checkers SHOULD provide an option for users to
-provide a path to a directory containing a custom or modified version of
-typeshed; if this option is provided, type checkers SHOULD use this as the
-canonical source for standard-library types in this step"
-([import resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)).
-Basilisk therefore honours `typeshed-path` to replace the bundled stdlib
-typeshed wholesale as the canonical stdlib source, distinct from `stub-paths`
-(resolution step 1), which *prepends* additional `.pyi` stub directories. The
-canonical resolution order and override semantics live in
-[STUBRES-CUSTOM-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED).
+Pinned typing step 3 says a configured custom typeshed is the "canonical source"
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
+Accordingly, `typeshed-path` is the sole step-3 tree when set. Otherwise Basilisk
+resolves the pinned `typeshed-commit` (unset = the bundled commit) from the
+local store or the bundled stdlib ZIP — always offline, never a download.
+Step-3 sources never mix and a missing pin never substitutes another source.
+`typeshed-store-path` only relocates the local store, while `stub-paths`
+remains the separate step-1 override
+([STUBRES-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)).
 
 ---
 
-## Plugin and Extension System {#CHKARCH-PLUGINS}
+## Plugin host (planned) {#CHKARCH-PLUGINS}
 
-### Architecture {#CHKARCH-PLUGINS-ARCH}
+No plugin crate ships today. A WASM host remains future work rather than a placeholder runtime.
 
-**WASM-based** for security and portability: plugins compile to WebAssembly, run sandboxed (no filesystem, no network), receive AST nodes and type information, and return diagnostics and code actions.
+### Sandbox target {#CHKARCH-PLUGINS-ARCH}
 
-### Extension Points {#CHKARCH-PLUGINS-EXTENSIONS}
+The planned host runs WASM without ambient filesystem or network access.
 
-| Extension Point | Example |
-|---|---|
-| Custom diagnostic rules | Flag Django `QuerySet` misuse |
-| Custom type providers | Infer SQLAlchemy model field types |
-| Custom code actions | Generate Pydantic validator stubs |
-| Custom type narrowing | Django `get_object_or_404` narrows to model type |
+### Extension target {#CHKARCH-PLUGINS-EXTENSIONS}
 
-### Distribution {#CHKARCH-PLUGINS-DIST}
+The first planned extension point is third-party diagnostics over explicit AST/type inputs.
 
-Plugins declared in `pyproject.toml`:
-```toml
-[tool.basilisk.plugins]
-django = "basilisk-plugin-django >= 0.1"
-pydantic = "basilisk-plugin-pydantic >= 0.1"
-```
+### Distribution target {#CHKARCH-PLUGINS-DIST}
+
+Configuration, package format, and compatibility policy are unresolved and remain tracked in
+the advanced-features plan.
 
 ---
 
 ## Configuration {#CHKARCH-CONFIG}
 
+### Configuration Model {#CHKARCH-CONFIG-MODEL}
+
+The design source is [`models/configuration.td`](../../models/configuration.td).
+A configuration is two flat maps and nothing else:
+
+- `[tool.basilisk.rules]` — explicit per-rule entries:
+  `"<code>" = "error" | "warning" | "info" | "disabled"`.
+- `[tool.basilisk.rule-tags]` — explicit group entries:
+  `"<tag>" = "<severity>"` — one written line that grades every rule carrying
+  the tag (e.g. `"basilisk" = "error"` turns every house rule on). A tag entry
+  is config in the file, never an implicit switch.
+
+**Resolution** — per rule, per checked file, one walk, first decision wins:
+
+1. Walk from the file's folder to the root. The **nearest** `[tool.basilisk]`
+   table that decides the rule wins outright.
+2. Within a table, a per-rule entry beats tag entries; among matching tag
+   entries the **strictest** severity wins
+   (`error` > `warning` > `info` > `disabled`).
+3. No table decides the rule: `pep`-tagged rules run at `error`
+   ([CHKARCH-COMMANDS](#CHKARCH-COMMANDS)); every other rule is disabled.
+
+That is the whole model. There are no default severities beyond the check
+scope's `error`, no inherited state, no glob path patterns, no per-file or
+per-module exceptions, no precedence scores, and no merge intents. Scoping a
+rule differently for part of the tree means putting a config file in that
+folder. A missing table and an empty table behave identically — PEP rules at
+`error`, nothing else runs; the only thing that distinguishes them is the
+LSP's one-time seed
+([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
+
+`disabled` never applies to a `pep`-tagged rule: any configuration that
+resolves a PEP rule to `disabled` — by rule entry or tag entry — is invalid
+and fails config loading. Line-level `# type: ignore` and `exclude` remain the
+escape hatches ([CHKARCH-STRICTNESS-SUPPRESSION](#CHKARCH-STRICTNESS-SUPPRESSION),
+[CHKARCH-CONFIG-EXCLUDE](#CHKARCH-CONFIG-EXCLUDE)).
+
+Rule codes carry no severity class (`BSK-nnnn`, or a conformance snake_case
+name — [CHKARCH-DIAG-CODES](#CHKARCH-DIAG-CODES)); only entries carry severity.
+
 ### Configuration File {#CHKARCH-CONFIG-FILE}
 
-All configuration lives in `pyproject.toml`:
+`pyproject.toml` under `[tool.basilisk]` is the **single** Basilisk-native
+configuration source and the seeding target for new projects
+([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
+There is no other Basilisk config format: a legacy root-level `basilisk.json`
+is **never read or written**
+([CONFIGEDITOR-SOURCES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES)).
+For drop-in migration, the **analysis-environment tier only** (import
+resolution, stub search, typeshed activation — never rule severities) also
+accepts pyright-compatible spellings: a root `pyrightconfig.json`, a
+`[tool.pyright]` fallback table, and camelCase key aliases (`pythonVersion`,
+`extraPaths`, `typeshedPath`). Note that pyright's stub-directory key is the
+**singular** `stubPath` holding one path string, not a plural array; both it
+and Basilisk's own `stub-paths`/`stubPaths` list are accepted, with the list
+winning when both appear. Priority is specified in
+[ANALYSIS-CONFIG-PRI](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CONFIG-PRI).
+How the file is found and how multiple ancestor tables combine is specified in
+[Configuration Discovery](#CHKARCH-CONFIG-DISCOVERY).
+
+Project TOML example:
 
 ```toml
 [tool.basilisk]
-python-version = "3.12"
-python-platform = "All"          # Default: check for all platforms
+python-platform = "All"          # Explicit cross-platform analysis
 stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
-# typeshed-path = "typeshed-x"   # resolution step 3: replace the bundled stdlib typeshed
+# An unset pin IS the bundled commit; `basilisk typeshed download` updates it:
+# typeshed-commit = "<full commit SHA>"  # optional explicit immutable source
+# typeshed-store-path = ".cache/typeshed"  # optional: relocate the local store
+# typeshed-path = "typeshed-x"   # resolution step 3: your sole custom stdlib tree
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]
 
-[tool.basilisk.mojo-safety]
-ownership = true                 # Enable ownership tracking (default: true)
-immutability = true              # Parameters immutable by default (default: true)
-no-implicit-coercion = true      # Flag implicit type coercion (default: true)
+[tool.basilisk.rules]
+"imports_unresolved" = "warning"    # a PEP rule graded down — never disabled
+"BSK-0050" = "error"               # one house rule promoted above its tag entry
 
-[tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["returns_compatibility"]
-rules."imports_unresolved" = "warning"
+[tool.basilisk.rule-tags]
+"basilisk" = "error"                # every house rule on — strict by default
 ```
+
+Scoping a rule differently for part of the tree means placing another
+`pyproject.toml` with a `[tool.basilisk]` table in that folder; the nearest
+deciding table wins per rule ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)).
+
+### Configuration Discovery {#CHKARCH-CONFIG-DISCOVERY}
+
+Rule configuration is resolved **per checked file** through one shared routine
+(`basilisk_config::load_basilisk_config`), used identically by `basilisk check`,
+`basilisk fix`, `basilisk adopt`, and the LSP (GitHub #311). The result is
+independent of argument order, path spelling, and cwd — for the same file in
+the same project, every surface resolves the identical **rule** configuration.
+(Which keys are per-file versus per-project is scoped under **Two tiers**
+below.)
+
+**Walk.** Starting from the file's own directory, every ancestor directory up
+to the filesystem root is visited. Each directory contributes at most its
+`pyproject.toml` `[tool.basilisk]` table. A `pyproject.toml` **without**
+`[tool.basilisk]` contributes nothing and does not stop the walk (Ruff's
+`[tool.ruff]` semantics).
+
+**Rule resolution.** Rules are never merged: the nearest table that decides a
+rule — per-rule entry first, then tag entries — wins outright
+([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)).
+
+**Scalar merge.** Non-rule fields merge additively, nearest directory winning
+per key: `stub-paths` appends (deduplicated); remaining scalar/list fields
+keep the ancestor's value unless the child explicitly sets one; the nearest
+config's directory becomes the merged config's `project_root`, anchoring
+`include`/`exclude` globs.
+
+**Two tiers.** The per-file ancestor walk above governs the **rule tier**:
+rule severities (`rules`, `rule-tags`) and `python-version`/`python-platform`
+as consumed by version-gated rules. `include`/`exclude` live in the same
+`[tool.basilisk]` tables but are **discovery-time** keys: each invocation
+resolves them once — from the first checked path's ancestor chain on the
+CLI, per workspace root in the LSP — because they decide *which files are
+collected* before any per-file rule resolution exists
+([CHKARCH-CONFIG-EXCLUDE](#CHKARCH-CONFIG-EXCLUDE)). The
+**analysis-environment tier** — `extra-paths`, `stub-paths` as import search
+roots, every `typeshed-*` key, and `python-version` as the stub-resolution
+target — is instead resolved **once per project root** by the workspace
+loader (which also honors the pyright-compatible sources,
+[CHKARCH-CONFIG-FILE](#CHKARCH-CONFIG-FILE)) and applied uniformly to the
+whole workspace by `basilisk check`, the MCP server, and LSP initialization
+([ANALYSIS-CONFIG-PRI](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CONFIG-PRI)).
+A nested `[tool.basilisk]` table therefore cannot re-point the import
+environment for a subtree — only the root decides it. One deliberate
+exception: the LSP configuration editor and its config-file watcher read the
+typeshed keys back through the ancestor-walk loader, so editor changes
+round-trip through the same file the editor writes
+([CONFIGEDITOR-SOURCES](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES)).
+
+**Surfaces.**
+
+- **CLI `check`/`fix`**: each collected file is checked with the config
+  discovered from its own directory (memoized per directory —
+  `resolve_dir_configs`). The first path argument only anchors project-level
+  concerns (include expansion, version detection, cache location); the check
+  cache fingerprints every directory's config so a child config edit
+  invalidates cached results.
+- **CLI `adopt`/`unadopt`**: the config root anchors at the nearest ancestor
+  directory holding a config table (`basilisk_config::discover_config_dir`),
+  so `adopt` writes exactly where `check` discovers.
+- **LSP**: per-file config is the owning workspace root's **in-memory** config
+  merged with the ancestor chain discovered strictly *below* that root
+  (`WorkspaceIndex::config_for_file` / `load_basilisk_config_below`, memoized
+  per directory; the shared refresh tail the server runs on every
+  configuration change invalidates the memo). The root's own config file is
+  never re-read from disk here: the in-memory root config already reflects it
+  — or, authoritatively, an applied editor-UI change or an open, unsaved
+  config buffer ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)).
+  A workspace folder opened *inside* a project discovers the project's config
+  the same way (its root config is loaded through the full ancestor walk at
+  index build/reload).
 
 ### Include Semantics {#CHKARCH-CONFIG-INCLUDE}
 
@@ -1309,8 +1150,8 @@ diagnostics even when opened, like an `exclude`d file.
 
 ### Exclude Semantics {#CHKARCH-CONFIG-EXCLUDE}
 
-`exclude` (and `per-path-overrides` keys) use **gitignore-style globs**, matched
-against the path relative to the workspace root:
+`exclude` uses **gitignore-style globs**, matched against the path relative to
+the workspace root:
 
 - a bare name with no `/` matches that segment at **any** depth — `build` excludes
   every `build` dir, `*.pb.py` every generated file;
@@ -1319,10 +1160,26 @@ against the path relative to the workspace root:
 - an anchored pattern (containing `/`) matches the full path or any ancestor
   directory, so `vendor/**` or `src/generated` also excludes everything beneath it.
 
-A baseline set of vendored/cache directories is **always** excluded
-(`node_modules`, `site-packages`, `.venv`, `__pycache__`, `build`, `dist`, the
-extension's `bundled` / `_vendored` trees); user `exclude` entries extend it.
-Hidden directories (`.`-prefixed) are always skipped. The single canonical matcher
+When `exclude` is **unset**, a default set of vendored/cache directories is
+excluded (`basilisk_config::DEFAULT_EXCLUDES`: `node_modules`, `site-packages`,
+`.venv`, `__pycache__`, `build`, `dist`, the extension's `bundled` /
+`_vendored` trees, and friends). Setting `exclude` **replaces** those defaults
+entirely — re-add any default entries explicitly if they are still needed.
+Two **structural** skips sit outside `exclude` entirely and no configuration can
+switch them off, because both surfaces must agree on them file-for-file:
+
+- hidden directories (`.`-prefixed); and
+- **virtualenv roots**, identified by [PEP 405](https://peps.python.org/pep-0405/#specification)'s
+  `pyvenv.cfg` marker (`basilisk_config::is_virtualenv_dir`) rather than by
+  directory name, so `env/` and `.direnv/python-3.13/` are pruned exactly like
+  `.venv/`. A venv holds installed third-party packages — never the user's code.
+  Without this, a project that sets any custom `exclude` loses the
+  `venv`/`site-packages` default entries and `basilisk fix` **rewrites installed
+  packages** (GitHub #341). The skip prunes *traversal into* a venv; an explicit
+  CLI path pointing inside one is still checked, matching the walk's depth-0 root
+  exemption.
+
+The single canonical matcher
 `basilisk_config::path_matches_pattern` is shared by every entry point so they
 exclude identically:
 
@@ -1332,16 +1189,11 @@ exclude identically:
   `analyse_and_resolve`) — a vendored file *opened* or *edited* is parsed for
   navigation but publishes **no** diagnostics, matching the bulk scan.
 
-### Migration from Existing Tools {#CHKARCH-CONFIG-MIGRATION}
+### Migration from existing tools (planned) {#CHKARCH-CONFIG-MIGRATION}
 
-```bash
-basilisk migrate --from pyright   # Reads pyrightconfig.json -> pyproject.toml
-basilisk migrate --from mypy      # Reads mypy.ini / setup.cfg -> pyproject.toml
-```
-
-Semantic mapping:
-- Pyright `strict` / mypy `--strict` -> Basilisk with house-style rules enabled in configuration (require-annotation, explicit-`Any`, …), Mojo safety disabled
-- Pyright `standard` -> Basilisk's PEP-only default plus selected house rules, softened in `per-path-overrides` where needed
+No `basilisk migrate` command ships. A future importer must report every mapped and unmapped
+setting and must not claim semantic equivalence between another checker's modes and Basilisk
+rule configuration.
 
 ---
 
@@ -1352,15 +1204,15 @@ Semantic mapping:
 Diagnostics follow the rustc format:
 
 ```
-error[BSK-E0001]: Missing parameter type annotation
+error[BSK-0001]: Missing parameter type annotation
   --> src/utils.py:14:5
    |
 14 | def process(data):
    |             ^^^^ parameter `data` has no type annotation
    |
    = help: Add a type annotation: `data: <type>`
-   = note: In Basilisk, all function parameters require explicit types
-   = see: https://www.basilisk-python.dev/errors/BSK-E0001
+   = note: this project's configuration enables BSK-0001, which requires explicit parameter types
+   = see: https://www.basilisk-python.dev/errors/BSK-0001
 ```
 
 ### Quick Fixes {#CHKARCH-DIAGEXP-QUICKFIXES}
@@ -1369,8 +1221,8 @@ Every error has at least one associated code action:
 
 | Error | Quick Fix |
 |---|---|
-| BSK-E0001 (missing param type) | Insert `: <inferred_type>` |
-| BSK-E0002 (missing return type) | Insert `-> <inferred_type>` |
+| BSK-0001 (missing param type) | Insert `: Any` (the rule only fires where no type is inferable, [TYPEINF-EXCEEDS-REQUIRED](CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-EXCEEDS-REQUIRED)) |
+| BSK-0002 (missing return type) | Insert `-> Any` (same rationale) |
 | enums_behaviors (mutation of immutable param) | Add `InOut` annotation |
 | dataclasses_order (implicit coercion) | Wrap in explicit conversion |
 
@@ -1380,9 +1232,21 @@ Every error has at least one associated code action:
 
 ### Parallelism {#CHKARCH-PERF-PARALLEL}
 
-- File-level parallelism using Rayon (work-stealing)
-- Module dependency graph partitioned into independent subgraphs
-- Cross-module dependencies resolved first in dependency-ordered pass
+Analysis is single-threaded, by design and in fact. `check` / `analyze` / `fix` /
+`adopt` all run on one dedicated large-stack thread (`run_with_analysis_stack`,
+[LSPARCH-ARCH-STACK]) because the AST walk recurses deeply enough to overflow the
+default main-thread stack. No Basilisk crate calls Rayon — `rayon` reaches the
+lockfile only as a transitive dependency of `salsa` and `ruff_db`.
+
+Concurrency lives in the LSP server instead, on Tokio: request multiplexing, plus
+`spawn_blocking` for the genuinely blocking work (typeshed download, debug-adapter
+accept loop, process enumeration). What keeps an edit sub-10ms is Salsa's
+incremental invalidation ([CHKARCH-INCREMENTAL]), not thread count.
+
+File-level parallelism stays a future option. It is not implemented, and no
+benchmark number in this repository depends on it — so a change that adds it must
+still clear the benchmark ratchet on its own merits
+([CHKARCH-TESTING-BENCH-RATCHET]).
 
 ### Memory {#CHKARCH-PERF-MEMORY}
 
@@ -1394,7 +1258,13 @@ Every error has at least one associated code action:
 
 The suite that exists today is `benchmarks/` — single-construct typing-spec
 stress fixtures timed cold across Basilisk, Pyright, mypy, ty, Pyrefly, and
-zuban by `benchmarks/run.sh` ([CHKARCH-TESTING-BENCH-RATCHET]).
+zuban by `benchmarks/run.sh`. Each run does a full `cargo clean` + fresh
+`--release` build of basilisk, pulls the LATEST official release of every
+competitor, times all fixtures, and writes the measured numbers to the
+per-machine status CSV **immediately and unconditionally** — the write is never
+gated. A **separate** read-only regression gate then compares those numbers
+against the committed baseline and fails CI on a slip beyond a small noise
+tolerance. Full mechanism: [CHKARCH-TESTING-BENCH-RATCHET].
 
 **Planned, not yet built:** a real-world-codebase suite — **PyTorch** (~600K
 LOC), **Django** (~250K LOC), **FastAPI** (~30K LOC), **Python standard
@@ -1413,65 +1283,99 @@ a design target, not a claim of existing measurement.
 | Golden file tests | Expected diagnostic output | Diagnostic regression |
 | Fuzzing | `cargo-fuzz` | Crash resistance, soundness |
 | Property tests | `proptest` crate | Type system invariants |
-| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Performance tracking + regression gate (fails if basilisk regresses >25% vs the committed per-machine `benchmarks/status/<machine>.csv`) |
+| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Performance tracking (results written to `benchmarks/status/<machine>.csv` immediately, every run) + zero-tolerance regression gate that fails if basilisk gets slower than the **committed** baseline on any fixture ([CHKARCH-TESTING-BENCH-RATCHET]) |
 
 ### PEP Conformance Scoring {#CHKARCH-CONFORMANCE}
 
-The conformance score is computed by the **real `python/typing` conformance
-calculator**, not a Basilisk reimplementation — reproducible with the same tooling
-the reference checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
+The conformance score is produced by **RUNNING the real `python/typing`
+conformance harness** — the suite's own `conformance/src/main.py` driving its
+built-in `BasiliskTypeChecker` — against the compiled binary on **every run**,
+never a Basilisk reimplementation. It is the exact tooling the reference checkers
+(pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with. **A build in which
+that official check did not run against a freshly cloned suite is a BUILD FAILURE.**
+
+**The mechanism — every CI run, in order, no step skippable or the build dies:**
+
+1. **Freshly download** the tests **and** the harness/calculator from
+   `python/typing@main`'s **latest** commit — `git clone --depth 1
+   https://github.com/python/typing`. No cache, no committed fixtures, no vendored
+   calculator. (So the moment upstream merges a new rule/fixture, the very next run
+   grades against it — and if we regress, CI tanks.)
+2. **Freshly build a CLEAN release** `basilisk` binary from THIS checkout's source
+   — `cargo build --release`, un-instrumented, byte-for-byte what ships. Never the
+   PyPI wheel (a prior version), never an instrumented build.
+3. **Run the suite's OWN `conformance/src/main.py --only-run basilisk`** against
+   that binary (pointed at it via `BASILISK_BIN`), and **fail HARD on ANY false
+   positive or ANY missed required error** — the gate demands 100 % pass / 0 FP
+   (`coverage-thresholds.json`). One stray diagnostic tanks the build.
+4. **Regenerate `conformance/conformance_status.csv`** (and the website report)
+   from the harness's OWN `results/basilisk/*.toml` — the committed scoreboard is
+   always a product of the live run, never hand-authored.
 
 > ⛔️ **DISABLING, DELETING, OR UNREGISTERING ANY CONFORMANCE RULE IS FORBIDDEN.**
-> The binary is scored in its **full, default configuration with EVERY rule
-> enabled** — no `basilisk.json`, no per-rule override, no "spec-conformance mode",
+> The binary is scored in its **full default configuration with EVERY core
+> PEP/conformance rule enabled** — no Basilisk config (any format; the legacy
+> `basilisk.json` is no longer read), no per-rule override, no "spec-conformance mode",
 > no skipped fixtures, no deleting rule source (`src/rules/*.rs`), no removing rules
-> from `all_rules()`. `score.py` deletes any `basilisk.json` before scoring, but
+> from `all_rules()`. The binary is scored over a **fresh `python/typing` clone**
+> whose tree holds no Basilisk config of any format, so nothing of ours can silence a rule;
 > deleting the rules themselves is the **same crime by another route** and equally
 > forbidden — as is hand-editing `conformance/conformance_status.csv` or loosening
 > the `coverage-thresholds.json` gate (`threshold` / `max_false_positives`). A
 > strict default firing on valid code is a **real conformance gap to FIX in the
 > checker**, never to hide. Gaming the number is a punishable offence.
 
-- **Scorer**: [`conformance/score.py`](../../conformance/score.py) tracks the
-  **latest [`python/typing@main`](https://github.com/python/typing/tree/main/conformance)** —
-  we always shoot for the current spec suite, not a frozen commit. On every run it
-  resolves the live `main` tip, refreshes the vendored
-  [`conformance/upstream_main.py`](../../conformance/upstream_main.py) calculator
-  (a byte-identical copy of `python/typing`'s `conformance/src/main.py`) and the
-  `# E`-annotated fixtures when `main` has moved, and **records the exact graded
-  commit hash + the calculator's sha256** in
-  [`website/src/_data/conformance_report.json`](../../website/src/_data/conformance_report.json)
-  — so the version every published number corresponds to is always pinned *by hash*
-  on the website and re-verified there at build time. It then calls upstream's own
-  `get_expected_errors` + `diff_expected_errors` functions **unmodified**. When
-  `main` is unreachable the cached fixtures are scored and the result is flagged
-  `stale`. The only Basilisk-specific code is a checker *adapter* that runs the real
-  `basilisk` binary and turns its JSON output into the `{line: [errors]}` mapping the
-  upstream algorithm consumes — exactly the role of upstream's per-checker adapters
-  in `type_checker.py`.
+- **Runner — the real harness, nothing else**:
+  [`conformance/run_conformance.py`](../../conformance/run_conformance.py) is the
+  ONE conformance path. Every run it clones the
+  **latest [`python/typing@main`](https://github.com/python/typing/tree/main/conformance)**
+  FRESH (we shoot for the current spec suite, not a frozen commit) and runs the
+  suite's **OWN unmodified `conformance/src/main.py --only-run basilisk`** against
+  the real compiled binary (via `BASILISK_BIN`). The suite already ships the
+  official Basilisk adapter — `BasiliskTypeChecker` in
+  [`conformance/src/type_checker.py`](https://github.com/python/typing/blob/main/conformance/src/type_checker.py) —
+  so **nothing of ours is injected, vendored, adapted, or reimplemented**. The
+  harness writes `results/basilisk/*.toml`; every `Pass`/`Fail` verdict and every
+  `errors_diff` is the harness's OWN, produced by the same code that grades pyright,
+  mypy, pyrefly, ty, zuban and pycroscope. From those real results the runner only
+  *reports*: it writes `conformance/conformance_status.csv` and **records the exact
+  graded commit hash** in
+  [`website/src/_data/conformance_report.json`](../../website/src/_data/conformance_report.json),
+  so every published number is pinned *by hash* on the website. There is **NO
+  vendored calculator and NO cached-fixtures fallback** — a build in which the real
+  harness could not be cloned and run is a **BUILD FAILURE**, by design. (The only
+  auxiliary number not in the toml, `caught` = required errors matched, is taken
+  from upstream's own `get_expected_errors` imported live from the fresh clone — the
+  official function on the official tests, never a copy.)
 - **Pass rule** (upstream's, verbatim): a file passes iff the upstream
   `errors_diff` is empty — every `# E` line gets an error, every `# E[tag]`
   group is satisfied, and **no error lands on a line the suite does not mark**.
   `conformance_automated = "Fail" if errors_diff.strip() else "Pass"`.
-- **Nothing excluded.** The scorer counts **every** diagnostic — errors **and**
+- **Nothing excluded.** The harness counts **every** diagnostic — errors **and**
   warnings (strictest grading, as pyright is graded); no looser mode, no opt-out.
-  The binary runs with **every rule enabled** in its default mode; `score.py`
-  deletes any stale `basilisk.json` before scoring ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
+  The binary runs with **every core PEP/conformance rule enabled** in its default
+  configuration over a fresh `python/typing` clone whose tree holds no
+  Basilisk config of any format, so nothing of ours can silence a conformance rule. Opt-in
+  Basilisk-specific rules remain off by the same ordinary default
+  ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 - **Gate**: `make test` (via [`scripts/test-rust.sh`](../../scripts/test-rust.sh))
-  builds the `basilisk` binary, then runs `python3 conformance/score.py --gate`
-  on it — there is **no Rust conformance test**; the whole conformance system is
-  the two committed Python files plus the git-ignored downloaded fixtures under
-  `conformance/tests/`. The pass-percentage floor and false-positive ceiling live
-  in `coverage-thresholds.json` (`conformance.threshold`,
+  builds the `basilisk` binary, then runs
+  `python3 conformance/run_conformance.py --gate` on it — which runs the REAL
+  harness and delegates the 100 %-pass / 0-false-positive check to
+  [`conformance/assert_wheel_conformance.py`](../../conformance/assert_wheel_conformance.py)
+  over the harness's OWN `results/basilisk/*.toml`. There is **no Rust conformance
+  test** and **no in-repo scorer**: the score is the real suite's own verdict on the
+  compiled binary. The pass-percentage floor and false-positive ceiling live in
+  `coverage-thresholds.json` (`conformance.threshold`,
   `conformance.max_false_positives`); the former ratchets **up**, the latter
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
 - **Current score** — measured against `python/typing@main` at the exact graded
   commit recorded in `conformance_report.json`, currently
-  [`<!--g:short-->f4f2952<!--/g:short-->`](https://github.com/python/typing/tree/f4f2952f3ac94d7af819c5c71b60a50a100370e0/conformance):
+  [`<!--g:short-->39164cd<!--/g:short-->`](https://github.com/python/typing/tree/39164cd2c5b4e2608cb8b5d2fc8af9ae6f0c0fe8/conformance):
   **<!--g:pass-->141<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->100.0%<!--/g:score-->**, **<!--g:fp-->0<!--/g:fp--> false positives**, **<!--g:missed-->0<!--/g:missed--> missed required errors**, with
   **<!--g:caught-->970<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
-  PEP conformance set — and `score.py` deletes any `basilisk.json` first so nothing
-  can silence a rule; Basilisk's opt-in house-style rules never run during scoring,
+  PEP conformance set — over a fresh `python/typing` clone whose tree holds no
+  Basilisk config of any format, so nothing can silence a rule; Basilisk's opt-in house-style rules never run during scoring,
   so they can neither pad nor sink the number. The gate
   ratchets the pass-percentage **up** and the false-positive ceiling **down**
   (`coverage-thresholds.json` → `conformance.threshold` /
@@ -1486,10 +1390,11 @@ the reference checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are grade
 There is **no** conformance mode, and there never will be. The scorer runs the binary
 in exactly the configuration a user gets out of the box — the **default config, which
 is the pure PEP conformance set** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY))
-— with no `basilisk.json`, no per-rule override, and no special scoring path. Basilisk's
-opinionated *house-style* rules (require-annotations `BSK-E0001`/`BSK-E0002`/`BSK-E0004`,
-require-`@override` `BSK-E0025`, redundant-annotation `BSK-W0050`, the explicit-`Any`
-nudge `BSK-W0014`) are **opt-in and off by default**, so they never run during scoring
+— with no Basilisk config of any format (the legacy `basilisk.json` is no longer
+read), no per-rule override, and no special scoring path. Basilisk's
+opinionated *house-style* rules (require-annotations `BSK-0001`/`BSK-0002`/`BSK-0004`,
+require-`@override` `BSK-0025`, redundant-annotation `BSK-0050`, the explicit-`Any`
+nudge `BSK-0014`) are **opt-in and off by default**, so they never run during scoring
 and can neither pad nor sink the number. The figure is the genuine out-of-the-box
 conformance result — currently <!--g:score-->100.0%<!--/g:score-->. Any shortfall would be a real
 checker bug to fix (a missing spec feature, or a false positive from an over-strict
@@ -1500,12 +1405,14 @@ is forbidden** — as is hand-editing `conformance_status.csv` or loosening the
 `coverage-thresholds.json` gate (`threshold` / `max_false_positives`) to match a faked
 run. This has been attempted twice, back when the house rules still ran by default and
 counted toward the score. First, a revision wrote a `basilisk.json` that turned six
-rules off before scoring and reported a **fake 100%**; that was removed, and `score.py`
-now *deletes* any `basilisk.json` from the fixtures directory before scoring
-(`purge_rule_config`). Second — when config-disabling was blocked — a revision tried to
+rules off before scoring and reported a **fake 100%**; that was removed, and the
+scorer now runs the binary over a **fresh `python/typing` clone** whose tree contains
+no Basilisk config of any format (the legacy `basilisk.json` is no longer read at
+all), so no config can silence a rule. Second — when config-disabling
+was blocked — a revision tried to
 *delete the offending rule source files outright* and unregister them from
 `all_rules()`, then re-report a **fake 100%**: the same lie by another route. **Deleting
-a rule to dodge the `basilisk.json` guard is the identical offence.**
+a rule to dodge the config guard is the identical offence.**
 
 The path to 100% is to make the checker **correct**, never to silence a rule at score
 time: implement the spec features it still misses, and teach its conformance rules to
@@ -1524,26 +1431,82 @@ Mutation testing proves the test suite actually asserts behaviour. Scope only ev
   like `assignment_compatibility`); omitting `fns` scopes the whole file. Adding
   these tests is the only way to widen scope.
 - **Baseline is ratcheted.** `mutation_testing/mutation_scores.json` is the committed
-  baseline; `mutation_testing/mutants_report.py` fails the build when the **viable
-  mutant pool shrinks**, `caught` drops, `missed`/`timeout` rises, or `kill_rate`
-  drops. (`unviable` mutants don't compile and are excluded.) Both `make
-  mutation-test` and the CI shard merge enforce the same function.
+  baseline; `mutation_testing/mutants_report.py::regression_messages` fails the build
+  when `kill_rate` drops below the baseline or the absolute floor, when `detected`
+  (`caught` + `timeout`) drops **while the viable pool did not grow**, or when
+  `timeout` rises. (`unviable` mutants don't compile and are excluded.) Absolute
+  `missed` is deliberately *not* a signal: widening scope mutates more code, so a
+  larger raw `missed` against a smaller-pool baseline is expected — `kill_rate` is
+  the size-independent guard. Both `make mutation-test` and the CI shard merge
+  enforce the same function.
+- **A timeout may never rise.** A `timeout` is credited as a kill (the PIT/Stryker
+  convention: a terminating suite made non-terminating *has* been detected). That
+  credit is only honest while timeouts come from hung code rather than slowness —
+  and the mutants that time out are structurally the likely *survivors*, since a
+  killed mutant exits at the first failing test binary while an uncaught one runs
+  the whole suite. So a rise in `timeout` is itself a build failure: it means
+  mutants were credited as killed without being evaluated. Fix the budget or the
+  suite's speed ([`.cargo/mutants.toml`](../../.cargo/mutants.toml)); never absorb it.
 - **Direction.** End state is the full workspace under mutation
   (`make mutation-test ALL=1`); until then each checker-logic PR leaves the viable
   pool the same size or larger.
 
 ### Benchmark Non-Regression {#CHKARCH-TESTING-BENCH-RATCHET}
 
-Performance and conformance ratchet **together** — neither traded for the other:
+Performance and conformance ratchet **together** — neither traded for the other.
+`make bench` (`benchmarks/run.sh`) runs the fixture suite and enforces the
+performance gate. Two responsibilities are deliberately **DECOUPLED**, so one can
+never suppress the other (`benchmarks/summarize.py`):
 
-- `make bench` (`benchmarks/run.sh`) fails when basilisk regresses more than
-  `BENCH_REGRESS_PCT` (default 25%) on any fixture vs the committed per-machine
-  baseline `benchmarks/status/<machine>.csv`.
+1. **WRITE — unconditional and immediate.** Every measured number is written
+   straight to the per-machine status CSV `benchmarks/status/<machine>.csv` the
+   instant it exists: `summarize.py` runs in `incremental` mode after **each**
+   fixture (rewriting the CSV from all results so far) and again in `final` mode
+   at the end. There is **no gate on the write, no branch, no "left unchanged"
+   path** — the file ALWAYS reflects exactly what this build just measured. A run
+   that measured a number but did not record it is a lie about the build's
+   performance, and the whole point of the suite is to KNOW the moment a number
+   slips. So the write happens regardless of what the gate later decides
+   (atomic tmp + `os.replace`, so a kill mid-write never tears the file).
+
+2. **GATE — read-only, CI pass/fail, separate judgment.** In `final` mode, AFTER
+   the numbers are on disk, the run's basilisk times are compared against the
+   **COMMITTED** baseline — the status CSV read from git at `BENCH_BASELINE_REF`
+   (default `HEAD`) via `git show`, **never the working copy the run just
+   overwrote**, so a slower run can never launder its regression into the
+   baseline. Any backwards step on any fixture exits 3 →
+   CI FAILURE. The gate only READS; it never edits the file. The committed
+   baseline advances only when a run is committed, so it still ratchets toward
+   faster — while the live file never hides a slip.
+
+- **Fresh binary, every run.** `run.sh` ALWAYS does a full `cargo clean` + a
+  from-scratch `cargo build --release --bin basilisk` before timing a single
+  fixture. A number is only honest if it came from a from-scratch optimized build
+  of the exact tree under test — never a stale or incrementally-linked binary. The
+  `# generated` timestamp and the basilisk version recorded in the CSV header are
+  captured after this build, so the header proves the numbers came from it.
+- **Latest competitors, every run.** Before discovery/timing, `run.sh` upgrades
+  each officially-recognized checker (pyright, mypy, ty, pyrefly, zuban — only
+  those tracked by the `python/typing` conformance suite; never unofficial tools)
+  to its newest official release via `pip install --upgrade` (best-effort per
+  tool, loud warning on failure). Competitor columns therefore always reflect
+  current upstream, never a pinned build. The pull runs outside all timing.
+- **Zero-tolerance ratchet.** The committed tolerance is zero
+  (`BENCH_TOLERANCE_PCT=0`), so every fixture must be monotonically
+  non-increasing. It lives in the tracked script, not an env var; the gate itself
+  cannot be disabled or widened at runtime (`BENCH_NO_GATE` /
+  `BENCH_REGRESS_PCT` / `BENCH_TOLERANCE_PCT` overrides are rejected).
 - Run it whenever checker hot paths change (resolver visitors, rule `check` loops,
   conformance-driven additions). Conformance logic that blows the gate must be
-  optimised or restructured.
-- `BENCH_NO_GATE=1` (baseline reset) is reserved for fixture-set changes and must
-  be justified in the PR description.
+  optimised or restructured. A machine without a baseline establishes one only
+  after a successful run is committed.
+
+> **Planned — bench in the pipeline (CI).** Today `make bench` is run locally and
+> its results are committed. The intention is to eventually run the benchmark gate
+> in CI on a fixed runner class, on the same write-always / gate-separately
+> discipline described here, so a performance regression fails the pipeline the way
+> the conformance and coverage gates already do. Until that lands, the discipline
+> is enforced by running `make bench` locally and committing the updated status CSV.
 
 ### CI Artifact Storage Policy {#GITHUB-NO-ARTIFACTS}
 
@@ -1569,129 +1532,23 @@ separate, free, and unaffected.
 
 ---
 
-## Migration and Adoption {#CHKARCH-MIGRATION}
+## Migration tooling target {#CHKARCH-MIGRATION}
 
-### From mypy {#CHKARCH-MIGRATION-MYPY}
+### mypy import target {#CHKARCH-MIGRATION-MYPY}
 
-1. Run `basilisk migrate --from mypy`
-2. Fix BSK-E0001/E0002 errors (missing annotations) -- these are the primary diff
-3. Address enums_behaviors+ (Mojo safety) or disable with `mojo-safety = false`
+Map supported mypy settings and emit an explicit unmapped-options report.
 
-### From Pyright {#CHKARCH-MIGRATION-PYRIGHT}
+### Pyright import target {#CHKARCH-MIGRATION-PYRIGHT}
 
-1. Run `basilisk migrate --from pyright`
-2. If you were using Pyright's strict mode: minimal changes needed for core type checking
-3. Enable Mojo safety incrementally
+Map supported Pyright settings and emit an explicit unmapped-options report.
 
-### Gradual Adoption {#CHKARCH-MIGRATION-GRADUAL}
+### Gradual-adoption mapping {#CHKARCH-MIGRATION-GRADUAL}
 
-1. **Relax per-directory**: soften/disable high-volume rules in `legacy/**` via per-path overrides, keep `src/**` strict
-2. **Relax per-file**: `# basilisk: relaxed` at the top demotes a file's errors to warnings
-3. **Track progress**: `basilisk stats` shows type completeness percentage
-4. **Tighten over time**: remove per-path overrides directory by directory as code is typed
-
----
-
-## Governance {#CHKARCH-GOVERNANCE}
-
-### License {#CHKARCH-GOVERNANCE-LICENSE}
-
-MIT License. Copyright (c) 2026 NIMBLESITE PTY LTD. No CLA required. No proprietary layers.
-
-### Contribution Model {#CHKARCH-GOVERNANCE-CONTRIB}
-
-- Issues and PRs on GitHub
-- RFC process for significant type system changes
-- Monthly minor releases, quarterly major releases (semver)
-
-### Relationship to Python Typing Council {#CHKARCH-GOVERNANCE-TYPING}
-
-Basilisk follows the Python Typing Council's governance (PEP 729): implements the typing spec as defined by the council, participates in conformance testing, and never extends the type system in ways that contradict the spec.
-
----
-
-## Roadmap {#CHKARCH-ROADMAP}
-
-### Phase 1: Foundation {#CHKARCH-ROADMAP-P1}
-- Parser (evaluate `ruff_python_parser` vs custom)
-- Name resolver
-- Basic type checker (50% PEP conformance)
-- CLI with human-readable output
-- CI pipeline
-
-### Phase 2: LSP and Editors {#CHKARCH-ROADMAP-P2}
-- Language server (diagnostics, hover, completions)
-- VS Code extension (VSIX)
-- Integrated Python debugging via DAP proxy over debugpy (§10.1.1)
-- Neovim / Helix configuration
-
-### Phase 3: House Rules and Gradual Adoption {#CHKARCH-ROADMAP-P3}
-- All BSK-E0001 through BSK-E0025 rules
-- Gradual adoption (per-path / per-file relaxation)
-- `basilisk migrate` from mypy/Pyright
-- 80% PEP conformance
-
-### Phase 4: Mojo Safety {#CHKARCH-ROADMAP-P4}
-- Ownership tracking (BSK-E003x)
-- Immutability enforcement (BSK-E004x)
-- Structural discipline (BSK-E005x)
-- Coercion detection (BSK-E006x)
-
-### Phase 5: Plugin System and Stubs {#CHKARCH-ROADMAP-P5}
-- WASM plugin host
-- Django, Pydantic, SQLAlchemy plugins
-- Auto-stub generation engine
-- Stub registry
-
-### Phase 6: Production Hardening {#CHKARCH-ROADMAP-P6}
-- 95%+ PEP conformance
-- Performance optimization (meet all targets in Section 8.4)
-- SARIF/JUnit output
-- Enterprise migration playbook
-
-### Phase 7: Ecosystem Growth {#CHKARCH-ROADMAP-P7}
-- Plugin marketplace
-- Community stub registry
-- Conference talks, documentation, tutorials
-- PyCharm / IntelliJ plugin maturity
-
----
-
-## Appendix A: Full PEP Coverage Matrix {#CHKARCH-APPENDIX-PEPS}
-
-| PEP | Title | Priority | Phase |
-|---|---|---|---|
-| 484 | Type Hints | P0 | 1 |
-| 526 | Variable Annotations | P0 | 1 |
-| 544 | Protocols | P0 | 1 |
-| 585 | Generics in Standard Collections | P0 | 1 |
-| 586 | Literal Types | P0 | 3 |
-| 589 | TypedDict | P0 | 3 |
-| 591 | Final Qualifier | P0 | 3 |
-| 604 | Union X \| Y | P0 | 1 |
-| 612 | ParamSpec | P1 | 3 |
-| 613 | TypeAlias | P0 | 1 |
-| 634 | Structural Pattern Matching | P1 | 3 |
-| 646 | TypeVarTuple | P1 | 3 |
-| 647 | TypeGuard | P0 | 3 |
-| 673 | Self Type | P0 | 3 |
-| 675 | LiteralString | P1 | 5 |
-| 681 | Data Class Transforms | P1 | 5 |
-| 692 | TypedDict **kwargs | P1 | 5 |
-| 695 | Type Parameter Syntax | P0 | 3 |
-| 696 | TypeVar Defaults | P1 | 5 |
-| 698 | Override Decorator | P0 | 3 |
-| 702 | Deprecated Decorator | P1 | 5 |
-| 742 | TypeIs | P0 | 3 |
-
-## Appendix B: Glossary {#CHKARCH-APPENDIX-GLOSSARY}
-
-| Term | Definition |
-|---|---|
-| **Basilisk** | This project — a configuration-driven Python type checker in Rust; default config is pure PEP conformance, house-style rules opt-in. |
-| **Borrowed** | Parameter convention: function reads but does not mutate or transfer the value (default) |
-| **Owned** | Parameter convention: function takes exclusive ownership; caller must not use value afterward |
-| **InOut** | Parameter convention: function may mutate the value in place |
-| **Default configuration** | Basilisk has no modes (no basic/standard/strict). The default config enables every PEP typing-spec rule and nothing else; house-style rules are opt-in via configuration ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)) |
-| **Mojo safety** | The set of ownership, immutability, and coercion rules inspired by the Mojo language |
-| **Type completeness** | Percentage of symbols in a module/project with resolved (non-Any) types |
+The CLI and LSP record current error debt as ordinary warning-severity rule
+entries in the config file of the folder holding the debt — plain entries in
+the one configuration model, with no exact-file overrides, ownership markers,
+or sidecar state ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)). Re-running
+adoption recomputes the debt and rewrites those entries, so rules that no
+longer fire revert to the ancestor severity by deleting the folder entry.
+There is no hidden compatibility mode
+([AUTOFIX-ADOPTION](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-ADOPTION)).

@@ -1,4 +1,4 @@
-//! Implements [`callables_protocol_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`callables_protocol_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Module context, function signatures, and protocol info for `callables_protocol_2`.
 
 use ruff_python_ast::{self as ast, Expr, Stmt};

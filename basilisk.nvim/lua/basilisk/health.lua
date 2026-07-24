@@ -14,11 +14,12 @@ local M = {}
 function M.check()
   vim.health.start("basilisk.nvim")
 
-  -- Neovim version.
-  if vim.fn.has("nvim-0.10") == 1 then
-    vim.health.ok("Neovim >= 0.10")
+  -- Neovim version. The plugin drives vim.lsp.config()/vim.lsp.enable(),
+  -- which were added in Neovim 0.11 (see :h news-0.11).
+  if vim.fn.has("nvim-0.11") == 1 then
+    vim.health.ok("Neovim >= 0.11")
   else
-    vim.health.error("Neovim >= 0.10 required", { "Upgrade Neovim to 0.10 or later." })
+    vim.health.error("Neovim >= 0.11 required", { "Upgrade Neovim to 0.11 or later." })
   end
 
   -- Basilisk binary. Forward the configured binary_path so the cascade's
@@ -32,7 +33,8 @@ function M.check()
     vim.health.ok("basilisk binary found: " .. bin .. " (" .. ver .. ")")
   else
     vim.health.error("basilisk binary not found", {
-      "Install with: cargo install basilisk-cli",
+      "Run :BasiliskInstall to download the latest release",
+      "Or install with: cargo install basilisk-cli",
       "Or set vim.env.BASILISK_PATH",
     })
   end

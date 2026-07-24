@@ -30,15 +30,18 @@ fn test_lsp_did_open_with_type_errors() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
     let _ = fixture.initialize()?;
 
-    let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
+    // `name` has no default to infer from (BSK-0001) and the returned method
+    // call is not inferable (BSK-0002) — an f-string return would infer
+    // `-> str` and silence BSK-0002 ([TYPEINF-FUNC-RETURN]).
+    let python_code = "def greet(name):\n    return name.upper()";
     fixture.did_open("file:///test.py", python_code)?;
 
     let diag = fixture
         .wait_for_diagnostics()
         .ok_or("no diagnostics published")?;
 
-    assert!(diag.contains("BSK-E0001"));
-    assert!(diag.contains("BSK-E0002"));
+    assert!(diag.contains("BSK-0001"));
+    assert!(diag.contains("BSK-0002"));
     assert!(diag.contains("Missing parameter type annotation"));
     assert!(diag.contains("Missing return type annotation"));
     Ok(())
@@ -52,9 +55,11 @@ fn test_lsp_did_open_with_clean_code() -> TestResult<()> {
     let python_code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code)?;
 
+    // Clean code settles to an empty diagnostics publish; wait for that exact
+    // publish so an initial-then-settled double publish cannot race the assert.
     let diag = fixture
-        .wait_for_diagnostics()
-        .ok_or("no diagnostics published")?;
+        .wait_for_diagnostics_matching(|msg| msg.contains("\"diagnostics\":[]"))
+        .ok_or("no empty diagnostics published")?;
 
     assert!(diag.contains("\"diagnostics\":[]"));
     Ok(())
@@ -103,9 +108,11 @@ fn test_lsp_did_change_updates_diagnostics() -> TestResult<()> {
         }
     }))?;
 
+    // The server may still have a stale populated publish in flight from the
+    // did_open; wait for the settled empty publish rather than the first one.
     let diag = fixture
-        .wait_for_diagnostics()
-        .ok_or("no diagnostics after change")?;
+        .wait_for_diagnostics_matching(|msg| msg.contains("\"diagnostics\":[]"))
+        .ok_or("no empty diagnostics after change")?;
 
     assert!(diag.contains("\"diagnostics\":[]"));
     Ok(())
@@ -130,9 +137,11 @@ fn test_lsp_did_close_clears_diagnostics() -> TestResult<()> {
         }
     }))?;
 
+    // A populated publish from the did_open may still be in flight; wait for
+    // the clearing publish that didClose triggers rather than the first one.
     let diag = fixture
-        .wait_for_diagnostics()
-        .ok_or("no diagnostics after close")?;
+        .wait_for_diagnostics_matching(|msg| msg.contains("\"diagnostics\":[]"))
+        .ok_or("no clearing diagnostics after close")?;
 
     assert!(diag.contains("\"diagnostics\":[]"));
     Ok(())
@@ -170,7 +179,7 @@ fn test_lsp_hover_on_error_location() -> TestResult<()> {
     let hover = hover_response.ok_or("no hover response")?;
 
     assert!(hover.contains("\"jsonrpc\":\"2.0\""));
-    assert!(hover.contains("BSK-E0001"));
+    assert!(hover.contains("BSK-0001"));
     assert!(hover.contains("Missing parameter type annotation"));
     Ok(())
 }
@@ -247,18 +256,36 @@ fn test_lsp_concurrent_document_handling() -> TestResult<()> {
     fixture.did_open("file:///doc1.py", "def func1(x): pass")?;
     fixture.did_open("file:///doc2.py", "def func2(y): return y")?;
 
-    // Collect two diagnostic notifications (order may vary).
-    let mut diags = Vec::new();
-    for _ in 0..2 {
-        if let Some(msg) = fixture.wait_for_diagnostics() {
-            diags.push(msg);
+    // Drain diagnostic notifications until BOTH documents have been reported.
+    // The server may publish for one document more than once (e.g. an initial
+    // empty publish followed by the populated one) or in either order, so a
+    // fixed two-notification read can miss doc2 under parallel load. Keep
+    // reading until both URIs are seen (bounded) — this only strengthens the
+    // gate: both documents must still receive diagnostics.
+    let mut combined = String::new();
+    for _ in 0..8 {
+        let Some(msg) = fixture.wait_for_diagnostics() else {
+            break;
+        };
+        combined.push('\n');
+        combined.push_str(&msg);
+        if combined.contains("file:///doc1.py") && combined.contains("file:///doc2.py") {
+            break;
         }
     }
-    let combined = diags.join("\n");
 
-    assert!(combined.contains("file:///doc1.py"));
-    assert!(combined.contains("file:///doc2.py"));
-    assert!(combined.contains("BSK-E0001"));
+    assert!(
+        combined.contains("file:///doc1.py"),
+        "no diagnostics published for doc1: {combined}"
+    );
+    assert!(
+        combined.contains("file:///doc2.py"),
+        "no diagnostics published for doc2: {combined}"
+    );
+    assert!(
+        combined.contains("BSK-0001"),
+        "expected BSK-0001 in diagnostics: {combined}"
+    );
     Ok(())
 }
 
@@ -280,7 +307,7 @@ fn test_lsp_large_file_handling() -> TestResult<()> {
         .ok_or("no diagnostics published")?;
 
     assert!(diag.contains("\"method\":\"textDocument/publishDiagnostics\""));
-    assert!(diag.matches("BSK-E0001").count() >= 50);
-    assert!(diag.matches("BSK-E0002").count() >= 50);
+    assert!(diag.matches("BSK-0001").count() >= 50);
+    assert!(diag.matches("BSK-0002").count() >= 50);
     Ok(())
 }

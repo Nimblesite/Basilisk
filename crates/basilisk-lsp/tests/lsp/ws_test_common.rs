@@ -35,10 +35,12 @@ pub struct WsTestFixture {
         >,
     >,
     /// Temp workspace root opened by [`WsTestFixture::initialize`]. It ships a
-    /// `basilisk.json` that opts into the annotation house rules (off by default
-    /// — the default config is pure PEP conformance). Documents fall back to this
-    /// root's config, so house diagnostics (`BSK-E0001` …) fire exactly as they
-    /// do for a project that enabled them. No modes; configuration.
+    /// `pyproject.toml` whose `[tool.basilisk]` table supplies an explicit
+    /// Python target and whose rule table opts into the annotation house rules
+    /// (off by default — the default config is pure PEP conformance). Documents
+    /// fall back to this root's config, so house
+    /// diagnostics (`BSK-0001` …) fire exactly as they do for a project that
+    /// enabled them. No modes; configuration.
     /// See [CHKARCH-CONFIGURATION-ONLY].
     pub workspace_root: std::path::PathBuf,
     _server_handle: tokio::task::JoinHandle<()>,
@@ -79,9 +81,24 @@ impl WsTestFixture {
         // documents (which fall back to the root's checker config) see them.
         let workspace_root = unique_temp_dir("bsk_ws_fixture");
         std::fs::create_dir_all(&workspace_root)?;
+        // Opt into the full annotation house-rule bundle that the removed
+        // `strictAnnotations` flag used to enable (BSK-0001..E0005, E0025,
+        // W0014, W0050), so every ws diagnostics test that relies on one of
+        // them keeps firing. See [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
-            workspace_root.join("basilisk.json"),
-            "{\"strictAnnotations\": true}\n",
+            workspace_root.join("pyproject.toml"),
+            "[tool.basilisk]\n\
+python-version = \"3.12\"\n\
+\n\
+[tool.basilisk.rules]\n\
+\"BSK-0001\" = \"error\"\n\
+\"BSK-0002\" = \"error\"\n\
+\"BSK-0003\" = \"error\"\n\
+\"BSK-0004\" = \"error\"\n\
+\"BSK-0005\" = \"error\"\n\
+\"BSK-0025\" = \"error\"\n\
+\"BSK-0014\" = \"warning\"\n\
+\"BSK-0050\" = \"warning\"\n",
         )?;
 
         Ok(Self {
@@ -136,15 +153,25 @@ impl WsTestFixture {
 
         let response = self.recv().await.ok_or("no response to initialize")?;
 
+        // Typeshed resolution is a local read completed during `initialize`
+        // ([STUBRES-TYPESHED-OFFLINE]): the response payload itself carries
+        // each root's terminal status, so there is no startup notification to
+        // await — and nothing intermediate a client could ever render.
+        if !response.contains("typeshedStatuses")
+            || !response.contains("\"lifecycle\":{\"kind\":\"Ready\"}")
+        {
+            return Err(format!(
+                "initialize payload must carry a terminal Ready Typeshed status: {response}"
+            )
+            .into());
+        }
+
         self.send_json(&serde_json::json!({
             "jsonrpc": "2.0",
             "method": "initialized",
             "params": {}
         }))
         .await?;
-
-        // Drain the server's log message.
-        let _ = timeout(Duration::from_millis(500), self.ws_read.next()).await;
 
         Ok(response)
     }

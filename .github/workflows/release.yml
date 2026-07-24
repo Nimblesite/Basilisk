@@ -97,19 +97,39 @@ jobs:
           mkdir -p "$staging"
           cp "$reldir/${{ matrix.binary }}" "$staging/"
           cp "$reldir/basilisk-profiler-helper" "$staging/"
+          # [STUBRES-TYPESHED-LICENSE] The embedded Typeshed snapshot makes
+          # attribution part of every binary-bearing release artifact.
+          cp LICENSE NOTICES THIRD-PARTY-LICENSES RUST-DEPENDENCY-LICENSES "$staging/"
           ditto -c -k --keepParent "$staging" "${{ matrix.archive }}"
 
       - name: Package Linux archive
         if: startsWith(matrix.platform, 'linux-')
         run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ../../../${{ matrix.archive }} ${{ matrix.binary }}
+          set -euo pipefail
+          reldir="target/${{ matrix.target }}/release"
+          tar czf "${{ matrix.archive }}" \
+            -C "$reldir" "${{ matrix.binary }}" \
+            -C "$GITHUB_WORKSPACE" LICENSE NOTICES THIRD-PARTY-LICENSES RUST-DEPENDENCY-LICENSES
 
       - name: Package Windows archive
         if: startsWith(matrix.platform, 'win32-')
         shell: pwsh
         run: |
-          Compress-Archive -Path "target/${{ matrix.target }}/release/${{ matrix.binary }}" -DestinationPath "${{ matrix.archive }}"
+          $files = @(
+            "target/${{ matrix.target }}/release/${{ matrix.binary }}",
+            "LICENSE",
+            "NOTICES",
+            "THIRD-PARTY-LICENSES",
+            "RUST-DEPENDENCY-LICENSES"
+          )
+          Compress-Archive -Path $files -DestinationPath "${{ matrix.archive }}"
+
+      - name: Verify binary archive attribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v python3 >/dev/null 2>&1; then py=python3; else py=python; fi
+          "$py" scripts/verify_release_attribution.py "${{ matrix.archive }}" --kind binary
 
       # Transient in-run hand-off to the `release` job, which attaches these to
       # the GitHub Release (the only permanent, free, unlimited store). Pinned to
@@ -135,16 +155,25 @@ jobs:
         with:
           key: conformance
 
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      # The REAL python/typing harness's own runtime deps (run_conformance.py runs
+      # the suite's unmodified src/main.py). See [CHKARCH-CONFORMANCE].
+      - name: Install conformance harness deps
+        run: pip install jinja2 markdown tomlkit
+
       - name: Build basilisk
         run: cargo build --release --bin basilisk
 
-      # Pull the LATEST python/typing@main and require a perfect score — anything
-      # less than 100%, or a single false positive, tanks the release
-      # (coverage-thresholds.json → conformance.threshold 100, max_false_positives 0).
-      - name: Enforce 100% PEP conformance
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 conformance/score.py --bin target/release/basilisk --gate
+      # Clone the LATEST python/typing@main FRESH and run its OWN harness against
+      # the compiled binary; require a perfect score — anything less than 100%, or a
+      # single false positive, tanks the release (coverage-thresholds.json →
+      # conformance.threshold 100, max_false_positives 0). No cached fixtures, no
+      # vendored calculator: if the real harness cannot run, the release fails.
+      - name: Enforce 100% PEP conformance (REAL python/typing harness)
+        run: python3 conformance/run_conformance.py --bin target/release/basilisk --gate
 
   release:
     name: Publish binaries to release
@@ -152,12 +181,32 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # shipwright.json and the notes generator live in the repo; check out
+      # BEFORE downloading artifacts so checkout's clean cannot remove them.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
       - name: Download platform archives
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
           pattern: basilisk-*
           merge-multiple: true
+
+      # Release notes cannot drift from what actually shipped: the component
+      # block is generated from shipwright.json and the release binary itself
+      # ([LSPFMT-RELEASE-NOTES]), then appended to the auto-generated notes.
+      # Drift-tested against the built binary in
+      # crates/basilisk-cli/tests/e2e_release_notes_block.rs.
+      - name: Generate release-notes component block
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The linux-x64 archive from the build matrix, by its exact name —
+          # the archives are named by target triple, and a glob that matches
+          # nothing fails only at release time (first hit: v0.37.1).
+          tar -xzf artifacts/basilisk-x86_64-unknown-linux-gnu.tar.gz basilisk
+          chmod +x basilisk
+          python3 scripts/gen_release_notes.py ./basilisk "$GITHUB_REF_NAME" > release-notes-block.md
 
       # Create the release up front and attach the platform archives to it.
       # Every downstream job (VSIX, Homebrew, Scoop) pulls its binaries from
@@ -167,6 +216,10 @@ jobs:
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           generate_release_notes: true
+          # The generated component block ([LSPFMT-RELEASE-NOTES]) is appended
+          # to the auto-generated notes rather than replacing them.
+          body_path: release-notes-block.md
+          append_body: true
           # Publish immediately — never leave the release as a draft. The action
           # defaults to draft=false, but it only WRITES the fields you give it:
           # on a re-run over a tag whose release already exists as a draft (a
@@ -316,7 +369,9 @@ jobs:
           # [VSIX-PACKAGING-PARITY].
           node vscode-extension/scripts/stage-runtime.mjs runtime-bin "${{ env.target }}"
           cp shipwright.json vscode-extension/shipwright.json
-          cp NOTICES vscode-extension/NOTICES
+          cp VSCODE-DISTRIBUTION-LICENSE vscode-extension/LICENSE.txt
+          cp NOTICES THIRD-PARTY-LICENSES RUST-DEPENDENCY-LICENSES \
+            VSCODE-DEPENDENCY-LICENSES vscode-extension/
 
       # Skip on cross-compiled targets: the runner's CPU arch can't execute
       # the produced binary (x64 host -> aarch64 target). The VSIX contents
@@ -363,6 +418,11 @@ jobs:
           if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
           unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "bin/${{ env.target }}/basilisk${exe}"
           unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "shipwright.json"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/LICENSE.txt"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/NOTICES"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/THIRD-PARTY-LICENSES"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/RUST-DEPENDENCY-LICENSES"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/VSCODE-DEPENDENCY-LICENSES"
           if [ "${{ matrix.platform }}" = "darwin" ]; then
             unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "bin/${{ env.target }}/basilisk-profiler-helper"
           fi
@@ -814,9 +874,16 @@ jobs:
             target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             manylinux: auto
+          # Native ARM runner, not cross-compilation: the typeshed download
+          # runtime ([STUBRES-TYPESHED]) pulls in `ring`, whose pregenerated
+          # aarch64 assembly does not build under the old cross-gcc in
+          # maturin-action's manylinux cross container ("#error ARM assembler
+          # must define __ARM_ARCH" — failed the v0.36.0/v0.37.0 releases).
+          # The native manylinux aarch64 image carries a modern toolchain and
+          # keeps the widest manylinux2014 wheel tag.
           - platform: linux-arm64
             target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
             manylinux: auto
           - platform: darwin-arm64
             target: aarch64-apple-darwin
@@ -839,17 +906,34 @@ jobs:
         shell: bash
         run: scripts/stamp-version.sh
 
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.x"
+
       # `bindings = "bin"` packages the compiled `basilisk` executable into a
       # binary-only wheel (no Python extension module). Linux builds inside a
       # manylinux container for broad glibc compatibility; macOS/Windows build
       # natively or cross-compile for arm64.
-      - name: Build wheel
+      - name: Select wheel license expression
+        shell: bash
+        run: python3 scripts/set_wheel_license_expression.py --target "${{ matrix.target }}"
+
+      - name: Package wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
           args: --release --out dist
           sccache: "true"
+
+      - name: Verify wheel attribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v python3 >/dev/null 2>&1; then py=python3; else py=python; fi
+          for wheel in dist/*.whl; do
+            "$py" scripts/verify_release_attribution.py "$wheel" --kind wheel --target "${{ matrix.target }}"
+          done
 
       # Transient in-run hand-off to publish-pypi (PyPI is the permanent store).
       # retention-days: 1 (the floor) keeps wheels out of billed storage
@@ -862,10 +946,11 @@ jobs:
           retention-days: 1
 
   # Prove the ACTUAL shipped wheel — pip-installed — scores 100% via the REAL,
-  # unmodified python/typing harness (its own `src/main.py`, not our fast local
-  # scorer). This complements conformance/score.py (which grades the compiled
-  # binary): score.py stays the sha-pinned dev/CI fast path; this gate guarantees
-  # the released install path is conformant. See [CHKARCH-CONFORMANCE].
+  # unmodified python/typing harness (its own `src/main.py` + built-in
+  # BasiliskTypeChecker). This is the SAME harness CI runs against the compiled
+  # binary (conformance/run_conformance.py); here it runs against the pip-installed
+  # wheel so the released install path is proven conformant too. There is no other
+  # scorer. See [CHKARCH-CONFORMANCE].
   conformance-wheel:
     name: Conformance gate — pip-installed wheel vs python/typing@main (real harness)
     needs: pypi-wheels
@@ -893,23 +978,25 @@ jobs:
           # Fails the job immediately if the wheel did not put `basilisk` on PATH.
           basilisk --version
 
-      - name: Clone python/typing@main (real fixtures + harness + calculator)
+      - name: Clone python/typing@main (real fixtures + harness + adapter)
         shell: bash
-        run: git clone --depth 1 https://github.com/python/typing typing-upstream
-
-      - name: Inject the Basilisk adapter (suite ships every other checker; add ours)
-        shell: bash
-        run: cat conformance/basilisk_conformance_adapter.py >> typing-upstream/conformance/src/type_checker.py
+        # The suite already ships the official Basilisk adapter (BasiliskTypeChecker
+        # in conformance/src/type_checker.py) — nothing of ours is injected.
+        # Cloned OUTSIDE the repo checkout: per-file config discovery walks
+        # ancestor directories ([CHKARCH-CONFIG-DISCOVERY]), so an in-repo clone
+        # would inherit the repo's own [tool.basilisk] rules instead of scoring
+        # the wheel's out-of-the-box default.
+        run: git clone --depth 1 https://github.com/python/typing "$RUNNER_TEMP/typing-upstream"
 
       - name: Run the REAL upstream harness against the installed wheel
-        working-directory: typing-upstream/conformance
+        working-directory: ${{ runner.temp }}/typing-upstream/conformance
         shell: bash
         # `basilisk` resolves to the pip-installed wheel on PATH (BASILISK_BIN unset).
         run: python src/main.py --only-run basilisk
 
       - name: Assert the wheel scores 100% / zero false positives
         shell: bash
-        run: python conformance/assert_wheel_conformance.py typing-upstream/conformance/results/basilisk
+        run: python conformance/assert_wheel_conformance.py "$RUNNER_TEMP/typing-upstream/conformance/results/basilisk"
 
   publish-pypi:
     name: Publish wheels to PyPI

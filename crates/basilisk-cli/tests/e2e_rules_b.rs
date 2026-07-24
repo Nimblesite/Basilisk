@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::as_conversions
 )]
-//! E2E tests for error codes E0010 through BSK-E0025.
+//! E2E tests for error codes E0010 through BSK-0025.
 //!
 //! Includes both exact-diagnostic tests and presence-check tests for
 //! rules that are partially implemented.
@@ -15,7 +15,9 @@
 mod common;
 
 use basilisk_test_utils::{assert_diagnostics, Expected};
-use common::{annotation_rules_config, fixture, run, run_with_config};
+use common::{
+    annotation_rules_config, annotation_rules_config_for_python, fixture, run, run_with_config,
+};
 
 // ---------------------------------------------------------------------------
 // import from untyped module
@@ -41,8 +43,8 @@ fn explicit_any_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config("errors/e0011_explicit_any.py", &annotation_rules_config())?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-W0014"),
-        "should emit BSK-W0014 for explicit Any annotations, got: {diags:#?}"
+        codes.contains(&"BSK-0014"),
+        "should emit BSK-0014 for explicit Any annotations, got: {diags:#?}"
     );
     Ok(())
 }
@@ -62,9 +64,9 @@ fn any_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Error>> {
         &src,
         &diags,
         &[
-            Expected::warning("BSK-W0014", "return annotation", 4, 5),
-            Expected::warning("BSK-W0014", "`args`", 4, 14),
-            Expected::warning("BSK-W0014", "`kwargs`", 4, 27),
+            Expected::warning("BSK-0014", "return annotation", 4, 5),
+            Expected::warning("BSK-0014", "`args`", 4, 14),
+            Expected::warning("BSK-0014", "`kwargs`", 4, 27),
         ],
     );
     Ok(())
@@ -202,7 +204,7 @@ fn overlapping_overload_signatures() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// exact diagnostics: overlapping overloads also trigger BSK-E0001
+// exact diagnostics: overlapping overloads also trigger BSK-0001
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -216,11 +218,11 @@ fn exact_diagnostics_for_overlapping_overloads() -> Result<(), Box<dyn std::erro
         &src,
         &diags,
         &[
-            Expected::error("BSK-E0001", "`x`", 5, 13),
+            Expected::error("BSK-0001", "`x`", 5, 13),
             Expected::error("overloads_consistency", "`process`", 9, 5),
             // The second overload returns `str`, not assignable to the impl's `int`.
             Expected::error("overloads_consistency_3", "`process`", 9, 5),
-            Expected::error("BSK-E0001", "`x`", 9, 13),
+            Expected::error("BSK-0001", "`x`", 9, 13),
         ],
     );
     Ok(())
@@ -284,89 +286,82 @@ fn numeric_literal_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error
 fn override_without_decorator() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config(
         "errors/e0025_missing_override.py",
-        &annotation_rules_config(),
+        &annotation_rules_config_for_python("3.12"),
     )?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-E0025"),
-        "should emit BSK-E0025 for override without @override, got: {diags:#?}"
+        codes.contains(&"BSK-0025"),
+        "should emit BSK-0025 for override without @override, got: {diags:#?}"
     );
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// FAILING TESTS — rules not yet implemented (Phase 1 limitations)
-// These tests document desired behavior and fail to mark missing functionality.
+// Type-safety and flow diagnostics.
 // ---------------------------------------------------------------------------
 
 /// Argument type mismatch.
-/// Requires a type inference engine — not implemented in Phase 1.
 #[test]
-fn argument_type_mismatch_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn argument_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0012_wrong_arg_type.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "calls_argument_type"),
-        "E0012 (argument type mismatch) not yet implemented — Phase 1 limitation"
+        "expected calls_argument_type for an incompatible argument"
     );
     Ok(())
 }
 
 /// Incompatible method override (type-level).
-/// Requires class hierarchy + type inference — not implemented in Phase 1.
 #[test]
-fn incompatible_method_override_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn incompatible_method_override() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0016_incompatible_override.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "classes_override"),
-        "E0016 (incompatible override) not yet implemented — Phase 1 limitation"
+        "expected classes_override for an incompatible method override"
     );
     Ok(())
 }
 
 /// Incompatible variable override.
-/// Requires type inference for variable types — not implemented in Phase 1.
 #[test]
-fn incompatible_variable_override_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn incompatible_variable_override() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0017_variable_override.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "classes_override_2"),
-        "E0017 (incompatible variable override) not yet implemented — Phase 1 limitation"
+        "expected classes_override_2 for an incompatible variable override"
     );
     Ok(())
 }
 
 /// Undefined variable.
-/// Requires full scope analysis of expressions — not implemented in Phase 1.
 #[test]
-fn undefined_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn undefined_variable() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0018_undefined_variable.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "names_undefined"),
-        "E0018 (undefined variable) not yet implemented — Phase 1 limitation"
+        "expected names_undefined for an undefined variable"
     );
     Ok(())
 }
 
 /// Unbound variable on some code paths.
-/// Requires full flow analysis — not implemented in Phase 1.
 #[test]
-fn unbound_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_variable() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0019_unbound_variable.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "names_unbound"),
-        "E0019 (unbound variable) not yet implemented — Phase 1 limitation"
+        "expected names_unbound for a conditionally unbound variable"
     );
     Ok(())
 }
 
 /// Unhashable type in hash-requiring context.
-/// Requires type inference — not implemented in Phase 1.
 #[test]
-fn unhashable_type_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn unhashable_type() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0022_unhashable_type.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "dict_key_hashable"),
-        "E0022 (unhashable type) not yet implemented — Phase 1 limitation"
+        "expected dict_key_hashable for an unhashable dictionary key"
     );
     Ok(())
 }

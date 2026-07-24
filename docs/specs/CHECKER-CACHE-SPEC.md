@@ -2,7 +2,7 @@
 
 **Spec group:** `CHKCACHE`
 **Status:** v1 (opt-in)
-**Related:** [`CHKARCH-INCREMENTAL-SALSA`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA), [`CHKARCH-CLI`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI)
+**Related:** [`CHKARCH-INCREMENTAL-SALSA`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA), [`CHKARCH-CLI`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI), [`STUBRES-TYPESHED`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)
 
 An **opt-in, persistent, content-addressed result cache** for the CLI
 (`basilisk check`): an unchanged check returns from cache without changing
@@ -22,16 +22,30 @@ Inputs that can affect the diagnostics for `basilisk check <file>`:
 1. **Target file bytes** (`CHKCACHE-INPUT-TARGET`).
 2. **Bytes of every other source/stub file the checker actually read** —
    transitive imports and `.pyi` stubs included (`CHKCACHE-INPUT-DEPS`).
-3. **Effective configuration** — the resolved `BasiliskConfig` (rule severities,
-   per-path/per-module overrides, excludes, stub paths, auto-stub mode, …)
-   (`CHKCACHE-INPUT-CONFIG`).
-4. **Resolution environment** — import search roots, site-packages dirs, and
-   `uv.lock` contents when present; a change can change *which* files an import
-   resolves to (`CHKCACHE-INPUT-ENV`).
-5. **Checker version** — `CARGO_PKG_VERSION`; a new binary may change rule logic
-   or bundled stubs, so it invalidates every entry (`CHKCACHE-INPUT-VERSION`).
+3. **Effective configuration** — the resolved `BasiliskConfig` (the
+   nearest-first rule-severity chain, include/exclude patterns, stub paths,
+   the `typeshed-*` keys, `python-version`/`python-platform`, narrowing
+   toggles, …) (`CHKCACHE-INPUT-CONFIG`).
+4. **Resolution environment** — import search roots, site-packages dirs, the
+   selected standard-library source path, and `uv.lock` contents when
+   present; a change can change *which* files an import resolves to
+   (`CHKCACHE-INPUT-ENV`).
+5. **Checker version** — `CARGO_PKG_VERSION`; a new binary may change rule logic,
+   so it invalidates every entry (`CHKCACHE-INPUT-VERSION`).
+6. **Standard-library typeshed identity** — the exact
+   [`python/typeshed`](https://github.com/python/typeshed) commit SHA, custom-tree
+   content identity, or bundled-ZIP identity
+   ([`STUBRES-TYPESHED-PIN`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-PIN),
+   [`STUBRES-TYPESHED-BASELINE`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-BASELINE)).
+   The selected identity moves **independently of the binary**: a
+   `typeshed-commit` change swaps the stdlib `.pyi` bodies under a fixed
+   `CARGO_PKG_VERSION`, so keying only on the checker version would serve a stale
+   entry across a typeshed update. The fingerprint MUST therefore key on the
+   exact selected source identity as well
+   (`CHKCACHE-INPUT-TYPESHED`). This preserves step 3 of the pinned typing order
+   ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 
-A hit requires **all five** to match. If any differ, or anything cannot be
+A hit requires **all six** to match. If any differ, or anything cannot be
 determined (a recorded dependency missing/unreadable, the entry unparseable, the
 config unfingerprintable), it is a MISS and the check runs in full.
 
@@ -42,8 +56,8 @@ configuration and `uv.lock`. Installing or removing packages **directly into a
 virtualenv's site-packages without a `uv.lock` change** is not auto-detected in
 v1. This is why the cache is **opt-in**: clear the cache (or omit `--cache`)
 after mutating the environment outside the lockfile. Source, config, lockfile,
-and version changes are always detected. This boundary is the reason v1 ships
-behind a flag rather than on by default.
+resolved typeshed identity, and version changes are always detected. This boundary is the
+reason v1 ships behind a flag rather than on by default.
 
 ### `CHKCACHE-POSITIONING` — When this cache helps, and the Salsa endgame {#CHKCACHE-POSITIONING}
 
@@ -94,19 +108,29 @@ and the documentation must say so plainly.
 
 ## `CHKCACHE-READSET` — Capturing the exact read-set {#CHKCACHE-READSET}
 
+### Tracked filesystem reads {#CHKCACHE-READSET-FS}
+
 All checker file reads go through `basilisk_parser::parse_file` (target +
 imported `.py` sources) and `basilisk_stubs::parse_pyi_file` (`.pyi` stubs), both
-routing `read_to_string` through `basilisk_common::fs::read_tracked`
-(`CHKCACHE-READSET-FS`). When a thread-local `ReadRecorder` is active, every read
-records `(canonical_path, content_hash)`. The recorder is an RAII guard
-(`CHKCACHE-READSET-GUARD`): inert when absent (zero behaviour change for the LSP
-and non-cached CLI runs), active only during a cached check.
+routing `read_to_string` through `basilisk_common::fs::read_tracked`. When a
+thread-local `ReadRecorder` is active, every read records
+`(canonical_path, content_hash)`.
+
+### Recorder guard {#CHKCACHE-READSET-GUARD}
+
+The recorder is an RAII guard: inert when absent (zero behaviour change for the
+LSP and non-cached CLI runs), active only during a cached check.
 
 ---
 
 ## `CHKCACHE-FINGERPRINT` — The fingerprint {#CHKCACHE-FINGERPRINT}
 
-`fingerprint = hash(version ‖ config_hash ‖ env_hash ‖ sorted[(path, content_hash)…])`
+`fingerprint = hash(version ‖ typeshed_id ‖ config_hash ‖ env_hash ‖ sorted[(path, content_hash)…])`
+
+`typeshed_id` is the resolved `python/typeshed` commit SHA of the downloaded archive,
+the custom-tree content identity, or the bundled-ZIP identity
+(`CHKCACHE-INPUT-TYPESHED`) — see
+[`STUBRES-TYPESHED`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED).
 
 The read-set is sorted by canonical path for determinism. Hashing uses
 `basilisk_db::hash_source` (`DefaultHasher`); the entry stores the **full
@@ -121,16 +145,23 @@ One JSON file per target, named by the hash of the target's canonical path,
 under the cache directory (`CHKCACHE-DIR`, default `.basilisk/cache/check`).
 Each entry stores:
 
-- `version`, `config_hash`, `env_hash`
+- `version`, `typeshed_id`, `config_hash`, `env_hash`
 - `deps`: `[(canonical_path, content_hash)]` (includes the target)
-- `diagnostics`: `[CachedDiagnostic]` — an owned, serde projection of
-  `Diagnostic` (`CHKCACHE-DIAG`). `docs_url` is **not** stored: it is rebuilt
-  deterministically from the code. On replay, the `&'static` `code`/`docs_url`
-  are produced via a bounded process-wide interner (`CHKCACHE-DIAG-INTERN`,
-  ≤ one entry per distinct BSK code).
+- `diagnostics`: `[CachedDiagnostic]`, described below.
 
-A lookup loads the entry, checks `version`/`config_hash`/`env_hash`, then
-re-hashes every `deps` path against its stored hash. All match ⟹ HIT.
+### Diagnostic projection {#CHKCACHE-DIAG}
+
+`CachedDiagnostic` is an owned serde projection of `Diagnostic`. `docs_url` is not stored; it
+is rebuilt deterministically from the code.
+
+#### Bounded code interning {#CHKCACHE-DIAG-INTERN}
+
+On replay, the `&'static` code/docs URL values come from a bounded process-wide interner with
+at most one entry per distinct Basilisk code.
+
+A lookup loads the entry, checks
+`version`/`typeshed_id`/`config_hash`/`env_hash`, then re-hashes every `deps`
+path against its stored hash. All match ⟹ HIT.
 
 ---
 
@@ -153,7 +184,9 @@ Disabled (default) ⟹ behaviour is byte-for-byte identical to today.
    diagnostics, never the stale cached set.
 3. `CHKCACHE-TEST-DEP` — editing an imported dependency yields fresh diagnostics.
 4. `CHKCACHE-TEST-CONFIG` — a config change forces a miss.
-5. `CHKCACHE-TEST-DISABLED` — without `--cache`, no cache dir is created and
+5. `CHKCACHE-TEST-TYPESHED` — a change to the resolved typeshed commit (or a
+   switch between an archive, custom tree, and bundled ZIP) forces a miss.
+6. `CHKCACHE-TEST-DISABLED` — without `--cache`, no cache dir is created and
    output is unchanged.
-6. `CHKCACHE-TEST-STATS` — `--cache-stats` reports a miss then a hit across two
+7. `CHKCACHE-TEST-STATS` — `--cache-stats` reports a miss then a hit across two
    runs.

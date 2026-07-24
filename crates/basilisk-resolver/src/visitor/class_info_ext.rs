@@ -369,15 +369,27 @@ pub(super) fn import_infos_from(node: &StmtImport) -> Vec<ImportInfo> {
                 .map(|asname| vec![asname.to_string()])
                 .unwrap_or_default(),
             span: text_range_to_span(node.range),
+            name_spans: alias_name_spans(alias),
             kind: ImportKind::Plain,
             resolution: ImportResolution::Unresolved,
             resolved_path: None,
             package_dep_kind: None,
             package_version: None,
             package_name: None,
+            stub_distribution: None,
             unresolved_reason: None,
         })
         .collect()
+}
+
+/// Identifier spans of an import alias: the imported name and, when present,
+/// its `as` alias — never the `as` keyword itself (GitHub #286).
+fn alias_name_spans(alias: &Alias) -> Vec<Span> {
+    let mut spans = vec![text_range_to_span(alias.name.range)];
+    if let Some(asname) = &alias.asname {
+        spans.push(text_range_to_span(asname.range));
+    }
+    spans
 }
 
 pub(super) fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
@@ -389,32 +401,46 @@ pub(super) fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
 
     let is_star = node.names.iter().any(|a| a.name.as_str() == "*");
 
+    // The module path identifier, when written out (`from . import x` has none).
+    let module_span = node
+        .module
+        .as_ref()
+        .map(|module| text_range_to_span(module.range));
+
     if is_star {
         return vec![ImportInfo {
             module,
             names: Vec::new(),
             span: text_range_to_span(node.range),
+            name_spans: module_span.into_iter().collect(),
             kind: ImportKind::Star,
             resolution: ImportResolution::Unresolved,
             resolved_path: None,
             package_dep_kind: None,
             package_version: None,
             package_name: None,
+            stub_distribution: None,
             unresolved_reason: None,
         }];
     }
 
     let names: Vec<String> = node.names.iter().map(alias_name).collect();
+    let name_spans = module_span
+        .into_iter()
+        .chain(node.names.iter().flat_map(alias_name_spans))
+        .collect();
     vec![ImportInfo {
         module,
         names,
         span: text_range_to_span(node.range),
+        name_spans,
         kind: ImportKind::From,
         resolution: ImportResolution::Unresolved,
         resolved_path: None,
         package_dep_kind: None,
         package_version: None,
         package_name: None,
+        stub_distribution: None,
         unresolved_reason: None,
     }]
 }

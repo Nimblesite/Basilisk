@@ -5,7 +5,7 @@
 //! ```json
 //! [
 //!   {
-//!     "code": "BSK-E0001",
+//!     "code": "BSK-0001",
 //!     "severity": "error",
 //!     "message": "Missing parameter type annotation for `x`",
 //!     "path": "src/utils.py",
@@ -26,7 +26,7 @@ use super::FileSource;
 /// Serialisable form of a single diagnostic for JSON output.
 #[derive(Serialize)]
 pub(super) struct JsonDiagnostic<'a> {
-    /// The diagnostic error/warning code (e.g. `BSK-E0001`).
+    /// The diagnostic error/warning code (e.g. `BSK-0001`).
     pub(super) code: &'a str,
     /// Severity string: `"error"`, `"warning"`, `"info"`, or `"safety violation"`.
     pub(super) severity: &'a str,

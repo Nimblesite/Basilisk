@@ -24,12 +24,6 @@ the prime directive (PEP conformance) — it is opt-in surface area beyond the s
 - [ ] No-implicit-coercion checks (int→float, bool→int, bytes→str) ([CHKARCH-MOJO-COERCION]).
 - [ ] Mojo-concept → Basilisk-check mapping table backing the above ([CHKARCH-MOJO-COMPAT]).
 
-### Auto-stub generation {#CHKADVPLAN-TODO-STUBS}
-
-- [ ] Stub-generation engine with runtime/AST/hybrid modes ([CHKARCH-STUBS], [CHKARCH-STUBS-AUTOGEN]).
-- [ ] Three quality tiers for generated stubs ([CHKARCH-STUBS-TIERS]).
-- [ ] Typeshed-bundled baseline integration ([CHKARCH-STUBS-TYPESHED]).
-
 ### Plugin host {#CHKADVPLAN-TODO-PLUGINS}
 
 - [ ] WASM-sandboxed plugin host architecture ([CHKARCH-PLUGINS-ARCH]).

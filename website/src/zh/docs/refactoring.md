@@ -10,6 +10,10 @@ lang: zh
 
 Basilisk 通过 LSP 协议提供**完整的重构代码操作套件**。它们自动出现在 VS Code、Zed 和 Neovim 的灯泡菜单中（通过 Open VSX 的 Cursor/Windsurf 即将推出）——无需额外的扩展或配置。
 
+![VS Code 中的 Basilisk 快速修复菜单——全部修复、添加注解、降级或禁用规则，以及移动函数重构](/assets/images/vscode-quickfix.png)
+
+*Basilisk 诊断上的快速修复菜单（`Cmd/Ctrl+.`）：自动修复、逐规则控制和重构。*
+
 每个重构都会产生一个编辑器原子性应用的 `WorkspaceEdit`。多文件重构（移动符号、模块重命名）使用带有 `CreateFile` 操作的 `DocumentChanges`。
 
 ## 提取
@@ -162,6 +166,17 @@ Basilisk 的重命名是**范围感知的**——在一个函数内重命名 `x`
 | `list()` ↔ `[]` | `list()` 变为 `[]` |
 | 三元 ↔ if/else | `x = a if cond else b` 变为 4 行 if/else 块 |
 | NamedTuple 类 ↔ 函数式 | 类语法变为 `namedtuple()` 调用，反之亦然 |
+
+## 模块重命名（workspace/willRenameFiles）
+
+当在编辑器中重命名 `.py` 文件时，Basilisk 会在整个工作区中重写所有引用旧模块路径的 `import` 和 `from ... import` 语句。这处理：
+
+- `import old.module` → `import new.module`
+- `from old.module import name` → `from new.module import name`
+- `__init__.py` → 包名映射
+- 嵌套子模块路径
+
+> **注意：** 此功能需要 LSP 客户端支持 `workspace/willRenameFiles`。目前受阻于 tower-lsp 0.21+ 的能力注册；处理程序逻辑已完全实现。
 
 ## 竞争对比
 

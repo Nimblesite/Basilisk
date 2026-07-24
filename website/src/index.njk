@@ -1,7 +1,8 @@
 ---
 layout: layouts/base.njk
 title: "Basilisk — The Only 100% PEP-Conformant Python Language Server"
-description: "The only Python type checker with a perfect 100% score on the official python/typing conformance suite. Open-source language server in Rust — type checking, autocomplete, refactoring, debugging & profiling in VS Code, Cursor, Zed & Neovim."
+description: "Looking for the best Python type checker? Basilisk is the only one scoring 100% on the official typing-conformance suite — plus refactoring, debugging, profiling, and editor extensions."
+keywords: "best python type checker, basilisk, python type checker, python language server, 100% pep conformance, python/typing conformance results, lsp, strict typing, rust, vs code, cursor, zed, neovim"
 permalink: /
 ---
 
@@ -15,7 +16,7 @@ permalink: /
     <div class="hero__split">
 
       <div class="hero__text">
-        <span class="hero__kicker">// basilisk — alpha</span>
+        <span class="hero__kicker">// basilisk — 100% PEP conformant</span>
 
         <h1 class="hero__headline">
           The open-source<br>
@@ -23,13 +24,16 @@ permalink: /
         </h1>
 
         <p class="hero__subheadline">
-          Basilisk is a complete, open-source Python language server.
-          Autocomplete, go-to-definition, hover info, refactoring,
-          diagnostics, integrated debugging &mdash; everything you rely on,
-          without the proprietary lock-in. In VS Code, Cursor, Zed, and Neovim
-          &mdash; wherever you write Python. The only type checker with a perfect
-          {{ conformanceOfficial.basilisk.pct }}% score on the official
-          <code>python/typing</code> conformance suite &mdash; strict to taste, built in Rust.
+          The only Python type checker scoring
+          {{ conformanceOfficial.basilisk.pct }}% on the official
+          <code>python/typing</code> conformance suite &mdash; and the fastest we&rsquo;ve
+          measured. A complete, open-source Python dev environment in Rust:
+          type checker, language server, debugger, profiler &mdash; autocomplete,
+          go-to-definition, hover, refactoring, diagnostics and integrated
+          debugging in VS Code, Cursor, Zed, and Neovim, without the proprietary
+          lock-in. Strict by default. Weighing up the
+          <a href="/docs/comparison/">best Python type checker</a> for your
+          codebase? Start with the scoreboard.
         </p>
 
         <div class="hero__cta-group">
@@ -59,7 +63,7 @@ permalink: /
       <!-- Product video — Basilisk renaming a symbol across a project in VS Code.
            Autoplays muted/inline on load (browser autoplay policy needs muted). -->
       <div class="hero__code">
-        <video class="hero__shot" autoplay muted loop playsinline preload="auto" aria-label="Basilisk performing a project-wide rename refactor in VS Code — every reference to the symbol updates live as it is renamed">
+        <video class="hero__shot" autoplay muted loop playsinline preload="metadata" poster="/assets/images/rename-poster.jpg" width="1440" height="932" aria-label="Basilisk performing a project-wide rename refactor in VS Code — every reference to the symbol updates live as it is renamed">
           <source src="/assets/images/rename.mp4" type="video/mp4">
         </video>
       </div>
@@ -108,10 +112,10 @@ permalink: /
     <h2 class="section-heading">Everything you expect.<br>Fully open source.</h2>
     <p class="section-subhead">
       A feature-complete, open-source language server with no proprietary lock-in.{% if benchmarks.hasData and benchmarks.toolMedians.fastest == 'basilisk' %}
-      And in our own cold-start benchmark it is the fastest of every checker we tested: a
-      <strong>{{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms</strong> median cold check &mdash; up to
-      <strong>{{ benchmarks.vsPyright.maxFactor }}&times;</strong> faster than Pyright, and quicker than the
-      Rust-based ty, Pyrefly, and zuban too. If the numbers hold, nothing we&rsquo;ve benchmarked is faster.{% endif %}
+      And in our own cold-start benchmark it posts the lowest median of every checker we tested: a
+      <strong>{{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms</strong> median cold check, against
+      Pyright&rsquo;s {{ benchmarks.toolMedians.ms.pyright }}&nbsp;ms and the Rust-based ty, Pyrefly, and
+      zuban.{% endif %}
       Every competitor claim below links to that tool&rsquo;s own docs &mdash; and the
       <a href="/docs/benchmarks/">benchmark methodology</a> shows exactly how these were measured.
     </p>
@@ -235,7 +239,7 @@ permalink: /
   <div class="feature-row">
     <div class="feature-row__text">
       <p class="feature-row__num">01 &mdash; Conformance first</p>
-      <h2 class="feature-row__title">{{ conformance.scorePct }}% to the typing spec.<br>Pinned to the exact commit.</h2>
+      <h2 class="feature-row__title">{{ conformance.scorePct }}% to the typing spec.<br>Re-run against <code>main</code>, every release.</h2>
       <p class="feature-row__body">
         Scored by the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">python/typing conformance suite</a> &mdash; the same published
         harness that grades Pyright, mypy, and Pyrefly &mdash; run on the real binary with every
@@ -250,7 +254,7 @@ permalink: /
       <div class="stat-block">
         <span class="stat-block__number">{{ conformance.scorePct }}<span class="stat-block__unit">%</span></span>
         <span class="stat-block__label">PEP conformance score</span>
-        <span class="stat-block__sub">graded against <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %} ({{ conformance.commitDate }}){% endif %} &mdash; re-pinned every release</span>
+        <span class="stat-block__sub">graded against <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %} ({{ conformance.commitDate }}){% endif %} &mdash; re-cloned from <code>main</code> every release</span>
       </div>
     </div>
   </div>
@@ -258,19 +262,19 @@ permalink: /
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">{{ benchmarks.vsPyright.beats }}<span class="stat-block__unit">/{{ benchmarks.vsPyright.total }}</span></span>
-        <span class="stat-block__label">benchmarked constructs beat Pyright</span>
+        <span class="stat-block__number">{{ benchmarks.toolMedians.ms.basilisk }}<span class="stat-block__unit">&nbsp;ms</span></span>
+        <span class="stat-block__label">median cold full-file check</span>
       </div>
     </div>
     <div class="feature-row__text">
       <p class="feature-row__num">02 &mdash; Measured, not promised</p>
-      {% if benchmarks.toolMedians.fastest == 'basilisk' %}<h2 class="feature-row__title">The fastest checker<br>we&rsquo;ve benchmarked.</h2>{% else %}<h2 class="feature-row__title">Faster than Pyright.<br>Every construct we benchmark.</h2>{% endif %}
+      {% if benchmarks.toolMedians.fastest == 'basilisk' %}<h2 class="feature-row__title">The lowest median<br>we&rsquo;ve benchmarked.</h2>{% else %}<h2 class="feature-row__title">Measured against<br>every checker.</h2>{% endif %}
       <p class="feature-row__body">
         The numbers come from <code>make bench</code> &mdash; hyperfine wall-clock against Pyright,
         mypy, ty, Pyrefly, and zuban on identical fixtures &mdash; and the raw CSV is committed to
         the repo, so the site renders exactly what was last measured.
-        {% if benchmarks.toolMedians.fastest == 'basilisk' %}Basilisk posts the fastest cold full-file check of every tool we measured &mdash; a
-        {{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms median, up to {{ benchmarks.vsPyright.maxFactor }}&times; faster than Pyright.{% else %}On the constructs we benchmark, Basilisk&rsquo;s cold full-file checks beat Pyright outright.{% endif %}
+        {% if benchmarks.toolMedians.fastest == 'basilisk' %}Basilisk posts the lowest median cold full-file check of every tool we measured &mdash;
+        {{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms, against Pyright&rsquo;s {{ benchmarks.toolMedians.ms.pyright }}&nbsp;ms.{% else %}Each tool&rsquo;s median cold full-file check is published side by side.{% endif %}
         And because re-checks are incremental &mdash; only the edited file and its importers are
         re-analyzed &mdash; warm edits do even less work. <a href="/docs/benchmarks/">See the benchmark methodology &rarr;</a>
       </p>
@@ -297,7 +301,7 @@ permalink: /
         </div>
         <div class="code-window__body">
 <pre><span class="tok-cmt"># 💡 Quick Fix available</span>
-<span class="tok-kw">def</span> <span class="tok-fn">process</span>(data) <span class="tok-cmt"># BSK-E0001</span>
+<span class="tok-kw">def</span> <span class="tok-fn">process</span>(data) <span class="tok-cmt"># BSK-0001</span>
 
 <span class="tok-cmt"># → Add type annotation</span>
 <span class="tok-kw">def</span> <span class="tok-fn">process</span>(data<span class="tok-type">: str</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
@@ -323,9 +327,9 @@ permalink: /
         {{ ruleStats.strictness }} opt-in strictness rules refuse that: they require a type on every parameter,
         return, variable, <code>*args</code>/<code>**kwargs</code>, and class attribute, demand
         <code>@override</code> on overrides, reject implicit and explicit <code>Any</code>, and flag
-        unannotated lambdas. Every one is off by default &mdash; switch them on per-file or per-path
-        from your editor or <code>pyproject.toml</code>, and one-click enrichment fixes add the missing
-        types <em>for</em> you. They never run during conformance, so they can&rsquo;t pad that score.
+        unannotated lambdas. Every one is off by default &mdash; switch them on project-wide or per-folder
+        from your editor or <code>pyproject.toml</code>, and one-click quick-fixes drop in a placeholder
+        annotation (<code>: Any</code>, <code>-&gt; None</code>) so you can fill in the real type. They never run during conformance, so they can&rsquo;t pad that score.
         <a href="/docs/rules/">See the rules &rarr;</a>
       </p>
     </div>
@@ -390,7 +394,7 @@ permalink: /
       <h2>Open source.<br>Conformant by default.</h2>
       <div>
         <p>
-          Basilisk is in alpha. The type checker, LSP server, and editor
+          The type checker, LSP server, and editor
           extensions are working today &mdash; autocomplete, go-to-definition,
           hover info, diagnostics, refactoring, F5 debugging, and profiling &mdash;
           in VS Code, Cursor, Windsurf, Zed, and Neovim. JetBrains is on the way.

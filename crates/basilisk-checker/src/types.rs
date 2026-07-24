@@ -1,4 +1,6 @@
-//! Implements [TYPEINF-OVERVIEW]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-overview
+//! Implements [TYPEINF-OVERVIEW], [TYPEINF-SUBTYPING], and
+//! [TYPEINF-SPECIAL]. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVIEW
 //! Type representation for Basilisk's type inference engine.
 //!
 //! Annotation parsing logic lives in [`super::types_parsing`].
@@ -36,6 +38,8 @@ pub enum InferredType {
     Optional(Box<InferredType>),
     /// Callable type (`Callable[[params...], return]` or `Callable[..., return]`)
     Callable(CallableInfo),
+    /// Generator type (`Generator[Yield, Send, Return]`).
+    Generator(Box<InferredType>, Box<InferredType>, Box<InferredType>),
     /// Any type (`Any`) - explicit escape hatch.
     /// Implements [TYPEINF-SPECIAL-ANY] — the explicit escape hatch variant; never
     /// inferred as a fallback (unannotated params produce E0001, not `Any`).
@@ -125,6 +129,9 @@ impl fmt::Display for InferredType {
                     write!(f, "{param}")?;
                 }
                 write!(f, "], {}]", info.return_type)
+            }
+            InferredType::Generator(yield_type, send_type, return_type) => {
+                write!(f, "Generator[{yield_type}, {send_type}, {return_type}]")
             }
             InferredType::Any => write!(f, "Any"),
             InferredType::Never => write!(f, "Never"),
@@ -237,8 +244,10 @@ impl InferredType {
                 InferredType::Int | InferredType::Literal(LiteralValue::Float(_)),
                 InferredType::Float,
             )
+            // `bool` is a subclass of `int` (PEP 484), so plain `bool` widens
+            // through the whole tower exactly like `Literal[bool]` does below.
             | (
-                InferredType::Literal(LiteralValue::Int(_)),
+                InferredType::Literal(LiteralValue::Int(_)) | InferredType::Bool,
                 InferredType::Int | InferredType::Float,
             )
             | (
@@ -251,7 +260,7 @@ impl InferredType {
             )
             | (InferredType::Literal(LiteralValue::Bytes(_)), InferredType::Bytes)
             | (
-                InferredType::Str | InferredType::Literal(LiteralValue::Str(_)),
+                InferredType::Literal(LiteralValue::Str(_)),
                 InferredType::LiteralString,
             )
             // None is always assignable to Optional[T]
@@ -259,23 +268,30 @@ impl InferredType {
             // `None` satisfies `Hashable` (it defines `__hash__`). The annotation
             // parser lowercases names, so the ABC arrives as `Named("hashable")`.
             (InferredType::None_, InferredType::Named(name)) if name == "hashable" => true,
+            // Union on the LEFT decomposes before Optional-target unwrapping:
+            // `A | None <: Optional[B]` must check each variant against the
+            // whole `Optional[B]` (so the `None` arm can satisfy it), not
+            // against the unwrapped `B`.
+            // Implements [TYPEINF-SUBTYPING-UNION] — `A | B <: C` iff `A <: C` and
+            // `B <: C`.
+            (InferredType::Union(types), other) => types.iter().all(|t| t.is_assignable_to(other)),
             // Optional types are assignable to their non-optional counterparts.
             // Implements [TYPEINF-SUBTYPING-UNION] — Optional[T] = T | None handling.
             (InferredType::Optional(inner), other) => inner.is_assignable_to(other),
             (inner, InferredType::Optional(other)) => inner.is_assignable_to(other),
-            // Union types require all variants to be assignable.
-            // Implements [TYPEINF-SUBTYPING-UNION] — `A | B <: C` iff `A <: C` and
-            // `B <: C`; `A <: A | B` (a type is a subtype of any union containing it).
-            (InferredType::Union(types), other) => types.iter().all(|t| t.is_assignable_to(other)),
+            // `A <: A | B` (a type is a subtype of any union containing it).
             (inner, InferredType::Union(types)) => types.iter().any(|t| inner.is_assignable_to(t)),
-            // Container types require element type assignability.
+            // Mutable containers are invariant: each argument must be
+            // compatible in both directions. This preserves gradual `Any` /
+            // `Unknown` compatibility while rejecting one-way widening such
+            // as `list[int]` -> `list[float]`.
             // Implements [TYPEINF-SUBTYPING-GENERIC] — list/set/dict are invariant
             // here (element types checked structurally, no cross-container matching).
             // List and Set cannot use or-patterns — that would incorrectly allow cross-matching.
             (InferredType::List(a), InferredType::List(b))
-            | (InferredType::Set(a), InferredType::Set(b)) => a.is_assignable_to(b),
+            | (InferredType::Set(a), InferredType::Set(b)) => invariantly_assignable(a, b),
             (InferredType::Dict(a_key, a_val), InferredType::Dict(b_key, b_val)) => {
-                a_key.is_assignable_to(b_key) && a_val.is_assignable_to(b_val)
+                invariantly_assignable(a_key, b_key) && invariantly_assignable(a_val, b_val)
             }
             (InferredType::Tuple(a), InferredType::Tuple(b)) => {
                 // Implements [TYPEINF-COLLECTIONS-TUPLES] — fixed-length positional
@@ -349,8 +365,10 @@ impl InferredType {
                     return true;
                 }
 
-                // Check parameter count
-                if a.param_types.len() != b.param_types.len() {
+                // Required parameter positions are contravariant. A source may
+                // require fewer parameters than the target because its trailing
+                // positions can be satisfied by defaults; it may not require more.
+                if a.param_types.len() > b.param_types.len() {
                     return false;
                 }
 
@@ -362,6 +380,9 @@ impl InferredType {
                 }
 
                 true
+            }
+            (a @ InferredType::Generator(..), b @ InferredType::Generator(..)) => {
+                generator_assignable(a, b)
             }
             // TypeForm covariance: TypeForm[S] is assignable to TypeForm[T] if S is assignable to T.
             (InferredType::TypeForm(inner_a), InferredType::TypeForm(inner_b)) => {
@@ -384,139 +405,25 @@ impl InferredType {
     }
 }
 
-/// Returns the element type `X` when `elems` is the homogeneous variable-length
-/// tuple form `tuple[X, ...]`.
-///
-/// Implements [TYPEINF-OVERVIEW]. The annotation parser ([`super::types_parsing`])
-/// represents the `...` terminator as `Named("...")`, so `tuple[str, ...]` becomes
-/// `Tuple([Str, Named("...")])`. Distinguishing this from a fixed-length tuple is
-/// what lets a literal `(a, b, c)` widen to `tuple[X, ...]` (PEP 484).
-fn homogeneous_tuple_elem(elems: &[InferredType]) -> Option<&InferredType> {
-    match elems {
-        [elem, InferredType::Named(terminator)] if terminator == "..." => Some(elem),
-        _ => None,
-    }
+fn invariantly_assignable(left: &InferredType, right: &InferredType) -> bool {
+    left.is_assignable_to(right) && right.is_assignable_to(left)
 }
 
-/// Returns `true` when a tuple element is an unpacked variadic segment — either
-/// `*tuple[...]` or a `*Ts` `TypeVarTuple`. The annotation parser stores these as
-/// `Named` text beginning with `*`.
-fn is_unpacked_tuple_elem(elem: &InferredType) -> bool {
-    matches!(elem, InferredType::Named(name) if name.starts_with('*'))
-}
-
-/// What an unpacked `*tuple[...]` / `*Ts` segment consumes from a source tuple.
-enum StarSegment {
-    /// `*tuple[X, ...]` or `*Ts` — zero or more elements, each assignable to the
-    /// element type (`None` ⇒ any, for `*Ts` / `*tuple[Any, ...]`).
-    Variadic(Option<InferredType>),
-    /// `*tuple[X, Y]` — a fixed run of elements consumed positionally.
-    Fixed(Vec<InferredType>),
-}
-
-/// Parse an unpacked tuple element (`Named("*tuple[...]")` / `Named("*ts")`).
-fn parse_star_segment(name: &str) -> StarSegment {
-    let Some(inner) = name
-        .strip_prefix("*tuple[")
-        .and_then(|rest| rest.strip_suffix(']'))
+/// Generator yield/return positions are covariant; the value sent back into
+/// the suspended generator is contravariant.
+fn generator_assignable(left: &InferredType, right: &InferredType) -> bool {
+    let (
+        InferredType::Generator(left_yield, left_send, left_return),
+        InferredType::Generator(right_yield, right_send, right_return),
+    ) = (left, right)
     else {
-        // `*Ts` (a TypeVarTuple) — any number of elements of any type.
-        return StarSegment::Variadic(None);
+        return false;
     };
-    let parts = crate::types_parsing::split_type_params(inner);
-    if matches!(parts.last(), Some(last) if last.trim() == "...") {
-        // `*tuple[X, ...]` — homogeneous, zero or more of `X`.
-        let elem = parts
-            .first()
-            .map(|p| InferredType::from_annotation(p.trim()));
-        return StarSegment::Variadic(elem);
-    }
-    StarSegment::Fixed(
-        parts
-            .iter()
-            .map(|p| InferredType::from_annotation(p.trim()))
-            .collect(),
-    )
+    left_yield.is_assignable_to(right_yield)
+        && right_send.is_assignable_to(left_send)
+        && left_return.is_assignable_to(right_return)
 }
 
-/// Match a fixed-length source tuple against a target tuple that contains a
-/// single unpacked `*tuple[...]` / `*Ts` segment (PEP 646), using
-/// prefix/middle/suffix decomposition.
-fn tuple_assignable_with_star(source: &[InferredType], target: &[InferredType]) -> bool {
-    // Unhandled shapes return `true` (assignable) rather than `false`: this is a
-    // best-effort matcher and must never manufacture a false positive. Only a
-    // pattern we actually decompose may return `false` (a real mismatch).
-    //
-    // A variadic source, multiple unpacked segments, or a `*Ts` we can't read
-    // all need full PEP 646 unification — be permissive.
-    if source.iter().any(is_unpacked_tuple_elem) {
-        return true;
-    }
-    // A homogeneous variadic source (`tuple[X, ...]`) has unknown length —
-    // prefix/middle/suffix decomposition cannot prove a mismatch.
-    if homogeneous_tuple_elem(source).is_some() {
-        return true;
-    }
-    let Some(star_idx) = target.iter().position(is_unpacked_tuple_elem) else {
-        return true;
-    };
-    let (prefix, rest) = target.split_at(star_idx);
-    let Some((star_elem, suffix)) = rest.split_first() else {
-        return true;
-    };
-    // Only one unpacked segment is supported.
-    if suffix.iter().any(is_unpacked_tuple_elem) {
-        return true;
-    }
-    let InferredType::Named(star_name) = star_elem else {
-        return true;
-    };
-
-    match parse_star_segment(star_name) {
-        StarSegment::Variadic(elem) => {
-            let Some(middle_len) = source.len().checked_sub(prefix.len() + suffix.len()) else {
-                return false;
-            };
-            prefix_suffix_match(source, prefix, suffix)
-                && match elem {
-                    None => true,
-                    Some(elem_ty) => source
-                        .iter()
-                        .skip(prefix.len())
-                        .take(middle_len)
-                        .all(|s| s.is_assignable_to(&elem_ty)),
-                }
-        }
-        StarSegment::Fixed(middle) => {
-            if source.len() != prefix.len() + middle.len() + suffix.len() {
-                return false;
-            }
-            prefix_suffix_match(source, prefix, suffix)
-                && source
-                    .iter()
-                    .skip(prefix.len())
-                    .take(middle.len())
-                    .zip(middle.iter())
-                    .all(|(s, m)| s.is_assignable_to(m))
-        }
-    }
-}
-
-/// Check that a source tuple's leading elements match `prefix` and trailing
-/// elements match `suffix` (both fixed, non-starred). Callers guarantee
-/// `source.len() >= prefix.len() + suffix.len()`.
-fn prefix_suffix_match(
-    source: &[InferredType],
-    prefix: &[InferredType],
-    suffix: &[InferredType],
-) -> bool {
-    source
-        .iter()
-        .zip(prefix.iter())
-        .all(|(s, p)| s.is_assignable_to(p))
-        && source
-            .iter()
-            .rev()
-            .zip(suffix.iter().rev())
-            .all(|(s, q)| s.is_assignable_to(q))
-}
+pub(crate) use crate::types_star_tuples::{
+    homogeneous_tuple_elem, is_unpacked_tuple_elem, tuple_assignable_with_star,
+};

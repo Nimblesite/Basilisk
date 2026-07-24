@@ -1,5 +1,5 @@
-//! Implements [BSK-W0012] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-W0012: Unused dependency.
+//! Implements [BSK-0012] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! BSK-0012: Unused dependency.
 //!
 //! Fires when a package is declared in `[project.dependencies]` but no module
 //! in the workspace imports it. This indicates a dependency that can be removed,
@@ -12,11 +12,11 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{info_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
-/// Emits BSK-W0012 when a declared dependency is never imported across the
+/// Emits BSK-0012 when a declared dependency is never imported across the
 /// workspace.
 ///
 /// This rule is a skeleton awaiting workspace-level aggregate import data.
@@ -33,10 +33,10 @@ pub(crate) struct UnusedDependency;
     )
 )]
 impl UnusedDependency {
-    /// Diagnostic code for BSK-W0012.
+    /// Diagnostic code for BSK-0012.
     pub(crate) const CODE: ErrorCode = ErrorCode {
-        code: "BSK-W0012",
-        docs_url: "https://www.basilisk-python.dev/warnings/BSK-W0012",
+        code: "BSK-0012",
+        docs_url: "https://www.basilisk-python.dev/errors/BSK-0012",
     };
 
     /// Build the diagnostic for an unused dependency.
@@ -47,7 +47,7 @@ impl UnusedDependency {
         path: &str,
         span: basilisk_resolver::Span,
     ) -> Diagnostic {
-        info_diagnostic_owned(
+        warning_diagnostic_owned(
             Self::CODE.clone(),
             format!(
                 "Package `{package_name}` is declared in [project.dependencies] but never imported"
@@ -81,7 +81,7 @@ impl Rule for UnusedDependency {
         // Implementation approach:
         // 1. Collect all root import modules across the workspace
         // 2. Compare against PackageRegistry direct deps
-        // 3. Emit BSK-W0012 for direct deps with no matching import
+        // 3. Emit BSK-0012 for direct deps with no matching import
     }
 }
 
@@ -113,8 +113,8 @@ mod tests {
     #[test]
     fn make_diagnostic_produces_correct_code() {
         let diagnostic = UnusedDependency::make_diagnostic("flask", "test.py", Span::new(0, 10));
-        assert_eq!(diagnostic.code.code, "BSK-W0012");
-        assert_eq!(diagnostic.severity, Severity::Info);
+        assert_eq!(diagnostic.code.code, "BSK-0012");
+        assert_eq!(diagnostic.severity, Severity::Warning);
         assert!(diagnostic.message.contains("flask"));
         assert!(diagnostic.message.contains("never imported"));
     }

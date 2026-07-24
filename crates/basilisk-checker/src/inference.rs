@@ -1,4 +1,7 @@
-//! Implements [TYPEINF-ALGO]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-algo
+//! Implements [TYPEINF-OVERVIEW], [TYPEINF-INFERRED], [TYPEINF-ALGO],
+//! [TYPEINF-VARS], [TYPEINF-VARS-SIMPLE], and the shared predicates behind
+//! [TYPEINF-REQUIRED] / [TYPEINF-EXCEEDS]. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md.
 //! Type inference engine for Basilisk.
 
 use crate::types::InferredType;
@@ -10,7 +13,10 @@ pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
     match rhs {
         RhsKind::IntLiteral => InferredType::Int,
         RhsKind::FloatLiteral => InferredType::Float,
-        RhsKind::StrLiteral => InferredType::Str,
+        // PEP 675: a literal expression is provably a LiteralString. Plain
+        // `str` remains reserved for dynamic string values, preserving that
+        // distinction through container inference.
+        RhsKind::StrLiteral => InferredType::LiteralString,
         RhsKind::BoolLiteral => InferredType::Bool,
         RhsKind::BytesLiteral => InferredType::Bytes,
         RhsKind::NoneValue => InferredType::None_,
@@ -35,6 +41,171 @@ pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
                 return_type: Box::new(InferredType::Unknown),
             })
         }
+    }
+}
+
+/// Checks a freshly-constructed collection *literal* against a declared
+/// container type using **covariant, contextual** typing.
+///
+/// Implements [TYPEINF-SPECIAL-LITERAL-CONTEXT]. A stored value keeps the
+/// invariant subtyping of [TYPEINF-SUBTYPING-GENERIC]: `c: list[Never]` is not
+/// assignable to `list[int]`, and `specialtypes_never.py` requires that error.
+/// But a literal expression has no aliasing, so in a `return`/`yield` context it
+/// is typed *against* the expected type — `return []` constructs a `list[bytes]`
+/// directly, and `yield {"": 0}` a `dict[str, int]` — rather than first becoming
+/// a `list[Never]` / `dict[LiteralString, int]` value and then failing
+/// invariance. Each literal element need only be assignable *to* the declared
+/// element type.
+///
+/// Returns `None` when `rhs` is not a collection literal this can judge against
+/// `declared`, so callers fall back to the invariant
+/// [`InferredType::is_assignable_to`]. Genuine element mismatches (`return [1]`
+/// against `list[str]`) still yield `Some(false)`, preserving required errors.
+#[must_use]
+pub fn literal_collection_assignable_to(rhs: &RhsKind, declared: &InferredType) -> Option<bool> {
+    match declared {
+        // A literal fits a union/optional iff it fits at least one member.
+        InferredType::Union(members) => {
+            // A literal fits a union iff it fits at least one member. If any
+            // member is UNJUDGEABLE here (`None` — e.g. an `Any`/`object` arm),
+            // we cannot definitively reject: defer to the caller's invariant
+            // fallback (which accepts via that arm). Only return `Some(false)`
+            // when EVERY member was judged and none accepted — otherwise a
+            // valid `return [1]` for `list[str] | object` becomes a false
+            // positive (the `object` arm parses to `Any`).
+            let mut saw_unjudgeable = false;
+            for member in members {
+                match literal_collection_assignable_to(rhs, member) {
+                    Some(true) => return Some(true),
+                    Some(false) => {}
+                    None => saw_unjudgeable = true,
+                }
+            }
+            if saw_unjudgeable {
+                None
+            } else {
+                Some(false)
+            }
+        }
+        InferredType::Optional(inner) => literal_collection_assignable_to(rhs, inner),
+        InferredType::List(elem) => match rhs {
+            RhsKind::EmptyList => Some(true),
+            RhsKind::List(elements) => Some(
+                elements
+                    .iter()
+                    .all(|e| literal_element_assignable_to(e, elem)),
+            ),
+            _ => None,
+        },
+        InferredType::Set(elem) => match rhs {
+            RhsKind::Set(elements) => Some(
+                elements
+                    .iter()
+                    .all(|e| literal_element_assignable_to(e, elem)),
+            ),
+            _ => None,
+        },
+        InferredType::Dict(key_ty, val_ty) => match rhs {
+            RhsKind::EmptyDict => Some(true),
+            RhsKind::Dict(pairs) => Some(pairs.iter().all(|(key, value)| {
+                literal_element_assignable_to(key, key_ty)
+                    && literal_element_assignable_to(value, val_ty)
+            })),
+            _ => None,
+        },
+        InferredType::Tuple(declared_elems) => match rhs {
+            RhsKind::Tuple(elements) => tuple_literal_assignable_to(elements, declared_elems),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Contextual typing for a tuple display against a declared tuple type: each
+/// position carries the declared element type inward, so an empty `[]`/`{}`
+/// nested in the tuple constructs the declared container instead of a
+/// `list[Never]` / `dict[Never, Never]` that then fails invariance (#337).
+///
+/// Implements [TYPEINF-SPECIAL-LITERAL-CONTEXT] for the tuple shapes of
+/// [TYPEINF-COLLECTIONS-TUPLES]. Returns `None` for shapes this cannot judge —
+/// a PEP 646 unpacked segment or an arity mismatch — leaving those to the
+/// invariant fallback unchanged.
+fn tuple_literal_assignable_to(
+    elements: &[RhsKind],
+    declared_elems: &[InferredType],
+) -> Option<bool> {
+    if declared_elems
+        .iter()
+        .any(crate::types_star_tuples::is_unpacked_tuple_elem)
+    {
+        return None;
+    }
+    // `tuple[X, ...]` (PEP 484 homogeneous): every position is typed against `X`.
+    if let Some(elem) = crate::types_star_tuples::homogeneous_tuple_elem(declared_elems) {
+        return Some(
+            elements
+                .iter()
+                .all(|element| literal_element_assignable_to(element, elem)),
+        );
+    }
+    if elements.len() != declared_elems.len() {
+        return None;
+    }
+    Some(
+        elements
+            .iter()
+            .zip(declared_elems)
+            .all(|(element, declared)| literal_element_assignable_to(element, declared)),
+    )
+}
+
+/// Assignability of a single literal element: a nested collection literal stays
+/// covariant/contextual; anything else uses its ordinary inferred type.
+fn literal_element_assignable_to(rhs: &RhsKind, declared: &InferredType) -> bool {
+    literal_collection_assignable_to(rhs, declared)
+        .unwrap_or_else(|| infer_rhs(rhs).is_assignable_to(declared))
+}
+
+/// Returns `true` when the CURRENT engine fully determines a usable declared
+/// type from this RHS alone — i.e. [`infer_rhs`] produces a type with no
+/// `Unknown`/`Never` component and no widening guess.
+///
+/// Implements [TYPEINF-EXCEEDS-REQUIRED]: a missing-annotation rule
+/// (BSK-0001/BSK-0002) must never fire where this returns `true`, and must
+/// keep firing where it returns `false`. The predicate is deliberately exactly
+/// as strong as today's inference and no stronger:
+///
+/// - scalar literals (`int`/`float`/`str`/`bool`/`bytes`) determine their type;
+/// - non-empty containers of determining elements determine theirs;
+/// - `None` does NOT determine a declared type (`T | None` needs `T`);
+/// - empty containers do NOT (element types unknown);
+/// - calls, lambdas, names, and arbitrary expressions do NOT
+///   ([TYPEINF-EXCEEDS-NOUNKNOWN] keeps them `Unknown`).
+#[must_use]
+pub fn rhs_fully_determines_type(rhs: &RhsKind) -> bool {
+    match rhs {
+        RhsKind::IntLiteral
+        | RhsKind::FloatLiteral
+        | RhsKind::StrLiteral
+        | RhsKind::BoolLiteral
+        | RhsKind::BytesLiteral => true,
+        RhsKind::List(elements) | RhsKind::Set(elements) | RhsKind::Tuple(elements) => {
+            !elements.is_empty() && elements.iter().all(rhs_fully_determines_type)
+        }
+        RhsKind::Dict(pairs) => {
+            !pairs.is_empty()
+                && pairs
+                    .iter()
+                    .all(|(k, v)| rhs_fully_determines_type(k) && rhs_fully_determines_type(v))
+        }
+        RhsKind::NoneValue
+        | RhsKind::EmptyList
+        | RhsKind::EmptyDict
+        | RhsKind::CallExpr
+        | RhsKind::KnownCall(_)
+        | RhsKind::TypeCall
+        | RhsKind::Lambda
+        | RhsKind::Other => false,
     }
 }
 
@@ -174,4 +345,80 @@ pub fn infer_flow_union_types(
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rhs_fully_determines_type;
+    use basilisk_resolver::RhsKind;
+
+    /// [TYPEINF-EXCEEDS-REQUIRED]: scalar literals fully determine a declared
+    /// type; the annotation rules must stay silent on them.
+    #[test]
+    fn scalar_literals_determine_the_type() {
+        for kind in [
+            RhsKind::IntLiteral,
+            RhsKind::FloatLiteral,
+            RhsKind::StrLiteral,
+            RhsKind::BoolLiteral,
+            RhsKind::BytesLiteral,
+        ] {
+            assert!(
+                rhs_fully_determines_type(&kind),
+                "{kind:?} must determine its type"
+            );
+        }
+    }
+
+    /// [TYPEINF-EXCEEDS-REQUIRED]: `None`, empty containers, calls, lambdas,
+    /// and arbitrary expressions do NOT determine a usable declared type — the
+    /// annotation rules must keep firing there.
+    #[test]
+    fn non_determining_kinds_keep_the_rules_firing() {
+        for kind in [
+            RhsKind::NoneValue,
+            RhsKind::EmptyList,
+            RhsKind::EmptyDict,
+            RhsKind::CallExpr,
+            RhsKind::KnownCall(Box::new(RhsKind::IntLiteral)),
+            RhsKind::TypeCall,
+            RhsKind::Lambda,
+            RhsKind::Other,
+        ] {
+            assert!(
+                !rhs_fully_determines_type(&kind),
+                "{kind:?} must NOT determine a type"
+            );
+        }
+    }
+
+    /// Containers determine their type iff non-empty and every element (or
+    /// key/value pair) determines its own.
+    #[test]
+    fn containers_recurse_and_reject_unknown_elements() {
+        assert!(rhs_fully_determines_type(&RhsKind::List(vec![
+            RhsKind::IntLiteral,
+            RhsKind::IntLiteral,
+        ])));
+        assert!(rhs_fully_determines_type(&RhsKind::Tuple(vec![
+            RhsKind::StrLiteral,
+            RhsKind::BoolLiteral,
+        ])));
+        assert!(rhs_fully_determines_type(&RhsKind::Dict(vec![(
+            RhsKind::StrLiteral,
+            RhsKind::IntLiteral,
+        )])));
+        // An uninferable element poisons the whole container.
+        assert!(!rhs_fully_determines_type(&RhsKind::List(vec![
+            RhsKind::IntLiteral,
+            RhsKind::CallExpr,
+        ])));
+        assert!(!rhs_fully_determines_type(&RhsKind::Dict(vec![(
+            RhsKind::StrLiteral,
+            RhsKind::Other,
+        )])));
+        // Empty collections carry no element information.
+        assert!(!rhs_fully_determines_type(&RhsKind::List(vec![])));
+        assert!(!rhs_fully_determines_type(&RhsKind::Dict(vec![])));
+    }
 }

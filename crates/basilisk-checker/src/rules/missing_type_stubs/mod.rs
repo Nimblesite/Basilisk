@@ -1,13 +1,13 @@
-//! Implements [BSK-E0152] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0152: Missing type stubs for installed package.
+//! Implements [BSK-0152] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
+//! BSK-0152: Missing type stubs for installed package.
 //!
 //! Fires when a package is imported and resolves to a `.py` source file (not
 //! `.pyi`) without a `py.typed` marker. This means the package is installed
 //! but lacks type information, reducing type safety. This rule is off by
 //! default — the default configuration is pure PEP conformance — and a project
-//! opts in via configuration (`uv.stubSuggestions`). Once enabled, an untyped
+//! opts in with an explicit `BSK-0152` severity. Once enabled, an untyped
 //! third-party import is a hard error; a project can soften it per import
-//! (`# type: warning[BSK-E0152]`) or globally (`"BSK-E0152" = "warning"`) to
+//! (`# type: warning[BSK-0152]`) or globally (`"BSK-0152" = "warning"`) to
 //! use non-type-safe libraries at its own risk.
 //!
 //! ```python
@@ -29,11 +29,11 @@ use super::Rule;
 mod tests;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0152",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0152",
+    code: "BSK-0152",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-0152",
 };
 
-/// Emits BSK-E0152 when an imported package resolves to a `.py` source file
+/// Emits BSK-0152 when an imported package resolves to a `.py` source file
 /// without a `py.typed` marker, indicating missing type stubs.
 pub(crate) struct MissingTypeStubs;
 
@@ -45,10 +45,10 @@ impl Rule for MissingTypeStubs {
         })
     }
 
-    // Implements [STUBRES-PEP561] step 6 (no stubs found) — fires the BSK-E0152
+    // Implements [STUBRES-PEP561] after step 6 is exhausted — fires BSK-0152
     // import-site diagnostic only for a site-packages `.py` import that is not
     // stdlib and carries no PEP 561 `py.typed` marker (i.e. resolution exhausted
-    // steps 1-5 without type information).
+    // all six steps without type information).
     fn check(
         &self,
         module: &ResolvedModule,
@@ -59,7 +59,6 @@ impl Rule for MissingTypeStubs {
             .imports
             .iter()
             .filter(|import| import.resolution == ImportResolution::SourcePy)
-            .filter(|import| !basilisk_stubs::is_stdlib_module(&import.module))
             .filter(|import| is_site_packages_import(import))
             .filter(|import| !has_py_typed_marker(import))
             .for_each(|import| diagnostics.push(make_diagnostic(import, &module.path)));
@@ -109,11 +108,11 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
         message: format!("Package `{root_module}` is installed but has no type stubs available"),
         span: import.span,
         path: path.to_owned(),
-        help: Some(stub_help_text(root_module)),
+        help: Some(stub_help_text(root_module, import.stub_distribution.as_deref()).into()),
         note: Some(
             "Packages without type stubs or a PEP 561 `py.typed` marker provide no type \
              information — https://peps.python.org/pep-0561/"
-                .to_owned(),
+                .into(),
         ),
         provenance: Some(TypeProvenance::Untyped),
     }
@@ -133,8 +132,8 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
 /// Implements [LSPUV-DIAGNOSTICS-MISSING-STUBS]: the typeshed branch is gated
 /// on the bundled typeshed index — stub names are never guessed by
 /// concatenation.
-fn stub_help_text(root_module: &str) -> String {
-    match basilisk_stubs::typeshed_stub_distribution(root_module) {
+fn stub_help_text(root_module: &str, distribution: Option<&str>) -> String {
+    match distribution {
         Some(distribution) => {
             format!("Type stubs available as `{distribution}` — use quick fix to install")
         }

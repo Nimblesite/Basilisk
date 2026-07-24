@@ -5,7 +5,7 @@
 # Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup mutation-test conformance bench reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease
+.PHONY: build test lint fmt clean ci setup book mutation-test conformance bench reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -25,9 +25,55 @@ endif
 _EXTENSION_DIR             := vscode-extension
 _ZED_DIR                   := basilisk-zed
 _NVIM_DIR                  := basilisk.nvim
+_BOOK_DIR                  := book
 _MUTATION_DIR              := mutation_testing
 _MUTATION_TEST_PACKAGE     := basilisk-checker
 _MUTATION_TEST_MARKER      := mutation_safe
+# Which crate to mutate. Every crate here mutates ALL its source (no code
+# exclusions); only the TEST suite is scoped per crate (see mutation-test).
+PKG                        ?= basilisk-checker
+# EXISTING checker test binaries fed to the mutation run as the killing suite.
+# These are the broad, FAST rule-test binaries already in the repo (thousands of
+# assertions, sub-2s to execute); they are what actually kill the whole-crate
+# mutant pool. Add existing binaries here to raise the kill rate — never invent
+# new tests just for mutation. Slow/E2E-ish binaries are deliberately omitted so
+# the per-mutant test run stays cheap.
+#
+# Order matters, but only a little. `cargo test` stops at the first failing
+# binary, so a mutant dies as soon as a binary that kills it runs;
+# `mutation_kill_tests` exists to kill these mutants, so it runs first. Measured
+# effect of the move alone: 31 -> 30 timeouts. It is kept because it is free and
+# directionally right, NOT because it solved anything — see `--timeout` below for
+# what actually did ([CHKARCH-TESTING-MUTATION-RATCHET]).
+_CHECKER_MUTATION_TESTS := \
+	--test mutation_kill_tests \
+	--test coverage_boost_tests \
+	--test coverage_boost_32_tests \
+	--test coverage_boost_33_tests \
+	--test coverage_boost_34_tests \
+	--test coverage_boost_35_tests \
+	--test coverage_boost_36_tests \
+	--test coverage_boost_37_tests \
+	--test coverage_boost_38_tests \
+	--test checker_tests \
+	--test checker_rules_a_tests \
+	--test checker_rules_b_tests \
+	--test checker_rules_c_tests \
+	--test checker_rules_d_tests \
+	--test checker_rules_e_tests \
+	--test checker_rules_f_tests \
+	--test checker_rules_g_tests \
+	--test comprehensive_rules_tests \
+	--test advanced_rules_tests \
+	--test categorical_tests \
+	--test fp_elimination_tests \
+	--test config_override_tests \
+	--test rule_tags_tests \
+	--test cached_tests \
+	--test incremental_tests \
+	--test incremental_cross_tests \
+	--test incremental_resolved_tests \
+	--test inference_all_tests
 _COVERAGE_THRESHOLDS_FILE  := coverage-thresholds.json
 OPEN                       ?= 0
 ALL                        ?= 0
@@ -48,7 +94,7 @@ test: _audit
 	echo -e '\n\033[0;32m✓ All tests passed.\033[0m'
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.
-lint: _lint_rust _lint_vsix _lint_deslop
+lint: _lint_rust _lint_vsix _lint_deslop _lint_docs
 
 ## fmt: Format all code in-place
 fmt: _fmt_rust _fmt_python _fmt_vsix
@@ -67,26 +113,42 @@ setup:
 # Repo-Specific Targets
 # =============================================================================
 
-## mutation-test: Run mutation-safe tests. Use ALL=1 for full checker suite.
+## book: Build and EPUBCheck The Basilisk Book outline EPUB
+book:
+	@$(MAKE) --no-print-directory -C $(_BOOK_DIR) epub
+
+## mutation-test: Mutate a crate's source and kill with its fast test suite.
+## PKG=basilisk-checker (default) | basilisk-lsp. The per-PR `working` gate scopes
+## mutants to the functions the mutation-safe binaries cover (via
+## scripts/mutation_examine_re.py) so it finishes inside CI's 60-min budget. Use
+## ALL=1 for the WHOLE-crate run (examine_re=".", every line, no exclusions) —
+## thorough but hours-long, so it is an offline/scheduled run, never the PR gate.
 mutation-test:
 	@bash -euo pipefail -c '\
-		package="$(_MUTATION_TEST_PACKAGE)"; \
+		package="$(PKG)"; \
 		marker="$(_MUTATION_TEST_MARKER)"; \
 		mutation_rustflags="$${RUSTFLAGS:-}"; \
-		mode="working"; \
-		test_filter="$$marker"; \
-		examine_re=""; \
+		examine_re="."; \
 		shard="$(SHARD)"; \
 		shard_arg=""; \
 		mutation_check="$(MUTATION_CHECK)"; \
-		if [ "$(ALL)" = "1" ]; then \
+		test_args=""; \
+		test_desc=""; \
+		if [ "$(ALL)" = "1" ] && [ "$$package" = "basilisk-checker" ]; then \
 			mode="all"; \
-			test_filter=""; \
-			examine_re="."; \
+			test_args=""; \
+			test_desc="all tests (unscoped); mutants: WHOLE crate (examine_re=.)"; \
+		elif [ "$$package" = "basilisk-lsp" ]; then \
+			mode="lsp"; \
+			test_args="--lib"; \
+			test_desc="lib unit tests (--lib; no E2E)"; \
 		else \
+			mode="working"; \
 			mutation_rustflags="$${mutation_rustflags:+$$mutation_rustflags }--cfg mutation_testing"; \
+			test_args="--lib $(_CHECKER_MUTATION_TESTS)"; \
+			test_desc="lib unit tests + broad existing rule-test binaries"; \
 			tests_file="$$(mktemp)"; \
-			RUSTFLAGS="$$mutation_rustflags" cargo test --package "$$package" "$$marker" -- --list > "$$tests_file"; \
+			RUSTFLAGS="$$mutation_rustflags" cargo test --package "$$package" "$$marker" -- --list > "$$tests_file" 2>/dev/null || true; \
 			examine_re="$$(python3 scripts/mutation_examine_re.py "$$tests_file")"; \
 			rm -f "$$tests_file"; \
 		fi; \
@@ -103,13 +165,17 @@ mutation-test:
 			fi; \
 		fi; \
 		echo -e "\033[1m\033[0;36m▶ Mutation testing ($$mode): $$package\033[0m"; \
-		echo -e "\033[0;36m  [diag] Tests: $${test_filter:-all}\033[0m"; \
-		echo -e "\033[0;36m  [diag] Mutants: $$examine_re\033[0m"; \
+		echo -e "\033[0;36m  [diag] Tests: $$test_desc\033[0m"; \
+		echo -e "\033[0;36m  [diag] Mutant selection (examine_re): $$examine_re\033[0m"; \
 		if [ -n "$$shard" ]; then \
 			echo -e "\033[0;36m  [diag] Shard: $$shard\033[0m"; \
 		fi; \
-		mutation_jobs="$${MUTATION_JOBS:-$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}"; \
-		echo -e "\033[0;36m  [diag] Parallel jobs: $$mutation_jobs\033[0m"; \
+		cores="$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"; \
+		half_cores="$$(( cores / 2 ))"; \
+		default_jobs="$$(( half_cores < 4 ? half_cores : 4 ))"; \
+		[ "$$default_jobs" -lt 1 ] && default_jobs=1 || true; \
+		mutation_jobs="$${MUTATION_JOBS:-$$default_jobs}"; \
+		echo -e "\033[0;36m  [diag] Parallel jobs: $$mutation_jobs (cores=$$cores; capped low — each job is a full cargo rebuild, over-parallelism starves the test phase into false TIMEOUTs)\033[0m"; \
 		out_dir="$(_MUTATION_DIR)/mutants.out.$$mode"; \
 		rm -rf "$$out_dir"; \
 		mutants_count="$$(RUSTFLAGS="$$mutation_rustflags" cargo mutants --list --package "$$package" --re "$$examine_re" $$shard_arg | wc -l | tr -d " ")"; \
@@ -118,17 +184,18 @@ mutation-test:
 			exit 1; \
 		fi; \
 		echo -e "\033[0;36m  [diag] Total mutants: $$mutants_count\033[0m"; \
-		if [ -n "$$test_filter" ]; then \
+		echo -e "\033[0;36m  [diag] Test timeout: 400s — a mutated lib relinks every test binary in each parallel job; at 120s that link cost alone exhausted the budget, so killable mutants were recorded as TIMEOUT and credited as kills without ever being evaluated\033[0m"; \
+		if [ -n "$$test_args" ]; then \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
-				--jobs "$$mutation_jobs" --timeout 60 --baseline skip --copy-target true \
-				--package "$$package" --re "$$examine_re" \
+				--jobs "$$mutation_jobs" --timeout 400 --build-timeout 600 --baseline skip --copy-target true \
+				--package "$$package" --test-package "$$package" --re "$$examine_re" \
 				$$shard_arg \
 				--output "$$out_dir" \
-				-- --test coverage_boost_33_tests --test mutation_kill_tests "$$test_filter" || true; \
+				-- $$test_args || true; \
 		else \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
-				--jobs "$$mutation_jobs" --timeout 60 --baseline skip --copy-target true \
-				--package "$$package" --re "$$examine_re" \
+				--jobs "$$mutation_jobs" --timeout 400 --build-timeout 600 --baseline skip --copy-target true \
+				--package "$$package" --test-package "$$package" --re "$$examine_re" \
 				$$shard_arg \
 				--output "$$out_dir" || true; \
 		fi; \
@@ -142,7 +209,8 @@ mutation-test:
 		[ -s "$$unviable_file" ] && unviable="$$(wc -l < "$$unviable_file" | tr -d " ")" || true; \
 		[ -s "$$caught_file" ] && caught="$$(wc -l < "$$caught_file" | tr -d " ")" || true; \
 		[ -s "$$timeout_file" ] && timed_out="$$(wc -l < "$$timeout_file" | tr -d " ")" || true; \
-		echo -e "\033[1m\033[0;36m▶ Results: $$mutants_count mutants — $$caught caught, $$missed missed, $$unviable unviable, $$timed_out timeout\033[0m"; \
+		killed="$$((caught + timed_out))"; \
+		echo -e "\033[1m\033[0;36m▶ Results: $$mutants_count mutants — $$killed killed ($$caught caught + $$timed_out timeout-as-kill), $$missed missed, $$unviable unviable\033[0m"; \
 		report="$(_MUTATION_DIR)/mutants_report.html"; \
 		scores="$(_MUTATION_DIR)/mutation_scores.json"; \
 		if [ "$$mutation_check" = "1" ]; then \
@@ -163,18 +231,19 @@ mutation-test:
 		fi; \
 	'
 
-## conformance: Run the PEP typing conformance suite and write
-## conformance/conformance_status.csv. Fetches the upstream suite if missing;
-## use FETCH=1 to force a re-download.
+## conformance: Score basilisk by RUNNING the REAL python/typing harness and
+## write conformance/conformance_status.csv + the website report. Clones the
+## suite FRESH every run (no cache); needs network + git. See [CHKARCH-CONFORMANCE].
 conformance:
 	@cargo build -p basilisk-cli --bin basilisk
-	@python3 conformance/score.py --bin target/debug/basilisk $(if $(filter 1,$(FETCH)),--fetch,)
+	@python3 conformance/run_conformance.py --bin target/debug/basilisk
 
 ## bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly/zuban on the fixture suite.
 ## Requires hyperfine; competitor tools are skipped if not installed.
-## Writes per-fixture JSON + a summary to benchmarks/results/.
+## run.sh does the CLEAN release rebuild itself (fresh binary under test) before
+## timing, so the guarantee holds even when run.sh is invoked directly — this
+## target just delegates. Writes per-fixture JSON + a summary to benchmarks/results/.
 bench:
-	@cargo build --release --bin basilisk
 	@bash benchmarks/run.sh
 
 ## smoke-micropython: Real-world smoke test for typeshed-path
@@ -220,7 +289,10 @@ _clean_rust:
 
 _clean_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Cleaning VSIX artifacts\033[0m' && \
-	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix ./*.vsix $(_EXTENSION_DIR)/NOTICES && \
+	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix ./*.vsix \
+		$(_EXTENSION_DIR)/NOTICES $(_EXTENSION_DIR)/THIRD-PARTY-LICENSES \
+		$(_EXTENSION_DIR)/RUST-DEPENDENCY-LICENSES \
+		$(_EXTENSION_DIR)/VSCODE-DEPENDENCY-LICENSES && \
 	echo -e '\033[0;32m✓ VSIX clean complete\033[0m'
 
 _uninstall_binaries:
@@ -251,8 +323,11 @@ _build_vsix:
 # and the published package can never diverge. Set BSK_VSIX_TARGET (e.g.
 # darwin-arm64) to pin the platform regardless of host; unset auto-detects from
 # uname. Implements [VSIX-PACKAGING-PARITY].
+# [STUBRES-TYPESHED-LICENSE] Every binary-bearing package carries the Basilisk
+# license and the exact third-party attribution files.
 _release_vsix:
 	@set -e; \
+	python3 scripts/verify_release_attribution.py --policy-only; \
 	if [ -n "$${BSK_VSIX_TARGET:-}" ]; then \
 		target="$$BSK_VSIX_TARGET"; \
 		plat="$${target%-*}"; arch="$${target##*-}"; \
@@ -289,9 +364,12 @@ _release_vsix:
 	fi; \
 	node $(_EXTENSION_DIR)/scripts/stage-runtime.mjs "target/$$rust_target/release" "$$target"; \
 	cp shipwright.json $(_EXTENSION_DIR)/shipwright.json; \
-	cp NOTICES $(_EXTENSION_DIR)/NOTICES; \
+	cp VSCODE-DISTRIBUTION-LICENSE $(_EXTENSION_DIR)/LICENSE.txt; \
+	cp NOTICES THIRD-PARTY-LICENSES RUST-DEPENDENCY-LICENSES \
+		VSCODE-DEPENDENCY-LICENSES $(_EXTENSION_DIR)/; \
 	repo_root="$$(pwd)"; \
-	cd $(_EXTENSION_DIR) && npm ci && npm run compile && npm run sync:shipwright; \
+	cd $(_EXTENSION_DIR) && npm ci && npm run licenses:check && \
+		npm run compile && npm run sync:shipwright; \
 	echo -e "\033[1m\033[0;36m▶ Validating Shipwright manifest\033[0m"; \
 	node scripts/verify-shipwright.mjs manifest; \
 	echo -e "\033[1m\033[0;36m▶ Vendoring debugpy into the VSIX bundle\033[0m"; \
@@ -317,6 +395,8 @@ _lint_rust:
 	@echo -e '\033[1m\033[0;36m▶ Linting Rust\033[0m' && \
 	cargo check --workspace --all-targets && \
 	cargo clippy --workspace --all-targets -- -D warnings && \
+	cargo audit && \
+	bash scripts/check-dependency-shape.sh && \
 	echo -e '\033[0;32m✓ Rust lint passed\033[0m'
 
 _lint_vsix:
@@ -331,6 +411,19 @@ _lint_deslop:
 	@echo -e '\033[1m\033[0;36m▶ Deslop duplication gate\033[0m' && \
 	deslop . && \
 	echo -e '\033[0;32m✓ Deslop duplication gate passed\033[0m'
+
+# Generated-documentation drift gates. The published READMEs (GitHub, the VSIX
+# on both Marketplace and Open VSX, PyPI) are rendered from docs/readme/
+# ([README]), and the diagnostic reference data is generated from the checker
+# rule sources ([WEBSITE-ERROR-PAGES-DRIFT]) — editing either output by hand,
+# or editing a source without regenerating, fails here as it does in CI.
+_lint_docs:
+	@echo -e '\033[1m\033[0;36m▶ Checking generated documentation\033[0m' && \
+	python3 scripts/gen_readmes.py --check && \
+	python3 scripts/gen_rules_reference.py --data /tmp/basilisk-rules.json && \
+	diff -u website/src/_data/rules.json /tmp/basilisk-rules.json > /dev/null || \
+		{ echo 'rules.json is stale — run: python3 scripts/gen_rules_reference.py --data'; exit 1; } && \
+	echo -e '\033[0;32m✓ Generated documentation is in sync\033[0m'
 
 _fmt_rust:
 	@echo -e '\033[1m\033[0;36m▶ Formatting Rust\033[0m' && \

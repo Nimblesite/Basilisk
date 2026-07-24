@@ -2,7 +2,7 @@
 //!
 //! Text example:
 //! ```text
-//! error[BSK-E0001]: Missing parameter type annotation for `data`
+//! error[BSK-0001]: Missing parameter type annotation for `data`
 //!   --> src/utils.py:14:5
 //!    |
 //! 14 | def process(data):
@@ -10,14 +10,14 @@
 //!    |
 //!    = help: Add a type annotation: `data: <type>`
 //!    = note: In Basilisk, all function parameters require explicit types
-//!    = see: https://www.basilisk-python.dev/errors/BSK-E0001
+//!    = see: https://www.basilisk-python.dev/errors/BSK-0001
 //! ```
 //!
 //! JSON output is a flat array consumed by the VS Code extension:
 //! ```json
 //! [
 //!   {
-//!     "code": "BSK-E0001",
+//!     "code": "BSK-0001",
 //!     "severity": "error",
 //!     "message": "Missing parameter type annotation for `x`",
 //!     "path": "src/utils.py",
@@ -180,15 +180,15 @@ mod tests {
     ) -> Diagnostic {
         Diagnostic {
             code: ErrorCode {
-                code: "BSK-E0001",
-                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
+                code: "BSK-0001",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-0001",
             },
             severity,
             message: "missing annotation for `x`".to_owned(),
             span: Span { start: 8, end: 9 },
             path: "test.py".to_owned(),
-            help: help.map(str::to_owned),
-            note: note.map(str::to_owned),
+            help: help.map(|value| value.to_owned().into()),
+            note: note.map(|value| value.to_owned().into()),
             provenance: None,
         }
     }
@@ -235,7 +235,7 @@ mod tests {
         let diag = make_diag(None, None);
         let out = render_one(&diag, "def foo(x): pass");
         assert!(
-            out.contains(&format!("{BOLD}[BSK-E0001]{RESET}")),
+            out.contains(&format!("{BOLD}[BSK-0001]{RESET}")),
             "error code must be bold, got:\n{out}"
         );
     }
@@ -387,7 +387,7 @@ mod tests {
         assert!(!out.contains("help"), "must omit help when None");
         assert!(!out.contains("note"), "must omit note when None");
         // Still must contain the see URL.
-        assert!(out.contains("BSK-E0001"), "must contain error code");
+        assert!(out.contains("BSK-0001"), "must contain error code");
         assert!(out.contains("basilisk-python.dev"), "must contain docs URL");
     }
 
@@ -511,7 +511,7 @@ mod tests {
         let diag = make_diag(None, None);
         let out = render_one(&diag, "def foo(x): pass");
         assert!(
-            out.contains("https://www.basilisk-python.dev/errors/BSK-E0001"),
+            out.contains("https://www.basilisk-python.dev/errors/BSK-0001"),
             "must contain docs URL, got:\n{out}"
         );
     }
@@ -536,7 +536,7 @@ mod tests {
         let (line, col) = byte_offset_to_line_col(source, 8);
         let (end_line, end_col) = byte_offset_to_line_col(source, 9);
         let item = JsonDiagnostic {
-            code: "BSK-E0001",
+            code: "BSK-0001",
             severity: "error",
             message: "missing annotation for `x`",
             path: "test.py",
@@ -546,7 +546,7 @@ mod tests {
             end_col,
         };
         let json = serde_json::to_string(&item)?;
-        assert!(json.contains("BSK-E0001"));
+        assert!(json.contains("BSK-0001"));
         assert!(json.contains("\"line\":1"));
         assert!(json.contains("\"col\":9"));
         assert!(json.contains("\"end_line\":1"));
@@ -614,7 +614,7 @@ mod tests {
         let (line, col) = byte_offset_to_line_col(source, 8);
         let (end_line, end_col) = byte_offset_to_line_col(source, 9);
         let item = JsonDiagnostic {
-            code: "BSK-W0001",
+            code: "BSK-0001",
             severity: "warning",
             message: "test warning",
             path: "test.py",
@@ -637,8 +637,8 @@ mod tests {
     fn render_diagnostics_json_produces_correct_item_count() {
         let d1 = Diagnostic {
             code: ErrorCode {
-                code: "BSK-E0001",
-                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
+                code: "BSK-0001",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-0001",
             },
             severity: Severity::Error,
             message: "missing annotation".to_owned(),
@@ -650,8 +650,8 @@ mod tests {
         };
         let d2 = Diagnostic {
             code: ErrorCode {
-                code: "BSK-E0002",
-                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0002",
+                code: "BSK-0002",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-0002",
             },
             severity: Severity::Error,
             message: "missing return annotation".to_owned(),
@@ -693,8 +693,8 @@ mod tests {
             })
             .collect();
         assert_eq!(items.len(), 2, "must produce one item per diagnostic");
-        assert_eq!(items[0].code, "BSK-E0001");
-        assert_eq!(items[1].code, "BSK-E0002");
+        assert_eq!(items[0].code, "BSK-0001");
+        assert_eq!(items[1].code, "BSK-0002");
     }
 
     // ── render_diagnostics_json: != mutant at output.rs:92 ──────────────────
@@ -706,8 +706,8 @@ mod tests {
     fn render_diagnostics_json_matches_correct_source_file() {
         let diag = Diagnostic {
             code: ErrorCode {
-                code: "BSK-E0001",
-                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
+                code: "BSK-0001",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-0001",
             },
             severity: Severity::Error,
             message: "test".to_owned(),

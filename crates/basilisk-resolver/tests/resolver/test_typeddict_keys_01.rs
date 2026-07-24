@@ -367,7 +367,7 @@ fn typeddict_subscript_read_in_binop() -> Result<(), Box<dyn std::error::Error>>
     )
     .to_owned();
     let resolved = resolve_src(&src)?;
-    assert!(resolved.functions.len() == 1);
+    assert_eq!(resolved.functions.len(), 1);
     Ok(())
 }
 
@@ -382,7 +382,7 @@ fn typeddict_subscript_read_in_call_arg() -> Result<(), Box<dyn std::error::Erro
     )
     .to_owned();
     let resolved = resolve_src(&src)?;
-    assert!(resolved.functions.len() == 1);
+    assert_eq!(resolved.functions.len(), 1);
     Ok(())
 }
 

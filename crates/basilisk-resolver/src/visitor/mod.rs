@@ -18,6 +18,7 @@ mod final_readonly_ext;
 mod function_info;
 mod generics;
 mod historical;
+mod key_lambda;
 mod module_level;
 mod narrowing;
 mod pep695_scoping;
@@ -30,6 +31,7 @@ mod typeddict_schema;
 mod typevar;
 mod unhashable;
 pub(crate) mod walks;
+mod walrus;
 mod yield_exprs;
 
 use basilisk_parser::ParsedModule;
@@ -190,6 +192,12 @@ fn build_resolved_module(
             typevar_calls.iter().map(|tv| tv.name.clone()).collect();
         type_alias::collect_type_alias_type_violations(stmts, &tv_names)
     };
+    let tuple_index_violations = key_lambda::collect_key_lambda_tuple_violations(
+        stmts,
+        &functions,
+        &module_vars,
+        &module.source,
+    );
     ResolvedModule {
         functions,
         classes,
@@ -236,7 +244,7 @@ fn build_resolved_module(
         type_alias_defs: results.type_alias_defs,
         generic_subscript_sites: results.generic_subscript_sites,
         literal_augmented_assign_violations: Vec::new(),
-        tuple_index_violations: Vec::new(),
+        tuple_index_violations,
         bounded_typevar_attr_violations: crate::bounded_typevar::collect(stmts),
         protocol_class_object_violations: Vec::new(),
         unhashable_hash_call_violations: results.unhashable_hash_calls,
@@ -244,10 +252,16 @@ fn build_resolved_module(
         generator_violations: results.generator_issues,
         unbound_typevar_usages: Vec::new(),
         imported_symbols: std::collections::HashMap::new(),
+        builtin_classes: std::sync::Arc::new(std::collections::HashMap::new()),
         imported_modules: std::collections::HashMap::new(),
         pep695_scoping: pep695_scoping::collect_pep695_scoping(stmts, &module.source),
         path: module.path.clone(),
         source: module.source.clone(),
+        comment_ranges: module
+            .comment_ranges
+            .iter()
+            .map(|&(start, end)| crate::scope::Span::new(start, end))
+            .collect(),
         lazy_ast: super::scope::LazyAst::default(),
     }
 }

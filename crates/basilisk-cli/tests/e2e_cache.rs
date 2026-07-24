@@ -27,20 +27,28 @@ fn unique_dir(prefix: &str) -> PathBuf {
     dir
 }
 
-/// Write a `basilisk.json` into `dir` opting into the annotation house rules
-/// (`BSK-E0001`/`BSK-W0050` …), which are off by default — the default config is
+/// Write a `pyproject.toml` into `dir` opting into the annotation house rules
+/// (`BSK-0001`/`BSK-0050` …), which are off by default — the default config is
 /// pure PEP conformance. Tests that assert those diagnostics call this so they
 /// see exactly what a user who enabled them would. No modes; this is
-/// configuration. See [CHKARCH-CONFIGURATION-ONLY].
+/// configuration. See [CHKARCH-CONFIGURATION-ONLY]. Callers use their own
+/// unique dir and must not also write a `pyproject.toml` there (the config test
+/// below writes its own instead of calling this).
 fn opt_in_house_rules(dir: &std::path::Path) {
-    std::fs::write(dir.join("basilisk.json"), "{\"strictAnnotations\": true}\n")
-        .expect("write basilisk.json");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[tool.basilisk.rules]\n\"BSK-0001\" = \"error\"\n\"BSK-0002\" = \"error\"\n",
+    )
+    .expect("write pyproject.toml");
 }
 
-/// Run `basilisk check <target> --cache --cache-dir <cache> --cache-stats`.
-fn check_cached(target: &PathBuf, cache: &PathBuf) -> Output {
+/// Run `basilisk <subcommand> <target> --cache --cache-dir <cache> --cache-stats`.
+///
+/// `check` and `analyze` share the cache flags and pipeline; entries are
+/// scope-free so both commands share them ([CHKARCH-COMMANDS]).
+fn run_cached(subcommand: &str, target: &PathBuf, cache: &PathBuf) -> Output {
     Command::new(env!("CARGO_BIN_EXE_basilisk"))
-        .arg("check")
+        .arg(subcommand)
         .arg(target)
         .arg("--cache")
         .arg("--cache-dir")
@@ -48,6 +56,18 @@ fn check_cached(target: &PathBuf, cache: &PathBuf) -> Output {
         .arg("--cache-stats")
         .output()
         .expect("spawn basilisk")
+}
+
+/// Run `basilisk check` with the cache enabled.
+fn check_cached(target: &PathBuf, cache: &PathBuf) -> Output {
+    run_cached("check", target, cache)
+}
+
+/// Run `basilisk analyze` with the cache enabled — the command that renders
+/// the opt-in house-rule diagnostics these fixtures produce
+/// ([CHKARCH-COMMANDS]).
+fn analyze_cached(target: &PathBuf, cache: &PathBuf) -> Output {
+    run_cached("analyze", target, cache)
 }
 
 fn stdout(output: &Output) -> String {
@@ -79,9 +99,9 @@ fn second_run_hits_with_identical_output() {
     let cache = dir.join("cache");
     std::fs::write(&target, "def f(x):\n    return x\n").unwrap();
 
-    let first = check_cached(&target, &cache);
+    let first = analyze_cached(&target, &cache);
     assert_stats(&first, 0, 1);
-    let second = check_cached(&target, &cache);
+    let second = analyze_cached(&target, &cache);
     assert_stats(&second, 1, 0);
 
     assert_eq!(
@@ -90,7 +110,7 @@ fn second_run_hits_with_identical_output() {
         "a cache hit must replay byte-identical diagnostics"
     );
     assert!(
-        stdout(&first).contains("BSK-E0001"),
+        stdout(&first).contains("BSK-0001"),
         "the fixture must produce a diagnostic to make the parity check meaningful"
     );
     assert_eq!(
@@ -111,18 +131,18 @@ fn editing_target_invalidates() {
     let cache = dir.join("cache");
 
     std::fs::write(&target, "def f(x):\n    return x\n").unwrap();
-    let first = check_cached(&target, &cache);
+    let first = analyze_cached(&target, &cache);
     assert!(
-        stdout(&first).contains("BSK-E0001"),
+        stdout(&first).contains("BSK-0001"),
         "first run reports error"
     );
 
     // Fix the error; the cached entry must NOT be served.
     std::fs::write(&target, "def f(x: int) -> int:\n    return x\n").unwrap();
-    let second = check_cached(&target, &cache);
+    let second = analyze_cached(&target, &cache);
     assert_stats(&second, 0, 1);
     assert!(
-        !stdout(&second).contains("BSK-E0001"),
+        !stdout(&second).contains("BSK-0001"),
         "stale cached diagnostics must not survive a target edit:\n{}",
         stdout(&second)
     );
@@ -165,7 +185,7 @@ fn changing_config_invalidates() {
     std::fs::write(&target, "x: int = 42\n").unwrap();
     std::fs::write(
         &pyproject,
-        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\nstrict-annotations = true\n\n[tool.basilisk.rules]\n\"BSK-W0050\" = \"warning\"\n",
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk.rules]\n\"BSK-0050\" = \"warning\"\n",
     )
     .unwrap();
 
@@ -175,7 +195,7 @@ fn changing_config_invalidates() {
     // Same source, different config: the fingerprint must differ → miss.
     std::fs::write(
         &pyproject,
-        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\nstrict-annotations = true\n\n[tool.basilisk.rules]\n\"BSK-W0050\" = \"error\"\n",
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk.rules]\n\"BSK-0050\" = \"error\"\n",
     )
     .unwrap();
     assert_stats(&check_cached(&target, &cache), 0, 1);
@@ -193,7 +213,7 @@ fn disabled_creates_no_cache_dir() {
     std::fs::write(&target, "def f(x):\n    return x\n").unwrap();
 
     let plain = Command::new(env!("CARGO_BIN_EXE_basilisk"))
-        .arg("check")
+        .arg("analyze")
         .arg(&target)
         .output()
         .expect("spawn basilisk");
@@ -203,8 +223,8 @@ fn disabled_creates_no_cache_dir() {
         "no cache directory may be created without --cache"
     );
     assert!(
-        stdout(&plain).contains("BSK-E0001"),
-        "plain check output must be unchanged"
+        stdout(&plain).contains("BSK-0001"),
+        "plain analyze output must be unchanged"
     );
     assert!(
         !stderr(&plain).contains("cache:"),

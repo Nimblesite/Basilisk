@@ -1,4 +1,4 @@
-//! Implements [`annotations_generators`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`annotations_generators`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Helper functions for `annotations_generators`: Generator return type and yield type
 //! violations.
 //!
@@ -27,15 +27,49 @@ pub(super) const ASYNC_GENERATOR_TYPES: &[&str] =
     &["AsyncGenerator", "AsyncIterator", "AsyncIterable"];
 
 /// Infer the type of a yield expression value.
-pub(super) fn infer_yield_type(rhs: &RhsKind, call_name: Option<&String>) -> InferredType {
-    // If it's a call expression with a known name, use that as a Named type.
+pub(super) fn infer_yield_type(
+    rhs: &RhsKind,
+    call_name: Option<&String>,
+    module: &ResolvedModule,
+) -> InferredType {
     if matches!(rhs, RhsKind::CallExpr) {
-        if let Some(name) = call_name {
-            return InferredType::Named(name.to_ascii_lowercase());
-        }
-        return InferredType::Unknown;
+        return call_name.map_or(InferredType::Unknown, |name| {
+            infer_call_result(name, module)
+        });
     }
     infer_rhs(rhs)
+}
+
+/// The result type of a direct call `name(...)`: a module-level function's
+/// declared return type, a local class's instance, or a builtin constructor
+/// (`str(...)`, `int(...)`). `Unknown` for anything unresolvable — a callee's
+/// bare name is never itself the yielded type (GitHub #281 inferred `get` as
+/// a type from `yield NAME_SYNONYMS.get(name, name)`).
+fn infer_call_result(name: &str, module: &ResolvedModule) -> InferredType {
+    // A module-level (or nested) function: its declared return type is the
+    // call's type. Methods are excluded — a direct call never targets one.
+    if let Some(callee) = module
+        .functions
+        .iter()
+        .find(|f| f.name == name && f.class_name.is_none())
+    {
+        return callee
+            .return_annotation_span
+            .and_then(|span| slice_span(&module.source, span))
+            .map_or(InferredType::Unknown, |ann| {
+                InferredType::from_annotation(ann.trim())
+            });
+    }
+    // A locally-defined class: constructing it yields an instance of it.
+    if module.classes.iter().any(|c| c.name == name) {
+        return InferredType::from_annotation(name);
+    }
+    // A builtin constructor parses to a concrete type; any other bare name
+    // parses to `Named(...)`, which is not evidence of the call's type.
+    match InferredType::from_annotation(name) {
+        InferredType::Named(_) => InferredType::Unknown,
+        builtin => builtin,
+    }
 }
 
 /// Extract the base type name (before `[`).

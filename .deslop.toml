@@ -7,9 +7,9 @@
 # exceeds the value below.
 # Docs: https://deslop.live/docs/for-ai/
 [threshold]
-# Measured repo-wide duplication at stamp time: 12.5%. Ceiling set just above to
+# Measured repo-wide duplication at stamp time: 12.49%. Ceiling set just above to
 # absorb cross-runner float jitter. Ratchet DOWN as duplication is reduced.
-max_duplication_percent = 12.6
+max_duplication_percent = 12.59
 
 [defaults]
 # `exclude` drops files during discovery so they are never analysed and never
@@ -33,8 +33,8 @@ exclude = [
   # of upstream repos live here; never product source.
   "scratchpad/**",
   "**/scratchpad/**",
-  # Upstream python/typing conformance test suite — sha-pinned third-party
-  # fixtures downloaded by score.py, not our code. Duplication among the spec's
+  # Upstream python/typing conformance test suite — third-party fixtures mirrored
+  # from a fresh clone by run_conformance.py, not our code. Duplication among the spec's
   # own test files is expected and must not gate our build (mirrors the
   # crates/*/tests and benchmarks/fixtures exclusions above).
   "conformance/tests/**",

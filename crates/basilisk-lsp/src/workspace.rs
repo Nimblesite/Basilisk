@@ -10,7 +10,7 @@ use std::sync::Arc;
 use basilisk_config::BasiliskConfig;
 use basilisk_uv::PackageRegistry;
 use dashmap::DashMap;
-use tower_lsp::lsp_types::Url;
+use tower_lsp::lsp_types::{TextEdit, Url};
 
 use crate::config::AnalysisMode;
 use crate::import_graph::ImportGraph;
@@ -91,27 +91,71 @@ pub struct WorkspaceIndex {
     pub registry: Option<Arc<PackageRegistry>>,
     /// Per-root project-level checker configuration.
     ///
-    /// Each workspace root can have its own `pyproject.toml` or `basilisk.json`
+    /// Each workspace root can have its own `pyproject.toml` `[tool.basilisk]`
     /// with different rule severity overrides, per-module, and per-path settings.
     /// Files are matched to their owning root to apply the correct config.
     pub root_configs: std::collections::HashMap<PathBuf, BasiliskConfig>,
     /// Fallback checker configuration used when a file doesn't belong to any
     /// known root, or for single-root backwards compatibility.
     pub checker_config: BasiliskConfig,
+    /// Per-directory merged rule config cache ([CHKARCH-CONFIG-DISCOVERY]):
+    /// the owning root's config merged with configs discovered on the file's
+    /// own ancestor chain, so a child directory's config applies exactly as
+    /// in `basilisk check` (GitHub #311). Cleared by `reload_root_configs`.
+    dir_configs: std::sync::RwLock<std::collections::HashMap<PathBuf, Arc<BasiliskConfig>>>,
     /// Import search paths (venv site-packages, workspace members, stub paths,
-    /// uv registry) cached from the last full workspace scan.
+    /// uv registry) cached per owning workspace root from the last full scan.
     ///
     /// Reused by the incremental single-file analysis path (`didOpen` /
     /// `didChange` / disk reload) so third-party import resolution matches the
     /// full scan and the editor does not resurrect false `imports_unresolved`.
     /// Implements [ANALYSIS-INCR-IMPORTS]. See
     /// docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-INCR-IMPORTS
-    pub search_paths: std::sync::RwLock<Option<Arc<crate::import_resolver::ImportSearchPaths>>>,
+    pub search_paths_by_root: std::sync::RwLock<
+        std::collections::HashMap<PathBuf, Arc<crate::import_resolver::ImportSearchPaths>>,
+    >,
     /// In-session Salsa engine backing the incremental single-file analysis path
     /// once the search paths are known. Memoizes `parse → resolve →
     /// resolve_module_imports → check` per file. Implements
     /// [CHKARCH-INCREMENTAL-SALSA].
     pub(crate) salsa_engine: crate::salsa_engine::SalsaAnalysisEngine,
+}
+
+fn authoritative_edited_text(
+    current: String,
+    original: &str,
+    edited: String,
+    is_open: bool,
+) -> String {
+    if is_open && current != original && current != edited {
+        return current;
+    }
+    edited
+}
+
+fn apply_non_overlapping_edits(source: &str, edits: &[TextEdit]) -> Option<String> {
+    let mut indexed = edits
+        .iter()
+        .enumerate()
+        .map(|(order, edit)| {
+            let start = crate::util::position_to_byte_offset(source, edit.range.start);
+            let end = crate::util::position_to_byte_offset(source, edit.range.end);
+            (start, end, order, edit.new_text.as_str())
+        })
+        .collect::<Vec<_>>();
+    indexed.sort_by_key(|&(start, end, order, _)| (start, end, order));
+    if indexed.iter().any(|&(start, end, _, _)| start > end)
+        || indexed
+            .windows(2)
+            .any(|pair| matches!(pair, [left, right] if left.1 > right.0))
+    {
+        return None;
+    }
+    let mut result = source.to_owned();
+    for (start, end, _, replacement) in indexed.into_iter().rev() {
+        result.replace_range(start..end, replacement);
+    }
+    Some(result)
 }
 
 impl std::fmt::Debug for WorkspaceIndex {
@@ -127,7 +171,7 @@ impl std::fmt::Debug for WorkspaceIndex {
 impl WorkspaceIndex {
     /// Create an empty index for the given roots, mode, and project config.
     ///
-    /// Each root is checked for its own `pyproject.toml` / `basilisk.json`.
+    /// Each root is checked for its own `pyproject.toml` `[tool.basilisk]`.
     /// If a root has no config file, the provided `checker_config` is used as
     /// the fallback for that root.
     #[must_use]
@@ -141,7 +185,8 @@ impl WorkspaceIndex {
             registry: None,
             root_configs,
             checker_config,
-            search_paths: std::sync::RwLock::new(None),
+            dir_configs: std::sync::RwLock::new(std::collections::HashMap::new()),
+            search_paths_by_root: std::sync::RwLock::new(std::collections::HashMap::new()),
             salsa_engine: crate::salsa_engine::SalsaAnalysisEngine::default(),
         }
     }
@@ -169,7 +214,7 @@ impl WorkspaceIndex {
     }
 
     /// Load each root's `BasiliskConfig` from its `pyproject.toml` /
-    /// `basilisk.json`, falling back to `fallback` for roots without a config
+    /// falling back to `fallback` for roots without a config
     /// file.
     ///
     /// [CHKARCH-VERSION-TARGET] An explicit `python-version` in the config wins;
@@ -183,16 +228,30 @@ impl WorkspaceIndex {
         roots
             .iter()
             .map(|root| {
-                let has_config =
-                    root.join("pyproject.toml").is_file() || root.join("basilisk.json").is_file();
+                // [CHKARCH-CONFIG-DISCOVERY] A root without its own config
+                // file still discovers ancestor configs (e.g. a workspace
+                // folder opened inside a project) — GitHub #311.
+                let has_config = basilisk_config::discover_config_dir(root).is_some();
                 let mut cfg = if has_config {
                     basilisk_config::load_basilisk_config(root)
                 } else {
                     fallback.clone()
                 };
+                cfg.project_root = Some(root.clone());
                 if cfg.python_version.is_none() {
                     cfg.python_version =
                         basilisk_uv::python_version::resolve_target_python_version(root);
+                }
+                if cfg.python_platform.is_none() {
+                    let analysis_config = crate::config::load_config(root);
+                    let interpreter = analysis_config
+                        .python_interpreter
+                        .unwrap_or_else(|| PathBuf::from(crate::debug::resolve_python(root)));
+                    cfg.python_platform =
+                        basilisk_uv::python_version::read_python_platform(&interpreter);
+                    if cfg.python_platform.is_none() {
+                        cfg.python_platform.clone_from(&fallback.python_platform);
+                    }
                 }
                 (root.clone(), cfg)
             })
@@ -200,12 +259,29 @@ impl WorkspaceIndex {
     }
 
     /// Re-read every root's `BasiliskConfig` from disk so a change to a watched
-    /// config file (`pyproject.toml` / `basilisk.json` / `.python-version`)
+    /// config file (`pyproject.toml` / `.python-version`)
     /// takes effect — version-aware rules and severity overrides — without an
     /// LSP restart. The caller re-checks open files afterwards (e.g. via
     /// [`Self::recheck_all_files`]). Implements [CHKARCH-VERSION-TARGET].
     pub fn reload_root_configs(&mut self) {
         self.root_configs = Self::load_root_configs(&self.roots, &self.checker_config);
+        // Discovered per-directory configs derive from disk state — drop them
+        // so the next lookup re-walks ([CHKARCH-CONFIG-DISCOVERY]).
+        if let Ok(mut dir_configs) = self.dir_configs.write() {
+            dir_configs.clear();
+        }
+    }
+
+    /// Replace one root's checker config with an already-resolved document
+    /// (a live configuration buffer or a freshly observed disk edit) and drop
+    /// the discovered per-directory config cache so the next lookup re-merges
+    /// instead of serving the stale entry. Implements [LSPARCH-CONFIG]
+    /// via [CHKARCH-CONFIG-DISCOVERY].
+    pub fn set_root_config(&mut self, root: PathBuf, config: BasiliskConfig) {
+        let _ = self.root_configs.insert(root, config);
+        if let Ok(mut dir_configs) = self.dir_configs.write() {
+            dir_configs.clear();
+        }
     }
 
     /// Cache the import search paths built during the workspace scan.
@@ -214,18 +290,107 @@ impl WorkspaceIndex {
     /// resolve imports against these so the editor's diagnostics match the
     /// full-scan diagnostics. Implements [ANALYSIS-INCR-IMPORTS].
     pub fn set_search_paths(&self, search_paths: crate::import_resolver::ImportSearchPaths) {
-        if let Ok(mut guard) = self.search_paths.write() {
-            *guard = Some(Arc::new(search_paths));
+        let search_paths = Arc::new(search_paths);
+        let mut by_root = std::collections::HashMap::new();
+        let roots = if self.roots.is_empty() {
+            search_paths.roots.clone()
+        } else {
+            self.roots.clone()
+        };
+        if roots.is_empty() {
+            let _ = by_root.insert(PathBuf::new(), Arc::clone(&search_paths));
+        } else {
+            for root in roots {
+                let _ = by_root.insert(root, Arc::clone(&search_paths));
+            }
+        }
+        self.set_search_paths_by_root(by_root);
+    }
+
+    /// Atomically replace all per-root import environments.
+    pub fn set_search_paths_by_root(
+        &self,
+        search_paths: std::collections::HashMap<
+            PathBuf,
+            Arc<crate::import_resolver::ImportSearchPaths>,
+        >,
+    ) {
+        if let Ok(mut guard) = self.search_paths_by_root.write() {
+            *guard = search_paths;
         }
     }
 
-    /// Snapshot the cached import search paths, if a scan has built them.
+    /// Cache one root's import environment without disturbing other roots.
+    fn set_root_search_paths(
+        &self,
+        root: PathBuf,
+        search_paths: crate::import_resolver::ImportSearchPaths,
+    ) {
+        if let Ok(mut guard) = self.search_paths_by_root.write() {
+            let _ = guard.insert(root, Arc::new(search_paths));
+        }
+    }
+
+    /// Whether at least one scan has installed import search paths.
     #[must_use]
-    fn search_paths_snapshot(&self) -> Option<Arc<crate::import_resolver::ImportSearchPaths>> {
-        self.search_paths
+    fn has_search_paths(&self) -> bool {
+        self.search_paths_by_root
             .read()
-            .ok()
-            .and_then(|guard| guard.clone())
+            .is_ok_and(|guard| !guard.is_empty())
+    }
+
+    /// Snapshot the import environment for `path` using the longest owning
+    /// workspace-root prefix. Nested workspace folders therefore select the
+    /// most specific target and never inherit a sibling root's interpreter.
+    #[must_use]
+    pub(crate) fn search_paths_for_file(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<(PathBuf, Arc<crate::import_resolver::ImportSearchPaths>)> {
+        let guard = self.search_paths_by_root.read().ok()?;
+        let selected = guard
+            .keys()
+            .filter(|root| !root.as_os_str().is_empty() && path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+            .cloned()
+            .or_else(|| {
+                guard
+                    .contains_key(std::path::Path::new(""))
+                    .then(PathBuf::new)
+            })
+            .or_else(|| {
+                (guard.len() == 1)
+                    .then(|| guard.keys().next().cloned())
+                    .flatten()
+            })?;
+        guard
+            .get(&selected)
+            .map(|search_paths| (selected, Arc::clone(search_paths)))
+    }
+
+    /// Return the longest workspace-root prefix that owns `path`.
+    #[must_use]
+    fn owning_root_for_path(&self, path: &std::path::Path) -> Option<&PathBuf> {
+        self.roots
+            .iter()
+            .filter(|root| !root.as_os_str().is_empty() && path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+    }
+
+    /// Whether `root` is the longest-prefix owner of `path`.
+    #[must_use]
+    pub(crate) fn path_is_owned_by_root(
+        &self,
+        path: &std::path::Path,
+        root: &std::path::Path,
+    ) -> bool {
+        self.owning_root_for_path(path)
+            .is_some_and(|owner| owner == root)
+    }
+
+    fn path_is_owned_by_any_root(&self, path: &std::path::Path, roots: &[PathBuf]) -> bool {
+        self.owning_root_for_path(path)
+            .is_some_and(|owner| roots.iter().any(|root| root == owner))
     }
 
     /// Run the analysis pipeline for one file, then resolve its imports against
@@ -248,8 +413,8 @@ impl WorkspaceIndex {
         // Before the first scan populates the search paths, keep the import-free
         // path (no salsa engine): it matches the pre-scan behaviour exactly and
         // avoids marking every third-party import unresolved.
-        let Some(search_paths) = self.search_paths_snapshot() else {
-            let (mut entry, lsp_diags) = analyse_with_config(text, path, config);
+        let Some((search_paths_root, search_paths)) = self.search_paths_for_file(path) else {
+            let (mut entry, lsp_diags) = analyse_with_config(text, path, &config);
             if self.is_path_excluded(path) || self.is_outside_include_roots(path) {
                 entry.diagnostics.clear();
                 return (entry, Vec::new());
@@ -263,11 +428,19 @@ impl WorkspaceIndex {
         // populate `imported_symbols` from the other tracked files' current
         // content, so cross-file diagnostics and navigation stay live.
         // Implements [ANALYSIS-INCR-IMPORTS] via [CHKARCH-INCREMENTAL-SALSA].
-        let root_key = self.config_root_key(path);
+        let root_key = Self::config_root_key(path);
         let cross_module = matches!(self.mode(), AnalysisMode::CrossModule);
-        let analysis =
-            self.salsa_engine
-                .analyse(path, text, config, &root_key, &search_paths, cross_module);
+        let analysis = self.salsa_engine.analyse(
+            path,
+            text,
+            crate::salsa_engine::AnalysisInputs {
+                config: &config,
+                config_key: &root_key,
+                search_paths_root: &search_paths_root,
+                search_paths: &search_paths,
+            },
+            cross_module,
+        );
         let hash = fnv1a(text);
 
         // Parse failure: surface BSK-PARSE, no navigable module (matches the
@@ -300,32 +473,60 @@ impl WorkspaceIndex {
         (entry, lsp_diags)
     }
 
-    /// The config-input key for `file_path`: its owning workspace root, or an
-    /// empty path for the fallback `checker_config`. Files that share a config
-    /// (same owning root) share one salsa `ConfigInput`.
+    /// The config-input key for `file_path`: its own directory. Files in one
+    /// directory share a merged discovered config
+    /// ([CHKARCH-CONFIG-DISCOVERY]), hence one salsa `ConfigInput`; a shared
+    /// per-root key would let files with different child-dir configs thrash a
+    /// single input.
     #[must_use]
-    fn config_root_key(&self, file_path: &std::path::Path) -> PathBuf {
-        self.roots
-            .iter()
-            .filter(|root| file_path.starts_with(root))
-            .max_by_key(|root| root.components().count())
-            .cloned()
-            .unwrap_or_default()
+    fn config_root_key(file_path: &std::path::Path) -> PathBuf {
+        file_path.parent().unwrap_or(file_path).to_path_buf()
     }
 
-    /// Get the checker config for a file, looking up the owning root.
+    /// Get the checker config for a file.
     ///
-    /// Finds the root that is a prefix of the file path, and returns
-    /// that root's config. Falls back to the default `checker_config`.
+    /// Implements [CHKARCH-CONFIG-DISCOVERY] (GitHub #311): the owning root's
+    /// config (falling back to `checker_config`) merged with configs
+    /// discovered on the file's own ancestor chain, so a child directory's
+    /// config applies exactly as in `basilisk check`. Memoized per directory;
+    /// `reload_root_configs` clears the cache.
     #[must_use]
-    pub fn config_for_file(&self, file_path: &std::path::Path) -> &BasiliskConfig {
-        // Find the longest matching root (most specific).
-        self.roots
+    pub fn config_for_file(&self, file_path: &std::path::Path) -> Arc<BasiliskConfig> {
+        let dir = Self::config_root_key(file_path);
+        let cached = self
+            .dir_configs
+            .read()
+            .ok()
+            .and_then(|cache| cache.get(&dir).cloned());
+        if let Some(hit) = cached {
+            return hit;
+        }
+
+        // Find the longest matching root (most specific) for the base config,
+        // then merge the discovered ancestor chain over it. Inside a root the
+        // walk stops BELOW the root ([LSPARCH-CONFIG]): the in-memory root
+        // config is the authoritative effective config — an applied
+        // configuration-editor change or an open, unsaved config buffer beats
+        // disk — so re-reading the root's file here would resurrect stale
+        // disk state over it.
+        let owning_root = self
+            .roots
             .iter()
             .filter(|root| file_path.starts_with(root))
-            .max_by_key(|root| root.components().count())
+            .max_by_key(|root| root.components().count());
+        let base = owning_root
             .and_then(|root| self.root_configs.get(root))
             .unwrap_or(&self.checker_config)
+            .clone();
+        let discovered = owning_root.map_or_else(
+            || basilisk_config::load_basilisk_config(&dir),
+            |root| basilisk_config::load_basilisk_config_below(&dir, root),
+        );
+        let merged = Arc::new(base.merged_with(discovered));
+        if let Ok(mut cache) = self.dir_configs.write() {
+            let _ = cache.insert(dir, Arc::clone(&merged));
+        }
+        merged
     }
 
     /// Whether `file_path` matches the owning root's `exclude` patterns.
@@ -377,6 +578,17 @@ impl WorkspaceIndex {
             .include
             .iter()
             .any(|inc| file_path.starts_with(root.join(inc)))
+    }
+
+    /// Whether configuration impact analysis should include `file_path`.
+    ///
+    /// The configuration editor rechecks retained open documents under a
+    /// hypothetical rule policy. It must preserve the same include/exclude
+    /// boundary as normal analysis instead of resurrecting diagnostics for a
+    /// document that is indexed only for navigation.
+    #[must_use]
+    pub(crate) fn configuration_path_is_in_scope(&self, file_path: &std::path::Path) -> bool {
+        !self.is_path_excluded(file_path) && !self.is_outside_include_roots(file_path)
     }
 
     /// Return the `FileEntry` for a URI, if present.
@@ -446,6 +658,65 @@ impl WorkspaceIndex {
 
         let _ = self.files.insert(path, entry);
         lsp_diags
+    }
+
+    /// Track an open buffer without parsing or checking it.
+    ///
+    /// Used while the owning root has no gate-accepted Typeshed generation.
+    /// The text remains authoritative and is analysed when that root becomes
+    /// Ready; no fallback generation is allowed to produce interim results.
+    pub(crate) fn set_open_without_analysis(&self, uri: &Url, text: &str, version: i32) {
+        let path = uri.to_file_path().unwrap_or_default();
+        let _ = self.files.insert(
+            path,
+            FileEntry {
+                source_hash: fnv1a(text),
+                text: text.to_owned(),
+                resolved: None,
+                diagnostics: Vec::new(),
+                version,
+                is_open: true,
+            },
+        );
+    }
+
+    /// Mirror client-accepted LSP edits into the analysis index and reanalyse.
+    ///
+    /// Open-buffer text and its version remain authoritative if a newer
+    /// `didChange` races the edit response. Otherwise the exact accepted edit
+    /// set is applied to the source snapshot used to construct the request.
+    /// Implements [ANALYSIS-INDEX-OPEN] and [AUTOFIX-CONFLICTS].
+    #[must_use]
+    pub fn apply_accepted_text_edits(
+        &self,
+        uri: &Url,
+        original: &str,
+        edits: &[TextEdit],
+    ) -> Option<Vec<tower_lsp::lsp_types::Diagnostic>> {
+        let path = self.indexed_path(uri)?;
+        let (current, version, is_open) = self.entry_authority(&path)?;
+        let edited = apply_non_overlapping_edits(original, edits)?;
+        let next = authoritative_edited_text(current, original, edited, is_open);
+        let (mut entry, diagnostics) = self.analyse_and_resolve(&next, &path);
+        entry.version = version;
+        entry.is_open = is_open;
+        let _ = self.files.insert(path, entry);
+        Some(diagnostics)
+    }
+
+    fn indexed_path(&self, uri: &Url) -> Option<PathBuf> {
+        let path = uri.to_file_path().ok()?;
+        if self.files.contains_key(&path) {
+            return Some(path);
+        }
+        let canonical = path.canonicalize().ok()?;
+        self.files.contains_key(&canonical).then_some(canonical)
+    }
+
+    fn entry_authority(&self, path: &std::path::Path) -> Option<(String, i32, bool)> {
+        self.files
+            .get(path)
+            .map(|entry| (entry.text.clone(), entry.version, entry.is_open))
     }
 
     /// Like [`Self::set_open`], but in cross-module mode also refreshes
@@ -576,7 +847,7 @@ impl WorkspaceIndex {
                 } else {
                     basilisk_checker::check_with_config(
                         &resolved,
-                        self.config_for_file(entry.key()),
+                        &self.config_for_file(entry.key()),
                     )
                 };
                 let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
@@ -607,7 +878,7 @@ impl WorkspaceIndex {
     pub fn reresolve_imports_and_recheck(
         &self,
     ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
-        if self.search_paths_snapshot().is_none() {
+        if !self.has_search_paths() {
             return self.recheck_all_files();
         }
         self.salsa_engine.prime(
@@ -724,9 +995,25 @@ impl WorkspaceIndex {
         usize,
         usize,
     ) {
+        self.scan_roots(&self.roots)
+    }
+
+    /// Scan only files whose longest-prefix owning root is in `roots`.
+    ///
+    /// This keeps a blocked nested root out of a healthy parent-root scan while
+    /// allowing the healthy root to continue independently.
+    #[must_use]
+    pub(crate) fn scan_roots(
+        &self,
+        roots: &[PathBuf],
+    ) -> (
+        Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)>,
+        usize,
+        usize,
+    ) {
         let mut all_files: Vec<PathBuf> = Vec::new();
 
-        for root in &self.roots {
+        for root in roots {
             let cfg = crate::config::load_config(root);
             for scan_dir in self.scan_dirs_for(root) {
                 collect_python_files(&scan_dir, &mut all_files, &cfg.exclude, root);
@@ -734,7 +1021,10 @@ impl WorkspaceIndex {
         }
 
         // Prefer .pyi over .py when both exist for the same stem.
-        let deduped = deduplicate_by_stem(all_files);
+        let deduped = deduplicate_by_stem(all_files)
+            .into_iter()
+            .filter(|path| self.path_is_owned_by_any_root(path, roots))
+            .collect::<Vec<_>>();
         let file_count = deduped.len();
 
         // Read every closed file's text before analysing anything, so the
@@ -751,7 +1041,7 @@ impl WorkspaceIndex {
             })
             .collect();
 
-        if self.search_paths_snapshot().is_some() {
+        if self.has_search_paths() {
             self.salsa_engine.prime(
                 to_analyse
                     .iter()
@@ -782,6 +1072,77 @@ impl WorkspaceIndex {
         (results, file_count, error_count)
     }
 
+    /// Populate one root for configuration-editor inventory without publishing.
+    ///
+    /// `openFilesOnly` intentionally skips the startup scan, but project policy
+    /// operations still need complete counts and occurrences. Open buffers stay
+    /// authoritative; closed files are refreshed from disk and retained only in
+    /// the server index. The caller deliberately discards LSP diagnostics.
+    #[must_use]
+    pub fn preload_root_for_configuration(&self, root: &std::path::Path) -> usize {
+        if !self.roots.iter().any(|candidate| candidate == root) {
+            return 0;
+        }
+        self.ensure_configuration_search_paths(root);
+        let config = crate::config::load_config(root);
+        let mut files = Vec::new();
+        for scan_dir in self.scan_dirs_for(root) {
+            collect_python_files(&scan_dir, &mut files, &config.exclude, root);
+        }
+        let files = deduplicate_by_stem(files);
+        self.remove_stale_configuration_entries(root, &files);
+        let sources = self.closed_sources(files);
+        if self.has_search_paths() {
+            self.salsa_engine.prime(
+                sources
+                    .iter()
+                    .map(|(path, text)| (path.clone(), text.clone())),
+            );
+        }
+        for (path, text) in sources {
+            let (entry, _diagnostics_for_client) = self.analyse_and_resolve(&text, &path);
+            let _ = self.files.insert(path, entry);
+        }
+        self.files
+            .iter()
+            .filter(|entry| entry.key().starts_with(root))
+            .count()
+    }
+
+    fn ensure_configuration_search_paths(&self, root: &std::path::Path) {
+        if self
+            .search_paths_by_root
+            .read()
+            .is_ok_and(|paths| paths.contains_key(root))
+        {
+            return;
+        }
+        let roots = self.roots.clone();
+        let config = crate::config::load_config(root);
+        let search_paths =
+            crate::server::init::build_root_search_paths(&roots, root, config, None, None);
+        self.set_root_search_paths(root.to_path_buf(), search_paths);
+    }
+
+    fn remove_stale_configuration_entries(&self, root: &std::path::Path, files: &[PathBuf]) {
+        let expected: std::collections::HashSet<&std::path::Path> =
+            files.iter().map(PathBuf::as_path).collect();
+        self.files.retain(|path, entry| {
+            !path.starts_with(root) || entry.is_open || expected.contains(path.as_path())
+        });
+    }
+
+    fn closed_sources(&self, files: Vec<PathBuf>) -> Vec<(PathBuf, String)> {
+        files
+            .into_iter()
+            .filter(|path| !self.files.get(path).is_some_and(|entry| entry.is_open))
+            .filter_map(|path| {
+                let text = std::fs::read_to_string(&path).ok()?;
+                Some((path, text))
+            })
+            .collect()
+    }
+
     /// Re-analyse every OPEN file through the engine and return its fresh
     /// diagnostics — **always**, even when they are unchanged.
     ///
@@ -794,10 +1155,21 @@ impl WorkspaceIndex {
     /// rescans so open editors converge with the workspace.
     #[must_use]
     pub fn refresh_open_files(&self) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+        self.refresh_open_files_for_roots(&self.roots)
+    }
+
+    /// Re-analyse open files owned by one of `roots`.
+    #[must_use]
+    pub(crate) fn refresh_open_files_for_roots(
+        &self,
+        roots: &[PathBuf],
+    ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
         let open_paths: Vec<PathBuf> = self
             .files
             .iter()
-            .filter(|entry| entry.value().is_open)
+            .filter(|entry| {
+                entry.value().is_open && self.path_is_owned_by_any_root(entry.key(), roots)
+            })
             .map(|entry| entry.key().clone())
             .collect();
         self.reanalyse_paths(open_paths, PublishPolicy::Always)
@@ -1044,7 +1416,7 @@ mod tests {
     fn test_set_open_produces_diagnostics_for_type_error() {
         let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/err.py");
-        // Missing return type annotation (BSK-E0002) — a house rule, off by
+        // Missing return type annotation (BSK-0002) — a house rule, off by
         // default, so the index opts in. See [CHKARCH-CONFIGURATION-ONLY].
         let src = "def foo(x: int):\n    return x\n";
         let diags = idx.set_open(&uri, src, 1);
@@ -1052,6 +1424,22 @@ mod tests {
             !diags.is_empty(),
             "expected diagnostics for missing return annotation"
         );
+    }
+
+    #[test]
+    fn blocked_open_tracks_text_without_running_analysis() {
+        let index = make_index_with_config(annotations_on());
+        let uri = make_uri("/tmp/blocked.py");
+        let source = "def missing_annotations(value):\n    return value\n";
+        index.set_open_without_analysis(&uri, source, 7);
+
+        assert_eq!(index.get_text(&uri).as_deref(), Some(source));
+        let path = uri.to_file_path().unwrap();
+        let entry = index.files.get(&path).unwrap();
+        assert!(entry.is_open);
+        assert_eq!(entry.version, 7);
+        assert!(entry.resolved.is_none());
+        assert!(entry.diagnostics.is_empty());
     }
 
     // ── Issue #80 (editor): opening a vendored/excluded file must NOT publish
@@ -1245,6 +1633,40 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[test]
+    fn selected_root_scan_excludes_files_owned_by_nested_blocked_root() {
+        let parent = unique_tmp("bsk_partial_ready_parent");
+        let child = parent.join("nested");
+        std::fs::create_dir_all(&child).unwrap();
+        let parent_file = parent.join("healthy.py");
+        let child_file = child.join("blocked.py");
+        std::fs::write(&parent_file, "healthy: int = 1\n").unwrap();
+        std::fs::write(&child_file, "blocked: int = 2\n").unwrap();
+
+        let index = WorkspaceIndex::new(
+            vec![parent.clone(), child.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let (results, file_count, _) = index.scan_roots(std::slice::from_ref(&parent));
+        assert_eq!(file_count, 1);
+        assert_eq!(results.len(), 1);
+        assert!(results
+            .first()
+            .is_some_and(|(uri, _)| uri.to_file_path().ok().as_ref() == Some(&parent_file)));
+        assert!(index.path_is_owned_by_root(&parent_file, &parent));
+        assert!(!index.path_is_owned_by_root(&child_file, &parent));
+        assert!(index.path_is_owned_by_root(&child_file, &child));
+
+        let (inverse, inverse_count, _) = index.scan_roots(std::slice::from_ref(&child));
+        assert_eq!(inverse_count, 1);
+        assert!(inverse
+            .first()
+            .is_some_and(|(uri, _)| uri.to_file_path().ok().as_ref() == Some(&child_file)));
+
+        let _ = std::fs::remove_dir_all(parent);
+    }
+
     // ── Issue #80: vendored / bundled third-party code must not be scanned ───
     //
     // The extension vendors third-party Python under `vscode-extension/bundled/`
@@ -1290,6 +1712,30 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[test]
+    fn configuration_inventory_preloads_closed_files_in_open_files_only_mode() {
+        let root = unique_tmp("bsk_configuration_inventory");
+        std::fs::create_dir_all(&root).unwrap();
+        let source = root.join("closed.py");
+        std::fs::write(&source, "value: int = 'not an int'\n").unwrap();
+        let index = WorkspaceIndex::new(
+            vec![root.clone()],
+            AnalysisMode::OpenFilesOnly,
+            BasiliskConfig::default(),
+        );
+        assert!(index.files.is_empty());
+
+        assert_eq!(index.preload_root_for_configuration(&root), 1);
+        let entry = index.files.get(&source).unwrap();
+        assert!(!entry.is_open);
+        assert!(entry
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code.code == "assignment_compatibility"));
+        drop(entry);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     // ── Issue #80: user-facing `exclude` must accept glob patterns ───────────
     //
     // The workspace `exclude` config is the user's knob for extending the
@@ -1308,8 +1754,8 @@ mod tests {
         std::fs::write(dir.join("schema.pb.py"), "z: int = 3\n").unwrap();
         // The user-facing exclude knob, read by the scan via load_config.
         std::fs::write(
-            dir.join("basilisk.json"),
-            r#"{"exclude": ["**/generated/**", "*.pb.py"]}"#,
+            dir.join("pyproject.toml"),
+            "[tool.basilisk]\nexclude = [\"**/generated/**\", \"*.pb.py\"]\n",
         )
         .unwrap();
 
@@ -1364,7 +1810,7 @@ mod tests {
             workspace_members: vec![],
             site_packages: None,
             registry: None,
-            typeshed_path: None,
+            typeshed_snapshot: None,
         });
 
         let (results, file_count, _) = idx.scan();
@@ -1401,7 +1847,7 @@ mod tests {
             workspace_members: vec![],
             site_packages: None,
             registry: None,
-            typeshed_path: None,
+            typeshed_snapshot: None,
         });
 
         // Open a file with a diagnostic; its fresh state is now stored.
@@ -1452,7 +1898,7 @@ mod tests {
             workspace_members: vec![],
             site_packages: None,
             registry: None,
-            typeshed_path: None,
+            typeshed_snapshot: None,
         });
         let _ = idx.scan();
 
@@ -1909,7 +2355,7 @@ mod tests {
             stub_paths: vec![],
             workspace_members: vec![],
             site_packages: Some(site_packages.clone()),
-            typeshed_path: None,
+            typeshed_snapshot: None,
             registry: None,
         });
 
@@ -1955,15 +2401,9 @@ mod tests {
         // Verify that the change is detected and a different value is returned.
         assert_ne!(ver1, ver2, "python version should change after file update");
 
-        // Verify stdlib module availability doesn't regress — `tomllib` was
-        // added in 3.11 so it should be available in both versions.
-        assert!(
-            basilisk_stubs::is_stdlib_module("tomllib"),
-            "tomllib should be a stdlib module"
-        );
-
-        // `os` should always be available regardless of version.
-        assert!(basilisk_stubs::is_stdlib_module("os"));
+        let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot().unwrap();
+        assert!(snapshot.read_stub("tomllib").is_some());
+        assert!(snapshot.read_stub("os").is_some());
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -2113,10 +2553,10 @@ mod tests {
     // overrides identically to the CLI. Before the fix, the LSP always used
     // `BasiliskConfig::default()` and ignored project-level configuration.
 
-    /// Source that triggers BSK-E0001 (missing parameter annotation).
+    /// Source that triggers BSK-0001 (missing parameter annotation).
     const SRC_MISSING_ANNOTATION: &str = "def greet(name):\n    return name\n";
 
-    /// Source that triggers BSK-W0050 (redundant type annotation).
+    /// Source that triggers BSK-0050 (redundant type annotation).
     const SRC_REDUNDANT_ANNOTATION: &str = "x: int = 42\n";
 
     /// Helper: build a `WorkspaceIndex` with a custom `BasiliskConfig`.
@@ -2124,30 +2564,39 @@ mod tests {
         WorkspaceIndex::new(vec![], AnalysisMode::WholeModule, config)
     }
 
-    /// Config that opts into the annotation house rules (`strict_annotations =
-    /// true`). `BSK-E0001`/`BSK-W0050` are off by default — the default config is
-    /// pure PEP conformance — so tests that exercise those rules (or override
-    /// their severity) enable them here, exactly as a project would. No modes;
-    /// this is configuration. See [CHKARCH-CONFIGURATION-ONLY].
+    /// Config with explicit native severities for the annotation rules used by
+    /// these workspace tests. See [CHKARCH-CONFIGURATION-ONLY].
     fn annotations_on() -> BasiliskConfig {
-        BasiliskConfig {
-            strict_annotations: true,
-            ..Default::default()
-        }
+        use basilisk_config::RuleSeverity::{Error, Warning};
+
+        BasiliskConfig::with_rule_entries(
+            [
+                ("BSK-0001", Error),
+                ("BSK-0002", Error),
+                ("BSK-0003", Error),
+                ("BSK-0004", Error),
+                ("BSK-0005", Error),
+                ("BSK-0025", Error),
+                ("BSK-0014", Warning),
+                ("BSK-0040", Warning),
+                ("BSK-0050", Warning),
+            ]
+            .into_iter()
+            .map(|(code, severity)| (code.to_owned(), severity))
+            .collect(),
+        )
     }
 
-    /// Helper: build a `WorkspaceIndex` whose config opts into the annotation
-    /// house rules and overrides exactly one rule's severity. A severity override
-    /// only re-grades a rule that is already enabled, so the house rules are
-    /// turned on first. See [CHKARCH-CONFIGURATION-ONLY].
+    /// Build a `WorkspaceIndex` that explicitly assigns one rule's severity.
+    /// A non-disabled severity also selects an opt-in rule.
     fn make_index_with_rule_override(
         code: &str,
         severity: basilisk_config::RuleSeverity,
     ) -> WorkspaceIndex {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(code.to_owned(), severity)]),
-            ..annotations_on()
-        };
+        let mut config = annotations_on();
+        if let Some(tables) = config.rule_chain.first_mut() {
+            let _ = tables.rules.insert(code.to_owned(), severity);
+        }
         make_index_with_config(config)
     }
 
@@ -2253,7 +2702,7 @@ mod tests {
         let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_w0050_default.py");
         let _ = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
-        assert_checker_severity(&idx, &uri, "BSK-W0050", basilisk_checker::Severity::Warning);
+        assert_checker_severity(&idx, &uri, "BSK-0050", basilisk_checker::Severity::Warning);
     }
 
     #[test]
@@ -2263,7 +2712,7 @@ mod tests {
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
         assert_lsp_severity(
             &lsp_diags,
-            "BSK-W0050",
+            "BSK-0050",
             tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
         );
     }
@@ -2273,7 +2722,7 @@ mod tests {
         let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_e0001_default.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-        assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Error);
+        assert_checker_severity(&idx, &uri, "BSK-0001", basilisk_checker::Severity::Error);
     }
 
     #[test]
@@ -2283,7 +2732,7 @@ mod tests {
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_lsp_severity(
             &lsp_diags,
-            "BSK-E0001",
+            "BSK-0001",
             tower_lsp::lsp_types::DiagnosticSeverity::ERROR,
         );
     }
@@ -2292,22 +2741,20 @@ mod tests {
 
     #[test]
     fn config_override_demotes_e0001_to_warning_in_checker() {
-        let idx =
-            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
+        let idx = make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Warning);
         let uri = make_uri("/tmp/cfg_demote_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-        assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Warning);
+        assert_checker_severity(&idx, &uri, "BSK-0001", basilisk_checker::Severity::Warning);
     }
 
     #[test]
     fn config_override_demotes_e0001_to_warning_in_lsp() {
-        let idx =
-            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
+        let idx = make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Warning);
         let uri = make_uri("/tmp/cfg_demote_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_lsp_severity(
             &lsp_diags,
-            "BSK-E0001",
+            "BSK-0001",
             tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
         );
     }
@@ -2316,20 +2763,20 @@ mod tests {
 
     #[test]
     fn config_override_demotes_e0001_to_info_in_checker() {
-        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Info);
+        let idx = make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Info);
         let uri = make_uri("/tmp/cfg_info_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-        assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Info);
+        assert_checker_severity(&idx, &uri, "BSK-0001", basilisk_checker::Severity::Info);
     }
 
     #[test]
     fn config_override_demotes_e0001_to_info_in_lsp() {
-        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Info);
+        let idx = make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Info);
         let uri = make_uri("/tmp/cfg_info_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_lsp_severity(
             &lsp_diags,
-            "BSK-E0001",
+            "BSK-0001",
             tower_lsp::lsp_types::DiagnosticSeverity::INFORMATION,
         );
     }
@@ -2339,93 +2786,87 @@ mod tests {
     #[test]
     fn config_override_disables_e0001_removes_from_checker() {
         let idx =
-            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
+            make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_disable_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
         let diags = get_diagnostics(&idx, &uri);
-        let e0001_count = count_code(&diags, "BSK-E0001");
+        let e0001_count = count_code(&diags, "BSK-0001");
         assert_eq!(
             e0001_count, 0,
-            "disabled rule BSK-E0001 must produce zero diagnostics, got {e0001_count}"
+            "disabled rule BSK-0001 must produce zero diagnostics, got {e0001_count}"
         );
     }
 
     #[test]
     fn config_override_disables_e0001_removes_from_lsp() {
         let idx =
-            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
+            make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_disable_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
         let codes = lsp_codes(&lsp_diags);
         assert!(
-            !codes.contains(&"BSK-E0001".to_owned()),
-            "disabled BSK-E0001 must not appear in LSP diagnostics, got {codes:?}"
+            !codes.contains(&"BSK-0001".to_owned()),
+            "disabled BSK-0001 must not appear in LSP diagnostics, got {codes:?}"
         );
     }
 
-    // ── BSK-W0050 severity override: promote warning to error ───────────────────
+    // ── BSK-0050 severity override: promote warning to error ───────────────────
 
     #[test]
     fn config_override_promotes_w0050_to_error_in_lsp() {
         // `RuleSeverity::Error` promotes a warning-default rule UP to a hard
         // error, so a project can dial strictness up (e.g. make "no type stubs"
-        // a red error) — not just down. BSK-W0050 defaults to Warning; with the
+        // a red error) — not just down. BSK-0050 defaults to Warning; with the
         // override it must surface as ERROR through the LSP.
-        let idx = make_index_with_rule_override("BSK-W0050", basilisk_config::RuleSeverity::Error);
+        let idx = make_index_with_rule_override("BSK-0050", basilisk_config::RuleSeverity::Error);
         let uri = make_uri("/tmp/cfg_promote_w0050.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
         assert_lsp_severity(
             &lsp_diags,
-            "BSK-W0050",
+            "BSK-0050",
             tower_lsp::lsp_types::DiagnosticSeverity::ERROR,
         );
     }
 
-    // ── BSK-W0050 disabled via config ───────────────────────────────────────────
+    // ── BSK-0050 disabled via config ───────────────────────────────────────────
 
     #[test]
     fn config_override_disables_w0050() {
         let idx =
-            make_index_with_rule_override("BSK-W0050", basilisk_config::RuleSeverity::Disabled);
+            make_index_with_rule_override("BSK-0050", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_disable_w0050.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
 
         let codes = lsp_codes(&lsp_diags);
         assert!(
-            !codes.contains(&"BSK-W0050".to_owned()),
-            "disabled BSK-W0050 must not appear in LSP diagnostics, got {codes:?}"
+            !codes.contains(&"BSK-0050".to_owned()),
+            "disabled BSK-0050 must not appear in LSP diagnostics, got {codes:?}"
         );
 
         let diags = get_diagnostics(&idx, &uri);
-        let w0050_count = count_code(&diags, "BSK-W0050");
+        let w0050_count = count_code(&diags, "BSK-0050");
         assert_eq!(
             w0050_count, 0,
-            "disabled BSK-W0050 must produce zero checker diagnostics"
+            "disabled BSK-0050 must produce zero checker diagnostics"
         );
     }
 
-    // ── uv_stub_suggestions config ──────────────────────────────────────────
+    // ── Opt-in stub diagnostics ──────────────────────────────────────────────
 
     #[test]
-    fn config_uv_stub_suggestions_false_suppresses_e0152() {
-        // BSK-E0152 should be suppressed when uv_stub_suggestions is false.
-        let config = BasiliskConfig {
-            uv_stub_suggestions: false,
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+    fn unconfigured_stub_rule_stays_disabled() {
+        let idx = make_index_with_config(BasiliskConfig::default());
         let uri = make_uri("/tmp/cfg_no_stubs.py");
-        // Even with source that might trigger E0152, the config suppresses it.
         let src = "import os\n";
         let _ = idx.set_open(&uri, src, 1);
 
         let diags = get_diagnostics(&idx, &uri);
-        let e0152_count = count_code(&diags, "BSK-E0152");
+        let e0152_count = count_code(&diags, "BSK-0152");
         assert_eq!(
             e0152_count, 0,
-            "BSK-E0152 should be suppressed when uv_stub_suggestions is false"
+            "BSK-0152 must remain off without an explicit rule severity"
         );
     }
 
@@ -2433,25 +2874,17 @@ mod tests {
 
     #[test]
     fn workspace_index_stores_checker_config() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Warning,
-            )]),
-            uv_stub_suggestions: false,
-            ..Default::default()
-        };
+        let config = BasiliskConfig::with_rule_entries(std::collections::HashMap::from([(
+            "BSK-0001".to_owned(),
+            basilisk_config::RuleSeverity::Warning,
+        )]));
         let idx = make_index_with_config(config);
 
         // Verify config is stored and accessible.
         assert_eq!(
-            idx.checker_config.rule_severity("BSK-E0001"),
+            idx.checker_config.resolve_severity("BSK-0001", &[]),
             Some(basilisk_config::RuleSeverity::Warning),
             "checker_config must store the rule severity override"
-        );
-        assert!(
-            !idx.checker_config.uv_stub_suggestions,
-            "checker_config must store uv_stub_suggestions=false"
         );
     }
 
@@ -2460,14 +2893,14 @@ mod tests {
     #[test]
     fn config_applies_to_set_open() {
         let idx =
-            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
+            make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_set_open.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
         let codes = lsp_codes(&lsp_diags);
         assert!(
-            !codes.contains(&"BSK-E0001".to_owned()),
-            "set_open must apply checker_config — disabled BSK-E0001 should be absent"
+            !codes.contains(&"BSK-0001".to_owned()),
+            "set_open must apply checker_config — disabled BSK-0001 should be absent"
         );
     }
 
@@ -2479,7 +2912,7 @@ mod tests {
         std::fs::write(&file_path, SRC_MISSING_ANNOTATION).unwrap();
 
         let idx =
-            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
+            make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Disabled);
 
         // First, set_open to get it in the index, then close to allow reload.
         let uri = Url::from_file_path(&file_path).unwrap();
@@ -2502,8 +2935,8 @@ mod tests {
         let (_, lsp_diags) = result.unwrap();
         let codes = lsp_codes(&lsp_diags);
         assert!(
-            !codes.contains(&"BSK-E0001".to_owned()),
-            "reload_from_disk must apply checker_config — disabled BSK-E0001 should be absent"
+            !codes.contains(&"BSK-0001".to_owned()),
+            "reload_from_disk must apply checker_config — disabled BSK-0001 should be absent"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2577,7 +3010,7 @@ mod tests {
         std::fs::write(&file_path, SRC_MISSING_ANNOTATION).unwrap();
 
         let idx =
-            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
+            make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Disabled);
 
         let uri = Url::from_file_path(&file_path).unwrap();
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
@@ -2585,8 +3018,8 @@ mod tests {
         let (_, lsp_diags) = idx.set_closed(&uri);
         let codes = lsp_codes(&lsp_diags);
         assert!(
-            !codes.contains(&"BSK-E0001".to_owned()),
-            "set_closed must apply checker_config — disabled BSK-E0001 should be absent"
+            !codes.contains(&"BSK-0001".to_owned()),
+            "set_closed must apply checker_config — disabled BSK-0001 should be absent"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2680,13 +3113,10 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("scan_cfg.py"), SRC_MISSING_ANNOTATION).unwrap();
 
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
+        let config = BasiliskConfig::with_rule_entries(std::collections::HashMap::from([(
+            "BSK-0001".to_owned(),
+            basilisk_config::RuleSeverity::Disabled,
+        )]));
         let idx = WorkspaceIndex::new(vec![dir.clone()], AnalysisMode::WholeModule, config);
 
         let (results, file_count, _) = idx.scan();
@@ -2695,8 +3125,8 @@ mod tests {
         for (_, lsp_diags) in &results {
             let codes = lsp_codes(lsp_diags);
             assert!(
-                !codes.contains(&"BSK-E0001".to_owned()),
-                "scan must apply checker_config — disabled BSK-E0001 should be absent, got {codes:?}"
+                !codes.contains(&"BSK-0001".to_owned()),
+                "scan must apply checker_config — disabled BSK-0001 should be absent, got {codes:?}"
             );
         }
 
@@ -2712,10 +3142,10 @@ mod tests {
         std::fs::create_dir_all(&root_a).unwrap();
         std::fs::create_dir_all(&root_b).unwrap();
 
-        // Root A: disable BSK-E0001 via pyproject.toml
+        // Root A: disable BSK-0001 via pyproject.toml
         std::fs::write(
             root_a.join("pyproject.toml"),
-            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"disabled\"\n",
         )
         .unwrap();
         std::fs::write(root_a.join("a.py"), SRC_MISSING_ANNOTATION).unwrap();
@@ -2729,20 +3159,20 @@ mod tests {
             BasiliskConfig::default(),
         );
 
-        // Check that root A's config disables BSK-E0001
+        // Check that root A's config disables BSK-0001
         let cfg_a = idx.config_for_file(&root_a.join("a.py"));
         assert_eq!(
-            cfg_a.rule_severity("BSK-E0001"),
+            cfg_a.resolve_severity("BSK-0001", &[]),
             Some(basilisk_config::RuleSeverity::Disabled),
-            "root A should have BSK-E0001 disabled"
+            "root A should have BSK-0001 disabled"
         );
 
-        // Check that root B uses default config (BSK-E0001 not overridden)
+        // Check that root B uses default config (BSK-0001 not overridden)
         let cfg_b = idx.config_for_file(&root_b.join("b.py"));
         assert_eq!(
-            cfg_b.rule_severity("BSK-E0001"),
+            cfg_b.resolve_severity("BSK-0001", &[]),
             None,
-            "root B should have default config (no BSK-E0001 override)"
+            "root B should have default config (no BSK-0001 override)"
         );
 
         let _ = std::fs::remove_dir_all(&root_a);
@@ -2763,8 +3193,53 @@ mod tests {
         // File outside any root should fall back to default config.
         let cfg = idx.config_for_file(std::path::Path::new("/nonexistent/foo.py"));
         assert!(
-            cfg.rules.is_empty(),
-            "fallback config should have no rule overrides"
+            !cfg.has_config_table(),
+            "fallback config should have no rule tables"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn set_root_config_is_authoritative_over_stale_disk_config() {
+        // [LSPARCH-CONFIG] via [CHKARCH-CONFIG-DISCOVERY]: after an applied
+        // configuration-editor change or an open, unsaved config buffer, the
+        // in-memory root config decides. config_for_file must not re-read the
+        // root's pyproject.toml from disk and merge its stale severities back
+        // over the applied one (crates/basilisk-lsp/src/workspace.rs
+        // config_for_file bounded walk).
+        let root = unique_tmp("bsk_cfg_authority");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"error\"\n",
+        )
+        .unwrap();
+
+        let mut idx = WorkspaceIndex::new(
+            vec![root.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let file = root.join("app.py");
+        assert_eq!(
+            idx.config_for_file(&file).resolve_severity("BSK-0001", &[]),
+            Some(basilisk_config::RuleSeverity::Error),
+            "disk config decides before any in-memory update"
+        );
+
+        // The applied document parses exactly as the configuration editor
+        // builds it; disk still holds the stale "error" entry.
+        let applied = basilisk_config::discover_config_document_with_content(
+            &root,
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"warning\"\n".to_owned(),
+        )
+        .unwrap();
+        idx.set_root_config(root.clone(), applied.config);
+        assert_eq!(
+            idx.config_for_file(&file).resolve_severity("BSK-0001", &[]),
+            Some(basilisk_config::RuleSeverity::Warning),
+            "the in-memory root config must beat the stale on-disk entry"
         );
 
         let _ = std::fs::remove_dir_all(&root);
@@ -2774,46 +3249,44 @@ mod tests {
 
     #[test]
     fn config_multiple_overrides_applied_together() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([
-                (
-                    "BSK-E0001".to_owned(),
-                    basilisk_config::RuleSeverity::Warning,
-                ),
-                (
-                    "BSK-W0050".to_owned(),
-                    basilisk_config::RuleSeverity::Disabled,
-                ),
-            ]),
-            ..annotations_on()
-        };
+        let mut config = annotations_on();
+        if let Some(tables) = config.rule_chain.first_mut() {
+            let _ = tables.rules.insert(
+                "BSK-0001".to_owned(),
+                basilisk_config::RuleSeverity::Warning,
+            );
+            let _ = tables.rules.insert(
+                "BSK-0050".to_owned(),
+                basilisk_config::RuleSeverity::Disabled,
+            );
+        }
         let idx = make_index_with_config(config);
 
-        // File with both BSK-E0001 and BSK-W0050 triggers.
+        // File with both BSK-0001 and BSK-0050 triggers.
         let uri = make_uri("/tmp/cfg_multi.py");
         let src = "x: int = 42\n\ndef greet(name):\n    return name\n";
         let lsp_diags = idx.set_open(&uri, src, 1);
         let codes = lsp_codes(&lsp_diags);
 
-        // BSK-W0050 should be gone (disabled).
+        // BSK-0050 should be gone (disabled).
         assert!(
-            !codes.contains(&"BSK-W0050".to_owned()),
-            "disabled BSK-W0050 must not appear, got {codes:?}"
+            !codes.contains(&"BSK-0050".to_owned()),
+            "disabled BSK-0050 must not appear, got {codes:?}"
         );
 
-        // BSK-E0001 should be present but demoted to Warning.
+        // BSK-0001 should be present but demoted to Warning.
         assert!(
-            codes.contains(&"BSK-E0001".to_owned()),
-            "demoted BSK-E0001 should still appear, got {codes:?}"
+            codes.contains(&"BSK-0001".to_owned()),
+            "demoted BSK-0001 should still appear, got {codes:?}"
         );
 
         for d in &lsp_diags {
             if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &d.code {
-                if code == "BSK-E0001" {
+                if code == "BSK-0001" {
                     assert_eq!(
                         d.severity,
                         Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "demoted BSK-E0001 must be WARNING in combined config"
+                        "demoted BSK-0001 must be WARNING in combined config"
                     );
                 }
             }
@@ -2821,9 +3294,9 @@ mod tests {
 
         // Also verify the raw checker diagnostics match.
         let diags = get_diagnostics(&idx, &uri);
-        let w0050_count = count_code(&diags, "BSK-W0050");
-        assert_eq!(w0050_count, 0, "BSK-W0050 disabled in checker too");
-        for d in diags.iter().filter(|d| d.code.code == "BSK-E0001") {
+        let w0050_count = count_code(&diags, "BSK-0050");
+        assert_eq!(w0050_count, 0, "BSK-0050 disabled in checker too");
+        for d in diags.iter().filter(|d| d.code.code == "BSK-0001") {
             assert_eq!(d.severity, basilisk_checker::Severity::Warning);
         }
     }
@@ -2849,7 +3322,7 @@ mod tests {
     #[test]
     fn bsk_to_lsp_maps_warning_to_warning_not_error() {
         let diag = make_test_diag(
-            "BSK-W0050",
+            "BSK-0050",
             basilisk_checker::Severity::Warning,
             "test warning",
         );
@@ -2868,7 +3341,7 @@ mod tests {
 
     #[test]
     fn bsk_to_lsp_maps_error_to_error() {
-        let diag = make_test_diag("BSK-E0001", basilisk_checker::Severity::Error, "test error");
+        let diag = make_test_diag("BSK-0001", basilisk_checker::Severity::Error, "test error");
         let lsp_diag = crate::workspace_analysis::bsk_to_lsp(&diag, "x\n");
         assert_eq!(
             lsp_diag.severity,
@@ -2879,7 +3352,7 @@ mod tests {
 
     #[test]
     fn bsk_to_lsp_maps_info_to_information() {
-        let diag = make_test_diag("BSK-I0001", basilisk_checker::Severity::Info, "test info");
+        let diag = make_test_diag("BSK-8902", basilisk_checker::Severity::Info, "test info");
         let lsp_diag = crate::workspace_analysis::bsk_to_lsp(&diag, "x\n");
         assert_eq!(
             lsp_diag.severity,
@@ -2890,27 +3363,69 @@ mod tests {
 
     // ── Config loaded from pyproject.toml via WorkspaceIndex constructor ────
 
+    #[cfg(unix)]
+    #[test]
+    fn multi_root_platform_evidence_is_resolved_per_root() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let base = unique_tmp("bsk_multi_root_platform");
+        let roots = [base.join("a"), base.join("b")];
+        for (root, platform) in roots.iter().zip(["platform-a", "platform-b"]) {
+            std::fs::create_dir_all(root).unwrap();
+            let interpreter = root.join("python");
+            std::fs::write(&interpreter, format!("#!/bin/sh\nprintf '{platform}\\n'\n")).unwrap();
+            std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::write(
+                root.join("pyproject.toml"),
+                format!("[tool.basilisk]\npython = '{}'\n", interpreter.display()),
+            )
+            .unwrap();
+        }
+
+        let index = WorkspaceIndex::new(
+            roots.to_vec(),
+            AnalysisMode::OpenFilesOnly,
+            BasiliskConfig::default(),
+        );
+
+        assert_eq!(
+            index
+                .root_configs
+                .get(&roots[0])
+                .and_then(|config| config.python_platform.as_deref()),
+            Some("platform-a")
+        );
+        assert_eq!(
+            index
+                .root_configs
+                .get(&roots[1])
+                .and_then(|config| config.python_platform.as_deref()),
+            Some("platform-b")
+        );
+        let _ = std::fs::remove_dir_all(base);
+    }
+
     #[test]
     fn workspace_index_with_pyproject_config_applies_overrides() {
         let dir = unique_tmp("bsk_cfg_pyproject");
         std::fs::create_dir_all(&dir).unwrap();
 
-        // Write a pyproject.toml that disables BSK-E0001.
+        // Write a pyproject.toml that disables BSK-0001.
         std::fs::write(
             dir.join("pyproject.toml"),
-            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"disabled\"\n",
         )
         .unwrap();
 
-        // Write a Python file that triggers BSK-E0001.
+        // Write a Python file that triggers BSK-0001.
         std::fs::write(dir.join("check_me.py"), SRC_MISSING_ANNOTATION).unwrap();
 
         // Load config the same way the LSP init does.
         let config = basilisk_config::load_basilisk_config(&dir);
         assert_eq!(
-            config.rule_severity("BSK-E0001"),
+            config.resolve_severity("BSK-0001", &[]),
             Some(basilisk_config::RuleSeverity::Disabled),
-            "pyproject.toml should disable BSK-E0001"
+            "pyproject.toml should disable BSK-0001"
         );
 
         let idx = WorkspaceIndex::new(vec![dir.clone()], AnalysisMode::WholeModule, config);
@@ -2922,8 +3437,8 @@ mod tests {
         for (_, lsp_diags) in &results {
             let codes = lsp_codes(lsp_diags);
             assert!(
-                !codes.contains(&"BSK-E0001".to_owned()),
-                "pyproject.toml disabled BSK-E0001 must not appear in scan results"
+                !codes.contains(&"BSK-0001".to_owned()),
+                "pyproject.toml disabled BSK-0001 must not appear in scan results"
             );
         }
 
@@ -2932,11 +3447,53 @@ mod tests {
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         let codes = lsp_codes(&lsp_diags);
         assert!(
-            !codes.contains(&"BSK-E0001".to_owned()),
-            "pyproject.toml disabled BSK-E0001 must not appear via set_open either"
+            !codes.contains(&"BSK-0001".to_owned()),
+            "pyproject.toml disabled BSK-0001 must not appear via set_open either"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// GitHub #311 (CLI⇄LSP parity): per-file rule config must merge a child
+    /// directory's config over the workspace-root config, exactly like the
+    /// CLI's per-file ancestor walk — not pin every file to the workspace
+    /// root's config.
+    #[test]
+    fn set_open_merges_child_dir_config_over_workspace_root_config() {
+        let root = unique_tmp("bsk_cfg_child_merge");
+        let child = root.join("child");
+        std::fs::create_dir_all(&child).unwrap();
+        std::fs::write(
+            root.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"error\"\n\"BSK-0002\" = \"error\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            child.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"disabled\"\n",
+        )
+        .unwrap();
+        std::fs::write(child.join("open_me.py"), SRC_MISSING_ANNOTATION).unwrap();
+
+        // Load config the same way the LSP init does for the workspace root.
+        let config = basilisk_config::load_basilisk_config(&root);
+        let idx = WorkspaceIndex::new(vec![root.clone()], AnalysisMode::WholeModule, config);
+
+        let uri = Url::from_file_path(child.join("open_me.py")).unwrap();
+        let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
+        let _ = std::fs::remove_dir_all(&root);
+
+        let codes = lsp_codes(&lsp_diags);
+        assert!(
+            codes.contains(&"BSK-0002".to_owned()),
+            "the root's rule opt-ins must still apply to files in \
+             the child dir (cumulative merge, GitHub #311); got: {codes:?}"
+        );
+        assert!(
+            !codes.contains(&"BSK-0001".to_owned()),
+            "the child dir's `BSK-0001 = disabled` must be honored for files \
+             under it (CLI⇄LSP parity, GitHub #311); got: {codes:?}"
+        );
     }
 
     #[test]
@@ -2944,12 +3501,10 @@ mod tests {
         let dir = unique_tmp("bsk_cfg_pyproject_demote");
         std::fs::create_dir_all(&dir).unwrap();
 
-        // A severity override only re-grades an already-enabled rule; BSK-E0001
-        // is off by default, so the project opts in AND demotes it.
-        // See [CHKARCH-CONFIGURATION-ONLY].
+        // A non-disabled severity selects this off-by-default rule and demotes it.
         std::fs::write(
             dir.join("pyproject.toml"),
-            "[tool.basilisk]\nstrict-annotations = true\n\n[tool.basilisk.rules]\n\"BSK-E0001\" = \"warning\"\n",
+            "[tool.basilisk.rules]\n\"BSK-0001\" = \"warning\"\n",
         )
         .unwrap();
         std::fs::write(dir.join("demote_me.py"), SRC_MISSING_ANNOTATION).unwrap();
@@ -2962,17 +3517,17 @@ mod tests {
 
         let codes = lsp_codes(&lsp_diags);
         assert!(
-            codes.contains(&"BSK-E0001".to_owned()),
-            "demoted BSK-E0001 should still appear"
+            codes.contains(&"BSK-0001".to_owned()),
+            "demoted BSK-0001 should still appear"
         );
 
         for d in &lsp_diags {
             if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &d.code {
-                if code == "BSK-E0001" {
+                if code == "BSK-0001" {
                     assert_eq!(
                         d.severity,
                         Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "pyproject.toml demoted BSK-E0001 must be WARNING in LSP"
+                        "pyproject.toml demoted BSK-0001 must be WARNING in LSP"
                     );
                 }
             }
@@ -2980,11 +3535,11 @@ mod tests {
 
         // Verify checker diagnostics too.
         let diags = get_diagnostics(&idx, &uri);
-        for d in diags.iter().filter(|d| d.code.code == "BSK-E0001") {
+        for d in diags.iter().filter(|d| d.code.code == "BSK-0001") {
             assert_eq!(
                 d.severity,
                 basilisk_checker::Severity::Warning,
-                "pyproject.toml demoted BSK-E0001 must be Warning in checker"
+                "pyproject.toml demoted BSK-0001 must be Warning in checker"
             );
         }
 
@@ -2999,56 +3554,53 @@ mod tests {
         // rule, different severities. See [CHKARCH-CONFIGURATION-ONLY].
         let uri_path = "/tmp/cfg_diff.py";
 
-        // House rules enabled, BSK-E0001 at its default severity: Error.
+        // House rules enabled, BSK-0001 at its default severity: Error.
         let default_idx = make_index_with_config(annotations_on());
         let default_uri = make_uri(uri_path);
         let default_diags = default_idx.set_open(&default_uri, SRC_MISSING_ANNOTATION, 1);
         let default_severities: Vec<_> = default_diags
             .iter()
             .filter(|d| {
-                matches!(&d.code, Some(tower_lsp::lsp_types::NumberOrString::String(c)) if c == "BSK-E0001")
+                matches!(&d.code, Some(tower_lsp::lsp_types::NumberOrString::String(c)) if c == "BSK-0001")
             })
             .filter_map(|d| d.severity)
             .collect();
 
-        // Custom config: BSK-E0001 demoted to Warning.
+        // Custom config: BSK-0001 demoted to Warning.
         let custom_idx =
-            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
+            make_index_with_rule_override("BSK-0001", basilisk_config::RuleSeverity::Warning);
         let custom_uri = make_uri(uri_path);
         let custom_diags = custom_idx.set_open(&custom_uri, SRC_MISSING_ANNOTATION, 1);
         let custom_severities: Vec<_> = custom_diags
             .iter()
             .filter(|d| {
-                matches!(&d.code, Some(tower_lsp::lsp_types::NumberOrString::String(c)) if c == "BSK-E0001")
+                matches!(&d.code, Some(tower_lsp::lsp_types::NumberOrString::String(c)) if c == "BSK-0001")
             })
             .filter_map(|d| d.severity)
             .collect();
 
-        // Both should have BSK-E0001 diagnostics.
-        assert!(
-            !default_severities.is_empty(),
-            "default must have BSK-E0001"
-        );
-        assert!(!custom_severities.is_empty(), "custom must have BSK-E0001");
+        // Both should have BSK-0001 diagnostics.
+        assert!(!default_severities.is_empty(), "default must have BSK-0001");
+        assert!(!custom_severities.is_empty(), "custom must have BSK-0001");
 
         // Default = ERROR, Custom = WARNING.
         assert!(
             default_severities
                 .iter()
                 .all(|s| *s == tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
-            "default config BSK-E0001 must be ERROR"
+            "default config BSK-0001 must be ERROR"
         );
         assert!(
             custom_severities
                 .iter()
                 .all(|s| *s == tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-            "custom config BSK-E0001 must be WARNING"
+            "custom config BSK-0001 must be WARNING"
         );
 
         // They must differ — this is the core assertion proving the fix.
         assert_ne!(
             default_severities, custom_severities,
-            "default and custom configs MUST produce different LSP severities for BSK-E0001"
+            "default and custom configs MUST produce different LSP severities for BSK-0001"
         );
     }
 }

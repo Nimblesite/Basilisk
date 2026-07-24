@@ -35,7 +35,7 @@ import {
     loadFlamegraphSvgDataUri,
 } from '../../profiler-flamegraph-html';
 import type { ProfileResult } from '../../profiler-decorations';
-import { pollUntilResult, closeAllEditors } from './test-helpers';
+import { pollUntilResult, closeAllEditors, removeTestDir } from './test-helpers';
 
 /** A payload that closes the surrounding <script> if embedding is unescaped. */
 const HOSTILE = '</script><img src=x onerror=alert(1)>';
@@ -200,7 +200,7 @@ suite('Profiler webviews — flame graph hero', () => {
     });
 
     suiteTeardown(() => {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
+        removeTestDir(tmpDir);
     });
 
     function writeSvg(name: string, contents: string): string {

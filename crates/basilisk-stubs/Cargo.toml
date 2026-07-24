@@ -1,25 +1,40 @@
 [package]
 name        = "basilisk-stubs"
-description = "Bundled type stubs and stdlib index for Basilisk"
+description = "Offline python/typeshed source resolution (bundle, store, custom) for Basilisk"
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
+# This internal crate embeds the composite Apache-2.0/MIT Typeshed snapshot.
+# Release binaries carry the exact composite license and notices; publishing
+# this implementation crate with only the workspace MIT package metadata would
+# misrepresent that embedded payload.
+publish = false
 
 [dependencies]
 basilisk-common = { path = "../basilisk-common" }
-phf.workspace = true
+basilisk-parser.workspace = true
 ruff_python_ast.workspace = true
-ruff_python_parser.workspace = true
 ruff_text_size.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# Offline pin verification ([STUBRES-TYPESHED-PIN]): `sha1` reconstructs Git
+# commit/blob/tree object IDs to bind analysed bytes to the pinned commit SHA;
+# `sha2` fingerprints the embedded bundle and legal files. Both are pure-Rust
+# RustCrypto crates with no system dependencies (no Dockerfile/CI change).
+sha1 = "0.10"
+sha2 = "0.10"
+# Decode the bundled stdlib ZIP into the in-memory archive model
+# ([STUBRES-TYPESHED-BASELINE]). Deflate read only — no bzip2/zstd/aes surface.
+zip = { version = "5.1.1", default-features = false, features = ["deflate"] }
 thiserror.workspace = true
 tracing.workspace = true
-
-[build-dependencies]
-phf_codegen = "0.14"
+# NO HTTP client may ever appear here: the checker links this crate, and "the
+# checker never downloads" is a property of the build ([TYPESHEDRT-SEGREGATION],
+# enforced by scripts/check-dependency-shape.sh). Downloading lives in
+# `basilisk-typeshed-fetch`.
 
 [dev-dependencies]
+serde_json.workspace = true
 tempfile = "3"
 
 [lints]

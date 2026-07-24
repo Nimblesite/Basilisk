@@ -1,4 +1,4 @@
-//! Implements [`dataclasses_usage`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`dataclasses_usage`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `dataclasses_usage`: Type mismatch between a dataclass `field(default_factory=…)` and
 //! the field's declared type annotation.
 //!

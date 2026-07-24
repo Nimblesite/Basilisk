@@ -1,4 +1,4 @@
-//! Implements [`specialtypes_promotions`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! Implements [`specialtypes_promotions`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 //! `specialtypes_promotions`: Access to an `int`-only attribute on a `float`-typed parameter.
 //!
 //! The Python typing spec (PEP 484 / typing spec §Special cases for float and complex)

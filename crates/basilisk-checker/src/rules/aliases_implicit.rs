@@ -1,4 +1,4 @@
-//! Implements [`aliases_implicit`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! Implements [`aliases_implicit`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 //! `aliases_implicit`: Invalid right-hand side for a `TypeAlias` annotation.
 //!
 //! PEP 613 requires that the RHS of an explicit `TypeAlias` annotation must be

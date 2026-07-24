@@ -14,40 +14,93 @@ cap_lints = true
 # Without this, cargo-mutants copies 200MB+ of node_modules per mutant → disk full.
 gitignore = true
 
-# Only mutate basilisk-checker. All other crates are excluded:
+# Crates under mutation: basilisk-checker and basilisk-lsp. Both have real, fast
+# test suites; every line of their source is mutated (NO code exclusions). The
+# Makefile drives ONE crate per run (`PKG=`) and records a separate baseline per
+# scope in mutation_scores.json.
+#   basilisk-checker — the broad rule-test binaries listed in the Makefile's
+#                      `_CHECKER_MUTATION_TESTS`, plus `--lib`.
+#   basilisk-lsp     — fast inline `#[cfg(test)]` unit tests via `--lib`; the
+#                      heavy E2E binaries in tests/ (spawn LSP subprocess /
+#                      sockets / python) are excluded as TESTS, not code.
+# Still fully excluded (as TESTS — their code is simply not mutated yet, not hidden
+# from a run that mutates it):
 #   basilisk-parser   — 2 mutants, 0 tests, all unviable
 #   basilisk-resolver — cold builds take 300s+; tests don't cover mutations well
-#   basilisk-lsp      — no unit tests; spawns language server subprocess
 #   basilisk-cli      — e2e tests spawn compiled binary; hangs per-mutant
-test_package = [
-    "basilisk-checker",
-]
+#
+# NO `test_package` list here, DELIBERATELY. A static list is workspace-global:
+# cargo-mutants unions it into EVERY mutant's build, so listing both crates made
+# each of the 141 basilisk-checker mutants compile and link the whole
+# basilisk-lsp test suite — including the very E2E binaries this file says are
+# "excluded as TESTS" — only to never run them. That was pure waste on every
+# mutant and it is what pushed the test phase into the `--timeout` ceiling (see
+# TIMEOUTS below). The Makefile now passes `--test-package "$PKG"` per run, so a
+# checker run builds and runs checker tests and nothing else. This scopes the
+# TEST suite, never the mutant pool — `--re` still lists every line.
 
-# Equivalent mutants: these produce no observable behaviour change because
-# surrounding code handles the edge case gracefully. Excluding them avoids
-# false "missed" reports that can never be killed by a test. Patterns are
-# matched against `cargo mutants --list` output, so they reference the rule's
-# source path + the exact replacement. (Paths track the rule module names; keep
-# them in sync when a rule file/dir is renamed, or the exclusions silently lapse.)
+# NO `exclude_re`. Excluding *code* from the mutant generator is forbidden: it
+# hides mutants that would otherwise survive, inflating the kill rate against a
+# smaller-than-real pool. EVERY line of basilisk-checker is mutated. What we
+# scope instead is the *test suite* — the Makefile restricts `cargo mutants` to
+# the mutation-safe test binaries (`--test coverage_boost_33_tests --test
+# mutation_kill_tests`). A mutant no safe test kills is reported as MISSED, in
+# the open, never excluded. Widen coverage by adding #[mutation_safe] tests that
+# kill those survivors — never by hiding the code from the generator.
 #
-#   assignment_compatibility/mod.rs extract_annotation `pos + 1` → `pos * 1`:
-#   line_start then points at the preceding '\n', but name_offset
-#   (= start - line_start) shifts by the same amount, so every slice taken from
-#   `line` is byte-identical to the unmutated extraction. Provably equivalent.
+# TIMEOUTS — none may occur from slowness; any that remains is a hung-code KILL.
+# This is an INVARIANT, not an aspiration: the gate in `mutants_report.py` folds
+# Timeout into the killed total, so a timeout caused by slowness would launder an
+# untested mutant into a "kill". The timeout ratchet there enforces the invariant.
 #
-#   aliases_implicit.rs collect_type_alias_names `&& alias != "TypeAlias"` → `||`:
-#   the only inputs that differ (`TypeAlias as TypeAlias`, or an empty alias) push
-#   a duplicate "TypeAlias"/"" into `names`, which is consumed solely via
-#   `is_type_alias_annotation`'s `.any(|n| ann == n)` — so the extra entry can
-#   never change a diagnostic. Equivalent.
+# MEASURED (2026-07-21, this workspace):
+#   - Serial and warm, the FULL killing suite — what a mutant no test kills must
+#     run, with no early exit — is 29 binaries in ~25s.
+#   - Build phase (the per-mutant incremental rebuild): ~54s median.
+#   - That 25s does NOT describe the per-mutant test phase under `--jobs 4`. Each
+#     job works in its own copied tree, so a mutated lib relinks all 29 test
+#     binaries in every concurrent job; that link cost, not test execution, is
+#     what the ceiling has to cover.
+#   - At `--timeout 120` this produced 30 TIMEOUTs across 144 mutants (0 MISSED).
+#     Re-running those same mutants over the full 29-binary set at `--timeout 400
+#     --jobs 1` caught every one of them, ~27s each — so they were always
+#     killable, and the ceiling rather than the code was what failed them.
+# `--timeout 400` therefore sizes the ceiling to the link-bound worst case rather
+# than the serial warm one, and `--build-timeout 600` covers the build phase
+# separately. `--jobs` is capped to min(4, cores/2) so concurrent rebuilds don't
+# starve each other. All three are TEST-execution settings, not code exclusions —
+# every mutant still runs.
 #
-# (The former check_vars `&& rhs_span.is_some()` → `||` exclusion was dropped:
-# that mutant is now killed by the `mutant_bare_declaration_not_flagged` test, so
-# it stays in the pool as real, caught coverage rather than a hidden exclusion.)
-exclude_re = [
-    # Inference engine: slow, not covered by mutation-safe tests.
-    "src/inference",
-    # Equivalent mutants — produce no observable behaviour change:
-    "assignment_compatibility/mod\\.rs:\\d+:\\d+: replace \\+ with \\* in extract_annotation",
-    "aliases_implicit\\.rs:\\d+:\\d+: replace && with \\|\\| in collect_type_alias_names",
-]
+# HISTORY — why the baseline once showed 29 timeouts and 0 missed. A global
+# `test_package` list (removed above) unioned basilisk-lsp into every
+# basilisk-checker mutant, so each mutant also built the lsp test suite and RAN
+# its lib tests. That pushed the test phase to a 38s median / 110s max against
+# the 120s ceiling — 1.09x headroom, not the 5-6x claimed here at the time. The
+# mutants that blew it were, by construction, the ones NO test killed: a killed
+# mutant exits at the first failing binary, while a survivor runs every binary to
+# the end. So the slowest mutants were precisely the would-be survivors, and
+# timeout-as-kill recorded them as caught. Scoping the test package REDUCED that
+# cost but did not remove it — 30 timeouts survived the scoping — because the
+# per-mutant relink described above remained. Raising the ceiling is what
+# actually cleared them; the timeout ratchet stops the symptom from ever being
+# silent again.
+#
+# The residual policy, for any GENUINE infinite-loop mutant (one that would run
+# FOREVER, far past any 400s run): it has been DETECTED — a terminating suite
+# became non-terminating, an observable behaviour change — so a Timeout counts as
+# a KILL, exactly as PIT and Stryker do. That remains true. What changed is that
+# a RISE in the timeout count is now itself a gate failure, so the kill credit
+# can never quietly grow on the back of a slow runner.
+#
+# BASELINE & SCOPE — two runs, one honest gate.
+# The whole-crate run (`make mutation-test ALL=1`, examine_re=".", ~9085 mutants,
+# no code excluded) is the thorough audit. But at ~2272 mutants/shard on a 4-core
+# CI runner (~15-24s each, 2 parallel jobs) it takes HOURS per shard — far past
+# the 60-min job budget — so it is an OFFLINE/scheduled run, never the per-PR
+# gate. The per-PR `working` gate instead scopes mutants to the functions the
+# mutation-safe binaries actually cover (scripts/mutation_examine_re.py), which
+# finishes inside the budget; its committed baseline is 100% over that ~125-mutant
+# covered pool (mutation_scores.json `working`), and the ratchet forbids any drop.
+# This is scoping the GATE for feasibility, not hiding code from the generator:
+# `--re .` still lists every line for the ALL=1 audit. The timeout-as-kill policy
+# below still applies to whichever run is executing.

@@ -29,6 +29,8 @@ pub struct UnhashableHashCallViolation {
 pub struct CallSite {
     /// The name of the called function (simple name only; complex callees ignored).
     pub callee: String,
+    /// Receiver of a supported bound method call, if this is `receiver.method(...)`.
+    pub receiver: Option<CallReceiver>,
     /// Kinds and spans of positional arguments at the call site.
     pub args: Vec<(RhsKind, Span)>,
     /// Keyword arguments at the call site: `(name, rhs_kind)` pairs.
@@ -43,6 +45,17 @@ pub struct CallSite {
     pub has_unpacked_kwargs: bool,
     /// The span of the entire call expression.
     pub span: Span,
+}
+
+/// Receiver shapes whose built-in type is statically knowable at a call site.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CallReceiver {
+    /// A string literal, which also satisfies `LiteralString` receivers.
+    StringLiteral,
+    /// A bytes literal.
+    BytesLiteral,
+    /// A named variable or parameter whose annotation/inferred type is resolved later.
+    Name(String),
 }
 
 /// A `NamedTuple` definition collected from module-level code.

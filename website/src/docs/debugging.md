@@ -36,7 +36,9 @@ You need **debugpy** installed in your Python environment:
 pip install debugpy
 ```
 
-Basilisk targets **Python 3.12**. Make sure your environment uses Python 3.12 or later.
+Basilisk uses the selected project interpreter and has no fixed Python target.
+Version-dependent analysis follows the pinned typing directives
+([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)).
 
 ## Quick start
 
@@ -237,7 +239,7 @@ Set the interpreter explicitly:
 ```json
 // .vscode/settings.json
 {
-  "basilisk.python": "/path/to/python3.12"
+  "basilisk.python": "/path/to/python"
 }
 ```
 

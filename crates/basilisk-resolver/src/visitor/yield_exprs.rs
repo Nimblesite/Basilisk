@@ -5,8 +5,23 @@ use ruff_python_ast::{Expr, Stmt};
 
 use crate::scope::RhsKind;
 
-use super::calls_and_reveal::extract_call_name;
 use super::core::{classify_rhs, text_range_to_span};
+
+/// The callee name of a direct call expression (`f(...)`).
+///
+/// Attribute calls (`a.b(...)`) yield `None`: their bare method name is not a
+/// module-scope callee, and downstream consumers resolve `call_name` against
+/// module-level definitions — treating `NAME_SYNONYMS.get(...)` as a callee
+/// named `get` produced name-as-type false positives (GitHub #281).
+fn direct_call_name(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Call(call) => match call.func.as_ref() {
+            Expr::Name(n) => Some(n.id.to_string()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
 
 pub(super) fn stmt_contains_yield(stmt: &Stmt) -> bool {
     match stmt {
@@ -52,7 +67,7 @@ pub(super) fn collect_yield_from_expr(expr: &Expr, out: &mut Vec<crate::scope::Y
     match expr {
         Expr::Yield(y) => {
             let (rhs_kind, call_name) = y.value.as_ref().map_or((RhsKind::NoneValue, None), |v| {
-                (classify_rhs(v), extract_call_name(v))
+                (classify_rhs(v), direct_call_name(v))
             });
             out.push(crate::scope::YieldExprInfo {
                 span: text_range_to_span(y.range),
@@ -63,7 +78,7 @@ pub(super) fn collect_yield_from_expr(expr: &Expr, out: &mut Vec<crate::scope::Y
         }
         Expr::YieldFrom(yf) => {
             let rhs_kind = classify_rhs(&yf.value);
-            let call_name = extract_call_name(&yf.value);
+            let call_name = direct_call_name(&yf.value);
             out.push(crate::scope::YieldExprInfo {
                 span: text_range_to_span(yf.range),
                 rhs_kind,

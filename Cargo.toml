@@ -7,8 +7,8 @@ members = [
     "crates/basilisk-checker",
     "crates/basilisk-cli",
     "crates/basilisk-stubs",
+    "crates/basilisk-typeshed-fetch",
     "crates/basilisk-config",
-    "crates/basilisk-plugin",
     "crates/basilisk-lsp",
     "crates/basilisk-mojo",
     "crates/basilisk-compiler",
@@ -59,12 +59,12 @@ walkdir   = "2.5"
 serde     = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml      = "1.1"
-phf       = "0.14"
+toml_edit = "0.22.27"
 colored   = "3.0"
 
 # Incremental computation — Salsa powers the demand-driven query engine
 # ([CHKARCH-INCREMENTAL-SALSA]); the same framework underpins rust-analyzer.
-salsa     = "0.28"
+salsa     = "0.27"
 
 # Workspace crates
 basilisk-db       = { path = "crates/basilisk-db" }
@@ -74,6 +74,7 @@ basilisk-checker  = { path = "crates/basilisk-checker" }
 basilisk-lsp      = { path = "crates/basilisk-lsp" }
 basilisk-compiler = { path = "crates/basilisk-compiler" }
 basilisk-stubs      = { path = "crates/basilisk-stubs" }
+basilisk-typeshed-fetch = { path = "crates/basilisk-typeshed-fetch" }
 basilisk-config     = { path = "crates/basilisk-config" }
 basilisk-common     = { path = "crates/basilisk-common" }
 basilisk-buildinfo  = { path = "crates/basilisk-buildinfo" }
@@ -144,6 +145,15 @@ exit                 = "deny"
 rest_pat_in_fully_bound_structs = "deny"
 # Require Arc::clone(&x) syntax — make ref-counted pointer cloning visually distinct
 clone_on_ref_ptr     = "deny"
+# Release artifacts are latency-sensitive CLI/LSP binaries. Fat LTO plus one
+# codegen unit lets LLVM optimize across crate boundaries and keeps benchmark
+# baselines moving down; development and CI test profiles remain fast below.
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
 
 # ── CI profile: fast compilation for test/coverage runs ──────────────────────
 # Use via `cargo test --profile ci` or `cargo llvm-cov --profile ci`.

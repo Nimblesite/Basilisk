@@ -18,6 +18,7 @@ import { registerTestExplorer } from "./test-explorer";
 import { registerModuleExplorer } from "./module-explorer";
 import { registerInfoPanel } from "./info-panel";
 import { registerPythonProcesses } from "./process-explorer";
+import { registerConfigurationEditor } from "./configuration-editor-registration";
 import { createStore, type Store } from "./store";
 import { registerProfiler, disposeProfiler } from "./profiler";
 import { registerMemoryProfiler, disposeMemoryProfiler } from "./memory-profiler";
@@ -173,6 +174,11 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
   const infoPanelResult = registerInfoPanel(context, s);
   singletonDisposables.push(...infoPanelResult.disposables);
 
+  // Editor-area configuration shell. Capability gating and all mutations are
+  // delegated to the LSP; this registration owns only VS Code lifecycle/UI.
+  const configurationEditor = registerConfigurationEditor(s);
+  singletonDisposables.push(...configurationEditor.disposables);
+
   // Python Processes panel — LSP-driven process picker for one-click profiling (#62).
   const processesResult = registerPythonProcesses(context, s);
   singletonDisposables.push(...processesResult.disposables);
@@ -201,6 +207,28 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
       );
     }),
   );
+
+  // Implements [VSIX-STATUS-BAR] — clicking the always-visible status bar item
+  // opens a quick-pick so configuration is reachable from anywhere in the UI,
+  // not only the settings cog buried in the BASILISK info panel title bar.
+  singletonDisposables.push(
+    vscode.commands.registerCommand("basilisk.statusMenu", async () => handleStatusMenu()),
+  );
+}
+
+// Implements [VSIX-STATUS-BAR] — quick-pick shown when the status bar item is
+// clicked. Configuration is listed first (the primary reason a user reaches for
+// it); Show Output and Restart Server remain one keystroke away.
+async function handleStatusMenu(): Promise<void> {
+  const items: readonly { label: string; command: string }[] = [
+    { label: "$(settings-gear) Open Configuration Editor", command: "basilisk.openConfigurationEditor" },
+    { label: "$(output) Show Output", command: "basilisk.showOutput" },
+    { label: "$(debug-restart) Restart Language Server", command: "basilisk.restartServer" },
+  ];
+  const pick = await vscode.window.showQuickPick(items, { placeHolder: "Basilisk" });
+  if (pick !== undefined) {
+    await vscode.commands.executeCommand(pick.command);
+  }
 }
 
 export function deactivate(): Promise<void> | undefined {
@@ -268,7 +296,7 @@ function initStatusBar(context: vscode.ExtensionContext, s: Store): void {
     vscode.StatusBarAlignment.Left,
     STATUS_BAR_PRIORITY
   );
-  item.command = "basilisk.showOutput";
+  item.command = "basilisk.statusMenu";
   s.setStatusBarItem(item);
   context.subscriptions.push(item);
 }
@@ -378,7 +406,7 @@ function updateStatusBar(state: "starting" | "ready" | "error" | "stopped"): voi
       break;
     case "ready":
       item.text = "$(check) Basilisk";
-      item.tooltip = "Basilisk language server running";
+      item.tooltip = "Basilisk language server running — click to configure";
       item.backgroundColor = undefined;
       break;
     case "error":
@@ -460,4 +488,3 @@ async function startRuntime(context: vscode.ExtensionContext, s: Store): Promise
     updateStatusBar("error");
   }
 }
-

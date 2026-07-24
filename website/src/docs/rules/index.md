@@ -1,44 +1,38 @@
 ---
 layout: layouts/docs.njk
-title: "Basilisk Diagnostic Rules — All BSK Error and Warning Codes"
-description: "Reference for every Basilisk diagnostic code and rule — BSK-E errors and BSK-W warnings from the strict Python type checker, with causes and fixes for each."
-keywords: basilisk rules, type errors, BSK-E, BSK-W, diagnostic codes
+title: "Basilisk Diagnostic Rules — Python Typing & Opt-In Rule Tags"
+description: "Browse every Basilisk diagnostic by its authoritative tags: Python typing-spec rules enabled by default and Basilisk-specific rules enabled explicitly by tag."
+keywords: basilisk rules, python typing rules, strictness rules, type errors, BSK-E, BSK-W, diagnostic codes
 date: 2026-02-28
-dateModified: 2026-05-30
+dateModified: 2026-07-11
 author: The Basilisk Project
 eleventyNavigation:
   key: Rules
   order: 5
 ---
+{% from "components/rules.njk" import groupGrid with context %}
 
-# Diagnostic Rules
+# Diagnostic rules
 
-Every Basilisk diagnostic has a unique code in the format `BSK-EXXXX` (error) or `BSK-WXXXX` (warning).
+Basilisk organises rules by the same flat tags the checker uses—not by arbitrary code ranges. Every rule has exactly one provenance tag:
 
-The PEP typing-spec rules run by default; Basilisk's own opt-in house-style rules stay off until you switch them on. Dial any rule up or down per-file or per-path from your editor or `pyproject.toml` — strict is the default, not a cage.
+- `pep` identifies the **{{ ruleTagGroups.counts.pep }} core rules enabled by default**, including the rules measured by the [official Python typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html).
+- `basilisk` identifies the **{{ ruleTagGroups.counts.basilisk }} Basilisk-specific rules that are off by default** and activate only when a project opts into one of their descriptive tags.
 
-Basilisk ships **{{ ruleStats.pep }} PEP typing-spec rules** — the set the [official Python typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) grades (currently **{{ conformance.scorePct }}%**, {{ conformance.pass }} / {{ conformance.total }} (errors+warnings, strictest); target 100% — [how we measure](/docs/conformance/)) — plus **{{ ruleStats.optIn }} opt-in house-style rules** that are off by default and never counted toward that score. Together, **{{ ruleStats.total }} diagnostic codes** ({{ ruleStats.errors }} errors, {{ ruleStats.warnings }} warnings) span the full Python typing surface — generics, protocols, dataclasses, TypedDicts, overloads, literals, enums, and more. The two foundational groups have worked examples:
+Each diagnostic links to a permanent `/errors/.../` explanation—the same URL the CLI prints when a rule fires.
 
-| Group | Codes | Description |
-|---|---|---|
-| [Missing Annotations](/docs/rules/missing-annotations/) | E0001–E0009 | Unannotated parameters, return types, variables, and attributes |
-| [Type Safety](/docs/rules/type-safety/) | E0010–E0029 | Type mismatches, incorrect annotations, unsound type usage |
+## Basilisk rules (opt-in)
 
-> **Roadmap:** Mojo-inspired ownership and immutability analysis is planned for a future release. It is not yet part of the shipping rule set.
+Use these tags when you want checking beyond the typing specification. A rule can appear under more than one descriptive tag; for example, a dependency rule may also be tagged `imports`.
+
+{{ groupGrid(ruleTagGroups.basilisk, "en") }}
+
+## Python typing-spec rules
+
+These rules form the default checker surface. Their category tags come directly from the `python/typing` conformance vocabulary; cross-cutting checks that span categories are collected under **Cross-cutting core**.
+
+{{ groupGrid(ruleTagGroups.pep, "en") }}
 
 ## Complete diagnostic reference
 
-Every code the checker emits — generated from the checker source
-(`scripts/gen_rules_reference.py`), so it never drifts. **Each code links to its
-own page** with a full explanation and fix, the same page the CLI sends you to
-(`see: https://www.basilisk-python.dev/errors/BSK-XXXX`). Browse them all in the
-[error reference](/errors/).
-
-<table class="rules-table">
-<thead><tr><th>Code</th><th>Description</th></tr></thead>
-<tbody>
-{%- for rule in rules %}
-<tr><td><a href="/errors/{{ rule.code }}/"><code>{{ rule.code }}</code></a></td><td>{{ rule.summaryHtml | safe }}</td></tr>
-{%- endfor %}
-</tbody>
-</table>
+Browse the [tag-grouped error reference](/errors/) or jump directly to any canonical page at `/errors/CODE/`. Rule selection and severity overrides are documented in the [`pyproject.toml` configuration reference](/docs/configuration/).
