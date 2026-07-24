@@ -32,9 +32,10 @@ import { decodeConfigurationEditorIntent } from "../../configuration-editor-inte
 import { readBasiliskSettings } from "../../lsp-client";
 import { createStore } from "../../store";
 import { removeTestDir } from './test-helpers';
-import { typeshedFixture } from "./typeshed-fixture";
+import { LATEST_COMMIT, typeshedFixture } from "./typeshed-fixture";
 
 const ROOT_URI = "file:///workspace";
+const OTHER_ROOT_URI = "file:///workspace-other";
 const PEP_CODE = "BSK-0001";
 const ANALYZE_CODE = "BSK-0060";
 
@@ -332,7 +333,10 @@ suite("Configuration editor — typed mutation routing", () => {
     }
   });
 
-  test("drops a Typeshed action response made stale by a newer root load generation", async () => {
+  // A same-root refresh no longer drops the action result (the action's
+  // snapshot is authoritative for its root). What MUST still be dropped is an
+  // action whose root the panel has abandoned mid-flight ([LSPCFGED-TYPESHED-DOWNLOAD]).
+  test("drops a Typeshed action response after the panel moves to another workspace root", async () => {
     const store = createStore();
     const transport = new RecordingTransport();
     let finishAction: ((result: TypeshedActionResult) => void) | undefined;
@@ -343,11 +347,13 @@ suite("Configuration editor — typed mutation routing", () => {
       await pollUntil(() => store.configurationEditor.value.phase === "ready");
       const action = controller.receive({ type: "typeshedAction", action: "DownloadLatest" });
       await pollUntil(() => transport.typeshedActionRequests.length === 1);
-      transport.snapshotResult = configurationSnapshot("revision-newer");
-      await controller.receive({ type: "refresh" });
+      // The user navigates to a DIFFERENT root while the download runs.
+      store.beginConfigurationLoad(OTHER_ROOT_URI);
       finishAction?.({ kind: "Snapshot", snapshot: configurationSnapshot("revision-stale-action") });
       await action;
-      assert.strictEqual(store.configurationEditor.value.snapshot?.revision, "revision-newer");
+      const settled = store.configurationEditor.value;
+      assert.strictEqual(settled.rootUri, OTHER_ROOT_URI, "the panel must stay on the navigated-to root");
+      assert.strictEqual(settled.snapshot, undefined, "the abandoned root's snapshot must not land");
     } finally {
       controller.dispose();
     }
@@ -389,6 +395,64 @@ suite("Configuration editor — typed mutation routing", () => {
       );
     } finally {
       (vscode.window as { showErrorMessage: unknown }).showErrorMessage = originalShowError;
+      controller.dispose();
+    }
+  });
+
+});
+
+suite("Configuration editor — Typeshed download snapshot authority", () => {
+  // The reported failure ("I downloaded the latest and it's still saying it's
+  // not pinned"): the server emits the transient Downloading status BEFORE the
+  // download finishes, and that notification triggers a SAME-ROOT snapshot
+  // refresh which bumps the load generation. The action then resolves with the
+  // AUTHORITATIVE post-download snapshot — the pin is written and the source is
+  // the freshly resolved commit (the server builds this snapshot LAST, after
+  // download_latest_and_pin lands) — but the stale-generation guard discarded
+  // it, so the panel stayed on the pre-download bundled/unpinned snapshot
+  // forever. A download's own returned snapshot is the freshest word for its
+  // root and must survive a refresh the download itself triggered
+  // ([LSPCFGED-TYPESHED-DOWNLOAD]).
+  test("a Download latest lands its pinned snapshot even when its own Downloading refresh raced it", async () => {
+    const store = createStore();
+    const transport = new RecordingTransport();
+    let finishAction: ((result: TypeshedActionResult) => void) | undefined;
+    transport.typeshedActionHandler = async () => new Promise((resolve) => { finishAction = resolve; });
+    const controller = new ConfigurationEditorController(store, transport);
+    try {
+      controller.open(ROOT_URI);
+      await pollUntil(() => store.configurationEditor.value.phase === "ready");
+      const action = controller.receive({ type: "typeshedAction", action: "DownloadLatest" });
+      await pollUntil(() => transport.typeshedActionRequests.length === 1);
+      // The server's transient Downloading notification triggers exactly this
+      // same-root refresh while the download is still running; it fetches the
+      // pre-pin (still bundled/unpinned) snapshot and bumps the load generation.
+      transport.snapshotResult = {
+        ...configurationSnapshot("revision-downloading"),
+        typeshed: typeshedFixture({ downloading: true }),
+      };
+      await controller.receive({ type: "refresh" });
+      // The download finishes: the pin is written and the server returns the
+      // authoritative Ready snapshot pinned to the resolved commit.
+      finishAction?.({
+        kind: "Snapshot",
+        snapshot: {
+          ...configurationSnapshot("revision-pinned"),
+          typeshed: typeshedFixture({ source: { kind: "ExactCommit", commit: LATEST_COMMIT } }),
+        },
+      });
+      await action;
+      assert.strictEqual(
+        store.configurationEditor.value.snapshot?.revision,
+        "revision-pinned",
+        "the authoritative post-download snapshot must replace the raced Downloading refresh",
+      );
+      assert.deepStrictEqual(
+        store.configurationEditor.value.snapshot?.typeshed.source,
+        { kind: "ExactCommit", commit: LATEST_COMMIT },
+        "the panel must show the freshly pinned commit, not the pre-download bundled default",
+      );
+    } finally {
       controller.dispose();
     }
   });
