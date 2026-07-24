@@ -7127,6 +7127,157 @@
     ]
   },
   {
+    "code": "typeshed_source_license_changed",
+    "scope": "analyze",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "stubs"
+    ],
+    "summary": "The bundled typeshed's approved LICENSE/NOTICE changed and activation was blocked pending review",
+    "summaryHtml": "The bundled typeshed&#x27;s approved LICENSE/NOTICE changed and activation was blocked pending review",
+    "body": [
+      {
+        "type": "text",
+        "html": "Basilisk vets the LICENSE and NOTICE files of the typeshed snapshot it bundles at build time and records their exact identity. If those legal files no longer match what was approved, Basilisk refuses to serve the stubs rather than distribute content under unknown terms."
+      },
+      {
+        "type": "text",
+        "html": "This condition is elevated: it defaults to <code>error</code>, and analysis for the affected root does not run until it is resolved. Update Basilisk to a build whose bundled typeshed license is approved again."
+      },
+      {
+        "type": "text",
+        "html": "Like any Basilisk diagnostic it can be graded, though lowering it does not make the underlying license mismatch safe:"
+      },
+      {
+        "type": "code",
+        "lang": "toml",
+        "code": "[tool.basilisk.rules]\n\"typeshed_source_license_changed\" = \"error\""
+      },
+      {
+        "type": "text",
+        "html": "It is reported out of band (CLI banner, an editor <code>window/showMessage</code>, MCP status), never as a Python diagnostic, so it can never affect conformance."
+      }
+    ],
+    "group": "Stubs",
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeshed_source_license_changed",
+    "references": [
+      {
+        "label": "python/typeshed LICENSE",
+        "url": "https://github.com/python/typeshed/blob/main/LICENSE"
+      },
+      {
+        "label": "python/typeshed",
+        "url": "https://github.com/python/typeshed"
+      },
+      {
+        "label": "Basilisk configuration: typeshed source",
+        "url": "https://www.basilisk-python.dev/docs/configuration/"
+      }
+    ]
+  },
+  {
+    "code": "typeshed_source_unpinned",
+    "scope": "analyze",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "stubs"
+    ],
+    "summary": "The active typeshed source is not pinned to an exact commit, so type checks are not reproducible across machines and CI",
+    "summaryHtml": "The active typeshed source is not pinned to an exact commit, so type checks are not reproducible across machines and CI",
+    "body": [
+      {
+        "type": "text",
+        "html": "Basilisk type-checks your code against <code>typeshed</code>, the community&#x27;s standard-library and third-party type stubs. Which revision of typeshed is active decides which symbols and signatures exist, so two machines resolving different typeshed contents can disagree about whether the same code type-checks."
+      },
+      {
+        "type": "text",
+        "html": "Basilisk bundles a vetted typeshed snapshot inside the binary and serves it by default. A build-time snapshot is not a <em>user</em> pin: upgrade Basilisk and the snapshot moves. When no <code>typeshed-commit</code> is set \u2014 or when a custom <code>typeshed-path</code> folder is used, whose contents can change on disk \u2014 Basilisk raises this advisory to say the type-checking baseline is not reproducible."
+      },
+      {
+        "type": "text",
+        "html": "Pin an exact <code>python/typeshed</code> commit so every machine and CI run resolves byte-identical stubs. A pin fails closed \u2014 Basilisk never silently substitutes another commit:"
+      },
+      {
+        "type": "code",
+        "lang": "toml",
+        "code": "[tool.basilisk]\ntypeshed-commit = \"\u2026full 40-character SHA\u2026\""
+      },
+      {
+        "type": "text",
+        "html": "This is an ordinary Basilisk diagnostic. Grade it like any rule \u2014 raise it to an error in CI, or silence it once you have accepted the unpinned default:"
+      },
+      {
+        "type": "code",
+        "lang": "toml",
+        "code": "[tool.basilisk.rules]\n\"typeshed_source_unpinned\" = \"error\"   # or \"off\" to silence"
+      },
+      {
+        "type": "text",
+        "html": "It is reported out of band \u2014 on the CLI&#x27;s stderr banner, in the editor&#x27;s Server Info panel, and as MCP status \u2014 and never as a Python diagnostic, so it can never affect conformance."
+      }
+    ],
+    "group": "Stubs",
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeshed_source_unpinned",
+    "references": [
+      {
+        "label": "python/typeshed",
+        "url": "https://github.com/python/typeshed"
+      },
+      {
+        "label": "Basilisk configuration: typeshed source",
+        "url": "https://www.basilisk-python.dev/docs/configuration/"
+      }
+    ]
+  },
+  {
+    "code": "typeshed_source_user_managed",
+    "scope": "analyze",
+    "provenance": "basilisk",
+    "tags": [
+      "basilisk",
+      "stubs"
+    ],
+    "summary": "A custom typeshed folder is user-managed: you supply its license and contents, so typeshed's license terms are not applied to it",
+    "summaryHtml": "A custom typeshed folder is user-managed: you supply its license and contents, so typeshed&#x27;s license terms are not applied to it",
+    "body": [
+      {
+        "type": "text",
+        "html": "When you point Basilisk at a custom <code>typeshed-path</code> folder, Basilisk treats it as user-managed: you supply both its contents and its license. Basilisk does not attach <code>python/typeshed</code>&#x27;s license terms to a tree it did not vet."
+      },
+      {
+        "type": "text",
+        "html": "This advisory makes that explicit so you never unintentionally rely on a custom tree believing it carries typeshed&#x27;s license, or skip the pin and content verification that the bundled and pinned sources enforce."
+      },
+      {
+        "type": "text",
+        "html": "It composes with <code>typeshed_source_unpinned</code> \u2014 a custom folder is both unpinned and user-managed. Grade it like any rule:"
+      },
+      {
+        "type": "code",
+        "lang": "toml",
+        "code": "[tool.basilisk.rules]\n\"typeshed_source_user_managed\" = \"warning\"   # or \"off\" to silence"
+      },
+      {
+        "type": "text",
+        "html": "It is reported out of band (CLI banner, Server Info, MCP status), never as a Python diagnostic, so it can never affect conformance."
+      }
+    ],
+    "group": "Stubs",
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeshed_source_user_managed",
+    "references": [
+      {
+        "label": "python/typeshed",
+        "url": "https://github.com/python/typeshed"
+      },
+      {
+        "label": "Basilisk configuration: typeshed source",
+        "url": "https://www.basilisk-python.dev/docs/configuration/"
+      }
+    ]
+  },
+  {
     "code": "version_target_syntax",
     "scope": "check",
     "provenance": "pep",

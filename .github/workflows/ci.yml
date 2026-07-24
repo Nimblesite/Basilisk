@@ -664,17 +664,14 @@ jobs:
             label: 4-of-4
             output: 3-of-4
     steps:
-      # cargo-mutants runs with --copy-target true, so EVERY parallel job holds
-      # its own full copy of the debug target (the checker links ~30 statically
-      # linked test binaries per copy). On the standard runner's ~14 GB root
-      # disk this exhausts space mid-shard: the linker dies with "No space left
-      # on device" or SIGBUS (mmap over a full disk), and cargo-mutants records
-      # those aborted builds as UNVIABLE — deflating the caught count and
-      # failing the ratchet gate with mutants that were never actually tested.
-      # Reclaim the ~25 GB of preinstalled toolchains this job never touches,
-      # exactly as the coverage job above does. Harmless on runners that lack
-      # these dirs (|| true); `df -h` logs the reclaimed headroom.
-      - name: Free disk space for per-job target copies
+      # cargo-mutants copies the workspace and does a full build PER mutant, so
+      # the standard runner's ~14 GB root disk fills mid-shard ("No space left
+      # on device") — which cargo-mutants then records as spurious `unviable`
+      # mutants, dropping the merged `caught` count and failing the score gate
+      # even though no real mutant survived. Reclaim the ~25 GB of preinstalled
+      # toolchains this job never touches up front, exactly like the instrumented
+      # coverage build does. Gated on RUN so no-op shards stay seconds-fast.
+      - name: Free disk space for the per-mutant builds
         if: env.RUN == 'true'
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \

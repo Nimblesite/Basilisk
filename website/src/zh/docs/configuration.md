@@ -41,7 +41,7 @@ Basilisk 完全不需要配置文件。当遍历路径上任何地方都没有 `
   `requires-python` 下界。
 - 标准库存根来自编译进二进制的
   [python/typeshed](https://github.com/python/typeshed) 内置快照——完全
-  离线，在你固定某个提交之前会附带 `UNPINNED`
+  离线，在你固定某个提交之前会附带 `typeshed_source_unpinned`
   提示——见[标准库存根](#标准库存根-typeshed)。
 
 > **在编辑器中，这一状态会被一次性写入种子配置——CLI 从不写配置，但 LSP 会。**
@@ -319,12 +319,12 @@ typeshed 的字节只能通过显式下载操作到达机器，而这些操作�
 处**完整的 typeshed `stdlib/` `.pyi` 存根集合**（不含第三方 `stubs/`，也不含
 typeshed 自身在 `stdlib/` 下的非存根文件）：752 个 `.pyi` 文件，外加
 `stdlib/VERSIONS` 与 `LICENSE`，未压缩约 2.85 MB。未设置 `typeshed-commit`
-时，内置提交即为生效的固定项，编辑器的 Server Info 面板会显示 `UNPINNED`
+时，内置提交即为生效的固定项，编辑器的 Server Info 面板会显示 `typeshed_source_unpinned`
 提示；显式固定任意提交——包括内置的 `83c2518…`——即可清除该提示。
 
 | 键 | 类型 | 默认值 | 含义 |
 | --- | --- | --- | --- |
-| `typeshed-commit` | 完整 40 位 SHA | _（未设置——内置提交，附 `UNPINNED` 提示）_ | 磁盘上的树必须匹配的精确 `python/typeshed` 提交。固定后**失败关闭**——绝不静默替换为其他提交。缩写 SHA 会被拒绝。 |
+| `typeshed-commit` | 完整 40 位 SHA | _（未设置——内置提交，附 `typeshed_source_unpinned` 提示）_ | 磁盘上的树必须匹配的精确 `python/typeshed` 提交。固定后**失败关闭**——绝不静默替换为其他提交。缩写 SHA 会被拒绝。 |
 | `typeshed-store-path` | 路径 | 操作系统缓存目录 | 经验证的内容寻址存储库根目录：`basilisk typeshed download` 写入这里，固定提交从这里解析。 |
 | `typeshed-path` | 路径 | _（未设置）_ | 你自己的标准库存根树——完全取代存储库与内置快照。 |
 

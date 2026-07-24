@@ -120,7 +120,7 @@ pub struct WorkspaceConfig {
     /// `None` uses the bundled typeshed.
     pub typeshed_path: Option<PathBuf>,
     /// Exact full `python/typeshed` commit pin; unset resolves to the bundled
-    /// commit with an `UNPINNED` warning ([STUBRES-TYPESHED-CONFIG]).
+    /// commit with a `typeshed_source_unpinned` warning ([STUBRES-TYPESHED-CONFIG]).
     pub typeshed_commit: Option<String>,
     /// Optional verified content-addressed store directory
     /// ([STUBRES-TYPESHED-STORE]); unset uses the per-user OS default.
@@ -172,7 +172,7 @@ impl Default for WorkspaceConfig {
 ///
 /// There are exactly two sources ([STUBRES-TYPESHED]): a pinned commit or a
 /// custom folder. An unset `typeshed-commit` resolves to the bundled commit as
-/// an implicit pin (still `UNPINNED`); resolution never downloads.
+/// an implicit pin (still `typeshed_source_unpinned`); resolution never downloads.
 ///
 /// # Errors
 ///
@@ -216,6 +216,51 @@ pub fn typeshed_request(
         selection,
         store_path: config.typeshed_store_path.clone(),
     })
+}
+
+/// The rule-tag every typeshed source-status advisory carries.
+///
+/// These advisories are Basilisk's own house diagnostics
+/// ([STUBRES-TYPESHED-WARN]), so they resolve severity through the SAME
+/// `[tool.basilisk.rules]` / `[tool.basilisk.rule-tags]` machinery as every
+/// other Basilisk rule ([STUBRES-TYPESHED-CONFIG], [CHKARCH-CONFIG-MODEL]):
+/// grade a single code under `[tool.basilisk.rules]`
+/// (`"typeshed_source_unpinned" = "error"`), or the whole `basilisk` tag at
+/// once under `[tool.basilisk.rule-tags]`.
+pub const TYPESHED_STATUS_TAG: &str = "basilisk";
+
+/// Resolve the effective severity at which a typeshed source-status advisory
+/// renders, AFTER applying any `[tool.basilisk]` override.
+///
+/// The three status codes ([STUBRES-TYPESHED-WARN]) are configured exactly like
+/// any Basilisk rule: a `[tool.basilisk.rules]` / `[tool.basilisk.rule-tags]`
+/// entry wins outright, and when no table decides, the code keeps its intrinsic
+/// default (see [`default_status_severity`]). Grading a code `disabled`/`off`
+/// silences it — the ONLY supported way to make these advisories go away
+/// ([STUBRES-TYPESHED-CONFIG]).
+#[must_use]
+pub fn resolve_status_severity(
+    config: &basilisk_config::BasiliskConfig,
+    code: &str,
+    intrinsic: basilisk_stubs::typeshed::warning::WarningSeverity,
+) -> basilisk_config::RuleSeverity {
+    config
+        .resolve_severity(code, &[TYPESHED_STATUS_TAG])
+        .unwrap_or_else(|| default_status_severity(intrinsic))
+}
+
+/// The intrinsic default severity of a status code with no `[tool.basilisk]`
+/// entry: an advisory condition renders as `warning`, an elevated license
+/// change renders as `error` ([STUBRES-TYPESHED-CONFIG]).
+#[must_use]
+pub const fn default_status_severity(
+    intrinsic: basilisk_stubs::typeshed::warning::WarningSeverity,
+) -> basilisk_config::RuleSeverity {
+    use basilisk_stubs::typeshed::warning::WarningSeverity;
+    match intrinsic {
+        WarningSeverity::Advisory => basilisk_config::RuleSeverity::Warning,
+        WarningSeverity::High => basilisk_config::RuleSeverity::Error,
+    }
 }
 
 /// Load workspace configuration from the given root directory.
@@ -878,7 +923,7 @@ mod tests {
             typeshed_request(&WorkspaceConfig::default()).expect("default request");
         match default_request.selection {
             SourceSelection::Pinned { commit, explicit } => {
-                assert!(!explicit, "an unset pin must stay UNPINNED");
+                assert!(!explicit, "an unset pin must stay typeshed_source_unpinned");
                 assert_eq!(
                     commit.to_hex(),
                     basilisk_stubs::typeshed::bundle::bundled_commit_sha()

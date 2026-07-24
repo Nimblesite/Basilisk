@@ -102,7 +102,7 @@ impl SourceIdentity {
     }
 
     /// Whether the user explicitly pinned this source. Only an explicit
-    /// `typeshed-commit` suppresses the `UNPINNED` advisory.
+    /// `typeshed-commit` suppresses the `typeshed_source_unpinned` advisory.
     #[must_use]
     pub const fn is_pinned(&self) -> bool {
         matches!(self, Self::Commit { pinned: true, .. })
@@ -126,7 +126,7 @@ pub enum SourceSelection {
         /// The full commit SHA.
         commit: Oid,
         /// `true` for an explicit `typeshed-commit`; `false` when the pin is
-        /// the bundled default an unset key resolves to (still `UNPINNED`).
+        /// the bundled default an unset key resolves to (still `typeshed_source_unpinned`).
         explicit: bool,
     },
 }
@@ -146,14 +146,19 @@ pub struct TypeshedRequest {
     pub store_path: Option<PathBuf>,
 }
 
-/// A warning projected into `{code, message, severity}` for machine surfaces.
+/// A warning projected into `{code, message, docs_url, severity}` for machine
+/// surfaces, so every surface (CLI banner, LSP, MCP) prints the same
+/// descriptive code and deep-links to the same `/errors/<code>` documentation
+/// page ([STUBRES-TYPESHED-WARN], [WEBSITE-ERROR-PAGES]).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct StatusWarning {
-    /// Stable machine code (e.g. `UNPINNED`).
+    /// Stable, descriptive machine code (e.g. `typeshed_source_unpinned`).
     pub code: String,
-    /// Full human-readable status line.
+    /// Full human-readable status sentence (prose, never a `CODE — …` tag).
     pub message: String,
-    /// Warning severity.
+    /// Canonical documentation page for this code.
+    pub docs_url: String,
+    /// Intrinsic warning severity, before any `[tool.basilisk]` override.
     pub severity: WarningSeverity,
 }
 
@@ -162,6 +167,7 @@ impl From<&TypeshedWarning> for StatusWarning {
         Self {
             code: warning.code().to_owned(),
             message: warning.message(),
+            docs_url: warning.docs_url(),
             severity: warning.severity(),
         }
     }
@@ -269,9 +275,15 @@ mod tests {
             TypeshedWarning::LicenseChanged,
             TypeshedWarning::Unpinned(UnpinnedKind::BundledDefault),
         ]);
-        // Canonical spec-table order: UNPINNED precedes LICENSE CHANGED.
+        // Canonical spec-table order: typeshed_source_unpinned precedes typeshed_source_license_changed.
         let codes: Vec<&str> = warnings.iter().map(|w| w.code.as_str()).collect();
-        assert_eq!(codes, vec!["UNPINNED", "LICENSE CHANGED"]);
+        assert_eq!(
+            codes,
+            vec![
+                "typeshed_source_unpinned",
+                "typeshed_source_license_changed"
+            ]
+        );
         let status = TypeshedStatus {
             active_source: SourceKind::Bundled,
             commit: oid(),

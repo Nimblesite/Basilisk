@@ -49,7 +49,7 @@ anywhere on the walk:
   the `uv.lock` `requires-python` lower bound.
 - Standard-library stubs come from the bundled
   [python/typeshed](https://github.com/python/typeshed) snapshot compiled into
-  the binary — fully offline, with an `UNPINNED` advisory until you pin a
+  the binary — fully offline, with an `typeshed_source_unpinned` advisory until you pin a
   commit — see
   [Standard-library stubs](#standard-library-stubs-typeshed).
 
@@ -381,12 +381,12 @@ and typeshed's own non-stub `stdlib/` files excluded) at commit
 [`83c2518`](https://github.com/python/typeshed/tree/83c2518a9e6abbda0c44592c3483de459198f887/stdlib):
 752 `.pyi` files plus `stdlib/VERSIONS` and `LICENSE`, ~2.85 MB uncompressed.
 When `typeshed-commit` is unset, the bundled commit is the effective pin and
-the editor's Server Info panel shows an `UNPINNED` advisory; pinning any
+the editor's Server Info panel shows an `typeshed_source_unpinned` advisory; pinning any
 commit explicitly — the bundled `83c2518…` included — clears it.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `typeshed-commit` | full 40-char SHA | _(unset — the bundled commit, with an `UNPINNED` advisory)_ | Exact `python/typeshed` commit the on-disk tree must match. A pin **fails closed** — it never silently substitutes another commit. Abbreviated SHAs are rejected. |
+| `typeshed-commit` | full 40-char SHA | _(unset — the bundled commit, with an `typeshed_source_unpinned` advisory)_ | Exact `python/typeshed` commit the on-disk tree must match. A pin **fails closed** — it never silently substitutes another commit. Abbreviated SHAs are rejected. |
 | `typeshed-store-path` | path | OS cache dir | Root of the verified, content-addressed store that `basilisk typeshed download` writes into and pins resolve from. |
 | `typeshed-path` | path | _(unset)_ | Your own stdlib stub tree — replaces the store and the bundled snapshot entirely. |
 

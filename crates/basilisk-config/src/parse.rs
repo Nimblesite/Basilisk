@@ -72,7 +72,7 @@ pub struct BasiliskConfig {
     pub typeshed_path: Option<PathBuf>,
 
     /// Exact `python/typeshed` commit pin ([STUBRES-TYPESHED-CONFIG]). A full
-    /// SHA. Unset means the bundled commit with an `UNPINNED` warning. A set
+    /// SHA. Unset means the bundled commit with a `typeshed_source_unpinned` warning. A set
     /// pin fails closed — the checker never downloads and never substitutes
     /// another SHA; a pin not on this machine is `NO SOURCE`.
     pub typeshed_commit: Option<String>,
@@ -283,7 +283,7 @@ pub(crate) fn parse_pyproject_content(content: &str) -> Option<BasiliskConfig> {
     }
 
     // [STUBRES-TYPESHED-CONFIG]: `typeshed-commit` pins an exact SHA (unset
-    // => bundled commit + UNPINNED); `typeshed-store-path` relocates the
+    // => bundled commit + typeshed_source_unpinned); `typeshed-store-path` relocates the
     // verified store. That is the whole runtime surface.
     if let Some(val) = basilisk.get("typeshed-commit").and_then(|v| v.as_str()) {
         cfg.typeshed_commit = Some(val.to_owned());
