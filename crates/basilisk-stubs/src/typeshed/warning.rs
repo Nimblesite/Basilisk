@@ -9,8 +9,8 @@
 //! fields. They therefore cannot create conformance false positives
 //! ([STUBRES-TYPESHED-WARN]).
 //!
-//! Warnings **compose**: a custom folder is simultaneously `UNPINNED` and
-//! `USER-MANAGED SOURCE`, so the report carries an ordered list rather than one
+//! Warnings **compose**: a custom folder is simultaneously `typeshed_source_unpinned` and
+//! `typeshed_source_user_managed`, so the report carries an ordered list rather than one
 //! enum. A missing or corrupt pinned source is NOT a warning — it is the
 //! terminal `NO SOURCE` failure and analysis does not run
 //! ([STUBRES-TYPESHED-OFFLINE]).
@@ -59,7 +59,7 @@ pub enum TypeshedWarning {
 
 impl TypeshedWarning {
     /// Stable, descriptive machine code, matching the spec's status table
-    /// heading. Named like a conformance rule (snake_case, no numbers) so it is
+    /// heading. Named like a conformance rule (`snake_case`, no numbers) so it is
     /// greppable and deep-linkable, and so `grep typeshed_source_` walks spec →
     /// code → tests in one shot ([STUBRES-TYPESHED-WARN]).
     #[must_use]

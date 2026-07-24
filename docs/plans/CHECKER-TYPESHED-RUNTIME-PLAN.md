@@ -43,7 +43,7 @@ The pinned order puts standard-library typeshed at step 3, stub packages at step
 4. The checker resolves a pin from the store or the bundle and verifies it
    offline by hashing; missing or corrupt fails hard. A custom miss proceeds to step 4.
 5. Fingerprint caches by source identity, and return active source/full SHA plus
-   composable `UNPINNED`, `LICENSE CHANGED`, `USER-MANAGED SOURCE`, and `NO SOURCE`
+   composable `typeshed_source_unpinned`, `typeshed_source_license_changed`, `typeshed_source_user_managed`, and `NO SOURCE`
    statuses on CLI/LSP/MCP ([§STUBRES-TYPESHED-WARN](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 
 ## Segregation {#TYPESHEDRT-SEGREGATION}
@@ -88,7 +88,7 @@ every time, and only deletion ends reuse — the pin never expires or changes.
 **Download latest** lands the resolved commit in the store and pegs it as
 `typeshed-commit` in one action, writing neither when it fails; **Download
 pinned** materialises an existing pin and leaves the configuration untouched. The
-bundled default and Custom report `UNPINNED`, and a custom tree resolves verbatim
+bundled default and Custom report `typeshed_source_unpinned`, and a custom tree resolves verbatim
 under user-managed terms, bypassing every other step-3 lookup — a custom miss
 goes straight to step 4.
 

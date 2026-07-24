@@ -188,7 +188,7 @@ fn select_pinned(
 }
 
 /// The embedded bundle serving a pin of exactly its own commit. An explicit
-/// pin is deterministic and suppresses `UNPINNED`; the bundled default keeps
+/// pin is deterministic and suppresses `typeshed_source_unpinned`; the bundled default keeps
 /// it ([STUBRES-TYPESHED-WARN]).
 fn pinned_bundle(
     mut bundle: Snapshot,

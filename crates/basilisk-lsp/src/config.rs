@@ -120,7 +120,7 @@ pub struct WorkspaceConfig {
     /// `None` uses the bundled typeshed.
     pub typeshed_path: Option<PathBuf>,
     /// Exact full `python/typeshed` commit pin; unset resolves to the bundled
-    /// commit with an `UNPINNED` warning ([STUBRES-TYPESHED-CONFIG]).
+    /// commit with a `typeshed_source_unpinned` warning ([STUBRES-TYPESHED-CONFIG]).
     pub typeshed_commit: Option<String>,
     /// Optional verified content-addressed store directory
     /// ([STUBRES-TYPESHED-STORE]); unset uses the per-user OS default.
@@ -172,7 +172,7 @@ impl Default for WorkspaceConfig {
 ///
 /// There are exactly two sources ([STUBRES-TYPESHED]): a pinned commit or a
 /// custom folder. An unset `typeshed-commit` resolves to the bundled commit as
-/// an implicit pin (still `UNPINNED`); resolution never downloads.
+/// an implicit pin (still `typeshed_source_unpinned`); resolution never downloads.
 ///
 /// # Errors
 ///
@@ -923,7 +923,7 @@ mod tests {
             typeshed_request(&WorkspaceConfig::default()).expect("default request");
         match default_request.selection {
             SourceSelection::Pinned { commit, explicit } => {
-                assert!(!explicit, "an unset pin must stay UNPINNED");
+                assert!(!explicit, "an unset pin must stay typeshed_source_unpinned");
                 assert_eq!(
                     commit.to_hex(),
                     basilisk_stubs::typeshed::bundle::bundled_commit_sha()

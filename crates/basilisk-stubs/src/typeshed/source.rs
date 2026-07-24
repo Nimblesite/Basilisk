@@ -102,7 +102,7 @@ impl SourceIdentity {
     }
 
     /// Whether the user explicitly pinned this source. Only an explicit
-    /// `typeshed-commit` suppresses the `UNPINNED` advisory.
+    /// `typeshed-commit` suppresses the `typeshed_source_unpinned` advisory.
     #[must_use]
     pub const fn is_pinned(&self) -> bool {
         matches!(self, Self::Commit { pinned: true, .. })
@@ -126,7 +126,7 @@ pub enum SourceSelection {
         /// The full commit SHA.
         commit: Oid,
         /// `true` for an explicit `typeshed-commit`; `false` when the pin is
-        /// the bundled default an unset key resolves to (still `UNPINNED`).
+        /// the bundled default an unset key resolves to (still `typeshed_source_unpinned`).
         explicit: bool,
     },
 }
@@ -275,9 +275,15 @@ mod tests {
             TypeshedWarning::LicenseChanged,
             TypeshedWarning::Unpinned(UnpinnedKind::BundledDefault),
         ]);
-        // Canonical spec-table order: UNPINNED precedes LICENSE CHANGED.
+        // Canonical spec-table order: typeshed_source_unpinned precedes typeshed_source_license_changed.
         let codes: Vec<&str> = warnings.iter().map(|w| w.code.as_str()).collect();
-        assert_eq!(codes, vec!["typeshed_source_unpinned", "typeshed_source_license_changed"]);
+        assert_eq!(
+            codes,
+            vec![
+                "typeshed_source_unpinned",
+                "typeshed_source_license_changed"
+            ]
+        );
         let status = TypeshedStatus {
             active_source: SourceKind::Bundled,
             commit: oid(),

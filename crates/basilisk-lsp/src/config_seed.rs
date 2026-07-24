@@ -76,7 +76,7 @@ fn write_seed(root: &Path) -> Result<(), basilisk_config::ConfigDocumentError> {
             )]),
         },
         // Pin the binary's bundled typeshed commit so the workspace is
-        // reproducible from the moment it is opened — never `UNPINNED`
+        // reproducible from the moment it is opened — never `typeshed_source_unpinned`
         // ([STUBRES-TYPESHED-WARN]). The bundle is complete inside the
         // binary, so the pin needs no network access and cannot produce a
         // `NO SOURCE` state. The seed only runs when the ancestor walk found
@@ -137,7 +137,7 @@ mod tests {
 
     /// [LSPARCH-CONFIG-SEEDING]: the seed stamps the binary's bundled
     /// typeshed commit alongside the rule tag, so a freshly-opened workspace
-    /// is pinned and reproducible — never `UNPINNED`
+    /// is pinned and reproducible — never `typeshed_source_unpinned`
     /// ([STUBRES-TYPESHED-WARN]) — without any network access (GitHub #343).
     #[test]
     fn seed_stamps_the_bundled_typeshed_commit() {

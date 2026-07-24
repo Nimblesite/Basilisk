@@ -1,8 +1,6 @@
 //! CLI activation and reporting for [STUBRES-TYPESHED-WARN].
 //! See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN.
 
-use std::io::Write as _;
-
 use basilisk_config::{BasiliskConfig, RuleSeverity};
 use tracing::{debug, info, warn};
 
@@ -115,13 +113,25 @@ fn report_typeshed_status(
         "typeshed source status"
     );
     for warning in &status.warnings {
-        let severity =
-            basilisk_lsp::config::resolve_status_severity(rule_config, &warning.code, warning.severity);
+        let severity = basilisk_lsp::config::resolve_status_severity(
+            rule_config,
+            &warning.code,
+            warning.severity,
+        );
         if severity == RuleSeverity::Disabled {
-            debug!(warning_code = warning.code, "typeshed source advisory silenced by config");
+            debug!(
+                warning_code = warning.code,
+                "typeshed source advisory silenced by config"
+            );
             continue;
         }
-        let _ = writeln!(banner, "{}[{}]: {}", severity.as_str(), warning.code, warning.message);
+        let _ = writeln!(
+            banner,
+            "{}[{}]: {}",
+            severity.as_str(),
+            warning.code,
+            warning.message
+        );
         let _ = writeln!(banner, "   = see: {}", warning.docs_url);
     }
 }
@@ -319,10 +329,8 @@ mod tests {
         Ok(())
     }
 
-    fn composed_status() -> Result<
-        basilisk_stubs::typeshed::source::TypeshedStatus,
-        Box<dyn std::error::Error>,
-    > {
+    fn composed_status(
+    ) -> Result<basilisk_stubs::typeshed::source::TypeshedStatus, Box<dyn std::error::Error>> {
         use basilisk_stubs::typeshed::source::StatusWarning;
         use basilisk_stubs::typeshed::warning::{TypeshedWarning, UnpinnedKind};
 
@@ -347,16 +355,22 @@ mod tests {
         report_typeshed_status(&status, &config, &mut banner);
         let banner = String::from_utf8(banner)?;
 
-        for code in [
+        // Advisory conditions default to `warning`; the elevated license change
+        // keeps its intrinsic `error` default ([STUBRES-TYPESHED-CONFIG]).
+        for header in [
             "warning[typeshed_source_unpinned]:",
             "warning[typeshed_source_user_managed]:",
-            "warning[typeshed_source_license_changed]:",
+            "error[typeshed_source_license_changed]:",
         ] {
-            assert!(banner.contains(code), "missing banner header `{code}`: {banner}");
+            assert!(
+                banner.contains(header),
+                "missing banner header `{header}`: {banner}"
+            );
         }
         // Every advisory deep-links to its own /errors/<code> page.
         assert!(
-            banner.matches("= see: https://www.basilisk-python.dev/errors/typeshed_source_")
+            banner
+                .matches("= see: https://www.basilisk-python.dev/errors/typeshed_source_")
                 .count()
                 == 3,
             "each advisory must carry its own = see: link: {banner}"
@@ -372,9 +386,10 @@ mod tests {
                 .is_some_and(|((first, second), third)| first < second && second < third),
             "status warnings must stay in canonical order: {banner}"
         );
-        // The old telemetry spelling must never resurface on the human banner.
+        // The old `key="VALUE"` telemetry spelling must never resurface on the
+        // human banner.
         assert!(
-            !banner.contains("warning_code=") && !banner.contains("UNPINNED"),
+            !banner.contains("warning_code=") && !banner.contains("warning_message="),
             "banner must not read like CLI-arg telemetry: {banner}"
         );
         Ok(())
@@ -420,8 +435,8 @@ mod tests {
     /// structured `debug` telemetry surface (log file / Output Channel), never
     /// on the human banner.
     #[test]
-    fn status_reporting_emits_structured_debug_telemetry(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn status_reporting_emits_structured_debug_telemetry() -> Result<(), Box<dyn std::error::Error>>
+    {
         let mut status = basilisk_stubs::typeshed::bundle::bundled_snapshot()?.status;
         status.commit = None;
         status.tree = None;
@@ -449,7 +464,10 @@ mod tests {
             "tree_identity=\"not supplied\"",
             "license_reference=\"not supplied\"",
         ] {
-            assert!(telemetry.contains(field), "missing `{field}` in: {telemetry}");
+            assert!(
+                telemetry.contains(field),
+                "missing `{field}` in: {telemetry}"
+            );
         }
         Ok(())
     }

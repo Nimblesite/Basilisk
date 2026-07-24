@@ -123,7 +123,7 @@ and every control re-renders from the snapshot that results. The impact dialog
 remains for rule and tag entries; dismissing it discards the change and returns
 every control to the configuration that still holds.
 
-Only a pinned commit suppresses `UNPINNED`; Custom says its folder can change and
+Only a pinned commit suppresses `typeshed_source_unpinned`; Custom says its folder can change and
 should be versioned or content-addressed externally, and shows user-managed terms
 rather than the typeshed composite license
 ([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
@@ -165,9 +165,9 @@ from [STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WA
 | State | Row |
 |---|---|
 | pin absent from this machine, or verification failed | persistent `NO SOURCE`; analysis does not run; no substitute source |
-| no explicit commit (the bundled commit is serving) | persistent `UNPINNED` |
-| license drift | persistent `LICENSE CHANGED`; activation blocked |
-| custom | persistent `UNPINNED` + `USER-MANAGED SOURCE` |
+| no explicit commit (the bundled commit is serving) | persistent `typeshed_source_unpinned` |
+| license drift | persistent `typeshed_source_license_changed`; activation blocked |
+| custom | persistent `typeshed_source_unpinned` + `typeshed_source_user_managed` |
 | download running | spinner, on that action only |
 
 Rows may coexist, never poll, and never mutate; fixes remain in the editable

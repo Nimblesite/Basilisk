@@ -45,7 +45,7 @@ by this crate.
   verified against. Those three keys are the whole typeshed surface: there are
   no download-policy keys, because resolution never downloads — a pin missing
   from the store is a terminal `NO SOURCE` failure, and leaving
-  `typeshed-commit` unset simply pins the bundled commit with an `UNPINNED`
+  `typeshed-commit` unset simply pins the bundled commit with a `typeshed_source_unpinned`
   advisory
   ([STUBRES-TYPESHED-CONFIG](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG),
   [STUBRES-TYPESHED-OFFLINE](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-OFFLINE)).

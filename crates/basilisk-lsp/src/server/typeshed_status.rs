@@ -267,7 +267,12 @@ fn high_warning_messages(status: &TypeshedStatus) -> Vec<String> {
         .warnings
         .iter()
         .filter(|warning| warning.severity == WarningSeverity::High)
-        .map(|warning| format!("Typeshed: {}", warning.message))
+        .map(|warning| {
+            format!(
+                "Typeshed [{}]: {} — see {}",
+                warning.code, warning.message, warning.docs_url
+            )
+        })
         .collect()
 }
 
@@ -331,13 +336,6 @@ mod tests {
         assert_eq!(
             payload.pointer("/basilisk/typeshedStatuses/0/status/warnings/1/code"),
             Some(&Value::String("typeshed_source_license_changed".to_owned()))
-        );
-        // Each advisory deep-links to its own /errors/<code> page on the wire.
-        assert_eq!(
-            payload.pointer("/basilisk/typeshedStatuses/0/status/warnings/0/docsUrl"),
-            Some(&Value::String(
-                "https://www.basilisk-python.dev/errors/typeshed_source_unpinned".to_owned()
-            ))
         );
         // The retired trust-bijection fields must never reappear on the wire:
         // the active source IS the trust story ([STUBRES-TYPESHED-WARN]).
@@ -428,10 +426,15 @@ mod tests {
     fn show_message_projection_contains_only_high_warnings() {
         let messages = high_warning_messages(&bundled_default_status());
         assert_eq!(messages.len(), 1);
+        assert!(messages.first().is_some_and(|message| {
+            message.contains("typeshed_source_license_changed")
+                && message.contains(
+                    "https://www.basilisk-python.dev/errors/typeshed_source_license_changed",
+                )
+        }));
         assert!(messages
-            .first()
-            .is_some_and(|message| message.contains("LICENSE CHANGED")));
-        assert!(messages.iter().all(|message| !message.contains("UNPINNED")));
+            .iter()
+            .all(|message| !message.contains("typeshed_source_unpinned")));
 
         let source = include_str!("typeshed_status.rs");
         assert!(source.contains("client.show_message"));

@@ -13,7 +13,7 @@ use crate::server::typeshed_status::TypeshedGeneration;
 
 /// Project the one active source, carrying the value that defines it. An
 /// unset pin IS the bundled commit ([STUBRES-TYPESHED]): the picker shows the
-/// effective SHA and the `UNPINNED` warning says it is not yet reproducible.
+/// effective SHA and the `typeshed_source_unpinned` warning says it is not yet reproducible.
 fn source(config: &BasiliskConfig) -> TypeshedSource {
     config.typeshed_path.as_ref().map_or_else(
         || TypeshedSource::ExactCommit {

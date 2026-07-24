@@ -282,7 +282,7 @@ typeshed-store-path = ".cache/typeshed-store"
     }
 
     /// [STUBRES-TYPESHED-CONFIG]: unset keys stay `None`, so the runtime uses
-    /// the bundled commit (with `UNPINNED`) and the OS store directory —
+    /// the bundled commit (with `typeshed_source_unpinned`) and the OS store directory —
     /// never a download.
     #[test]
     fn typeshed_acquisition_keys_default_to_none() {

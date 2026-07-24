@@ -23,7 +23,11 @@ fn unpinned_user_managed_and_license_warnings_compose() {
             .iter()
             .map(TypeshedWarning::code)
             .collect::<Vec<_>>(),
-        vec!["typeshed_source_unpinned", "typeshed_source_user_managed", "typeshed_source_license_changed"]
+        vec![
+            "typeshed_source_unpinned",
+            "typeshed_source_user_managed",
+            "typeshed_source_license_changed"
+        ]
     );
     assert_eq!(warnings[0].severity(), WarningSeverity::Advisory);
     assert_eq!(warnings[2].severity(), WarningSeverity::High);

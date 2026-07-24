@@ -7,7 +7,7 @@ use super::{ConfigurationSnapshot, Revision, TypeshedSettingKey, Uri};
 /// The active source and the value that defines it. There are exactly two
 /// sources ([LSPCFGED-TYPESHED]): a pinned commit or a custom folder. There is
 /// no "track latest" source — freshness is the user-invoked download action.
-/// An unset pin reports the bundled default commit (still `UNPINNED`).
+/// An unset pin reports the bundled default commit (still `typeshed_source_unpinned`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all_fields = "camelCase")]
 pub enum TypeshedSource {
