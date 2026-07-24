@@ -113,7 +113,7 @@ PEP rules need no seeding — `check` always runs them
 is the entire out-of-the-box configuration: every house rule on, at `error`,
 and the workspace pinned to the typeshed commit the binary already bundles
 (`bundled_commit_sha()`), in a file the user owns from that moment. The pin
-makes a freshly-opened workspace reproducible — never `UNPINNED`
+makes a freshly-opened workspace reproducible — never `typeshed_source_unpinned`
 ([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN))
 — without changing which stubs are resolved and without network access: the
 bundled commit is complete inside the binary, so the pin cannot produce a

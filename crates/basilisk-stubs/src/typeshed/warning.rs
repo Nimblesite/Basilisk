@@ -9,8 +9,8 @@
 //! fields. They therefore cannot create conformance false positives
 //! ([STUBRES-TYPESHED-WARN]).
 //!
-//! Warnings **compose**: a custom folder is simultaneously `UNPINNED` and
-//! `USER-MANAGED SOURCE`, so the report carries an ordered list rather than one
+//! Warnings **compose**: a custom folder is simultaneously `typeshed_source_unpinned` and
+//! `typeshed_source_user_managed`, so the report carries an ordered list rather than one
 //! enum. A missing or corrupt pinned source is NOT a warning — it is the
 //! terminal `NO SOURCE` failure and analysis does not run
 //! ([STUBRES-TYPESHED-OFFLINE]).
@@ -58,14 +58,26 @@ pub enum TypeshedWarning {
 }
 
 impl TypeshedWarning {
-    /// Stable machine code, matching the spec's status table heading.
+    /// Stable, descriptive machine code, matching the spec's status table
+    /// heading. Named like a conformance rule (`snake_case`, no numbers) so it is
+    /// greppable and deep-linkable, and so `grep typeshed_source_` walks spec →
+    /// code → tests in one shot ([STUBRES-TYPESHED-WARN]).
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
-            Self::Unpinned(_) => "UNPINNED",
-            Self::LicenseChanged => "LICENSE CHANGED",
-            Self::UserManaged => "USER-MANAGED SOURCE",
+            Self::Unpinned(_) => "typeshed_source_unpinned",
+            Self::LicenseChanged => "typeshed_source_license_changed",
+            Self::UserManaged => "typeshed_source_user_managed",
         }
+    }
+
+    /// The canonical documentation page for this status code — the same
+    /// code-addressed route every other Basilisk diagnostic deep-links to, so
+    /// each surface can print `see: https://www.basilisk-python.dev/errors/<code>`
+    /// ([STUBRES-TYPESHED-WARN], [WEBSITE-ERROR-PAGES]).
+    #[must_use]
+    pub fn docs_url(&self) -> String {
+        format!("https://www.basilisk-python.dev/errors/{}", self.code())
     }
 
     /// Severity of this warning.
@@ -77,20 +89,34 @@ impl TypeshedWarning {
         }
     }
 
-    /// Full human-readable status line, verbatim from the spec's status table.
+    /// A plain-English status sentence for the human banner. The code is shown
+    /// separately in the banner header (`warning[<code>]: <message>`), so the
+    /// message reads as prose and never repeats the code
+    /// ([STUBRES-TYPESHED-WARN]).
     #[must_use]
     pub fn message(&self) -> String {
         match self {
             Self::Unpinned(UnpinnedKind::BundledDefault) => {
-                "UNPINNED — pin a commit to make this reproducible".to_owned()
-            }
-            Self::Unpinned(UnpinnedKind::CustomFolder) => {
-                "UNPINNED — folder contents can change; version or content-address the folder externally"
+                "the typeshed stubs bundled with Basilisk are not pinned to a commit; \
+                 set `typeshed-commit` to an exact SHA so type checks stay reproducible \
+                 across machines and CI"
                     .to_owned()
             }
-            Self::LicenseChanged => "LICENSE CHANGED — Basilisk update/review required".to_owned(),
+            Self::Unpinned(UnpinnedKind::CustomFolder) => {
+                "the custom typeshed folder is not version-pinned, so its contents can \
+                 change between runs and checks are not reproducible; version or \
+                 content-address the folder externally"
+                    .to_owned()
+            }
+            Self::LicenseChanged => {
+                "the bundled typeshed's approved LICENSE/NOTICE changed and needs review; \
+                 update Basilisk before relying on these stubs"
+                    .to_owned()
+            }
             Self::UserManaged => {
-                "USER-MANAGED SOURCE — license and contents supplied by user".to_owned()
+                "the custom typeshed is user-managed: you supply its license and contents, \
+                 so typeshed's license terms are not applied to it"
+                    .to_owned()
             }
         }
     }
@@ -130,10 +156,47 @@ mod tests {
     fn codes_match_spec_table() {
         assert_eq!(
             TypeshedWarning::Unpinned(UnpinnedKind::BundledDefault).code(),
-            "UNPINNED"
+            "typeshed_source_unpinned"
         );
-        assert_eq!(TypeshedWarning::LicenseChanged.code(), "LICENSE CHANGED");
-        assert_eq!(TypeshedWarning::UserManaged.code(), "USER-MANAGED SOURCE");
+        assert_eq!(
+            TypeshedWarning::LicenseChanged.code(),
+            "typeshed_source_license_changed"
+        );
+        assert_eq!(
+            TypeshedWarning::UserManaged.code(),
+            "typeshed_source_user_managed"
+        );
+    }
+
+    /// The contract this change establishes ([STUBRES-TYPESHED-WARN], issue
+    /// #312): source-status advisories carry DESCRIPTIVE, greppable, number-free
+    /// codes — one per condition — each deep-linking to its own `/errors/<code>`
+    /// documentation page, exactly like every other diagnostic the CLI prints.
+    /// Regression guard for the "these read like CLI-arg log spam" report.
+    #[test]
+    fn codes_are_descriptive_number_free_names_with_doc_links() {
+        for warning in [
+            TypeshedWarning::Unpinned(UnpinnedKind::BundledDefault),
+            TypeshedWarning::Unpinned(UnpinnedKind::CustomFolder),
+            TypeshedWarning::UserManaged,
+            TypeshedWarning::LicenseChanged,
+        ] {
+            let code = warning.code();
+            assert!(
+                code.starts_with("typeshed_source_"),
+                "code `{code}` must be a descriptive typeshed_source_* name"
+            );
+            assert!(
+                code.bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte == b'_'),
+                "code `{code}` must be snake_case with NO numbers or spaces"
+            );
+            assert_eq!(
+                warning.docs_url(),
+                format!("https://www.basilisk-python.dev/errors/{code}"),
+                "every status code must deep-link to its own /errors/<code> page"
+            );
+        }
     }
 
     #[test]
@@ -158,23 +221,43 @@ mod tests {
 
     #[test]
     fn messages_are_verbatim_from_the_spec_table() {
-        // Exact strings — a mutant that edits a word is caught.
+        // Exact strings — a mutant that edits a word is caught. Prose sentences
+        // with NO leading code (the banner header carries the code separately).
         assert_eq!(
             TypeshedWarning::Unpinned(UnpinnedKind::BundledDefault).message(),
-            "UNPINNED — pin a commit to make this reproducible"
+            "the typeshed stubs bundled with Basilisk are not pinned to a commit; \
+             set `typeshed-commit` to an exact SHA so type checks stay reproducible \
+             across machines and CI"
         );
         assert_eq!(
             TypeshedWarning::Unpinned(UnpinnedKind::CustomFolder).message(),
-            "UNPINNED — folder contents can change; version or content-address the folder externally"
+            "the custom typeshed folder is not version-pinned, so its contents can \
+             change between runs and checks are not reproducible; version or \
+             content-address the folder externally"
         );
         assert_eq!(
             TypeshedWarning::LicenseChanged.message(),
-            "LICENSE CHANGED — Basilisk update/review required"
+            "the bundled typeshed's approved LICENSE/NOTICE changed and needs review; \
+             update Basilisk before relying on these stubs"
         );
         assert_eq!(
             TypeshedWarning::UserManaged.message(),
-            "USER-MANAGED SOURCE — license and contents supplied by user"
+            "the custom typeshed is user-managed: you supply its license and contents, \
+             so typeshed's license terms are not applied to it"
         );
+        // No message repeats its own code or leads with a SHOUTY tag.
+        for warning in [
+            TypeshedWarning::Unpinned(UnpinnedKind::CustomFolder),
+            TypeshedWarning::UserManaged,
+            TypeshedWarning::LicenseChanged,
+        ] {
+            assert!(
+                !warning.message().contains(warning.code())
+                    && !warning.message().starts_with(char::is_uppercase),
+                "message must be prose, not `CODE — ...`: {:?}",
+                warning.message()
+            );
+        }
     }
 
     #[test]
@@ -208,7 +291,7 @@ mod tests {
         assert_eq!(warnings.len(), 2);
         assert_eq!(
             warnings.first().map(TypeshedWarning::code),
-            Some("UNPINNED")
+            Some("typeshed_source_unpinned")
         );
     }
 

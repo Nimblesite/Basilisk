@@ -21,7 +21,7 @@ fn pinned_request(commit: Oid, explicit: bool, store: &std::path::Path) -> Types
 }
 
 /// The out-of-the-box conformance path: no configuration, no store entry, no
-/// network — the bundled commit resolves offline and reports UNPINNED.
+/// network — the bundled commit resolves offline and reports `typeshed_source_unpinned`.
 #[test]
 fn the_bundled_default_resolves_offline_with_unpinned() {
     let store = tempfile::tempdir().expect("tempdir");
@@ -35,13 +35,13 @@ fn the_bundled_default_resolves_offline_with_unpinned() {
         .iter()
         .map(|warning| warning.code.as_str())
         .collect();
-    assert_eq!(codes, vec!["UNPINNED"]);
+    assert_eq!(codes, vec!["typeshed_source_unpinned"]);
     // Real bodies, offline.
     assert!(snapshot.read_stub("os").is_some());
 }
 
 /// An explicit pin of the bundled commit is deterministic: same bytes, no
-/// UNPINNED, still zero store/network involvement.
+/// `typeshed_source_unpinned`, still zero store/network involvement.
 #[test]
 fn an_explicit_pin_of_the_bundled_commit_suppresses_unpinned() {
     let store = tempfile::tempdir().expect("tempdir");
@@ -138,7 +138,10 @@ fn a_custom_tree_activates_verbatim() {
         .iter()
         .map(|warning| warning.code.as_str())
         .collect();
-    assert_eq!(codes, vec!["UNPINNED", "USER-MANAGED SOURCE"]);
+    assert_eq!(
+        codes,
+        vec!["typeshed_source_unpinned", "typeshed_source_user_managed"]
+    );
     assert_eq!(
         snapshot.read_stub("os").map(|(_, body)| body),
         Some("name: str\n")

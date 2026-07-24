@@ -169,7 +169,7 @@ fn snapshot_reports_rule_entries_effective_severities_and_tag_entries() {
 }
 
 /// The bundled default the fixture root resolves to: an unset pin IS the
-/// bundled commit ([STUBRES-TYPESHED]), still explicitly `UNPINNED`.
+/// bundled commit ([STUBRES-TYPESHED]), still carrying `typeshed_source_unpinned`.
 fn assert_bundled_default(snapshot: &crate::configuration_editor::model::ConfigurationSnapshot) {
     assert_eq!(
         snapshot.typeshed.source,
@@ -189,7 +189,7 @@ fn assert_bundled_default(snapshot: &crate::configuration_editor::model::Configu
             .warnings
             .first()
             .map(|warning| warning.code.as_str()),
-        Some("UNPINNED")
+        Some("typeshed_source_unpinned")
     );
     assert!(snapshot.typeshed.license_available);
     assert!(
@@ -219,9 +219,11 @@ fn snapshot_describes_typeshed_controls_and_terminal_status() {
         license_status: LicenseStatus::Approved,
         license_reference: Some("typeshed://license/83c2518".to_owned()),
         warnings: vec![basilisk_stubs::typeshed::source::StatusWarning {
-            code: "UNPINNED".to_owned(),
-            message: "UNPINNED — choose the pinned-commit source to make this reproducible"
+            code: "typeshed_source_unpinned".to_owned(),
+            message: "the typeshed stubs bundled with Basilisk are not pinned to a commit; \
+                      choose the pinned-commit source to make this reproducible"
                 .to_owned(),
+            docs_url: "https://www.basilisk-python.dev/errors/typeshed_source_unpinned".to_owned(),
             severity: WarningSeverity::Advisory,
         }],
     };

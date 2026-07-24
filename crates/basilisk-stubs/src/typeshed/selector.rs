@@ -188,7 +188,7 @@ fn select_pinned(
 }
 
 /// The embedded bundle serving a pin of exactly its own commit. An explicit
-/// pin is deterministic and suppresses `UNPINNED`; the bundled default keeps
+/// pin is deterministic and suppresses `typeshed_source_unpinned`; the bundled default keeps
 /// it ([STUBRES-TYPESHED-WARN]).
 fn pinned_bundle(
     mut bundle: Snapshot,
@@ -246,9 +246,10 @@ mod status_line_tests {
         assert_eq!(
             rendered.ok(),
             Some(format!(
-                "LICENSE CHANGED — Basilisk update/review required (commit {SHA})"
+                "the bundled typeshed's approved LICENSE/NOTICE changed and needs \
+                 review; update Basilisk before relying on these stubs (commit {SHA})"
             )),
-            "license drift is the spec's LICENSE CHANGED status, not NO SOURCE"
+            "license drift is the spec's typeshed_source_license_changed status, not NO SOURCE"
         );
     }
 

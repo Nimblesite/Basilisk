@@ -119,11 +119,11 @@ fn stdio_server_lists_and_returns_ordered_structured_status(
             .first()
             .and_then(|warning| warning.get("code"))
             .and_then(Value::as_str),
-        Some("UNPINNED")
+        Some("typeshed_source_unpinned")
     );
     assert!(
         warnings.iter().any(|warning| {
-            warning.get("code").and_then(Value::as_str) == Some("USER-MANAGED SOURCE")
+            warning.get("code").and_then(Value::as_str) == Some("typeshed_source_user_managed")
         }),
         "custom status must disclose user-managed contents and terms: {warnings:?}"
     );

@@ -8,7 +8,7 @@
 //! root tree, so it is verified by its **embedded ZIP SHA-256 plus the license
 //! manifest**, never by tree reconstruction ([STUBRES-TYPESHED-BASELINE]). It
 //! is the data an unset `typeshed-commit` resolves to; the selector reports
-//! that default `UNPINNED` (a build-time pin is not a user pin) and an explicit
+//! that default `typeshed_source_unpinned` (a build-time pin is not a user pin) and an explicit
 //! pin of the same commit as pinned ([STUBRES-TYPESHED-WARN]).
 
 use std::sync::OnceLock;
@@ -175,7 +175,7 @@ fn build_bundled_snapshot() -> Result<Snapshot, BundleError> {
     let tree = Oid::from_hex(&manifest.source.tree_sha).map_err(BundleError::BadSha)?;
     let identity = SourceIdentity::Bundled { commit };
     // Warnings are set by the selector, which knows whether an explicit pin
-    // selected this bundle (suppressing UNPINNED) or the default did not.
+    // selected this bundle (suppressing typeshed_source_unpinned) or the default did not.
     let status = TypeshedStatus {
         active_source: SourceKind::Bundled,
         commit: Some(commit),

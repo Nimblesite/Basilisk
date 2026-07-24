@@ -38,6 +38,7 @@ fn collect_uncached(
 fn activate_bundled_typeshed(
     search_paths: &mut basilisk_lsp::import_resolver::ImportSearchPaths,
     config: &basilisk_lsp::config::WorkspaceConfig,
+    _rule_config: &basilisk_config::BasiliskConfig,
 ) -> Result<(), PipelineError> {
     let snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot()
         .map(std::sync::Arc::new)
@@ -73,8 +74,12 @@ fn cli_activation_uses_custom_snapshot_and_target() -> Result<(), Box<dyn std::e
         ..basilisk_lsp::config::WorkspaceConfig::default()
     };
     let mut search_paths = crate::import_search::roots_only(vec![project.clone()]);
-    super::typeshed::activate_production_typeshed(&mut search_paths, &config)
-        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    super::typeshed::activate_production_typeshed(
+        &mut search_paths,
+        &config,
+        &basilisk_config::BasiliskConfig::default(),
+    )
+    .map_err(|error| std::io::Error::other(error.to_string()))?;
     let active = search_paths
         .typeshed_snapshot
         .as_ref()
@@ -91,7 +96,7 @@ fn cli_activation_uses_custom_snapshot_and_target() -> Result<(), Box<dyn std::e
             .iter()
             .map(|warning| warning.code.as_str())
             .collect::<Vec<_>>(),
-        vec!["UNPINNED", "USER-MANAGED SOURCE"]
+        vec!["typeshed_source_unpinned", "typeshed_source_user_managed"]
     );
     assert_eq!(
         active.target().map(|target| target.python_version),
@@ -171,7 +176,7 @@ fn nested_file_inherits_project_python_target_for_analysis(
         &no_cache(),
         &mut cache_check::CacheStats::default(),
         DiagnosticScope::Check,
-        |_search_paths, config| {
+        |_search_paths, config, _rule_config| {
             assert_eq!(config.python_version.as_deref(), Some("3.12"));
             Ok(())
         },

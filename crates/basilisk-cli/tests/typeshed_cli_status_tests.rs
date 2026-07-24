@@ -30,20 +30,29 @@ fn check_uses_custom_typeshed_and_routes_status_only_to_stderr(
     );
     let diagnostics: serde_json::Value = serde_json::from_str(&stdout)?;
     assert_eq!(diagnostics, serde_json::json!([]));
-    assert!(!stdout.contains("UNPINNED"));
-    assert!(stderr.contains("typeshed source status"), "{stderr}");
-    assert!(stderr.contains("active_source=\"custom\""), "{stderr}");
-    assert!(stderr.contains("license_status=NotSupplied"), "{stderr}");
+    // [STUBRES-TYPESHED-WARN] conformance invariant: source-status advisories
+    // NEVER enter the scored stdout JSON stream.
     assert!(
-        !stderr.contains("provenance="),
-        "active_source IS the trust story — no provenance field may reappear: {stderr}"
+        !stdout.contains("typeshed_source"),
+        "advisories must stay off stdout: {stdout}"
+    );
+    // The human banner renders on stderr like any other Basilisk diagnostic:
+    // `warning[<descriptive_code>]: <prose>` plus a `= see:` deep link, in
+    // canonical status-table order, NOT key="VALUE" telemetry.
+    assert!(
+        stderr.contains("warning[typeshed_source_unpinned]:"),
+        "{stderr}"
     );
     assert!(
-        !stderr.contains("signed_release="),
-        "active_source IS the trust story — no signed_release field may reappear: {stderr}"
+        stderr.contains("= see: https://www.basilisk-python.dev/errors/typeshed_source_unpinned"),
+        "each advisory must deep-link to its docs page: {stderr}"
     );
-    let unpinned = stderr.find("warning_code=\"UNPINNED\"");
-    let user_managed = stderr.find("warning_code=\"USER-MANAGED SOURCE\"");
+    assert!(
+        !stderr.contains("warning_code="),
+        "the banner must not read like CLI-arg telemetry: {stderr}"
+    );
+    let unpinned = stderr.find("warning[typeshed_source_unpinned]");
+    let user_managed = stderr.find("warning[typeshed_source_user_managed]");
     assert!(
         unpinned
             .zip(user_managed)

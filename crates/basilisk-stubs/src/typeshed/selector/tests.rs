@@ -128,7 +128,7 @@ fn custom_failure_never_consults_another_source() {
 /// Implements [STUBRES-TYPESHED]: a pin naming the bundled commit is already
 /// complete inside the binary — content-addressed identity makes the embedded
 /// bytes exact — so selection activates the bundle without touching the store,
-/// and an explicit pin of it suppresses UNPINNED.
+/// and an explicit pin of it suppresses `typeshed_source_unpinned`.
 #[test]
 fn exact_pin_of_the_bundled_commit_is_served_from_the_binary() {
     let matching = bundle();
@@ -155,7 +155,7 @@ fn exact_pin_of_the_bundled_commit_is_served_from_the_binary() {
 }
 
 /// Implements [STUBRES-TYPESHED-WARN]: the bundled default (no explicit
-/// `typeshed-commit`) serves the same bytes but stays UNPINNED — a build-time
+/// `typeshed-commit`) serves the same bytes but stays `typeshed_source_unpinned` — a build-time
 /// pin is not a user pin.
 #[test]
 fn the_bundled_default_reports_unpinned() {
@@ -179,7 +179,7 @@ fn the_bundled_default_reports_unpinned() {
         .iter()
         .map(|warning| warning.code.as_str())
         .collect();
-    assert_eq!(codes, vec!["UNPINNED"]);
+    assert_eq!(codes, vec!["typeshed_source_unpinned"]);
 }
 
 /// Implements [STUBRES-TYPESHED-OFFLINE]: a pin that is not on this machine is

@@ -277,6 +277,206 @@ def references_for(code: str, doc_text: str) -> list[dict]:
     return refs
 
 
+# [STUBRES-TYPESHED-WARN] / [STUBRES-TYPESHED-CONFIG]: the typeshed
+# source-status advisories are Basilisk's OWN house diagnostics, emitted by the
+# stub-resolution layer (crates/basilisk-stubs/src/typeshed/warning.rs) rather
+# than a checker rule, so the file-scanning extractor below never sees them.
+# They deep-link to their own /errors/<code> page and are graded like any rule
+# via [tool.basilisk.rules] / [tool.basilisk.rule-tags], so they belong in the
+# same generated reference as every other code. Documented here from the shared
+# spec (docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN); the
+# prose is kept in agreement with the Rust `message()` and the spec status table.
+TYPESHED_STATUS_REFERENCES = [
+    {"label": "python/typeshed", "url": "https://github.com/python/typeshed"},
+    {
+        "label": "Basilisk configuration: typeshed source",
+        "url": "https://www.basilisk-python.dev/docs/configuration/",
+    },
+]
+
+TYPESHED_STATUS_SPECS = [
+    {
+        "code": "typeshed_source_unpinned",
+        "summary": (
+            "The active typeshed source is not pinned to an exact commit, so "
+            "type checks are not reproducible across machines and CI"
+        ),
+        "body": [
+            (
+                "text",
+                "Basilisk type-checks your code against `typeshed`, the "
+                "community's standard-library and third-party type stubs. Which "
+                "revision of typeshed is active decides which symbols and "
+                "signatures exist, so two machines resolving different typeshed "
+                "contents can disagree about whether the same code type-checks.",
+            ),
+            (
+                "text",
+                "Basilisk bundles a vetted typeshed snapshot inside the binary "
+                "and serves it by default. A build-time snapshot is not a *user* "
+                "pin: upgrade Basilisk and the snapshot moves. When no "
+                "`typeshed-commit` is set — or when a custom `typeshed-path` "
+                "folder is used, whose contents can change on disk — Basilisk "
+                "raises this advisory to say the type-checking baseline is not "
+                "reproducible.",
+            ),
+            (
+                "text",
+                "Pin an exact `python/typeshed` commit so every machine and CI "
+                "run resolves byte-identical stubs. A pin fails closed — "
+                "Basilisk never silently substitutes another commit:",
+            ),
+            (
+                "code",
+                "toml",
+                '[tool.basilisk]\ntypeshed-commit = "…full 40-character SHA…"',
+            ),
+            (
+                "text",
+                "This is an ordinary Basilisk diagnostic. Grade it like any rule "
+                "— raise it to an error in CI, or silence it once you have "
+                "accepted the unpinned default:",
+            ),
+            (
+                "code",
+                "toml",
+                "[tool.basilisk.rules]\n"
+                '"typeshed_source_unpinned" = "error"   # or "off" to silence',
+            ),
+            (
+                "text",
+                "It is reported out of band — on the CLI's stderr banner, in the "
+                "editor's Server Info panel, and as MCP status — and never as a "
+                "Python diagnostic, so it can never affect conformance.",
+            ),
+        ],
+        "references": TYPESHED_STATUS_REFERENCES,
+    },
+    {
+        "code": "typeshed_source_user_managed",
+        "summary": (
+            "A custom typeshed folder is user-managed: you supply its license "
+            "and contents, so typeshed's license terms are not applied to it"
+        ),
+        "body": [
+            (
+                "text",
+                "When you point Basilisk at a custom `typeshed-path` folder, "
+                "Basilisk treats it as user-managed: you supply both its "
+                "contents and its license. Basilisk does not attach "
+                "`python/typeshed`'s license terms to a tree it did not vet.",
+            ),
+            (
+                "text",
+                "This advisory makes that explicit so you never unintentionally "
+                "rely on a custom tree believing it carries typeshed's license, "
+                "or skip the pin and content verification that the bundled and "
+                "pinned sources enforce.",
+            ),
+            (
+                "text",
+                "It composes with `typeshed_source_unpinned` — a custom folder "
+                "is both unpinned and user-managed. Grade it like any rule:",
+            ),
+            (
+                "code",
+                "toml",
+                "[tool.basilisk.rules]\n"
+                '"typeshed_source_user_managed" = "warning"   # or "off" to silence',
+            ),
+            (
+                "text",
+                "It is reported out of band (CLI banner, Server Info, MCP "
+                "status), never as a Python diagnostic, so it can never affect "
+                "conformance.",
+            ),
+        ],
+        "references": TYPESHED_STATUS_REFERENCES,
+    },
+    {
+        "code": "typeshed_source_license_changed",
+        "summary": (
+            "The bundled typeshed's approved LICENSE/NOTICE changed and "
+            "activation was blocked pending review"
+        ),
+        "body": [
+            (
+                "text",
+                "Basilisk vets the LICENSE and NOTICE files of the typeshed "
+                "snapshot it bundles at build time and records their exact "
+                "identity. If those legal files no longer match what was "
+                "approved, Basilisk refuses to serve the stubs rather than "
+                "distribute content under unknown terms.",
+            ),
+            (
+                "text",
+                "This condition is elevated: it defaults to `error`, and "
+                "analysis for the affected root does not run until it is "
+                "resolved. Update Basilisk to a build whose bundled typeshed "
+                "license is approved again.",
+            ),
+            (
+                "text",
+                "Like any Basilisk diagnostic it can be graded, though lowering "
+                "it does not make the underlying license mismatch safe:",
+            ),
+            (
+                "code",
+                "toml",
+                '[tool.basilisk.rules]\n"typeshed_source_license_changed" = "error"',
+            ),
+            (
+                "text",
+                "It is reported out of band (CLI banner, an editor "
+                "`window/showMessage`, MCP status), never as a Python "
+                "diagnostic, so it can never affect conformance.",
+            ),
+        ],
+        "references": [
+            {
+                "label": "python/typeshed LICENSE",
+                "url": "https://github.com/python/typeshed/blob/main/LICENSE",
+            },
+            *TYPESHED_STATUS_REFERENCES,
+        ],
+    },
+]
+
+
+def typeshed_status_records() -> list[dict]:
+    """The three typeshed source-status advisories as reference records.
+
+    Implements [WEBSITE-ERROR-PAGES-PURPOSE] for the stub-resolution
+    advisories: they get the SAME /errors/<code> pages as every checker code,
+    built from a single description that agrees with the Rust `message()` and
+    the spec status table ([STUBRES-TYPESHED-WARN]).
+    """
+    records: list[dict] = []
+    for spec in TYPESHED_STATUS_SPECS:
+        body: list[dict] = []
+        for block in spec["body"]:
+            if block[0] == "text":
+                body.append({"type": "text", "html": inline_html(block[1])})
+            else:
+                body.append({"type": "code", "lang": block[1], "code": block[2]})
+        summary = clean(spec["summary"])
+        records.append(
+            {
+                "code": spec["code"],
+                "scope": "analyze",
+                "provenance": "basilisk",
+                "tags": ["basilisk", "stubs"],
+                "summary": summary,
+                "summaryHtml": inline_html(summary),
+                "body": body,
+                "group": "Stubs",
+                "docsUrl": f"{ERRORS_BASE_URL}/{spec['code']}",
+                "references": spec["references"],
+            }
+        )
+    return records
+
+
 ENDS_SENTENCE = (".", "!", ")", ":")
 FENCE = re.compile(r"^```(\w*)\s*$")
 
@@ -384,6 +584,10 @@ def extract() -> list[dict]:
                 else f"{ERRORS_BASE_URL}/{code}",
                 "references": references_for(code, " ".join([summary, *body_lines])),
             }
+    # The stub-resolution advisories live outside RULES_DIR (they are not checker
+    # rules) but earn the same /errors/<code> pages ([STUBRES-TYPESHED-WARN]).
+    for record in typeshed_status_records():
+        records.setdefault(record["code"], record)
     return [records[c] for c in sorted(records, key=sort_key)]
 
 
