@@ -664,6 +664,23 @@ jobs:
             label: 4-of-4
             output: 3-of-4
     steps:
+      # cargo-mutants runs with --copy-target true, so EVERY parallel job holds
+      # its own full copy of the debug target (the checker links ~30 statically
+      # linked test binaries per copy). On the standard runner's ~14 GB root
+      # disk this exhausts space mid-shard: the linker dies with "No space left
+      # on device" or SIGBUS (mmap over a full disk), and cargo-mutants records
+      # those aborted builds as UNVIABLE — deflating the caught count and
+      # failing the ratchet gate with mutants that were never actually tested.
+      # Reclaim the ~25 GB of preinstalled toolchains this job never touches,
+      # exactly as the coverage job above does. Harmless on runners that lack
+      # these dirs (|| true); `df -h` logs the reclaimed headroom.
+      - name: Free disk space for per-job target copies
+        if: env.RUN == 'true'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          df -h /
+
       - if: env.RUN == 'true'
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
