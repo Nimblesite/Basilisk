@@ -35,7 +35,7 @@ fn the_bundled_default_resolves_offline_with_unpinned() {
         .iter()
         .map(|warning| warning.code.as_str())
         .collect();
-    assert_eq!(codes, vec!["UNPINNED"]);
+    assert_eq!(codes, vec!["typeshed_source_unpinned"]);
     // Real bodies, offline.
     assert!(snapshot.read_stub("os").is_some());
 }
@@ -138,7 +138,7 @@ fn a_custom_tree_activates_verbatim() {
         .iter()
         .map(|warning| warning.code.as_str())
         .collect();
-    assert_eq!(codes, vec!["UNPINNED", "USER-MANAGED SOURCE"]);
+    assert_eq!(codes, vec!["typeshed_source_unpinned", "typeshed_source_user_managed"]);
     assert_eq!(
         snapshot.read_stub("os").map(|(_, body)| body),
         Some("name: str\n")

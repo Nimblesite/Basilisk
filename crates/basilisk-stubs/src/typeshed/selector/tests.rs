@@ -179,7 +179,7 @@ fn the_bundled_default_reports_unpinned() {
         .iter()
         .map(|warning| warning.code.as_str())
         .collect();
-    assert_eq!(codes, vec!["UNPINNED"]);
+    assert_eq!(codes, vec!["typeshed_source_unpinned"]);
 }
 
 /// Implements [STUBRES-TYPESHED-OFFLINE]: a pin that is not on this machine is

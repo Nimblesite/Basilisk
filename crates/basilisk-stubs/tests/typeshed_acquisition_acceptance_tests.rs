@@ -221,7 +221,7 @@ fn custom_tree_is_canonical_and_never_rescued_by_store_or_bundle() {
             .iter()
             .map(|warning| warning.code.as_str())
             .collect::<Vec<_>>(),
-        vec!["UNPINNED", "USER-MANAGED SOURCE"]
+        vec!["typeshed_source_unpinned", "typeshed_source_user_managed"]
     );
 }
 

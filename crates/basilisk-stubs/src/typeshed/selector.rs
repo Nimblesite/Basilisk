@@ -246,9 +246,10 @@ mod status_line_tests {
         assert_eq!(
             rendered.ok(),
             Some(format!(
-                "LICENSE CHANGED — Basilisk update/review required (commit {SHA})"
+                "the bundled typeshed's approved LICENSE/NOTICE changed and needs \
+                 review; update Basilisk before relying on these stubs (commit {SHA})"
             )),
-            "license drift is the spec's LICENSE CHANGED status, not NO SOURCE"
+            "license drift is the spec's typeshed_source_license_changed status, not NO SOURCE"
         );
     }
 

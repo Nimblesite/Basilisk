@@ -271,7 +271,7 @@ mod tests {
         ]);
         // Canonical spec-table order: UNPINNED precedes LICENSE CHANGED.
         let codes: Vec<&str> = warnings.iter().map(|w| w.code.as_str()).collect();
-        assert_eq!(codes, vec!["UNPINNED", "LICENSE CHANGED"]);
+        assert_eq!(codes, vec!["typeshed_source_unpinned", "typeshed_source_license_changed"]);
         let status = TypeshedStatus {
             active_source: SourceKind::Bundled,
             commit: oid(),

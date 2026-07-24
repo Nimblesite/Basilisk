@@ -23,7 +23,7 @@ fn unpinned_user_managed_and_license_warnings_compose() {
             .iter()
             .map(TypeshedWarning::code)
             .collect::<Vec<_>>(),
-        vec!["UNPINNED", "USER-MANAGED SOURCE", "LICENSE CHANGED"]
+        vec!["typeshed_source_unpinned", "typeshed_source_user_managed", "typeshed_source_license_changed"]
     );
     assert_eq!(warnings[0].severity(), WarningSeverity::Advisory);
     assert_eq!(warnings[2].severity(), WarningSeverity::High);
@@ -48,7 +48,7 @@ fn custom_source_is_unpinned_and_user_managed() {
             .iter()
             .map(TypeshedWarning::code)
             .collect::<Vec<_>>(),
-        vec!["UNPINNED", "USER-MANAGED SOURCE"]
+        vec!["typeshed_source_unpinned", "typeshed_source_user_managed"]
     );
     assert!(warnings
         .iter()
