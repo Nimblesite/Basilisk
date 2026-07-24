@@ -85,6 +85,7 @@ export default defineConfig({
             reporter: 'list',
             timeout: 45_000,
             require: './out/test/suite/index.js',
+            ...(process.env.BSK_TEST_GREP ? { grep: process.env.BSK_TEST_GREP } : {}),
         },
     }, ...realWorldTests],
     coverage: {

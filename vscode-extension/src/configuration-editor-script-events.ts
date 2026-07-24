@@ -54,11 +54,23 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
       event.preventDefault();
       return true;
     }
+    // Discarding a preview must reach the host even if the dialog's queued
+    // 'close' event never runs (an occluded webview throttles that task
+    // source), so the intent posts HERE, synchronously with the user's
+    // action; closing the dialog is only the visual half.
+    function discardPreview() {
+      if (editorState.phase === 'preview' && !previewCancelReported) {
+        previewCancelReported = true;
+        vscode.postMessage({ type: 'cancelPreview' });
+      }
+      const previewDialog = byId('preview-dialog');
+      if (previewDialog.open) previewDialog.close();
+    }
     function handleAction(action) {
       if (action === 'refresh') vscode.postMessage({ type: 'refresh' });
       else if (action === 'open-raw') vscode.postMessage({ type: 'openRaw' });
       else if (action === 'load-more-occurrences') loadMoreOccurrences();
-      else if (action === 'close-preview') byId('preview-dialog').close();
+      else if (action === 'close-preview') discardPreview();
       else if (action === 'apply-preview' && editorState.phase === 'preview') vscode.postMessage({ type: 'apply' });
       else if (action === 'adopt-workspace') vscode.postMessage({ type: 'adopt', scope: 'workspace' });
       else if (action === 'fix-safe') vscode.postMessage({ type: 'fixSafe' });
@@ -121,8 +133,14 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
     // A dialog dismissed any way at all (button, Escape, backdrop) discards
     // the change: the host returns to the snapshot and every control
     // re-renders from it, so nothing on screen can outlive the decision.
+    // User-initiated paths post through discardPreview() synchronously; this
+    // listener is the fallback for any other close so a discard can still
+    // never be lost, guarded against double-posting.
     byId('preview-dialog').addEventListener('close', () => {
-      if (editorState.phase === 'preview') vscode.postMessage({ type: 'cancelPreview' });
+      if (editorState.phase === 'preview' && !previewCancelReported) {
+        previewCancelReported = true;
+        vscode.postMessage({ type: 'cancelPreview' });
+      }
     });
     byId('rule-search').addEventListener('input', applyFilter);
     byId('rule-viewport').addEventListener('scroll', () => window.requestAnimationFrame(renderRuleWindow), { passive: true });
@@ -139,7 +157,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
         showSection('rules');
         byId('rule-search').focus();
       }
-      if (event.key === 'Escape' && byId('preview-dialog').open) byId('preview-dialog').close();
+      if (event.key === 'Escape' && byId('preview-dialog').open) discardPreview();
     });
     showSection(activeSection);
     vscode.postMessage({ type: 'ready' });
