@@ -1,5 +1,5 @@
 {
-  "carrier_sha256": "c4dca1716c57de4fc4fb03abb305ad354667cb0f19990ebaa0beb57841b7145f",
+  "carrier_sha256": "3c915e37fbd19cd48681f19d4624d392746e5575633ed8d4d2ff901f463b5b52",
   "dependencies": [
     {
       "name": "@nimblesite/shipwright-core",
@@ -33,11 +33,11 @@
     },
     {
       "name": "@preact/signals-core",
-      "version": "1.14.3",
+      "version": "1.14.4",
       "license": "MIT",
       "repository": "https://github.com/preactjs/signals",
-      "resolved": "https://registry.npmjs.org/@preact/signals-core/-/signals-core-1.14.3.tgz",
-      "integrity": "sha512-m0K3vnbSLC5rHs2ZVfeAMvBtT1zIyq4mxx5OlNncSgMj5Iz6W5Rn3kPrDxAC+iIKmiVe0lSl6U37t5ZkEWoVAw==",
+      "resolved": "https://registry.npmjs.org/@preact/signals-core/-/signals-core-1.14.4.tgz",
+      "integrity": "sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA==",
       "legal_files": [
         {
           "label": "LICENSE",
@@ -108,11 +108,11 @@
     },
     {
       "name": "vscode-jsonrpc",
-      "version": "9.0.0",
+      "version": "9.0.1",
       "license": "MIT",
       "repository": "https://github.com/Microsoft/vscode-languageserver-node.git",
-      "resolved": "https://registry.npmjs.org/vscode-jsonrpc/-/vscode-jsonrpc-9.0.0.tgz",
-      "integrity": "sha512-+VvMmQPJhtvJ+8O+zu2JKIRiLxXF8NW7krWgyMGeOHrp4Cn23T5hc0v2LknNeopDOB70wghHAds7mKtcZ0I4Sg==",
+      "resolved": "https://registry.npmjs.org/vscode-jsonrpc/-/vscode-jsonrpc-9.0.1.tgz",
+      "integrity": "sha512-rfuA6T75H6m5EkbhtEPzre9pT0HPcDI2MMy4+nPFIBks5J8JBAUHD4tRYSgaBOijIEC7SRkC1kKyXTLqbmh9jw==",
       "legal_files": [
         {
           "label": "License.txt",
@@ -128,11 +128,11 @@
     },
     {
       "name": "vscode-languageclient",
-      "version": "10.0.1",
+      "version": "10.1.0",
       "license": "MIT",
       "repository": "https://github.com/Microsoft/vscode-languageserver-node.git",
-      "resolved": "https://registry.npmjs.org/vscode-languageclient/-/vscode-languageclient-10.0.1.tgz",
-      "integrity": "sha512-kXitJTQVKfv69/TY0LnQdsSMaqzRaeoJMMic+B6ad7HLtFPO46MLxpNjnFh1KF1nOhZUoLX+6e+JoIl+Jp3ycQ==",
+      "resolved": "https://registry.npmjs.org/vscode-languageclient/-/vscode-languageclient-10.1.0.tgz",
+      "integrity": "sha512-XXRx6lqVitQy/oOLr9MfNYRG+MbQkhXkDaxbQMiKxEm8zZNfheRFUKNb8UYNh2stn9btl2wQM5wZFJjJvoc+jA==",
       "legal_files": [
         {
           "label": "License.txt",
@@ -143,11 +143,11 @@
     },
     {
       "name": "vscode-languageserver-protocol",
-      "version": "3.18.1",
+      "version": "3.18.2",
       "license": "MIT",
       "repository": "https://github.com/Microsoft/vscode-languageserver-node.git",
-      "resolved": "https://registry.npmjs.org/vscode-languageserver-protocol/-/vscode-languageserver-protocol-3.18.1.tgz",
-      "integrity": "sha512-RTiiVHdpxpYcJVI5sq6S5TLjQ4WDR/rBrIWru+kPXe6sGQ9PFQ3GamrTKLvPqbR4ylr1SoodhmcqbFII0WXVuw==",
+      "resolved": "https://registry.npmjs.org/vscode-languageserver-protocol/-/vscode-languageserver-protocol-3.18.2.tgz",
+      "integrity": "sha512-XRyDbT0Pp3sSNti3JmxVEUMySWCSi1hhM+/KUlCy1hV1zmrqpM1OwO12EAki8blhmLuIMpaJrYbo0OzGVfK2Qg==",
       "legal_files": [
         {
           "label": "License.txt",
@@ -202,5 +202,5 @@
       ]
     }
   ],
-  "production_graph_sha256": "43f5f5fd0daae31342024112becb94923452b92c929a2820b1eb50eca7f9f186"
+  "production_graph_sha256": "922d9bba467a8f83be41a8d8781c1c25de27456c0effbef572ce65952ade6aa6"
 }
