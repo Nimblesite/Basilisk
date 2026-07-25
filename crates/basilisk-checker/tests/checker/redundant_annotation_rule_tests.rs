@@ -166,6 +166,66 @@ fn test_w0050_pydantic_basemodel_transitive_subclass_field_not_flagged() {
     );
 }
 
+// Issue #182: `pydantic_settings.BaseSettings` fields are load-bearing exactly
+// like `BaseModel` fields — the annotation is what registers the setting. When
+// BSK-0050 fires here, `basilisk fix` strips the annotation and the module then
+// raises `PydanticUserError` at import. `BaseSettings` is a `BaseModel` subclass,
+// but it lives in a third-party package so the resolver cannot see that it
+// inherits `BaseModel`; the base name itself must be recognised.
+
+#[test]
+fn test_w0050_pydantic_basesettings_field_not_flagged() {
+    let diags = run_with_config(
+        concat!(
+            "from pydantic_settings import BaseSettings\n",
+            "class Settings(BaseSettings):\n",
+            "    debug: bool = False\n",
+        ),
+        &annotation_rules_config(),
+    )
+    .unwrap();
+    assert!(
+        !diags.iter().any(|d| d.code.code == "BSK-0050"),
+        "BSK-0050 on a BaseSettings field deletes the field when autofixed (issue #182)"
+    );
+}
+
+#[test]
+fn test_w0050_pydantic_basesettings_transitive_subclass_field_not_flagged() {
+    let diags = run_with_config(
+        concat!(
+            "from pydantic_settings import BaseSettings\n",
+            "class AppSettings(BaseSettings):\n",
+            "    name: str = \"x\"\n",
+            "class DevSettings(AppSettings):\n",
+            "    debug: bool = False\n",
+        ),
+        &annotation_rules_config(),
+    )
+    .unwrap();
+    assert!(
+        !diags.iter().any(|d| d.code.code == "BSK-0050"),
+        "BSK-0050 on a transitive BaseSettings subclass field deletes the field when autofixed (issue #182)"
+    );
+}
+
+#[test]
+fn test_w0050_pydantic_basesettings_dotted_base_field_not_flagged() {
+    let diags = run_with_config(
+        concat!(
+            "import pydantic_settings\n",
+            "class Settings(pydantic_settings.BaseSettings):\n",
+            "    debug: bool = False\n",
+        ),
+        &annotation_rules_config(),
+    )
+    .unwrap();
+    assert!(
+        !diags.iter().any(|d| d.code.code == "BSK-0050"),
+        "BSK-0050 must not fire on BaseSettings fields referenced via dotted base (issue #182)"
+    );
+}
+
 #[test]
 fn test_w0050_dataclass_field_not_flagged() {
     let diags = run_with_config(

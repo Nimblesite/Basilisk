@@ -250,9 +250,11 @@ fn capture_active_typeshed_api(
     search_paths: &ImportSearchPaths,
     importing_file: &std::path::Path,
 ) -> Option<(String, ImportedModuleApi)> {
-    if import.kind != ImportKind::Plain {
-        return None;
-    }
+    // An unaliased dotted `import a.b.c` binds only the root `a`, whose members
+    // are not the resolved `a.b.c` stub's members — capturing them under `a`
+    // reds correct code (GitHub #324). The shared helper yields no binding for
+    // exactly those imports, mirroring the user-stub path.
+    let binding = crate::exports::authoritative_module_binding(import)?;
     let resolved_path = import.resolved_path.as_ref()?;
     let active = search_paths.typeshed_snapshot.as_ref()?;
     let (_, importer_target) = active.for_importer(Some(importing_file))?;
@@ -274,17 +276,6 @@ fn capture_active_typeshed_api(
         return None;
     }
 
-    // A plain `import foo as f` carries its alias in `names`; the alias binds
-    // the module object, so it — not the dotted module path — is the base name
-    // an attribute access is written against.
-    let binding = import.names.first().cloned().unwrap_or_else(|| {
-        import
-            .module
-            .split('.')
-            .next()
-            .unwrap_or(&import.module)
-            .to_owned()
-    });
     Some((
         binding,
         ImportedModuleApi {

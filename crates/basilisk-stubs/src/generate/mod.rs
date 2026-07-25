@@ -58,6 +58,35 @@ pub struct GeneratedStub {
     pub mode: StubGenMode,
 }
 
+impl GeneratedStub {
+    /// Whether this stub declares any usable type information — at least one
+    /// function, class, variable, or overload.
+    ///
+    /// A stub with none carries nothing a checker can use. Caching it would
+    /// report a false success and let the empty `.pyi` satisfy BSK-0152 as
+    /// though the module were typed (GitHub #336), so the CLI treats an
+    /// declaration-free result as "nothing generated" rather than a win. A stub
+    /// whose content fails to parse is conservatively reported as having
+    /// declarations so a genuine (if unparseable) result is never silently
+    /// dropped.
+    #[must_use]
+    pub fn has_declarations(&self) -> bool {
+        crate::pyi_parser::parse_pyi_source(
+            &self.pyi_content,
+            Path::new("<generated>"),
+            &self.module_name,
+            crate::types::StubSource::UserStub,
+            crate::types::StubTier::Tier3,
+        )
+        .map_or(true, |module| {
+            !module.functions.is_empty()
+                || !module.classes.is_empty()
+                || !module.variables.is_empty()
+                || !module.overloads.is_empty()
+        })
+    }
+}
+
 /// Generate stubs for a module using the specified mode.
 ///
 /// # Errors
@@ -76,5 +105,38 @@ pub fn generate_stubs(
         StubGenMode::Runtime => runtime::generate_runtime_stubs(module_name, python_path),
         StubGenMode::Ast => ast::generate_ast_stubs(module_name, source_path),
         StubGenMode::Hybrid => hybrid::generate_hybrid_stubs(module_name, source_path, python_path),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stub(pyi_content: &str) -> GeneratedStub {
+        GeneratedStub {
+            module_name: "m".to_owned(),
+            pyi_content: pyi_content.to_owned(),
+            mode: StubGenMode::Runtime,
+        }
+    }
+
+    /// GitHub #336: a stub that declares nothing must be recognised as empty so
+    /// the CLI never caches it or reports a false success.
+    #[test]
+    fn has_declarations_reports_a_header_only_stub_as_empty() {
+        let empty = stub(
+            "# Auto-generated stub for `m` (runtime introspection)\n\nfrom typing import Any\n",
+        );
+        assert!(
+            !empty.has_declarations(),
+            "a header-only stub declares no usable type information"
+        );
+    }
+
+    #[test]
+    fn has_declarations_reports_a_populated_stub_as_non_empty() {
+        assert!(stub("def f() -> int: ...\n").has_declarations(), "function");
+        assert!(stub("class C: ...\n").has_declarations(), "class");
+        assert!(stub("VERSION: str\n").has_declarations(), "variable");
     }
 }

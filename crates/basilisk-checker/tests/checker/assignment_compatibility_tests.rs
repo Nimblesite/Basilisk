@@ -58,6 +58,64 @@ def build_refs_dict() -> RefsDictT:
 }
 
 #[test]
+fn dict_literal_with_typed_variable_value_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Regression for issue #332: a dict display whose value comes from a typed
+    // variable must be checked contextually against the declared dict type
+    // (exactly like `return {...}`), not inferred bottom-up to
+    // `dict[LiteralString, Unknown]` and then rejected under dict invariance.
+    // The `y`/`lst` lines already pass; the `d` line was the false positive.
+    let source = r#"
+def f(x: str) -> None:
+    y: str = x
+    lst: list[str] = [x]
+    d: dict[str, str] = {"k": x}
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "assignment_compatibility");
+    assert!(
+        msgs.is_empty(),
+        "a dict literal with a typed variable value is assignable to dict[str, str]; should not fire, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn dict_literal_with_multiple_typed_variable_values_no_diagnostic(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Real-world instance from issue #332 (docker_host.py:617): every value
+    // comes from a typed parameter.
+    let source = r#"
+def build(bind_host: str, host_port_str: str) -> None:
+    binding: dict[str, str] = {"HostIp": bind_host, "HostPort": host_port_str}
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "assignment_compatibility");
+    assert!(
+        msgs.is_empty(),
+        "a dict of typed-variable values should not fire against dict[str, str], got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn dict_literal_with_wrong_value_type_still_fires() -> Result<(), Box<dyn std::error::Error>> {
+    // Guard for issue #332: contextual checking must not swallow a genuine
+    // mismatch — a str-literal value against `dict[str, int]` is still an error.
+    let source = r#"
+def f() -> None:
+    d: dict[str, int] = {"k": "not an int"}
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "assignment_compatibility");
+    assert!(
+        !msgs.is_empty(),
+        "a str value is not assignable to dict[str, int]; should fire, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn str_annotated_int_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "label: str = 42\n";
     let diags = run(source)?;

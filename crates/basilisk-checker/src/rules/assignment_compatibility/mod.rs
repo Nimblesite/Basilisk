@@ -209,6 +209,17 @@ fn literal_collection_assignable(
     ) {
         return false;
     }
+    // Bidirectional (expected-type) inference: carry the declared element types
+    // INWARD and check each literal element against them — the exact check
+    // `returns`/`yield` already use. Without this the RHS is inferred bottom-up
+    // to e.g. `dict[LiteralString, Unknown]` (a value from a typed variable
+    // becomes `Unknown`, a string key becomes `LiteralString`) and then rejected
+    // under dict invariance, so `d: dict[str, str] = {"k": x}` fires while the
+    // identical `return {"k": x}` is clean (GitHub #332). A genuine element
+    // mismatch still yields `Some(false)` and falls through to the alias check.
+    if crate::inference::literal_collection_assignable_to(&var.rhs_kind, declared) == Some(true) {
+        return true;
+    }
     let ctx = alias_match::AliasCtx {
         union: &skip.value_aliases,
         generic: &skip.generic_aliases,
