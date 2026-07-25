@@ -53,11 +53,15 @@ struct BoundedOutput {
 /// {"name": "Session", "kind": "class", "methods": [...]}
 /// ```
 const INTROSPECT_SCRIPT: &str = r#"
-import sys, json, inspect, types
+import sys, json, inspect, types, importlib
 
 module_name = sys.argv[1]
 try:
-    module = __import__(module_name)
+    # `importlib.import_module` returns the named (sub)module itself; the bare
+    # `__import__(name)` returns the TOP-LEVEL package for a dotted name, so
+    # `import_module("pkg.sub")` was introspecting `pkg` — producing an empty or
+    # wrong-module stub (GitHub #336). This mirrors FIND_PACKAGE_SOURCE_SCRIPT.
+    module = importlib.import_module(module_name)
 except Exception as e:
     print(json.dumps({"error": str(e)}))
     sys.exit(1)
@@ -451,7 +455,8 @@ pub const fn default_timeout() -> Duration {
 #[cfg(test)]
 #[expect(
     clippy::unwrap_used,
-    reason = "test-only: unwrap acceptable in unit tests"
+    clippy::expect_used,
+    reason = "test-only: unwrap/expect acceptable in unit tests"
 )]
 mod tests {
     use super::*;
@@ -610,6 +615,24 @@ exit 7",
         assert!(
             stub.pyi_content.contains("VERSION: str"),
             "{}",
+            stub.pyi_content
+        );
+    }
+
+    /// GitHub #336 (bugs 1 & 2): runtime introspection must import the named
+    /// (sub)module itself, not its top-level package. `__import__("a.b.c")`
+    /// returns `a`, whose only members are submodules — an empty/wrong stub.
+    /// This runs the REAL introspection script against a real interpreter, so
+    /// it depends on `python3` being on PATH (as it is in CI's Rust job).
+    #[test]
+    fn runtime_introspection_targets_the_dotted_submodule_not_its_root() {
+        let python = std::path::PathBuf::from("python3");
+        let stub = generate_runtime_stubs("concurrent.futures", &python)
+            .expect("python3 must introspect a dotted stdlib submodule");
+        assert!(
+            stub.pyi_content.contains("ThreadPoolExecutor"),
+            "the dotted submodule's own members must be introspected (not the \
+             root package's), got:\n{}",
             stub.pyi_content
         );
     }

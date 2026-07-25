@@ -234,6 +234,18 @@ fn cache_generation_result(
 
 /// Cache a generated stub and print the result.
 pub(super) fn cache_stub(cache_dir: &Path, package: &str, stub: &GeneratedStub) -> bool {
+    // A declaration-free stub carries no type information. Writing it would
+    // report a false "✓ Generated" success AND let the empty `.pyi` satisfy
+    // BSK-0152 as though the module were typed (GitHub #336). Surface it as a
+    // warning and write nothing — there is no stub worth caching.
+    if !stub.has_declarations() {
+        println!(
+            "{} `{package}` exposed no introspectable public API — no stub written",
+            "⚠".yellow()
+        );
+        return true;
+    }
+
     let source_hash = generate::cache::hash_source(&stub.pyi_content);
     match generate::cache::write_cache(cache_dir, package, &stub.pyi_content, source_hash) {
         Ok(path) => {

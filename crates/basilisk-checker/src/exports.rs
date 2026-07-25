@@ -288,6 +288,36 @@ fn stub_module_exports(
         ));
     }
 
+    // Overloaded functions live in a separate map from plain functions. Omitting
+    // them dropped every `@overload` stdlib function (`math.ceil`, `ast.parse`,
+    // `hmac.new`, …) from the member set, so correct code looked undeclared and
+    // `imports_module_attribute` red a clean repo (GitHub #324). Every variant is
+    // rendered so hover shows the full overload set.
+    for (name, variants) in &stub.overloads {
+        let signature = variants
+            .iter()
+            .map(basilisk_stubs::render_stub_signature)
+            .collect::<Vec<_>>()
+            .join("\n");
+        exports.push((
+            name.clone(),
+            ExternalSymbol {
+                name: name.clone(),
+                kind: ExternalSymbolKind::Function,
+                type_annotation: variants.first().and_then(|variant| variant.return_type.clone()),
+                source_path: stub_path.to_path_buf(),
+                source_span: Span::new(0, 0),
+                signature: (!signature.is_empty()).then_some(signature),
+                docstring: None,
+                provenance,
+                methods: Vec::new(),
+                bases: Vec::new(),
+                metaclass: None,
+                metaclass_calls: Vec::new(),
+            },
+        ));
+    }
+
     exports
 }
 
@@ -751,6 +781,30 @@ fn stub_source_for(resolved_path: &Path, stub_paths: &[PathBuf]) -> StubSource {
     StubSource::StubPackage
 }
 
+/// The single top-level name a plain `import` binds an authoritative module API
+/// to, or `None` when the import binds no such API.
+///
+/// `import foo` binds `foo`; `import foo as f` — and `import a.b.c as f` — binds
+/// the alias `f` to the imported (leaf) module. But an *unaliased dotted*
+/// `import a.b.c` binds only the root package `a`, while the stub that resolved
+/// is `a.b.c`, whose members are NOT `a`'s members. Attributing them to `a` reds
+/// correct code (`a.b.c` itself, and any real `a.other`), so such imports yield
+/// no binding (GitHub #324) — the same rule the user-stub path already applies
+/// by skipping every dotted import.
+#[must_use]
+pub fn authoritative_module_binding(import: &basilisk_resolver::ImportInfo) -> Option<String> {
+    if import.kind != ImportKind::Plain {
+        return None;
+    }
+    if let Some(alias) = import.names.first() {
+        return Some(alias.clone());
+    }
+    if import.module.contains('.') {
+        return None;
+    }
+    Some(import.module.clone())
+}
+
 /// Repopulate `resolved.imported_symbols` from its resolved imports.
 ///
 /// `workspace_exports` supplies the exports of a **workspace-tracked** file
@@ -820,27 +874,21 @@ pub fn populate_imported_symbols<'a, F, E>(
                 continue;
             };
 
-        if import.kind == ImportKind::Plain && authoritative_stub {
-            let binding = import.names.first().cloned().unwrap_or_else(|| {
-                import
-                    .module
-                    .split('.')
-                    .next()
-                    .unwrap_or(&import.module)
-                    .to_owned()
-            });
-            let member_names = target_exports
-                .iter()
-                .map(|(name, _)| name.clone())
-                .collect();
-            let _ = imported_modules.insert(
-                binding,
-                ImportedModuleApi {
-                    has_getattr: target_exports.iter().any(|(name, _)| name == "__getattr__"),
-                    member_names,
-                    stub_path: resolved_path.clone(),
-                },
-            );
+        if authoritative_stub {
+            if let Some(binding) = authoritative_module_binding(import) {
+                let member_names = target_exports
+                    .iter()
+                    .map(|(name, _)| name.clone())
+                    .collect();
+                let _ = imported_modules.insert(
+                    binding,
+                    ImportedModuleApi {
+                        has_getattr: target_exports.iter().any(|(name, _)| name == "__getattr__"),
+                        member_names,
+                        stub_path: resolved_path.clone(),
+                    },
+                );
+            }
         }
 
         // Discriminate on `kind`, not `names.is_empty()`: a plain `import foo

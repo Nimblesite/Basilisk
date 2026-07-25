@@ -269,18 +269,18 @@ fn make_diagnostic_for_var(
 /// Whether annotated assignments in this class declare *fields* rather than
 /// plain attributes (issue #110).
 ///
-/// For `pydantic.BaseModel` subclasses, `@dataclass` classes (including
-/// `dataclass_transform` factories), and attrs-style classes, the annotation is
-/// what makes the assignment a field — removing it silently deletes the field
-/// from validation/serialization or the generated `__init__`. BSK-0050 must never
-/// call such an annotation redundant.
+/// For `pydantic.BaseModel` / `pydantic_settings.BaseSettings` subclasses,
+/// `@dataclass` classes (including `dataclass_transform` factories), and
+/// attrs-style classes, the annotation is what makes the assignment a field —
+/// removing it silently deletes the field from validation/serialization or the
+/// generated `__init__`. BSK-0050 must never call such an annotation redundant.
 fn annotation_defines_field(
     class: &basilisk_resolver::ClassInfo,
     all_classes: &[basilisk_resolver::ClassInfo],
 ) -> bool {
     class.is_dataclass
         || has_attrs_class_decorator(class)
-        || transitively_inherits(class, all_classes, &is_pydantic_model_base)
+        || transitively_inherits(class, all_classes, &is_pydantic_field_base)
 }
 
 /// attrs-style class decorators (`@define`, `@frozen`, `@mutable`, `@attr.s`,
@@ -300,8 +300,19 @@ fn is_namedtuple_base(base: &str) -> bool {
     base == "NamedTuple"
 }
 
-fn is_pydantic_model_base(base: &str) -> bool {
-    base == "BaseModel" || base.ends_with(".BaseModel")
+/// A pydantic base whose annotated attributes are model *fields*.
+///
+/// `BaseModel` (pydantic) and `BaseSettings` (pydantic-settings, itself a
+/// `BaseModel` subclass) both turn `name: T = default` into a registered field;
+/// `BaseSettings` lives in a third-party package, so the resolver records only
+/// the bare base name and cannot see the inheritance — the name must be matched
+/// directly (issue #182). Dotted references (`pydantic_settings.BaseSettings`)
+/// keep their qualifier, hence the `ends_with` arm.
+fn is_pydantic_field_base(base: &str) -> bool {
+    base == "BaseModel"
+        || base.ends_with(".BaseModel")
+        || base == "BaseSettings"
+        || base.ends_with(".BaseSettings")
 }
 
 /// Check if a class transitively inherits from a base matching `is_marker_base`,
