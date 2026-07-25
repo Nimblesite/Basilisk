@@ -58,8 +58,8 @@ def build_refs_dict() -> RefsDictT:
 }
 
 #[test]
-fn dict_literal_with_typed_variable_value_no_diagnostic(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn dict_literal_with_typed_variable_value_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
+{
     // Regression for issue #332: a dict display whose value comes from a typed
     // variable must be checked contextually against the declared dict type
     // (exactly like `return {...}`), not inferred bottom-up to

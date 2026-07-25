@@ -304,7 +304,9 @@ fn stub_module_exports(
             ExternalSymbol {
                 name: name.clone(),
                 kind: ExternalSymbolKind::Function,
-                type_annotation: variants.first().and_then(|variant| variant.return_type.clone()),
+                type_annotation: variants
+                    .first()
+                    .and_then(|variant| variant.return_type.clone()),
                 source_path: stub_path.to_path_buf(),
                 source_span: Span::new(0, 0),
                 signature: (!signature.is_empty()).then_some(signature),
