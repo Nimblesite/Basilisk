@@ -8,9 +8,9 @@ fn status() -> Value {
         "license_status": "approved",
         "license_reference": "typeshed://LICENSE",
         "warnings": [
-            { "code": "UNPINNED", "message": "Pin a commit to make this reproducible" },
-            { "code": "LICENSE CHANGED", "message": "Basilisk update/review required" },
-            { "code": "USER-MANAGED SOURCE", "message": "Folder supplies its own license" }
+            { "code": "typeshed_source_unpinned", "message": "Pin a commit to make this reproducible", "docs_url": "https://www.basilisk-python.dev/errors/typeshed_source_unpinned" },
+            { "code": "typeshed_source_license_changed", "message": "Basilisk update/review required", "docs_url": "https://www.basilisk-python.dev/errors/typeshed_source_license_changed" },
+            { "code": "typeshed_source_user_managed", "message": "Folder supplies its own license", "docs_url": "https://www.basilisk-python.dev/errors/typeshed_source_user_managed" }
         ]
     })
 }
@@ -82,21 +82,28 @@ fn lifecycle_lists_and_calls_structured_status() -> Result<(), String> {
             .first()
             .and_then(|warning| warning.get("code"))
             .and_then(Value::as_str),
-        Some("UNPINNED")
+        Some("typeshed_source_unpinned")
+    );
+    assert_eq!(
+        warnings
+            .first()
+            .and_then(|warning| warning.get("docs_url"))
+            .and_then(Value::as_str),
+        Some("https://www.basilisk-python.dev/errors/typeshed_source_unpinned")
     );
     assert_eq!(
         warnings
             .get(1)
             .and_then(|warning| warning.get("code"))
             .and_then(Value::as_str),
-        Some("LICENSE CHANGED")
+        Some("typeshed_source_license_changed")
     );
     assert_eq!(
         warnings
             .get(2)
             .and_then(|warning| warning.get("code"))
             .and_then(Value::as_str),
-        Some("USER-MANAGED SOURCE")
+        Some("typeshed_source_user_managed")
     );
     Ok(())
 }
@@ -226,7 +233,13 @@ fn shared_custom_status_projects_to_the_closed_mcp_envelope() {
     assert!(document.pointer("/warnings/0/severity").is_none());
     assert_eq!(
         document.pointer("/warnings/0/code").and_then(Value::as_str),
-        Some("UNPINNED")
+        Some("typeshed_source_unpinned")
+    );
+    assert_eq!(
+        document
+            .pointer("/warnings/0/docs_url")
+            .and_then(Value::as_str),
+        Some("https://www.basilisk-python.dev/errors/typeshed_source_unpinned")
     );
 }
 

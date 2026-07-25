@@ -73,7 +73,7 @@ function verifyTypeshedInfoRows(): void {
       commitIdentity: "83c2518a9e6abbda0c44592c3483de459198f887",
       licenseStatus: { kind: "Approved" },
       warnings: [{
-        code: "UNPINNED", message: "Pin a commit to make this reproducible",
+        code: "typeshed_source_unpinned", message: "Pin a commit to make this reproducible",
         severity: { kind: "Advisory" },
       }],
     },
@@ -90,7 +90,7 @@ function verifyTypeshedInfoRows(): void {
     assert.ok(sourceTooltip.includes("License: Approved"));
     assert.ok(!byLabel.has("Typeshed Transport"), "trust details belong in one source tooltip");
     assert.strictEqual(
-      byLabel.get("Typeshed UNPINNED")?.description,
+      byLabel.get("Typeshed typeshed_source_unpinned")?.description,
       "Pin a commit to make this reproducible",
     );
   } finally {
@@ -124,7 +124,7 @@ function verifyDownloadingTypeshedSpinner(): void {
   }
 }
 
-/** A store whose single root reports the UNPINNED typeshed warning. */
+/** A store whose single root reports the typeshed_source_unpinned typeshed warning. */
 function storeWithUnpinnedWarning(): ReturnType<typeof createStore> {
   const store = createStore();
   const writable = store.typeshedStatuses as unknown as {
@@ -138,7 +138,7 @@ function storeWithUnpinnedWarning(): ReturnType<typeof createStore> {
       commitIdentity: "6fb14c98ee340a07eea807a4c804e20a849eb92b",
       licenseStatus: { kind: "Approved" },
       warnings: [{
-        code: "UNPINNED", message: "Pin a commit to make this reproducible",
+        code: "typeshed_source_unpinned", message: "Pin a commit to make this reproducible",
         severity: { kind: "Advisory" },
       }],
     },
@@ -166,14 +166,14 @@ function advertiseConfigurationEditor(
   writableState.value = options.running ? "running" : "starting";
 }
 
-/** The single UNPINNED warning row from a flat-root panel. */
+/** The single typeshed_source_unpinned warning row from a flat-root panel. */
 function unpinnedRow(store: ReturnType<typeof createStore>): vscode.TreeItem {
   const typeshedProvider = new InfoPanelProvider(store);
   try {
     const row = typeshedProvider
       .getChildren()
-      .find((candidate) => labelOf(candidate) === "Typeshed UNPINNED");
-    assert.ok(row, "the UNPINNED warning row should exist");
+      .find((candidate) => labelOf(candidate) === "Typeshed typeshed_source_unpinned");
+    assert.ok(row, "the typeshed_source_unpinned warning row should exist");
     return row;
   } finally {
     typeshedProvider.dispose();
@@ -181,7 +181,7 @@ function unpinnedRow(store: ReturnType<typeof createStore>): vscode.TreeItem {
 }
 
 // Tests [LSPCFGED-TYPESHED-SERVICE-INFO] navigation + [EXTACT-INFO-AFFORDANCE]:
-// the UNPINNED row's own message tells the user to "Pin current", and Pin
+// the typeshed_source_unpinned row's own message tells the user to "Pin current", and Pin
 // current lives in the configuration editor — so the row must navigate there
 // when the editor is genuinely reachable (info-panel.ts typeshedWarningItem).
 function verifyUnpinnedWarningRowOpensConfigurationEditor(): void {
@@ -191,7 +191,7 @@ function verifyUnpinnedWarningRowOpensConfigurationEditor(): void {
   assert.strictEqual(
     unpinned.command?.command,
     "basilisk.openConfigurationEditor",
-    "the UNPINNED row advertises Pin current, so clicking it must open the configuration editor where Pin current lives",
+    "the typeshed_source_unpinned row advertises Pin current, so clicking it must open the configuration editor where Pin current lives",
   );
   assert.strictEqual(
     unpinned.contextValue,
@@ -342,17 +342,17 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
   test("Server Info shows a downloading Typeshed spinner", verifyDownloadingTypeshedSpinner);
 
   test(
-    "the UNPINNED warning row opens the configuration editor where Pin current lives",
+    "the typeshed_source_unpinned warning row opens the configuration editor where Pin current lives",
     verifyUnpinnedWarningRowOpensConfigurationEditor,
   );
 
   test(
-    "the UNPINNED warning row stays inert while no server advertises the configuration editor",
+    "the typeshed_source_unpinned warning row stays inert while no server advertises the configuration editor",
     verifyUnpinnedWarningRowStaysInertWithoutEditorCapability,
   );
 
   test(
-    "the UNPINNED warning row stays inert while the server is not yet running",
+    "the typeshed_source_unpinned warning row stays inert while the server is not yet running",
     verifyUnpinnedWarningRowStaysInertWhileServerIsNotRunning,
   );
 

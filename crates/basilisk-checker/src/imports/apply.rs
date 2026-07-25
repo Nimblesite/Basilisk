@@ -227,7 +227,10 @@ fn capture_user_stub_api(
         tier,
     )
     .ok()?;
-    Some((import.module.clone(), build_stub_api(&stub, stub_path)))
+    Some((
+        import.module.clone(),
+        build_stub_api(&stub, stub_path, search_paths),
+    ))
 }
 
 /// Capture the member API of a plain `import X` backed by the **active step-3
@@ -322,7 +325,10 @@ pub fn recapture_user_stub_from_source(
         tier,
     )
     .ok()?;
-    Some((import.module.clone(), build_stub_api(&stub, stub_path)))
+    Some((
+        import.module.clone(),
+        build_stub_api(&stub, stub_path, search_paths),
+    ))
 }
 
 /// Whether this import binds a user stub — i.e. its member API is re-derived
@@ -363,16 +369,36 @@ fn user_stub_path<'a>(
 /// presence) from a parsed user stub. Names the stub re-exports — redundant
 /// aliases, `__all__` entries, and star-imported submodules' export sets
 /// ([STUBRES-PYI-REEXPORTS], GitHub #312) — are members too.
+///
+/// Star targets that don't resolve beside the stub fall back to the active
+/// step-3 Typeshed source: `MicroPython`'s `uio.pyi` is just `from io import *`
+/// with `io` in the custom typeshed's `stdlib/` tree (GitHub #312 follow-up).
 fn build_stub_api(
     stub: &basilisk_stubs::StubModule,
     stub_path: &std::path::Path,
+    search_paths: &ImportSearchPaths,
 ) -> ImportedModuleApi {
     let mut member_names = std::collections::HashSet::new();
     member_names.extend(stub.functions.keys().cloned());
     member_names.extend(stub.classes.keys().cloned());
     member_names.extend(stub.variables.keys().cloned());
     member_names.extend(stub.overloads.keys().cloned());
-    member_names.extend(basilisk_stubs::reexported_member_names(stub));
+    let mut snapshot_fallback = |module_name: &str| {
+        let active = search_paths.typeshed_snapshot.as_ref()?;
+        let (snapshot, target) = active.for_importer(Some(stub_path))?;
+        crate::exports::parse_snapshot_stub(
+            snapshot,
+            target,
+            module_name,
+            snapshot_stub_source(snapshot),
+        )
+    };
+    member_names.extend(
+        basilisk_stubs::reexports::reexported_member_names_with_fallback(
+            stub,
+            &mut snapshot_fallback,
+        ),
+    );
     ImportedModuleApi {
         member_names,
         has_getattr: stub.functions.contains_key("__getattr__"),

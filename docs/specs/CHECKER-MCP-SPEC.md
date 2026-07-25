@@ -56,12 +56,14 @@ The closed output schema contains:
 | `tree_identity` | Full Git tree identity, or `null` when unavailable. |
 | `license_status` | `approved`, `changed`, or `not supplied` (custom). |
 | `license_reference` | Safe immutable license reference, or `null` for custom. |
-| `warnings` | Canonically ordered `{code, message}` status warnings. |
+| `warnings` | Canonically ordered `{code, message, docs_url}` status warnings. |
 
 Field values and warning order MUST match the CLI and LSP status produced for
-the same resolved source. Warning codes are the stable display codes
-`UNPINNED`, `USER-MANAGED SOURCE`, and `LICENSE CHANGED`, in that canonical
-order ([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
+the same resolved source. Warning codes are the stable, descriptive,
+number-free codes `typeshed_source_unpinned`, `typeshed_source_user_managed`,
+and `typeshed_source_license_changed`, in that canonical order, and each
+`docs_url` deep-links the code's own `/errors/<code>` page
+([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
 They are service status, never Python diagnostics.
 
 Unknown methods/tools and invalid arguments return JSON-RPC errors. A shared

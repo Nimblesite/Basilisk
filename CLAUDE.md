@@ -54,7 +54,7 @@ Refer to the Makefile for build scripts
 # Rules
 
 - **Top priority: reduce duplication.** Run `deslop:find-similar` BEFORE writing new code and `deslop:top-offenders` after changing code. Always merge duplicates and keep it DRY.
-- Aggressively hoist shared code into shared crates/modules/packages.
+- Aggressively hoist shared code into shared crates/modules/packages. Use [lspkit](https://crates.io/crates/lspkit) where possible.
 - Centralize all global state: each app has a single global-state file, and NO state lives outside it. All mutable state uses Signals for reactivity — no stale state on screen.
 - Keep dependencies and versions in sync across `.github/workflows/ci.yml` and `.devcontainer/Dockerfile` at all times.
 - Use [typeDiagram markup](https://typediagram.dev/docs/language-reference.html) to define models in the specs. Generate the ADTs using the [typeDiagram code generator](https://typediagram.dev/docs/cli.html) pointing at the markup.
@@ -86,6 +86,7 @@ Git is off-limits unless you are explicitly asked. When git IS used:
 
 ## Testing
 
+- We aim for 100% test coverage on every measure. Each PR MUST INCREASE the overall test coverage or it is considered a failure
 - NEVER delete a failing test, remove a failure-causing assertion, reduce assertiveness, or ignore tests. Broken or missing functionality gets MORE failing tests, never fewer.
 - Mutation score only increases. Widen scope over time by adding `#[mutation_safe]` tests over more rules/functions. The gate ([CHKARCH-TESTING-MUTATION-RATCHET], baseline `mutation_testing/mutation_scores.json`) fails CI if the viable mutant pool shrinks, caught drops, missed/timeout rise, or kill rate drops.
 - `make test` is FAIL-FAST — it stops at the first failure. NEVER use `--no-fail-fast`; it saves CI minutes.

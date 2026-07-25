@@ -168,7 +168,7 @@ async fn initialization_seeds_an_unconfigured_root_exactly_once() -> TestResult<
         assert!(
             seeded.contains(&expected_pin),
             "the seed pins the bundled typeshed commit so a fresh workspace \
-             is never UNPINNED (GitHub #343): {seeded}"
+             is never typeshed_source_unpinned (GitHub #343): {seeded}"
         );
     }
 

@@ -361,24 +361,57 @@ The pinned typing specification defines resolution order, not transport status
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 Basilisk reports `active_source` plus an ordered `warnings[]`; warnings compose.
 
-| Condition | Persistent status |
-|---|---|
-| no explicit `typeshed-commit` (the bundled commit is a build-time pin, not a user pin) | `UNPINNED — pin a commit to make this reproducible` |
-| custom folder | `UNPINNED — folder contents can change; version or content-address the folder externally` |
-| custom folder | `USER-MANAGED SOURCE — license and contents supplied by user` |
-| approved license/NOTICE identity changed | `LICENSE CHANGED — Basilisk update/review required` |
-| pinned commit absent from the store, or verification failed | `NO SOURCE — <sha> is not on this machine; run Download latest or basilisk typeshed download --commit <sha>` — analysis does not run |
+**These advisories are real, named Basilisk diagnostics** — deliberately
+upgraded from the anonymous `key="VALUE"` log lines they used to be. Each
+carries a stable, **descriptive, number-free** code (`typeshed_source_*`, named
+like a conformance rule — never a `BSK-####`), a plain-English message, and a
+canonical `/errors/<code>` documentation page it deep-links with `see:
+https://www.basilisk-python.dev/errors/<code>`, exactly like every other
+diagnostic the CLI prints ([§WEBSITE-ERROR-PAGES](WEBSITE-ERROR-PAGES-SPEC.md#WEBSITE-ERROR-PAGES)).
+The `code`/`message` pair is the single source of truth: the Rust
+`TypeshedWarning` (`crates/basilisk-stubs/src/typeshed/warning.rs`), this table,
+and the generated `/errors/<code>` page all state the same thing.
 
-CLI uses a stderr status banner without contaminating machine diagnostics; LSP
-uses `window/showMessage` plus persistent Service Info, never
-`publishDiagnostics`; MCP returns structured status. These warnings therefore
-cannot create conformance false positives. All surfaces show the full SHA when
-known; the UI also provides a safe View License action. MCP fields are
-`active_source`, commit/tree identity, `license_status`, immutable license
-reference (or custom `not supplied`), and ordered `warnings[]`. The active
-source already names the trust story (custom = user-managed, bundled =
-build-vetted, exact commit = attested at download and re-proven offline), so
-there are no separate transport or provenance fields.
+| Condition | Code | Default severity | Persistent status message |
+|---|---|---|---|
+| no explicit `typeshed-commit` (the bundled commit is a build-time pin, not a user pin) | `typeshed_source_unpinned` | `warning` | the typeshed stubs bundled with Basilisk are not pinned to a commit; set `typeshed-commit` to an exact SHA so type checks stay reproducible across machines and CI |
+| custom folder (contents can change on disk) | `typeshed_source_unpinned` | `warning` | the custom typeshed folder is not version-pinned, so its contents can change between runs and checks are not reproducible; version or content-address the folder externally |
+| custom folder (user supplies license + contents) | `typeshed_source_user_managed` | `warning` | the custom typeshed is user-managed: you supply its license and contents, so typeshed's license terms are not applied to it |
+| approved license/NOTICE identity changed | `typeshed_source_license_changed` | `error` | the bundled typeshed's approved LICENSE/NOTICE changed and needs review; update Basilisk before relying on these stubs |
+| pinned commit absent from the store, or verification failed | `NO SOURCE` (terminal failure, not an advisory) | — | `NO SOURCE — <sha> is not on this machine; run Download latest or basilisk typeshed download --commit <sha>` — analysis does not run |
+
+**Routing — out of band on every surface, never a Python diagnostic.** The CLI
+prints a rustc-style banner (`<severity>[<code>]: <message>` then `= see:
+<docs_url>`) to **stderr**, and keeps the structured `active_source`/identity
+fields on a separate `debug` telemetry channel — the human banner is not
+`key="VALUE"` telemetry. The LSP surfaces them through `window/showMessage`
+plus persistent Service Info, never `publishDiagnostics`. MCP returns them as
+structured `{code, message, docs_url}` fields. **Conformance invariant:** no
+advisory ever enters the stdout JSON / `publishDiagnostics` stream a conformance
+run scores, so it can NEVER create a false positive. The default bundled run
+emits exactly one advisory — the `typeshed_source_unpinned` reproducibility
+notice — on stderr, which the `python/typing` harness never reads; the 100 % /
+0-FP score is unaffected ([§CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
+
+**Severity is configured exactly like any Basilisk rule.** Each advisory carries
+the `basilisk` provenance tag, so it resolves severity through the same
+`[tool.basilisk.rules]` / `[tool.basilisk.rule-tags]` machinery
+([§CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)): a
+per-code entry (`"typeshed_source_unpinned" = "error"`) or a whole-tag entry
+(`[tool.basilisk.rule-tags]` `basilisk = "…"`) wins outright. With no table
+deciding, each code keeps its intrinsic default — advisory conditions render
+`warning`, the elevated license change renders `error`. Grading a code
+`disabled`/`off` silences it: the only supported way to make an advisory go
+away. The resolved severity sets the banner label and whether the advisory
+renders at all; it never moves the advisory onto the scored diagnostic stream.
+
+All surfaces show the full SHA when known; the UI also provides a safe View
+License action. MCP fields are `active_source`, commit/tree identity,
+`license_status`, immutable license reference (or custom `not supplied`), and
+ordered `warnings[]` of `{code, message, docs_url}`. The active source already
+names the trust story (custom = user-managed, bundled = build-vetted, exact
+commit = attested at download and re-proven offline), so there are no separate
+transport or provenance fields.
 
 #### Config keys {#STUBRES-TYPESHED-CONFIG}
 
@@ -395,11 +428,21 @@ open. Every one is exposed as a control in the configuration UI
 | `typeshed-path` | `string` | _(unset)_ | The canonical custom step-3 tree; excludes the pin and the bundle. | checker |
 | `typeshed-store-path` | path | OS cache | Where downloads are dumped and pins are resolved. | both |
 
-That is the whole surface: three keys. There are no cache-reuse, expiry,
-verification-waiver, or mirror settings, and no one-run flags: nothing is
-cached, nothing expires, a pin always verifies
+That is the whole *source-selection* surface: three keys. There are no
+cache-reuse, expiry, verification-waiver, or mirror settings, and no one-run
+flags: nothing is cached, nothing expires, a pin always verifies
 ([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)), and downloads come only from
 GitHub ([§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD)).
+
+Separately, the **severity** of each source-status advisory
+([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)) is graded through the ordinary
+rule tables, not these keys. The three codes — `typeshed_source_unpinned`,
+`typeshed_source_user_managed`, `typeshed_source_license_changed` — carry the
+`basilisk` tag and resolve severity via `[tool.basilisk.rules]` /
+`[tool.basilisk.rule-tags]` exactly like any Basilisk rule
+([§CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)),
+defaulting to `warning` (advisory) or `error` (the license change) and silenced
+by grading the code `off`.
 
 #### Target Python version {#STUBRES-TYPESHED-VERSION}
 
@@ -453,6 +496,16 @@ branch; `All` requires validity in every platform alternative and never exposes 
 name from only one branch. This follows the pinned directive that checkers are
 expected to understand those checks
 ([`python/typing@6ef9f77`, directives](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/directives.rst)).
+
+Star targets resolve **inside the re-exporting stub's own source root first**;
+a target absent there falls back to the active step-3 Typeshed source
+(GitHub #312 follow-up). A user stub may legitimately re-export from a module
+owned by a different stub source — MicroPython's `uio.pyi` is just
+`from io import *` with `io` in the custom typeshed's `stdlib/` tree — and the
+walk keeps recursing through whichever source resolved each target, so a
+stdlib package reached this way still follows its own relative re-exports
+within the snapshot. Local-first ordering means a sibling stub always shadows
+a same-named fallback module; the snapshot is a fallback, never an override.
 
 ---
 

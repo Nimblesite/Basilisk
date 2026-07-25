@@ -104,7 +104,7 @@ pub fn is_materialized(path: &str) -> bool {
 
 /// Read and verify one store entry into an immutable snapshot
 /// ([STUBRES-TYPESHED-PIN]). `explicit` records whether the pin is a user's
-/// `typeshed-commit` (suppressing `UNPINNED`) or the bundled default.
+/// `typeshed-commit` (suppressing `typeshed_source_unpinned`) or the bundled default.
 ///
 /// # Errors
 ///
@@ -423,7 +423,7 @@ mod tests {
         // An unmaterialised repo file participates in the root hash but never
         // reaches the VFS.
         assert!(snapshot.vfs.read("README.md").is_none());
-        // The default (bundled) pin keeps UNPINNED semantics via `pinned`.
+        // The default (bundled) pin keeps typeshed_source_unpinned semantics via `pinned`.
         let default_pin = read_snapshot(root.path(), commit, false).expect("default pin");
         assert!(!default_pin.identity.is_pinned());
     }
