@@ -164,6 +164,40 @@ fn createstub_alias_generates_the_named_package() -> Result<(), Box<dyn std::err
     Ok(())
 }
 
+/// GitHub #336: a module whose only names are private exposes no public API, so
+/// the generated stub is declaration-free. The CLI must NOT report a false
+/// "✓ Generated" success or write an empty `.pyi` (which would then satisfy
+/// BSK-0152 as though the module were typed) — it warns and writes nothing.
+#[test]
+fn generate_writes_nothing_and_warns_for_a_module_with_no_public_api(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = TestProject::new("no_public_api")?;
+    let _ = project.write(
+        ".venv/lib/python3.12/site-packages/hollow.py",
+        "_private = 1\ndef _helper() -> int:\n    return 2\n",
+    )?;
+    let _ = project.write("app.py", "import hollow\n")?;
+
+    let output = project.generate_all()?;
+    let details = output_text(&output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success(), "{details}");
+    assert!(
+        !project.root.join(".basilisk/stubs/hollow.pyi").exists(),
+        "a declaration-free stub must not be written; {details}"
+    );
+    assert!(
+        !stdout.contains("Generated stub for `hollow`"),
+        "an empty stub must not be reported as a generation success; {details}"
+    );
+    assert!(
+        stdout.contains("no introspectable public API"),
+        "the CLI must warn that `hollow` exposed nothing to stub; {details}"
+    );
+    Ok(())
+}
+
 #[test]
 fn generate_all_with_no_untyped_imports_succeeds() -> Result<(), Box<dyn std::error::Error>> {
     let project = TestProject::new("all_empty")?;

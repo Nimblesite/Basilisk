@@ -160,6 +160,108 @@ fn cli_accepts_user_stub_reexports_from_the_custom_typeshed_stdlib() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Regression for GitHub #324 (bug 1): `@overload` stdlib functions must be
+/// part of a module's captured member set. `stub_module_exports` looped the
+/// stub's plain functions, classes, and variables but NOT its overload groups,
+/// so every overloaded stdlib function (`math.ceil`, `hmac.new`, `ast.parse`, …)
+/// looked undeclared and `basilisk check` red a clean repo out of the box.
+#[test]
+fn cli_accepts_overloaded_stdlib_functions() {
+    let dir = unique_dir("overloaded_stdlib_functions");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\n",
+    )
+    .expect("write pyproject");
+    std::fs::write(
+        dir.join("app.py"),
+        "import math\nimport ast\n\nrounded = math.ceil(1.5)\ntree = ast.parse(\"x = 1\")\n",
+    )
+    .expect("write app");
+
+    let output = check_app(&dir);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        !stdout.contains("imports_module_attribute"),
+        "`math.ceil` and `ast.parse` are `@overload` stdlib functions and must not be flagged, stdout: {stdout}, stderr: {stderr}"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "correct stdlib code using overloaded functions must let the CLI check pass, stdout: {stdout}, stderr: {stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Regression for GitHub #324 (bug 2): an unaliased dotted `import os.path`
+/// binds only the root package `os`, but the resolved stub is `os.path` — its
+/// members are NOT `os`'s members, so attributing them to `os` red `os.path`
+/// itself ("Module `os` has no attribute `path`"). Such imports must capture no
+/// authoritative module API, mirroring the user-stub path that already skips
+/// every dotted import.
+#[test]
+fn cli_accepts_dotted_submodule_imports() {
+    let dir = unique_dir("dotted_submodule_imports");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\n",
+    )
+    .expect("write pyproject");
+    std::fs::write(
+        dir.join("app.py"),
+        "import os.path\nimport http.client\n\njoined = os.path.join(\"a\", \"b\")\nconn = http.client.HTTPConnection(\"localhost\")\n",
+    )
+    .expect("write app");
+
+    let output = check_app(&dir);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        !stdout.contains("imports_module_attribute"),
+        "`os.path.join` and `http.client.HTTPConnection` are correct dotted-submodule access and must not be flagged, stdout: {stdout}, stderr: {stderr}"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "correct dotted-submodule imports must let the CLI check pass, stdout: {stdout}, stderr: {stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Guard against over-skipping the GitHub #324 dotted fix: an *aliased* dotted
+/// `import X.Y as z` binds the alias `z` to the leaf module `X.Y`, so its member
+/// API is still authoritative and a genuine typo on it must still be flagged.
+#[test]
+fn cli_still_flags_missing_member_on_aliased_dotted_import() {
+    let dir = unique_dir("aliased_dotted_missing_member");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\n",
+    )
+    .expect("write pyproject");
+    std::fs::write(
+        dir.join("app.py"),
+        "import http.client as hc\n\nvalue = hc.NoSuchMemberZzz\n",
+    )
+    .expect("write app");
+
+    let output = check_app(&dir);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        stdout.contains("imports_module_attribute") && stdout.contains("NoSuchMemberZzz"),
+        "an aliased dotted import still binds the leaf module's authoritative API, so a missing member must be flagged, stdout: {stdout}, stderr: {stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The other half of GitHub #330, and the guard against re-introducing #312:
 /// members the active Typeshed stub DOES declare — including names it
 /// re-exports rather than defines — must never be flagged. Capturing the

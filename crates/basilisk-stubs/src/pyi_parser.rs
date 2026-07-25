@@ -294,11 +294,7 @@ impl StubExtractor {
                 &alternative.functions,
                 same_stub_function,
             );
-            retain_matching_entries(
-                &mut intersection.overloads,
-                &alternative.overloads,
-                |left, right| same_stub_functions(left, right),
-            );
+            union_common_overloads(&mut intersection.overloads, &alternative.overloads);
             retain_matching_entries(
                 &mut intersection.classes,
                 &alternative.classes,
@@ -522,6 +518,37 @@ pub(super) fn same_stub_function(left: &StubFunction, right: &StubFunction) -> b
         && left.is_async == right.is_async
         && left.decorators == right.decorators
         && left.class_name == right.class_name
+}
+
+/// Intersect overload groups by NAME across feasible branches, unioning the
+/// variants of a name that appears in every branch.
+///
+/// A plain [`retain_matching_entries`] keyed on `same_stub_functions` drops an
+/// overload whose variant list differs across a version gate — but a function
+/// like `ast.parse`, declared under BOTH arms of `if sys.version_info >= (3,
+/// 15)`, exists regardless of the (unknown) target version. Dropping it reported
+/// `ast.parse` as a missing attribute (GitHub #324). Keeping the name and
+/// unioning the per-branch variants preserves membership without inventing a
+/// declaration no branch made. A name present in only SOME branches is still
+/// intersected away — it may genuinely not exist on the resolved version.
+fn union_common_overloads(
+    left: &mut HashMap<String, Vec<StubFunction>>,
+    right: &HashMap<String, Vec<StubFunction>>,
+) {
+    left.retain(|name, variants| match right.get(name) {
+        Some(other) => {
+            for variant in other {
+                if !variants
+                    .iter()
+                    .any(|existing| same_stub_function(existing, variant))
+                {
+                    variants.push(variant.clone());
+                }
+            }
+            true
+        }
+        None => false,
+    });
 }
 
 fn same_stub_functions(left: &[StubFunction], right: &[StubFunction]) -> bool {
