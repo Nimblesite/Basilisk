@@ -21,11 +21,11 @@ serde_json.workspace = true
 # commit/blob/tree object IDs to bind analysed bytes to the pinned commit SHA;
 # `sha2` fingerprints the embedded bundle and legal files. Both are pure-Rust
 # RustCrypto crates with no system dependencies (no Dockerfile/CI change).
-sha1 = "0.10"
-sha2 = "0.10"
+sha1 = "0.11"
+sha2 = "0.11"
 # Decode the bundled stdlib ZIP into the in-memory archive model
 # ([STUBRES-TYPESHED-BASELINE]). Deflate read only — no bzip2/zstd/aes surface.
-zip = { version = "5.1.1", default-features = false, features = ["deflate"] }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 thiserror.workspace = true
 tracing.workspace = true
 # NO HTTP client may ever appear here: the checker links this crate, and "the
