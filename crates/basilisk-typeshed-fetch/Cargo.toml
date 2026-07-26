@@ -28,12 +28,12 @@ tracing.workspace = true
 # `https_only` is also enforced by the adapter.
 ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
 # `test-support` only: encode synthetic codeload zipballs for the fixture.
-zip = { version = "5.1.1", default-features = false, features = ["deflate"], optional = true }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"
 # The crate's own tests always build the fixture module.
-zip = { version = "5.1.1", default-features = false, features = ["deflate"] }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 [lints]
 workspace = true
