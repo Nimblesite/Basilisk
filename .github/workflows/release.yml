@@ -52,7 +52,7 @@ jobs:
             archive: basilisk-aarch64-pc-windows-msvc.zip
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Stamp release version
         shell: bash
@@ -147,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
@@ -155,7 +155,7 @@ jobs:
         with:
           key: conformance
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
@@ -183,7 +183,7 @@ jobs:
     steps:
       # shipwright.json and the notes generator live in the repo; check out
       # BEFORE downloading artifacts so checkout's clean cannot remove them.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download platform archives
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -290,7 +290,7 @@ jobs:
             archive: basilisk-aarch64-pc-windows-msvc.zip
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Stamp release version
         shell: bash
@@ -303,7 +303,7 @@ jobs:
           cache-dependency-path: vscode-extension/package-lock.json
 
       # Needed to vendor debugpy (pip install --target) into the VSIX bundle.
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
@@ -595,14 +595,14 @@ jobs:
     timeout-minutes: 10
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Auth for the tap push: actions/checkout configures the PAT as an HTTP
       # extraheader, which GitHub accepts. A hand-rolled
       # `git clone https://x-access-token:$PAT@github.com/...` is rejected
       # ("Invalid username or token. Password authentication is not supported").
       - name: Checkout homebrew-tap
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: Nimblesite/homebrew-tap
           token: ${{ secrets.BREW_SCOOP_PAT }}
@@ -658,7 +658,7 @@ jobs:
     timeout-minutes: 10
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Render plugin tree and push to the basilisk.nvim mirror
         # Same write convention as publish-homebrew/publish-scoop: clone the
@@ -717,7 +717,7 @@ jobs:
     timeout-minutes: 15
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The zed-industries/extensions registry compiles the extension to WASM
       # standalone, so the mirror must build outside the monorepo. Gate the push
@@ -797,12 +797,12 @@ jobs:
     timeout-minutes: 10
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Auth for the bucket push: see note in publish-homebrew. Use
       # actions/checkout's token handling, not a URL-embedded PAT.
       - name: Checkout scoop-bucket
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: Nimblesite/scoop-bucket
           token: ${{ secrets.BREW_SCOOP_PAT }}
@@ -898,7 +898,7 @@ jobs:
             os: windows-latest
             manylinux: "off"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Stamp the workspace version so the wheel version (maturin reads it from
       # Cargo.toml via `dynamic = ["version"]` in pyproject.toml) matches the tag.
@@ -906,7 +906,7 @@ jobs:
         shell: bash
         run: scripts/stamp-version.sh
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.x"
 
@@ -957,9 +957,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
