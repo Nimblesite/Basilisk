@@ -76,7 +76,11 @@ def encode_signature(entry, obj):
     for pname, param in sig.parameters.items():
         p = {"name": pname}
         if param.annotation is not inspect.Parameter.empty:
-            p["annotation"] = str(param.annotation)
+            # formatannotation renders a class object as a type expression
+            # (`datetime.datetime`), where str() would produce the repr
+            # (`<class 'datetime.datetime'>`) — not valid stub source
+            # (GitHub #336).
+            p["annotation"] = inspect.formatannotation(param.annotation)
         if param.default is not inspect.Parameter.empty:
             p["has_default"] = True
         if param.kind == inspect.Parameter.VAR_POSITIONAL:
@@ -91,7 +95,7 @@ def encode_signature(entry, obj):
     entry["params"] = params
     ret = sig.return_annotation
     if ret is not inspect.Parameter.empty:
-        entry["return"] = str(ret)
+        entry["return"] = inspect.formatannotation(ret)
 
 def encode_class_methods(entry, cls):
     methods = []
@@ -173,6 +177,16 @@ pub fn generate_runtime_stubs(
     }
 
     let pyi_content = entries_to_pyi(module_name, &entries);
+
+    // A stub Basilisk's own parser rejects must never be reported as a
+    // success — fail loudly instead of writing a contentless lie (GitHub #336).
+    if let Err(err) =
+        basilisk_parser::parse_source(pyi_content.clone(), format!("{module_name}.pyi"))
+    {
+        return Err(StubGenError::Subprocess(format!(
+            "generated stub for `{module_name}` does not parse: {err}"
+        )));
+    }
 
     Ok(GeneratedStub {
         module_name: module_name.to_owned(),
@@ -366,6 +380,13 @@ fn entries_to_pyi(module_name: &str, entries: &[serde_json::Value]) -> String {
     lines.push("# Tier 3: best-effort, may be inaccurate".to_owned());
     lines.push(String::new());
     lines.push("from typing import Any".to_owned());
+    // A dotted annotation (`datetime.datetime`) references a module the stub
+    // must import to be self-consistent (GitHub #336).
+    lines.extend(
+        collect_annotation_imports(entries)
+            .into_iter()
+            .map(|module| format!("import {module}")),
+    );
     lines.push(String::new());
 
     for entry in entries {
@@ -426,13 +447,10 @@ fn format_function_stub(name: &str, entry: &serde_json::Value) -> String {
             let formatted = match kind {
                 Some("vararg") => format!("*{pname}"),
                 Some("kwarg") => format!("**{pname}"),
-                _ => {
-                    if let Some(a) = ann {
-                        format!("{pname}: {a}")
-                    } else {
-                        pname.to_owned()
-                    }
-                }
+                _ => match ann.map(sanitized_annotation) {
+                    Some(annotation) => format!("{pname}: {annotation}"),
+                    None => pname.to_owned(),
+                },
             };
             params.push(formatted);
         }
@@ -441,9 +459,77 @@ fn format_function_stub(name: &str, entry: &serde_json::Value) -> String {
     let ret = entry
         .get("return")
         .and_then(|v| v.as_str())
-        .unwrap_or("Any");
+        .map_or_else(|| "Any".to_owned(), sanitized_annotation);
 
     format!("def {name}({}) -> {ret}: ...", params.join(", "))
+}
+
+/// An introspected annotation, degraded to `Any` unless it is usable stub
+/// source: a single-line string that parses as the annotation of one
+/// `_x: <annotation>` statement. Guards against non-expressions such as the
+/// `repr()` of a runtime class object — `<class 'str'>` (GitHub #336).
+fn sanitized_annotation(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let single_line = !trimmed.is_empty() && !trimmed.contains(['\n', '\r', ';', '#']);
+    if single_line
+        && basilisk_parser::parse_source(format!("_x: {trimmed}"), "annotation.pyi".to_owned())
+            .is_ok()
+    {
+        trimmed.to_owned()
+    } else {
+        "Any".to_owned()
+    }
+}
+
+/// The modules referenced by dotted annotations across all entries, in stable
+/// (sorted) order. Best-effort: only a plain dotted-name chain counts, and the
+/// module is everything up to the final segment (`datetime.datetime` →
+/// `datetime`).
+fn collect_annotation_imports(entries: &[serde_json::Value]) -> std::collections::BTreeSet<String> {
+    let mut imports = std::collections::BTreeSet::new();
+    for entry in entries {
+        collect_entry_imports(entry, &mut imports);
+        if let Some(methods) = entry.get("methods").and_then(|v| v.as_array()) {
+            for method in methods {
+                collect_entry_imports(method, &mut imports);
+            }
+        }
+    }
+    imports
+}
+
+/// Collect the dotted-annotation modules of one function/method entry.
+fn collect_entry_imports(
+    entry: &serde_json::Value,
+    imports: &mut std::collections::BTreeSet<String>,
+) {
+    let param_annotations = entry
+        .get("params")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|param| param.get("annotation").and_then(|v| v.as_str()));
+    let return_annotation = entry.get("return").and_then(|v| v.as_str());
+    for annotation in param_annotations.chain(return_annotation) {
+        if let Some(module) = dotted_annotation_module(annotation) {
+            let _newly_inserted = imports.insert(module);
+        }
+    }
+}
+
+/// The module portion of a plain dotted-name annotation, if any:
+/// `datetime.datetime` → `datetime`, `a.b.C` → `a.b`. Generic or otherwise
+/// composite annotations return `None` — imports for those stay best-effort.
+fn dotted_annotation_module(annotation: &str) -> Option<String> {
+    let (module, class_name) = annotation.trim().rsplit_once('.')?;
+    let is_identifier = |segment: &str| {
+        let mut chars = segment.chars();
+        chars
+            .next()
+            .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+            && chars.all(|rest| rest.is_ascii_alphanumeric() || rest == '_')
+    };
+    (module.split('.').all(&is_identifier) && is_identifier(class_name)).then(|| module.to_owned())
 }
 
 /// Timeout constant exposed for configuration.
@@ -693,6 +779,130 @@ exit 7",
         assert!(
             pyi.contains("config: Any"),
             "a variable with no annotation defaults to Any: {pyi}"
+        );
+    }
+
+    /// GitHub #336 follow-up: `repr()` of a runtime class object
+    /// (`<class 'str'>`) is not a type expression. Whatever the interpreter
+    /// hands back, every annotation must be emitted as parseable source — an
+    /// annotation that isn't a valid expression degrades to `Any`, and the
+    /// assembled stub must always pass Basilisk's own parser.
+    #[test]
+    fn entries_to_pyi_sanitizes_repr_style_annotations_to_a_parseable_stub() {
+        let entries: Vec<serde_json::Value> = serde_json::from_str(
+            r#"[
+                {"name": "get_host", "kind": "function",
+                 "params": [{"name": "when", "annotation": "<class 'datetime.datetime'>"}],
+                 "return": "<class 'str'>"}
+            ]"#,
+        )
+        .unwrap();
+
+        let pyi = entries_to_pyi("m", &entries);
+        assert!(
+            basilisk_parser::parse_source(pyi.clone(), "m.pyi".to_owned()).is_ok(),
+            "the generated stub must parse:\n{pyi}"
+        );
+        assert!(
+            !pyi.contains("<class"),
+            "repr-style annotations must never reach the stub:\n{pyi}"
+        );
+        assert!(
+            pyi.contains("def get_host(when: Any) -> Any: ..."),
+            "unparseable annotations degrade to Any:\n{pyi}"
+        );
+    }
+
+    /// GitHub #336 follow-up: a dotted annotation like `datetime.datetime`
+    /// references a module the stub never imports — the generator must emit
+    /// the matching `import` so the stub is self-consistent.
+    #[test]
+    fn entries_to_pyi_imports_modules_referenced_by_dotted_annotations() {
+        let entries: Vec<serde_json::Value> = serde_json::from_str(
+            r#"[
+                {"name": "stamp", "kind": "function",
+                 "params": [{"name": "when", "annotation": "datetime.datetime"}],
+                 "return": "zoneinfo.ZoneInfo"}
+            ]"#,
+        )
+        .unwrap();
+
+        let pyi = entries_to_pyi("m", &entries);
+        assert!(
+            pyi.contains("import datetime"),
+            "dotted parameter annotations need their module imported:\n{pyi}"
+        );
+        assert!(
+            pyi.contains("import zoneinfo"),
+            "dotted return annotations need their module imported:\n{pyi}"
+        );
+        assert!(
+            pyi.contains("def stamp(when: datetime.datetime) -> zoneinfo.ZoneInfo: ..."),
+            "valid dotted annotations must be preserved verbatim:\n{pyi}"
+        );
+    }
+
+    /// GitHub #336 follow-up: the real introspection script must format
+    /// runtime class-object annotations as type expressions
+    /// (`datetime.datetime`), never `str(cls)` = `<class '...'>`. Exercises
+    /// the REAL script against a real interpreter (like the dotted-submodule
+    /// test above, this depends on `python3` being on PATH).
+    #[cfg(unix)]
+    #[test]
+    fn runtime_introspection_formats_class_annotations_as_type_expressions() {
+        use std::fmt::Write as _;
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("ann_fixture_336.py"),
+            "import datetime\n\n\
+             def stamp(when: datetime.datetime) -> str:\n    return \"\"\n",
+        )
+        .unwrap();
+        // Wrapper so the fixture dir is importable without mutating this
+        // process's environment (parallel tests share it).
+        let mut wrapper = String::from("#!/bin/sh\n");
+        let _ = writeln!(
+            wrapper,
+            "PYTHONPATH={} exec python3 \"$@\"",
+            dir.path().display()
+        );
+        let python = dir.path().join("python");
+        std::fs::write(&python, wrapper).unwrap();
+        let mut permissions = std::fs::metadata(&python).unwrap().permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o700);
+        std::fs::set_permissions(&python, permissions).unwrap();
+
+        let stub = generate_runtime_stubs("ann_fixture_336", &python)
+            .expect("python3 must introspect the fixture module");
+        assert!(
+            !stub.pyi_content.contains("<class"),
+            "class-object annotations must not be repr()'d:\n{}",
+            stub.pyi_content
+        );
+        assert!(
+            stub.pyi_content
+                .contains("def stamp(when: datetime.datetime) -> str: ..."),
+            "class-object annotations must render as type expressions:\n{}",
+            stub.pyi_content
+        );
+    }
+
+    /// GitHub #336 follow-up: reporting `✓ Generated` for a stub Basilisk's
+    /// own parser rejects is a lie. If the assembled content does not parse,
+    /// generation must fail loudly instead of succeeding.
+    #[cfg(unix)]
+    #[test]
+    fn generate_runtime_stubs_fails_when_the_assembled_stub_does_not_parse() {
+        // A symbol name that cannot form a valid `def` line — sanitizing
+        // annotations alone cannot save this stub.
+        let (_dir, python) =
+            fake_python(r#"printf '%s' '[{"name": "not a name", "kind": "function"}]'"#);
+
+        let error = generate_runtime_stubs("mod", &python).unwrap_err();
+        assert!(
+            matches!(error, StubGenError::Subprocess(ref msg) if msg.contains("parse")),
+            "an unparseable assembled stub must be an error, not a success: {error:?}"
         );
     }
 
