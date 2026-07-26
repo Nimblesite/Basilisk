@@ -321,13 +321,14 @@ pub fn find_scoped_references(
         return vec![];
     };
 
+    let mask = crate::source_mask::SourceMask::build(source);
     let tree = ScopeTree::build(resolved, source.len());
     let scope_idx = tree.scope_at(byte_offset);
 
     // Find which scope defines this name.
     let Some(def_scope) = tree.defining_scope(&name, scope_idx) else {
         // Name not found in any scope — fall back to module-wide text match.
-        return crate::references::find_identifier_occurrences(source, &name);
+        return crate::references::find_identifier_occurrences(source, &name, &mask);
     };
 
     // Get the visible ranges (defining scope minus shadowing children).
@@ -342,7 +343,7 @@ pub fn find_scoped_references(
             continue;
         };
 
-        find_identifier_in_slice(slice, &name, start, source, &mut results);
+        find_identifier_in_slice(slice, &name, start, source, &mask, &mut results);
     }
 
     results
@@ -355,6 +356,7 @@ fn find_identifier_in_slice(
     name: &str,
     slice_offset: usize,
     full_source: &str,
+    mask: &crate::source_mask::SourceMask<'_>,
     results: &mut Vec<Range>,
 ) {
     let bytes = slice.as_bytes();
@@ -369,10 +371,7 @@ fn find_identifier_in_slice(
             match_start == 0 || bytes.get(match_start - 1).is_none_or(|&b| !is_ident(b));
         let at_word_end = bytes.get(match_end).is_none_or(|&b| !is_ident(b));
 
-        if at_word_start
-            && at_word_end
-            && !crate::references::is_in_string_or_comment(full_source, slice_offset + match_start)
-        {
+        if at_word_start && at_word_end && !mask.is_masked(slice_offset + match_start) {
             let lsp_start = byte_offset_to_position(full_source, slice_offset + match_start);
             let lsp_end = byte_offset_to_position(full_source, slice_offset + match_end);
             results.push(Range {

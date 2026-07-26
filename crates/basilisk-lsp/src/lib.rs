@@ -57,6 +57,7 @@ pub mod selection;
 pub mod semantic_tokens;
 pub mod server;
 pub mod signature;
+pub mod source_mask;
 pub mod symbols;
 pub mod test_discovery;
 pub mod type_definition;

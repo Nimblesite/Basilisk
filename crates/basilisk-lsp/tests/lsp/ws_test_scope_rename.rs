@@ -219,6 +219,157 @@ async fn test_ws_rename_rejects_invalid_identifier() -> TestResult<()> {
     Ok(())
 }
 
+/// Renaming a symbol must never rewrite matching text inside string literals
+/// or docstring prose — those are data, not references.
+///
+/// Regression test for `is_in_string_or_comment` (references.rs) only
+/// implementing the `#`-comment half of its contract: occurrences of the
+/// name inside plain strings and docstrings were emitted as rename edits,
+/// silently corrupting user data.
+#[tokio::test]
+async fn test_ws_rename_skips_string_literals_and_docstring_prose() -> TestResult<()> {
+    let uri = "file:///scope_rename_strings.py";
+    // `total` appears as: the parameter (line 0), prose inside the docstring
+    // (line 1), text inside a string literal (line 2), and the real usage
+    // (line 3). Only lines 0 and 3 are genuine references.
+    let code = "def process(total: int) -> int:\n    \"\"\"Compute the total for a report.\"\"\"\n    label: str = \"total is big\"\n    return total\n";
+
+    // Rename the `total` parameter (line 0, char 12 = the `t` in `total`).
+    let (_fixture, resp) = open_and_request(
+        uri,
+        code,
+        507,
+        "textDocument/rename",
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 12 },
+            "newName": "amount"
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let changes = &parsed["result"]["changes"];
+    assert!(!changes.is_null(), "changes must not be null: {resp}");
+
+    let edits = changes[uri]
+        .as_array()
+        .expect("file edits must be an array");
+
+    // The docstring (line 1) and the string literal (line 2) must be untouched.
+    for edit in edits {
+        let line = edit["range"]["start"]["line"].as_u64().unwrap();
+        assert!(
+            line == 0 || line == 3,
+            "rename must not edit string content on line {line}: {edit}"
+        );
+    }
+    // Exactly the definition + the real usage, nothing more.
+    assert_eq!(
+        edits.len(),
+        2,
+        "expected exactly 2 edits (definition + usage): {resp}"
+    );
+
+    Ok(())
+}
+
+/// Renaming a parameter used in an f-string interpolation field must rename
+/// the field: `{name}` is code, not string data. Companion pin for the
+/// string-literal mask — only *literal* f-string chunks are masked.
+#[tokio::test]
+async fn test_ws_rename_includes_fstring_interpolation_field() -> TestResult<()> {
+    let uri = "file:///scope_rename_fstring.py";
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
+
+    // Rename the `name` parameter (line 0, char 10).
+    let (_fixture, resp) = open_and_request(
+        uri,
+        code,
+        508,
+        "textDocument/rename",
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 10 },
+            "newName": "person"
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let changes = &parsed["result"]["changes"];
+    assert!(!changes.is_null(), "changes must not be null: {resp}");
+
+    let edits = changes[uri]
+        .as_array()
+        .expect("file edits must be an array");
+
+    // The interpolation field on line 1 MUST be renamed. `{` sits at char 20,
+    // so the `name` identifier spans chars 21-25.
+    let interpolation_edit = edits.iter().find(|edit| {
+        edit["range"]["start"]["line"].as_u64() == Some(1)
+            && edit["range"]["start"]["character"].as_u64() == Some(21)
+    });
+    assert!(
+        interpolation_edit.is_some(),
+        "f-string interpolation field must be renamed: {resp}"
+    );
+    // Definition + interpolation field, nothing else (the literal chunks
+    // `Hello, ` and `!` contain no match, and no other usage exists).
+    assert_eq!(edits.len(), 2, "expected exactly 2 edits: {resp}");
+
+    Ok(())
+}
+
+/// Renaming a class referenced through PEP 563 string annotations must rename
+/// the name inside the annotation strings — they are forward references, not
+/// data. Companion pin for the string-literal mask's annotation exemption.
+#[tokio::test]
+async fn test_ws_rename_includes_string_annotation_references() -> TestResult<()> {
+    let uri = "file:///scope_rename_str_ann.py";
+    let code =
+        "class MyClass:\n    pass\n\ndef make(x: \"MyClass\") -> \"MyClass\":\n    return x\n";
+
+    // Rename `MyClass` at its definition (line 0, char 6).
+    let (_fixture, resp) = open_and_request(
+        uri,
+        code,
+        509,
+        "textDocument/rename",
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 6 },
+            "newName": "Renamed"
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let changes = &parsed["result"]["changes"];
+    assert!(!changes.is_null(), "changes must not be null: {resp}");
+
+    let edits = changes[uri]
+        .as_array()
+        .expect("file edits must be an array");
+
+    // Both string-annotation occurrences on line 3 must be renamed: the
+    // parameter annotation (char 13) and the return annotation (char 27).
+    for expected_char in [13_u64, 27_u64] {
+        let annotation_edit = edits.iter().find(|edit| {
+            edit["range"]["start"]["line"].as_u64() == Some(3)
+                && edit["range"]["start"]["character"].as_u64() == Some(expected_char)
+        });
+        assert!(
+            annotation_edit.is_some(),
+            "string annotation at line 3 char {expected_char} must be renamed: {resp}"
+        );
+    }
+    // Definition + the two annotation strings.
+    assert_eq!(edits.len(), 3, "expected exactly 3 edits: {resp}");
+
+    Ok(())
+}
+
 /// Nested function scoping: renaming `x` in the outer function should not
 /// affect `x` in the inner function when the inner function redefines it.
 #[tokio::test]
