@@ -27,6 +27,7 @@ import {
     workspaceHealthBadge,
     workspaceHealthMessage,
 } from '../../module-explorer';
+import type { HealthStats, ModuleNode } from '../../module-explorer-render';
 import {
     closeAllEditors,
     DIAGNOSTIC_TIMEOUT_MS,
@@ -69,6 +70,37 @@ interface LoosePanelResponse {
     readonly workspace: LooseHealthStats;
 }
 
+// The wire shapes above stay independent of the client interfaces on purpose.
+// Where a payload is handed to the production renderers, it is CONVERTED here
+// rather than asserted into their types: an `as never` would let the wire drift
+// away from what those renderers actually require and still compile, which is
+// the very drift this suite exists to catch.
+
+/** Supply the one field the renderer requires that the wire may omit. */
+function asHealthStats(wire: LooseHealthStats): HealthStats {
+    return { ...wire, totalFiles: wire.totalFiles ?? 0 };
+}
+
+/**
+ * Build the node `ModuleTreeItem` needs from a wire node.
+ *
+ * `symbols` is emptied and `kind` fixed: the row rendering these assertions
+ * inspect (the coverage tint on `iconPath`) is derived from `coveragePercent`
+ * alone, so neither field can affect the outcome.
+ */
+function asModuleNode(wire: LooseModuleNode): ModuleNode {
+    return { ...wire, kind: 'module', symbols: [] };
+}
+
+/** The icon a row resolved to, proven to be a themed icon rather than assumed. */
+function themeIcon(item: vscode.TreeItem): vscode.ThemeIcon {
+    assert.ok(
+        item.iconPath instanceof vscode.ThemeIcon,
+        'a module row renders a ThemeIcon, which is what carries the coverage tint',
+    );
+    return item.iconPath;
+}
+
 /** Fetch a panel payload from the REAL running LSP via executeCommand. */
 async function fetchPanelPayload(command: string): Promise<LoosePanelResponse> {
     const client = getStore()?.client.value;
@@ -109,13 +141,13 @@ function assertGradingServed(payload: LoosePanelResponse, moduleNeedle: string):
         'enabled module nodes carry coverage',
     );
     assert.match(
-        workspaceHealthMessage(payload.workspace as never),
+        workspaceHealthMessage(asHealthStats(payload.workspace)),
         /% typed/,
         'enabled header renders "NN% typed"',
     );
-    const item = new ModuleTreeItem(module as never);
+    const item = new ModuleTreeItem(asModuleNode(module));
     assert.ok(
-        (item.iconPath as vscode.ThemeIcon).color !== undefined,
+        themeIcon(item).color !== undefined,
         'enabled low-coverage module row is coverage-tinted (red)',
     );
 }
@@ -144,7 +176,7 @@ function assertDisabledStateNeutral(payload: LoosePanelResponse, moduleNeedle: s
     }
 
     // Header chrome: no "% typed", explicit disabled wording, no badge.
-    const message = workspaceHealthMessage(payload.workspace as never);
+    const message = workspaceHealthMessage(asHealthStats(payload.workspace));
     assert.doesNotMatch(
         message, /% typed/,
         'disabled header must NOT display "NN% typed" (#119)',
@@ -154,14 +186,14 @@ function assertDisabledStateNeutral(payload: LoosePanelResponse, moduleNeedle: s
         'disabled header must say type checking is off',
     );
     assert.strictEqual(
-        workspaceHealthBadge(payload.workspace as never), undefined,
+        workspaceHealthBadge(asHealthStats(payload.workspace)), undefined,
         'disabled view must carry no diagnostics badge (#119)',
     );
 
     // Row rendering: no coverage tint — the "red rows" from the report.
-    const item = new ModuleTreeItem(module as never);
+    const item = new ModuleTreeItem(asModuleNode(module));
     assert.strictEqual(
-        (item.iconPath as vscode.ThemeIcon).color, undefined,
+        themeIcon(item).color, undefined,
         'disabled module rows must not be coverage-tinted red (#119)',
     );
 }
@@ -287,7 +319,7 @@ suite('Type Checking Toggle (basilisk.enabled)', function () {
                 're-enabling must recompute the coverage rollup',
             );
             assert.match(
-                workspaceHealthMessage(restored.workspace as never),
+                workspaceHealthMessage(asHealthStats(restored.workspace)),
                 /% typed/,
                 're-enabled header renders "NN% typed" again',
             );
