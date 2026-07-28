@@ -29,7 +29,9 @@ import { findBasiliskBinary, removeTestDir } from './test-helpers';
 import { getStore } from '../../extension';
 import { currentStoppedFrameId, evaluateInDebugSession } from '../../dap-evaluate';
 import { debugOutputCursor, debugOutputSince } from '../../dap-output';
+import { booleanField, numberField, recordArrayField, recordField, stringField } from '../../unknown-shape';
 import { ACTIVE_FILE_VARIABLE, applyDebugConfigDefaults } from '../../debug-adapter';
+import { manifestDebuggers } from "./extension-manifest";
 
 const EXTENSION_ID = 'Nimblesite.basilisk';
 
@@ -45,24 +47,6 @@ const STOPPED_EVENT_TIMEOUT_MS = 10_000;
 /** Path to the debug stepping fixture. */
 const FIXTURE_DIR = path.resolve(__dirname, '../../src/test/fixtures');
 const STEPPING_FIXTURE = path.join(FIXTURE_DIR, 'debug_stepping.py');
-
-/** Shape of the package.json fields we inspect in tests. */
-interface DebuggerConfigAttributes {
-    launch?: { properties?: Record<string, unknown> };
-    attach?: { properties?: Record<string, unknown> };
-}
-
-interface DebuggerContribution {
-    type: string;
-    label?: string;
-    configurationAttributes?: DebuggerConfigAttributes;
-}
-
-interface PackageJSON {
-    contributes?: {
-        debuggers?: DebuggerContribution[];
-    };
-}
 
 /** Timeout (ms) for subprocess commands (binary/python detection). */
 const SUBPROCESS_TIMEOUT_MS = 5_000;
@@ -228,7 +212,14 @@ async function startDebugSession(
         'basilisk.startDebugSession',
         { python: pythonOverride ?? null }
     );
-    return result as { host: string; port: number; sessionId: string };
+    const host = stringField(result, 'host');
+    const port = numberField(result, 'port');
+    const sessionId = stringField(result, 'sessionId');
+    assert.ok(
+        host !== undefined && port !== undefined && sessionId !== undefined,
+        'basilisk.startDebugSession must return host, port and sessionId',
+    );
+    return { host, port, sessionId };
 }
 
 /**
@@ -239,7 +230,9 @@ async function stopDebugSession(sessionId: string): Promise<{ stopped: boolean }
         'basilisk.stopDebugSession',
         { sessionId }
     );
-    return result as { stopped: boolean };
+    const stopped = booleanField(result, 'stopped');
+    assert.ok(stopped !== undefined, 'basilisk.stopDebugSession must report whether it stopped');
+    return { stopped };
 }
 
 /**
@@ -278,33 +271,55 @@ async function waitForDebugSessionEnd(timeoutMs: number = DEBUG_SESSION_TIMEOUT_
     });
 }
 
+// The adapter responses below are read field by field rather than asserted into
+// their DAP shapes. An `as` would hand a missing field to the assertions as
+// `undefined` — which several of them compare away — whereas a checked read
+// fails here, naming the field the adapter did not send.
+
+/** One frame of a `stackTrace` response. */
+interface StackFrame {
+    id: number;
+    name: string;
+    source?: { path?: string };
+    line: number;
+    column: number;
+}
+
+/** Read one stack frame, requiring the fields every DAP frame carries. */
+function narrowStackFrame(raw: Record<string, unknown>): StackFrame {
+    const id = numberField(raw, 'id');
+    const name = stringField(raw, 'name');
+    const line = numberField(raw, 'line');
+    const column = numberField(raw, 'column');
+    assert.ok(
+        id !== undefined && name !== undefined && line !== undefined && column !== undefined,
+        'a stackTrace frame carries id, name, line and column',
+    );
+    const sourcePath = stringField(recordField(raw, 'source'), 'path');
+    return {
+        id, name, line, column,
+        source: sourcePath === undefined ? undefined : { path: sourcePath },
+    };
+}
+
 /**
  * Get the stack trace for the given thread.
  */
 async function getStackTrace(session: vscode.DebugSession, threadId: number): Promise<{
-    stackFrames: {
-        id: number;
-        name: string;
-        source?: { path?: string };
-        line: number;
-        column: number;
-    }[];
+    stackFrames: StackFrame[];
     totalFrames: number;
 }> {
-    return session.customRequest('stackTrace', {
+    const response: unknown = await session.customRequest('stackTrace', {
         threadId,
         startFrame: 0,
         levels: MAX_STACK_LEVELS,
-    }) as Promise<{
-        stackFrames: {
-            id: number;
-            name: string;
-            source?: { path?: string };
-            line: number;
-            column: number;
-        }[];
-        totalFrames: number;
-    }>;
+    });
+    const totalFrames = numberField(response, 'totalFrames');
+    assert.ok(totalFrames !== undefined, 'a stackTrace response reports totalFrames');
+    return {
+        stackFrames: recordArrayField(response, 'stackFrames').map(narrowStackFrame),
+        totalFrames,
+    };
 }
 
 /**
@@ -317,13 +332,19 @@ async function getScopes(session: vscode.DebugSession, frameId: number): Promise
         expensive: boolean;
     }[];
 }> {
-    return session.customRequest('scopes', { frameId }) as Promise<{
-        scopes: {
-            name: string;
-            variablesReference: number;
-            expensive: boolean;
-        }[];
-    }>;
+    const response: unknown = await session.customRequest('scopes', { frameId });
+    return {
+        scopes: recordArrayField(response, 'scopes').map((raw) => {
+            const name = stringField(raw, 'name');
+            const variablesReference = numberField(raw, 'variablesReference');
+            const expensive = booleanField(raw, 'expensive');
+            assert.ok(
+                name !== undefined && variablesReference !== undefined && expensive !== undefined,
+                'a scopes entry carries name, variablesReference and expensive',
+            );
+            return { name, variablesReference, expensive };
+        }),
+    };
 }
 
 /**
@@ -337,14 +358,19 @@ async function getVariables(session: vscode.DebugSession, variablesReference: nu
         variablesReference: number;
     }[];
 }> {
-    return session.customRequest('variables', { variablesReference }) as Promise<{
-        variables: {
-            name: string;
-            value: string;
-            type?: string;
-            variablesReference: number;
-        }[];
-    }>;
+    const response: unknown = await session.customRequest('variables', { variablesReference });
+    return {
+        variables: recordArrayField(response, 'variables').map((raw) => {
+            const name = stringField(raw, 'name');
+            const value = stringField(raw, 'value');
+            const reference = numberField(raw, 'variablesReference');
+            assert.ok(
+                name !== undefined && value !== undefined && reference !== undefined,
+                'a variables entry carries name, value and variablesReference',
+            );
+            return { name, value, type: stringField(raw, 'type'), variablesReference: reference };
+        }),
+    };
 }
 
 /** Options for evaluating an expression in a debug session. */
@@ -364,15 +390,18 @@ async function evaluateExpression(options: EvaluateExpressionOptions): Promise<{
     variablesReference: number;
 }> {
     const { session, expression, frameId, context = 'watch' } = options;
-    return session.customRequest('evaluate', {
+    const response: unknown = await session.customRequest('evaluate', {
         expression,
         frameId,
         context,
-    }) as Promise<{
-        result: string;
-        type?: string;
-        variablesReference: number;
-    }>;
+    });
+    const result = stringField(response, 'result');
+    const variablesReference = numberField(response, 'variablesReference');
+    assert.ok(
+        result !== undefined && variablesReference !== undefined,
+        `evaluating "${expression}" must return a result and a variablesReference`,
+    );
+    return { result, type: stringField(response, 'type'), variablesReference };
 }
 
 /**
@@ -421,12 +450,9 @@ async function waitForStop(timeoutMs: number = STOPPED_EVENT_TIMEOUT_MS): Promis
                 return;
             }
             try {
-                const threadsResponse = (await session.customRequest('threads')) as {
-                    threads?: { id: number }[];
-                };
-                const threads = threadsResponse.threads;
-                if (threads !== undefined && threads.length > 0) {
-                    const threadId: number = threads[0].id;
+                const threadsResponse: unknown = await session.customRequest('threads');
+                const threadId = numberField(recordArrayField(threadsResponse, 'threads')[0], 'id');
+                if (threadId !== undefined) {
                     try {
                         const stack = await getStackTrace(session, threadId);
                         if (stack.stackFrames.length > 0) {
@@ -707,9 +733,8 @@ suite('Debug Integration E2E Tests', () => {
         this.timeout(SUBPROCESS_TIMEOUT_MS);
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, 'Extension must be installed');
-        const pkg = ext.packageJSON as PackageJSON;
-        const debuggers = pkg.contributes?.debuggers;
-        assert.ok(debuggers !== undefined, 'Extension must contribute debuggers');
+        const debuggers = manifestDebuggers();
+        assert.ok(debuggers.length > 0, 'Extension must contribute debuggers');
         assert.ok(
             debuggers.some((d) => d.type === 'basilisk-debug'),
             'Extension must contribute basilisk-debug debugger type'
@@ -724,8 +749,7 @@ suite('Debug Integration E2E Tests', () => {
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, 'Extension must be installed');
 
-        const pkg = ext.packageJSON as PackageJSON;
-        const debuggerContrib = pkg.contributes?.debuggers?.find(
+        const debuggerContrib = manifestDebuggers().find(
             (d) => d.type === 'basilisk-debug'
         );
         assert.ok(debuggerContrib !== undefined, 'basilisk-debug debugger must be contributed');
@@ -896,24 +920,20 @@ suite('Debug Integration E2E Tests', () => {
             });
         });
 
-        const parsed = JSON.parse(dapResponse) as {
-            type: string;
-            command?: string;
-            success?: boolean;
-            body?: { supportsConfigurationDoneRequest?: boolean };
-        };
-        assert.ok(parsed !== undefined, 'Expected a valid JSON DAP response');
+        const parsed: unknown = JSON.parse(dapResponse);
+        const type = stringField(parsed, 'type');
         assert.ok(
-            parsed.type === 'response' || parsed.type === 'event',
-            `Expected DAP response or event, got type: ${parsed.type}`
+            type === 'response' || type === 'event',
+            `Expected DAP response or event, got type: ${String(type)}`
         );
 
-        if (parsed.type === 'response') {
-            assert.strictEqual(parsed.command, 'initialize', 'Should be initialize response');
-            assert.strictEqual(parsed.success, true, 'Initialize should succeed');
-            assert.ok(parsed.body !== undefined, 'Initialize response should have a body');
+        if (type === 'response') {
+            assert.strictEqual(stringField(parsed, 'command'), 'initialize', 'Should be initialize response');
+            assert.strictEqual(booleanField(parsed, 'success'), true, 'Initialize should succeed');
+            const body = recordField(parsed, 'body');
+            assert.ok(body !== undefined, 'Initialize response should have a body');
             assert.ok(
-                parsed.body.supportsConfigurationDoneRequest !== undefined,
+                booleanField(body, 'supportsConfigurationDoneRequest') !== undefined,
                 'Should report supportsConfigurationDoneRequest'
             );
         }
@@ -1880,17 +1900,30 @@ suite('Debug Integration E2E Tests', () => {
 // ── Zero-config debug start [VSIX-PYTHON-DEBUGGER-START] ─────────────────────
 // Pure tests for the DebugConfigurationProvider's defaulting logic that lets
 // "Run and Debug" / F5 start without a launch.json.
+/**
+ * The truly-empty object VS Code hands the provider when there is no launch.json.
+ *
+ * `DebugConfiguration` declares `type`, `name` and `request` as required, so the
+ * empty case cannot be spelled without one assertion — and reproducing it exactly
+ * is the whole point: the defaulting logic under test exists precisely because
+ * VS Code passes a value its own declared shape forbids.
+ */
+function emptyLaunchConfig(): vscode.DebugConfiguration {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- see above.
+    return {} as vscode.DebugConfiguration;
+}
+
 suite('Basilisk Debug Config Provider', () => {
     test('empty config + Python file synthesizes a current-file launch', () => {
         // VS Code passes a truly-empty {} when starting with no launch.json.
-        const resolved = applyDebugConfigDefaults({} as vscode.DebugConfiguration, 'python');
+        const resolved = applyDebugConfigDefaults(emptyLaunchConfig(), 'python');
         assert.strictEqual(resolved.type, 'basilisk-debug');
         assert.strictEqual(resolved.request, 'launch');
         assert.strictEqual(resolved.program, ACTIVE_FILE_VARIABLE);
     });
 
     test('empty config + non-Python file is left untouched', () => {
-        const empty = {} as vscode.DebugConfiguration;
+        const empty = emptyLaunchConfig();
         const resolved = applyDebugConfigDefaults(empty, 'rust');
         assert.strictEqual(resolved.type, undefined);
         assert.strictEqual(resolved.program, undefined);
@@ -1905,9 +1938,9 @@ suite('Basilisk Debug Config Provider', () => {
     });
 
     test('a complete config passes through unchanged', () => {
-        const full = {
-            name: 'x', type: 'basilisk-debug', request: 'launch', program: '/tmp/a.py',
-        } as vscode.DebugConfiguration;
+        const full: vscode.DebugConfiguration = {
+            name: "x", type: "basilisk-debug", request: "launch", program: "/tmp/a.py",
+        };
         const resolved = applyDebugConfigDefaults(full, 'python');
         assert.strictEqual(resolved.program, '/tmp/a.py');
     });
@@ -1918,7 +1951,7 @@ suite('Basilisk Debug Config Provider', () => {
     // breakpoints — otherwise a plain F5 with the global setting on still halts
     // at user breakpoints, the exact dead-stop #145 forbids.
     test('global profiler.profileOnLaunch marks an ordinary launch as a profiling run (#145)', () => {
-        const resolved = applyDebugConfigDefaults({} as vscode.DebugConfiguration, 'python', true);
+        const resolved = applyDebugConfigDefaults(emptyLaunchConfig(), 'python', true);
         assert.strictEqual(resolved.type, 'basilisk-debug', 'still synthesizes a current-file launch');
         assert.strictEqual(
             resolved.profileOnLaunch,
@@ -1932,10 +1965,10 @@ suite('Basilisk Debug Config Provider', () => {
     // its breakpoints and the CPU sampler auto-starts alongside tracemalloc,
     // both fighting over the single entry pause.
     test('global profiler.profileOnLaunch does NOT contaminate a memory-tracking launch (dap-1)', () => {
-        const memory = {
+        const memory: vscode.DebugConfiguration = {
             name: 'Run & Track Memory (Current File)', type: 'basilisk-debug', request: 'launch',
             program: '/tmp/a.py', memoryTrackOnLaunch: true,
-        } as unknown as vscode.DebugConfiguration;
+        };
         const resolved = applyDebugConfigDefaults(memory, 'python', true);
         assert.notStrictEqual(
             resolved.profileOnLaunch,
@@ -1953,7 +1986,7 @@ suite('Basilisk Debug Config Provider', () => {
         );
         assert.strictEqual(explicit.profileOnLaunch, true, 'an explicit Run & Profile launch stays a profiling run');
 
-        const normal = applyDebugConfigDefaults({} as vscode.DebugConfiguration, 'python', false);
+        const normal = applyDebugConfigDefaults(emptyLaunchConfig(), 'python', false);
         assert.notStrictEqual(normal.profileOnLaunch, true, 'ordinary F5 (global off) must remain a real debug session with breakpoints');
     });
 });
