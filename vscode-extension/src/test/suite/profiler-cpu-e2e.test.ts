@@ -300,17 +300,30 @@ function hotFunctionSummary(result: Pick<ProfileResult, "hotFunctions">): string
 }
 
 /** Assert the burner's hottest line wears the correctly-tiered palette color. */
-function assertHottestLineTier(result: ProfileResult, burnerPath: string): void {
+async function assertHottestLineTier(result: ProfileResult, burnerPath: string): Promise<void> {
+  // The heat map only paints VISIBLE editors, so open the burner rather than
+  // depending on the debugger having revealed the paused frame. That reveal is
+  // a side effect of the adapter, not something this test arranges, and it does
+  // not happen on every platform — which is exactly how this assertion failed
+  // on Windows while the profile data underneath it was perfectly correct.
+  await vscode.window.showTextDocument(
+    await vscode.workspace.openTextDocument(vscode.Uri.file(burnerPath)),
+    { preview: false },
+  );
   applyProfileDecorations(result);
   const applied = appliedProfileDecorations().filter((entry) => samePath(entry.file, burnerPath));
-  // Name both sides: this assertion fires when the ledger and the fixture
-  // disagree about the SAME file's path spelling (see `samePath`), and a bare
-  // boolean makes that indistinguishable from "the profiler found nothing".
+  // Name every side: this fires either when the ledger and the fixture disagree
+  // about the SAME file's path spelling (see `samePath`) or when no editor was
+  // open to paint at all, and a bare boolean makes those indistinguishable from
+  // "the profiler found nothing".
   assert.ok(
     applied.length > 0,
     `real profile data must paint the open hot file ${burnerPath}; ` +
       `ledger paths: ${JSON.stringify(appliedProfileDecorations().map((entry) => entry.file))}; ` +
-      `hot-line paths: ${JSON.stringify(result.hotLines.map((line) => line.file))}`,
+      `hot-line paths: ${JSON.stringify(result.hotLines.map((line) => line.file))}; ` +
+      `visible editors: ${JSON.stringify(
+        vscode.window.visibleTextEditors.map((editor) => editor.document.uri.fsPath),
+      )}`,
   );
   // Tier-check the hottest line OF THE BURNER — under debugpy, tracer
   // machinery can own the globally hottest line in a file that isn't open.
@@ -444,7 +457,7 @@ suite("CPU profiling — real end-to-end", () => {
     assertSpeedscopeArtifact(result.outputFile);
     assertCpuProfileArtifact(result.cpuProfilePath, "hot_function");
     assertFlamegraphArtifact(result);
-    assertHottestLineTier(result, burnerPath);
+    await assertHottestLineTier(result, burnerPath);
   });
 
   test("panel one-click flow: attach → live progress in status bar → stop paints the heat map", async function () {
@@ -563,7 +576,7 @@ suite("CPU profiling — real end-to-end", () => {
       );
       assertCpuProfileArtifact(result.cpuProfilePath);
       assertFlamegraphArtifact(result);
-      assertHottestLineTier(result, burnerPath);
+      await assertHottestLineTier(result, burnerPath);
       // The debug launch wraps the program in the runpy/debugpy spine; every
       // real artifact of this run must root at the user's code with zero
       // scaffolding ([PROFILE-AGGREGATION-SCAFFOLD]).
