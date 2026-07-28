@@ -488,6 +488,38 @@ code) — false-positive surface is zero by construction. Third-party typeshed /
 are deferred. Implemented in `crates/basilisk-checker/src/rules/e0154/`; tests in
 `crates/basilisk-checker/src/rules/e0154/tests.rs`.
 
+#### Missing imported name {#CHKARCH-DIAG-IMPORT-MEMBER}
+
+`imports_missing_name` closes the symbol-level half of import checking (GitHub #55):
+`from M import name` where the module path `M` resolves to a **workspace `.py`
+source** but `name` is neither a module-level binding in `M` nor an existing
+submodule of the package is an error — at runtime it raises `ImportError`.
+This complements [CHKARCH-DIAG-TYPESAFETY] (`imports_unresolved`, module-path
+level) and [CHKARCH-DIAG-STUB-MEMBER] (`imports_module_attribute`, stub-backed
+attribute access).
+
+The rule re-reads and parses the target module at check time (read through
+`basilisk_common::fs::read_tracked` so the CLI result cache records the content
+edge; the parse is memoized per `(path, content-hash)` process-wide) and
+collects **every** module-level binding form: `def`/`class`, all assignment
+forms, `import`/`from` bindings (re-exports), `for`/`with`/`match`/`except`
+targets, walrus expressions, and `type` alias statements — recursing through
+control flow but not into function/class bodies.
+
+Conservative by construction — silence over guessing:
+
+- a module-level `__getattr__` (PEP 562) permits any name;
+- a target containing `from x import *` has an unknowable member set and is skipped;
+- an unreadable or unparseable target is skipped (its own check reports the syntax error);
+- `from pkg import mod` is satisfied by an existing `pkg/mod.py`, `pkg/mod.pyi`, or `pkg/mod/`;
+- imports resolving into `site-packages` are out of scope (PEP 561 trust
+  boundary — untyped third-party sources belong to `missing_type_stubs`);
+- in cross-module mode a name found in live-buffer `imported_symbols` is
+  trusted over the on-disk view.
+
+Implemented in `crates/basilisk-checker/src/rules/imports_missing_name.rs`;
+tests in `crates/basilisk-checker/tests/imports_missing_name_tests.rs`.
+
 #### TypedDict `extra_items` / `closed` (PEP 728) {#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS}
 
 `typeddicts_extra_items` implements [PEP 728](https://peps.python.org/pep-0728/) — the
