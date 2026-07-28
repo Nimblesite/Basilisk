@@ -62,7 +62,7 @@ export interface DapMessage {
  * checked here rather than assumed: a frame without it would otherwise flow
  * through every `msg.type === ...` comparison as a silent no-match.
  */
-function parseDapMessage(body: string): DapMessage | undefined {
+export function parseDapMessage(body: string): DapMessage | undefined {
   let decoded: unknown;
   try {
     decoded = JSON.parse(body);
@@ -75,6 +75,13 @@ function parseDapMessage(body: string): DapMessage | undefined {
   }
   const record = asRecord(decoded);
   return {
+    // The proxy is a relay — `sendToClient`/`sendToDebugpy` re-serialise what
+    // was decoded here — so every field the wire carried is kept, including the
+    // ones nothing below reads: the standard `message` that carries an error
+    // back to the user on a failed response, and any adapter-specific
+    // extension. The named fields below then re-state the handful the proxy
+    // itself switches on, checked rather than assumed.
+    ...record,
     type,
     seq: numberField(record, "seq"),
     request_seq: numberField(record, "request_seq"),
