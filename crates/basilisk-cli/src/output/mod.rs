@@ -34,7 +34,7 @@ use clap::ValueEnum;
 mod json;
 mod text;
 
-pub use json::render_diagnostics_json;
+pub use json::{render_diagnostics_json, JsonFailure};
 pub use text::render_diagnostics;
 
 /// Output format for the `check` subcommand.
@@ -570,12 +570,12 @@ mod tests {
             text: "def foo(x): pass".to_owned(),
         }];
         // Just verify it doesn't panic.
-        render_diagnostics_json(&[diag], &sources);
+        render_diagnostics_json(&[diag], &sources, &[]);
     }
 
     #[test]
     fn render_diagnostics_json_empty_is_safe() {
-        render_diagnostics_json(&[], &[]);
+        render_diagnostics_json(&[], &[], &[]);
     }
 
     #[test]
@@ -585,7 +585,7 @@ mod tests {
             path: "test.py".to_owned(),
             text: "def foo(x): pass".to_owned(),
         }];
-        render_diagnostics_json(&[diag], &sources);
+        render_diagnostics_json(&[diag], &sources, &[]);
     }
 
     #[test]
@@ -595,7 +595,7 @@ mod tests {
             path: "test.py".to_owned(),
             text: "def foo(x): pass".to_owned(),
         }];
-        render_diagnostics_json(&[diag], &sources);
+        render_diagnostics_json(&[diag], &sources, &[]);
     }
 
     #[test]
@@ -605,7 +605,7 @@ mod tests {
             path: "test.py".to_owned(),
             text: "def foo(x): pass".to_owned(),
         }];
-        render_diagnostics_json(&[diag], &sources);
+        render_diagnostics_json(&[diag], &sources, &[]);
     }
 
     #[test]
