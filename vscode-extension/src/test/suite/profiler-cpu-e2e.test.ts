@@ -48,6 +48,7 @@ import {
   teardownLspTestSuite,
   closeAllEditors,
   waitForLspReady,
+  isSamePath,
 } from "./test-helpers";
 
 /** How long the burner keeps spinning (covers the whole suite). */
@@ -449,8 +450,8 @@ suite("CPU profiling — real end-to-end", () => {
       `hot lines must be detected; result: ${JSON.stringify(result)}`,
     );
     assert.ok(
-      result.hotLines.some((line) => line.file === burnerPath),
-      `hot lines must carry the editor's exact path ${burnerPath}, got: ${ 
+      result.hotLines.some((line) => isSamePath(line.file, burnerPath)),
+      `hot lines must name the burner file ${burnerPath} (compared by path key, not spelling), got: ${ 
         JSON.stringify(result.hotLines.map((line) => line.file))}`,
     );
 

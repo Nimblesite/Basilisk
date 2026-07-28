@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { editorPathKey } from '../../editor-path-key';
 import { type Store } from '../../store-types';
 import type { ReadonlySignal, Signal } from '@preact/signals-core';
 import type { LanguageClient } from 'vscode-languageclient/node';
@@ -630,4 +631,30 @@ export async function getNavLocations(
         timeoutMs: DIAGNOSTIC_TIMEOUT_MS,
     }).catch(() => [] as (vscode.Location | vscode.LocationLink)[]);
     return normalizeLocations(raw);
+}
+
+/**
+ * Do two paths name the same file, as the editor and a Python runtime spell it?
+ *
+ * A test's expected path comes from `path.resolve`, while the paths under
+ * assertion come from `Uri.fsPath` (what the extension records for a visible
+ * editor) or from the interpreter itself (what tracemalloc and the profiler
+ * report). Those spellings are identical on POSIX and DIFFERENT on Windows:
+ * `path.resolve` keeps the drive letter as given (`C:\…`) and `Uri.fsPath`
+ * lowercases it (`c:\…`), so a `===` compare is always false there — the filter
+ * yields `[]` and the assertion reports "nothing was painted" for a feature that
+ * painted correctly. `os.tmpdir()`'s 8.3 short components are the same trap.
+ *
+ * Delegates to the production keyer ([VSIX-CI-PLATFORM-COVERAGE]) rather than
+ * case-folding here, so the comparison the tests make is the SAME one the
+ * decorations make. A test that hand-rolled `toLowerCase()` would pass while
+ * the shipped overlay stayed blank.
+ */
+export function isSamePath(left: string, right: string): boolean {
+    return editorPathKey(left) === editorPathKey(right);
+}
+
+/** `isSamePath` as a predicate over a record carrying a `file` path. */
+export function sameFile(expected: string): (entry: { readonly file: string }) => boolean {
+    return (entry) => isSamePath(entry.file, expected);
 }

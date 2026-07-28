@@ -26,6 +26,7 @@ import {
   setupLspTestSuite,
   teardownLspTestSuite,
   closeAllEditors,
+  sameFile,
 } from "./test-helpers";
 import { buildProfileLaunchConfig } from "../../process-launch";
 import { activeMemorySession } from "../../memory-profiler";
@@ -155,7 +156,7 @@ function assertEscalatedToHigh(): void {
 
 /** The purple track AND the HIGH leak badge are painted on the fixture — automatically. */
 function assertAutoPaintedDecorations(): void {
-  const applied = appliedMemoryDecorations().filter((entry) => entry.file === FIXTURE);
+  const applied = appliedMemoryDecorations().filter(sameFile(FIXTURE));
   assert.ok(
     applied.some((entry) => entry.line === ALLOC_LINE && MEMORY_PALETTE.includes(entry.color)),
     `the leak line must wear an auto-painted purple track, got: ${JSON.stringify(applied)}`,

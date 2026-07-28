@@ -43,6 +43,8 @@ import {
   setupLspTestSuite,
   teardownLspTestSuite,
   closeAllEditors,
+  isSamePath,
+  sameFile,
 } from "./test-helpers";
 
 /** The memory fixture, opened from the real fixtures directory. */
@@ -107,7 +109,7 @@ function assertSnapshotSurface(snapshot: MemorySnapshotResult & IngestResult): v
 
   // The purple memory track is really painted ([PROFILE-VIS-HEATMAP]).
   applyMemoryDecorations(snapshot);
-  const memApplied = appliedMemoryDecorations().filter((entry) => entry.file === FIXTURE);
+  const memApplied = appliedMemoryDecorations().filter(sameFile(FIXTURE));
   assert.ok(memApplied.length > 0, "snapshot allocations must paint the open fixture");
   assert.ok(
     memApplied.some((entry) => entry.line === ALLOC_LINE && MEMORY_PALETTE.includes(entry.color)),
@@ -204,7 +206,7 @@ async function trackAndSnapshotRunningProgram(): Promise<void> {
   clearMemoryDecorations();
   const opsBefore = recordedOperations().length;
   await vscode.commands.executeCommand("basilisk.memorySnapshot");
-  const applied = appliedMemoryDecorations().filter((entry) => entry.file === busyFixture);
+  const applied = appliedMemoryDecorations().filter(sameFile(busyFixture));
   assert.ok(
     applied.some((entry) => entry.line === busyAllocLine),
     `the snapshot must attribute the live allocation line ${busyAllocLine}, got: ${JSON.stringify(applied)}`,
@@ -264,7 +266,7 @@ async function runTrackMemoryToCompletionAndAssertResult(): Promise<void> {
   // snapshot's live allocations paint the purple memory track on the real
   // allocation line.
   const memApplied = await pollUntilResult({
-    fn: async () => appliedMemoryDecorations().filter((entry) => entry.file === FIXTURE),
+    fn: async () => appliedMemoryDecorations().filter(sameFile(FIXTURE)),
     predicate: (entries) =>
       entries.some((entry) => entry.line === ALLOC_LINE && MEMORY_PALETTE.includes(entry.color)),
     timeoutMs: SESSION_WAIT_MS,
@@ -432,7 +434,7 @@ function assertLeakSurface(diff: MemoryDiffResult & IngestResult): void {
 
   applyLeakDecorations(diff);
   const leakApplied = appliedMemoryDecorations().filter(
-    (entry) => entry.file === FIXTURE && LEAK_PALETTE.includes(entry.color) && entry.contentText.includes("leak"),
+    (entry) => isSamePath(entry.file, FIXTURE) && LEAK_PALETTE.includes(entry.color) && entry.contentText.includes("leak"),
   );
   assert.ok(leakApplied.length > 0, "suspected leaks must paint leak decorations with a confidence badge");
 }
