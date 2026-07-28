@@ -299,7 +299,15 @@ function hotFunctionSummary(result: Pick<ProfileResult, "hotFunctions">): string
 function assertHottestLineTier(result: ProfileResult, burnerPath: string): void {
   applyProfileDecorations(result);
   const applied = appliedProfileDecorations().filter((entry) => samePath(entry.file, burnerPath));
-  assert.ok(applied.length > 0, "real profile data must paint the open hot file");
+  // Name both sides: this assertion fires when the ledger and the fixture
+  // disagree about the SAME file's path spelling (see `samePath`), and a bare
+  // boolean makes that indistinguishable from "the profiler found nothing".
+  assert.ok(
+    applied.length > 0,
+    `real profile data must paint the open hot file ${burnerPath}; ` +
+      `ledger paths: ${JSON.stringify(appliedProfileDecorations().map((entry) => entry.file))}; ` +
+      `hot-line paths: ${JSON.stringify(result.hotLines.map((line) => line.file))}`,
+  );
   // Tier-check the hottest line OF THE BURNER — under debugpy, tracer
   // machinery can own the globally hottest line in a file that isn't open.
   const topLine = [...result.hotLines]
