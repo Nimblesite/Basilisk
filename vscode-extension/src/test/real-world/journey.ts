@@ -13,6 +13,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { numberField, recordField } from '../../unknown-shape';
 import { getStore } from '../../extension';
 import {
     DIAGNOSTIC_TIMEOUT_MS,
@@ -68,8 +69,10 @@ export function findServerPid(): number {
     assert.ok(store !== undefined, 'extension store unavailable — extension not activated');
     const client = store.client.value;
     assert.ok(client !== undefined, 'LSP client not started');
-    const internals = client as unknown as { _serverProcess?: { pid?: number } };
-    const pid = internals._serverProcess?.pid;
+    // `_serverProcess` is vscode-languageclient internals, absent from its
+    // public types — read it as an observation rather than asserting the
+    // client has a shape its own d.ts does not promise.
+    const pid = numberField(recordField(client, '_serverProcess'), 'pid');
     assert.ok(typeof pid === 'number' && pid > 0, 'basilisk server PID unavailable on the language client');
     return pid;
 }

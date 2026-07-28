@@ -177,6 +177,7 @@ suite("Configuration editor — Configure Severity deep link", () => {
         `[Configure Severity](command:${CONFIGURATION_EDITOR_COMMAND})`,
       );
       const hover = await provideHover(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- empty TextDocument double; the hover middleware never reads the document
         {} as vscode.TextDocument,
         new vscode.Position(0, 0),
         new vscode.CancellationTokenSource().token,

@@ -15,6 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { locate } from '../suite/test-helpers';
+import { recordArrayField } from '../../unknown-shape';
 
 /** Env var each real-world test config sets to select its corpus entry. */
 export const REPO_ENV_VAR = 'BSK_REAL_WORLD_REPO';
@@ -98,9 +99,6 @@ export interface RepoSpec {
     readonly files: readonly FileJourney[];
 }
 
-interface CorpusFile {
-    readonly repos: readonly RepoSpec[];
-}
 
 /** Absolute path to the extension root (…/vscode-extension). */
 function extensionRoot(): string {
@@ -111,9 +109,14 @@ function extensionRoot(): string {
 /** Load the corpus manifest from test-fixtures. */
 export function loadCorpus(): readonly RepoSpec[] {
     const manifest = path.join(extensionRoot(), 'test-fixtures', 'real-world-corpus.json');
-    const parsed = JSON.parse(fs.readFileSync(manifest, 'utf8')) as CorpusFile;
-    assert.ok(parsed.repos.length > 0, `corpus manifest ${manifest} lists no repos`);
-    return parsed.repos;
+    const parsed: unknown = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+    // Check `repos` is really a non-empty array of objects BEFORE trusting its
+    // element type: reading `.length` off an unchecked cast throws a
+    // TypeError on a malformed manifest instead of failing this assertion.
+    const repos = recordArrayField(parsed, 'repos');
+    assert.ok(repos.length > 0, `corpus manifest ${manifest} lists no repos`);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- RepoSpec is a 9-field committed fixture schema; scripts/fetch-real-world-repos.mjs validates it field-by-field before any test reads it
+    return repos as unknown as readonly RepoSpec[];
 }
 
 /** The corpus entry selected by the active test config's env var. */
