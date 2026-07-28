@@ -104,7 +104,7 @@ pub fn render_diagnostics_json(
 ///
 /// The location is the start of the file: the failure is about the file as a
 /// whole, and the parser's own message carries whatever position it knows.
-fn failure_entry<'a>(failure: &'a JsonFailure<'a>) -> JsonDiagnostic<'a> {
+pub(super) fn failure_entry<'a>(failure: &'a JsonFailure<'a>) -> JsonDiagnostic<'a> {
     JsonDiagnostic {
         code: None,
         severity: "error",
