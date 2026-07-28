@@ -28,6 +28,7 @@ import {
     pollUntilResult,
     closeAllEditors,
 } from "./test-helpers";
+import { arrayField, booleanField, numberField, rawField, stringField } from "../../unknown-shape";
 
 /** Shape of a test item received from the LSP server. */
 interface LspTestItem {
@@ -39,13 +40,41 @@ interface LspTestItem {
   children: LspTestItem[];
 }
 
-/** Shape of test run results from the LSP server. */
-interface LspTestRunResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-  passed: boolean;
-  perTest: { testId: string; status: string; message: string }[];
+/** Whether `value` is an array, without claiming anything about its elements. */
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+/**
+ * Read one discovered test item off the wire.
+ *
+ * The reply is checked field by field rather than asserted into `LspTestItem`:
+ * an item missing `id` or `line` fails here, naming what the server left out,
+ * instead of reaching the assertions below as an `undefined` they compare away.
+ */
+function narrowTestItem(raw: unknown): LspTestItem {
+  const name = stringField(raw, "name");
+  const id = stringField(raw, "id");
+  const file = stringField(raw, "file");
+  const line = numberField(raw, "line");
+  const kind = stringField(raw, "kind");
+  assert.ok(
+    name !== undefined && id !== undefined && file !== undefined
+      && line !== undefined && kind !== undefined,
+    "a discovered test item carries name, id, file, line and kind",
+  );
+  return { name, id, file, line, kind, children: arrayField(raw, "children").map(narrowTestItem) };
+}
+
+/**
+ * Assert the two fields every `runTests` reply must carry.
+ *
+ * The `typeof` checks at the call sites were the only thing proving the server
+ * sent them, so they move here and the reply is never cast.
+ */
+function assertRunResultShape(result: unknown): void {
+  assert.ok(booleanField(result, "passed") !== undefined, "Result should have passed boolean");
+  assert.ok(numberField(result, "exitCode") !== undefined, "Result should have exitCode number");
 }
 
 /** Helper: write a test file and return its path. */
@@ -88,9 +117,9 @@ async function discoverTests(
     arguments: args,
   });
   assert.ok(result, "discoverTests should return a result");
-  const typed = result as { items: LspTestItem[] };
-  assert.ok(Array.isArray(typed.items), "result should have items array");
-  return typed;
+  const items = rawField(result, "items");
+  assert.ok(isUnknownArray(items), "result should have items array");
+  return { items: items.map(narrowTestItem) };
 }
 
 // Tests [VSIX-TEST-EXPLORER-INTEGRATION] — the VS Code Test Explorer wiring
@@ -693,10 +722,8 @@ suite("Basilisk Test Explorer E2E Tests", function () {
 
       // Even with empty IDs, the command should return a structured result.
       if (result !== null) {
-        const typed = result as LspTestRunResult;
-        assert.ok(typeof typed.passed === "boolean", "Result should have passed boolean");
-        assert.ok(typeof typed.exitCode === "number", "Result should have exitCode number");
-        assert.ok(Array.isArray(typed.perTest), "Result should have perTest array");
+        assertRunResultShape(result);
+        assert.ok(isUnknownArray(rawField(result, "perTest")), "Result should have perTest array");
       }
     } catch {
       // pytest may not be installed — the command returning an error is acceptable.
@@ -722,9 +749,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
       });
 
       if (result !== null) {
-        const typed = result as LspTestRunResult;
-        assert.ok(typeof typed.passed === "boolean", "Result should have passed boolean");
-        assert.ok(typeof typed.exitCode === "number", "Result should have exitCode number");
+        assertRunResultShape(result);
       }
     } catch {
       // pytest may not be installed — command error is acceptable.
@@ -892,9 +917,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
       });
 
       if (result !== null) {
-        const typed = result as LspTestRunResult;
-        assert.ok(typeof typed.passed === "boolean", "Result should have passed boolean");
-        assert.ok(typeof typed.exitCode === "number", "Result should have exitCode number");
+        assertRunResultShape(result);
       }
     } catch {
       // pytest-cov may not be installed — command error is acceptable.

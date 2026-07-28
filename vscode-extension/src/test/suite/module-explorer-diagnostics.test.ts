@@ -20,6 +20,7 @@ import {
   PackageTreeItem,
 } from "../../module-explorer";
 import { createStore, type Store } from "../../store";
+import { rawField } from "../../unknown-shape";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -103,12 +104,16 @@ const WORKSPACE = {
 /** Build a Store whose LSP client returns the given flat module list. */
 function storeWith(modules: readonly TestModule[]): Store {
   const store = createStore();
+  // A stand-in for the members the code under test calls. No runtime check
+  // can produce the rest of `LanguageClient`, so the test double itself is
+  // the one assertion here — it is not a payload being read.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- see above.
   const client = {
     isRunning: (): boolean => true,
     onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
     sendRequest: async (): Promise<unknown> => ({ modules, workspace: WORKSPACE }),
   } as unknown as LanguageClient;
-  store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, client);
+  store.setClient({ subscriptions: [] }, client);
   return store;
 }
 
@@ -185,9 +190,14 @@ suite("Module Explorer diagnostics drill-down [EXTACT-MODULES-DIAGNOSTICS] (#235
     );
     assert.strictEqual(row.command?.command, "vscode.open", "clicking opens the file");
     const args: readonly unknown[] = row.command?.arguments ?? [];
-    assert.strictEqual((args[0] as vscode.Uri).fsPath, "/ws/util.py");
-    const selection = (args[1] as { selection?: vscode.Range }).selection;
-    assert.ok(selection, "the open command must carry the diagnostic's range as the selection");
+    const target = args[0];
+    assert.ok(target instanceof vscode.Uri, "the open command targets a Uri");
+    assert.strictEqual(target.fsPath, "/ws/util.py");
+    const selection = rawField(args[1], "selection");
+    assert.ok(
+      selection instanceof vscode.Range,
+      "the open command must carry the diagnostic's range as the selection",
+    );
     assert.strictEqual(selection.start.line, 41, "selection anchors to the zero-based line");
     assert.strictEqual(selection.start.character, 7, "selection anchors to the zero-based character");
   });

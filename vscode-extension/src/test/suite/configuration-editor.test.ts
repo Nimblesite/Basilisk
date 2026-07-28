@@ -34,6 +34,7 @@ import { readBasiliskSettings } from "../../lsp-client";
 import { createStore } from "../../store";
 import { removeTestDir } from './test-helpers';
 import { LATEST_COMMIT, typeshedFixture } from "./typeshed-fixture";
+import { booleanField, recordField } from "../../unknown-shape";
 
 const ROOT_URI = "file:///workspace";
 const OTHER_ROOT_URI = "file:///workspace-other";
@@ -995,6 +996,10 @@ suite("Configuration editor — conflicts, capability, and lifecycle", () => {
   // is no protocol version to negotiate.
   test("gates on presence of the experimental capability", () => {
     function clientWithCapability(configurationEditor: unknown): LanguageClient {
+      // A stand-in for the members the code under test calls. No runtime check
+      // can produce the rest of `LanguageClient`, so the test double itself is
+      // the one assertion here — it is not a payload being read.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- see above.
       return {
         initializeResult: {
           capabilities: { experimental: { basilisk: { configurationEditor } } },
@@ -1063,14 +1068,16 @@ suite("Configuration editor — diagnostic scope setting relay", () => {
     assert.strictEqual(inspected?.defaultValue, true, "package.json must declare the default");
 
     const relayedDefault = readBasiliskSettings();
-    const nested = relayedDefault.basilisk as Record<string, unknown>;
-    assert.strictEqual(nested.analyze, true);
+    assert.strictEqual(booleanField(recordField(relayedDefault, "basilisk"), "analyze"), true);
 
     try {
       await cfg.update("analyze", false, vscode.ConfigurationTarget.Workspace);
       const relayed = readBasiliskSettings();
-      const nestedOff = relayed.basilisk as Record<string, unknown>;
-      assert.strictEqual(nestedOff.analyze, false, "the opt-out must reach the LSP payload");
+      assert.strictEqual(
+        booleanField(recordField(relayed, "basilisk"), "analyze"),
+        false,
+        "the opt-out must reach the LSP payload",
+      );
     } finally {
       await cfg.update("analyze", undefined, vscode.ConfigurationTarget.Workspace);
     }
