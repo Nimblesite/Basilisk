@@ -509,3 +509,62 @@ show(U())
     );
     Ok(())
 }
+
+/// A name rebound in an inner scope no longer means what it meant at module
+/// level, so the module-level tables cannot resolve it. `U = V` constructs `V`.
+#[test]
+fn call_arg_ignores_class_name_rebound_in_an_inner_scope() -> Result<(), Box<dyn std::error::Error>>
+{
+    let source = r"
+from typing import Protocol
+
+class R(Protocol):
+    def render(self) -> str: ...
+
+class U:
+    pass
+
+class V:
+    def render(self) -> str:
+        return 'x'
+
+def show(i: R) -> None: ...
+
+def go() -> None:
+    U = V
+    show(U())
+";
+    let diags = run(source)?;
+    assert!(
+        !has_code(&diags, "protocols_definition_2"),
+        "a rebound class name must not be resolved against the module table, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+/// The same hazard via a parameter rather than an assignment.
+#[test]
+fn call_arg_ignores_class_name_shadowed_by_a_parameter() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Protocol
+
+class R(Protocol):
+    def render(self) -> str: ...
+
+class U:
+    pass
+
+def show(i: R) -> None: ...
+
+def go(U: type) -> None:
+    show(U())
+";
+    let diags = run(source)?;
+    assert!(
+        !has_code(&diags, "protocols_definition_2"),
+        "a class name shadowed by a parameter must not be resolved, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

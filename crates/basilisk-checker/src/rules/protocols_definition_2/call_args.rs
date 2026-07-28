@@ -71,6 +71,7 @@ pub(super) fn check_protocol_call_args(
         class_map,
         self_attrs: super::ast_index::self_attrs_by_class(body),
         opaque: opaque_classes(body),
+        rebound: rebound_names(body),
     };
 
     basilisk_resolver::walk_all_stmts(body, &mut |stmt| match stmt {
@@ -111,6 +112,84 @@ struct ClassKnowledge<'a> {
     self_attrs: HashMap<&'a str, std::collections::HashSet<String>>,
     /// Classes whose member set cannot be trusted ([`opaque_classes`]).
     opaque: std::collections::HashSet<String>,
+    /// Names rebound somewhere in the file ([`rebound_names`]).
+    rebound: std::collections::HashSet<String>,
+}
+
+/// Names bound by anything other than their module-level `class`/`def`.
+///
+/// Call targets and constructor targets are resolved here by bare name against
+/// module-level tables, which is only sound while that name still means what it
+/// meant at module level. A parameter, loop variable, import alias, nested
+/// definition or plain reassignment can rebind it to something entirely
+/// different — `U = V; show(U())` constructs `V`, not `U`. Rather than
+/// re-implement scope resolution inside a rule, any name that is rebound
+/// anywhere is treated as unresolvable and skipped.
+fn rebound_names(body: &[Stmt]) -> std::collections::HashSet<String> {
+    let module_level: std::collections::HashSet<&str> = body
+        .iter()
+        .filter_map(|stmt| match stmt {
+            Stmt::ClassDef(class_def) => Some(class_def.name.as_str()),
+            Stmt::FunctionDef(func) => Some(func.name.as_str()),
+            _ => None,
+        })
+        .collect();
+
+    let mut rebound = std::collections::HashSet::new();
+    let bind = |expr: &Expr, out: &mut std::collections::HashSet<String>| {
+        if let Expr::Name(name) = expr {
+            let _ = out.insert(name.id.to_string());
+        }
+    };
+
+    basilisk_resolver::walk_all_stmts(body, &mut |stmt| match stmt {
+        Stmt::Assign(node) => {
+            for target in &node.targets {
+                bind(target, &mut rebound);
+                if let Expr::Tuple(tuple) = target {
+                    for element in &tuple.elts {
+                        bind(element, &mut rebound);
+                    }
+                }
+            }
+        }
+        Stmt::AnnAssign(node) => bind(&node.target, &mut rebound),
+        Stmt::AugAssign(node) => bind(&node.target, &mut rebound),
+        Stmt::For(node) => bind(&node.target, &mut rebound),
+        Stmt::With(node) => {
+            for item in &node.items {
+                if let Some(vars) = item.optional_vars.as_deref() {
+                    bind(vars, &mut rebound);
+                }
+            }
+        }
+        Stmt::Import(node) => {
+            for alias in &node.names {
+                let bound = alias.asname.as_ref().unwrap_or(&alias.name);
+                let _ = rebound.insert(bound.to_string());
+            }
+        }
+        Stmt::ImportFrom(node) => {
+            for alias in &node.names {
+                let bound = alias.asname.as_ref().unwrap_or(&alias.name);
+                let _ = rebound.insert(bound.to_string());
+            }
+        }
+        Stmt::FunctionDef(func) => {
+            if !module_level.contains(func.name.as_str()) {
+                let _ = rebound.insert(func.name.to_string());
+            }
+            for param in &func.parameters {
+                let _ = rebound.insert(param.name().to_string());
+            }
+        }
+        Stmt::ClassDef(class_def) if !module_level.contains(class_def.name.as_str()) => {
+            let _ = rebound.insert(class_def.name.to_string());
+        }
+        _ => {}
+    });
+
+    rebound
 }
 
 /// Recursively check call expressions (including nested call arguments).
@@ -123,8 +202,10 @@ fn scan_expr(
 ) {
     let Expr::Call(call) = expr else { return };
     if let Expr::Name(name) = call.func.as_ref() {
-        if let Some(func) = functions.get(name.id.as_str()) {
-            validate_call(call, func, knowledge, path, diagnostics);
+        if !knowledge.rebound.contains(name.id.as_str()) {
+            if let Some(func) = functions.get(name.id.as_str()) {
+                validate_call(call, func, knowledge, path, diagnostics);
+            }
         }
     }
     for arg in &call.arguments.args {
@@ -211,7 +292,7 @@ fn report_non_conforming_argument(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let class_map = knowledge.class_map;
-    let Some(class) = constructed_class(arg, class_map) else {
+    let Some(class) = constructed_class(arg, class_map, &knowledge.rebound) else {
         return;
     };
     // A protocol argument satisfying the protocol nominally is fine regardless
@@ -265,11 +346,15 @@ fn report_non_conforming_argument(
 fn constructed_class<'a>(
     arg: &Expr,
     class_map: &HashMap<&str, &'a ClassInfo>,
+    rebound: &std::collections::HashSet<String>,
 ) -> Option<&'a ClassInfo> {
     let Expr::Call(inner) = arg else { return None };
     let Expr::Name(name) = inner.func.as_ref() else {
         return None;
     };
+    if rebound.contains(name.id.as_str()) {
+        return None;
+    }
     let class = class_map.get(name.id.as_str())?;
     (!class.bases.iter().any(|base| base == "Protocol")).then_some(*class)
 }
