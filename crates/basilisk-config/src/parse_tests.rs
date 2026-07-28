@@ -1,0 +1,265 @@
+//! Validation and merge tests for [CHKARCH-CONFIG-MODEL] / [CHKCACHE-CONFIG]
+//! parsing in `parse.rs`. Split out to keep that file under the repository
+//! size ceiling; `#[path]`-included, so it stays the same `validation_tests`
+//! module it always was.
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use super::{is_full_commit_sha, BasiliskConfig, RuleSeverity};
+
+/// [STUBRES-TYPESHED-CONFIG]: only a full 40-char hex SHA is a valid pin.
+#[test]
+fn full_sha_is_accepted_short_and_nonhex_rejected() {
+    // The pinned typing-authority SHA from the plan — exactly 40 hex chars.
+    assert!(is_full_commit_sha(
+        "6ef9f7719ecfff09dad8724ef42b621fd994fb5e"
+    ));
+    // Upper-case identifies the same immutable commit.
+    assert!(is_full_commit_sha(
+        "6EF9F7719ECFFF09DAD8724EF42B621FD994FB5E"
+    ));
+    // Abbreviated (7-char) SHA — ambiguous, rejected so a pin fails closed.
+    assert!(!is_full_commit_sha("6ef9f77"));
+    // 39 and 41 chars — off-by-one lengths rejected.
+    assert!(!is_full_commit_sha(
+        "6ef9f7719ecfff09dad8724ef42b621fd994fb5"
+    ));
+    assert!(!is_full_commit_sha(
+        "6ef9f7719ecfff09dad8724ef42b621fd994fb5ee"
+    ));
+    // Non-hex character (`g`) at full length — rejected.
+    assert!(!is_full_commit_sha(
+        "6ef9f7719ecfff09dad8724ef42b621fd994fb5g"
+    ));
+    // Empty — rejected.
+    assert!(!is_full_commit_sha(""));
+}
+
+#[test]
+fn nearer_typeshed_selection_replaces_inherited_selection_atomically() {
+    let ancestor_pin = BasiliskConfig {
+        typeshed_commit: Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
+        ..Default::default()
+    };
+    let child_path = BasiliskConfig {
+        typeshed_path: Some(PathBuf::from("custom-typeshed")),
+        ..Default::default()
+    };
+    let path_result = ancestor_pin.merged_with(child_path);
+    assert_eq!(
+        path_result.typeshed_path,
+        Some(PathBuf::from("custom-typeshed"))
+    );
+    assert!(path_result.typeshed_commit.is_none());
+
+    let ancestor_path = BasiliskConfig {
+        typeshed_path: Some(PathBuf::from("parent-typeshed")),
+        ..Default::default()
+    };
+    let child_pin = BasiliskConfig {
+        typeshed_commit: Some("0123456789abcdef0123456789abcdef01234567".to_owned()),
+        ..Default::default()
+    };
+    let pin_result = ancestor_path.merged_with(child_pin);
+    assert!(pin_result.typeshed_path.is_none());
+    assert_eq!(
+        pin_result.typeshed_commit.as_deref(),
+        Some("0123456789abcdef0123456789abcdef01234567")
+    );
+}
+
+#[test]
+fn malformed_same_table_path_and_pin_remain_visible_to_fail_closed() {
+    let child = BasiliskConfig {
+        typeshed_path: Some(PathBuf::from("custom-typeshed")),
+        typeshed_commit: Some("0123456789abcdef0123456789abcdef01234567".to_owned()),
+        ..Default::default()
+    };
+    let merged = BasiliskConfig::default().merged_with(child);
+    assert!(merged.typeshed_path.is_some());
+    assert!(merged.typeshed_commit.is_some());
+}
+
+/// Build a `[tool.basilisk.rules]`-shaped table directly, so the fixture
+/// carries no `Result` to unwrap and can hold non-string values a TOML
+/// severity table must still tolerate.
+fn severity_table(entries: &[(&str, toml::Value)]) -> toml::Table {
+    let mut table = toml::Table::new();
+    for (key, value) in entries {
+        let _ = table.insert((*key).to_owned(), value.clone());
+    }
+    table
+}
+
+/// [CHKARCH-STRICTNESS-SEVERITY]: every documented spelling — the four
+/// canonical names and the four aliases — must reach the rule map, so a
+/// config the docs sanction is never quietly a no-op.
+#[test]
+fn every_documented_severity_spelling_is_accepted() {
+    let table = severity_table(&[
+        ("a", toml::Value::from("error")),
+        ("b", toml::Value::from("warning")),
+        ("c", toml::Value::from("warn")),
+        ("d", toml::Value::from("info")),
+        ("e", toml::Value::from("information")),
+        ("f", toml::Value::from("disabled")),
+        ("g", toml::Value::from("off")),
+        ("h", toml::Value::from("none")),
+    ]);
+    let mut parsed = HashMap::new();
+    super::parse_severity_map(&table, &mut parsed);
+
+    assert_eq!(parsed.get("a"), Some(&RuleSeverity::Error));
+    assert_eq!(parsed.get("b"), Some(&RuleSeverity::Warning));
+    assert_eq!(parsed.get("c"), Some(&RuleSeverity::Warning));
+    assert_eq!(parsed.get("d"), Some(&RuleSeverity::Info));
+    assert_eq!(parsed.get("e"), Some(&RuleSeverity::Info));
+    assert_eq!(parsed.get("f"), Some(&RuleSeverity::Disabled));
+    assert_eq!(parsed.get("g"), Some(&RuleSeverity::Disabled));
+    assert_eq!(parsed.get("h"), Some(&RuleSeverity::Disabled));
+    assert_eq!(parsed.len(), 8, "no documented spelling may be dropped");
+}
+
+/// [CHKARCH-CONFIG-MODEL]: a value that is not a severity is dropped rather
+/// than coerced — a typo must never silently become `error`, and it must
+/// never take a neighbouring valid entry down with it. The drop is
+/// announced through `tracing::warn!` in `parse_severity_map`, because the
+/// configuration editor rejects the same value outright and a silent run
+/// would disagree with the editor about one file.
+#[test]
+fn unparseable_severities_are_dropped_without_disturbing_valid_entries() {
+    let table = severity_table(&[
+        ("typo", toml::Value::from("eror")),
+        ("wrong_case", toml::Value::from("ERROR")),
+        ("empty", toml::Value::from("")),
+        ("numeric", toml::Value::from(3)),
+        ("boolean", toml::Value::from(true)),
+        ("listy", toml::Value::from(vec!["error"])),
+        ("good", toml::Value::from("warning")),
+    ]);
+    let mut parsed = HashMap::new();
+    super::parse_severity_map(&table, &mut parsed);
+
+    for dropped in ["typo", "wrong_case", "empty", "numeric", "boolean", "listy"] {
+        assert!(
+            !parsed.contains_key(dropped),
+            "`{dropped}` is not a severity and must not enter the rule map"
+        );
+    }
+    assert_eq!(
+        parsed.get("good"),
+        Some(&RuleSeverity::Warning),
+        "a malformed neighbour must not suppress a valid entry"
+    );
+    assert_eq!(parsed.len(), 1);
+}
+
+/// [CHKCACHE-CONFIG]: both persistent-cache keys parse from `[tool.basilisk]`
+/// with their documented TOML types.
+#[test]
+fn cache_keys_parse_from_pyproject() {
+    let cfg = super::parse_pyproject_content(
+        "[tool.basilisk]\ncache = true\ncache-dir = \"build/bsk-cache\"\n",
+    )
+    .expect("a [tool.basilisk] table must parse");
+    assert_eq!(cfg.cache_enabled, Some(true));
+    assert_eq!(cfg.cache_dir, Some(PathBuf::from("build/bsk-cache")));
+    assert!(cfg.cache_is_enabled());
+}
+
+/// [CHKCACHE-CONFIG]: unwritten keys stay `None` so the pre-existing default
+/// (cache off, default folder) is untouched by the key's mere existence.
+#[test]
+fn cache_keys_default_to_unset_and_off() {
+    let cfg =
+        super::parse_pyproject_content("[tool.basilisk]\n").expect("an empty table must parse");
+    assert!(cfg.cache_enabled.is_none());
+    assert!(cfg.cache_dir.is_none());
+    assert!(!cfg.cache_is_enabled(), "an unwritten `cache` key is off");
+}
+
+/// [CHKCACHE-CONFIG]: `cache = false` is a real, explicit opt-out — it must
+/// reach the config as `Some(false)`, not collapse into "unset".
+#[test]
+fn explicit_cache_false_is_recorded() {
+    let cfg = super::parse_pyproject_content("[tool.basilisk]\ncache = false\n")
+        .expect("a [tool.basilisk] table must parse");
+    assert_eq!(cfg.cache_enabled, Some(false));
+    assert!(!cfg.cache_is_enabled());
+}
+
+/// [CHKCACHE-CONFIG]: a wrongly-typed value is dropped rather than coerced —
+/// `cache = "yes"` must never read as `true`.
+#[test]
+fn wrongly_typed_cache_values_are_not_coerced() {
+    let cfg = super::parse_pyproject_content("[tool.basilisk]\ncache = \"yes\"\ncache-dir = 7\n")
+        .expect("a [tool.basilisk] table must parse");
+    assert!(cfg.cache_enabled.is_none());
+    assert!(cfg.cache_dir.is_none());
+}
+
+/// [CHKCACHE-CONFIG]: the nearer directory wins per key, exactly like the
+/// other non-rule fields ([CHKARCH-CONFIG-DISCOVERY]).
+#[test]
+fn nearer_cache_settings_win_per_key() {
+    let ancestor = BasiliskConfig {
+        cache_enabled: Some(false),
+        cache_dir: Some(PathBuf::from("outer")),
+        ..Default::default()
+    };
+    let child = BasiliskConfig {
+        cache_enabled: Some(true),
+        ..Default::default()
+    };
+    let merged = ancestor.merged_with(child);
+    assert_eq!(merged.cache_enabled, Some(true), "the child key wins");
+    assert_eq!(
+        merged.cache_dir,
+        Some(PathBuf::from("outer")),
+        "a key the child does not state inherits the ancestor"
+    );
+}
+
+/// [CHKCACHE-CONFIG]: the default location is `.basilisk/cache/check` under
+/// the project root — the same folder the CLI has always used.
+#[test]
+fn default_cache_directory_is_under_the_project_root() {
+    let root = PathBuf::from("/projects/demo");
+    let resolved = BasiliskConfig::default().cache_directory(&root);
+    assert_eq!(resolved, root.join(".basilisk").join("cache").join("check"));
+}
+
+/// [CHKCACHE-CONFIG]: a relative `cache-dir` anchors to the project root, so
+/// the folder does not move with the caller's working directory.
+#[test]
+fn relative_cache_directory_resolves_against_the_project_root() {
+    let root = PathBuf::from("/projects/demo");
+    let cfg = BasiliskConfig {
+        cache_dir: Some(PathBuf::from("build/cache")),
+        ..Default::default()
+    };
+    assert_eq!(
+        cfg.cache_directory(&root),
+        root.join("build").join("cache")
+    );
+}
+
+/// [CHKCACHE-CONFIG]: an absolute `cache-dir` is used verbatim — a shared
+/// cache outside the project is the whole point of setting one.
+#[test]
+fn absolute_cache_directory_is_used_verbatim() {
+    let absolute = if cfg!(windows) {
+        PathBuf::from(r"C:\shared\bsk")
+    } else {
+        PathBuf::from("/shared/bsk")
+    };
+    let cfg = BasiliskConfig {
+        cache_dir: Some(absolute.clone()),
+        ..Default::default()
+    };
+    assert_eq!(
+        cfg.cache_directory(&PathBuf::from("/projects/demo")),
+        absolute
+    );
+}

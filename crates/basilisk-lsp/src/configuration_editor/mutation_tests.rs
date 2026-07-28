@@ -11,17 +11,18 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use basilisk_config::{
-    build_configuration_patch, BasiliskConfig, ConfigDocument, RuleSeverity, TypeshedConfigKey,
+    build_configuration_patch, BasiliskConfig, CacheConfigMutation, ConfigDocument, RuleSeverity,
+    TypeshedConfigKey,
 };
 
 use super::{
     build_impact, build_update, require_mutations, require_no_pep_disable, require_revision,
-    require_valid_typeshed_configuration, resolved_changes, resolved_typeshed_changes,
-    selection_error, validate_document_rules,
+    require_valid_typeshed_configuration, resolved_cache_changes, resolved_changes,
+    resolved_typeshed_changes, selection_error, validate_document_rules,
 };
 use crate::configuration_editor::catalog::{descriptors, SelectionError};
 use crate::configuration_editor::model::{
-    EditorMutation, RuleSeverity as WireSeverity, TypeshedSettingKey,
+    CacheSettingKey, EditorMutation, RuleSeverity as WireSeverity, TypeshedSettingKey,
 };
 use crate::configuration_editor::snapshot::Inventory;
 
@@ -444,4 +445,118 @@ fn document(config: BasiliskConfig) -> ConfigDocument {
         revision: "revision".to_owned(),
         config,
     }
+}
+
+/// [LSPCFGED-CACHE]: the cache keys fold into the same validated update as
+/// rule and Typeshed mutations, and `cache` becomes a real TOML boolean rather
+/// than the string the wire carried it as.
+#[test]
+fn cache_setting_mutations_fold_into_the_update() {
+    let catalog = descriptors();
+    let update = build_update(
+        &[
+            EditorMutation::SetCacheSetting {
+                key: CacheSettingKey::CacheEnabled,
+                value: "true".to_owned(),
+            },
+            EditorMutation::SetCacheSetting {
+                key: CacheSettingKey::CacheDir,
+                value: "build/bsk".to_owned(),
+            },
+            EditorMutation::RemoveCacheSetting {
+                key: CacheSettingKey::CacheDir,
+            },
+        ],
+        &catalog,
+    )
+    .expect("valid cache mutations must build an update");
+    assert_eq!(
+        update.cache.mutations,
+        vec![
+            CacheConfigMutation::SetEnabled(true),
+            CacheConfigMutation::SetDir("build/bsk".to_owned()),
+            CacheConfigMutation::RemoveDir,
+        ],
+        "request order must be preserved so the last write wins"
+    );
+}
+
+/// [LSPCFGED-CACHE]: `cache` is a boolean. A value the TOML parser would drop
+/// is a request error, never a silently-ignored write.
+#[test]
+fn cache_setting_values_are_strictly_validated() {
+    let catalog = descriptors();
+    for mutation in [
+        EditorMutation::SetCacheSetting {
+            key: CacheSettingKey::CacheEnabled,
+            value: "yes".to_owned(),
+        },
+        EditorMutation::SetCacheSetting {
+            key: CacheSettingKey::CacheEnabled,
+            value: "True".to_owned(),
+        },
+        EditorMutation::SetCacheSetting {
+            key: CacheSettingKey::CacheDir,
+            value: "   ".to_owned(),
+        },
+    ] {
+        let result = build_update(&[mutation], &catalog);
+        assert!(result.is_err(), "invalid cache value must fail");
+        let Some(error) = result.err() else { continue };
+        assert_eq!(
+            error_kind(&error),
+            Some(serde_json::json!("invalidCacheSetting"))
+        );
+    }
+    for value in ["true", "false"] {
+        let _accepted = build_update(
+            &[EditorMutation::SetCacheSetting {
+                key: CacheSettingKey::CacheEnabled,
+                value: value.to_owned(),
+            }],
+            &catalog,
+        )
+        .expect("the two canonical boolean spellings are accepted");
+    }
+}
+
+/// [LSPCFGED-CACHE]: the preview names exactly the cache keys that move, with
+/// the persisted text on each side and nothing for keys that stay put.
+#[test]
+fn cache_changes_report_only_what_actually_moves() {
+    let before = BasiliskConfig {
+        cache_enabled: Some(false),
+        cache_dir: Some(PathBuf::from("build/bsk")),
+        ..BasiliskConfig::default()
+    };
+    let after = BasiliskConfig {
+        cache_enabled: Some(true),
+        cache_dir: Some(PathBuf::from("build/bsk")),
+        ..BasiliskConfig::default()
+    };
+    let changes = resolved_cache_changes(&before, &after);
+    assert_eq!(changes.len(), 1, "only `cache` moved: {changes:?}");
+    assert_eq!(changes[0].key, CacheSettingKey::CacheEnabled);
+    assert_eq!(changes[0].before.as_deref(), Some("false"));
+    assert_eq!(changes[0].after.as_deref(), Some("true"));
+
+    assert!(
+        resolved_cache_changes(&before, &before).is_empty(),
+        "an unchanged configuration reports no cache changes"
+    );
+}
+
+/// [LSPCFGED-CACHE]: removing a key is reported as a change to "no value", so
+/// a reset is visible in the preview rather than looking like a no-op.
+#[test]
+fn cache_key_removal_is_reported_as_a_change() {
+    let before = BasiliskConfig {
+        cache_dir: Some(PathBuf::from("build/bsk")),
+        ..BasiliskConfig::default()
+    };
+    let changes = resolved_cache_changes(&before, &BasiliskConfig::default());
+    assert_eq!(changes.len(), 1);
+    assert_eq!(changes[0].key, CacheSettingKey::CacheDir);
+    assert_eq!(changes[0].before.as_deref(), Some("build/bsk"));
+    assert!(changes[0].after.is_none());
 }

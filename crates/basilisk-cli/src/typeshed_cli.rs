@@ -142,6 +142,7 @@ fn write_pin(workspace: &Path, sha: &str) -> Result<(), basilisk_config::ConfigD
                 (basilisk_config::TypeshedConfigKey::TypeshedPath, None),
             ]),
         },
+        cache: basilisk_config::CacheConfigUpdate::default(),
     };
     let patch = basilisk_config::build_configuration_patch(&document, &update)?;
     basilisk_config::apply_config_patch(&patch)

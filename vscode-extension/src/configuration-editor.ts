@@ -22,11 +22,12 @@ import {
   clientTransport,
   type ConfigurationEditorTransport,
 } from "./configuration-editor-transport";
+import { TypeshedEditorUi } from "./configuration-editor-typeshed";
 import {
-  isTypeshedOnly,
+  isDirectSettingOnly,
+  pickCacheFolder,
   pickTypeshedFolder,
-  TypeshedEditorUi,
-} from "./configuration-editor-typeshed";
+} from "./configuration-editor-settings";
 import { Logger } from "./logger";
 import { SingletonWebviewPanel, type WebviewMessage } from "./profiler-webview";
 import type { Store } from "./store";
@@ -141,6 +142,7 @@ export class ConfigurationEditorController implements vscode.Disposable {
       case "openDocs": await this.openRuleDocs(intent.uri); return;
       case "openOccurrence": await this.openOccurrence(intent); return;
       case "pickTypeshedFolder": await this.pickTypeshedFolder(intent.key); return;
+      case "pickCacheFolder": await this.pickCacheFolder(); return;
       case "typeshedAction": await this.runTypeshedAction(intent.action); return;
     }
   }
@@ -230,8 +232,9 @@ export class ConfigurationEditorController implements vscode.Disposable {
       });
       if (generation !== this.loadGeneration || previewGeneration !== this.previewGeneration
         || this.disposed || !this.panel.isOpen()) { return; }
-      // A Typeshed edit has no severity impact to weigh, so it lands at once.
-      if (isTypeshedOnly(intent)) { await this.applyPreview(preview); return; }
+      // A Typeshed or cache edit has no severity impact to weigh, so it lands
+      // at once ([LSPCFGED-TYPESHED], [LSPCFGED-CACHE]).
+      if (isDirectSettingOnly(intent)) { await this.applyPreview(preview); return; }
       this.store.acceptConfigurationPreview(preview);
     } catch (error: unknown) {
       if (generation !== this.loadGeneration || previewGeneration !== this.previewGeneration
@@ -245,6 +248,16 @@ export class ConfigurationEditorController implements vscode.Disposable {
     const state = this.store.configurationEditor.value;
     if (state.snapshot === undefined) { return; }
     const intent = await pickTypeshedFolder(state.snapshot, key);
+    // A cancelled picker writes nothing, so the controls must snap back to the
+    // configuration that still holds ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+    if (intent === undefined) { void this.panel.postMessage({ type: "state", state }); return; }
+    await this.preview(intent);
+  }
+
+  private async pickCacheFolder(): Promise<void> {
+    const state = this.store.configurationEditor.value;
+    if (state.snapshot === undefined) { return; }
+    const intent = await pickCacheFolder(state.snapshot);
     // A cancelled picker writes nothing, so the controls must snap back to the
     // configuration that still holds ([CONFIGEDITOR-VSIX-EXPERIENCE]).
     if (intent === undefined) { void this.panel.postMessage({ type: "state", state }); return; }

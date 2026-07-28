@@ -19,8 +19,8 @@ use std::path::{Path, PathBuf};
 use crate::BasiliskConfig;
 
 pub use patch::{
-    build_configuration_patch, build_rule_patch, ConfigurationUpdate, RuleConfigUpdate,
-    TypeshedConfigKey, TypeshedConfigUpdate,
+    build_configuration_patch, build_rule_patch, CacheConfigMutation, CacheConfigUpdate,
+    ConfigurationUpdate, RuleConfigUpdate, TypeshedConfigKey, TypeshedConfigUpdate,
 };
 pub use write::apply_config_patch;
 
@@ -223,7 +223,37 @@ fn validate_toml_structure(path: &Path, table: &toml::Table) -> Result<bool, Con
     validate_toml_severity_table(path, basilisk.get("rules"), "rules")?;
     validate_toml_severity_table(path, basilisk.get("rule-tags"), "rule-tags")?;
     validate_typeshed_settings(path, basilisk)?;
+    validate_cache_settings(path, basilisk)?;
     Ok(true)
+}
+
+/// Validate the persistent result-cache keys ([CHKCACHE-CONFIG]).
+///
+/// The parser reads `cache` only as a boolean and `cache-dir` only as a
+/// string, and drops anything else. Rejecting a wrong-typed value here is what
+/// makes that drop visible: the editor refuses the document rather than
+/// presenting a cache setting the checker will never honour.
+fn validate_cache_settings(path: &Path, basilisk: &toml::Table) -> Result<(), ConfigDocumentError> {
+    if basilisk
+        .get(crate::parse::CACHE_KEY)
+        .is_some_and(|value| !value.is_bool())
+    {
+        return invalid(path, "`cache` must be a boolean");
+    }
+    if basilisk
+        .get(crate::parse::CACHE_DIR_KEY)
+        .is_some_and(|value| !value.is_str())
+    {
+        return invalid(path, "`cache-dir` must be a string");
+    }
+    if basilisk
+        .get(crate::parse::CACHE_DIR_KEY)
+        .and_then(toml::Value::as_str)
+        .is_some_and(|dir| dir.trim().is_empty())
+    {
+        return invalid(path, "`cache-dir` must name a directory");
+    }
+    Ok(())
 }
 
 fn validate_typeshed_settings(

@@ -2,6 +2,7 @@
 /** Untrusted webview messages accepted by the configuration editor host. */
 
 import type {
+  CacheSettingKey,
   EditorMutation,
   RuleOccurrencesRequest,
   RuleSelector,
@@ -30,6 +31,7 @@ export type ConfigurationEditorIntent =
   | { readonly type: "openDocs"; readonly uri: string }
   | { readonly type: "openOccurrence"; readonly uri: string; readonly line: number; readonly character: number }
   | { readonly type: "pickTypeshedFolder"; readonly key: "TypeshedPath" | "TypeshedStorePath" }
+  | { readonly type: "pickCacheFolder" }
   | { readonly type: "typeshedAction"; readonly action: TypeshedAction };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -108,10 +110,42 @@ function decodeTypeshedMutation(value: Record<string, unknown>): EditorMutation 
   return undefined;
 }
 
+function decodeCacheKey(value: unknown): CacheSettingKey | undefined {
+  if (!isRecord(value) || typeof value.kind !== "string") { return undefined; }
+  switch (value.kind) {
+    case "CacheEnabled": return { kind: "CacheEnabled" };
+    case "CacheDir": return { kind: "CacheDir" };
+    default: return undefined;
+  }
+}
+
+/**
+ * The persistent cache's two keys ([LSPCFGED-CACHE]). Both cross the wire as
+ * text — the server parses "true"/"false" for CacheEnabled and rejects
+ * anything else, so no unchecked value reaches the configuration file.
+ */
+function decodeCacheMutation(value: Record<string, unknown>): EditorMutation | undefined {
+  if (value.kind === "SetCacheSetting") {
+    const key = decodeCacheKey(value.key);
+    const setting = boundedString(value.value);
+    return key === undefined || setting === undefined
+      ? undefined
+      : { kind: "SetCacheSetting", key, value: setting };
+  }
+  if (value.kind === "RemoveCacheSetting") {
+    const key = decodeCacheKey(value.key);
+    return key === undefined ? undefined : { kind: "RemoveCacheSetting", key };
+  }
+  return undefined;
+}
+
 function decodeMutation(value: unknown): EditorMutation | undefined {
   if (!isRecord(value) || typeof value.kind !== "string") { return undefined; }
   if (value.kind === "SetTypeshedSetting" || value.kind === "RemoveTypeshedSetting") {
     return decodeTypeshedMutation(value);
+  }
+  if (value.kind === "SetCacheSetting" || value.kind === "RemoveCacheSetting") {
+    return decodeCacheMutation(value);
   }
   switch (value.kind) {
     case "SetRule": {
@@ -213,6 +247,7 @@ export function decodeConfigurationEditorIntent(value: unknown): ConfigurationEd
       ? { type: "pickTypeshedFolder", key: value.key }
       : undefined;
   }
+  if (value.type === "pickCacheFolder") { return { type: "pickCacheFolder" }; }
   if (value.type === "typeshedAction") {
     const action = decodeTypeshedAction(value.action);
     return action === undefined ? undefined : { type: "typeshedAction", action };

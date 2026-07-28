@@ -119,6 +119,7 @@ pub(crate) async fn apply_rule_updates(
     let update = ConfigurationUpdate {
         rules: update.clone(),
         typeshed: basilisk_config::TypeshedConfigUpdate::default(),
+        cache: basilisk_config::CacheConfigUpdate::default(),
     };
     apply_configuration_update(server, root, &update, reason).await
 }

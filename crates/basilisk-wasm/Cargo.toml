@@ -1,0 +1,41 @@
+# Crate manifest. Implements [WASM-BUILD]: the checker compiled for the browser.
+#
+# `cdylib` produces the browser module; `rlib` keeps the engine linkable by the
+# host test binary, so every test in [WASM-TESTING] runs under the normal
+# coverage gate without a wasm runtime.
+[package]
+name        = "basilisk-wasm"
+description = "Basilisk type checker compiled to WebAssembly for in-browser checking"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+repository.workspace   = true
+rust-version.workspace = true
+# Not published: this is the playground engine, distributed as a built artefact
+# rather than a crate, and it links the composite-licensed Typeshed bundle that
+# `basilisk-stubs` embeds.
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+basilisk-checker.workspace  = true
+basilisk-common.workspace   = true
+basilisk-config.workspace   = true
+basilisk-parser.workspace   = true
+basilisk-resolver.workspace = true
+basilisk-stubs.workspace    = true
+serde.workspace             = true
+serde_json.workspace        = true
+
+# The JS boundary only exists in a browser build. Keeping it target-gated means
+# a native `cargo test` never pulls `wasm-bindgen` into the graph.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

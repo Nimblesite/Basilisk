@@ -15,7 +15,7 @@ fn test_excludes() -> HashSet<&'static str> {
 /// Disabled cache options for tests that exercise the plain check pipeline.
 fn no_cache() -> cache_check::CacheOptions {
     cache_check::CacheOptions {
-        enabled: false,
+        enabled: cache_check::CacheOverride::ForceOff,
         dir: None,
         stats: false,
     }

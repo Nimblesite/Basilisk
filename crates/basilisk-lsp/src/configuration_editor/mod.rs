@@ -7,6 +7,7 @@ pub mod model;
 mod mutation;
 mod protocol;
 mod snapshot;
+mod snapshot_cache;
 pub(crate) mod snapshot_typeshed;
 mod state;
 mod transaction;

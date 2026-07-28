@@ -8,3 +8,12 @@ c = "clippy --all-targets"
 # gcc-aarch64-linux-gnu. macOS uses the system linker.
 [target.x86_64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# Browser build of the checker ([WASM-BUILD]). Type inference recurses deeper
+# than the 1 MiB wasm default stack allows on nested generics and long call
+# chains, and blowing the wasm stack aborts the module rather than unwinding —
+# the playground would die with no diagnostic to show. 16 MiB matches the order
+# of the dedicated large-stack analysis thread the native server uses
+# ([LSPARCH-ARCH-STACK]); it is reserved address space, not resident memory.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=-zstack-size=16777216"]

@@ -19,6 +19,7 @@ members = [
     "crates/basilisk-uv",
     "crates/basilisk-profiler-helper",
     "crates/basilisk-profiler-protocol",
+    "crates/basilisk-wasm",
     "basilisk-zed",
 ]
 exclude = []

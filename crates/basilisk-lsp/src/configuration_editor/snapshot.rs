@@ -133,6 +133,13 @@ pub(super) fn build_snapshot(
             &document.config,
             typeshed_generation,
         ),
+        // [LSPCFGED-CACHE]: both caching layers, so the Project view can say
+        // which one the config file governs and which one simply always runs.
+        cache: super::snapshot_cache::cache_configuration(
+            &document.config,
+            root,
+            index.tracked_source_count(),
+        ),
     }
 }
 

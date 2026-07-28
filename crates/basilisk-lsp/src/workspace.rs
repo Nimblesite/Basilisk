@@ -591,6 +591,17 @@ impl WorkspaceIndex {
         !self.is_path_excluded(file_path) && !self.is_outside_include_roots(file_path)
     }
 
+    /// How many files the in-session Salsa engine currently holds memos for
+    /// ([CHKARCH-INCREMENTAL-SALSA]).
+    ///
+    /// Reported by the configuration editor's caching panel ([LSPCFGED-CACHE]):
+    /// the in-session layer has no configuration key, so this live count is
+    /// the only evidence a reader has that it is running at all.
+    #[must_use]
+    pub(crate) fn tracked_source_count(&self) -> usize {
+        self.salsa_engine.tracked_source_count()
+    }
+
     /// Return the `FileEntry` for a URI, if present.
     ///
     /// Canonicalizes the path to handle macOS `/var` → `/private/var` symlinks

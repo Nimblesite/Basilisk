@@ -74,6 +74,9 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
       else if (action === 'apply-preview' && editorState.phase === 'preview') vscode.postMessage({ type: 'apply' });
       else if (action === 'adopt-workspace') vscode.postMessage({ type: 'adopt', scope: 'workspace' });
       else if (action === 'fix-safe') vscode.postMessage({ type: 'fixSafe' });
+      // Resetting the cache folder removes the key rather than writing the
+      // default back as an entry ([LSPCFGED-CACHE]).
+      else if (action === 'reset-cache-folder') postPreview([cacheRemove('CacheDir')]);
       else if (action === 'show-current') {
         showSection('rules');
         byId('rule-search').value = 'has:diagnostics';
@@ -100,6 +103,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
       if (openConfigUri) { vscode.postMessage({ type: 'openConfigFile', uri: openConfigUri }); return; }
       const folderKey = target.dataset.pickTypeshedFolder;
       if (folderKey) { vscode.postMessage({ type: 'pickTypeshedFolder', key: folderKey }); return; }
+      if (target.dataset.pickCacheFolder) { vscode.postMessage({ type: 'pickCacheFolder' }); return; }
       const typeshedAction = target.dataset.typeshedAction;
       if (typeshedAction) {
         // The invoking button goes busy at once; nothing else changes
@@ -120,6 +124,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_EVENTS = String.raw`
     });
     document.addEventListener('change', (event) => {
       const target = event.target;
+      if (target instanceof HTMLInputElement && cacheChanged(target)) return;
       if (target instanceof HTMLInputElement && typeshedChanged(target)) return;
       if (!(target instanceof HTMLSelectElement)) return;
       // One control change = exactly one typed mutation ([CONFIGEDITOR-MODEL]).

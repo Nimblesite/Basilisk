@@ -11,6 +11,12 @@
 //! Resolution is per rule, per checked file: the nearest table on the
 //! ancestor walk that decides the rule wins outright
 //! ([`BasiliskConfig::resolve_severity`]).
+//!
+//! Alongside the rule tables sit the flat project settings — the typeshed
+//! source keys ([STUBRES-TYPESHED-CONFIG]), the version/platform target, and
+//! the persistent result-cache keys `cache`/`cache-dir` ([CHKCACHE-CONFIG]).
+//! Every key here is read by a real consumer; a setting with no reader does
+//! not belong in this file (see `retired_auto_stub_keys_are_not_resurrected…`).
 
 pub mod editor;
 mod parse;
@@ -19,11 +25,11 @@ mod severity;
 
 pub use editor::{
     active_config_path, apply_config_patch, build_configuration_patch, build_rule_patch,
-    discover_config_document, discover_config_document_with_content, ConfigDocument,
-    ConfigDocumentError, ConfigPatch, ConfigurationUpdate, RuleConfigUpdate, TypeshedConfigKey,
-    TypeshedConfigUpdate,
+    discover_config_document, discover_config_document_with_content, CacheConfigMutation,
+    CacheConfigUpdate, ConfigDocument, ConfigDocumentError, ConfigPatch, ConfigurationUpdate,
+    RuleConfigUpdate, TypeshedConfigKey, TypeshedConfigUpdate,
 };
-pub use parse::{is_full_commit_sha, BasiliskConfig, RuleTables};
+pub use parse::{is_full_commit_sha, BasiliskConfig, RuleTables, DEFAULT_CACHE_DIR};
 pub use paths::{is_virtualenv_dir, path_matches_pattern};
 pub use severity::RuleSeverity;
 

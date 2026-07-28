@@ -88,6 +88,10 @@ fn write_seed(root: &Path) -> Result<(), basilisk_config::ConfigDocumentError> {
                 Some(basilisk_stubs::typeshed::bundle::bundled_commit_sha().to_owned()),
             )]),
         },
+        // The seed states no caching preference: the persistent result cache
+        // stays unwritten (off) and the in-session Salsa layer needs no key
+        // at all ([CHKCACHE-CONFIG], [CHKARCH-INCREMENTAL-SALSA]).
+        cache: basilisk_config::CacheConfigUpdate::default(),
     };
     let patch = build_configuration_patch(&document, &update)?;
     apply_config_patch(&patch)

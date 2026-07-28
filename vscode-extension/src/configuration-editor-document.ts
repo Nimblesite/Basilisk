@@ -10,7 +10,8 @@ import { CONFIGURATION_EDITOR_STYLES } from "./configuration-editor-styles";
 // (the exact effective state, never a synthetic score). The Rules view is
 // tag-first and drives the four rule/tag mutations (tag groups carry the
 // tag-entry control; rows carry per-rule entry controls). Overview and Project
-// are read-only dashboards; Adoption invokes the standalone adopt / safe-fix
+// are read-only dashboards (Project additionally carries the Typeshed and
+// Caching setting panels); Adoption invokes the standalone adopt / safe-fix
 // commands; Path Overrides lists the nested [tool.basilisk] tables the checker
 // honors and opens one for editing. There is no preset UI.
 const SECTION_NAV = `
@@ -57,6 +58,7 @@ const PROJECT_SECTION = `
     <div class="dashboard-grid">
       <article class="card wide" data-accent="sky"><h3>Active configuration</h3><dl id="source-details"></dl><div class="action-row"><button type="button" class="primary" data-action="open-raw">Open raw configuration</button><button type="button" class="secondary" data-action="refresh">Refresh</button></div></article>
       <article class="card wide" data-accent="orange"><h3>Typeshed standard library</h3><p>Pin a commit for deterministic behavior.</p><div id="typeshed-status" aria-live="polite"></div><div id="typeshed-controls"></div><div id="typeshed-actions" class="action-row"></div></article>
+      <article class="card wide" data-accent="teal"><h3>Caching</h3><p>Basilisk caches on two layers. One is project configuration; the other simply always runs.</p><div id="cache-controls"></div><h4>In-session incremental cache</h4><div id="cache-in-session"></div></article>
       <article class="card wide"><h3>Configuration problems</h3><div id="problem-list"></div></article>
     </div>
   </section>`;

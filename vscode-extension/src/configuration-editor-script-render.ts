@@ -255,6 +255,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
       ];
       facts.forEach(([name, value]) => dl.append(textNode('dt', name), textNode('dd', value)));
       renderTypeshedControls();
+      renderCacheControls();
       const problemList = byId('problem-list');
       clear(problemList);
       const problems = snapshot.problems || [];
@@ -327,12 +328,24 @@ export const CONFIGURATION_EDITOR_SCRIPT_RENDER = String.raw`
         row.append(textNode('code', kind(change.key, 'Typeshed')), textNode('strong', before + ' → ' + after));
         changes.append(row);
       });
-      if (preview.changes.length === 0 && preview.typeshedChanges.length === 0) {
+      (preview.cacheChanges || []).forEach((change) => {
+        const row = document.createElement('div');
+        row.className = 'preview-change';
+        row.append(
+          textNode('code', kind(change.key, 'Cache')),
+          textNode('strong', (change.before || 'default') + ' → ' + (change.after || 'default')),
+        );
+        changes.append(row);
+      });
+      if (preview.changes.length === 0 && preview.typeshedChanges.length === 0
+        && (preview.cacheChanges || []).length === 0) {
         changes.append(textNode('p', 'No effective configuration changes.', 'empty-state'));
       }
       const dialog = byId('preview-dialog');
       if (!dialog.open) dialog.showModal();
-      announce('Preview ready: ' + formatNumber(preview.changes.length + preview.typeshedChanges.length) + ' setting(s) change');
+      const changed = preview.changes.length + preview.typeshedChanges.length
+        + (preview.cacheChanges || []).length;
+      announce('Preview ready: ' + formatNumber(changed) + ' setting(s) change');
     }
     // The editor never blocks itself: failures and first loads render as an
     // inline notice row while every control on screen stays live. There is no

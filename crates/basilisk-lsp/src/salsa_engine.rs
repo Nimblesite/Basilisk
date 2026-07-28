@@ -232,8 +232,12 @@ impl SalsaAnalysisEngine {
         }
     }
 
-    /// Number of files the engine currently tracks (test hook).
-    #[cfg(test)]
+    /// Number of files the engine currently holds memoized inputs for.
+    ///
+    /// The configuration editor reports this as the in-session cache's one
+    /// real measurement ([LSPCFGED-CACHE]) — a layer with no configuration
+    /// key still deserves to be visible, and a count nobody can read is
+    /// indistinguishable from a layer that is not running.
     pub(crate) fn tracked_source_count(&self) -> usize {
         self.sources.len()
     }

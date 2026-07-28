@@ -8,6 +8,7 @@ export const CONFIGURATION_EDITOR_STYLES = `
     --bsk-orange-soft: color-mix(in srgb, var(--bsk-orange) 14%, transparent);
     --bsk-sky: #3aa3d3;
     --bsk-sky-soft: color-mix(in srgb, var(--bsk-sky) 14%, transparent);
+    --bsk-teal: #12857a;
     --bg: var(--vscode-editor-background);
     --surface: var(--vscode-sideBar-background, var(--vscode-editor-background));
     --surface-raised: var(--vscode-editorWidget-background, var(--surface));
@@ -180,6 +181,8 @@ export const CONFIGURATION_EDITOR_STYLES = `
   .dashboard-grid { width: min(100%, 940px); margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
   .card[data-accent]::before { position: absolute; top: -1px; left: 16px; width: 38px; height: 2px; border-radius: 2px; background: var(--bsk-orange); content: ""; }
   .card[data-accent="sky"]::before { background: var(--bsk-sky); }
+  .card[data-accent="teal"]::before { background: var(--bsk-teal); }
+  .card h4 { margin: 18px 0 6px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 12px; }
   .card h3 { margin: 0 0 6px; font-size: 13px; }
   .card > p { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
   .stat { display: block; margin-bottom: 10px; font-size: 30px; font-weight: 650; letter-spacing: -.04em; }
@@ -346,6 +349,22 @@ export const CONFIGURATION_EDITOR_STYLES = `
   .typeshed-advanced summary { cursor: pointer; color: var(--muted); }
   .typeshed-advanced[open] summary { margin-bottom: 2px; }
   .path-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  #cache-controls { display: grid; gap: 16px; max-width: 620px; margin: 4px 0 0; }
+  .cache-toggle {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: baseline;
+  }
+  .cache-toggle input { grid-row: 1 / span 2; align-self: center; margin: 0; }
+  .cache-toggle > span { font-weight: 600; }
+  .cache-toggle small { grid-column: 2; color: var(--muted); }
+  .cache-field { display: grid; gap: 5px; justify-items: start; }
+  .cache-field > span { font-weight: 600; }
+  .cache-field > small { color: var(--muted); }
+  .cache-field .path-picker { width: 100%; }
+  .cache-field input[type="text"] { width: 100%; min-width: 0; }
+  #cache-in-session p { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+  #cache-in-session dl { display: grid; grid-template-columns: minmax(100px, auto) minmax(0, 1fr); gap: 4px 12px; margin: 0; }
+  #cache-in-session dt { color: var(--muted); }
+  #cache-in-session dd { margin: 0; }
   .busy::after {
     content: "";
     display: inline-block;

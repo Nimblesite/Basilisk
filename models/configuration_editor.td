@@ -35,9 +35,20 @@ union TypeshedSettingKey {
   TypeshedStorePath
 }
 
-# The only six things the editor can ask for: four rule/tag mutations plus
-# allowlisted Typeshed setting set/remove operations. Setting Disabled on a
-# pep-tagged rule is a request error.
+# The persistent result-cache keys are a closed allowlist of two
+# [tool.basilisk] keys ([LSPCFGED-CACHE], [CHKCACHE-CONFIG]). The in-session
+# Salsa memo layer is deliberately absent: it is always on and has no key, so
+# there is nothing here to set.
+union CacheSettingKey {
+  CacheEnabled
+  CacheDir
+}
+
+# The only eight things the editor can ask for: four rule/tag mutations plus
+# allowlisted Typeshed and cache setting set/remove operations. Setting
+# Disabled on a pep-tagged rule is a request error. Every setting value crosses
+# the wire as text; the server parses "true"/"false" for CacheEnabled, so the
+# mutation union keeps one shape.
 union EditorMutation {
   SetRule { code: RuleCode, severity: RuleSeverity }
   RemoveRule { code: RuleCode }
@@ -45,6 +56,35 @@ union EditorMutation {
   RemoveTag { tag: RuleTag }
   SetTypeshedSetting { key: TypeshedSettingKey, value: String }
   RemoveTypeshedSetting { key: TypeshedSettingKey }
+  SetCacheSetting { key: CacheSettingKey, value: String }
+  RemoveCacheSetting { key: CacheSettingKey }
+}
+
+# The persistent, cross-session result cache ([CHKCACHE]). `folder` is the
+# effective location the next run uses — the configured cache-dir or the
+# default — so the editor can never show a folder the run does not use;
+# `folderConfigured` separates "the default, for information" from "a folder
+# this project chose", which is all a reset control needs.
+type PersistentCacheState {
+  enabled: Bool
+  folder: String
+  folderConfigured: Bool
+}
+
+# The in-session incremental engine ([CHKARCH-INCREMENTAL-SALSA]). Nothing to
+# configure and nothing to switch off, so the one real value is how many files
+# the live database currently memoizes. The copy explaining the layer is client
+# presentation, exactly as it is for Typeshed.
+type InSessionCacheState {
+  trackedFiles: Int
+}
+
+# Both caching layers in one projection. The editor describes BOTH because a
+# configuration surface naming only one reads as "this is all the caching there
+# is" ([LSPCFGED-CACHE]).
+type CacheConfigurationState {
+  persistent: PersistentCacheState
+  inSession: InSessionCacheState
 }
 
 # The ACTIVE source carries the value that defines it, so "a pinned commit plus
@@ -217,6 +257,7 @@ type ConfigurationSnapshot {
   debt: DebtSummary
   problems: List<ConfigurationProblem>
   typeshed: TypeshedConfigurationState
+  cache: CacheConfigurationState
 }
 
 type PreviewConfigurationRequest {
@@ -249,11 +290,20 @@ type ConfigurationPreview {
   baseRevision: Revision
   changes: List<ResolvedRuleChange>
   typeshedChanges: List<TypeshedSettingChange>
+  cacheChanges: List<CacheSettingChange>
   impact: ConfigurationImpact
 }
 
 type TypeshedSettingChange {
   key: TypeshedSettingKey
+  before: Option<String>
+  after: Option<String>
+}
+
+# One exact persisted cache-setting change, in rendered TOML text ("true" /
+# "false" for cache, the path for cache-dir). None on a side = key absent.
+type CacheSettingChange {
+  key: CacheSettingKey
   before: Option<String>
   after: Option<String>
 }

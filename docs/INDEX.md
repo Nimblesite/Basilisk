@@ -36,6 +36,7 @@ linked to an active plan.
 | [Real-world e2e suites](specs/VSIX-REAL-WORLD-SPEC.md) | Pinned real-repo journeys with memory/CPU budgets. |
 | [Neovim extension](specs/NEOVIM-SPEC.md) | `basilisk.nvim` client behavior. |
 | [Zed extension](specs/ZED-SPEC.md) | Zed WASM client behavior. |
+| [WASM](specs/WASM-SPEC.md) | The checker compiled for the browser: one-shot in-memory checking with no filesystem, network, or threads. |
 | [Editor screenshots](specs/VSIX-EDITOR-SCREENSHOTS-SPEC.md) | Automated real VS Code screenshots. |
 | [Website E2E](specs/WEBSITE-E2E-SPEC.md) | Navigation and responsive smoke tests. |
 | [Website screenshots](specs/WEBSITE-SCREENSHOTS-SPEC.md) | Verified CLI screenshot generation. |
@@ -58,5 +59,6 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Bidirectional/constraint-based inference engine, flow analysis, shared subtyping, and PEP 827 readiness. |
 | [Runtime typeshed resolution](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Two open items: a socket-instrumented witness that checking is offline across CLI/LSP/MCP, and byte-exact per-artifact licensing verification inside the VSIX (binaries and wheels are already verified). |
 | [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Replace remaining raw-source rule scans with AST data. |
+| [WASM](plans/WASM-PLAN.md) | CI wasm build and size ratchet, multi-file in-memory VFS, and the playground site. |
 | [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Mojo checks, plugin host, migration, and CI helpers. |
 | [Native compiler](plans/COMPILER-ARCHITECTURE-PLAN.md) | HIR, backend, runtime, interop, CLI, and native acceptance. |

@@ -250,8 +250,10 @@ where
         DiagnosticScope::Analyze | DiagnosticScope::Union => 0,
     };
 
+    // [CHKCACHE-CONFIG]: the project-root config carries the standing
+    // `cache`/`cache-dir` policy; the CLI flags override it for this run only.
     let cache_context =
-        cache_check::build_context(cache, &dir_configs, &search_paths, &project_root);
+        cache_check::build_context(cache, &config, &dir_configs, &search_paths, &project_root);
 
     let mut all_diagnostics = Vec::new();
     let mut sources = Vec::new();
