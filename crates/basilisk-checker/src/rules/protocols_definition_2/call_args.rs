@@ -65,11 +65,19 @@ pub(super) fn check_protocol_call_args(
         return;
     }
 
+    // Everything needed to decide that a member is genuinely absent rather than
+    // merely invisible from here ([`visible_members`]).
+    let knowledge = ClassKnowledge {
+        class_map,
+        self_attrs: super::ast_index::self_attrs_by_class(body),
+        opaque: opaque_classes(body),
+    };
+
     basilisk_resolver::walk_all_stmts(body, &mut |stmt| match stmt {
         Stmt::Expr(node) => scan_expr(
             &node.value,
             &functions,
-            class_map,
+            &knowledge,
             &module.path,
             diagnostics,
         ),
@@ -77,41 +85,50 @@ pub(super) fn check_protocol_call_args(
             scan_expr(
                 &node.value,
                 &functions,
-                class_map,
+                &knowledge,
                 &module.path,
                 diagnostics,
             );
         }
         Stmt::AnnAssign(node) => {
             if let Some(value) = node.value.as_deref() {
-                scan_expr(value, &functions, class_map, &module.path, diagnostics);
+                scan_expr(value, &functions, &knowledge, &module.path, diagnostics);
             }
         }
         Stmt::Return(node) => {
             if let Some(value) = node.value.as_deref() {
-                scan_expr(value, &functions, class_map, &module.path, diagnostics);
+                scan_expr(value, &functions, &knowledge, &module.path, diagnostics);
             }
         }
         _ => {}
     });
 }
 
+/// What this module can prove about the classes it can see.
+struct ClassKnowledge<'a> {
+    class_map: &'a HashMap<&'a str, &'a ClassInfo>,
+    /// `self.<name> = ...` bindings per class, from its own methods.
+    self_attrs: HashMap<&'a str, std::collections::HashSet<String>>,
+    /// Classes whose member set cannot be trusted ([`opaque_classes`]).
+    opaque: std::collections::HashSet<String>,
+}
+
 /// Recursively check call expressions (including nested call arguments).
 fn scan_expr(
     expr: &Expr,
     functions: &HashMap<&str, &FunctionInfo>,
-    class_map: &HashMap<&str, &ClassInfo>,
+    knowledge: &ClassKnowledge<'_>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let Expr::Call(call) = expr else { return };
     if let Expr::Name(name) = call.func.as_ref() {
         if let Some(func) = functions.get(name.id.as_str()) {
-            validate_call(call, func, class_map, path, diagnostics);
+            validate_call(call, func, knowledge, path, diagnostics);
         }
     }
     for arg in &call.arguments.args {
-        scan_expr(arg, functions, class_map, path, diagnostics);
+        scan_expr(arg, functions, knowledge, path, diagnostics);
     }
 }
 
@@ -120,10 +137,11 @@ fn scan_expr(
 fn validate_call(
     call: &ruff_python_ast::ExprCall,
     func: &FunctionInfo,
-    class_map: &HashMap<&str, &ClassInfo>,
+    knowledge: &ClassKnowledge<'_>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    let class_map = knowledge.class_map;
     for (arg, param) in call.arguments.args.iter().zip(&func.parameters) {
         let Some(ann) = param.annotation_text.as_deref() else {
             continue;
@@ -131,7 +149,7 @@ fn validate_call(
         // A parameter annotated with a bare Protocol is checked structurally,
         // the same way an annotated assignment already is.
         if let Some(protocol) = bare_protocol(ann, class_map) {
-            report_non_conforming_argument(arg, param, protocol, class_map, path, diagnostics);
+            report_non_conforming_argument(arg, param, protocol, knowledge, path, diagnostics);
         }
         let Some(protocol) = protocol_element(ann, class_map) else {
             continue;
@@ -188,10 +206,11 @@ fn report_non_conforming_argument(
     arg: &Expr,
     param: &basilisk_resolver::ParameterInfo,
     protocol: &ClassInfo,
-    class_map: &HashMap<&str, &ClassInfo>,
+    knowledge: &ClassKnowledge<'_>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    let class_map = knowledge.class_map;
     let Some(class) = constructed_class(arg, class_map) else {
         return;
     };
@@ -200,7 +219,9 @@ fn report_non_conforming_argument(
     if class.bases.contains(&protocol.name) {
         return;
     }
-    let Some(available) = visible_members(class, class_map) else {
+    let Some(available) =
+        visible_members(class, class_map, &knowledge.self_attrs, &knowledge.opaque)
+    else {
         return;
     };
     let required = super::collect_protocol_required_methods(protocol, class_map);
@@ -253,14 +274,61 @@ fn constructed_class<'a>(
     (!class.bases.iter().any(|base| base == "Protocol")).then_some(*class)
 }
 
+/// Class-body statements that can bind a member where `ClassInfo` will not see
+/// it: a `def` guarded by `if TYPE_CHECKING:`, a `sys.version_info` branch, a
+/// `try`/`except` import fallback, and so on. A class containing any of these
+/// has an unknown member set and must never be blamed for a missing member.
+fn hides_members(class_def: &ruff_python_ast::StmtClassDef) -> bool {
+    class_def.body.iter().any(|stmt| {
+        matches!(
+            stmt,
+            Stmt::If(_)
+                | Stmt::Try(_)
+                | Stmt::With(_)
+                | Stmt::For(_)
+                | Stmt::While(_)
+                | Stmt::Match(_)
+        )
+    })
+}
+
+/// Names of locally defined classes whose member set cannot be trusted.
+///
+/// Two ways a class earns its place here: a class-body statement that hides a
+/// definition ([`hides_members`]), or a `__getattr__`/`__getattribute__` hook,
+/// which can answer for any member name at all.
+pub(super) fn opaque_classes(body: &[Stmt]) -> std::collections::HashSet<String> {
+    let mut opaque = std::collections::HashSet::new();
+    basilisk_resolver::walk_all_stmts(body, &mut |stmt| {
+        if let Stmt::ClassDef(class_def) = stmt {
+            let dynamic_lookup = class_def.body.iter().any(|inner| {
+                matches!(inner, Stmt::FunctionDef(func)
+                    if func.name.as_str() == "__getattr__"
+                        || func.name.as_str() == "__getattribute__")
+            });
+            if dynamic_lookup || hides_members(class_def) {
+                let _ = opaque.insert(class_def.name.to_string());
+            }
+        }
+    });
+    opaque
+}
+
 /// Every member name `class` provides, following its bases.
 ///
-/// Returns `None` when any base is not locally defined — an imported base may
-/// supply the member, so the class's member set is unknown and silence is the
-/// only safe answer.
+/// Returns `None` whenever the member set cannot be known in full, which is the
+/// only false-positive-safe answer:
+/// - a base that is not locally defined may supply the member;
+/// - a class that hides definitions or defines `__getattr__` ([`opaque_classes`]).
+///
+/// `self_attrs` carries `self.<name> = ...` bindings from each class's own
+/// methods — the same source the annotated-assignment path already consults, so
+/// a member installed in `__init__` counts here exactly as it does there.
 fn visible_members(
     class: &ClassInfo,
     class_map: &HashMap<&str, &ClassInfo>,
+    self_attrs: &HashMap<&str, std::collections::HashSet<String>>,
+    opaque: &std::collections::HashSet<String>,
 ) -> Option<std::collections::HashSet<String>> {
     let mut members: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut queue = vec![class];
@@ -270,9 +338,15 @@ fn visible_members(
         if seen.contains(&current.name.as_str()) {
             continue;
         }
+        if opaque.contains(current.name.as_str()) {
+            return None;
+        }
         seen.push(current.name.as_str());
         members.extend(current.method_names.iter().cloned());
         members.extend(current.attributes.iter().map(|attr| attr.name.clone()));
+        if let Some(attrs) = self_attrs.get(current.name.as_str()) {
+            members.extend(attrs.iter().cloned());
+        }
 
         for base in &current.bases {
             if base == "object" || base == "Protocol" || base == "Generic" {
