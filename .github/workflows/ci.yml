@@ -558,9 +558,16 @@ jobs:
       # `npx vscode-test` rather than `npm test` so npm's `pretest` hook does
       # not fetch the real-world corpus; `--label workspace-suite` selects the
       # full src/test/suite run and leaves the corpus configs out.
+      # BSK_TEST_BAIL=0 (see .vscode-test.mjs) makes this job report EVERY
+      # win32 failure in one run. Everywhere else the suite still fails fast;
+      # here the ~30s of test time sits behind a ~20min cold cargo build, so
+      # bailing hides the next defect behind the first and buys a full rebuild
+      # to find it — which is exactly how the first two runs went.
       - name: Run VS Code extension tests
         working-directory: vscode-extension
-        run: npx vscode-test --bail --label workspace-suite
+        env:
+          BSK_TEST_BAIL: "0"
+        run: npx vscode-test --label workspace-suite
 
   verify-binaries:
     name: Shipwright Binary Gate

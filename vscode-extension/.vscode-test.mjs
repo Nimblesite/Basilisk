@@ -81,7 +81,18 @@ export default defineConfig({
         // Timeout sized for slow debug-integration tests that spawn debugpy
         // and step through real Python code on CI runners.
         mocha: {
-            bail: true,
+            // Fail fast by DEFAULT: a local run or the Linux CI job should stop
+            // at the first failure rather than spend minutes on a verdict that
+            // is already decided.
+            //
+            // `BSK_TEST_BAIL=0` opts out, and the Windows CI job sets it,
+            // because there the economics invert: the suite itself takes ~30s
+            // but sits behind a ~20min cold `cargo build`. Bailing there saves
+            // half a minute of testing and costs a FULL REBUILD for every
+            // failure it hid — the first two Windows runs each surfaced exactly
+            // one win32 defect and hid the next behind it. One run that names
+            // every failure is strictly cheaper ([VSIX-CI-PLATFORM-COVERAGE]).
+            bail: process.env.BSK_TEST_BAIL !== '0',
             reporter: 'list',
             timeout: 45_000,
             require: './out/test/suite/index.js',
