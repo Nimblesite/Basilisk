@@ -198,6 +198,28 @@ function assertDisabledStateNeutral(payload: LoosePanelResponse, moduleNeedle: s
     );
 }
 
+/**
+ * The `basilisk.enabled` value the fixture workspace actually COMMITS — not the
+ * effective value.
+ *
+ * `get()` folds in the schema default, so an unset setting reads back as
+ * `true`; restoring that writes `"basilisk.enabled": true` into the fixture's
+ * settings.json, and the platforms disagree about what that means. On Linux
+ * VS Code answers a write-the-default by DELETING the key, so the fixture came
+ * back clean by luck; on win32 it writes the key out, and every run left the
+ * repository dirty.
+ *
+ * `inspect().workspaceValue` is `undefined` for a setting the fixture never
+ * committed, and `update(..., undefined)` removes the key — so the fixture is
+ * restored to its committed state on both platforms rather than to whatever
+ * the current default happens to be ([VSIX-CI-PLATFORM-COVERAGE-CLASSES]).
+ */
+function committedWorkspaceEnabled(
+    cfg: vscode.WorkspaceConfiguration,
+): boolean | undefined {
+    return cfg.inspect<boolean>('enabled')?.workspaceValue;
+}
+
 // eslint-disable-next-line max-lines-per-function -- suite callback contains all tests
 suite('Type Checking Toggle (basilisk.enabled)', function () {
     let tmpDir: string;
@@ -226,7 +248,7 @@ suite('Type Checking Toggle (basilisk.enabled)', function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS * 3 + TIMEOUT_BUFFER_MS);
 
         const cfg = vscode.workspace.getConfiguration('basilisk');
-        const originalEnabled = cfg.get<boolean>('enabled');
+        const originalEnabled = committedWorkspaceEnabled(cfg);
 
         try {
             // Start from a known-enabled state.
@@ -273,7 +295,7 @@ suite('Type Checking Toggle (basilisk.enabled)', function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS * 3 + TIMEOUT_BUFFER_MS);
 
         const cfg = vscode.workspace.getConfiguration('basilisk');
-        const originalEnabled = cfg.get<boolean>('enabled');
+        const originalEnabled = committedWorkspaceEnabled(cfg);
 
         try {
             await cfg.update('enabled', true, vscode.ConfigurationTarget.Workspace);
@@ -338,7 +360,7 @@ suite('Type Checking Toggle (basilisk.enabled)', function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + TIMEOUT_BUFFER_MS);
 
         const cfg = vscode.workspace.getConfiguration('basilisk');
-        const originalEnabled = cfg.get<boolean>('enabled');
+        const originalEnabled = committedWorkspaceEnabled(cfg);
         const store = getStore();
         assert.ok(store, 'store must exist');
 
