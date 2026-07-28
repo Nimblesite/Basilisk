@@ -97,6 +97,7 @@ pub(crate) mod generics_variance;
 pub(crate) mod generics_variance_inference;
 pub(crate) mod guards;
 pub(crate) mod historical_positional;
+pub(crate) mod imports_missing_name;
 pub(crate) mod imports_module_attribute;
 pub(crate) mod imports_unresolved;
 pub(crate) mod lambda_missing_annotations;
@@ -219,6 +220,7 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &missing_vararg_annotation::MissingVarArgAnnotation,
         &missing_attribute_annotation::MissingAttributeAnnotation,
         &imports_unresolved::ImportFromUntypedModule,
+        &imports_missing_name::MissingImportedName,
         &returns_compatibility::ReturnTypeMismatch,
         &calls_argument_type::ArgumentTypeMismatch,
         &returns_compatibility_2::ReturnTypeMismatch,

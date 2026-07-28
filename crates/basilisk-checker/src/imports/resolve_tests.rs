@@ -356,3 +356,84 @@ fn importer_directory_is_user_code_before_site_packages() {
             .expect("importer-local user code resolves");
     assert_eq!(resolved.path, expected);
 }
+
+/// GitHub #336 (bug 3): a `stub-paths` stub that declares nothing must be
+/// treated as absent. Resolution falls through to the installed `.py` source,
+/// so BSK-0152 still reports the package as untyped — an empty stub must not
+/// turn the gate green while providing no type information.
+#[test]
+fn stub_path_stub_declaring_nothing_is_treated_as_absent() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let stubs = temp.path().join("stubs");
+    std::fs::create_dir_all(&stubs).expect("create stubs dir");
+    std::fs::write(
+        stubs.join("foopkg.pyi"),
+        "# Auto-generated stub\n\nfrom typing import Any\n",
+    )
+    .expect("write empty stub");
+    let site_packages = temp.path().join("site-packages");
+    let expected = write_module(&site_packages, "foopkg", "py");
+    let mut paths = search_paths(&site_packages);
+    paths.stub_paths.push(stubs);
+
+    let resolved = resolve_module("foopkg", &paths)
+        .expect("resolution must fall through to the installed source");
+    assert_eq!(
+        resolved.path, expected,
+        "a declaration-less stub must not shadow the installed source"
+    );
+    assert_eq!(
+        resolved.resolution,
+        basilisk_resolver::scope::ImportResolution::SourcePy,
+        "the fall-through resolution must be SourcePy so BSK-0152 can fire"
+    );
+}
+
+/// GitHub #336 follow-up: a `stub-paths` stub that fails to parse (e.g. the
+/// generator's former `-> <class 'str'>` output) must likewise be treated as
+/// absent instead of silently counting as type information.
+#[test]
+fn stub_path_stub_that_fails_to_parse_is_treated_as_absent() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let stubs = temp.path().join("stubs");
+    std::fs::create_dir_all(&stubs).expect("create stubs dir");
+    std::fs::write(
+        stubs.join("foopkg.pyi"),
+        "from typing import Any\n\ndef get_host(self) -> <class 'str'>: ...\n",
+    )
+    .expect("write broken stub");
+    let site_packages = temp.path().join("site-packages");
+    let expected = write_module(&site_packages, "foopkg", "py");
+    let mut paths = search_paths(&site_packages);
+    paths.stub_paths.push(stubs);
+
+    let resolved = resolve_module("foopkg", &paths)
+        .expect("resolution must fall through to the installed source");
+    assert_eq!(
+        resolved.path, expected,
+        "an unparseable stub must not shadow the installed source"
+    );
+    assert_eq!(
+        resolved.resolution,
+        basilisk_resolver::scope::ImportResolution::SourcePy,
+        "the fall-through resolution must be SourcePy so BSK-0152 can fire"
+    );
+}
+
+/// Guard: a `stub-paths` stub with real declarations keeps winning step 1 —
+/// treating empty stubs as absent must not disturb valid manual stubs.
+#[test]
+fn stub_path_stub_with_declarations_still_wins_step_one() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let stubs = temp.path().join("stubs");
+    std::fs::create_dir_all(&stubs).expect("create stubs dir");
+    let expected = stubs.join("foopkg.pyi");
+    std::fs::write(&expected, "class Widget: ...\n").expect("write real stub");
+    let site_packages = temp.path().join("site-packages");
+    let _shadow = write_module(&site_packages, "foopkg", "py");
+    let mut paths = search_paths(&site_packages);
+    paths.stub_paths.push(stubs);
+
+    let resolved = resolve_module("foopkg", &paths).expect("manual stub must resolve");
+    assert_eq!(resolved.path, expected);
+}
