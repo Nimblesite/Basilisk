@@ -192,7 +192,14 @@ suite("Module Explorer diagnostics drill-down [EXTACT-MODULES-DIAGNOSTICS] (#235
     const args: readonly unknown[] = row.command?.arguments ?? [];
     const target = args[0];
     assert.ok(target instanceof vscode.Uri, "the open command targets a Uri");
-    assert.strictEqual(target.fsPath, "/ws/util.py");
+    // `fsPath` is rendered in the host's native form — `\ws\util.py` on Windows —
+    // so the literal is compared through `Uri.file`, and the platform-independent
+    // `path`/`scheme` are asserted alongside it rather than in place of it.
+    const expected = vscode.Uri.file("/ws/util.py");
+    assert.strictEqual(target.scheme, "file", "the row must open a file, not a virtual document");
+    assert.strictEqual(target.path, expected.path, "the Uri path must address the module's file");
+    assert.strictEqual(target.fsPath, expected.fsPath, "the native path must address the same file");
+    assert.strictEqual(target.toString(), expected.toString(), "the whole Uri must match");
     const selection = rawField(args[1], "selection");
     assert.ok(
       selection instanceof vscode.Range,
