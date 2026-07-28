@@ -13,11 +13,53 @@ use basilisk_config::BasiliskConfig;
 use basilisk_db::cache::{CheckCache, Fingerprint};
 use basilisk_lsp::import_resolver::ImportSearchPaths;
 
+/// What this invocation's flags say about the persistent result cache
+/// ([CHKCACHE-CONFIG]).
+///
+/// The project states the standing policy in `[tool.basilisk] cache`; a flag
+/// is a per-run override of it. `Project` is the flagless case — the config
+/// decides, and with no key written the cache stays off exactly as before.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CacheOverride {
+    /// No `--cache`/`--no-cache`: `[tool.basilisk] cache` decides.
+    #[default]
+    Project,
+    /// `--cache`: run the cache regardless of configuration.
+    ForceOn,
+    /// `--no-cache`: skip the cache regardless of configuration.
+    ForceOff,
+}
+
+impl CacheOverride {
+    /// Fold the two mutually reinforcing flags into one decision.
+    ///
+    /// `--no-cache` wins when both are passed: an explicit opt-out is the
+    /// safer reading of a contradictory command line, and it is the flag a
+    /// user reaches for when they suspect the cache.
+    #[must_use]
+    pub const fn from_flags(cache: bool, no_cache: bool) -> Self {
+        match (cache, no_cache) {
+            (_, true) => Self::ForceOff,
+            (true, false) => Self::ForceOn,
+            (false, false) => Self::Project,
+        }
+    }
+
+    /// Resolve against the project configuration ([CHKCACHE-CONFIG]).
+    fn resolve(self, config: &BasiliskConfig) -> bool {
+        match self {
+            Self::ForceOn => true,
+            Self::ForceOff => false,
+            Self::Project => config.cache_is_enabled(),
+        }
+    }
+}
+
 /// Parsed `--cache*` flags.
 #[derive(Debug, Clone)]
 pub struct CacheOptions {
-    /// Whether the cache is enabled (`--cache`).
-    pub enabled: bool,
+    /// Per-run override of the configured cache policy.
+    pub enabled: CacheOverride,
     /// Override for the cache directory (`--cache-dir`).
     pub dir: Option<PathBuf>,
     /// Whether to print hit/miss stats (`--cache-stats`).
@@ -52,20 +94,31 @@ pub struct CacheContext {
 /// `dir_configs` is the per-directory rule-config map for this run
 /// ([CHKARCH-CONFIG-DISCOVERY]) — every directory's config participates in
 /// the fingerprint so a child config edit invalidates cached results.
+/// `project_config` is the project-root configuration whose `cache`/`cache-dir`
+/// keys are this project's standing policy; the flags in `options` override it
+/// for this run only ([CHKCACHE-CONFIG]).
 #[must_use]
 pub fn build_context(
     options: &CacheOptions,
+    project_config: &BasiliskConfig,
     dir_configs: &std::collections::BTreeMap<PathBuf, std::sync::Arc<BasiliskConfig>>,
     search_paths: &ImportSearchPaths,
     project_root: &Path,
 ) -> Option<CacheContext> {
-    if !options.enabled {
+    let enabled = options.enabled.resolve(project_config);
+    tracing::debug!(
+        enabled,
+        override_source = ?options.enabled,
+        configured = ?project_config.cache_enabled,
+        "resolved persistent result-cache policy"
+    );
+    if !enabled {
         return None;
     }
     let dir = options
         .dir
         .clone()
-        .unwrap_or_else(|| default_cache_dir(project_root));
+        .unwrap_or_else(|| project_config.cache_directory(project_root));
     let fingerprint = Fingerprint {
         version: env!("CARGO_PKG_VERSION").to_owned(),
         config_hash: hash_dir_configs(dir_configs),
@@ -76,11 +129,6 @@ pub fn build_context(
         cache: CheckCache::new(dir),
         fingerprint,
     })
-}
-
-/// Default cache location: `<project-root>/.basilisk/cache/check`.
-fn default_cache_dir(project_root: &Path) -> PathBuf {
-    project_root.join(".basilisk").join("cache").join("check")
 }
 
 /// Identity of the active step-3 typeshed snapshot for the fingerprint
@@ -227,7 +275,10 @@ mod tests {
         LicenseStatus, SourceIdentity, SourceKind, TypeshedStatus,
     };
 
-    use super::{build_context, typeshed_snapshot_identity, CacheContext, CacheOptions};
+    use super::{
+        build_context, typeshed_snapshot_identity, BasiliskConfig, CacheContext, CacheOptions,
+        CacheOverride,
+    };
 
     fn snapshot(identity: SourceIdentity) -> Arc<Snapshot> {
         let status = TypeshedStatus {
@@ -276,10 +327,11 @@ mod tests {
         paths.typeshed_snapshot = Some(ActiveTypeshed::new(snapshot, None));
         build_context(
             &CacheOptions {
-                enabled: true,
+                enabled: CacheOverride::ForceOn,
                 dir: Some(cache_dir.to_path_buf()),
                 stats: false,
             },
+            &BasiliskConfig::default(),
             &BTreeMap::new(),
             &paths,
             cache_dir,

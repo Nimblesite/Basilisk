@@ -31,6 +31,10 @@ broader clients, richer metadata, and additional drift/audit automation.
   broad-glob precedence plus root-relative matching.
 - [x] Expose a sorted, normalized path-override inventory with adoption
   provenance in every snapshot.
+- [x] Persist the two persistent result-cache keys through the same validated
+  transaction as rule/tag and Typeshed settings, and report BOTH caching layers
+  in the snapshot — the configurable cross-session cache and the always-on,
+  keyless in-session Salsa memoization ([LSPCFGED-CACHE], [CHKCACHE-CONFIG]).
 - [ ] Put fixability metadata in the canonical checker catalog and make the LSP
   selectors plus website rule data consume it; remove the parallel safe/all
   fix lists.
@@ -103,6 +107,10 @@ broader clients, richer metadata, and additional drift/audit automation.
 - [x] Render typed tag facets, virtualized rule rows, all severity/reset
   controls, exact previews, presets, path inventory, strict-first actions, and
   paged occurrence navigation as a thin LSP shell.
+- [x] Render the Project view's Caching panel: the persistent cache's toggle
+  and folder-picker (with a reset that REMOVES the key), plus the read-only
+  in-session Salsa rows, driven by a real-webview DOM journey
+  (`configuration-editor-cache-dom.test.ts`).
 - [x] Enforce the default-deny CSP, nonce-only scripts, no remote resources,
   runtime intent decoding, root-checked navigation, and stale async-result
   rejection in focused VSIX tests.

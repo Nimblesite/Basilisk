@@ -21,7 +21,8 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use basilisk_config::{
-    ConfigurationUpdate, RuleConfigUpdate, TypeshedConfigKey, TypeshedConfigUpdate,
+    CacheConfigUpdate, ConfigurationUpdate, RuleConfigUpdate, TypeshedConfigKey,
+    TypeshedConfigUpdate,
 };
 
 fn unique_dir(prefix: &str) -> PathBuf {
@@ -72,6 +73,7 @@ fn typeshed_update(entries: &[(TypeshedConfigKey, Option<&str>)]) -> Configurati
                 .map(|(key, setting)| (*key, setting.map(str::to_owned)))
                 .collect::<BTreeMap<_, _>>(),
         },
+        cache: CacheConfigUpdate::default(),
     }
 }
 

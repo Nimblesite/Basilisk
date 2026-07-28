@@ -70,12 +70,18 @@ struct CheckArgs {
     /// When to use terminal colours: auto (default), always, or never.
     #[arg(long, default_value = "auto")]
     color: ColorMode,
-    /// Enable the opt-in result cache: unchanged files are served from a
+    /// Enable the opt-in result cache for this run, whatever
+    /// `[tool.basilisk] cache` says: unchanged files are served from a
     /// persistent cache. A hit is returned only when the file, every file
     /// it reads, the config, and the checker version are unchanged.
     #[arg(long)]
     cache: bool,
-    /// Override the cache directory (default: `<project>/.basilisk/cache/check`).
+    /// Disable the result cache for this run, whatever `[tool.basilisk] cache`
+    /// says. Wins over `--cache` when both are given ([CHKCACHE-CONFIG]).
+    #[arg(long)]
+    no_cache: bool,
+    /// Override the cache directory for this run (default: the project's
+    /// `[tool.basilisk] cache-dir`, else `<project>/.basilisk/cache/check`).
     #[arg(long, value_name = "DIR")]
     cache_dir: Option<std::path::PathBuf>,
     /// Print cache hit/miss counts to stderr after checking.
@@ -335,7 +341,7 @@ fn run_command(command: Command) -> u8 {
 fn run_scoped_check(args: &CheckArgs, scope: DiagnosticScope) -> u8 {
     args.color.apply();
     let cache = cache_check::CacheOptions {
-        enabled: args.cache,
+        enabled: cache_check::CacheOverride::from_flags(args.cache, args.no_cache),
         dir: args.cache_dir.clone(),
         stats: args.cache_stats,
     };
@@ -467,6 +473,7 @@ mod tests {
             output,
             color: ColorMode::Never,
             cache: false,
+            no_cache: false,
             cache_dir: None,
             cache_stats: false,
         }
@@ -878,6 +885,7 @@ mod tests {
                 output: OutputFormat::Json,
                 color: ColorMode::Always,
                 cache: false,
+                no_cache: false,
                 cache_dir: None,
                 cache_stats: false,
             },
@@ -900,6 +908,7 @@ mod tests {
                 output: OutputFormat::Text,
                 color: ColorMode::Auto,
                 cache: true,
+                no_cache: false,
                 cache_dir: Some(cache_dir),
                 cache_stats: true,
             },

@@ -4,8 +4,8 @@
 //! Implements [CONFIGEDITOR-MODEL] / [LSPARCH-CONFIG-EDITOR-PROTOCOL]. The
 //! declarations below preserve the typeDiagram shapes; derives and serde tags
 //! are Rust transport integration applied to the generated declarations. The
-//! Typeshed subset is split into `model_typeshed.rs` only to preserve the
-//! repository's per-file size ceiling.
+//! Typeshed and caching subsets are split into `model_typeshed.rs` and
+//! `model_cache.rs` only to preserve the repository's per-file size ceiling.
 
 #![allow(clippy::struct_field_names, missing_docs)]
 
@@ -14,6 +14,10 @@ use serde::{Deserialize, Serialize};
 #[path = "model_typeshed.rs"]
 mod model_typeshed;
 pub use model_typeshed::*;
+
+#[path = "model_cache.rs"]
+mod model_cache;
+pub use model_cache::*;
 
 pub type Uri = String;
 pub type Revision = String;
@@ -50,7 +54,20 @@ pub enum TypeshedSettingKey {
     TypeshedStorePath,
 }
 
-/// The six operations the editor may ask the configuration service to apply.
+/// Closed allowlist of persistent result-cache configuration keys — the whole
+/// surface is two `[tool.basilisk]` keys ([LSPCFGED-CACHE], [CHKCACHE-CONFIG]).
+/// The in-session Salsa layer is deliberately absent: it has no key, so there
+/// is nothing here to set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "kind")]
+pub enum CacheSettingKey {
+    /// `cache` — run the persistent result cache.
+    CacheEnabled,
+    /// `cache-dir` — where its entries live.
+    CacheDir,
+}
+
+/// The eight operations the editor may ask the configuration service to apply.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum EditorMutation {
@@ -74,6 +91,13 @@ pub enum EditorMutation {
     },
     RemoveTypeshedSetting {
         key: TypeshedSettingKey,
+    },
+    SetCacheSetting {
+        key: CacheSettingKey,
+        value: String,
+    },
+    RemoveCacheSetting {
+        key: CacheSettingKey,
     },
 }
 
@@ -216,6 +240,7 @@ pub struct ConfigurationSnapshot {
     pub debt: DebtSummary,
     pub problems: Vec<ConfigurationProblem>,
     pub typeshed: TypeshedConfigurationState,
+    pub cache: CacheConfigurationState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -256,6 +281,7 @@ pub struct ConfigurationPreview {
     pub base_revision: Revision,
     pub changes: Vec<ResolvedRuleChange>,
     pub typeshed_changes: Vec<TypeshedSettingChange>,
+    pub cache_changes: Vec<CacheSettingChange>,
     pub impact: ConfigurationImpact,
 }
 

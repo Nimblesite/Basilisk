@@ -25,7 +25,10 @@ Inputs that can affect the diagnostics for `basilisk check <file>`:
 3. **Effective configuration** — the resolved `BasiliskConfig` (the
    nearest-first rule-severity chain, include/exclude patterns, stub paths,
    the `typeshed-*` keys, `python-version`/`python-platform`, narrowing
-   toggles, …) (`CHKCACHE-INPUT-CONFIG`).
+   toggles, …) (`CHKCACHE-INPUT-CONFIG`). The cache's own keys
+   (`CHKCACHE-CONFIG`) ride in that fingerprint like any other field, which is
+   harmless: they select *whether and where* entries are kept, never what the
+   diagnostics are.
 4. **Resolution environment** — import search roots, site-packages dirs, the
    selected standard-library source path, and `uv.lock` contents when
    present; a change can change *which* files an import resolves to
@@ -165,15 +168,72 @@ path against its stored hash. All match ⟹ HIT.
 
 ---
 
+## `CHKCACHE-CONFIG` — Project configuration {#CHKCACHE-CONFIG}
+
+Caching is a **property of the project**, not of the command line that happened
+to be typed: a repository that wants warm CI re-runs wants them from every
+machine and every invocation. The standing policy therefore lives in
+`pyproject.toml` `[tool.basilisk]` alongside every other project setting
+([`CHKARCH-CONFIG-FILE`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-FILE)),
+and the flags are a per-run override of it.
+
+| Key | Type | Unset | Effect |
+|---|---|---|---|
+| `cache` | boolean | off | Run the persistent result cache (`CHKCACHE-CONFIG-ENABLE`) |
+| `cache-dir` | string | `.basilisk/cache/check` under the project root | Where entries live; a relative path anchors to the project root, never the caller's cwd (`CHKCACHE-CONFIG-DIR`) |
+
+Both keys merge nearest-first with every other non-rule field
+([`CHKARCH-CONFIG-DISCOVERY`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY)),
+and the project-ROOT config is the one that decides — one project, one cache.
+An unwritten `cache` key is off, so adding these keys to the model changed no
+existing project's behaviour. A wrongly-typed value (`cache = "yes"`) is
+dropped by the parser and **rejected outright** by the configuration editor
+([`CONFIGEDITOR-SOURCES`](LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR-SOURCES)),
+so a setting the checker will never honour is never displayed as one.
+
+`BasiliskConfig::cache_directory` is the single resolver for `CHKCACHE-DIR`:
+the CLI writes entries through it and the configuration editor displays through
+it, so the folder the editor shows is provably the folder the run uses
+(`CHKCACHE-CONFIG-ONE-RESOLVER`).
+
+### `CHKCACHE-CONFIG-SALSA` — What is NOT configured here {#CHKCACHE-CONFIG-SALSA}
+
+Basilisk caches on two layers, and only one of them is configuration:
+
+| Layer | Lifetime | Configured by |
+|---|---|---|
+| **Persistent result cache** (this spec) | across processes, on disk | `cache` / `cache-dir` |
+| **In-session Salsa memoization** ([`CHKARCH-INCREMENTAL-SALSA`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA)) | one LSP session, in memory | **nothing — always on** |
+
+The Salsa layer has **no key and no switch**, by design: `parse -> resolve ->
+check` is one memoized query per file, an edit re-executes only the affected
+file's query, and there is no alternative code path to select. Its absence from
+`[tool.basilisk]` is a stated fact, not an omission — the configuration editor
+reports it read-only next to the keys above precisely so a reader is never left
+guessing whether the single visible "cache" switch is all the caching there is
+([`LSPCFGED-CACHE`](LSP-CONFIGURATION-EDITOR-SPEC.md#LSPCFGED-CACHE)).
+
+---
+
 ## `CHKCACHE-CLI` — CLI surface {#CHKCACHE-CLI}
 
-- `--cache` — enable the cache (off by default). (`CHKCACHE-CLI-ENABLE`)
-- `--cache-dir <DIR>` — override the cache location. (`CHKCACHE-CLI-DIR`)
+The flags override `CHKCACHE-CONFIG` for one run and never write configuration:
+
+- `--cache` — run the cache regardless of `[tool.basilisk] cache`. (`CHKCACHE-CLI-ENABLE`)
+- `--no-cache` — skip the cache regardless of `[tool.basilisk] cache`; wins over
+  `--cache` when a command line states both, because an explicit opt-out is the
+  safer reading of a contradictory command line. (`CHKCACHE-CLI-DISABLE`)
+- `--cache-dir <DIR>` — override the cache location for this run. (`CHKCACHE-CLI-DIR`)
 - `--cache-stats` — print `cache: N hit / M miss` to stderr after the run, so a
   warm run is detectable. Hit/miss is also emitted via `tracing`.
   (`CHKCACHE-CLI-STATS`)
 
-Disabled (default) ⟹ behaviour is byte-for-byte identical to today.
+Precedence, highest first: `--no-cache`, then `--cache`, then
+`[tool.basilisk] cache`, then off. `basilisk adopt` always runs cold: it
+rewrites the very configuration an entry is fingerprinted against.
+
+Disabled (the default, with no key and no flag) means behaviour is
+byte-for-byte identical to before the cache existed.
 
 ---
 
@@ -190,3 +250,10 @@ Disabled (default) ⟹ behaviour is byte-for-byte identical to today.
    output is unchanged.
 7. `CHKCACHE-TEST-STATS` — `--cache-stats` reports a miss then a hit across two
    runs.
+8. `CHKCACHE-TEST-CONFIG-ENABLE` — `[tool.basilisk] cache = true` produces a
+   cold-then-warm run with **no flag at all**, and creates the default folder.
+9. `CHKCACHE-TEST-CONFIG-DIR` — `cache-dir` relocates the entries, resolving a
+   relative path against the project root, and the default folder is not created.
+10. `CHKCACHE-TEST-CONFIG-OVERRIDE` — `--no-cache` beats a configured
+    `cache = true` and beats `--cache`; `--cache` beats a configured
+    `cache = false`.

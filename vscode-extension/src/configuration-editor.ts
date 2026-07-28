@@ -4,17 +4,16 @@
 import { effect } from "@preact/signals-core";
 import * as vscode from "vscode";
 import { buildConfigurationEditorDocument } from "./configuration-editor-document";
-import {
-  configurationError,
-  configurationRepairUri,
-  fileIsWithinRoot,
-} from "./configuration-editor-errors";
+import { configurationError } from "./configuration-editor-errors";
 import {
   decodeConfigurationEditorIntent,
+  isNavigationIntent,
   type ConfigurationEditorIntent,
+  type ConfigurationEditorNavigationIntent,
 } from "./configuration-editor-intents";
 import type {
   ConfigurationPreview,
+  ConfigurationSnapshot,
   RuleOccurrencesRequest,
   TypeshedActionRequest,
 } from "./configuration-editor-model";
@@ -22,11 +21,19 @@ import {
   clientTransport,
   type ConfigurationEditorTransport,
 } from "./configuration-editor-transport";
+import type { ConfigurationEditorState } from "./configuration-editor-state";
+import { TypeshedEditorUi } from "./configuration-editor-typeshed";
 import {
-  isTypeshedOnly,
+  openConfigFile,
+  openOccurrence,
+  openRawConfiguration,
+  openRuleDocs,
+} from "./configuration-editor-navigation";
+import {
+  isDirectSettingOnly,
+  pickCacheFolder,
   pickTypeshedFolder,
-  TypeshedEditorUi,
-} from "./configuration-editor-typeshed";
+} from "./configuration-editor-settings";
 import { Logger } from "./logger";
 import { SingletonWebviewPanel, type WebviewMessage } from "./profiler-webview";
 import type { Store } from "./store";
@@ -127,6 +134,7 @@ export class ConfigurationEditorController implements vscode.Disposable {
   }
 
   private async route(intent: ConfigurationEditorIntent): Promise<void> {
+    if (isNavigationIntent(intent)) { await this.routeNavigation(intent); return; }
     switch (intent.type) {
       case "ready": this.handleReady(); return;
       case "refresh": await this.refresh(); return;
@@ -135,12 +143,21 @@ export class ConfigurationEditorController implements vscode.Disposable {
       case "cancelPreview": this.cancelPreview(); return;
       case "adopt": await this.runWorkspaceCommand(ADOPT_WORKSPACE_COMMAND, false); return;
       case "fixSafe": await this.runWorkspaceCommand(FIX_WORKSPACE_COMMAND, true); return;
-      case "openConfigFile": await this.openConfigFile(intent.uri); return;
       case "occurrences": await this.loadOccurrences(intent.request); return;
-      case "openRaw": await this.openRawConfiguration(); return;
-      case "openDocs": await this.openRuleDocs(intent.uri); return;
-      case "openOccurrence": await this.openOccurrence(intent); return;
-      case "pickTypeshedFolder": await this.pickTypeshedFolder(intent.key); return;
+    }
+  }
+
+  /** Opening documents and the two setting panels' native pickers/actions. */
+  private async routeNavigation(intent: ConfigurationEditorNavigationIntent): Promise<void> {
+    switch (intent.type) {
+      case "openConfigFile": await openConfigFile(this.editorState(), intent.uri); return;
+      case "openRaw": await openRawConfiguration(this.editorState()); return;
+      case "openDocs": await openRuleDocs(this.editorState(), intent.uri); return;
+      case "openOccurrence": await openOccurrence(this.editorState(), intent); return;
+      case "pickTypeshedFolder":
+        await this.pickSettingFolder(async (snapshot) => pickTypeshedFolder(snapshot, intent.key));
+        return;
+      case "pickCacheFolder": await this.pickSettingFolder(pickCacheFolder); return;
       case "typeshedAction": await this.runTypeshedAction(intent.action); return;
     }
   }
@@ -230,8 +247,9 @@ export class ConfigurationEditorController implements vscode.Disposable {
       });
       if (generation !== this.loadGeneration || previewGeneration !== this.previewGeneration
         || this.disposed || !this.panel.isOpen()) { return; }
-      // A Typeshed edit has no severity impact to weigh, so it lands at once.
-      if (isTypeshedOnly(intent)) { await this.applyPreview(preview); return; }
+      // A Typeshed or cache edit has no severity impact to weigh, so it lands
+      // at once ([LSPCFGED-TYPESHED], [LSPCFGED-CACHE]).
+      if (isDirectSettingOnly(intent)) { await this.applyPreview(preview); return; }
       this.store.acceptConfigurationPreview(preview);
     } catch (error: unknown) {
       if (generation !== this.loadGeneration || previewGeneration !== this.previewGeneration
@@ -241,12 +259,22 @@ export class ConfigurationEditorController implements vscode.Disposable {
     }
   }
 
-  private async pickTypeshedFolder(key: "TypeshedPath" | "TypeshedStorePath"): Promise<void> {
-    const state = this.store.configurationEditor.value;
+  /** The live editor state every navigation and picker helper reads from. */
+  private editorState(): ConfigurationEditorState {
+    return this.store.configurationEditor.value;
+  }
+
+  /**
+   * Run one native folder-picker and preview what it chose. A cancelled picker
+   * writes nothing, so the controls snap back to the configuration that still
+   * holds ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+   */
+  private async pickSettingFolder(
+    pick: (snapshot: ConfigurationSnapshot) => Promise<Extract<ConfigurationEditorIntent, { type: "preview" }> | undefined>,
+  ): Promise<void> {
+    const state = this.editorState();
     if (state.snapshot === undefined) { return; }
-    const intent = await pickTypeshedFolder(state.snapshot, key);
-    // A cancelled picker writes nothing, so the controls must snap back to the
-    // configuration that still holds ([CONFIGEDITOR-VSIX-EXPERIENCE]).
+    const intent = await pick(state.snapshot);
     if (intent === undefined) { void this.panel.postMessage({ type: "state", state }); return; }
     await this.preview(intent);
   }
@@ -370,15 +398,6 @@ export class ConfigurationEditorController implements vscode.Disposable {
    * Open a nested path-override configuration file. Untrusted input: only a URI
    * the current snapshot listed as a path override, and only inside the root.
    */
-  private async openConfigFile(uri: string): Promise<void> {
-    const overrides = this.store.configurationEditor.value.snapshot?.pathOverrides ?? [];
-    if (!overrides.some((entry) => entry.configUri === uri)) { return; }
-    const target = vscode.Uri.parse(uri);
-    const rootUri = this.store.configurationEditor.value.rootUri;
-    if (target.scheme !== "file" || !fileIsWithinRoot(target, rootUri)) { return; }
-    await vscode.window.showTextDocument(target, { preview: false });
-  }
-
   private async loadOccurrences(request: Omit<RuleOccurrencesRequest, "rootUri">): Promise<void> {
     const rootUri = this.store.configurationEditor.value.snapshot?.rootUri;
     if (rootUri === undefined) { return; }
@@ -397,41 +416,6 @@ export class ConfigurationEditorController implements vscode.Disposable {
       const details = configurationError(error, rootUri);
       this.store.failRuleOccurrences(details.message);
     }
-  }
-
-  private async openRawConfiguration(): Promise<void> {
-    const state = this.store.configurationEditor.value;
-    const repairUri = state.repairUri;
-    if (repairUri !== undefined) {
-      await vscode.window.showTextDocument(vscode.Uri.parse(repairUri, true), { preview: false });
-      return;
-    }
-    const sourceUri = configurationRepairUri(state.snapshot?.configUri, state.snapshot?.rootUri);
-    if (sourceUri === undefined) { return; }
-    try {
-      await vscode.window.showTextDocument(vscode.Uri.parse(sourceUri, true), { preview: false });
-    } catch {
-      void vscode.window.showInformationMessage("Basilisk will create pyproject.toml when you apply a configuration change.");
-    }
-  }
-
-  private async openRuleDocs(uri: string): Promise<void> {
-    const rules = this.store.configurationEditor.value.snapshot?.rules ?? [];
-    if (!rules.some((rule) => rule.descriptor.docsUrl === uri)) { return; }
-    const target = vscode.Uri.parse(uri);
-    if (target.scheme === "https") { await vscode.env.openExternal(target); }
-  }
-
-  private async openOccurrence(intent: Extract<ConfigurationEditorIntent, { type: "openOccurrence" }>): Promise<void> {
-    const items = this.store.configurationEditor.value.occurrences?.items ?? [];
-    const allowed = items.some((item) => item.uri === intent.uri
-      && item.range.start.line === intent.line && item.range.start.character === intent.character);
-    if (!allowed) { return; }
-    const target = vscode.Uri.parse(intent.uri);
-    const rootUri = this.store.configurationEditor.value.rootUri;
-    if (target.scheme !== "file" || !fileIsWithinRoot(target, rootUri)) { return; }
-    const position = new vscode.Position(intent.line, intent.character);
-    await vscode.window.showTextDocument(target, { preview: false, selection: new vscode.Range(position, position) });
   }
 
   public dispose(): void {

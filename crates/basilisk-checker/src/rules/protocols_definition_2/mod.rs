@@ -293,7 +293,7 @@ fn class_inherits_protocol(
 }
 
 /// Collect all methods required by a protocol, including inherited ones.
-fn collect_protocol_required_methods(
+pub(super) fn collect_protocol_required_methods(
     protocol_class: &basilisk_resolver::ClassInfo,
     class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
 ) -> Vec<String> {

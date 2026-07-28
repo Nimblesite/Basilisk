@@ -10,6 +10,19 @@ use std::path::{Path, PathBuf};
 
 use crate::severity::RuleSeverity;
 
+/// Path segments of the default persistent-cache directory, relative to the
+/// project root ([CHKCACHE-CONFIG], [CHKCACHE-ENTRY]).
+pub const DEFAULT_CACHE_DIR: &[&str] = &[".basilisk", "cache", "check"];
+
+/// The `[tool.basilisk]` key that runs the persistent result cache.
+///
+/// Spelled once, so the parser, the editor's validator, and the editor's
+/// writer can never disagree about what the key is called.
+pub(crate) const CACHE_KEY: &str = "cache";
+
+/// The `[tool.basilisk]` key that relocates the persistent result cache.
+pub(crate) const CACHE_DIR_KEY: &str = "cache-dir";
+
 /// One folder's `[tool.basilisk]` rule tables ([CHKARCH-CONFIG-MODEL]).
 ///
 /// The design source is `models/configuration.td` (`RulesConfig`): explicit
@@ -81,6 +94,19 @@ pub struct BasiliskConfig {
     /// ([STUBRES-TYPESHED-STORE]). Unset uses the OS cache directory.
     pub typeshed_store_path: Option<PathBuf>,
 
+    /// Whether the persistent, cross-session result cache runs
+    /// ([CHKCACHE-CONFIG]). `None` means the project states no preference, so
+    /// the caller's default applies — off for `basilisk check`, which is why
+    /// an unwritten key and `cache = false` are behaviourally identical.
+    /// The in-session Salsa memo layer is a different thing entirely: it is
+    /// always on and has no key ([CHKARCH-INCREMENTAL-SALSA]).
+    pub cache_enabled: Option<bool>,
+
+    /// Directory holding the persistent result cache ([CHKCACHE-CONFIG]).
+    /// Relative paths resolve against the project root. `None` uses
+    /// [`Self::cache_directory`]'s default, `.basilisk/cache/check`.
+    pub cache_dir: Option<PathBuf>,
+
     /// Nearest-first chain of `[tool.basilisk]` rule tables on the ancestor
     /// walk ([CHKARCH-CONFIG-DISCOVERY]). Rules are never merged: resolution
     /// walks this chain and the nearest table that decides a rule wins
@@ -117,6 +143,8 @@ impl Default for BasiliskConfig {
             typeshed_path: None,
             typeshed_commit: None,
             typeshed_store_path: None,
+            cache_enabled: None,
+            cache_dir: None,
             rule_chain: Vec::new(),
             python_version: None,
             python_platform: None,
@@ -172,6 +200,41 @@ impl BasiliskConfig {
         self.rule_chain.first()
     }
 
+    /// Whether the persistent result cache runs for this project
+    /// ([CHKCACHE-CONFIG]). An unwritten `cache` key is off, so the default
+    /// stays exactly what it was before the key existed.
+    #[must_use]
+    pub fn cache_is_enabled(&self) -> bool {
+        self.cache_enabled.unwrap_or(false)
+    }
+
+    /// Where the persistent result cache lives for a project rooted at
+    /// `project_root` ([CHKCACHE-CONFIG]).
+    ///
+    /// The configured `cache-dir` wins, resolved against the project root when
+    /// relative so a checked-out project keeps one cache wherever it is
+    /// invoked from; otherwise [`DEFAULT_CACHE_DIR`] under that root. Every
+    /// surface — the CLI that writes entries and the configuration editor that
+    /// displays the location — resolves through this one routine, so the
+    /// folder the editor shows is the folder the run uses.
+    #[must_use]
+    pub fn cache_directory(&self, project_root: &Path) -> PathBuf {
+        self.cache_dir.as_ref().map_or_else(
+            || {
+                DEFAULT_CACHE_DIR
+                    .iter()
+                    .fold(project_root.to_path_buf(), |dir, part| dir.join(part))
+            },
+            |dir| {
+                if dir.is_absolute() {
+                    dir.clone()
+                } else {
+                    project_root.join(dir)
+                }
+            },
+        )
+    }
+
     /// Merge `child` over `self`, where `child` is nearer to the checked file.
     ///
     /// Implements [CHKARCH-CONFIG-DISCOVERY]. Rules are never merged: the
@@ -224,6 +287,8 @@ impl BasiliskConfig {
             }
         }
         self.typeshed_store_path = child.typeshed_store_path.or(self.typeshed_store_path);
+        self.cache_enabled = child.cache_enabled.or(self.cache_enabled);
+        self.cache_dir = child.cache_dir.or(self.cache_dir);
         self.python_version = child.python_version.or(self.python_version);
         self.python_platform = child.python_platform.or(self.python_platform);
         self.narrow_attributes_across_calls = child
@@ -290,6 +355,17 @@ pub(crate) fn parse_pyproject_content(content: &str) -> Option<BasiliskConfig> {
     }
     if let Some(val) = basilisk.get("typeshed-store-path").and_then(|v| v.as_str()) {
         cfg.typeshed_store_path = Some(PathBuf::from(val));
+    }
+
+    // [CHKCACHE-CONFIG]: the persistent result cache is two keys — run it, and
+    // where it lives. A non-boolean `cache` or non-string `cache-dir` is left
+    // unset here; the configuration editor rejects both outright, so the only
+    // way to reach this parser with one is a hand-edited file.
+    if let Some(val) = basilisk.get(CACHE_KEY).and_then(toml::Value::as_bool) {
+        cfg.cache_enabled = Some(val);
+    }
+    if let Some(val) = basilisk.get(CACHE_DIR_KEY).and_then(|v| v.as_str()) {
+        cfg.cache_dir = Some(PathBuf::from(val));
     }
 
     // [CHKARCH-CONFIG-MODEL]: this file's one rule table. An empty or absent
@@ -381,156 +457,9 @@ fn warn_on_malformed_typeshed_values(cfg: &BasiliskConfig) {
 }
 
 #[cfg(test)]
-mod validation_tests {
-    use std::collections::HashMap;
-    use std::path::PathBuf;
-
-    use super::{is_full_commit_sha, BasiliskConfig, RuleSeverity};
-
-    /// [STUBRES-TYPESHED-CONFIG]: only a full 40-char hex SHA is a valid pin.
-    #[test]
-    fn full_sha_is_accepted_short_and_nonhex_rejected() {
-        // The pinned typing-authority SHA from the plan — exactly 40 hex chars.
-        assert!(is_full_commit_sha(
-            "6ef9f7719ecfff09dad8724ef42b621fd994fb5e"
-        ));
-        // Upper-case identifies the same immutable commit.
-        assert!(is_full_commit_sha(
-            "6EF9F7719ECFFF09DAD8724EF42B621FD994FB5E"
-        ));
-        // Abbreviated (7-char) SHA — ambiguous, rejected so a pin fails closed.
-        assert!(!is_full_commit_sha("6ef9f77"));
-        // 39 and 41 chars — off-by-one lengths rejected.
-        assert!(!is_full_commit_sha(
-            "6ef9f7719ecfff09dad8724ef42b621fd994fb5"
-        ));
-        assert!(!is_full_commit_sha(
-            "6ef9f7719ecfff09dad8724ef42b621fd994fb5ee"
-        ));
-        // Non-hex character (`g`) at full length — rejected.
-        assert!(!is_full_commit_sha(
-            "6ef9f7719ecfff09dad8724ef42b621fd994fb5g"
-        ));
-        // Empty — rejected.
-        assert!(!is_full_commit_sha(""));
-    }
-
-    #[test]
-    fn nearer_typeshed_selection_replaces_inherited_selection_atomically() {
-        let ancestor_pin = BasiliskConfig {
-            typeshed_commit: Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
-            ..Default::default()
-        };
-        let child_path = BasiliskConfig {
-            typeshed_path: Some(PathBuf::from("custom-typeshed")),
-            ..Default::default()
-        };
-        let path_result = ancestor_pin.merged_with(child_path);
-        assert_eq!(
-            path_result.typeshed_path,
-            Some(PathBuf::from("custom-typeshed"))
-        );
-        assert!(path_result.typeshed_commit.is_none());
-
-        let ancestor_path = BasiliskConfig {
-            typeshed_path: Some(PathBuf::from("parent-typeshed")),
-            ..Default::default()
-        };
-        let child_pin = BasiliskConfig {
-            typeshed_commit: Some("0123456789abcdef0123456789abcdef01234567".to_owned()),
-            ..Default::default()
-        };
-        let pin_result = ancestor_path.merged_with(child_pin);
-        assert!(pin_result.typeshed_path.is_none());
-        assert_eq!(
-            pin_result.typeshed_commit.as_deref(),
-            Some("0123456789abcdef0123456789abcdef01234567")
-        );
-    }
-
-    #[test]
-    fn malformed_same_table_path_and_pin_remain_visible_to_fail_closed() {
-        let child = BasiliskConfig {
-            typeshed_path: Some(PathBuf::from("custom-typeshed")),
-            typeshed_commit: Some("0123456789abcdef0123456789abcdef01234567".to_owned()),
-            ..Default::default()
-        };
-        let merged = BasiliskConfig::default().merged_with(child);
-        assert!(merged.typeshed_path.is_some());
-        assert!(merged.typeshed_commit.is_some());
-    }
-
-    /// Build a `[tool.basilisk.rules]`-shaped table directly, so the fixture
-    /// carries no `Result` to unwrap and can hold non-string values a TOML
-    /// severity table must still tolerate.
-    fn severity_table(entries: &[(&str, toml::Value)]) -> toml::Table {
-        let mut table = toml::Table::new();
-        for (key, value) in entries {
-            let _ = table.insert((*key).to_owned(), value.clone());
-        }
-        table
-    }
-
-    /// [CHKARCH-STRICTNESS-SEVERITY]: every documented spelling — the four
-    /// canonical names and the four aliases — must reach the rule map, so a
-    /// config the docs sanction is never quietly a no-op.
-    #[test]
-    fn every_documented_severity_spelling_is_accepted() {
-        let table = severity_table(&[
-            ("a", toml::Value::from("error")),
-            ("b", toml::Value::from("warning")),
-            ("c", toml::Value::from("warn")),
-            ("d", toml::Value::from("info")),
-            ("e", toml::Value::from("information")),
-            ("f", toml::Value::from("disabled")),
-            ("g", toml::Value::from("off")),
-            ("h", toml::Value::from("none")),
-        ]);
-        let mut parsed = HashMap::new();
-        super::parse_severity_map(&table, &mut parsed);
-
-        assert_eq!(parsed.get("a"), Some(&RuleSeverity::Error));
-        assert_eq!(parsed.get("b"), Some(&RuleSeverity::Warning));
-        assert_eq!(parsed.get("c"), Some(&RuleSeverity::Warning));
-        assert_eq!(parsed.get("d"), Some(&RuleSeverity::Info));
-        assert_eq!(parsed.get("e"), Some(&RuleSeverity::Info));
-        assert_eq!(parsed.get("f"), Some(&RuleSeverity::Disabled));
-        assert_eq!(parsed.get("g"), Some(&RuleSeverity::Disabled));
-        assert_eq!(parsed.get("h"), Some(&RuleSeverity::Disabled));
-        assert_eq!(parsed.len(), 8, "no documented spelling may be dropped");
-    }
-
-    /// [CHKARCH-CONFIG-MODEL]: a value that is not a severity is dropped rather
-    /// than coerced — a typo must never silently become `error`, and it must
-    /// never take a neighbouring valid entry down with it. The drop is
-    /// announced through `tracing::warn!` in `parse_severity_map`, because the
-    /// configuration editor rejects the same value outright and a silent run
-    /// would disagree with the editor about one file.
-    #[test]
-    fn unparseable_severities_are_dropped_without_disturbing_valid_entries() {
-        let table = severity_table(&[
-            ("typo", toml::Value::from("eror")),
-            ("wrong_case", toml::Value::from("ERROR")),
-            ("empty", toml::Value::from("")),
-            ("numeric", toml::Value::from(3)),
-            ("boolean", toml::Value::from(true)),
-            ("listy", toml::Value::from(vec!["error"])),
-            ("good", toml::Value::from("warning")),
-        ]);
-        let mut parsed = HashMap::new();
-        super::parse_severity_map(&table, &mut parsed);
-
-        for dropped in ["typo", "wrong_case", "empty", "numeric", "boolean", "listy"] {
-            assert!(
-                !parsed.contains_key(dropped),
-                "`{dropped}` is not a severity and must not enter the rule map"
-            );
-        }
-        assert_eq!(
-            parsed.get("good"),
-            Some(&RuleSeverity::Warning),
-            "a malformed neighbour must not suppress a valid entry"
-        );
-        assert_eq!(parsed.len(), 1);
-    }
-}
+#[expect(
+    clippy::expect_used,
+    reason = "test-only: a fixture document that fails to parse must abort naming it"
+)]
+#[path = "parse_tests.rs"]
+mod validation_tests;

@@ -231,3 +231,126 @@ fn disabled_creates_no_cache_dir() {
         "no cache stats without --cache-stats"
     );
 }
+
+// ── CHKCACHE-CONFIG ─────────────────────────────────────────────────────────
+
+/// Run `basilisk analyze <target> --cache-stats` with no cache flag at all, so
+/// the project's `[tool.basilisk] cache` key is the only thing that can turn
+/// the cache on.
+fn analyze_with_extra(target: &PathBuf, extra: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_basilisk"))
+        .arg("analyze")
+        .arg(target)
+        .arg("--cache-stats")
+        .args(extra)
+        .output()
+        .expect("spawn basilisk")
+}
+
+/// A project that writes `cache = true` gets the cache with no flags: the
+/// configuration IS the switch ([CHKCACHE-CONFIG]).
+#[test]
+fn pyproject_cache_key_enables_the_cache_without_any_flag() {
+    let dir = unique_dir("cfg_enable");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[tool.basilisk]\ncache = true\n\n[tool.basilisk.rules]\n\"BSK-0001\" = \"error\"\n",
+    )
+    .unwrap();
+    let target = dir.join("t.py");
+    std::fs::write(&target, "def f(x):\n    return x\n").unwrap();
+
+    let cold = analyze_with_extra(&target, &[]);
+    assert_stats(&cold, 0, 1);
+    assert!(
+        dir.join(".basilisk").join("cache").join("check").is_dir(),
+        "the configured cache must use the documented default folder"
+    );
+
+    let warm = analyze_with_extra(&target, &[]);
+    assert_stats(&warm, 1, 0);
+    assert_eq!(
+        stdout(&cold),
+        stdout(&warm),
+        "a configured warm run must replay identical diagnostics"
+    );
+}
+
+/// `cache-dir` relocates the cache, and the relative path anchors to the
+/// project root rather than the caller's working directory ([CHKCACHE-CONFIG]).
+#[test]
+fn pyproject_cache_dir_relocates_the_cache() {
+    let dir = unique_dir("cfg_dir");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[tool.basilisk]\ncache = true\ncache-dir = \"build/bsk\"\n",
+    )
+    .unwrap();
+    let target = dir.join("t.py");
+    std::fs::write(&target, "def f(x: int) -> int:\n    return x\n").unwrap();
+
+    assert_stats(&analyze_with_extra(&target, &[]), 0, 1);
+    assert!(
+        dir.join("build").join("bsk").is_dir(),
+        "the configured cache-dir must hold the entries"
+    );
+    assert!(
+        !dir.join(".basilisk").exists(),
+        "the default folder must not be created once cache-dir is configured"
+    );
+    assert_stats(&analyze_with_extra(&target, &[]), 1, 0);
+}
+
+/// `--no-cache` overrides `cache = true` for one run, and creates nothing
+/// ([CHKCACHE-CONFIG]).
+#[test]
+fn no_cache_flag_overrides_the_configured_cache() {
+    let dir = unique_dir("cfg_no_cache");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[tool.basilisk]\ncache = true\n",
+    )
+    .unwrap();
+    let target = dir.join("t.py");
+    std::fs::write(&target, "def f(x: int) -> int:\n    return x\n").unwrap();
+
+    let output = analyze_with_extra(&target, &["--no-cache"]);
+    assert_stats(&output, 0, 0);
+    assert!(
+        !dir.join(".basilisk").exists(),
+        "--no-cache must create no cache directory"
+    );
+}
+
+/// `--no-cache` wins over `--cache` when a command line states both, so the
+/// explicit opt-out is never silently dropped ([CHKCACHE-CONFIG]).
+#[test]
+fn no_cache_flag_wins_over_cache_flag() {
+    let dir = unique_dir("cfg_both_flags");
+    let target = dir.join("t.py");
+    std::fs::write(&target, "def f(x: int) -> int:\n    return x\n").unwrap();
+
+    let output = analyze_with_extra(&target, &["--cache", "--no-cache"]);
+    assert_stats(&output, 0, 0);
+    assert!(!dir.join(".basilisk").exists());
+}
+
+/// `cache = false` is honoured, and `--cache` still overrides it for one run
+/// ([CHKCACHE-CONFIG]).
+#[test]
+fn explicit_cache_false_is_honoured_and_flag_overridable() {
+    let dir = unique_dir("cfg_false");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[tool.basilisk]\ncache = false\n",
+    )
+    .unwrap();
+    let target = dir.join("t.py");
+    std::fs::write(&target, "def f(x: int) -> int:\n    return x\n").unwrap();
+
+    assert_stats(&analyze_with_extra(&target, &[]), 0, 0);
+    assert!(!dir.join(".basilisk").exists());
+
+    assert_stats(&analyze_with_extra(&target, &["--cache"]), 0, 1);
+    assert!(dir.join(".basilisk").join("cache").join("check").is_dir());
+}

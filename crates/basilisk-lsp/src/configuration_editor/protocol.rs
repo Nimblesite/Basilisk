@@ -18,8 +18,8 @@ use super::model::{
 };
 use super::mutation::{
     build_impact, build_update, require_mutations, require_no_pep_disable, require_revision,
-    require_valid_typeshed_configuration, resolved_changes, resolved_typeshed_changes,
-    selection_error, validate_document_rules,
+    require_valid_typeshed_configuration, resolved_cache_changes, resolved_changes,
+    resolved_typeshed_changes, selection_error, validate_document_rules,
 };
 use super::snapshot::{
     build_snapshot, hypothetical_inventory, inventory, occurrences as build_occurrences,
@@ -76,6 +76,7 @@ impl LspServer {
         drop(guard);
         let changes = resolved_changes(&catalog, &document.config, &patch.config);
         let typeshed_changes = resolved_typeshed_changes(&document.config, &patch.config);
+        let cache_changes = resolved_cache_changes(&document.config, &patch.config);
         let impact = build_impact(&before, &after);
         let prepared = PreparedPreview {
             root,
@@ -88,6 +89,7 @@ impl LspServer {
             base_revision: request.base_revision,
             changes,
             typeshed_changes,
+            cache_changes,
             impact,
         })
     }

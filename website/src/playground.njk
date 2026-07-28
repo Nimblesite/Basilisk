@@ -1,0 +1,31 @@
+---
+layout: layouts/base.njk
+title: "Basilisk Playground — Python type checking in your browser"
+description: "Try Basilisk's Python type checker instantly in your browser. No install, no upload, no server — powered locally by WebAssembly."
+permalink: /playground/
+noTranslation: true
+---
+{% block head %}<link rel="stylesheet" href="/assets/css/playground.css">{% endblock %}
+<section class="playground" aria-labelledby="playground-title">
+  <header class="playground-intro">
+    <div><p class="playground-eyebrow"><span></span> WebAssembly playground</p><h1 id="playground-title">Make Python <em>tell the truth.</em></h1><p>Real Basilisk diagnostics, running entirely in your browser. Your code never leaves this tab.</p></div>
+    <div class="playground-proof"><span>100% browser-side</span><span>Embedded typeshed</span><span>No install</span></div>
+  </header>
+  <div class="playground-shell">
+    <div class="playground-toolbar">
+      <div class="playground-file"><span class="python-mark">Py</span><strong>playground.py</strong><span class="dirty-dot"></span></div>
+      <div class="playground-presets" aria-label="Example programs"><span>Examples</span><button type="button" data-example="generics">Return mismatch</button><button type="button" data-example="protocol">Protocol mismatch</button><button type="button" data-example="clean">Clean code</button></div>
+      <div class="playground-actions"><label>Python <select id="python-version"><option value="">Latest typing spec</option><option>3.13</option></select></label><button id="share-code" class="playground-button playground-button--quiet" type="button">Share</button><button id="check-code" class="playground-button" type="button"><span>Check code</span><kbd>⌘↵</kbd></button></div>
+    </div>
+    <div class="playground-workspace">
+      <div class="editor-pane"><div id="editor" aria-label="Python source editor"><noscript>The playground requires JavaScript.</noscript></div><div id="editor-loading" class="editor-loading"><span class="loader-orbit"></span><strong>Loading Monaco</strong></div></div>
+      <aside class="diagnostics-pane" aria-live="polite" aria-labelledby="diagnostics-title">
+        <div class="diagnostics-head"><div><span class="diagnostics-kicker">Analysis</span><h2 id="diagnostics-title">Diagnostics</h2></div><span id="diagnostic-count" class="diagnostic-count">—</span></div>
+        <div id="engine-status" class="engine-status"><span></span>Engine waiting</div>
+        <ol id="diagnostics" class="diagnostics-list"><li class="diagnostics-empty"><div class="empty-glyph">⌁</div><strong>Ready when you are</strong><p>Run the checker to surface type errors, right here.</p></li></ol>
+      </aside>
+    </div>
+    <footer class="playground-statusbar"><span id="check-timing">Basilisk WASM</span><span>Ln <b id="cursor-line">1</b>, Col <b id="cursor-col">1</b></span><span>UTF-8</span><span>Spaces: 4</span></footer>
+  </div>
+</section>
+{% block scripts %}<script src="/assets/vendor/lz-string.min.js"></script><script src="/assets/vendor/monaco/vs/loader.js"></script><script type="module" src="/assets/js/playground.js"></script>{% endblock %}

@@ -193,8 +193,11 @@ fn unadopt_folders(paths: &[String]) -> Result<usize, PipelineError> {
 /// governing folder config. Every scanned file registers its root even when
 /// clean, so recompute can graduate stale entries.
 fn collect_folder_debt(paths: &[String]) -> Result<BTreeMap<PathBuf, FolderDebt>, PipelineError> {
+    // Adoption rewrites the very configuration a cache entry is fingerprinted
+    // against, so it always runs cold — the project's `cache` key does not
+    // apply here ([CHKCACHE-CONFIG]).
     let no_cache = crate::cache_check::CacheOptions {
-        enabled: false,
+        enabled: crate::cache_check::CacheOverride::ForceOff,
         dir: None,
         stats: false,
     };

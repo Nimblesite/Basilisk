@@ -445,3 +445,6 @@ fn document(config: BasiliskConfig) -> ConfigDocument {
         config,
     }
 }
+
+#[path = "mutation_cache_tests.rs"]
+mod cache;

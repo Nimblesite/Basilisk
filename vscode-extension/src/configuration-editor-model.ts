@@ -44,13 +44,24 @@ export type TypeshedSettingKey =
   | { kind: "TypeshedCommit" }
   | { kind: "TypeshedStorePath" };
 
+/**
+ * The persistent result cache's two [tool.basilisk] keys ([LSPCFGED-CACHE]).
+ * The in-session Salsa layer is deliberately absent: it is always on and has
+ * no key, so there is nothing here to set.
+ */
+export type CacheSettingKey =
+  | { kind: "CacheEnabled" }
+  | { kind: "CacheDir" };
+
 export type EditorMutation =
   | { kind: "SetRule"; code: RuleCode; severity: RuleSeverity }
   | { kind: "RemoveRule"; code: RuleCode }
   | { kind: "SetTag"; tag: RuleTag; severity: RuleSeverity }
   | { kind: "RemoveTag"; tag: RuleTag }
   | { kind: "SetTypeshedSetting"; key: TypeshedSettingKey; value: string }
-  | { kind: "RemoveTypeshedSetting"; key: TypeshedSettingKey };
+  | { kind: "RemoveTypeshedSetting"; key: TypeshedSettingKey }
+  | { kind: "SetCacheSetting"; key: CacheSettingKey; value: string }
+  | { kind: "RemoveCacheSetting"; key: CacheSettingKey };
 
 /**
  * There are exactly two sources, each carrying the value that defines it:
@@ -116,6 +127,31 @@ export interface TypeshedConfigurationState {
   storeFolder: string | undefined;
   licenseAvailable: boolean;
   status: TypeshedStatusState;
+}
+
+/**
+ * The persistent, cross-session result cache ([CHKCACHE]). `folder` is the
+ * effective location the next run uses, so the editor never shows a folder the
+ * run would not use; `folderConfigured` separates the default from a project's
+ * own choice.
+ */
+export interface PersistentCacheState {
+  enabled: boolean;
+  folder: string;
+  folderConfigured: boolean;
+}
+
+/**
+ * The in-session incremental engine ([CHKARCH-INCREMENTAL-SALSA]): always on,
+ * no configuration key, so its one real value is the live memo count.
+ */
+export interface InSessionCacheState {
+  trackedFiles: number;
+}
+
+export interface CacheConfigurationState {
+  persistent: PersistentCacheState;
+  inSession: InSessionCacheState;
 }
 
 export type RuleSelector =
@@ -197,6 +233,7 @@ export interface ConfigurationSnapshot {
   debt: DebtSummary;
   problems: ConfigurationProblem[];
   typeshed: TypeshedConfigurationState;
+  cache: CacheConfigurationState;
 }
 
 export interface PreviewConfigurationRequest {
@@ -225,11 +262,19 @@ export interface ConfigurationPreview {
   baseRevision: Revision;
   changes: ResolvedRuleChange[];
   typeshedChanges: TypeshedSettingChange[];
+  cacheChanges: CacheSettingChange[];
   impact: ConfigurationImpact;
 }
 
 export interface TypeshedSettingChange {
   key: TypeshedSettingKey;
+  before: string | undefined;
+  after: string | undefined;
+}
+
+/** Rendered TOML text on each side; undefined = the key is absent there. */
+export interface CacheSettingChange {
+  key: CacheSettingKey;
   before: string | undefined;
   after: string | undefined;
 }

@@ -33,7 +33,7 @@ import { decodeConfigurationEditorIntent } from "../../configuration-editor-inte
 import { readBasiliskSettings } from "../../lsp-client";
 import { createStore } from "../../store";
 import { removeTestDir } from './test-helpers';
-import { LATEST_COMMIT, typeshedFixture } from "./typeshed-fixture";
+import { cacheFixture, LATEST_COMMIT, typeshedFixture } from "./settings-fixture";
 import { booleanField, recordField } from "../../unknown-shape";
 
 const ROOT_URI = "file:///workspace";
@@ -107,6 +107,7 @@ function configurationSnapshot(revision = "revision-1"): ConfigurationSnapshot {
     },
     problems: [],
     typeshed: typeshedFixture(),
+    cache: cacheFixture(),
   };
 }
 
@@ -120,6 +121,7 @@ function configurationPreview(baseRevision = "revision-1"): ConfigurationPreview
       after: { kind: "Warning" },
     }],
     typeshedChanges: [],
+    cacheChanges: [],
     impact: {
       errorsBefore: 3,
       errorsAfter: 0,

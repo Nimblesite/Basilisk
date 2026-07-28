@@ -471,6 +471,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "basilisk-wasm"
+version = "0.0.0-PLACEHOLDER"
+dependencies = [
+ "basilisk-checker",
+ "basilisk-common",
+ "basilisk-config",
+ "basilisk-parser",
+ "basilisk-resolver",
+ "basilisk-stubs",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "basilisk-zed"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [

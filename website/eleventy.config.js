@@ -187,6 +187,10 @@ export default function (eleventyConfig) {
   eleventyConfig.addPlugin((config) => config.setLibrary("md", markdown));
 
   eleventyConfig.addPassthroughCopy("src/assets");
+  eleventyConfig.addPassthroughCopy({
+    "node_modules/monaco-editor/min/vs": "assets/vendor/monaco/vs",
+    "node_modules/lz-string/libs/lz-string.min.js": "assets/vendor/lz-string.min.js",
+  });
   eleventyConfig.addPassthroughCopy("src/CNAME");
 
   // [Author pages] Posts written by a given author, matched on the post's

@@ -8,6 +8,7 @@ import { test, expect } from "@playwright/test";
 // Top-level nav links exist and resolve on every viewport (the markup is in the
 // DOM on mobile too — it is just collapsed behind the hamburger).
 const TOP_NAV = [
+  { name: "Playground", href: "/playground/" },
   { name: "Docs", href: "/docs/" },
   { name: "Rules", href: "/docs/rules/" },
   { name: "Blog", href: "/blog/" },

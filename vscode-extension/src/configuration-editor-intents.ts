@@ -2,6 +2,7 @@
 /** Untrusted webview messages accepted by the configuration editor host. */
 
 import type {
+  CacheSettingKey,
   EditorMutation,
   RuleOccurrencesRequest,
   RuleSelector,
@@ -16,21 +17,46 @@ const MAX_TAGS = 128;
 const MAX_TEXT_LENGTH = 8_192;
 const MAX_OCCURRENCES = 500;
 
-export type ConfigurationEditorIntent =
+/** Intents that read or change the configuration the editor is editing. */
+export type ConfigurationEditorStateIntent =
   | { readonly type: "ready" }
   | { readonly type: "refresh" }
-  | { readonly type: "openRaw" }
   | { readonly type: "apply" }
   | { readonly type: "cancelPreview" }
   | { readonly type: "preview"; readonly mutations: EditorMutation[] }
   | { readonly type: "adopt"; readonly scope: "workspace" }
   | { readonly type: "fixSafe" }
+  | { readonly type: "occurrences"; readonly request: Omit<RuleOccurrencesRequest, "rootUri"> };
+
+/**
+ * Intents that only open a document or run a native picker/action. They are
+ * split out so each side routes through its own exhaustive switch, which is
+ * how the union stays checked as it grows ([LSPCFGED-CACHE] added two).
+ */
+export type ConfigurationEditorNavigationIntent =
+  | { readonly type: "openRaw" }
   | { readonly type: "openConfigFile"; readonly uri: string }
-  | { readonly type: "occurrences"; readonly request: Omit<RuleOccurrencesRequest, "rootUri"> }
   | { readonly type: "openDocs"; readonly uri: string }
   | { readonly type: "openOccurrence"; readonly uri: string; readonly line: number; readonly character: number }
   | { readonly type: "pickTypeshedFolder"; readonly key: "TypeshedPath" | "TypeshedStorePath" }
+  | { readonly type: "pickCacheFolder" }
   | { readonly type: "typeshedAction"; readonly action: TypeshedAction };
+
+export type ConfigurationEditorIntent =
+  | ConfigurationEditorStateIntent
+  | ConfigurationEditorNavigationIntent;
+
+const NAVIGATION_TYPES: readonly ConfigurationEditorNavigationIntent["type"][] = [
+  "openRaw", "openConfigFile", "openDocs", "openOccurrence",
+  "pickTypeshedFolder", "pickCacheFolder", "typeshedAction",
+];
+
+/** Narrow one decoded intent to the navigation half of the union. */
+export function isNavigationIntent(
+  intent: ConfigurationEditorIntent,
+): intent is ConfigurationEditorNavigationIntent {
+  return (NAVIGATION_TYPES as readonly string[]).includes(intent.type);
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -108,11 +134,51 @@ function decodeTypeshedMutation(value: Record<string, unknown>): EditorMutation 
   return undefined;
 }
 
+function decodeCacheKey(value: unknown): CacheSettingKey | undefined {
+  if (!isRecord(value) || typeof value.kind !== "string") { return undefined; }
+  switch (value.kind) {
+    case "CacheEnabled": return { kind: "CacheEnabled" };
+    case "CacheDir": return { kind: "CacheDir" };
+    default: return undefined;
+  }
+}
+
+/**
+ * The persistent cache's two keys ([LSPCFGED-CACHE]). Both cross the wire as
+ * text — the server parses "true"/"false" for CacheEnabled and rejects
+ * anything else, so no unchecked value reaches the configuration file.
+ */
+function decodeCacheMutation(value: Record<string, unknown>): EditorMutation | undefined {
+  if (value.kind === "SetCacheSetting") {
+    const key = decodeCacheKey(value.key);
+    const setting = boundedString(value.value);
+    return key === undefined || setting === undefined
+      ? undefined
+      : { kind: "SetCacheSetting", key, value: setting };
+  }
+  if (value.kind === "RemoveCacheSetting") {
+    const key = decodeCacheKey(value.key);
+    return key === undefined ? undefined : { kind: "RemoveCacheSetting", key };
+  }
+  return undefined;
+}
+
 function decodeMutation(value: unknown): EditorMutation | undefined {
   if (!isRecord(value) || typeof value.kind !== "string") { return undefined; }
   if (value.kind === "SetTypeshedSetting" || value.kind === "RemoveTypeshedSetting") {
     return decodeTypeshedMutation(value);
   }
+  if (value.kind === "SetCacheSetting" || value.kind === "RemoveCacheSetting") {
+    return decodeCacheMutation(value);
+  }
+  return decodeRuleMutation(value);
+}
+
+/**
+ * The only four things the rule table can request: set or remove one rule
+ * entry, or one tag entry ([CHKARCH-CONFIG-MODEL], [CONFIGEDITOR-OPERATIONS]).
+ */
+function decodeRuleMutation(value: Record<string, unknown>): EditorMutation | undefined {
   switch (value.kind) {
     case "SetRule": {
       const code = boundedString(value.code);
@@ -213,6 +279,7 @@ export function decodeConfigurationEditorIntent(value: unknown): ConfigurationEd
       ? { type: "pickTypeshedFolder", key: value.key }
       : undefined;
   }
+  if (value.type === "pickCacheFolder") { return { type: "pickCacheFolder" }; }
   if (value.type === "typeshedAction") {
     const action = decodeTypeshedAction(value.action);
     return action === undefined ? undefined : { type: "typeshedAction", action };

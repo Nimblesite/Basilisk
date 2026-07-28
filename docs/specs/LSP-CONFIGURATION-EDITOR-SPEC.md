@@ -10,7 +10,7 @@ This contract composes:
 
 The LSP owns the rule catalog, configuration parsing, impact analysis, and mutation. Clients render server data, request server operations, and apply the returned edit. They do not maintain another rule catalog or write project configuration directly.
 
-The editor is a veneer over the configuration model, never an extension of it. Its rule table requests exactly four mutations: set/remove a rule or tag entry. The separate Typeshed panel uses allowlisted set/remove-setting mutations for the keys in [STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG). The five navigation views (Overview, Rules, Adoption, Path Overrides, Project) never widen that vocabulary: each renders server-computed state and drives only those mutations, allowlisted Typeshed actions, or standalone adopt/safe-fix commands, so every editor concept beyond a rule entry, a tag entry, and an allowlisted Typeshed setting — snapshots, previews, occurrence pages, the debt summary, the path inventory — exists only on the wire, never as a new kind of config line.
+The editor is a veneer over the configuration model, never an extension of it. Its rule table requests exactly four mutations: set/remove a rule or tag entry. The separate Typeshed and Caching panels use allowlisted set/remove-setting mutations for the keys in [STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG) and [CHKCACHE-CONFIG](CHECKER-CACHE-SPEC.md#CHKCACHE-CONFIG). The five navigation views (Overview, Rules, Adoption, Path Overrides, Project) never widen that vocabulary: each renders server-computed state and drives only those mutations, allowlisted Typeshed actions, or standalone adopt/safe-fix commands, so every editor concept beyond a rule entry, a tag entry, and an allowlisted Typeshed or caching setting — snapshots, previews, occurrence pages, the debt summary, the path inventory, the read-only in-session cache report — exists only on the wire, never as a new kind of config line.
 
 ## Rule catalog and tags {#CONFIGEDITOR-TAGS}
 
@@ -22,19 +22,19 @@ Tags serve two roles, both explicit. As *facets*, they group the catalog for nav
 
 All configuration-editor requests require an explicit active-workspace `rootUri`:
 
-- `basilisk/configurationSnapshot` returns the root config document URI and revision, the active source (URI/exists/read-only), rule/tag states, the discovered per-folder path overrides, a server-computed debt summary, the real configuration problems, and the server-described Typeshed settings and active status.
-- `basilisk/previewConfigurationChange` validates the base revision, builds a validated in-memory patch from the requested mutations, and reruns checking against that hypothetical config, returning the resolved per-rule effective-severity changes and before/after impact.
+- `basilisk/configurationSnapshot` returns the root config document URI and revision, the active source (URI/exists/read-only), rule/tag states, the discovered per-folder path overrides, a server-computed debt summary, the real configuration problems, the server-described Typeshed settings and active status, and the server-described caching state for both layers ([§LSPCFGED-CACHE](#LSPCFGED-CACHE)).
+- `basilisk/previewConfigurationChange` validates the base revision, builds a validated in-memory patch from the requested mutations, and reruns checking against that hypothetical config, returning the resolved per-rule effective-severity changes, the exact persisted Typeshed and caching setting changes, and before/after impact.
 - `basilisk/applyConfigurationChange` consumes a cached preview identified by root and preview ID; the server rejects it if the preview's pinned base revision no longer matches the current document. It asks the client to apply one configuration edit, reloads and rechecks the root, republishes diagnostics, emits `basilisk/configurationChanged`, and returns a fresh snapshot.
 - `basilisk/ruleOccurrences` returns URI/range/code-ordered pages selected by the all/codes/tags selectors. The opaque cursor resumes the stable result and the server accepts limits from 1 to 1000.
 - `basilisk/typeshedAction` accepts only `DownloadLatest`, `DownloadPinned`, or `ViewLicense`; it returns an ordinary config preview (the new pin), a refreshed snapshot, or a safe read-only license document respectively.
 
-A mutation is `SetRule`, `RemoveRule`, `SetTag`, `RemoveTag`, `SetTypeshedSetting`, or `RemoveTypeshedSetting`; the latter two accept only the typed keys in [§LSPCFGED-TYPESHED](#LSPCFGED-TYPESHED). Requesting `disabled` for a `pep`-tagged rule is an error: PEP rules are graded, never disabled ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
+A mutation is `SetRule`, `RemoveRule`, `SetTag`, `RemoveTag`, `SetTypeshedSetting`, `RemoveTypeshedSetting`, `SetCacheSetting`, or `RemoveCacheSetting`; the setting variants accept only the typed keys in [§LSPCFGED-TYPESHED](#LSPCFGED-TYPESHED) and [§LSPCFGED-CACHE](#LSPCFGED-CACHE). Every setting value crosses the wire as text, so the mutation union keeps one shape; the server parses `"true"`/`"false"` for `CacheEnabled` and rejects anything else, so no value the TOML parser would silently drop reaches the document. Requesting `disabled` for a `pep`-tagged rule is an error: PEP rules are graded, never disabled ([CHKARCH-CONFIG-MODEL](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL)).
 
 Snapshot, preview, and occurrence inventory cover the complete selected root, even when analysis is configured to publish only open files. Open buffers stay authoritative; eligible closed files are loaded from disk into the server index without publishing additional diagnostics.
 
 The `basilisk.disableRule` command writes an explicit `disabled` rule entry through the same validated, root-aware mutation service, and is rejected for `pep`-tagged rules. Configuration watching is server-owned ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)).
 
-Unknown roots, rule codes, tags, severities, selectors, or Typeshed keys/values/combinations, plus pep-disable requests, stale revisions, malformed configuration, expired previews, and client-rejected edits are request errors ([LSPARCH-CONFIG-EDITOR-ERRORS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR-ERRORS)).
+Unknown roots, rule codes, tags, severities, selectors, or Typeshed/caching keys/values/combinations, plus pep-disable requests, stale revisions, malformed configuration, expired previews, and client-rejected edits are request errors ([LSPARCH-CONFIG-EDITOR-ERRORS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-EDITOR-ERRORS)).
 
 ## Wire model {#CONFIGEDITOR-MODEL}
 
@@ -42,10 +42,10 @@ The editor protocol's design source is [`models/configuration_editor.td`](../../
 
 The protocol is deliberately small:
 
-- a snapshot is the root, config URI/revision, the active source (URI/exists/read-only), rule/tag states, the discovered per-folder path overrides, a server-computed debt summary (the errors/warnings/infos partition plus adopted/disabled rule counts), the real configuration problems, and server-described Typeshed settings/status;
-- `EditorMutation` adds allowlisted `SetTypeshedSetting` / `RemoveTypeshedSetting` to the four rule/tag variants;
+- a snapshot is the root, config URI/revision, the active source (URI/exists/read-only), rule/tag states, the discovered per-folder path overrides, a server-computed debt summary (the errors/warnings/infos partition plus adopted/disabled rule counts), the real configuration problems, server-described Typeshed settings/status, and the two-layer caching state;
+- `EditorMutation` adds allowlisted `SetTypeshedSetting` / `RemoveTypeshedSetting` and `SetCacheSetting` / `RemoveCacheSetting` to the four rule/tag variants;
 - `TypeshedAction` is the closed `DownloadLatest` / `DownloadPinned` / `ViewLicense` union;
-- a preview is the resolved per-rule effective-severity changes (`Disabled` = does not run, never present on a `pep` rule) plus a complete errors/warnings/infos before/after partition; and
+- a preview is the resolved per-rule effective-severity changes (`Disabled` = does not run, never present on a `pep` rule), the exact persisted Typeshed and cache setting changes, plus a complete errors/warnings/infos before/after partition; and
 - occurrences are paged locations with the severity that produced them.
 
 There is no format enum, no preset list, and no mutation intents. The debt summary, path inventory, configuration problems, and adoption state a view renders are read-only server projections of the snapshot — never client-computed and never a new kind of config line.
@@ -80,7 +80,7 @@ The **Adoption** view renders the server's effective adoption state read-only �
 
 The **Path Overrides** view surfaces the nested `pyproject.toml` `[tool.basilisk]` tables the server discovered under the root ([CHKARCH-CONFIG-DISCOVERY](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY)): each is shown with its folder, its rule and tag entries, and a link that opens that folder's configuration file for editing. The checker honors the nearest deciding table per rule; the view exposes only folder-scoped tables — glob-path and per-module override tables stay excluded.
 
-The **Project** view shows the active configuration source resolved by the server — its `pyproject.toml` URI, whether it exists on disk, whether it is writable, and the content revision — plus any real configuration problems (an entry naming an unknown rule code) and the Typeshed settings ([LSPCFGED-TYPESHED](#LSPCFGED-TYPESHED)). The extension never reads or writes configuration files itself.
+The **Project** view shows the active configuration source resolved by the server — its `pyproject.toml` URI, whether it exists on disk, whether it is writable, and the content revision — plus any real configuration problems (an entry naming an unknown rule code), the Typeshed settings ([LSPCFGED-TYPESHED](#LSPCFGED-TYPESHED)), and the caching panel ([LSPCFGED-CACHE](#LSPCFGED-CACHE)). The extension never reads or writes configuration files itself.
 
 Multi-root selection is explicit: the active editor's root wins, otherwise the user chooses a workspace. Responses and navigation are checked against that root. The extension does not read or write configuration files itself. The analyze opt-out is an ordinary editor setting relayed as an initialization option ([LSPARCH-DIAGNOSTIC-SCOPE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE)), not part of this editor.
 
@@ -180,6 +180,47 @@ command. They describe Basilisk transport around pinned typing step 3, not extra
 typing diagnostics
 ([`python/typing@6ef9f77`](https://github.com/python/typing/blob/6ef9f7719ecfff09dad8724ef42b621fd994fb5e/docs/spec/distributing.rst)).
 
+## Caching {#LSPCFGED-CACHE}
+
+Basilisk caches on **two layers**, and this panel names both. A configuration
+surface that showed only the switchable one would read as *"this is all the
+caching there is"* — which is precisely the question the panel exists to
+answer. Both layers are described in
+[CHKCACHE-CONFIG-SALSA](CHECKER-CACHE-SPEC.md#CHKCACHE-CONFIG-SALSA).
+
+| Layer | Lifetime | Rendered as |
+|---|---|---|
+| **Persistent result cache** ([CHKCACHE](CHECKER-CACHE-SPEC.md#CHKCACHE)) | across processes, on disk | editable controls |
+| **In-session Salsa memoization** ([CHKARCH-INCREMENTAL-SALSA](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA)) | one session, in memory | read-only rows |
+
+Every key in [CHKCACHE-CONFIG](CHECKER-CACHE-SPEC.md#CHKCACHE-CONFIG) is
+editable here, and nothing else is:
+
+| Control | Key | Widget |
+|---|---|---|
+| Reuse results between runs | `cache` | checkbox; always writes an explicit `true`/`false` |
+| Cache folder | `cache-dir` | folder-picker, with **Use default folder** — which REMOVES the key rather than writing the default back as an entry |
+
+The checkbox writes an explicit value for the same reason a severity control
+does ([§CONFIGEDITOR-VSIX-EXPERIENCE](#CONFIGEDITOR-VSIX-EXPERIENCE)): what the
+panel shows is then what the file says, with no inferred middle state. The
+folder field always shows the **effective** location — the configured folder or
+the default — resolved server-side through the one resolver the CLI writes
+entries through (`CHKCACHE-CONFIG-ONE-RESOLVER`), so the panel can never
+display a folder the run would not use; the reset control appears only once
+there is a project choice to undo.
+
+The in-session rows are read-only and carry **no control of any kind**, because
+the Salsa layer has no key: it reports the engine, that it is always on, and
+the live count of files the session currently memoizes. That count is the only
+evidence a reader has that the layer is running at all.
+
+Like a Typeshed edit, a caching edit has no rule-severity impact to weigh, so
+it is written as soon as it is made — the impact dialog never stands between
+these controls and the configuration
+([§LSPCFGED-TYPESHED](#LSPCFGED-TYPESHED)). Cancelling the folder picker writes
+nothing and restores the controls to the configuration that still holds.
+
 ## Accessibility and security {#CONFIGEDITOR-ACCESSIBILITY-SECURITY}
 
 The webview uses theme tokens, text-labelled severities, keyboard controls, high-contrast/responsive styles, reduced-motion handling, a default-deny CSP, nonce-gated local scripts, no remote resources, and runtime-decoded intents. Workspace data arrives only after the ready handshake and is never interpolated into executable HTML.
@@ -188,6 +229,6 @@ Automated tests cover the CSP/data boundary, intent decoding, semantic labels, r
 
 ## Acceptance {#CONFIGEDITOR-ACCEPTANCE}
 
-The acceptance surface is: the five LSP operations over rule/tag entries and allowlisted Typeshed settings/actions, the five-view VS Code client (Overview, Rules, Adoption, Path Overrides, Project) rendering only server-computed state, and unsaved-buffer/apply-race safety. The partition, seeding, and diagnostic scope are accepted where they are specified ([CHKARCH-COMMANDS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS), [LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING), [LSPARCH-DIAGNOSTIC-SCOPE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE)).
+The acceptance surface is: the five LSP operations over rule/tag entries and allowlisted Typeshed and caching settings/actions, the five-view VS Code client (Overview, Rules, Adoption, Path Overrides, Project) rendering only server-computed state, and unsaved-buffer/apply-race safety. The partition, seeding, and diagnostic scope are accepted where they are specified ([CHKARCH-COMMANDS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS), [LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING), [LSPARCH-DIAGNOSTIC-SCOPE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE)).
 
-The contract deliberately excludes — and tests assert the absence of — selector-based mutations, `Inherit`/`Native` intents, native/default severities, presets, mutation intents and rule-family booleans, glob path and per-module override tables (folder configs cover scoped grading and back the Path Overrides view), fixability selectors and per-occurrence fix-safety metadata (mass fixes and adopt/un-adopt are the standalone [AUTOFIX](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX) commands), configuration-format enums, and shadowed-source reporting. Malformed configuration surfaces as a structured request error, distinct from the real configuration-problem inventory the Project view renders.
+The contract deliberately excludes — and tests assert the absence of — selector-based mutations, `Inherit`/`Native` intents, native/default severities, presets, mutation intents and rule-family booleans, glob path and per-module override tables (folder configs cover scoped grading and back the Path Overrides view), fixability selectors and per-occurrence fix-safety metadata (mass fixes and adopt/un-adopt are the standalone [AUTOFIX](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX) commands), configuration-format enums, shadowed-source reporting, and any control over the in-session Salsa layer (it has no key — [LSPCFGED-CACHE](#LSPCFGED-CACHE) reports it, never edits it). Malformed configuration surfaces as a structured request error, distinct from the real configuration-problem inventory the Project view renders.

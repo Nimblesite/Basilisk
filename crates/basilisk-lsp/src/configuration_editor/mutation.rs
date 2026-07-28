@@ -8,13 +8,15 @@
 
 use std::collections::HashSet;
 
-use basilisk_config::{BasiliskConfig, ConfigDocument, ConfigurationUpdate, TypeshedConfigKey};
+use basilisk_config::{
+    BasiliskConfig, CacheConfigMutation, ConfigDocument, ConfigurationUpdate, TypeshedConfigKey,
+};
 use tower_lsp::jsonrpc::{Error, Result as LspResult};
 
 use super::catalog::{descriptors, effective_severity, wire_to_config, SelectionError};
 use super::model::{
-    ConfigurationImpact, EditorMutation, ResolvedRuleChange, RuleDescriptor, RuleSeverity,
-    TypeshedSettingChange, TypeshedSettingKey,
+    CacheSettingChange, CacheSettingKey, ConfigurationImpact, EditorMutation, ResolvedRuleChange,
+    RuleDescriptor, RuleSeverity, TypeshedSettingChange, TypeshedSettingKey,
 };
 use super::protocol::{path_uri, rpc_error, rpc_error_data};
 use super::snapshot::{count_i64, Inventory};
@@ -96,9 +98,83 @@ pub(super) fn build_update(
                     .entries
                     .insert(typeshed_config_key(*key), None);
             }
+            EditorMutation::SetCacheSetting { key, value } => {
+                update.cache.mutations.push(cache_set(*key, value)?);
+            }
+            EditorMutation::RemoveCacheSetting { key } => {
+                update.cache.mutations.push(match key {
+                    CacheSettingKey::CacheEnabled => CacheConfigMutation::RemoveEnabled,
+                    CacheSettingKey::CacheDir => CacheConfigMutation::RemoveDir,
+                });
+            }
         }
     }
     Ok(update)
+}
+
+/// Validate one cache-setting write ([LSPCFGED-CACHE], [CHKCACHE-CONFIG]).
+///
+/// The wire carries every setting as text so the mutation union stays one
+/// shape, but `cache` is a TOML boolean: only the two canonical spellings are
+/// accepted here, so a value the parser would silently drop never reaches the
+/// document. `cache-dir` must name something.
+fn cache_set(key: CacheSettingKey, value: &str) -> LspResult<CacheConfigMutation> {
+    match key {
+        CacheSettingKey::CacheEnabled => match value {
+            "true" => Ok(CacheConfigMutation::SetEnabled(true)),
+            "false" => Ok(CacheConfigMutation::SetEnabled(false)),
+            _ => Err(invalid_cache_setting(
+                key,
+                "cache must be exactly \"true\" or \"false\"",
+            )),
+        },
+        CacheSettingKey::CacheDir if !value.trim().is_empty() => {
+            Ok(CacheConfigMutation::SetDir(value.to_owned()))
+        }
+        CacheSettingKey::CacheDir => Err(invalid_cache_setting(
+            key,
+            "cache-dir requires a non-empty path",
+        )),
+    }
+}
+
+fn invalid_cache_setting(key: CacheSettingKey, message: &str) -> Error {
+    rpc_error_data(
+        "invalidCacheSetting",
+        message,
+        serde_json::json!({ "key": format!("{key:?}") }),
+    )
+}
+
+/// Project exact persisted cache-setting changes into the preview
+/// ([LSPCFGED-CACHE]). Values are the rendered TOML text, so a boolean flip
+/// reads `false → true` rather than as an opaque key name.
+pub(super) fn resolved_cache_changes(
+    before: &BasiliskConfig,
+    after: &BasiliskConfig,
+) -> Vec<CacheSettingChange> {
+    [CacheSettingKey::CacheEnabled, CacheSettingKey::CacheDir]
+        .into_iter()
+        .filter_map(|key| {
+            let previous = config_cache_value(before, key);
+            let next = config_cache_value(after, key);
+            (previous != next).then_some(CacheSettingChange {
+                key,
+                before: previous,
+                after: next,
+            })
+        })
+        .collect()
+}
+
+fn config_cache_value(config: &BasiliskConfig, key: CacheSettingKey) -> Option<String> {
+    match key {
+        CacheSettingKey::CacheEnabled => config.cache_enabled.map(|flag| flag.to_string()),
+        CacheSettingKey::CacheDir => config
+            .cache_dir
+            .as_ref()
+            .map(|dir| dir.to_string_lossy().into_owned()),
+    }
 }
 
 fn typeshed_config_key(key: TypeshedSettingKey) -> TypeshedConfigKey {
