@@ -10,6 +10,7 @@
 
 import * as vscode from "vscode";
 import { type Store } from "./store";
+import type { WorkspaceStateStore } from "./store-types";
 import { subscribeRevision } from "./reactive-refresh";
 import { Logger } from "./logger";
 import {
@@ -211,8 +212,32 @@ export function workspaceHealthBadge(stats: HealthStats | undefined): vscode.Vie
 
 // ── Provider ─────────────────────────────────────────────────────────────
 
+/**
+ * The slice of a `TreeView` this provider writes: a header message and a badge.
+ *
+ * Neither is ever read back, and nothing else on `TreeView<TreeItem>` is
+ * touched, so naming just these two keeps the dependency honest — and lets a
+ * test hand over an object that captures what was written instead of
+ * manufacturing a whole tree view.
+ */
+export interface ViewChrome {
+  message?: string | undefined;
+  badge?: vscode.ViewBadge | undefined;
+}
+
 /** View mode for module explorer: tree (hierarchical) or flat (all symbols). */
 type ViewMode = "tree" | "flat";
+
+/**
+ * The persisted view mode, or `"tree"` when storage holds anything else.
+ *
+ * What comes back was written by whichever version of the extension last ran,
+ * so it is checked rather than assumed: an unrecognised mode falls back to the
+ * default instead of putting the explorer into a state it cannot render.
+ */
+function asViewMode(value: unknown): ViewMode {
+  return value === "flat" || value === "tree" ? value : "tree";
+}
 
 /** Sort mode applied in flat view (tree view stays structural) — #189. */
 type SortMode = "name" | "path" | "coverage";
@@ -239,12 +264,12 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
   private viewMode: ViewMode = "tree";
   private sortMode: SortMode = "coverage";
   private filterPattern = "";
-  private treeView: vscode.TreeView<TreeItem> | undefined;
+  private treeView: ViewChrome | undefined;
 
   constructor(private readonly store: Store) {}
 
   /** Bind the tree view so the provider can drive its native message + badge chrome. */
-  public setTreeView(treeView: vscode.TreeView<TreeItem>): void {
+  public setTreeView(treeView: ViewChrome): void {
     this.treeView = treeView;
   }
 
@@ -277,7 +302,7 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
   // Implements [EXTACT-MODULES-TOOLBAR] Toggle View — switch tree<->flat and
   // publish the `basilisk.moduleExplorerView` context key that gates Sort (#151).
   /** Toggle between tree and flat view modes, persisted in workspaceState. */
-  public toggleViewMode(context: vscode.ExtensionContext): void {
+  public toggleViewMode(context: WorkspaceStateStore): void {
     this.viewMode = this.viewMode === "tree" ? "flat" : "tree";
     void context.workspaceState.update("basilisk.moduleExplorerView", this.viewMode);
     void vscode.commands.executeCommand("setContext", "basilisk.moduleExplorerView", this.viewMode);
@@ -285,8 +310,8 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
   }
 
   /** Restore view mode from workspaceState. */
-  public restoreViewMode(context: vscode.ExtensionContext): void {
-    this.viewMode = context.workspaceState.get<ViewMode>("basilisk.moduleExplorerView") ?? "tree";
+  public restoreViewMode(context: WorkspaceStateStore): void {
+    this.viewMode = asViewMode(context.workspaceState.get("basilisk.moduleExplorerView"));
     void vscode.commands.executeCommand("setContext", "basilisk.moduleExplorerView", this.viewMode);
   }
 

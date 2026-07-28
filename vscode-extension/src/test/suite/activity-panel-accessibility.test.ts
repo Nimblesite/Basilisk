@@ -11,69 +11,25 @@
  */
 
 import * as assert from "assert";
-import * as vscode from "vscode";
 import { getStore } from "../../extension";
 import {
-    EXTENSION_ID,
+  manifestCommands,
+  manifestMenu,
+  manifestViews,
+  manifestViewsWelcome,
+  type CommandContribution,
+} from "./extension-manifest";
+import {
     WAIT_MS,
     setupLspTestSuite,
     teardownLspTestSuite,
     closeAllEditors,
 } from "./test-helpers";
 
-// ── Package.json types ───────────────────────────────────────────────────���
-
-interface CommandContribution {
-  readonly command: string;
-  readonly title: string;
-  readonly icon?: string | { light: string; dark: string };
-  readonly category?: string;
-}
-
-interface ViewContribution {
-  readonly id: string;
-  readonly name: string;
-  readonly when?: string;
-  readonly visibility?: string;
-}
-
-interface MenuContribution {
-  readonly command: string;
-  readonly when: string;
-  readonly group?: string;
-}
-
-interface WelcomeContribution {
-  readonly view: string;
-  readonly contents: string;
-  readonly when?: string;
-}
-
-interface PackageJSON {
-  contributes?: {
-    commands?: CommandContribution[];
-    views?: Record<string, ViewContribution[]>;
-    menus?: {
-      "view/title"?: MenuContribution[];
-      "view/item/context"?: MenuContribution[];
-    };
-    viewsWelcome?: WelcomeContribution[];
-  };
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-function loadPackageJSON(): PackageJSON {
-  const ext = vscode.extensions.getExtension(EXTENSION_ID);
-  assert.ok(ext, "Extension should be installed");
-  return ext.packageJSON as PackageJSON;
-}
-
 // ── Assertion helpers (extracted to keep the suite body under 120 lines) ──
 
 function assertViewsHaveDescriptiveNames(): void {
-  const pkg = loadPackageJSON();
-  const views = pkg.contributes?.views?.["basilisk-explorer"] ?? [];
+  const views = manifestViews()["basilisk-explorer"] ?? [];
 
   for (const view of views) {
     assert.ok(view.name, `View "${view.id}" should have a name`);
@@ -85,8 +41,7 @@ function assertViewsHaveDescriptiveNames(): void {
 }
 
 function assertCommandsHaveDescriptiveTitles(): void {
-  const pkg = loadPackageJSON();
-  const commands = pkg.contributes?.commands ?? [];
+  const commands = manifestCommands();
 
   const panelCommands = commands.filter(
     (cmd) =>
@@ -110,9 +65,8 @@ function assertCommandsHaveDescriptiveTitles(): void {
 }
 
 function assertToolbarCommandsHaveIcons(): void {
-  const pkg = loadPackageJSON();
-  const commands = pkg.contributes?.commands ?? [];
-  const titleMenus = pkg.contributes?.menus?.["view/title"] ?? [];
+  const commands = manifestCommands();
+  const titleMenus = manifestMenu("view/title");
 
   const toolbarCommandIds = new Set(titleMenus.map((entry) => entry.command));
 
@@ -127,8 +81,7 @@ function assertToolbarCommandsHaveIcons(): void {
 }
 
 function assertCommandsHaveCategory(): void {
-  const pkg = loadPackageJSON();
-  const commands = pkg.contributes?.commands ?? [];
+  const commands = manifestCommands();
 
   const panelCommands = commands.filter(
     (cmd) =>
@@ -146,8 +99,7 @@ function assertCommandsHaveCategory(): void {
 }
 
 function assertToolbarMenusHaveWhenClauses(): void {
-  const pkg = loadPackageJSON();
-  const titleMenus = pkg.contributes?.menus?.["view/title"] ?? [];
+  const titleMenus = manifestMenu("view/title");
 
   const panelMenus = titleMenus.filter(
     (entry) =>
@@ -167,8 +119,7 @@ function assertToolbarMenusHaveWhenClauses(): void {
 }
 
 function assertContextMenusHaveWhenClauses(): void {
-  const pkg = loadPackageJSON();
-  const contextMenus = pkg.contributes?.menus?.["view/item/context"] ?? [];
+  const contextMenus = manifestMenu("view/item/context");
 
   const panelMenus = contextMenus.filter((entry) => entry.when.includes("basilisk"));
 
@@ -178,8 +129,7 @@ function assertContextMenusHaveWhenClauses(): void {
 }
 
 function assertWelcomeViewsHaveMeaningfulContent(): void {
-  const pkg = loadPackageJSON();
-  const welcomeViews = pkg.contributes?.viewsWelcome ?? [];
+  const welcomeViews = manifestViewsWelcome();
 
   const panelWelcome = welcomeViews.filter(
     (entry) => entry.view === "basilisk.moduleExplorer",
@@ -199,8 +149,7 @@ function assertWelcomeViewsHaveMeaningfulContent(): void {
 }
 
 function assertCommandsFollowNamingPattern(filter: (cmd: CommandContribution) => boolean): void {
-  const pkg = loadPackageJSON();
-  const commands = pkg.contributes?.commands ?? [];
+  const commands = manifestCommands();
   const filtered = commands.filter(filter);
 
   for (const cmd of filtered) {
@@ -211,8 +160,7 @@ function assertCommandsFollowNamingPattern(filter: (cmd: CommandContribution) =>
 }
 
 function assertInfoPanelVisible(): void {
-  const pkg = loadPackageJSON();
-  const views = pkg.contributes?.views?.["basilisk-explorer"] ?? [];
+  const views = manifestViews()["basilisk-explorer"] ?? [];
   const infoView = views.find((v) => v.id === "basilisk.info");
 
   assert.ok(infoView, "info view should exist");
@@ -220,8 +168,7 @@ function assertInfoPanelVisible(): void {
 }
 
 function assertDataPanelsRequireWorkspace(): void {
-  const pkg = loadPackageJSON();
-  const views = pkg.contributes?.views?.["basilisk-explorer"] ?? [];
+  const views = manifestViews()["basilisk-explorer"] ?? [];
 
   const dataViews = views.filter(
     (v) => v.id === "basilisk.moduleExplorer",

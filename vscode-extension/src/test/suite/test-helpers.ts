@@ -12,9 +12,41 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { type Store } from '../../store-types';
+import type { ReadonlySignal, Signal } from '@preact/signals-core';
+import type { LanguageClient } from 'vscode-languageclient/node';
 
 
 export { POLL_INTERVAL_MS, WAIT_MS } from '../../timeouts';
+
+/**
+ * Put a Store signal the public interface exposes as read-only into `value`.
+ *
+ * The Store deliberately hands out `ReadonlySignal` so production code cannot
+ * write to it, but they are the same `Signal` objects underneath. A test that
+ * needs the store in a particular state says so directly here rather than
+ * driving several unrelated code paths to arrive at it — and rather than each
+ * call site inventing its own `as unknown as { value: X }`, which describes a
+ * type the object does not have and would keep compiling if the real shape
+ * changed. The one assertion the runtime genuinely requires lives here, once.
+ */
+export function seedSignal<T>(signal: ReadonlySignal<T>, value: T): void {
+  (signal as Signal<T>).value = value;
+}
+
+/**
+ * A `LanguageClient` double carrying only the members a test actually drives.
+ *
+ * `sendRequest<R>(…): Promise<R>` cannot be honestly implemented by a double:
+ * satisfying it means producing a caller-chosen `R` out of canned data, and no
+ * runtime check narrows `unknown` to a type parameter. That one unavoidable
+ * assertion lives here rather than being copied into every fixture — the
+ * payloads such a client hands back are still checked wherever production code
+ * reads them, which is the thing `no-unsafe-type-assertion` exists to protect.
+ */
+export function fakeLanguageClient(members: Record<string, unknown>): LanguageClient {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- generic sendRequest<R> cannot be satisfied by a double; see above
+    return members as unknown as LanguageClient;
+}
 
 export const EXTENSION_ID = 'Nimblesite.basilisk';
 

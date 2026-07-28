@@ -155,6 +155,14 @@ const testOverrides = {
   '@typescript-eslint/no-confusing-void-expression': 'off',
   // Tests use truthy checks on dynamic/unknown values from LSP responses
   '@typescript-eslint/strict-boolean-expressions': 'off',
+  // NOTE: `@typescript-eslint/no-unsafe-type-assertion` is deliberately NOT
+  // overridden here. Turning it off for tests was measured to hide 101 of 132
+  // violations, of which only a handful are the generic-test-double case the
+  // exemption was written for — a test that asserts a payload's shape proves
+  // nothing about the payload. The few sites where overriding a generic API
+  // (`sendRequest<R>(): Promise<R>`) genuinely cannot be satisfied carry a
+  // targeted `eslint-disable-next-line` naming that reason, so the exemption is
+  // visible at the site instead of blanketing the suite.
   // Test setup/teardown functions can be longer
   'max-lines-per-function': ['error', { max: 120, skipBlankLines: true, skipComments: true }],
 };

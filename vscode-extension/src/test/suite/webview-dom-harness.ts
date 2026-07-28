@@ -13,9 +13,11 @@ import { buildConfigurationEditorDocument } from "../../configuration-editor-doc
 import type {
   ConfigurationSnapshot,
   EditorMutation,
+  RuleSeverity,
   TypeshedConfigurationState,
 } from "../../configuration-editor-model";
 import { ACTIVE_COMMIT, LATEST_COMMIT, typeshedFixture } from "./typeshed-fixture";
+import { asRecord, isRecord, stringArrayField } from "../../unknown-shape";
 
 export const RESULT_TIMEOUT_MS = 30_000;
 const PEP_RULE_COUNT = 40;
@@ -31,6 +33,52 @@ export interface DomTestResult {
   readonly reason?: string;
   readonly steps?: DomStep[];
   readonly [observation: string]: unknown;
+}
+
+/** Every mutation kind the configuration editor can post ([LSPCFGED-EDITOR]). */
+const EDITOR_MUTATION_KINDS: ReadonlySet<string> = new Set([
+  "SetRule", "RemoveRule", "SetTag", "RemoveTag",
+  "SetTypeshedSetting", "RemoveTypeshedSetting",
+]);
+
+/** Whether a posted value carries one of the recognised mutation kinds. */
+function isEditorMutation(value: unknown): value is EditorMutation {
+  return isRecord(value) && typeof value.kind === "string" && EDITOR_MUTATION_KINDS.has(value.kind);
+}
+
+/**
+ * The `mutations` the webview posted, minus anything unrecognised.
+ *
+ * The webview is a separate context, so its payload is checked rather than
+ * assumed: a mutation kind this harness does not know is dropped here, where
+ * the resulting assertion failure names the mutation, instead of flowing on as
+ * a value the compiler has been told is an `EditorMutation`.
+ */
+function editorMutations(value: unknown): EditorMutation[] {
+  return (Array.isArray(value) ? value : []).filter(isEditorMutation);
+}
+
+/**
+ * The webview's `domTestResult` post, read field by field.
+ *
+ * The webview is a separate JavaScript context: what arrives is whatever it
+ * chose to post, so `ok` is derived from the value rather than asserted — a
+ * post that forgets it reads as a failed scenario, which is the truthful
+ * reading, instead of an `undefined` that every `assert.ok` would wave through.
+ */
+export function domTestResult(message: Record<string, unknown>): DomTestResult {
+  const { ok, reason, steps, ...observations } = message;
+  return {
+    ...observations,
+    ok: ok === true,
+    reason: typeof reason === "string" ? reason : undefined,
+    steps: Array.isArray(steps) ? steps.filter(isDomStep) : undefined,
+  };
+}
+
+/** Whether one posted step carries the `label` every step is required to have. */
+function isDomStep(value: unknown): value is DomStep {
+  return typeof value === "object" && value !== null && typeof (value as { label?: unknown }).label === "string";
 }
 
 export interface ScenarioOutcome {
@@ -145,7 +193,7 @@ export class ScenarioHost {
   private pendingDownload: "DownloadLatest" | "DownloadPinned" | undefined;
   private revision = 0;
   private pending: EditorMutation[] = [];
-  private ruleEntries = new Map<string, string>();
+  private ruleEntries = new Map<string, RuleSeverity>();
   /** Folders the picker returns, in order; `undefined` means the user cancelled. */
   private readonly folders: (string | undefined)[];
   private readonly focusRule: string | null;
@@ -186,7 +234,7 @@ export class ScenarioHost {
       ...snapshot,
       rules: snapshot.rules.map((rule) => {
         const entry = this.ruleEntries.get(rule.descriptor.code);
-        return entry === undefined ? rule : { ...rule, entry: { kind: entry } as never };
+        return entry === undefined ? rule : { ...rule, entry };
       }),
     };
   }
@@ -196,7 +244,7 @@ export class ScenarioHost {
     this.intents.push(message);
     switch (message.type) {
       case "ready": return this.readyState();
-      case "preview": return this.preview(message.mutations as EditorMutation[]);
+      case "preview": return this.preview(editorMutations(message.mutations));
       case "apply": return this.applyPending();
       case "cancelPreview": return this.readyState("Change discarded; configuration is unchanged");
       case "typeshedAction": return this.typeshedAction(String(message.action));
@@ -248,7 +296,7 @@ export class ScenarioHost {
 
   private applyPending(): Record<string, unknown> {
     this.pending.forEach((mutation) => {
-      if (mutation.kind === "SetRule") { this.ruleEntries.set(mutation.code, mutation.severity.kind); }
+      if (mutation.kind === "SetRule") { this.ruleEntries.set(mutation.code, mutation.severity); }
       if (mutation.kind === "RemoveRule") { this.ruleEntries.delete(mutation.code); }
       this.write(mutation);
     });
@@ -295,12 +343,12 @@ export class ScenarioHost {
   }
 
   private occurrences(message: Record<string, unknown>): Record<string, unknown> {
-    const selector = message.selector as { codes?: string[] } | undefined;
+    const codes = stringArrayField(message.selector, "codes");
     return {
       ...this.readyState(),
       occurrences: {
         items: [{
-          code: selector?.codes?.[0] ?? "",
+          code: codes[0] ?? "",
           uri: "file:///workspace/project/app.py",
           range: { start: { line: 1, character: 0 }, end: { line: 1, character: 4 } },
           severity: { kind: "Error" },
@@ -364,7 +412,7 @@ export async function runScenario(driver: string, host: ScenarioHost): Promise<S
         if (message.type === "domTestBoot") { booted = true; return; }
         if (message.type === "domTestResult") {
           clearTimeout(timer);
-          resolve(message as DomTestResult);
+          resolve(domTestResult(message));
           return;
         }
         if (message.type === "domTestSettle") {
@@ -372,7 +420,7 @@ export async function runScenario(driver: string, host: ScenarioHost): Promise<S
           return;
         }
         if (message.type !== "domTestIntent") { return; }
-        const state = host.receive(message.intent as Record<string, unknown>);
+        const state = host.receive(asRecord(message.intent));
         if (state !== undefined) { void panel.webview.postMessage({ type: "state", state }); }
       });
       panel.webview.html = harnessDocument(driver);

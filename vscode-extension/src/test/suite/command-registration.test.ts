@@ -27,7 +27,9 @@ import {
     setupLspTestSuite,
     teardownLspTestSuite,
 } from "./test-helpers";
-import { getPackageJsonCommands } from './profiler-test-constants';
+import {
+  manifestCommands
+} from "./extension-manifest";
 
 /** Extra time for the restart cycle test. */
 
@@ -50,8 +52,8 @@ const ZOMBIE_STOP_TIMEOUT_MS = 5_000;
  * drifts: it never included `basilisk.profileDiff`, which shipped contributed
  * but unregistered ("command not found" in the palette) and no test noticed.
  */
-function manifestCommands(): readonly string[] {
-    return getPackageJsonCommands().map((entry) => entry.command);
+function manifestCommandIds(): readonly string[] {
+    return manifestCommands().map((entry) => entry.command);
 }
 
 /** Commands registered client-side (not by the LSP server). */
@@ -199,7 +201,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     // 1. Every manifest command is known to VS Code's command registry
     // ----------------------------------------------------------------
     test('all manifest commands exist in the VS Code command registry', function () {
-        const commands = manifestCommands();
+        const commands = manifestCommandIds();
         assert.ok(commands.length > 0, 'the manifest must contribute commands');
         for (const cmd of commands) {
             assertCannotRegister(cmd, 'Manifest command registration');

@@ -53,11 +53,11 @@ import {
   type LspState,
   type ReadyHandle,
 } from "./store-ready";
-import type { RuntimeResolution, Store, StoreSignals } from "./store-types";
+import type { DisposableSink, RuntimeResolution, Store, StoreSignals } from "./store-types";
 
 // Re-exported so consumers keep importing the LSP lifecycle type from the store.
 export { type LspState } from "./store-ready";
-export type { RuntimeResolution, Store } from "./store-types";
+export type { DisposableSink, RuntimeResolution, Store } from "./store-types";
 
 // ── Private helpers operating on StoreSignals ─────────────────────────────
 
@@ -101,7 +101,7 @@ function syncServerCommands(signals: StoreSignals): void {
 
 interface CommandRegistration {
   signals: StoreSignals;
-  context: vscode.ExtensionContext;
+  context: DisposableSink;
   commandId: string;
 }
 
@@ -144,7 +144,7 @@ function disposeAllCommands(signals: StoreSignals): void {
 // ([VSIX-OUTPUT-CHANNELS]). All other contributed commands are server-advertised
 // and auto-registered via syncServerCommands (per the Command Registration Rule).
 /** Register all client-only commands. Called when LSP reaches Running. */
-function registerClientCommands(signals: StoreSignals, context: vscode.ExtensionContext): void {
+function registerClientCommands(signals: StoreSignals, context: DisposableSink): void {
   registerCommand({ signals, context, commandId: "basilisk.restartServer" }, async () => {
     const lspClient = signals.client.value;
     if (!lspClient) {
@@ -203,7 +203,7 @@ const DIAGNOSTICS_BUMP_DEBOUNCE_MS = 300;
  * diagnostics change bumps the analysis revision (debounced) so panels that
  * render health rollups stay live ([EXTACT-HEALTH-REFRESH]).
  */
-function bindDiagnosticsListener(signals: StoreSignals, context: vscode.ExtensionContext): void {
+function bindDiagnosticsListener(signals: StoreSignals, context: DisposableSink): void {
   if (signals.diagnosticsListenerBound) { return; }
   signals.diagnosticsListenerBound = true;
   context.subscriptions.push(
@@ -225,7 +225,7 @@ function bindDiagnosticsListener(signals: StoreSignals, context: vscode.Extensio
  */
 function bindClientStateListener(
   signals: StoreSignals,
-  context: vscode.ExtensionContext,
+  context: DisposableSink,
   lspClient: LanguageClient
 ): void {
   lspClient.onDidChangeState((event) => {
@@ -422,7 +422,7 @@ export function createStore(onReset?: () => void): Store {
     ...createProcessPanelActions(signals.processes),
     ...createConfigurationEditorActions(signals.configurationEditor),
 
-    setClient(context: vscode.ExtensionContext, c: LanguageClient): void {
+    setClient(context: DisposableSink, c: LanguageClient): void {
       signals.client.value = c;
       bindClientStateListener(signals, context, c);
       bindDiagnosticsListener(signals, context);
