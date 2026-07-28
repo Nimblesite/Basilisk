@@ -347,3 +347,47 @@ fn failure_report_is_anchored_at_the_start_of_the_file() {
         "a whole-file failure names no rule and points at the file's start"
     );
 }
+
+/// Verifies [WASM-PLAN-SITE]: the playground's own "Protocol mismatch" example
+/// actually reports a protocol mismatch.
+///
+/// The example shipped advertising a violation the checker did not detect —
+/// the page rendered "No type errors found" for code that PEP 544 rejects,
+/// because `protocols_definition_2` only inspected annotated assignments and
+/// not call arguments. A demo that silently proves the opposite of its own
+/// label is worse than no demo, so the example source is pinned here, byte for
+/// byte, against the engine the browser actually runs.
+#[test]
+fn playground_protocol_example_reports_the_mismatch_it_advertises() {
+    // Byte-identical to `EXAMPLES.protocol` in website/src/assets/js/playground.js.
+    let source = "from typing import Protocol\n\nclass Renderable(Protocol):\n    def render(self) -> str: ...\n\nclass User:\n    name: str = \"Ada\"\n\ndef show(item: Renderable) -> None:\n    print(item.render())\n\nshow(User())";
+
+    // The playground's default version selection is "Latest typing spec", which
+    // sends no `python_version` at all — so that is the path asserted here.
+    let report = check_source(
+        source,
+        &CheckOptions {
+            path: None,
+            python_version: None,
+        },
+    );
+
+    let protocol_errors: Vec<&WasmDiagnostic> = report
+        .diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("protocols_definition_2"))
+        .collect();
+
+    assert!(
+        !protocol_errors.is_empty(),
+        "the Protocol mismatch example must report a protocol mismatch, got: {:?}",
+        report.diagnostics
+    );
+    assert!(
+        protocol_errors
+            .iter()
+            .any(|d| d.message.contains("render") && d.message.contains("User")),
+        "the message must name the missing member and the offending class, got: {:?}",
+        protocol_errors.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+}
