@@ -13,7 +13,26 @@
  */
 
 import * as vscode from "vscode";
+import * as path from "path";
 import { Logger } from "./logger";
+
+/**
+ * Key a file path so the profiler's paths and the editor's agree.
+ *
+ * The heat map matches profile rows to open editors by path. Those two paths
+ * come from different producers and are only textually identical on POSIX:
+ * the profiler reports the interpreter's own filename (`C:\...`), while
+ * `Uri.fsPath` hands back a drive letter VS Code has lower-cased (`c:\...`).
+ * A raw string compare therefore NEVER matches on Windows and the heat map
+ * silently paints nothing — the profile is correct, the editor just stays
+ * blank. Windows paths are case-insensitive, so folding case there is sound;
+ * POSIX paths are case-SENSITIVE, so it must not fold there.
+ * Implements [PROFILE-VIS-HEATMAP] on Windows ([VSIX-CI-PLATFORM-COVERAGE]).
+ */
+function pathKey(file: string): string {
+  const resolved = path.resolve(file);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -164,15 +183,16 @@ function getDecorationTypeForColor(color: string): vscode.TextEditorDecorationTy
  * Apply inline heat map decorations to all visible editors based on
  * profiling results.
  */
-/** Group items by file path into a map. */
+/** Group items by normalised file path (see `pathKey`) into a map. */
 function groupByFile<T extends { file: string }>(items: T[]): Map<string, T[]> {
   const grouped = new Map<string, T[]>();
   for (const item of items) {
-    const existing = grouped.get(item.file);
+    const key = pathKey(item.file);
+    const existing = grouped.get(key);
     if (existing !== undefined) {
       existing.push(item);
     } else {
-      grouped.set(item.file, [item]);
+      grouped.set(key, [item]);
     }
   }
   return grouped;
@@ -265,14 +285,15 @@ export function applyProfileDecorations(result: ProfileResult): void {
 
   for (const editor of vscode.window.visibleTextEditors) {
     const filePath = editor.document.uri.fsPath;
+    const key = pathKey(filePath);
     const optionsByColor = new Map<string, vscode.DecorationOptions[]>();
 
-    const lines = linesByFile.get(filePath);
+    const lines = linesByFile.get(key);
     if (lines !== undefined) {
       buildLineDecorations(editor, lines, optionsByColor);
     }
 
-    const funcs = funcsByFile.get(filePath);
+    const funcs = funcsByFile.get(key);
     if (funcs !== undefined) {
       buildFuncDecorations(editor, funcs, { lines, optionsByColor });
     }

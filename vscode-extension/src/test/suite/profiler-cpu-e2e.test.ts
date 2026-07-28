@@ -270,9 +270,23 @@ function assertCpuprofileRootsAtUserCode(cpuProfilePath: string, burnerPath: str
   }
 }
 
+/**
+ * Compare two paths the way the host filesystem does.
+ *
+ * The paths under comparison come from different producers: the profiler
+ * reports the interpreter's own filename, while the decoration ledger records
+ * `Uri.fsPath`, whose drive letter VS Code lower-cases. Windows paths are
+ * case-insensitive, so the two name the same file; POSIX paths are
+ * case-SENSITIVE, so folding there would let a genuinely different file pass.
+ */
+function samePath(left: string, right: string): boolean {
+  const a = path.resolve(left);
+  const b = path.resolve(right);
+  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
 function hasBurnerHotFunction(result: Pick<ProfileResult, "hotFunctions">, burnerPath: string): boolean {
-  const expected = path.resolve(burnerPath);
-  return result.hotFunctions.some((fn) => path.resolve(fn.file) === expected);
+  return result.hotFunctions.some((fn) => samePath(fn.file, burnerPath));
 }
 
 function hotFunctionSummary(result: Pick<ProfileResult, "hotFunctions">): string {
@@ -284,12 +298,12 @@ function hotFunctionSummary(result: Pick<ProfileResult, "hotFunctions">): string
 /** Assert the burner's hottest line wears the correctly-tiered palette color. */
 function assertHottestLineTier(result: ProfileResult, burnerPath: string): void {
   applyProfileDecorations(result);
-  const applied = appliedProfileDecorations().filter((entry) => entry.file === burnerPath);
+  const applied = appliedProfileDecorations().filter((entry) => samePath(entry.file, burnerPath));
   assert.ok(applied.length > 0, "real profile data must paint the open hot file");
   // Tier-check the hottest line OF THE BURNER — under debugpy, tracer
   // machinery can own the globally hottest line in a file that isn't open.
   const topLine = [...result.hotLines]
-    .filter((line) => line.file === burnerPath)
+    .filter((line) => samePath(line.file, burnerPath))
     .sort((a, b) => b.percentage - a.percentage)[0];
   assert.ok(topLine !== undefined, `the burner must have hot lines, got: ${JSON.stringify(result.hotLines)}`);
   const expectedColor =
@@ -327,7 +341,7 @@ async function assertProfilerDiagnosticsPublished(uri: vscode.Uri): Promise<void
 
 /** Assert the heat map painted on the burner with palette colors and % text. */
 function assertHeatMapPainted(burnerPath: string): void {
-  const applied = appliedProfileDecorations().filter((entry) => entry.file === burnerPath);
+  const applied = appliedProfileDecorations().filter((entry) => samePath(entry.file, burnerPath));
   const visible = vscode.window.visibleTextEditors.map((e) => e.document.uri.fsPath).join(", ");
   assert.ok(
     applied.length > 0,
