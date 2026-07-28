@@ -17,6 +17,8 @@
 //! ]
 //! ```
 //!
+//! Implements [CHKARCH-CLI-OUTPUT-FAILURES]. See
+//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-OUTPUT-FAILURES
 //! A file the run could not read at all is reported in the same array with a
 //! `null` code, because no rule produced it. Leaving it out rendered `[]` — the
 //! answer a clean file gets — for a file that was never checked, so every

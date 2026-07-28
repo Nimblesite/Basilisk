@@ -1,4 +1,6 @@
 // Tests for [VSIX]. See docs/specs/VSIX-SPEC.md#VSIX
+// Consumes [CHKARCH-CLI-OUTPUT-FAILURES]. See
+// docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-OUTPUT-FAILURES
 /**
  * Contract tests for the subprocess-mode parse boundary.
  *

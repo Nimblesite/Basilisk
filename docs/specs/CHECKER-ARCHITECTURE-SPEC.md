@@ -946,6 +946,23 @@ and `analyze` — which just ran them — never prints it. Exit codes
 ([CHKARCH-CLI-EXITCODES](#CHKARCH-CLI-EXITCODES)) and the JSON contract are
 unchanged; machine consumers see no new field.
 
+#### Unanalysable files {#CHKARCH-CLI-OUTPUT-FAILURES}
+
+A file the run could not analyse at all — a syntax error, an unreadable path —
+appears in the JSON array alongside the diagnostics, with `code` set to `null`
+because no rule produced it and a `severity` of `"error"`. It anchors at line 1,
+column 1: the failure is about the file as a whole, and the parser's own message
+carries whatever position it knows.
+
+Omitting it rendered `[]` — byte-for-byte the answer a clean file gets — for a
+file that was never checked, so every consumer reading the report rather than
+the exit code was told a file with a syntax error had no problems. The exit code
+([CHKARCH-CLI-EXITCODES](#CHKARCH-CLI-EXITCODES)) still distinguishes the two,
+but a report that contradicts it is worse than one that says nothing.
+
+Consumers must therefore treat `code` as nullable, and must not require it to
+recognise an entry.
+
 ### Exit codes {#CHKARCH-CLI-EXITCODES}
 
 | Code | Meaning |

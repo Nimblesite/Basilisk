@@ -14,7 +14,12 @@ import { numberField, stringField } from "./unknown-shape";
 /** Exit code returned by `basilisk check` on internal errors. */
 const BASILISK_INTERNAL_ERROR_EXIT_CODE = 3;
 
-/** Shape of a single diagnostic emitted by `basilisk check --output json`. */
+/**
+ * Shape of a single diagnostic emitted by `basilisk check --output json`.
+ *
+ * Consumes [CHKARCH-CLI-OUTPUT-FAILURES]. See
+ * docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-OUTPUT-FAILURES
+ */
 interface BasiliskDiagnostic {
   /**
    * The rule code, absent for a file the CLI could not analyse at all.
