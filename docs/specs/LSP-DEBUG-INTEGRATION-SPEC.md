@@ -86,6 +86,31 @@ The LSP waits until debugpy is accepting TCP connections before returning, avoid
 
 The resolver finds the Python interpreter using a three-step cascade: (1) `BASILISK_PYTHON` environment variable, (2) workspace virtualenv (`.venv/bin/python` or `venv/bin/python`), (3) system `python3` (or `python` on Windows). Before spawning debugpy, `check_debugpy` verifies the interpreter can import debugpy and returns `DebugError::DebugpyNotFound` if it cannot.
 
+#### Verifying debugpy once, ahead of time {#LSPDEBUG-PYRES-WARM}
+
+`check_debugpy` spawns a whole Python process, and the FIRST interpreter a
+server process spawns is dramatically more expensive than every one after it —
+measured at **~15s against ~0.4s** on win32, where a freshly spawned interpreter
+is scanned before it runs. The adapter spawn that follows costs ~300ms, so the
+pre-flight, not the thing it guards, was the whole cost of starting a debug
+session.
+
+Two rules follow:
+
+- **Verify an interpreter at most once.** `DebugSessionManager::ensure_debugpy`
+  remembers interpreters that passed. A **failure is never cached**: a user who
+  installs debugpy after being told it is missing must be able to retry without
+  restarting the server.
+- **Pay the first spawn during initialization, not on F5.**
+  `warm_debugpy` runs from `initialized` in a spawned task, so the expensive
+  first spawn overlaps the workspace scan. It is never awaited and never fails
+  initialization — a workspace with no usable interpreter must still start, and
+  the real debug request reports the real error.
+
+Without this, every debug session on win32 began with a multi-second stall the
+user could neither see nor explain, and the DAP e2e suite timed out behind it
+([VSIX-CI-PLATFORM-COVERAGE-CLASSES]).
+
 ### LSP Server Wiring {#LSPDEBUG-WIRE}
 
 Add `DebugSessionManager` to `LspServer` and handle `basilisk.startDebugSession` / `basilisk.stopDebugSession` in the `execute_command` dispatch. Register both commands in the `initialize` response's `executeCommandProvider`.

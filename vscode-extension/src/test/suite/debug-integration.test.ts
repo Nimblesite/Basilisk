@@ -35,8 +35,21 @@ import { manifestDebuggers } from "./extension-manifest";
 
 const EXTENSION_ID = 'Nimblesite.basilisk';
 
-/** Maximum time (ms) for a debug session to start. */
-const DEBUG_SESSION_TIMEOUT_MS = 15_000;
+/**
+ * Maximum time (ms) for a debug session to start.
+ *
+ * Sized for a COLD server, which is what the first test in this file gets.
+ * Starting a session spawns a real interpreter, and the first Python process a
+ * freshly started server spawns is far more expensive than the rest — it
+ * competes with everything else initialization is doing. The server pays that
+ * once, in the background ([LSPDEBUG-PYRES-WARM]); a session started before it
+ * finishes waits for it rather than paying it twice, so the first session can
+ * legitimately take several seconds on win32 where every later one takes ~250ms.
+ *
+ * This budget bounds a hang. It is not an assertion about latency — no test
+ * here passes or fails on how quickly the session came up.
+ */
+const DEBUG_SESSION_TIMEOUT_MS = 60_000;
 
 /** Maximum time (ms) to wait for a stopped event (breakpoint/step). */
 const STOPPED_EVENT_TIMEOUT_MS = 10_000;

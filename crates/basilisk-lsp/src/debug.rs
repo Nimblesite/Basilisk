@@ -6,7 +6,7 @@
 //! The editor connects directly to debugpy via DAP over TCP — the
 //! LSP just brokers the connection.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::net::TcpListener;
 use std::path::Path;
@@ -132,6 +132,26 @@ impl std::error::Error for DebugError {}
 pub struct DebugSessionManager {
     /// Map from session ID to the spawned debugpy child process.
     sessions: Mutex<HashMap<String, Child>>,
+    /// Interpreters already proven to import debugpy ([LSPDEBUG-PYRES-WARM]).
+    ///
+    /// The check costs a whole Python process, and the FIRST Python spawned
+    /// from the server process is dramatically more expensive than the rest —
+    /// measured at ~15s against ~0.4s on win32, where a freshly spawned
+    /// interpreter is scanned before it runs. Paying that per debug session,
+    /// in front of the adapter spawn, put it squarely in the user's F5 path.
+    /// An interpreter's debugpy does not come and go during a session, so the
+    /// answer is remembered.
+    verified_interpreters: Mutex<HashSet<String>>,
+    /// Serializes interpreter verification ([LSPDEBUG-PYRES-WARM]).
+    ///
+    /// The expensive part is not the interpreter — it is the FIRST Python
+    /// process the server spawns, which competes with everything else
+    /// initialization is doing. Two verifications running at once therefore
+    /// both pay full price, and that is exactly the race between the
+    /// background warm-up and a debug session started moments after the editor
+    /// connects. Holding this gate makes the second caller WAIT for the first
+    /// and then find the work already done, instead of doing it twice.
+    verify_gate: Mutex<()>,
 }
 
 impl fmt::Debug for DebugSessionManager {
@@ -153,6 +173,69 @@ impl DebugSessionManager {
     pub fn new() -> Self {
         Self {
             sessions: Mutex::new(HashMap::new()),
+            verified_interpreters: Mutex::new(HashSet::new()),
+            verify_gate: Mutex::new(()),
+        }
+    }
+
+    /// Verify `python_path` can import debugpy, at most once per interpreter.
+    ///
+    /// Implements [LSPDEBUG-PYRES-WARM]. `check_debugpy` spawns a whole Python
+    /// process, and on win32 the FIRST interpreter spawned from the server
+    /// process costs ~15s against ~0.4s for every one after it — so running it
+    /// per debug session put a 15s stall in front of the adapter spawn (itself
+    /// ~300ms) every time a user pressed F5 on a cold editor.
+    ///
+    /// A negative result is NOT cached: a user who installs debugpy after
+    /// being told it is missing must be able to retry without restarting the
+    /// server.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DebugError::DebugpyNotFound` / `PythonNotFound` exactly as
+    /// [`check_debugpy`] does, for an interpreter not already verified.
+    pub async fn ensure_debugpy(&self, python_path: &str) -> Result<(), DebugError> {
+        if self.is_verified(python_path).await {
+            debug!(python = python_path, "debugpy already verified");
+            return Ok(());
+        }
+        // One verification at a time. Whoever waited here re-reads the cache
+        // first: the holder may have just verified this very interpreter, and
+        // paying for a second cold Python spawn to learn that is the whole
+        // cost this gate exists to avoid.
+        let _gate = self.verify_gate.lock().await;
+        if self.is_verified(python_path).await {
+            debug!(python = python_path, "debugpy verified while waiting");
+            return Ok(());
+        }
+        check_debugpy(python_path).await?;
+        let _ = self
+            .verified_interpreters
+            .lock()
+            .await
+            .insert(python_path.to_owned());
+        Ok(())
+    }
+
+    /// Has this interpreter already been proven to import debugpy?
+    async fn is_verified(&self, python_path: &str) -> bool {
+        self.verified_interpreters
+            .lock()
+            .await
+            .contains(python_path)
+    }
+
+    /// Pay the first-spawn cost off the user's critical path.
+    ///
+    /// Implements [LSPDEBUG-PYRES-WARM]. Called during server initialization so
+    /// the expensive first interpreter spawn overlaps the workspace scan
+    /// instead of landing on the first debug session. Failure is deliberately
+    /// ignored: a workspace with no usable interpreter must not fail to
+    /// initialize, and the real attempt reports the real error.
+    pub async fn warm_debugpy(&self, python_path: &str) {
+        match self.ensure_debugpy(python_path).await {
+            Ok(()) => info!(python = python_path, "debugpy pre-verified"),
+            Err(err) => debug!(python = python_path, %err, "debugpy pre-verify skipped"),
         }
     }
 
@@ -560,6 +643,105 @@ mod tests {
 
     /// Guard for tests that mutate process-wide environment variables.
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Implements [LSPDEBUG-PYRES-WARM]: a verified interpreter is verified
+    /// ONCE. The check spawns a whole Python process, and the first one a
+    /// server spawns is ~40x the cost of the rest on win32, so repeating it
+    /// per debug session is what put a multi-second stall in front of F5.
+    ///
+    /// Timing is the observable here because the cache has no other surface:
+    /// a second `ensure_debugpy` that re-ran the check would spawn Python
+    /// again and cost the same as the first, not a small fraction of it.
+    #[tokio::test]
+    async fn a_verified_interpreter_is_not_re_checked() {
+        let python = if cfg!(windows) { "python" } else { "python3" };
+        let manager = DebugSessionManager::default();
+
+        if manager.ensure_debugpy(python).await.is_err() {
+            // No usable interpreter here; the cache has nothing to prove.
+            return;
+        }
+
+        let cold = Instant::now();
+        manager
+            .ensure_debugpy(python)
+            .await
+            .expect("a verified interpreter stays verified");
+        let cached = cold.elapsed();
+
+        assert!(
+            cached < Duration::from_millis(50),
+            "a cached verification must not spawn Python again (took {cached:?})",
+        );
+    }
+
+    /// Implements [LSPDEBUG-PYRES-WARM]: concurrent verifications of one
+    /// interpreter collapse into a single check. This is the warm-up racing a
+    /// debug session started moments after the editor connects — without the
+    /// gate both pay the expensive first-spawn cost.
+    #[tokio::test]
+    async fn concurrent_verifications_collapse_into_one() {
+        let python = if cfg!(windows) { "python" } else { "python3" };
+        let manager = std::sync::Arc::new(DebugSessionManager::default());
+
+        if manager.ensure_debugpy(python).await.is_err() {
+            return; // No usable interpreter here.
+        }
+        // Forget the result so the racers below start from a cold cache.
+        let _ = manager.verified_interpreters.lock().await.remove(python);
+
+        let started = Instant::now();
+        let racers = (0..4).map(|_| {
+            let manager = std::sync::Arc::clone(&manager);
+            tokio::spawn(async move { manager.ensure_debugpy(python).await })
+        });
+        for racer in racers {
+            racer
+                .await
+                .expect("verification task must not panic")
+                .expect("a usable interpreter must verify");
+        }
+        let elapsed = started.elapsed();
+
+        assert!(
+            manager.is_verified(python).await,
+            "the interpreter must end up cached",
+        );
+        // Four serialized cold checks would cost about four times one; the gate
+        // means three of them find the answer already there.
+        assert!(
+            elapsed < Duration::from_secs(30),
+            "concurrent verifications must not each pay full price (took {elapsed:?})",
+        );
+    }
+
+    /// A failed check is NOT remembered: a user who installs debugpy after
+    /// being told it is missing must be able to retry without restarting the
+    /// server. Implements [LSPDEBUG-PYRES-WARM].
+    #[tokio::test]
+    async fn a_failed_check_is_not_cached() {
+        let manager = DebugSessionManager::default();
+        let missing = "/nonexistent/interpreter-for-cache-test";
+
+        let first = manager.ensure_debugpy(missing).await;
+        assert!(first.is_err(), "a missing interpreter must fail");
+
+        let second = manager.ensure_debugpy(missing).await;
+        assert!(
+            second.is_err(),
+            "the failure must be re-derived, never served from cache",
+        );
+    }
+
+    /// Warming must never fail initialization, however broken the interpreter.
+    /// Implements [LSPDEBUG-PYRES-WARM].
+    #[tokio::test]
+    async fn warming_a_broken_interpreter_is_silent() {
+        let manager = DebugSessionManager::default();
+        manager
+            .warm_debugpy("/nonexistent/interpreter-for-warm-test")
+            .await;
+    }
 
     #[test]
     fn find_free_port_returns_nonzero() {
