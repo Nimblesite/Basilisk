@@ -14,14 +14,16 @@ import { buildProfileLaunchConfig } from "../../process-launch";
 import { shouldProfileOnLaunch } from "../../profiler";
 import { PythonProcessesProvider } from "../../process-explorer";
 import { createStore } from "../../store";
-import {
-  getPackageJsonCommands,
-  getPackageJsonMenu,
-  getPackageJsonViewsWelcome,
-  type PackageJsonCommandEntry,
-  type PackageJsonViewsWelcomeEntry,
-} from "./profiler-test-constants";
+import { asRecord } from "../../unknown-shape";
+
 import { EXTENSION_ID } from "./test-helpers";
+import {
+  type CommandContribution,
+  type WelcomeContribution,
+  manifestCommands,
+  manifestMenu,
+  manifestViewsWelcome
+} from "./extension-manifest";
 
 /** The metric-explicit run-and-profile entry points (#82). */
 const CPU_LAUNCH_COMMAND = "basilisk.profileCurrentFileCpu";
@@ -31,14 +33,14 @@ const AMBIGUOUS_LAUNCH_COMMAND = "basilisk.profileCurrentFile";
 
 /** The view/title entries scoped to the Python Processes panel. */
 function pythonProcessesTitleCommands(): string[] {
-  return getPackageJsonMenu("view/title")
-    .filter((entry) => entry.when?.includes("basilisk.pythonProcesses") === true)
+  return manifestMenu("view/title")
+    .filter((entry) => entry.when.includes("basilisk.pythonProcesses"))
     .map((entry) => entry.command);
 }
 
 /** Look up a command's declaration, asserting it exists. */
-function commandEntry(commandId: string): PackageJsonCommandEntry {
-  const entry = getPackageJsonCommands().find((cmd) => cmd.command === commandId);
+function commandEntry(commandId: string): CommandContribution {
+  const entry = manifestCommands().find((cmd) => cmd.command === commandId);
   assert.ok(entry, `command "${commandId}" must be declared in package.json`);
   return entry;
 }
@@ -63,8 +65,8 @@ suite("Python Processes — title-bar entry points state their metric (#82)", ()
   test("the CPU launch is labelled CPU and wears the flame icon, matching the row action", () => {
     const cpu = commandEntry(CPU_LAUNCH_COMMAND);
     assert.ok(
-      cpu.title?.includes("CPU") === true,
-      `the CPU launch title must say CPU (#82); got: ${String(cpu.title)}`,
+      cpu.title.includes("CPU"),
+      `the CPU launch title must say CPU (#82); got: ${cpu.title}`,
     );
     assert.strictEqual(cpu.icon, "$(flame)", "the CPU launch must reuse the Profile CPU row icon");
   });
@@ -72,8 +74,8 @@ suite("Python Processes — title-bar entry points state their metric (#82)", ()
   test("the memory launch is labelled Memory and wears the database icon, matching the row action", () => {
     const memory = commandEntry(MEMORY_LAUNCH_COMMAND);
     assert.ok(
-      memory.title?.includes("Memory") === true,
-      `the memory launch title must say Memory (#82); got: ${String(memory.title)}`,
+      memory.title.includes("Memory"),
+      `the memory launch title must say Memory (#82); got: ${memory.title}`,
     );
     assert.strictEqual(
       memory.icon,
@@ -85,7 +87,7 @@ suite("Python Processes — title-bar entry points state their metric (#82)", ()
   test("the empty-state welcome offers both metric-explicit launches", () => {
     // [PROFILE-UX-PROGRESS] split the welcome into connecting/stopped/running
     // states; the launch buttons live on the server-running empty state.
-    const welcome = getPackageJsonViewsWelcome().find(
+    const welcome = manifestViewsWelcome().find(
       (entry) =>
         entry.view === "basilisk.pythonProcesses" &&
         entry.contents.includes("No Python processes running"),
@@ -112,7 +114,7 @@ suite("Python Processes — title-bar entry points state their metric (#82)", ()
   // key nobody sets evaluates falsy and silently hides the entry point from
   // every shipped user, which is indistinguishable from the feature not existing.
   test("both launches are palette-reachable in production — never hidden behind a gate", () => {
-    const palette = getPackageJsonMenu("commandPalette");
+    const palette = manifestMenu("commandPalette");
     for (const command of [CPU_LAUNCH_COMMAND, MEMORY_LAUNCH_COMMAND]) {
       const entry = palette.find((item) => item.command === command);
       assert.ok(
@@ -147,8 +149,8 @@ suite("Python Processes — title-bar entry points state their metric (#82)", ()
 const REFRESH_COMMAND = "basilisk.refreshProcesses";
 
 /** The Python Processes panel's welcome entries. */
-function processWelcomes(): PackageJsonViewsWelcomeEntry[] {
-  return getPackageJsonViewsWelcome().filter((entry) => entry.view === "basilisk.pythonProcesses");
+function processWelcomes(): WelcomeContribution[] {
+  return manifestViewsWelcome().filter((entry) => entry.view === "basilisk.pythonProcesses");
 }
 
 suite("Python Processes — empty state honesty (#147)", () => {
@@ -200,9 +202,10 @@ function providerWithClient(client: unknown): PythonProcessesProvider {
   if (client !== undefined) {
     const fake = {
       onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
-      ...(client as object),
+      ...asRecord(client),
     };
-    store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, fake as never);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- generic LanguageClient double; the store only reads onDidChangeState here
+    store.setClient({ subscriptions: [] }, fake as never);
   }
   return new PythonProcessesProvider(store);
 }

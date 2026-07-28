@@ -23,11 +23,15 @@ function trackerFor(sessionId: string): {
   tracker: vscode.DebugAdapterTracker;
   stopped: () => readonly number[];
 } {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- generic DebugSession double; the tracker reads only id and name
   const session = { id: sessionId, name: "stop-state test" } as vscode.DebugSession;
-  const tracker = new BasiliskDebugAdapterTrackerFactory().createDebugAdapterTracker(
-    session
-  ) as vscode.DebugAdapterTracker;
-  return { tracker, stopped: () => stoppedThreadIds(sessionId) };
+  const created = new BasiliskDebugAdapterTrackerFactory().createDebugAdapterTracker(session);
+  // ProviderResult is `T | undefined | null | Thenable<T>`; narrow it by
+  // checking rather than asserting, so a factory that starts returning a
+  // promise fails here instead of silently handing the tests a thenable.
+  assert.ok(created !== undefined && created !== null, "the factory must create a tracker");
+  assert.ok(!("then" in created), "the factory must create the tracker synchronously");
+  return { tracker: created, stopped: () => stoppedThreadIds(sessionId) };
 }
 
 function stoppedEvent(threadId: number): unknown {

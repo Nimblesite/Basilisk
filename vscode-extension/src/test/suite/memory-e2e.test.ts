@@ -27,6 +27,7 @@ import {
   memoryRoundTrip,
   type IngestResult,
 } from "./debug-e2e-helpers";
+import { recordArrayField, recordField, stringField } from "../../unknown-shape";
 import { recordedOperations } from "../../progress-ops";
 import { buildProfileLaunchConfig } from "../../process-launch";
 import {
@@ -56,22 +57,21 @@ const BP_AFTER_CHUNK3 = 17;
 const MEMORY_PALETTE = ["#c084fc", "#a78bfa", "#8b5cf6", "#7c3aed"];
 const LEAK_PALETTE = ["#ef4444", "#f87171", "#fb923c", "#a78bfa"];
 
-/** A node in the V8 `.heapprofile` call tree. */
-interface HeapNode {
-  callFrame?: { url?: string };
-  children?: HeapNode[];
-}
+// The `.heapprofile` is bytes read off disk, so the walkers below take
+// `unknown` and narrow field by field rather than asserting a `HeapNode`
+// shape nothing has checked — a malformed artifact then fails the assertion
+// it should, instead of type-erroring deeper in the walk.
 
 /** Depth of the heapprofile call tree (root counts as 1). */
-function heapTreeDepth(node: HeapNode): number {
-  const children = node.children ?? [];
+function heapTreeDepth(node: unknown): number {
+  const children = recordArrayField(node, "children");
   return 1 + children.reduce((deepest, child) => Math.max(deepest, heapTreeDepth(child)), 0);
 }
 
 /** Every `callFrame.url` in the heapprofile tree. */
-function heapNodeUrls(node: HeapNode): string[] {
-  const here = node.callFrame?.url;
-  const childUrls = (node.children ?? []).flatMap(heapNodeUrls);
+function heapNodeUrls(node: unknown): string[] {
+  const here = stringField(recordField(node, "callFrame"), "url");
+  const childUrls = recordArrayField(node, "children").flatMap(heapNodeUrls);
   return here !== undefined && here !== "" ? [here, ...childUrls] : childUrls;
 }
 
@@ -88,12 +88,12 @@ function assertSnapshotSurface(snapshot: MemorySnapshotResult & IngestResult): v
   const heapProfilePath = snapshot.heapProfilePath;
   assert.ok(typeof heapProfilePath === "string" && heapProfilePath !== "", "heapProfilePath must be returned");
   assert.ok(fs.existsSync(heapProfilePath), ".heapprofile must be written to disk");
-  const heapprofile = JSON.parse(fs.readFileSync(heapProfilePath, "utf8")) as { head?: HeapNode };
-  assert.ok(heapprofile.head !== undefined, ".heapprofile must have a head tree");
+  const heapprofile: unknown = JSON.parse(fs.readFileSync(heapProfilePath, "utf8"));
+  const head = recordField(heapprofile, "head");
+  assert.ok(head !== undefined, ".heapprofile must have a head tree");
 
   // [PROFILE-MEMORY-FINAL] The profile must be a real call tree of the USER's
   // program — genuine depth (not a flat by-line list) and zero debugger frames.
-  const head = heapprofile.head;
   assert.ok(heapTreeDepth(head) >= 3, `the .heapprofile must be a real call tree with depth, got depth ${heapTreeDepth(head)}`);
   const urls = heapNodeUrls(head);
   assert.ok(
