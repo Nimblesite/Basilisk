@@ -16,6 +16,7 @@
  * tool, or in a headless CI run, capture is silently skipped.
  */
 
+import { delay } from '../../timeouts';
 import { execFile } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -31,12 +32,6 @@ function websiteImageDir(): string {
         return path.resolve(configured);
     }
     return path.resolve(__dirname, '..', '..', '..', '..', 'website', 'src', 'assets', 'images');
-}
-
-async function sleep(ms: number): Promise<void> {
-    await new Promise<void>((resolve) => {
-        setTimeout(resolve, ms);
-    });
 }
 
 /**
@@ -73,7 +68,7 @@ export async function takeWindowScreenshot(filename: string): Promise<void> {
             console.log(`[screenshot] wrote ${filename}`);
             return;
         }
-        await sleep(100);
+        await delay(100);
     }
     throw new Error(`screenshot sidecar did not produce ${filename} within 20s`);
 }

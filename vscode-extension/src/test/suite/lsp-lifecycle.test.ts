@@ -30,16 +30,15 @@ import {
     setupLspTestSuite,
     teardownLspTestSuite,
 } from './test-helpers';
+import {
+  manifestActivationEvents
+} from "./extension-manifest";
 
 /** Extra buffer (ms) added to restart-test timeout to cover server restart. */
 const RESTART_EXTRA_TIMEOUT_MS = 20_000;
 
 /** Multiplier applied to DIAGNOSTIC_TIMEOUT_MS for multi-phase tests. */
 const DIAGNOSTIC_TIMEOUT_MULTIPLIER = 3;
-
-interface PackageJSON {
-    readonly activationEvents?: string[];
-}
 
 // eslint-disable-next-line max-lines-per-function
 suite('LSP Lifecycle Tests', () => {
@@ -168,7 +167,7 @@ suite('LSP Lifecycle Tests', () => {
         assert.ok(ext, `Extension ${EXTENSION_ID} should be installed`);
 
         // Verify activation events include Python language.
-        const activationEvents: string[] = (ext.packageJSON as PackageJSON).activationEvents ?? [];
+        const activationEvents: string[] = manifestActivationEvents();
         assert.ok(
             activationEvents.includes('onLanguage:python'),
             'Extension should declare onLanguage:python activation event'

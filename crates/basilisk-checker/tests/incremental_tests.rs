@@ -267,7 +267,7 @@ fn editing_rule_chain_reinvalidates() {
             rules: HashMap::from([("BSK-0001".to_owned(), basilisk_config::RuleSeverity::Error)]),
             rule_tags: HashMap::new(),
         }],
-        ..base.clone()
+        ..base
     };
     let _previous_a = config.set_value(&mut db).to(ConfigValue(cfg_a.clone()));
     let _a = checked_file(&db, file, config);

@@ -9,6 +9,7 @@
  * Extracted from lsp-integration.test.ts to keep files under the 500-line limit.
  */
 
+import { delay } from '../../timeouts';
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as fs from 'fs';
@@ -93,7 +94,7 @@ async function assertDiagnosticsStayCleared(uri: vscode.Uri, windowMs: number): 
             `stale diagnostics republished for closed file ${uri.fsPath} after ` +
             `didClose cleared them (GitHub #264): ${diags.map((d) => d.message).join('; ')}`
         );
-        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        await delay(100);
     }
 }
 
@@ -269,7 +270,7 @@ suite('Analysis Mode Tests', () => {
             }
 
             // Wait for the LSP server startup scan to complete.
-            await new Promise<void>((resolve) => setTimeout(resolve, SERVER_START_WAIT_MS + TIMEOUT_BUFFER_MS));
+            await delay(SERVER_START_WAIT_MS + TIMEOUT_BUFFER_MS);
 
             // The startup scan must have published diagnostics for the closed file.
             const closedFileUri = vscode.Uri.file(closedFilePath);
@@ -328,7 +329,7 @@ suite('Analysis Mode Tests', () => {
             }
 
             // Wait long enough for a scan to have run (if it was going to).
-            await new Promise<void>((resolve) => setTimeout(resolve, NO_DIAGNOSTIC_WAIT_MS));
+            await delay(NO_DIAGNOSTIC_WAIT_MS);
 
             // In openFilesOnly mode, the closed file must NOT have diagnostics.
             const closedFileUri = vscode.Uri.file(closedFilePath);
@@ -406,7 +407,7 @@ suite('Analysis Mode Tests', () => {
             // Start in openFilesOnly so the later flip to wholeModule triggers
             // a fresh workspace scan while our file is open.
             await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Workspace);
-            await new Promise<void>((resolve) => setTimeout(resolve, 1_000));
+            await delay(1_000);
 
             // Slow the upcoming scan down and plant the completion marker.
             const markerUri = writeScanFodder(fodderDir);
@@ -425,7 +426,7 @@ suite('Analysis Mode Tests', () => {
             // file. Give the config change time to reach the server and the
             // scan time to start computing…
             await cfg.update('analysisMode', 'wholeModule', vscode.ConfigurationTarget.Workspace);
-            await new Promise<void>((resolve) => setTimeout(resolve, SCAN_KICKOFF_WAIT_MS));
+            await delay(SCAN_KICKOFF_WAIT_MS);
 
             // …then close the editor while the scan is still running. The
             // server clears the file's diagnostics on didClose.

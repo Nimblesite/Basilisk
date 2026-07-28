@@ -342,8 +342,8 @@ mod tests {
         ]);
         assert!(matches!(
             Snapshot::build(
-                identity.clone(),
-                status.clone(),
+                identity,
+                status,
                 ArchiveVfs::new("custom-bad", duplicate),
                 None,
             ),

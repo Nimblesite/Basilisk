@@ -9,6 +9,7 @@
 // HTML. Attach assertions are Linux-gated (CI runs ubuntu; macOS requires
 // root for py-spy), and every platform asserts the actionable #81 error path.
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import * as fs from "fs";
@@ -20,6 +21,14 @@ import { buildProfileLaunchConfig } from "../../process-launch";
 import { profilerStatusText, startProfilingForPid } from "../../profiler";
 import { pythonProcessesViewState } from "../../process-reactivity";
 import { recordedOperations } from "../../progress-ops";
+import {
+  arrayField,
+  numberArrayField,
+  numberField,
+  recordArrayField,
+  recordField,
+  stringField,
+} from "../../unknown-shape";
 import {
   applyProfileDecorations,
   clearProfileDecorations,
@@ -39,6 +48,7 @@ import {
   teardownLspTestSuite,
   closeAllEditors,
   waitForLspReady,
+  isSamePath,
 } from "./test-helpers";
 
 /** How long the burner keeps spinning (covers the whole suite). */
@@ -141,15 +151,13 @@ async function stopAllProfilerSessions(): Promise<void> {
 /** Assert the speedscope JSON artifact exists and attributes hot_function. */
 function assertSpeedscopeArtifact(outputFile: string): void {
   assert.ok(fs.existsSync(outputFile), `speedscope file must exist: ${outputFile}`);
-  const speedscope = JSON.parse(fs.readFileSync(outputFile, "utf8")) as {
-    shared?: { frames?: { name: string }[] };
-    profiles?: unknown[];
-  };
+  const speedscope: unknown = JSON.parse(fs.readFileSync(outputFile, "utf8"));
+  const frames = recordArrayField(recordField(speedscope, "shared"), "frames");
   assert.ok(
-    speedscope.shared?.frames?.some((frame) => frame.name === "hot_function"),
+    frames.some((frame) => stringField(frame, "name") === "hot_function"),
     "speedscope frames must include hot_function",
   );
-  assert.ok((speedscope.profiles?.length ?? 0) > 0, "speedscope must contain at least one profile");
+  assert.ok(arrayField(speedscope, "profiles").length > 0, "speedscope must contain at least one profile");
 }
 
 // Implements [PROFILE-FLAMEGRAPH]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-FLAMEGRAPH
@@ -182,21 +190,20 @@ function assertFlamegraphArtifact(result: ProfileResult): void {
 function assertCpuProfileArtifact(cpuProfilePath: string | undefined, expectedFunction?: string): void {
   assert.ok(typeof cpuProfilePath === "string" && cpuProfilePath !== "", "cpuProfilePath returned");
   assert.ok(fs.existsSync(cpuProfilePath), ".cpuprofile must be written to disk");
-  const cpuprofile = JSON.parse(fs.readFileSync(cpuProfilePath, "utf8")) as {
-    nodes?: { callFrame?: { functionName?: string } }[];
-    samples?: number[];
-    timeDeltas?: number[];
-  };
-  assert.ok((cpuprofile.nodes?.length ?? 0) > 0, ".cpuprofile must have a call tree");
-  assert.ok((cpuprofile.samples?.length ?? 0) > 0, ".cpuprofile must have samples");
+  const cpuprofile: unknown = JSON.parse(fs.readFileSync(cpuProfilePath, "utf8"));
+  const nodes = recordArrayField(cpuprofile, "nodes");
+  const samples = numberArrayField(cpuprofile, "samples");
+  const timeDeltas = numberArrayField(cpuprofile, "timeDeltas");
+  assert.ok(nodes.length > 0, ".cpuprofile must have a call tree");
+  assert.ok(samples.length > 0, ".cpuprofile must have samples");
   assert.strictEqual(
-    cpuprofile.samples?.length,
-    cpuprofile.timeDeltas?.length,
+    samples.length,
+    timeDeltas.length,
     ".cpuprofile samples and timeDeltas must be parallel arrays",
   );
   if (expectedFunction !== undefined) {
     assert.ok(
-      cpuprofile.nodes?.some((node) => node.callFrame?.functionName === expectedFunction),
+      nodes.some((node) => stringField(recordField(node, "callFrame"), "functionName") === expectedFunction),
       `.cpuprofile call tree must include ${expectedFunction}`,
     );
   }
@@ -232,46 +239,59 @@ function assertHotListsCarryNoScaffolding(result: ProfileResult): void {
 }
 
 function assertSpeedscopeCarriesNoScaffolding(outputFile: string): void {
-  const speedscope = JSON.parse(fs.readFileSync(outputFile, "utf8")) as {
-    shared?: { frames?: { file?: string }[] };
-  };
-  for (const frame of speedscope.shared?.frames ?? []) {
+  const speedscope: unknown = JSON.parse(fs.readFileSync(outputFile, "utf8"));
+  for (const frame of recordArrayField(recordField(speedscope, "shared"), "frames")) {
+    const file = stringField(frame, "file");
     assert.ok(
-      !SCAFFOLDING_FILE_RE.test(frame.file ?? ""),
-      `speedscope frames must carry no scaffolding, got ${String(frame.file)}`,
+      !SCAFFOLDING_FILE_RE.test(file ?? ""),
+      `speedscope frames must carry no scaffolding, got ${String(file)}`,
     );
   }
 }
 
 function assertCpuprofileRootsAtUserCode(cpuProfilePath: string, burnerPath: string): void {
-  const cpuprofile = JSON.parse(fs.readFileSync(cpuProfilePath, "utf8")) as {
-    nodes?: { id: number; callFrame?: { functionName?: string; url?: string }; children?: number[] }[];
-  };
-  const nodes = cpuprofile.nodes ?? [];
+  const cpuprofile: unknown = JSON.parse(fs.readFileSync(cpuProfilePath, "utf8"));
+  const nodes = recordArrayField(cpuprofile, "nodes");
   for (const node of nodes) {
+    const url = stringField(recordField(node, "callFrame"), "url");
     assert.ok(
-      !SCAFFOLDING_FILE_RE.test(node.callFrame?.url ?? ""),
-      `.cpuprofile must carry no scaffolding nodes, got ${String(node.callFrame?.url)}`,
+      !SCAFFOLDING_FILE_RE.test(url ?? ""),
+      `.cpuprofile must carry no scaffolding nodes, got ${String(url)}`,
     );
   }
   // The flame chart's first real row is the user's own module — the launcher
   // spine is gone, so the user's code gets the full canvas.
-  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const byId = new Map(nodes.map((node) => [numberField(node, "id"), node]));
   const root = nodes[0];
   assert.ok(root !== undefined, ".cpuprofile must have a root node");
-  for (const childId of root.children ?? []) {
-    const child = byId.get(childId);
-    assert.strictEqual(
-      child?.callFrame?.url,
-      burnerPath,
-      `every top-level frame must be the user's file, got ${String(child?.callFrame?.url)}`,
+  for (const childId of numberArrayField(root, "children")) {
+    const url = stringField(recordField(byId.get(childId), "callFrame"), "url");
+    // Path-compare, not string-compare: the `.cpuprofile` url and the fixture
+    // path are spelled differently on Windows (see `samePath`).
+    assert.ok(
+      url !== undefined && samePath(url, burnerPath),
+      `every top-level frame must be the user's file ${burnerPath}, got ${String(url)}`,
     );
   }
 }
 
+/**
+ * Compare two paths the way the host filesystem does.
+ *
+ * The paths under comparison come from different producers: the profiler
+ * reports the interpreter's own filename, while the decoration ledger records
+ * `Uri.fsPath`, whose drive letter VS Code lower-cases. Windows paths are
+ * case-insensitive, so the two name the same file; POSIX paths are
+ * case-SENSITIVE, so folding there would let a genuinely different file pass.
+ */
+function samePath(left: string, right: string): boolean {
+  const a = path.resolve(left);
+  const b = path.resolve(right);
+  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
 function hasBurnerHotFunction(result: Pick<ProfileResult, "hotFunctions">, burnerPath: string): boolean {
-  const expected = path.resolve(burnerPath);
-  return result.hotFunctions.some((fn) => path.resolve(fn.file) === expected);
+  return result.hotFunctions.some((fn) => samePath(fn.file, burnerPath));
 }
 
 function hotFunctionSummary(result: Pick<ProfileResult, "hotFunctions">): string {
@@ -281,14 +301,35 @@ function hotFunctionSummary(result: Pick<ProfileResult, "hotFunctions">): string
 }
 
 /** Assert the burner's hottest line wears the correctly-tiered palette color. */
-function assertHottestLineTier(result: ProfileResult, burnerPath: string): void {
+async function assertHottestLineTier(result: ProfileResult, burnerPath: string): Promise<void> {
+  // The heat map only paints VISIBLE editors, so open the burner rather than
+  // depending on the debugger having revealed the paused frame. That reveal is
+  // a side effect of the adapter, not something this test arranges, and it does
+  // not happen on every platform — which is exactly how this assertion failed
+  // on Windows while the profile data underneath it was perfectly correct.
+  await vscode.window.showTextDocument(
+    await vscode.workspace.openTextDocument(vscode.Uri.file(burnerPath)),
+    { preview: false },
+  );
   applyProfileDecorations(result);
-  const applied = appliedProfileDecorations().filter((entry) => entry.file === burnerPath);
-  assert.ok(applied.length > 0, "real profile data must paint the open hot file");
+  const applied = appliedProfileDecorations().filter((entry) => samePath(entry.file, burnerPath));
+  // Name every side: this fires either when the ledger and the fixture disagree
+  // about the SAME file's path spelling (see `samePath`) or when no editor was
+  // open to paint at all, and a bare boolean makes those indistinguishable from
+  // "the profiler found nothing".
+  assert.ok(
+    applied.length > 0,
+    `real profile data must paint the open hot file ${burnerPath}; ` +
+      `ledger paths: ${JSON.stringify(appliedProfileDecorations().map((entry) => entry.file))}; ` +
+      `hot-line paths: ${JSON.stringify(result.hotLines.map((line) => line.file))}; ` +
+      `visible editors: ${JSON.stringify(
+        vscode.window.visibleTextEditors.map((editor) => editor.document.uri.fsPath),
+      )}`,
+  );
   // Tier-check the hottest line OF THE BURNER — under debugpy, tracer
   // machinery can own the globally hottest line in a file that isn't open.
   const topLine = [...result.hotLines]
-    .filter((line) => line.file === burnerPath)
+    .filter((line) => samePath(line.file, burnerPath))
     .sort((a, b) => b.percentage - a.percentage)[0];
   assert.ok(topLine !== undefined, `the burner must have hot lines, got: ${JSON.stringify(result.hotLines)}`);
   const expectedColor =
@@ -326,7 +367,7 @@ async function assertProfilerDiagnosticsPublished(uri: vscode.Uri): Promise<void
 
 /** Assert the heat map painted on the burner with palette colors and % text. */
 function assertHeatMapPainted(burnerPath: string): void {
-  const applied = appliedProfileDecorations().filter((entry) => entry.file === burnerPath);
+  const applied = appliedProfileDecorations().filter((entry) => samePath(entry.file, burnerPath));
   const visible = vscode.window.visibleTextEditors.map((e) => e.document.uri.fsPath).join(", ");
   assert.ok(
     applied.length > 0,
@@ -392,7 +433,7 @@ suite("CPU profiling — real end-to-end", () => {
     assert.ok(started.sessionId.length > 0, "start must mint a session");
     assert.ok(started.pythonVersion.startsWith("3."), `expected Python 3.x, got ${started.pythonVersion}`);
 
-    await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+    await delay(SAMPLE_WINDOW_MS);
 
     const result = await vscode.commands.executeCommand<ProfileResult>("basilisk.profiler.stop", {
       sessionId: started.sessionId,
@@ -409,15 +450,15 @@ suite("CPU profiling — real end-to-end", () => {
       `hot lines must be detected; result: ${JSON.stringify(result)}`,
     );
     assert.ok(
-      result.hotLines.some((line) => line.file === burnerPath),
-      `hot lines must carry the editor's exact path ${burnerPath}, got: ${ 
+      result.hotLines.some((line) => isSamePath(line.file, burnerPath)),
+      `hot lines must name the burner file ${burnerPath} (compared by path key, not spelling), got: ${ 
         JSON.stringify(result.hotLines.map((line) => line.file))}`,
     );
 
     assertSpeedscopeArtifact(result.outputFile);
     assertCpuProfileArtifact(result.cpuProfilePath, "hot_function");
     assertFlamegraphArtifact(result);
-    assertHottestLineTier(result, burnerPath);
+    await assertHottestLineTier(result, burnerPath);
   });
 
   test("panel one-click flow: attach → live progress in status bar → stop paints the heat map", async function () {
@@ -458,7 +499,7 @@ suite("CPU profiling — real end-to-end", () => {
       timeoutMs: PROGRESS_WAIT_MS,
     });
 
-    await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+    await delay(SAMPLE_WINDOW_MS);
     await vscode.commands.executeCommand("basilisk.profileStop");
 
     // [PROFILE-PROCESSES-REACTIVE] Stop must clear the reactive state so the
@@ -536,7 +577,7 @@ suite("CPU profiling — real end-to-end", () => {
       );
       assertCpuProfileArtifact(result.cpuProfilePath);
       assertFlamegraphArtifact(result);
-      assertHottestLineTier(result, burnerPath);
+      await assertHottestLineTier(result, burnerPath);
       // The debug launch wraps the program in the runpy/debugpy spine; every
       // real artifact of this run must root at the user's code with zero
       // scaffolding ([PROFILE-AGGREGATION-SCAFFOLD]).
@@ -580,7 +621,7 @@ suite("CPU profiling — real end-to-end", () => {
       // the sibling heat-map journeys: stopping at the first observed sample
       // can leave zero samples attributed to the burner's lines (all in
       // bootstrap/injection frames), so no heat decorations would paint.
-      await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+      await delay(SAMPLE_WINDOW_MS);
 
       // [PROFILE-PROCESSES-REACTIVE] The OOTB one-click flow must drive the
       // reactive panel on macOS too: busy + a live "Profiling PID …" readout.
@@ -665,7 +706,7 @@ suite("CPU profiling — real end-to-end", () => {
 
     disposeFlamegraphPanel(); // known-closed baseline so the post-stop check is meaningful
     try {
-      await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+      await delay(SAMPLE_WINDOW_MS);
       await vscode.commands.executeCommand("basilisk.profileStop");
     } finally {
       win.showInformationMessage = originalShow;

@@ -17,6 +17,7 @@
  * ([PROFILE-MEMORY-HOWTO]); a user's own breakpoint pause is left untouched.
  */
 
+import { delay } from "./timeouts";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import { Logger } from "./logger";
@@ -26,6 +27,8 @@ import { withUserProgress } from "./progress-ops";
 import {
   toDashboardDiff,
   toDashboardSnapshot,
+  toDiffResult,
+  toSnapshotResult,
   asNumber,
   type MemoryIngestResult,
 } from "./memory-dashboard-mapping";
@@ -38,7 +41,6 @@ import {
   applyLeakDecorations,
   applyMemoryDecorations,
   type MemoryDiffResult,
-  type MemorySnapshotResult,
 } from "./memory-decorations";
 // ── LSP command ids ─────────────────────────────────────────────────────────
 
@@ -263,7 +265,7 @@ export function presentSnapshot(
   result: MemoryIngestResult,
   options: { openResultsView: boolean },
 ): void {
-  applyMemoryDecorations(result as unknown as MemorySnapshotResult);
+  applyMemoryDecorations(toSnapshotResult(result));
   const dashboard = toDashboardSnapshot(result);
   recordTimelinePoint(dashboard);
   dashboard.timeline = [...captureTimeline];
@@ -280,12 +282,12 @@ export function presentSnapshot(
  * typed diff so callers (the autopilot) can read suspected-leak confidence.
  */
 export function presentDiff(result: MemoryIngestResult): MemoryDiffResult {
-  const diff = result as unknown as MemoryDiffResult;
+  const diff = toDiffResult(result);
   applyLeakDecorations(diff);
   if (lastDashboardSnapshot !== undefined) {
     openMemoryDashboard(lastDashboardSnapshot, toDashboardDiff(result));
   }
-  const leaks = Array.isArray(diff.suspectedLeaks) ? diff.suspectedLeaks : [];
+  const leaks = diff.suspectedLeaks;
   Logger.info(`Memory diff: ${leaks.length} suspected leak(s)`);
   return diff;
 }
@@ -353,7 +355,7 @@ export async function readFinalSnapshot(path: string): Promise<string | null> {
       return contents;
     }
     if (Date.now() >= deadline) { return null; }
-    await new Promise<void>((resolve) => setTimeout(resolve, FINAL_SNAPSHOT_POLL_MS));
+    await delay(FINAL_SNAPSHOT_POLL_MS);
   }
 }
 

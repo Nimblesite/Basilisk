@@ -26,19 +26,41 @@ command -v brew >/dev/null || {
     exit 1
 }
 
+# Every `brew` invocation may trigger an auto-update that talks to the network,
+# and those fail intermittently on CI runners — one Lint run died with a bare
+# "Broken pipe" partway through a step that had succeeded minutes earlier. Retry
+# each brew call a few times before giving up, so a blip costs seconds rather
+# than a whole pipeline.
+readonly BREW_ATTEMPTS=3
+readonly BREW_BACKOFF_SECONDS=5
+
+# Run `brew "$@"`, retrying transient failures. Returns brew's last exit status.
+brew_retry() {
+    local attempt=1
+    until brew "$@"; do
+        local status=$?
+        if ((attempt >= BREW_ATTEMPTS)); then
+            return "$status"
+        fi
+        echo "brew $* failed (attempt $attempt/$BREW_ATTEMPTS); retrying" >&2
+        attempt=$((attempt + 1))
+        sleep "$BREW_BACKOFF_SECONDS"
+    done
+}
+
 # Homebrew >= 6 gates formulae from non-official taps behind
 # HOMEBREW_REQUIRE_TAP_TRUST (set by default on GitHub's ubuntu runners). Under
 # that gate an untrusted-tap install prompts for confirmation; in CI stdin is
 # closed, so the prompt dies as a "Broken pipe" and the install aborts. Tap
 # explicitly, then trust the tap non-interactively so `brew install` proceeds.
-# The trust step is guarded: older Homebrew without the `brew trust` subcommand
-# (and machines where the gate isn't set) simply skip it and install as before.
-brew tap nimblesite/tap
-if brew trust --help >/dev/null 2>&1; then
-    brew trust --tap nimblesite/tap
-fi
+brew_retry tap nimblesite/tap
 
-brew install nimblesite/tap/deslop || brew upgrade nimblesite/tap/deslop
+# Best-effort: older Homebrew has no `brew trust` subcommand, and machines
+# without the gate never needed one. A genuine trust failure is not swallowed —
+# it resurfaces immediately as the install below prompting and aborting.
+brew_retry trust --tap nimblesite/tap || echo "brew trust unavailable; installing untrusted" >&2
+
+brew_retry install nimblesite/tap/deslop || brew_retry upgrade nimblesite/tap/deslop
 
 # Make the brew bin discoverable to later CI steps.
 if [[ -n "${GITHUB_PATH:-}" ]]; then

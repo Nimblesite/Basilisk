@@ -191,7 +191,8 @@
       "id": "fig-07-boundary-transformation",
       "section": "07",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/07-boundary-transformation.svg",
       "path": "assets/diagrams/07-boundary-transformation.png",
       "title": "External shape in, domain model out",
       "alt": "A dictionary-shaped external reading is validated and transformed into a dataclass before reaching the core application."
@@ -200,7 +201,8 @@
       "id": "fig-07-structure-comparison",
       "section": "07",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/07-structured-data-comparison.svg",
       "path": "assets/diagrams/07-structured-data-comparison.png",
       "title": "Choose a structure that matches the boundary",
       "alt": "The same reading fields appear as a TypedDict, dataclass, named tuple, and ordinary class with their relevant differences highlighted."
@@ -209,7 +211,8 @@
       "id": "fig-07-generic-payload",
       "section": "07",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/07-generic-payload.svg",
       "path": "assets/diagrams/07-generic-payload.png",
       "title": "One container preserves different payload types",
       "alt": "A generic page container keeps its reading payload type as concrete examples substitute different type arguments."
@@ -218,7 +221,8 @@
       "id": "fig-07-overload-table",
       "section": "07",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/07-overload-decision.svg",
       "path": "assets/diagrams/07-overload-decision.png",
       "title": "Overloads connect inputs to precise outputs",
       "alt": "Two documented call shapes map to distinct return types while sharing one implementation body."

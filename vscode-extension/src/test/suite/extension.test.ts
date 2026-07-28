@@ -1,16 +1,16 @@
 // Tests for [VSIX]. See docs/specs/VSIX-SPEC.md#VSIX
+import { delay } from '../../timeouts';
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getStore } from '../../extension';
 import { POLL_INTERVAL_MS, WAIT_MS } from "./test-helpers";
+import {
+  manifestActivationEvents,
+  manifestDisplayName
+} from "./extension-manifest";
 
 const EXTENSION_ID = 'Nimblesite.basilisk';
-
-interface PackageJSON {
-    displayName: string;
-    activationEvents?: string[];
-}
 
 // eslint-disable-next-line max-lines-per-function
 suite('Basilisk Extension E2E Tests', () => {
@@ -34,7 +34,7 @@ suite('Basilisk Extension E2E Tests', () => {
         const deadline = Date.now() + WAIT_MS;
         while (Date.now() < deadline) {
             if (ext?.isActive) {break;}
-            await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS));
+            await delay(POLL_INTERVAL_MS);
         }
     });
 
@@ -247,13 +247,13 @@ suite('Basilisk Extension E2E Tests', () => {
     test('Extension has correct display name', () => {
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, `Extension ${EXTENSION_ID} should be installed`);
-        assert.strictEqual((ext.packageJSON as PackageJSON).displayName, 'Basilisk');
+        assert.strictEqual(manifestDisplayName(), 'Basilisk');
     });
 
     test('Extension activates on Python language', () => {
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, `Extension ${EXTENSION_ID} should be installed`);
-        const activationEvents: string[] = (ext.packageJSON as PackageJSON).activationEvents ?? [];
+        const activationEvents: string[] = manifestActivationEvents();
         assert.ok(
             activationEvents.includes('onLanguage:python'),
             'Extension should activate on Python language'

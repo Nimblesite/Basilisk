@@ -17,6 +17,15 @@ import {
   PROFILER_JS_UTILS,
 } from "./profiler-styles";
 import {
+  arrayField,
+  booleanField,
+  isRecord,
+  numberField,
+  recordArrayField,
+  stringArrayField,
+  stringField,
+} from "./unknown-shape";
+import {
   buildWebviewDocument,
   embedJson,
   handleSourceNavigation,
@@ -50,6 +59,38 @@ interface RefGraphEdge {
   from: number;
   to: number;
   label: string;
+}
+
+/**
+ * Decode the graph payload of a `kind: "refs"` ingest result.
+ *
+ * Node `repr`/`type` strings come straight from the profiled program, so every
+ * field is coerced here rather than asserted — a malformed node becomes an
+ * empty-ish node instead of an `undefined` the canvas renderer would trip on.
+ */
+export function decodeRefGraph(value: unknown): ReferenceGraphResult["graph"] {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  return {
+    nodes: recordArrayField(value, "nodes").map((node) => ({
+      id: numberField(node, "id") ?? 0,
+      type: stringField(node, "type") ?? "",
+      size: numberField(node, "size") ?? 0,
+      repr: stringField(node, "repr") ?? "",
+      depth: numberField(node, "depth") ?? 0,
+      isTarget: booleanField(node, "isTarget") ?? false,
+    })),
+    edges: recordArrayField(value, "edges").map((edge) => ({
+      from: numberField(edge, "from") ?? 0,
+      to: numberField(edge, "to") ?? 0,
+      label: stringField(edge, "label") ?? "",
+    })),
+    cycles: arrayField(value, "cycles").map((cycle) =>
+      Array.isArray(cycle) ? cycle.filter((id): id is number => typeof id === "number") : []
+    ),
+    retentionPath: stringArrayField(value, "retentionPath"),
+  };
 }
 
 const refGraphPanel = new SingletonWebviewPanel("basilisk.refGraph", (msg) => {

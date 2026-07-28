@@ -15,6 +15,33 @@ import type { ProfilerActions, ProfilerSession } from "./profiler-state";
 import type { Result } from "./result";
 import type { LspState, ReadyHandle } from "./store-ready";
 
+/**
+ * The slice of the extension context a collaborator needs to own disposables.
+ *
+ * Depending on the whole `ExtensionContext` makes every caller — tests
+ * included — responsible for producing all seventeen of its members, none of
+ * which this code path reads. Naming the one member that is actually used
+ * keeps the dependency honest and lets a caller hand over exactly that.
+ */
+export interface DisposableSink {
+  readonly subscriptions: { dispose(): unknown }[];
+}
+
+/**
+ * The slice of the extension context that persists per-workspace UI state.
+ *
+ * `get` returns `unknown`, not a caller-chosen `T`. The value comes back from
+ * storage a previous version of the extension wrote, so a `get<ViewMode>(…)`
+ * would be an unchecked assertion dressed as a generic — the compiler would
+ * vouch for a shape nothing verified. Callers narrow what they read.
+ */
+export interface WorkspaceStateStore {
+  readonly workspaceState: {
+    get(key: string): unknown;
+    update(key: string, value: unknown): Thenable<void>;
+  };
+}
+
 /** Runtime binary selected by Shipwright during activation. */
 export interface RuntimeResolution {
   readonly componentId: string;
@@ -45,7 +72,7 @@ export interface Store extends ProfilerActions, ProcessPanelActions, Configurati
   readonly typeshedStatuses: ReadonlySignal<ReadonlyMap<string, TypeshedStatusState>>;
   readonly lspReadyPromise: ReadonlySignal<Promise<void> | undefined>;
 
-  setClient(context: vscode.ExtensionContext, client: LanguageClient): void;
+  setClient(context: DisposableSink, client: LanguageClient): void;
   setStatusBarItem(item: vscode.StatusBarItem): void;
   setOutputChannel(channel: vscode.LogOutputChannel): void;
   setLogSink(sink: LogSink): void;

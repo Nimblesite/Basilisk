@@ -9,6 +9,7 @@
  * this module owns what happens when the user clicks.
  */
 
+import { numberField, rawField } from "./unknown-shape";
 import * as vscode from "vscode";
 import { startProfilingForPid } from "./profiler";
 import { type Store } from "./store";
@@ -26,8 +27,7 @@ type ProcessRowItem = vscode.TreeItem & { readonly process: ProcessInfo };
 
 /** Structural guard: does this tree item carry a profilable process? */
 function isProcessRow(item: vscode.TreeItem | undefined): item is ProcessRowItem {
-  const pid = (item as { process?: { pid?: unknown } } | undefined)?.process?.pid;
-  return typeof pid === "number";
+  return numberField(rawField(item, "process"), "pid") !== undefined;
 }
 
 /**

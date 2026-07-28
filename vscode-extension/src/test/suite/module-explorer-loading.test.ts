@@ -10,9 +10,9 @@
 // is fed through a real store and the tree view's native message chrome is
 // asserted.
 
+import { fakeLanguageClient } from "./test-helpers";
 import * as assert from "assert";
 import type * as vscode from "vscode";
-import { type LanguageClient } from "vscode-languageclient/node";
 import { ModuleExplorerProvider } from "../../module-explorer";
 import { createStore, type Store } from "../../store";
 
@@ -22,12 +22,12 @@ const EMPTY_STATE_MESSAGE = "No Python files found";
 /** Build a Store whose running LSP client answers workspaceModules with `payload`. */
 function storeAnswering(payload: unknown): Store {
   const store = createStore();
-  const client = {
+  const client = fakeLanguageClient({
     isRunning: (): boolean => true,
     onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
     sendRequest: async (): Promise<unknown> => payload,
-  } as unknown as LanguageClient;
-  store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, client);
+  });
+  store.setClient({ subscriptions: [] }, client);
   return store;
 }
 
@@ -39,7 +39,7 @@ interface ChromeCapture {
 
 function bindChrome(provider: ModuleExplorerProvider): ChromeCapture {
   const view: ChromeCapture = { message: undefined, badge: undefined };
-  provider.setTreeView(view as unknown as Parameters<ModuleExplorerProvider["setTreeView"]>[0]);
+  provider.setTreeView(view);
   return view;
 }
 

@@ -1,6 +1,11 @@
 //! Tests for [CONFIGEDITOR-OPERATIONS] / [CONFIGEDITOR-MODEL] snapshot,
 //! inventory, and occurrence projections. See `snapshot.rs`.
 
+#![expect(
+    clippy::expect_used,
+    reason = "test-only: a fixture that fails to index must abort naming the missing value"
+)]
+
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -40,12 +45,12 @@ fn hypothetical_inventory_keeps_excluded_open_files_out_of_preview_counts() {
         std::process::id()
     ));
     let excluded = root.join("generated.py");
-    assert!(std::fs::create_dir_all(&root).is_ok());
-    assert!(std::fs::write(
+    std::fs::create_dir_all(&root).expect("the fixture root is creatable");
+    std::fs::write(
         root.join("pyproject.toml"),
         "[tool.basilisk]\nexclude = [\"generated.py\"]\n",
     )
-    .is_ok());
+    .expect("the fixture configuration is writable");
     let index = WorkspaceIndex::new(
         vec![root.clone()],
         AnalysisMode::OpenFilesOnly,
@@ -108,9 +113,8 @@ fn indexed_root(name: &str) -> Option<(PathBuf, WorkspaceIndex)> {
 // per code with a severity partition inside the requested root only.
 #[test]
 fn inventory_counts_diagnostics_by_code_and_severity() {
-    let Some((root, index)) = indexed_root("inventory") else {
-        unreachable!("indexed fixture must produce diagnostics");
-    };
+    let (root, index) =
+        indexed_root("inventory").expect("indexed fixture must produce diagnostics");
     let counted = inventory(&index, &root);
     assert_eq!(counted.counts.get("BSK-0001"), Some(&2));
     assert_eq!(counted.errors, 2);
@@ -127,13 +131,9 @@ fn inventory_counts_diagnostics_by_code_and_severity() {
 // diagnostic count), and tag states with their entries — nothing else.
 #[test]
 fn snapshot_reports_rule_entries_effective_severities_and_tag_entries() {
-    let Some((root, index)) = indexed_root("snapshot") else {
-        unreachable!("indexed fixture must produce diagnostics");
-    };
+    let (root, index) = indexed_root("snapshot").expect("indexed fixture must produce diagnostics");
     let document = basilisk_config::discover_config_document(&root);
-    let Ok(document) = document else {
-        unreachable!("fixture pyproject.toml must parse");
-    };
+    let document = document.expect("fixture pyproject.toml must parse");
     let snapshot = build_snapshot(&index, &root, &document, None);
     assert_eq!(snapshot.revision, document.revision);
     assert!(snapshot.config_uri.ends_with("pyproject.toml"));
@@ -143,16 +143,12 @@ fn snapshot_reports_rule_entries_effective_severities_and_tag_entries() {
         .rules
         .iter()
         .find(|state| state.descriptor.code == "BSK-0001");
-    let Some(annotation) = annotation else {
-        unreachable!("BSK-0001 must be present in the snapshot");
-    };
+    let annotation = annotation.expect("BSK-0001 must be present in the snapshot");
     assert_eq!(annotation.entry, Some(RuleSeverity::Error));
     assert_eq!(annotation.effective_severity, RuleSeverity::Error);
     assert_eq!(annotation.diagnostic_count, 2);
     let suppressions = snapshot.tags.iter().find(|tag| tag.name == "suppressions");
-    let Some(suppressions) = suppressions else {
-        unreachable!("suppressions tag must be present in the snapshot");
-    };
+    let suppressions = suppressions.expect("suppressions tag must be present in the snapshot");
     assert_eq!(suppressions.entry, Some(RuleSeverity::Warning));
     assert!(suppressions.rule_count >= 1);
     // A pep rule with no entry runs at error; an analyze rule with no entry
@@ -203,15 +199,11 @@ fn assert_bundled_default(snapshot: &crate::configuration_editor::model::Configu
 /// status — there are exactly two sources and no download-policy knobs.
 #[test]
 fn snapshot_describes_typeshed_controls_and_terminal_status() {
-    let Some((root, index)) = indexed_root("typeshed") else {
-        unreachable!("indexed fixture must produce diagnostics");
-    };
-    let Ok(mut document) = basilisk_config::discover_config_document(&root) else {
-        unreachable!("fixture configuration must parse");
-    };
-    let Ok(commit) = Oid::from_hex("83c2518a9e6abbda0c44592c3483de459198f887") else {
-        unreachable!("fixture SHA must parse");
-    };
+    let (root, index) = indexed_root("typeshed").expect("indexed fixture must produce diagnostics");
+    let mut document =
+        basilisk_config::discover_config_document(&root).expect("fixture configuration must parse");
+    let commit =
+        Oid::from_hex("83c2518a9e6abbda0c44592c3483de459198f887").expect("fixture SHA must parse");
     let status = TypeshedStatus {
         active_source: SourceKind::Bundled,
         commit: Some(commit),
@@ -227,9 +219,8 @@ fn snapshot_describes_typeshed_controls_and_terminal_status() {
             severity: WarningSeverity::Advisory,
         }],
     };
-    let Ok(mut runtime_snapshot) = basilisk_stubs::typeshed::bundle::bundled_snapshot() else {
-        unreachable!("bundled snapshot must activate");
-    };
+    let mut runtime_snapshot = basilisk_stubs::typeshed::bundle::bundled_snapshot()
+        .expect("bundled snapshot must activate");
     runtime_snapshot.status = status;
     let generation = TypeshedGeneration::Ready(Arc::new(runtime_snapshot));
     let snapshot = build_snapshot(&index, &root, &document, Some(&generation));
@@ -288,12 +279,10 @@ fn snapshot_describes_typeshed_controls_and_terminal_status() {
 /// lifecycle a client could render as a panel overlay.
 #[test]
 fn missing_generation_projects_terminal_no_source() {
-    let Some((root, index)) = indexed_root("typeshed-unresolved") else {
-        unreachable!("indexed fixture must produce diagnostics");
-    };
-    let Ok(document) = basilisk_config::discover_config_document(&root) else {
-        unreachable!("fixture configuration must parse");
-    };
+    let (root, index) =
+        indexed_root("typeshed-unresolved").expect("indexed fixture must produce diagnostics");
+    let document =
+        basilisk_config::discover_config_document(&root).expect("fixture configuration must parse");
 
     let snapshot = build_snapshot(&index, &root, &document, None);
 
@@ -317,16 +306,16 @@ fn missing_generation_projects_terminal_no_source() {
 // resume exactly where the previous cursor stopped.
 #[test]
 fn occurrences_page_stably_with_cursor_resume() {
-    let Some((root, index)) = indexed_root("occurrences") else {
-        unreachable!("indexed fixture must produce diagnostics");
-    };
+    let (root, index) =
+        indexed_root("occurrences").expect("indexed fixture must produce diagnostics");
     let selected: HashSet<String> = std::iter::once("BSK-0001".to_owned()).collect();
     let first = occurrences(&index, &root, &selected, None, 1);
     assert_eq!(first.items.len(), 1);
     assert_eq!(first.next_cursor.as_deref(), Some("1"));
-    let Some(item) = first.items.first() else {
-        unreachable!("first page must hold one occurrence");
-    };
+    let item = first
+        .items
+        .first()
+        .expect("first page must hold one occurrence");
     assert_eq!(item.code, "BSK-0001");
     assert!(item.uri.ends_with("app.py"));
     assert_eq!(item.severity, RuleSeverity::Error);

@@ -14,12 +14,12 @@
  * resolves that frame (or null when nothing is paused).
  */
 
+import { numberField, recordArrayField, stringField } from "./unknown-shape";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import { Logger } from "./logger";
 import { ALL_THREADS, debugOutputCursor, debugOutputSince, stoppedThreadIds } from "./dap-output";
-import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS, WAIT_MS } from "./timeouts";
-
+import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS, WAIT_MS, delay } from "./timeouts";
 /** The Basilisk debug adapter type. */
 const DEBUG_TYPE = "basilisk-debug";
 
@@ -31,8 +31,30 @@ const MARKER_PREFIX = "__BASILISK_";
  *  temp file instead of stdout — see [PROFILE-MEMORY-COURIER] and
  *  `scripts.rs::emit_via_file_helper`. The text after it is the file path. */
 const FILE_PAYLOAD_MARKER = "__BASILISK_MEM_FILE__";
-/** How long to wait for a script's (possibly large, chunked) marker output. */
-const MARKER_WAIT_MS = 4000;
+/**
+ * How long to wait for a script's (possibly large, chunked) marker output.
+ *
+ * This budget is for DELIVERY, not for work: the evaluate has already returned,
+ * and we are waiting on the marker line to travel debuggee stdout -> debugpy ->
+ * adapter -> DAP `output` event -> extension host. The wait loop below returns
+ * the instant the line is complete, so a larger ceiling costs nothing when the
+ * pipeline is prompt — it only changes what happens when it is slow.
+ *
+ * The previous 4s was calibrated on a prompt machine, and on the win32 CI runner
+ * it expired mid-delivery: the wait then returned marker-LESS output, which the
+ * courier posted on to `basilisk.memory.ingest`, and the LSP rejected it with
+ * "no recognized __BASILISK_MEM*__ marker in script output"
+ * (profiler/memory/session.rs). That reads as a broken injection script rather
+ * than as a wait that gave up, which is why the same test failed three different
+ * ways across consecutive runs ([VSIX-CI-PLATFORM-COVERAGE]).
+ *
+ * 20s is a judgement, not a measurement — no per-platform delivery figure was
+ * taken. It is bounded from both sides: comfortably above the sibling
+ * `FILE_PAYLOAD_WAIT_MS` render budget's granularity, and small enough that even
+ * three fully-expired legs stay inside the courier round-trip's own 90s test
+ * budget. Nothing asserts how QUICKLY a marker arrives.
+ */
+const MARKER_WAIT_MS = 20_000;
 /** Poll interval while waiting for marker output. */
 const MARKER_POLL_MS = 25;
 /** How long to wait for the debuggee's render worker to fill the payload file.
@@ -74,8 +96,8 @@ export async function evaluateInDebugSession(
   try {
     const request: Record<string, unknown> = { expression, context };
     if (frameId !== undefined) { request.frameId = frameId; }
-    const response = (await session.customRequest("evaluate", request)) as { result?: string };
-    const direct = response.result ?? "";
+    const response: unknown = await session.customRequest("evaluate", request);
+    const direct = stringField(response, "result") ?? "";
     if (direct.includes(MARKER_PREFIX)) { return await resolveMarkerFilePayload(direct); }
     const printed = await waitForMarkerOutput(session.id, cursor);
     return await resolveMarkerFilePayload(printed.length > 0 ? printed : direct);
@@ -124,7 +146,7 @@ export async function resolveMarkerFilePayload(out: string): Promise<string> {
       await fs.promises.unlink(path).catch(() => undefined);
       return out;
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, FILE_PAYLOAD_POLL_MS));
+    await delay(FILE_PAYLOAD_POLL_MS);
   }
 }
 
@@ -145,10 +167,23 @@ async function waitForMarkerOutput(sessionId: string, cursor: number): Promise<s
     // The payload line is complete once a newline follows the marker (the
     // `print()` terminator); `includes(.., markerAt)` searches from the marker.
     const complete = markerAt !== -1 && out.includes("\n", markerAt);
-    if (complete || Date.now() >= deadline) {
+    if (complete) {
       return out;
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, MARKER_POLL_MS));
+    if (Date.now() >= deadline) {
+      // Say WHY we gave up. Returning quietly hands marker-less (or truncated)
+      // output to the ingest leg, which rejects it as an unrecognised marker —
+      // blaming the injection script for a wait that ran out. Distinguish the
+      // two cases the caller cannot: nothing arrived at all, versus a marker
+      // that arrived but never terminated.
+      Logger.warn(
+        markerAt === -1
+          ? `[Memory] no marker in ${out.length} bytes of debuggee output after ${MARKER_WAIT_MS}ms`
+          : `[Memory] marker output still unterminated after ${MARKER_WAIT_MS}ms (${out.length} bytes) — payload likely truncated`,
+      );
+      return out;
+    }
+    await delay(MARKER_POLL_MS);
   }
 }
 
@@ -187,8 +222,10 @@ export async function currentStoppedFrameId(): Promise<number | null> {
 
 /** Every thread id the debuggee reports (for `allThreadsStopped` stops). */
 async function allThreadIds(session: vscode.DebugSession): Promise<number[]> {
-  const threads = (await session.customRequest("threads")) as { threads?: { id: number }[] };
-  return (threads.threads ?? []).map((thread) => thread.id);
+  const threads: unknown = await session.customRequest("threads");
+  return recordArrayField(threads, "threads")
+    .map((thread) => numberField(thread, "id"))
+    .filter((id): id is number => id !== undefined);
 }
 
 /** A stopped, evaluable frame plus how to release it when the caller is done. */
@@ -239,7 +276,7 @@ export async function acquireStoppedFrame(): Promise<AcquiredFrame | null> {
     // the program can reach user code, then try again.
     Logger.info(`[Memory] pause landed in non-user frames (attempt ${attempt}) — resuming to retry`);
     await resumeDebuggee(session);
-    await new Promise<void>((resolve) => setTimeout(resolve, PAUSE_RETRY_BACKOFF_MS));
+    await delay(PAUSE_RETRY_BACKOFF_MS);
   }
   return null;
 }
@@ -249,7 +286,7 @@ async function waitForFrameUntil(deadlineMs: number): Promise<number | null> {
   while (Date.now() < deadlineMs) {
     const frameId = await currentStoppedFrameId();
     if (frameId !== null) { return frameId; }
-    await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    await delay(POLL_INTERVAL_MS);
   }
   return null;
 }
@@ -295,12 +332,12 @@ async function topFrameIdIfStopped(
   threadId: number,
 ): Promise<number | null> {
   try {
-    const stack = (await session.customRequest("stackTrace", {
+    const stack: unknown = await session.customRequest("stackTrace", {
       threadId,
       startFrame: 0,
       levels: 1,
-    })) as { stackFrames?: { id: number }[] };
-    return stack.stackFrames?.[0]?.id ?? null;
+    });
+    return numberField(recordArrayField(stack, "stackFrames")[0], "id") ?? null;
   } catch {
     return null; // thread not suspended
   }

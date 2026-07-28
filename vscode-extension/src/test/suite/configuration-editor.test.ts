@@ -1,6 +1,7 @@
 // Implements [VSIX-CONFIGURATION-EDITOR] / [CONFIGEDITOR-ACCESSIBILITY-SECURITY].
 /** Contract, thin-shell, security, accessibility, and lifecycle tests. */
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as fs from "fs";
 import * as os from "os";
@@ -33,6 +34,7 @@ import { readBasiliskSettings } from "../../lsp-client";
 import { createStore } from "../../store";
 import { removeTestDir } from './test-helpers';
 import { LATEST_COMMIT, typeshedFixture } from "./typeshed-fixture";
+import { booleanField, recordField } from "../../unknown-shape";
 
 const ROOT_URI = "file:///workspace";
 const OTHER_ROOT_URI = "file:///workspace-other";
@@ -130,7 +132,7 @@ function configurationPreview(baseRevision = "revision-1"): ConfigurationPreview
 }
 
 class RecordingTransport implements ConfigurationEditorTransport {
-  public snapshotResult = configurationSnapshot();
+  private snapshotResult = configurationSnapshot();
   public previewResult = configurationPreview();
   public applyResult = configurationSnapshot("revision-2");
   public occurrenceResult: RuleOccurrencesResponse = { items: [], nextCursor: undefined };
@@ -150,6 +152,13 @@ class RecordingTransport implements ConfigurationEditorTransport {
   public applyHandler: (() => Promise<ConfigurationSnapshot>) | undefined;
   public occurrenceHandler: ((request: RuleOccurrencesRequest) => Promise<RuleOccurrencesResponse>) | undefined;
   public typeshedActionHandler: ((request: TypeshedActionRequest) => Promise<TypeshedActionResult>) | undefined;
+
+  /// The snapshot the next `snapshot()` call answers with. A method rather
+  /// than a public field so swapping it mid-test is one atomic step instead of
+  /// a read-then-write straddling an `await`.
+  public useSnapshot(snapshot: ConfigurationSnapshot): void {
+    this.snapshotResult = snapshot;
+  }
 
   public async snapshot(rootUri: string): Promise<ConfigurationSnapshot> {
     this.snapshotRequests.push(rootUri);
@@ -215,7 +224,7 @@ function occurrence(line: number): RuleOccurrencesResponse["items"][number] {
 async function pollUntil(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!predicate() && Date.now() < deadline) {
-    await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    await delay(25);
   }
   assert.ok(predicate(), "condition did not become true before timeout");
 }
@@ -427,10 +436,10 @@ suite("Configuration editor — Typeshed download snapshot authority", () => {
       // The server's transient Downloading notification triggers exactly this
       // same-root refresh while the download is still running; it fetches the
       // pre-pin (still bundled/unpinned) snapshot and bumps the load generation.
-      transport.snapshotResult = {
+      transport.useSnapshot({
         ...configurationSnapshot("revision-downloading"),
         typeshed: typeshedFixture({ downloading: true }),
-      };
+      });
       await controller.receive({ type: "refresh" });
       // The download finishes: the pin is written and the server returns the
       // authoritative Ready snapshot pinned to the resolved commit.
@@ -710,7 +719,7 @@ suite("Configuration editor — thin LSP shell", () => {
     const store = createStore();
     const transport = new RecordingTransport();
     const pending: ((response: RuleOccurrencesResponse) => void)[] = [];
-    transport.occurrenceHandler = async () => new Promise((resolve) => pending.push(resolve));
+    transport.occurrenceHandler = async () => new Promise((resolve) => { pending.push(resolve); });
     const controller = new ConfigurationEditorController(store, transport);
     try {
       controller.open(ROOT_URI);
@@ -746,7 +755,7 @@ suite("Configuration editor — transaction lifecycle", () => {
       ...configurationSnapshot("revision-2"),
       typeshed: typeshedFixture(),
     };
-    transport.snapshotResult = custom;
+    transport.useSnapshot(custom);
     transport.previewResult = { ...configurationPreview(), typeshedChanges: [] };
     let finishApply: ((snapshot: ConfigurationSnapshot) => void) | undefined;
     transport.applyHandler = async () => new Promise<ConfigurationSnapshot>((resolve) => { finishApply = resolve; });
@@ -780,7 +789,7 @@ suite("Configuration editor — transaction lifecycle", () => {
     const store = createStore();
     const transport = new RecordingTransport();
     const pending: ((preview: ConfigurationPreview) => void)[] = [];
-    transport.previewHandler = async () => new Promise<ConfigurationPreview>((resolve) => pending.push(resolve));
+    transport.previewHandler = async () => new Promise<ConfigurationPreview>((resolve) => { pending.push(resolve); });
     const controller = new ConfigurationEditorController(store, transport);
     try {
       controller.open(ROOT_URI);
@@ -821,7 +830,7 @@ suite("Configuration editor — transaction lifecycle", () => {
     try {
       controller.open(ROOT_URI);
       await pollUntil(() => transport.snapshotRequests.length === 1);
-      transport.snapshotResult = configurationSnapshot("revision-2");
+      transport.useSnapshot(configurationSnapshot("revision-2"));
       store.markConfigurationChanged({ rootUri: ROOT_URI, revision: "revision-2" });
       await pollUntil(() => transport.snapshotRequests.length === 2);
       await pollUntil(() => store.configurationEditor.value.snapshot?.revision === "revision-2");
@@ -838,7 +847,7 @@ suite("Configuration editor — transaction lifecycle", () => {
     try {
       controller.open(ROOT_URI);
       await pollUntil(() => store.configurationEditor.value.phase === "ready");
-      transport.snapshotHandler = async () => new Promise((resolve) => pending.push(resolve));
+      transport.snapshotHandler = async () => new Promise((resolve) => { pending.push(resolve); });
 
       const refresh = controller.receive({ type: "refresh" });
       await pollUntil(() => transport.snapshotRequests.length === 2);
@@ -907,7 +916,7 @@ suite("Configuration editor — apply persistence", () => {
     const scratch = createScratchConfigWorkspace();
     const store = createStore();
     const transport = new RecordingTransport();
-    transport.snapshotResult = scratch.snapshot("revision-1");
+    transport.useSnapshot(scratch.snapshot("revision-1"));
     transport.applyHandler = async () => {
       await applyWholeDocumentEdit(scratch.configUri, scratch.appliedToml);
       return scratch.snapshot("revision-2");
@@ -987,6 +996,10 @@ suite("Configuration editor — conflicts, capability, and lifecycle", () => {
   // is no protocol version to negotiate.
   test("gates on presence of the experimental capability", () => {
     function clientWithCapability(configurationEditor: unknown): LanguageClient {
+      // A stand-in for the members the code under test calls. No runtime check
+      // can produce the rest of `LanguageClient`, so the test double itself is
+      // the one assertion here — it is not a payload being read.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- see above.
       return {
         initializeResult: {
           capabilities: { experimental: { basilisk: { configurationEditor } } },
@@ -1028,7 +1041,7 @@ suite("Configuration editor — conflicts, capability, and lifecycle", () => {
       await pollUntil(() => controller.readyMessageCount() >= 1, 10_000);
       controller.open(ROOT_URI);
       await pollUntil(() => controller.readyMessageCount() >= 2, 10_000);
-      await new Promise<void>((resolve) => setTimeout(resolve, 500));
+      await delay(500);
       assert.strictEqual(controller.readyMessageCount(), 2, "a stacked handler would deliver the second ready twice");
       assert.strictEqual(controller.isOpen(), true);
       await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
@@ -1055,14 +1068,16 @@ suite("Configuration editor — diagnostic scope setting relay", () => {
     assert.strictEqual(inspected?.defaultValue, true, "package.json must declare the default");
 
     const relayedDefault = readBasiliskSettings();
-    const nested = relayedDefault.basilisk as Record<string, unknown>;
-    assert.strictEqual(nested.analyze, true);
+    assert.strictEqual(booleanField(recordField(relayedDefault, "basilisk"), "analyze"), true);
 
     try {
       await cfg.update("analyze", false, vscode.ConfigurationTarget.Workspace);
       const relayed = readBasiliskSettings();
-      const nestedOff = relayed.basilisk as Record<string, unknown>;
-      assert.strictEqual(nestedOff.analyze, false, "the opt-out must reach the LSP payload");
+      assert.strictEqual(
+        booleanField(recordField(relayed, "basilisk"), "analyze"),
+        false,
+        "the opt-out must reach the LSP payload",
+      );
     } finally {
       await cfg.update("analyze", undefined, vscode.ConfigurationTarget.Workspace);
     }

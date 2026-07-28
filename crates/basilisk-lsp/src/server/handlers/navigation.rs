@@ -276,8 +276,12 @@ pub(in crate::server) async fn references(
                                 if let Some(importer_uri) =
                                     crate::workspace_scan::path_to_uri(&importer_path)
                                 {
-                                    let ranges =
-                                        references::find_identifier_occurrences(&entry.text, &name);
+                                    let mask = crate::source_mask::SourceMask::build(&entry.text);
+                                    let ranges = references::find_identifier_occurrences(
+                                        &entry.text,
+                                        &name,
+                                        &mask,
+                                    );
                                     for range in ranges {
                                         let key = (
                                             importer_uri.clone(),
@@ -321,8 +325,9 @@ pub(in crate::server) async fn references(
                                 }
                             }
                             // Also find usage references in the source file.
+                            let mask = crate::source_mask::SourceMask::build(&entry.text);
                             let ranges =
-                                references::find_identifier_occurrences(&entry.text, &name);
+                                references::find_identifier_occurrences(&entry.text, &name, &mask);
                             for range in ranges {
                                 let key =
                                     (source_uri.clone(), range.start.line, range.start.character);
@@ -410,14 +415,19 @@ pub(in crate::server) async fn rename(
                                 if let Some(importer_uri) =
                                     crate::workspace_scan::path_to_uri(&importer_path)
                                 {
+                                    let mask = crate::source_mask::SourceMask::build(&entry.text);
                                     let edits: Vec<tower_lsp::lsp_types::TextEdit> =
-                                        references::find_identifier_occurrences(&entry.text, &name)
-                                            .into_iter()
-                                            .map(|range| tower_lsp::lsp_types::TextEdit {
-                                                range,
-                                                new_text: new_name.clone(),
-                                            })
-                                            .collect();
+                                        references::find_identifier_occurrences(
+                                            &entry.text,
+                                            &name,
+                                            &mask,
+                                        )
+                                        .into_iter()
+                                        .map(|range| tower_lsp::lsp_types::TextEdit {
+                                            range,
+                                            new_text: new_name.clone(),
+                                        })
+                                        .collect();
                                     if !edits.is_empty() {
                                         all_changes.entry(importer_uri).or_default().extend(edits);
                                     }
@@ -435,8 +445,9 @@ pub(in crate::server) async fn rename(
                         if let Some(source_uri) =
                             crate::workspace_scan::path_to_uri(&ext_sym.source_path)
                         {
+                            let mask = crate::source_mask::SourceMask::build(&entry.text);
                             let edits: Vec<tower_lsp::lsp_types::TextEdit> =
-                                references::find_identifier_occurrences(&entry.text, &name)
+                                references::find_identifier_occurrences(&entry.text, &name, &mask)
                                     .into_iter()
                                     .map(|range| tower_lsp::lsp_types::TextEdit {
                                         range,

@@ -9,13 +9,27 @@
 import * as vscode from "vscode";
 import { execFile } from "child_process";
 import * as path from "path";
+import { numberField, stringField } from "./unknown-shape";
 
 /** Exit code returned by `basilisk check` on internal errors. */
 const BASILISK_INTERNAL_ERROR_EXIT_CODE = 3;
 
-/** Shape of a single diagnostic emitted by `basilisk check --output json`. */
+/**
+ * Shape of a single diagnostic emitted by `basilisk check --output json`.
+ *
+ * Consumes [CHKARCH-CLI-OUTPUT-FAILURES]. See
+ * docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-OUTPUT-FAILURES
+ */
 interface BasiliskDiagnostic {
-  code: string;
+  /**
+   * The rule code, absent for a file the CLI could not analyse at all.
+   *
+   * A parse failure is reported with a `null` code because no rule produced
+   * it. Requiring a code here dropped those entries on the floor, so a file
+   * with a syntax error showed a clean editor — the same blind spot the CLI's
+   * JSON output had.
+   */
+  code?: string;
   severity: "error" | "warning";
   message: string;
   path: string;
@@ -76,9 +90,17 @@ function checkDocument(
     { cwd: workspaceRoot() },
     (error, stdout, stderr) => {
       if (error?.code === BASILISK_INTERNAL_ERROR_EXIT_CODE) {
-        vscode.window.showWarningMessage(
-          `Basilisk: internal error checking ${path.basename(filePath)}: ${stderr}`
-        );
+        // Exit 3 means at least one file could not be analysed at all, and the
+        // report on stdout now names them. Returning here published nothing,
+        // so a file with a syntax error kept whatever squiggles it had before
+        // the edit and explained itself only through a toast.
+        const reported = parseDiagnostics(stdout, doc);
+        collection.set(doc.uri, reported);
+        if (reported.length === 0) {
+          vscode.window.showWarningMessage(
+            `Basilisk: internal error checking ${path.basename(filePath)}: ${stderr}`
+          );
+        }
         return;
       }
       if (error && typeof error.code === "number" && error.code !== 1) {
@@ -93,31 +115,85 @@ function checkDocument(
   );
 }
 
-function parseDiagnostics(json: string, doc: vscode.TextDocument): vscode.Diagnostic[] {
-  let items: BasiliskDiagnostic[];
+/**
+ * Map the CLI's JSON report onto the editor diagnostics for one document.
+ *
+ * Exported as the parse boundary between a separate process's output and the
+ * editor: it is where an unrecognised payload has to degrade to "nothing to
+ * show" rather than throw inside the `execFile` callback, so it is tested
+ * directly against the shapes the CLI actually emits.
+ */
+export function parseDiagnostics(json: string, doc: vscode.TextDocument): vscode.Diagnostic[] {
+  let parsed: unknown;
   try {
-    items = JSON.parse(json) as BasiliskDiagnostic[];
+    parsed = JSON.parse(json);
   } catch {
     return [];
   }
-  if (!Array.isArray(items)) {return [];}
+  if (!Array.isArray(parsed)) {return [];}
 
-  return items
+  return parsed
+    .map(narrowDiagnostic)
+    .filter((item): item is BasiliskDiagnostic => item !== undefined)
     .filter((item) => item.path === doc.uri.fsPath)
-    .map((item) => {
-      const range = new vscode.Range(
-        new vscode.Position(item.line - 1, item.col - 1),
-        new vscode.Position(item.end_line - 1, item.end_col - 1)
-      );
-      const severity = item.severity === "error"
-        ? vscode.DiagnosticSeverity.Error
-        : vscode.DiagnosticSeverity.Warning;
-      const diag = new vscode.Diagnostic(range, `${item.message} [${item.code}]`, severity);
-      diag.source = "basilisk";
-      diag.code = {
-        value: item.code,
-        target: vscode.Uri.parse(`https://www.basilisk-python.dev/errors/${item.code}`),
-      };
-      return diag;
-    });
+    .map(toVscodeDiagnostic);
+}
+
+/**
+ * Narrow one element of the CLI's JSON array to a diagnostic.
+ *
+ * Returns `undefined` — dropping the entry — when any required field is absent
+ * or the wrong type. The CLI is a separate process on a version the extension
+ * does not control, so a shape change must degrade to "no diagnostic here",
+ * never to a `TypeError` inside the `execFile` callback.
+ */
+function narrowDiagnostic(value: unknown): BasiliskDiagnostic | undefined {
+  const code = stringField(value, "code");
+  const message = stringField(value, "message");
+  const filePath = stringField(value, "path");
+  const line = numberField(value, "line");
+  const col = numberField(value, "col");
+  const endLine = numberField(value, "end_line");
+  const endCol = numberField(value, "end_col");
+  if (
+    message === undefined || filePath === undefined ||
+    line === undefined || col === undefined ||
+    endLine === undefined || endCol === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    code,
+    // Anything that is not explicitly "error" is reported as a warning, matching
+    // the previous behaviour of the two-way severity mapping below.
+    severity: stringField(value, "severity") === "error" ? "error" : "warning",
+    message,
+    path: filePath,
+    line,
+    col,
+    end_line: endLine,
+    end_col: endCol,
+  };
+}
+
+/** Render a narrowed CLI diagnostic as an editor diagnostic. */
+function toVscodeDiagnostic(item: BasiliskDiagnostic): vscode.Diagnostic {
+  const range = new vscode.Range(
+    new vscode.Position(item.line - 1, item.col - 1),
+    new vscode.Position(item.end_line - 1, item.end_col - 1)
+  );
+  const severity = item.severity === "error"
+    ? vscode.DiagnosticSeverity.Error
+    : vscode.DiagnosticSeverity.Warning;
+  const { code } = item;
+  const label = code === undefined ? item.message : `${item.message} [${code}]`;
+  const diag = new vscode.Diagnostic(range, label, severity);
+  diag.source = "basilisk";
+  if (code !== undefined) {
+    diag.code = {
+      value: code,
+      target: vscode.Uri.parse(`https://www.basilisk-python.dev/errors/${code}`),
+    };
+  }
+  return diag;
 }

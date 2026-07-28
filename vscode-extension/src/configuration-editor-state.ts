@@ -1,6 +1,7 @@
 // Implements [VSIX-CONFIGURATION-EDITOR-THIN-SHELL].
 /** Central immutable state and explicit actions for the configuration editor. */
 
+import { asRecord, isRecord, stringField } from "./unknown-shape";
 import type { ReadonlySignal, Signal } from "@preact/signals-core";
 import type {
   ConfigurationChanged,
@@ -8,6 +9,7 @@ import type {
   ConfigurationSnapshot,
   RuleOccurrencesResponse,
   TypeshedStatusChanged,
+  TypeshedStatusState,
 } from "./configuration-editor-model";
 
 export type ConfigurationEditorPhase =
@@ -80,17 +82,14 @@ export interface ConfigurationEditorStore extends ConfigurationEditorActions {
 
 /** Validate the small server-pushed invalidation before it touches shared state. */
 export function decodeConfigurationChanged(value: unknown): ConfigurationChanged | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) { return undefined; }
-  const candidate = value as Record<string, unknown>;
-  return typeof candidate.rootUri === "string" && typeof candidate.revision === "string"
-    ? { rootUri: candidate.rootUri, revision: candidate.revision }
-    : undefined;
+  const rootUri = stringField(value, "rootUri");
+  const revision = stringField(value, "revision");
+  return rootUri !== undefined && revision !== undefined ? { rootUri, revision } : undefined;
 }
 
 function hasKind(value: unknown, allowed: readonly string[]): boolean {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) { return false; }
-  const kind = (value as Record<string, unknown>).kind;
-  return typeof kind === "string" && allowed.includes(kind);
+  const kind = stringField(value, "kind");
+  return kind !== undefined && allowed.includes(kind);
 }
 
 function hasOptionalKind(value: unknown, allowed: readonly string[]): boolean {
@@ -102,10 +101,9 @@ function isOptionalString(value: unknown): boolean {
 }
 
 function isTypeshedWarning(value: unknown): boolean {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) { return false; }
-  const fields = value as Record<string, unknown>;
-  return typeof fields.code === "string" && typeof fields.message === "string"
-    && hasKind(fields.severity, ["Advisory", "High"]);
+  if (!isRecord(value)) { return false; }
+  return stringField(value, "code") !== undefined && stringField(value, "message") !== undefined
+    && hasKind(value.severity, ["Advisory", "High"]);
 }
 
 function hasTypeshedStateKinds(fields: Record<string, unknown>): boolean {
@@ -119,9 +117,12 @@ function hasTypeshedIdentityFields(fields: Record<string, unknown>): boolean {
     && isOptionalString(fields.commitIdentity);
 }
 
-function isTypeshedStatus(value: unknown): boolean {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) { return false; }
-  const fields = value as Record<string, unknown>;
+// A type predicate, not a boolean check: every field the wire type declares is
+// verified below, so callers get the narrowed type without an `as` that the
+// compiler would have to take on faith.
+function isTypeshedStatus(value: unknown): value is TypeshedStatusState {
+  if (!isRecord(value)) { return false; }
+  const fields = value;
   return hasTypeshedStateKinds(fields)
     && hasTypeshedIdentityFields(fields)
     && Array.isArray(fields.warnings)
@@ -130,12 +131,14 @@ function isTypeshedStatus(value: unknown): boolean {
 
 /** Validate the typed Typeshed lifecycle notification before using it as an invalidation. */
 export function decodeTypeshedStatusChanged(value: unknown): TypeshedStatusChanged | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) { return undefined; }
-  const candidate = value as Record<string, unknown>;
-  if (typeof candidate.rootUri !== "string" || !isTypeshedStatus(candidate.status)) {
+  const rootUri = stringField(value, "rootUri");
+  const status = asRecord(value).status;
+  if (rootUri === undefined || !isTypeshedStatus(status)) {
     return undefined;
   }
-  return candidate as unknown as TypeshedStatusChanged;
+  // `isTypeshedStatus` has just verified every field the wire type declares,
+  // so the narrowed shape is rebuilt rather than re-asserted.
+  return { rootUri, status };
 }
 
 /** Mark an open root stale without replacing the snapshot beneath an active preview. */

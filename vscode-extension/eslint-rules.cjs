@@ -113,6 +113,24 @@ const masterRules = {
   // 22. No unnecessary boolean literal compare — `if (x === true)` is noise
   '@typescript-eslint/no-unnecessary-boolean-literal-compare': 'error',
 
+  // ── Unchecked escape hatches & async hazards (CRITICAL) ──────────────
+  // 23. No unsafe type assertion — `as T` is the last hole left once
+  //     no-explicit-any and the no-unsafe-* family are on. Narrow untrusted
+  //     payloads (DAP/LSP JSON, DOM lookups) with a runtime check instead.
+  '@typescript-eslint/no-unsafe-type-assertion': 'error',
+  // 24. No shadowing — an inner binding that reuses an outer name silently
+  //     detaches later reads from the value the author meant.
+  '@typescript-eslint/no-shadow': 'error',
+  // 25. Async race conditions — `x = await f()` after another await can clobber
+  //     an interleaved write to the same variable.
+  'require-atomic-updates': 'error',
+  // 26. Nothing may be returned from a `new Promise` executor — the value is
+  //     discarded, so a `return` there is always a mistake.
+  'no-promise-executor-return': 'error',
+  // 27. `'${x}'` in a plain string never interpolates — it ships the literal
+  //     dollar-brace text to the user.
+  'no-template-curly-in-string': 'error',
+
   // ── Complexity limits ────────────────────────────────────────────────
   'max-depth': ['error', 4],
   'max-lines-per-function': ['error', { max: 60, skipBlankLines: true, skipComments: true }],
@@ -137,6 +155,14 @@ const testOverrides = {
   '@typescript-eslint/no-confusing-void-expression': 'off',
   // Tests use truthy checks on dynamic/unknown values from LSP responses
   '@typescript-eslint/strict-boolean-expressions': 'off',
+  // NOTE: `@typescript-eslint/no-unsafe-type-assertion` is deliberately NOT
+  // overridden here. Turning it off for tests was measured to hide 101 of 132
+  // violations, of which only a handful are the generic-test-double case the
+  // exemption was written for — a test that asserts a payload's shape proves
+  // nothing about the payload. The few sites where overriding a generic API
+  // (`sendRequest<R>(): Promise<R>`) genuinely cannot be satisfied carry a
+  // targeted `eslint-disable-next-line` naming that reason, so the exemption is
+  // visible at the site instead of blanketing the suite.
   // Test setup/teardown functions can be longer
   'max-lines-per-function': ['error', { max: 120, skipBlankLines: true, skipComments: true }],
 };

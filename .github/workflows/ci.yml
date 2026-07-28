@@ -464,6 +464,111 @@ jobs:
       - name: Run VS Code extension tests
         run: make _test_vsix
 
+  # ── VS Code extension on Windows (runs in parallel) ────────────────────────
+  # Implements [VSIX-CI-PLATFORM-COVERAGE] (docs/specs/VSIX-SPEC.md).
+  # Windows is a first-class target — the VSIX ships win32-x64/win32-arm64
+  # binaries (shipwright.json) — but until this job existed EVERY test ran on
+  # Linux, so win32-only defects (`.exe` suffixes, `\` separators, per-platform
+  # bundle paths) shipped uncaught. This runs the SAME `workspace-suite` the
+  # Linux job runs — all of src/test/suite, including the DAP debugger
+  # ([VSIX-PYTHON-DEBUGGER-DAP]) and CPU/memory profiler
+  # ([VSIX-PROFILER]) suites — natively on Windows.
+  #
+  # It deliberately does NOT call `make _test_vsix`: that recipe packages a
+  # release VSIX and re-enforces the coverage ratchet, both of which the Linux
+  # job already owns. Here the steps are spelled out so the Windows run is the
+  # thing under test — build the win32 binary, stage it through the ONE
+  # canonical staging path ([VSIX-PACKAGING-PARITY], scripts/stage-runtime.mjs),
+  # then drive the suite against that staged bundle.
+  test-vscode-windows:
+    name: VS Code Extension (Windows)
+    needs: changes
+    # Same gate as the Linux e2e job: the suite runs the real basilisk binary,
+    # so a core change alters what it exercises.
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.vscode == 'true'
+    runs-on: windows-latest
+    # TIMEOUT EXCEPTION: a cold Windows `cargo build --release` plus a full
+    # VS Code e2e suite (real debugpy sessions, real profiler runs) is slower
+    # than the Linux equivalent; Windows I/O makes both phases materially
+    # longer. No real-world corpus here, so the total still lands under Linux's.
+    timeout-minutes: 75
+    # Git Bash — the repo's scripts and these steps are POSIX shell, and it is
+    # the shell `_release_vsix` already targets on Windows (MINGW*/MSYS*).
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          cache-on-failure: true
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      # Same pins as the Linux e2e job — the debug suites drive real debugpy
+      # sessions and the LSP shells out to ruff.
+      - name: Install Python test dependencies
+        run: pip install debugpy==1.8.14 ruff==0.15.17
+
+      # Keyed on runner.os, so this is a Windows-only cache bucket and never
+      # collides with the Linux job's VS Code download.
+      - name: Cache VS Code test build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: vscode-extension/.vscode-test
+          key: vscode-test-${{ runner.os }}-${{ hashFiles('vscode-extension/.vscode-test.mjs', 'vscode-extension/.vscode-test.js', 'vscode-extension/package.json') }}
+          restore-keys: vscode-test-${{ runner.os }}-
+
+      # basilisk-profiler-helper is a darwin-arm64-only component in
+      # shipwright.json, so win32 bundles the LSP binary alone.
+      - name: Build the win32 basilisk binary
+        run: cargo build --release --bin basilisk
+
+      # The ONE canonical staging path ([VSIX-PACKAGING-PARITY]) — the same
+      # script the release packager and release.yml `vsix` job use, so the
+      # bundle these tests see is laid out exactly like the shipped VSIX
+      # (`bin/win32-x64/basilisk.exe`).
+      - name: Stage the bundled runtime
+        run: node vscode-extension/scripts/stage-runtime.mjs target/release win32-x64
+
+      - name: Build the extension
+        working-directory: vscode-extension
+        run: |
+          npm ci
+          npm run sync:shipwright
+          npm run compile
+
+      # Bundled debugpy is what the DAP suites launch against, matching a real
+      # install (the user never has to pip-install it themselves).
+      - name: Vendor debugpy into the bundle
+        working-directory: vscode-extension
+        run: node scripts/vendor-debugpy.mjs
+
+      # `npx vscode-test` rather than `npm test` so npm's `pretest` hook does
+      # not fetch the real-world corpus; `--label workspace-suite` selects the
+      # full src/test/suite run and leaves the corpus configs out.
+      # BSK_TEST_BAIL=0 (see .vscode-test.mjs) makes this job report EVERY
+      # win32 failure in one run. Everywhere else the suite still fails fast;
+      # here the ~30s of test time sits behind a ~20min cold cargo build, so
+      # bailing hides the next defect behind the first and buys a full rebuild
+      # to find it — which is exactly how the first two runs went.
+      - name: Run VS Code extension tests
+        working-directory: vscode-extension
+        env:
+          BSK_TEST_BAIL: "0"
+        run: npx vscode-test --label workspace-suite
+
   verify-binaries:
     name: Shipwright Binary Gate
     needs: changes
@@ -766,7 +871,7 @@ jobs:
   # ── Build gate (standard job name per repo standards) ──────────────────────
   build:
     name: Build
-    needs: [changes, test-rust, test-vscode, test-nvim, zed, mutation-test, verify-binaries]
+    needs: [changes, test-rust, test-vscode, test-vscode-windows, test-nvim, zed, mutation-test, verify-binaries]
     if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10

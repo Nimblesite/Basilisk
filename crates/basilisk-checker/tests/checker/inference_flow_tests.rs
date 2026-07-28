@@ -178,7 +178,7 @@ fn check_annotated_var_with_known_rhs() {
         name_span: basilisk_resolver::Span { start: 0, end: 1 },
         rhs_span: None,
     };
-    assert!(check_annotated_variable(&var_info).is_ok());
+    check_annotated_variable(&var_info).expect("a matching annotation and value is accepted");
 }
 
 #[test]
@@ -204,7 +204,7 @@ fn check_annotated_var_without_annotation() {
         name_span: basilisk_resolver::Span { start: 0, end: 1 },
         rhs_span: None,
     };
-    assert!(check_annotated_variable(&var_info).is_ok());
+    check_annotated_variable(&var_info).expect("a matching annotation and value is accepted");
 }
 
 #[test]

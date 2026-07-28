@@ -25,30 +25,15 @@ import * as memoryDashboardModule from "../../memory-dashboard";
 import type { WebviewMessage } from "../../profiler-webview";
 import { SESSION_WAIT_MS, POLL_MS, waitForSessionEnd } from "./debug-e2e-helpers";
 import {
-  EXTENSION_ID,
   pollUntilResult,
   setupLspTestSuite,
   teardownLspTestSuite,
   closeAllEditors,
 } from "./test-helpers";
+import { manifestMenus } from "./extension-manifest";
+import { stringField } from "../../unknown-shape";
 
 /** One contributes.menus entry from the live manifest. */
-interface MenuContribution {
-  readonly command: string;
-  readonly when: string;
-  readonly group?: string;
-}
-
-/** The live extension manifest's menu contributions (never a hand-copy). */
-function manifestMenus(): Record<string, MenuContribution[]> {
-  const extension = vscode.extensions.getExtension(EXTENSION_ID);
-  assert.ok(extension, "the Basilisk extension must be present");
-  const pkg = extension.packageJSON as {
-    contributes?: { menus?: Record<string, MenuContribution[]> };
-  };
-  return pkg.contributes?.menus ?? {};
-}
-
 /** A captured notification: its message and the action buttons it offered. */
 interface Toast {
   readonly message: string;
@@ -58,8 +43,7 @@ interface Toast {
 /** The label of one showInformationMessage item (string or MessageItem). */
 function actionLabel(item: unknown): string | undefined {
   if (typeof item === "string") { return item; }
-  const title = (item as { title?: unknown } | null)?.title;
-  return typeof title === "string" ? title : undefined;
+  return stringField(item, "title");
 }
 
 /** Run `body` while capturing every information toast (message + actions). */
@@ -191,24 +175,39 @@ function assertDashboardAdviceIsActionable(): void {
  * The webview buttons post messages; the extension side must translate them
  * into the real basilisk.memorySnapshot / basilisk.memoryDiff runs.
  */
+/**
+ * Whether the module's export is the dashboard's message router.
+ *
+ * A predicate rather than an assertion: this suite deliberately reads
+ * `memory-dashboard` as an untyped module so #263 stays a runtime check that
+ * the export exists, and a predicate keeps that check while still giving the
+ * caller something callable.
+ */
+function isMessageRouter(value: unknown): value is (msg: WebviewMessage) => boolean {
+  return typeof value === "function";
+}
+
 async function assertDashboardMessagesRouteToCommands(): Promise<void> {
   const { handleMemoryDashboardMessage } = memoryDashboardModule as {
     handleMemoryDashboardMessage?: unknown;
   };
-  assert.strictEqual(
-    typeof handleMemoryDashboardMessage,
-    "function",
+  assert.ok(
+    isMessageRouter(handleMemoryDashboardMessage),
     "memory-dashboard must export handleMemoryDashboardMessage routing the action buttons (#263)",
   );
-  const route = handleMemoryDashboardMessage as (msg: WebviewMessage) => boolean;
+  const route = handleMemoryDashboardMessage;
 
   const executed: string[] = [];
   const commandsApi = vscode.commands as {
     executeCommand: typeof vscode.commands.executeCommand;
   };
   const original = commandsApi.executeCommand;
+  // Swapping in a recorder for `executeCommand` means producing its generic
+  // return from nothing — no runtime check can do that, so the double keeps
+  // one explained assertion.
   commandsApi.executeCommand = (async (command: string) => {
     executed.push(command);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- see above.
     return undefined as never;
   }) as typeof vscode.commands.executeCommand;
   try {

@@ -195,7 +195,7 @@ exclude = ["packages/beta"]
         std::fs::write(dir.path().join("pyproject.toml"), "not { valid toml").unwrap();
 
         let result = parse_uv_workspace(dir.path());
-        assert!(result.is_err());
+        let _error = result.unwrap_err();
     }
 
     #[test]

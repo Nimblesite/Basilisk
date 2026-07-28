@@ -20,7 +20,8 @@ pub fn document_highlights(
     };
 
     // Find all occurrences of the name as whole-word matches in the source.
-    let occurrences = crate::references::find_identifier_occurrences(source, &name);
+    let mask = crate::source_mask::SourceMask::build(source);
+    let occurrences = crate::references::find_identifier_occurrences(source, &name, &mask);
 
     // Get the definition range if we're on a symbol
     let definition_range =

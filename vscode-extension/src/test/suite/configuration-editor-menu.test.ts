@@ -7,20 +7,20 @@
 
 import * as assert from "assert";
 import {
-  getPackageJsonCommands,
-  getPackageJsonMenu,
-} from "./profiler-test-constants";
+  manifestCommands,
+  manifestMenu
+} from "./extension-manifest";
 
 suite("Configuration editor — pyproject.toml explorer context menu", () => {
   test("pyproject.toml context menu has an Edit Config item at the top", function () {
-    const commands = getPackageJsonCommands();
+    const commands = manifestCommands();
     const editConfig = commands.find((entry) => entry.title === "Edit Config");
     assert.ok(
       editConfig,
       'package.json must declare a command titled "Edit Config" for the explorer context menu',
     );
 
-    const explorerMenu = getPackageJsonMenu("explorer/context");
+    const explorerMenu = manifestMenu("explorer/context");
     const menuEntry = explorerMenu.find((entry) => entry.command === editConfig.command);
     assert.ok(
       menuEntry,

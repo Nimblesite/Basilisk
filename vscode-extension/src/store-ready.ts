@@ -39,11 +39,19 @@ export function resolveLspReady(signals: ReadySignals): void {
   }
 }
 
+/** Placeholder resolver, replaced synchronously by the `Promise` executor. */
+function unresolved(): void {
+  // Intentionally empty — see `createReadyHandle`.
+}
+
 /** Create a fresh ready handle for this start cycle. */
 export function createReadyHandle(signals: ReadySignals): ReadyHandle {
-  let resolve: (() => void) | undefined;
-  const promise = new Promise<void>((r) => { resolve = r; });
-  const handle: ReadyHandle = { promise, resolve: resolve as () => void };
+  // Seeded with a no-op so the binding is a `() => void` without asserting one.
+  // The executor runs synchronously inside `new Promise`, so the real resolver
+  // is always in place by the time the handle is built on the next line.
+  let resolve: () => void = unresolved;
+  const promise = new Promise<void>((settle) => { resolve = settle; });
+  const handle: ReadyHandle = { promise, resolve };
   signals.readyHandle.value = handle;
   return handle;
 }

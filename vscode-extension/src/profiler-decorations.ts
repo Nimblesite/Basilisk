@@ -14,6 +14,7 @@
 
 import * as vscode from "vscode";
 import { Logger } from "./logger";
+import { pathKeyer } from "./editor-path-key";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -164,15 +165,19 @@ function getDecorationTypeForColor(color: string): vscode.TextEditorDecorationTy
  * Apply inline heat map decorations to all visible editors based on
  * profiling results.
  */
-/** Group items by file path into a map. */
-function groupByFile<T extends { file: string }>(items: T[]): Map<string, T[]> {
+/** Group items by normalised file path (see `pathKey`) into a map. */
+function groupByFile<T extends { file: string }>(
+  items: T[],
+  keyOf: (file: string) => string,
+): Map<string, T[]> {
   const grouped = new Map<string, T[]>();
   for (const item of items) {
-    const existing = grouped.get(item.file);
+    const key = keyOf(item.file);
+    const existing = grouped.get(key);
     if (existing !== undefined) {
       existing.push(item);
     } else {
-      grouped.set(item.file, [item]);
+      grouped.set(key, [item]);
     }
   }
   return grouped;
@@ -260,19 +265,22 @@ export function applyProfileDecorations(result: ProfileResult): void {
 
   clearProfileDecorations();
 
-  const linesByFile = groupByFile(result.hotLines);
-  const funcsByFile = groupByFile(result.hotFunctions);
+  const keyOf = pathKeyer();
+  const linesByFile = groupByFile(result.hotLines, keyOf);
+  const funcsByFile = groupByFile(result.hotFunctions, keyOf);
 
-  for (const editor of vscode.window.visibleTextEditors) {
+  const editors = vscode.window.visibleTextEditors;
+  for (const editor of editors) {
     const filePath = editor.document.uri.fsPath;
+    const key = keyOf(filePath);
     const optionsByColor = new Map<string, vscode.DecorationOptions[]>();
 
-    const lines = linesByFile.get(filePath);
+    const lines = linesByFile.get(key);
     if (lines !== undefined) {
       buildLineDecorations(editor, lines, optionsByColor);
     }
 
-    const funcs = funcsByFile.get(filePath);
+    const funcs = funcsByFile.get(key);
     if (funcs !== undefined) {
       buildFuncDecorations(editor, funcs, { lines, optionsByColor });
     }
@@ -283,9 +291,13 @@ export function applyProfileDecorations(result: ProfileResult): void {
     recordApplied(appliedDecorations, filePath, optionsByColor);
   }
 
-  const totalLines = result.hotLines.length;
-  const totalFuncs = result.hotFunctions.length;
-  Logger.info(`Profile decorations applied: ${totalLines} hot lines, ${totalFuncs} hot functions`);
+  // Count what was PAINTED, not what the profile held: a profile full of hot
+  // lines that matches no open editor used to log exactly like a successful
+  // pass, which is how the heat map stayed silently blank on Windows.
+  Logger.info(
+    `Profile decorations applied: ${appliedDecorations.length} across ${editors.length} visible editor(s)`
+    + ` from ${result.hotLines.length} hot lines, ${result.hotFunctions.length} hot functions`,
+  );
 }
 
 /** Clear all profiling decorations from visible editors. */

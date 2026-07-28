@@ -25,9 +25,12 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { InfoPanelProvider, featureToggleTarget } from "../../info-panel";
-import type { TypeshedStatusState } from "../../configuration-editor-model";
 import { createStore } from "../../store";
-import { EXTENSION_ID, SUITE_SETUP_TIMEOUT_MS, waitForLspReady } from "./test-helpers";
+import { SUITE_SETUP_TIMEOUT_MS, seedSignal, waitForLspReady } from "./test-helpers";
+import type { LanguageClient } from "vscode-languageclient/node";
+import {
+  manifestMenu
+} from "./extension-manifest";
 
 /** Toggles that ship — each has a namesake, observable effect. */
 const KEPT_FEATURE_LABELS = ["Diagnostics"] as const;
@@ -62,10 +65,7 @@ function tooltipOf(item: vscode.TreeItem): string {
 
 function verifyTypeshedInfoRows(): void {
   const store = createStore();
-  const writable = store.typeshedStatuses as unknown as {
-    value: ReadonlyMap<string, TypeshedStatusState>;
-  };
-  writable.value = new Map([[
+  seedSignal(store.typeshedStatuses, new Map([[
     "file:///workspace",
     {
       lifecycle: { kind: "Ready" }, activeSource: { kind: "Bundled" },
@@ -77,7 +77,7 @@ function verifyTypeshedInfoRows(): void {
         severity: { kind: "Advisory" },
       }],
     },
-  ]]);
+  ]]));
   const typeshedProvider = new InfoPanelProvider(store);
   try {
     const rows = typeshedProvider.getChildren().filter((row) => row.contextValue === "info");
@@ -100,10 +100,7 @@ function verifyTypeshedInfoRows(): void {
 
 function verifyDownloadingTypeshedSpinner(): void {
   const store = createStore();
-  const writable = store.typeshedStatuses as unknown as {
-    value: ReadonlyMap<string, TypeshedStatusState>;
-  };
-  writable.value = new Map([[
+  seedSignal(store.typeshedStatuses, new Map([[
     "file:///workspace",
     {
       lifecycle: { kind: "Downloading" }, noSourceReason: undefined, activeSource: undefined,
@@ -111,7 +108,7 @@ function verifyDownloadingTypeshedSpinner(): void {
       licenseStatus: { kind: "Unavailable" },
       warnings: [],
     },
-  ]]);
+  ]]));
   const typeshedProvider = new InfoPanelProvider(store);
   try {
     const state = typeshedProvider
@@ -127,10 +124,7 @@ function verifyDownloadingTypeshedSpinner(): void {
 /** A store whose single root reports the typeshed_source_unpinned typeshed warning. */
 function storeWithUnpinnedWarning(): ReturnType<typeof createStore> {
   const store = createStore();
-  const writable = store.typeshedStatuses as unknown as {
-    value: ReadonlyMap<string, TypeshedStatusState>;
-  };
-  writable.value = new Map([[
+  seedSignal(store.typeshedStatuses, new Map([[
     "file:///workspace",
     {
       lifecycle: { kind: "Ready" }, activeSource: { kind: "Bundled" },
@@ -142,7 +136,7 @@ function storeWithUnpinnedWarning(): ReturnType<typeof createStore> {
         severity: { kind: "Advisory" },
       }],
     },
-  ]]);
+  ]]));
   return store;
 }
 
@@ -156,14 +150,16 @@ function advertiseConfigurationEditor(
   store: ReturnType<typeof createStore>,
   options: { readonly running: boolean },
 ): void {
-  const writableClient = store.client as unknown as { value: unknown };
-  writableClient.value = {
+  // Only `initializeResult` is read here; the rest of `LanguageClient` is not
+  // touched by the code under test, so the double states exactly that much.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- LanguageClient double; only initializeResult is read
+  const advertising = {
     initializeResult: {
       capabilities: { experimental: { basilisk: { configurationEditor: true } } },
     },
-  };
-  const writableState = store.lspState as unknown as { value: string };
-  writableState.value = options.running ? "running" : "starting";
+  } as unknown as LanguageClient;
+  seedSignal(store.client, advertising);
+  seedSignal(store.lspState, options.running ? "running" : "starting");
 }
 
 /** The single typeshed_source_unpinned warning row from a flat-root panel. */
@@ -419,22 +415,6 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
 //
 // Spec: docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-AFFORDANCE
 
-interface InlineMenuEntry {
-  readonly command: string;
-  readonly when: string;
-  readonly group?: string;
-}
-
-/** Load the extension's contributed view/item/context menu entries. */
-function loadItemContextMenus(): InlineMenuEntry[] {
-  const ext = vscode.extensions.getExtension(EXTENSION_ID);
-  assert.ok(ext, "Extension should be installed");
-  const pkg = ext.packageJSON as {
-    contributes?: { menus?: { "view/item/context"?: InlineMenuEntry[] } };
-  };
-  return pkg.contributes?.menus?.["view/item/context"] ?? [];
-}
-
 suite("Basilisk Info Panel Affordance [EXTACT-INFO-AFFORDANCE]", () => {
   let provider: InfoPanelProvider;
 
@@ -522,7 +502,7 @@ suite("Basilisk Info Panel Affordance [EXTACT-INFO-AFFORDANCE]", () => {
   });
 
   test("package.json contributes an inline action button for feature rows only", () => {
-    const inlineForInfo = loadItemContextMenus().filter(
+    const inlineForInfo = manifestMenu("view/item/context").filter(
       (entry) => entry.group === "inline" && entry.when.includes("basilisk.info"),
     );
     assert.ok(

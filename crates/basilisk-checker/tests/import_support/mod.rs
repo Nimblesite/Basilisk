@@ -70,7 +70,9 @@ pub fn custom_typeshed_snapshot(files: &[(&str, &str)]) -> ActiveTypeshed {
             .trim_end_matches("/__init__.pyi")
             .trim_end_matches(".pyi")
             .replace('/', ".");
-        assert!(writeln!(&mut versions, "{module}: 3.0-").is_ok());
+        // Writing into a `String` cannot fail, so the `Result` is dropped
+        // rather than asserted on.
+        let _ = writeln!(&mut versions, "{module}: 3.0-");
         versions
     });
     let mut entries = vec![ArchiveEntry {

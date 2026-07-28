@@ -6,14 +6,48 @@
  * every test file: binary discovery, diagnostic polling, file management.
  */
 
+import { delay } from '../../timeouts';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { editorPathKey } from '../../editor-path-key';
 import { type Store } from '../../store-types';
+import type { ReadonlySignal, Signal } from '@preact/signals-core';
+import type { LanguageClient } from 'vscode-languageclient/node';
 
 
 export { POLL_INTERVAL_MS, WAIT_MS } from '../../timeouts';
+
+/**
+ * Put a Store signal the public interface exposes as read-only into `value`.
+ *
+ * The Store deliberately hands out `ReadonlySignal` so production code cannot
+ * write to it, but they are the same `Signal` objects underneath. A test that
+ * needs the store in a particular state says so directly here rather than
+ * driving several unrelated code paths to arrive at it — and rather than each
+ * call site inventing its own `as unknown as { value: X }`, which describes a
+ * type the object does not have and would keep compiling if the real shape
+ * changed. The one assertion the runtime genuinely requires lives here, once.
+ */
+export function seedSignal<T>(signal: ReadonlySignal<T>, value: T): void {
+  (signal as Signal<T>).value = value;
+}
+
+/**
+ * A `LanguageClient` double carrying only the members a test actually drives.
+ *
+ * `sendRequest<R>(…): Promise<R>` cannot be honestly implemented by a double:
+ * satisfying it means producing a caller-chosen `R` out of canned data, and no
+ * runtime check narrows `unknown` to a type parameter. That one unavoidable
+ * assertion lives here rather than being copied into every fixture — the
+ * payloads such a client hands back are still checked wherever production code
+ * reads them, which is the thing `no-unsafe-type-assertion` exists to protect.
+ */
+export function fakeLanguageClient(members: Record<string, unknown>): LanguageClient {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- generic sendRequest<R> cannot be satisfied by a double; see above
+    return members as unknown as LanguageClient;
+}
 
 export const EXTENSION_ID = 'Nimblesite.basilisk';
 
@@ -30,6 +64,22 @@ export const SERVER_START_WAIT_MS = 60_000;
 /** Mocha timeout (ms) for suiteSetup hooks that wait for the LSP.
  *  Must exceed SERVER_START_WAIT_MS to avoid Mocha killing the hook early. */
 export const SUITE_SETUP_TIMEOUT_MS = 90_000;
+
+/**
+ * Time (ms) to allow an LSP client to come back up after a restart or a
+ * deactivate/activate cycle.
+ *
+ * Distinct from `WAIT_MS` (1s), which is the module's generic short wait: a
+ * restart respawns the server binary and replays initialize, which is not a
+ * one-second operation on a cold CI runner — spawning an .exe on win32 alone
+ * costs more than that. Tests that waited `WAIT_MS` for it read the
+ * still-starting client as a broken one and failed on a downstream assertion
+ * that never named the real cause ([VSIX-CI-PLATFORM-COVERAGE]).
+ *
+ * Kept under the suite's 45s Mocha timeout so a genuine hang is reported by
+ * the wait that understands it, not by Mocha.
+ */
+export const LSP_RESTART_WAIT_MS = 30_000;
 
 /** Maximum time (ms) to wait for a server-advertised command to appear. */
 export const COMMAND_WAIT_MS = 1_000;
@@ -183,7 +233,7 @@ export async function pollUntilResult<T>(
     while (Date.now() < deadline) {
         const result = await fn();
         if (predicate(result)) {return result;}
-        await new Promise<void>((r) => setTimeout(r, intervalMs));
+        await delay(intervalMs);
     }
     // One final attempt after deadline.
     const last = await fn();
@@ -263,7 +313,7 @@ export async function waitForLspReady(): Promise<void> {
         if (store !== undefined && store.serverCommands.value.size > 0) {
             return;
         }
-        await new Promise<void>((r) => setTimeout(r, SERVER_READINESS_POLL_INTERVAL_MS));
+        await delay(SERVER_READINESS_POLL_INTERVAL_MS);
     }
     throw new Error(describeLspStartTimeout(getStoreFromExtension()));
 }
@@ -581,4 +631,38 @@ export async function getNavLocations(
         timeoutMs: DIAGNOSTIC_TIMEOUT_MS,
     }).catch(() => [] as (vscode.Location | vscode.LocationLink)[]);
     return normalizeLocations(raw);
+}
+
+/**
+ * Do two paths name the same file, as the editor and a Python runtime spell it?
+ *
+ * A test's expected path comes from `path.resolve`, while the paths under
+ * assertion come from `Uri.fsPath` (what the extension records for a visible
+ * editor) or from the interpreter itself (what tracemalloc and the profiler
+ * report). A raw `===` between those is not WRONG so much as UNDER-SPECIFIED: it
+ * holds only while both producers happen to spell the path identically.
+ *
+ * Inside the extension host they usually do, which is why a raw compare passes
+ * on win32 today: `__dirname` is itself a path VS Code resolved, so it already
+ * carries the drive-letter casing `Uri.fsPath` produces. Nothing guarantees that
+ * for a path from a DIFFERENT producer — a filename the interpreter reports, or
+ * an `os.tmpdir()` path carrying 8.3 short components (`RUNNER~1`) where the
+ * editor has the long form. Those differ by more than case, and a `===` filter
+ * then yields `[]`, so the assertion reports "nothing was painted" for a feature
+ * that painted correctly.
+ *
+ * Delegates to the production keyer ([VSIX-CI-PLATFORM-COVERAGE]) rather than
+ * case-folding here, so the comparison the tests make is the SAME one the
+ * decorations make — the test cannot pass on a coincidence the shipped overlay
+ * does not share. A test that hand-rolled `toLowerCase()` would pass while the
+ * shipped overlay stayed blank; this also keeps an empty result meaning "nothing
+ * was painted" instead of "the two spellings disagreed".
+ */
+export function isSamePath(left: string, right: string): boolean {
+    return editorPathKey(left) === editorPathKey(right);
+}
+
+/** `isSamePath` as a predicate over a record carrying a `file` path. */
+export function sameFile(expected: string): (entry: { readonly file: string }) => boolean {
+    return (entry) => isSamePath(entry.file, expected);
 }

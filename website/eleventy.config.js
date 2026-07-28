@@ -24,6 +24,19 @@ const templateOverrides = [
   ["src/_includes/pages/blog/categories.njk", "templates/pages/blog/categories.njk"],
   ["src/_includes/pages/blog/categories-pages.njk", "templates/pages/blog/categories-pages.njk"],
 ];
+// The copy is LINE-ENDING NORMALIZED, and must stay that way. These overrides
+// are working-tree files, so on Windows — where git's `autocrlf` default checks
+// them out CRLF — a verbatim copy hands the plugin CRLF template content. Every
+// probe below (`patchIndexFrontMatter`'s `^title: .*$` replacements,
+// `addSharedProseClass`'s literal `class="docs-content"`, and above all
+// `addLocalizedTemplateLang`'s `lang: zh` guard) is written against LF, so on a
+// CRLF copy the guard silently missed an existing `lang: zh` and inserted a
+// SECOND one — "duplicated mapping key", and the whole site build died on
+// Windows while Linux CI stayed green. Normalizing here makes the bytes the
+// plugin sees identical on every platform, so one probe cannot pass on Linux and
+// fail on Windows. On Linux this is a no-op: the files are already LF.
+const toLf = (text) => text.replace(/\r\n/g, "\n");
+
 for (const [source, target] of templateOverrides) {
   const localOverride = join(__dirname, source);
   const pluginTarget = join(
@@ -32,7 +45,7 @@ for (const [source, target] of templateOverrides) {
     target
   );
   if (existsSync(localOverride)) {
-    writeFileSync(pluginTarget, readFileSync(localOverride, "utf-8"));
+    writeFileSync(pluginTarget, toLf(readFileSync(localOverride, "utf-8")));
   }
 }
 

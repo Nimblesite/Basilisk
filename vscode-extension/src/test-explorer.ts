@@ -19,6 +19,7 @@ import { applyCoverageDecorations, type LspCoverageResult } from "./coverage-dec
 import { Logger } from "./logger";
 import type { Store } from "./store";
 import { POLL_INTERVAL_MS } from "./timeouts";
+import { booleanField, numberField, recordArrayField, stringField } from "./unknown-shape";
 
 /** Test item kind — mirrors the Rust `TestItemKind` enum. */
 type TestItemKind = "file" | "function" | "class" | "method";
@@ -336,7 +337,7 @@ async function runNormalTests(args: RunNormalTestsArgs): Promise<void> {
 
   if (result === null) { return; }
 
-  const typed = result as LspTestRunResult;
+  const typed = narrowRunResult(result);
   // Use per-test results when available, fall back to bulk pass/fail.
   if (typed.perTest.length > 0) {
     applyPerTestResults(run, controller, typed.perTest);
@@ -356,6 +357,38 @@ async function runNormalTests(args: RunNormalTestsArgs): Promise<void> {
       }
     }
   }
+}
+
+/**
+ * Narrow the server's run report into the shape this module reads.
+ *
+ * The report crosses a process boundary, so every field is checked rather than
+ * asserted: a server on a different version yields empty text and a failed
+ * verdict instead of a value the compiler would keep vouching for.
+ */
+function narrowRunResult(value: unknown): LspTestRunResult {
+  return {
+    stdout: stringField(value, "stdout") ?? "",
+    stderr: stringField(value, "stderr") ?? "",
+    exitCode: numberField(value, "exitCode") ?? 0,
+    passed: booleanField(value, "passed") ?? false,
+    perTest: narrowPerTestResults(value),
+  };
+}
+
+/** Narrow the report's `perTest` array, dropping entries of an unknown shape. */
+function narrowPerTestResults(value: unknown): LspPerTestResult[] {
+  return recordArrayField(value, "perTest").flatMap((entry) => {
+    const testId = stringField(entry, "testId");
+    const status = stringField(entry, "status");
+    if (testId === undefined || !isTestStatus(status)) { return []; }
+    return [{ testId, status, message: stringField(entry, "message") ?? "" }];
+  });
+}
+
+/** Whether `value` is one of the four statuses a per-test result can carry. */
+function isTestStatus(value: string | undefined): value is TestStatus {
+  return value === "passed" || value === "failed" || value === "skipped" || value === "error";
 }
 
 /** Arguments for running a debug test. */
@@ -383,7 +416,18 @@ async function runDebugTest(args: RunDebugTestArgs): Promise<void> {
     return;
   }
 
-  const result = rawResult as { host: string; port: number };
+  // The proxy address is checked, not asserted: a report without a usable
+  // host/port must surface as an errored test, never as an attach to
+  // `undefined:undefined`.
+  const host = stringField(rawResult, "host");
+  const port = numberField(rawResult, "port");
+  if (host === undefined || port === undefined) {
+    const item = findTestItem(controller, testId);
+    if (item !== undefined) {
+      run.errored(item, new vscode.TestMessage("Debug proxy did not report a host and port"));
+    }
+    return;
+  }
 
   // Start a VS Code debug session connecting to the debugpy proxy.
   const debugStarted = await vscode.debug.startDebugging(
@@ -392,10 +436,7 @@ async function runDebugTest(args: RunDebugTestArgs): Promise<void> {
       name: `Debug Test: ${testId}`,
       type: "basilisk-debug",
       request: "attach",
-      connect: {
-        host: result.host,
-        port: result.port,
-      },
+      connect: { host, port },
     }
   );
 

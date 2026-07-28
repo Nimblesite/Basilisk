@@ -1,0 +1,7 @@
+[project]
+name = "signal-box-ch07"
+version = "0.1.0"
+
+[tool.basilisk]
+include = ["src", "tests"]
+typeshed-commit = "83c2518a9e6abbda0c44592c3483de459198f887"

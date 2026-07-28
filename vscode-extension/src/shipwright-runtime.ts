@@ -132,7 +132,13 @@ async function bundledFallback(
 }
 
 async function loadShipwrightApi(): Promise<ShipwrightApi> {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval -- preserves native ESM import from this CommonJS extension build.
+  // `new Function` is the only way to reach a native ESM `import()` from this
+  // CommonJS build, and it is typed `Function` — no runtime check can recover a
+  // call signature from that, so the shim's own type is the one thing here that
+  // must be asserted. Nothing is assumed about what it *returns*: every entry
+  // point read off the module is checked for `undefined` before it is called
+  // (see `resolveBasiliskRuntime` and `bundledFallbackRuntime`).
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-type-assertion -- see above.
   const importModule = new Function("specifier", "return import(specifier)") as (
     specifier: string
   ) => Promise<ShipwrightApi>;

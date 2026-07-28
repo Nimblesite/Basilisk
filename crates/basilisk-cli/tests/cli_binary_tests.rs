@@ -194,6 +194,143 @@ fn exit_3_for_nonexistent_path() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// A file the parser cannot read is the one case where the run has nothing to
+// say about the file's contents. `--output json` used to answer that with `[]`
+// — byte-for-byte the answer a clean file gets — so every machine consumer
+// (CI gate, editor, review bot) read "no problems found" for a file that was
+// never checked at all. The exit code was the only signal, and a consumer that
+// reads the report rather than the status never saw it.
+#[test]
+fn json_output_reports_a_file_that_failed_to_parse() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = std::env::temp_dir().join(format!("basilisk-json-failure-{}", std::process::id()));
+    std::fs::create_dir_all(&dir)?;
+    let malformed = dir.join("src.py");
+    std::fs::write(&malformed, b"def hi()\n")?;
+    let malformed = malformed.to_string_lossy().into_owned();
+
+    let out = run_check_with_args(&[&malformed], &["--output", "json"])?;
+    let rendered = stdout(&out);
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert_eq!(
+        out.status.code(),
+        Some(3),
+        "an unparseable file must exit 3"
+    );
+    assert_ne!(
+        rendered.trim(),
+        "[]",
+        "JSON must never report an unparseable file the way it reports a clean one"
+    );
+
+    let value: Value = serde_json::from_str(&rendered)?;
+    let items = value
+        .as_array()
+        .ok_or("JSON output must stay a flat array of entries")?;
+    assert_eq!(
+        items.len(),
+        1,
+        "the failed file must produce exactly one entry"
+    );
+    let entry = items.first().ok_or("entry missing")?;
+    assert_eq!(
+        entry["severity"], "error",
+        "a file that cannot be read is an error"
+    );
+    assert!(
+        entry["path"]
+            .as_str()
+            .is_some_and(|p| p.ends_with("src.py")),
+        "the entry must name the file that failed: {entry}"
+    );
+    assert!(
+        entry["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("syntax error")),
+        "the entry must say why the file could not be read: {entry}"
+    );
+    assert!(
+        entry["code"].is_null(),
+        "no rule produced this entry, so it must not claim a rule code: {entry}"
+    );
+    assert!(
+        entry["line"].as_u64().is_some_and(|line| line >= 1),
+        "the entry must carry a 1-based line: {entry}"
+    );
+    assert!(
+        entry["col"].as_u64().is_some_and(|col| col >= 1),
+        "the entry must carry a 1-based column: {entry}"
+    );
+    Ok(())
+}
+
+// The failure must not cost the run the diagnostics it did produce, and the
+// clean peer's entries must stay exactly as they were.
+#[test]
+fn json_output_keeps_valid_diagnostics_beside_a_parse_failure(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (dir, staged) = stage_project(&["errors/e0001_single_param.py"])?;
+    let malformed = dir.join("malformed.py");
+    std::fs::write(&malformed, b"def hi()\n")?;
+    let valid = staged.first().ok_or("staged diagnostic fixture missing")?;
+    let malformed = malformed.to_string_lossy().into_owned();
+
+    let out = run_subcommand("analyze", &[valid, &malformed], &["--output", "json"])?;
+    let rendered = stdout(&out);
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert_eq!(out.status.code(), Some(3), "a parse failure must exit 3");
+    let value: Value = serde_json::from_str(&rendered)?;
+    let items = value.as_array().ok_or("JSON output must stay an array")?;
+    assert!(
+        items.len() >= 2,
+        "both the diagnostic and the failure must appear"
+    );
+
+    let coded: Vec<&Value> = items
+        .iter()
+        .filter(|item| !item["code"].is_null())
+        .collect();
+    let failures: Vec<&Value> = items.iter().filter(|item| item["code"].is_null()).collect();
+    assert!(
+        coded.iter().any(|item| item["code"] == "BSK-0001"),
+        "the valid peer's diagnostics must survive the failure: {rendered}"
+    );
+    assert_eq!(
+        failures.len(),
+        1,
+        "exactly one file failed to parse: {rendered}"
+    );
+    assert!(
+        failures.first().is_some_and(|item| item["path"]
+            .as_str()
+            .is_some_and(|p| p.ends_with("malformed.py"))),
+        "the failure entry must name the file that failed: {rendered}"
+    );
+    for item in coded {
+        assert!(
+            item["code"]
+                .as_str()
+                .is_some_and(|code| code.starts_with("BSK-")),
+            "a rule-produced entry keeps its code: {item}"
+        );
+    }
+    Ok(())
+}
+
+// A clean run must be untouched by the change: still an empty array, still 0.
+#[test]
+fn json_output_for_a_clean_file_is_still_an_empty_array() -> Result<(), Box<dyn std::error::Error>>
+{
+    let out = run_check_with_args(
+        &[&fixture("clean/fully_typed_module.py")],
+        &["--output", "json"],
+    )?;
+    assert_eq!(out.status.code(), Some(0), "a clean file must exit 0");
+    assert_eq!(stdout(&out).trim(), "[]", "a clean file reports no entries");
+    Ok(())
+}
+
 #[test]
 fn analysis_failure_exits_three_without_dropping_valid_diagnostics(
 ) -> Result<(), Box<dyn std::error::Error>> {

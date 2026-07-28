@@ -175,7 +175,7 @@ mod tests {
     fn bench_module_changed_data_under_20ms_per_file() {
         let root = PathBuf::from("/tmp/bench-workspace-changed");
         let idx = WorkspaceIndex::new(
-            vec![root.clone()],
+            vec![root],
             AnalysisMode::WholeModule,
             basilisk_config::BasiliskConfig::default(),
         );

@@ -168,7 +168,7 @@ fn e2e_web_server_profiling_identifies_correct_hotspots() {
     assert!(hot_fns.len() >= 5, "should detect at least 5 hot functions");
 
     // Sort by self-percentage to find the actual bottleneck.
-    let mut by_self = hot_fns.clone();
+    let mut by_self = hot_fns;
     by_self.sort_by(|a, b| b.self_percentage.partial_cmp(&a.self_percentage).unwrap());
 
     // db_query should be the #1 bottleneck (45% self-time).

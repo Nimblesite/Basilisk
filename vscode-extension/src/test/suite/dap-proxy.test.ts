@@ -9,7 +9,8 @@
 // applies to every client→debugpy request before forwarding.
 
 import * as assert from "assert";
-import { suppressBreakpointsForProfiling, type DapMessage } from "../../dap-proxy";
+import { parseDapMessage, suppressBreakpointsForProfiling, type DapMessage } from "../../dap-proxy";
+import { isRecord } from "../../unknown-shape";
 
 suite("Run & Profile launches run to completion, not as a debug session (#145)", () => {
   test("a profiling launch arms no user breakpoints", () => {
@@ -86,6 +87,73 @@ suite("Run & Profile launches run to completion, not as a debug session (#145)",
       forwarded,
       cont,
       "non-breakpoint requests must pass through unchanged (incl. the resume after stopOnEntry)",
+    );
+  });
+});
+
+// Tests for [VSIX-DEBUGGING]. See docs/specs/VSIX-SPEC.md#VSIX-DEBUGGING
+//
+// The proxy sits between the editor and debugpy and re-serialises every frame
+// it forwards (`sendToClient`/`sendToDebugpy` both `JSON.stringify(msg)`).
+// Whatever the decoder drops therefore never reaches the other end. The
+// protocol has fields beyond the handful the proxy itself switches on — the
+// standard `message` on a failed response, plus adapter-specific extensions —
+// and dropping those silently degrades the debug session.
+suite("The DAP proxy forwards frames without dropping fields", () => {
+  /** What the proxy would put back on the wire for a decoded frame. */
+  function reserialize(message: DapMessage | undefined): Record<string, unknown> {
+    assert.notStrictEqual(message, undefined, "the frame must decode");
+    const wire: unknown = JSON.parse(JSON.stringify(message));
+    assert.ok(isRecord(wire), "a re-serialised DAP frame is a JSON object");
+    return wire;
+  }
+
+  test("a failed response keeps the adapter's error text", () => {
+    const wire = JSON.stringify({
+      type: "response",
+      request_seq: 4,
+      success: false,
+      command: "evaluate",
+      message: "Unable to evaluate expression: name 'x' is not defined",
+    });
+    assert.strictEqual(
+      reserialize(parseDapMessage(wire)).message,
+      "Unable to evaluate expression: name 'x' is not defined",
+      "`message` is the DAP field that carries an error to the user — dropping it blanks the failure",
+    );
+  });
+
+  test("adapter-specific fields survive the round trip", () => {
+    const wire = JSON.stringify({
+      type: "event",
+      event: "debugpySockets",
+      seq: 12,
+      body: { sockets: [] },
+      pydevdAuthToken: "opaque-token",
+    });
+    assert.strictEqual(
+      reserialize(parseDapMessage(wire)).pydevdAuthToken,
+      "opaque-token",
+      "the proxy is a relay: fields it does not understand must still reach the other side",
+    );
+  });
+
+  test("the fields the proxy switches on are still decoded", () => {
+    const parsed = parseDapMessage(
+      JSON.stringify({ type: "request", command: "next", seq: 3, arguments: { threadId: 1 } }),
+    );
+    assert.strictEqual(parsed?.type, "request");
+    assert.strictEqual(parsed?.command, "next");
+    assert.strictEqual(parsed?.seq, 3);
+    assert.strictEqual(parsed?.arguments?.threadId, 1);
+  });
+
+  test("bytes that are not a DAP frame are rejected", () => {
+    assert.strictEqual(parseDapMessage("{not json"), undefined, "unparseable bytes are dropped");
+    assert.strictEqual(
+      parseDapMessage(JSON.stringify({ seq: 1 })),
+      undefined,
+      "a frame with no `type` matches no branch of the proxy, so it is not a DAP frame",
     );
   });
 });

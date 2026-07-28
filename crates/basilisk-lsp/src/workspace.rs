@@ -2350,11 +2350,11 @@ mod tests {
         // Built directly (not via `from_config`) so an ambient `VIRTUAL_ENV`
         // in the test environment cannot redirect site-packages discovery.
         idx.set_search_paths(crate::import_resolver::ImportSearchPaths {
-            roots: roots.clone(),
+            roots,
             extra_paths: vec![],
             stub_paths: vec![],
             workspace_members: vec![],
-            site_packages: Some(site_packages.clone()),
+            site_packages: Some(site_packages),
             typeshed_snapshot: None,
             registry: None,
         });

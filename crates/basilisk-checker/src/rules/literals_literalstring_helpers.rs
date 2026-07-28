@@ -296,7 +296,7 @@ pub(super) fn extract_literal_string_value(ann: &str) -> Option<&str> {
 /// For `f"{a} {non_literal}"`, returns `["a", "non_literal"]`.
 pub(super) fn extract_fstring_names(fstring: &str) -> Vec<String> {
     let mut names = Vec::new();
-    let mut chars = fstring.chars().peekable();
+    let mut chars = fstring.chars();
     while let Some(ch) = chars.next() {
         if ch == '{' {
             // Collect until '}' or non-identifier char.

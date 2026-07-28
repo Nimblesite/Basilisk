@@ -1517,7 +1517,7 @@ fn leak_tracker_multiple_sites_tracked_independently() {
 
     // b is still first-time.
     let mut combined = growths_a.clone();
-    combined.extend(growths_b.clone());
+    combined.extend(growths_b);
     let leaks = tracker.process_growths(&combined);
 
     assert_eq!(leaks.len(), 2, "should track 2 sites");

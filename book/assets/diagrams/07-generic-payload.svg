@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">One container preserves different payload types</title>
+  <desc id="desc">A central Page of Payload template branches through substitution into a Page of Reading with Reading items and a Page of string with string items, while total remains an integer.</desc>
+  <defs>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="2" fill="#252d3f"/></pattern>
+    <marker id="green-arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto"><path d="M1 1L12 7L1 13" fill="none" stroke="#34d399" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="blue-arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto"><path d="M1 1L12 7L1 13" fill="none" stroke="#6ec5e9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></marker>
+  </defs>
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="url(#dots)" stroke="#252d3f" stroke-width="3"/>
+  <text x="82" y="110" fill="#e8500a" font-family="monospace" font-size="28" font-weight="700" letter-spacing="5">GENERIC SUBSTITUTION</text>
+  <text x="82" y="178" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="60" font-weight="800">Preserve the payload relationship</text>
+  <text x="84" y="226" fill="#8892a4" font-family="system-ui,sans-serif" font-size="29">Replace one type parameter consistently; leave unrelated fields unchanged.</text>
+
+  <g transform="translate(520 284)">
+    <rect width="560" height="300" rx="30" fill="#201a2c" stroke="#c4b5fd" stroke-width="5"/>
+    <text x="280" y="66" text-anchor="middle" fill="#ddd6fe" font-family="monospace" font-size="28" font-weight="700">TEMPLATE</text>
+    <text x="280" y="126" text-anchor="middle" fill="#f0f2f7" font-family="monospace" font-size="38">Page[Payload]</text>
+    <rect x="42" y="164" width="476" height="62" rx="15" fill="#14101e" stroke="#8b5cf6" stroke-width="3"/>
+    <text x="280" y="204" text-anchor="middle" fill="#ede9fe" font-family="monospace" font-size="27">items: tuple[Payload, ...]</text>
+    <rect x="42" y="240" width="476" height="42" rx="14" fill="#141820" stroke="#4a5468" stroke-width="2"/>
+    <text x="280" y="270" text-anchor="middle" fill="#cbd5e1" font-family="monospace" font-size="24">total: int</text>
+  </g>
+
+  <path d="M650 600C600 648 478 657 402 700" fill="none" stroke="#34d399" stroke-width="6" marker-end="url(#green-arrow)"/>
+  <path d="M950 600C1000 648 1122 657 1198 700" fill="none" stroke="#6ec5e9" stroke-width="6" marker-end="url(#blue-arrow)"/>
+
+  <g transform="translate(94 688)">
+    <rect width="620" height="202" rx="28" fill="#123128" stroke="#34d399" stroke-width="4"/>
+    <text x="310" y="50" text-anchor="middle" fill="#86efac" font-family="monospace" font-size="24" font-weight="700">Payload := Reading</text>
+    <text x="310" y="101" text-anchor="middle" fill="#f0f2f7" font-family="monospace" font-size="33">Page[Reading]</text>
+    <text x="310" y="149" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="25">items: tuple[Reading, ...]</text>
+    <text x="310" y="182" text-anchor="middle" fill="#a7f3d0" font-family="monospace" font-size="23">total: int</text>
+  </g>
+
+  <g transform="translate(886 688)">
+    <rect width="620" height="202" rx="28" fill="#17232c" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="310" y="50" text-anchor="middle" fill="#7dd3fc" font-family="monospace" font-size="24" font-weight="700">Payload := str</text>
+    <text x="310" y="101" text-anchor="middle" fill="#f0f2f7" font-family="monospace" font-size="33">Page[str]</text>
+    <text x="310" y="149" text-anchor="middle" fill="#e0f2fe" font-family="monospace" font-size="25">items: tuple[str, ...]</text>
+    <text x="310" y="182" text-anchor="middle" fill="#bae6fd" font-family="monospace" font-size="23">total: int</text>
+  </g>
+
+  <text x="800" y="940" text-anchor="middle" fill="#8892a4" font-family="system-ui,sans-serif" font-size="27">The parameter changes only the positions that mention it.</text>
+</svg>

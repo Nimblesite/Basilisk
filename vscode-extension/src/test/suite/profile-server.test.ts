@@ -8,6 +8,7 @@
 // token required, expiry, teardown) — without them the button regresses to
 // dumping the user on speedscope's empty "Browse" landing page.
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as fs from "fs";
 import * as http from "http";
@@ -88,7 +89,7 @@ suite("Profile loopback server — speedscope deep links load automatically", ()
 
   test("an expired registration stops being served", async () => {
     const url = await serveProfileForBrowser(profilePath, 1);
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await delay(10);
     const response = await fetchUrl(url);
     assert.strictEqual(response.status, 404, "expired registrations must 404, not serve stale data");
   });

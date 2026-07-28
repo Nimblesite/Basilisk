@@ -24,13 +24,14 @@ fn reference_title(count: usize) -> String {
 #[must_use]
 pub fn code_lenses(resolved: &ResolvedModule, source: &str) -> Vec<CodeLens> {
     let mut lenses = Vec::new();
+    let mask = crate::source_mask::SourceMask::build(source);
 
     // Top-level functions (not methods).
     for func in &resolved.functions {
         if func.class_name.is_some() {
             continue;
         }
-        let refs = find_identifier_occurrences(source, &func.name);
+        let refs = find_identifier_occurrences(source, &func.name, &mask);
         // Subtract the definition itself.
         let count = refs.len().saturating_sub(1);
         let range = span_to_range(source, func.name_span);
@@ -47,7 +48,7 @@ pub fn code_lenses(resolved: &ResolvedModule, source: &str) -> Vec<CodeLens> {
 
     // Classes.
     for class in &resolved.classes {
-        let refs = find_identifier_occurrences(source, &class.name);
+        let refs = find_identifier_occurrences(source, &class.name, &mask);
         let count = refs.len().saturating_sub(1);
         let range = span_to_range(source, class.name_span);
         lenses.push(CodeLens {

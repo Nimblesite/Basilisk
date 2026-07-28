@@ -21,56 +21,20 @@ import {
     workspaceHealthMessage,
 } from "../../module-explorer";
 import {
-    EXTENSION_ID,
-    WAIT_MS,
+  manifestCommands,
+  manifestConfigurationProperties,
+  manifestContributes,
+  manifestViews,
+  type Contributes,
+  type ViewContribution,
+} from "./extension-manifest";
+import {
+    LSP_RESTART_WAIT_MS,
     pollUntilResult,
     setupLspTestSuite,
     teardownLspTestSuite,
     closeAllEditors,
 } from "./test-helpers";
-
-// ── Package.json type definitions ─────────────────────────────────────────
-
-interface ViewContribution {
-  readonly id: string;
-  readonly name: string;
-  readonly when?: string;
-  readonly visibility?: string;
-}
-
-interface MenuContribution {
-  readonly command: string;
-  readonly when: string;
-  readonly group?: string;
-}
-
-interface WelcomeContribution {
-  readonly view: string;
-  readonly contents: string;
-}
-
-interface CommandContribution {
-  readonly command: string;
-  readonly title: string;
-  readonly icon?: string;
-}
-
-interface ConfigurationContribution {
-  readonly properties?: Record<string, { type?: string; default?: unknown }>;
-}
-
-interface PackageJSON {
-  contributes?: {
-    views?: Record<string, ViewContribution[]>;
-    menus?: {
-      "view/title"?: MenuContribution[];
-      "view/item/context"?: MenuContribution[];
-    };
-    viewsWelcome?: WelcomeContribution[];
-    commands?: CommandContribution[];
-    configuration?: ConfigurationContribution | ConfigurationContribution[];
-  };
-}
 
 // ── Command lists ─────────────────────────────────────────────────────────
 
@@ -137,18 +101,31 @@ function assertCommandRegistered(commandId: string, label: string): void {
 }
 
 /** Load the extension's package.json contributes section with type safety. */
-function loadContributes(): PackageJSON["contributes"] {
-  const ext = vscode.extensions.getExtension(EXTENSION_ID);
-  assert.ok(ext, "Extension should be installed");
-  const pkg = ext.packageJSON as PackageJSON;
-  return pkg.contributes;
+function loadContributes(): Contributes {
+  return manifestContributes();
+}
+
+/**
+ * Every contributed command's icon, as a comparable glyph string.
+ *
+ * A manifest icon may be a glyph reference or a light/dark pair; both are
+ * reduced to one string so uniqueness comparisons stay meaningful instead of
+ * degrading to object identity (which every pair would trivially pass).
+ */
+function commandIconGlyphs(): Map<string, string> {
+  return new Map(
+    manifestCommands().map((cmd) => [
+      cmd.command,
+      typeof cmd.icon === "string" ? cmd.icon : JSON.stringify(cmd.icon ?? null),
+    ]),
+  );
 }
 
 /** Load the basilisk-explorer views from package.json. */
 function loadBasiliskViews(): ViewContribution[] {
-  const contributes = loadContributes();
-  assert.ok(contributes?.views, "Extension should contribute views");
-  return contributes.views["basilisk-explorer"] ?? [];
+  const views = manifestViews()["basilisk-explorer"] ?? [];
+  assert.ok(views.length > 0, "Extension should contribute views");
+  return views;
 }
 
 /** Extract a TreeItem's label as a plain string. */
@@ -180,7 +157,7 @@ suite("Basilisk Activity Panel E2E Tests", function () {
 
     const store = getStore();
     assert.ok(store, "Store should exist after activation");
-    const result = await store.ensureLspReadyPromise(WAIT_MS);
+    const result = await store.ensureLspReadyPromise(LSP_RESTART_WAIT_MS);
     assert.ok(result.ok, "LSP should be running");
   });
 
@@ -400,9 +377,7 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     );
 
     // No two inline buttons may render the same (or near-identical) glyph.
-    const commandIcons = new Map(
-      (contributes?.commands ?? []).map((cmd) => [cmd.command, cmd.icon]),
-    );
+    const commandIcons = commandIconGlyphs();
     const inlineIcons = inline.map((entry) => commandIcons.get(entry.command));
     assert.strictEqual(
       new Set(inlineIcons).size,
@@ -442,9 +417,7 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     // Defence-in-depth: no Modules toolbar command may re-introduce the
     // $(collapse-all) glyph, which would render as a second collapse button
     // next to the native one.
-    const commandIcons = new Map(
-      (contributes?.commands ?? []).map((cmd) => [cmd.command, cmd.icon]),
-    );
+    const commandIcons = commandIconGlyphs();
     for (const entry of moduleToolbar) {
       assert.notStrictEqual(
         commandIcons.get(entry.command),
@@ -473,12 +446,7 @@ suite("Basilisk Activity Panel E2E Tests", function () {
 
   test("Fix All is feature-flagged: config default off, when-clause gated", function () {
     const contributes = loadContributes();
-    const configSections = Array.isArray(contributes?.configuration)
-      ? contributes.configuration
-      : [contributes?.configuration].filter(Boolean) as ConfigurationContribution[];
-    const flag = configSections
-      .map((section) => section.properties?.["basilisk.experimental.fixAll"])
-      .find((prop) => prop !== undefined);
+    const flag = manifestConfigurationProperties()["basilisk.experimental.fixAll"];
     assert.ok(flag, "basilisk.experimental.fixAll setting must be declared");
     assert.strictEqual(flag.type, "boolean");
     assert.strictEqual(flag.default, false, "Fix All must be off by default");
@@ -526,12 +494,12 @@ suite("Basilisk Activity Panel E2E Tests", function () {
       // can flip true a beat before the store's state listener re-registers
       // the server commands, so also wait for the commands to be re-advertised
       // — the very next tests assert on them.
-      const ready = await store.ensureLspReadyPromise(WAIT_MS);
+      const ready = await store.ensureLspReadyPromise(LSP_RESTART_WAIT_MS);
       assert.ok(ready.ok, "LSP should be running again after restart");
       await pollUntilResult({
         fn: async () => store.serverCommands.value.size,
         predicate: (size) => size > 0,
-        timeoutMs: WAIT_MS,
+        timeoutMs: LSP_RESTART_WAIT_MS,
       });
     } finally {
       provider.dispose();

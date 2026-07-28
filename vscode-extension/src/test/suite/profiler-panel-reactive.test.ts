@@ -15,16 +15,20 @@ import { getStore } from "../../extension";
 import { profilerStatusText } from "../../profiler";
 import { panelBadge, panelMessage, pythonProcessesViewState } from "../../process-reactivity";
 import { IDLE_PROFILER_SESSION, type ProfilerSession } from "../../profiler-state";
-import { getPackageJsonMenu, type PackageJsonMenuEntry } from "./profiler-test-constants";
+
 import { setupLspTestSuite, teardownLspTestSuite } from "./test-helpers";
+import {
+  type MenuContribution,
+  manifestMenu
+} from "./extension-manifest";
 
 /** Panel-scoped entries of a given menu. */
-function panelMenu(menuId: string): PackageJsonMenuEntry[] {
-  return getPackageJsonMenu(menuId).filter((entry) => (entry.when ?? "").includes("basilisk.pythonProcesses"));
+function panelMenu(menuId: string): MenuContribution[] {
+  return manifestMenu(menuId).filter((entry) => (entry.when ?? "").includes("basilisk.pythonProcesses"));
 }
 
 /** Assert a menu entry exists and its `when` contains a clause. */
-function assertWhenHas(entry: PackageJsonMenuEntry | undefined, command: string, clause: string): void {
+function assertWhenHas(entry: MenuContribution | undefined, command: string, clause: string): void {
   assert.ok(entry, `${command} must be declared in the panel menu`);
   assert.ok((entry.when ?? "").includes(clause), `${command} when must contain "${clause}"; got: ${entry.when ?? "(none)"}`);
 }

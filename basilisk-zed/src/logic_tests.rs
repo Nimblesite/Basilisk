@@ -418,7 +418,9 @@ fn attach_process_id_takes_precedence() {
 #[test]
 fn unknown_request_kind_errors() {
     let config = serde_json::json!({"request": "restart"});
-    assert!(is_attach_request(&config).is_err());
+    let message =
+        is_attach_request(&config).expect_err("only launch and attach are known request kinds");
+    assert_eq!(message, "Unknown request kind: restart");
 }
 
 // ── DAP scenario builders ───────────────────────────────────────────

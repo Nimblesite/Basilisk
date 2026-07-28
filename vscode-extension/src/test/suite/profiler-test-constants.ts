@@ -4,11 +4,10 @@
  *
  * Extracted to avoid duplication across profiler.test.ts,
  * profiler-decorations.test.ts, and profiler-memory-integration.test.ts.
+ *
+ * Manifest contributions live in ./extension-manifest — they are read by every
+ * suite, not just the profiler ones.
  */
-
-import * as assert from 'assert';
-import * as vscode from 'vscode';
-import { EXTENSION_ID } from './test-helpers';
 
 /** Profiler client-side commands (registered in profiler.ts). */
 export const PROFILER_CLIENT_COMMANDS = [
@@ -52,91 +51,3 @@ export const PROFILER_EXTRA_SETTINGS = [
     'basilisk.profiler.profileOnLaunch',
     'basilisk.profiler.preset',
 ] as const;
-
-/** Shape of a command entry in package.json contributes.commands. */
-export interface PackageJsonCommandEntry {
-    command: string;
-    title?: string;
-    category?: string;
-    icon?: string;
-}
-
-/** Shape of a menu contribution entry in package.json contributes.menus. */
-export interface PackageJsonMenuEntry {
-    command: string;
-    when?: string;
-    group?: string;
-}
-
-/** Shape of a viewsWelcome entry in package.json contributes.viewsWelcome. */
-export interface PackageJsonViewsWelcomeEntry {
-    view: string;
-    contents: string;
-    when?: string;
-}
-
-/** Shape of a keybinding entry in package.json contributes.keybindings. */
-export interface PackageJsonKeybinding {
-    command: string;
-    key?: string;
-    when?: string;
-}
-
-/** Shape of package.json contributes.configuration.properties. */
-export type PackageJsonProperties = Record<string, Record<string, unknown>>;
-
-/** Shape of the packageJSON object exposed by the VS Code extension API. */
-interface PackageJson {
-    contributes?: {
-        configuration?: {
-            properties?: PackageJsonProperties;
-        };
-        commands?: PackageJsonCommandEntry[];
-        keybindings?: PackageJsonKeybinding[];
-        menus?: Record<string, PackageJsonMenuEntry[]>;
-        viewsWelcome?: PackageJsonViewsWelcomeEntry[];
-    };
-}
-
-/**
- * Retrieve the configuration properties from the extension's package.json.
- * Asserts the extension is found and returns the properties map.
- */
-export function getPackageJsonProperties(): PackageJsonProperties {
-    const extension = vscode.extensions.getExtension(EXTENSION_ID);
-    assert.ok(extension, 'Extension should be found');
-    const packageJson = extension.packageJSON as PackageJson;
-    return packageJson.contributes?.configuration?.properties ?? {};
-}
-
-/**
- * Retrieve the command entries from the extension's package.json.
- * Asserts the extension is found and returns the commands array.
- */
-export function getPackageJsonCommands(): PackageJsonCommandEntry[] {
-    const extension = vscode.extensions.getExtension(EXTENSION_ID);
-    assert.ok(extension, 'Extension should be found');
-    const packageJson = extension.packageJSON as PackageJson;
-    return packageJson.contributes?.commands ?? [];
-}
-
-/**
- * Retrieve a menu's contribution entries from the extension's package.json
- * (e.g. `view/title`, `view/item/context`).
- */
-export function getPackageJsonMenu(menuId: string): PackageJsonMenuEntry[] {
-    const extension = vscode.extensions.getExtension(EXTENSION_ID);
-    assert.ok(extension, 'Extension should be found');
-    const packageJson = extension.packageJSON as PackageJson;
-    return packageJson.contributes?.menus?.[menuId] ?? [];
-}
-
-/**
- * Retrieve the viewsWelcome entries from the extension's package.json.
- */
-export function getPackageJsonViewsWelcome(): PackageJsonViewsWelcomeEntry[] {
-    const extension = vscode.extensions.getExtension(EXTENSION_ID);
-    assert.ok(extension, 'Extension should be found');
-    const packageJson = extension.packageJSON as PackageJson;
-    return packageJson.contributes?.viewsWelcome ?? [];
-}

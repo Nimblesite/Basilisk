@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Choose a structure that matches the boundary</title>
+  <desc id="desc">Four cards compare a TypedDict, dataclass, named tuple, and ordinary class by access style, runtime shape, and the boundary where each is a natural choice.</desc>
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="#10141d" stroke="#252d3f" stroke-width="3"/>
+  <text x="82" y="110" fill="#e8500a" font-family="monospace" font-size="28" font-weight="700" letter-spacing="5">SHAPE FOLLOWS OPERATIONS</text>
+  <text x="82" y="178" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="60" font-weight="800">The same fields, four honest choices</text>
+  <text x="84" y="226" fill="#8892a4" font-family="system-ui,sans-serif" font-size="29">Ask how the surrounding code should read and use the value.</text>
+
+  <g transform="translate(68 292)">
+    <rect width="340" height="510" rx="28" fill="#123128" stroke="#34d399" stroke-width="4"/>
+    <text x="170" y="62" text-anchor="middle" fill="#a7f3d0" font-family="monospace" font-size="28" font-weight="700">TypedDict</text>
+    <text x="30" y="128" fill="#86efac" font-family="system-ui,sans-serif" font-size="23" font-weight="700">NATURAL ACCESS</text>
+    <text x="30" y="174" fill="#f0f2f7" font-family="monospace" font-size="24">item["celsius"]</text>
+    <line x1="30" y1="210" x2="310" y2="210" stroke="#2f5b4d" stroke-width="3"/>
+    <text x="30" y="260" fill="#86efac" font-family="system-ui,sans-serif" font-size="23" font-weight="700">RUNTIME SHAPE</text>
+    <text x="30" y="306" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="26">ordinary dictionary</text>
+    <line x1="30" y1="342" x2="310" y2="342" stroke="#2f5b4d" stroke-width="3"/>
+    <text x="30" y="392" fill="#86efac" font-family="system-ui,sans-serif" font-size="23" font-weight="700">USE WHEN</text>
+    <text x="30" y="438" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">external keys are</text>
+    <text x="30" y="474" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">part of the contract</text>
+  </g>
+
+  <g transform="translate(443 292)">
+    <rect width="340" height="510" rx="28" fill="#201a2c" stroke="#c4b5fd" stroke-width="4"/>
+    <text x="170" y="62" text-anchor="middle" fill="#ddd6fe" font-family="monospace" font-size="28" font-weight="700">dataclass</text>
+    <text x="30" y="128" fill="#c4b5fd" font-family="system-ui,sans-serif" font-size="23" font-weight="700">NATURAL ACCESS</text>
+    <text x="30" y="174" fill="#f0f2f7" font-family="monospace" font-size="24">item.celsius</text>
+    <line x1="30" y1="210" x2="310" y2="210" stroke="#4b3e63" stroke-width="3"/>
+    <text x="30" y="260" fill="#c4b5fd" font-family="system-ui,sans-serif" font-size="23" font-weight="700">RUNTIME SHAPE</text>
+    <text x="30" y="306" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="26">class + generated</text>
+    <text x="30" y="338" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="26">data methods</text>
+    <line x1="30" y1="366" x2="310" y2="366" stroke="#4b3e63" stroke-width="3"/>
+    <text x="30" y="414" fill="#c4b5fd" font-family="system-ui,sans-serif" font-size="23" font-weight="700">USE WHEN</text>
+    <text x="30" y="460" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">the domain wants a</text>
+    <text x="30" y="494" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">named data record</text>
+  </g>
+
+  <g transform="translate(818 292)">
+    <rect width="340" height="510" rx="28" fill="#17232c" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="170" y="62" text-anchor="middle" fill="#bae6fd" font-family="monospace" font-size="28" font-weight="700">NamedTuple</text>
+    <text x="30" y="128" fill="#7dd3fc" font-family="system-ui,sans-serif" font-size="23" font-weight="700">NATURAL ACCESS</text>
+    <text x="30" y="174" fill="#f0f2f7" font-family="monospace" font-size="24">item[1]</text>
+    <text x="151" y="174" fill="#8892a4" font-family="system-ui,sans-serif" font-size="22">or attribute</text>
+    <line x1="30" y1="210" x2="310" y2="210" stroke="#365164" stroke-width="3"/>
+    <text x="30" y="260" fill="#7dd3fc" font-family="system-ui,sans-serif" font-size="23" font-weight="700">RUNTIME SHAPE</text>
+    <text x="30" y="306" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="26">tuple subclass with</text>
+    <text x="30" y="338" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="26">named fields</text>
+    <line x1="30" y1="366" x2="310" y2="366" stroke="#365164" stroke-width="3"/>
+    <text x="30" y="414" fill="#7dd3fc" font-family="system-ui,sans-serif" font-size="23" font-weight="700">USE WHEN</text>
+    <text x="30" y="460" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">tuple position and</text>
+    <text x="30" y="494" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">unpacking matter</text>
+  </g>
+
+  <g transform="translate(1193 292)">
+    <rect width="340" height="510" rx="28" fill="#2a2015" stroke="#fbbf24" stroke-width="4"/>
+    <text x="170" y="62" text-anchor="middle" fill="#fde68a" font-family="monospace" font-size="28" font-weight="700">ordinary class</text>
+    <text x="30" y="128" fill="#fcd34d" font-family="system-ui,sans-serif" font-size="23" font-weight="700">NATURAL ACCESS</text>
+    <text x="30" y="174" fill="#f0f2f7" font-family="monospace" font-size="24">item.celsius</text>
+    <line x1="30" y1="210" x2="310" y2="210" stroke="#625039" stroke-width="3"/>
+    <text x="30" y="260" fill="#fcd34d" font-family="system-ui,sans-serif" font-size="23" font-weight="700">RUNTIME SHAPE</text>
+    <text x="30" y="306" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="26">class with authored</text>
+    <text x="30" y="338" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="26">construction</text>
+    <line x1="30" y1="366" x2="310" y2="366" stroke="#625039" stroke-width="3"/>
+    <text x="30" y="414" fill="#fcd34d" font-family="system-ui,sans-serif" font-size="23" font-weight="700">USE WHEN</text>
+    <text x="30" y="460" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">custom lifecycle or</text>
+    <text x="30" y="494" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">behavior leads</text>
+  </g>
+
+  <rect x="202" y="858" width="1196" height="78" rx="20" fill="#0f1218" stroke="#4a5468" stroke-width="3"/>
+  <text x="800" y="908" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="29"><tspan fill="#e8500a" font-weight="800">Decision:</tspan> preserve only the semantics the boundary actually uses.</text>
+</svg>

@@ -13,6 +13,7 @@
  * This panel is always visible regardless of workspace state.
  */
 
+import { nested, stringField } from "./unknown-shape";
 import * as vscode from "vscode";
 import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
@@ -120,10 +121,24 @@ interface ResolvedEnvironment {
  * `undefined` while no live server data exists (starting/stopped).
  */
 function resolvedEnvironment(client: LanguageClient | undefined): ResolvedEnvironment | undefined {
-  const experimental = client?.initializeResult?.capabilities.experimental as
-    | { basilisk?: { resolvedEnvironment?: ResolvedEnvironment } }
-    | undefined;
-  return experimental?.basilisk?.resolvedEnvironment;
+  const resolved = nested(
+    client?.initializeResult?.capabilities.experimental,
+    "basilisk",
+    "resolvedEnvironment",
+  );
+  return resolved === undefined
+    ? undefined
+    : {
+        python: resolvedTool(resolved.python),
+        uv: resolvedTool(resolved.uv),
+        binary: resolvedTool(resolved.binary),
+      };
+}
+
+/** One `path` + optional `version` pair from the server's initialize result. */
+function resolvedTool(value: unknown): ResolvedTool | null {
+  const path = stringField(value, "path");
+  return path === undefined ? null : { path, version: stringField(value, "version") ?? null };
 }
 
 /** Render a tool as `version (path)` — bare path when the probe failed. */

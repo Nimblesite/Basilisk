@@ -921,18 +921,20 @@ mod tests {
 
         let default_request =
             typeshed_request(&WorkspaceConfig::default()).expect("default request");
-        match default_request.selection {
-            SourceSelection::Pinned { commit, explicit } => {
-                assert!(!explicit, "an unset pin must stay typeshed_source_unpinned");
-                assert_eq!(
-                    commit.to_hex(),
-                    basilisk_stubs::typeshed::bundle::bundled_commit_sha()
-                );
-            }
-            SourceSelection::Custom { .. } => {
-                unreachable!("an unset config must resolve to the bundled pin")
-            }
-        }
+        // Compared as data rather than asserted per arm: a `Custom` selection
+        // then fails with both sides printed instead of a bare panic.
+        let pinned = match default_request.selection {
+            SourceSelection::Pinned { commit, explicit } => Some((commit.to_hex(), explicit)),
+            SourceSelection::Custom { .. } => None,
+        };
+        assert_eq!(
+            pinned,
+            Some((
+                basilisk_stubs::typeshed::bundle::bundled_commit_sha().to_owned(),
+                false
+            )),
+            "an unset config must resolve to the unpinned bundled commit"
+        );
         assert_eq!(default_request.store_path, None);
     }
 }

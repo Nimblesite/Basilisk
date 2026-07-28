@@ -13,6 +13,7 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { currentStoppedFrameId, evaluateInDebugSession } from "../../dap-evaluate";
+import { numberField, recordArrayField } from "../../unknown-shape";
 import { pollUntilResult } from "./test-helpers";
 
 /** Budget for a debug session to start / stop / pause. */
@@ -49,8 +50,8 @@ export async function waitForPause(): Promise<number> {
 export async function resume(): Promise<void> {
   const session = vscode.debug.activeDebugSession;
   assert.ok(session, "an active debug session is required to resume");
-  const threads = (await session.customRequest("threads")) as { threads?: { id: number }[] };
-  const threadId = threads.threads?.[0]?.id;
+  const threads: unknown = await session.customRequest("threads");
+  const threadId = numberField(recordArrayField(threads, "threads")[0], "id");
   assert.ok(threadId !== undefined, "the debuggee must report a thread");
   await session.customRequest("continue", { threadId });
 }

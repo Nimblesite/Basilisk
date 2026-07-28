@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">External shape in, domain model out</title>
+  <desc id="desc">An unknown runtime object passes through validation to earn a RawReading TypedDict shape, then crosses a transformation into a Reading dataclass used by storage and reports.</desc>
+  <defs>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="2" fill="#252d3f"/></pattern>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto"><path d="M1 1L12 7L1 13" fill="none" stroke="#6ec5e9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></marker>
+  </defs>
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="url(#dots)" stroke="#252d3f" stroke-width="3"/>
+  <text x="82" y="110" fill="#e8500a" font-family="monospace" font-size="28" font-weight="700" letter-spacing="5">BOUNDARY TRANSFORMATION</text>
+  <text x="82" y="178" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="60" font-weight="800">Keep uncertainty at the edge</text>
+  <text x="84" y="226" fill="#8892a4" font-family="system-ui,sans-serif" font-size="29">Runtime evidence earns each more precise static contract.</text>
+
+  <g transform="translate(70 332)">
+    <rect width="238" height="350" rx="26" fill="#27171a" stroke="#fb7185" stroke-width="4"/>
+    <circle cx="119" cy="82" r="45" fill="#3b1d23" stroke="#fb7185" stroke-width="3"/>
+    <text x="119" y="98" text-anchor="middle" fill="#fecdd3" font-family="system-ui,sans-serif" font-size="48" font-weight="800">?</text>
+    <text x="119" y="166" text-anchor="middle" fill="#f0f2f7" font-family="monospace" font-size="30">object</text>
+    <text x="119" y="217" text-anchor="middle" fill="#fecdd3" font-family="system-ui,sans-serif" font-size="25">unknown keys</text>
+    <text x="119" y="255" text-anchor="middle" fill="#fecdd3" font-family="system-ui,sans-serif" font-size="25">unknown values</text>
+    <text x="119" y="312" text-anchor="middle" fill="#8892a4" font-family="system-ui,sans-serif" font-size="23">wire / JSON edge</text>
+  </g>
+
+  <path d="M324 507H365" fill="none" stroke="#6ec5e9" stroke-width="6" marker-end="url(#arrow)"/>
+
+  <g transform="translate(382 332)">
+    <rect width="238" height="350" rx="26" fill="#171f29" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="119" y="70" text-anchor="middle" fill="#6ec5e9" font-family="monospace" font-size="25" font-weight="700">VALIDATE</text>
+    <text x="34" y="137" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">✓ dictionary</text>
+    <text x="34" y="187" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">✓ required keys</text>
+    <text x="34" y="237" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">✓ value types</text>
+    <line x1="30" y1="274" x2="208" y2="274" stroke="#334155" stroke-width="3"/>
+    <text x="119" y="319" text-anchor="middle" fill="#bae6fd" font-family="system-ui,sans-serif" font-size="23">runtime evidence</text>
+  </g>
+
+  <path d="M636 507H677" fill="none" stroke="#6ec5e9" stroke-width="6" marker-end="url(#arrow)"/>
+
+  <g transform="translate(694 332)">
+    <rect width="260" height="350" rx="26" fill="#123128" stroke="#34d399" stroke-width="4"/>
+    <text x="130" y="70" text-anchor="middle" fill="#a7f3d0" font-family="monospace" font-size="25" font-weight="700">TYPEDDICT</text>
+    <text x="130" y="126" text-anchor="middle" fill="#f0f2f7" font-family="monospace" font-size="30">RawReading</text>
+    <text x="30" y="190" fill="#f0f2f7" font-family="monospace" font-size="24">sensor_id: str</text>
+    <text x="30" y="238" fill="#f0f2f7" font-family="monospace" font-size="24">celsius: float</text>
+    <text x="30" y="286" fill="#a7f3d0" font-family="monospace" font-size="22">state: optional</text>
+    <text x="130" y="326" text-anchor="middle" fill="#86efac" font-family="system-ui,sans-serif" font-size="22">dictionary semantics</text>
+  </g>
+
+  <path d="M970 507H1011" fill="none" stroke="#6ec5e9" stroke-width="6" marker-end="url(#arrow)"/>
+
+  <g transform="translate(1028 332)">
+    <rect width="210" height="350" rx="26" fill="#2a2015" stroke="#fbbf24" stroke-width="4"/>
+    <text x="105" y="70" text-anchor="middle" fill="#fde68a" font-family="monospace" font-size="24" font-weight="700">TRANSFORM</text>
+    <text x="105" y="148" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">keys → fields</text>
+    <text x="105" y="201" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">string → enum</text>
+    <text x="105" y="254" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">wire → domain</text>
+    <text x="105" y="319" text-anchor="middle" fill="#fde68a" font-family="system-ui,sans-serif" font-size="22">one explicit seam</text>
+  </g>
+
+  <path d="M1254 507H1295" fill="none" stroke="#6ec5e9" stroke-width="6" marker-end="url(#arrow)"/>
+
+  <g transform="translate(1312 332)">
+    <rect width="218" height="350" rx="26" fill="#201a2c" stroke="#c4b5fd" stroke-width="4"/>
+    <text x="109" y="70" text-anchor="middle" fill="#ddd6fe" font-family="monospace" font-size="24" font-weight="700">DATACLASS</text>
+    <text x="109" y="126" text-anchor="middle" fill="#f0f2f7" font-family="monospace" font-size="29">Reading</text>
+    <text x="109" y="190" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="24">named fields</text>
+    <text x="109" y="238" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="24">AlertState</text>
+    <text x="109" y="286" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="24">frozen record</text>
+    <text x="109" y="326" text-anchor="middle" fill="#ddd6fe" font-family="system-ui,sans-serif" font-size="22">core semantics</text>
+  </g>
+
+  <g transform="translate(122 784)">
+    <rect width="1356" height="124" rx="24" fill="#0f1218" stroke="#4a5468" stroke-width="3"/>
+    <text x="42" y="48" fill="#bae6fd" font-family="system-ui,sans-serif" font-size="27" font-weight="700">Runtime lane</text>
+    <text x="230" y="48" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27">validate · convert · test failures</text>
+    <text x="42" y="91" fill="#a7f3d0" font-family="system-ui,sans-serif" font-size="27" font-weight="700">Static lane</text>
+    <text x="230" y="91" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27">object → RawReading → Reading</text>
+  </g>
+</svg>

@@ -17,7 +17,7 @@ sequenceDiagram
     LSP->>LSP: Verify debugpy installed
     LSP->>LSP: Find free TCP port
     LSP->>debugpy: Spawn "python -m debugpy.adapter --port 54321"
-    LSP-->>Editor: { host: "localhost", port: 54321 }
+    LSP-->>Editor: { host: "127.0.0.1", port: 54321 }
     Editor->>debugpy: DAP Initialize (TCP)
     debugpy-->>Editor: Capabilities
     Editor->>debugpy: Launch (program, args, cwd)
@@ -50,13 +50,15 @@ The LSP only needs which Python to use. All DAP config (program, args, justMyCod
 **Response:**
 ```json
 {
-    "host": "localhost",
+    "host": "127.0.0.1",
     "port": 54321,
     "sessionId": "a1b2c3"
 }
 ```
 
 The LSP waits until debugpy is accepting TCP connections before returning, avoiding a race where the editor connects before debugpy is ready.
+
+**`host` is the IPv4 literal, never the name `localhost`.** Every bind in the session path is IPv4 — the free-port allocator, the readiness probe, and `debugpy.adapter` itself, which defaults to `127.0.0.1` when spawned with `--port` and no `--host`. `localhost` is a *name*, and on Windows it resolves to the IPv6 `::1` first; nothing listens there, so a client that connects to the advertised host has its connection refused and either fails outright or stalls while the resolver falls back to IPv4. That is why debugging and profiling appeared broken on Windows while working on Linux and macOS. Advertising the address that is actually bound removes the name-resolution step entirely. Asserted in `crates/basilisk-lsp/tests/debug_spawn.rs` and `vscode-extension/src/test/suite/debug-integration.test.ts`.
 
 **Port-collision retry.** Free-port allocation is a TOCTOU: the allocator's listener is dropped before debugpy rebinds the port, and anything on the machine can steal it in between — debugpy then exits 1 before accepting connections. `start_session` therefore tries up to 3 candidate ports (each allocated only after the previous attempt failed): a pre-flight occupancy check skips a stolen port without spawning a doomed adapter, and an adapter that exits on a bind failure is retried on the next candidate. Readiness checks the child's exit **before** the port probe, so a stranger's listener on the candidate port is never reported as a ready session. Non-port failures (missing interpreter, timeout) are never retried or masked, and an adapter-exit error carries debugpy's trailing stderr — never a bare exit status. Covered by `crates/basilisk-lsp/tests/debug_spawn.rs`.
 
@@ -83,6 +85,31 @@ The LSP waits until debugpy is accepting TCP connections before returning, avoid
 ### Python Resolver {#LSPDEBUG-PYRES}
 
 The resolver finds the Python interpreter using a three-step cascade: (1) `BASILISK_PYTHON` environment variable, (2) workspace virtualenv (`.venv/bin/python` or `venv/bin/python`), (3) system `python3` (or `python` on Windows). Before spawning debugpy, `check_debugpy` verifies the interpreter can import debugpy and returns `DebugError::DebugpyNotFound` if it cannot.
+
+#### Verifying debugpy once, ahead of time {#LSPDEBUG-PYRES-WARM}
+
+`check_debugpy` spawns a whole Python process, and the FIRST interpreter a
+server process spawns is dramatically more expensive than every one after it —
+measured at **~15s against ~0.4s** on win32, where a freshly spawned interpreter
+is scanned before it runs. The adapter spawn that follows costs ~300ms, so the
+pre-flight, not the thing it guards, was the whole cost of starting a debug
+session.
+
+Two rules follow:
+
+- **Verify an interpreter at most once.** `DebugSessionManager::ensure_debugpy`
+  remembers interpreters that passed. A **failure is never cached**: a user who
+  installs debugpy after being told it is missing must be able to retry without
+  restarting the server.
+- **Pay the first spawn during initialization, not on F5.**
+  `warm_debugpy` runs from `initialized` in a spawned task, so the expensive
+  first spawn overlaps the workspace scan. It is never awaited and never fails
+  initialization — a workspace with no usable interpreter must still start, and
+  the real debug request reports the real error.
+
+Without this, every debug session on win32 began with a multi-second stall the
+user could neither see nor explain, and the DAP e2e suite timed out behind it
+([VSIX-CI-PLATFORM-COVERAGE-CLASSES]).
 
 ### LSP Server Wiring {#LSPDEBUG-WIRE}
 

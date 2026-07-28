@@ -11,26 +11,18 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import { recordedOperations } from "../../progress-ops";
 import {
-  EXTENSION_ID,
   setupLspTestSuite,
   teardownLspTestSuite,
 } from "./test-helpers";
+import {
+  manifestViewsWelcome,
+  type WelcomeContribution
+} from "./extension-manifest";
 
 /** One viewsWelcome contribution. */
-interface WelcomeEntry {
-  readonly view: string;
-  readonly contents: string;
-  readonly when?: string;
-}
-
 /** The pythonProcesses panel's welcome entries from the live manifest. */
-function pythonProcessesWelcome(): WelcomeEntry[] {
-  const extension = vscode.extensions.getExtension(EXTENSION_ID);
-  assert.ok(extension, "the Basilisk extension must be present");
-  const pkg = extension.packageJSON as {
-    contributes?: { viewsWelcome?: WelcomeEntry[] };
-  };
-  return (pkg.contributes?.viewsWelcome ?? []).filter(
+function pythonProcessesWelcome(): WelcomeContribution[] {
+  return manifestViewsWelcome().filter(
     (entry) => entry.view === "basilisk.pythonProcesses",
   );
 }

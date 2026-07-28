@@ -11,6 +11,7 @@
 // stages the binary, copies shipwright.json, launches the sidecar, and runs only
 // this file. See docs/specs/VSIX-EDITOR-SCREENSHOTS-SPEC.md.
 
+import { delay } from '../../timeouts';
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -29,18 +30,12 @@ import { takeWindowScreenshot } from './screenshot';
 import { ConfigurationEditorController } from '../../configuration-editor';
 import { getStore } from '../../extension';
 
-async function sleep(ms: number): Promise<void> {
-    await new Promise<void>((resolve) => {
-        setTimeout(resolve, ms);
-    });
-}
-
 // Strip transient chrome that clutters a marketing screenshot: the
 // "--disable-extensions"/git toasts and the Chat auxiliary bar.
 async function prepareWindow(): Promise<void> {
     await vscode.commands.executeCommand('notifications.clearAll');
     await vscode.commands.executeCommand('workbench.action.closeAuxiliaryBar');
-    await sleep(400);
+    await delay(400);
 }
 
 // A file that triggers several distinct Basilisk diagnostics, so the editor and
@@ -68,7 +63,7 @@ async function captureBookConfigurationPreview(
         throw new Error('configuration editor did not render the real LSP preview');
     }
     await prepareWindow();
-    await sleep(800);
+    await delay(800);
     await takeWindowScreenshot('09-configuration-preview-full.png');
 }
 
@@ -101,7 +96,7 @@ suite('Editor screenshots', function () {
         await waitForDiagnostics(uri);
         // Surface the squiggles in the Problems panel for a complete picture.
         await vscode.commands.executeCommand('workbench.actions.view.problems');
-        await sleep(1200);
+        await delay(1200);
         await prepareWindow();
         await takeWindowScreenshot('vscode-diagnostics.png');
         await vscode.commands.executeCommand('workbench.action.closePanel');
@@ -119,12 +114,12 @@ suite('Editor screenshots', function () {
         const pos = new vscode.Position(0, 5);
         editor.selection = new vscode.Selection(pos, pos);
         editor.revealRange(new vscode.Range(pos, pos));
-        await sleep(500);
+        await delay(500);
         await vscode.commands.executeCommand('editor.action.showHover');
         await prepareWindow();
-        await sleep(300);
+        await delay(300);
         await vscode.commands.executeCommand('editor.action.showHover');
-        await sleep(1200);
+        await delay(1200);
         await takeWindowScreenshot('vscode-hover.png');
     });
 
@@ -140,12 +135,12 @@ suite('Editor screenshots', function () {
         const pos = new vscode.Position(0, 12); // on the unannotated `data` parameter
         editor.selection = new vscode.Selection(pos, pos);
         editor.revealRange(new vscode.Range(pos, pos));
-        await sleep(500);
+        await delay(500);
         await vscode.commands.executeCommand('editor.action.quickFix');
         await prepareWindow();
-        await sleep(300);
+        await delay(300);
         await vscode.commands.executeCommand('editor.action.quickFix');
-        await sleep(1200);
+        await delay(1200);
         await takeWindowScreenshot('vscode-quickfix.png');
         await vscode.commands.executeCommand('hideSuggestWidget');
     });
@@ -154,9 +149,9 @@ suite('Editor screenshots', function () {
         this.timeout(60_000);
         await openPythonFile(tmpDir, 'explorer.py', DEMO_SOURCE);
         await vscode.commands.executeCommand('workbench.view.extension.basilisk-explorer');
-        await sleep(800);
+        await delay(800);
         await vscode.commands.executeCommand('basilisk.refreshModuleExplorer');
-        await sleep(1800);
+        await delay(1800);
         await prepareWindow();
         await takeWindowScreenshot('vscode-module-explorer.png');
     });
@@ -175,13 +170,13 @@ suite('Editor screenshots', function () {
             controller.open(root.uri.toString());
             const deadline = Date.now() + 10_000;
             while (store.configurationEditor.value.phase !== 'ready' && Date.now() < deadline) {
-                await sleep(50);
+                await delay(50);
             }
             if (store.configurationEditor.value.phase !== 'ready') {
                 throw new Error('configuration editor did not receive a snapshot from the real LSP');
             }
             await prepareWindow();
-            await sleep(1_200);
+            await delay(1_200);
             const bookCapture = process.env.BASILISK_BOOK_SCREENSHOTS !== undefined;
             await takeWindowScreenshot(
                 bookCapture ? '09-configuration-editor-full.png' : 'vscode-configuration-editor.png',

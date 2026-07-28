@@ -411,7 +411,7 @@ async fn e2e_stop_nonexistent_session_returns_error() {
 async fn e2e_snapshot_nonexistent_session_returns_error() {
     let manager = ProfileSessionManager::new();
     let result = manager.snapshot("nonexistent-session-id").await;
-    assert!(result.is_err());
+    let _error = result.expect_err("an unknown session id has no snapshot to return");
 }
 
 /// Test memory profiling scripts generate valid Python code.

@@ -8,6 +8,7 @@
 // user sees: leak confidence escalating LOW→MEDIUM→HIGH, the purple + leak
 // decorations painted, and exactly one proactive leak-action offer. No mocks.
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import * as fs from "fs";
@@ -25,6 +26,7 @@ import {
   setupLspTestSuite,
   teardownLspTestSuite,
   closeAllEditors,
+  sameFile,
 } from "./test-helpers";
 import { buildProfileLaunchConfig } from "../../process-launch";
 import { activeMemorySession } from "../../memory-profiler";
@@ -69,12 +71,31 @@ async function showFixture(file: string): Promise<void> {
   await vscode.window.showTextDocument(doc, { preview: false });
 }
 
+/**
+ * Budget for the autopilot to accumulate captures.
+ *
+ * NOT `SESSION_WAIT_MS`, which is documented for a debug session to start,
+ * stop or pause. A capture is a whole round trip on top of that — pause the
+ * program, run a tracemalloc snapshot through a DAP `evaluate`, resume — and
+ * these fixtures deliberately burn CPU while it happens, so on a small CI
+ * runner one capture can cost more than the entire session budget. Reusing the
+ * session budget here asked for several of those inside the time allowed for
+ * one pause; on win32 the interval test recorded ZERO captures against it
+ * ([VSIX-CI-PLATFORM-COVERAGE-CLASSES]).
+ *
+ * Sized to fit several waits inside each test's own Mocha budget (150s for the
+ * money flow, 90s for interval mode), so a genuinely stuck autopilot still
+ * fails here — naming the capture count it reached — rather than as a bare
+ * Mocha timeout. Nothing asserts how QUICKLY a capture arrives.
+ */
+const AUTO_CAPTURE_WAIT_MS = 40_000;
+
 /** Wait until the autopilot has recorded at least `count` automatic captures. */
 async function waitForAutoCaptures(count: number): Promise<void> {
   await pollUntilResult({
     fn: async () => recordedAutopilotCaptures().length,
     predicate: (n) => n >= count,
-    timeoutMs: SESSION_WAIT_MS,
+    timeoutMs: AUTO_CAPTURE_WAIT_MS,
     intervalMs: POLL_MS,
   });
 }
@@ -154,7 +175,7 @@ function assertEscalatedToHigh(): void {
 
 /** The purple track AND the HIGH leak badge are painted on the fixture — automatically. */
 function assertAutoPaintedDecorations(): void {
-  const applied = appliedMemoryDecorations().filter((entry) => entry.file === FIXTURE);
+  const applied = appliedMemoryDecorations().filter(sameFile(FIXTURE));
   assert.ok(
     applied.some((entry) => entry.line === ALLOC_LINE && MEMORY_PALETTE.includes(entry.color)),
     `the leak line must wear an auto-painted purple track, got: ${JSON.stringify(applied)}`,
@@ -192,7 +213,7 @@ async function offSwitchSuppressesAutoCapture(): Promise<void> {
   // Continue to the next pass and give any (erroneous) auto-capture time to fire.
   await resume();
   await waitForPause();
-  await new Promise<void>((r) => setTimeout(r, QUIET_SETTLE_MS));
+  await delay(QUIET_SETTLE_MS);
 
   assert.strictEqual(
     recordedAutopilotCaptures().length,

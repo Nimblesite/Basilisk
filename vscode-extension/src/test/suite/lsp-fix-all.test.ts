@@ -14,6 +14,7 @@
  *   - The binary must be on PATH or the test will fail hard
  */
 
+import { delay } from '../../timeouts';
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 
@@ -202,7 +203,7 @@ suite('LSP Fix-All Tests', () => {
         await vscode.commands.executeCommand('basilisk.fixFile');
 
         // Brief wait for any edits to land.
-        await new Promise<void>((r) => setTimeout(r, COMMAND_WAIT_MS));
+        await delay(COMMAND_WAIT_MS);
 
         const after = doc.getText();
         assert.strictEqual(
@@ -237,7 +238,7 @@ suite('LSP Fix-All Tests', () => {
         await vscode.commands.executeCommand('basilisk.fixFile');
 
         // Wait for edits to apply and re-diagnosis to happen.
-        await new Promise<void>((r) => setTimeout(r, RECHECK_WAIT_MS));
+        await delay(RECHECK_WAIT_MS);
 
         // The W0050 should be gone — the redundant annotation was removed.
         const after = vscode.languages.getDiagnostics(uri);

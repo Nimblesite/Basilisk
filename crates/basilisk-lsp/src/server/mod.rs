@@ -143,7 +143,7 @@ pub struct LspServer {
     pub(super) python_interpreter: Arc<RwLock<Option<std::path::PathBuf>>>,
     // Implements [LSPDEBUG-WIRE] (DebugSessionManager added to LspServer)
     /// Debug session manager — spawns debugpy and tracks active sessions.
-    pub(super) debug_manager: crate::debug::DebugSessionManager,
+    pub(super) debug_manager: Arc<crate::debug::DebugSessionManager>,
     /// Profiler session manager — py-spy sampling, aggregation, export.
     pub(super) profiler_manager: crate::profiler::ProfileSessionManager,
     /// Memory session manager — drives the editor-couriered ingest round-trip
@@ -210,7 +210,7 @@ impl LspServer {
             workspace_roots: Arc::new(RwLock::new(Vec::new())),
             typeshed_generations: Arc::new(RwLock::new(std::collections::BTreeMap::new())),
             python_interpreter: Arc::new(RwLock::new(None)),
-            debug_manager: crate::debug::DebugSessionManager::new(),
+            debug_manager: Arc::new(crate::debug::DebugSessionManager::new()),
             profiler_manager: crate::profiler::ProfileSessionManager::new(),
             memory_manager: crate::profiler::memory::session::MemorySessionManager::new(),
             watcher_debounce: Mutex::new(None),

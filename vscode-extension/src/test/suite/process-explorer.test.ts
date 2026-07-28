@@ -12,6 +12,7 @@ import { type LanguageClient } from "vscode-languageclient/node";
 import { ProcessDecorationProvider, PythonProcessesProvider, type ProcessInfo } from "../../process-explorer";
 import { createProcessRowActions, memoryTrackRoute } from "../../process-launch";
 import { createStore, type Store } from "../../store";
+import { numberField, rawField, recordArrayField } from "../../unknown-shape";
 
 const MB = 1024 * 1024;
 
@@ -50,6 +51,10 @@ interface RecordedRequest {
  */
 function storeWith(processes: readonly ProcessInfo[], requests?: RecordedRequest[]): Store {
   const store = createStore();
+  // A stand-in for the three members the provider actually calls. No runtime
+  // check can produce the rest of `LanguageClient`, so this one assertion
+  // stays — it is the test double itself, not a payload being read.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- see above.
   const client = {
     isRunning: (): boolean => true,
     onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
@@ -59,7 +64,7 @@ function storeWith(processes: readonly ProcessInfo[], requests?: RecordedRequest
       return { processes };
     },
   } as unknown as LanguageClient;
-  store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, client);
+  store.setClient({ subscriptions: [] }, client);
   return store;
 }
 
@@ -82,22 +87,29 @@ function profilerStarts(requests: readonly RecordedRequest[]): RecordedRequest[]
 
 /** The pid argument of a recorded `basilisk.profiler.start` request. */
 function startPid(request: RecordedRequest): unknown {
-  return (request.arguments[0] as { pid?: unknown } | undefined)?.pid;
+  return rawField(request.arguments[0], "pid");
 }
+
+// `process` and `members` are attached to the tree item by the provider under
+// test and are not part of `vscode.TreeItem`. They are read back by name rather
+// than asserted onto the item, so a provider that stops attaching one fails the
+// assertion instead of handing the test an `undefined` it would compare away.
 
 /** Read the PID a process row carries (the arg passed to inline commands). */
 function pidOf(item: vscode.TreeItem): number | undefined {
-  return (item as unknown as { process?: ProcessInfo }).process?.pid;
+  return numberField(rawField(item, "process"), "pid");
 }
 
-/** Read the members a group row carries. */
-function membersOf(item: vscode.TreeItem): readonly ProcessInfo[] {
-  return (item as unknown as { members?: readonly ProcessInfo[] }).members ?? [];
+/** The PIDs of the members a group row carries. */
+function memberPids(item: vscode.TreeItem): number[] {
+  return recordArrayField(item, "members")
+    .map((member) => numberField(member, "pid"))
+    .filter((pid): pid is number => pid !== undefined);
 }
 
 /** Read a group header's label (a plain string at runtime). */
 function labelText(item: vscode.TreeItem): string {
-  return (item as unknown as { label?: string }).label ?? "";
+  return typeof item.label === "string" ? item.label : "";
 }
 
 // ── Display-cue helpers ([PROFILE-PROCESSES-DISPLAY]) ──────────────────────
@@ -107,10 +119,10 @@ function colorId(value: { id?: string } | undefined): string | undefined {
   return value?.id;
 }
 function iconId(item: vscode.TreeItem): string | undefined {
-  return (item.iconPath as vscode.ThemeIcon | undefined)?.id;
+  return item.iconPath instanceof vscode.ThemeIcon ? item.iconPath.id : undefined;
 }
 function resourceUri(item: vscode.TreeItem): vscode.Uri | undefined {
-  return (item as unknown as { resourceUri?: vscode.Uri }).resourceUri;
+  return item.resourceUri;
 }
 /** The row's tooltip narrowed to its string form (rowTooltip always returns one). */
 function tooltipText(item: vscode.TreeItem): string {
@@ -229,7 +241,7 @@ suite("Python Processes Panel", () => {
     const groups = await provider.getChildren();
     const eleven = groups.find((g) => labelText(g) === "3.11.7");
     assert.ok(eleven, "3.11.7 group must exist");
-    assert.deepStrictEqual(membersOf(eleven).map((p) => p.pid), [200]);
+    assert.deepStrictEqual(memberPids(eleven), [200]);
   });
 });
 

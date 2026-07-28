@@ -415,6 +415,10 @@ fn platform_permission_message_impl() -> &'static str {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "test-only: a permission probe that errors must abort naming the probe"
+)]
 mod tests {
     use super::*;
 
@@ -467,7 +471,7 @@ mod tests {
     fn check_permissions_returns_result() {
         // Should not panic for any PID.
         let result = check_profiling_permissions(1);
-        assert!(result.is_ok());
+        let _permissions = result.expect("permission probing reports a verdict for any PID");
     }
 
     // [PROFILE-PERMISSIONS-MACOS] An external (non-child) process needs elevation

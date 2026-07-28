@@ -54,7 +54,7 @@ fn find_fstring(line: &str) -> Option<(usize, char)> {
 fn extract_interpolations(body: &str) -> (String, Vec<String>) {
     let mut result = String::with_capacity(body.len());
     let mut expressions = Vec::new();
-    let mut chars = body.char_indices().peekable();
+    let mut chars = body.char_indices();
 
     while let Some((_, ch)) = chars.next() {
         if ch == '{' {

@@ -34,7 +34,7 @@ use clap::ValueEnum;
 mod json;
 mod text;
 
-pub use json::render_diagnostics_json;
+pub use json::{render_diagnostics_json, JsonFailure};
 pub use text::render_diagnostics;
 
 /// Output format for the `check` subcommand.
@@ -536,7 +536,7 @@ mod tests {
         let (line, col) = byte_offset_to_line_col(source, 8);
         let (end_line, end_col) = byte_offset_to_line_col(source, 9);
         let item = JsonDiagnostic {
-            code: "BSK-0001",
+            code: Some("BSK-0001"),
             severity: "error",
             message: "missing annotation for `x`",
             path: "test.py",
@@ -570,12 +570,12 @@ mod tests {
             text: "def foo(x): pass".to_owned(),
         }];
         // Just verify it doesn't panic.
-        render_diagnostics_json(&[diag], &sources);
+        render_diagnostics_json(&[diag], &sources, &[]);
     }
 
     #[test]
     fn render_diagnostics_json_empty_is_safe() {
-        render_diagnostics_json(&[], &[]);
+        render_diagnostics_json(&[], &[], &[]);
     }
 
     #[test]
@@ -585,7 +585,7 @@ mod tests {
             path: "test.py".to_owned(),
             text: "def foo(x): pass".to_owned(),
         }];
-        render_diagnostics_json(&[diag], &sources);
+        render_diagnostics_json(&[diag], &sources, &[]);
     }
 
     #[test]
@@ -595,7 +595,7 @@ mod tests {
             path: "test.py".to_owned(),
             text: "def foo(x): pass".to_owned(),
         }];
-        render_diagnostics_json(&[diag], &sources);
+        render_diagnostics_json(&[diag], &sources, &[]);
     }
 
     #[test]
@@ -605,7 +605,7 @@ mod tests {
             path: "test.py".to_owned(),
             text: "def foo(x): pass".to_owned(),
         }];
-        render_diagnostics_json(&[diag], &sources);
+        render_diagnostics_json(&[diag], &sources, &[]);
     }
 
     #[test]
@@ -614,7 +614,7 @@ mod tests {
         let (line, col) = byte_offset_to_line_col(source, 8);
         let (end_line, end_col) = byte_offset_to_line_col(source, 9);
         let item = JsonDiagnostic {
-            code: "BSK-0001",
+            code: Some("BSK-0001"),
             severity: "warning",
             message: "test warning",
             path: "test.py",
@@ -626,6 +626,101 @@ mod tests {
         let json = serde_json::to_string(&item)?;
         assert!(json.contains("\"warning\""));
         Ok(())
+    }
+
+    /// A file the run could not analyse is serialised with an explicit `null`
+    /// code. It must not be omitted — a consumer that reads the key's absence
+    /// as "no entry here" would drop the only report an unparseable file gets.
+    #[test]
+    fn json_failure_entry_serialises_an_explicit_null_code(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let item = JsonDiagnostic {
+            code: None,
+            severity: "error",
+            message: "syntax error: Expected `:`, found newline",
+            path: "broken.py",
+            line: 1,
+            col: 1,
+            end_line: 1,
+            end_col: 1,
+        };
+        let json = serde_json::to_string(&item)?;
+        assert!(
+            json.contains("\"code\":null"),
+            "the code key must be present and null: {json}"
+        );
+        assert!(
+            !json.contains("BSK-"),
+            "no rule ran, so no code may be claimed: {json}"
+        );
+        assert!(
+            json.contains("\"severity\":\"error\""),
+            "a failed file is an error: {json}"
+        );
+        assert!(
+            json.contains("broken.py"),
+            "the entry must name the file that failed: {json}"
+        );
+        assert!(
+            json.contains("syntax error"),
+            "the entry must say why it failed: {json}"
+        );
+        Ok(())
+    }
+
+    /// The failure entries are appended to the diagnostics, not substituted for
+    /// them: a run that both found problems and failed a file reports both.
+    #[test]
+    fn render_diagnostics_json_appends_failures_after_diagnostics() {
+        let diagnostic = Diagnostic {
+            code: ErrorCode {
+                code: "BSK-0001",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-0001",
+            },
+            severity: Severity::Error,
+            message: "missing annotation".to_owned(),
+            span: Span { start: 0, end: 3 },
+            path: "ok.py".to_owned(),
+            help: None,
+            note: None,
+            provenance: None,
+        };
+        let sources = vec![FileSource {
+            path: "ok.py".to_owned(),
+            text: "def foo(x): pass".to_owned(),
+        }];
+        let failures = vec![JsonFailure {
+            path: "broken.py",
+            message: "syntax error: Expected `:`, found newline",
+        }];
+        // Renders to stdout, so what it wrote cannot be read back here; the
+        // call proves the mixed report does not panic, and the entry the
+        // failure half contributes is asserted field by field below.
+        render_diagnostics_json(&[diagnostic], &sources, &failures);
+        let entry = json::failure_entry(&failures[0]);
+        assert_eq!(entry.code, None, "no rule ran, so the entry claims no code");
+        assert_eq!(
+            entry.severity, "error",
+            "a file that could not be read is an error"
+        );
+        assert_eq!(
+            entry.path, "broken.py",
+            "the entry names the file that failed"
+        );
+        assert_eq!(
+            entry.message, "syntax error: Expected `:`, found newline",
+            "the parser's own message is carried through verbatim",
+        );
+        assert_eq!(entry.line, 1, "the failure anchors at the first line");
+        assert_eq!(entry.col, 1, "the failure anchors at the first column");
+        assert_eq!(
+            entry.end_line, 1,
+            "the failure spans no further than its anchor"
+        );
+        assert_eq!(
+            entry.end_col, 1,
+            "the failure spans no further than its anchor"
+        );
     }
 
     // ── render_diagnostics_json: FnValue→() mutant at output.rs:87 ──────────
@@ -681,7 +776,7 @@ mod tests {
                     byte_offset_to_line_col(src, usize::try_from(d.span.end).unwrap_or(0))
                 });
                 JsonDiagnostic {
-                    code: d.code.code,
+                    code: Some(d.code.code),
                     severity: "error",
                     message: &d.message,
                     path: &d.path,
@@ -693,8 +788,8 @@ mod tests {
             })
             .collect();
         assert_eq!(items.len(), 2, "must produce one item per diagnostic");
-        assert_eq!(items[0].code, "BSK-0001");
-        assert_eq!(items[1].code, "BSK-0002");
+        assert_eq!(items[0].code, Some("BSK-0001"));
+        assert_eq!(items[1].code, Some("BSK-0002"));
     }
 
     // ── render_diagnostics_json: != mutant at output.rs:92 ──────────────────

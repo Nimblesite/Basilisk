@@ -6,6 +6,8 @@
 // centralized in the store as the `analysisRevision` signal; panels subscribe
 // via a signals effect instead of hand-rolled polling.
 
+import { fakeLanguageClient } from "./test-helpers";
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { State, type LanguageClient } from "vscode-languageclient/node";
@@ -25,7 +27,7 @@ interface FakeClientHandles {
 function fakeClient(typeshedStatuses: readonly unknown[] = []): FakeClientHandles {
   const stateListeners: StateListener[] = [];
   const notificationListeners = new Map<string, NotificationListener>();
-  const client = {
+  const client = fakeLanguageClient({
     isRunning: (): boolean => true,
     onDidChangeState: (listener: StateListener): vscode.Disposable => {
       stateListeners.push(listener);
@@ -39,7 +41,7 @@ function fakeClient(typeshedStatuses: readonly unknown[] = []): FakeClientHandle
     initializeResult: {
       capabilities: { experimental: { basilisk: { typeshedStatuses } } },
     },
-  } as unknown as LanguageClient;
+  });
   return {
     client,
     fireState: (state: State): void => {
@@ -58,7 +60,7 @@ function storeWithFakeClient(
 ): { store: Store; handles: FakeClientHandles } {
   const store = createStore();
   const handles = fakeClient(typeshedStatuses);
-  store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, handles.client);
+  store.setClient({ subscriptions: [] }, handles.client);
   return { store, handles };
 }
 
@@ -160,7 +162,7 @@ suite("Centralized analysis reactivity (issue #58)", () => {
       // The bump is debounced — poll briefly.
       const deadline = Date.now() + 5000;
       while (store.analysisRevision.value === before && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await delay(100);
       }
       assert.ok(
         store.analysisRevision.value > before,

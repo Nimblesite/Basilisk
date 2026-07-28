@@ -10,6 +10,7 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule};
 use tower_lsp::lsp_types::{Location, PrepareRenameResponse, Range, TextEdit, Url, WorkspaceEdit};
 
 use crate::scope_tree;
+use crate::source_mask::SourceMask;
 use crate::util::{
     definition_range, find_symbol_at_offset, identifier_at_offset, symbol_name_at, SymbolHit,
 };
@@ -94,10 +95,12 @@ pub fn rename_symbol(
     // Use scope-aware reference finding.
     let mut ranges = scope_tree::find_scoped_references(resolved, source, byte_offset);
 
+    let mask = SourceMask::build(source);
+
     // If renaming a parameter, also find keyword argument sites and docstring refs.
     let hit = find_symbol_at_offset(resolved, byte_offset);
     if let Some(SymbolHit::Parameter { func, .. }) = &hit {
-        let kwarg_ranges = find_keyword_arg_sites(source, &func.name, &name);
+        let kwarg_ranges = find_keyword_arg_sites(source, &func.name, &name, &mask);
         ranges.extend(kwarg_ranges);
         let doc_ranges = find_docstring_param_references(source, func, &name);
         ranges.extend(doc_ranges);
@@ -105,7 +108,7 @@ pub fn rename_symbol(
 
     // If renaming a class attribute, find `self.attr` references in all methods.
     if let Some(SymbolHit::Attribute { class, .. }) = &hit {
-        let attr_ranges = find_self_attr_references(source, &class.name, &name, resolved);
+        let attr_ranges = find_self_attr_references(source, &class.name, &name, resolved, &mask);
         ranges.extend(attr_ranges);
     }
 
@@ -115,9 +118,23 @@ pub fn rename_symbol(
         Some(SymbolHit::Function(f)) if f.class_name.is_none()
     ) || matches!(&hit, Some(SymbolHit::Class(_) | SymbolHit::Variable(_)))
     {
-        let all_ranges = find_dunder_all_entries(source, &name);
+        let all_ranges = crate::dunder_all::find_dunder_all_entries(source, &name);
         ranges.extend(all_ranges);
     }
+
+    // The sweeps above overlap: a defaulted parameter's `def` line matches both
+    // the scope-aware sweep and the keyword-argument sweep, for instance. LSP
+    // forbids overlapping edit ranges within one `changes` entry — and identical
+    // ranges overlap — so collapse exact duplicates before emitting edits.
+    ranges.sort_by_key(|range| {
+        (
+            range.start.line,
+            range.start.character,
+            range.end.line,
+            range.end.character,
+        )
+    });
+    ranges.dedup();
 
     let edits: Vec<TextEdit> = ranges
         .into_iter()
@@ -140,20 +157,38 @@ pub fn rename_symbol(
 }
 
 /// Find keyword argument sites like `func(param_name=value)` in the source.
-fn find_keyword_arg_sites(source: &str, func_name: &str, param_name: &str) -> Vec<Range> {
+fn find_keyword_arg_sites(
+    source: &str,
+    func_name: &str,
+    param_name: &str,
+    mask: &SourceMask<'_>,
+) -> Vec<Range> {
     let mut results = Vec::new();
-    for (line_idx, line) in source.lines().enumerate() {
-        if !line.contains(func_name) {
-            continue;
+    let mut line_start = 0;
+    for raw_line in source.split_inclusive('\n') {
+        let line = raw_line.trim_end_matches(['\n', '\r']);
+        if line.contains(func_name) {
+            find_kwarg_in_line(line, param_name, line_start, source, mask, &mut results);
         }
-        let line_u32 = u32::try_from(line_idx).unwrap_or(u32::MAX);
-        find_kwarg_in_line(line, param_name, line_u32, &mut results);
+        line_start += raw_line.len();
     }
     results
 }
 
 /// Find keyword argument occurrences within a single line.
-fn find_kwarg_in_line(line: &str, param_name: &str, line_num: u32, results: &mut Vec<Range>) {
+///
+/// `line_start` is the byte offset of `line` within `source`. Both the mask
+/// query and the emitted range use absolute offsets, so the range goes through
+/// `byte_offset_to_position` like every other range in this module — LSP
+/// columns are UTF-16 code units, not bytes.
+fn find_kwarg_in_line(
+    line: &str,
+    param_name: &str,
+    line_start: usize,
+    source: &str,
+    mask: &SourceMask<'_>,
+    results: &mut Vec<Range>,
+) {
     let bytes = line.as_bytes();
     let param_len = param_name.len();
     let pattern = format!("{param_name}=");
@@ -169,59 +204,12 @@ fn find_kwarg_in_line(line: &str, param_name: &str, line_num: u32, results: &mut
         if at_word_start
             && before.contains('(')
             && is_single_eq
-            && !is_in_string_or_comment(line, abs)
+            && !mask.is_masked(line_start + abs)
         {
-            let start_char = u32::try_from(abs).unwrap_or(0);
-            let end_char = u32::try_from(after_param).unwrap_or(0);
-            results.push(Range {
-                start: tower_lsp::lsp_types::Position {
-                    line: line_num,
-                    character: start_char,
-                },
-                end: tower_lsp::lsp_types::Position {
-                    line: line_num,
-                    character: end_char,
-                },
-            });
+            push_name_range(results, source, line_start + abs, line_start + after_param);
         }
         pos = abs + param_len.max(1);
     }
-}
-
-/// Find `__all__` entries that match `name` and return their ranges.
-fn find_dunder_all_entries(source: &str, name: &str) -> Vec<Range> {
-    let mut results = Vec::new();
-    let mut in_all_block = false;
-    for (line_idx, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("__all__") && trimmed.contains('=') {
-            in_all_block = true;
-        }
-        if in_all_block {
-            for quote in &['\'', '"'] {
-                let quoted = format!("{quote}{name}{quote}");
-                if let Some(pos) = line.find(&quoted) {
-                    let name_start = pos + 1;
-                    let name_end = name_start + name.len();
-                    let line_u32 = u32::try_from(line_idx).unwrap_or(u32::MAX);
-                    results.push(Range {
-                        start: tower_lsp::lsp_types::Position {
-                            line: line_u32,
-                            character: u32::try_from(name_start).unwrap_or(0),
-                        },
-                        end: tower_lsp::lsp_types::Position {
-                            line: line_u32,
-                            character: u32::try_from(name_end).unwrap_or(0),
-                        },
-                    });
-                }
-            }
-            if trimmed.ends_with(']') {
-                in_all_block = false;
-            }
-        }
-    }
-    results
 }
 
 // Implements [REFACTOR-RENAME-DOCS]
@@ -333,6 +321,7 @@ fn find_self_attr_references(
     class_name: &str,
     attr_name: &str,
     resolved: &ResolvedModule,
+    mask: &SourceMask<'_>,
 ) -> Vec<Range> {
     let methods = class_methods(resolved, class_name);
 
@@ -343,7 +332,14 @@ fn find_self_attr_references(
             methods
                 .iter()
                 .flat_map(move |func| {
-                    find_attr_in_span(source, func.def_span, &pattern, prefix.len(), attr_name)
+                    find_attr_in_span(
+                        source,
+                        func.def_span,
+                        &pattern,
+                        prefix.len(),
+                        attr_name,
+                        mask,
+                    )
                 })
                 .collect::<Vec<_>>()
         })
@@ -366,6 +362,7 @@ fn find_attr_in_span(
     pattern: &str,
     prefix_len: usize,
     attr_name: &str,
+    mask: &SourceMask<'_>,
 ) -> Vec<Range> {
     let start = span.start_usize();
     let end = span.end_usize().min(source.len());
@@ -378,7 +375,7 @@ fn find_attr_in_span(
         let name_start = abs + prefix_len;
         let name_end = name_start + attr_name.len();
 
-        if has_word_boundary_after(source, name_end) && !is_in_string_or_comment(source, abs) {
+        if has_word_boundary_after(source, name_end) && !mask.is_masked(abs) {
             push_name_range(&mut results, source, name_start, name_end);
         }
         search_pos += rel + pattern.len().max(1);
@@ -398,8 +395,13 @@ fn has_word_boundary_after(source: &str, pos: usize) -> bool {
 ///
 /// This is the **non-scope-aware** version, still used by cross-file reference
 /// search in the navigation handler where we don't have a resolved module for
-/// the remote file's scope tree.
-pub(crate) fn find_identifier_occurrences(source: &str, name: &str) -> Vec<Range> {
+/// the remote file's scope tree. `mask` must be built from the same `source`;
+/// callers sweeping many names over one file build it once.
+pub(crate) fn find_identifier_occurrences(
+    source: &str,
+    name: &str,
+    mask: &SourceMask<'_>,
+) -> Vec<Range> {
     let bytes = source.as_bytes();
     let name_bytes = name.as_bytes();
     let mut results = Vec::new();
@@ -414,7 +416,7 @@ pub(crate) fn find_identifier_occurrences(source: &str, name: &str) -> Vec<Range
             abs_pos == 0 || bytes.get(abs_pos - 1).is_none_or(|&b| !is_ident_byte(b));
         let at_word_end = bytes.get(end_pos).is_none_or(|&b| !is_ident_byte(b));
 
-        if at_word_start && at_word_end && !is_in_string_or_comment(source, abs_pos) {
+        if at_word_start && at_word_end && !mask.is_masked(abs_pos) {
             let start = crate::util::byte_offset_to_position(source, abs_pos);
             let end = crate::util::byte_offset_to_position(source, end_pos);
             results.push(Range { start, end });
@@ -450,30 +452,4 @@ fn identifier_range_at(source: &str, offset: usize) -> Option<Range> {
 
 fn is_ident_byte(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
-}
-
-/// Simple heuristic: check if position is inside a `#` comment or string literal.
-pub(crate) fn is_in_string_or_comment(source: &str, offset: usize) -> bool {
-    // Find the start of the line containing offset.
-    let line_start = source
-        .get(..offset)
-        .and_then(|s| s.rfind('\n'))
-        .map_or(0, |p| p + 1);
-    let Some(line_before) = source.get(line_start..offset) else {
-        return false;
-    };
-
-    // If there's a `#` before us on the same line (outside strings), it's a comment.
-    if let Some(hash_pos) = line_before.find('#') {
-        let Some(before_hash) = line_before.get(..hash_pos) else {
-            return false;
-        };
-        let single_quotes = before_hash.chars().filter(|&c| c == '\'').count();
-        let double_quotes = before_hash.chars().filter(|&c| c == '"').count();
-        if single_quotes % 2 == 0 && double_quotes % 2 == 0 {
-            return true;
-        }
-    }
-
-    false
 }

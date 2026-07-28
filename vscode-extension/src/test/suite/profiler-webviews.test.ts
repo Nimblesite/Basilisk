@@ -14,6 +14,7 @@
  * the real builders and, for the handler, on a real live webview panel.
  */
 
+import { delay } from '../../timeouts';
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -35,6 +36,7 @@ import {
     loadFlamegraphSvgDataUri,
 } from '../../profiler-flamegraph-html';
 import type { ProfileResult } from '../../profiler-decorations';
+import { stringField } from '../../unknown-shape';
 import { pollUntilResult, closeAllEditors, removeTestDir } from './test-helpers';
 
 /** A payload that closes the surrounding <script> if embedding is unescaped. */
@@ -186,8 +188,8 @@ suite('Profiler webviews — shared host hardening', () => {
     test('embedJson keeps a </script> payload inert inside an inline script', () => {
         const embedded = embedJson({ name: HOSTILE });
         assert.ok(!embedded.includes('</script>'), 'embedJson must escape < so the script cannot be closed');
-        const roundTripped = JSON.parse(embedded) as { name: string };
-        assert.strictEqual(roundTripped.name, HOSTILE, 'escaping must not corrupt the payload');
+        const roundTripped: unknown = JSON.parse(embedded);
+        assert.strictEqual(stringField(roundTripped, 'name'), HOSTILE, 'escaping must not corrupt the payload');
     });
 });
 
@@ -307,7 +309,7 @@ suite('Profiler webviews — singleton panel message handler', () => {
                 (count) => count >= 2,
             );
             // Give a stacked handler time to double-deliver before asserting.
-            await new Promise((resolve) => setTimeout(resolve, 1_000));
+            await delay(1_000);
             assert.strictEqual(
                 received.length,
                 2,

@@ -503,3 +503,59 @@ Invariants:
 - **Intentional difference:** local builds keep `0.0.0-PLACEHOLDER`; `release.yml` runs `stamp-version.sh` first. Structure and binaries are identical; only the embedded version string differs, staying internally consistent (manifest and binary agree).
 
 `verify-shipwright.mjs vsix` enforces the bundle matches the manifest on every path (rejecting missing, unmanifested, or wrong-platform binaries), so drift fails the build rather than shipping.
+
+## Cross-Platform CI Coverage {#VSIX-CI-PLATFORM-COVERAGE}
+
+The VSIX ships `win32-x64` and `win32-arm64` binaries (`shipwright.json`), so **Windows is a supported target and must be tested as one**. Testing only on Linux lets win32-only defects — a missing `.exe` suffix, a `/` vs `\` separator, a per-platform bundle path that never resolves — reach users untested; that is precisely how a Windows install can report a missing binary while every CI job is green.
+
+| Job (`.github/workflows/ci.yml`) | Runner | What it runs |
+|---|---|---|
+| `test-vscode` | `ubuntu-24.04` | `make _test_vsix` — packaged release VSIX, `workspace-suite` + the real-world corpus, coverage ratchet |
+| `test-vscode-windows` | `windows-latest` | the same `workspace-suite` (all of `src/test/suite`, including the DAP debugger and CPU/memory profiler suites) natively on Windows |
+
+Invariants:
+
+- **Same tests, not a Windows-only subset.** The Windows job runs the `workspace-suite` label from `.vscode-test.mjs` — the identical test files the Linux job runs. There is no separate Windows test list to drift, and no `BSK_TEST_GREP` filter narrowing it.
+- **Same staging path.** The Windows job stages its bundle through `stage-runtime.mjs` and `vendor-debugpy.mjs` ([VSIX-PACKAGING-PARITY]), so it exercises the real `bin/win32-x64/basilisk.exe` layout a user installs, not an ad-hoc one.
+- **It gates the merge.** `test-vscode-windows` is in the `build` gate's `needs`, so a Windows regression blocks the PR exactly like a Linux one.
+- **Single-ownership of the ratchets.** The Windows job deliberately skips VSIX packaging, ESLint, and the coverage threshold — the Linux job owns those, and duplicating them would double the failure surface without adding platform signal.
+- **This job does NOT bail; everywhere else still does.** `.vscode-test.mjs` fails fast by default, and the Windows job alone sets `BSK_TEST_BAIL=0`. Fail-fast saves time when a run is cheap to repeat, but this suite's ~30s of test time sits behind a ~20min cold `cargo build`: stopping at the first failure saves half a minute and buys a full rebuild to discover the next defect. The first two Windows runs demonstrated it — each surfaced exactly one win32 defect and hid the following one behind it. Reporting every failure per run is the cheaper reading of the same fail-fast intent, not an exception to it.
+
+### Defect classes this job surfaces {#VSIX-CI-PLATFORM-COVERAGE-CLASSES}
+
+The win32 failures found so far were not Windows trivia; each was a real defect
+whose symptom on Linux was "passes by luck". They cluster into three classes,
+and new code in these areas must be written against the class, not patched per
+test.
+
+**1. Path identity across producers.** Any overlay matching runtime-produced
+rows to open editors must compare paths through `editorPathKey`
+(`src/editor-path-key.ts`), never as raw strings. The runtime reports the
+interpreter's filename; `Uri.fsPath` reports what VS Code resolved. On win32
+those differ by drive-letter case AND by 8.3 short components
+(`C:\Users\RUNNER~1\…` vs `C:\Users\runneradmin\…`), so a raw compare matches
+nothing and the feature paints an empty editor while reporting success. This hit
+the CPU heat map ([PROFILE-VIS-HEATMAP]) and, identically, the memory allocation
+track and leak badges ([PROFILE-MEMORY-FINAL]). One shared keyer, memoised per
+pass — a second copy is how the memory side missed the first fix.
+
+**2. Client shutdown during startup.** Spawning the server binary is slow enough
+on win32 that a deactivate, a `store.reset()`, or a `basilisk.restartServer`
+routinely lands while the client is still `Starting`. `LanguageClient.stop()`
+rejects for every state but `Running`, and `isRunning()` reads `false` for a
+client whose server process is already up — so an `isRunning()` guard either
+throws out of the shutdown or silently abandons a live server. All three
+shutdown paths go through `stopClientSettled` (`src/lsp-client-stop.ts`), which
+settles the in-flight start before shutting down and collapses concurrent
+shutdowns of one client into one. See [LSPARCH-CMDREG].
+
+**3. Process trees, not processes.** Windows' `TerminateProcess` does not touch
+descendants, so killing a debug adapter leaves its debuggee running and holding
+its port ([LSPDEBUG-STOP]). Kills walk the tree.
+
+Test budgets are part of the contract too: a wait sized for a warm Linux runner
+(the module-generic one-second `WAIT_MS`) is not a budget for respawning a
+server binary. Readiness waits use `LSP_RESTART_WAIT_MS`, and they **throw**
+naming the state they observed rather than returning quietly — a swallowed
+timeout reports itself as whichever unrelated assertion happens to run next,
+which is what made this job's first failures so slow to read.

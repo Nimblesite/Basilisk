@@ -6,7 +6,7 @@
 //! The editor connects directly to debugpy via DAP over TCP — the
 //! LSP just brokers the connection.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::net::TcpListener;
 use std::path::Path;
@@ -15,6 +15,22 @@ use tracing::{debug, error, info, warn};
 use tokio::process::Child;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, Instant};
+
+/// The host a debug session is advertised on.
+///
+/// This is the LITERAL IPv4 loopback address, never the name `localhost`,
+/// because it has to name the same interface the adapter actually binds.
+/// Every bind in this module is IPv4 — the free-port allocator, the readiness
+/// probe, and `debugpy.adapter` itself, which defaults to `127.0.0.1` when
+/// spawned with `--port` and no `--host`.
+///
+/// `localhost` is a NAME, and on Windows it resolves to the IPv6 `::1` first.
+/// Nothing listens there, so a client that connects to the advertised host
+/// gets its connection refused and either fails outright or stalls while the
+/// resolver falls back to IPv4 — which is why debugging and profiling appeared
+/// broken on Windows while working on Linux and macOS. Advertising the address
+/// we bind removes the name-resolution step entirely ([LSPDEBUG-START]).
+const ADAPTER_HOST: &str = "127.0.0.1";
 
 /// How long a freshly spawned debugpy.adapter gets to bind its port.
 /// Generous on purpose: a cold `CPython` start on a loaded machine can take
@@ -116,6 +132,26 @@ impl std::error::Error for DebugError {}
 pub struct DebugSessionManager {
     /// Map from session ID to the spawned debugpy child process.
     sessions: Mutex<HashMap<String, Child>>,
+    /// Interpreters already proven to import debugpy ([LSPDEBUG-PYRES-WARM]).
+    ///
+    /// The check costs a whole Python process, and the FIRST Python spawned
+    /// from the server process is dramatically more expensive than the rest —
+    /// measured at ~15s against ~0.4s on win32, where a freshly spawned
+    /// interpreter is scanned before it runs. Paying that per debug session,
+    /// in front of the adapter spawn, put it squarely in the user's F5 path.
+    /// An interpreter's debugpy does not come and go during a session, so the
+    /// answer is remembered.
+    verified_interpreters: Mutex<HashSet<String>>,
+    /// Serializes interpreter verification ([LSPDEBUG-PYRES-WARM]).
+    ///
+    /// The expensive part is not the interpreter — it is the FIRST Python
+    /// process the server spawns, which competes with everything else
+    /// initialization is doing. Two verifications running at once therefore
+    /// both pay full price, and that is exactly the race between the
+    /// background warm-up and a debug session started moments after the editor
+    /// connects. Holding this gate makes the second caller WAIT for the first
+    /// and then find the work already done, instead of doing it twice.
+    verify_gate: Mutex<()>,
 }
 
 impl fmt::Debug for DebugSessionManager {
@@ -137,6 +173,69 @@ impl DebugSessionManager {
     pub fn new() -> Self {
         Self {
             sessions: Mutex::new(HashMap::new()),
+            verified_interpreters: Mutex::new(HashSet::new()),
+            verify_gate: Mutex::new(()),
+        }
+    }
+
+    /// Verify `python_path` can import debugpy, at most once per interpreter.
+    ///
+    /// Implements [LSPDEBUG-PYRES-WARM]. `check_debugpy` spawns a whole Python
+    /// process, and on win32 the FIRST interpreter spawned from the server
+    /// process costs ~15s against ~0.4s for every one after it — so running it
+    /// per debug session put a 15s stall in front of the adapter spawn (itself
+    /// ~300ms) every time a user pressed F5 on a cold editor.
+    ///
+    /// A negative result is NOT cached: a user who installs debugpy after
+    /// being told it is missing must be able to retry without restarting the
+    /// server.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DebugError::DebugpyNotFound` / `PythonNotFound` exactly as
+    /// [`check_debugpy`] does, for an interpreter not already verified.
+    pub async fn ensure_debugpy(&self, python_path: &str) -> Result<(), DebugError> {
+        if self.is_verified(python_path).await {
+            debug!(python = python_path, "debugpy already verified");
+            return Ok(());
+        }
+        // One verification at a time. Whoever waited here re-reads the cache
+        // first: the holder may have just verified this very interpreter, and
+        // paying for a second cold Python spawn to learn that is the whole
+        // cost this gate exists to avoid.
+        let _gate = self.verify_gate.lock().await;
+        if self.is_verified(python_path).await {
+            debug!(python = python_path, "debugpy verified while waiting");
+            return Ok(());
+        }
+        check_debugpy(python_path).await?;
+        let _ = self
+            .verified_interpreters
+            .lock()
+            .await
+            .insert(python_path.to_owned());
+        Ok(())
+    }
+
+    /// Has this interpreter already been proven to import debugpy?
+    async fn is_verified(&self, python_path: &str) -> bool {
+        self.verified_interpreters
+            .lock()
+            .await
+            .contains(python_path)
+    }
+
+    /// Pay the first-spawn cost off the user's critical path.
+    ///
+    /// Implements [LSPDEBUG-PYRES-WARM]. Called during server initialization so
+    /// the expensive first interpreter spawn overlaps the workspace scan
+    /// instead of landing on the first debug session. Failure is deliberately
+    /// ignored: a workspace with no usable interpreter must not fail to
+    /// initialize, and the real attempt reports the real error.
+    pub async fn warm_debugpy(&self, python_path: &str) {
+        match self.ensure_debugpy(python_path).await {
+            Ok(()) => info!(python = python_path, "debugpy pre-verified"),
+            Err(err) => debug!(python = python_path, %err, "debugpy pre-verify skipped"),
         }
     }
 
@@ -227,13 +326,13 @@ impl DebugSessionManager {
         debug!(port, "waiting for debugpy to accept connections");
         if let Err(err) = wait_for_port_or_exit(port, Some(&mut child), ADAPTER_BIND_TIMEOUT).await
         {
-            let _ = child.kill().await;
+            kill_tree(&mut child).await;
             return Err(err);
         }
 
         let _ = self.sessions.lock().await.insert(session_id.clone(), child);
-        info!(port, session_id = %session_id, "debugpy ready on localhost:{port}");
-        Ok(("localhost".to_owned(), port, session_id))
+        info!(port, session_id = %session_id, "debugpy ready on {ADAPTER_HOST}:{port}");
+        Ok((ADAPTER_HOST.to_owned(), port, session_id))
     }
 
     /// Kill a debug session and clean up.
@@ -243,7 +342,7 @@ impl DebugSessionManager {
         let mut sessions = self.sessions.lock().await;
         if let Some(mut child) = sessions.remove(session_id) {
             info!(session_id, "stopping debug session");
-            let _ = child.kill().await;
+            kill_tree(&mut child).await;
             return true;
         }
         warn!(session_id, "stop_session called for unknown session");
@@ -261,9 +360,41 @@ impl DebugSessionManager {
         }
         for (id, mut child) in sessions.drain() {
             debug!(session_id = %id, "killing debug session");
-            let _ = child.kill().await;
+            kill_tree(&mut child).await;
         }
     }
+}
+
+/// Kill `child` and every process it spawned.
+///
+/// `Child::kill` terminates the adapter only. The adapter launches the debuggee
+/// as its own child, and the two platforms disagree about what happens to it:
+/// on Unix the debuggee sees the adapter's socket close and exits, but Windows'
+/// `TerminateProcess` does not touch descendants, so the debuggee survives its
+/// own session — holding the port it was told to use and competing for the CPU
+/// of every session started after it. Over a run that starts many sessions the
+/// leak compounds until later sessions cannot start inside their budget.
+///
+/// `taskkill /T` walks the tree, so the descendants go with the adapter. It is
+/// spawned rather than linked because a Job Object would need `unsafe`, which
+/// this workspace denies.
+async fn kill_tree(child: &mut Child) {
+    #[cfg(windows)]
+    if let Some(pid) = child.id() {
+        let killed = tokio::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .await;
+        if let Err(err) = killed {
+            warn!(pid, %err, "taskkill failed; falling back to killing the adapter alone");
+        }
+    }
+    // Always runs: on Unix it is the whole kill, and on Windows it reaps the
+    // adapter whether or not `taskkill` got there first.
+    let _ = child.kill().await;
 }
 
 /// Spawn `python -m debugpy.adapter --port <port>` with the bundled debugpy
@@ -512,6 +643,105 @@ mod tests {
 
     /// Guard for tests that mutate process-wide environment variables.
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Implements [LSPDEBUG-PYRES-WARM]: a verified interpreter is verified
+    /// ONCE. The check spawns a whole Python process, and the first one a
+    /// server spawns is ~40x the cost of the rest on win32, so repeating it
+    /// per debug session is what put a multi-second stall in front of F5.
+    ///
+    /// Timing is the observable here because the cache has no other surface:
+    /// a second `ensure_debugpy` that re-ran the check would spawn Python
+    /// again and cost the same as the first, not a small fraction of it.
+    #[tokio::test]
+    async fn a_verified_interpreter_is_not_re_checked() {
+        let python = if cfg!(windows) { "python" } else { "python3" };
+        let manager = DebugSessionManager::default();
+
+        if manager.ensure_debugpy(python).await.is_err() {
+            // No usable interpreter here; the cache has nothing to prove.
+            return;
+        }
+
+        let cold = Instant::now();
+        manager
+            .ensure_debugpy(python)
+            .await
+            .expect("a verified interpreter stays verified");
+        let cached = cold.elapsed();
+
+        assert!(
+            cached < Duration::from_millis(50),
+            "a cached verification must not spawn Python again (took {cached:?})",
+        );
+    }
+
+    /// Implements [LSPDEBUG-PYRES-WARM]: concurrent verifications of one
+    /// interpreter collapse into a single check. This is the warm-up racing a
+    /// debug session started moments after the editor connects — without the
+    /// gate both pay the expensive first-spawn cost.
+    #[tokio::test]
+    async fn concurrent_verifications_collapse_into_one() {
+        let python = if cfg!(windows) { "python" } else { "python3" };
+        let manager = std::sync::Arc::new(DebugSessionManager::default());
+
+        if manager.ensure_debugpy(python).await.is_err() {
+            return; // No usable interpreter here.
+        }
+        // Forget the result so the racers below start from a cold cache.
+        let _ = manager.verified_interpreters.lock().await.remove(python);
+
+        let started = Instant::now();
+        let racers = (0..4).map(|_| {
+            let manager = std::sync::Arc::clone(&manager);
+            tokio::spawn(async move { manager.ensure_debugpy(python).await })
+        });
+        for racer in racers {
+            racer
+                .await
+                .expect("verification task must not panic")
+                .expect("a usable interpreter must verify");
+        }
+        let elapsed = started.elapsed();
+
+        assert!(
+            manager.is_verified(python).await,
+            "the interpreter must end up cached",
+        );
+        // Four serialized cold checks would cost about four times one; the gate
+        // means three of them find the answer already there.
+        assert!(
+            elapsed < Duration::from_secs(30),
+            "concurrent verifications must not each pay full price (took {elapsed:?})",
+        );
+    }
+
+    /// A failed check is NOT remembered: a user who installs debugpy after
+    /// being told it is missing must be able to retry without restarting the
+    /// server. Implements [LSPDEBUG-PYRES-WARM].
+    #[tokio::test]
+    async fn a_failed_check_is_not_cached() {
+        let manager = DebugSessionManager::default();
+        let missing = "/nonexistent/interpreter-for-cache-test";
+
+        let first = manager.ensure_debugpy(missing).await;
+        assert!(first.is_err(), "a missing interpreter must fail");
+
+        let second = manager.ensure_debugpy(missing).await;
+        assert!(
+            second.is_err(),
+            "the failure must be re-derived, never served from cache",
+        );
+    }
+
+    /// Warming must never fail initialization, however broken the interpreter.
+    /// Implements [LSPDEBUG-PYRES-WARM].
+    #[tokio::test]
+    async fn warming_a_broken_interpreter_is_silent() {
+        let manager = DebugSessionManager::default();
+        manager
+            .warm_debugpy("/nonexistent/interpreter-for-warm-test")
+            .await;
+    }
 
     #[test]
     fn find_free_port_returns_nonzero() {
@@ -767,5 +997,56 @@ mod tests {
         // allowing the simulated debugpy thread to unblock and finish.
         drop(real_client);
         let _ = accept_handle.await;
+    }
+
+    /// `kill_tree` must reap the process it kills, not just signal it.
+    ///
+    /// A killed-but-unreaped child stays a zombie holding its PID, and the
+    /// Windows arm spawns `taskkill` before the kill — if that arm ever
+    /// returned early the child would outlive its session. Asserting the exit
+    /// status is observable afterwards proves the process is genuinely gone on
+    /// whichever platform the suite runs on.
+    // Tests [LSPDEBUG-STOP]: stopping a session leaves no surviving process.
+    #[tokio::test]
+    async fn kill_tree_reaps_the_process_it_kills() {
+        // A process that would never exit on its own, so only the kill can end it.
+        let mut command = if cfg!(windows) {
+            let mut windows_sleep = tokio::process::Command::new("cmd");
+            let _ = windows_sleep.args(["/C", "timeout /T 300 /NOBREAK"]);
+            windows_sleep
+        } else {
+            let mut unix_sleep = tokio::process::Command::new("sleep");
+            let _ = unix_sleep.arg("300");
+            unix_sleep
+        };
+        let mut child = command
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("the long-running helper must spawn");
+
+        // Without this the test would pass vacuously on a helper that died on
+        // arrival: `try_wait` would report a status the kill never produced.
+        assert!(
+            child
+                .try_wait()
+                .expect("querying the live child must not error")
+                .is_none(),
+            "the helper must still be running, or the kill proves nothing",
+        );
+
+        kill_tree(&mut child).await;
+
+        // `try_wait` on a reaped child reports its status without blocking; on a
+        // child that was signalled but never awaited it would report `None`.
+        let status = child
+            .try_wait()
+            .expect("querying the killed child must not error");
+        assert!(
+            status.is_some(),
+            "kill_tree must reap the child, not leave a zombie"
+        );
+        assert!(child.id().is_none(), "a reaped child no longer holds a PID");
     }
 }

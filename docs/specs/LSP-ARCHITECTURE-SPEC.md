@@ -216,6 +216,27 @@ not register those names themselves. Client-only commands such as restart or sho
 remain editor-owned, and tests must wait for the LSP handshake before checking advertised
 commands.
 
+Every path that tears a client down — extension `deactivate()`, `store.reset()`, and the
+client-owned `basilisk.restartServer` — goes through one shutdown helper
+(`vscode-extension/src/lsp-client-stop.ts`), never `client.stop()` directly, because
+`stop()` rejects for any client state but `Running`:
+
+- A client that is **`Starting`** has already spawned its server process, yet `isRunning()`
+  reports `false` for it. Guarding on `isRunning()` therefore either lets the rejection
+  escape the shutdown, or drops a client whose server keeps running — a zombie that goes on
+  publishing into its own diagnostics collection (GitHub #264). The helper awaits the
+  in-flight `start()` — which returns the existing start rather than beginning a second one
+  — and only then shuts down.
+- **Concurrent shutdowns of one client collapse into one.** `deactivate()` stops the client
+  and then calls `reset()`, which also wants it gone; the second must join the first rather
+  than shut down a client already `Stopping` and take its rejection.
+- **Shutdown never rejects.** A client that failed to start is already stopped, and a
+  shutdown error must not take down the deactivation around it.
+
+The `Starting` window is narrow on Linux and wide on win32, where spawning the server binary
+is slow — see [VSIX-CI-PLATFORM-COVERAGE-CLASSES]. Tests accordingly budget a client restart
+with `LSP_RESTART_WAIT_MS`, not the module-generic one-second `WAIT_MS`.
+
 ### Modules toolbar contract (VS Code) {#VSIX-MODULE-EXPLORER-TOOLBAR}
 
 The MODULES title bar contributes refresh, view toggle, filter, and flat-view sort in that

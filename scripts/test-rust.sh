@@ -86,28 +86,33 @@ cargo build --release --bin basilisk
 
 eval "$(cargo llvm-cov show-env --export-prefix)"
 
-# macOS coverage-collection fix. cargo-llvm-cov's default `LLVM_PROFILE_FILE`
-# uses the `%Nm` ONLINE-MERGE pattern: every instrumented process merges its
-# counters into a shared pool of N files via mmap + POSIX advisory file locking.
-# On Darwin that merge path corrupts under the heavy concurrent writes of
-# `cargo test --all-targets` — processes leave truncated / bad-header `.profraw`
-# files, and a single bad header makes `llvm-profdata merge` abort the ENTIRE
-# report ("no profile can be merged"), collapsing every crate's coverage to ~0.
-# It is also aggravated by the LSP/profiler e2e suites, which SIGKILL their
-# instrumented `basilisk` child (see basilisk-lsp/tests/common/mod.rs) mid-merge.
+# Coverage-collection fix, EVERY platform. cargo-llvm-cov's default
+# `LLVM_PROFILE_FILE` uses the `%Nm` ONLINE-MERGE pattern: every instrumented
+# process merges its counters into a shared pool of N files via mmap + POSIX
+# advisory file locking. That merge path corrupts under the heavy concurrent
+# writes of `cargo test --all-targets`, and is aggravated by the LSP/profiler
+# e2e suites, which SIGKILL their instrumented `basilisk` child (see
+# basilisk-lsp/tests/common/mod.rs) *mid-merge*. The result is a truncated /
+# bad-header `.profraw`, and a single bad header makes `llvm-profdata merge`
+# abort the ENTIRE report ("no profile can be merged") — a hard build failure.
 #
-# Linux (where CI runs) does not exhibit this, so we scope the workaround to
-# macOS to avoid perturbing the green Linux ratchet. Replace the merge pool with
-# ONE plain, independently written profile per process (`%p`, no `%m`): no shared
-# pool, no lock contention, no mmap-merge corruption. A process that runs to
-# completion then writes a valid profile; the ONLY files that can still be bad
-# are instrumented `basilisk` children the LSP/profiler e2e suites SIGKILL
-# *mid-write* — those leave a truncated, bad-header profile the prune step below
-# drops before the merge. `cargo llvm-cov report` globs every `*.profraw` in the
-# target dir regardless of filename, so dropping `%m` does not affect discovery.
-if [[ "$OSTYPE" == darwin* ]]; then
-    export LLVM_PROFILE_FILE="${CARGO_LLVM_COV_TARGET_DIR:-$REPO_ROOT/target}/Basilisk-%p.profraw"
-fi
+# This was once believed to be Darwin-only and scoped to macOS "to avoid
+# perturbing the green Linux ratchet". Linux disproved it: CI died on
+# `Basilisk-<pid>-<hash>_3.profraw: invalid instrumentation profile data (file
+# header is corrupt)` — the `_3` names pool slot 3 of the very `%Nm` pool this
+# override removes. The kill-mid-write cause is platform-independent; only its
+# probability differed, so the workaround belongs on every platform.
+#
+# Replace the merge pool with ONE plain, independently written profile per
+# process (`%p`, no `%m`): no shared pool, no lock contention, no mmap-merge
+# corruption. A process that runs to completion writes a valid profile; the ONLY
+# files that can still be bad are the SIGKILLed children, which now lose their
+# OWN profile instead of corrupting a slot every other process merged into — so
+# this preserves strictly MORE coverage than the pool it replaces. The prune step
+# below drops those few files before the merge. `cargo llvm-cov report` globs
+# every `*.profraw` in the target dir regardless of filename, so dropping `%m`
+# does not affect discovery.
+export LLVM_PROFILE_FILE="${CARGO_LLVM_COV_TARGET_DIR:-$REPO_ROOT/target}/Basilisk-%p.profraw"
 
 # Sync the (git-ignored) conformance fixtures the Rust tests read, from the REAL
 # python/typing suite. `--sync-tests` clones python/typing@main FRESH — done AFTER
@@ -166,31 +171,44 @@ python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_D
 header "Enforcing PEP conformance gate (freshly-built CLEAN RELEASE build vs the REAL harness)"
 python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_DIR" --bin "$REPO_ROOT/target/release/basilisk" --gate --reuse-clone
 
-# ── macOS: drop truncated profiles before the merge ──────────────────────────
-# Completes the `%p` fix above. All instrumented runs are done, so any profile
-# `llvm-profdata` cannot read is a `basilisk` child the e2e suites SIGKILLed
-# mid-write — a half-written, bad-header file. `llvm-profdata merge` (inside
-# `cargo llvm-cov report`) aborts the WHOLE merge on a single unreadable header
-# ("no profile can be merged"), collapsing every crate to ~0, so we remove those
-# few files first. Their partial counters carry no coverage the cleanly-exited
-# test binaries and the conformance run above don't already provide. Linux (CI)
-# never produces these, so — like the `%p` override — this stays macOS-scoped.
-if [[ "$OSTYPE" == darwin* ]]; then
-    header "Pruning truncated coverage profiles (macOS)"
-    llvm_profdata="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin/llvm-profdata"
-    prof_dir="${CARGO_LLVM_COV_TARGET_DIR:-$REPO_ROOT/target}"
-    if [[ -x "$llvm_profdata" ]]; then
-        pruned=0
-        while IFS= read -r -d '' profraw; do
-            if ! "$llvm_profdata" show "$profraw" >/dev/null 2>&1; then
-                rm -f "$profraw"
-                pruned=$((pruned + 1))
-            fi
-        done < <(find "$prof_dir" -name '*.profraw' -print0)
-        ok "pruned $pruned truncated profile(s) before merge"
-    else
-        warn "llvm-profdata not found at $llvm_profdata — skipping prune"
+# ── Drop truncated profiles before the merge (every platform) ────────────────
+# Completes the `%p` fix above, and runs wherever that does — for the same
+# reason: the SIGKILL-mid-write cause is platform-independent, and Linux CI has
+# died on exactly this ("no profile can be merged"). All instrumented runs are
+# done by now, so any profile `llvm-profdata` cannot read is a `basilisk` child
+# the e2e suites SIGKILLed mid-write — a half-written, bad-header file. A single
+# unreadable header makes `llvm-profdata merge` (inside `cargo llvm-cov report`)
+# abort the WHOLE merge, collapsing every crate to ~0 or failing the build
+# outright, so we remove those few files first. Their partial counters carry no
+# coverage the cleanly-exited test binaries and the conformance run above don't
+# already provide, so the reported number never drops because of this prune.
+#
+# A prune that silently removed EVERY profile would report ~0% and read as a
+# threshold failure rather than the collection failure it is, so an empty pool
+# after pruning fails loudly here instead.
+header "Pruning truncated coverage profiles"
+llvm_profdata="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin/llvm-profdata"
+prof_dir="${CARGO_LLVM_COV_TARGET_DIR:-$REPO_ROOT/target}"
+if [[ -x "$llvm_profdata" ]]; then
+    pruned=0
+    kept=0
+    while IFS= read -r -d '' profraw; do
+        if "$llvm_profdata" show "$profraw" >/dev/null 2>&1; then
+            kept=$((kept + 1))
+        else
+            rm -f "$profraw"
+            pruned=$((pruned + 1))
+        fi
+    done < <(find "$prof_dir" -name '*.profraw' -print0)
+    ok "pruned $pruned truncated profile(s) before merge, kept $kept"
+    if [[ "$kept" -eq 0 ]]; then
+        echo -e "${RED}${BOLD}FATAL: no readable coverage profile survived the prune.${RESET}"
+        echo -e "${RED}Every .profraw under $prof_dir was unreadable ($pruned pruned) —${RESET}"
+        echo -e "${RED}that is a coverage-COLLECTION failure, not a low-coverage result.${RESET}"
+        exit 1
     fi
+else
+    warn "llvm-profdata not found at $llvm_profdata — skipping prune"
 fi
 
 # ── Finalize coverage from BOTH phases (tests + conformance binary runs) ──────

@@ -8,6 +8,7 @@ import {
     SUITE_SETUP_TIMEOUT_MS,
     setupLspTestSuite,
     teardownLspTestSuite,
+    fakeLanguageClient,
 } from './test-helpers';
 
 /** Run `body`, capturing any `showInformationMessage` toasts, then restore. */
@@ -40,9 +41,9 @@ async function uvToastsForResult(
     command: string,
     arg: unknown
 ): Promise<string[]> {
-    const fakeClient = {
+    const fakeClient = fakeLanguageClient({
         sendRequest: async () => result,
-    } as unknown as Parameters<typeof createServerCommandHandler>[0];
+    });
     const handler = createServerCommandHandler(fakeClient, command);
     return captureInfoToasts(async () => handler(arg));
 }

@@ -17,7 +17,9 @@ use shipwright::{dispatch, BuildInfo, VersionSpec};
 use shipwright_manifest::{ExecutableKind, Language};
 use tracing::error;
 
-use crate::output::{render_diagnostics, render_diagnostics_json, ColorMode, OutputFormat};
+use crate::output::{
+    render_diagnostics, render_diagnostics_json, ColorMode, JsonFailure, OutputFormat,
+};
 use crate::pipeline::{collect_and_check, pluralise, DiagnosticScope, PipelineError};
 
 mod adopt;
@@ -396,7 +398,15 @@ fn print_scope_notice(unrun_selected_rules: usize) {
 fn render_outcome(outcome: &pipeline::CheckOutcome, format: OutputFormat) -> u8 {
     match format {
         OutputFormat::Json => {
-            render_diagnostics_json(&outcome.diagnostics, &outcome.sources);
+            let failures: Vec<JsonFailure<'_>> = outcome
+                .failures
+                .iter()
+                .map(|failure| JsonFailure {
+                    path: &failure.path,
+                    message: &failure.message,
+                })
+                .collect();
+            render_diagnostics_json(&outcome.diagnostics, &outcome.sources, &failures);
             let error_count = outcome
                 .diagnostics
                 .iter()

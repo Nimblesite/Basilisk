@@ -2,13 +2,13 @@
 /**
  * Logging abstraction for the Basilisk VS Code extension.
  *
- * Provides a backend-agnostic `Logger` interface so callers never
- * depend on VS Code APIs, the filesystem, or any concrete sink.
- * The active sink is stored in the centralized Store — no global
- * mutable state lives in this module.
+ * Provides a backend-agnostic `Logger` interface so callers never depend on
+ * VS Code APIs or any concrete sink; only the `FileLogSink` in this module
+ * touches the filesystem. The active sink is stored in the centralized Store —
+ * no global mutable state lives in this module.
  */
 
-import type FsModule from "fs";
+import * as fsModule from "fs";
 
 // ── Public interface ─────────────────────────────────────────────────────
 
@@ -61,8 +61,6 @@ const LOG_FILE_MODE = 0o600;
 export class FileLogSink implements LogSink {
   private readonly fd: number;
   constructor(filePath: string) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fsModule = require("fs") as typeof FsModule;
     // Create+truncate with OWNER-ONLY (0o600) permissions so the log — which
     // can contain workspace paths — is never world-readable, even if a caller
     // ever points this at a shared directory (defense-in-depth for
@@ -75,8 +73,6 @@ export class FileLogSink implements LogSink {
   public warn(message: string): void { this.write("WARN ", message); }
   public error(message: string): void { this.write("ERROR", message); }
   private write(level: string, message: string): void {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fsModule = require("fs") as typeof FsModule;
     const timestamp = new Date().toISOString();
     fsModule.writeSync(this.fd, `${timestamp} [${level}] ${message}\n`);
   }

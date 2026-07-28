@@ -333,6 +333,26 @@ pub(super) async fn initialized(server: &LspServer) {
         super::typeshed_status::show_high_warnings(&server.client, &status).await;
     }
 
+    // Implements [LSPDEBUG-PYRES-WARM] — pay the first-interpreter-spawn cost
+    // here, in the background, rather than in front of the user's first debug
+    // session. On win32 the first Python process a server spawns costs ~15s
+    // against ~0.4s for every one after it, and that stall used to land
+    // entirely on the first F5. Spawned, never awaited: initialization must
+    // not wait on it, and a workspace with no usable interpreter must still
+    // initialize.
+    let debug_manager = Arc::clone(&server.debug_manager);
+    let roots = Arc::clone(&server.workspace_roots);
+    drop(tokio::spawn(async move {
+        let root = roots
+            .read()
+            .await
+            .first()
+            .cloned()
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        let python = crate::debug::resolve_python(&root);
+        debug_manager.warm_debugpy(&python).await;
+    }));
+
     // Spawn file watcher registration in the background so it never blocks
     // the message loop (register_capability sends a request to the client).
     let client = server.client.clone();

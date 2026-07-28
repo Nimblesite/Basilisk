@@ -1,5 +1,10 @@
 //! Tests for the server-described Typeshed source projection.
 
+#![expect(
+    clippy::expect_used,
+    reason = "test-only: a release bundle that will not activate must abort naming it"
+)]
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -76,9 +81,7 @@ fn license_availability_tracks_the_matching_active_generation() {
     };
     assert!(!license_available(&bundled_pin, None));
 
-    let Ok(snapshot) = bundled_snapshot() else {
-        unreachable!("release bundle must activate");
-    };
+    let snapshot = bundled_snapshot().expect("release bundle must activate");
     let ready = TypeshedGeneration::Ready(Arc::new(snapshot));
     assert!(license_available(&bundled_pin, Some(&ready)));
 
@@ -96,9 +99,7 @@ fn license_availability_tracks_the_matching_active_generation() {
 /// intermediate state for a client to render as a blocking overlay.
 #[test]
 fn projections_are_always_terminal() {
-    let Ok(snapshot) = bundled_snapshot() else {
-        unreachable!("release bundle must activate");
-    };
+    let snapshot = bundled_snapshot().expect("release bundle must activate");
     let ready = ready_projection(&snapshot.status);
     assert_eq!(ready.lifecycle, TypeshedLifecycle::Ready);
     assert!(ready.no_source_reason.is_none());

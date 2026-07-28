@@ -276,7 +276,7 @@ pub(super) async fn execute_start_debug_session(
     debug!(python = %python, "resolved python interpreter");
 
     // Verify debugpy is installed.
-    if let Err(err) = crate::debug::check_debugpy(&python).await {
+    if let Err(err) = server.debug_manager.ensure_debugpy(&python).await {
         error!(python = %python, %err, "debugpy check failed");
         server
             .client

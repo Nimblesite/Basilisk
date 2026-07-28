@@ -17,6 +17,8 @@ import {
   PackageTreeItem,
 } from "../../module-explorer";
 import { createStore, type Store } from "../../store";
+import { rawField, stringField } from "../../unknown-shape";
+import type { WorkspaceStateStore } from "../../store-types";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -96,22 +98,55 @@ const WORKSPACE = {
   totalFiles: 5,
 };
 
-/** Minimal ExtensionContext for toggleViewMode (only workspaceState is touched). */
-const FAKE_CONTEXT = {
-  workspaceState: { update: (): Thenable<void> => Promise.resolve() },
-} as unknown as vscode.ExtensionContext;
+/** Minimal context for toggleViewMode (only workspaceState is touched). */
+const FAKE_CONTEXT: WorkspaceStateStore = {
+  workspaceState: {
+    get: (): undefined => undefined,
+    update: (): Thenable<void> => Promise.resolve(),
+  },
+};
+
+/** A context whose workspace storage already holds `persisted` under any key. */
+function contextHolding(persisted: unknown): WorkspaceStateStore {
+  return {
+    workspaceState: {
+      get: (): unknown => persisted,
+      update: (): Thenable<void> => Promise.resolve(),
+    },
+  };
+}
+
+/** Whether the provider's current root rows are flat-view module rows. */
+async function rootsAreFlat(provider: ModuleExplorerProvider): Promise<boolean> {
+  const roots = await provider.getChildren();
+  return labelsOf(roots).includes("app.api.auth");
+}
 
 // ── Stubs ─────────────────────────────────────────────────────────────────
 
-/** Build a Store whose LSP client returns the given flat module list. */
-function storeWith(modules: readonly TestModule[]): Store {
+/**
+ * Build a Store whose LSP client returns the given flat module list.
+ *
+ * `modules` is `unknown[]` because that is what the wire actually carries: the
+ * server sends JSON, and some of these fixtures deliberately omit grading
+ * fields to stand in for a server that does not send them. Typing the
+ * parameter as `TestModule[]` would force each such fixture through a cast and
+ * hide exactly the case the test exists to cover.
+ */
+function storeWith(modules: readonly unknown[]): Store {
   const store = createStore();
+  // A stub for `sendRequest<R>(…): Promise<R>` cannot be written without this
+  // cast: satisfying it means producing a caller-chosen `R` from canned data,
+  // and no runtime check narrows `unknown` to a type parameter. Every payload
+  // the provider then reads off this client IS checked — that is what the rule
+  // is for, and it stays on everywhere else in this file.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- generic LSP client double; see above
   const client = {
     isRunning: (): boolean => true,
     onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
     sendRequest: async (): Promise<unknown> => ({ modules, workspace: WORKSPACE }),
   } as unknown as LanguageClient;
-  store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, client);
+  store.setClient({ subscriptions: [] }, client);
   return store;
 }
 
@@ -124,10 +159,28 @@ function labelsOf(items: readonly vscode.TreeItem[]): string[] {
   return items.map(labelOf);
 }
 
-/** Theme-colour id of a row's icon tint, or undefined when untinted. */
+/**
+ * Theme-colour id of a row's icon tint, or undefined when untinted.
+ *
+ * `iconPath` is a union of four shapes and only `ThemeIcon` carries a colour,
+ * so the tint is read field by field rather than asserted: a row that turns out
+ * to hold a `Uri` reports "no tint" instead of throwing inside the assertion.
+ */
 function iconColorId(item: vscode.TreeItem): string | undefined {
-  const icon = item.iconPath as vscode.ThemeIcon;
-  return (icon.color as { id?: string } | undefined)?.id;
+  return stringField(rawField(item.iconPath, "color"), "id");
+}
+
+/**
+ * A row's tooltip as plain text, failing the test when it is not.
+ *
+ * The assertion is the narrowing: every caller wants to state that the tooltip
+ * is plain text *and* then read it, and doing both in one place keeps the
+ * second half from becoming a cast that repeats the first half's claim.
+ */
+function tooltipText(item: vscode.TreeItem): string {
+  const { tooltip } = item;
+  assert.strictEqual(typeof tooltip, "string", "tooltip must be plain text");
+  return typeof tooltip === "string" ? tooltip : "";
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────
@@ -375,7 +428,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
       { name: "app", kind: "package", symbols: [], path: "/ws/app/__init__.py" },
       { name: "app.mod", kind: "module", symbols: [], path: "/ws/app/mod.py" },
     ];
-    const provider = new ModuleExplorerProvider(storeWith(ungraded as unknown as readonly TestModule[]));
+    const provider = new ModuleExplorerProvider(storeWith(ungraded));
     try {
       const roots = await provider.getChildren();
       const app = roots.find((row) => labelOf(row) === "app");
@@ -414,7 +467,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
   });
 
   test("package icon tint bands: subtree errors win, then warnings, then coverage colour, untinted when ungraded", async () => {
-    const cases: readonly { readonly modules: readonly TestModule[]; readonly expected: string | undefined; readonly why: string }[] = [
+    const cases: readonly { readonly modules: readonly unknown[]; readonly expected: string | undefined; readonly why: string }[] = [
       {
         modules: [
           mod("app", "package", { coverage: 100, totalSymbols: 2, annotatedSymbols: 2 }),
@@ -451,7 +504,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
         modules: [
           { name: "app", kind: "package", symbols: [], path: "/ws/app/__init__.py" },
           { name: "app.core", kind: "module", symbols: [], path: "/ws/app/core.py" },
-        ] as unknown as readonly TestModule[],
+        ],
         expected: undefined,
         why: "an ungraded subtree (Type Checking disabled, #119) stays untinted",
       },
@@ -482,8 +535,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
       const roots = await provider.getChildren();
       const app = roots.find((row) => labelOf(row) === "app");
       assert.ok(app instanceof PackageTreeItem, "'app' is a package container");
-      assert.strictEqual(typeof app.tooltip, "string", "package tooltip is plain text");
-      const packageTip = app.tooltip as string;
+      const packageTip = tooltipText(app);
       assert.ok(
         packageTip.includes("Coverage: 17% (subtree)"),
         `package tooltip must quote the rolled-up subtree coverage (2/12 = 17%), not its own 100%, got: ${packageTip}`,
@@ -495,8 +547,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
 
       const core = (await provider.getChildren(app)).find((row) => labelOf(row) === "core");
       assert.ok(core instanceof ModuleTreeItem, "'core' is a leaf module");
-      assert.strictEqual(typeof core.tooltip, "string", "module tooltip is plain text");
-      const moduleTip = core.tooltip as string;
+      const moduleTip = tooltipText(core);
       for (const line of ["app.core", "/ws/app/core.py", "Coverage: 0%", "Errors: 1", "Warnings: 2"]) {
         assert.ok(moduleTip.includes(line), `module tooltip must include "${line}", got: ${moduleTip}`);
       }
@@ -561,6 +612,36 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
       );
     } finally {
       provider.dispose();
+    }
+  });
+
+  // The persisted view mode was written by whichever version of the extension
+  // last ran, so `restoreViewMode` reads it as `unknown` and validates it. These
+  // pin both halves: a mode we recognise is honoured, and anything else falls
+  // back to the default rather than leaving the explorer in a mode it cannot
+  // render.
+  test("restoreViewMode honours a persisted 'flat'", async () => {
+    const provider = new ModuleExplorerProvider(storeWith(MODULES));
+    try {
+      provider.restoreViewMode(contextHolding("flat"));
+      assert.ok(await rootsAreFlat(provider), "a persisted 'flat' must restore flat view");
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  test("restoreViewMode falls back to tree when storage holds an unusable value", async () => {
+    for (const persisted of ["outline", "", 7, null, undefined, { mode: "flat" }]) {
+      const provider = new ModuleExplorerProvider(storeWith(MODULES));
+      try {
+        provider.restoreViewMode(contextHolding(persisted));
+        assert.ok(
+          !(await rootsAreFlat(provider)),
+          `stored ${JSON.stringify(persisted) ?? "undefined"} is not a view mode — must fall back to tree`,
+        );
+      } finally {
+        provider.dispose();
+      }
     }
   });
 });

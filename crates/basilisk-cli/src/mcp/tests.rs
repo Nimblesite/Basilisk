@@ -245,7 +245,11 @@ fn shared_custom_status_projects_to_the_closed_mcp_envelope() {
 
 #[test]
 fn shared_oid_type_rejects_truncated_git_identity() {
-    assert!(basilisk_stubs::typeshed::gittree::Oid::from_hex("83c2518").is_err());
+    assert_eq!(
+        basilisk_stubs::typeshed::gittree::Oid::from_hex("83c2518").ok(),
+        None,
+        "a truncated SHA is never a valid object identity"
+    );
 }
 
 #[test]

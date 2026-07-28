@@ -15,11 +15,13 @@
  * production creates one in activate().
  */
 
+import { arrayField, recordField } from "./unknown-shape";
 import { signal, computed } from "@preact/signals-core";
 import { type LanguageClient, State } from "vscode-languageclient/node";
 import * as vscode from "vscode";
 import { Logger, type LogSink } from "./logger";
 import { createServerCommandHandler } from "./lsp-client";
+import { stopClientSettled } from "./lsp-client-stop";
 import type { Result } from "./result";
 import { WAIT_MS } from "./timeouts";
 import {
@@ -52,11 +54,11 @@ import {
   type LspState,
   type ReadyHandle,
 } from "./store-ready";
-import type { RuntimeResolution, Store, StoreSignals } from "./store-types";
+import type { DisposableSink, RuntimeResolution, Store, StoreSignals } from "./store-types";
 
 // Re-exported so consumers keep importing the LSP lifecycle type from the store.
 export { type LspState } from "./store-ready";
-export type { RuntimeResolution, Store } from "./store-types";
+export type { DisposableSink, RuntimeResolution, Store } from "./store-types";
 
 // ── Private helpers operating on StoreSignals ─────────────────────────────
 
@@ -100,7 +102,7 @@ function syncServerCommands(signals: StoreSignals): void {
 
 interface CommandRegistration {
   signals: StoreSignals;
-  context: vscode.ExtensionContext;
+  context: DisposableSink;
   commandId: string;
 }
 
@@ -143,7 +145,7 @@ function disposeAllCommands(signals: StoreSignals): void {
 // ([VSIX-OUTPUT-CHANNELS]). All other contributed commands are server-advertised
 // and auto-registered via syncServerCommands (per the Command Registration Rule).
 /** Register all client-only commands. Called when LSP reaches Running. */
-function registerClientCommands(signals: StoreSignals, context: vscode.ExtensionContext): void {
+function registerClientCommands(signals: StoreSignals, context: DisposableSink): void {
   registerCommand({ signals, context, commandId: "basilisk.restartServer" }, async () => {
     const lspClient = signals.client.value;
     if (!lspClient) {
@@ -152,7 +154,12 @@ function registerClientCommands(signals: StoreSignals, context: vscode.Extension
     }
     try {
       Logger.info("Restarting Basilisk language server...");
-      await lspClient.stop();
+      // Not `stop()`: it rejects for any state but Running, so a restart
+      // requested while the server is still coming up used to report a failure
+      // and leave the server un-restarted — nothing downstream of the restart
+      // ever fired. stopClientSettled waits the start out first, and leaves the
+      // client Stopped (not disposed) so it can start again below.
+      await stopClientSettled(lspClient);
       await lspClient.start();
       Logger.info("Basilisk language server restarted.");
     } catch (err: unknown) {
@@ -176,16 +183,11 @@ function replaceInitialTypeshedStatuses(
   signals: StoreSignals,
   client: LanguageClient,
 ): void {
-  const experimental = client.initializeResult?.capabilities.experimental as
-    | { basilisk?: { typeshedStatuses?: unknown } }
-    | undefined;
-  const values = experimental?.basilisk?.typeshedStatuses;
+  const basilisk = recordField(client.initializeResult?.capabilities.experimental, "basilisk");
   const next = new Map<string, TypeshedStatusState>();
-  if (Array.isArray(values)) {
-    for (const value of values) {
-      const change = decodeTypeshedStatusChanged(value);
-      if (change !== undefined) { next.set(change.rootUri, change.status); }
-    }
+  for (const value of arrayField(basilisk, "typeshedStatuses")) {
+    const change = decodeTypeshedStatusChanged(value);
+    if (change !== undefined) { next.set(change.rootUri, change.status); }
   }
   signals.typeshedStatuses.value = next;
 }
@@ -207,7 +209,7 @@ const DIAGNOSTICS_BUMP_DEBOUNCE_MS = 300;
  * diagnostics change bumps the analysis revision (debounced) so panels that
  * render health rollups stay live ([EXTACT-HEALTH-REFRESH]).
  */
-function bindDiagnosticsListener(signals: StoreSignals, context: vscode.ExtensionContext): void {
+function bindDiagnosticsListener(signals: StoreSignals, context: DisposableSink): void {
   if (signals.diagnosticsListenerBound) { return; }
   signals.diagnosticsListenerBound = true;
   context.subscriptions.push(
@@ -229,7 +231,7 @@ function bindDiagnosticsListener(signals: StoreSignals, context: vscode.Extensio
  */
 function bindClientStateListener(
   signals: StoreSignals,
-  context: vscode.ExtensionContext,
+  context: DisposableSink,
   lspClient: LanguageClient
 ): void {
   lspClient.onDidChangeState((event) => {
@@ -426,7 +428,7 @@ export function createStore(onReset?: () => void): Store {
     ...createProcessPanelActions(signals.processes),
     ...createConfigurationEditorActions(signals.configurationEditor),
 
-    setClient(context: vscode.ExtensionContext, c: LanguageClient): void {
+    setClient(context: DisposableSink, c: LanguageClient): void {
       signals.client.value = c;
       bindClientStateListener(signals, context, c);
       bindDiagnosticsListener(signals, context);
@@ -450,13 +452,15 @@ export function createStore(onReset?: () => void): Store {
       // server process and publishing into its own diagnostics collection,
       // which VS Code merges into getDiagnostics(). Its late republishes
       // then resurrect diagnostics the real server already cleared
-      // (GitHub #264). dispose() also tears the collection down; skip it
-      // when a stop is already in flight (the deactivate() path).
+      // (GitHub #264).
+      //
+      // stopClientSettled covers the STARTING client too — an `isRunning()`
+      // guard reads false there and drops a client whose server process is
+      // already up, which is the same zombie by a quieter route. It also
+      // joins the shutdown deactivate() has in flight rather than racing it.
       const dyingClient = signals.client.value;
-      if (dyingClient?.isRunning() === true) {
-        dyingClient.dispose().catch((err: unknown) => {
-          Logger.warn(`Failed to dispose replaced LSP client: ${String(err)}`);
-        });
+      if (dyingClient !== undefined) {
+        void stopClientSettled(dyingClient, "dispose");
       }
       disposeAllCommands(signals);
       resetSignals(signals);

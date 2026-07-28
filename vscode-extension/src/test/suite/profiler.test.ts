@@ -15,6 +15,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { getStore } from '../../extension';
+import { arrayField, isRecord, rawField } from '../../unknown-shape';
 import {
     EXTENSION_ID,
     setupLspTestSuite,
@@ -23,14 +24,16 @@ import {
 } from "./test-helpers";
 
 import {
-    PROFILER_CLIENT_COMMANDS,
-    PROFILER_SERVER_COMMANDS,
-    PROFILER_SETTINGS,
-    PROFILER_EXTRA_SETTINGS,
-    type PackageJsonCommandEntry,
-    type PackageJsonKeybinding,
-    getPackageJsonProperties,
+  PROFILER_CLIENT_COMMANDS,
+  PROFILER_SERVER_COMMANDS,
+  PROFILER_SETTINGS,
+  PROFILER_EXTRA_SETTINGS
 } from './profiler-test-constants';
+import {
+  manifestCommands,
+  manifestConfigurationProperties,
+  manifestKeybindings
+} from "./extension-manifest";
 
 let tmpDir = '';
 
@@ -111,10 +114,9 @@ suite('Profiler — Command Registration', () => {
         assert.ok(result !== undefined, 'profiler.list should return a result');
         assert.ok(result !== null, 'profiler.list should not return null');
 
-        const json = result as { sessions: unknown[] };
-        assert.ok(Array.isArray(json.sessions), 'sessions should be an array');
+        assert.ok(Array.isArray(rawField(result, 'sessions')), 'sessions should be an array');
         assert.strictEqual(
-            json.sessions.length,
+            arrayField(result, 'sessions').length,
             0,
             'no sessions should be active initially',
         );
@@ -126,9 +128,9 @@ suite('Profiler — Command Registration', () => {
         );
         assert.ok(result !== undefined, 'profiler.list must return a value');
 
-        const json = result as Record<string, unknown>;
-        assert.ok('sessions' in json, 'result must have sessions key');
-        assert.ok(Array.isArray(json.sessions), 'sessions must be an array');
+        assert.ok(isRecord(result), 'result must be an object');
+        assert.ok('sessions' in result, 'result must have sessions key');
+        assert.ok(Array.isArray(rawField(result, 'sessions')), 'sessions must be an array');
     });
 });
 
@@ -196,7 +198,7 @@ suite('Profiler — Configuration', () => {
     });
 
     test('profiler settings are declared in package.json', () => {
-        const properties = getPackageJsonProperties();
+        const properties = manifestConfigurationProperties();
 
         for (const setting of PROFILER_SETTINGS) {
             assert.ok(
@@ -207,7 +209,7 @@ suite('Profiler — Configuration', () => {
     });
 
     test('extra profiler settings are declared in package.json', () => {
-        const properties = getPackageJsonProperties();
+        const properties = manifestConfigurationProperties();
 
         for (const setting of PROFILER_EXTRA_SETTINGS) {
             assert.ok(
@@ -218,7 +220,7 @@ suite('Profiler — Configuration', () => {
     });
 
     test('profiler settings have correct types in package.json', () => {
-        const properties = getPackageJsonProperties();
+        const properties = manifestConfigurationProperties();
 
         const expectedTypes: Record<string, string> = {
             'basilisk.profiler.sampleRate': 'number',
@@ -243,7 +245,7 @@ suite('Profiler — Configuration', () => {
     });
 
     test('preset enum offers exactly the presets the server parses', () => {
-        const properties = getPackageJsonProperties();
+        const properties = manifestConfigurationProperties();
         const presetProp = properties['basilisk.profiler.preset'] as
             { enum?: string[] } | undefined;
         assert.ok(presetProp, 'preset property should exist');
@@ -305,10 +307,7 @@ suite('Profiler — Keybindings', () => {
         const extension = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(extension, 'Extension should be found');
 
-        const packageJson = extension.packageJSON as {
-            contributes?: { keybindings?: PackageJsonKeybinding[] };
-        };
-        const keybindings = packageJson.contributes?.keybindings ?? [];
+        const keybindings = manifestKeybindings();
 
         const profilerKeybindings = keybindings.filter(
             (kb) => kb.command.startsWith('basilisk.profile'),
@@ -324,10 +323,7 @@ suite('Profiler — Keybindings', () => {
         const extension = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(extension, 'Extension should be found');
 
-        const packageJson = extension.packageJSON as {
-            contributes?: { commands?: PackageJsonCommandEntry[] };
-        };
-        const commands = packageJson.contributes?.commands ?? [];
+        const commands = manifestCommands();
         const commandIds = commands.map((c) => c.command);
 
         for (const cmd of PROFILER_CLIENT_COMMANDS) {
@@ -342,10 +338,7 @@ suite('Profiler — Keybindings', () => {
         const extension = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(extension, 'Extension should be found');
 
-        const packageJson = extension.packageJSON as {
-            contributes?: { commands?: PackageJsonCommandEntry[] };
-        };
-        const commands = packageJson.contributes?.commands ?? [];
+        const commands = manifestCommands();
 
         for (const cmd of PROFILER_CLIENT_COMMANDS) {
             const entry = commands.find((c) => c.command === cmd);

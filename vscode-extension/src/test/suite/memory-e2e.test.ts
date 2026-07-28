@@ -9,6 +9,7 @@
 // (via the applied-decoration ledger), the `.heapprofile` for VS Code's
 // built-in viewer, and the "Run & Track Memory (Current File)" auto-start.
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import * as fs from "fs";
@@ -26,6 +27,7 @@ import {
   memoryRoundTrip,
   type IngestResult,
 } from "./debug-e2e-helpers";
+import { recordArrayField, recordField, stringField } from "../../unknown-shape";
 import { recordedOperations } from "../../progress-ops";
 import { buildProfileLaunchConfig } from "../../process-launch";
 import {
@@ -41,6 +43,8 @@ import {
   setupLspTestSuite,
   teardownLspTestSuite,
   closeAllEditors,
+  isSamePath,
+  sameFile,
 } from "./test-helpers";
 
 /** The memory fixture, opened from the real fixtures directory. */
@@ -55,22 +59,21 @@ const BP_AFTER_CHUNK3 = 17;
 const MEMORY_PALETTE = ["#c084fc", "#a78bfa", "#8b5cf6", "#7c3aed"];
 const LEAK_PALETTE = ["#ef4444", "#f87171", "#fb923c", "#a78bfa"];
 
-/** A node in the V8 `.heapprofile` call tree. */
-interface HeapNode {
-  callFrame?: { url?: string };
-  children?: HeapNode[];
-}
+// The `.heapprofile` is bytes read off disk, so the walkers below take
+// `unknown` and narrow field by field rather than asserting a `HeapNode`
+// shape nothing has checked — a malformed artifact then fails the assertion
+// it should, instead of type-erroring deeper in the walk.
 
 /** Depth of the heapprofile call tree (root counts as 1). */
-function heapTreeDepth(node: HeapNode): number {
-  const children = node.children ?? [];
+function heapTreeDepth(node: unknown): number {
+  const children = recordArrayField(node, "children");
   return 1 + children.reduce((deepest, child) => Math.max(deepest, heapTreeDepth(child)), 0);
 }
 
 /** Every `callFrame.url` in the heapprofile tree. */
-function heapNodeUrls(node: HeapNode): string[] {
-  const here = node.callFrame?.url;
-  const childUrls = (node.children ?? []).flatMap(heapNodeUrls);
+function heapNodeUrls(node: unknown): string[] {
+  const here = stringField(recordField(node, "callFrame"), "url");
+  const childUrls = recordArrayField(node, "children").flatMap(heapNodeUrls);
   return here !== undefined && here !== "" ? [here, ...childUrls] : childUrls;
 }
 
@@ -87,12 +90,12 @@ function assertSnapshotSurface(snapshot: MemorySnapshotResult & IngestResult): v
   const heapProfilePath = snapshot.heapProfilePath;
   assert.ok(typeof heapProfilePath === "string" && heapProfilePath !== "", "heapProfilePath must be returned");
   assert.ok(fs.existsSync(heapProfilePath), ".heapprofile must be written to disk");
-  const heapprofile = JSON.parse(fs.readFileSync(heapProfilePath, "utf8")) as { head?: HeapNode };
-  assert.ok(heapprofile.head !== undefined, ".heapprofile must have a head tree");
+  const heapprofile: unknown = JSON.parse(fs.readFileSync(heapProfilePath, "utf8"));
+  const head = recordField(heapprofile, "head");
+  assert.ok(head !== undefined, ".heapprofile must have a head tree");
 
   // [PROFILE-MEMORY-FINAL] The profile must be a real call tree of the USER's
   // program — genuine depth (not a flat by-line list) and zero debugger frames.
-  const head = heapprofile.head;
   assert.ok(heapTreeDepth(head) >= 3, `the .heapprofile must be a real call tree with depth, got depth ${heapTreeDepth(head)}`);
   const urls = heapNodeUrls(head);
   assert.ok(
@@ -106,7 +109,7 @@ function assertSnapshotSurface(snapshot: MemorySnapshotResult & IngestResult): v
 
   // The purple memory track is really painted ([PROFILE-VIS-HEATMAP]).
   applyMemoryDecorations(snapshot);
-  const memApplied = appliedMemoryDecorations().filter((entry) => entry.file === FIXTURE);
+  const memApplied = appliedMemoryDecorations().filter(sameFile(FIXTURE));
   assert.ok(memApplied.length > 0, "snapshot allocations must paint the open fixture");
   assert.ok(
     memApplied.some((entry) => entry.line === ALLOC_LINE && MEMORY_PALETTE.includes(entry.color)),
@@ -154,7 +157,7 @@ async function probeRunningDebuggeeForFrames(probes: number): Promise<void> {
       null,
       "a running debuggee must never yield a frame id (debugpy samples stackTrace for running threads)",
     );
-    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    await delay(200);
   }
 
   await vscode.debug.stopDebugging();
@@ -199,11 +202,11 @@ async function trackAndSnapshotRunningProgram(): Promise<void> {
   );
 
   // Let the program allocate under tracemalloc, then snapshot while RUNNING.
-  await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+  await delay(1000);
   clearMemoryDecorations();
   const opsBefore = recordedOperations().length;
   await vscode.commands.executeCommand("basilisk.memorySnapshot");
-  const applied = appliedMemoryDecorations().filter((entry) => entry.file === busyFixture);
+  const applied = appliedMemoryDecorations().filter(sameFile(busyFixture));
   assert.ok(
     applied.some((entry) => entry.line === busyAllocLine),
     `the snapshot must attribute the live allocation line ${busyAllocLine}, got: ${JSON.stringify(applied)}`,
@@ -263,7 +266,7 @@ async function runTrackMemoryToCompletionAndAssertResult(): Promise<void> {
   // snapshot's live allocations paint the purple memory track on the real
   // allocation line.
   const memApplied = await pollUntilResult({
-    fn: async () => appliedMemoryDecorations().filter((entry) => entry.file === FIXTURE),
+    fn: async () => appliedMemoryDecorations().filter(sameFile(FIXTURE)),
     predicate: (entries) =>
       entries.some((entry) => entry.line === ALLOC_LINE && MEMORY_PALETTE.includes(entry.color)),
     timeoutMs: SESSION_WAIT_MS,
@@ -333,7 +336,7 @@ async function trackedRunSurvivesUnrelatedSessionEnd(): Promise<void> {
   });
   assert.ok(startedB, "the unrelated session must launch");
   await bTerminated;
-  await new Promise<void>((r) => setTimeout(r, 500)); // let the terminate handler run
+  await delay(500); // let the terminate handler run
 
   startSub.dispose();
   assert.ok(sessionBId !== undefined && sessionBId !== sessionA?.id, "the two sessions must be distinct");
@@ -431,7 +434,7 @@ function assertLeakSurface(diff: MemoryDiffResult & IngestResult): void {
 
   applyLeakDecorations(diff);
   const leakApplied = appliedMemoryDecorations().filter(
-    (entry) => entry.file === FIXTURE && LEAK_PALETTE.includes(entry.color) && entry.contentText.includes("leak"),
+    (entry) => isSamePath(entry.file, FIXTURE) && LEAK_PALETTE.includes(entry.color) && entry.contentText.includes("leak"),
   );
   assert.ok(leakApplied.length > 0, "suspected leaks must paint leak decorations with a confidence badge");
 }

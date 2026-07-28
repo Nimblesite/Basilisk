@@ -9,6 +9,7 @@
 // subscriber, and that the poll feeding the store lives store-side
 // (process-poll.ts), gated on view visibility.
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { type LanguageClient } from "vscode-languageclient/node";
@@ -16,6 +17,7 @@ import { PythonProcessesProvider, type ProcessInfo } from "../../process-explore
 import { bindProcessPolling, fetchProcessesIntoStore } from "../../process-poll";
 import { subscribeRevision } from "../../reactive-refresh";
 import { createStore, type Store } from "../../store";
+import { numberField, rawField } from "../../unknown-shape";
 
 const MB = 1024 * 1024;
 
@@ -33,12 +35,16 @@ function proc(pid: number, overrides: Partial<ProcessInfo> = {}): ProcessInfo {
 /** A store whose fake LSP client serves the given process table. */
 function storeServing(processes: readonly ProcessInfo[]): Store {
   const store = createStore();
+  // A stand-in for the members the code under test calls. No runtime check
+  // can produce the rest of `LanguageClient`, so the test double itself is
+  // the one assertion here — it is not a payload being read.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- see above.
   const client = {
     isRunning: (): boolean => true,
     onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
     sendRequest: async (): Promise<unknown> => ({ processes }),
   } as unknown as LanguageClient;
-  store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, client);
+  store.setClient({ subscriptions: [] }, client);
   return store;
 }
 
@@ -51,9 +57,11 @@ function subscribedProvider(store: Store): PythonProcessesProvider {
 
 /** The PIDs of the plain process rows in a root listing. */
 function pidsOf(rows: vscode.TreeItem[]): number[] {
+  // `process` is attached to the row by the provider under test, not by
+  // `vscode.TreeItem`, so it is read back by name rather than asserted on.
   return rows
-    .map((row) => (row as unknown as { process?: ProcessInfo }).process?.pid)
-    .filter((pid): pid is number => typeof pid === "number");
+    .map((row) => numberField(rawField(row, "process"), "pid"))
+    .filter((pid): pid is number => pid !== undefined);
 }
 
 suite("Python Processes — pure projection of store Signals (#148)", () => {
@@ -118,7 +126,7 @@ suite("Python Processes — pure projection of store Signals (#148)", () => {
 
       store.setActiveDebuggeePid(20);
       const debuggeeRow = (await panelB.getChildren()).find(
-        (row) => (row as unknown as { process?: ProcessInfo }).process?.pid === 20,
+        (row) => numberField(rawField(row, "process"), "pid") === 20,
       );
       assert.strictEqual(
         debuggeeRow?.contextValue,
@@ -139,7 +147,7 @@ suite("Python Processes — pure projection of store Signals (#148)", () => {
       // The immediate fetch is fire-and-forget; wait for the signal to settle.
       const deadline = Date.now() + 2000;
       while (store.processes.value.fetch !== "loaded" && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await delay(10);
       }
       assert.strictEqual(store.processes.value.fetch, "loaded", "the store-side poll must fetch on bind");
       assert.deepStrictEqual(store.processes.value.list.map((p) => p.pid), [42], "the fetch landed in the store signal");
@@ -157,12 +165,16 @@ suite("Python Processes — pure projection of store Signals (#148)", () => {
 
     // Failing client → error, and any stale rows are dropped.
     const failing = createStore();
-    const client = {
+    // A stand-in for the members the code under test calls. No runtime check
+  // can produce the rest of `LanguageClient`, so the test double itself is
+  // the one assertion here — it is not a payload being read.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- see above.
+  const client = {
       isRunning: (): boolean => true,
       onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
       sendRequest: async (): Promise<unknown> => { throw new Error("disconnected"); },
     } as unknown as LanguageClient;
-    failing.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, client);
+    failing.setClient({ subscriptions: [] }, client);
     failing.processesLoaded([proc(1)]);
     await fetchProcessesIntoStore(failing);
     assert.strictEqual(failing.processes.value.fetch, "error");

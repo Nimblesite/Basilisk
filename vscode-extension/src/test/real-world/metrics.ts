@@ -10,6 +10,7 @@
  * means the server crashed and restarted, which is a failure, not a detail).
  */
 
+import { delay } from '../../timeouts';
 import * as assert from 'assert';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
@@ -131,10 +132,6 @@ export function cpuPercentBetween(prev: ProcessSample, next: ProcessSample): num
     return ((next.cpuMs - prev.cpuMs) / wallMs) * 100;
 }
 
-async function sleep(ms: number): Promise<void> {
-    await new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * Tracks the basilisk server + extension host across a journey and asserts
  * every budget in the corpus manifest. Every assert*() call is a real gate:
@@ -182,7 +179,7 @@ export class ResourceMonitor {
             try {
                 const pid = resolvePid();
                 const first = sampleProcess(pid);
-                await sleep(PID_STABILITY_GAP_MS);
+                await delay(PID_STABILITY_GAP_MS);
                 if (resolvePid() === pid) {
                     return new ResourceMonitor({ resolvePid, budgets, repo, pid, first });
                 }
@@ -190,7 +187,7 @@ export class ResourceMonitor {
             } catch (error: unknown) {
                 lastError = error instanceof Error ? error.message : String(error);
             }
-            await sleep(PID_STABILITY_GAP_MS);
+            await delay(PID_STABILITY_GAP_MS);
         }
         assert.fail(
             `[${repo}] could not lock onto a stable basilisk server process ` +
@@ -271,7 +268,7 @@ export class ResourceMonitor {
         let calmWindows = 0;
         let lastPct = Number.POSITIVE_INFINITY;
         while (Date.now() < deadline) {
-            await sleep(CPU_WINDOW_MS);
+            await delay(CPU_WINDOW_MS);
             const next = this.sample(phase);
             lastPct = cpuPercentBetween(prev, next);
             prev = next;

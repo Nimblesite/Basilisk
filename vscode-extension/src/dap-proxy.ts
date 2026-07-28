@@ -26,6 +26,7 @@
  * (activeDebugSession is cleared before onDidTerminateDebugSession fires).
  */
 
+import { asRecord, booleanField, numberField, rawField, recordArrayField, recordField, stringField } from "./unknown-shape";
 import * as net from "net";
 import * as fs from "fs";
 import { Logger } from "./logger";
@@ -51,6 +52,45 @@ export interface DapMessage {
   success?: boolean;
   body?: unknown;
   arguments?: Record<string, unknown>;
+}
+
+/**
+ * Decode one DAP wire frame, or `undefined` when the bytes are not a DAP
+ * message.
+ *
+ * `type` is the one field every branch of the proxy switches on, so it is
+ * checked here rather than assumed: a frame without it would otherwise flow
+ * through every `msg.type === ...` comparison as a silent no-match.
+ */
+export function parseDapMessage(body: string): DapMessage | undefined {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+  const type = stringField(decoded, "type");
+  if (type === undefined) {
+    return undefined;
+  }
+  const record = asRecord(decoded);
+  return {
+    // The proxy is a relay — `sendToClient`/`sendToDebugpy` re-serialise what
+    // was decoded here — so every field the wire carried is kept, including the
+    // ones nothing below reads: the standard `message` that carries an error
+    // back to the user on a failed response, and any adapter-specific
+    // extension. The named fields below then re-state the handful the proxy
+    // itself switches on, checked rather than assumed.
+    ...record,
+    type,
+    seq: numberField(record, "seq"),
+    request_seq: numberField(record, "request_seq"),
+    command: stringField(record, "command"),
+    event: stringField(record, "event"),
+    success: booleanField(record, "success"),
+    body: rawField(record, "body"),
+    arguments: recordField(record, "arguments"),
+  };
 }
 
 // Implements [PROFILE-LAUNCH-NOSTOP]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-LAUNCH-NOSTOP
@@ -249,8 +289,8 @@ export class DapTcpProxy {
       const body = this.clientBuffer.subarray(bodyStart, bodyStart + bodyLen).toString("utf-8");
       this.clientBuffer = this.clientBuffer.subarray(bodyStart + bodyLen);
 
-      let msg: DapMessage;
-      try { msg = JSON.parse(body) as DapMessage; } catch { continue; }
+      const msg = parseDapMessage(body);
+      if (msg === undefined) { continue; }
       this.processFromClient(msg);
     }
   }
@@ -274,8 +314,8 @@ export class DapTcpProxy {
       const body = this.debugpyBuffer.subarray(bodyStart, bodyStart + bodyLen).toString("utf-8");
       this.debugpyBuffer = this.debugpyBuffer.subarray(bodyStart + bodyLen);
 
-      let msg: DapMessage;
-      try { msg = JSON.parse(body) as DapMessage; } catch { continue; }
+      const msg = parseDapMessage(body);
+      if (msg === undefined) { continue; }
       this.processFromDebugpy(msg);
     }
   }
@@ -342,13 +382,13 @@ export class DapTcpProxy {
 
     if (msg.type === "request" && msg.command === "stepOut") {
       this.pendingStepOutSeq = msg.seq;
-      this.stepOutThreadId = msg.arguments?.threadId as number | undefined;
+      this.stepOutThreadId = numberField(msg.arguments, "threadId");
       this.awaitingStepOutStop = false;
     }
 
     if (msg.type === "request" && msg.command === "next") {
       this.pendingNextSeq = msg.seq;
-      this.nextThreadId = msg.arguments?.threadId as number | undefined;
+      this.nextThreadId = numberField(msg.arguments, "threadId");
       this.awaitingNextStop = false;
       Logger.debug(`[DAP Proxy] outgoing next seq=${msg.seq}`);
     }
@@ -421,7 +461,7 @@ export class DapTcpProxy {
       return false;
     }
     this.awaitingStepOutStop = false;
-    const tid = (msg.body as { threadId?: number })?.threadId ?? this.stepOutThreadId;
+    const tid = numberField(msg.body, "threadId") ?? this.stepOutThreadId;
     Logger.info(`[DAP Proxy] injecting next after stepOut (thread ${tid})`);
     this.injectedSeq++;
     this.sendToDebugpy({
@@ -456,7 +496,7 @@ export class DapTcpProxy {
       return false;
     }
     this.awaitingNextStop = false;
-    const tid = (msg.body as { threadId?: number })?.threadId ?? this.nextThreadId;
+    const tid = numberField(msg.body, "threadId") ?? this.nextThreadId;
     this.pendingStoppedMsg = msg;
     this.injectedSeq++;
     this.pendingStackTraceSeq = this.injectedSeq;
@@ -503,15 +543,16 @@ export class DapTcpProxy {
   // skipped, matching the spec.
   /** Check if the top frame is a structural line and inject a skip if so. */
   private trySkipStructuralLine(stackMsg: DapMessage, stoppedMsg: DapMessage): boolean {
-    const frames = (stackMsg.body as { stackFrames?: { line?: number; source?: { path?: string } }[] })?.stackFrames;
-    if (!frames || frames.length === 0) {return false;}
+    const frames = recordArrayField(stackMsg.body, "stackFrames");
+    const top = frames[0];
+    if (top === undefined) {return false;}
 
-    const line = frames[0].line;
-    const filePath = frames[0].source?.path;
+    const line = numberField(top, "line");
+    const filePath = stringField(recordField(top, "source"), "path");
     if (line === undefined || filePath === undefined || filePath === "") {return false;}
     if (!this.isStructuralLine(filePath, line)) {return false;}
 
-    const tid = (stoppedMsg.body as { threadId?: number })?.threadId ?? this.nextThreadId;
+    const tid = numberField(stoppedMsg.body, "threadId") ?? this.nextThreadId;
     Logger.info(`[DAP Proxy] skipping structural line ${line} in ${filePath.split("/").pop()}`);
     this.awaitingNextStop = true;
     this.injectedSeq++;
@@ -601,12 +642,13 @@ export class DapTcpProxy {
 
     if (msg.event === "exited") {
       this.sawExitedEvent = true;
-      Logger.info(`[DAP Proxy] exited, code=${(msg.body as { exitCode?: number })?.exitCode}`);
+      Logger.info(`[DAP Proxy] exited, code=${numberField(msg.body, "exitCode")}`);
     }
 
     if (msg.event === "thread") {
-      const body = msg.body as { reason?: string; threadId?: number };
-      Logger.info(`[DAP Proxy] thread: reason=${body.reason}, id=${body.threadId}`);
+      const reason = stringField(msg.body, "reason");
+      const threadId = numberField(msg.body, "threadId");
+      Logger.info(`[DAP Proxy] thread: reason=${reason}, id=${threadId}`);
     }
 
     if (msg.event === "terminated") {
