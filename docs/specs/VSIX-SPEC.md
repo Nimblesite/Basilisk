@@ -503,3 +503,19 @@ Invariants:
 - **Intentional difference:** local builds keep `0.0.0-PLACEHOLDER`; `release.yml` runs `stamp-version.sh` first. Structure and binaries are identical; only the embedded version string differs, staying internally consistent (manifest and binary agree).
 
 `verify-shipwright.mjs vsix` enforces the bundle matches the manifest on every path (rejecting missing, unmanifested, or wrong-platform binaries), so drift fails the build rather than shipping.
+
+## Cross-Platform CI Coverage {#VSIX-CI-PLATFORM-COVERAGE}
+
+The VSIX ships `win32-x64` and `win32-arm64` binaries (`shipwright.json`), so **Windows is a supported target and must be tested as one**. Testing only on Linux lets win32-only defects — a missing `.exe` suffix, a `/` vs `\` separator, a per-platform bundle path that never resolves — reach users untested; that is precisely how a Windows install can report a missing binary while every CI job is green.
+
+| Job (`.github/workflows/ci.yml`) | Runner | What it runs |
+|---|---|---|
+| `test-vscode` | `ubuntu-24.04` | `make _test_vsix` — packaged release VSIX, `workspace-suite` + the real-world corpus, coverage ratchet |
+| `test-vscode-windows` | `windows-latest` | the same `workspace-suite` (all of `src/test/suite`, including the DAP debugger and CPU/memory profiler suites) natively on Windows |
+
+Invariants:
+
+- **Same tests, not a Windows-only subset.** The Windows job runs the `workspace-suite` label from `.vscode-test.mjs` — the identical test files the Linux job runs. There is no separate Windows test list to drift, and no `BSK_TEST_GREP` filter narrowing it.
+- **Same staging path.** The Windows job stages its bundle through `stage-runtime.mjs` and `vendor-debugpy.mjs` ([VSIX-PACKAGING-PARITY]), so it exercises the real `bin/win32-x64/basilisk.exe` layout a user installs, not an ad-hoc one.
+- **It gates the merge.** `test-vscode-windows` is in the `build` gate's `needs`, so a Windows regression blocks the PR exactly like a Linux one.
+- **Single-ownership of the ratchets.** The Windows job deliberately skips VSIX packaging, ESLint, and the coverage threshold — the Linux job owns those, and duplicating them would double the failure surface without adding platform signal.
