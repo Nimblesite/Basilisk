@@ -31,20 +31,25 @@ import {
   manifestCommands
 } from "./extension-manifest";
 
-/** Extra time for the restart cycle test. */
-
-/** Timeout for cross-session (deactivate/activate) tests. */
-
 /** Number of consecutive deactivate/activate cycles to test. */
 const MULTI_CYCLE_COUNT = 3;
 
 /** Brief settle time after restart. */
 const RESTART_SETTLE_MS = 500;
 
+/**
+ * Mocha budget for ONE test that fully restarts the language server.
+ *
+ * The suite default (45s, .vscode-test.mjs) is sized for tests that do not
+ * respawn the server binary. These do, and a cold win32 runner spends real
+ * time on it — so a test driving three restarts needs three times the budget,
+ * not the same one. Exceeding the default reports as a bare Mocha timeout that
+ * names nothing; `pollUntilReady` inside it reports the state it observed.
+ */
+const RESTART_TEST_TIMEOUT_MS = 60_000;
+
 /** Budget for a replaced LSP client to stop after store.reset() (#264). */
 const ZOMBIE_STOP_TIMEOUT_MS = 5_000;
-
-/** Poll interval for waiting on command availability. */
 
 /**
  * All commands declared in package.json contributes.commands — read from the
@@ -356,6 +361,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     // 9. Client commands survive a restart cycle (dispose + re-register)
     // ----------------------------------------------------------------
     test('client commands survive a full LSP restart cycle', async function () {
+        this.timeout(RESTART_TEST_TIMEOUT_MS);
 
         const store = getStore();
         assert.ok(store, 'Store should be available');
@@ -383,6 +389,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     // 10. store.reset() disposes all client commands
     // ----------------------------------------------------------------
     test('store.reset() clears all client command tracking', async function () {
+        this.timeout(RESTART_TEST_TIMEOUT_MS);
 
         const store = getStore();
         assert.ok(store, 'Store should be available');
@@ -427,6 +434,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     //     cleared (the flaky openFilesOnly diagnostics-clear failure).
     // ----------------------------------------------------------------
     test('store.reset() stops the replaced LSP client — no zombie publisher (#264)', async function () {
+        this.timeout(RESTART_TEST_TIMEOUT_MS);
         const store = getStore();
         assert.ok(store, 'Store should be available');
         await pollUntilReady(LSP_RESTART_WAIT_MS);
@@ -465,6 +473,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     //     they must be re-registered without errors.
     // ----------------------------------------------------------------
     test('CROSS-SESSION: deactivate then activate does not throw duplicate command errors', async function () {
+        this.timeout(RESTART_TEST_TIMEOUT_MS);
 
         const storeBefore = getStore();
         assert.ok(storeBefore, 'Store should exist in session 1');
@@ -513,6 +522,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     // 12. CROSS-SESSION: three consecutive deactivate/activate cycles
     // ----------------------------------------------------------------
     test('CROSS-SESSION: three consecutive deactivate/activate cycles', async function () {
+        this.timeout(MULTI_CYCLE_COUNT * RESTART_TEST_TIMEOUT_MS);
 
         for (let cycle = 1; cycle <= MULTI_CYCLE_COUNT; cycle++) {
             const tag = `Cycle ${cycle}`;
@@ -545,6 +555,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     // 13. CROSS-SESSION: all server commands re-advertised after cycle
     // ----------------------------------------------------------------
     test('CROSS-SESSION: all server commands re-advertised after deactivate/activate', async function () {
+        this.timeout(RESTART_TEST_TIMEOUT_MS);
 
         // Ensure we start in a good state.
         await pollUntilReady(LSP_RESTART_WAIT_MS);
@@ -594,6 +605,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     //     build).
     // ----------------------------------------------------------------
     test('CROSS-SESSION: server commands survive three rapid deactivate/activate cycles', async function () {
+        this.timeout(MULTI_CYCLE_COUNT * RESTART_TEST_TIMEOUT_MS);
 
         // Snapshot from current session.
         await pollUntilReady(LSP_RESTART_WAIT_MS);
@@ -639,6 +651,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     // 15. CROSS-SESSION: client commands are executable after refresh
     // ----------------------------------------------------------------
     test('CROSS-SESSION: client commands are executable after deactivate/activate', async function () {
+        this.timeout(RESTART_TEST_TIMEOUT_MS);
 
         const stopPromise = deactivate();
         if (stopPromise !== undefined) {
