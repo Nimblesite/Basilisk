@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("usage: ift_measure <path-to-ift-benchmark Pyright/main.py>")?;
     let source = std::fs::read_to_string(&path)?;
 
-    let parsed = basilisk_parser::parse_source(source.clone(), path.clone())
+    let parsed = basilisk_parser::parse_source(source.clone(), path)
         .map_err(|error| format!("benchmark file must parse: {error}"))?;
     let resolved = basilisk_resolver::resolve(&parsed)
         .map_err(|error| format!("benchmark file must resolve: {error}"))?;

@@ -85,20 +85,17 @@ pub(super) fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)
                     || bytes.get(ann_start + 2) == Some(&b' '))
         };
 
+        // Both `continue` arms below used to re-assign `idx` themselves, which
+        // read and wrote it inside one expression; the tail assignment already
+        // covers every path out of the iteration.
         if has_cv {
-            let Some(span_start) = u32::try_from(idx).ok() else {
-                idx = attr_end;
-                continue;
-            };
-            let Some(span_end) = u32::try_from(attr_end).ok() else {
-                idx = attr_end;
-                continue;
-            };
-            let span = Span {
-                start: span_start,
-                end: span_end,
-            };
-            results.push((attr_name, span));
+            if let (Ok(span_start), Ok(span_end)) = (u32::try_from(idx), u32::try_from(attr_end)) {
+                let span = Span {
+                    start: span_start,
+                    end: span_end,
+                };
+                results.push((attr_name, span));
+            }
         }
 
         idx = attr_end;

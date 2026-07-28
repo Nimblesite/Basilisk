@@ -211,6 +211,10 @@ pub fn format_bytes(bytes: u64) -> String {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "test-only: a parse that defies its fixture must abort naming the expectation"
+)]
 mod tests {
     use super::*;
 
@@ -240,7 +244,7 @@ more output"#;
     fn parse_missing_marker() {
         let output = "no marker here";
         let result = parse_snapshot_output(output, "snap-001");
-        assert!(result.is_err());
+        let _error = result.expect_err("output without the marker cannot yield a snapshot");
     }
 
     #[test]

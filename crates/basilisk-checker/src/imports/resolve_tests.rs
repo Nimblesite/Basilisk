@@ -42,7 +42,8 @@ fn custom_snapshot(modules: &[(&str, &str)]) -> ActiveTypeshed {
     let versions = modules
         .iter()
         .fold(String::new(), |mut versions, (module, _)| {
-            assert!(writeln!(&mut versions, "{module}: 3.0-").is_ok());
+            // Writing into a `String` cannot fail.
+            let _ = writeln!(&mut versions, "{module}: 3.0-");
             versions
         });
     let mut entries = if versions.is_empty() {

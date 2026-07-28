@@ -369,7 +369,7 @@ mod tests {
     #[test]
     fn test_build_module_tree_two_files() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
         let uri_a = make_uri("/workspace/alpha.py");
         let uri_b = make_uri("/workspace/beta.py");
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
@@ -399,7 +399,7 @@ mod tests {
     #[test]
     fn test_build_module_tree_kind_for_init_py() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
         let uri = make_uri("/workspace/pkg/__init__.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn test_build_module_tree_kind_for_regular_module() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
         let uri = make_uri("/workspace/mod.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
@@ -431,7 +431,7 @@ mod tests {
     #[test]
     fn test_build_module_tree_scope_filter() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
         let uri_a = make_uri("/workspace/pkg/a.py");
         let uri_b = make_uri("/workspace/other/b.py");
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
@@ -453,7 +453,7 @@ mod tests {
     #[test]
     fn test_disabled_toggle_serves_no_grading_data() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
         // Unannotated symbols → low coverage that would tint rows red if served.
         let uri = make_uri("/workspace/untyped.py");
         let _ = idx.set_open(&uri, "def bare(a):\n    return a\n\nb = 2\n", 1);
@@ -494,7 +494,7 @@ mod tests {
     #[test]
     fn test_enabled_toggle_stamps_flag_and_serves_grading() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
         let uri = make_uri("/workspace/mod.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
@@ -520,7 +520,7 @@ mod tests {
     #[test]
     fn test_module_nodes_carry_symbol_counts_for_folder_rollup() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
         // Half-annotated file: 1 of 2 symbols annotated.
         let uri = make_uri("/workspace/pkg/partial.py");
         let _ = idx.set_open(&uri, "a: int = 1\nb = 2\n", 1);
@@ -562,7 +562,7 @@ mod tests {
     #[test]
     fn test_module_nodes_carry_navigable_diagnostics() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
         let uri = make_uri("/workspace/broken.py");
         let _ = idx.set_open(&uri, "x: int = \"not an int\"\n", 1);
 
@@ -629,7 +629,7 @@ mod tests {
     #[test]
     fn test_disabled_toggle_serves_empty_diagnostics() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
         let uri = make_uri("/workspace/broken.py");
         let _ = idx.set_open(&uri, "x: int = \"not an int\"\n", 1);
 
@@ -714,7 +714,7 @@ mod tests {
     #[test]
     fn test_build_module_tree_folds_health_rollup() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
         // Fully annotated file (100%) and a half-annotated file.
         let uri_full = make_uri("/workspace/full.py");
         let uri_partial = make_uri("/workspace/partial.py");

@@ -151,6 +151,10 @@ pub(super) enum SelectionError {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "test-only: a rule missing from the live registry must abort naming it"
+)]
 mod tests {
     use std::collections::HashMap;
 
@@ -200,9 +204,7 @@ mod tests {
         let catalog = descriptors();
         assert_eq!(catalog.len(), basilisk_checker::rule_catalog().len());
         let annotation = catalog.iter().find(|rule| rule.code == "BSK-0001");
-        let Some(annotation) = annotation else {
-            unreachable!("BSK-0001 must exist in the live registry");
-        };
+        let annotation = annotation.expect("BSK-0001 must exist in the live registry");
         assert!(annotation.docs_url.contains("BSK-0001"));
         assert!(!annotation.title.is_empty());
         assert!(!annotation.tags.is_empty());
@@ -220,9 +222,8 @@ mod tests {
         let analyze = catalog
             .iter()
             .find(|rule| !basilisk_checker::is_pep_rule(&rule.code));
-        let (Some(pep), Some(analyze)) = (pep, analyze) else {
-            unreachable!("registry holds both pep and analyze rules");
-        };
+        let pep = pep.expect("the registry holds at least one pep rule");
+        let analyze = analyze.expect("the registry holds at least one analyze rule");
         let bare = basilisk_config::BasiliskConfig::default();
         assert_eq!(effective_severity(pep, &bare), RuleSeverity::Error);
         assert_eq!(effective_severity(analyze, &bare), RuleSeverity::Disabled);

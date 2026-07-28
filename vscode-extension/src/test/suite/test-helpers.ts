@@ -6,6 +6,7 @@
  * every test file: binary discovery, diagnostic polling, file management.
  */
 
+import { delay } from '../../timeouts';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -183,7 +184,7 @@ export async function pollUntilResult<T>(
     while (Date.now() < deadline) {
         const result = await fn();
         if (predicate(result)) {return result;}
-        await new Promise<void>((r) => setTimeout(r, intervalMs));
+        await delay(intervalMs);
     }
     // One final attempt after deadline.
     const last = await fn();
@@ -263,7 +264,7 @@ export async function waitForLspReady(): Promise<void> {
         if (store !== undefined && store.serverCommands.value.size > 0) {
             return;
         }
-        await new Promise<void>((r) => setTimeout(r, SERVER_READINESS_POLL_INTERVAL_MS));
+        await delay(SERVER_READINESS_POLL_INTERVAL_MS);
     }
     throw new Error(describeLspStartTimeout(getStoreFromExtension()));
 }

@@ -64,13 +64,14 @@ mod cases {
         let root = tempfile::tempdir().expect("tempdir");
         let api = FakeApi::new(fake_repo());
         let requested = api.repo.commit;
-        assert!(download_commit(
+        let outcome = download_commit(
             requested,
             Some(root.path().to_path_buf()),
             &api,
-            &|_phase| {}
+            &|_phase| {},
         )
-        .is_ok());
+        .expect("the requested commit resolves to itself and materialises");
+        assert_eq!(outcome.commit, requested);
 
         let other_root = tempfile::tempdir().expect("tempdir");
         let other = git_blob_oid(b"a different commit entirely");

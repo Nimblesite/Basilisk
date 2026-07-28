@@ -8,6 +8,7 @@
 // user sees: leak confidence escalating LOW→MEDIUM→HIGH, the purple + leak
 // decorations painted, and exactly one proactive leak-action offer. No mocks.
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import * as fs from "fs";
@@ -192,7 +193,7 @@ async function offSwitchSuppressesAutoCapture(): Promise<void> {
   // Continue to the next pass and give any (erroneous) auto-capture time to fire.
   await resume();
   await waitForPause();
-  await new Promise<void>((r) => setTimeout(r, QUIET_SETTLE_MS));
+  await delay(QUIET_SETTLE_MS);
 
   assert.strictEqual(
     recordedAutopilotCaptures().length,

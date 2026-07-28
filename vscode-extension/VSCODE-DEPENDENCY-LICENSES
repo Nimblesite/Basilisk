@@ -2,7 +2,7 @@ Basilisk VS Code Production Dependency Licenses
 =================================================
 
 Generated from the exact npm production graph selected by package-lock.json.
-Production graph SHA-256: 43f5f5fd0daae31342024112becb94923452b92c929a2820b1eb50eca7f9f186
+Production graph SHA-256: 922d9bba467a8f83be41a8d8781c1c25de27456c0effbef572ce65952ade6aa6
 Regenerate with: npm run licenses:update
 
 ===============================================================================
@@ -64,7 +64,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ===============================================================================
-@preact/signals-core 1.14.3
+@preact/signals-core 1.14.4
 License: MIT
 Repository: https://github.com/preactjs/signals
 Source: LICENSE
@@ -241,7 +241,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ===============================================================================
-vscode-jsonrpc 9.0.0
+vscode-jsonrpc 9.0.1
 License: MIT
 Repository: https://github.com/Microsoft/vscode-languageserver-node.git
 Source: License.txt
@@ -280,7 +280,7 @@ Notwithstanding any other terms, you may reverse engineer this software to the e
 required to debug changes to any libraries licensed under the GNU Lesser General Public License.
 
 ===============================================================================
-vscode-languageclient 10.0.1
+vscode-languageclient 10.1.0
 License: MIT
 Repository: https://github.com/Microsoft/vscode-languageserver-node.git
 Source: License.txt
@@ -299,7 +299,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ===============================================================================
-vscode-languageserver-protocol 3.18.1
+vscode-languageserver-protocol 3.18.2
 License: MIT
 Repository: https://github.com/Microsoft/vscode-languageserver-node.git
 Source: License.txt

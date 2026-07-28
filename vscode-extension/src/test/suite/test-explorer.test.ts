@@ -14,6 +14,7 @@
  *   - Server-advertised vs client-registered command distinction
  */
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import * as path from "path";
@@ -800,7 +801,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
     });
 
     // Give the notification a moment to arrive.
-    await new Promise<void>((r) => setTimeout(r, 500));
+    await delay(500);
     disposable.dispose();
 
     // The notification may or may not fire depending on whether the server
@@ -912,7 +913,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
     );
 
     // Give it a moment.
-    await new Promise<void>((r) => setTimeout(r, 200));
+    await delay(200);
     disposable.dispose();
 
     // Handler registration should not throw.

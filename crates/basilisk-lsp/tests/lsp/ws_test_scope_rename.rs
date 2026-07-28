@@ -646,3 +646,189 @@ async fn test_ws_rename_nested_function_shadow() -> TestResult<()> {
 
     Ok(())
 }
+
+/// A `WorkspaceEdit` must never contain two edits covering the same range.
+/// The LSP spec forbids overlapping edit ranges within one `changes` entry,
+/// and identical ranges overlap.
+///
+/// Regression test for `rename_symbol` unioning the scope-aware sweep with
+/// `find_keyword_arg_sites` and never de-duplicating: for a parameter with a
+/// default (`def f(x=1)`) the `def` line satisfies BOTH sweeps, so the
+/// definition range was emitted twice and clients rejected the whole rename.
+#[tokio::test]
+async fn test_ws_rename_defaulted_parameter_has_no_duplicate_edits() -> TestResult<()> {
+    let uri = "file:///scope_rename_dup_default.py";
+    let code = "def f(x=1) -> int:\n    return x\n\nresult: int = f(x=2)\n";
+
+    // Rename the `x` parameter (line 0, char 6).
+    let (_fixture, resp) = open_and_request(
+        uri,
+        code,
+        515,
+        "textDocument/rename",
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 6 },
+            "newName": "quantity"
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let edits = parsed["result"]["changes"][uri]
+        .as_array()
+        .expect("file edits must be an array")
+        .clone();
+
+    let mut ranges: Vec<String> = edits.iter().map(|edit| edit["range"].to_string()).collect();
+    ranges.sort();
+    let mut unique = ranges.clone();
+    unique.dedup();
+    assert_eq!(
+        ranges.len(),
+        unique.len(),
+        "WorkspaceEdit must not contain duplicate ranges: {resp}"
+    );
+
+    Ok(())
+}
+
+/// `__all__` handling must stay inside the `__all__` statement. A trailing
+/// comment (or the tuple form) used to leave the block "open" forever, so the
+/// first quoted match on every later line was rewritten as if it were an
+/// export entry — silently corrupting ordinary string literals.
+#[tokio::test]
+async fn test_ws_rename_dunder_all_with_trailing_comment_spares_string_literals() -> TestResult<()>
+{
+    let uri = "file:///scope_rename_all_comment.py";
+    let code = "__all__ = [\"run\"]  # public API\n\n\ndef run() -> None:\n    print(\"run\")\n";
+
+    // Rename the function `run` (line 3, char 4).
+    let (_fixture, resp) = open_and_request(
+        uri,
+        code,
+        516,
+        "textDocument/rename",
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 3, "character": 4 },
+            "newName": "execute"
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let edits = parsed["result"]["changes"][uri]
+        .as_array()
+        .expect("file edits must be an array")
+        .clone();
+
+    // Legitimate edits: the `__all__` entry (line 0) and the def (line 3).
+    // The `print("run")` string on line 4 must NOT be touched.
+    for edit in &edits {
+        let line = edit["range"]["start"]["line"].as_u64().unwrap();
+        assert!(
+            line == 0 || line == 3,
+            "rename must not rewrite the string literal on line {line}: {edit}"
+        );
+    }
+    let has_all_entry = edits
+        .iter()
+        .any(|edit| edit["range"]["start"]["line"].as_u64() == Some(0));
+    assert!(
+        has_all_entry,
+        "the __all__ entry must still be renamed: {resp}"
+    );
+
+    Ok(())
+}
+
+/// Strings in `Literal[...]` are values, not forward references. The
+/// annotation exemption in the string mask must cover only type-expression
+/// positions, never `Literal` arguments.
+#[tokio::test]
+async fn test_ws_rename_skips_literal_string_values() -> TestResult<()> {
+    let uri = "file:///scope_rename_literal.py";
+    let code = "from typing import Literal\n\nMode = \"fast\"\n\n\ndef run(mode: Literal[\"Mode\"]) -> None:\n    print(Mode, mode)\n";
+
+    // Rename the module variable `Mode` (line 2, char 0).
+    let (_fixture, resp) = open_and_request(
+        uri,
+        code,
+        517,
+        "textDocument/rename",
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 2, "character": 0 },
+            "newName": "Kind"
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let edits = parsed["result"]["changes"][uri]
+        .as_array()
+        .expect("file edits must be an array")
+        .clone();
+
+    // Only the definition (line 2) and the `print(Mode, ...)` usage (line 6).
+    // The `Literal["Mode"]` value on line 5 is data.
+    for edit in &edits {
+        let line = edit["range"]["start"]["line"].as_u64().unwrap();
+        assert!(
+            line == 2 || line == 6,
+            "rename must not rewrite the Literal value on line {line}: {edit}"
+        );
+    }
+
+    Ok(())
+}
+
+/// LSP `Position.character` is a UTF-16 code-unit offset. The keyword-argument
+/// sweep emitted raw byte indices, so any non-ASCII character earlier on the
+/// line shifted the edit right and corrupted the source.
+#[tokio::test]
+async fn test_ws_rename_kwarg_range_uses_utf16_columns() -> TestResult<()> {
+    let uri = "file:///scope_rename_utf16_kwarg.py";
+    // The en dash on the call line is 3 bytes but 1 UTF-16 code unit, so a
+    // byte-indexed column would report `body` two columns too far right.
+    let code = "def notify(title: str, body: str) -> None:\n    print(title, body)\n\n\nnotify(title=\"Erfolg \u{2013} gespeichert\", body=\"ok\")\n";
+
+    // Rename the `body` parameter (line 0, char 23).
+    let (_fixture, resp) = open_and_request(
+        uri,
+        code,
+        518,
+        "textDocument/rename",
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 23 },
+            "newName": "message"
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let edits = parsed["result"]["changes"][uri]
+        .as_array()
+        .expect("file edits must be an array")
+        .clone();
+
+    // `body=` on the call line starts at UTF-16 column 37.
+    let kwarg_edit = edits
+        .iter()
+        .find(|edit| edit["range"]["start"]["line"].as_u64() == Some(4));
+    let kwarg_edit = kwarg_edit.expect("the keyword-argument site must be renamed");
+    assert_eq!(
+        kwarg_edit["range"]["start"]["character"].as_u64(),
+        Some(37),
+        "kwarg column must be a UTF-16 offset, not a byte offset: {kwarg_edit}"
+    );
+    assert_eq!(
+        kwarg_edit["range"]["end"]["character"].as_u64(),
+        Some(41),
+        "kwarg end column must be a UTF-16 offset: {kwarg_edit}"
+    );
+
+    Ok(())
+}

@@ -10,7 +10,9 @@ Chapter 4's executable checkpoint lives in
 assignment, function, collection, and callback compatibility in
 [`ch05-compatibility/`](ch05-compatibility/). Chapter 6 follows inference,
 narrowing, a user-defined type guard, and exhaustive routing in
-[`ch06-narrowing/`](ch06-narrowing/). Chapter 9 uses
+[`ch06-narrowing/`](ch06-narrowing/). Chapter 7 separates validated external
+data, domain models, storage behavior, and generic report pages in
+[`ch07-structured-contracts/`](ch07-structured-contracts/). Chapter 9 uses
 [`signal-box/`](signal-box/) with its explicit annotation policy and
 deliberately incomplete functions to capture the real configuration editor and
 its path preview. Run that capture reproducibly with `make -C book screenshots`
@@ -22,13 +24,11 @@ Planned checkpoints:
 2. everyday annotations, unions, and aliases;
 3. assignments, function contracts, mutable collections, and callbacks;
 4. narrowing and exhaustive routing;
-5. `TypedDict` input transformed into a dataclass;
-6. a storage protocol and generic report page;
-7. a simulated untyped vendor package plus reviewed local stub;
-8. explicit project rule policy;
-9. bounded fixes and file adoption;
-10. cross-file navigation and refactoring; and
-11. tests, a debug scenario, a CPU hot path, and CI.
+5. a simulated untyped vendor package plus reviewed local stub;
+6. explicit project rule policy;
+7. bounded fixes and file adoption;
+8. cross-file navigation and refactoring; and
+9. tests, a debug scenario, a CPU hot path, and CI.
 
 Every published checkpoint must agree with the governing Basilisk spec, pinned
 release implementation, and executable tests. If those sources disagree, the

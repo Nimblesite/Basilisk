@@ -9,6 +9,7 @@
 // subscriber, and that the poll feeding the store lives store-side
 // (process-poll.ts), gated on view visibility.
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { type LanguageClient } from "vscode-languageclient/node";
@@ -139,7 +140,7 @@ suite("Python Processes — pure projection of store Signals (#148)", () => {
       // The immediate fetch is fire-and-forget; wait for the signal to settle.
       const deadline = Date.now() + 2000;
       while (store.processes.value.fetch !== "loaded" && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await delay(10);
       }
       assert.strictEqual(store.processes.value.fetch, "loaded", "the store-side poll must fetch on bind");
       assert.deepStrictEqual(store.processes.value.list.map((p) => p.pid), [42], "the fetch landed in the store signal");

@@ -406,7 +406,7 @@ mod tests {
         assert_eq!(effective.version, Some(11));
         assert_eq!(effective.document.content, repaired);
         assert!(state.close_document(&uri).is_some());
-        assert!(state.effective_document(&root).is_err());
+        let _error = state.effective_document(&root).unwrap_err();
         let _ = std::fs::remove_dir_all(root);
     }
 
@@ -425,7 +425,7 @@ mod tests {
         };
         let rendered = build_rule_patch(&document, &update).unwrap();
         let applied = ConfigDocument {
-            root: document.root.clone(),
+            root: document.root,
             path: rendered.path.clone(),
             exists: true,
             read_only: false,

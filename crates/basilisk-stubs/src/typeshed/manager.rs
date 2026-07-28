@@ -230,8 +230,14 @@ mod tests {
             },
             Arc::<CountingBackend>::clone(&backend),
         );
-        assert!(manager.snapshot().is_err());
-        assert!(manager.status().is_err());
+        let snapshot_error = manager
+            .snapshot()
+            .expect_err("a terminal custom-source failure never yields a snapshot");
+        assert!(matches!(snapshot_error, SelectionError::Custom(_)));
+        let status_error = manager
+            .status()
+            .expect_err("the memoized failure is reported by status too");
+        assert!(matches!(status_error, SelectionError::Custom(_)));
         assert_eq!(backend.custom_calls.load(Ordering::SeqCst), 1);
         assert!(manager.ready_snapshot().is_none());
     }

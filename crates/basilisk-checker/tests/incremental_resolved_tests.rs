@@ -359,10 +359,8 @@ fn editing_a_non_stub_imported_file_does_not_reparse_the_importer() {
         "y = 1\n".to_owned(),
     );
     let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![dir.clone()]));
-    let workspace = WorkspaceFiles::new(
-        &db,
-        FileRegistry(HashMap::from([(b_path.clone(), b), (c_path.clone(), c)])),
-    );
+    let workspace =
+        WorkspaceFiles::new(&db, FileRegistry(HashMap::from([(b_path, b), (c_path, c)])));
 
     let _first = resolved_module(&db, a, search_paths, workspace);
     let _ = db.executions_of("resolved_module"); // drain priming
@@ -420,7 +418,7 @@ fn editing_a_user_stub_updates_the_importer_diagnostics() {
     sp.stub_paths = vec![stub_dir.clone()];
     let search_paths = SearchPathsInput::new(&db, sp);
     let config = default_config(&db);
-    let workspace = WorkspaceFiles::new(&db, FileRegistry(HashMap::from([(x_pyi.clone(), x)])));
+    let workspace = WorkspaceFiles::new(&db, FileRegistry(HashMap::from([(x_pyi, x)])));
 
     let before = file_diagnostics_resolved(&db, a, config, search_paths, workspace);
     assert!(

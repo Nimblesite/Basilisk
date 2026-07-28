@@ -144,6 +144,10 @@ fn typeshed_policy_changed(before: &BasiliskConfig, after: &BasiliskConfig) -> b
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "test-only: a pin change that stages nothing must abort naming the stage"
+)]
 mod tests {
     use basilisk_config::BasiliskConfig;
 
@@ -196,9 +200,7 @@ mod tests {
         after.typeshed_store_path = Some(store.clone());
         let staged =
             stage_configuration_change(std::path::Path::new("/workspace"), &before, &after).await;
-        let Some(staged) = staged else {
-            unreachable!("a pin change must stage a resolution");
-        };
+        let staged = staged.expect("a pin change must stage a resolution");
         assert!(staged.candidate().is_none());
         let state = staged.next.status_state();
         assert_eq!(

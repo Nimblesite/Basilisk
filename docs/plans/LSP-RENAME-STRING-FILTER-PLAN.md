@@ -144,6 +144,55 @@ target the bug and nothing else:
 Plus 5 unit tests in `source_mask.rs` (strings/docstrings/comments masked; f-string
 fields and annotation strings exempt; parse-failure fallback).
 
+## Follow-up round: four more bugs found and fixed in the same neighbourhood
+
+A 5-finder adversarial hunt (run `wf_aa2ba10c-67c`) over references/scope_tree/source_mask/
+navigation/highlight surfaced 10 candidates. Four were both obvious and egregious and were
+fixed here, each test-first via the fix-bug workflow:
+
+1. **Duplicate (overlapping) TextEdits** — `rename_symbol` unioned four sweeps and never
+   de-duplicated, so a defaulted parameter (`def f(x=1)`) had its definition range emitted
+   twice; LSP forbids overlapping ranges, so VS Code rejected the whole rename. Fixed by
+   sorting + `dedup()` on the range tuple before building edits (references.rs).
+   Test: `test_ws_rename_defaulted_parameter_has_no_duplicate_edits`.
+2. **`__all__` block never terminated** — the line scanner opened on `__all__ … =` and only
+   closed on a line *ending* with `]`, so `__all__ = ["run"]  # comment` and the tuple form
+   left it open for the rest of the file, rewriting the first quoted match on every later
+   line. Replaced the whole line-scanning heuristic with an AST-based finder in the new
+   [dunder_all.rs](../../crates/basilisk-lsp/src/dunder_all.rs) (Assign / AnnAssign /
+   AugAssign targets named `__all__`; list, tuple, set and `+`-concatenated values), which
+   also lifted references.rs back under the 500-LOC cap.
+   Test: `test_ws_rename_dunder_all_with_trailing_comment_spares_string_literals` + 8 unit tests.
+3. **Byte offsets emitted as LSP `character`** — `find_kwarg_in_line` and the old `__all__`
+   scanner built `Position.character` from raw byte indices while every other range went
+   through `byte_offset_to_position`. Any non-ASCII character earlier on the line shifted the
+   edit right (+2 for an en dash) and corrupted the file. Both now use absolute offsets and
+   `push_name_range`/`byte_offset_to_position`.
+   Test: `test_ws_rename_kwarg_range_uses_utf16_columns`.
+4. **Annotation exemption was too broad (regression introduced by the fix above)** — the mask
+   exempted *every* string inside an annotation span, so `Literal["Mode"]` values and
+   `Annotated[T, "meta"]` metadata were treated as forward references and rewritten. The
+   exemption now walks the type expression and records only strings in true type-expression
+   position, skipping `Literal` arguments entirely and taking only the first argument of
+   `Annotated`.
+   Test: `test_ws_rename_skips_literal_string_values` + 2 unit tests.
+
+### Verified-real but NOT fixed (need design changes, deliberately out of scope)
+
+- **Non-ASCII identifiers are split.** `is_ident_byte`/`is_ident`/`is_ident_char` all use
+  `is_ascii_alphanumeric() || b'_'`, so every byte of a non-ASCII UTF-8 char reads as a word
+  boundary. Renaming `x` in a file containing `xé` rewrites the `x` prefix of `xé`. PEP 3131
+  allows these identifiers and ruff parses them. Fixing means char-based identifier
+  classification across three helpers plus every raw sweep.
+- **Cross-file rename is not scope-aware.** The importer sweep in navigation.rs is a raw
+  whole-word text match, so `self.greet`, class attributes and shadowing locals in importer
+  files are rewritten. The importer's `entry.resolved` is already in hand, so the scope tree
+  is available — but wiring it in is a design change.
+- **`defining_scope` walks through class scopes.** Python skips class scopes when resolving
+  names inside nested functions (this file's own doc comment says so at scope_tree.rs:24-26),
+  but the lookup walks the parent chain unconditionally, so a method reading a module-level
+  name binds to the class attribute instead. Changing name resolution risks broad fallout.
+
 ## Known accepted limitations (documented, not regressions)
 
 - `cast("MyClass", x)` / implicit string type aliases outside annotation position are

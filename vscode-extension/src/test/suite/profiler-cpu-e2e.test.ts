@@ -9,6 +9,7 @@
 // HTML. Attach assertions are Linux-gated (CI runs ubuntu; macOS requires
 // root for py-spy), and every platform asserts the actionable #81 error path.
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import * as fs from "fs";
@@ -392,7 +393,7 @@ suite("CPU profiling — real end-to-end", () => {
     assert.ok(started.sessionId.length > 0, "start must mint a session");
     assert.ok(started.pythonVersion.startsWith("3."), `expected Python 3.x, got ${started.pythonVersion}`);
 
-    await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+    await delay(SAMPLE_WINDOW_MS);
 
     const result = await vscode.commands.executeCommand<ProfileResult>("basilisk.profiler.stop", {
       sessionId: started.sessionId,
@@ -458,7 +459,7 @@ suite("CPU profiling — real end-to-end", () => {
       timeoutMs: PROGRESS_WAIT_MS,
     });
 
-    await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+    await delay(SAMPLE_WINDOW_MS);
     await vscode.commands.executeCommand("basilisk.profileStop");
 
     // [PROFILE-PROCESSES-REACTIVE] Stop must clear the reactive state so the
@@ -580,7 +581,7 @@ suite("CPU profiling — real end-to-end", () => {
       // the sibling heat-map journeys: stopping at the first observed sample
       // can leave zero samples attributed to the burner's lines (all in
       // bootstrap/injection frames), so no heat decorations would paint.
-      await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+      await delay(SAMPLE_WINDOW_MS);
 
       // [PROFILE-PROCESSES-REACTIVE] The OOTB one-click flow must drive the
       // reactive panel on macOS too: busy + a live "Profiling PID …" readout.
@@ -665,7 +666,7 @@ suite("CPU profiling — real end-to-end", () => {
 
     disposeFlamegraphPanel(); // known-closed baseline so the post-stop check is meaningful
     try {
-      await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+      await delay(SAMPLE_WINDOW_MS);
       await vscode.commands.executeCommand("basilisk.profileStop");
     } finally {
       win.showInformationMessage = originalShow;

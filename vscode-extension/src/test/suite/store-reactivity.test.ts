@@ -6,6 +6,7 @@
 // centralized in the store as the `analysisRevision` signal; panels subscribe
 // via a signals effect instead of hand-rolled polling.
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { State, type LanguageClient } from "vscode-languageclient/node";
@@ -160,7 +161,7 @@ suite("Centralized analysis reactivity (issue #58)", () => {
       // The bump is debounced — poll briefly.
       const deadline = Date.now() + 5000;
       while (store.analysisRevision.value === before && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await delay(100);
       }
       assert.ok(
         store.analysisRevision.value > before,

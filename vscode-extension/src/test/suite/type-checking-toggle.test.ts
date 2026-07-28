@@ -16,6 +16,7 @@
  * [ANALYSIS-ENABLED].
  */
 
+import { delay } from '../../timeouts';
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -86,7 +87,7 @@ async function pollUntil(probe: () => boolean, timeoutMs: number): Promise<boole
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         if (probe()) { return true; }
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        await delay(200);
     }
     return probe();
 }
@@ -314,7 +315,7 @@ suite('Type Checking Toggle (basilisk.enabled)', function () {
             // A fully-annotated, diagnostic-free file: nothing to clear on disable.
             await openPythonFile(tmpDir, 'toggle_clean_refresh.py', 'x: int = 1\n');
             // Let the open/analysis settle so later bumps are toggle-driven.
-            await new Promise((resolve) => setTimeout(resolve, 2_000));
+            await delay(2_000);
 
             const before = store.analysisRevision.value;
             await cfg.update('enabled', false, vscode.ConfigurationTarget.Workspace);

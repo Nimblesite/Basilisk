@@ -288,6 +288,6 @@ mod tests {
     #[test]
     fn parse_nonexistent_file() {
         let result = parse_coverage_xml(Path::new("/tmp/nonexistent_coverage_abc123.xml"));
-        assert!(result.is_err());
+        let _error = result.expect_err("a missing coverage file is an error, not empty coverage");
     }
 }

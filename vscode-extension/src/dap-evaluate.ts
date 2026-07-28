@@ -18,8 +18,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import { Logger } from "./logger";
 import { ALL_THREADS, debugOutputCursor, debugOutputSince, stoppedThreadIds } from "./dap-output";
-import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS, WAIT_MS } from "./timeouts";
-
+import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS, WAIT_MS, delay } from "./timeouts";
 /** The Basilisk debug adapter type. */
 const DEBUG_TYPE = "basilisk-debug";
 
@@ -124,7 +123,7 @@ export async function resolveMarkerFilePayload(out: string): Promise<string> {
       await fs.promises.unlink(path).catch(() => undefined);
       return out;
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, FILE_PAYLOAD_POLL_MS));
+    await delay(FILE_PAYLOAD_POLL_MS);
   }
 }
 
@@ -148,7 +147,7 @@ async function waitForMarkerOutput(sessionId: string, cursor: number): Promise<s
     if (complete || Date.now() >= deadline) {
       return out;
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, MARKER_POLL_MS));
+    await delay(MARKER_POLL_MS);
   }
 }
 
@@ -239,7 +238,7 @@ export async function acquireStoppedFrame(): Promise<AcquiredFrame | null> {
     // the program can reach user code, then try again.
     Logger.info(`[Memory] pause landed in non-user frames (attempt ${attempt}) — resuming to retry`);
     await resumeDebuggee(session);
-    await new Promise<void>((resolve) => setTimeout(resolve, PAUSE_RETRY_BACKOFF_MS));
+    await delay(PAUSE_RETRY_BACKOFF_MS);
   }
   return null;
 }
@@ -249,7 +248,7 @@ async function waitForFrameUntil(deadlineMs: number): Promise<number | null> {
   while (Date.now() < deadlineMs) {
     const frameId = await currentStoppedFrameId();
     if (frameId !== null) { return frameId; }
-    await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    await delay(POLL_INTERVAL_MS);
   }
   return null;
 }

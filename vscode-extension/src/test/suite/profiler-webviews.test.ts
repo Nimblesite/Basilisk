@@ -14,6 +14,7 @@
  * the real builders and, for the handler, on a real live webview panel.
  */
 
+import { delay } from '../../timeouts';
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -307,7 +308,7 @@ suite('Profiler webviews — singleton panel message handler', () => {
                 (count) => count >= 2,
             );
             // Give a stacked handler time to double-deliver before asserting.
-            await new Promise((resolve) => setTimeout(resolve, 1_000));
+            await delay(1_000);
             assert.strictEqual(
                 received.length,
                 2,

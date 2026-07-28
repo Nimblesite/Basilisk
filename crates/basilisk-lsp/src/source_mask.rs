@@ -16,7 +16,7 @@
 
 use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::visitor::{walk_stmt, Visitor};
-use ruff_python_ast::{ModModule, Stmt};
+use ruff_python_ast::{Expr, ModModule, Stmt};
 use ruff_text_size::Ranged;
 
 /// Byte ranges of one source file where identifier matches must be ignored.
@@ -110,10 +110,13 @@ fn within_any(spans: &[(u32, u32)], span: (u32, u32)) -> bool {
         .any(|&(start, end)| span.0 >= start && span.1 <= end)
 }
 
-/// Collect the byte spans of every annotation expression in the module:
-/// parameter annotations, return annotations, and `AnnAssign` annotations.
-/// String literals inside these spans are PEP 563 forward references — code,
-/// not data — and must stay renameable.
+/// Collect the byte spans of string literals that are PEP 563 forward
+/// references — code, not data — and so must stay renameable.
+///
+/// Only strings in *type-expression* position qualify. A string that is merely
+/// nested somewhere inside an annotation can still be data: `Literal["x"]`
+/// values and `Annotated[T, "meta"]` metadata are values, and renaming through
+/// them corrupts the program.
 fn annotation_spans(module: &ModModule) -> Vec<(u32, u32)> {
     let mut collector = AnnotationSpans(Vec::new());
     for stmt in &module.body {
@@ -122,13 +125,63 @@ fn annotation_spans(module: &ModModule) -> Vec<(u32, u32)> {
     collector.0
 }
 
-/// AST visitor accumulating annotation expression spans.
+/// AST visitor accumulating type-expression string spans.
 struct AnnotationSpans(Vec<(u32, u32)>);
 
 impl AnnotationSpans {
     fn push_span(&mut self, ranged: &impl Ranged) {
         let range = ranged.range();
         self.0.push((range.start().to_u32(), range.end().to_u32()));
+    }
+
+    /// Walk a type expression, recording only the strings that name types.
+    fn collect_type_strings(&mut self, expr: &Expr) {
+        match expr {
+            Expr::StringLiteral(literal) => self.push_span(literal),
+            Expr::Subscript(subscript) => self.collect_subscript(subscript),
+            Expr::Tuple(tuple) => self.collect_each(&tuple.elts),
+            Expr::List(list) => self.collect_each(&list.elts),
+            // `A | "B"` unions.
+            Expr::BinOp(bin_op) => {
+                self.collect_type_strings(&bin_op.left);
+                self.collect_type_strings(&bin_op.right);
+            }
+            _ => {}
+        }
+    }
+
+    /// Recurse into a subscript's arguments, honouring the two special forms
+    /// whose arguments are not all types.
+    fn collect_subscript(&mut self, subscript: &ruff_python_ast::ExprSubscript) {
+        match qualified_tail(&subscript.value) {
+            // Every argument is a value.
+            Some("Literal") => {}
+            // Only the first argument is a type; the rest is metadata.
+            Some("Annotated") => match subscript.slice.as_ref() {
+                Expr::Tuple(tuple) => {
+                    if let Some(first) = tuple.elts.first() {
+                        self.collect_type_strings(first);
+                    }
+                }
+                other => self.collect_type_strings(other),
+            },
+            _ => self.collect_type_strings(&subscript.slice),
+        }
+    }
+
+    fn collect_each(&mut self, elements: &[Expr]) {
+        for element in elements {
+            self.collect_type_strings(element);
+        }
+    }
+}
+
+/// The trailing name of a plain or dotted reference (`Literal`, `typing.Literal`).
+fn qualified_tail(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Name(name) => Some(name.id.as_str()),
+        Expr::Attribute(attribute) => Some(attribute.attr.as_str()),
+        _ => None,
     }
 }
 
@@ -138,14 +191,14 @@ impl<'a> Visitor<'a> for AnnotationSpans {
             Stmt::FunctionDef(def) => {
                 for param in &def.parameters {
                     if let Some(annotation) = param.annotation() {
-                        self.push_span(annotation);
+                        self.collect_type_strings(annotation);
                     }
                 }
                 if let Some(returns) = &def.returns {
-                    self.push_span(returns.as_ref());
+                    self.collect_type_strings(returns.as_ref());
                 }
             }
-            Stmt::AnnAssign(ann) => self.push_span(ann.annotation.as_ref()),
+            Stmt::AnnAssign(ann) => self.collect_type_strings(ann.annotation.as_ref()),
             _ => {}
         }
         walk_stmt(self, stmt);
@@ -230,6 +283,28 @@ mod tests {
                 "annotation string occurrence {nth} must stay renameable"
             );
         }
+    }
+
+    #[test]
+    fn masks_literal_argument_values() {
+        // `Literal[...]` arguments are values, not forward references.
+        let source = "from typing import Literal\nMode = \"fast\"\ndef run(mode: Literal[\"Mode\"]) -> None:\n    print(Mode)\n";
+        let mask = SourceMask::build(source);
+        assert!(mask.is_masked(offset_of(source, "Mode", 1)));
+        assert!(!mask.is_masked(offset_of(source, "Mode", 0)));
+        assert!(!mask.is_masked(offset_of(source, "Mode", 2)));
+    }
+
+    #[test]
+    fn masks_annotated_metadata_but_not_its_type() {
+        // In `Annotated[T, meta]` only the first argument is a type.
+        let source =
+            "from typing import Annotated\ndef f(x: Annotated[\"MyClass\", \"MyClass doc\"]) -> None:\n    print(x)\n";
+        let mask = SourceMask::build(source);
+        // The forward reference stays renameable...
+        assert!(!mask.is_masked(offset_of(source, "MyClass", 0)));
+        // ...the metadata string does not.
+        assert!(mask.is_masked(offset_of(source, "MyClass", 1)));
     }
 
     #[test]

@@ -510,7 +510,8 @@ fn make_custom_typeshed(stdlib_files: &[(&str, &str)]) -> Arc<Snapshot> {
     let versions = top_level_modules
         .into_iter()
         .fold(String::new(), |mut versions, module| {
-            assert!(writeln!(&mut versions, "{module}: 3.0-").is_ok());
+            // Writing into a `String` cannot fail.
+            let _ = writeln!(&mut versions, "{module}: 3.0-");
             versions
         });
     let mut entries = vec![ArchiveEntry {

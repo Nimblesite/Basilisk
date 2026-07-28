@@ -16,6 +16,7 @@
  *   - `debugpy` must be installed: `pip install debugpy`
  */
 
+import { delay } from '../../timeouts';
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -28,7 +29,7 @@ import { findBasiliskBinary, removeTestDir } from './test-helpers';
 import { getStore } from '../../extension';
 import { currentStoppedFrameId, evaluateInDebugSession } from '../../dap-evaluate';
 import { debugOutputCursor, debugOutputSince } from '../../dap-output';
-import { applyDebugConfigDefaults } from '../../debug-adapter';
+import { ACTIVE_FILE_VARIABLE, applyDebugConfigDefaults } from '../../debug-adapter';
 
 const EXTENSION_ID = 'Nimblesite.basilisk';
 
@@ -594,7 +595,7 @@ async function stopActiveDebugSession(): Promise<void> {
             throw error;
         }
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, SESSION_SETTLE_MS));
+    await delay(SESSION_SETTLE_MS);
 }
 
 /**
@@ -680,7 +681,7 @@ suite('Debug Integration E2E Tests', () => {
         }
 
         // Give the LSP server time to fully initialize.
-        await new Promise<void>((resolve) => setTimeout(resolve, SERVER_START_WAIT_MS));
+        await delay(SERVER_START_WAIT_MS);
     });
 
     suiteTeardown(async () => {
@@ -791,7 +792,7 @@ suite('Debug Integration E2E Tests', () => {
         const stopResult = await stopDebugSession(result.sessionId);
         assert.strictEqual(stopResult.stopped, true, 'Session should be reported as stopped');
 
-        await new Promise<void>((resolve) => setTimeout(resolve, SESSION_SETTLE_MS));
+        await delay(SESSION_SETTLE_MS);
         const stillListening = await checkPortListening(result.host, result.port, PORT_CLOSED_CHECK_MS);
         assert.strictEqual(stillListening, false, `Port ${result.port} should stop listening`);
     });
@@ -1607,7 +1608,7 @@ suite('Debug Integration E2E Tests', () => {
         // VS Code may not clear activeDebugSession synchronously with the
         // terminate event — poll briefly to let the runtime settle.
         for (let i = 0; i < SESSION_CLEAR_MAX_POLLS && vscode.debug.activeDebugSession; i++) {
-            await new Promise<void>((r) => setTimeout(r, STOP_POLL_INTERVAL_MS));
+            await delay(STOP_POLL_INTERVAL_MS);
         }
 
         assert.strictEqual(
@@ -1694,7 +1695,7 @@ suite('Debug Integration E2E Tests', () => {
         for (let i = 0; i < 40 && pid === undefined; i++) {
             pid = getStore()?.getDebuggeeProcessId(session.id);
             if (pid === undefined) {
-                await new Promise<void>((resolve) => setTimeout(resolve, 50));
+                await delay(50);
             }
         }
 
@@ -1840,7 +1841,7 @@ suite('Debug Integration E2E Tests', () => {
         while (frameB === null && Date.now() < buildDeadline) {
             frameB = await currentStoppedFrameId();
             if (frameB === null) {
-                await new Promise<void>((resolve) => setTimeout(resolve, STOP_POLL_INTERVAL_MS));
+                await delay(STOP_POLL_INTERVAL_MS);
             }
         }
         assert.ok(frameB !== null, 'should resolve a frame at the ready anchor');
@@ -1885,7 +1886,7 @@ suite('Basilisk Debug Config Provider', () => {
         const resolved = applyDebugConfigDefaults({} as vscode.DebugConfiguration, 'python');
         assert.strictEqual(resolved.type, 'basilisk-debug');
         assert.strictEqual(resolved.request, 'launch');
-        assert.strictEqual(resolved.program, '${file}');
+        assert.strictEqual(resolved.program, ACTIVE_FILE_VARIABLE);
     });
 
     test('empty config + non-Python file is left untouched', () => {
@@ -1900,7 +1901,7 @@ suite('Basilisk Debug Config Provider', () => {
             { name: 'x', type: 'basilisk-debug', request: 'launch' },
             'python'
         );
-        assert.strictEqual(resolved.program, '${file}');
+        assert.strictEqual(resolved.program, ACTIVE_FILE_VARIABLE);
     });
 
     test('a complete config passes through unchanged', () => {

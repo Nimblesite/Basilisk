@@ -17,6 +17,7 @@
  * ([PROFILE-MEMORY-HOWTO]); a user's own breakpoint pause is left untouched.
  */
 
+import { delay } from "./timeouts";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import { Logger } from "./logger";
@@ -353,7 +354,7 @@ export async function readFinalSnapshot(path: string): Promise<string | null> {
       return contents;
     }
     if (Date.now() >= deadline) { return null; }
-    await new Promise<void>((resolve) => setTimeout(resolve, FINAL_SNAPSHOT_POLL_MS));
+    await delay(FINAL_SNAPSHOT_POLL_MS);
   }
 }
 

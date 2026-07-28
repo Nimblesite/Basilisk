@@ -10,6 +10,7 @@
  * (src/lsp-trace.ts — VS Code offers no API to read a channel back).
  */
 
+import { delay } from '../../timeouts';
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { lspTraceLines } from '../../lsp-trace';
@@ -43,7 +44,7 @@ async function waitForTraceLine(
         if (line !== undefined) {
             return line;
         }
-        await new Promise((resolve) => setTimeout(resolve, TRACE_POLL_MS));
+        await delay(TRACE_POLL_MS);
     }
     return undefined;
 }

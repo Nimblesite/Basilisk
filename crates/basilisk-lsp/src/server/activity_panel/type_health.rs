@@ -310,7 +310,7 @@ mod tests {
     #[test]
     fn test_build_type_health_coverage_and_counts() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
 
         // Fully annotated file.
         let uri_full = make_uri("/workspace/full.py");
@@ -354,7 +354,7 @@ mod tests {
     #[test]
     fn test_build_type_health_sorted_by_coverage() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
 
         // File with 0% coverage (no annotations).
         let uri_none = make_uri("/workspace/none.py");
@@ -383,7 +383,7 @@ mod tests {
     #[test]
     fn test_build_type_health_errors_and_warnings() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
 
         // File with a type error (missing return annotation triggers diagnostics).
         let uri = make_uri("/workspace/errs.py");
@@ -408,7 +408,7 @@ mod tests {
     #[test]
     fn test_disabled_toggle_serves_no_type_health_grading() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root.clone()]);
+        let idx = make_index_with_roots(vec![root]);
         let uri = make_uri("/workspace/errs.py");
         let _ = idx.set_open(&uri, "def foo(x: int):\n    return x\n", 1);
 

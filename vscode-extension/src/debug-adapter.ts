@@ -409,6 +409,14 @@ function isBlank(value: string | undefined): boolean {
   return value === undefined || value === "";
 }
 
+/**
+ * VS Code's own substitution variable for the active editor's file, resolved by
+ * VS Code before the config reaches the adapter. It is a literal `${file}` on
+ * the wire, never a JavaScript template placeholder — hence the one disable.
+ */
+// eslint-disable-next-line no-template-curly-in-string -- VS Code variable syntax, not a template literal
+export const ACTIVE_FILE_VARIABLE = "${file}";
+
 // Implements [VSIX-PYTHON-DEBUGGER-DAP-LAUNCH-CONFIGURATIONS] (launch shape) —
 // the zero-config "launch" configuration (type/request/program) offered in the
 // Run-and-Debug picker and used to fill an empty/partial config.
@@ -418,7 +426,7 @@ function defaultLaunchConfig(): vscode.DebugConfiguration {
     name: "Python: Current File (Basilisk)",
     type: "basilisk-debug",
     request: "launch",
-    program: "${file}",
+    program: ACTIVE_FILE_VARIABLE,
     console: "internalConsole",
     redirectOutput: true,
     justMyCode: true,
@@ -449,7 +457,7 @@ function withProgramDefaults(
     config.request === "launch" &&
     isBlank(config.program as string | undefined)
   ) {
-    return { ...config, program: "${file}" };
+    return { ...config, program: ACTIVE_FILE_VARIABLE };
   }
   return config;
 }

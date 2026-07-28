@@ -181,7 +181,7 @@ fn custom_typeshed_overrides_stdlib_and_parses() {
     fs::write(shadow.join("os.pyi"), "def getcwd() -> str: ...\n").unwrap();
     let shadow_paths = ImportSearchPaths {
         stub_paths: vec![shadow.clone()],
-        ..paths.clone()
+        ..paths
     };
     let shadowed = resolve_module("os", &shadow_paths).expect("stub-path os resolves");
     assert!(

@@ -113,7 +113,44 @@
       ],
       "blocker": "The book edition has not pinned its Basilisk release. Before publication, pin the release and verify its TypeGuard, TypeIs, and is-None behaviour against the normative typing specification. Do not publish implementation-specific inference results as normative rules."
     },
-    {"section": "07", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {
+      "section": "07",
+      "decision": "withhold-until-versioned-release",
+      "governingSpecs": [
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-PROTOCOL",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-TYPEDDICT",
+        "docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-GENERIC",
+        "https://typing.python.org/en/latest/spec/typeddict.html",
+        "https://typing.python.org/en/latest/spec/dataclasses.html",
+        "https://typing.python.org/en/latest/spec/enums.html",
+        "https://typing.python.org/en/latest/spec/protocol.html",
+        "https://typing.python.org/en/latest/spec/generics.html",
+        "https://typing.python.org/en/latest/spec/overload.html"
+      ],
+      "releaseImplementation": [],
+      "workingTreeImplementation": [
+        "crates/basilisk-checker/src/rules/typeddicts_class_syntax.rs",
+        "crates/basilisk-checker/src/rules/dataclasses_usage.rs",
+        "crates/basilisk-checker/src/rules/enums_behaviors.rs",
+        "crates/basilisk-checker/src/rules/protocols_subtyping.rs",
+        "crates/basilisk-checker/src/rules/generics_basic.rs",
+        "crates/basilisk-checker/src/rules/overloads_evaluation.rs",
+        "book/examples/ch07-structured-contracts/"
+      ],
+      "executableEvidence": [
+        "Python 3.14.6 ran the Chapter 7 Signal Box checkpoint: 4 tests passed on 2026-07-28",
+        "The Chapter 7 runtime tests exercised required, optional, and invalid input; enum conversion; scalar and batch overload paths; two structural protocol implementations; and Page[Reading] on 2026-07-28",
+        "target/debug/basilisk check --color never . reported no issues across the Chapter 7 source and tests on 2026-07-28; this was working-tree evidence from a binary identifying itself as 0.0.0-PLACEHOLDER, not release evidence",
+        "The real python/typing harness report for upstream commit 39164cd2c5b4e2608cb8b5d2fc8af9ae6f0c0fe8 records 141 of 141 files passing, 970 required errors caught, 0 missed, and 0 false positives; every Chapter 7 category row is PASS: dataclasses 16 of 16, enums 6 of 6, generics 30 of 30, overloads 5 of 5, protocols 11 of 11, and TypedDicts 14 of 14"
+      ],
+      "omitted": [
+        "Exact diagnostic wording and identifiers are omitted until the edition pins a released Basilisk binary.",
+        "No checker-specific inferred-type claims are used; the chapter relies on written contracts and maintained normative typing rules.",
+        "A product screenshot is intentionally omitted because the chapter's four explanatory relationships are shown more clearly as deterministic diagrams and no release-specific UI claim is needed."
+      ],
+      "blocker": "The complete chapter cannot enter a release build until the book edition pins a released Basilisk version. Rerun its static checkpoint with that binary and record the release implementation before setting decision to publish."
+    },
     {"section": "08", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {
       "section": "09",

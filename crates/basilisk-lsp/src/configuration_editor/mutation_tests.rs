@@ -3,6 +3,7 @@
 
 #![expect(
     clippy::panic,
+    clippy::expect_used,
     reason = "test-only destructuring failures should abort with a focused message"
 )]
 
@@ -60,10 +61,10 @@ fn empty_mutation_lists_are_rejected() {
         error_kind(&error),
         Some(serde_json::json!("invalidMutation"))
     );
-    assert!(require_mutations(&[EditorMutation::RemoveTag {
+    require_mutations(&[EditorMutation::RemoveTag {
         tag: "basilisk".to_owned(),
     }])
-    .is_ok());
+    .expect("removing a tag entry is always a legal mutation");
 }
 
 /// [CONFIGEDITOR-OPERATIONS]: all six mutation kinds fold into one update.
@@ -168,7 +169,7 @@ fn pep_disable_mutations_are_rejected() {
     // Direct SetRule(disabled) on a pep rule fails at mutation validation.
     let Err(direct) = build_update(
         &[EditorMutation::SetRule {
-            code: pep.clone(),
+            code: pep,
             severity: WireSeverity::Disabled,
         }],
         &catalog,
@@ -181,14 +182,14 @@ fn pep_disable_mutations_are_rejected() {
     );
 
     // Disabling an analyze rule is legitimate configuration.
-    assert!(build_update(
+    let _analyze_disabled = build_update(
         &[EditorMutation::SetRule {
             code: analyze,
             severity: WireSeverity::Disabled,
         }],
         &catalog,
     )
-    .is_ok());
+    .expect("disabling an analyze rule is legitimate configuration");
 
     // A tag entry that resolves a pep rule to disabled fails the hypothetical
     // configuration check ([`pep_disable_violations`]).
@@ -245,14 +246,14 @@ fn typeshed_setting_values_are_strictly_validated() {
             Some(serde_json::json!("invalidTypeshedSetting"))
         );
     }
-    assert!(build_update(
+    let _commit_pinned = build_update(
         &[EditorMutation::SetTypeshedSetting {
             key: TypeshedSettingKey::TypeshedCommit,
             value: "83c2518a9e6abbda0c44592c3483de459198f887".to_owned(),
         }],
         &catalog,
     )
-    .is_ok());
+    .expect("a well-formed commit SHA is an accepted typeshed setting");
 }
 
 /// [LSPCFGED-TYPESHED]: custom and exact sources cannot coexist, and custom
@@ -280,7 +281,8 @@ fn typeshed_source_combination_and_shape_are_validated() {
         let _ = std::fs::remove_dir_all(root);
         return;
     }
-    assert!(require_valid_typeshed_configuration(&config).is_ok());
+    require_valid_typeshed_configuration(&config)
+        .expect("a custom source with a materialised stdlib validates");
     let _ = std::fs::remove_dir_all(root);
 }
 
@@ -379,7 +381,7 @@ fn impact_partitions_diagnostics_by_emitting_severity() {
 #[test]
 fn revision_gate_reports_both_revisions_on_conflict() {
     let document = document(BasiliskConfig::default());
-    assert!(require_revision(&document, "revision").is_ok());
+    require_revision(&document, "revision").expect("the document's own revision matches");
     let Err(error) = require_revision(&document, "stale") else {
         panic!("stale revision must conflict");
     };

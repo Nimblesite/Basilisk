@@ -3,6 +3,7 @@
 // opens the editor focused on that rule, and the LSP hover markdown is
 // trusted for exactly that one command.
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import type {
@@ -89,7 +90,7 @@ function snapshotTransport(): ConfigurationEditorTransport {
 async function pollUntil(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!predicate() && Date.now() < deadline) {
-    await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    await delay(25);
   }
   assert.ok(predicate(), "condition did not become true before timeout");
 }
@@ -216,7 +217,7 @@ suite("Configuration editor — Configure Severity deep link", () => {
         executed = true;
       } catch (error) {
         lastError = error;
-        await new Promise<void>((resolve) => setTimeout(resolve, 250));
+        await delay(250);
       }
     }
     assert.ok(executed, `basilisk.editConfig never became executable: ${String(lastError)}`);

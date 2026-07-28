@@ -361,7 +361,7 @@ mod tests {
                 mode: entry.mode,
             })
             .collect();
-        git_files.push(unmaterialized.clone());
+        git_files.push(unmaterialized);
         let tree = reconstruct_root_tree_oid(&git_files).expect("fixture tree");
         let commit_object =
             format!("tree {tree}\nauthor a <a@a> 0 +0000\ncommitter a <a@a> 0 +0000\n\nfixture\n")
@@ -411,7 +411,7 @@ mod tests {
     fn write_then_read_verifies_the_full_offline_chain() {
         let root = tempfile::tempdir().expect("tempdir");
         let (entry, commit) = fixture_entry();
-        assert!(write_entry(root.path(), &entry).is_ok());
+        write_entry(root.path(), &entry).expect("the fixture entry writes cleanly");
         let snapshot = read_snapshot(root.path(), commit, true).expect("verified entry");
         assert_eq!(snapshot.status.active_source, SourceKind::ExactCommit);
         assert_eq!(snapshot.status.commit, Some(commit));
@@ -442,7 +442,7 @@ mod tests {
         }
         let rebuilt = rebuild_identity(entry);
         let commit = rebuilt.commit;
-        assert!(write_entry(root.path(), &rebuilt).is_ok());
+        write_entry(root.path(), &rebuilt).expect("the rebuilt entry writes cleanly");
         assert_eq!(
             read_snapshot(root.path(), commit, true).err(),
             Some(StoreError::LicenseChanged)
@@ -490,7 +490,7 @@ mod tests {
     fn any_mutated_byte_fails_the_pin() {
         let root = tempfile::tempdir().expect("tempdir");
         let (entry, commit) = fixture_entry();
-        assert!(write_entry(root.path(), &entry).is_ok());
+        write_entry(root.path(), &entry).expect("the fixture entry writes cleanly");
         let stub = entry_dir(root.path(), commit).join("stdlib/os.pyi");
         fs::write(&stub, b"def getcwd() -> bytes: ...\n").expect("tamper");
         assert_eq!(
@@ -503,7 +503,7 @@ mod tests {
     fn a_tampered_commit_object_fails_before_its_tree_is_trusted() {
         let root = tempfile::tempdir().expect("tempdir");
         let (entry, commit) = fixture_entry();
-        assert!(write_entry(root.path(), &entry).is_ok());
+        write_entry(root.path(), &entry).expect("the fixture entry writes cleanly");
         let commit_object = entry_dir(root.path(), commit).join(COMMIT_OBJECT_FILE);
         // Rewrite the commit object to name a different tree; it no longer
         // hashes to the directory's SHA, so nothing after it is consulted.
@@ -529,7 +529,7 @@ mod tests {
                 file.oid = git_blob_oid(b"a different readme\n").to_hex();
             }
         }
-        assert!(write_entry(root.path(), &entry).is_ok());
+        write_entry(root.path(), &entry).expect("the fixture entry writes cleanly");
         assert_eq!(
             read_snapshot(root.path(), commit, true).err(),
             Some(StoreError::Corrupt)
@@ -544,7 +544,7 @@ mod tests {
             .manifest
             .tree_files
             .retain(|file| file.path != "stdlib/os.pyi");
-        assert!(write_entry(root.path(), &entry).is_ok());
+        write_entry(root.path(), &entry).expect("the fixture entry writes cleanly");
         assert_eq!(
             read_snapshot(root.path(), commit, true).err(),
             Some(StoreError::Corrupt)
@@ -578,20 +578,21 @@ mod tests {
             Some(StoreError::Missing),
             "a staging directory is not an entry"
         );
-        assert!(write_entry(root.path(), &entry).is_ok());
+        write_entry(root.path(), &entry).expect("the fixture entry writes cleanly");
         // The real entry activates regardless of the stale staging litter.
-        assert!(read_snapshot(root.path(), commit, true).is_ok());
+        let snapshot = read_snapshot(root.path(), commit, true).expect("the real entry activates");
+        assert_eq!(snapshot.status.commit, Some(commit));
     }
 
     #[test]
     fn an_existing_entry_is_immutable_under_rewrites() {
         let root = tempfile::tempdir().expect("tempdir");
         let (entry, commit) = fixture_entry();
-        assert!(write_entry(root.path(), &entry).is_ok());
+        write_entry(root.path(), &entry).expect("the fixture entry writes cleanly");
         let marker = entry_dir(root.path(), commit).join("stdlib/marker.pyi");
         fs::write(&marker, b"x: int\n").expect("marker");
         // A second write of the same commit is a no-op, not a replacement.
-        assert!(write_entry(root.path(), &entry).is_ok());
+        write_entry(root.path(), &entry).expect("the fixture entry writes cleanly");
         assert!(
             marker.exists(),
             "content-addressed entries are never rewritten"

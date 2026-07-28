@@ -1,4 +1,5 @@
 // Tests for [VSIX]. See docs/specs/VSIX-SPEC.md#VSIX
+import { delay } from '../../timeouts';
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -34,7 +35,7 @@ suite('Basilisk Extension E2E Tests', () => {
         const deadline = Date.now() + WAIT_MS;
         while (Date.now() < deadline) {
             if (ext?.isActive) {break;}
-            await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS));
+            await delay(POLL_INTERVAL_MS);
         }
     });
 

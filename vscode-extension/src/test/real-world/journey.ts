@@ -8,6 +8,7 @@
  * ([VSIX-REALWORLD-JOURNEY] density floor).
  */
 
+import { delay } from '../../timeouts';
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -170,7 +171,7 @@ export async function waitForWorkspaceAnalysis(
         } else if (snapshot.length > 0 && Date.now() - stableSince >= DIAGNOSTIC_SETTLE_MS) {
             return snapshot;
         }
-        await new Promise<void>((resolve) => setTimeout(resolve, SETTLE_POLL_MS));
+        await delay(SETTLE_POLL_MS);
     }
     assert.fail(`workspace diagnostics never settled non-empty within ${spec.budgets.cpuSettleTimeoutMs}ms (last shape ${lastShape})`);
 }

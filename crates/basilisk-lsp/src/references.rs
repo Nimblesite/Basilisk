@@ -118,9 +118,23 @@ pub fn rename_symbol(
         Some(SymbolHit::Function(f)) if f.class_name.is_none()
     ) || matches!(&hit, Some(SymbolHit::Class(_) | SymbolHit::Variable(_)))
     {
-        let all_ranges = find_dunder_all_entries(source, &name);
+        let all_ranges = crate::dunder_all::find_dunder_all_entries(source, &name);
         ranges.extend(all_ranges);
     }
+
+    // The sweeps above overlap: a defaulted parameter's `def` line matches both
+    // the scope-aware sweep and the keyword-argument sweep, for instance. LSP
+    // forbids overlapping edit ranges within one `changes` entry — and identical
+    // ranges overlap — so collapse exact duplicates before emitting edits.
+    ranges.sort_by_key(|range| {
+        (
+            range.start.line,
+            range.start.character,
+            range.end.line,
+            range.end.character,
+        )
+    });
+    ranges.dedup();
 
     let edits: Vec<TextEdit> = ranges
         .into_iter()
@@ -151,11 +165,10 @@ fn find_keyword_arg_sites(
 ) -> Vec<Range> {
     let mut results = Vec::new();
     let mut line_start = 0;
-    for (line_idx, raw_line) in source.split_inclusive('\n').enumerate() {
+    for raw_line in source.split_inclusive('\n') {
         let line = raw_line.trim_end_matches(['\n', '\r']);
         if line.contains(func_name) {
-            let line_u32 = u32::try_from(line_idx).unwrap_or(u32::MAX);
-            find_kwarg_in_line(line, param_name, line_u32, line_start, mask, &mut results);
+            find_kwarg_in_line(line, param_name, line_start, source, mask, &mut results);
         }
         line_start += raw_line.len();
     }
@@ -164,13 +177,15 @@ fn find_keyword_arg_sites(
 
 /// Find keyword argument occurrences within a single line.
 ///
-/// `line_start` is the byte offset of `line` within the full source, used to
-/// query the string/comment `mask` with absolute offsets.
+/// `line_start` is the byte offset of `line` within `source`. Both the mask
+/// query and the emitted range use absolute offsets, so the range goes through
+/// `byte_offset_to_position` like every other range in this module — LSP
+/// columns are UTF-16 code units, not bytes.
 fn find_kwarg_in_line(
     line: &str,
     param_name: &str,
-    line_num: u32,
     line_start: usize,
+    source: &str,
     mask: &SourceMask<'_>,
     results: &mut Vec<Range>,
 ) {
@@ -191,57 +206,10 @@ fn find_kwarg_in_line(
             && is_single_eq
             && !mask.is_masked(line_start + abs)
         {
-            let start_char = u32::try_from(abs).unwrap_or(0);
-            let end_char = u32::try_from(after_param).unwrap_or(0);
-            results.push(Range {
-                start: tower_lsp::lsp_types::Position {
-                    line: line_num,
-                    character: start_char,
-                },
-                end: tower_lsp::lsp_types::Position {
-                    line: line_num,
-                    character: end_char,
-                },
-            });
+            push_name_range(results, source, line_start + abs, line_start + after_param);
         }
         pos = abs + param_len.max(1);
     }
-}
-
-/// Find `__all__` entries that match `name` and return their ranges.
-fn find_dunder_all_entries(source: &str, name: &str) -> Vec<Range> {
-    let mut results = Vec::new();
-    let mut in_all_block = false;
-    for (line_idx, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("__all__") && trimmed.contains('=') {
-            in_all_block = true;
-        }
-        if in_all_block {
-            for quote in &['\'', '"'] {
-                let quoted = format!("{quote}{name}{quote}");
-                if let Some(pos) = line.find(&quoted) {
-                    let name_start = pos + 1;
-                    let name_end = name_start + name.len();
-                    let line_u32 = u32::try_from(line_idx).unwrap_or(u32::MAX);
-                    results.push(Range {
-                        start: tower_lsp::lsp_types::Position {
-                            line: line_u32,
-                            character: u32::try_from(name_start).unwrap_or(0),
-                        },
-                        end: tower_lsp::lsp_types::Position {
-                            line: line_u32,
-                            character: u32::try_from(name_end).unwrap_or(0),
-                        },
-                    });
-                }
-            }
-            if trimmed.ends_with(']') {
-                in_all_block = false;
-            }
-        }
-    }
-    results
 }
 
 // Implements [REFACTOR-RENAME-DOCS]

@@ -9,6 +9,7 @@
 // (via the applied-decoration ledger), the `.heapprofile` for VS Code's
 // built-in viewer, and the "Run & Track Memory (Current File)" auto-start.
 
+import { delay } from "../../timeouts";
 import * as assert from "assert";
 import * as vscode from "vscode";
 import * as fs from "fs";
@@ -154,7 +155,7 @@ async function probeRunningDebuggeeForFrames(probes: number): Promise<void> {
       null,
       "a running debuggee must never yield a frame id (debugpy samples stackTrace for running threads)",
     );
-    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    await delay(200);
   }
 
   await vscode.debug.stopDebugging();
@@ -199,7 +200,7 @@ async function trackAndSnapshotRunningProgram(): Promise<void> {
   );
 
   // Let the program allocate under tracemalloc, then snapshot while RUNNING.
-  await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+  await delay(1000);
   clearMemoryDecorations();
   const opsBefore = recordedOperations().length;
   await vscode.commands.executeCommand("basilisk.memorySnapshot");
@@ -333,7 +334,7 @@ async function trackedRunSurvivesUnrelatedSessionEnd(): Promise<void> {
   });
   assert.ok(startedB, "the unrelated session must launch");
   await bTerminated;
-  await new Promise<void>((r) => setTimeout(r, 500)); // let the terminate handler run
+  await delay(500); // let the terminate handler run
 
   startSub.dispose();
   assert.ok(sessionBId !== undefined && sessionBId !== sessionA?.id, "the two sessions must be distinct");

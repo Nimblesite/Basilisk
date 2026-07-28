@@ -15,6 +15,7 @@
  * Reference: https://code.visualstudio.com/api/references/vscode-api#commands
  */
 
+import { delay } from '../../timeouts';
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { getStore, activate, deactivate } from '../../extension';
@@ -158,7 +159,7 @@ async function pollUntilReady(
             const serverReady = store.serverCommands.value.size > 0;
             if (clientReady && serverReady) { return; }
         }
-        await new Promise<void>((r) => setTimeout(r, POLL_INTERVAL_MS));
+        await delay(POLL_INTERVAL_MS);
     }
 }
 
@@ -345,7 +346,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
         }
 
         await vscode.commands.executeCommand('basilisk.restartServer');
-        await new Promise<void>((r) => setTimeout(r, RESTART_SETTLE_MS));
+        await delay(RESTART_SETTLE_MS);
         await pollUntilReady(WAIT_MS);
 
         for (const cmd of CLIENT_COMMANDS) {
@@ -424,7 +425,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
         // publisher (GitHub #264).
         const deadline = Date.now() + ZOMBIE_STOP_TIMEOUT_MS;
         while (oldClient.isRunning() && Date.now() < deadline) {
-            await new Promise<void>((resolve) => setTimeout(resolve, 100));
+            await delay(100);
         }
         assert.strictEqual(
             oldClient.isRunning(),

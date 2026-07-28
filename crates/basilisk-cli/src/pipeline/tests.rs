@@ -182,7 +182,8 @@ fn nested_file_inherits_project_python_target_for_analysis(
         },
     );
     let _ = std::fs::remove_dir_all(project);
-    assert!(result.is_ok());
+    let _outcome =
+        result.map_err(|error| format!("the nested file must analyse cleanly: {error:?}"))?;
     Ok(())
 }
 

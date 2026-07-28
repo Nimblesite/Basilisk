@@ -76,11 +76,10 @@ fn contains_self(text: &str) -> bool {
     let target = b"Self";
     let mut i = 0;
     while i + 4 <= bytes.len() {
-        let Some(slice) = bytes.get(i..i + 4) else {
-            i += 1;
-            continue;
-        };
-        if slice == target {
+        // The tail `i += 1` already covers a miss, so the window check stays a
+        // plain `if`; advancing `i` inside a `let … else` scrutinee would read
+        // and write it within one expression.
+        if bytes.get(i..i + 4) == Some(&target[..]) {
             let before_ok = i == 0
                 || bytes
                     .get(i - 1)

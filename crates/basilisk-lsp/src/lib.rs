@@ -40,6 +40,7 @@ pub mod coverage;
 pub mod debug;
 pub mod declaration;
 pub mod definition;
+pub mod dunder_all;
 pub mod folding;
 pub mod formatting;
 pub mod highlight;

@@ -145,6 +145,23 @@ exit                 = "deny"
 rest_pat_in_fully_bound_structs = "deny"
 # Require Arc::clone(&x) syntax — make ref-counted pointer cloning visually distinct
 clone_on_ref_ptr     = "deny"
+# `unreachable!()` is a panic like any other — completes the panic-macro ban above
+# (panic/todo/unimplemented). A case you believe cannot happen still has to be
+# modelled in the type or returned as an error, never asserted at runtime.
+unreachable          = "deny"
+# Clones whose value is dropped or overwritten without being read. Pure waste on
+# the checker's hot paths, and the benchmark ratchet only moves down
+# ([CHKARCH-TESTING-BENCH-RATCHET]).
+redundant_clone      = "deny"
+# `assert!(x.is_ok())` prints "assertion failed" and throws the error away.
+# Unwrap the Result instead so a failing test names the actual cause.
+assertions_on_result_states = "deny"
+# Reading and writing the same binding inside one expression makes the result
+# depend on Rust's evaluation order — split the statement instead.
+mixed_read_write_in_expression = "deny"
+# A `Peekable` that is never peeked means the lookahead logic was dropped
+# somewhere — the iterator is silently behaving differently than intended.
+unused_peekable      = "deny"
 # Release artifacts are latency-sensitive CLI/LSP binaries. Fat LTO plus one
 # codegen unit lets LLVM optimize across crate boundaries and keeps benchmark
 # baselines moving down; development and CI test profiles remain fast below.
