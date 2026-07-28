@@ -786,14 +786,21 @@ suite('Debug Integration E2E Tests', () => {
     // 2. LSP-level: start/stop debug session via raw LSP commands
     // ────────────────────────────────────────────────────────────────────────
 
-    // [LSPDEBUG-START]: response shape (host=localhost, port>0, sessionId dbg-…)
+    // [LSPDEBUG-START]: response shape (host=127.0.0.1, port>0, sessionId dbg-…)
     // and debugpy actually listening on the returned port.
     test('startDebugSession spawns debugpy on a TCP port', async function () {
         this.timeout(DEBUG_SESSION_TIMEOUT_MS);
 
         const result = await startDebugSession(pythonPath);
         assert.ok(result !== undefined, 'Expected startDebugSession to return a result');
-        assert.strictEqual(result.host, 'localhost', 'Host should be localhost');
+        // The IPv4 literal, not the name `localhost`: the adapter binds IPv4,
+        // and on Windows `localhost` resolves to `::1` first — where nothing
+        // listens, so the connect below is refused ([LSPDEBUG-START]).
+        assert.strictEqual(
+            result.host,
+            '127.0.0.1',
+            'the session must be advertised on the IPv4 address it binds, not a name'
+        );
         assert.ok(result.port > 0, `Port should be positive, got ${result.port}`);
         assert.ok(
             result.sessionId.startsWith('dbg-'),

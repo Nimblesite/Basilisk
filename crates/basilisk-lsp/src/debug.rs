@@ -16,6 +16,22 @@ use tokio::process::Child;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, Instant};
 
+/// The host a debug session is advertised on.
+///
+/// This is the LITERAL IPv4 loopback address, never the name `localhost`,
+/// because it has to name the same interface the adapter actually binds.
+/// Every bind in this module is IPv4 — the free-port allocator, the readiness
+/// probe, and `debugpy.adapter` itself, which defaults to `127.0.0.1` when
+/// spawned with `--port` and no `--host`.
+///
+/// `localhost` is a NAME, and on Windows it resolves to the IPv6 `::1` first.
+/// Nothing listens there, so a client that connects to the advertised host
+/// gets its connection refused and either fails outright or stalls while the
+/// resolver falls back to IPv4 — which is why debugging and profiling appeared
+/// broken on Windows while working on Linux and macOS. Advertising the address
+/// we bind removes the name-resolution step entirely ([LSPDEBUG-START]).
+const ADAPTER_HOST: &str = "127.0.0.1";
+
 /// How long a freshly spawned debugpy.adapter gets to bind its port.
 /// Generous on purpose: a cold `CPython` start on a loaded machine can take
 /// well over 5 seconds, and a premature timeout kills a healthy session. A
@@ -227,13 +243,13 @@ impl DebugSessionManager {
         debug!(port, "waiting for debugpy to accept connections");
         if let Err(err) = wait_for_port_or_exit(port, Some(&mut child), ADAPTER_BIND_TIMEOUT).await
         {
-            let _ = child.kill().await;
+            kill_tree(&mut child).await;
             return Err(err);
         }
 
         let _ = self.sessions.lock().await.insert(session_id.clone(), child);
-        info!(port, session_id = %session_id, "debugpy ready on localhost:{port}");
-        Ok(("localhost".to_owned(), port, session_id))
+        info!(port, session_id = %session_id, "debugpy ready on {ADAPTER_HOST}:{port}");
+        Ok((ADAPTER_HOST.to_owned(), port, session_id))
     }
 
     /// Kill a debug session and clean up.
@@ -243,7 +259,7 @@ impl DebugSessionManager {
         let mut sessions = self.sessions.lock().await;
         if let Some(mut child) = sessions.remove(session_id) {
             info!(session_id, "stopping debug session");
-            let _ = child.kill().await;
+            kill_tree(&mut child).await;
             return true;
         }
         warn!(session_id, "stop_session called for unknown session");
@@ -261,9 +277,41 @@ impl DebugSessionManager {
         }
         for (id, mut child) in sessions.drain() {
             debug!(session_id = %id, "killing debug session");
-            let _ = child.kill().await;
+            kill_tree(&mut child).await;
         }
     }
+}
+
+/// Kill `child` and every process it spawned.
+///
+/// `Child::kill` terminates the adapter only. The adapter launches the debuggee
+/// as its own child, and the two platforms disagree about what happens to it:
+/// on Unix the debuggee sees the adapter's socket close and exits, but Windows'
+/// `TerminateProcess` does not touch descendants, so the debuggee survives its
+/// own session — holding the port it was told to use and competing for the CPU
+/// of every session started after it. Over a run that starts many sessions the
+/// leak compounds until later sessions cannot start inside their budget.
+///
+/// `taskkill /T` walks the tree, so the descendants go with the adapter. It is
+/// spawned rather than linked because a Job Object would need `unsafe`, which
+/// this workspace denies.
+async fn kill_tree(child: &mut Child) {
+    #[cfg(windows)]
+    if let Some(pid) = child.id() {
+        let killed = tokio::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .await;
+        if let Err(err) = killed {
+            warn!(pid, %err, "taskkill failed; falling back to killing the adapter alone");
+        }
+    }
+    // Always runs: on Unix it is the whole kill, and on Windows it reaps the
+    // adapter whether or not `taskkill` got there first.
+    let _ = child.kill().await;
 }
 
 /// Spawn `python -m debugpy.adapter --port <port>` with the bundled debugpy
@@ -767,5 +815,56 @@ mod tests {
         // allowing the simulated debugpy thread to unblock and finish.
         drop(real_client);
         let _ = accept_handle.await;
+    }
+
+    /// `kill_tree` must reap the process it kills, not just signal it.
+    ///
+    /// A killed-but-unreaped child stays a zombie holding its PID, and the
+    /// Windows arm spawns `taskkill` before the kill — if that arm ever
+    /// returned early the child would outlive its session. Asserting the exit
+    /// status is observable afterwards proves the process is genuinely gone on
+    /// whichever platform the suite runs on.
+    // Tests [LSPDEBUG-STOP]: stopping a session leaves no surviving process.
+    #[tokio::test]
+    async fn kill_tree_reaps_the_process_it_kills() {
+        // A process that would never exit on its own, so only the kill can end it.
+        let mut command = if cfg!(windows) {
+            let mut windows_sleep = tokio::process::Command::new("cmd");
+            let _ = windows_sleep.args(["/C", "timeout /T 300 /NOBREAK"]);
+            windows_sleep
+        } else {
+            let mut unix_sleep = tokio::process::Command::new("sleep");
+            let _ = unix_sleep.arg("300");
+            unix_sleep
+        };
+        let mut child = command
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("the long-running helper must spawn");
+
+        // Without this the test would pass vacuously on a helper that died on
+        // arrival: `try_wait` would report a status the kill never produced.
+        assert!(
+            child
+                .try_wait()
+                .expect("querying the live child must not error")
+                .is_none(),
+            "the helper must still be running, or the kill proves nothing",
+        );
+
+        kill_tree(&mut child).await;
+
+        // `try_wait` on a reaped child reports its status without blocking; on a
+        // child that was signalled but never awaited it would report `None`.
+        let status = child
+            .try_wait()
+            .expect("querying the killed child must not error");
+        assert!(
+            status.is_some(),
+            "kill_tree must reap the child, not leave a zombie"
+        );
+        assert!(child.id().is_none(), "a reaped child no longer holds a PID");
     }
 }

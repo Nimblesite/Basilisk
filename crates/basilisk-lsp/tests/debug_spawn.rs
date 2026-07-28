@@ -75,7 +75,13 @@ async fn a_port_collision_is_retried_on_the_next_candidate_port() {
         .await
         .expect("a collision on the first candidate port must be retried, not surfaced");
 
-    assert_eq!(host, "localhost", "session must come up on localhost");
+    // The advertised host must be the literal IPv4 loopback, not the NAME
+    // `localhost`: every bind here is IPv4, and on Windows `localhost` resolves
+    // to `::1` first, where nothing is listening ([LSPDEBUG-START]).
+    assert_eq!(
+        host, "127.0.0.1",
+        "session must be advertised on the IPv4 address it binds, not a name"
+    );
     assert_ne!(port, taken, "the session must never land on the taken port");
     assert!(
         fresh.contains(&port),

@@ -17,7 +17,7 @@ sequenceDiagram
     LSP->>LSP: Verify debugpy installed
     LSP->>LSP: Find free TCP port
     LSP->>debugpy: Spawn "python -m debugpy.adapter --port 54321"
-    LSP-->>Editor: { host: "localhost", port: 54321 }
+    LSP-->>Editor: { host: "127.0.0.1", port: 54321 }
     Editor->>debugpy: DAP Initialize (TCP)
     debugpy-->>Editor: Capabilities
     Editor->>debugpy: Launch (program, args, cwd)
@@ -50,13 +50,15 @@ The LSP only needs which Python to use. All DAP config (program, args, justMyCod
 **Response:**
 ```json
 {
-    "host": "localhost",
+    "host": "127.0.0.1",
     "port": 54321,
     "sessionId": "a1b2c3"
 }
 ```
 
 The LSP waits until debugpy is accepting TCP connections before returning, avoiding a race where the editor connects before debugpy is ready.
+
+**`host` is the IPv4 literal, never the name `localhost`.** Every bind in the session path is IPv4 — the free-port allocator, the readiness probe, and `debugpy.adapter` itself, which defaults to `127.0.0.1` when spawned with `--port` and no `--host`. `localhost` is a *name*, and on Windows it resolves to the IPv6 `::1` first; nothing listens there, so a client that connects to the advertised host has its connection refused and either fails outright or stalls while the resolver falls back to IPv4. That is why debugging and profiling appeared broken on Windows while working on Linux and macOS. Advertising the address that is actually bound removes the name-resolution step entirely. Asserted in `crates/basilisk-lsp/tests/debug_spawn.rs` and `vscode-extension/src/test/suite/debug-integration.test.ts`.
 
 **Port-collision retry.** Free-port allocation is a TOCTOU: the allocator's listener is dropped before debugpy rebinds the port, and anything on the machine can steal it in between — debugpy then exits 1 before accepting connections. `start_session` therefore tries up to 3 candidate ports (each allocated only after the previous attempt failed): a pre-flight occupancy check skips a stolen port without spawning a doomed adapter, and an adapter that exits on a bind failure is retried on the next candidate. Readiness checks the child's exit **before** the port probe, so a stranger's listener on the candidate port is never reported as a ready session. Non-port failures (missing interpreter, timeout) are never retried or masked, and an adapter-exit error carries debugpy's trailing stderr — never a bare exit status. Covered by `crates/basilisk-lsp/tests/debug_spawn.rs`.
 

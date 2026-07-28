@@ -275,7 +275,10 @@ async function handleAttachMode(
   lspClient: LanguageClient | undefined
 ): Promise<vscode.DebugAdapterDescriptor> {
   const connectInfo = asRecord(config.connect);
-  let host = stringField(connectInfo, "host") ?? "localhost";
+  // Falls back to the IPv4 literal, never the name `localhost`: the server
+  // side binds `127.0.0.1`, and on Windows `localhost` resolves to `::1`
+  // first, where nothing listens ([LSPDEBUG-START]).
+  let host = stringField(connectInfo, "host") ?? "127.0.0.1";
   let port = numberField(connectInfo, "port") ?? 0;
   Logger.info(`[Basilisk Debug] Attach mode → ${host}:${port}`);
 
