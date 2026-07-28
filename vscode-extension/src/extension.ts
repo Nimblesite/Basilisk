@@ -12,6 +12,7 @@ import * as fs from "fs";
 import { Logger, bindLogger, CompositeSink, FileLogSink, nullSink } from "./logger";
 import type { LogSink } from "./logger";
 import { startLspClient } from "./lsp-client";
+import { stopClientSettled } from "./lsp-client-stop";
 import { createDebugAdapterFactory, BasiliskDebugAdapterTrackerFactory, createBasiliskDebugConfigProvider } from "./debug-adapter";
 import { startSubprocessMode } from "./subprocess-mode";
 import { registerTestExplorer } from "./test-explorer";
@@ -235,7 +236,13 @@ export function deactivate(): Promise<void> | undefined {
   disposeProfiler();
   disposeMemoryProfiler();
   disposeMemoryAutopilot();
-  const result = store?.client.value?.stop();
+  // A client caught mid-start cannot be stopped directly — `stop()` rejects
+  // for any state but Running, which is how a deactivate landing inside a slow
+  // server spawn used to throw out of here. stopClientSettled waits for the
+  // start to settle first, and store.reset() below joins this same shutdown
+  // rather than starting a competing one.
+  const dyingClient = store?.client.value;
+  const result = dyingClient === undefined ? undefined : stopClientSettled(dyingClient);
   // Set store = undefined BEFORE calling reset() so the onReset callback
   // (which checks `store !== undefined`) does NOT restart the LSP client.
   // Without this, reset() → onReset → startLspClient re-registers commands

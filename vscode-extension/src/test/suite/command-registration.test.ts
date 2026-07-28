@@ -20,7 +20,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { getStore, activate, deactivate } from '../../extension';
 import {
-    WAIT_MS,
+    LSP_RESTART_WAIT_MS,
     EXTENSION_ID,
     POLL_INTERVAL_MS,
     closeAllEditors,
@@ -149,7 +149,16 @@ async function assertExecutable(cmd: string, context: string): Promise<void> {
     assert.ok(!threw, `${context}: "${cmd}" should be executable`);
 }
 
-/** Poll until client commands and server commands are populated in the store. */
+/**
+ * Wait until the store has re-registered its client commands AND the server
+ * has re-advertised its own.
+ *
+ * Throws on timeout rather than returning quietly. A silent give-up turned
+ * "the server did not come back within the budget" into whichever assertion
+ * happened to run next — `old client should be running before reset`,
+ * `Baseline should have server commands` — none of which named the real
+ * cause. The message below reports the state it actually observed.
+ */
 async function pollUntilReady(
     timeoutMs: number,
 ): Promise<void> {
@@ -163,6 +172,17 @@ async function pollUntilReady(
         }
         await delay(POLL_INTERVAL_MS);
     }
+    const store = getStore();
+    const missing = store === undefined
+        ? 'no store'
+        : CLIENT_COMMANDS.filter((cmd) => !store.isClientCommandRegistered(cmd)).join(', ') || 'none';
+    throw new Error(
+        `LSP client did not become ready within ${timeoutMs}ms — ` +
+        `lspState=${store?.lspState.value ?? 'n/a'}, ` +
+        `client=${store?.client.value !== undefined}, ` +
+        `serverCommands=${store?.serverCommands.value.size ?? 0}, ` +
+        `unregistered client commands=[${missing}]`
+    );
 }
 
 // eslint-disable-next-line max-lines-per-function
@@ -172,7 +192,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     suiteSetup(async function () {
         const result = await setupLspTestSuite('basilisk-cmd-reg-test-');
         tmpDir = result.tmpDir;
-        await pollUntilReady(WAIT_MS - 2_000);
+        await pollUntilReady(LSP_RESTART_WAIT_MS);
 
         const store = getStore();
         assert.ok(store, 'Store should exist after suiteSetup');
@@ -349,7 +369,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
 
         await vscode.commands.executeCommand('basilisk.restartServer');
         await delay(RESTART_SETTLE_MS);
-        await pollUntilReady(WAIT_MS);
+        await pollUntilReady(LSP_RESTART_WAIT_MS);
 
         for (const cmd of CLIENT_COMMANDS) {
             assert.ok(store.isClientCommandRegistered(cmd), `"${cmd}" should be re-registered after restart`);
@@ -392,7 +412,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
         if (ext && !ext.isActive) {
             await ext.activate();
         }
-        await pollUntilReady(WAIT_MS);
+        await pollUntilReady(LSP_RESTART_WAIT_MS);
     });
 
     // ----------------------------------------------------------------
@@ -409,7 +429,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     test('store.reset() stops the replaced LSP client — no zombie publisher (#264)', async function () {
         const store = getStore();
         assert.ok(store, 'Store should be available');
-        await pollUntilReady(WAIT_MS);
+        await pollUntilReady(LSP_RESTART_WAIT_MS);
 
         const oldClient = store.client.value;
         assert.ok(oldClient, 'a running LSP client should exist before reset');
@@ -418,7 +438,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
         store.reset();
 
         // The onReset hook must bring up a replacement client.
-        await pollUntilReady(WAIT_MS);
+        await pollUntilReady(LSP_RESTART_WAIT_MS);
         const newClient = store.client.value;
         assert.ok(newClient, 'reset() must start a replacement client');
         assert.notStrictEqual(newClient, oldClient, 'reset() must create a new client instance');
@@ -476,7 +496,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
 
         const storeAfter = getStore();
         assert.ok(storeAfter, 'Store should exist in session 2');
-        await pollUntilReady(WAIT_MS);
+        await pollUntilReady(LSP_RESTART_WAIT_MS);
 
         for (const cmd of CLIENT_COMMANDS) {
             assert.ok(storeAfter.isClientCommandRegistered(cmd), `Session 2: "${cmd}" should be registered`);
@@ -513,7 +533,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
 
             const store = getStore();
             assert.ok(store, `${tag}: store should exist after activate`);
-            await pollUntilReady(WAIT_MS);
+            await pollUntilReady(LSP_RESTART_WAIT_MS);
 
             for (const cmd of CLIENT_COMMANDS) {
                 assert.ok(store.isClientCommandRegistered(cmd), `${tag}: "${cmd}" should be registered`);
@@ -527,7 +547,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     test('CROSS-SESSION: all server commands re-advertised after deactivate/activate', async function () {
 
         // Ensure we start in a good state.
-        await pollUntilReady(WAIT_MS);
+        await pollUntilReady(LSP_RESTART_WAIT_MS);
         const storeBefore = getStore();
         assert.ok(storeBefore, 'Store should exist in session 1');
         const session1Commands = new Set(storeBefore.serverCommands.value);
@@ -544,7 +564,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
         await ext.activate();
 
         // Trigger re-init and wait for server commands.
-        await pollUntilReady(WAIT_MS);
+        await pollUntilReady(LSP_RESTART_WAIT_MS);
 
         const storeAfter = getStore();
         assert.ok(storeAfter, 'Store should exist in session 2');
@@ -576,7 +596,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
     test('CROSS-SESSION: server commands survive three rapid deactivate/activate cycles', async function () {
 
         // Snapshot from current session.
-        await pollUntilReady(WAIT_MS);
+        await pollUntilReady(LSP_RESTART_WAIT_MS);
         const baseline = getStore();
         assert.ok(baseline, 'Baseline store should exist');
         const baselineCommands = new Set(baseline.serverCommands.value);
@@ -595,7 +615,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
             assert.ok(ext, `${tag}: extension should still be installed`);
             await ext.activate();
 
-            await pollUntilReady(WAIT_MS);
+            await pollUntilReady(LSP_RESTART_WAIT_MS);
             const store = getStore();
             assert.ok(store, `${tag}: store should exist after activate`);
 
@@ -630,7 +650,7 @@ suite('Command Registration (VS Code API Compliance)', () => {
         assert.ok(ext, 'Extension should still be installed');
         await ext.activate();
 
-        await pollUntilReady(WAIT_MS);
+        await pollUntilReady(LSP_RESTART_WAIT_MS);
 
         for (const cmd of CLIENT_COMMANDS) {
             await assertExecutable(cmd, 'After deactivate/activate');

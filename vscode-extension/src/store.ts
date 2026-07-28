@@ -21,6 +21,7 @@ import { type LanguageClient, State } from "vscode-languageclient/node";
 import * as vscode from "vscode";
 import { Logger, type LogSink } from "./logger";
 import { createServerCommandHandler } from "./lsp-client";
+import { stopClientSettled } from "./lsp-client-stop";
 import type { Result } from "./result";
 import { WAIT_MS } from "./timeouts";
 import {
@@ -153,7 +154,12 @@ function registerClientCommands(signals: StoreSignals, context: DisposableSink):
     }
     try {
       Logger.info("Restarting Basilisk language server...");
-      await lspClient.stop();
+      // Not `stop()`: it rejects for any state but Running, so a restart
+      // requested while the server is still coming up used to report a failure
+      // and leave the server un-restarted — nothing downstream of the restart
+      // ever fired. stopClientSettled waits the start out first, and leaves the
+      // client Stopped (not disposed) so it can start again below.
+      await stopClientSettled(lspClient);
       await lspClient.start();
       Logger.info("Basilisk language server restarted.");
     } catch (err: unknown) {
@@ -446,13 +452,15 @@ export function createStore(onReset?: () => void): Store {
       // server process and publishing into its own diagnostics collection,
       // which VS Code merges into getDiagnostics(). Its late republishes
       // then resurrect diagnostics the real server already cleared
-      // (GitHub #264). dispose() also tears the collection down; skip it
-      // when a stop is already in flight (the deactivate() path).
+      // (GitHub #264).
+      //
+      // stopClientSettled covers the STARTING client too — an `isRunning()`
+      // guard reads false there and drops a client whose server process is
+      // already up, which is the same zombie by a quieter route. It also
+      // joins the shutdown deactivate() has in flight rather than racing it.
       const dyingClient = signals.client.value;
-      if (dyingClient?.isRunning() === true) {
-        dyingClient.dispose().catch((err: unknown) => {
-          Logger.warn(`Failed to dispose replaced LSP client: ${String(err)}`);
-        });
+      if (dyingClient !== undefined) {
+        void stopClientSettled(dyingClient, "dispose");
       }
       disposeAllCommands(signals);
       resetSignals(signals);

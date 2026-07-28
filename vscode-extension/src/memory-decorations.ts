@@ -15,6 +15,7 @@
 import * as vscode from "vscode";
 import { Logger } from "./logger";
 import { recordApplied, type AppliedDecoration } from "./profiler-decorations";
+import { pathKeyer } from "./editor-path-key";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -152,19 +153,26 @@ function confidenceBadge(confidence: LeakConfidence): string {
 export function applyMemoryDecorations(result: MemorySnapshotResult): void {
   clearMemoryDecorations();
 
+  // Keyed, not compared raw: tracemalloc reports the interpreter's own
+  // filename and the editor reports what VS Code resolved. On win32 those
+  // differ in drive-letter case and 8.3 short components, so a raw compare
+  // matches nothing and the memory track silently paints nothing at all
+  // ([VSIX-CI-PLATFORM-COVERAGE]).
+  const keyOf = pathKeyer();
   const allocsByFile = new Map<string, MemoryAllocation[]>();
   for (const alloc of result.topAllocations) {
-    const existing = allocsByFile.get(alloc.file);
+    const key = keyOf(alloc.file);
+    const existing = allocsByFile.get(key);
     if (existing !== undefined) {
       existing.push(alloc);
     } else {
-      allocsByFile.set(alloc.file, [alloc]);
+      allocsByFile.set(key, [alloc]);
     }
   }
 
   for (const editor of vscode.window.visibleTextEditors) {
     const filePath = editor.document.uri.fsPath;
-    const allocs = allocsByFile.get(filePath);
+    const allocs = allocsByFile.get(keyOf(filePath));
     if (allocs === undefined) { continue; }
 
     const optionsByColor = new Map<string, vscode.DecorationOptions[]>();
@@ -204,19 +212,23 @@ export function applyMemoryDecorations(result: MemorySnapshotResult): void {
 
 /** Apply leak indicator decorations with confidence badges to visible editors. */
 export function applyLeakDecorations(result: MemoryDiffResult): void {
+  // Keyed for the same reason as the allocation track above — a raw compare
+  // never matches on win32 ([VSIX-CI-PLATFORM-COVERAGE]).
+  const keyOf = pathKeyer();
   const leaksByFile = new Map<string, SuspectedLeak[]>();
   for (const leak of result.suspectedLeaks) {
-    const existing = leaksByFile.get(leak.file);
+    const key = keyOf(leak.file);
+    const existing = leaksByFile.get(key);
     if (existing !== undefined) {
       existing.push(leak);
     } else {
-      leaksByFile.set(leak.file, [leak]);
+      leaksByFile.set(key, [leak]);
     }
   }
 
   for (const editor of vscode.window.visibleTextEditors) {
     const filePath = editor.document.uri.fsPath;
-    const leaks = leaksByFile.get(filePath);
+    const leaks = leaksByFile.get(keyOf(filePath));
     if (leaks === undefined) { continue; }
 
     const optionsByColor = new Map<string, vscode.DecorationOptions[]>();

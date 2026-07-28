@@ -64,6 +64,22 @@ export const SERVER_START_WAIT_MS = 60_000;
  *  Must exceed SERVER_START_WAIT_MS to avoid Mocha killing the hook early. */
 export const SUITE_SETUP_TIMEOUT_MS = 90_000;
 
+/**
+ * Time (ms) to allow an LSP client to come back up after a restart or a
+ * deactivate/activate cycle.
+ *
+ * Distinct from `WAIT_MS` (1s), which is the module's generic short wait: a
+ * restart respawns the server binary and replays initialize, which is not a
+ * one-second operation on a cold CI runner — spawning an .exe on win32 alone
+ * costs more than that. Tests that waited `WAIT_MS` for it read the
+ * still-starting client as a broken one and failed on a downstream assertion
+ * that never named the real cause ([VSIX-CI-PLATFORM-COVERAGE]).
+ *
+ * Kept under the suite's 45s Mocha timeout so a genuine hang is reported by
+ * the wait that understands it, not by Mocha.
+ */
+export const LSP_RESTART_WAIT_MS = 30_000;
+
 /** Maximum time (ms) to wait for a server-advertised command to appear. */
 export const COMMAND_WAIT_MS = 1_000;
 

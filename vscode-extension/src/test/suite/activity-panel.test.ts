@@ -29,7 +29,7 @@ import {
   type ViewContribution,
 } from "./extension-manifest";
 import {
-    WAIT_MS,
+    LSP_RESTART_WAIT_MS,
     pollUntilResult,
     setupLspTestSuite,
     teardownLspTestSuite,
@@ -157,7 +157,7 @@ suite("Basilisk Activity Panel E2E Tests", function () {
 
     const store = getStore();
     assert.ok(store, "Store should exist after activation");
-    const result = await store.ensureLspReadyPromise(WAIT_MS);
+    const result = await store.ensureLspReadyPromise(LSP_RESTART_WAIT_MS);
     assert.ok(result.ok, "LSP should be running");
   });
 
@@ -494,12 +494,12 @@ suite("Basilisk Activity Panel E2E Tests", function () {
       // can flip true a beat before the store's state listener re-registers
       // the server commands, so also wait for the commands to be re-advertised
       // — the very next tests assert on them.
-      const ready = await store.ensureLspReadyPromise(WAIT_MS);
+      const ready = await store.ensureLspReadyPromise(LSP_RESTART_WAIT_MS);
       assert.ok(ready.ok, "LSP should be running again after restart");
       await pollUntilResult({
         fn: async () => store.serverCommands.value.size,
         predicate: (size) => size > 0,
-        timeoutMs: WAIT_MS,
+        timeoutMs: LSP_RESTART_WAIT_MS,
       });
     } finally {
       provider.dispose();
