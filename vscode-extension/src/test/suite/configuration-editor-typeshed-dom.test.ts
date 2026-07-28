@@ -25,22 +25,53 @@ import {
 } from "./webview-dom-harness";
 import { ACTIVE_COMMIT, LATEST_COMMIT, OTHER_COMMIT } from "./typeshed-fixture";
 import { decodeConfigurationEditorIntent } from "../../configuration-editor-intents";
+import { booleanField, rawField, recordArrayField, stringField } from "../../unknown-shape";
 
 const CUSTOM_FOLDER = "/workspace/vendor/typeshed";
 const STORE_FOLDER = "/workspace/.basilisk/typeshed-store";
 const NO_SOURCE_REASON = "Pinned commit 1f2e3d4c is not in the local store";
 
+// `DomStep` carries its observations under an index signature, so each one is
+// read field by field below. Every field stays `| undefined` on purpose: the
+// assertions compare against concrete values (`disabled === false`,
+// `State === "Ready"`), so an observation the harness failed to record must
+// arrive as `undefined` and fail, not be defaulted into the expected answer.
+
 interface Source {
-  readonly mode: string;
-  readonly checked: boolean;
-  readonly disabled: boolean;
-  readonly hint: string;
+  readonly mode: string | undefined;
+  readonly checked: boolean | undefined;
+  readonly disabled: boolean | undefined;
+  readonly hint: string | undefined;
 }
 
 interface Action {
-  readonly action: string;
-  readonly disabled: boolean;
-  readonly busy: boolean;
+  readonly action: string | undefined;
+  readonly disabled: boolean | undefined;
+  readonly busy: boolean | undefined;
+}
+
+/** The action buttons a recorded step rendered. */
+function actionsOf(entry: DomStep): Action[] {
+  return recordArrayField(entry, "actions").map((raw) => ({
+    action: stringField(raw, "action"),
+    disabled: booleanField(raw, "disabled"),
+    busy: booleanField(raw, "busy"),
+  }));
+}
+
+/** The source radios a recorded step rendered. */
+function sourcesOf(entry: DomStep): Source[] {
+  return recordArrayField(entry, "sources").map((raw) => ({
+    mode: stringField(raw, "mode"),
+    checked: booleanField(raw, "checked"),
+    disabled: booleanField(raw, "disabled"),
+    hint: stringField(raw, "hint"),
+  }));
+}
+
+/** The `State` row of the status table a recorded step rendered. */
+function statusState(entry: DomStep): string | undefined {
+  return stringField(rawField(entry, "status"), "State");
 }
 
 function step(steps: DomStep[] | undefined, label: string): DomStep {
@@ -50,14 +81,14 @@ function step(steps: DomStep[] | undefined, label: string): DomStep {
 }
 
 function action(entry: DomStep, name: string): Action {
-  const found = (entry.actions as Action[]).find((candidate) => candidate.action === name);
+  const found = actionsOf(entry).find((candidate) => candidate.action === name);
   assert.ok(found, `step "${entry.label}" rendered no ${name} button`);
   return found;
 }
 
 /** Exactly the two sources exist — a "Latest" radio may NEVER render. */
 function assertSelected(entry: DomStep, mode: string): void {
-  const sources = entry.sources as Source[];
+  const sources = sourcesOf(entry);
   assert.deepStrictEqual(
     sources.map((candidate) => candidate.mode),
     ["ExactCommit", "CustomFolder"],
@@ -74,7 +105,7 @@ function assertSelected(entry: DomStep, mode: string): void {
 function assertNothingLocked(entry: DomStep): void {
   assert.strictEqual(entry.overlayPresent, false, `step "${entry.label}" must render no full-panel overlay node`);
   assert.strictEqual(entry.shellInert, false, `step "${entry.label}" must never make the shell inert`);
-  (entry.sources as Source[]).forEach((candidate) => {
+  sourcesOf(entry).forEach((candidate) => {
     assert.strictEqual(candidate.disabled, false, `step "${entry.label}" must keep the ${candidate.mode} radio enabled`);
   });
   if (entry.commitPresent === true) {
@@ -262,11 +293,11 @@ function assertPinnedAndCommitEditing(steps: DomStep[] | undefined, intents: rea
   assert.strictEqual(pinned.textControls, 0, "the alternate-URL text control is deleted");
   assert.strictEqual(pinned.advancedPresent, true, "the store folder lives under Advanced");
   assert.deepStrictEqual(
-    (pinned.actions as Action[]).map((entry) => entry.action),
+    actionsOf(pinned).map((entry) => entry.action),
     ["DownloadLatest", "ViewLicense"],
     "Download latest is always offered; Download pinned only without a source",
   );
-  assert.strictEqual((pinned.status as Record<string, string>).State, "Ready");
+  assert.strictEqual(statusState(pinned), "Ready");
   assert.strictEqual(intents[0]?.type, "ready");
 
   const invalid = step(steps, "invalid-sha");
@@ -362,7 +393,7 @@ function assertDownloadLatest(steps: DomStep[] | undefined, intents: readonly Re
   const ready = step(steps, "ready");
   assertNothingLocked(ready);
   assert.deepStrictEqual(
-    (ready.actions as Action[]).map((entry) => [entry.action, entry.disabled, entry.busy]),
+    actionsOf(ready).map((entry) => [entry.action, entry.disabled, entry.busy]),
     [["DownloadLatest", false, false], ["ViewLicense", false, false]],
     "Ready offers Download latest live and no Download pinned",
   );
@@ -378,7 +409,7 @@ function assertDownloadLatest(steps: DomStep[] | undefined, intents: readonly Re
   assert.strictEqual(clickedButton.disabled, true, "a second identical download cannot start");
 
   const downloading = step(steps, "downloading");
-  assert.strictEqual((downloading.status as Record<string, string>).State, "Downloading");
+  assert.strictEqual(statusState(downloading), "Downloading");
   assertSelected(downloading, "ExactCommit");
   assertNothingLocked(downloading);
   assert.strictEqual(action(downloading, "DownloadLatest").busy, true, "the spinner stays on the invoking button");
@@ -393,10 +424,10 @@ function assertDownloadLatest(steps: DomStep[] | undefined, intents: readonly Re
   assertNothingLocked(edited);
 
   const settled = step(steps, "settled");
-  assert.strictEqual((settled.status as Record<string, string>).State, "Ready");
+  assert.strictEqual(statusState(settled), "Ready");
   assert.strictEqual(settled.commitValue, LATEST_COMMIT, "the finished download wrote the resolved SHA");
   assert.deepStrictEqual(
-    (settled.actions as Action[]).map((entry) => [entry.action, entry.disabled, entry.busy]),
+    actionsOf(settled).map((entry) => [entry.action, entry.disabled, entry.busy]),
     [["DownloadLatest", false, false], ["ViewLicense", false, false]],
     "settling releases the button and removes the spinner",
   );
@@ -405,7 +436,7 @@ function assertDownloadLatest(steps: DomStep[] | undefined, intents: readonly Re
 /** NO SOURCE: a persistent inline row whose fix is the Download pinned button. */
 function assertNoSource(steps: DomStep[] | undefined, intents: readonly Record<string, unknown>[]): void {
   const noSource = step(steps, "no-source");
-  assert.strictEqual((noSource.status as Record<string, string>).State, "NoSource");
+  assert.strictEqual(statusState(noSource), "NoSource");
   assert.strictEqual(noSource.noSourcePresent, true, "the reason renders as a persistent row in the panel");
   assert.ok(
     String(noSource.noSourceText).includes(NO_SOURCE_REASON),
@@ -431,7 +462,7 @@ function assertNoSource(steps: DomStep[] | undefined, intents: readonly Record<s
   assert.strictEqual(action(clicked, "DownloadLatest").busy, false, "the other download button never spins");
 
   const downloading = step(steps, "pinned-downloading");
-  assert.strictEqual((downloading.status as Record<string, string>).State, "Downloading");
+  assert.strictEqual(statusState(downloading), "Downloading");
   assert.strictEqual(downloading.noSourcePresent, true, "the row keeps the busy button until the source settles");
   assert.strictEqual(action(downloading, "DownloadPinned").busy, true);
   assert.strictEqual(action(downloading, "DownloadLatest").busy, false);
@@ -439,10 +470,10 @@ function assertNoSource(steps: DomStep[] | undefined, intents: readonly Record<s
   assertNothingLocked(downloading);
 
   const resolved = step(steps, "resolved");
-  assert.strictEqual((resolved.status as Record<string, string>).State, "Ready");
+  assert.strictEqual(statusState(resolved), "Ready");
   assert.strictEqual(resolved.noSourcePresent, false, "the row disappears once a source exists");
   assert.deepStrictEqual(
-    (resolved.actions as Action[]).map((entry) => entry.action),
+    actionsOf(resolved).map((entry) => entry.action),
     ["DownloadLatest", "ViewLicense"],
     "Download pinned is offered only while there is no source",
   );
