@@ -16,7 +16,7 @@ import type {
   RuleSeverity,
   TypeshedConfigurationState,
 } from "../../configuration-editor-model";
-import { ACTIVE_COMMIT, LATEST_COMMIT, typeshedFixture } from "./typeshed-fixture";
+import { ACTIVE_COMMIT, cacheFixture, LATEST_COMMIT, typeshedFixture } from "./settings-fixture";
 import { asRecord, isRecord, stringArrayField } from "../../unknown-shape";
 
 export const RESULT_TIMEOUT_MS = 30_000;
@@ -87,12 +87,17 @@ export interface ScenarioOutcome {
   readonly intents: readonly Record<string, unknown>[];
 }
 
-/** The persisted Typeshed configuration the fake server holds. */
+/** The persisted Typeshed and caching configuration the fake server holds. */
 export interface HostConfig {
   commit?: string;
   path?: string;
   storeFolder?: string;
+  cacheEnabled?: boolean;
+  cacheDir?: string;
 }
+
+/** The default persistent-cache folder, as the server would resolve it. */
+const DEFAULT_CACHE_DIR = "/workspace/project/.basilisk/cache/check";
 
 /** The lifecycle facts the fake server holds beside the configuration. */
 interface HostLifecycle {
@@ -111,6 +116,16 @@ function typeshedFor(config: HostConfig, lifecycle: HostLifecycle): TypeshedConf
     storeFolder: config.storeFolder,
     downloading: lifecycle.downloading,
     noSourceReason: lifecycle.downloading ? undefined : lifecycle.noSourceReason,
+  });
+}
+
+// [LSPCFGED-CACHE]: the server always resolves the effective folder, so the
+// panel shows a real location whether or not `cache-dir` is written.
+function cacheFor(config: HostConfig): CacheConfigurationState {
+  return cacheFixture({
+    enabled: config.cacheEnabled ?? false,
+    folder: config.cacheDir ?? DEFAULT_CACHE_DIR,
+    folderConfigured: config.cacheDir !== undefined,
   });
 }
 
@@ -146,7 +161,11 @@ function fixtureRules(): ConfigurationSnapshot["rules"] {
   return [...pep, ...basilisk];
 }
 
-function fixtureSnapshot(typeshed: TypeshedConfigurationState, revision: string): ConfigurationSnapshot {
+function fixtureSnapshot(
+  typeshed: TypeshedConfigurationState,
+  cache: CacheConfigurationState,
+  revision: string,
+): ConfigurationSnapshot {
   return {
     rootUri: "file:///workspace/project",
     configUri: "file:///workspace/project/pyproject.toml",
@@ -173,11 +192,17 @@ function fixtureSnapshot(typeshed: TypeshedConfigurationState, revision: string)
     },
     problems: [],
     typeshed,
+    cache,
   };
 }
 
-function isTypeshedMutation(mutation: EditorMutation): boolean {
-  return mutation.kind === "SetTypeshedSetting" || mutation.kind === "RemoveTypeshedSetting";
+/**
+ * Typeshed and cache settings are direct writes with no severity impact, so
+ * the server applies them at once ([LSPCFGED-TYPESHED], [LSPCFGED-CACHE]).
+ */
+function isDirectSettingMutation(mutation: EditorMutation): boolean {
+  return mutation.kind === "SetTypeshedSetting" || mutation.kind === "RemoveTypeshedSetting"
+    || mutation.kind === "SetCacheSetting" || mutation.kind === "RemoveCacheSetting";
 }
 
 /**
@@ -228,6 +253,7 @@ export class ScenarioHost {
     this.revision += 1;
     const snapshot = fixtureSnapshot(
       typeshedFor(this.config, { downloading: this.downloading, noSourceReason: this.noSourceReason }),
+      cacheFor(this.config),
       `fnv1a64:${this.revision}`,
     );
     return {
@@ -249,6 +275,7 @@ export class ScenarioHost {
       case "cancelPreview": return this.readyState("Change discarded; configuration is unchanged");
       case "typeshedAction": return this.typeshedAction(String(message.action));
       case "pickTypeshedFolder": return this.pickFolder(String(message.key));
+      case "pickCacheFolder": return this.pickFolder("CacheDir");
       case "occurrences": return this.occurrences(message);
       default: return undefined;
     }
@@ -270,7 +297,7 @@ export class ScenarioHost {
   }
 
   private preview(mutations: EditorMutation[]): Record<string, unknown> {
-    if (mutations.every(isTypeshedMutation)) {
+    if (mutations.every(isDirectSettingMutation)) {
       mutations.forEach((mutation) => { this.write(mutation); });
       return this.readyState("Applied");
     }
@@ -285,6 +312,7 @@ export class ScenarioHost {
           ? [{ code: mutation.code, before: { kind: "Error" }, after: mutation.severity }]
           : []),
         typeshedChanges: [],
+        cacheChanges: [],
         impact: {
           errorsBefore: 780, errorsAfter: 779,
           warningsBefore: 15, warningsAfter: 16,
@@ -306,6 +334,10 @@ export class ScenarioHost {
 
   /** The writer's closed allowlist, in the same shape the TOML holds. */
   private write(mutation: EditorMutation): void {
+    if (mutation.kind === "SetCacheSetting" || mutation.kind === "RemoveCacheSetting") {
+      this.writeCache(mutation);
+      return;
+    }
     if (mutation.kind !== "SetTypeshedSetting" && mutation.kind !== "RemoveTypeshedSetting") { return; }
     const text = mutation.kind === "SetTypeshedSetting" ? mutation.value : undefined;
     const fields: Record<string, keyof HostConfig> = {
@@ -316,6 +348,18 @@ export class ScenarioHost {
     const field = fields[mutation.key.kind];
     if (field === undefined) { return; }
     Object.assign(this.config, { [field]: text });
+  }
+
+  /** `cache` is a TOML boolean; the wire spells it "true"/"false" text. */
+  private writeCache(mutation: EditorMutation): void {
+    const set = mutation.kind === "SetCacheSetting";
+    if (!set && mutation.kind !== "RemoveCacheSetting") { return; }
+    const key = mutation.key.kind;
+    if (key === "CacheEnabled") {
+      this.config.cacheEnabled = set && mutation.value === "true";
+      return;
+    }
+    this.config.cacheDir = set ? mutation.value : undefined;
   }
 
   // A download is not a configuration edit: the action returns the refreshed
@@ -333,7 +377,9 @@ export class ScenarioHost {
     // A cancelled picker writes nothing — the host re-pushes the state so the
     // controls snap back to the configuration that still holds.
     if (folder === undefined) { return this.readyState(); }
-    if (key === "TypeshedPath") {
+    if (key === "CacheDir") {
+      this.config.cacheDir = folder;
+    } else if (key === "TypeshedPath") {
       this.config.path = folder;
       this.config.commit = undefined;
     } else {

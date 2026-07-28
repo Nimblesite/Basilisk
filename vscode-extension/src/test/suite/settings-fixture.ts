@@ -1,7 +1,9 @@
-// Shared [LSPCFGED-TYPESHED] wire fixtures for the configuration-editor suites.
+// Shared [LSPCFGED-TYPESHED] / [LSPCFGED-CACHE] wire fixtures for the
+// configuration-editor suites — the Project view's two setting panels.
 /** One source of truth for what the server sends, so no suite invents a shape. */
 
 import type {
+  CacheConfigurationState,
   TypeshedConfigurationState,
   TypeshedSource,
   TypeshedStatusState,
@@ -53,5 +55,28 @@ export function typeshedFixture(options: TypeshedFixtureOptions = {}): TypeshedC
     storeFolder: source.kind === "CustomFolder" ? undefined : options.storeFolder,
     licenseAvailable: options.licenseAvailable ?? source.kind !== "CustomFolder",
     status: fixtureStatus(options),
+  };
+}
+
+export interface CacheFixtureOptions {
+  readonly enabled?: boolean;
+  readonly folder?: string;
+  readonly folderConfigured?: boolean;
+  readonly trackedFiles?: number;
+}
+
+/**
+ * The server's caching projection for one root ([LSPCFGED-CACHE]). The default
+ * is the out-of-the-box state: the persistent cache off at its default folder,
+ * with the in-session Salsa layer running as it always does.
+ */
+export function cacheFixture(options: CacheFixtureOptions = {}): CacheConfigurationState {
+  return {
+    persistent: {
+      enabled: options.enabled ?? false,
+      folder: options.folder ?? "/workspace/project/.basilisk/cache/check",
+      folderConfigured: options.folderConfigured ?? options.folder !== undefined,
+    },
+    inSession: { trackedFiles: options.trackedFiles ?? 128 },
   };
 }

@@ -25,7 +25,7 @@ import {
 import { configurationEditorFocusRule } from "../../configuration-editor-registration";
 import { buildClientOptions, trustConfigureSeverityLinks } from "../../lsp-client";
 import { createStore } from "../../store";
-import { typeshedFixture } from "./typeshed-fixture";
+import { cacheFixture, typeshedFixture } from "./settings-fixture";
 
 const ROOT_URI = "file:///workspace";
 const RULE_CODE = "BSK-0001";
@@ -60,6 +60,7 @@ function snapshotWithRule(): ConfigurationSnapshot {
     },
     problems: [],
     typeshed: typeshedFixture({ downloading: true }),
+    cache: cacheFixture(),
   };
 }
 

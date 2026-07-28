@@ -23,7 +23,7 @@ import {
   ScenarioHost,
   type DomStep,
 } from "./webview-dom-harness";
-import { ACTIVE_COMMIT, LATEST_COMMIT, OTHER_COMMIT } from "./typeshed-fixture";
+import { ACTIVE_COMMIT, LATEST_COMMIT, OTHER_COMMIT } from "./settings-fixture";
 import { decodeConfigurationEditorIntent } from "../../configuration-editor-intents";
 import { booleanField, rawField, recordArrayField, stringField } from "../../unknown-shape";
 
