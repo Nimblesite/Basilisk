@@ -25,7 +25,7 @@ import * as os from 'os';
 import * as net from 'net';
 import { execFileSync } from 'child_process';
 
-import { findBasiliskBinary, removeTestDir } from './test-helpers';
+import { SUITE_SETUP_TIMEOUT_MS, findBasiliskBinary, removeTestDir, waitForLspReady } from './test-helpers';
 import { getStore } from '../../extension';
 import { currentStoppedFrameId, evaluateInDebugSession } from '../../dap-evaluate';
 import { debugOutputCursor, debugOutputSince } from '../../dap-output';
@@ -34,9 +34,6 @@ import { ACTIVE_FILE_VARIABLE, applyDebugConfigDefaults } from '../../debug-adap
 import { manifestDebuggers } from "./extension-manifest";
 
 const EXTENSION_ID = 'Nimblesite.basilisk';
-
-/** Maximum time (ms) to wait for the LSP server to fully start. */
-const SERVER_START_WAIT_MS = 10_000;
 
 /** Maximum time (ms) for a debug session to start. */
 const DEBUG_SESSION_TIMEOUT_MS = 15_000;
@@ -672,7 +669,10 @@ suite('Debug Integration E2E Tests', () => {
     let tmpDir: string;
 
     suiteSetup(async function () {
-        this.timeout(SERVER_START_WAIT_MS + STOPPED_EVENT_TIMEOUT_MS);
+        // Sized for the readiness POLL, not for a fixed sleep: a cold win32
+        // start is minutes, and a hook killed early reports as a mystery
+        // failure in the first test rather than as "the server never came up".
+        this.timeout(SUITE_SETUP_TIMEOUT_MS);
 
         basiliskBinary = findBasiliskBinary();
         debugpyAvailable = isDebugpyInstalled();
@@ -700,14 +700,24 @@ suite('Debug Integration E2E Tests', () => {
             `Fixture not found: ${STEPPING_FIXTURE}`
         );
 
-        // Ensure the extension is activated.
-        const ext = vscode.extensions.getExtension(EXTENSION_ID);
-        if (ext && !ext.isActive) {
-            await ext.activate();
-        }
-
-        // Give the LSP server time to fully initialize.
-        await delay(SERVER_START_WAIT_MS);
+        // Wait for the server to actually ADVERTISE its commands, rather than
+        // sleeping a fixed guess and hoping.
+        //
+        // Every test below sends `basilisk.startDebugSession` straight through
+        // `executeCommand`, so it does not go past the debug adapter factory
+        // and does not inherit the factory's readiness gate. A request sent
+        // while the client is still `Starting` is never answered and never
+        // rejected — it just hangs, and every later test in the file times out
+        // behind it.
+        //
+        // The fixed sleep this replaces was 10s, which is longer than a warm
+        // Linux start and SHORTER than a cold win32 one, so the race was
+        // invisible on Linux and reliable on Windows: one hung request and 14
+        // cascading timeouts. Polling until `serverCommands` is populated ends
+        // when the server is genuinely ready, on whatever platform, instead of
+        // encoding one machine's start time as a constant
+        // ([VSIX-CI-PLATFORM-COVERAGE]).
+        await waitForLspReady();
     });
 
     suiteTeardown(async () => {
