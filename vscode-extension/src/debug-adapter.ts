@@ -3,6 +3,7 @@
  * Debug adapter factory, DAP tracker, and logging utilities for Basilisk.
  */
 
+import { asRecord, booleanField, isRecord, numberField, rawField, recordArrayField, recordField, stringField } from "./unknown-shape";
 import * as vscode from "vscode";
 import * as net from "net";
 import { type LanguageClient } from "vscode-languageclient/node";
@@ -26,8 +27,8 @@ const SESSION_ID_PREFIX_LEN = 8;
 
 /** Compact summary of DAP request arguments for logging. */
 export function summarizeArgs(args: unknown): string {
-  if (args === null || args === undefined || typeof args !== "object") {return "";}
-  const obj = args as Record<string, unknown>;
+  if (!isRecord(args)) {return "";}
+  const obj = args;
   const parts: string[] = [];
   if ("threadId" in obj) {parts.push(`thread=${String(obj.threadId)}`);}
   if ("expression" in obj) {parts.push(`expr="${String(obj.expression)}"`);}
@@ -41,19 +42,19 @@ export function summarizeArgs(args: unknown): string {
 
 function summarizeBreakpointsAndSource(obj: Record<string, unknown>, parts: string[]): void {
   if ("breakpoints" in obj) {
-    const bps = obj.breakpoints as { line?: number }[];
-    parts.push(`bps=[${bps.map((b) => b.line).join(",")}]`);
+    const bps = recordArrayField(obj, "breakpoints");
+    parts.push(`bps=[${bps.map((b) => numberField(b, "line")).join(",")}]`);
   }
   if ("source" in obj) {
-    const src = obj.source as { path?: string };
-    if (src.path !== undefined && src.path !== "") {parts.push(`src=${src.path.split("/").pop()}`);}
+    const path = stringField(recordField(obj, "source"), "path");
+    if (path !== undefined && path !== "") {parts.push(`src=${path.split("/").pop()}`);}
   }
 }
 
 /** Compact summary of DAP response/event body for logging. */
 export function summarizeBody(body: unknown): string {
-  if (body === null || body === undefined || typeof body !== "object") {return "";}
-  const obj = body as Record<string, unknown>;
+  if (!isRecord(body)) {return "";}
+  const obj = body;
   const parts: string[] = [];
   summarizeScalarFields(obj, parts);
   summarizeCollectionFields(obj, parts);
@@ -71,26 +72,26 @@ function summarizeScalarFields(obj: Record<string, unknown>, parts: string[]): v
 
 function summarizeCollectionFields(obj: Record<string, unknown>, parts: string[]): void {
   if ("stackFrames" in obj) {
-    const frames = obj.stackFrames as { name?: string; line?: number }[];
+    const frames = recordArrayField(obj, "stackFrames");
     if (frames.length > 0) {
-      parts.push(`frames=[${frames.map((f) => `${String(f.name)}:${String(f.line)}`).join(", ")}]`);
+      parts.push(`frames=[${frames.map((f) => `${String(stringField(f, "name"))}:${String(numberField(f, "line"))}`).join(", ")}]`);
     }
   }
   if ("scopes" in obj) {
-    const scopes = obj.scopes as { name?: string }[];
-    parts.push(`scopes=[${scopes.map((s) => String(s.name)).join(", ")}]`);
+    const scopes = recordArrayField(obj, "scopes");
+    parts.push(`scopes=[${scopes.map((sc) => String(stringField(sc, "name"))).join(", ")}]`);
   }
   if ("variables" in obj) {
-    const vars = obj.variables as { name?: string; value?: string }[];
+    const vars = recordArrayField(obj, "variables");
     if (vars.length <= MAX_INLINE_VARS) {
-      parts.push(`vars=[${vars.map((v) => `${String(v.name)}=${String(v.value)}`).join(", ")}]`);
+      parts.push(`vars=[${vars.map((v) => `${String(stringField(v, "name"))}=${String(stringField(v, "value"))}`).join(", ")}]`);
     } else {
       parts.push(`vars=[${vars.length} items]`);
     }
   }
   if ("threads" in obj) {
-    const threads = obj.threads as { id?: number; name?: string }[];
-    parts.push(`threads=[${threads.map((t) => `${String(t.id)}:${String(t.name)}`).join(", ")}]`);
+    const threads = recordArrayField(obj, "threads");
+    parts.push(`threads=[${threads.map((t) => `${String(numberField(t, "id"))}:${String(stringField(t, "name"))}`).join(", ")}]`);
   }
 }
 
@@ -158,9 +159,10 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
   }
 
   public onWillReceiveMessage(message: unknown): void {
-    const msg = message as { type?: string; command?: string; seq?: number; arguments?: unknown };
-    if (msg.type === "request") {
-      Logger.debug(`[DAP ${this.sessionId}] --> ${msg.command} #${msg.seq} ${summarizeArgs(msg.arguments)}`);
+    if (stringField(message, "type") === "request") {
+      const command = stringField(message, "command");
+      const seq = numberField(message, "seq");
+      Logger.debug(`[DAP ${this.sessionId}] --> ${command} #${seq} ${summarizeArgs(rawField(message, "arguments"))}`);
       // Resume bookkeeping: a successful continue/step RESPONSE implies the
       // thread runs (the `continued` event is optional per the DAP spec), so
       // in-flight resume requests are remembered here and matched below.
@@ -169,13 +171,14 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
   }
 
   public onDidSendMessage(message: unknown): void {
-    const msg = message as {
-      type?: string; command?: string; event?: string;
-      seq?: number; request_seq?: number; success?: boolean; body?: unknown;
-    };
-    if (msg.type === "response") {
-      const text = `[DAP ${this.sessionId}] <-- ${msg.command} #${msg.request_seq} success=${msg.success} ${summarizeBody(msg.body)}`;
-      if (msg.success) {
+    const msg = asRecord(message);
+    const type = stringField(msg, "type");
+    const success = booleanField(msg, "success");
+    if (type === "response") {
+      const command = stringField(msg, "command");
+      const requestSeq = numberField(msg, "request_seq");
+      const text = `[DAP ${this.sessionId}] <-- ${command} #${requestSeq} success=${success} ${summarizeBody(rawField(msg, "body"))}`;
+      if (success === true) {
         Logger.debug(text);
       } else {
         Logger.warn(text);
@@ -184,8 +187,8 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
       // waiting for the optional `continued` event leaves a stale window
       // where couriers evaluate against a sampled frame of a running thread.
       trackResumeResponse(this.fullSessionId, message);
-    } else if (msg.type === "event") {
-      this.handleEvent(msg.event, msg.body);
+    } else if (type === "event") {
+      this.handleEvent(stringField(msg, "event"), rawField(msg, "body"));
     }
   }
 
@@ -195,8 +198,8 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
       // Capture debuggee stdout/stderr so the memory round-trip can recover
       // the `__BASILISK_MEM*__` marker its injection scripts print (debugpy
       // delivers print() output here, not in the evaluate result).
-      const text = (body as { output?: string } | undefined)?.output;
-      if (typeof text === "string") {
+      const text = stringField(body, "output");
+      if (text !== undefined) {
         appendDebugOutput(this.fullSessionId, text);
       }
       return;
@@ -204,8 +207,8 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
     if (event === "process") {
       // The debuggee's OS PID — captured so the CPU profiler can attach to the
       // SAME process the debugger drives (DAP: body.systemProcessId).
-      const pid = (body as { systemProcessId?: number } | undefined)?.systemProcessId;
-      if (typeof pid === "number" && this.callbacks.onDebuggeeProcessId !== undefined) {
+      const pid = numberField(body, "systemProcessId");
+      if (pid !== undefined && this.callbacks.onDebuggeeProcessId !== undefined) {
         Logger.info(`[DAP ${this.sessionId}] debuggee systemProcessId=${pid}`);
         this.callbacks.onDebuggeeProcessId(this.fullSessionId, pid);
       }
@@ -271,9 +274,9 @@ async function handleAttachMode(
   config: vscode.DebugConfiguration,
   lspClient: LanguageClient | undefined
 ): Promise<vscode.DebugAdapterDescriptor> {
-  const connectInfo = config.connect as { host?: string; port: number };
-  let host = connectInfo.host ?? "localhost";
-  let port = connectInfo.port;
+  const connectInfo = asRecord(config.connect);
+  let host = stringField(connectInfo, "host") ?? "localhost";
+  let port = numberField(connectInfo, "port") ?? 0;
   Logger.info(`[Basilisk Debug] Attach mode → ${host}:${port}`);
 
   const alive = await isPortAlive(host, port);
@@ -284,7 +287,7 @@ async function handleAttachMode(
         "workspace/executeCommand",
         {
           command: "basilisk.startDebugSession",
-          arguments: [{ python: (config.python as string | undefined) ?? null }],
+          arguments: [{ python: stringField(config, "python") ?? null }],
         }
       );
       if (result !== undefined && result !== null && typeof result.port === "number") {
@@ -360,7 +363,7 @@ async function handleLaunchMode(
   lspClient: LanguageClient
 ): Promise<vscode.DebugAdapterDescriptor> {
   const configuredPython =
-    (config.python as string | undefined) ??
+    stringField(config, "python") ??
     vscode.workspace.getConfiguration("basilisk").get<string>("python") ??
     null;
 
@@ -455,7 +458,7 @@ function withProgramDefaults(
   if (
     config.type === "basilisk-debug" &&
     config.request === "launch" &&
-    isBlank(config.program as string | undefined)
+    isBlank(stringField(config, "program"))
   ) {
     return { ...config, program: ACTIVE_FILE_VARIABLE };
   }

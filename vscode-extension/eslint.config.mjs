@@ -7,7 +7,9 @@ const { masterRules, testOverrides } = require('./eslint-rules.cjs');
 export default tseslint.config(
   // Global ignores
   {
-    ignores: ['out/', 'coverage/', 'scripts/', '*.config.*', '.vscode-test/', 'node_modules/', '.vscode-test.mjs', 'eslint-rules.cjs'],
+    // `.real-world/` holds gitignored clones of third-party projects used as
+    // checker fixtures — never our source, and not present in CI.
+    ignores: ['out/', 'coverage/', 'scripts/', '*.config.*', '.vscode-test/', 'node_modules/', '.vscode-test.mjs', 'eslint-rules.cjs', '.real-world/'],
   },
 
   // Base configs: strict + stylistic type-checked

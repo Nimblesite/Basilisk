@@ -7,6 +7,7 @@
  * tracking) by reacting to the store's lspState signal.
  */
 
+import { arrayField, asRecord, rawField, recordField, stringField } from "./unknown-shape";
 import * as vscode from "vscode";
 import {
   LanguageClient,
@@ -251,15 +252,15 @@ export function buildClientOptions(
           if (!Array.isArray(results)) {
             return results;
           }
-          return (results as unknown[]).map((item: unknown, idx: number) => {
+          return results.map((item: unknown, idx: number) => {
             const section = params.items[idx]?.section;
             if (section === "basilisk" || section?.startsWith("basilisk.")) {
               return {
-                ...(typeof item === "object" && item !== null ? item as Record<string, unknown> : {}),
+                ...asRecord(item),
                 ...readBasiliskSettings(),
               };
             }
-            return item as Record<string, unknown>;
+            return asRecord(item);
           });
         },
       },
@@ -401,9 +402,7 @@ function showUvSuccessToast(command: string, args: unknown[], isPackageCmd: bool
     // A code action passes the package as a bare string (e.g. ["types-six"]);
     // the command-palette prompt path passes [{ package: "..." }]. Accept both.
     const arg = args[0];
-    const pkg = typeof arg === "string"
-      ? arg
-      : (arg as { package?: string } | undefined)?.package;
+    const pkg = typeof arg === "string" ? arg : stringField(arg, "package");
     const verb = command === "basilisk.uv.remove" ? "Removed" :
       command === "basilisk.uv.addDev" ? "Added dev dependency" : "Added";
     vscode.window.showInformationMessage(`Basilisk: ${verb} ${pkg}.`);
@@ -496,23 +495,27 @@ function registerTabTracking(context: vscode.ExtensionContext, store: Store): vo
  */
 function removeExecuteCommandFeature(client: LanguageClient): void {
   const METHOD = "workspace/executeCommand";
-  const internals = client as unknown as {
-    _features: { registrationType?: { method?: string } }[];
-    _dynamicFeatures: Map<string, unknown>;
-  };
-
-  const idx = internals._features.findIndex(
-    (f) => f.registrationType?.method === METHOD
+  // `_features` and `_dynamicFeatures` are library internals with no public
+  // type. Asserting a shape onto `client` would make the compiler vouch for
+  // fields a vscode-languageclient upgrade can rename without warning, so they
+  // are reached through runtime checks instead — a rename then quietly skips
+  // the removal rather than throwing on a missing member.
+  const features = arrayField(client, "_features");
+  const idx = features.findIndex(
+    (feature) => stringField(recordField(feature, "registrationType"), "method") === METHOD
   );
   if (idx !== -1) {
-    internals._features.splice(idx, 1);
+    features.splice(idx, 1);
   }
 
   // The feature is also stored in _dynamicFeatures — if left there,
   // the client's handleRegistrationRequest path can still call register()
   // on it, which triggers vscode.commands.registerCommand and crashes
   // with "command already exists" on reload.
-  internals._dynamicFeatures.delete(METHOD);
+  const dynamicFeatures: unknown = rawField(client, "_dynamicFeatures");
+  if (dynamicFeatures instanceof Map) {
+    dynamicFeatures.delete(METHOD);
+  }
 }
 
 function collectOpenPythonUris(): Set<string> {

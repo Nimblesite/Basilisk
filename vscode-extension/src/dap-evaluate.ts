@@ -14,6 +14,7 @@
  * resolves that frame (or null when nothing is paused).
  */
 
+import { numberField, recordArrayField, stringField } from "./unknown-shape";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import { Logger } from "./logger";
@@ -73,8 +74,8 @@ export async function evaluateInDebugSession(
   try {
     const request: Record<string, unknown> = { expression, context };
     if (frameId !== undefined) { request.frameId = frameId; }
-    const response = (await session.customRequest("evaluate", request)) as { result?: string };
-    const direct = response.result ?? "";
+    const response: unknown = await session.customRequest("evaluate", request);
+    const direct = stringField(response, "result") ?? "";
     if (direct.includes(MARKER_PREFIX)) { return await resolveMarkerFilePayload(direct); }
     const printed = await waitForMarkerOutput(session.id, cursor);
     return await resolveMarkerFilePayload(printed.length > 0 ? printed : direct);
@@ -186,8 +187,10 @@ export async function currentStoppedFrameId(): Promise<number | null> {
 
 /** Every thread id the debuggee reports (for `allThreadsStopped` stops). */
 async function allThreadIds(session: vscode.DebugSession): Promise<number[]> {
-  const threads = (await session.customRequest("threads")) as { threads?: { id: number }[] };
-  return (threads.threads ?? []).map((thread) => thread.id);
+  const threads: unknown = await session.customRequest("threads");
+  return recordArrayField(threads, "threads")
+    .map((thread) => numberField(thread, "id"))
+    .filter((id): id is number => id !== undefined);
 }
 
 /** A stopped, evaluable frame plus how to release it when the caller is done. */
@@ -294,12 +297,12 @@ async function topFrameIdIfStopped(
   threadId: number,
 ): Promise<number | null> {
   try {
-    const stack = (await session.customRequest("stackTrace", {
+    const stack: unknown = await session.customRequest("stackTrace", {
       threadId,
       startFrame: 0,
       levels: 1,
-    })) as { stackFrames?: { id: number }[] };
-    return stack.stackFrames?.[0]?.id ?? null;
+    });
+    return numberField(recordArrayField(stack, "stackFrames")[0], "id") ?? null;
   } catch {
     return null; // thread not suspended
   }

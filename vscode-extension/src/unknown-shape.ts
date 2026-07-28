@@ -29,6 +29,16 @@ export function asRecord(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : {};
 }
 
+/**
+ * The raw `key` field of `value`, still `unknown`.
+ *
+ * For fields handed straight to another `unknown`-taking function, where
+ * narrowing here would only be undone at the other end.
+ */
+export function rawField(value: unknown, key: string): unknown {
+  return asRecord(value)[key];
+}
+
 /** The `key` field of `value` when it is a string, else `undefined`. */
 export function stringField(value: unknown, key: string): string | undefined {
   const field = asRecord(value)[key];

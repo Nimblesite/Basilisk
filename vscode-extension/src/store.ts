@@ -15,6 +15,7 @@
  * production creates one in activate().
  */
 
+import { arrayField, recordField } from "./unknown-shape";
 import { signal, computed } from "@preact/signals-core";
 import { type LanguageClient, State } from "vscode-languageclient/node";
 import * as vscode from "vscode";
@@ -176,16 +177,11 @@ function replaceInitialTypeshedStatuses(
   signals: StoreSignals,
   client: LanguageClient,
 ): void {
-  const experimental = client.initializeResult?.capabilities.experimental as
-    | { basilisk?: { typeshedStatuses?: unknown } }
-    | undefined;
-  const values = experimental?.basilisk?.typeshedStatuses;
+  const basilisk = recordField(client.initializeResult?.capabilities.experimental, "basilisk");
   const next = new Map<string, TypeshedStatusState>();
-  if (Array.isArray(values)) {
-    for (const value of values) {
-      const change = decodeTypeshedStatusChanged(value);
-      if (change !== undefined) { next.set(change.rootUri, change.status); }
-    }
+  for (const value of arrayField(basilisk, "typeshedStatuses")) {
+    const change = decodeTypeshedStatusChanged(value);
+    if (change !== undefined) { next.set(change.rootUri, change.status); }
   }
   signals.typeshedStatuses.value = next;
 }

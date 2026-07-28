@@ -23,6 +23,7 @@ import {
     closeAllEditors,
     openPythonFile,
 } from "./test-helpers";
+import { errorMessage } from "./caught-error";
 
 import type { ProfileResult } from '../../profiler-decorations';
 import {
@@ -89,7 +90,7 @@ suite('Profiler — Start/Stop Lifecycle', () => {
             });
             assert.fail('profiler.start with PID 0 should have thrown');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(
                 message.includes('not found') ||
                     message.includes('Process') ||
@@ -110,7 +111,7 @@ suite('Profiler — Start/Stop Lifecycle', () => {
             });
             assert.fail('profiler.stop with unknown session should have thrown');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(
                 message.includes('session') ||
                     message.includes('not found') ||
@@ -128,7 +129,7 @@ suite('Profiler — Start/Stop Lifecycle', () => {
             );
             assert.fail('profiler.snapshot with unknown session should have thrown');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(
                 message.includes('session') ||
                     message.includes('not found') ||
@@ -156,7 +157,7 @@ suite('Profiler — Start/Stop Lifecycle', () => {
             await vscode.commands.executeCommand('basilisk.profiler.start', {});
             assert.fail('profiler.start with no PID should have thrown');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(
                 message.length > 0,
                 'Should have an error message, got empty',
@@ -169,7 +170,7 @@ suite('Profiler — Start/Stop Lifecycle', () => {
             await vscode.commands.executeCommand('basilisk.profiler.stop', {});
             assert.fail('profiler.stop with missing sessionId should have thrown');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(
                 message.length > 0,
                 'Should have an error message for missing sessionId',
@@ -305,7 +306,7 @@ suite('Profiler — Lifecycle Interaction', () => {
             await vscode.commands.executeCommand('basilisk.profiler.start', { pid: 0 });
             assert.fail('profiler.start with PID 0 should have thrown');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(message.length > 10,
                 `Error message should be descriptive, got: "${message}"`);
             assert.ok(typeof message === 'string', 'Error should be a string message');
@@ -321,7 +322,7 @@ suite('Profiler — Lifecycle Interaction', () => {
             await vscode.commands.executeCommand('basilisk.profiler.start', { pid: -1 });
             assert.fail('profiler.start with negative PID should have thrown');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(message.length > 0, 'Error message should not be empty');
             assert.ok(typeof message === 'string', 'Error should produce a string message');
             assert.ok(!message.startsWith('undefined'),
@@ -334,7 +335,7 @@ suite('Profiler — Lifecycle Interaction', () => {
             await vscode.commands.executeCommand('basilisk.profiler.start', { pid: 999999999 });
             assert.fail('profiler.start with nonexistent PID should have thrown');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(message.length > 0, 'Error message for large PID should not be empty');
             assert.ok(typeof message === 'string', 'Error should be a string');
             assert.ok(
@@ -356,7 +357,7 @@ suite('Profiler — Lifecycle Interaction', () => {
             });
             assert.fail('profiler.stop without starting should have thrown');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(message.length > 0, 'Should have an error message');
             assert.ok(
                 message.includes('session') ||
@@ -376,7 +377,7 @@ suite('Profiler — Lifecycle Interaction', () => {
             );
             assert.fail('profiler.snapshot without starting should have thrown');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(message.length > 0, 'Should have an error message');
             assert.ok(
                 message.includes('session') ||
@@ -429,7 +430,7 @@ suite('Profiler — Lifecycle Interaction (Continued)', () => {
             try {
                 await call;
             } catch (err: unknown) {
-                const message = (err as Error).message ?? String(err);
+                const message = errorMessage(err);
                 const stackTraceLineCount = message.split('\n')
                     .filter((line: string) => line.trim().startsWith('at ')).length;
                 assert.ok(stackTraceLineCount < 3,
@@ -624,7 +625,7 @@ suite('Memory Profiler — Extended', () => {
         try {
             await vscode.commands.executeCommand('basilisk.memoryStart');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(message.length > 0, 'Error message should not be empty');
             assert.ok(typeof message === 'string', 'Error should be a string');
         }
@@ -635,7 +636,7 @@ suite('Memory Profiler — Extended', () => {
         try {
             await vscode.commands.executeCommand('basilisk.memorySnapshot');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(message.length > 0, 'Error should have a message');
         }
         assert.ok(true, 'memorySnapshot without session did not crash');
@@ -661,7 +662,7 @@ suite('Memory Profiler — Extended', () => {
                 dismiss,
             ]);
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(typeof message === 'string', 'Error should be a string');
         }
         assert.ok(true, 'memoryReferences command was callable without crash');
@@ -846,7 +847,7 @@ suite('Profiler — Error Handling', () => {
             });
             assert.fail('Should have thrown for invalid params');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(message.length > 0, 'Error message should not be empty');
             assert.ok(typeof message === 'string', 'Error should be string');
             assert.ok(
@@ -876,7 +877,7 @@ suite('Profiler — Error Handling', () => {
             await vscode.commands.executeCommand('basilisk.profiler.stop', { sessionId: '' });
             assert.fail('Empty sessionId should produce an error');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(message.length > 0, 'Error should have a message');
             assert.ok(typeof message === 'string', 'Error should be string type');
             assert.ok(
@@ -891,7 +892,7 @@ suite('Profiler — Error Handling', () => {
             await vscode.commands.executeCommand('basilisk.profiler.snapshot', { sessionId: null });
             assert.fail('Null sessionId should produce an error');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(message.length > 0, 'Error should have a message');
             assert.ok(typeof message === 'string', 'Error should be string type');
             assert.ok(
@@ -910,7 +911,7 @@ suite('Profiler — Error Handling', () => {
             await vscode.commands.executeCommand('basilisk.profiler.start', { pid: 2147483647 });
             assert.fail('Nonexistent PID should produce an error');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(
                 !message.includes('ECONNREFUSED') &&
                     !message.includes('ECONNRESET'),
@@ -931,7 +932,7 @@ suite('Profiler — Error Handling', () => {
             });
             assert.fail('Should have thrown');
         } catch (err: unknown) {
-            const message = (err as Error).message ?? String(err);
+            const message = errorMessage(err);
             assert.ok(
                 !message.trimStart().startsWith('{') ||
                     message.includes('session') ||

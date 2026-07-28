@@ -23,6 +23,8 @@
  */
 
 /** Cap per-session buffer so a long-lived session can't grow it unbounded. */
+import { booleanField, numberField, rawField, stringField } from "./unknown-shape";
+
 const MAX_BUFFER_CHARS = 1_000_000;
 
 /** sessionId → accumulated output text. */
@@ -44,22 +46,20 @@ export function trackSuspensionEvent(
   event: "stopped" | "continued",
   body: unknown,
 ): void {
-  const info = body as
-    | { threadId?: number; allThreadsStopped?: boolean; allThreadsContinued?: boolean }
-    | undefined;
+  const threadId = numberField(body, "threadId");
   if (event === "stopped") {
     const set = stoppedThreads.get(sessionId) ?? new Set<number>();
-    if (typeof info?.threadId === "number") { set.add(info.threadId); }
-    if (info?.allThreadsStopped === true) { set.add(ALL_THREADS); }
+    if (threadId !== undefined) { set.add(threadId); }
+    if (booleanField(body, "allThreadsStopped") === true) { set.add(ALL_THREADS); }
     if (set.size > 0) { stoppedThreads.set(sessionId, set); }
     return;
   }
-  if (info?.allThreadsContinued !== false || typeof info.threadId !== "number") {
+  if (booleanField(body, "allThreadsContinued") !== false || threadId === undefined) {
     stoppedThreads.delete(sessionId);
     return;
   }
   const set = stoppedThreads.get(sessionId);
-  set?.delete(info.threadId);
+  set?.delete(threadId);
   set?.delete(ALL_THREADS);
   if (set?.size === 0) { stoppedThreads.delete(sessionId); }
 }
@@ -85,13 +85,12 @@ const pendingResumes = new Map<string, Map<number, { command: string; threadId?:
 
 /** Remember an outgoing resume-implying request (DAP tracker, editor → adapter). */
 export function trackResumeRequest(sessionId: string, message: unknown): void {
-  const msg = message as
-    | { type?: string; command?: string; seq?: number; arguments?: { threadId?: number } }
-    | undefined;
-  if (msg?.type !== "request" || typeof msg.seq !== "number") { return; }
-  if (msg.command === undefined || !RESUME_COMMANDS.has(msg.command)) { return; }
+  const seq = numberField(message, "seq");
+  if (stringField(message, "type") !== "request" || seq === undefined) { return; }
+  const command = stringField(message, "command");
+  if (command === undefined || !RESUME_COMMANDS.has(command)) { return; }
   const pending = pendingResumes.get(sessionId) ?? new Map<number, { command: string; threadId?: number }>();
-  pending.set(msg.seq, { command: msg.command, threadId: msg.arguments?.threadId });
+  pending.set(seq, { command, threadId: numberField(rawField(message, "arguments"), "threadId") });
   pendingResumes.set(sessionId, pending);
 }
 
@@ -103,17 +102,17 @@ export function trackResumeRequest(sessionId: string, message: unknown): void {
  * re-arms the bookkeeping when the step lands.
  */
 export function trackResumeResponse(sessionId: string, message: unknown): void {
-  const msg = message as
-    | { type?: string; request_seq?: number; success?: boolean; body?: { allThreadsContinued?: boolean } }
-    | undefined;
-  if (msg?.type !== "response" || typeof msg.request_seq !== "number") { return; }
+  const requestSeq = numberField(message, "request_seq");
+  if (stringField(message, "type") !== "response" || requestSeq === undefined) { return; }
   const pending = pendingResumes.get(sessionId);
-  const request = pending?.get(msg.request_seq);
+  const request = pending?.get(requestSeq);
   if (pending === undefined || request === undefined) { return; }
-  pending.delete(msg.request_seq);
+  pending.delete(requestSeq);
   if (pending.size === 0) { pendingResumes.delete(sessionId); }
-  if (msg.success !== true) { return; }
-  const allThreads = ALL_THREAD_RESUMES.has(request.command) && msg.body?.allThreadsContinued !== false;
+  if (booleanField(message, "success") !== true) { return; }
+  const allThreads =
+    ALL_THREAD_RESUMES.has(request.command) &&
+    booleanField(rawField(message, "body"), "allThreadsContinued") !== false;
   trackSuspensionEvent(sessionId, "continued", {
     threadId: request.threadId,
     allThreadsContinued: allThreads,
