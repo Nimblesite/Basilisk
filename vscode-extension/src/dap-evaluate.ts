@@ -31,8 +31,30 @@ const MARKER_PREFIX = "__BASILISK_";
  *  temp file instead of stdout — see [PROFILE-MEMORY-COURIER] and
  *  `scripts.rs::emit_via_file_helper`. The text after it is the file path. */
 const FILE_PAYLOAD_MARKER = "__BASILISK_MEM_FILE__";
-/** How long to wait for a script's (possibly large, chunked) marker output. */
-const MARKER_WAIT_MS = 4000;
+/**
+ * How long to wait for a script's (possibly large, chunked) marker output.
+ *
+ * This budget is for DELIVERY, not for work: the evaluate has already returned,
+ * and we are waiting on the marker line to travel debuggee stdout -> debugpy ->
+ * adapter -> DAP `output` event -> extension host. The wait loop below returns
+ * the instant the line is complete, so a larger ceiling costs nothing when the
+ * pipeline is prompt — it only changes what happens when it is slow.
+ *
+ * The previous 4s was calibrated on a prompt machine, and on the win32 CI runner
+ * it expired mid-delivery: the wait then returned marker-LESS output, which the
+ * courier posted on to `basilisk.memory.ingest`, and the LSP rejected it with
+ * "no recognized __BASILISK_MEM*__ marker in script output"
+ * (profiler/memory/session.rs). That reads as a broken injection script rather
+ * than as a wait that gave up, which is why the same test failed three different
+ * ways across consecutive runs ([VSIX-CI-PLATFORM-COVERAGE]).
+ *
+ * 20s is a judgement, not a measurement — no per-platform delivery figure was
+ * taken. It is bounded from both sides: comfortably above the sibling
+ * `FILE_PAYLOAD_WAIT_MS` render budget's granularity, and small enough that even
+ * three fully-expired legs stay inside the courier round-trip's own 90s test
+ * budget. Nothing asserts how QUICKLY a marker arrives.
+ */
+const MARKER_WAIT_MS = 20_000;
 /** Poll interval while waiting for marker output. */
 const MARKER_POLL_MS = 25;
 /** How long to wait for the debuggee's render worker to fill the payload file.
@@ -145,7 +167,20 @@ async function waitForMarkerOutput(sessionId: string, cursor: number): Promise<s
     // The payload line is complete once a newline follows the marker (the
     // `print()` terminator); `includes(.., markerAt)` searches from the marker.
     const complete = markerAt !== -1 && out.includes("\n", markerAt);
-    if (complete || Date.now() >= deadline) {
+    if (complete) {
+      return out;
+    }
+    if (Date.now() >= deadline) {
+      // Say WHY we gave up. Returning quietly hands marker-less (or truncated)
+      // output to the ingest leg, which rejects it as an unrecognised marker —
+      // blaming the injection script for a wait that ran out. Distinguish the
+      // two cases the caller cannot: nothing arrived at all, versus a marker
+      // that arrived but never terminated.
+      Logger.warn(
+        markerAt === -1
+          ? `[Memory] no marker in ${out.length} bytes of debuggee output after ${MARKER_WAIT_MS}ms`
+          : `[Memory] marker output still unterminated after ${MARKER_WAIT_MS}ms (${out.length} bytes) — payload likely truncated`,
+      );
       return out;
     }
     await delay(MARKER_POLL_MS);
