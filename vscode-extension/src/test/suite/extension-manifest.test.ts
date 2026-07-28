@@ -55,6 +55,18 @@ function onDisk(key: string): Record<string, unknown>[] {
   return Array.isArray(raw) ? raw.map(asRecord) : [];
 }
 
+/**
+ * The raw entries of one TOP-LEVEL manifest array.
+ *
+ * `activationEvents` sits beside `contributes` rather than inside it, so
+ * reading it with `onDisk` would find nothing and quietly compare the readers
+ * against an empty list — the exact failure mode this suite exists to catch.
+ */
+function topLevelOnDisk(key: string): unknown[] {
+  const raw = rawField(manifestOnDisk(), key);
+  return Array.isArray(raw) ? raw : [];
+}
+
 suite("Extension manifest readers [VSIX]", () => {
   test("identity fields match the file", () => {
     const displayName = manifestDisplayName();
@@ -66,7 +78,7 @@ suite("Extension manifest readers [VSIX]", () => {
 
   test("activation events match the file exactly", () => {
     const events = manifestActivationEvents();
-    const declared = onDisk("activationEvents");
+    const declared = topLevelOnDisk("activationEvents");
     assert.ok(Array.isArray(events), "activationEvents must be an array");
     assert.ok(events.length > 0, "the extension must declare activation events");
     assert.ok(events.includes("onLanguage:python"), "must activate on Python");
@@ -75,7 +87,11 @@ suite("Extension manifest readers [VSIX]", () => {
       events.includes(`onDebugResolve:${DEBUGGER_TYPE}`),
       "must activate when resolving its own debug type",
     );
-    assert.strictEqual(events.length, declared.length, "no activation event may be dropped");
+    assert.deepStrictEqual(
+      events,
+      declared,
+      "the reader must report the file's activation events verbatim — order included",
+    );
     for (const event of events) {
       assert.strictEqual(typeof event, "string", `activation event ${event} must be a string`);
       assert.ok(event.length > 0, "an activation event must never be empty");
