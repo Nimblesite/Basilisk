@@ -225,6 +225,49 @@ b: str = greeting(\"world\")
     Ok(())
 }
 
+/// Find-references must not report occurrences of the name inside string
+/// literals or docstring prose — those are data, not references.
+#[tokio::test]
+async fn test_ws_find_references_skips_strings_and_docstrings() -> TestResult<()> {
+    let uri = "file:///ws_refs_strings.py";
+    let code = "def greet(name: str) -> str:\n    \"\"\"greet politely.\"\"\"\n    return name\n\nmsg: str = \"greet\"\nx: str = greet(\"hi\")\n";
+
+    let (_fixture, resp) = open_and_request(
+        uri,
+        code,
+        1106,
+        "textDocument/references",
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 4 },
+            "context": { "includeDeclaration": true }
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let refs = parsed["result"]
+        .as_array()
+        .ok_or("references result should be an array")?;
+
+    // Only the definition (line 0) and the call (line 5) are references; the
+    // docstring prose (line 1) and the string literal (line 4) are not.
+    for reference in refs {
+        let line = reference["range"]["start"]["line"].as_u64().unwrap_or(99);
+        assert!(
+            line == 0 || line == 5,
+            "reference must not point into string content on line {line}: {resp}"
+        );
+    }
+    assert_eq!(
+        refs.len(),
+        2,
+        "expected exactly 2 references (definition + call): {resp}"
+    );
+
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_ws_find_references_cross_file() -> TestResult<()> {
     // Set up workspace: helpers.py defines `greet`, main.py imports and uses it.

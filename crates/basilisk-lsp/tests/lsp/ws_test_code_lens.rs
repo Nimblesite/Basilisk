@@ -32,6 +32,43 @@ y = greet(\"world\")
     Ok(())
 }
 
+/// Reference counts must not count occurrences of the name inside string
+/// literals or docstring prose.
+#[tokio::test]
+async fn test_ws_code_lens_count_skips_string_content() -> TestResult<()> {
+    let code = "\
+def helper() -> int:
+    \"\"\"helper returns one.\"\"\"
+    return 1
+
+label: str = \"helper\"
+x: int = helper()
+";
+    let (_fixture, resp) = open_and_request(
+        "file:///ws_code_lens_strings.py",
+        code,
+        406,
+        "textDocument/codeLens",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///ws_code_lens_strings.py" }
+        }),
+    )
+    .await?;
+
+    // Only the call on the last line counts; the docstring mention and the
+    // string literal do not. Counting them all would report "3 references".
+    assert!(
+        resp.contains("1 reference"),
+        "codeLens should show '1 reference' for helper: {resp}"
+    );
+    assert!(
+        !resp.contains("3 references"),
+        "codeLens must not count string/docstring mentions: {resp}"
+    );
+
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_ws_code_lens_class_references() -> TestResult<()> {
     let code = "\

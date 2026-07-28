@@ -1,7 +1,8 @@
 # LSP Rename String-Literal Filter — Bug-Fix Working Doc
 
-**Status: IN PROGRESS — Step 1 (understanding) of the [fix-bug skill](../../.claude/skills/fix-bug/SKILL.md) workflow.**
-This doc is the live handoff record: any agent can resume from the "Next step" section at the bottom.
+**Status: FIXED and VERIFIED.** Fix landed in commit `f6dd07d6` (branch `fixes`);
+hardening tests added on top (working tree). All steps of the
+[fix-bug skill](../../.claude/skills/fix-bug/SKILL.md) workflow completed.
 
 ## The bug
 
@@ -100,17 +101,56 @@ Rewrite `is_in_string_or_comment` on ruff's lexer instead of the line heuristic:
       with `rename must not edit string content on line 1: {"newText":"amount","range":
       {"start":{"line":1,"character":19},"end":{"line":1,"character":24}}}` — the word `total`
       inside the docstring. Fails precisely on the bug. ✅
-- [ ] Step 4: Show failure to user; STOP for explicit confirmation. ⚠️ Do not fix before this.
-      **← CURRENT STATE: awaiting user confirmation.**
-- [ ] Step 5: Minimal fix in `is_in_string_or_comment` (+ helpers it needs).
-- [ ] Step 6: New test passes.
-- [ ] Step 7: Full suite (`make test` — fail-fast, coverage-enforced) + clippy/fmt.
+- [x] Step 4: Failure shown; user confirmed ("go ahead").
+- [x] Step 5: Fix implemented — new module `crates/basilisk-lsp/src/source_mask.rs`
+      (`SourceMask`, Implements [LSPARCH-FEATURES-REFS]): built once per sweep via
+      `ruff_python_parser::parse_module`; masks `Comment`, `String` (excluding
+      annotation-span strings, collected by an AST `Visitor` over parameter/return/
+      `AnnAssign` annotations), and `FStringMiddle`/`TStringMiddle` literal chunks —
+      so f-string interpolation fields and PEP 563 string annotations stay renameable.
+      Parse failure falls back to the old comment-only heuristic. The broken
+      `is_in_string_or_comment` was deleted; all four sweep sites now take
+      `&SourceMask` (`scope_tree::find_identifier_in_slice`,
+      `references::find_identifier_occurrences` / `find_kwarg_in_line` /
+      `find_attr_in_span`); `find_keyword_arg_sites` now tracks absolute line
+      offsets (CRLF-exact via `split_inclusive`). Callers build one mask per file:
+      rename, scoped refs, highlight, code-lens, 4 cross-file sweeps in navigation.
+- [x] Step 6: Regression test passes.
+- [x] Step 7 (scoped per user instruction — focused verification instead of full CI):
+      all suites around the touched code green — basilisk-lsp lib 666, ws_navigation 84,
+      ws_features 133, ws_core 89, lsp_stdio e2e 98; clippy clean; fmt clean.
 
-## Next step
+## Verification (inside-out and backwards)
 
-Answer open questions 1–3 (read `ws_test_scope_rename.rs`, grep reference/highlight/code-lens
-tests for string expectations, inspect `basilisk_parser::ParsedModule` for retained AST/tokens),
-then write the Step-2 failing test.
+Backwards check: sources temporarily reverted to pre-fix (`git checkout HEAD~1 --
+crates/basilisk-lsp/src/`), new tests run, then restored. On the OLD code exactly the
+seven bug-catching tests fail and every non-regression pin passes — proving the tests
+target the bug and nothing else:
+
+| Test | Old code | Fixed |
+|---|---|---|
+| rename skips docstring + string literal (507) | FAIL | pass |
+| original repro: module var + string (510) | FAIL | pass |
+| kwarg site renamed, string lookalike skipped (512) | FAIL | pass |
+| self-attr rename skips docstring mention (513) | FAIL | pass |
+| find-references skips strings/docstrings (1106) | FAIL | pass |
+| documentHighlight skips string content (631) | FAIL | pass |
+| code-lens count skips string/docstring (406) | FAIL | pass |
+| comment text still skipped (511) | pass | pass |
+| f-string interpolation still renamed (508) | pass | pass |
+| PEP 563 string annotations still renamed (509) | pass | pass |
+| `__all__` entry still renamed (514) | pass | pass |
+
+Plus 5 unit tests in `source_mask.rs` (strings/docstrings/comments masked; f-string
+fields and annotation strings exempt; parse-failure fallback).
+
+## Known accepted limitations (documented, not regressions)
+
+- `cast("MyClass", x)` / implicit string type aliases outside annotation position are
+  masked (not renamed) — the old code renamed them only by accident of renaming ALL
+  string content; PEP 563 annotation positions are the supported exemption.
+- On files with syntax errors the mask degrades to comment-only filtering (exactly the
+  pre-fix behaviour).
 
 ## Session context (for a resuming agent)
 
