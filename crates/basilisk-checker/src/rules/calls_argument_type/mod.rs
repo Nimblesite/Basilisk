@@ -13,6 +13,9 @@
 //! result: int = add("hello", "world")   # str literals for int params → E0012
 //! ```
 
+mod arg_types;
+mod builtin_methods;
+
 use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, RhsKind, Span, TypeVarCallInfo};
@@ -106,94 +109,8 @@ impl Rule for ArgumentTypeMismatch {
                 }
             }
         }
-        check_builtin_method_argument_types(module, diagnostics);
+        builtin_methods::check_builtin_method_argument_types(module, diagnostics);
     }
-}
-
-/// Validate literal arguments to bound built-in methods against all applicable
-/// overloads from the active `builtins.pyi` declaration ([STUBRES-PYI] #288).
-fn check_builtin_method_argument_types(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    for call in &module.calls {
-        let declarations: Vec<_> = module
-            .builtin_methods_for_call(call)
-            .into_iter()
-            .filter(|declaration| {
-                super::calls_argument_count::stub_arity_accepts(declaration, call.args.len())
-            })
-            .collect();
-        if declarations.is_empty() {
-            continue;
-        }
-        if declarations.iter().any(|declaration| {
-            call.args.iter().enumerate().all(|(index, (rhs, _))| {
-                declaration
-                    .params
-                    .get(index)
-                    .and_then(|parameter| parameter.annotation.as_deref())
-                    .is_none_or(|annotation| stub_argument_compatible(annotation, rhs))
-            })
-        }) {
-            continue;
-        }
-        let Some((index, (rhs, span))) = call.args.iter().enumerate().find(|(index, (rhs, _))| {
-            declarations.iter().all(|declaration| {
-                declaration
-                    .params
-                    .get(*index)
-                    .and_then(|parameter| parameter.annotation.as_deref())
-                    .is_some_and(|annotation| !stub_argument_compatible(annotation, rhs))
-            })
-        }) else {
-            continue;
-        };
-        let expected = declarations
-            .iter()
-            .filter_map(|declaration| declaration.params.get(index))
-            .filter_map(|parameter| parameter.annotation.as_deref())
-            .collect::<std::collections::BTreeSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>()
-            .join(" | ");
-        let description = format!("an argument incompatible with `{expected}` ({rhs:?})");
-        diagnostics.push(make_diagnostic(
-            &call.callee,
-            declarations
-                .first()
-                .and_then(|declaration| declaration.params.get(index))
-                .map_or("argument", |parameter| parameter.name.as_str()),
-            &expected,
-            &description,
-            *span,
-            &module.path,
-        ));
-    }
-}
-
-fn stub_argument_compatible(annotation: &str, rhs: &RhsKind) -> bool {
-    let normalized = annotation.replace(' ', "");
-    if normalized == "Any" || normalized == "object" {
-        return true;
-    }
-    if normalized.contains("Iterable[str]") || normalized.contains("Iterable[LiteralString]") {
-        return match rhs {
-            RhsKind::StrLiteral
-            | RhsKind::EmptyList
-            | RhsKind::Other
-            | RhsKind::CallExpr
-            | RhsKind::KnownCall(_) => true,
-            RhsKind::List(items) | RhsKind::Tuple(items) | RhsKind::Set(items) => {
-                items.iter().all(|item| matches!(item, RhsKind::StrLiteral))
-            }
-            _ => false,
-        };
-    }
-    if normalized.contains("LiteralString") {
-        return matches!(
-            rhs,
-            RhsKind::StrLiteral | RhsKind::Other | RhsKind::CallExpr
-        );
-    }
-    arg_rhs_mismatch(annotation, rhs, None).is_none()
 }
 
 /// For an overloaded function, determine which function signature to check
@@ -271,7 +188,7 @@ fn is_overload_stub(func: &FunctionInfo, _module: &ResolvedModule) -> bool {
 ///
 /// `arg_source` is the raw source text of the argument expression, used to
 /// disambiguate `CallExpr` arguments (e.g. detecting `type(None)` vs other calls).
-fn arg_rhs_mismatch(
+pub(super) fn arg_rhs_mismatch(
     annotation: &str,
     rhs: &RhsKind,
     arg_source: Option<&str>,
@@ -411,7 +328,7 @@ fn is_type_call(arg_source: Option<&str>) -> bool {
     src.starts_with("type(") && src.ends_with(')')
 }
 
-fn make_diagnostic(
+pub(super) fn make_diagnostic(
     callee: &str,
     param_name: &str,
     annotation: &str,

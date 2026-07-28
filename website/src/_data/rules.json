@@ -4567,6 +4567,55 @@
     ]
   },
   {
+    "code": "imports_missing_name",
+    "scope": "check",
+    "provenance": "pep",
+    "tags": [
+      "pep"
+    ],
+    "summary": "Importing a name the resolved module does not define",
+    "summaryHtml": "Importing a name the resolved module does not define",
+    "body": [
+      {
+        "type": "text",
+        "html": "<code>from M import name</code> only proves that the module path <code>M</code> resolves to a file; it says nothing about <code>name</code>. When <code>M</code> is a workspace <code>.py</code> source Basilisk can see every module-level binding, so importing a name that is neither bound in <code>M</code>, nor an existing submodule of the package, is an <code>ImportError</code> waiting for runtime (GitHub #55)."
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "from demo.late_module import provide_value  # late_module.py defines nothing"
+      },
+      {
+        "type": "text",
+        "html": "The rule is deliberately conservative \u2014 silence over guessing:"
+      },
+      {
+        "type": "text",
+        "html": "- Every module-level binding form counts as defined: <code>def</code>/<code>class</code>,   every assignment form, <code>import</code>/<code>from</code> re-exports, <code>for</code>/<code>with</code>/<code>match</code>/   <code>except</code> targets, walrus expressions, and <code>type</code> alias statements. - A module-level <code>__getattr__</code> (<a href=\"https://peps.python.org/pep-0562/\">PEP 562</a>) permits any name. - A target containing <code>from x import *</code> has an unknowable member set and   suppresses the rule for that module. - <code>from pkg import mod</code> is satisfied by an existing <code>pkg/mod.py</code>,   <code>pkg/mod.pyi</code>, or <code>pkg/mod/</code> submodule."
+      },
+      {
+        "type": "text",
+        "html": "Scope: <code>from</code>-imports resolved to workspace <code>.py</code> sources. Stub-backed imports are covered by <code>imports_module_attribute</code>; site-packages sources stay with <code>missing_type_stubs</code> (<a href=\"https://peps.python.org/pep-0561/\">PEP 561</a> draws the trust boundary there)."
+      }
+    ],
+    "group": "Type System",
+    "docsUrl": "https://www.basilisk-python.dev/errors/imports_missing_name",
+    "references": [
+      {
+        "label": "Typing spec: Distributing type information",
+        "url": "https://typing.python.org/en/latest/spec/distributing.html"
+      },
+      {
+        "label": "PEP 561",
+        "url": "https://peps.python.org/pep-0561/"
+      },
+      {
+        "label": "PEP 562",
+        "url": "https://peps.python.org/pep-0562/"
+      }
+    ]
+  },
+  {
     "code": "imports_module_attribute",
     "scope": "check",
     "provenance": "pep",

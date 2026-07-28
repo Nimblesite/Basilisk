@@ -88,7 +88,15 @@ fn resolve_module_cached_with_importer(
     //    (`.pyi` before `.py`).
     for stub_dir in &search_paths.stub_paths {
         if let Some(resolved) = try_resolve_stub_only(module_name, stub_dir, fs) {
-            return Some(resolved);
+            // A stub that fails to parse — or a module stub that declares
+            // nothing — carries no type information. Treat it as absent so
+            // resolution falls through to the remaining steps and BSK-0152
+            // still reports the package as untyped, instead of a contentless
+            // `.pyi` silencing the very rule it was generated to satisfy
+            // (GitHub #336).
+            if stub_provides_type_info(&resolved.path, module_name) {
+                return Some(resolved);
+            }
         }
     }
     for dir in &search_paths.extra_paths {
@@ -192,6 +200,45 @@ pub(crate) fn resolve_module_with_importer_cached(
         importing_file.and_then(Path::parent),
         fs,
     )
+}
+
+/// Whether a step-1 user stub actually provides type information: it parses,
+/// and (for a module stub) declares or re-exports at least one name. An empty
+/// but parseable `__init__.pyi` remains valid — it is the conventional package
+/// marker of a partial stub tree. Implements the GitHub #336 fix: an empty or
+/// unparseable stub is treated as absent rather than as type coverage.
+fn stub_provides_type_info(stub_path: &Path, module_name: &str) -> bool {
+    let Ok(content) = basilisk_common::fs::read_tracked(stub_path) else {
+        return false;
+    };
+    let tier = basilisk_stubs::user_stub_tier(&content);
+    let Ok(stub) = basilisk_stubs::parse_pyi_source(
+        &content,
+        stub_path,
+        module_name,
+        basilisk_stubs::StubSource::UserStub,
+        tier,
+    ) else {
+        return false;
+    };
+    stub_path
+        .file_name()
+        .is_some_and(|name| name == "__init__.pyi")
+        || stub_declares_names(&stub)
+}
+
+/// Whether a parsed stub declares or re-exports at least one name.
+fn stub_declares_names(stub: &basilisk_stubs::StubModule) -> bool {
+    !stub.functions.is_empty()
+        || !stub.overloads.is_empty()
+        || !stub.classes.is_empty()
+        || !stub.variables.is_empty()
+        || !stub.reexported_names.is_empty()
+        || !stub.star_reexports.is_empty()
+        || stub
+            .dunder_all
+            .as_ref()
+            .is_some_and(|names| !names.is_empty())
 }
 
 /// Try resolving a module in a stub-only directory (only `.pyi` files).
