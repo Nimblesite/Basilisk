@@ -9,6 +9,7 @@ import * as net from "net";
 import { type LanguageClient } from "vscode-languageclient/node";
 import { Logger } from "./logger";
 import { DapTcpProxy } from "./dap-proxy";
+import type { Result } from "./result";
 import {
   appendDebugOutput,
   clearDebugOutput,
@@ -380,9 +381,26 @@ async function handleLaunchMode(
   return new vscode.DebugAdapterServer(proxyPort);
 }
 
-/** Create a debug adapter factory bound to the given LSP client accessor. */
+/**
+ * How long a debug launch waits for the language server to come up.
+ *
+ * Sized for a cold start, not a warm one: on win32 spawning the server binary
+ * and completing the handshake takes ~10s, and a user who opens a project and
+ * immediately presses F5 is inside that window every time.
+ */
+const LSP_READY_FOR_DEBUG_MS = 60_000;
+
+/**
+ * Create a debug adapter factory bound to the given LSP readiness accessor.
+ *
+ * The accessor waits for the client to reach Running rather than handing back
+ * whatever reference exists. A client that merely EXISTS may still be
+ * `Starting`, and a request sent into that state is never answered and never
+ * rejected — the debug session just hangs, with nothing written anywhere to
+ * say why ([VSIX-CI-PLATFORM-COVERAGE-CLASSES]).
+ */
 export function createDebugAdapterFactory(
-  getClient: () => LanguageClient | undefined
+  ensureLspReady: (timeoutMs: number) => Promise<Result<LanguageClient>>
 ): vscode.DebugAdapterDescriptorFactory {
   return {
     async createDebugAdapterDescriptor(
@@ -395,15 +413,25 @@ export function createDebugAdapterFactory(
         `program=${config.program ?? "(none)"}`
       );
 
-      if (config.request === "attach" && config.connect !== undefined && config.connect !== null) {
-        return handleAttachMode(config, getClient());
+      const ready = await ensureLspReady(LSP_READY_FOR_DEBUG_MS);
+      if (!ready.ok) {
+        // Attach mode tolerates a missing client (it can connect to an
+        // already-running debugpy), so only a launch is fatal here.
+        if (config.request === "attach" && config.connect !== undefined && config.connect !== null) {
+          Logger.warn(`[Basilisk Debug] attaching without a ready LSP: ${ready.error.message}`);
+          return handleAttachMode(config, undefined);
+        }
+        Logger.error(`[Basilisk Debug] LSP not ready: ${ready.error.message}`);
+        throw new Error(
+          `Basilisk: the language server is not running, so the debug session cannot start ` +
+          `(${ready.error.message}). Check the Basilisk output channel.`
+        );
       }
 
-      const lspClient = getClient();
-      if (!lspClient) {
-        throw new Error("Basilisk: LSP client is not running. Cannot start debug session.");
+      if (config.request === "attach" && config.connect !== undefined && config.connect !== null) {
+        return handleAttachMode(config, ready.value);
       }
-      return handleLaunchMode(config, lspClient);
+      return handleLaunchMode(config, ready.value);
     },
   };
 }

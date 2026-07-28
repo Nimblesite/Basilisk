@@ -322,7 +322,7 @@ function registerDebugSupport(context: vscode.ExtensionContext, s: Store): void 
   singletonDisposables.push(
     vscode.debug.registerDebugAdapterDescriptorFactory(
       "basilisk-debug",
-      createDebugAdapterFactory(() => s.client.value)
+      createDebugAdapterFactory(async (ms) => s.ensureLspReadyPromise(ms))
     )
   );
   // Let users start debugging with NO launch.json: the Dynamic provider lists a
