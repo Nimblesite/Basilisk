@@ -639,16 +639,24 @@ export async function getNavLocations(
  * A test's expected path comes from `path.resolve`, while the paths under
  * assertion come from `Uri.fsPath` (what the extension records for a visible
  * editor) or from the interpreter itself (what tracemalloc and the profiler
- * report). Those spellings are identical on POSIX and DIFFERENT on Windows:
- * `path.resolve` keeps the drive letter as given (`C:\…`) and `Uri.fsPath`
- * lowercases it (`c:\…`), so a `===` compare is always false there — the filter
- * yields `[]` and the assertion reports "nothing was painted" for a feature that
- * painted correctly. `os.tmpdir()`'s 8.3 short components are the same trap.
+ * report). A raw `===` between those is not WRONG so much as UNDER-SPECIFIED: it
+ * holds only while both producers happen to spell the path identically.
+ *
+ * Inside the extension host they usually do, which is why a raw compare passes
+ * on win32 today: `__dirname` is itself a path VS Code resolved, so it already
+ * carries the drive-letter casing `Uri.fsPath` produces. Nothing guarantees that
+ * for a path from a DIFFERENT producer — a filename the interpreter reports, or
+ * an `os.tmpdir()` path carrying 8.3 short components (`RUNNER~1`) where the
+ * editor has the long form. Those differ by more than case, and a `===` filter
+ * then yields `[]`, so the assertion reports "nothing was painted" for a feature
+ * that painted correctly.
  *
  * Delegates to the production keyer ([VSIX-CI-PLATFORM-COVERAGE]) rather than
  * case-folding here, so the comparison the tests make is the SAME one the
- * decorations make. A test that hand-rolled `toLowerCase()` would pass while
- * the shipped overlay stayed blank.
+ * decorations make — the test cannot pass on a coincidence the shipped overlay
+ * does not share. A test that hand-rolled `toLowerCase()` would pass while the
+ * shipped overlay stayed blank; this also keeps an empty result meaning "nothing
+ * was painted" instead of "the two spellings disagreed".
  */
 export function isSamePath(left: string, right: string): boolean {
     return editorPathKey(left) === editorPathKey(right);
