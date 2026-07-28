@@ -211,3 +211,120 @@ close_all([r])
     );
     Ok(())
 }
+
+// ── Protocol-typed call arguments ────────────────────────────────────────────
+// A parameter annotated with a bare Protocol is checked structurally at the call
+// site, exactly as an annotated assignment already is. Before these tests the
+// rule only inspected `Container[Protocol]` parameters receiving literal
+// displays, so `show(User())` — the shape the website playground demonstrates —
+// passed silently while `x: Renderable = User()` was correctly rejected.
+
+#[test]
+fn protocol_param_rejects_non_conforming_argument() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Protocol
+
+class Renderable(Protocol):
+    def render(self) -> str: ...
+
+class User:
+    name: str = 'Ada'
+
+def show(item: Renderable) -> None:
+    print(item.render())
+
+show(User())
+";
+    let diags = run(source)?;
+    assert!(
+        has_code(&diags, "protocols_definition_2"),
+        "passing a class that lacks a protocol method must fire E0121, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn protocol_param_accepts_conforming_argument() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Protocol
+
+class Renderable(Protocol):
+    def render(self) -> str: ...
+
+class User:
+    def render(self) -> str:
+        return 'Ada'
+
+def show(item: Renderable) -> None:
+    print(item.render())
+
+show(User())
+";
+    let diags = run(source)?;
+    assert!(
+        !has_code(&diags, "protocols_definition_2"),
+        "a conforming argument must not fire E0121, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn protocol_param_accepts_member_inherited_from_local_base(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // The member is supplied by a base class, so the argument does conform.
+    let source = r"
+from typing import Protocol
+
+class Renderable(Protocol):
+    def render(self) -> str: ...
+
+class Base:
+    def render(self) -> str:
+        return 'base'
+
+class User(Base):
+    name: str = 'Ada'
+
+def show(item: Renderable) -> None:
+    print(item.render())
+
+show(User())
+";
+    let diags = run(source)?;
+    assert!(
+        !has_code(&diags, "protocols_definition_2"),
+        "a member inherited from a local base must satisfy the protocol, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn protocol_param_ignores_argument_with_unknown_base() -> Result<(), Box<dyn std::error::Error>> {
+    // `Mystery` is imported, so its members are unknown here and it may well
+    // supply `render`. Staying silent is the only false-positive-safe answer.
+    let source = r"
+from typing import Protocol
+from elsewhere import Mystery
+
+class Renderable(Protocol):
+    def render(self) -> str: ...
+
+class User(Mystery):
+    name: str = 'Ada'
+
+def show(item: Renderable) -> None:
+    print(item.render())
+
+show(User())
+";
+    let diags = run(source)?;
+    assert!(
+        !has_code(&diags, "protocols_definition_2"),
+        "a class with an unknown base must never be flagged, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

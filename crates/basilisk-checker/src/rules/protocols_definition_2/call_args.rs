@@ -128,6 +128,11 @@ fn validate_call(
         let Some(ann) = param.annotation_text.as_deref() else {
             continue;
         };
+        // A parameter annotated with a bare Protocol is checked structurally,
+        // the same way an annotated assignment already is.
+        if let Some(protocol) = bare_protocol(ann, class_map) {
+            report_non_conforming_argument(arg, param, protocol, class_map, path, diagnostics);
+        }
         let Some(protocol) = protocol_element(ann, class_map) else {
             continue;
         };
@@ -158,6 +163,126 @@ fn validate_call(
             ),
         ));
     }
+}
+
+/// If `ann` names a locally defined `Protocol` class directly (not wrapped in a
+/// container), return that protocol's `ClassInfo`.
+fn bare_protocol<'a>(ann: &str, class_map: &HashMap<&str, &'a ClassInfo>) -> Option<&'a ClassInfo> {
+    let class = class_map.get(ann.trim())?;
+    class
+        .bases
+        .iter()
+        .any(|base| base == "Protocol")
+        .then_some(*class)
+}
+
+/// Report `ClassName()` passed to a bare-`Protocol` parameter when the class
+/// provably lacks a required member.
+///
+/// Deliberately narrow, because a false positive here is worse than a miss
+/// ([CHKARCH-CONFORMANCE]): it fires only for a direct constructor call of a
+/// class whose every base is locally visible, so "the member is absent" is a
+/// fact about the whole inheritance chain rather than about the one class body
+/// this module happens to see.
+fn report_non_conforming_argument(
+    arg: &Expr,
+    param: &basilisk_resolver::ParameterInfo,
+    protocol: &ClassInfo,
+    class_map: &HashMap<&str, &ClassInfo>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Some(class) = constructed_class(arg, class_map) else {
+        return;
+    };
+    // A protocol argument satisfying the protocol nominally is fine regardless
+    // of what this module can see of its members.
+    if class.bases.contains(&protocol.name) {
+        return;
+    }
+    let Some(available) = visible_members(class, class_map) else {
+        return;
+    };
+    let required = super::collect_protocol_required_methods(protocol, class_map);
+    let missing: Vec<&str> = required
+        .iter()
+        .map(String::as_str)
+        .filter(|name| !name.starts_with("__") && !available.contains(*name))
+        .collect();
+    if missing.is_empty() {
+        return;
+    }
+
+    let plural = if missing.len() == 1 { "" } else { "s" };
+    let missing_list = missing.join("`, `");
+    let range = arg.range();
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
+            "Argument is incompatible with parameter `{}` of type `{}`: class `{}` is \
+             missing method{plural} `{missing_list}`",
+            param.name, protocol.name, class.name
+        ),
+        Span {
+            start: range.start().to_u32(),
+            end: range.end().to_u32(),
+        },
+        path,
+        Some(format!(
+            "Add the missing method{plural} to `{}` or pass a class that implements `{}`",
+            class.name, protocol.name
+        )),
+        Some(
+            "Protocol classes use structural subtyping: the argument's class must \
+             implement every member the protocol declares"
+                .to_owned(),
+        ),
+    ));
+}
+
+/// The locally defined, non-protocol class a direct `ClassName()` call builds.
+fn constructed_class<'a>(
+    arg: &Expr,
+    class_map: &HashMap<&str, &'a ClassInfo>,
+) -> Option<&'a ClassInfo> {
+    let Expr::Call(inner) = arg else { return None };
+    let Expr::Name(name) = inner.func.as_ref() else {
+        return None;
+    };
+    let class = class_map.get(name.id.as_str())?;
+    (!class.bases.iter().any(|base| base == "Protocol")).then_some(*class)
+}
+
+/// Every member name `class` provides, following its bases.
+///
+/// Returns `None` when any base is not locally defined — an imported base may
+/// supply the member, so the class's member set is unknown and silence is the
+/// only safe answer.
+fn visible_members(
+    class: &ClassInfo,
+    class_map: &HashMap<&str, &ClassInfo>,
+) -> Option<std::collections::HashSet<String>> {
+    let mut members: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut queue = vec![class];
+    let mut seen: Vec<&str> = Vec::new();
+
+    while let Some(current) = queue.pop() {
+        if seen.contains(&current.name.as_str()) {
+            continue;
+        }
+        seen.push(current.name.as_str());
+        members.extend(current.method_names.iter().cloned());
+        members.extend(current.attributes.iter().map(|attr| attr.name.clone()));
+
+        for base in &current.bases {
+            if base == "object" || base == "Protocol" || base == "Generic" {
+                continue;
+            }
+            queue.push(class_map.get(base.as_str())?);
+        }
+    }
+
+    Some(members)
 }
 
 /// If `ann` is `Container[Protocol]` for a known iterable container and a locally
