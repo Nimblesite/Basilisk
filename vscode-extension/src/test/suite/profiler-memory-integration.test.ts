@@ -47,14 +47,36 @@ import {
 } from '../../memory-decorations';
 
 import {
-    PROFILER_CLIENT_COMMANDS,
-    PROFILER_SERVER_COMMANDS,
-    MEMORY_CLIENT_COMMANDS,
-    type PackageJsonCommandEntry,
-    getPackageJsonProperties,
+  PROFILER_CLIENT_COMMANDS,
+  PROFILER_SERVER_COMMANDS,
+  MEMORY_CLIENT_COMMANDS
 } from './profiler-test-constants';
+import {
+  manifestCommands,
+  manifestConfigurationProperties
+} from "./extension-manifest";
+import { rawField } from "../../unknown-shape";
 
 let tmpDir = '';
+
+/** Whether `value` is an array, without saying anything about its elements. */
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+/**
+ * The `sessions` array of a `basilisk.profiler.list` reply.
+ *
+ * Each call site used to assert the reply into `{ sessions: unknown[] }` and
+ * then check `Array.isArray` separately. That check was the only thing actually
+ * proving the reply carried one, so it lives here now — callers get a real
+ * array, and a reply without one fails with the caller's own message.
+ */
+function sessionsOf(result: unknown, message: string): unknown[] {
+  const sessions = rawField(result, 'sessions');
+  assert.ok(isUnknownArray(sessions), message);
+  return sessions;
+}
 
 function assertCommandRegistered(commandId: string, label: string): void {
     let threw = false;
@@ -145,11 +167,7 @@ suite('Profiler — Start/Stop Lifecycle', () => {
         );
         assert.ok(result !== undefined, 'Should return a result');
 
-        const json = result as { sessions: unknown[] };
-        assert.ok(
-            Array.isArray(json.sessions),
-            'Result should have sessions array',
-        );
+        sessionsOf(result, 'Result should have sessions array');
     });
 
     test('profiler.start with no PID and no debug session gives clear error', async () => {
@@ -189,12 +207,10 @@ suite('Profiler — Start/Stop Lifecycle', () => {
         const result1 = await vscode.commands.executeCommand('basilisk.profiler.list');
         const result2 = await vscode.commands.executeCommand('basilisk.profiler.list');
 
-        const json1 = result1 as { sessions: unknown[] };
-        const json2 = result2 as { sessions: unknown[] };
+        const sessions1 = sessionsOf(result1, 'First call sessions should be array');
+        const sessions2 = sessionsOf(result2, 'Second call sessions should be array');
 
-        assert.ok(Array.isArray(json1.sessions), 'First call sessions should be array');
-        assert.ok(Array.isArray(json2.sessions), 'Second call sessions should be array');
-        assert.strictEqual(json1.sessions.length, json2.sessions.length,
+        assert.strictEqual(sessions1.length, sessions2.length,
             'Consecutive list calls should return same session count');
     });
 });
@@ -223,10 +239,7 @@ suite('Memory Profiler — Command Registration', () => {
         const extension = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(extension, 'Extension should be found');
 
-        const packageJson = extension.packageJSON as {
-            contributes?: { commands?: PackageJsonCommandEntry[] };
-        };
-        const commands = packageJson.contributes?.commands ?? [];
+        const commands = manifestCommands();
         const commandIds = commands.map((c) => c.command);
 
         for (const cmd of MEMORY_CLIENT_COMMANDS) {
@@ -241,10 +254,7 @@ suite('Memory Profiler — Command Registration', () => {
         const extension = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(extension, 'Extension should be found');
 
-        const packageJson = extension.packageJSON as {
-            contributes?: { commands?: PackageJsonCommandEntry[] };
-        };
-        const commands = packageJson.contributes?.commands ?? [];
+        const commands = manifestCommands();
 
         for (const cmd of MEMORY_CLIENT_COMMANDS) {
             const entry = commands.find((c) => c.command === cmd);
@@ -397,9 +407,8 @@ suite('Profiler — Lifecycle Interaction', () => {
         assert.ok(result !== undefined, 'profiler.list should return a result');
         assert.ok(result !== null, 'profiler.list should not return null');
 
-        const json = result as { sessions: unknown[] };
-        assert.ok(Array.isArray(json.sessions), 'sessions should be an array');
-        assert.strictEqual(json.sessions.length, 0,
+        const sessions = sessionsOf(result, 'sessions should be an array');
+        assert.strictEqual(sessions.length, 0,
             'no sessions should be active when nothing was started');
     });
 
@@ -448,9 +457,8 @@ suite('Profiler — Lifecycle Interaction (Continued)', () => {
 
         for (const result of results) {
             assert.ok(result !== undefined, 'Each list call must return a result');
-            const json = result as { sessions: unknown[] };
-            assert.ok(Array.isArray(json.sessions), 'Each result must have sessions array');
-            assert.strictEqual(json.sessions.length, 0,
+            const sessions = sessionsOf(result, 'Each result must have sessions array');
+            assert.strictEqual(sessions.length, 0,
                 'All parallel list calls should return empty sessions');
         }
     });
@@ -486,10 +494,7 @@ suite('Profiler — Status Bar Behavior', () => {
         const extension = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(extension, 'Extension should be found');
 
-        const packageJson = extension.packageJSON as {
-            contributes?: { commands?: PackageJsonCommandEntry[] };
-        };
-        const commands = packageJson.contributes?.commands ?? [];
+        const commands = manifestCommands();
         const stopCmd = commands.find((c) => c.command === 'basilisk.profileStop');
 
         assert.ok(stopCmd, 'profileStop command should exist in package.json');
@@ -535,7 +540,7 @@ suite('Profiler — Configuration Interaction', () => {
     });
 
     test('quick preset is offered for short burst profiling', () => {
-        const properties = getPackageJsonProperties();
+        const properties = manifestConfigurationProperties();
         const presetProp = properties['basilisk.profiler.preset'] as
             { enum?: string[]; type?: string } | undefined;
         assert.ok(presetProp, 'preset property should exist');
@@ -545,7 +550,7 @@ suite('Profiler — Configuration Interaction', () => {
     });
 
     test('detailed preset is offered and includeNative defaults off', () => {
-        const properties = getPackageJsonProperties();
+        const properties = manifestConfigurationProperties();
         const presetProp = properties['basilisk.profiler.preset'] as
             { enum?: string[] } | undefined;
         assert.ok(presetProp, 'preset property should exist');
@@ -558,7 +563,7 @@ suite('Profiler — Configuration Interaction', () => {
     });
 
     test('all 4 presets are exactly the ones the server parses', () => {
-        const properties = getPackageJsonProperties();
+        const properties = manifestConfigurationProperties();
         const presetProp = properties['basilisk.profiler.preset'] as
             { enum?: string[] } | undefined;
         assert.ok(presetProp, 'preset property should exist');
@@ -574,7 +579,7 @@ suite('Profiler — Configuration Interaction', () => {
     });
 
     test('numeric settings have reasonable bounds in config declarations', () => {
-        const properties = getPackageJsonProperties();
+        const properties = manifestConfigurationProperties();
 
         const sampleRateProp = properties['basilisk.profiler.sampleRate'];
         assert.ok(sampleRateProp !== undefined, 'sampleRate property must exist');
@@ -980,9 +985,7 @@ suite('Profiler — Cross-Feature Integration', () => {
     test('profiler.list is idempotent and does not corrupt LSP state', async () => {
         for (let iteration = 0; iteration < 5; iteration++) {
             const result = await vscode.commands.executeCommand('basilisk.profiler.list');
-            const json = result as { sessions: unknown[] };
-            assert.ok(Array.isArray(json.sessions),
-                `Iteration ${iteration}: sessions should be an array`);
+            sessionsOf(result, `Iteration ${iteration}: sessions should be an array`);
         }
 
         const store = getStore();
@@ -1019,9 +1022,7 @@ suite('Profiler — Cross-Feature Integration', () => {
         );
 
         const result = await vscode.commands.executeCommand('basilisk.profiler.list');
-        const json = result as { sessions: unknown[] };
-        assert.ok(Array.isArray(json.sessions),
-            'profiler.list should still work after error cycles');
+        sessionsOf(result, 'profiler.list should still work after error cycles');
     });
 
 });
