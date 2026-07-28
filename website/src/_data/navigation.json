@@ -1,5 +1,6 @@
 {
   "main": [
+    { "key": "playground", "text": "Playground", "url": "/playground/" },
     { "key": "docs", "text": "Docs", "url": "/docs/" },
     { "key": "rules", "text": "Rules", "url": "/docs/rules/" },
     { "key": "blog", "text": "Blog", "url": "/blog/" },

@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Documentation website for Basilisk — the only Python type checker scoring 100% on the official python/typing conformance suite, and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions.",
   "scripts": {
-    "build": "eleventy",
+    "build": "npm run build:wasm && eleventy",
+    "build:wasm": "npx --yes wasm-pack build ../crates/basilisk-wasm --target web --release --out-dir ../../website/src/assets/wasm --out-name basilisk_wasm",
     "start": "eleventy --serve --watch",
     "clean": "rm -rf _site",
     "screenshots": "node screenshots/generate.mjs",

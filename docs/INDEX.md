@@ -17,7 +17,7 @@ linked to an active plan.
 | [Type inference](specs/CHECKER-TYPE-INFERENCE-SPEC.md) | Expression/type inference and narrowing contracts, plus the target bidirectional/constraint architecture and its research grounding. |
 | [Stub resolution](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | Pinned typing-spec import order, custom typeshed, offline pin verification against the store, the segregated download component, bundled stdlib ZIP, and generation. |
 | [Checker MCP service](specs/CHECKER-MCP-SPEC.md) | Packaged stdio lifecycle and the structured typeshed source/status tool. |
-| [Checker cache](specs/CHECKER-CACHE-SPEC.md) | Opt-in content-addressed CLI result cache. |
+| [Checker cache](specs/CHECKER-CACHE-SPEC.md) | Opt-in content-addressed cross-session result cache, its `[tool.basilisk]` keys, and how it differs from always-on Salsa memoization. |
 | [Rule tagging](specs/CHECKER-RULE-TAGGING-SPEC.md) | Rule provenance/category/free-form tags and conflict rules. |
 | [Compiler prototype](specs/COMPILER-ARCHITECTURE-SPEC.md) | Current checker-gated AST interpreter and fixture contract. |
 | [LSP architecture](specs/LSP-ARCHITECTURE-SPEC.md) | Shared server protocol, analysis, commands, and capabilities. |

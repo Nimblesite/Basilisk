@@ -39,3 +39,9 @@ serde_json.workspace = true
 
 [lints]
 workspace = true
+
+# The repository toolchain emits bulk-memory operations that the wasm-pack
+# bundled Binaryen validator does not yet enable. Keep the browser artefact
+# unmodified; Rust's release profile has already optimized it.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

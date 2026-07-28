@@ -239,10 +239,7 @@ fn relative_cache_directory_resolves_against_the_project_root() {
         cache_dir: Some(PathBuf::from("build/cache")),
         ..Default::default()
     };
-    assert_eq!(
-        cfg.cache_directory(&root),
-        root.join("build").join("cache")
-    );
+    assert_eq!(cfg.cache_directory(&root), root.join("build").join("cache"));
 }
 
 /// [CHKCACHE-CONFIG]: an absolute `cache-dir` is used verbatim — a shared

@@ -734,6 +734,18 @@ Basilisk uses the [Salsa](https://crates.io/crates/salsa) incremental computatio
 framework (the same system powering rust-analyzer) for **in-session** incremental
 checking.
 
+**There is nothing here to configure, and that is deliberate.** This layer has
+no `[tool.basilisk]` key and no switch: there is no alternative code path to
+select, so a toggle could only ever be a no-op. It is not the same thing as the
+opt-in persistent result cache, which *is* configuration
+([CHKCACHE-CONFIG](CHECKER-CACHE-SPEC.md#CHKCACHE-CONFIG)); the two layers are
+contrasted in
+[CHKCACHE-CONFIG-SALSA](CHECKER-CACHE-SPEC.md#CHKCACHE-CONFIG-SALSA). Because a
+silent always-on layer is indistinguishable from a missing one, the
+configuration editor reports it read-only — engine, always-on state, and the
+live memoized-file count — beside the keys that *are* editable
+([LSPCFGED-CACHE](LSP-CONFIGURATION-EDITOR-SPEC.md#LSPCFGED-CACHE)).
+
 - **Input queries**: a file's source text — `SourceFile::text`
   (`crates/basilisk-db/src/db.rs`) — and the effective configuration —
   `ConfigInput::value`, a `ConfigValue(BasiliskConfig)`
@@ -1099,6 +1111,8 @@ stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub di
 # typeshed-path = "typeshed-x"   # resolution step 3: your sole custom stdlib tree
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]
+cache = true                     # reuse check results between runs ([CHKCACHE-CONFIG])
+# cache-dir = "build/bsk-cache"  # optional: relocate the persistent result cache
 
 [tool.basilisk.rules]
 "imports_unresolved" = "warning"    # a PEP rule graded down — never disabled
@@ -1111,6 +1125,18 @@ exclude = ["**/migrations/**"]
 Scoping a rule differently for part of the tree means placing another
 `pyproject.toml` with a `[tool.basilisk]` table in that folder; the nearest
 deciding table wins per rule ([CHKARCH-CONFIG-MODEL](#CHKARCH-CONFIG-MODEL)).
+
+Every key here is read by a real consumer. A setting no code reads does not
+belong in this file: it reads as a knob the author turned, while the checker
+never sees it (the retired `auto-stub-*` keys are pinned gone by test). The
+converse also holds and is worth stating, because caching is where readers
+most often assume a missing key: the **in-session Salsa memo layer**
+([CHKARCH-INCREMENTAL-SALSA](#CHKARCH-INCREMENTAL-SALSA)) is always on and has
+**no key at all**, while `cache`/`cache-dir` govern only the *persistent,
+cross-session* result cache
+([CHKCACHE-CONFIG-SALSA](CHECKER-CACHE-SPEC.md#CHKCACHE-CONFIG-SALSA)). The
+configuration editor states both layers side by side for exactly this reason
+([LSPCFGED-CACHE](LSP-CONFIGURATION-EDITOR-SPEC.md#LSPCFGED-CACHE)).
 
 ### Configuration Discovery {#CHKARCH-CONFIG-DISCOVERY}
 
@@ -1147,7 +1173,9 @@ CLI, per workspace root in the LSP — because they decide *which files are
 collected* before any per-file rule resolution exists
 ([CHKARCH-CONFIG-EXCLUDE](#CHKARCH-CONFIG-EXCLUDE)). The
 **analysis-environment tier** — `extra-paths`, `stub-paths` as import search
-roots, every `typeshed-*` key, and `python-version` as the stub-resolution
+roots, every `typeshed-*` key, the `cache`/`cache-dir` keys
+([CHKCACHE-CONFIG](CHECKER-CACHE-SPEC.md#CHKCACHE-CONFIG): one project, one
+cache, so the ROOT config decides), and `python-version` as the stub-resolution
 target — is instead resolved **once per project root** by the workspace
 loader (which also honors the pyright-compatible sources,
 [CHKARCH-CONFIG-FILE](#CHKARCH-CONFIG-FILE)) and applied uniformly to the

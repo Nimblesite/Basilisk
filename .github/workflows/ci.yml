@@ -97,6 +97,11 @@ jobs:
               # data (website/src/_data/rules.json) and /errors/ pages are
               # generated from — so a new/renamed rule re-runs the drift guard.
               website/*|benchmarks/status/*|crates/basilisk-checker/src/rules/*) website=true ;;
+              # The playground ships the checker itself, compiled to wasm at
+              # site-build time ([WASM-BUILD]). A change to that crate changes
+              # what the published playground answers, so the site build and its
+              # playground e2e must re-run to catch a browser-only break.
+              crates/basilisk-wasm/*) website=true ;;
               # The conformance score + graded python/typing commit are stamped
               # into these by scripts/gen_conformance_reference.py — editing
               # them re-runs the website job's stamp drift guard. The published
@@ -150,7 +155,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.website == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # 20, not 10: `npm run build` now compiles the checker to WebAssembly for
+    # the playground ([WASM-BUILD]) before Eleventy runs, and a cold wasm build
+    # of the parser + typeshed does not fit the old budget.
+    timeout-minutes: 20
     steps:
       # fetch-depth: 0 — mirrors deploy-pages.yml so the conformance over-time
       # chart (built from the git history of conformance_status.csv) is exercised
@@ -164,6 +172,19 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: website/package-lock.json
+
+      # The playground engine is the real checker compiled to wasm32, built by
+      # `npm run build:wasm` ([WASM-BUILD]). Declare the target explicitly
+      # rather than letting wasm-pack add it implicitly, so a missing target is
+      # a setup failure here instead of a confusing mid-build one.
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          cache-on-failure: true
+          prefix-key: v1-rust-glibc
 
       - name: Install dependencies
         working-directory: website

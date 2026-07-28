@@ -69,6 +69,8 @@ python-platform = "All"          # 显式跨平台分析
 stub-paths = ["stubs/"]          # 解析第 1 步：前置额外的 .pyi 存根目录
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
+cache = true                     # 在多次运行之间复用检查结果
+# cache-dir = "build/bsk-cache"  # 或：把缓存放到别处
 # typeshed-commit = "<完整 40 位提交 SHA>"  # 固定标准库存根来源
 # typeshed-path = "vendor/typeshed"          # 或：你自己的标准库存根树
 
@@ -279,6 +281,53 @@ exclude = [
 但把每次调用都当作失效会让属性窄化在实践中毫无用处——将来 `false` 会选择
 健全但严格的行为：任何调用都会丢弃属性窄化。参见
 [`TYPEINF-NARROWING-ATTR-CALLS`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ATTR-CALLS)。
+
+### `cache` 与 `cache-dir`
+
+**类型：** `bool` / `string`
+**默认值：** `false`，以及项目根目录下的 `.basilisk/cache/check`
+
+`cache = true` 启用**持久化结果缓存**：`basilisk check` 与 `basilisk analyze`
+会从磁盘复用某个文件的诊断结果，而不是重新检查它。只有当所有可能改变答案的
+输入都逐字节相同时，缓存结果才会被回放——该文件、它读取的每一个文件（包括
+传递导入与 `.pyi` 存根）、生效的配置、解析环境、选定的 typeshed 来源，以及
+Basilisk 版本。只要有任何不同（或有任何内容读不到），就算未命中，该文件会被
+完整重新检查。
+
+`cache-dir` 用于移动缓存条目。相对路径相对**项目根目录**解析，而不是你的
+shell 工作目录，因此无论从哪里调用，一个项目始终只有一份缓存。
+
+```toml
+[tool.basilisk]
+cache = true
+cache-dir = "build/bsk-cache"   # 可选
+```
+
+就单次运行而言，`--cache` 与 `--no-cache` 会覆盖该键（两者同时给出时
+`--no-cache` 获胜），`--cache-dir` 会覆盖目录。`--cache-stats` 会向 stderr
+打印 `cache: N hit / M miss`，让你看到热运行确实发生了。
+
+**唯一的注意事项，也正是缓存默认关闭的原因。** 在不改动 `uv.lock` 的情况下
+**直接**向虚拟环境安装或移除包，是检测不到的。在锁文件之外改动环境后，请清空
+缓存或不要使用该选项。
+
+### `cache` 不控制什么
+
+编辑一直都是增量的。语言服务器用 [Salsa](https://crates.io/crates/salsa) 对
+每个文件的 `parse → resolve → check` 做记忆化，因此一次编辑只会重新运行你
+改动的那个文件以及导入它的文件。该层驻留在内存中，生命周期等于会话本身，
+**没有配置键，也无法关闭**——它没有可以退回的更慢路径。
+
+所以这是两件不同的事：
+
+| 层 | 存在于 | 由什么配置 |
+| --- | --- | --- |
+| 持久化结果缓存 | 磁盘上，跨运行 | `cache` / `cache-dir` |
+| 会话内 Salsa 记忆化 | 内存中，单个会话 | 无——始终开启 |
+
+VS Code 配置编辑器的 **Project → Caching** 面板会同时展示两者：两个可编辑的
+键，以及对 Salsa 层的只读报告（包括当前会话已记忆化的文件数）。参见
+[`CHKCACHE-CONFIG`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-CACHE-SPEC.md#CHKCACHE-CONFIG)。
 
 ---
 

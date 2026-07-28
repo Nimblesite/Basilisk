@@ -121,6 +121,7 @@ function configurationPreview(baseRevision = "revision-1"): ConfigurationPreview
       after: { kind: "Warning" },
     }],
     typeshedChanges: [],
+    cacheChanges: [],
     impact: {
       errorsBefore: 3,
       errorsAfter: 0,

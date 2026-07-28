@@ -10,9 +10,17 @@ use std::path::Path;
 use super::{
     active_config_path, apply_config_patch, build_configuration_patch, build_rule_patch,
     content_revision, discover_config_document, discover_config_document_with_content,
-    CacheConfigMutation, CacheConfigUpdate, ConfigDocument, ConfigDocumentError, ConfigPatch,
-    ConfigurationUpdate, RuleConfigUpdate, TypeshedConfigKey, TypeshedConfigUpdate,
+    CacheConfigUpdate, ConfigDocument, ConfigDocumentError, ConfigPatch, ConfigurationUpdate,
+    RuleConfigUpdate, TypeshedConfigKey, TypeshedConfigUpdate,
 };
+
+// The two setting panels' persistence tests live beside these rule/tag ones,
+// in their own files, so no file here approaches the size ceiling.
+#[path = "cache_tests.rs"]
+mod cache_tests;
+
+#[path = "typeshed_tests.rs"]
+mod typeshed_tests;
 use crate::{BasiliskConfig, RuleSeverity};
 
 fn temp_root(unique: &str) -> std::path::PathBuf {
@@ -87,26 +95,6 @@ fn malformed_severity_is_invalid() {
         "[tool.basilisk.rule-tags]\n\"basilisk\" = 3\n".to_owned(),
     );
     assert!(matches!(result, Err(ConfigDocumentError::Invalid { .. })));
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-/// [LSPCFGED-TYPESHED]: malformed acquisition settings fail before a snapshot
-/// can silently reinterpret them as defaults or a different source mode.
-#[test]
-fn malformed_typeshed_settings_are_invalid() {
-    let root = temp_root("bad_typeshed_settings");
-    for content in [
-        "[tool.basilisk]\ntypeshed-commit = 42\n",
-        "[tool.basilisk]\ntypeshed-commit = \"short\"\n",
-        "[tool.basilisk]\ntypeshed-store-path = false\n",
-        "[tool.basilisk]\ntypeshed-path = \"custom\"\ntypeshed-commit = \"83c2518a9e6abbda0c44592c3483de459198f887\"\n",
-    ] {
-        let result = discover_config_document_with_content(&root, content.to_owned());
-        assert!(
-            matches!(result, Err(ConfigDocumentError::Invalid { .. })),
-            "must reject {content}"
-        );
-    }
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -417,75 +405,6 @@ fn wrong_shaped_mutation_targets_fail_to_patch() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// [LSPCFGED-TYPESHED]: Typeshed keys participate in the same atomic,
-/// structure-preserving transaction as rule/tag entries.
-#[test]
-fn typeshed_settings_patch_atomically_and_preserve_project_content() {
-    let root = temp_root("typeshed_patch");
-    let document = document_for(
-        &root,
-        "# keep\n[project]\nname = \"demo\"\n\n[tool.basilisk]\n",
-    );
-    let update = ConfigurationUpdate {
-        rules: set_rule("BSK-0001", RuleSeverity::Warning),
-        typeshed: TypeshedConfigUpdate {
-            entries: BTreeMap::from([
-                (
-                    TypeshedConfigKey::TypeshedCommit,
-                    Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
-                ),
-                (
-                    TypeshedConfigKey::TypeshedStorePath,
-                    Some(".cache/typeshed-store".to_owned()),
-                ),
-            ]),
-        },
-        cache: CacheConfigUpdate::default(),
-    };
-    let patch = build_configuration_patch(&document, &update).unwrap();
-    assert!(patch.content.contains("# keep"));
-    assert!(patch.content.contains("name = \"demo\""));
-    assert!(patch
-        .content
-        .contains("typeshed-commit = \"83c2518a9e6abbda0c44592c3483de459198f887\""));
-    assert!(patch
-        .content
-        .contains("typeshed-store-path = \".cache/typeshed-store\""));
-    assert_eq!(
-        patch.config.typeshed_store_path,
-        Some(std::path::PathBuf::from(".cache/typeshed-store"))
-    );
-    assert_eq!(
-        patch.config.typeshed_commit.as_deref(),
-        Some("83c2518a9e6abbda0c44592c3483de459198f887")
-    );
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-/// [LSPCFGED-TYPESHED]: removing an explicit setting leaves unrelated
-/// acquisition settings and comments untouched.
-#[test]
-fn typeshed_setting_removal_is_allowlisted_and_narrow() {
-    let root = temp_root("typeshed_remove");
-    let document = document_for(
-        &root,
-        "[tool.basilisk]\n# keep store\ntypeshed-store-path = \".cache/store\"\ntypeshed-commit = \"83c2518a9e6abbda0c44592c3483de459198f887\"\n",
-    );
-    let update = ConfigurationUpdate {
-        rules: RuleConfigUpdate::default(),
-        typeshed: TypeshedConfigUpdate {
-            entries: BTreeMap::from([(TypeshedConfigKey::TypeshedCommit, None)]),
-        },
-        cache: CacheConfigUpdate::default(),
-    };
-    let patch = build_configuration_patch(&document, &update).unwrap();
-    assert!(!patch.content.contains("typeshed-commit"));
-    assert!(patch.content.contains("# keep store"));
-    assert!(patch.content.contains("typeshed-store-path"));
-    assert!(patch.config.typeshed_commit.is_none());
-    let _ = std::fs::remove_dir_all(&root);
-}
-
 /// [CONFIGEDITOR-SOURCES]: apply surfaces an unreadable target as a `Read`
 /// error before touching anything.
 #[test]
@@ -565,140 +484,5 @@ fn apply_surfaces_unwritable_parent() {
     let result = apply_config_patch(&patch);
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
     assert!(matches!(result, Err(ConfigDocumentError::Read { .. })));
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-fn cache_update(mutations: Vec<CacheConfigMutation>) -> ConfigurationUpdate {
-    ConfigurationUpdate {
-        cache: CacheConfigUpdate { mutations },
-        ..ConfigurationUpdate::default()
-    }
-}
-
-/// [CHKCACHE-CONFIG]: the cache keys ride the same atomic,
-/// structure-preserving transaction as rule/tag and Typeshed entries, and are
-/// written with the TOML types the parser actually reads.
-#[test]
-fn cache_settings_patch_with_their_documented_toml_types() {
-    let root = temp_root("cache_patch");
-    let document = document_for(
-        &root,
-        "# keep\n[project]\nname = \"demo\"\n\n[tool.basilisk]\n",
-    );
-    let update = cache_update(vec![
-        CacheConfigMutation::SetEnabled(true),
-        CacheConfigMutation::SetDir("build/bsk-cache".to_owned()),
-    ]);
-    let patch = build_configuration_patch(&document, &update).unwrap();
-    assert!(patch.content.contains("# keep"));
-    assert!(patch.content.contains("name = \"demo\""));
-    assert!(
-        patch.content.contains("cache = true"),
-        "`cache` must render as a TOML boolean, not a string: {}",
-        patch.content
-    );
-    assert!(patch.content.contains("cache-dir = \"build/bsk-cache\""));
-    assert_eq!(patch.config.cache_enabled, Some(true));
-    assert_eq!(
-        patch.config.cache_dir,
-        Some(std::path::PathBuf::from("build/bsk-cache"))
-    );
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-/// [CHKCACHE-CONFIG]: turning the cache off writes an explicit `cache = false`
-/// — the same "always write an explicit entry" rule the rule controls follow.
-#[test]
-fn disabling_the_cache_writes_an_explicit_false() {
-    let root = temp_root("cache_off");
-    let document = document_for(&root, "[tool.basilisk]\ncache = true\n");
-    let patch = build_configuration_patch(
-        &document,
-        &cache_update(vec![CacheConfigMutation::SetEnabled(false)]),
-    )
-    .unwrap();
-    assert!(patch.content.contains("cache = false"));
-    assert_eq!(patch.config.cache_enabled, Some(false));
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-/// [CHKCACHE-CONFIG]: removing `cache-dir` restores the default location and
-/// leaves every unrelated key and comment exactly where it was.
-#[test]
-fn cache_directory_removal_is_narrow() {
-    let root = temp_root("cache_dir_remove");
-    let document = document_for(
-        &root,
-        "[tool.basilisk]\n# keep me\ncache = true\ncache-dir = \"build/bsk-cache\"\n",
-    );
-    let patch = build_configuration_patch(
-        &document,
-        &cache_update(vec![CacheConfigMutation::RemoveDir]),
-    )
-    .unwrap();
-    assert!(!patch.content.contains("cache-dir"));
-    assert!(patch.content.contains("# keep me"));
-    assert!(patch.content.contains("cache = true"));
-    assert!(patch.config.cache_dir.is_none());
-    assert_eq!(patch.config.cache_enabled, Some(true));
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-/// [CHKCACHE-CONFIG]: removing `cache` drops the key entirely, so the project
-/// states no preference again rather than pinning the default as an entry.
-#[test]
-fn cache_enable_removal_drops_the_key() {
-    let root = temp_root("cache_enable_remove");
-    let document = document_for(&root, "[tool.basilisk]\ncache = true\n");
-    let patch = build_configuration_patch(
-        &document,
-        &cache_update(vec![CacheConfigMutation::RemoveEnabled]),
-    )
-    .unwrap();
-    assert!(!patch.content.contains("cache ="));
-    assert!(patch.config.cache_enabled.is_none());
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-/// [CHKCACHE-CONFIG]: later writes win over earlier ones for the same key,
-/// exactly as a repeated TOML assignment would.
-#[test]
-fn later_cache_mutations_win_over_earlier_ones() {
-    let root = temp_root("cache_last_wins");
-    let document = document_for(&root, "[tool.basilisk]\n");
-    let patch = build_configuration_patch(
-        &document,
-        &cache_update(vec![
-            CacheConfigMutation::SetEnabled(true),
-            CacheConfigMutation::SetEnabled(false),
-        ]),
-    )
-    .unwrap();
-    assert_eq!(patch.config.cache_enabled, Some(false));
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-/// [CHKCACHE-CONFIG]: a hand-written `cache = "yes"` is refused outright. The
-/// parser would silently drop it, so the editor must not present a cache
-/// setting the checker will never honour.
-#[test]
-fn wrongly_typed_cache_keys_are_rejected_as_invalid_documents() {
-    let root = temp_root("cache_bad_type");
-    for (content, expected) in [
-        ("[tool.basilisk]\ncache = \"yes\"\n", "`cache` must be a boolean"),
-        ("[tool.basilisk]\ncache-dir = 7\n", "`cache-dir` must be a string"),
-        (
-            "[tool.basilisk]\ncache-dir = \"  \"\n",
-            "`cache-dir` must name a directory",
-        ),
-    ] {
-        let result = discover_config_document_with_content(&root, content.to_owned());
-        match result {
-            Err(ConfigDocumentError::Invalid { message, .. }) => {
-                assert_eq!(message, expected, "for {content:?}");
-            }
-            other => panic!("{content:?} must be rejected, got {other:?}"),
-        }
-    }
     let _ = std::fs::remove_dir_all(&root);
 }

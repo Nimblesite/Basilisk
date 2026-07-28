@@ -306,7 +306,11 @@ fn pyproject_cache_dir_relocates_the_cache() {
 #[test]
 fn no_cache_flag_overrides_the_configured_cache() {
     let dir = unique_dir("cfg_no_cache");
-    std::fs::write(dir.join("pyproject.toml"), "[tool.basilisk]\ncache = true\n").unwrap();
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[tool.basilisk]\ncache = true\n",
+    )
+    .unwrap();
     let target = dir.join("t.py");
     std::fs::write(&target, "def f(x: int) -> int:\n    return x\n").unwrap();
 
@@ -336,7 +340,11 @@ fn no_cache_flag_wins_over_cache_flag() {
 #[test]
 fn explicit_cache_false_is_honoured_and_flag_overridable() {
     let dir = unique_dir("cfg_false");
-    std::fs::write(dir.join("pyproject.toml"), "[tool.basilisk]\ncache = false\n").unwrap();
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[tool.basilisk]\ncache = false\n",
+    )
+    .unwrap();
     let target = dir.join("t.py");
     std::fs::write(&target, "def f(x: int) -> int:\n    return x\n").unwrap();
 

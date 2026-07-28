@@ -80,6 +80,8 @@ python-platform = "All"          # explicit cross-platform analysis
 stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
+cache = true                     # reuse check results between runs
+# cache-dir = "build/bsk-cache"  # or: put the cache somewhere else
 # typeshed-commit = "<full 40-char commit SHA>"  # pin the stdlib stub source
 # typeshed-path = "vendor/typeshed"              # or: your own stdlib stub tree
 
@@ -333,6 +335,59 @@ attribute, but treating every call as an invalidation makes attribute narrowing
 useless in practice — `false` will select the sound-but-strict behavior where
 any call discards attribute narrowing. See
 [`TYPEINF-NARROWING-ATTR-CALLS`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ATTR-CALLS).
+
+### `cache` and `cache-dir`
+
+**Type:** `bool` / `string`
+**Default:** `false`, and `.basilisk/cache/check` under the project root
+
+`cache = true` turns on the **persistent result cache**: `basilisk check` and
+`basilisk analyze` reuse a file's diagnostics from disk instead of re-checking
+it. A cached result is replayed only when every input that could change the
+answer is byte-identical — the file, every file it reads (transitive imports
+and `.pyi` stubs), the effective configuration, the resolution environment, the
+selected typeshed source, and the Basilisk version. Anything else, or anything
+unreadable, is a miss and the file is checked in full.
+
+`cache-dir` moves the entries. A relative path resolves against the project
+root, not your shell's working directory, so one project keeps one cache
+wherever you invoke it from.
+
+```toml
+[tool.basilisk]
+cache = true
+cache-dir = "build/bsk-cache"   # optional
+```
+
+Per run, `--cache` and `--no-cache` override the key (`--no-cache` wins if you
+pass both), and `--cache-dir` overrides the folder. `--cache-stats` prints
+`cache: N hit / M miss` to stderr so you can see a warm run land.
+
+**One caveat, and it is why the cache is opt-in.** Installing or removing
+packages *directly* into a virtualenv without a `uv.lock` change is not
+detected. Clear the cache, or drop the flag, after mutating an environment
+outside the lockfile.
+
+### What `cache` does *not* control
+
+Editing is already incremental and always has been. The language server
+memoizes `parse → resolve → check` per file with
+[Salsa](https://crates.io/crates/salsa), so an edit re-runs only the file you
+touched and the files that import it. That layer lives in memory for the life
+of the session, **has no configuration key, and cannot be switched off** —
+there is no slower path for it to fall back to.
+
+So the two are different things:
+
+| Layer | Lives | Configured by |
+| --- | --- | --- |
+| Persistent result cache | on disk, across runs | `cache` / `cache-dir` |
+| In-session Salsa memoization | in memory, one session | nothing — always on |
+
+The VS Code configuration editor's **Project → Caching** panel shows both: the
+two editable keys, and a read-only report of the Salsa layer including how many
+files the session currently has memoized. See
+[`CHKCACHE-CONFIG`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-CACHE-SPEC.md#CHKCACHE-CONFIG).
 
 ---
 
@@ -589,8 +644,9 @@ revert to their full severity automatically.
 The tag-first VS Code editor reads the live rule catalog from the LSP,
 previews bulk changes, and shows every rule's effective severity and where it
 was decided. Its edits are typed mutations the LSP applies to the active
-`pyproject.toml` — set or remove a rule entry, a tag entry, or a typeshed
-setting; requesting `disabled` for a PEP rule is rejected as an error. The
+`pyproject.toml` — set or remove a rule entry, a tag entry, a typeshed setting,
+or a caching setting; requesting `disabled` for a PEP rule is rejected as an
+error. The
 extension never parses or writes configuration files itself, and folder
 configs back the editor's scoped-grading view.
 

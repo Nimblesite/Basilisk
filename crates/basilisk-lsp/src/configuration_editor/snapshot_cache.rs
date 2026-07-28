@@ -26,10 +26,7 @@ pub(super) fn cache_configuration(
     CacheConfigurationState {
         persistent: PersistentCacheState {
             enabled: config.cache_is_enabled(),
-            folder: config
-                .cache_directory(root)
-                .to_string_lossy()
-                .into_owned(),
+            folder: config.cache_directory(root).to_string_lossy().into_owned(),
             folder_configured: config.cache_dir.is_some(),
         },
         in_session: InSessionCacheState {

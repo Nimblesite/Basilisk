@@ -19,8 +19,7 @@ use super::model::{
 use super::mutation::{
     build_impact, build_update, require_mutations, require_no_pep_disable, require_revision,
     require_valid_typeshed_configuration, resolved_cache_changes, resolved_changes,
-    resolved_typeshed_changes,
-    selection_error, validate_document_rules,
+    resolved_typeshed_changes, selection_error, validate_document_rules,
 };
 use super::snapshot::{
     build_snapshot, hypothetical_inventory, inventory, occurrences as build_occurrences,

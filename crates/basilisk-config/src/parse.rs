@@ -457,5 +457,9 @@ fn warn_on_malformed_typeshed_values(cfg: &BasiliskConfig) {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "test-only: a fixture document that fails to parse must abort naming it"
+)]
 #[path = "parse_tests.rs"]
 mod validation_tests;

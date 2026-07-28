@@ -62,7 +62,11 @@ fn explicit_false_and_unset_both_report_disabled() {
         cache_enabled: Some(false),
         ..BasiliskConfig::default()
     };
-    assert!(!cache_configuration(&explicit, &root(), 0).persistent.enabled);
+    assert!(
+        !cache_configuration(&explicit, &root(), 0)
+            .persistent
+            .enabled
+    );
     assert!(
         !cache_configuration(&BasiliskConfig::default(), &root(), 0)
             .persistent
