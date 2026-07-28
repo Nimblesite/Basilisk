@@ -71,12 +71,31 @@ async function showFixture(file: string): Promise<void> {
   await vscode.window.showTextDocument(doc, { preview: false });
 }
 
+/**
+ * Budget for the autopilot to accumulate captures.
+ *
+ * NOT `SESSION_WAIT_MS`, which is documented for a debug session to start,
+ * stop or pause. A capture is a whole round trip on top of that — pause the
+ * program, run a tracemalloc snapshot through a DAP `evaluate`, resume — and
+ * these fixtures deliberately burn CPU while it happens, so on a small CI
+ * runner one capture can cost more than the entire session budget. Reusing the
+ * session budget here asked for several of those inside the time allowed for
+ * one pause; on win32 the interval test recorded ZERO captures against it
+ * ([VSIX-CI-PLATFORM-COVERAGE-CLASSES]).
+ *
+ * Sized to fit several waits inside each test's own Mocha budget (150s for the
+ * money flow, 90s for interval mode), so a genuinely stuck autopilot still
+ * fails here — naming the capture count it reached — rather than as a bare
+ * Mocha timeout. Nothing asserts how QUICKLY a capture arrives.
+ */
+const AUTO_CAPTURE_WAIT_MS = 40_000;
+
 /** Wait until the autopilot has recorded at least `count` automatic captures. */
 async function waitForAutoCaptures(count: number): Promise<void> {
   await pollUntilResult({
     fn: async () => recordedAutopilotCaptures().length,
     predicate: (n) => n >= count,
-    timeoutMs: SESSION_WAIT_MS,
+    timeoutMs: AUTO_CAPTURE_WAIT_MS,
     intervalMs: POLL_MS,
   });
 }
