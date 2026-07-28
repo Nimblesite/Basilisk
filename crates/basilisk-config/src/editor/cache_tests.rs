@@ -128,20 +128,28 @@ fn later_cache_mutations_win_over_earlier_ones() {
 fn wrongly_typed_cache_keys_are_rejected_as_invalid_documents() {
     let root = temp_root("cache_bad_type");
     for (content, expected) in [
-        ("[tool.basilisk]\ncache = \"yes\"\n", "`cache` must be a boolean"),
-        ("[tool.basilisk]\ncache-dir = 7\n", "`cache-dir` must be a string"),
+        (
+            "[tool.basilisk]\ncache = \"yes\"\n",
+            "`cache` must be a boolean",
+        ),
+        (
+            "[tool.basilisk]\ncache-dir = 7\n",
+            "`cache-dir` must be a string",
+        ),
         (
             "[tool.basilisk]\ncache-dir = \"  \"\n",
             "`cache-dir` must name a directory",
         ),
     ] {
-        let result = discover_config_document_with_content(&root, content.to_owned());
-        match result {
-            Err(ConfigDocumentError::Invalid { message, .. }) => {
-                assert_eq!(message, expected, "for {content:?}");
-            }
-            other => panic!("{content:?} must be rejected, got {other:?}"),
-        }
+        // Read the rejection reason out rather than branching on it, so a
+        // document that is wrongly ACCEPTED fails on the same assertion as one
+        // rejected for the wrong reason.
+        let reason = match discover_config_document_with_content(&root, content.to_owned()) {
+            Err(ConfigDocumentError::Invalid { message, .. }) => message,
+            Err(other) => format!("wrong error: {other}"),
+            Ok(_) => "accepted".to_owned(),
+        };
+        assert_eq!(reason, expected, "for {content:?}");
     }
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -36,4 +36,11 @@ test.describe("WASM playground", () => {
     expect(dimensions.shellRight).toBe(dimensions.viewportWidth);
     expect(dimensions.shellBottom).toBe(dimensions.viewportHeight);
   });
+
+  test("keeps all example buttons visible in the app toolbar", async ({ page }) => {
+    await page.goto("/playground/");
+    for (const name of ["Return mismatch", "Protocol mismatch", "Clean code"]) {
+      await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+    }
+  });
 });

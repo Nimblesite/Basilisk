@@ -315,10 +315,7 @@ fn rule_tables_report_emptiness() {
     assert!(RuleTables::default().is_empty());
     let tagged = RuleTables {
         rules: std::collections::HashMap::new(),
-        rule_tags: std::collections::HashMap::from([(
-            "basilisk".to_owned(),
-            RuleSeverity::Error,
-        )]),
+        rule_tags: std::collections::HashMap::from([("basilisk".to_owned(), RuleSeverity::Error)]),
     };
     assert!(!tagged.is_empty());
     let ruled = RuleTables {
