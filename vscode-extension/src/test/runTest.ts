@@ -64,12 +64,19 @@ function findSystemVSCodeElectron(): string | undefined {
 }
 
 /**
- * Find the debug-built basilisk binary.
+ * Find the built basilisk binary, preferring `release` over `debug`.
+ *
+ * Cargo names the executable `basilisk.exe` on Windows, so the suffix is not
+ * optional: without it this probe misses a perfectly good binary and `main()`
+ * aborts with "Basilisk binary not found" on every Windows checkout. Mirrors
+ * `findBasiliskBinary()` in suite/test-helpers.ts. Implements
+ * [VSIX-CI-PLATFORM-COVERAGE].
  */
 function findBinary(): string | undefined {
     const workspaceRoot = path.resolve(__dirname, '../../..');
+    const exe = process.platform === 'win32' ? '.exe' : '';
     for (const profile of ['release', 'debug']) {
-        const binary = path.join(workspaceRoot, 'target', profile, 'basilisk');
+        const binary = path.join(workspaceRoot, 'target', profile, `basilisk${exe}`);
         if (fs.existsSync(binary)) {
             return binary;
         }
