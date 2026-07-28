@@ -7,17 +7,33 @@ on:
   # event that can start another workflow, so the release pipeline invokes this
   # one directly instead of relying on that event.
   workflow_call:
-  # Website + benchmark content is pure static-site data — it never touches the
-  # Rust toolchain or the published binaries. Deploy it straight from `main` on
-  # merge so a docs/benchmark refresh goes live WITHOUT cutting a binary release
-  # (release.yml builds 5 platforms + VSIX + marketplace publishes — all wasted
-  # work for a site change). A real release still redeploys via workflow_call.
+  # Deploy straight from `main` on merge so a site refresh goes live WITHOUT
+  # cutting a binary release (release.yml builds 5 platforms + VSIX + marketplace
+  # publishes — all wasted work for a site change). A real release still
+  # redeploys via workflow_call.
+  #
+  # The site is no longer pure static data: the playground embeds the checker
+  # itself, compiled to WebAssembly at build time ([WASM-BUILD]). A change to
+  # any crate the playground links therefore changes what the PUBLISHED site
+  # answers, and must redeploy — otherwise a checker fix ships to the CLI while
+  # the playground keeps demonstrating the old, wrong behaviour. The list below
+  # is `basilisk-wasm`'s dependency closure; extend it when that closure grows.
   push:
     branches: [main]
     paths:
       - "website/**"
       - "benchmarks/status/**"
       - ".github/workflows/deploy-pages.yml"
+      - "crates/basilisk-wasm/**"
+      - "crates/basilisk-checker/**"
+      - "crates/basilisk-common/**"
+      - "crates/basilisk-config/**"
+      - "crates/basilisk-db/**"
+      - "crates/basilisk-parser/**"
+      - "crates/basilisk-resolver/**"
+      - "crates/basilisk-stubs/**"
+      - "crates/basilisk-uv/**"
+      - "Cargo.lock"
 
 permissions:
   contents: read

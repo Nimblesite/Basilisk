@@ -388,6 +388,9 @@ fn playground_protocol_example_reports_the_mismatch_it_advertises() {
             .iter()
             .any(|d| d.message.contains("render") && d.message.contains("User")),
         "the message must name the missing member and the offending class, got: {:?}",
-        protocol_errors.iter().map(|d| &d.message).collect::<Vec<_>>()
+        protocol_errors
+            .iter()
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
 }
