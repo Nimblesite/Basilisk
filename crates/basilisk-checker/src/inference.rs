@@ -209,6 +209,58 @@ pub fn rhs_fully_determines_type(rhs: &RhsKind) -> bool {
     }
 }
 
+/// Synthesize the type of one expression's SOURCE text through the
+/// bidirectional engine ([TYPEINF-TARGET-BIDIRECTIONAL]) — **the** shared
+/// inference behind checker diagnostics
+/// ([`crate::incremental_defs::expression_types`]), hover, completions, and
+/// inlay hints ([NARROWPLAN-CHECKLIST] Stage 2: "reuse the same inference
+/// results"). Anything unparseable or unsupported answers the conservative
+/// `Unknown` — never a guess.
+#[must_use]
+pub fn infer_expression_source(source: &str) -> InferredType {
+    let Ok(parsed) = ruff_python_parser::parse_expression(source) else {
+        return InferredType::Unknown;
+    };
+    let module = parsed.into_syntax();
+    let mut engine = crate::bidir::BidirEngine::new(std::collections::HashMap::new());
+    let ty = engine.synth(&module.body);
+    let solution = engine.finish();
+    ty.to_inferred(&solution.vars)
+}
+
+/// Widen an inferred type to its DISPLAY form: literals become their base
+/// type (`Literal[1]` → `int`), matching how annotations are conventionally
+/// written in hover/inlay surfaces. Precision-preserving variants
+/// (`LiteralString`, unions, containers) widen structurally.
+#[must_use]
+pub fn display_widened(ty: &InferredType) -> InferredType {
+    match ty {
+        InferredType::Literal(literal) => match literal {
+            crate::types::LiteralValue::Int(_) => InferredType::Int,
+            crate::types::LiteralValue::Str(_) => InferredType::Str,
+            crate::types::LiteralValue::Float(_) => InferredType::Float,
+            crate::types::LiteralValue::Bool(_) => InferredType::Bool,
+            crate::types::LiteralValue::Bytes(_) => InferredType::Bytes,
+        },
+        InferredType::LiteralString => InferredType::Str,
+        InferredType::List(elem) => InferredType::List(Box::new(display_widened(elem))),
+        InferredType::Set(elem) => InferredType::Set(Box::new(display_widened(elem))),
+        InferredType::Dict(key, value) => InferredType::Dict(
+            Box::new(display_widened(key)),
+            Box::new(display_widened(value)),
+        ),
+        InferredType::Tuple(elems) => {
+            InferredType::Tuple(elems.iter().map(display_widened).collect())
+        }
+        InferredType::Optional(inner) => InferredType::Optional(Box::new(display_widened(inner))),
+        InferredType::Union(members) => members
+            .iter()
+            .map(display_widened)
+            .fold(InferredType::Never, InferredType::union),
+        other => other.clone(),
+    }
+}
+
 /// Checks if a variable assignment is valid given its annotation and inferred RHS type.
 ///
 /// # Errors

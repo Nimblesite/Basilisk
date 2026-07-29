@@ -330,7 +330,7 @@ fn format_variable_signature(var: &VariableInfo, source: &str) -> String {
     if let Some(ann) = annotation_text(var.annotation_span, source) {
         let _ = write!(sig, ": {ann}");
     } else {
-        let inferred = rhs_type_display(&var.rhs_kind);
+        let inferred = rhs_or_expr_type_display(&var.rhs_kind, var.rhs_span, source);
         if !inferred.is_empty() {
             let _ = write!(sig, ": {inferred}");
         }
@@ -351,7 +351,7 @@ fn format_attribute_signature(class: &ClassInfo, attr: &AttributeInfo, source: &
     if let Some(ann) = annotation_text(attr.annotation_span, source) {
         let _ = write!(sig, ": {ann}");
     } else {
-        let inferred = rhs_type_display(&attr.rhs_kind);
+        let inferred = rhs_or_expr_type_display(&attr.rhs_kind, attr.rhs_span, source);
         if !inferred.is_empty() {
             let _ = write!(sig, ": {inferred}");
         }
@@ -407,6 +407,42 @@ pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> String {
             InferredType::Unknown => String::new(),
             ty => ty.to_string(),
         },
+    }
+}
+
+/// Bidirectional-engine fallback for expression display: when the `RhsKind`
+/// table cannot answer, synthesize the expression SOURCE through the
+/// checker's shared engine — the SAME inference behind checker diagnostics
+/// ([NARROWPLAN-CHECKLIST] Stage 2: one inference for diagnostics, hover,
+/// completions, and inlay hints) — widened to display form. Empty when
+/// nothing is provable (never a guess, and never a partial `Unknown` inside
+/// a rendered type).
+pub(crate) fn expr_type_display(span: Option<Span>, source: &str) -> String {
+    use basilisk_checker::inference::{display_widened, infer_expression_source, is_fully_known};
+    let Some(snippet) = annotation_text(span, source) else {
+        return String::new();
+    };
+    let inferred = infer_expression_source(&snippet);
+    if is_fully_known(&inferred) {
+        display_widened(&inferred).to_string()
+    } else {
+        String::new()
+    }
+}
+
+/// [`rhs_type_display`] with the shared-engine fallback: the `RhsKind` table
+/// answers first (existing displays stay stable), the bidirectional engine
+/// fills what the table cannot see (method calls, subscripts, arithmetic).
+pub(crate) fn rhs_or_expr_type_display(
+    rhs: &basilisk_resolver::RhsKind,
+    span: Option<Span>,
+    source: &str,
+) -> String {
+    let display = rhs_type_display(rhs);
+    if display.is_empty() {
+        expr_type_display(span, source)
+    } else {
+        display
     }
 }
 

@@ -294,6 +294,148 @@ def f(x: int | None) -> None:
     assert_eq!(last_use(&result, "x"), Some(InferredType::Int));
 }
 
+/// Rebinding invalidation ([TYPEINF-NARROWING-ASSIGN]): a tuple-unpacking
+/// assignment rebinds its names — the stale pre-rebind narrow must die, and
+/// the element-wise value types take over.
+#[test]
+fn tuple_unpacking_invalidates_stale_narrows() {
+    let result = analyse(
+        r"
+def f(x: int | None) -> None:
+    if x is None:
+        return
+    x, y = None, 0
+    a = x
+    b = y
+",
+    );
+    let x_uses: Vec<&InferredType> = result
+        .narrowed_uses
+        .iter()
+        .filter(|u| u.name == "x")
+        .map(|u| &u.narrowed)
+        .collect();
+    assert_eq!(
+        last_use(&result, "x"),
+        Some(InferredType::None_),
+        "after `x, y = None, 0` the flow type of x is None: {x_uses:?}"
+    );
+    assert_eq!(
+        last_use(&result, "y"),
+        Some(InferredType::Literal(LiteralValue::Int(0))),
+        "tuple unpacking distributes element-wise: {:?}",
+        result.narrowed_uses
+    );
+}
+
+/// Rebinding invalidation: a `for` target rebinds each iteration — inside
+/// the body the target is the iterable's ELEMENT type, and the stale
+/// pre-loop narrow never survives (in the body or after the loop).
+#[test]
+fn for_target_rebinds_to_the_element_type() {
+    let result = analyse(
+        r"
+def f(x: int | None, items: list[None]) -> None:
+    if x is None:
+        return
+    for x in items:
+        a = x
+    b = x
+",
+    );
+    let x_uses: Vec<&InferredType> = result
+        .narrowed_uses
+        .iter()
+        .filter(|u| u.name == "x")
+        .map(|u| &u.narrowed)
+        .collect();
+    assert!(
+        !x_uses.contains(&&InferredType::Int),
+        "the stale pre-loop Int narrow must not survive the rebinding: {x_uses:?}"
+    );
+    assert!(
+        x_uses.contains(&&InferredType::None_),
+        "inside the loop, x is the element type of list[None]: {x_uses:?}"
+    );
+}
+
+/// Rebinding invalidation: a name assigned inside a loop BODY is unreliable
+/// both inside the loop (later iterations) and after it.
+#[test]
+fn loop_body_assignment_invalidates_stale_narrows() {
+    let result = analyse(
+        r"
+def f(x: int | None, items: list[int]) -> None:
+    if x is None:
+        return
+    for i in items:
+        x = None
+    a = x
+",
+    );
+    let x_uses: Vec<&InferredType> = result
+        .narrowed_uses
+        .iter()
+        .filter(|u| u.name == "x")
+        .map(|u| &u.narrowed)
+        .collect();
+    assert!(
+        !x_uses.contains(&&InferredType::Int),
+        "a loop-body rebinding kills the pre-loop narrow: {x_uses:?}"
+    );
+}
+
+/// Rebinding invalidation: `with ... as x` and `x += 1` rebind without a
+/// modelled result type — the stale narrow resets, never a guess. The read
+/// BEFORE the rebind (including the aug-assign target's own read) still sees
+/// the live narrow; reads after it are back at the declared type and are
+/// therefore not recorded.
+#[test]
+fn with_and_augassign_targets_reset_stale_narrows() {
+    let with_result = analyse(
+        r"
+def f(x: int | None) -> None:
+    if x is None:
+        return
+    c = x
+    with open(p) as x:
+        a = x
+",
+    );
+    let x_uses: Vec<&InferredType> = with_result
+        .narrowed_uses
+        .iter()
+        .filter(|u| u.name == "x")
+        .map(|u| &u.narrowed)
+        .collect();
+    assert_eq!(
+        x_uses,
+        vec![&InferredType::Int],
+        "only the pre-rebind read keeps the narrow; `a = x` reverts to declared"
+    );
+
+    let aug_result = analyse(
+        r"
+def f(y: int | None) -> None:
+    if y is None:
+        return
+    y += 1
+    b = y
+",
+    );
+    let y_uses: Vec<&InferredType> = aug_result
+        .narrowed_uses
+        .iter()
+        .filter(|u| u.name == "y")
+        .map(|u| &u.narrowed)
+        .collect();
+    assert_eq!(
+        y_uses,
+        vec![&InferredType::Int],
+        "the aug-assign target READ sees the old narrow; `b = y` reverts to declared"
+    );
+}
+
 /// Assignment narrowing: `x = 1` narrows the flow type at later uses.
 #[test]
 fn assignment_narrows_flow_type() {
@@ -541,6 +683,148 @@ def f(x: int) -> None:
         1,
         "the isinstance(x, str) body must be unreachable for x: int: {:?}",
         result.unreachable_ranges
+    );
+}
+
+/// A UNION guard over an ATOMIC declared type distributes member-wise:
+/// `isinstance(x, (bool, str))` with `x: int` narrows to `bool` (the
+/// overlapping member), never a collapsed `Never`.
+#[test]
+fn union_guard_over_atomic_declared_narrows_memberwise() {
+    let result = analyse(
+        r"
+def f(x: int) -> None:
+    if isinstance(x, (bool, str)):
+        y = x
+",
+    );
+    let x_uses: Vec<&InferredType> = result
+        .narrowed_uses
+        .iter()
+        .filter(|u| u.name == "x")
+        .map(|u| &u.narrowed)
+        .collect();
+    assert!(
+        x_uses.contains(&&InferredType::Bool),
+        "int ∧ (bool | str) must keep the overlapping member bool: {x_uses:?}"
+    );
+    assert!(
+        result.unreachable_ranges.is_empty(),
+        "the branch is reachable (bool <: int): {:?}",
+        result.unreachable_ranges
+    );
+}
+
+/// Inference-driven divergence: a branch ending in a call typed `Never`
+/// (a same-module `NoReturn` function) counts as an early exit, so the
+/// complement persists — reachability decided by the type, not an idiom.
+#[test]
+fn never_returning_call_diverges_and_persists_the_complement() {
+    use basilisk_checker::narrow::{analyse_function_in, NarrowContext};
+    use basilisk_checker::types::CallableInfo;
+    let source = r"
+def f(x: int | None) -> None:
+    if x is None:
+        fail()
+    y = x
+";
+    let parsed = basilisk_parser::parse_source(source.to_owned(), "flow.py".to_owned())
+        .expect("fixture parses");
+    let resolved = basilisk_resolver::resolve(&parsed).expect("fixture resolves");
+    let function = resolved.functions.first().expect("function");
+    let declared: HashMap<String, InferredType> = [(
+        "x".to_owned(),
+        InferredType::Optional(Box::new(InferredType::Int)),
+    )]
+    .into_iter()
+    .collect();
+    let mut ctx = NarrowContext::default();
+    let _ = ctx.callables.insert(
+        "fail".to_owned(),
+        InferredType::Callable(CallableInfo {
+            param_types: vec![],
+            return_type: Box::new(InferredType::Never),
+        }),
+    );
+    let reparsed = ruff_python_parser::parse_module(source).expect("reparses");
+    let body = reparsed
+        .syntax()
+        .body
+        .iter()
+        .find_map(|stmt| match stmt {
+            Stmt::FunctionDef(def) => Some(def.body.clone()),
+            _ => None,
+        })
+        .expect("body");
+    let result = analyse_function_in(
+        &body,
+        NarrowEnv::new(declared),
+        &function.narrowing_guards,
+        &ctx,
+    );
+    assert_eq!(
+        last_use(&result, "x"),
+        Some(InferredType::Int),
+        "after the Never-call branch, the complement must persist: {:?}",
+        result.narrowed_uses
+    );
+}
+
+/// Inference-driven divergence: `while True:` (a proven always-truthy test)
+/// without a `break` diverges, so the complement persists after the `if`.
+#[test]
+fn while_true_branch_diverges_and_persists_the_complement() {
+    let result = analyse(
+        r"
+def f(x: int | None) -> int:
+    if x is None:
+        while True:
+            pass
+    return x
+",
+    );
+    assert_eq!(
+        last_use(&result, "x"),
+        Some(InferredType::Int),
+        "a `while True:` branch never falls through: {:?}",
+        result.narrowed_uses
+    );
+}
+
+/// Inference-driven reachability: statements after a proven-diverging
+/// statement are reported unreachable — including via an `if`/`else` whose
+/// branches ALL diverge (recursive divergence, not a last-statement idiom).
+#[test]
+fn statements_after_divergence_are_reported_unreachable() {
+    let after_return = analyse(
+        r"
+def f(x: int) -> None:
+    return
+    y = x
+",
+    );
+    assert_eq!(
+        after_return.unreachable_ranges.len(),
+        1,
+        "code after `return` is unreachable: {:?}",
+        after_return.unreachable_ranges
+    );
+
+    let after_exhaustive_if = analyse(
+        r"
+def f(x: int | str) -> int:
+    if isinstance(x, int):
+        return 1
+    else:
+        return 2
+    y = x
+",
+    );
+    assert_eq!(
+        after_exhaustive_if.unreachable_ranges.len(),
+        1,
+        "an if/else whose branches all diverge is itself divergent: {:?}",
+        after_exhaustive_if.unreachable_ranges
     );
 }
 

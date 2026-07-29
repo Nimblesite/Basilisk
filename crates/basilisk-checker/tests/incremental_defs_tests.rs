@@ -181,6 +181,36 @@ fn body_only_edit_backdates_the_module_interface() {
     );
 }
 
+/// Inference-driven reachability through the tracked query: a sibling
+/// `-> Never` function's call diverges, so the complement narrowing
+/// persists — the callable interface flows into the narrow context
+/// ([TYPEINF-TARGET-NARROWING]).
+#[test]
+fn never_returning_sibling_call_diverges_through_the_query() {
+    use basilisk_checker::incremental_defs::narrowed_uses;
+    let db = EventDb::default();
+    let source = r"def fail() -> Never:
+    raise RuntimeError()
+
+def g(x: int | None) -> None:
+    if x is None:
+        fail()
+    y = x
+";
+    let file = SourceFile::new(&db, "m.py".to_owned(), source.to_owned());
+    let g_uses = definitions(&db, file)
+        .iter()
+        .find(|def| def.name(&db) == "g")
+        .map(|def| narrowed_uses(&db, *def).clone())
+        .expect("g exists");
+    assert!(
+        g_uses
+            .iter()
+            .any(|use_site| use_site.name == "x" && use_site.narrowed == InferredType::Int),
+        "the Never-call branch diverges, so `y = x` sees int: {g_uses:?}"
+    );
+}
+
 /// The Salsa-backed use-def map ([TYPEINF-TARGET-NARROWING]): `narrowed_uses`
 /// reports flow-narrowed reads per definition, and editing one function
 /// re-executes only that function's query — narrowing is incremental at
