@@ -5,18 +5,24 @@
 //! persisting the complement after a diverging branch (early exit), applying
 //! `assert` narrowing whole-scope, and modelling assignment narrowing without
 //! ever touching the declared type ([NARROWPLAN-CHECKLIST] Stage 2).
+//!
+//! Divergence and reachability are **inference-driven**
+//! ([`super::reachability`]): a `Never`-typed call statement diverges, and a
+//! rebound name never keeps a stale narrow ([`super::rebind`]).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::NarrowingGuard;
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
-use crate::bidir::BidirEngine;
+use crate::bidir::{BidirEngine, Ty};
 use crate::types::InferredType;
 
 use super::env::NarrowEnv;
 use super::guards::{guard_outcomes_in, GuardOutcome};
+use super::reachability::{stmt_diverges, stmts_diverge};
+use super::rebind::{bound_names, target_names};
 
 /// One narrowed name-use site: the location and the type visible there.
 #[derive(Debug, Clone, PartialEq)]
@@ -37,10 +43,11 @@ pub struct FlowResult {
     /// Every `Name` read whose flow-narrowed type differs from its declared
     /// type — the sites hover/diagnostics consume.
     pub narrowed_uses: Vec<NarrowedUse>,
-    /// Body ranges of branches whose guard narrows a variable to `Never` —
-    /// **inference-driven reachability** ([TYPEINF-TARGET-NARROWING]): the
-    /// branch is unreachable because the type lattice proves the guard can
-    /// never hold, not because a syntactic idiom matched.
+    /// **Inference-driven reachability** ([TYPEINF-TARGET-NARROWING]):
+    /// body ranges of branches whose guard narrows a variable to `Never`
+    /// (the type lattice proves the guard can never hold) and statement
+    /// ranges following a proven-diverging statement — never a syntactic
+    /// idiom match.
     pub unreachable_ranges: Vec<(u32, u32)>,
 }
 
@@ -52,8 +59,8 @@ pub fn analyse_function(body: &[Stmt], env: NarrowEnv, guards: &[NarrowingGuard]
     analyse_function_in(body, env, guards, &super::guards::NarrowContext::default())
 }
 
-/// [`analyse_function`] with module facts (`TypedDict` schemas) available to
-/// the guard interpreter.
+/// [`analyse_function`] with module facts (`TypedDict` schemas, callable
+/// interfaces) available to the guard interpreter and flow synthesis.
 #[must_use]
 pub fn analyse_function_in(
     body: &[Stmt],
@@ -84,8 +91,18 @@ struct FlowWalker<'g> {
 
 impl FlowWalker<'_> {
     fn walk_stmts(&mut self, stmts: &[Stmt]) {
-        for stmt in stmts {
+        let mut reported_remainder = false;
+        for (index, stmt) in stmts.iter().enumerate() {
             self.walk_stmt(stmt);
+            // Inference-driven reachability: everything after a proven-
+            // diverging statement is unreachable (recorded once, but still
+            // walked so its uses stay visible to consumers).
+            if !reported_remainder && index + 1 < stmts.len() && self.one_diverges(stmt) {
+                if let Some(range) = body_range(&stmts[index + 1..]) {
+                    self.result.unreachable_ranges.push(range);
+                }
+                reported_remainder = true;
+            }
         }
     }
 
@@ -94,30 +111,17 @@ impl FlowWalker<'_> {
             Stmt::If(node) => self.walk_if(node),
             Stmt::Assert(node) => self.walk_assert(node),
             Stmt::Assign(node) => self.walk_assign(node),
-            Stmt::AnnAssign(node) => {
-                if let Some(value) = node.value.as_deref() {
-                    self.record_uses(value);
-                }
-            }
+            Stmt::AugAssign(node) => self.walk_aug_assign(node),
+            Stmt::AnnAssign(node) => self.walk_ann_assign(node),
             Stmt::Return(node) => {
                 if let Some(value) = node.value.as_deref() {
                     self.record_uses(value);
                 }
             }
             Stmt::Expr(node) => self.record_uses(&node.value),
-            // Loop bodies: narrowing inside must not escape — walk within a
-            // discarded branch frame ([TYPEINF-NARROWING-SCOPE]).
-            Stmt::For(node) => {
-                self.record_uses(&node.iter);
-                self.walk_discarded(&node.body);
-                self.walk_discarded(&node.orelse);
-            }
-            Stmt::While(node) => {
-                self.record_uses(&node.test);
-                self.walk_discarded(&node.body);
-                self.walk_discarded(&node.orelse);
-            }
-            Stmt::With(node) => self.walk_stmts(&node.body),
+            Stmt::For(node) => self.walk_for(node),
+            Stmt::While(node) => self.walk_while(node),
+            Stmt::With(node) => self.walk_with(node),
             Stmt::Try(node) => self.walk_try(node),
             Stmt::Match(node) => self.walk_match(node),
             // Everything else — including nested functions/classes, which
@@ -132,14 +136,16 @@ impl FlowWalker<'_> {
     fn walk_if(&mut self, node: &ruff_python_ast::StmtIf) {
         self.record_uses(&node.test);
         let outcome = self.lookup_outcome(node.test.range());
-        let then_diverges = diverges(&node.body);
+        let then_diverges = self.body_diverges(&node.body);
         let else_body: Vec<&Stmt> = node
             .elif_else_clauses
             .iter()
             .filter(|clause| clause.test.is_none())
             .flat_map(|clause| clause.body.iter())
             .collect();
-        let else_diverges = !else_body.is_empty() && diverges_refs(&else_body);
+        let else_diverges = else_body
+            .last()
+            .is_some_and(|last| self.one_diverges(last));
 
         let then_frame = self.walk_branch(&node.body, outcome.as_ref(), true);
         let else_frame = self.walk_else(&node.elif_else_clauses, outcome.as_ref());
@@ -208,15 +214,135 @@ impl FlowWalker<'_> {
         }
     }
 
-    /// `x = expr` — assignment narrowing: the flow type of `x` becomes the
-    /// synthesized type of `expr`; the DECLARED type (what assignment
+    /// `x = expr` — assignment narrowing: every bound name takes its slice of
+    /// the synthesized value type; the DECLARED type (what assignment
     /// validation checks against) is untouched by design.
     fn walk_assign(&mut self, node: &ruff_python_ast::StmtAssign) {
         self.record_uses(&node.value);
-        if let [Expr::Name(target)] = node.targets.as_slice() {
-            let ty = synth_type(&node.value);
-            self.env.narrow(target.id.as_str(), ty);
+        let value_ty = self.synth_type(&node.value);
+        for target in &node.targets {
+            self.distribute(target, &value_ty);
         }
+    }
+
+    /// `x += expr` rebinds the target — its stale narrow dies; the result
+    /// type is not modelled yet, so reset rather than guess.
+    fn walk_aug_assign(&mut self, node: &ruff_python_ast::StmtAugAssign) {
+        self.record_uses(&node.target);
+        self.record_uses(&node.value);
+        self.reset_target(&node.target);
+    }
+
+    /// `x: T = expr` — the value narrows the target like a plain assignment
+    /// (the declared layer stays the validation anchor).
+    fn walk_ann_assign(&mut self, node: &ruff_python_ast::StmtAnnAssign) {
+        if let Some(value) = node.value.as_deref() {
+            self.record_uses(value);
+            let ty = self.synth_type(value);
+            self.distribute(&node.target, &ty);
+        }
+    }
+
+    /// Narrow every name bound by `target` from the value type: a single name
+    /// takes it whole, a tuple target with a matching tuple type distributes
+    /// element-wise, and any other shape RESETS its names — a rebound name
+    /// never keeps a narrow proven for its previous value.
+    fn distribute(&mut self, target: &Expr, value: &InferredType) {
+        match (target, value) {
+            (Expr::Name(name), _) => self.env.narrow(name.id.as_str(), value.clone()),
+            (Expr::Tuple(elts), InferredType::Tuple(types))
+                if elts.elts.len() == types.len()
+                    && !elts.elts.iter().any(|e| matches!(e, Expr::Starred(_))) =>
+            {
+                for (elt, ty) in elts.elts.iter().zip(types) {
+                    self.distribute(elt, ty);
+                }
+            }
+            _ => self.reset_target(target),
+        }
+    }
+
+    /// Reset every name bound by a target expression.
+    fn reset_target(&mut self, target: &Expr) {
+        let mut names = Vec::new();
+        target_names(target, &mut names);
+        for name in &names {
+            self.reset_name(name);
+        }
+    }
+
+    /// Reset one rebound name's flow fact: back to its declared type when it
+    /// has one, else `Unknown` (no fact at all — never a stale narrow).
+    fn reset_name(&mut self, name: &str) {
+        let ty = self
+            .env
+            .declared(name)
+            .cloned()
+            .unwrap_or(InferredType::Unknown);
+        self.env.narrow(name, ty);
+    }
+
+    /// `for tgt in iter:` — the target binds the iterable's element type at
+    /// each iteration start; every name the loop can rebind is reset both
+    /// inside the body (a later iteration may already have rebound it) and
+    /// after the loop (the rebinding outlives it).
+    fn walk_for(&mut self, node: &ruff_python_ast::StmtFor) {
+        self.record_uses(&node.iter);
+        let element = element_type(&self.synth_type(&node.iter));
+        let rebound = self.loop_rebound_names(Some(&node.target), &node.body);
+        self.env.push_branch();
+        for name in &rebound {
+            self.reset_name(name);
+        }
+        self.distribute(&node.target, &element);
+        self.walk_stmts(&node.body);
+        let _ = self.env.pop_branch();
+        for name in &rebound {
+            self.reset_name(name);
+        }
+        self.walk_discarded(&node.orelse);
+    }
+
+    /// `while <test>:` — same rebinding discipline as `for`, no bound target.
+    fn walk_while(&mut self, node: &ruff_python_ast::StmtWhile) {
+        self.record_uses(&node.test);
+        let rebound = self.loop_rebound_names(None, &node.body);
+        self.env.push_branch();
+        for name in &rebound {
+            self.reset_name(name);
+        }
+        self.walk_stmts(&node.body);
+        let _ = self.env.pop_branch();
+        for name in &rebound {
+            self.reset_name(name);
+        }
+        self.walk_discarded(&node.orelse);
+    }
+
+    /// Every name a loop can rebind: its target plus all bindings in its body.
+    fn loop_rebound_names(&self, target: Option<&Expr>, body: &[Stmt]) -> HashSet<String> {
+        let _ = self;
+        let mut rebound = HashSet::new();
+        if let Some(target) = target {
+            let mut names = Vec::new();
+            target_names(target, &mut names);
+            rebound.extend(names);
+        }
+        bound_names(body, &mut rebound);
+        rebound
+    }
+
+    /// `with expr as tgt:` — the bound names take `__enter__`'s result, which
+    /// is not modelled yet: reset, never guess. The body executes exactly
+    /// once, so it walks normally.
+    fn walk_with(&mut self, node: &ruff_python_ast::StmtWith) {
+        for item in &node.items {
+            self.record_uses(&item.context_expr);
+            if let Some(vars) = item.optional_vars.as_deref() {
+                self.reset_target(vars);
+            }
+        }
+        self.walk_stmts(&node.body);
     }
 
     /// `match <subject>: case ...` — per-case narrowing of the subject
@@ -255,7 +381,10 @@ impl FlowWalker<'_> {
         else {
             return;
         };
-        let all_diverge = node.cases.iter().all(|case| diverges(&case.body));
+        let all_diverge = node
+            .cases
+            .iter()
+            .all(|case| self.body_diverges(&case.body));
         if *has_wildcard || !all_diverge {
             return;
         }
@@ -300,15 +429,27 @@ impl FlowWalker<'_> {
         }
     }
 
-    /// Try/except: handler and else/final bodies walk in discarded frames —
-    /// exceptions make mid-body narrowing unreliable.
+    /// Try/except: handler and else bodies walk in discarded frames —
+    /// exceptions make mid-body narrowing unreliable — and anything they may
+    /// have rebound is reset before the `finally` (which always runs) walks
+    /// normally.
     fn walk_try(&mut self, node: &ruff_python_ast::StmtTry) {
         self.walk_discarded(&node.body);
+        let mut rebound = HashSet::new();
+        bound_names(&node.body, &mut rebound);
         for handler in &node.handlers {
             let ruff_python_ast::ExceptHandler::ExceptHandler(h) = handler;
             self.walk_discarded(&h.body);
+            if let Some(name) = &h.name {
+                let _ = rebound.insert(name.to_string());
+            }
+            bound_names(&h.body, &mut rebound);
         }
         self.walk_discarded(&node.orelse);
+        bound_names(&node.orelse, &mut rebound);
+        for name in &rebound {
+            self.reset_name(name);
+        }
         self.walk_stmts(&node.finalbody);
     }
 
@@ -327,6 +468,38 @@ impl FlowWalker<'_> {
         guard_outcomes_in(guard, &current, self.ctx)
     }
 
+    /// Synthesize an expression through the bidirectional engine, seeded with
+    /// the module's callable interfaces and every currently-visible flow
+    /// binding — the SAME engine the definition-level queries run
+    /// ([TYPEINF-TARGET-BIDIRECTIONAL]).
+    fn synth_type(&self, expr: &Expr) -> InferredType {
+        let mut globals: HashMap<String, Ty> = self
+            .ctx
+            .callables
+            .iter()
+            .map(|(name, ty)| (name.clone(), Ty::from_inferred(ty)))
+            .collect();
+        for (name, ty) in self.env.visible() {
+            let _ = globals.insert(name, Ty::from_inferred(&ty));
+        }
+        let mut engine = BidirEngine::new(globals);
+        let ty = engine.synth(expr);
+        let solution = engine.finish();
+        ty.to_inferred(&solution.vars)
+    }
+
+    /// Inference-driven divergence of a statement list.
+    fn body_diverges(&self, stmts: &[Stmt]) -> bool {
+        let mut synth = |expr: &Expr| self.synth_type(expr);
+        stmts_diverge(stmts, &mut synth)
+    }
+
+    /// Inference-driven divergence of one statement.
+    fn one_diverges(&self, stmt: &Stmt) -> bool {
+        let mut synth = |expr: &Expr| self.synth_type(expr);
+        stmt_diverges(stmt, &mut synth)
+    }
+
     /// Record every narrowed `Name` read inside `expr`.
     fn record_uses(&mut self, expr: &Expr) {
         let mut names = Vec::new();
@@ -335,6 +508,10 @@ impl FlowWalker<'_> {
             let Some(narrowed) = self.env.lookup(&name) else {
                 continue;
             };
+            // A reset/unknowable flow type carries no fact to report.
+            if narrowed == InferredType::Unknown {
+                continue;
+            }
             if self.env.declared(&name) == Some(&narrowed) {
                 continue;
             }
@@ -394,29 +571,31 @@ fn body_range(body: &[Stmt]) -> Option<(u32, u32)> {
     Some((start, end))
 }
 
-/// Whether a statement list definitely diverges (ends in `return`/`raise`/
-/// `continue`/`break`) — the early-exit signal for complement persistence.
-fn diverges(stmts: &[Stmt]) -> bool {
-    matches!(
-        stmts.last(),
-        Some(Stmt::Return(_) | Stmt::Raise(_) | Stmt::Continue(_) | Stmt::Break(_))
-    )
+/// What iterating over a value yields, when the type proves it.
+fn element_type(iterable: &InferredType) -> InferredType {
+    match iterable {
+        InferredType::List(elem) | InferredType::Set(elem) => (**elem).clone(),
+        InferredType::Dict(key, _) => (**key).clone(),
+        InferredType::Str | InferredType::LiteralString => InferredType::Str,
+        InferredType::Literal(crate::types::LiteralValue::Str(_)) => InferredType::Str,
+        InferredType::Generator(yield_type, _, _) => (**yield_type).clone(),
+        InferredType::Tuple(elems) => tuple_element(elems),
+        InferredType::Named(name) if name == "range" => InferredType::Int,
+        _ => InferredType::Unknown,
+    }
 }
 
-/// [`diverges`] over a collected reference list (the `else` clause bodies).
-fn diverges_refs(stmts: &[&Stmt]) -> bool {
-    matches!(
-        stmts.last(),
-        Some(Stmt::Return(_) | Stmt::Raise(_) | Stmt::Continue(_) | Stmt::Break(_))
-    )
-}
-
-/// Synthesize an expression's type through the bidirectional engine.
-fn synth_type(expr: &Expr) -> InferredType {
-    let mut engine = BidirEngine::new(HashMap::new());
-    let ty = engine.synth(expr);
-    let solution = engine.finish();
-    ty.to_inferred(&solution.vars)
+/// The element of iterating a tuple: the homogeneous `tuple[X, ...]` element
+/// when that form applies, else the union of the fixed positions.
+fn tuple_element(elems: &[InferredType]) -> InferredType {
+    crate::types::homogeneous_tuple_elem(elems)
+        .cloned()
+        .unwrap_or_else(|| {
+            elems
+                .iter()
+                .cloned()
+                .fold(InferredType::Never, InferredType::union)
+        })
 }
 
 /// Visitor collecting every `Name` read with its range.

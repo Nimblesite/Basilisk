@@ -11,11 +11,18 @@
 //! - [`guards`] — consumption of the resolver's collected
 //!   [`basilisk_resolver::scope::narrowing_types::NarrowingGuard`]s
 //!   (`isinstance`, `is None`, truthiness, `TypeGuard`, `TypeIs`, `assert`,
-//!   `match`) into positive/negative environment updates.
+//!   `match`) into positive/negative environment updates;
+//! - [`reachability`] — inference-driven divergence (a `Never`-typed call
+//!   statement diverges; `while True:` without `break` diverges) replacing
+//!   the pattern-matched last-statement idiom;
+//! - [`rebind`] — the binding collector behind narrow invalidation: a
+//!   rebound name never keeps a narrow proven for its previous value.
 
 pub mod env;
 pub mod flow;
 pub mod guards;
+mod reachability;
+mod rebind;
 pub mod set_ops;
 
 pub use env::NarrowEnv;
