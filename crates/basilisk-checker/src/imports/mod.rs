@@ -209,7 +209,7 @@ impl Eq for ActiveTypeshed {}
 /// `PartialEq` (the `Arc<PackageRegistry>` compares the pooled registry by
 /// value), mirroring the `CachedDiagnostic`/`ConfigValue` idiom, so no salsa
 /// dependency leaks into `basilisk-uv`.
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, salsa::Update)]
 pub struct ImportSearchPaths {
     /// Workspace root directories.
     pub roots: Vec<PathBuf>,

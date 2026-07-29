@@ -53,6 +53,7 @@ pub mod profiler;
 pub mod references;
 pub mod runtime;
 pub mod salsa_engine;
+pub(crate) mod scan_cache;
 pub mod scope_tree;
 pub mod selection;
 pub mod semantic_tokens;

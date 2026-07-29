@@ -30,7 +30,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_CACHE = String.raw`
       field.append(
         input,
         textNode('span', 'Reuse results between runs'),
-        textNode('small', 'Writes cache to pyproject.toml. A cached result is replayed only when the file, everything it imports, the configuration, the typeshed source, and the Basilisk version are all unchanged — otherwise the file is checked in full.'),
+        textNode('small', 'Writes the cache setting to pyproject.toml; entries live in the cache folder below. Applies to basilisk check/analyze runs and to the editor\'s startup scan of the workspace. A cached result is replayed only when the file, everything it imports, the configuration, the typeshed source, and the Basilisk version are all unchanged — otherwise the file is checked in full.'),
       );
       return field;
     }

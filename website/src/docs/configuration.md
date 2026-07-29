@@ -341,12 +341,13 @@ any call discards attribute narrowing. See
 **Type:** `bool` / `string`
 **Default:** `false`, and `.basilisk/cache/check` under the project root
 
-`cache = true` turns on the **persistent result cache**: `basilisk check` and
-`basilisk analyze` reuse a file's diagnostics from disk instead of re-checking
-it. A cached result is replayed only when every input that could change the
-answer is byte-identical — the file, every file it reads (transitive imports
-and `.pyi` stubs), the effective configuration, the resolution environment, the
-selected typeshed source, and the Basilisk version. Anything else, or anything
+`cache = true` turns on the **persistent result cache**: `basilisk check`,
+`basilisk analyze`, and the language server's startup scan of your workspace
+reuse a file's diagnostics from disk instead of re-checking it. A cached
+result is replayed only when every input that could change the answer is
+byte-identical — the file, every file it reads (transitive imports and `.pyi`
+stubs), the effective configuration, the resolution environment, the selected
+typeshed source, and the Basilisk version. Anything else, or anything
 unreadable, is a miss and the file is checked in full.
 
 `cache-dir` moves the entries. A relative path resolves against the project
@@ -368,6 +369,12 @@ packages *directly* into a virtualenv without a `uv.lock` change is not
 detected. Clear the cache, or drop the flag, after mutating an environment
 outside the lockfile.
 
+In the editor, the cache serves the **cold start**: opening a workspace whose
+files, configuration, and environment are unchanged since the last session
+replays the previous diagnostics instead of re-checking every file. It engages
+on the initial scan in the default (`wholeModule`) analysis mode; navigation
+is unaffected — only the check step is skipped.
+
 ### What `cache` does *not* control
 
 Editing is already incremental and always has been. The language server
@@ -375,7 +382,8 @@ memoizes `parse → resolve → check` per file with
 [Salsa](https://crates.io/crates/salsa), so an edit re-runs only the file you
 touched and the files that import it. That layer lives in memory for the life
 of the session, **has no configuration key, and cannot be switched off** —
-there is no slower path for it to fall back to.
+there is no slower path for it to fall back to. Once a session is warm, edits
+never consult the disk cache.
 
 So the two are different things:
 

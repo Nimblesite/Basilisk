@@ -43,6 +43,7 @@ pub mod incremental_defs;
 pub mod inference;
 pub mod narrow;
 pub mod param_infer;
+pub mod result_cache;
 pub mod rule_catalog;
 pub mod rule_tags;
 pub mod rules;

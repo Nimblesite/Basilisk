@@ -173,6 +173,45 @@ impl SalsaAnalysisEngine {
         }
     }
 
+    /// Resolve one file for navigation **without running the check step** —
+    /// the replay half of the persistent result cache ([CHKCACHE-LSP]): a
+    /// cache hit already carries the diagnostics, so only the memoized
+    /// parse + resolve + enrichment runs, keeping hover / references /
+    /// go-to-definition identical to a fully analysed file.
+    pub(crate) fn resolve_only(
+        &self,
+        path: &Path,
+        text: &str,
+        search_paths_root: &Path,
+        search_paths: &ImportSearchPaths,
+    ) -> Option<Arc<basilisk_resolver::ResolvedModule>> {
+        let path_str = path.to_string_lossy().into_owned();
+        let mut db = self
+            .db
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let source = self.source_for(&mut db, path, &path_str, text);
+        let search_paths_input = self.search_paths_for(&mut db, search_paths_root, search_paths);
+        let workspace = self.workspace_files_for(&mut db);
+        match cross_resolved_module(&*db, source, search_paths_input, workspace) {
+            ResolvedFile::Resolved(module) => Some(Arc::clone(module)),
+            ResolvedFile::ParseError(_) | ResolvedFile::ResolveError => None,
+        }
+    }
+
+    /// Snapshot the paths that already hold tracked `SourceFile` inputs.
+    ///
+    /// The persistent-cache store gate reads this **before** a scan primes the
+    /// engine ([CHKCACHE-LSP]): a file analysed earlier in the session has
+    /// warm memos whose reads a scan-time recorder never observes, so its
+    /// captured read-set would be incomplete and must not be persisted.
+    pub(crate) fn tracked_paths(&self) -> std::collections::HashSet<PathBuf> {
+        self.sources
+            .iter()
+            .map(|entry| entry.key().clone())
+            .collect()
+    }
+
     /// Bulk-register `files` as tracked `SourceFile` inputs ahead of a sweep.
     ///
     /// A workspace-wide re-analysis calls this once with every indexed file so
@@ -337,18 +376,6 @@ impl SalsaAnalysisEngine {
 mod tests {
     use super::*;
 
-    fn empty_search_paths() -> ImportSearchPaths {
-        ImportSearchPaths {
-            roots: vec![],
-            extra_paths: vec![],
-            stub_paths: vec![],
-            workspace_members: vec![],
-            site_packages: None,
-            registry: None,
-            typeshed_snapshot: None,
-        }
-    }
-
     /// Regression for #287, wiring layer: the default (non-cross-module)
     /// analysis must still populate `imported_symbols` from external
     /// stub/py.typed packages. Hover, completion, and navigation read the
@@ -381,9 +408,11 @@ mod tests {
 
         let engine = SalsaAnalysisEngine::default();
         let config = BasiliskConfig::default();
-        let mut search_paths = empty_search_paths();
-        search_paths.site_packages = Some(site);
-        search_paths.roots = vec![workspace.clone()];
+        let search_paths = ImportSearchPaths {
+            site_packages: Some(site),
+            roots: vec![workspace.clone()],
+            ..ImportSearchPaths::default()
+        };
 
         let analysis = engine.analyse(
             &file,
@@ -413,7 +442,7 @@ mod tests {
     fn remove_drops_a_tracked_source() {
         let engine = SalsaAnalysisEngine::default();
         let config = BasiliskConfig::default();
-        let sp = empty_search_paths();
+        let sp = ImportSearchPaths::default();
         let path = Path::new("/tmp/bsk_engine_remove/a.py");
         let root = Path::new("/tmp/bsk_engine_remove");
 

@@ -370,7 +370,7 @@ impl WorkspaceIndex {
 
     /// Return the longest workspace-root prefix that owns `path`.
     #[must_use]
-    fn owning_root_for_path(&self, path: &std::path::Path) -> Option<&PathBuf> {
+    pub(crate) fn owning_root_for_path(&self, path: &std::path::Path) -> Option<&PathBuf> {
         self.roots
             .iter()
             .filter(|root| !root.as_os_str().is_empty() && path.starts_with(root))
@@ -403,7 +403,7 @@ impl WorkspaceIndex {
     /// `didOpen` / `didChange` re-marks imports `Unresolved`, resurrecting
     /// false `imports_unresolved` in the editor for packages the CLI resolves fine.
     /// Implements [ANALYSIS-INCR-IMPORTS].
-    fn analyse_and_resolve(
+    pub(crate) fn analyse_and_resolve(
         &self,
         text: &str,
         path: &std::path::Path,
@@ -479,7 +479,7 @@ impl WorkspaceIndex {
     /// per-root key would let files with different child-dir configs thrash a
     /// single input.
     #[must_use]
-    fn config_root_key(file_path: &std::path::Path) -> PathBuf {
+    pub(crate) fn config_root_key(file_path: &std::path::Path) -> PathBuf {
         file_path.parent().unwrap_or(file_path).to_path_buf()
     }
 
@@ -536,7 +536,7 @@ impl WorkspaceIndex {
     /// so the incremental per-file path agrees with the bulk scan on which
     /// vendored/bundled files are skipped. Implements [CHKARCH-CONFIG-EXCLUDE].
     #[must_use]
-    fn is_path_excluded(&self, file_path: &std::path::Path) -> bool {
+    pub(crate) fn is_path_excluded(&self, file_path: &std::path::Path) -> bool {
         let Some(root) = self
             .roots
             .iter()
@@ -559,7 +559,7 @@ impl WorkspaceIndex {
     /// path, so an opened file outside the include roots is suppressed just like
     /// an excluded one. Implements [CHKARCH-CONFIG-INCLUDE].
     #[must_use]
-    fn is_outside_include_roots(&self, file_path: &std::path::Path) -> bool {
+    pub(crate) fn is_outside_include_roots(&self, file_path: &std::path::Path) -> bool {
         let Some(root) = self
             .roots
             .iter()
@@ -1052,6 +1052,11 @@ impl WorkspaceIndex {
             })
             .collect();
 
+        // The persistent-cache state snapshots the engine's tracked set, so it
+        // MUST be built before the prime below registers every scanned file
+        // ([CHKCACHE-LSP]).
+        let mut scan_cache = self.begin_scan_cache(&to_analyse);
+
         if self.has_search_paths() {
             self.salsa_engine.prime(
                 to_analyse
@@ -1064,11 +1069,12 @@ impl WorkspaceIndex {
             .into_iter()
             .filter_map(|(path, text)| {
                 let uri = path_to_uri(&path)?;
-                let (entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
+                let (entry, lsp_diags) = self.analyse_scanned(&mut scan_cache, &text, &path);
                 let _ = self.files.insert(path, entry);
                 Some((uri, lsp_diags))
             })
             .collect();
+        scan_cache.log_outcome();
 
         let error_count = results
             .iter()

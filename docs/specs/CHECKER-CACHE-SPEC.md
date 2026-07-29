@@ -4,11 +4,14 @@
 **Status:** v1 (opt-in)
 **Related:** [`CHKARCH-INCREMENTAL-SALSA`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA), [`CHKARCH-CLI`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI), [`STUBRES-TYPESHED`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)
 
-An **opt-in, persistent, content-addressed result cache** for the CLI
-(`basilisk check`): an unchanged check returns from cache without changing
-*which* diagnostics are reported. A warm (cache-hit) check is measurably faster
-than a cold (full) one, and the difference is detectable (the benchmark relies on
-this).
+An **opt-in, persistent, content-addressed result cache** with two consumers:
+the CLI (`basilisk check`, `CHKCACHE-CLI`) and the language server's cold
+workspace scan (`CHKCACHE-LSP`). An unchanged check returns from cache without
+changing *which* diagnostics are reported. A warm (cache-hit) check is
+measurably faster than a cold (full) one, and the difference is detectable
+(the benchmark relies on this). Both surfaces run the one shared core
+(`basilisk_checker::result_cache`) — one cache, one fingerprint, never two
+mechanisms.
 
 ---
 
@@ -71,13 +74,15 @@ and the documentation must say so plainly.
   edit.** A result cache earns its keep when something tells it *which* files
   changed so unchanged work can be skipped. In a long-lived process that means a
   **file watcher** that invalidates entries the moment a file is edited. v1 has
-  no watcher: it is a one-shot CLI cache that lazily re-verifies the recorded
-  read-set on the *next* lookup (re-reading and re-hashing every dependency).
-  That keeps it correct, but its value is confined to **repeated batch runs over
-  a mostly-unchanged tree** (CI re-runs, pre-commit, `basilisk check` loops). In
-  an interactive editor it is the wrong shape — the LSP already holds documents
-  in memory and is notified of edits, so a re-verify-on-read disk cache buys
-  little.
+  no watcher: it lazily re-verifies the recorded read-set on the *next* lookup
+  (re-reading and re-hashing every dependency). That keeps it correct, but its
+  value is confined to **batch-shaped runs over a mostly-unchanged tree**: CI
+  re-runs, pre-commit, `basilisk check` loops — and the editor's **cold start**,
+  which is exactly such a run (a new process, an unchanged tree, every
+  fingerprinted input byte-identical to the last session; `CHKCACHE-LSP`).
+  *In-session* editing is the wrong shape for it — the LSP already holds
+  documents in memory and is notified of edits, so a re-verify-on-read disk
+  cache buys nothing there.
 
 - **`CHKCACHE-POSITIONING-SMART` — invalidation must be smart, not blanket.**
   Re-checking every file because one changed defeats the purpose. Useful
@@ -139,6 +144,14 @@ The read-set is sorted by canonical path for determinism. Hashing uses
 `basilisk_db::hash_source` (`DefaultHasher`); the entry stores the **full
 read-set with per-file hashes** so a lookup re-verifies each file individually
 rather than trusting a single rolled-up number.
+
+Every path in the fingerprint — the per-directory config keys and the
+environment's search paths — hashes through its **canonical** form, never its
+spelling (`CHKCACHE-FINGERPRINT-CANONICAL`). The CLI walks
+invocation-relative paths (`basilisk check` yields `src/…`, `basilisk check .`
+yields `./src/…`) while the LSP holds absolute ones; a spelling-sensitive hash
+would silo every surface — and every CLI invocation spelling — into its own
+entries that no other run ever hits.
 
 ---
 
@@ -237,6 +250,50 @@ byte-for-byte identical to before the cache existed.
 
 ---
 
+## `CHKCACHE-LSP` — Language-server surface {#CHKCACHE-LSP}
+
+Caching is a property of the project (`CHKCACHE-CONFIG`), so the editor
+honours it too (GitHub #367): the language server's **cold workspace scan**
+consults the cache through the same shared core the CLI uses
+(`basilisk_checker::result_cache`, wired in `crates/basilisk-lsp/src/scan_cache.rs`).
+
+- **`CHKCACHE-LSP-REPLAY` — hit: replay diagnostics, skip only the check.** A
+  matching entry supplies the file's diagnostics; the memoized parse + resolve
+  still runs so navigation (hover, references, go-to-definition) is identical
+  to a fully analysed file. The check step — the expensive half — is skipped.
+- **`CHKCACHE-LSP-STORE` — miss: analyse in full, record, persist.** The
+  file's analysis runs under a `ReadRecorder` and the captured read-set is
+  stored, with the target itself **seeded manually**: its text enters the
+  engine from memory, never through a tracked disk read, and an entry missing
+  its own target would replay after edits. Entries are stored only for files
+  that parse and resolve — the CLI never caches failures either.
+- **`CHKCACHE-LSP-STORE-FRESH` — never persist a warm memo's read-set.** The
+  recorder only observes reads of queries that actually *execute*. A file
+  analysed earlier in the session has warm salsa memos; its scan-time capture
+  would be incomplete and is not stored. The scan snapshots the engine's
+  tracked set **before** priming to know which files are genuinely fresh.
+- **`CHKCACHE-LSP-MODE` — `wholeModule` only.** In `crossModule` mode both
+  halves are unsound: cached payloads are CLI-parity diagnostics (replay would
+  drop cross-only findings), and the cross queries serve
+  `module_exports`/`external_module` memos across importers, so a per-file
+  recorder misses dependencies first read during another file's analysis. In
+  `wholeModule` mode the diagnostics query is byte-for-byte CLI parity and
+  executes per file, so per-file capture is exactly as complete as the CLI's.
+- **`CHKCACHE-LSP-SCOPE` — the initial scan only.** In-session invalidation is
+  Salsa's job (`CHKCACHE-POSITIONING-SALSA`); the cold start is the
+  batch-shaped moment where the persistent layer pays
+  (`CHKCACHE-POSITIONING-WATCHER`). Keystroke-path re-checks never touch the
+  disk cache.
+- **`CHKCACHE-LSP-STATS` — the outcome is observable.** The scan logs its
+  hit/miss tally via `tracing`; a cache nobody can observe is
+  indistinguishable from one that never ran.
+
+The LSP takes no flags: it always resolves the standing `CHKCACHE-CONFIG`
+policy (`CacheOverride::Project`), with `cache-dir` honoured through the one
+shared resolver (`CHKCACHE-CONFIG-ONE-RESOLVER`).
+
+---
+
 ## `CHKCACHE-TEST` — Test obligations (coarse e2e) {#CHKCACHE-TEST}
 
 1. `CHKCACHE-TEST-HIT` — second cached run yields identical diagnostics.
@@ -257,3 +314,16 @@ byte-for-byte identical to before the cache existed.
 10. `CHKCACHE-TEST-CONFIG-OVERRIDE` — `--no-cache` beats a configured
     `cache = true` and beats `--cache`; `--cache` beats a configured
     `cache = false`.
+11. `CHKCACHE-TEST-LSP-STORE` — a cold LSP workspace scan of a `cache = true`
+    project stores one entry per scanned file
+    (`crates/basilisk-lsp/tests/persistent_cache_workspace_tests.rs`).
+12. `CHKCACHE-TEST-LSP-REPLAY` — a second cold scan over unchanged bytes
+    replays the stored entry instead of re-checking (proven by a poisoned
+    sentinel payload surfacing in the published diagnostics).
+13. `CHKCACHE-TEST-LSP-DISABLED` — without the `cache` key, a scan creates no
+    cache directory.
+14. `CHKCACHE-TEST-LSP-MODE` — a `crossModule` scan neither stores nor
+    replays (`CHKCACHE-LSP-MODE`).
+15. `CHKCACHE-TEST-CANONICAL` — the config hash is identical across path
+    spellings of the same directory (`CHKCACHE-FINGERPRINT-CANONICAL`;
+    `crates/basilisk-checker/src/result_cache.rs`).

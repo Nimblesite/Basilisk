@@ -205,10 +205,11 @@ The checkbox writes an explicit value for the same reason a severity control
 does ([§CONFIGEDITOR-VSIX-EXPERIENCE](#CONFIGEDITOR-VSIX-EXPERIENCE)): what the
 panel shows is then what the file says, with no inferred middle state. The
 folder field always shows the **effective** location — the configured folder or
-the default — resolved server-side through the one resolver the CLI writes
-entries through (`CHKCACHE-CONFIG-ONE-RESOLVER`), so the panel can never
-display a folder the run would not use; the reset control appears only once
-there is a project choice to undo.
+the default — resolved server-side through the one resolver every consumer
+writes entries through, CLI runs and the editor's own startup scan alike
+(`CHKCACHE-CONFIG-ONE-RESOLVER`, [CHKCACHE-LSP](CHECKER-CACHE-SPEC.md#CHKCACHE-LSP)),
+so the panel can never display a folder the run would not use; the reset
+control appears only once there is a project choice to undo.
 
 The in-session rows are read-only and carry **no control of any kind**, because
 the Salsa layer has no key: it reports the engine, that it is always on, and
