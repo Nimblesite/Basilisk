@@ -12,7 +12,9 @@ use super::super::{
     ConfigDocumentError, ConfigurationUpdate, RuleConfigUpdate, TypeshedConfigKey,
     TypeshedConfigUpdate,
 };
-use super::{document_for, set_rule, temp_root};
+use super::fixtures::{
+    assert_project_content_preserved, document_for, set_rule, temp_root, PROJECT_DOCUMENT,
+};
 use crate::RuleSeverity;
 
 /// [LSPCFGED-TYPESHED]: malformed acquisition settings fail before a snapshot
@@ -40,10 +42,7 @@ fn malformed_typeshed_settings_are_invalid() {
 #[test]
 fn typeshed_settings_patch_atomically_and_preserve_project_content() {
     let root = temp_root("typeshed_patch");
-    let document = document_for(
-        &root,
-        "# keep\n[project]\nname = \"demo\"\n\n[tool.basilisk]\n",
-    );
+    let document = document_for(&root, PROJECT_DOCUMENT);
     let update = ConfigurationUpdate {
         rules: set_rule("BSK-0001", RuleSeverity::Warning),
         typeshed: TypeshedConfigUpdate {
@@ -61,8 +60,7 @@ fn typeshed_settings_patch_atomically_and_preserve_project_content() {
         cache: CacheConfigUpdate::default(),
     };
     let patch = build_configuration_patch(&document, &update).unwrap();
-    assert!(patch.content.contains("# keep"));
-    assert!(patch.content.contains("name = \"demo\""));
+    assert_project_content_preserved(&patch.content);
     assert!(patch
         .content
         .contains("typeshed-commit = \"83c2518a9e6abbda0c44592c3483de459198f887\""));
