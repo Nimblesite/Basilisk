@@ -36,8 +36,10 @@ jobs:
   #   vscode  — vscode-extension/** only → the VS Code job (+ shipwright gate).
   #   nvim    — basilisk.nvim/** only → the Neovim job.
   #   zed     — basilisk-zed/** only → the Zed job.
-  #   website — static-site sources → the fast site build check (deploy-pages.yml
-  #             does the real deploy post-merge; this catches breakage pre-merge).
+  #   website — static-site sources → the site build check. ONLY a release
+  #             publishes the site (deploy-pages.yml has no push trigger), so
+  #             this pre-merge build is the only gate before it: a break caught
+  #             here instead of at release time, where it blocks shipping.
   #   code    — union of core|vscode|nvim|zed, for whole-repo jobs (lint/deslop).
   # A PR touching ONLY docs/website/CI-YAML starts no code job at all.
   changes:
@@ -102,9 +104,9 @@ jobs:
               # playground links changes what the published site answers, so the
               # site build and its playground e2e must re-run to catch a
               # browser-only break. This list is `basilisk-wasm`'s dependency
-              # closure and MUST stay in step with the `paths:` filter in
-              # deploy-pages.yml — if the pre-merge check skips where the deploy
-              # fires, a broken playground ships unverified.
+              # closure; extend it when that closure grows. The release deploy
+              # publishes whatever is on `main`, unfiltered — so a crate that
+              # skips this check reaches the live playground unverified.
               crates/basilisk-wasm/*|crates/basilisk-checker/*|crates/basilisk-common/*) website=true ;;
               crates/basilisk-config/*|crates/basilisk-db/*|crates/basilisk-parser/*) website=true ;;
               crates/basilisk-resolver/*|crates/basilisk-stubs/*|crates/basilisk-uv/*) website=true ;;
