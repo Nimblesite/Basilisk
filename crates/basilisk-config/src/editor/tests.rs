@@ -4,55 +4,29 @@
 //! and [CHKARCH-CONFIG-MODEL] (docs/specs/CHECKER-ARCHITECTURE-SPEC.md); code
 //! under test is `editor/mod.rs`, `editor/patch.rs`, `editor/write.rs`.
 
-use std::collections::BTreeMap;
-use std::path::Path;
-
 use super::{
     active_config_path, apply_config_patch, build_configuration_patch, build_rule_patch,
-    content_revision, discover_config_document, discover_config_document_with_content,
-    CacheConfigUpdate, ConfigDocument, ConfigDocumentError, ConfigPatch, ConfigurationUpdate,
-    RuleConfigUpdate, TypeshedConfigKey, TypeshedConfigUpdate,
+    discover_config_document, discover_config_document_with_content, CacheConfigUpdate,
+    ConfigDocumentError, ConfigurationUpdate, TypeshedConfigKey, TypeshedConfigUpdate,
 };
+use crate::RuleSeverity;
 
-// The two setting panels' persistence tests live beside these rule/tag ones,
-// in their own files, so no file here approaches the size ceiling.
+// Fixtures every persistence suite shares, and the two setting panels' own
+// suites, each in its own file so none approaches the size ceiling.
+#[path = "test_fixtures.rs"]
+mod fixtures;
+
 #[path = "cache_tests.rs"]
 mod cache_tests;
 
 #[path = "typeshed_tests.rs"]
 mod typeshed_tests;
-use crate::{BasiliskConfig, RuleSeverity};
 
-fn temp_root(unique: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("bsk_editor_{unique}_{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
-}
+use fixtures::{
+    document_for, manual_document, manual_patch, remove_rule, set_rule, set_tag, temp_root,
+};
 
-fn document_for(root: &Path, content: &str) -> ConfigDocument {
-    discover_config_document_with_content(root, content.to_owned()).unwrap()
-}
-
-fn set_rule(code: &str, severity: RuleSeverity) -> RuleConfigUpdate {
-    RuleConfigUpdate {
-        rules: BTreeMap::from([(code.to_owned(), Some(severity))]),
-        rule_tags: BTreeMap::new(),
-    }
-}
-
-fn remove_rule(code: &str) -> RuleConfigUpdate {
-    RuleConfigUpdate {
-        rules: BTreeMap::from([(code.to_owned(), None)]),
-        rule_tags: BTreeMap::new(),
-    }
-}
-
-fn set_tag(tag: &str, severity: RuleSeverity) -> RuleConfigUpdate {
-    RuleConfigUpdate {
-        rules: BTreeMap::new(),
-        rule_tags: BTreeMap::from([(tag.to_owned(), Some(severity))]),
-    }
-}
+use std::collections::BTreeMap;
 
 /// [CONFIGEDITOR-SOURCES]: the active source is always the root's
 /// `pyproject.toml`, existing or as creation target.
@@ -286,31 +260,6 @@ fn wrong_shaped_rules_target_is_invalid() {
     );
     assert!(matches!(result, Err(ConfigDocumentError::Invalid { .. })));
     let _ = std::fs::remove_dir_all(&root);
-}
-
-/// A document the editor holds in a state discovery would have rejected
-/// (stale buffer, external corruption) — the patch layer re-validates rather
-/// than trusting the caller.
-fn manual_document(root: &Path, content: &str, read_only: bool) -> ConfigDocument {
-    ConfigDocument {
-        root: root.to_path_buf(),
-        path: root.join("pyproject.toml"),
-        exists: true,
-        read_only,
-        content: content.to_owned(),
-        revision: content_revision(content),
-        config: BasiliskConfig::default(),
-    }
-}
-
-fn manual_patch(path: std::path::PathBuf, base: &str, content: &str) -> ConfigPatch {
-    ConfigPatch {
-        path,
-        base_revision: content_revision(base),
-        revision: content_revision(content),
-        content: content.to_owned(),
-        config: BasiliskConfig::default(),
-    }
 }
 
 /// [CONFIGEDITOR-OPERATIONS]: every error variant renders an actionable

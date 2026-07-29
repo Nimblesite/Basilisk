@@ -16,6 +16,7 @@ mod tests;
 
 use std::path::{Path, PathBuf};
 
+use crate::parse::{CACHE_DIR_KEY, CACHE_KEY};
 use crate::BasiliskConfig;
 
 pub use patch::{
@@ -234,20 +235,10 @@ fn validate_toml_structure(path: &Path, table: &toml::Table) -> Result<bool, Con
 /// makes that drop visible: the editor refuses the document rather than
 /// presenting a cache setting the checker will never honour.
 fn validate_cache_settings(path: &Path, basilisk: &toml::Table) -> Result<(), ConfigDocumentError> {
+    require_value_type(path, basilisk, CACHE_KEY, "boolean", toml::Value::is_bool)?;
+    require_value_type(path, basilisk, CACHE_DIR_KEY, "string", toml::Value::is_str)?;
     if basilisk
-        .get(crate::parse::CACHE_KEY)
-        .is_some_and(|value| !value.is_bool())
-    {
-        return invalid(path, "`cache` must be a boolean");
-    }
-    if basilisk
-        .get(crate::parse::CACHE_DIR_KEY)
-        .is_some_and(|value| !value.is_str())
-    {
-        return invalid(path, "`cache-dir` must be a string");
-    }
-    if basilisk
-        .get(crate::parse::CACHE_DIR_KEY)
+        .get(CACHE_DIR_KEY)
         .and_then(toml::Value::as_str)
         .is_some_and(|dir| dir.trim().is_empty())
     {
@@ -256,14 +247,31 @@ fn validate_cache_settings(path: &Path, basilisk: &toml::Table) -> Result<(), Co
     Ok(())
 }
 
+/// Reject a key whose value is not the TOML type the parser reads.
+///
+/// Shared by both setting panels because the failure is the same in each: the
+/// parser silently DROPS a wrong-typed value, so a document that kept one
+/// would show the editor a setting the checker never honours.
+fn require_value_type(
+    path: &Path,
+    basilisk: &toml::Table,
+    key: &str,
+    expected: &str,
+    is_expected: fn(&toml::Value) -> bool,
+) -> Result<(), ConfigDocumentError> {
+    if basilisk.get(key).is_some_and(|value| !is_expected(value)) {
+        invalid(path, &format!("`{key}` must be a {expected}"))
+    } else {
+        Ok(())
+    }
+}
+
 fn validate_typeshed_settings(
     path: &Path,
     basilisk: &toml::Table,
 ) -> Result<(), ConfigDocumentError> {
     for key in ["typeshed-path", "typeshed-commit", "typeshed-store-path"] {
-        if basilisk.get(key).is_some_and(|value| !value.is_str()) {
-            return invalid(path, &format!("`{key}` must be a string"));
-        }
+        require_value_type(path, basilisk, key, "string", toml::Value::is_str)?;
     }
     if basilisk.contains_key("typeshed-path") && basilisk.contains_key("typeshed-commit") {
         return invalid(

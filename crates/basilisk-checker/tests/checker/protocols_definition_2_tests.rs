@@ -568,3 +568,91 @@ def go(U: type) -> None:
     );
     Ok(())
 }
+
+// ── Guarded method definitions (resolver-level) ──────────────────────────────
+// `ClassInfo.method_names` was collected only from statements at the TOP LEVEL
+// of a class body, so a method defined inside `if` / `try` / `with` / `match`
+// was invisible and the class was reported as missing it. Attributes under the
+// same guard were collected correctly, which is what made the gap method-only.
+// pyright, mypy, pyrefly and ty all accept every program below.
+
+#[test]
+fn assignment_accepts_method_defined_under_an_always_true_guard(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // No version reasoning is involved: the method exists on every path.
+    let source = r"
+from typing import Protocol
+
+class Closer(Protocol):
+    def close(self) -> None: ...
+
+class Impl:
+    if True:
+        def close(self) -> None:
+            pass
+
+x: Closer = Impl()
+";
+    let diags = run(source)?;
+    assert!(
+        !has_code(&diags, "protocols_definition_2"),
+        "a method defined under `if True` exists unconditionally, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn assignment_accepts_method_defined_in_every_branch() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+import sys
+from typing import Protocol
+
+class Closer(Protocol):
+    def close(self) -> None: ...
+
+class Impl:
+    if sys.version_info >= (3, 9):
+        def close(self) -> None:
+            pass
+    else:
+        def close(self) -> None:
+            pass
+
+x: Closer = Impl()
+";
+    let diags = run(source)?;
+    assert!(
+        !has_code(&diags, "protocols_definition_2"),
+        "a method defined in every branch is always present, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn assignment_accepts_method_defined_in_a_class_body_try() -> Result<(), Box<dyn std::error::Error>>
+{
+    let source = r"
+from typing import Protocol
+
+class Closer(Protocol):
+    def close(self) -> None: ...
+
+class Impl:
+    try:
+        def close(self) -> None:
+            pass
+    except Exception:
+        pass
+
+x: Closer = Impl()
+";
+    let diags = run(source)?;
+    assert!(
+        !has_code(&diags, "protocols_definition_2"),
+        "a method defined inside a class-body try must be collected, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

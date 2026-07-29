@@ -9,7 +9,9 @@ use super::super::{
     build_configuration_patch, discover_config_document_with_content, CacheConfigMutation,
     CacheConfigUpdate, ConfigDocumentError, ConfigurationUpdate,
 };
-use super::{document_for, temp_root};
+use super::fixtures::{
+    assert_project_content_preserved, document_for, temp_root, PROJECT_DOCUMENT,
+};
 
 fn cache_update(mutations: Vec<CacheConfigMutation>) -> ConfigurationUpdate {
     ConfigurationUpdate {
@@ -24,17 +26,13 @@ fn cache_update(mutations: Vec<CacheConfigMutation>) -> ConfigurationUpdate {
 #[test]
 fn cache_settings_patch_with_their_documented_toml_types() {
     let root = temp_root("cache_patch");
-    let document = document_for(
-        &root,
-        "# keep\n[project]\nname = \"demo\"\n\n[tool.basilisk]\n",
-    );
+    let document = document_for(&root, PROJECT_DOCUMENT);
     let update = cache_update(vec![
         CacheConfigMutation::SetEnabled(true),
         CacheConfigMutation::SetDir("build/bsk-cache".to_owned()),
     ]);
     let patch = build_configuration_patch(&document, &update).unwrap();
-    assert!(patch.content.contains("# keep"));
-    assert!(patch.content.contains("name = \"demo\""));
+    assert_project_content_preserved(&patch.content);
     assert!(
         patch.content.contains("cache = true"),
         "`cache` must render as a TOML boolean, not a string: {}",

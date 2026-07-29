@@ -98,10 +98,17 @@ jobs:
               # generated from — so a new/renamed rule re-runs the drift guard.
               website/*|benchmarks/status/*|crates/basilisk-checker/src/rules/*) website=true ;;
               # The playground ships the checker itself, compiled to wasm at
-              # site-build time ([WASM-BUILD]). A change to that crate changes
-              # what the published playground answers, so the site build and its
-              # playground e2e must re-run to catch a browser-only break.
-              crates/basilisk-wasm/*) website=true ;;
+              # site-build time ([WASM-BUILD]). A change to ANY crate the
+              # playground links changes what the published site answers, so the
+              # site build and its playground e2e must re-run to catch a
+              # browser-only break. This list is `basilisk-wasm`'s dependency
+              # closure and MUST stay in step with the `paths:` filter in
+              # deploy-pages.yml — if the pre-merge check skips where the deploy
+              # fires, a broken playground ships unverified.
+              crates/basilisk-wasm/*|crates/basilisk-checker/*|crates/basilisk-common/*) website=true ;;
+              crates/basilisk-config/*|crates/basilisk-db/*|crates/basilisk-parser/*) website=true ;;
+              crates/basilisk-resolver/*|crates/basilisk-stubs/*|crates/basilisk-uv/*) website=true ;;
+              Cargo.lock) website=true ;;
               # The conformance score + graded python/typing commit are stamped
               # into these by scripts/gen_conformance_reference.py — editing
               # them re-runs the website job's stamp drift guard. The published

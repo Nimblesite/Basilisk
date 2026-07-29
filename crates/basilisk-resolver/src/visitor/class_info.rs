@@ -6,6 +6,7 @@ use ruff_text_size::Ranged;
 
 use crate::scope::{AttributeInfo, FunctionInfo, MatchStmtInfo, RhsKind};
 use crate::static_condition::{parse_static_condition, StaticCondition};
+use crate::visitor::class_info_ext::decorator_name;
 
 /// Return type for [`collect_class_body`]: attributes, method names, and
 /// per-method decorator lists.
@@ -104,7 +105,68 @@ pub(super) fn collect_class_body(
         }
     }
 
+    // A method can also be defined inside a compound statement in the class
+    // body — the `if TYPE_CHECKING:` / `if sys.version_info >= (...)` /
+    // `try: ... except ImportError:` compatibility shapes. The loop above only
+    // sees the top level, and the `Stmt::If` arm collects fields but never
+    // functions, so such a method was absent from `method_names` and its class
+    // was reported as missing it. Attributes under the same guard were always
+    // collected, which is what made the gap method-only.
+    collect_nested_method_names(&class.body, &mut method_names, &mut method_decorators);
+
     (attributes, method_names, method_decorators)
+}
+
+/// Record methods defined inside compound statements in a class body.
+///
+/// Names only: the enclosing statement decides *whether* the definition runs,
+/// which this resolver does not evaluate, so a guarded method is treated as
+/// present rather than absent. Present-but-unanalysed can only cost a missed
+/// diagnostic; absent produces a false positive on valid code, which is the
+/// worse failure ([CHKARCH-CONFORMANCE]).
+fn collect_nested_method_names(
+    stmts: &[Stmt],
+    method_names: &mut Vec<String>,
+    method_decorators: &mut Vec<(String, Vec<String>)>,
+) {
+    for stmt in stmts {
+        let nested: Vec<&[Stmt]> = match stmt {
+            Stmt::If(node) => std::iter::once(node.body.as_slice())
+                .chain(node.elif_else_clauses.iter().map(|c| c.body.as_slice()))
+                .collect(),
+            Stmt::Try(node) => std::iter::once(node.body.as_slice())
+                .chain(node.handlers.iter().map(|handler| {
+                    let ruff_python_ast::ExceptHandler::ExceptHandler(handler) = handler;
+                    handler.body.as_slice()
+                }))
+                .chain([node.orelse.as_slice(), node.finalbody.as_slice()])
+                .collect(),
+            Stmt::With(node) => vec![node.body.as_slice()],
+            Stmt::For(node) => vec![node.body.as_slice(), node.orelse.as_slice()],
+            Stmt::While(node) => vec![node.body.as_slice(), node.orelse.as_slice()],
+            Stmt::Match(node) => node.cases.iter().map(|case| case.body.as_slice()).collect(),
+            _ => continue,
+        };
+
+        for branch in nested {
+            for inner in branch {
+                if let Stmt::FunctionDef(func) = inner {
+                    let name = func.name.to_string();
+                    if !method_names.contains(&name) {
+                        method_names.push(name.clone());
+                        let decorators = func
+                            .decorator_list
+                            .iter()
+                            .filter_map(decorator_name)
+                            .collect();
+                        method_decorators.push((name, decorators));
+                    }
+                }
+            }
+            // Guards nest — `if` inside `try`, `elif` chains, and so on.
+            collect_nested_method_names(branch, method_names, method_decorators);
+        }
+    }
 }
 
 /// `true` for the `_: KW_ONLY` dataclass sentinel.
