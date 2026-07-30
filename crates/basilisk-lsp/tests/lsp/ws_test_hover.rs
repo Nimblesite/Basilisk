@@ -365,7 +365,10 @@ async fn test_ws_hover_member_access_via_engine_inferred_receiver() -> TestResul
         resp.contains("strip"),
         "hover must resolve str.strip through the engine-inferred receiver: {resp}"
     );
-    assert!(resp.contains("str"), "should present the str method: {resp}");
+    assert!(
+        resp.contains("str"),
+        "should present the str method: {resp}"
+    );
 
     Ok(())
 }

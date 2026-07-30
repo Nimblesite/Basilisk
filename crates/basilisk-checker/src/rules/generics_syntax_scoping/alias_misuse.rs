@@ -144,14 +144,11 @@ fn check_alias_attribute_access(
 // ---------------------------------------------------------------------------
 
 /// Primitive subtype relationship used for bound checking.
+///
+/// Delegates to the shared tower ([NARROWPLAN-SUBTYPING]); parity with the
+/// former local table is pinned in `tests/subtyping_context_tests.rs`.
 fn is_subtype_of(arg_type: &str, bound_type: &str) -> bool {
-    arg_type == bound_type
-        || matches!(
-            (arg_type, bound_type),
-            ("bool", "int" | "float" | "complex")
-                | ("int", "float" | "complex")
-                | ("float", "complex")
-        )
+    crate::subtyping::name_subtype(arg_type, bound_type)
 }
 
 /// Build the bounded-alias table from AST-derived alias definitions.

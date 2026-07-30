@@ -353,14 +353,12 @@ pub(crate) fn infer_expr_literal_type(expr: &Expr) -> Option<&'static str> {
 // ---------------------------------------------------------------------------
 
 /// Check numeric subtype relationship: `bool → int → float → complex`.
+///
+/// Delegates to the single text-level tower authority
+/// (`crate::subtyping::name_subtype`, [TYPEINF-SUBTYPING-NOMINAL]) so every
+/// rule agrees on it ([NARROWPLAN-SUBTYPING]).
 pub(crate) fn is_numeric_subtype(child: &str, parent: &str) -> bool {
-    if child == parent {
-        return true;
-    }
-    matches!(
-        (child, parent),
-        ("bool", "int" | "float" | "complex") | ("int", "float" | "complex") | ("float", "complex")
-    )
+    crate::subtyping::name_subtype(child, parent)
 }
 
 /// Check if `actual` is assignable to `expected`.

@@ -401,3 +401,38 @@ async fn test_ws_completion_on_empty_file() -> TestResult<()> {
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn test_ws_completion_dot_on_engine_inferred_receiver() -> TestResult<()> {
+    // The RhsKind table cannot type `"a".upper()`; only the shared bidirectional
+    // engine can ([TYPEINF-BIDIR-ENGINE]). Dot completions must reuse that same
+    // inference, so `name.` offers `str` methods ([NARROWPLAN-CHECKLIST] Stage 2).
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "name = \"a\".upper()\nname.\n";
+    fixture.did_open("file:///engine_dot.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            18,
+            "textDocument/completion",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///engine_dot.py" },
+                "position": { "line": 1, "character": 5 }
+            }),
+        )
+        .await?
+        .ok_or("no completion response")?;
+
+    assert!(
+        resp.contains("\"label\":\"strip\""),
+        "engine-inferred str receiver should offer 'strip': {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"upper\""),
+        "engine-inferred str receiver should offer 'upper': {resp}"
+    );
+    Ok(())
+}

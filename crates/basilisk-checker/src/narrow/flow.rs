@@ -98,7 +98,7 @@ impl FlowWalker<'_> {
             // diverging statement is unreachable (recorded once, but still
             // walked so its uses stay visible to consumers).
             if !reported_remainder && index + 1 < stmts.len() && self.one_diverges(stmt) {
-                if let Some(range) = body_range(&stmts[index + 1..]) {
+                if let Some(range) = stmts.get(index + 1..).and_then(body_range) {
                     self.result.unreachable_ranges.push(range);
                 }
                 reported_remainder = true;
@@ -143,9 +143,7 @@ impl FlowWalker<'_> {
             .filter(|clause| clause.test.is_none())
             .flat_map(|clause| clause.body.iter())
             .collect();
-        let else_diverges = else_body
-            .last()
-            .is_some_and(|last| self.one_diverges(last));
+        let else_diverges = else_body.last().is_some_and(|last| self.one_diverges(last));
 
         let then_frame = self.walk_branch(&node.body, outcome.as_ref(), true);
         let else_frame = self.walk_else(&node.elif_else_clauses, outcome.as_ref());
@@ -381,10 +379,7 @@ impl FlowWalker<'_> {
         else {
             return;
         };
-        let all_diverge = node
-            .cases
-            .iter()
-            .all(|case| self.body_diverges(&case.body));
+        let all_diverge = node.cases.iter().all(|case| self.body_diverges(&case.body));
         if *has_wildcard || !all_diverge {
             return;
         }
@@ -576,8 +571,9 @@ fn element_type(iterable: &InferredType) -> InferredType {
     match iterable {
         InferredType::List(elem) | InferredType::Set(elem) => (**elem).clone(),
         InferredType::Dict(key, _) => (**key).clone(),
-        InferredType::Str | InferredType::LiteralString => InferredType::Str,
-        InferredType::Literal(crate::types::LiteralValue::Str(_)) => InferredType::Str,
+        InferredType::Str
+        | InferredType::LiteralString
+        | InferredType::Literal(crate::types::LiteralValue::Str(_)) => InferredType::Str,
         InferredType::Generator(yield_type, _, _) => (**yield_type).clone(),
         InferredType::Tuple(elems) => tuple_element(elems),
         InferredType::Named(name) if name == "range" => InferredType::Int,

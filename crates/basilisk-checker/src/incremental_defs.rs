@@ -541,8 +541,14 @@ pub fn narrowed_uses<'db>(
     let Some(Stmt::FunctionDef(function_def)) = reparsed.syntax().body.first() else {
         return Vec::new();
     };
-    let mut ctx = crate::narrow::NarrowContext::default();
-    ctx.callables = callable_interface(db, def.file(db)).0.iter().cloned().collect();
+    let ctx = crate::narrow::NarrowContext {
+        callables: callable_interface(db, def.file(db))
+            .0
+            .iter()
+            .cloned()
+            .collect(),
+        ..Default::default()
+    };
     crate::narrow::analyse_function_in(
         &function_def.body,
         crate::narrow::NarrowEnv::new(declared),

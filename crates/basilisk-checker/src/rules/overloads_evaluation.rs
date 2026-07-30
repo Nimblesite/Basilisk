@@ -442,16 +442,6 @@ fn is_type_assignable(source_type: &str, target_type: &str) -> bool {
             .any(|part| is_type_assignable(src, part));
     }
 
-    // Numeric tower: bool <: int <: float <: complex
-    if tgt == "int" && src == "bool" {
-        return true;
-    }
-    if tgt == "float" && (src == "int" || src == "bool") {
-        return true;
-    }
-    if tgt == "complex" && (src == "int" || src == "float" || src == "bool") {
-        return true;
-    }
-
-    false
+    // Numeric tower via the shared core ([NARROWPLAN-SUBTYPING]).
+    crate::subtyping::name_subtype(src, tgt)
 }

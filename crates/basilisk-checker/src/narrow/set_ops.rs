@@ -171,10 +171,7 @@ mod tests {
     fn optional_guard_over_atom_keeps_the_overlap() {
         let guard = InferredType::Optional(Box::new(InferredType::Int));
         assert_eq!(intersect(&InferredType::Int, &guard), InferredType::Int);
-        assert_eq!(
-            intersect(&InferredType::None_, &guard),
-            InferredType::None_
-        );
+        assert_eq!(intersect(&InferredType::None_, &guard), InferredType::None_);
         assert_eq!(intersect(&InferredType::Str, &guard), InferredType::Never);
     }
 

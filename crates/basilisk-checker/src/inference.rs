@@ -240,9 +240,7 @@ pub fn is_fully_known(ty: &InferredType) -> bool {
         | InferredType::Optional(inner)
         | InferredType::TypeForm(inner) => is_fully_known(inner),
         InferredType::Dict(key, value) => is_fully_known(key) && is_fully_known(value),
-        InferredType::Tuple(elems) | InferredType::Union(elems) => {
-            elems.iter().all(is_fully_known)
-        }
+        InferredType::Tuple(elems) | InferredType::Union(elems) => elems.iter().all(is_fully_known),
         InferredType::Callable(info) => {
             info.param_types.iter().all(is_fully_known) && is_fully_known(&info.return_type)
         }
@@ -532,7 +530,10 @@ mod tests {
             display_widened(&InferredType::Literal(LiteralValue::Int(1))),
             InferredType::Int
         );
-        assert_eq!(display_widened(&InferredType::LiteralString), InferredType::Str);
+        assert_eq!(
+            display_widened(&InferredType::LiteralString),
+            InferredType::Str
+        );
         assert_eq!(
             display_widened(&InferredType::List(Box::new(InferredType::Literal(
                 LiteralValue::Str("x".into())

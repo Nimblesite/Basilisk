@@ -51,7 +51,13 @@ impl ConstrainedTypeVar {
 
 /// Returns `true` when `subtype` is a well-known subtype of `supertype`,
 /// or when class inheritance shows `subtype` inherits from `supertype`.
-fn is_subtype_of(
+///
+/// Deliberately narrower than the shared tower (`bool <: int` only): widening
+/// it would accept spec-invalid constraint matches this rule must flag. The
+/// current accepted/rejected cases are pinned by `helper_parity_tests`; the
+/// nominal walk merges into `crate::subtyping::SubtypingContext` at the
+/// Integration stage ([NARROWPLAN-SUBTYPING], [NARROWPLAN-INTEGRATION]).
+pub(super) fn is_subtype_of(
     subtype: &str,
     supertype: &str,
     class_bases: &HashMap<String, Vec<String>>,

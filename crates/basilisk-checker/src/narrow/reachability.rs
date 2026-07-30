@@ -193,7 +193,8 @@ mod tests {
     /// `match` needs an unguarded wildcard plus all-diverging cases.
     #[test]
     fn match_needs_a_wildcard_and_all_cases() {
-        let exhaustive = body_of("match x:\n    case 1:\n        return\n    case _:\n        raise E()\n");
+        let exhaustive =
+            body_of("match x:\n    case 1:\n        return\n    case _:\n        raise E()\n");
         assert!(stmts_diverge(&exhaustive, &mut unknown_synth));
         let no_wildcard = body_of("match x:\n    case 1:\n        return\n");
         assert!(!stmts_diverge(&no_wildcard, &mut unknown_synth));

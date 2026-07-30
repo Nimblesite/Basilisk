@@ -25,12 +25,14 @@ pub mod builtins;
 pub mod check;
 pub mod constraints;
 pub mod engine;
+pub mod generics;
 pub mod solve;
 pub mod ty;
 pub mod tyvar;
 
 pub use constraints::{Constraint, ConstraintReason, ConstraintSet};
 pub use engine::BidirEngine;
+pub use generics::{DeclaredVar, DeclaredVarKind, GenericEnv, Resolution, SolvedValue, VarDefault};
 pub use solve::{solve, Solution, SolveError};
 pub use ty::Ty;
 pub use tyvar::{Polarity, TyVarId, TyVarStore};

@@ -451,8 +451,17 @@ reproducible, write-always, ratcheted:
   the sound-but-strict behavior
   (`BasiliskConfig::narrow_attributes_across_calls`, parsed + merged in
   `crates/basilisk-config/src/parse.rs`).
-- [ ] Replace pattern-matched reachability idioms with inference-driven
+- [x] Replace pattern-matched reachability idioms with inference-driven
   reachability.
+  — `narrow/reachability.rs`: divergence is decided by ASKING THE ENGINE
+  (a `SynthFn` synthesis oracle) — a call statement diverges iff its
+  synthesized type is `Never`, never by matching callee names. Compound
+  forms recurse (`if`/`else` both diverge, `while True` without `break`,
+  fully-diverging `match` with a wildcard arm, `try`/`finally`), and the
+  flow walker records everything after a proven-diverging statement as
+  unreachable (`narrow/flow.rs::walk_stmts`). Gradual posture: `Unknown`
+  never fabricates divergence. Unit tests in `reachability.rs`; pipeline
+  tests in `tests/narrow_flow_tests.rs`.
 - [x] Measure narrowing richness against the utahplt/ifT-benchmark
   (<https://github.com/utahplt/ift-benchmark>).
   — Harness: `crates/basilisk-checker/examples/ift_measure.rs` over a fresh
@@ -493,8 +502,25 @@ reproducible, write-always, ratcheted:
   the engine's call synthesis; argument-dependent builtins deliberately
   stay `Unknown` rather than guessed. Existing rule-local tables migrate
   onto it at the Integration stage.
-- [ ] Reuse the same inference results for diagnostics, hover, completions, and
+- [x] Reuse the same inference results for diagnostics, hover, completions, and
   inlay hints.
+  — One entry point: `crates/basilisk-lsp/src/util.rs::rhs_or_expr_type_display`
+  answers from the resolver's `RhsKind` table first (stable displays) and
+  falls back to the SAME bidirectional engine the checker's
+  `expression_types` query uses (`inference::infer_expression_source` +
+  `display_widened`, gated by `is_fully_known` so a partial
+  `list[Unknown]` renders as silence, [TYPEINF-TARGET-GRADUAL]).
+  Consumers: hover variable/attribute signatures and member-access
+  receiver resolution (`hover/access.rs::receiver_type_name`), dot
+  completions (`hover/members.rs::dot_receiver_builtin_type`; the
+  completion handler now enriches its re-resolve via
+  `resolve_module_imports`, which also made builtin-receiver dot
+  completions live), and inlay hints (`inlay_hints.rs`). E2E: engine-only
+  receivers (`name = "a".upper()`) hover, complete, and hint in
+  `ws_test_hover.rs` / `ws_test_completion.rs` / `ws_test_inlay_hints.rs`.
+  Known limit: function return-type inlay hints still go through
+  `infer_return_type_display` (the resolver's `ReturnStmtInfo` carries no
+  value span to hand the engine).
 - [x] Infer unannotated parameter types from body constraints and call sites
   so `BSK-0001` becomes unnecessary where types are recoverable (issue
   [#317](https://github.com/MelbourneDeveloper/Basilisk/issues/317)).
@@ -519,20 +545,70 @@ reproducible, write-always, ratcheted:
 
 ### Stage 2 — generic constraints
 
-- [ ] Collect lower, upper, constrained, default, and expected-return bounds for
+- [x] Collect lower, upper, constrained, default, and expected-return bounds for
   TypeVars.
-- [ ] Solve bounds deterministically and report ambiguity without guessing.
-- [ ] Cover constrained/bound TypeVars, PEP 696 defaults, ParamSpec, and
+  — `crates/basilisk-checker/src/bidir/generics.rs` (`GenericEnv`): the
+  declared-generics layer over the engine's anonymous `TyVarStore`.
+  Declarations carry `bound=`, constrained value sets, and PEP 696
+  defaults; evidence accumulates as deduplicated lower bounds (argument
+  flows), upper bounds (expected-return propagation records the demanded
+  type), `ParamSpec` parameter-list captures, and `TypeVarTuple` element
+  captures — wrong-kind evidence is flagged, never silently dropped.
+- [x] Solve bounds deterministically and report ambiguity without guessing.
+  — `GenericEnv::resolve`: the answer depends only on the declaration and
+  deduplicated evidence. Joins keep literal precision (deferred
+  generalization); a constrained var solves to exactly ONE listed
+  constraint; evidence supporting several incomparable answers returns
+  `Resolution::Ambiguous` with every candidate, no evidence and no
+  default returns `Unsolved`, and contradictions return `Unsatisfiable`
+  with both sides — never a guess ([TYPEINF-EXCEEDS-NOUNKNOWN]). Ground
+  checks delegate to `is_assignable_to`, so `Any` stays gradual.
+- [x] Cover constrained/bound TypeVars, PEP 696 defaults, ParamSpec, and
   TypeVarTuple interactions before wiring the solver into rule decisions.
+  — `tests/generic_constraints_tests.rs` (21 tests): bound enforcement,
+  constraint selection/widening (`Literal["a"]` → the `str` constraint),
+  split-selection ambiguity, upper-narrowed constraint sets, defaults
+  used only without evidence (including the gradual `...` `ParamSpec`
+  default), capture conflicts, elementwise `TypeVarTuple` joins with
+  mixed-length ambiguity, and kind-conflict reporting. Rule wiring is
+  Integration-stage by design ([NARROWPLAN-INTEGRATION]).
 
 ### Stage 2 — shared subtyping
 
-- [ ] Build a context for nominal class relationships, Protocol members,
+- [x] Build a context for nominal class relationships, Protocol members,
   TypedDict schemas, generic variance, and Callable parameter kinds.
-- [ ] Replace duplicated rule-local subtype helpers only after parity tests pin
+  — `crates/basilisk-checker/src/subtyping.rs` (`SubtypingContext`):
+  cycle-guarded transitive nominal walk, structural Protocol satisfaction
+  (inherited members count, missing/incompatible members reject),
+  `TypedDict` schemas (required/`NotRequired`, `ReadOnly` covariant vs
+  mutable invariant), declared per-position variance
+  (invariant-by-default), and `Callable` contravariant-params /
+  covariant-return with gradual `...`. Tested in
+  `tests/subtyping_context_tests.rs`; rules consume it at the
+  Integration stage ([NARROWPLAN-INTEGRATION]).
+- [x] Replace duplicated rule-local subtype helpers only after parity tests pin
   their current accepted/rejected cases.
-- [ ] Keep `Any`/`Unknown` gradual behavior and the numeric tower consistent
+  — The text-level tower now has ONE home (`subtyping::name_subtype`),
+  pinned by the parity table in `tests/subtyping_context_tests.rs`; the
+  provably-identical helpers delegate to it (`rules/shared.rs::
+  is_numeric_subtype`, `narrowing_typeis`, `narrowing_typeis_2`,
+  `overloads_evaluation`, `generics_typevartuple_callable`,
+  `generics_syntax_scoping/alias_misuse`, `callables_subtyping` keeping
+  its local `Any`/`object` acceptances, `aliases_implicit` keeping its
+  conservative unknown-bound accept). The two DELIBERATELY-different
+  helpers stay local with their behavior pinned in place
+  (`rules/generics_basic_3/helper_parity_tests.rs`: bool<:int-only table
+  + nominal walk; `rules/protocols_generic/helper_parity_tests.rs`:
+  conservative TypeVar heuristic) — they merge into `SubtypingContext`
+  at Integration behind those same pins.
+- [x] Keep `Any`/`Unknown` gradual behavior and the numeric tower consistent
   across annotation parsing and inferred types.
+  — `tests/subtyping_context_tests.rs`: `Any`/`Unknown` bidirectional at
+  the `InferredType` layer and `Any`-either-side/`object`-top at the
+  context layer; the tower asserted to answer identically at the
+  annotation-text and `InferredType` layers wherever both define the
+  relation (`complex` stays text-level only — the parser folds it to
+  `Float`, the documented [TYPEINF-SUBTYPING-NOMINAL] trade-off).
 
 ### Stage 3 — type-level evaluation groundwork
 

@@ -198,9 +198,22 @@ pub(in crate::server) async fn completion(
         completion::try_resolve(&patched, &path_str)
     });
 
-    let Some(resolved) = resolved else {
+    let Some(mut resolved) = resolved else {
         return Ok(None);
     };
+
+    // The fresh resolve has no import resolution or Typeshed snapshot — only
+    // the workspace import layer attaches those. Run the SAME enrichment the
+    // analysis pipeline uses (builtins are cached per snapshot, so this is
+    // cheap) so dot completions on builtin-typed receivers answer from the
+    // same stub data hover uses ([LSPARCH-FEATURES-COMPLETION],
+    // [NARROWPLAN-CHECKLIST] Stage 2 shared inference).
+    if let Some((_, search_paths)) = server
+        .with_index(|idx| idx.search_paths_for_file(&file_path))
+        .await
+    {
+        crate::import_resolver::resolve_module_imports(&mut resolved, &search_paths);
+    }
 
     let mut items = completion::complete(&resolved, &text, byte_offset);
 

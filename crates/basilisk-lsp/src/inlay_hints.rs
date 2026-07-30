@@ -44,8 +44,11 @@ fn push_variable_type_hints(vars: &[VariableInfo], source: &str, hints: &mut Vec
         if var.has_annotation {
             continue;
         }
-        let type_name =
-            inlay_type_display(&rhs_or_expr_type_display(&var.rhs_kind, var.rhs_span, source));
+        let type_name = inlay_type_display(&rhs_or_expr_type_display(
+            &var.rhs_kind,
+            var.rhs_span,
+            source,
+        ));
         if type_name.is_empty() {
             continue;
         }
