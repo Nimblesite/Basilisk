@@ -349,12 +349,16 @@ release. Basilisk has no canonical Python version.
   [`[LSPUV-PYTHON-VERSION-RESOLUTION-ORDER]`](LSP-UV-INTEGRATION-SPEC.md):
   `.python-version` → `[project].requires-python` lower bound → `uv.lock`
   `requires-python` lower bound (`basilisk_uv::python_version::resolve_target_python_version`).
-- When `python-platform` is absent, the CLI and LSP ask the selected project
-  interpreter for `sys.platform` and thread that concrete evidence through
-  both Typeshed guard selection and checker rules. An explicit
-  `python-platform = "All"` keeps cross-platform intersection semantics. A
-  failed interpreter probe leaves the platform unknown; the checker never
-  manufactures a host or fixed-platform target.
+- When `python-platform` is absent, the CLI and LSP probe only an EXPLICITLY
+  selected interpreter (`python-interpreter` / `BASILISK_PYTHON`) for
+  `sys.platform`; with no explicit interpreter the host constant is the
+  evidence (an auto-discovered interpreter can only report the host value —
+  see [`[LSPUV-PYTHON-VERSION-RESOLUTION-ORDER]`](LSP-UV-INTEGRATION-SPEC.md)).
+  Either way the concrete evidence threads through Typeshed guard selection
+  and checker rules. An explicit `python-platform = "All"` keeps
+  cross-platform intersection semantics. A failed explicit-interpreter probe
+  leaves the platform unknown; the checker never substitutes the host for an
+  interpreter the user explicitly chose.
 - `rules::run_all(module, ctx)` threads the context into every
   `Rule::check(module, ctx, diagnostics)`. Feature-version boundaries come from
   their governing PEP or Python language rule, never from a book-wide or

@@ -341,33 +341,19 @@ start free of per-process verification of immutable inputs.
 
 #### Precomputed builtins class index {#STUBRES-TYPESHED-BUILTINS-INDEX}
 
-Extracting `builtins.pyi` with no version target (guard-branch intersection,
-[§STUBRES-TYPESHED-VERSION](#STUBRES-TYPESHED-VERSION)) is the largest fixed
-cost on a cold `check`. That extraction is a pure function of the bundled ZIP,
-so it is precomputed at development time and committed as
-`crates/basilisk-stubs/data/typeshed/builtins_index.bin` — a deterministic
-(name-sorted), length-prefixed binary encoding of the no-target `builtins`
-class map, embedded via `include_bytes!`
-(`src/typeshed/builtins_index.rs`, regenerated with
-`cargo run -p basilisk-stubs --bin gen_builtins_index`).
-
-Correctness is guarded three ways, so the artifact can be slow-path'd but
-never wrong:
-
-- **Identity guard** — the checker consults the artifact only when the active
-  snapshot is `SourceIdentity::Bundled` AND no `StubTarget` is in evidence
-  (`builtins_class_map` in `crates/basilisk-checker/src/imports/builtins.rs`).
-  An explicit `typeshed-commit` pin or custom tree resolves to a non-bundled
-  identity and always extracts live from its own `builtins.pyi`; version
-  evidence always takes the live target-aware parse.
-- **Content binding** — the artifact header records the manifest bundle
-  SHA-256. On mismatch (or any decode failure) the loader returns `None` and
-  the caller falls back to live extraction.
-- **Drift gate** — `embedded_index_matches_regenerated_bytes`
-  (`src/typeshed/builtins_index/tests.rs`) re-extracts with the real parser
-  in CI and asserts byte equality, so a bundle refresh cannot land without a
-  regenerated index; `embedded_index_decodes_to_live_extraction` pins the
-  decoded map semantically equal to the live extraction.
+The no-target extraction of `builtins.pyi`
+([§STUBRES-TYPESHED-VERSION](#STUBRES-TYPESHED-VERSION)) is a pure function of
+the bundled ZIP and the largest fixed cost on a cold `check`, so it is
+precomputed (`cargo run -p basilisk-stubs --bin gen_builtins_index`),
+committed as `crates/basilisk-stubs/data/typeshed/builtins_index.bin`, and
+embedded (`src/typeshed/builtins_index.rs`). Three guards make it slow-path'd
+but never wrong: the checker consults it only for a `SourceIdentity::Bundled`
+snapshot with no `StubTarget` (`builtins_class_map`,
+`crates/basilisk-checker/src/imports/builtins.rs`) — pins, custom trees, and
+version evidence always extract live; the header's bundle SHA-256 must match
+the manifest or the loader falls back to live extraction; and CI's drift gate
+(`embedded_index_matches_regenerated_bytes`) re-extracts with the real parser
+and asserts byte equality, so a bundle refresh cannot land unregenerated.
 
 #### License and attribution {#STUBRES-TYPESHED-LICENSE}
 
