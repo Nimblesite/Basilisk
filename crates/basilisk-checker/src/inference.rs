@@ -228,6 +228,31 @@ pub fn infer_expression_source(source: &str) -> InferredType {
     ty.to_inferred(&solution.vars)
 }
 
+/// Whether a type contains no `Unknown` anywhere — display surfaces show a
+/// type only when it is fully known (a partial `list[Unknown]` hint would be
+/// worse than silence, per the gradual posture [TYPEINF-TARGET-GRADUAL]).
+#[must_use]
+pub fn is_fully_known(ty: &InferredType) -> bool {
+    match ty {
+        InferredType::Unknown => false,
+        InferredType::List(inner)
+        | InferredType::Set(inner)
+        | InferredType::Optional(inner)
+        | InferredType::TypeForm(inner) => is_fully_known(inner),
+        InferredType::Dict(key, value) => is_fully_known(key) && is_fully_known(value),
+        InferredType::Tuple(elems) | InferredType::Union(elems) => {
+            elems.iter().all(is_fully_known)
+        }
+        InferredType::Callable(info) => {
+            info.param_types.iter().all(is_fully_known) && is_fully_known(&info.return_type)
+        }
+        InferredType::Generator(yielded, sent, returned) => {
+            is_fully_known(yielded) && is_fully_known(sent) && is_fully_known(returned)
+        }
+        _ => true,
+    }
+}
+
 /// Widen an inferred type to its DISPLAY form: literals become their base
 /// type (`Literal[1]` → `int`), matching how annotations are conventionally
 /// written in hover/inlay surfaces. Precision-preserving variants
@@ -472,5 +497,91 @@ mod tests {
         // Empty collections carry no element information.
         assert!(!rhs_fully_determines_type(&RhsKind::List(vec![])));
         assert!(!rhs_fully_determines_type(&RhsKind::Dict(vec![])));
+    }
+
+    /// [NARROWPLAN-CHECKLIST] Stage 2: the shared expression-source entry
+    /// point runs the SAME bidirectional engine as checker diagnostics —
+    /// literals, containers, arithmetic, and method calls all synthesize.
+    #[test]
+    fn expression_source_synthesizes_through_the_shared_engine() {
+        use super::infer_expression_source;
+        use crate::types::{InferredType, LiteralValue};
+        assert_eq!(
+            infer_expression_source("42"),
+            InferredType::Literal(LiteralValue::Int(42))
+        );
+        // Elements keep literal precision; display widening collapses them.
+        assert_eq!(
+            super::display_widened(&infer_expression_source("[1, 2]")),
+            InferredType::List(Box::new(InferredType::Int))
+        );
+        assert_eq!(infer_expression_source("1 + 2.5"), InferredType::Float);
+        assert_eq!(infer_expression_source("'a'.upper()"), InferredType::Str);
+        // Unparseable or unresolvable input answers `Unknown`, never a guess.
+        assert_eq!(infer_expression_source("def ("), InferredType::Unknown);
+        assert_eq!(infer_expression_source("mystery"), InferredType::Unknown);
+    }
+
+    /// Display widening turns literal precision into the annotation-style
+    /// base type, recursing through containers and unions.
+    #[test]
+    fn display_widening_reaches_annotation_form() {
+        use super::display_widened;
+        use crate::types::{InferredType, LiteralValue};
+        assert_eq!(
+            display_widened(&InferredType::Literal(LiteralValue::Int(1))),
+            InferredType::Int
+        );
+        assert_eq!(display_widened(&InferredType::LiteralString), InferredType::Str);
+        assert_eq!(
+            display_widened(&InferredType::List(Box::new(InferredType::Literal(
+                LiteralValue::Str("x".into())
+            )))),
+            InferredType::List(Box::new(InferredType::Str))
+        );
+        let union = InferredType::Union(vec![
+            InferredType::Literal(LiteralValue::Int(1)),
+            InferredType::Literal(LiteralValue::Int(2)),
+            InferredType::Str,
+        ]);
+        assert_eq!(
+            display_widened(&union),
+            InferredType::Union(vec![InferredType::Int, InferredType::Str]),
+            "widened literal duplicates must collapse in the union"
+        );
+    }
+
+    /// `is_fully_known` rejects any type with a nested `Unknown` — display
+    /// surfaces stay silent instead of rendering partial types
+    /// ([TYPEINF-TARGET-GRADUAL]).
+    #[test]
+    fn fully_known_rejects_nested_unknowns() {
+        use super::is_fully_known;
+        use crate::types::{CallableInfo, InferredType};
+        assert!(is_fully_known(&InferredType::Int));
+        assert!(is_fully_known(&InferredType::List(Box::new(
+            InferredType::Str
+        ))));
+        assert!(!is_fully_known(&InferredType::Unknown));
+        assert!(!is_fully_known(&InferredType::List(Box::new(
+            InferredType::Unknown
+        ))));
+        assert!(!is_fully_known(&InferredType::Dict(
+            Box::new(InferredType::Str),
+            Box::new(InferredType::Unknown)
+        )));
+        assert!(!is_fully_known(&InferredType::Union(vec![
+            InferredType::Int,
+            InferredType::Unknown
+        ])));
+        assert!(!is_fully_known(&InferredType::Callable(CallableInfo {
+            param_types: vec![],
+            return_type: Box::new(InferredType::Unknown),
+        })));
+        assert!(!is_fully_known(&InferredType::Generator(
+            Box::new(InferredType::Int),
+            Box::new(InferredType::None_),
+            Box::new(InferredType::Unknown)
+        )));
     }
 }

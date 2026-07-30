@@ -153,7 +153,7 @@ pub(crate) fn receiver_type_name(
             literal,
         ));
     }
-    let inferred = crate::util::rhs_type_display(rhs_kind?);
+    let inferred = crate::util::rhs_or_expr_type_display(rhs_kind?, rhs_span, source);
     if inferred.is_empty() {
         return call_return_type(resolved, rhs_span).map(|name| (name, false));
     }

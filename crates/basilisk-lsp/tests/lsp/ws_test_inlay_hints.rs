@@ -396,3 +396,85 @@ async fn test_ws_inlay_hint_method_return_type() -> TestResult<()> {
 
     Ok(())
 }
+
+/// [NARROWPLAN-CHECKLIST] Stage 2 — inlay hints reuse the SAME bidirectional
+/// engine as checker diagnostics (`rhs_or_expr_type_display` in
+/// `crates/basilisk-lsp/src/util.rs`): expressions the `RhsKind` table cannot
+/// answer (method calls, arithmetic) still get a type hint.
+#[tokio::test]
+async fn test_ws_inlay_hints_engine_fallback_types_expressions() -> TestResult<()> {
+    let uri = "file:///inlay_engine.py";
+    let code = "name = \"a\".upper()\nratio = 1 + 2.5\n";
+
+    let (_fixture, resp) = open_and_request(
+        uri,
+        code,
+        108,
+        "textDocument/inlayHint",
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 2, "character": 0 }
+            }
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let hints = parsed["result"]
+        .as_array()
+        .ok_or("result should be an array")?;
+
+    let labels: Vec<&str> = hints.iter().filter_map(|h| h["label"].as_str()).collect();
+    assert!(
+        labels.iter().any(|label| label.contains(": str")),
+        "'\"a\".upper()' should hint ': str' via the shared engine: {resp}"
+    );
+    assert!(
+        labels.iter().any(|label| label.contains(": float")),
+        "'1 + 2.5' should hint ': float' via the shared engine: {resp}"
+    );
+
+    Ok(())
+}
+
+/// The gradual posture holds on display surfaces: an expression the engine
+/// cannot fully type produces NO hint — never a partial `Unknown` render.
+#[tokio::test]
+async fn test_ws_inlay_hints_unknown_expressions_stay_silent() -> TestResult<()> {
+    let uri = "file:///inlay_unknown.py";
+    let code = "value = some_call()\n";
+
+    let (_fixture, resp) = open_and_request(
+        uri,
+        code,
+        109,
+        "textDocument/inlayHint",
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 1, "character": 0 }
+            }
+        }),
+    )
+    .await?;
+
+    // No hints answers `null`; a non-null result must hold no type hint.
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let type_hints: Vec<&str> = parsed["result"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|h| h["label"].as_str())
+        .filter(|label| label.starts_with(": "))
+        .collect();
+    assert!(
+        type_hints.is_empty(),
+        "an untypeable call must produce no variable type hint: {resp}"
+    );
+
+    Ok(())
+}
