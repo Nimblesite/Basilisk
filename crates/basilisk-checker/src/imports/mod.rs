@@ -22,15 +22,14 @@ use basilisk_resolver::scope::ImportResolution;
 use basilisk_uv::PackageRegistry;
 
 mod apply;
+mod builtins;
 mod fs_cache;
 mod resolve;
 #[cfg(test)]
 mod resolve_tests;
 
-pub use apply::{
-    is_user_stub_import, prewarm_builtin_classes, recapture_user_stub_from_source,
-    resolve_module_imports,
-};
+pub use apply::{is_user_stub_import, recapture_user_stub_from_source, resolve_module_imports};
+pub use builtins::prewarm_builtin_classes;
 pub use resolve::{
     classify_unresolved, has_stub_package, is_inline_typed_package, resolve_module,
     resolve_module_with_importer, resolve_relative_import,

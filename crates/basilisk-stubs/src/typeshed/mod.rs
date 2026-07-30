@@ -22,6 +22,7 @@
 //! download time. There is no verification waiver.
 
 pub mod archive;
+pub mod builtins_index;
 pub mod bundle;
 pub mod codec;
 pub mod gate;

@@ -255,6 +255,20 @@ fn build_bundled_snapshot() -> Result<Snapshot, BundleError> {
         .map_err(BundleError::Snapshot)
 }
 
+/// The manifest-declared SHA-256 of the embedded bundle ZIP. The precomputed
+/// builtins index binds to this value ([STUBRES-TYPESHED-BUILTINS-INDEX]);
+/// manifest ↔ ZIP equality itself is a build invariant
+/// ([`verify_bundled_assets`]), so no archive hash runs here.
+///
+/// # Errors
+///
+/// Returns a [`BundleError`] if the embedded manifest is invalid.
+pub(crate) fn manifest_bundle_sha() -> Result<String, BundleError> {
+    let manifest: BundleManifest = serde_json::from_str(BUNDLE_MANIFEST_JSON)
+        .map_err(|err| BundleError::Manifest(err.to_string()))?;
+    Ok(manifest.bundle.sha256)
+}
+
 /// The bundle's build-time commit SHA, without decoding the whole archive.
 #[must_use]
 pub fn bundled_commit_sha() -> &'static str {
