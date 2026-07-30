@@ -146,14 +146,31 @@ fn populate_builtin_classes(
         resolved.builtin_classes = std::sync::Arc::new(BuiltinsMap::new());
         return;
     };
+    resolved.builtin_classes = shared_builtins_index(snapshot, target);
+}
+
+/// Build (and memoize) the `builtins.pyi` class index for `(snapshot,
+/// target)` — the per-process cost of indexing `builtins.pyi` is paid once.
+/// The CLI calls this from a background thread right after activation so the
+/// parse overlaps its pipeline lead-in ([ANALYSIS-INCR-IMPORTS]).
+pub fn prewarm_builtin_classes(
+    snapshot: &std::sync::Arc<basilisk_stubs::typeshed::snapshot::Snapshot>,
+    target: Option<&basilisk_stubs::types::StubTarget>,
+) {
+    let _ = shared_builtins_index(snapshot, target);
+}
+
+fn shared_builtins_index(
+    snapshot: &std::sync::Arc<basilisk_stubs::typeshed::snapshot::Snapshot>,
+    target: Option<&basilisk_stubs::types::StubTarget>,
+) -> std::sync::Arc<BuiltinsMap> {
     let cache_key = format!(
         "{}|{}",
         snapshot.identity.uri_component(),
         target.map_or_else(String::new, |target| format!("{:?}", target.python_version))
     );
     if let Some(cached) = cached_builtins(&cache_key) {
-        resolved.builtin_classes = cached;
-        return;
+        return cached;
     }
     let build_index = || -> BuiltinsMap {
         let mut map = BuiltinsMap::new();
@@ -206,7 +223,7 @@ fn populate_builtin_classes(
     };
     let shared = std::sync::Arc::new(build_index());
     remember_builtins(&cache_key, &shared);
-    resolved.builtin_classes = shared;
+    shared
 }
 
 /// Build the [`ImportedModuleApi`] for a plain `import X` backed by a user stub,

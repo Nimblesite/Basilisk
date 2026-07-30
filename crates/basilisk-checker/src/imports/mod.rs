@@ -27,7 +27,10 @@ mod resolve;
 #[cfg(test)]
 mod resolve_tests;
 
-pub use apply::{is_user_stub_import, recapture_user_stub_from_source, resolve_module_imports};
+pub use apply::{
+    is_user_stub_import, prewarm_builtin_classes, recapture_user_stub_from_source,
+    resolve_module_imports,
+};
 pub use resolve::{
     classify_unresolved, has_stub_package, is_inline_typed_package, resolve_module,
     resolve_module_with_importer, resolve_relative_import,
@@ -42,10 +45,114 @@ pub struct ResolvedImport {
     pub resolution: ImportResolution,
 }
 
+/// A gate-accepted snapshot, resolved eagerly or by a deferred loader that a
+/// background thread may already be computing.
+///
+/// The CLI activates the default bundled generation CONCURRENTLY with its
+/// pipeline lead-in (config discovery, file collection, source parsing): the
+/// handle carries the identity for cache fingerprints and equality WITHOUT
+/// blocking, and the first consumer that needs stub bytes joins the load. A
+/// fully cache-hit run never touches the archive on its critical path.
+pub struct SharedSnapshot {
+    /// `SourceIdentity::uri_component()` — known without forcing.
+    identity: String,
+    cell: std::sync::OnceLock<Result<Arc<basilisk_stubs::typeshed::snapshot::Snapshot>, String>>,
+    #[expect(
+        clippy::type_complexity,
+        reason = "one-shot loader slot; naming the closure type adds nothing"
+    )]
+    loader: std::sync::Mutex<
+        Option<
+            Box<
+                dyn FnOnce() -> Result<Arc<basilisk_stubs::typeshed::snapshot::Snapshot>, String>
+                    + Send,
+            >,
+        >,
+    >,
+}
+
+impl SharedSnapshot {
+    fn ready(snapshot: Arc<basilisk_stubs::typeshed::snapshot::Snapshot>) -> Arc<Self> {
+        let identity = snapshot.identity.uri_component();
+        let cell = std::sync::OnceLock::new();
+        let _ = cell.set(Ok(snapshot));
+        Arc::new(Self {
+            identity,
+            cell,
+            loader: std::sync::Mutex::new(None),
+        })
+    }
+
+    fn deferred(
+        identity: String,
+        loader: impl FnOnce() -> Result<Arc<basilisk_stubs::typeshed::snapshot::Snapshot>, String>
+            + Send
+            + 'static,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            identity,
+            cell: std::sync::OnceLock::new(),
+            loader: std::sync::Mutex::new(Some(Box::new(loader))),
+        })
+    }
+
+    fn identity(&self) -> &str {
+        &self.identity
+    }
+
+    /// The snapshot, joining the deferred load on first use. `None` only when
+    /// the load failed — the failure is also surfaced loudly through
+    /// [`ActiveTypeshed::deferred_error`] at the end of a run.
+    fn force(&self) -> Option<&Arc<basilisk_stubs::typeshed::snapshot::Snapshot>> {
+        let resolved = self.cell.get_or_init(|| {
+            let loader = self
+                .loader
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take();
+            match loader {
+                Some(load) => load(),
+                None => Err("typeshed snapshot loader missing".to_owned()),
+            }
+        });
+        match resolved {
+            Ok(snapshot) => Some(snapshot),
+            Err(error) => {
+                tracing::error!(identity = %self.identity, error = %error, "typeshed snapshot load failed");
+                None
+            }
+        }
+    }
+
+    /// A load failure observed so far, without forcing the load.
+    fn error(&self) -> Option<String> {
+        match self.cell.get() {
+            Some(Err(error)) => Some(error.clone()),
+            _ => None,
+        }
+    }
+}
+
+// The loader closure is opaque; identity + resolution state describe the
+// handle fully.
+#[expect(
+    clippy::missing_fields_in_debug,
+    reason = "the one-shot loader closure has no useful Debug form"
+)]
+impl std::fmt::Debug for SharedSnapshot {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SharedSnapshot")
+            .field("identity", &self.identity)
+            .field("resolved", &self.cell.get().is_some())
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone)]
 struct TypeshedBinding {
     root: Option<PathBuf>,
-    snapshot: Arc<basilisk_stubs::typeshed::snapshot::Snapshot>,
+    snapshot: Arc<SharedSnapshot>,
     target: Option<basilisk_stubs::types::StubTarget>,
 }
 
@@ -69,11 +176,42 @@ impl ActiveTypeshed {
         Self {
             primary: TypeshedBinding {
                 root: None,
-                snapshot,
+                snapshot: SharedSnapshot::ready(snapshot),
                 target,
             },
             additional: Vec::new(),
         }
+    }
+
+    /// Pair a DEFERRED snapshot — its identity known up front, its bytes
+    /// resolved by `loader` (typically joining a background thread) on first
+    /// use. `identity` must equal the loaded snapshot's
+    /// `identity.uri_component()`, so fingerprints and equality agree with the
+    /// eager path.
+    #[must_use]
+    pub fn deferred(
+        identity: String,
+        target: Option<basilisk_stubs::types::StubTarget>,
+        loader: impl FnOnce() -> Result<Arc<basilisk_stubs::typeshed::snapshot::Snapshot>, String>
+            + Send
+            + 'static,
+    ) -> Self {
+        Self {
+            primary: TypeshedBinding {
+                root: None,
+                snapshot: SharedSnapshot::deferred(identity, loader),
+                target,
+            },
+            additional: Vec::new(),
+        }
+    }
+
+    /// A deferred load failure observed so far, without forcing the load.
+    /// Callers surface this at the end of a run so a broken generation fails
+    /// the run loudly instead of silently resolving nothing.
+    #[must_use]
+    pub fn deferred_error(&self) -> Option<String> {
+        self.bindings().find_map(|binding| binding.snapshot.error())
     }
 
     /// Build a multi-root generation map. Longest-prefix ownership decides
@@ -91,7 +229,7 @@ impl ActiveTypeshed {
             .into_iter()
             .map(|(root, snapshot, target)| TypeshedBinding {
                 root: Some(root),
-                snapshot,
+                snapshot: SharedSnapshot::ready(snapshot),
                 target,
             });
         let primary = bindings.next()?;
@@ -101,10 +239,12 @@ impl ActiveTypeshed {
         })
     }
 
-    /// The shared active snapshot.
+    /// The shared active snapshot, joining a deferred load on first use.
+    /// `None` only when a deferred load failed (also surfaced through
+    /// [`Self::deferred_error`]).
     #[must_use]
-    pub fn snapshot(&self) -> &Arc<basilisk_stubs::typeshed::snapshot::Snapshot> {
-        &self.primary.snapshot
+    pub fn snapshot(&self) -> Option<&Arc<basilisk_stubs::typeshed::snapshot::Snapshot>> {
+        self.primary.snapshot.force()
     }
 
     /// Concrete Python target evidence, if configured or discovered.
@@ -118,7 +258,7 @@ impl ActiveTypeshed {
     #[must_use]
     pub fn identity_fingerprint(&self) -> String {
         self.bindings()
-            .map(|binding| binding.snapshot.identity.uri_component())
+            .map(|binding| binding.snapshot.identity().to_owned())
             .collect::<Vec<_>>()
             .join("+")
     }
@@ -150,7 +290,7 @@ impl ActiveTypeshed {
             // An importer outside the workspace is unambiguous when exactly
             // one rooted generation is active. Never guess between roots.
             .or_else(|| self.additional.is_empty().then_some(&self.primary))?;
-        Some((&binding.snapshot, binding.target.as_ref()))
+        Some((binding.snapshot.force()?, binding.target.as_ref()))
     }
 
     pub(crate) fn source_for_uri(
@@ -165,11 +305,11 @@ impl ActiveTypeshed {
         self.bindings()
             .filter(|binding| binding.target.as_ref() == target)
             .find_map(|binding| {
-                binding
-                    .snapshot
+                let snapshot = binding.snapshot.force()?;
+                snapshot
                     .vfs
                     .read_uri(uri)
-                    .map(|source| (&binding.snapshot, binding.target.as_ref(), source))
+                    .map(|source| (snapshot, binding.target.as_ref(), source))
             })
     }
 
@@ -194,7 +334,7 @@ impl PartialEq for ActiveTypeshed {
         self.additional.len() == other.additional.len()
             && self.bindings().zip(other.bindings()).all(|(left, right)| {
                 left.root == right.root
-                    && left.snapshot.identity == right.snapshot.identity
+                    && left.snapshot.identity() == right.snapshot.identity()
                     && left.target == right.target
             })
     }

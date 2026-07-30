@@ -21,10 +21,8 @@ pub(super) fn load_cli_workspace_config(
         config.python_version = detected_python_version.map(str::to_owned);
     }
     if config.python_platform.is_none() {
-        let interpreter = config.python_interpreter.clone().unwrap_or_else(|| {
-            std::path::PathBuf::from(basilisk_lsp::debug::resolve_python(project_root))
-        });
-        config.python_platform = basilisk_uv::python_version::read_python_platform(&interpreter);
+        config.python_platform =
+            basilisk_lsp::debug::python_platform_evidence(config.python_interpreter.as_deref());
     }
     config
 }
@@ -64,16 +62,67 @@ pub(super) fn activate_production_typeshed(
     rule_config: &BasiliskConfig,
 ) -> Result<(), PipelineError> {
     let request = basilisk_lsp::config::typeshed_request(config).map_err(PipelineError::Config)?;
+    let target = basilisk_lsp::import_resolver::stub_target_from_config(config);
+    if let Some(active) = deferred_bundled_activation(&request, target.clone(), rule_config) {
+        search_paths.typeshed_snapshot = Some(active);
+        return Ok(());
+    }
     let manager = basilisk_stubs::typeshed::runtime::production_manager(request);
     let snapshot = manager
         .snapshot()
         .map_err(|error| PipelineError::Internal(error.to_string()))?;
     report_typeshed_status(&snapshot.status, rule_config, &mut std::io::stderr().lock());
     search_paths.typeshed_snapshot = Some(basilisk_checker::imports::ActiveTypeshed::new(
-        snapshot,
-        basilisk_lsp::import_resolver::stub_target_from_config(config),
+        snapshot, target,
     ));
     Ok(())
+}
+
+/// Activate a pin of the BUNDLED commit without blocking on the archive: the
+/// identity and status are manifest metadata (`bundled_pinned_status`, pinned
+/// equal to the selector's status under test), so the banner prints
+/// immediately while a background thread decodes the snapshot and prewarms
+/// the builtins index. The pipeline lead-in (file collection, config
+/// discovery, source parsing) runs concurrently, and a fully cache-hit run
+/// never waits for the archive at all. Every other selection — custom trees,
+/// non-bundled pins — resolves eagerly, so its verification and error
+/// surfacing are unchanged. A deferred load failure is surfaced loudly at the
+/// end of the run via `ActiveTypeshed::deferred_error`.
+fn deferred_bundled_activation(
+    request: &basilisk_stubs::typeshed::source::TypeshedRequest,
+    target: Option<basilisk_stubs::types::StubTarget>,
+    rule_config: &BasiliskConfig,
+) -> Option<basilisk_checker::imports::ActiveTypeshed> {
+    let basilisk_stubs::typeshed::source::SourceSelection::Pinned { commit, explicit } =
+        &request.selection
+    else {
+        return None;
+    };
+    if commit.to_hex() != basilisk_stubs::typeshed::bundle::bundled_commit_sha() {
+        return None;
+    }
+    // Must match `SourceIdentity::Bundled.uri_component()` so fingerprints
+    // and equality agree with the eager path.
+    let identity = format!("bundled-{}", commit.to_hex());
+    let status = basilisk_stubs::typeshed::bundle::bundled_pinned_status(*explicit).ok()?;
+    report_typeshed_status(&status, rule_config, &mut std::io::stderr().lock());
+    let thread_request = request.clone();
+    let thread_target = target.clone();
+    let loader = std::thread::spawn(move || {
+        let manager = basilisk_stubs::typeshed::runtime::production_manager(thread_request);
+        let snapshot = manager.snapshot().map_err(|error| error.to_string())?;
+        basilisk_checker::imports::prewarm_builtin_classes(&snapshot, thread_target.as_ref());
+        Ok(snapshot)
+    });
+    Some(basilisk_checker::imports::ActiveTypeshed::deferred(
+        identity,
+        target,
+        move || {
+            loader
+                .join()
+                .unwrap_or_else(|_panic| Err("typeshed loader thread panicked".to_owned()))
+        },
+    ))
 }
 
 /// Report the resolved typeshed source status.

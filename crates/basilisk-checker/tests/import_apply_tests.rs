@@ -517,12 +517,12 @@ fn make_custom_typeshed(stdlib_files: &[(&str, &str)]) -> Arc<Snapshot> {
     let mut entries = vec![ArchiveEntry {
         path: "stdlib/VERSIONS".to_owned(),
         mode: FileMode::Regular,
-        data: versions.into_bytes(),
+        data: versions.into_bytes().into(),
     }];
     entries.extend(stdlib_files.iter().map(|(name, body)| ArchiveEntry {
         path: format!("stdlib/{name}"),
         mode: FileMode::Regular,
-        data: body.as_bytes().to_vec(),
+        data: body.as_bytes().to_vec().into(),
     }));
     let status = TypeshedStatus {
         active_source: SourceKind::Custom,

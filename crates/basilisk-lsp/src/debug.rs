@@ -556,6 +556,32 @@ pub fn resolve_python(workspace_root: &Path) -> String {
     fallback.into()
 }
 
+/// Platform target evidence for a project ([STUBRES-TYPESHED-VERSION]).
+///
+/// Only an EXPLICITLY selected interpreter — the `python-interpreter` setting
+/// or `BASILISK_PYTHON` — is worth launching: deliberate selection can point
+/// at a shim whose `sys.platform` differs from the host, and its answer (or
+/// probe failure, `None`) is honored as-is. Auto-discovered interpreters (a
+/// workspace venv, a bare `python3` on `PATH`) execute on this host by
+/// definition, so their answer is always the host constant — returned
+/// directly, because paying an interpreter start-up on every invocation for
+/// an answer already known at compile time is pure waste.
+#[must_use]
+pub fn python_platform_evidence(configured_interpreter: Option<&Path>) -> Option<String> {
+    let explicit = configured_interpreter.map(Path::to_path_buf).or_else(|| {
+        // A blank override means "unset" (same contract as [`effective_python`]).
+        std::env::var("BASILISK_PYTHON")
+            .ok()
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+            .map(std::path::PathBuf::from)
+    });
+    match explicit {
+        Some(interpreter) => basilisk_uv::python_version::read_python_platform(&interpreter),
+        None => Some(basilisk_uv::python_version::host_sys_platform().to_owned()),
+    }
+}
+
 /// Resolve the interpreter to launch: an explicit, non-blank override wins;
 /// otherwise auto-detect via [`resolve_python`].
 ///

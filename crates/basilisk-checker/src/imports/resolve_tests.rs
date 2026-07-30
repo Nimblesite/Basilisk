@@ -52,13 +52,13 @@ fn custom_snapshot(modules: &[(&str, &str)]) -> ActiveTypeshed {
         vec![ArchiveEntry {
             path: "stdlib/VERSIONS".to_owned(),
             mode: FileMode::Regular,
-            data: versions.into_bytes(),
+            data: versions.into_bytes().into(),
         }]
     };
     entries.extend(modules.iter().map(|(module, body)| ArchiveEntry {
         path: format!("stdlib/{module}.pyi"),
         mode: FileMode::Regular,
-        data: body.as_bytes().to_vec(),
+        data: body.as_bytes().to_vec().into(),
     }));
     let status = TypeshedStatus {
         active_source: SourceKind::Custom,

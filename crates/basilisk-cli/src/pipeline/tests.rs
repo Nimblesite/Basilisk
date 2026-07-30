@@ -85,12 +85,17 @@ fn cli_activation_uses_custom_snapshot_and_target() -> Result<(), Box<dyn std::e
         .as_ref()
         .ok_or("active Typeshed missing")?;
     assert_eq!(
-        active.snapshot().status.active_source,
+        active
+            .snapshot()
+            .ok_or("snapshot must resolve")?
+            .status
+            .active_source,
         basilisk_stubs::typeshed::source::SourceKind::Custom
     );
     assert_eq!(
         active
             .snapshot()
+            .ok_or("snapshot must resolve")?
             .status
             .warnings
             .iter()

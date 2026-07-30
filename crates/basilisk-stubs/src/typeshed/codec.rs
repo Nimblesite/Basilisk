@@ -12,6 +12,7 @@
 //! or `../evil`-prefixed archive can never normalize into a clean path. Path
 //! safety and content attestation still run afterwards as their own gates.
 
+use std::borrow::Cow;
 use std::io::{Cursor, Read};
 
 use zip::read::ZipFile;
@@ -52,6 +53,10 @@ pub enum ZipLayout {
     /// The bundled snapshot: entries are rootless (`stdlib/…`, `LICENSE`).
     BundledRootless,
 }
+
+/// One decoded entry before layout prefix-stripping: raw name, Git mode, and
+/// bytes (borrowed from a static archive or owned).
+type RawEntry = (String, FileMode, Cow<'static, [u8]>);
 
 /// A ZIP decode failure.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -128,7 +133,7 @@ pub fn decode_zip(
             limit: limits.max_entries,
         });
     }
-    let mut raw: Vec<(String, FileMode, Vec<u8>)> = Vec::new();
+    let mut raw: Vec<RawEntry> = Vec::new();
     let mut total: u64 = 0;
     for index in 0..zip.len() {
         let mut file = zip
@@ -145,8 +150,156 @@ pub fn decode_zip(
         let remaining = limits.max_total_bytes.saturating_sub(total);
         let data = read_entry_data(&mut file, &raw_name, limits, remaining)?;
         total = total.saturating_add(u64::try_from(data.len()).unwrap_or(u64::MAX));
-        raw.push((raw_name, mode, data));
+        raw.push((raw_name, mode, Cow::Owned(data)));
     }
+    finish_archive(raw, layout)
+}
+
+/// Decode an **embedded** (`include_bytes!`) ZIP without copying entry data:
+/// a minimal, fully bounds-checked walk of the end-of-central-directory and
+/// central-directory records slices every STORED entry straight out of the
+/// static archive — no per-entry allocation, checksum, or memcpy of megabytes
+/// of stub text on every process start. Anything irregular — zip64 markers,
+/// compression, encryption, malformed records, breached caps — falls back to
+/// the authoritative [`decode_zip`] path (the `zip` crate), which either
+/// decodes it correctly (owned) or reports the precise error.
+///
+/// The embedded archive's integrity is a build invariant: its digest and
+/// gates run under test via the owned [`decode_zip`] path (see
+/// `verify_bundled_assets`), and the static/owned decoders are pinned equal
+/// under test.
+///
+/// # Errors
+///
+/// Returns a [`DecodeError`] if the container is invalid, an entry is
+/// encrypted, any cap is breached, or a prefixed archive lacks one coherent
+/// common root.
+pub fn decode_zip_static(
+    bytes: &'static [u8],
+    layout: ZipLayout,
+    limits: &DecodeLimits,
+) -> Result<Archive, DecodeError> {
+    match stored_entries_borrowed(bytes, limits) {
+        Some(raw) => finish_archive(raw, layout),
+        None => decode_zip(bytes, layout, limits),
+    }
+}
+
+const EOCD_SIGNATURE: u32 = 0x0605_4b50;
+const CENTRAL_SIGNATURE: u32 = 0x0201_4b50;
+const LOCAL_SIGNATURE: u32 = 0x0403_4b50;
+/// Fixed sizes of the ZIP end-of-central-directory, central-directory, and
+/// local-file headers.
+const EOCD_LEN: usize = 22;
+const CENTRAL_LEN: usize = 46;
+const LOCAL_LEN: usize = 30;
+
+fn read_u16(bytes: &[u8], at: usize) -> Option<u16> {
+    bytes
+        .get(at..at.checked_add(2)?)
+        .and_then(|pair| pair.try_into().ok())
+        .map(u16::from_le_bytes)
+}
+
+fn read_u32(bytes: &[u8], at: usize) -> Option<u32> {
+    bytes
+        .get(at..at.checked_add(4)?)
+        .and_then(|quad| quad.try_into().ok())
+        .map(u32::from_le_bytes)
+}
+
+/// Borrow every file entry of a plain (non-zip64) all-STORED ZIP directly from
+/// `bytes`. `None` means "not eligible for the borrowed fast path" — the
+/// caller falls back to the authoritative decoder, so this function never
+/// needs to report a precise error.
+fn stored_entries_borrowed(
+    bytes: &'static [u8],
+    limits: &DecodeLimits,
+) -> Option<Vec<RawEntry>> {
+    // The EOCD record sits within the last 64 KiB + 22 bytes (max comment).
+    let search_floor = bytes.len().saturating_sub(EOCD_LEN + usize::from(u16::MAX));
+    let eocd = (search_floor..=bytes.len().checked_sub(EOCD_LEN)?)
+        .rev()
+        .find(|&at| read_u32(bytes, at) == Some(EOCD_SIGNATURE))?;
+    let entry_count = usize::from(read_u16(bytes, eocd.checked_add(10)?)?);
+    let directory_offset = read_u32(bytes, eocd.checked_add(16)?)?;
+    if entry_count == usize::from(u16::MAX) || directory_offset == u32::MAX {
+        return None; // zip64 territory — authoritative path decides.
+    }
+    if entry_count > limits.max_entries {
+        return None;
+    }
+    let mut raw = Vec::with_capacity(entry_count);
+    let mut total: u64 = 0;
+    let mut at = usize::try_from(directory_offset).ok()?;
+    for _ in 0..entry_count {
+        if read_u32(bytes, at)? != CENTRAL_SIGNATURE {
+            return None;
+        }
+        let made_by_os = read_u16(bytes, at.checked_add(4)?)? >> 8;
+        let flags = read_u16(bytes, at.checked_add(8)?)?;
+        let method = read_u16(bytes, at.checked_add(10)?)?;
+        let compressed = read_u32(bytes, at.checked_add(20)?)?;
+        let uncompressed = read_u32(bytes, at.checked_add(24)?)?;
+        let name_len = usize::from(read_u16(bytes, at.checked_add(28)?)?);
+        let extra_len = usize::from(read_u16(bytes, at.checked_add(30)?)?);
+        let comment_len = usize::from(read_u16(bytes, at.checked_add(32)?)?);
+        let external = read_u32(bytes, at.checked_add(38)?)?;
+        let local_offset = read_u32(bytes, at.checked_add(42)?)?;
+        let name_start = at.checked_add(CENTRAL_LEN)?;
+        let name =
+            std::str::from_utf8(bytes.get(name_start..name_start.checked_add(name_len)?)?).ok()?;
+        // Encrypted, compressed, or zip64-marked entries: authoritative path.
+        if flags & 0x1 != 0
+            || method != 0
+            || compressed != uncompressed
+            || compressed == u32::MAX
+            || local_offset == u32::MAX
+        {
+            return None;
+        }
+        if !name.ends_with('/') {
+            let size = u64::from(compressed);
+            if size > limits.max_entry_bytes {
+                return None;
+            }
+            total = total.checked_add(size)?;
+            if total > limits.max_total_bytes {
+                return None;
+            }
+            // Data starts after the LOCAL header, whose name/extra lengths can
+            // differ from the central directory's.
+            let local = usize::try_from(local_offset).ok()?;
+            if read_u32(bytes, local)? != LOCAL_SIGNATURE {
+                return None;
+            }
+            let local_name = usize::from(read_u16(bytes, local.checked_add(26)?)?);
+            let local_extra = usize::from(read_u16(bytes, local.checked_add(28)?)?);
+            let start = local
+                .checked_add(LOCAL_LEN)?
+                .checked_add(local_name)?
+                .checked_add(local_extra)?;
+            let data = bytes.get(start..start.checked_add(usize::try_from(size).ok()?)?)?;
+            // Unix modes live in the external attributes' high half only when
+            // the entry was made on unix (`made_by` OS 3) — same rule as the
+            // `zip` crate's `unix_mode()`.
+            let mode = mode_from_unix((made_by_os == 3).then_some(external >> 16));
+            raw.push((name.to_owned(), mode, Cow::Borrowed(data)));
+        }
+        at = at
+            .checked_add(CENTRAL_LEN)?
+            .checked_add(name_len)?
+            .checked_add(extra_len)?
+            .checked_add(comment_len)?;
+    }
+    Some(raw)
+}
+
+/// Strip the layout prefix and build the final [`Archive`].
+fn finish_archive(
+    raw: Vec<RawEntry>,
+    layout: ZipLayout,
+) -> Result<Archive, DecodeError> {
     let prefix = match layout {
         ZipLayout::CodeloadPrefixed => {
             Some(common_root(raw.iter().map(|(name, _, _)| name.as_str()))?)
@@ -323,6 +476,33 @@ mod tests {
             decode_zip(&evil, ZipLayout::CodeloadPrefixed, &DecodeLimits::default()),
             Err(DecodeError::BadPrefix(_))
         ));
+    }
+
+    /// The static decoder must agree byte-for-byte with the owned decoder and
+    /// actually BORROW stored entries rather than copying them.
+    #[test]
+    fn static_decode_matches_owned_decode_and_borrows_stored_entries() {
+        // Leak a small archive so it satisfies the `'static` contract the
+        // embedded `include_bytes!` bundle provides in production.
+        let bytes: &'static [u8] = Box::leak(
+            zip_with(&[
+                ("stdlib/os.pyi", b"def getcwd() -> str: ...\n", 0o644),
+                ("stdlib/VERSIONS", b"os: 3.0-\n", 0o644),
+            ])
+            .into_boxed_slice(),
+        );
+        let owned =
+            decode_zip(bytes, ZipLayout::BundledRootless, &DecodeLimits::default()).unwrap();
+        let zero_copy =
+            decode_zip_static(bytes, ZipLayout::BundledRootless, &DecodeLimits::default()).unwrap();
+        assert_eq!(owned.entries(), zero_copy.entries());
+        for entry in zero_copy.entries() {
+            assert!(
+                matches!(entry.data, Cow::Borrowed(_)),
+                "stored entry {} must borrow from the static archive",
+                entry.path
+            );
+        }
     }
 
     #[test]
