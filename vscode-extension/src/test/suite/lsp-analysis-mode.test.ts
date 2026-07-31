@@ -269,12 +269,24 @@ suite('Analysis Mode Tests', () => {
                 await ext.activate();
             }
 
-            // Wait for the LSP server startup scan to complete.
-            await delay(SERVER_START_WAIT_MS + TIMEOUT_BUFFER_MS);
-
-            // The startup scan must have published diagnostics for the closed file.
+            // Wait for the startup scan to publish, EVENT-DRIVEN.
+            //
+            // This was `await delay(SERVER_START_WAIT_MS + TIMEOUT_BUFFER_MS)` —
+            // an unconditional 65-SECOND sleep, which measured as the single
+            // most expensive test in the suite on both CI legs. None of it was
+            // work: `waitForDiagnostics` resolves synchronously when
+            // diagnostics already exist, so the scan had invariably long
+            // finished and the test simply sat there.
+            //
+            // The deadline is deliberately unchanged — 65s of sleep plus a 15s
+            // wait is the same 80s budget the scan gets here — so this cannot
+            // introduce a timing flake. It only stops paying the budget when
+            // the scan is fast, which is always.
             const closedFileUri = vscode.Uri.file(closedFilePath);
-            const diags = await waitForDiagnostics(closedFileUri, DIAGNOSTIC_TIMEOUT_MS);
+            const diags = await waitForDiagnostics(
+                closedFileUri,
+                SERVER_START_WAIT_MS + TIMEOUT_BUFFER_MS + DIAGNOSTIC_TIMEOUT_MS
+            );
 
             assert.ok(
                 diags.length > 0,

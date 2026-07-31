@@ -181,5 +181,41 @@ inherits = "dev"
 opt-level = 1
 codegen-units = 16
 lto = false
-debug = 2
+# Line tables only, not full DWARF. Source-based coverage reads the
+# `__llvm_covmap`/`__llvm_covfun` sections and the .profraw pool — never DWARF —
+# so lcov.info and every threshold in coverage-thresholds.json are unaffected,
+# while ~150 instrumented binaries get materially cheaper to link and to store
+# (this job already has to reclaim ~25 GB of preinstalled toolchains to fit).
+# `debug = 1` keeps file:line in panic backtraces, so failure diagnosis is
+# unchanged; `debug-assertions` is a separate key, inherited from dev, untouched.
+debug = 1
 incremental = false
+
+# ── E2E profile: a release-speed binary built for driving, not for shipping ───
+# For CI jobs whose ONLY purpose is to run an editor E2E suite against a real
+# binary — today the win32 leg of the VS Code suite ([VSIX-CI-PLATFORM-COVERAGE]).
+# Those jobs hunt platform-specific defects (`.exe` suffixes, `\` separators,
+# per-platform bundle layout, process spawn/teardown); none of that is affected
+# by how LLVM optimizes, so paying for fat LTO there buys nothing.
+#
+# It costs a great deal. Fat LTO with one codegen unit is a SERIAL tail: measured
+# on this workspace with a warm dependency cache — exactly the CI shape, since
+# Swatinem caches deps and always rebuilds first-party crates — `release` takes
+# 145.5s wall for 148.2s of CPU (1.02x parallelism: one core, however many the
+# runner has), while this profile takes 27.1s wall for 101.0s of CPU (3.7x). The
+# runner's other cores go to waste under `release`.
+#
+# opt-level 3 is retained deliberately: the E2E suites drive a real LSP under
+# per-test timeouts, so the binary must stay fast at RUNTIME. Only the
+# cross-crate optimization — which affects binary size and benchmark numbers,
+# neither of which an E2E job measures — is given up.
+#
+# NOT for anything a user receives. Shipped artifacts (release.yml, and the
+# `_release_vsix` recipe the Linux leg builds for [VSIX-PACKAGING-PARITY]) stay
+# on `release`: dropping LTO grows the binary ~10% (16.3 -> 17.9 MB), and
+# download size is a published claim. Benchmarks stay on `release` too — the
+# ratchet in [CHKARCH-TESTING-BENCH-RATCHET] measures the shipped profile.
+[profile.e2e]
+inherits = "release"
+lto = false
+codegen-units = 16

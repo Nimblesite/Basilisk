@@ -212,10 +212,7 @@ fn read_u32(bytes: &[u8], at: usize) -> Option<u32> {
 /// `bytes`. `None` means "not eligible for the borrowed fast path" — the
 /// caller falls back to the authoritative decoder, so this function never
 /// needs to report a precise error.
-fn stored_entries_borrowed(
-    bytes: &'static [u8],
-    limits: &DecodeLimits,
-) -> Option<Vec<RawEntry>> {
+fn stored_entries_borrowed(bytes: &'static [u8], limits: &DecodeLimits) -> Option<Vec<RawEntry>> {
     // The EOCD record sits within the last 64 KiB + 22 bytes (max comment).
     let search_floor = bytes.len().saturating_sub(EOCD_LEN + usize::from(u16::MAX));
     let eocd = (search_floor..=bytes.len().checked_sub(EOCD_LEN)?)
@@ -296,10 +293,7 @@ fn stored_entries_borrowed(
 }
 
 /// Strip the layout prefix and build the final [`Archive`].
-fn finish_archive(
-    raw: Vec<RawEntry>,
-    layout: ZipLayout,
-) -> Result<Archive, DecodeError> {
+fn finish_archive(raw: Vec<RawEntry>, layout: ZipLayout) -> Result<Archive, DecodeError> {
     let prefix = match layout {
         ZipLayout::CodeloadPrefixed => {
             Some(common_root(raw.iter().map(|(name, _, _)| name.as_str()))?)

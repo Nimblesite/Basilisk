@@ -297,10 +297,15 @@ Incremental edits are applied to the in-memory buffer, then parse → resolve �
 
 ### Import resolution on incremental re-check {#ANALYSIS-INCR-IMPORTS}
 
-The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, the resolved typeshed stdlib source, uv registry) the full scan used. The full scan builds and caches these on the workspace index; incremental re-checks reuse the cached value (site-packages discovery may touch the filesystem or spawn a subprocess and MUST NOT run per keystroke).
+The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, the resolved typeshed stdlib source, uv registry) the full scan used. The full scan builds and caches these on the workspace index; incremental re-checks reuse the cached value (site-packages discovery touches the filesystem and MUST NOT run per keystroke). Discovery resolves the interpreter's `site-packages` from its own layout — PATH lookup plus prefix inspection (`detect_for_interpreter_on`, `crates/basilisk-lsp/src/import_resolver/ambient.rs`); starting Python to recover a path already encoded in the layout is startup cost a short-lived `basilisk check` must not pay. The interpreter probe remains the authoritative fallback for custom layouts.
 
 The cached `ImportSearchPaths` include the selected typeshed path and exact source
-identity. A `typeshed-path` or `typeshed-commit` change invalidates them and
+identity — an identity string, held by a `SharedSnapshot` that resolves its
+`Snapshot` on first use. Activation therefore names the source without building
+it: the CLI spawns the build (plus a `prewarm_builtin_classes` of the
+`builtins.pyi` index) on a background thread before collecting files, and a
+cache-hit run that never reads a stub never forces it at all. A
+`typeshed-path` or `typeshed-commit` change invalidates the cached paths and
 rebuilds step 3 before rechecking
 ([STUBRES-TYPESHED-PIN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-PIN)).
 This derived cache changes performance only; it preserves the pinned resolution

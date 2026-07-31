@@ -1,15 +1,11 @@
 // Eleventy global data: benchmark results, read from the git-tracked per-machine
 // CSV that `make bench` generates (benchmarks/status/<machine>.csv).
 //
-// The website renders MEASURED FACTS. This loader parses the CSV's header
-// metadata and its per-fixture measured times/diagnostic-counts, and derives
-// only ONE kind of summary from them: each tool's median cold check across the
-// corpus (a direct, order-statistic summary of the measured values). It does
-// NOT invent comparison numbers — there are no speedup ratios ("N× faster"), no
-// "beats M of N" tallies, and no arbitrary outlier thresholds computed at build
-// time. Every number the page shows is either a value straight out of the CSV or
-// the median of such values; nothing is editorialised beyond what `make bench`
-// recorded, so the page can never drift from — or overstate — the measured data.
+// The website renders MEASURED FACTS. This loader parses the CSV's header and
+// per-file timings for the benchmark page. It also derives each tool's median
+// fresh-process check for the home pages. There are no speedup ratios, "beats M
+// of N" tallies, or arbitrary outlier thresholds: published values are either
+// CSV measurements or direct medians of those measurements.
 //
 // Primary machine selection (what the website shows):
 //   1. $BASILISK_BENCH_PRIMARY (slug)   2. benchmarks/status/.primary file
@@ -22,39 +18,14 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATUS_DIR = join(__dirname, "../../../benchmarks/status");
 
-// A benchmark fixture's filename IS the typing-spec construct it stresses, so
-// the human-readable row label is derived straight from the stem — never a
-// tool-specific error code. "typeddict_key_access" -> "TypedDict key access".
-// Sentence case, with a small map that preserves the casing of typing-spec
-// proper nouns; no hand-maintained per-fixture list, so the label can never
-// drift from the fixture set. The benchmark table macro is shared across
-// locales — non-English pages pass a translated name map keyed by `fixture`,
-// falling back to this English `name`.
-const CONSTRUCT_ACRONYMS = {
-  typeddict: "TypedDict",
-  typevar: "TypeVar",
-  typevars: "TypeVars",
-  typeis: "TypeIs",
-  newtype: "NewType",
-  classvar: "ClassVar",
-};
-function fixtureName(stem) {
-  const label = stem
-    .split("_")
-    .map((word) => CONSTRUCT_ACRONYMS[word] || word)
-    .join(" ");
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
 // Parse the CSV `# tools:` header into [{ tool, version }] for the methodology
 // footnote. The header looks like:
 //   "basilisk=basilisk 0.0.0, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ..."
 // i.e. comma-separated `name=<--version output>` entries. The version output
 // usually repeats the tool name and may carry a trailing parenthetical, both of
 // which we strip so the site shows a clean "pyright 1.1.408". This is metadata
-// pass-through — the harness records exactly which build of each tool it
-// measured (competitors are upgraded to their LATEST release every run), and the
-// page shows it unchanged.
+// pass-through — the harness records each installed tool's version output, and
+// the page shows a cleaned form of that recorded value.
 function parseToolVersions(toolsStr) {
   if (!toolsStr) return [];
   return toolsStr
@@ -67,10 +38,9 @@ function parseToolVersions(toolsStr) {
       if (version.toLowerCase().startsWith(prefix.toLowerCase())) {
         version = version.slice(prefix.length).trim();
       }
-      // Dev builds don't have a released version number. `make bench` pins them
-      // to the source commit (0.0.0-dev+g<sha>); render that as "dev (<sha>)" so
-      // the site still says exactly which build was measured. A bare placeholder
-      // (no commit pin) degrades to a plain "dev build" label.
+      // Dev builds don't have a released version number. Preserve the source
+      // identifier emitted in 0.0.0-dev+g<sha> and keep a dirty marker visible.
+      // A bare placeholder degrades to a plain "dev build" label.
       const devPin = version.match(/dev\+g([0-9a-f]+(?:-dirty)?)/i);
       if (devPin) version = `dev (${devPin[1]})`;
       else if (!version || /placeholder/i.test(version)) version = "dev build";
@@ -94,36 +64,39 @@ function parseCsv(text) {
   }
   if (dataLines.length < 2) return null;
 
-  // Friendly run count: the `# runs:` header is "10 (hyperfine mean ...)" — the
-  // website only wants the leading number so the caption reads "10 runs".
+  // Friendly minimum run count: the header begins with the number of Hyperfine
+  // measurements required for every file, followed by the noisy-run policy.
   const runsMatch = (meta.runs || "").match(/^\d+/);
   meta.runsCount = runsMatch ? runsMatch[0] : null;
   meta.toolVersions = parseToolVersions(meta.tools);
 
-  // Column layout: `fixture`, one `<tool>_ms` per timed tool, then one
-  // `<tool>_diags` per base tool (how many diagnostics the tool reported on
-  // that fixture — the harness preflight writes it so a do-nothing run is
-  // visible next to its time). A blank `_ms` cell means the tool FAILED to
-  // analyze that fixture (exit >= 2) and the harness excluded it from timing.
+  // Column layout: `fixture`, then one `<tool>_ms` per timed tool. Diagnostic
+  // columns follow, but the benchmark page intentionally presents timings only.
+  // A blank `_ms` cell means the tool was unavailable or failed preflight.
   const msIdx = new Map();
-  const diagIdx = new Map();
   dataLines[0].split(",").forEach((c, i) => {
     if (c.endsWith("_ms")) msIdx.set(c.slice(0, -"_ms".length), i);
-    else if (c.endsWith("_diags")) diagIdx.set(c.slice(0, -"_diags".length), i);
   });
   const allTools = [...msIdx.keys()];
-  // Cold comparison only: warm-cache variants (…-warm) aren't separate
-  // checkers; their numbers stay in `values` for computeWarm.
+  // Warm-cache variants (…-warm) aren't separate checkers, so exclude them from
+  // the cold medians used on the home pages. Their per-file values stay in rows.
   const tools = allTools.filter((t) => !t.endsWith("-warm"));
   const rows = dataLines.slice(1).map((line) => {
     const parts = line.split(",");
     const num = (i) =>
       i == null || parts[i] === undefined || parts[i] === "" ? null : parseFloat(parts[i]);
     const values = {};
-    for (const [t, i] of msIdx) values[t] = num(i);
-    const diags = {};
-    for (const [t, i] of diagIdx) diags[t] = num(i);
-    return { fixture: parts[0], name: fixtureName(parts[0]), values, diags };
+    const valueText = {};
+    for (const [tool, index] of msIdx) {
+      values[tool] = num(index);
+      valueText[tool] = parts[index] ? `${parts[index]} ms` : "—";
+    }
+    return {
+      fixture: parts[0],
+      filename: `${parts[0]}.py`,
+      values,
+      valueText,
+    };
   });
   return { meta, tools, allTools, rows };
 }
@@ -139,8 +112,9 @@ function median(nums) {
 // statistic of the measured CSV values, NOT a comparison number: the page shows
 // each tool's median next to the others and lets the reader compare, rather than
 // asserting a build-time "N× faster" ratio. Warm/cache variants are excluded;
-// this is the cold, from-scratch number. Self-measured, reproducible with
-// `make bench`, so the table can't drift from the CSV.
+// this is the fresh-process measurement without a persistent result-cache.
+// Self-measured and reproducible with `make bench`, so it cannot drift from the
+// CSV.
 function computeToolMedians(rows, tools) {
   const ms = {};
   const text = {};
@@ -155,88 +129,6 @@ function computeToolMedians(rows, tools) {
     ? ranked.reduce((best, entry) => (entry[1] < best[1] ? entry : best))[0]
     : null;
   return { ms, text, fastest };
-}
-
-// Per-tool distribution of the cold check across the fixture corpus. The
-// published cold table is ONE ROW PER TOOL (median + fastest/slowest fixture),
-// never a fixture × tool grid: for the heavier tools a cold single-file check
-// is dominated by fixed startup + stub-loading cost, so a full grid would
-// repeat each tool's baseline once per fixture and imply per-construct
-// precision that doesn't exist. Every value here is a measured CSV time or the
-// median of measured times — no ratios, no thresholds. `zeroDiag` counts
-// fixtures where the tool ran but reported no diagnostics (so a do-nothing run
-// is visible next to its time); `missing` counts fixtures with no timing at all
-// (tool not installed on that machine, or excluded by the harness preflight
-// after failing to analyze).
-function computeToolStats(rows, tools) {
-  const stats = tools
-    .map((tool) => {
-      const measured = rows
-        .map((r) => ({
-          ms: r.values[tool],
-          fixture: r.fixture,
-          name: r.name,
-          diags: r.diags[tool] ?? null,
-        }))
-        .filter((e) => e.ms != null && e.ms > 0);
-      if (!measured.length) return null;
-      const byMs = [...measured].sort((a, b) => a.ms - b.ms);
-      const [min, max] = [byMs[0], byMs[byMs.length - 1]];
-      const med = Math.round(median(measured.map((e) => e.ms)));
-      const withDiags = measured.filter((e) => e.diags != null);
-      return {
-        tool,
-        medianMs: med,
-        medianText: `${med} ms`,
-        min: { fixture: min.fixture, name: min.name, text: `${Math.round(min.ms)} ms` },
-        max: { fixture: max.fixture, name: max.name, text: `${Math.round(max.ms)} ms` },
-        measured: measured.length,
-        missing: rows.length - measured.length,
-        diagCounted: withDiags.length,
-        zeroDiag: withDiags.filter((e) => e.diags === 0).length,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.medianMs - b.medianMs);
-  return stats.map((s, i) => ({ ...s, fastest: i === 0 }));
-}
-
-// Warm re-check comparison, collapsed to a per-tool median (same
-// one-row-per-tool shape as the cold table). Only two tools have a measured
-// warm number: basilisk (`--cache`) and mypy (incremental `.mypy_cache`) —
-// the `<tool>-warm` CSV columns. Pyright, ty and Pyrefly keep no cross-run
-// result cache (empirically: no cache artifacts, no cache flag, a repeat run
-// is just a warm-binary cold run); zuban's mypy mode DOES reuse a
-// `.mypy_cache`, but the harness wipes it and measures zuban cold-only. All
-// four are flagged `cached: false` and show their cold median — never a
-// fabricated warm figure. Reuses the already-parsed `values`, so this table
-// can never drift from the CSV.
-function computeWarm(rows, allTools) {
-  const warmSet = new Set(allTools.filter((t) => t.endsWith("-warm")));
-  const baseTools = allTools.filter((t) => !t.endsWith("-warm"));
-  // For each base tool, prefer its `-warm` column when one exists.
-  const columns = baseTools
-    .map((tool) => ({
-      tool,
-      key: warmSet.has(`${tool}-warm`) ? `${tool}-warm` : tool,
-      cached: warmSet.has(`${tool}-warm`),
-    }))
-    .filter((c) => rows.some((r) => r.values[c.key] != null));
-  // Only worth a table if at least one column is a genuine warm cache.
-  if (!columns.some((c) => c.cached)) return { hasData: false, columns: [] };
-
-  const stats = columns
-    .map((c) => {
-      const vals = rows.map((r) => r.values[c.key]).filter((v) => v != null && v > 0);
-      const med = vals.length ? Math.round(median(vals)) : null;
-      return { tool: c.tool, cached: c.cached, medianMs: med };
-    })
-    .filter((c) => c.medianMs != null)
-    .sort((a, b) => a.medianMs - b.medianMs);
-  return {
-    hasData: stats.length > 0,
-    columns: stats.map((c, i) => ({ ...c, text: `${c.medianMs} ms`, fastest: i === 0 })),
-  };
 }
 
 // How many tool columns in a CSV carry at least one real measurement. A machine
@@ -282,17 +174,12 @@ export default function () {
   const parsed = parseCsv(readFileSync(join(STATUS_DIR, primary), "utf-8"));
   if (!parsed) return empty;
 
-  // Everything exposed is either a raw CSV value or a median of raw CSV values.
-  // No speedup ratios, no "beats N of M", no outlier thresholds are computed —
-  // those build-time comparison numbers were removed so the page shows only
-  // measured facts and their direct medians.
+  // Everything exposed is either a CSV value or a median of CSV values.
   return {
     available: files.map((f) => f.replace(/\.csv$/, "")),
     primary: primary.replace(/\.csv$/, ""),
     ...parsed,
     toolMedians: computeToolMedians(parsed.rows, parsed.tools),
-    toolStats: computeToolStats(parsed.rows, parsed.tools),
-    warm: computeWarm(parsed.rows, parsed.allTools),
     hasData: parsed.rows.length > 0,
   };
 }

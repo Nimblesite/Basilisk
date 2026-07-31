@@ -57,7 +57,10 @@ fn bundled_builtins_classes_serves_core_builtin_classes() {
     }
     let int_class = classes.get("int");
     assert!(
-        int_class.is_some_and(|class| class.methods.iter().any(|method| method.name == "bit_length")),
+        int_class.is_some_and(|class| class
+            .methods
+            .iter()
+            .any(|method| method.name == "bit_length")),
         "int must keep its extracted methods"
     );
 }

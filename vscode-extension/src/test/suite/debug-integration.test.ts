@@ -623,6 +623,15 @@ async function stopActiveDebugSession(): Promise<void> {
     if (vscode.debug.activeDebugSession === undefined) {
         return;
     }
+    // Arm the termination listener BEFORE issuing the stop. `stopDebugging`
+    // can complete and the session terminate before a listener registered
+    // afterwards would see the event, which would then wait out the full
+    // budget for an event that already fired.
+    const ended = waitForDebugSessionEnd(SESSION_END_WAIT_MS);
+    // If the stop below re-throws, `ended` is never awaited; attaching a
+    // handler keeps that path from surfacing as an unhandled rejection. It does
+    // not swallow anything — `await ended` still rejects on the normal path.
+    void ended.catch(() => undefined);
     try {
         await vscode.debug.stopDebugging();
     } catch (error) {
@@ -631,7 +640,23 @@ async function stopActiveDebugSession(): Promise<void> {
             throw error;
         }
     }
-    await delay(SESSION_SETTLE_MS);
+    // Was `await delay(SESSION_SETTLE_MS)` — a blind 500ms settle run ~20 times
+    // per suite. Waiting on the actual `onDidTerminateDebugSession` is both
+    // faster (it returns the instant the session ends) and STRICTER: the blind
+    // sleep let a session that never terminated leak into the following test,
+    // whereas this fails and names it. [LSPDEBUG]
+    await ended;
+    // The terminate event does NOT clear `activeDebugSession` synchronously
+    // (same runtime lag the 'terminates cleanly' test polls for). Without
+    // draining it here this helper is not idempotent: a test that stops its own
+    // session, then hits the `teardown` hook that stops it again, would find a
+    // stale non-undefined session, skip the early return above, and wait out the
+    // full SESSION_END_WAIT_MS budget for a terminate event that already fired.
+    // The blind sleep this replaced happened to cover that; the event wait does
+    // not, so drain the handle explicitly. [LSPDEBUG]
+    for (let i = 0; i < SESSION_CLEAR_MAX_POLLS && vscode.debug.activeDebugSession; i++) {
+        await delay(STOP_POLL_INTERVAL_MS);
+    }
 }
 
 /**

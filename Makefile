@@ -391,9 +391,14 @@ _install_vsix:
 	code --install-extension $$(ls -t ./*.vsix | head -1) && \
 	echo -e '\033[0;32m✓ VSIX installed\033[0m'
 
+# No `cargo check` pass: clippy-driver IS rustc plus extra lint passes over the
+# same --workspace --all-targets unit graph, so every error and warning `cargo
+# check` can emit, `cargo clippy` already emits. Running both compiled the whole
+# workspace TWICE — clippy sets RUSTC_WORKSPACE_WRAPPER, which enters the
+# fingerprint for workspace units, so the second pass shares nothing but
+# dependencies. Nothing is suppressed here; one pass reports what two did.
 _lint_rust:
 	@echo -e '\033[1m\033[0;36m▶ Linting Rust\033[0m' && \
-	cargo check --workspace --all-targets && \
 	cargo clippy --workspace --all-targets -- -D warnings && \
 	cargo audit && \
 	bash scripts/check-dependency-shape.sh && \

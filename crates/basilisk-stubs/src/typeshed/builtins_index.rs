@@ -231,7 +231,9 @@ const fn param_kind_from(tag: u8) -> Option<StubParamKind> {
 // never a panic or over-allocation (no length-prefix preallocation).
 // ---------------------------------------------------------------------------
 
-fn decode_classes(bytes: &[u8]) -> Result<(String, HashMap<String, StubClass>), BuiltinsIndexError> {
+fn decode_classes(
+    bytes: &[u8],
+) -> Result<(String, HashMap<String, StubClass>), BuiltinsIndexError> {
     let mut cursor = Cursor { bytes, pos: 0 };
     if cursor.take(MAGIC.len())? != MAGIC {
         return Err(BuiltinsIndexError::Malformed(0));
