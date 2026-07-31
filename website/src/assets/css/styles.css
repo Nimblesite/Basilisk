@@ -1021,11 +1021,6 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .demo-wrapper { border: 1px solid var(--color-border-bright); border-radius: 0 0 var(--radius-lg) var(--radius-lg); overflow: hidden; text-align: left; }
 
 /* ── Benchmark table ────────────────────────────────────────── */
-.benchmark-section {
-  padding: var(--space-20) 0;
-  border-bottom: 1px solid var(--color-border);
-}
-
 .bench-versions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-5) 0 0; padding: 0; }
 .bench-versions dt { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted); margin-right: var(--space-1); }
 .bench-versions dd { margin: 0; }
@@ -1034,20 +1029,35 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .bench-meta { margin-top: var(--space-4); font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.6; }
 .bench-meta code { font-family: var(--font-mono); font-size: 0.9em; color: var(--color-text-secondary); }
-/* Warm re-check table: distinguish a real cross-run cache "(warm)" from a
-   tool with no cache "(no cache)" whose best case equals its cold time. */
-.bench-cache-tag { display: inline-block; font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.02em; color: var(--color-text-muted); white-space: nowrap; }
-.benchmark-table { width: 100%; min-width: 680px; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; }
+
+.benchmark-results {
+  width: calc(min(100vw, var(--max-width)) - var(--sidebar-width) - var(--space-12) - var(--space-16));
+  max-width: none;
+  margin: var(--space-6) 0 var(--space-4);
+}
+.prose .benchmark-table { display: table; max-width: none; overflow: visible; margin-bottom: 0; border: 0; border-radius: 0; }
+.benchmark-table { width: 100%; min-width: 900px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 0.8125rem; }
 .benchmark-table thead { background: var(--color-bg-tertiary); }
-.benchmark-table thead th { padding: var(--space-4) var(--space-5); text-align: center; font-weight: 600; color: var(--color-text-secondary); border-bottom: 1px solid var(--color-border-bright); white-space: nowrap; }
-.benchmark-table thead th:first-child { text-align: left; color: var(--color-text-muted); font-weight: 400; }
+.benchmark-table thead th { padding: var(--space-3); text-align: center; font-weight: 600; color: var(--color-text-secondary); border-bottom: 1px solid var(--color-border-bright); white-space: nowrap; }
+.benchmark-table thead th[rowspan] { width: 235px; text-align: left; color: var(--color-text-primary); }
+.benchmark-table thead th[scope="colgroup"] { color: var(--color-text-muted); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.benchmark-table thead th[scope="colgroup"] + th[scope="colgroup"] { border-left: 1px solid var(--color-border-bright); }
 .benchmark-table tbody tr:hover { background: rgba(255,255,255,0.015); }
-.benchmark-table tbody td { padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--color-border); text-align: center; vertical-align: middle; color: var(--color-text-secondary); }
-.benchmark-table tbody td:first-child { text-align: left; color: var(--color-text-primary); font-weight: 500; }
-.benchmark-table tbody tr:last-child td { border-bottom: none; }
+.benchmark-table tbody :is(th, td) { padding: var(--space-2); border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+.benchmark-table tbody th { position: sticky; left: 0; z-index: 1; background: var(--color-bg); color: var(--color-text-primary); font-weight: 500; text-align: left; }
+.benchmark-table tbody th a { color: var(--color-info); }
+.benchmark-table tbody th a:hover { color: var(--color-primary); }
+.benchmark-table tbody th code { overflow-wrap: anywhere; padding: 0; border: 0; background: none; color: inherit; font-size: 0.75rem; }
+.benchmark-table tbody td { color: var(--color-text-secondary); text-align: right; white-space: nowrap; }
+.benchmark-table tbody tr:hover th { background: var(--color-bg-elevated); }
+.benchmark-table tbody tr:last-child :is(th, td) { border-bottom: none; }
 .benchmark-table .col-basilisk { background: rgba(232,80,10,0.04); border-left: 1px solid rgba(232,80,10,0.3); border-right: 1px solid rgba(232,80,10,0.3); color: var(--color-text-primary); font-weight: 600; }
 .benchmark-table thead th.col-basilisk { color: var(--color-primary); font-weight: 700; font-size: 0.9375rem; border-top: 2px solid var(--color-primary); }
 .benchmark-table tbody tr:last-child td.col-basilisk { border-bottom: 2px solid var(--color-primary); }
+
+@media (max-width: 1023px) {
+  .benchmark-results { width: 100%; }
+}
 
 /* ── CTA — stripped, typographic ──────────────────────────── */
 .cta-section {

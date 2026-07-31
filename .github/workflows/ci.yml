@@ -17,7 +17,21 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-D warnings"
+  # lld is carried HERE, not in .cargo/config.toml, because cargo's four
+  # extra-flag sources are mutually exclusive and first-match-wins
+  # (CARGO_ENCODED_RUSTFLAGS > RUSTFLAGS > target.<triple>.rustflags >
+  # build.rustflags). A non-empty RUSTFLAGS therefore DISCARDS the whole
+  # `[target.x86_64-unknown-linux-gnu]` block in .cargo/config.toml — which is
+  # why every job below apt-installed lld and then silently linked with bfd
+  # anyway. Verified empirically: with RUSTFLAGS unset the config flag reaches
+  # rustc; with RUSTFLAGS set it reaches it zero times.
+  #
+  # Three jobs override this per-job because they link something that is not
+  # x86_64 linux and would reject `-fuse-ld=lld`: `website` (wasm32-unknown-
+  # unknown, and it re-adds the playground's 16 MiB stack for the same reason),
+  # `zed` (wasm32-wasip2), and `test-vscode-windows` (MSVC link.exe). Job-level
+  # `env` merges per-key, so every other job inherits both flags automatically.
+  RUSTFLAGS: "-D warnings -C link-arg=-fuse-ld=lld"
 
 # Least-privilege default ([SWR-SEC-TOKEN-PRIVILEGE]). CI only reads the repo;
 # any job needing more must opt in with a job-scoped permissions block.
@@ -164,6 +178,15 @@ jobs:
     needs: changes
     if: needs.changes.outputs.website == 'true'
     runs-on: ubuntu-24.04
+    # Overrides the workflow-level RUSTFLAGS: this job links wasm32-unknown-
+    # unknown, which rejects `-fuse-ld=lld`. It also RESTORES the playground's
+    # 16 MiB stack ([WASM-BUILD]) — that flag lives in .cargo/config.toml, which
+    # the workflow-level RUSTFLAGS discards entirely (see the env block above),
+    # so this pre-merge check was compiling the playground with the 1 MiB wasm
+    # default while deploy-pages.yml (which sets no RUSTFLAGS) shipped it with
+    # 16 MiB. The check and the deploy now build the same thing.
+    env:
+      RUSTFLAGS: "-D warnings -C link-arg=-zstack-size=16777216"
     # 20, not 10: `npm run build` now compiles the checker to WebAssembly for
     # the playground ([WASM-BUILD]) before Eleventy runs, and a cold wasm build
     # of the parser + typeshed does not fit the old budget.
@@ -301,6 +324,11 @@ jobs:
     # basilisk-common, so a core crate change must re-render + rebuild it.
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.zed == 'true'
     runs-on: ubuntu-24.04
+    # Overrides the workflow-level RUSTFLAGS: this job links wasm32-wasip2, and
+    # `-fuse-ld=lld` is a gcc/clang driver flag that rust-lld rejects. No lld is
+    # installed here and none is needed.
+    env:
+      RUSTFLAGS: "-D warnings"
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -517,11 +545,18 @@ jobs:
     # so a core change alters what it exercises.
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.vscode == 'true'
     runs-on: windows-latest
-    # TIMEOUT EXCEPTION: a cold Windows `cargo build --release` plus a full
-    # VS Code e2e suite (real debugpy sessions, real profiler runs) is slower
-    # than the Linux equivalent; Windows I/O makes both phases materially
-    # longer. No real-world corpus here, so the total still lands under Linux's.
-    timeout-minutes: 75
+    # Overrides the workflow-level RUSTFLAGS: MSVC's link.exe rejects the
+    # gcc/clang driver flag `-fuse-ld=lld`.
+    env:
+      RUSTFLAGS: "-D warnings"
+    # TIMEOUT EXCEPTION: a cold Windows cargo build plus a full VS Code e2e
+    # suite (real debugpy sessions, real profiler runs) is slower than the Linux
+    # equivalent; Windows I/O makes both phases materially longer. No real-world
+    # corpus here, so the total still lands under Linux's. 40 rather than 75:
+    # with the `e2e` profile replacing fat-LTO `release` the measured 8m48s
+    # build collapses, so this is a hang backstop with ~3x headroom, not a
+    # perf budget. The first run after a profile change is the cold one.
+    timeout-minutes: 40
     # Git Bash — the repo's scripts and these steps are POSIX shell, and it is
     # the shell `_release_vsix` already targets on Windows (MINGW*/MSYS*).
     defaults:
@@ -562,15 +597,26 @@ jobs:
 
       # basilisk-profiler-helper is a darwin-arm64-only component in
       # shipwright.json, so win32 bundles the LSP binary alone.
+      #
+      # `--profile e2e`, not `--release`: this job exists to catch win32-only
+      # defects (`.exe` suffixes, `\` separators, per-platform bundle paths,
+      # process spawn/teardown), none of which depend on how LLVM optimizes.
+      # `release` pins fat LTO + codegen-units=1, which is a SERIAL link — it
+      # used one core for 8m48s of this job's 18m45s while the rest of the
+      # runner idled. The e2e profile keeps opt-level 3 (the suite drives a real
+      # LSP under per-test timeouts, so runtime speed still matters) and gives up
+      # only cross-crate optimization, which this job never measures. Shipped
+      # artifacts and benchmarks stay on `release` — see [profile.e2e] in
+      # Cargo.toml for the measurements and the reasoning.
       - name: Build the win32 basilisk binary
-        run: cargo build --release --bin basilisk
+        run: cargo build --profile e2e --bin basilisk
 
       # The ONE canonical staging path ([VSIX-PACKAGING-PARITY]) — the same
       # script the release packager and release.yml `vsix` job use, so the
       # bundle these tests see is laid out exactly like the shipped VSIX
       # (`bin/win32-x64/basilisk.exe`).
       - name: Stage the bundled runtime
-        run: node vscode-extension/scripts/stage-runtime.mjs target/release win32-x64
+        run: node vscode-extension/scripts/stage-runtime.mjs target/e2e win32-x64
 
       - name: Build the extension
         working-directory: vscode-extension
@@ -616,8 +662,8 @@ jobs:
       # jobs run `cargo build --release`, so they compile the identical external
       # dependency graph. A single shared scope (instead of two per-job scopes)
       # halves this pair's cache footprint — relieving the 10 GB repo-cache limit
-      # that was evicting warm caches — and lets `build` (which runs later, after
-      # the test jobs) restore the dependencies this job already compiled.
+      # that was evicting warm caches — and lets `build` (which starts as soon as
+      # this job's cache is saved) restore the dependencies this job compiled.
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-on-failure: true
@@ -899,9 +945,22 @@ jobs:
           # reproducible locally via `make mutation-test`.
 
   # ── Build gate (standard job name per repo standards) ──────────────────────
+  # `needs` is deliberately NARROW. This job consumes nothing from the test jobs
+  # — its only step is `cargo build --release` — so fanning it in on all of them
+  # bought no signal and appended its whole runtime to the END of every core PR,
+  # after the slowest test job had already finished. Every one of those jobs is
+  # INDEPENDENTLY a required status check on main (Lint, Zed Extension, Rust
+  # Tests & Coverage, VS Code Extension, Shipwright Binary Gate, Neovim
+  # Extension, the four Mutation Testing Shards, Mutation Testing, and Build),
+  # so a failing test still blocks the merge on its own contexts; the dropped
+  # edges were pure ordering, never gating.
+  #
+  # The one retained edge is load-bearing: verify-binaries owns the SAVE of the
+  # `release` cache scope, and `needs` waits for its post-save step, so this job
+  # still restores a warm dependency cache and stays a near-no-op compile.
   build:
     name: Build
-    needs: [changes, test-rust, test-vscode, test-vscode-windows, test-nvim, zed, mutation-test, verify-binaries]
+    needs: [changes, verify-binaries]
     if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10

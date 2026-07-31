@@ -331,9 +331,29 @@ verifies `stdlib.zip` and the distribution sidecar against
 `data/typeshed/manifest.json` **in the test suite `test-rust.sh` runs before any
 release build**, so a corrupt, truncated, or stale asset fails CI — no basilisk
 binary (CLI, LSP, or any packaged artifact) is produced without a verified
-typeshed standard library. `src/typeshed/bundle.rs` re-checks the same
-identities at **runtime** before activation, defending against post-build
-corruption of an already-shipped binary.
+typeshed standard library. The second enforcement is
+`verify_bundled_assets()` in `src/typeshed/bundle.rs`, exercised by
+`bundled_assets_match_manifest_and_pass_all_gates`: it re-hashes the embedded
+constants and runs every gate over the decoded archive. Because
+`include_bytes!` data is the same bytes every process start, this is a build
+invariant — activation itself only decodes, never re-hashes, keeping cold
+start free of per-process verification of immutable inputs.
+
+#### Precomputed builtins class index {#STUBRES-TYPESHED-BUILTINS-INDEX}
+
+The no-target extraction of `builtins.pyi`
+([§STUBRES-TYPESHED-VERSION](#STUBRES-TYPESHED-VERSION)) is a pure function of
+the bundled ZIP and the largest fixed cost on a cold `check`, so it is
+precomputed (`cargo run -p basilisk-stubs --bin gen_builtins_index`),
+committed as `crates/basilisk-stubs/data/typeshed/builtins_index.bin`, and
+embedded (`src/typeshed/builtins_index.rs`). Three guards make it slow-path'd
+but never wrong: the checker consults it only for a `SourceIdentity::Bundled`
+snapshot with no `StubTarget` (`builtins_class_map`,
+`crates/basilisk-checker/src/imports/builtins.rs`) — pins, custom trees, and
+version evidence always extract live; the header's bundle SHA-256 must match
+the manifest or the loader falls back to live extraction; and CI's drift gate
+(`embedded_index_matches_regenerated_bytes`) re-extracts with the real parser
+and asserts byte equality, so a bundle refresh cannot land unregenerated.
 
 #### License and attribution {#STUBRES-TYPESHED-LICENSE}
 

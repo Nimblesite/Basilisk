@@ -75,10 +75,15 @@ resolver returns no project-version evidence. No interpreter subprocess is probe
 resolution path.
 
 Platform evidence is resolved separately. An explicit `python-platform` wins;
-otherwise the CLI/LSP query the selected interpreter for `sys.platform`. This
-probe does not invent a Python version and does not participate in Typeshed
-commit selection. Explicit `python-platform = "All"` retains every feasible
-platform branch instead of probing.
+otherwise only an EXPLICITLY selected interpreter (`python-interpreter` config
+or `BASILISK_PYTHON`, which may target a remote/cross environment) is queried
+for `sys.platform`. With no explicit interpreter the host constant is used
+directly (`python_platform_evidence`,
+`crates/basilisk-lsp/src/debug.rs`) — an auto-discovered interpreter runs on
+this machine and can only ever report the host value, so spawning it per
+`check` is pure startup cost. The probe does not invent a Python version and
+does not participate in Typeshed commit selection. Explicit
+`python-platform = "All"` retains every feasible platform branch instead.
 
 ## Diagnostics {#LSPUV-DIAGNOSTICS}
 

@@ -27,7 +27,7 @@ fn entry(path: &str, source: &str) -> ArchiveEntry {
     ArchiveEntry {
         path: path.to_owned(),
         mode: FileMode::Regular,
-        data: source.as_bytes().to_vec(),
+        data: source.as_bytes().to_vec().into(),
     }
 }
 

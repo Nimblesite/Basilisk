@@ -112,7 +112,7 @@ fn collect_files(
         entries.push(ArchiveEntry {
             path,
             mode: file_mode(&file_metadata),
-            data,
+            data: data.into(),
         });
     }
     Ok(())

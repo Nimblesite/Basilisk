@@ -203,6 +203,17 @@ where
             .clone_from(&workspace_config.python_platform);
     }
 
+    // Activate the typeshed source FIRST: the bundled default resolves its
+    // snapshot (and prewarms the builtins index) on a background thread, so
+    // kicking it off before file collection and search-path discovery
+    // maximises the overlap with the lead-in work. The activation seam only
+    // populates `typeshed_snapshot`, transplanted into the real search paths
+    // below. The source-status advisories resolve severity through the same
+    // project `[tool.basilisk]` tables as any rule
+    // ([STUBRES-TYPESHED-CONFIG]), so the project-root config is handed in.
+    let mut typeshed_activation = crate::import_search::roots_only(Vec::new());
+    activate_typeshed(&mut typeshed_activation, &workspace_config, &config)?;
+
     let excluded = excluded_dirs_and_log(&config, &config_root);
 
     // Implements [CHKARCH-CONFIG-INCLUDE] (issue #37): a no-args run walks
@@ -219,10 +230,7 @@ where
     } else {
         crate::import_search::roots_only(roots)
     };
-    // The typeshed source-status advisories resolve severity through the same
-    // project `[tool.basilisk]` tables as any rule ([STUBRES-TYPESHED-CONFIG]),
-    // so the project-root config is handed to the activation seam.
-    activate_typeshed(&mut search_paths, &workspace_config, &config)?;
+    search_paths.typeshed_snapshot = typeshed_activation.typeshed_snapshot.take();
 
     // Per-file rule config, memoized per directory ([CHKARCH-CONFIG-DISCOVERY]).
     // The cache fingerprint covers every directory's config so a child config
@@ -276,6 +284,18 @@ where
                 failures.push(FileAnalysisFailure { path, message: err });
             }
         }
+    }
+
+    // A deferred typeshed load that failed must fail the run loudly — inside
+    // the loop the miss can only surface as unresolved imports. A run that
+    // never needed the archive (all cache hits) never forces the load and is
+    // unaffected.
+    if let Some(error) = search_paths
+        .typeshed_snapshot
+        .as_ref()
+        .and_then(basilisk_lsp::import_resolver::ActiveTypeshed::deferred_error)
+    {
+        return Err(PipelineError::Internal(error));
     }
 
     Ok(CheckOutcome {

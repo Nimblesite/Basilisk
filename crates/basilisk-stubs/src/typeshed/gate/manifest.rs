@@ -99,7 +99,7 @@ mod tests {
         ArchiveEntry {
             path: path.to_owned(),
             mode: FileMode::Regular,
-            data: data.to_vec(),
+            data: data.to_vec().into(),
         }
     }
 

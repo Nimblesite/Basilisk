@@ -170,7 +170,7 @@ fn verified_archive(dir: &Path, manifest: &StoreManifest) -> Result<Archive, Sto
             entries.push(ArchiveEntry {
                 path: file.path.clone(),
                 mode,
-                data,
+                data: data.into(),
             });
             actual
         } else {
@@ -335,17 +335,17 @@ mod tests {
             ArchiveEntry {
                 path: "LICENSE".to_owned(),
                 mode: FileMode::Regular,
-                data: license_body,
+                data: license_body.into(),
             },
             ArchiveEntry {
                 path: "stdlib/VERSIONS".to_owned(),
                 mode: FileMode::Regular,
-                data: b"os: 3.0-\n".to_vec(),
+                data: b"os: 3.0-\n".to_vec().into(),
             },
             ArchiveEntry {
                 path: "stdlib/os.pyi".to_owned(),
                 mode: FileMode::Regular,
-                data: b"def getcwd() -> str: ...\n".to_vec(),
+                data: b"def getcwd() -> str: ...\n".to_vec().into(),
             },
         ];
         let unmaterialized = GitFile {
@@ -437,7 +437,7 @@ mod tests {
         // the License gate blocks ([STUBRES-TYPESHED-LICENSE]).
         for file in &mut entry.files {
             if file.path == "LICENSE" {
-                file.data = b"a different license\n".to_vec();
+                file.data = b"a different license\n".to_vec().into();
             }
         }
         let rebuilt = rebuild_identity(entry);

@@ -31,13 +31,13 @@ impl StubExtractor {
         self.visit_function_methods_for_class(&class.name, &methods);
         let _ = self.classes.insert(
             class.name.to_string(),
-            StubClass {
+            std::sync::Arc::new(StubClass {
                 name: class.name.to_string(),
                 bases,
                 metaclass,
                 methods,
                 attributes,
-            },
+            }),
         );
     }
 
@@ -85,7 +85,26 @@ impl StubExtractor {
         methods: &mut Vec<StubFunction>,
         attributes: &mut Vec<StubVariable>,
     ) {
-        let alternatives: Vec<_> = feasible_branches(if_stmt, self.target.as_ref())
+        let branches = feasible_branches(if_stmt, self.target.as_ref());
+        // Fast path for the dominant `if sys.version_info >= (3, X): …` shape
+        // (one guarded body, implicit empty else): collect the body straight
+        // into the class vectors, then keep an addition only when the members
+        // declared BEFORE the guard already contain an identical declaration —
+        // exactly what intersecting `pre + additions` with the untouched `pre`
+        // computes, without cloning everything collected so far for each
+        // guard. Big stdlib classes carry dozens of version guards, so the
+        // clone-based general path made class extraction quadratic.
+        if let [Some(body), None] = branches.as_slice() {
+            let method_start = methods.len();
+            let attribute_start = attributes.len();
+            self.collect_class_members(body, class_name, methods, attributes);
+            retain_additions_declared_before(methods, method_start, same_stub_function);
+            retain_additions_declared_before(attributes, attribute_start, |left, right| {
+                left == right
+            });
+            return;
+        }
+        let alternatives: Vec<_> = branches
             .into_iter()
             .map(|body| {
                 let mut branch_methods = methods.clone();
@@ -116,13 +135,29 @@ impl StubExtractor {
         for method in methods {
             let qualified = format!("{class_name}.{}", method.name);
             if method.is_overload {
-                self.overloads
-                    .entry(qualified)
-                    .or_default()
+                std::sync::Arc::make_mut(self.overloads.entry(qualified).or_default())
                     .push(method.clone());
             } else {
-                let _ = self.functions.insert(qualified, method.clone());
+                let _ = self
+                    .functions
+                    .insert(qualified, std::sync::Arc::new(method.clone()));
             }
         }
     }
+}
+
+/// Keep an addition appended at or after `start` only when the members
+/// declared before `start` already contain a matching declaration — the
+/// clone-free equivalent of intersecting `pre + additions` with `pre`.
+fn retain_additions_declared_before<T>(
+    items: &mut Vec<T>,
+    start: usize,
+    matches: impl Fn(&T, &T) -> bool,
+) {
+    let additions = items.split_off(start);
+    let kept: Vec<T> = additions
+        .into_iter()
+        .filter(|addition| items.iter().any(|declared| matches(declared, addition)))
+        .collect();
+    items.extend(kept);
 }

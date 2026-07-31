@@ -48,13 +48,14 @@ fn custom_mock_snapshot() -> Arc<Snapshot> {
         ArchiveEntry {
             path: "stdlib/VERSIONS".to_owned(),
             mode: FileMode::Regular,
-            data: b"unittest: 3.8-\nunittest.mock: 3.8-\n".to_vec(),
+            data: b"unittest: 3.8-\nunittest.mock: 3.8-\n".to_vec().into(),
         },
         ArchiveEntry {
             path: "stdlib/unittest/mock.pyi".to_owned(),
             mode: FileMode::Regular,
             data: b"class Mock:\n    def __init__(self, custom_token: bytes, /) -> None: ...\n"
-                .to_vec(),
+                .to_vec()
+                .into(),
         },
     ]);
     let status = TypeshedStatus {

@@ -244,14 +244,10 @@ impl WorkspaceIndex {
                 }
                 if cfg.python_platform.is_none() {
                     let analysis_config = crate::config::load_config(root);
-                    let interpreter = analysis_config
-                        .python_interpreter
-                        .unwrap_or_else(|| PathBuf::from(crate::debug::resolve_python(root)));
-                    cfg.python_platform =
-                        basilisk_uv::python_version::read_python_platform(&interpreter);
-                    if cfg.python_platform.is_none() {
-                        cfg.python_platform.clone_from(&fallback.python_platform);
-                    }
+                    cfg.python_platform = crate::debug::python_platform_evidence(
+                        analysis_config.python_interpreter.as_deref(),
+                    )
+                    .or_else(|| fallback.python_platform.clone());
                 }
                 (root.clone(), cfg)
             })

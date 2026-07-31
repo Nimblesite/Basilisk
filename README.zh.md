@@ -28,8 +28,8 @@
 
 <p align="center">
   <a href="https://www.basilisk-python.dev/zh/docs/conformance/"><strong>PEP 一致性 <!--g:score-->100.0%<!--/g:score--></strong></a> &mdash; 官方
-  <a href="https://github.com/python/typing/tree/39164cd2c5b4e2608cb8b5d2fc8af9ae6f0c0fe8/conformance"><code>python/typing</code></a>
-  一致性套件（提交 <code><!--g:short-->39164cd<!--/g:short--></code>）<!--g:total-->141<!--/g:total--> 项测试中通过 <!--g:pass-->141<!--/g:pass--> 项，
+  <a href="https://github.com/python/typing/tree/3410759355c3018063d3a446102f88621fc43eb5/conformance"><code>python/typing</code></a>
+  一致性套件（提交 <code><!--g:short-->3410759<!--/g:short--></code>）<!--g:total-->141<!--/g:total--> 项测试中通过 <!--g:pass-->141<!--/g:pass--> 项，
   由真实的上游评分器在默认配置下对 wheel 安装的 CLI 评出。
   我们以 <code>python/typing@main</code> 为目标，且分数只升不降。
 </p>
