@@ -263,7 +263,7 @@ fn format_function_signature(func: &FunctionInfo, source: &str) -> String {
             sig.push_str(", ");
         }
         sig.push_str(&param.name);
-        if let Some(ann) = annotation_text(param.annotation_span, source) {
+        if let Some(ann) = span_text(param.annotation_span, source) {
             let _ = write!(sig, ": {ann}");
         } else if !is_implicit_receiver(func, idx, param) {
             // #253: an unannotated parameter renders its inferred type —
@@ -276,7 +276,7 @@ fn format_function_signature(func: &FunctionInfo, source: &str) -> String {
             sig.push_str(", ");
         }
         let _ = write!(sig, "*{}", va.name);
-        if let Some(ann) = annotation_text(va.annotation_span, source) {
+        if let Some(ann) = span_text(va.annotation_span, source) {
             let _ = write!(sig, ": {ann}");
         }
     }
@@ -285,7 +285,7 @@ fn format_function_signature(func: &FunctionInfo, source: &str) -> String {
             sig.push_str(", ");
         }
         let _ = write!(sig, "**{}", kw.name);
-        if let Some(ann) = annotation_text(kw.annotation_span, source) {
+        if let Some(ann) = span_text(kw.annotation_span, source) {
             let _ = write!(sig, ": {ann}");
         }
     }
@@ -302,7 +302,7 @@ fn format_function_signature(func: &FunctionInfo, source: &str) -> String {
         ReturnAnnotationKind::NoneType => sig.push_str(" -> None"),
         ReturnAnnotationKind::Any => sig.push_str(" -> Any"),
         _ => {
-            if let Some(ann) = annotation_text(func.return_annotation_span, source) {
+            if let Some(ann) = span_text(func.return_annotation_span, source) {
                 let _ = write!(sig, " -> {ann}");
             }
         }
@@ -327,7 +327,7 @@ fn format_class_signature(class: &ClassInfo) -> String {
 
 fn format_variable_signature(var: &VariableInfo, source: &str) -> String {
     let mut sig = format!("(variable) {}", var.name);
-    if let Some(ann) = annotation_text(var.annotation_span, source) {
+    if let Some(ann) = span_text(var.annotation_span, source) {
         let _ = write!(sig, ": {ann}");
     } else {
         let inferred = rhs_or_expr_type_display(&var.rhs_kind, var.rhs_span, source);
@@ -340,7 +340,7 @@ fn format_variable_signature(var: &VariableInfo, source: &str) -> String {
 
 fn format_parameter_signature(param: &ParameterInfo, source: &str) -> String {
     let mut sig = format!("(parameter) {}", param.name);
-    if let Some(ann) = annotation_text(param.annotation_span, source) {
+    if let Some(ann) = span_text(param.annotation_span, source) {
         let _ = write!(sig, ": {ann}");
     }
     sig
@@ -348,7 +348,7 @@ fn format_parameter_signature(param: &ParameterInfo, source: &str) -> String {
 
 fn format_attribute_signature(class: &ClassInfo, attr: &AttributeInfo, source: &str) -> String {
     let mut sig = format!("(property) {}.{}", class.name, attr.name);
-    if let Some(ann) = annotation_text(attr.annotation_span, source) {
+    if let Some(ann) = span_text(attr.annotation_span, source) {
         let _ = write!(sig, ": {ann}");
     } else {
         let inferred = rhs_or_expr_type_display(&attr.rhs_kind, attr.rhs_span, source);
@@ -378,8 +378,13 @@ fn format_import_signature(imp: &ImportInfo) -> String {
     }
 }
 
-/// Extract annotation text from the source using a span.
-pub(crate) fn annotation_text(span: Option<Span>, source: &str) -> Option<String> {
+/// The trimmed source text a span covers, if it covers any.
+///
+/// Purely positional — it neither knows nor cares what the span denotes.
+/// Most callers hand it an annotation span; [`expr_type_display`] hands it an
+/// RHS-expression span, which is why the name describes the SPAN and not the
+/// syntax at the other end of it.
+pub(crate) fn span_text(span: Option<Span>, source: &str) -> Option<String> {
     let span = span?;
     let text = span.slice_source(source)?;
     Some(text.trim().to_owned())
@@ -419,7 +424,7 @@ pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> String {
 /// a rendered type).
 pub(crate) fn expr_type_display(span: Option<Span>, source: &str) -> String {
     use basilisk_checker::inference::{display_widened, infer_expression_source, is_fully_known};
-    let Some(snippet) = annotation_text(span, source) else {
+    let Some(snippet) = span_text(span, source) else {
         return String::new();
     };
     let inferred = infer_expression_source(&snippet);

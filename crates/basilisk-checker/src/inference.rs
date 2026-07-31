@@ -231,10 +231,16 @@ pub fn infer_expression_source(source: &str) -> InferredType {
 /// Whether a type contains no `Unknown` anywhere — display surfaces show a
 /// type only when it is fully known (a partial `list[Unknown]` hint would be
 /// worse than silence, per the gradual posture [TYPEINF-TARGET-GRADUAL]).
+///
+/// Matched EXHAUSTIVELY on purpose: a catch-all would answer "fully known"
+/// for a future type-carrying variant and let an `Unknown` nested inside it
+/// reach a rendered hover. Adding a variant to [`InferredType`] must break
+/// this build, not this guarantee.
 #[must_use]
 pub fn is_fully_known(ty: &InferredType) -> bool {
     match ty {
         InferredType::Unknown => false,
+        // Variants carrying nested types: known only if every child is.
         InferredType::List(inner)
         | InferredType::Set(inner)
         | InferredType::Optional(inner)
@@ -247,7 +253,18 @@ pub fn is_fully_known(ty: &InferredType) -> bool {
         InferredType::Generator(yielded, sent, returned) => {
             is_fully_known(yielded) && is_fully_known(sent) && is_fully_known(returned)
         }
-        _ => true,
+        // Leaves: nothing nested to hide an `Unknown` in.
+        InferredType::Int
+        | InferredType::Str
+        | InferredType::Float
+        | InferredType::Bool
+        | InferredType::Bytes
+        | InferredType::None_
+        | InferredType::Literal(_)
+        | InferredType::LiteralString
+        | InferredType::Named(_)
+        | InferredType::Any
+        | InferredType::Never => true,
     }
 }
 
@@ -255,6 +272,12 @@ pub fn is_fully_known(ty: &InferredType) -> bool {
 /// type (`Literal[1]` → `int`), matching how annotations are conventionally
 /// written in hover/inlay surfaces. Precision-preserving variants
 /// (`LiteralString`, unions, containers) widen structurally.
+///
+/// Matched EXHAUSTIVELY on purpose: under a catch-all, a future type-carrying
+/// variant would clone through unwidened and render a raw `Literal[1]` inside
+/// it, contradicting the contract above. Every nested position widens —
+/// including `Callable`, `Generator`, and `TypeForm`, which a catch-all
+/// silently skipped.
 #[must_use]
 pub fn display_widened(ty: &InferredType) -> InferredType {
     match ty {
@@ -280,7 +303,27 @@ pub fn display_widened(ty: &InferredType) -> InferredType {
             .iter()
             .map(display_widened)
             .fold(InferredType::Never, InferredType::union),
-        other => other.clone(),
+        InferredType::TypeForm(inner) => InferredType::TypeForm(Box::new(display_widened(inner))),
+        InferredType::Callable(info) => InferredType::Callable(crate::types::CallableInfo {
+            param_types: info.param_types.iter().map(display_widened).collect(),
+            return_type: Box::new(display_widened(&info.return_type)),
+        }),
+        InferredType::Generator(yielded, sent, returned) => InferredType::Generator(
+            Box::new(display_widened(yielded)),
+            Box::new(display_widened(sent)),
+            Box::new(display_widened(returned)),
+        ),
+        // Already in display form — nothing nested to widen.
+        InferredType::Int
+        | InferredType::Str
+        | InferredType::Float
+        | InferredType::Bool
+        | InferredType::Bytes
+        | InferredType::None_
+        | InferredType::Named(_)
+        | InferredType::Any
+        | InferredType::Never
+        | InferredType::Unknown => ty.clone(),
     }
 }
 
@@ -549,6 +592,45 @@ mod tests {
             display_widened(&union),
             InferredType::Union(vec![InferredType::Int, InferredType::Str]),
             "widened literal duplicates must collapse in the union"
+        );
+    }
+
+    /// Widening reaches EVERY nested position, including the ones a catch-all
+    /// arm used to clone through untouched (`Callable`, `Generator`,
+    /// `TypeForm`) — a rendered type never shows a raw `Literal[…]` inside.
+    #[test]
+    fn display_widening_reaches_every_nested_position() {
+        use super::display_widened;
+        use crate::types::{CallableInfo, InferredType, LiteralValue};
+        let lit = |value: i64| InferredType::Literal(LiteralValue::Int(value));
+        assert_eq!(
+            display_widened(&InferredType::Callable(CallableInfo {
+                param_types: vec![lit(1)],
+                return_type: Box::new(lit(2)),
+            })),
+            InferredType::Callable(CallableInfo {
+                param_types: vec![InferredType::Int],
+                return_type: Box::new(InferredType::Int),
+            }),
+            "callable parameters and return must widen"
+        );
+        assert_eq!(
+            display_widened(&InferredType::Generator(
+                Box::new(lit(1)),
+                Box::new(lit(2)),
+                Box::new(lit(3))
+            )),
+            InferredType::Generator(
+                Box::new(InferredType::Int),
+                Box::new(InferredType::Int),
+                Box::new(InferredType::Int)
+            ),
+            "all three generator positions must widen"
+        );
+        assert_eq!(
+            display_widened(&InferredType::TypeForm(Box::new(lit(1)))),
+            InferredType::TypeForm(Box::new(InferredType::Int)),
+            "the type-form payload must widen"
         );
     }
 

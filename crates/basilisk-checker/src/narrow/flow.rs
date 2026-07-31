@@ -287,7 +287,7 @@ impl FlowWalker<'_> {
     fn walk_for(&mut self, node: &ruff_python_ast::StmtFor) {
         self.record_uses(&node.iter);
         let element = element_type(&self.synth_type(&node.iter));
-        let rebound = self.loop_rebound_names(Some(&node.target), &node.body);
+        let rebound = loop_rebound_names(Some(&node.target), &node.body);
         self.env.push_branch();
         for name in &rebound {
             self.reset_name(name);
@@ -304,7 +304,7 @@ impl FlowWalker<'_> {
     /// `while <test>:` — same rebinding discipline as `for`, no bound target.
     fn walk_while(&mut self, node: &ruff_python_ast::StmtWhile) {
         self.record_uses(&node.test);
-        let rebound = self.loop_rebound_names(None, &node.body);
+        let rebound = loop_rebound_names(None, &node.body);
         self.env.push_branch();
         for name in &rebound {
             self.reset_name(name);
@@ -315,19 +315,6 @@ impl FlowWalker<'_> {
             self.reset_name(name);
         }
         self.walk_discarded(&node.orelse);
-    }
-
-    /// Every name a loop can rebind: its target plus all bindings in its body.
-    fn loop_rebound_names(&self, target: Option<&Expr>, body: &[Stmt]) -> HashSet<String> {
-        let _ = self;
-        let mut rebound = HashSet::new();
-        if let Some(target) = target {
-            let mut names = Vec::new();
-            target_names(target, &mut names);
-            rebound.extend(names);
-        }
-        bound_names(body, &mut rebound);
-        rebound
     }
 
     /// `with expr as tgt:` — the bound names take `__enter__`'s result, which
@@ -564,6 +551,21 @@ fn body_range(body: &[Stmt]) -> Option<(u32, u32)> {
     let start = u32::from(body.first()?.range().start());
     let end = u32::from(body.last()?.range().end());
     Some((start, end))
+}
+
+/// Every name a loop can rebind: its target plus all bindings in its body.
+///
+/// Depends on nothing but its arguments, so it is a free function rather than
+/// a method — the walker's state has no say in what a loop binds.
+fn loop_rebound_names(target: Option<&Expr>, body: &[Stmt]) -> HashSet<String> {
+    let mut rebound = HashSet::new();
+    if let Some(target) = target {
+        let mut names = Vec::new();
+        target_names(target, &mut names);
+        rebound.extend(names);
+    }
+    bound_names(body, &mut rebound);
+    rebound
 }
 
 /// What iterating over a value yields, when the type proves it.
