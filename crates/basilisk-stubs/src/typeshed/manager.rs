@@ -170,12 +170,12 @@ mod tests {
             ArchiveEntry {
                 path: "stdlib/VERSIONS".to_owned(),
                 mode: FileMode::Regular,
-                data: b"os: 3.0-\n".to_vec(),
+                data: b"os: 3.0-\n".to_vec().into(),
             },
             ArchiveEntry {
                 path: "stdlib/os.pyi".to_owned(),
                 mode: FileMode::Regular,
-                data: b"name: str\n".to_vec(),
+                data: b"name: str\n".to_vec().into(),
             },
         ]);
         let status = TypeshedStatus {

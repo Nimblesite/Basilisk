@@ -13,6 +13,7 @@
 //! temp extraction and no real filesystem path, so a cached immutable ZIP is
 //! never trusted through a mutable extracted tree ([STUBRES-TYPESHED-PIN]).
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -27,7 +28,12 @@ pub struct ArchiveEntry {
     /// The file's Git mode (regular, executable, symlink, or submodule).
     pub mode: FileMode,
     /// The file's raw bytes (for a symlink, the link target).
-    pub data: Vec<u8>,
+    ///
+    /// `Cow` so the embedded bundle's STORED entries borrow straight from the
+    /// `include_bytes!` constant (`decode_zip_static`) — no per-process copy
+    /// of ~3 MB of stub text — while downloaded or on-disk sources own their
+    /// bytes as before.
+    pub data: Cow<'static, [u8]>,
 }
 
 /// A logical, prefix-stripped archive: a flat set of files by path.
@@ -147,7 +153,7 @@ impl ArchiveVfs {
     /// The raw bytes of a file, if present.
     #[must_use]
     pub fn read(&self, path: &str) -> Option<&[u8]> {
-        self.archive.get(path).map(|entry| entry.data.as_slice())
+        self.archive.get(path).map(|entry| entry.data.as_ref())
     }
 
     /// The UTF-8 text of a file, if present and valid UTF-8 (`.pyi` always is).
@@ -187,7 +193,7 @@ mod tests {
         ArchiveEntry {
             path: path.to_owned(),
             mode: FileMode::Regular,
-            data: data.to_vec(),
+            data: data.to_vec().into(),
         }
     }
 
@@ -206,7 +212,7 @@ mod tests {
         assert_eq!(
             archive
                 .get("stdlib/os.pyi")
-                .map(|entry| entry.data.as_slice()),
+                .map(|entry| entry.data.as_ref()),
             Some(b"def getcwd() -> str: ...\n".as_slice())
         );
         assert!(archive.get("stdlib/missing.pyi").is_none());

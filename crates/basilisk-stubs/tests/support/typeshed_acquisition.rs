@@ -80,7 +80,7 @@ pub fn entry_from_files(files: &[(String, Vec<u8>)]) -> StoreEntry {
             .map(|(path, data)| ArchiveEntry {
                 path: path.clone(),
                 mode: FileMode::Regular,
-                data: data.clone(),
+                data: data.clone().into(),
             })
             .collect(),
     }

@@ -78,12 +78,12 @@ pub fn custom_typeshed_snapshot(files: &[(&str, &str)]) -> ActiveTypeshed {
     let mut entries = vec![ArchiveEntry {
         path: "stdlib/VERSIONS".to_owned(),
         mode: FileMode::Regular,
-        data: versions.into_bytes(),
+        data: versions.into_bytes().into(),
     }];
     entries.extend(files.iter().map(|(path, body)| ArchiveEntry {
         path: format!("stdlib/{path}"),
         mode: FileMode::Regular,
-        data: body.as_bytes().to_vec(),
+        data: body.as_bytes().to_vec().into(),
     }));
     let status = TypeshedStatus {
         active_source: SourceKind::Custom,

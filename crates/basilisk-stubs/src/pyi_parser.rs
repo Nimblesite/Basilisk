@@ -14,6 +14,7 @@ mod syntax;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use ruff_python_ast::{
     Expr, Operator, Stmt, StmtAnnAssign, StmtAssign, StmtAugAssign, StmtFunctionDef, StmtIf,
@@ -164,6 +165,16 @@ fn parse_pyi_source_with_target(
 }
 
 /// Walks the AST and collects stub information.
+///
+/// The large collections hold their values behind `Arc` so that the guard
+/// intersection in [`Self::visit_if`] can clone the whole accumulated state
+/// per feasible branch as refcount bumps: entries a branch never touches stay
+/// pointer-identical across alternatives, making both the clone and the
+/// intersection O(branch effects) instead of O(module so far) — the
+/// difference between milliseconds and tens of milliseconds on
+/// `builtins.pyi` with no version target. [`Self::into_module`] unwraps the
+/// `Arc`s (refcount is back to one by then), so [`StubModule`]'s public shape
+/// is unchanged.
 #[derive(Clone)]
 struct StubExtractor {
     module_name: String,
@@ -171,10 +182,10 @@ struct StubExtractor {
     source: StubSource,
     tier: StubTier,
     target: Option<StubTarget>,
-    functions: HashMap<String, StubFunction>,
-    overloads: HashMap<String, Vec<StubFunction>>,
-    classes: HashMap<String, StubClass>,
-    variables: HashMap<String, StubVariable>,
+    functions: HashMap<String, Arc<StubFunction>>,
+    overloads: HashMap<String, Arc<Vec<StubFunction>>>,
+    classes: HashMap<String, Arc<StubClass>>,
+    variables: HashMap<String, Arc<StubVariable>>,
     dunder_all_mutations: Vec<DunderAllMutation>,
     reexported_names: Vec<String>,
     star_reexports: Vec<StarReexport>,
@@ -213,10 +224,10 @@ impl StubExtractor {
             source: self.source,
             tier: self.tier,
             target: self.target,
-            functions: self.functions,
-            overloads: self.overloads,
-            classes: self.classes,
-            variables: self.variables,
+            functions: unwrap_shared_map(self.functions),
+            overloads: unwrap_shared_map(self.overloads),
+            classes: unwrap_shared_map(self.classes),
+            variables: unwrap_shared_map(self.variables),
             dunder_all: literal_dunder_all(&self.dunder_all_mutations),
             dunder_all_mutations: self.dunder_all_mutations,
             reexported_names: self.reexported_names,
@@ -244,6 +255,10 @@ impl StubExtractor {
 
     /// Select concrete target branches, or intersect all feasible alternatives
     /// when platform/version evidence is absent or explicitly `All`.
+    ///
+    /// Each alternative clones `self`, but the maps share values behind `Arc`,
+    /// so the clone is a table copy plus refcount bumps and the intersection
+    /// short-circuits untouched entries by pointer identity.
     fn visit_if(&mut self, if_stmt: &StmtIf) {
         let branches = feasible_branches(if_stmt, self.target.as_ref());
         if branches.len() == 1 {
@@ -292,15 +307,19 @@ impl StubExtractor {
             retain_matching_entries(
                 &mut intersection.functions,
                 &alternative.functions,
-                same_stub_function,
+                |left, right| Arc::ptr_eq(left, right) || same_stub_function(left, right),
             );
             union_common_overloads(&mut intersection.overloads, &alternative.overloads);
             retain_matching_entries(
                 &mut intersection.classes,
                 &alternative.classes,
-                same_stub_class,
+                |left, right| Arc::ptr_eq(left, right) || same_stub_class(left, right),
             );
-            retain_equal_entries(&mut intersection.variables, &alternative.variables);
+            retain_matching_entries(
+                &mut intersection.variables,
+                &alternative.variables,
+                |left, right| Arc::ptr_eq(left, right) || left == right,
+            );
             retain_equal_entries(
                 &mut intersection.module_bindings,
                 &alternative.module_bindings,
@@ -449,9 +468,9 @@ impl StubExtractor {
 
         let name = func.name.to_string();
         if is_overload {
-            self.overloads.entry(name).or_default().push(stub_fn);
+            Arc::make_mut(self.overloads.entry(name).or_default()).push(stub_fn);
         } else {
-            let _ = self.functions.insert(name, stub_fn);
+            let _ = self.functions.insert(name, Arc::new(stub_fn));
         }
     }
 
@@ -459,10 +478,10 @@ impl StubExtractor {
         if let Some(name) = ann_assign_target_name(ann) {
             let _ = self.variables.insert(
                 name.clone(),
-                StubVariable {
+                Arc::new(StubVariable {
                     name,
                     annotation: Some(expr_to_annotation(&ann.annotation)),
-                },
+                }),
             );
         }
     }
@@ -475,14 +494,27 @@ impl StubExtractor {
                 let annotation = Some(expr_to_annotation(&assign.value));
                 let _ = self.variables.insert(
                     name_expr.id.to_string(),
-                    StubVariable {
+                    Arc::new(StubVariable {
                         name: name_expr.id.to_string(),
                         annotation,
-                    },
+                    }),
                 );
             }
         }
     }
+}
+
+/// Unwrap an `Arc`-shared map into its plain form. By the time a module is
+/// finalized every intersection alternative has been dropped, so each `Arc`
+/// is unique and unwrapping moves the value without a deep clone.
+fn unwrap_shared_map<K, V>(map: HashMap<K, Arc<V>>) -> HashMap<K, V>
+where
+    K: std::hash::Hash + Eq,
+    V: Clone,
+{
+    map.into_iter()
+        .map(|(key, value)| (key, Arc::unwrap_or_clone(value)))
+        .collect()
 }
 
 fn retain_equal_entries<K, V>(left: &mut HashMap<K, V>, right: &HashMap<K, V>)
@@ -532,17 +564,20 @@ pub(super) fn same_stub_function(left: &StubFunction, right: &StubFunction) -> b
 /// declaration no branch made. A name present in only SOME branches is still
 /// intersected away — it may genuinely not exist on the resolved version.
 fn union_common_overloads(
-    left: &mut HashMap<String, Vec<StubFunction>>,
-    right: &HashMap<String, Vec<StubFunction>>,
+    left: &mut HashMap<String, Arc<Vec<StubFunction>>>,
+    right: &HashMap<String, Arc<Vec<StubFunction>>>,
 ) {
     left.retain(|name, variants| match right.get(name) {
+        // Pointer-identical groups were untouched by every branch — nothing
+        // to union.
+        Some(other) if Arc::ptr_eq(variants, other) => true,
         Some(other) => {
-            for variant in other {
+            for variant in other.iter() {
                 if !variants
                     .iter()
                     .any(|existing| same_stub_function(existing, variant))
                 {
-                    variants.push(variant.clone());
+                    Arc::make_mut(variants).push(variant.clone());
                 }
             }
             true
@@ -578,6 +613,100 @@ mod regression_tests {
 
     use super::parse_pyi_source;
     use crate::types::{StubSource, StubTier};
+
+    /// Unknown-guard intersection semantics ([STUBRES-PYI]): a symbol exists
+    /// only when EVERY feasible branch agrees on it; symbols untouched by the
+    /// guard survive unchanged. Pins the behavior the branch-sharing
+    /// optimization in `visit_if` must preserve.
+    #[test]
+    fn unknown_guard_intersection_keeps_agreeing_and_drops_diverging_symbols() {
+        let module = parse_pyi_source(
+            "def stable() -> int: ...\n\
+             x: int\n\
+             if feature:\n    def gated() -> int: ...\n    def stable() -> str: ...\n\
+             else:\n    def gated() -> int: ...\n",
+            Path::new("intersect.pyi"),
+            "intersect",
+            StubSource::Typeshed,
+            StubTier::Tier1,
+        )
+        .expect("fixture parses");
+        assert!(
+            module.functions.contains_key("gated"),
+            "identical declarations under every arm exist regardless of the guard"
+        );
+        assert!(
+            !module.functions.contains_key("stable"),
+            "a symbol the arms disagree on is intersected away"
+        );
+        assert!(
+            module.variables.contains_key("x"),
+            "symbols untouched by the guard survive"
+        );
+    }
+
+    /// A class member added under an unknown guard survives only when the
+    /// class already declares it identically before the guard — intersecting
+    /// `pre + additions` with the untouched `pre` (including the preserved
+    /// duplicate). Pins the clone-free class-guard fast path.
+    #[test]
+    fn class_guard_additions_survive_only_when_already_declared() {
+        let module = parse_pyi_source(
+            "class C:\n\
+             \x20   def stable(self) -> int: ...\n\
+             \x20   if feature:\n\
+             \x20       def stable(self) -> int: ...\n\
+             \x20       def gated(self) -> int: ...\n",
+            Path::new("class_guard.pyi"),
+            "class_guard",
+            StubSource::Typeshed,
+            StubTier::Tier1,
+        )
+        .expect("fixture parses");
+        let class = module.classes.get("C").expect("class C extracted");
+        assert_eq!(
+            class
+                .methods
+                .iter()
+                .filter(|method| method.name == "stable")
+                .count(),
+            2,
+            "an identical guarded redeclaration is preserved alongside the original"
+        );
+        assert!(
+            !class.methods.iter().any(|method| method.name == "gated"),
+            "a guarded-only member is not guaranteed to exist"
+        );
+    }
+
+    /// Nested unknown guards intersect through their enclosing branches: a
+    /// symbol reachable identically on every path exists; one missing from any
+    /// path does not.
+    #[test]
+    fn nested_unknown_guards_intersect_through_outer_branches() {
+        let module = parse_pyi_source(
+            "def outer() -> int: ...\n\
+             if feature_a:\n\
+             \x20   if feature_b:\n        def inner() -> int: ...\n\
+             \x20   else:\n        def inner() -> int: ...\n\
+             \x20   def only_a() -> int: ...\n\
+             else:\n    def inner() -> int: ...\n",
+            Path::new("nested.pyi"),
+            "nested",
+            StubSource::Typeshed,
+            StubTier::Tier1,
+        )
+        .expect("fixture parses");
+        assert!(
+            module.functions.contains_key("inner"),
+            "declared identically on every feasible path"
+        );
+        assert!(
+            !module.functions.contains_key("only_a"),
+            "absent from the else path, so not guaranteed to exist"
+        );
+        assert!(module.functions.contains_key("outer"));
+    }
 
     #[test]
     fn independent_unknown_guards_do_not_duplicate_identical_all_histories() {

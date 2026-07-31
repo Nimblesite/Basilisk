@@ -1,94 +1,61 @@
 {#
-  Shared benchmark section — the SINGLE source of truth for rendering benchmark
-  tables from `benchmarks` (_data/benchmarks.js). Pages supply only translated
-  prose via `t`.
-
-  Honesty contract: the published shape is ONE ROW PER TOOL (median + the
-  fixtures at each end of its own range) — never a fixture × tool grid. For the
-  heavier tools a cold single-file check is dominated by fixed startup + stub
-  cost, so a grid would repeat each tool's baseline once per fixture and imply
-  per-construct precision that doesn't exist. Every rendered number is a measured
-  CSV time or the median of measured times — NO build-time comparison numbers
-  (speedup ratios, "beats N of M" tallies, outlier thresholds). Full raw data
-  (every timing and every diagnostic count) stays in the committed per-machine CSV.
-
-  Args:
-    b  — the global `benchmarks` data object (from _data/benchmarks.js)
-    t  — locale strings. Prose fields are rendered with `| safe` so they may
-         contain inline HTML. Optional `t.names` is a { fixture: translatedName }
-         map; any fixture not present falls back to the English name.
+  The benchmark fixture table. Every displayed timing comes directly from the
+  committed per-machine CSV parsed by `_data/benchmarks.js`. A row represents a
+  complete Python file, and its label links to that source file.
 #}
-{# Cold summary: per-tool median / range / diagnostic coverage. Bare table +
-   versions + methodology caption, no outer <section>, so it embeds inside docs
-   prose (`.prose`) as well as any section wrapper. #}
-{% macro table(b, t) %}
-    {% if b.hasData %}
-    <div class="table-wrapper">
-      <table class="benchmark-table">
-        <thead>
-          <tr>
-            <th>{{ t.toolHeader }}</th>
-            <th>{{ t.medianHeader }}</th>
-            <th>{{ t.fastestHeader }}</th>
-            <th>{{ t.slowestHeader }}</th>
-            <th>{{ t.diagsHeader }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for s in b.toolStats %}
-          <tr>
-            <td{% if s.tool == 'basilisk' %} class="col-basilisk"{% endif %}>{{ s.tool }}</td>
-            <td{% if s.tool == 'basilisk' %} class="col-basilisk"{% endif %}>{{ s.medianText }}{% if s.fastest %} ✓{% endif %}</td>
-            <td>{{ s.min.text }} &mdash; {{ t.names[s.min.fixture] if t.names and t.names[s.min.fixture] else s.min.name }}</td>
-            <td>{{ s.max.text }} &mdash; {{ t.names[s.max.fixture] if t.names and t.names[s.max.fixture] else s.max.name }}</td>
-            <td>{% if s.diagCounted %}{{ s.diagCounted - s.zeroDiag }}/{{ s.diagCounted }} {{ t.fixturesWord }}{% else %}&mdash;{% endif %}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {# A tool with missing cells was either not installed on the bench machine
-       or failed preflight (never analyzed the fixture) — disclosed, not hidden. #}
-    {% for s in b.toolStats %}{% if s.missing > 0 %}
-    <p class="bench-meta"><code>{{ s.tool }}</code>{{ t.missingPre | safe }}{{ s.missing }}{{ t.missingPost | safe }}</p>
-    {% endif %}{% endfor %}
-    {% if b.meta.toolVersions.length %}
-    <dl class="bench-versions" aria-label="{{ t.versionsLabel }}">
-      <dt>{{ t.versionsLabel }}</dt>
-      {% for v in b.meta.toolVersions %}<dd><code{% if v.tool == 'basilisk' %} class="col-basilisk"{% endif %}>{{ v.tool }} {{ v.version }}</code></dd>{% endfor %}
-    </dl>
-    {% endif %}
-    <p class="bench-meta">{{ t.metaPre | safe }}{{ b.meta.runsCount }}{{ t.metaMid | safe }}<strong>{{ b.meta.cpu }}</strong>{{ t.metaCpuOpen | safe }}{{ b.meta.os }}{{ t.metaOsSep | safe }}{{ b.meta.cores }}{{ t.metaCoresClose | safe }}{{ b.meta.generated }}{{ t.metaDateClose | safe }}<code>benchmarks/status/{{ b.primary }}.csv</code>{{ t.metaEnd | safe }}</p>
-    {% endif %}
+{% macro resultsTable(b, repositoryUrl) %}
+  {% if b.hasData %}
+  <div class="table-wrapper benchmark-results">
+    <table class="benchmark-table">
+      <caption class="sr-only">
+        Mean wall-clock time in milliseconds for each checker to process each complete fixture file
+      </caption>
+      <thead>
+        <tr>
+          <th rowspan="2" scope="col">Fixture file</th>
+          <th colspan="6" scope="colgroup">Cold &middot; no result cache</th>
+          <th colspan="2" scope="colgroup">Warm &middot; cache hit</th>
+        </tr>
+        <tr>
+          <th class="col-basilisk" scope="col">Basilisk</th>
+          <th scope="col">Pyright</th>
+          <th scope="col">mypy</th>
+          <th scope="col">ty</th>
+          <th scope="col">Pyrefly</th>
+          <th scope="col">zuban</th>
+          <th class="col-basilisk" scope="col">Basilisk</th>
+          <th scope="col">mypy</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in b.rows %}
+        <tr>
+          <th scope="row">
+            <a href="{{ repositoryUrl }}/blob/main/benchmarks/fixtures/{{ row.filename }}"><code>{{ row.filename }}</code></a>
+          </th>
+          <td class="col-basilisk">{{ row.valueText.basilisk }}</td>
+          <td>{{ row.valueText.pyright }}</td>
+          <td>{{ row.valueText.mypy }}</td>
+          <td>{{ row.valueText.ty }}</td>
+          <td>{{ row.valueText.pyrefly }}</td>
+          <td>{{ row.valueText.zuban }}</td>
+          <td class="col-basilisk">{{ row.valueText['basilisk-warm'] }}</td>
+          <td>{{ row.valueText['mypy-warm'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
 {% endmacro %}
 
-{# Warm re-check: every tool at its FASTEST achievable repeat-check, one row
-   per tool. Tools with a real cross-run cache (basilisk `--cache`, mypy
-   incremental `.mypy_cache`) show their warm median, tagged `t.warmTag`; tools
-   with no cross-run cache show their cold median — their true best case —
-   tagged `t.noCacheTag`. `b.warm` comes from computeWarm in
-   _data/benchmarks.js, the same parsed CSV as the cold table. #}
-{% macro warmTable(b, t) %}
-    {% if b.warm.hasData %}
-    <div class="table-wrapper">
-      <table class="benchmark-table">
-        <thead>
-          <tr>
-            <th>{{ t.toolHeader }}</th>
-            <th>{{ t.warmHeader }}</th>
-            <th>{{ t.cacheHeader }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for c in b.warm.columns %}
-          <tr>
-            <td{% if c.tool == 'basilisk' %} class="col-basilisk"{% endif %}>{{ c.tool }}</td>
-            <td{% if c.tool == 'basilisk' %} class="col-basilisk"{% endif %}>{{ c.text }}{% if c.fastest %} ✓{% endif %}</td>
-            <td><span class="bench-cache-tag">{{ t.warmTag if c.cached else t.noCacheTag }}</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% endif %}
+{% macro versions(b) %}
+  {% if b.meta.toolVersions.length %}
+  <dl class="bench-versions" aria-label="Versions benchmarked">
+    <dt>Versions benchmarked</dt>
+    {% for version in b.meta.toolVersions %}
+    <dd><code{% if version.tool == 'basilisk' %} class="col-basilisk"{% endif %}>{{ version.tool }} {{ version.version }}</code></dd>
+    {% endfor %}
+  </dl>
+  {% endif %}
 {% endmacro %}

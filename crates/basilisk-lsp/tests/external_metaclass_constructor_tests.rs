@@ -26,7 +26,7 @@ fn metaclass_snapshot() -> Arc<Snapshot> {
         ArchiveEntry {
             path: "stdlib/VERSIONS".to_owned(),
             mode: FileMode::Regular,
-            data: b"unittest: 3.8-\nunittest.mock: 3.8-\n".to_vec(),
+            data: b"unittest: 3.8-\nunittest.mock: 3.8-\n".to_vec().into(),
         },
         ArchiveEntry {
             path: "stdlib/unittest/mock.pyi".to_owned(),
@@ -47,7 +47,8 @@ fn metaclass_snapshot() -> Arc<Snapshot> {
                 "    def __init__(self, required: int) -> None: ...\n",
             )
             .as_bytes()
-            .to_vec(),
+            .to_vec()
+            .into(),
         },
     ]);
     let status = TypeshedStatus {

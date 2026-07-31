@@ -178,18 +178,26 @@ pub enum SnapshotError {
 }
 
 fn build_module_index(vfs: &ArchiveVfs) -> Result<ModuleIndex, SnapshotError> {
-    let mut modules = BTreeMap::new();
+    // The entry API moves the module name into the map on the vacant path, so
+    // the common case allocates each name once — cloning per insert to keep a
+    // copy for the never-taken duplicate branch doubled this loop's allocations
+    // across ~750 stdlib modules, on the cold-start critical path.
+    let mut modules: BTreeMap<String, String> = BTreeMap::new();
     for path in vfs
         .paths()
         .filter(|path| path.starts_with("stdlib/") && is_pyi_path(path))
     {
-        let module = stdlib_module_name(path);
-        if let Some(first) = modules.insert(module.clone(), path.to_owned()) {
-            return Err(SnapshotError::DuplicateModule {
-                module,
-                first,
-                second: path.to_owned(),
-            });
+        match modules.entry(stdlib_module_name(path)) {
+            std::collections::btree_map::Entry::Vacant(slot) => {
+                let _ = slot.insert(path.to_owned());
+            }
+            std::collections::btree_map::Entry::Occupied(slot) => {
+                return Err(SnapshotError::DuplicateModule {
+                    module: slot.key().clone(),
+                    first: slot.get().clone(),
+                    second: path.to_owned(),
+                })
+            }
         }
     }
     Ok(ModuleIndex(modules))
@@ -280,7 +288,7 @@ mod tests {
         ArchiveEntry {
             path: path.to_owned(),
             mode: FileMode::Regular,
-            data: data.to_vec(),
+            data: data.to_vec().into(),
         }
     }
 

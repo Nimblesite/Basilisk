@@ -23,9 +23,35 @@ const PLATFORM_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 /// This is target evidence, not a host-platform default: cross-platform
 /// analysis can still select `python-platform = "All"`, while an explicitly
 /// selected interpreter reports its own concrete runtime platform.
+///
+/// Reserve this probe for EXPLICITLY selected interpreters
+/// (`python-interpreter`, `BASILISK_PYTHON`), which can deliberately point at
+/// a shim reporting a non-host target. An auto-discovered interpreter — a
+/// workspace venv, a bare `python3` on `PATH` — runs on this host by
+/// definition, so its answer is always [`host_sys_platform`]: spawning it buys
+/// nothing and costs a full interpreter start-up on every invocation.
+/// [STUBRES-TYPESHED-VERSION]
 #[must_use]
 pub fn read_python_platform(interpreter: &Path) -> Option<String> {
     read_python_platform_within(interpreter, PLATFORM_PROBE_TIMEOUT)
+}
+
+/// The host's `sys.platform` value, known at compile time.
+///
+/// Platform target evidence for projects with no EXPLICITLY selected
+/// interpreter: any auto-discovered interpreter (workspace venv, `PATH`
+/// fallback) executes on this host, so the constant answers exactly what a
+/// probe of it would — without launching anything. Values follow the
+/// `sys.platform` vocabulary the stub guards use (`darwin` / `linux` /
+/// `win32`). [STUBRES-TYPESHED-VERSION]
+#[must_use]
+pub fn host_sys_platform() -> &'static str {
+    match std::env::consts::OS {
+        "macos" => "darwin",
+        "windows" => "win32",
+        // `linux`, `freebsd`, `netbsd`, `aix`, … already match `sys.platform`.
+        other => other,
+    }
 }
 
 /// [`read_python_platform`] with an explicit probe ceiling.

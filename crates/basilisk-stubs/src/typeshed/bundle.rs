@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 use serde::Deserialize;
 
 use super::archive::ArchiveVfs;
-use super::codec::{decode_zip, DecodeError, DecodeLimits, ZipLayout};
+use super::codec::{decode_zip, decode_zip_static, DecodeError, DecodeLimits, ZipLayout};
 use super::gate::manifest::sha256_hex;
 use super::gate::{
     license_gate, safety_gate, shape_gate, LicenseManifest, LicenseViolation, SafetyLimits,
@@ -127,22 +127,40 @@ struct SourceSection {
     tree_sha: String,
 }
 
-/// Build the bundled snapshot from the embedded assets, verifying the ZIP digest
-/// and running the Safety, Shape, and License gates.
+/// Build the bundled snapshot from the embedded assets.
+///
+/// The assets are `include_bytes!`/`include_str!` constants — the SAME bytes
+/// every process start — so their digest and gate verification is a BUILD
+/// invariant enforced in CI ([`verify_bundled_assets`] under test), not a
+/// per-process runtime cost: re-hashing an immutable 3 MB constant on every
+/// short-lived `check` taxes cold start for information the build already
+/// proved. Runtime-acquired sources (pinned downloads, custom trees) are
+/// mutable inputs and keep their full runtime verification.
 ///
 /// # Errors
 ///
-/// Returns a [`BundleError`] if the manifest is invalid, the embedded ZIP digest
-/// does not match, or any gate rejects the decoded archive.
+/// Returns a [`BundleError`] if the manifest is invalid or the embedded ZIP
+/// cannot be decoded into a snapshot.
 pub fn bundled_snapshot() -> Result<Snapshot, BundleError> {
     static SNAPSHOT: OnceLock<Result<Snapshot, BundleError>> = OnceLock::new();
     SNAPSHOT.get_or_init(build_bundled_snapshot).clone()
 }
 
-fn build_bundled_snapshot() -> Result<Snapshot, BundleError> {
+/// Verify the embedded assets against their manifest: ZIP + sidecar digests,
+/// then the Safety, Shape, and License gates over the decoded archive.
+///
+/// This is the build invariant behind [`bundled_snapshot`]'s trust in the
+/// embedded bytes; it runs in CI (see
+/// `bundled_assets_match_manifest_and_pass_all_gates`), never on the
+/// per-process activation path.
+///
+/// # Errors
+///
+/// Returns a [`BundleError`] naming the first mismatched digest or violated
+/// gate.
+pub fn verify_bundled_assets() -> Result<(), BundleError> {
     let manifest: BundleManifest = serde_json::from_str(BUNDLE_MANIFEST_JSON)
         .map_err(|err| BundleError::Manifest(err.to_string()))?;
-
     let actual = sha256_hex(BUNDLE_ZIP);
     if actual != manifest.bundle.sha256 {
         return Err(BundleError::DigestMismatch {
@@ -157,19 +175,67 @@ fn build_bundled_snapshot() -> Result<Snapshot, BundleError> {
             actual: distribution_actual,
         });
     }
-
-    // The bundle has no top-level prefix; entries are `stdlib/…` and `LICENSE`.
     let archive = decode_zip(
         BUNDLE_ZIP,
         ZipLayout::BundledRootless,
         &DecodeLimits::default(),
     )
     .map_err(BundleError::Decode)?;
-
     safety_gate(&archive, &SafetyLimits::default()).map_err(BundleError::Safety)?;
     shape_gate(&archive).map_err(BundleError::Shape)?;
     let approved = license_manifest_from_section(&manifest.license_manifest);
-    license_gate(&archive, &approved).map_err(BundleError::License)?;
+    license_gate(&archive, &approved).map_err(BundleError::License)
+}
+
+/// The status a pin of the bundled commit reports, built from manifest
+/// metadata alone — NO archive decode. `explicit` mirrors the selector's pin
+/// policy: an explicit `typeshed-commit` suppresses
+/// `typeshed_source_unpinned`; the bundled default keeps it
+/// ([STUBRES-TYPESHED-WARN]).
+///
+/// This exists so the CLI can print the status banner while the snapshot
+/// itself resolves on a background thread; a unit test pins it equal to the
+/// selector-produced status so the two can never drift.
+///
+/// # Errors
+///
+/// Returns a [`BundleError`] if the embedded manifest is invalid.
+pub fn bundled_pinned_status(explicit: bool) -> Result<TypeshedStatus, BundleError> {
+    use super::warning::{TypeshedWarning, UnpinnedKind};
+
+    let manifest: BundleManifest = serde_json::from_str(BUNDLE_MANIFEST_JSON)
+        .map_err(|err| BundleError::Manifest(err.to_string()))?;
+    let commit = Oid::from_hex(&manifest.source.commit_sha).map_err(BundleError::BadSha)?;
+    let tree = Oid::from_hex(&manifest.source.tree_sha).map_err(BundleError::BadSha)?;
+    let warnings: &[TypeshedWarning] = if explicit {
+        &[]
+    } else {
+        &[TypeshedWarning::Unpinned(UnpinnedKind::BundledDefault)]
+    };
+    Ok(TypeshedStatus {
+        active_source: SourceKind::Bundled,
+        commit: Some(commit),
+        tree: Some(tree),
+        license_status: LicenseStatus::Approved,
+        license_reference: Some(license_reference(&manifest.source.commit_sha)),
+        warnings: super::source::StatusWarning::list(warnings),
+    })
+}
+
+fn build_bundled_snapshot() -> Result<Snapshot, BundleError> {
+    let manifest: BundleManifest = serde_json::from_str(BUNDLE_MANIFEST_JSON)
+        .map_err(|err| BundleError::Manifest(err.to_string()))?;
+
+    // The bundle has no top-level prefix; entries are `stdlib/…` and `LICENSE`.
+    // Digests and gates are the build invariant ([`verify_bundled_assets`]);
+    // activation only decodes — zero-copy, borrowing STORED entries from the
+    // embedded bytes.
+    let archive = decode_zip_static(
+        BUNDLE_ZIP,
+        ZipLayout::BundledRootless,
+        &DecodeLimits::default(),
+    )
+    .map_err(BundleError::Decode)?;
 
     let commit = Oid::from_hex(&manifest.source.commit_sha).map_err(BundleError::BadSha)?;
     let tree = Oid::from_hex(&manifest.source.tree_sha).map_err(BundleError::BadSha)?;
@@ -187,6 +253,20 @@ fn build_bundled_snapshot() -> Result<Snapshot, BundleError> {
     let vfs = ArchiveVfs::new(identity.uri_component(), archive);
     Snapshot::build(identity, status, vfs, Some(BUNDLE_DISTRIBUTIONS_TSV))
         .map_err(BundleError::Snapshot)
+}
+
+/// The manifest-declared SHA-256 of the embedded bundle ZIP. The precomputed
+/// builtins index binds to this value ([STUBRES-TYPESHED-BUILTINS-INDEX]);
+/// manifest ↔ ZIP equality itself is a build invariant
+/// ([`verify_bundled_assets`]), so no archive hash runs here.
+///
+/// # Errors
+///
+/// Returns a [`BundleError`] if the embedded manifest is invalid.
+pub(crate) fn manifest_bundle_sha() -> Result<String, BundleError> {
+    let manifest: BundleManifest = serde_json::from_str(BUNDLE_MANIFEST_JSON)
+        .map_err(|err| BundleError::Manifest(err.to_string()))?;
+    Ok(manifest.bundle.sha256)
 }
 
 /// The bundle's build-time commit SHA, without decoding the whole archive.
@@ -248,6 +328,44 @@ mod tests {
             snapshot.status.commit.map(|oid| oid.to_hex()).as_deref(),
             Some(bundled_commit_sha())
         );
+    }
+
+    /// [STUBRES-TYPESHED-BASELINE] build invariant: the embedded assets match
+    /// their manifest digests and pass every gate. `include_bytes!` data
+    /// cannot change between process starts, so this holds as a CI-enforced
+    /// invariant of the BUILD — the runtime activation path deliberately does
+    /// not re-verify immutable bytes on every short-lived `check` process.
+    #[test]
+    fn bundled_assets_match_manifest_and_pass_all_gates() {
+        assert_eq!(
+            verify_bundled_assets(),
+            Ok(()),
+            "embedded bundle must match its manifest digests and pass Safety/Shape/License"
+        );
+    }
+
+    /// [STUBRES-TYPESHED-WARN] `bundled_pinned_status` must report EXACTLY
+    /// what the selector produces for a pin of the bundled commit — it exists
+    /// so the banner can print without waiting for the archive decode, and a
+    /// drift here would let the fast banner lie about the resolved source.
+    #[test]
+    #[expect(clippy::expect_used, reason = "test-only: fail loudly on fixtures")]
+    fn manifest_status_matches_selector_status_for_both_pin_policies() {
+        for explicit in [false, true] {
+            let selected = crate::typeshed::selector::select_snapshot(
+                &crate::typeshed::source::TypeshedRequest {
+                    selection: crate::typeshed::source::SourceSelection::Pinned {
+                        commit: Oid::from_hex(bundled_commit_sha()).expect("bundled sha parses"),
+                        explicit,
+                    },
+                    store_path: None,
+                },
+                &crate::typeshed::runtime::RuntimeBackend::new(None),
+            )
+            .expect("bundled pin selects");
+            let fast = bundled_pinned_status(explicit).expect("manifest status builds");
+            assert_eq!(fast, selected.status, "explicit={explicit}");
+        }
     }
 
     #[test]
