@@ -15,8 +15,27 @@
 //! [`Resolution::Ambiguous`], never guessed. Ground assignability delegates
 //! to the single authority, [`InferredType::is_assignable_to`], so the
 //! gradual `Any`/`Unknown` posture ([TYPEINF-TARGET-GRADUAL]) is inherited,
-//! not re-implemented. Nothing here is wired into rule decisions yet — that
-//! is Integration-stage work ([NARROWPLAN-INTEGRATION]).
+//! not re-implemented.
+//!
+//! # No production caller yet — deliberately
+//!
+//! Nothing in this module is consumed by a rule, and that is the order
+//! [NARROWPLAN-CONSTRAINTS] asks for: "Cover constrained/bound `TypeVar`s,
+//! PEP 696 defaults, `ParamSpec`, and `TypeVarTuple` interactions **before**
+//! wiring the solver into rule decisions." The solver plus its 21-case
+//! interaction suite (`tests/generic_constraints_tests.rs`) is that coverage;
+//! the wiring is Integration-stage work ([NARROWPLAN-INTEGRATION]). Wiring it
+//! earlier would put an unproven solver behind live diagnostics, risking the
+//! zero-false-positive conformance gate that outranks everything else.
+//!
+//! **Lint posture — do not "fix" this by narrowing visibility.** The
+//! workspace denies `dead_code`. This module satisfies it because it is
+//! `pub mod generics` re-exported through `bidir`, itself `pub mod bidir` at
+//! the crate root, so every item is reachable from outside the crate and
+//! therefore live. Demoting the module, the re-export, or any item to
+//! `pub(crate)` before the Integration-stage wiring lands would make
+//! `dead_code` fire on a deliberate placeholder — and the fix for THAT is to
+//! wire the rules up, never to add an `#[allow]`/`#[expect]`.
 
 use crate::types::InferredType;
 

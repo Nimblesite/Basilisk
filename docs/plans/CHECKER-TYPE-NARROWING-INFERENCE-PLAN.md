@@ -194,6 +194,19 @@ alternate checking mode. Migrate assignment, return, call, and `assert_type`
 rules incrementally, deleting the replaced local logic in the same change. Add
 spec-ID-linked mutation-resistant tests for each migrated behavior.
 
+**A shared component with no production caller is on-plan, not dead code.**
+Stage 2 deliberately lands each core *and its pinning tests* one change ahead
+of the rules that consume it, because [NARROWPLAN-SUBTYPING] requires parity
+tests to pin current accepted/rejected cases *before* any helper is replaced,
+and [NARROWPLAN-CONSTRAINTS] requires the generic interactions to be covered
+*before* the solver reaches rule decisions. Wiring earlier would put unproven
+inference behind live diagnostics and risk the zero-false-positive gate.
+`bidir::generics::GenericEnv` and `subtyping::SubtypingContext` are in exactly
+that state now; both module headers record it. They are removed from this
+limbo by **wiring them up here**, never by deleting them and never by
+suppressing a lint — each stays `pub` from the crate root, which is what
+keeps the workspace's `dead_code = "deny"` satisfied without an `#[allow]`.
+
 ## Measurable targets {#NARROWPLAN-TARGETS}
 
 The axes on which inference superiority is defined and measured. Each axis has
