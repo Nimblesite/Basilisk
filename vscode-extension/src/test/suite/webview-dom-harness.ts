@@ -96,6 +96,8 @@ export interface ScenarioOutcome {
 export interface HostConfig {
   commit?: string;
   path?: string;
+  /** The `name@sha256:<64-hex>` pin spec ([STUBRES-TYPESHED-PYPI]). */
+  packageSpec?: string;
   storeFolder?: string;
   cacheEnabled?: boolean;
   cacheDir?: string;
@@ -110,12 +112,29 @@ interface HostLifecycle {
   readonly noSourceReason: string | undefined;
 }
 
-// With neither key configured the bundled commit is serving: the source is
+/**
+ * The server describes a source by the VALUE that defines it, in the same
+ * precedence the real projection uses: a folder, else a package pin, else the
+ * commit — and an unset commit IS the bundled one
+ * ([LSPCFGED-TYPESHED], [STUBRES-TYPESHED-PYPI]). A malformed pin is no source
+ * at all and falls through, exactly as the server's `source()` does, so the
+ * editor can never render a half-formed package identity.
+ */
+function packageSource(spec: string): { kind: "PyPIPackage"; name: string; sha256: string } | undefined {
+  const separator = spec.indexOf("@sha256:");
+  if (separator <= 0) { return undefined; }
+  const name = spec.slice(0, separator);
+  const sha256 = spec.slice(separator + "@sha256:".length).toLowerCase();
+  return /^[0-9a-f]{64}$/.test(sha256) ? { kind: "PyPIPackage", name, sha256 } : undefined;
+}
+
+// With no source key configured the bundled commit is serving: the source is
 // still ExactCommit — there is no "Latest" source at all ([LSPCFGED-TYPESHED]).
 function typeshedFor(config: HostConfig, lifecycle: HostLifecycle): TypeshedConfigurationState {
+  const pinned = config.packageSpec === undefined ? undefined : packageSource(config.packageSpec);
   const source = config.path !== undefined
     ? ({ kind: "CustomFolder", path: config.path } as const)
-    : ({ kind: "ExactCommit", commit: config.commit ?? ACTIVE_COMMIT } as const);
+    : pinned ?? ({ kind: "ExactCommit", commit: config.commit ?? ACTIVE_COMMIT } as const);
   return typeshedFixture({
     source,
     storeFolder: config.storeFolder,
@@ -348,6 +367,7 @@ export class ScenarioHost {
     const fields: Record<string, keyof HostConfig> = {
       TypeshedCommit: "commit",
       TypeshedPath: "path",
+      TypeshedPackage: "packageSpec",
       TypeshedStorePath: "storeFolder",
     };
     const field = fields[mutation.key.kind];

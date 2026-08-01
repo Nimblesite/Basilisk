@@ -31,6 +31,10 @@ import { booleanField, rawField, recordArrayField, stringField } from "../../unk
 const CUSTOM_FOLDER = "/workspace/vendor/typeshed";
 const STORE_FOLDER = "/workspace/.basilisk/typeshed-store";
 const NO_SOURCE_REASON = "Pinned commit 1f2e3d4c is not in the local store";
+// A wheel SHA-256 and the pin spec built from it ([STUBRES-TYPESHED-PYPI]).
+const PACKAGE_DIGEST =
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+const PACKAGE_PIN = `micropython-stdlib-stubs@sha256:${PACKAGE_DIGEST}`;
 
 // `DomStep` carries its observations under an index signature, so each one is
 // read field by field below. Every field stays `| undefined` on purpose: the
@@ -156,6 +160,18 @@ const sourceJourneyDriver = String.raw`
       // 5. Custom again, but cancel the folder picker: nothing changes.
       await chooseSource('CustomFolder');
       record('picker-cancelled');
+      // 6. The PyPI package source. Selecting it must reveal an EMPTY pin
+      //    field — the server describes sources by value, so it cannot report
+      //    this source until one exists, and this field is the only way to
+      //    create one.
+      await chooseSource('PyPIPackage');
+      record('package-empty');
+      // 7. A name outside the PEP 508 alphabet is refused in place.
+      await change(el('[data-typeshed-package]'), 'stubs/json@sha256:${PACKAGE_DIGEST}');
+      record('invalid-package');
+      // 8. A valid pin writes it and clears BOTH competing sources at once.
+      await change(el('[data-typeshed-package]'), '${PACKAGE_PIN}');
+      record('package-pinned');
       report({ ok: true, steps });
     } catch (error) { report({ ok: false, reason: String(error), steps }); }
   })();
@@ -401,6 +417,62 @@ function assertCustomFolder(steps: DomStep[] | undefined, intents: readonly Reco
   assert.strictEqual(cancelled.pathPresent, false, "a cancelled picker must not select the folder source");
 }
 
+/**
+ * 6-8: the PyPI package source ([STUBRES-TYPESHED-PYPI]). It is the one source
+ * with no value the editor can supply on the user's behalf — a commit falls
+ * back to the bundled SHA and a folder comes from the picker — so selecting it
+ * must reveal an EMPTY field to type into. If the panel only rendered the
+ * server's described source, this source would be unreachable: the field that
+ * creates a pin would exist only once a pin already existed.
+ */
+function assertPackagePin(steps: DomStep[] | undefined, intents: readonly Record<string, unknown>[]): void {
+  const empty = step(steps, "package-empty");
+  assertSelected(empty, "PyPIPackage");
+  assertNothingLocked(empty);
+  assert.strictEqual(empty.packagePresent, true, "choosing the package source must reveal its field");
+  assert.strictEqual(empty.packageValue, "", "no pin exists yet, so the field starts empty");
+  assert.strictEqual(empty.commitPresent, false, "a package pin and a commit can never coexist");
+  assert.strictEqual(empty.pathPresent, false, "a package pin and a folder can never coexist");
+  assert.strictEqual(
+    empty.advancedPresent,
+    true,
+    "a package resolves from the store, so the store folder stays reachable",
+  );
+  // Merely selecting the source writes NOTHING: a pin that was never typed
+  // must not destroy the configuration the user already had. Proven by what
+  // sits immediately before the pin write — still the cancelled folder pick
+  // from step 5, so neither step 6 nor step 7 posted anything at all.
+  assert.strictEqual(
+    intents[intents.length - 2]?.type,
+    "pickTypeshedFolder",
+    "choosing the package source and typing an invalid pin must post no intent",
+  );
+
+  const invalid = step(steps, "invalid-package");
+  assert.strictEqual(invalid.packageInvalid, "true", "the field must report itself invalid");
+  assert.ok(
+    String(invalid.packageError).includes("letters, digits"),
+    `the error must teach the name alphabet (got "${String(invalid.packageError)}")`,
+  );
+  assertSelected(invalid, "PyPIPackage");
+  assert.ok(
+    !intents.some((intent) => JSON.stringify(intent).includes("stubs/json")),
+    "a name outside the PEP 508 alphabet must never reach the configuration",
+  );
+
+  const pinned = step(steps, "package-pinned");
+  assert.strictEqual(pinned.packageValue, PACKAGE_PIN);
+  assert.strictEqual(pinned.packageError, null, "the error must clear once the pin is valid");
+  assert.strictEqual(pinned.packageInvalid, null);
+  // Exclusivity is enforced by the write that SETS the source, in one atomic
+  // mutation ([LSPCFGED-TYPESHED], [STUBRES-TYPESHED-PYPI]).
+  assert.deepStrictEqual(mutationsOf(intents, intents.length - 1), [
+    { kind: "SetTypeshedSetting", key: { kind: "TypeshedPackage" }, value: PACKAGE_PIN },
+    { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedCommit" } },
+    { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedPath" } },
+  ]);
+}
+
 /** A running Download latest: spinner on that button only, everything else live. */
 function assertDownloadLatest(steps: DomStep[] | undefined, intents: readonly Record<string, unknown>[]): void {
   const ready = step(steps, "ready");
@@ -501,6 +573,7 @@ suite("Configuration editor — Typeshed source in a real webview DOM", () => {
     assert.strictEqual(result.ok, true, `driver failed: ${result.reason ?? "unknown"}`);
     assertPinnedAndCommitEditing(result.steps, intents);
     assertCustomFolder(result.steps, intents);
+    assertPackagePin(result.steps, intents);
     assertEveryPostedIntentDecodes(intents);
   });
 

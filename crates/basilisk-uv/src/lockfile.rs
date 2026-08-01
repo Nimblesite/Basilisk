@@ -163,16 +163,42 @@ pub fn parse_lock_file(path: &Path) -> Result<LockFile, UvError> {
 
 /// Package names `uv.lock` may pin that ship a typeshed-shaped `stdlib/` tree
 /// Basilisk can use as a step-3 source ([STUBRES-TYPESHED-PYPI], issue #312).
-/// Recognised by normalised name (case- and `-`/`_`-insensitive). Curated so a
+/// Compared after PEP 503 normalisation, so every spelling of a name is
+/// recognised. Entries MUST already be normalised — asserted by
+/// `recognised_typeshed_distributions_are_already_normalised`. Curated so a
 /// random dependency never silently replaces the stdlib source.
 const TYPESHED_DISTRIBUTION_PACKAGES: &[&str] = &["micropython-stdlib-stubs"];
 
+/// Normalise a distribution name the way the index does
+/// ([PEP 503](https://peps.python.org/pep-0503/#normalized-names)): fold every
+/// run of `-`, `_`, or `.` into a single `-`, then lower-case. Names that
+/// normalise alike address the *same* project, so this — not a case fold or a
+/// single-character swap — is what makes the comparison correct: `uv.lock` may
+/// record `MicroPython_Stdlib_Stubs` or `micropython.stdlib.stubs` for the
+/// distribution published as `micropython-stdlib-stubs`.
+fn normalise_distribution_name(name: &str) -> String {
+    let mut normalised = String::with_capacity(name.len());
+    let mut previous_was_separator = false;
+    for character in name.chars() {
+        let is_separator = matches!(character, '-' | '_' | '.');
+        if is_separator {
+            if !previous_was_separator {
+                normalised.push('-');
+            }
+        } else {
+            normalised.extend(character.to_lowercase());
+        }
+        previous_was_separator = is_separator;
+    }
+    normalised
+}
+
 /// Whether a locked package name is a recognised typeshed distribution.
 fn is_typeshed_distribution(name: &str) -> bool {
-    let normalised = name.to_lowercase().replace('-', "_");
+    let normalised = normalise_distribution_name(name);
     TYPESHED_DISTRIBUTION_PACKAGES
         .iter()
-        .any(|recognised| recognised.to_lowercase().replace('-', "_") == normalised)
+        .any(|recognised| *recognised == normalised)
 }
 
 /// Strip the `sha256:` prefix from a `uv.lock` wheel `hash` and return the
@@ -182,32 +208,43 @@ fn wheel_sha256_hex(hash: &str) -> Option<&str> {
     (hex.len() == 64 && hex.as_bytes().iter().all(u8::is_ascii_hexdigit)).then_some(hex)
 }
 
-/// If `uv.lock` pins **exactly one** recognised typeshed-distribution package,
-/// return its name and the 64-hex SHA-256 of its (first hashed) wheel
-/// ([STUBRES-TYPESHED-PYPI], issue #312). Ambiguous (more than one candidate)
-/// or absent → `None`: no auto-pin, the bundled default stands with
-/// `typeshed_source_unpinned`.
+/// If `uv.lock` pins **exactly one** recognised typeshed-distribution package
+/// at **exactly one** wheel digest, return its name and that 64-hex SHA-256
+/// ([STUBRES-TYPESHED-PYPI], issue #312). Anything ambiguous — more than one
+/// candidate package, or one package whose wheels carry differing digests —
+/// yields `None`, as does a lock file with no candidate: no auto-pin, and the
+/// bundled default stands with `typeshed_source_unpinned`.
+///
+/// Ambiguity is refused rather than resolved by picking the first match,
+/// because nothing in a lock file distinguishes one wheel as *the* stdlib
+/// source; silently pinning an arbitrary one would make the checked stdlib
+/// depend on lock-file ordering. Stub distributions are pure Python and
+/// publish a single `py3-none-any` wheel, so the unambiguous case is the
+/// ordinary one.
 ///
 /// This is pure over a parsed lock file — no disk I/O — so it is trivially
-/// testable. A package with no hashed wheel does not count.
+/// testable. A package with no hashed wheel is not a candidate.
 #[must_use]
 pub fn find_typeshed_package_pin(lock: &LockFile) -> Option<(String, String)> {
     let mut found: Option<(String, String)> = None;
-    for pkg in &lock.packages {
-        if !is_typeshed_distribution(&pkg.name) {
+    for package in &lock.packages {
+        if !is_typeshed_distribution(&package.name) {
             continue;
         }
-        let Some(hex) = pkg
+        let mut digests = package
             .wheels
             .iter()
-            .find_map(|wheel| wheel.hash.as_deref().and_then(wheel_sha256_hex))
-        else {
+            .filter_map(|wheel| wheel.hash.as_deref().and_then(wheel_sha256_hex));
+        let Some(hex) = digests.next() else {
             continue;
         };
-        if found.is_some() {
+        // Hex is case-insensitive, so the same artifact spelled in a different
+        // case is not a second digest. The pin is canonicalised to lower case
+        // because the store compares it against a lower-case re-hash.
+        if digests.any(|other| !other.eq_ignore_ascii_case(hex)) || found.is_some() {
             return None;
         }
-        found = Some((pkg.name.clone(), hex.to_owned()));
+        found = Some((package.name.clone(), hex.to_ascii_lowercase()));
     }
     found
 }
@@ -530,6 +567,97 @@ wheels = [
 "#;
         let lock: LockFile = toml::from_str(content).unwrap();
         assert_eq!(find_typeshed_package_pin(&lock), None);
+    }
+
+    // [STUBRES-TYPESHED-PYPI]: PEP 503 says a run of `-`, `_`, or `.` all
+    // normalise to the same project, so every spelling `uv.lock` may record for
+    // the recognised distribution must be recognised — and a name that merely
+    // looks similar must not be.
+    #[test]
+    fn typeshed_distributions_are_matched_by_pep_503_normalisation() {
+        for spelling in [
+            "micropython-stdlib-stubs",
+            "MicroPython_Stdlib_Stubs",
+            "micropython.stdlib.stubs",
+            "MICROPYTHON--STDLIB__STUBS",
+            "micropython_stdlib.stubs",
+        ] {
+            assert!(
+                is_typeshed_distribution(spelling),
+                "`{spelling}` normalises to the recognised distribution and must match"
+            );
+        }
+        for other in [
+            "micropythonstdlibstubs",
+            "micropython-stdlib-stub",
+            "types-micropython-stdlib-stubs",
+            "requests",
+        ] {
+            assert!(
+                !is_typeshed_distribution(other),
+                "`{other}` is a different project and must not match"
+            );
+        }
+    }
+
+    /// The recognised list is compared against normalised names, so an entry
+    /// that is not itself already normalised could never match anything. This
+    /// keeps that invariant true as the list grows.
+    #[test]
+    fn recognised_typeshed_distributions_are_already_normalised() {
+        for recognised in TYPESHED_DISTRIBUTION_PACKAGES {
+            assert_eq!(
+                &normalise_distribution_name(recognised),
+                recognised,
+                "`{recognised}` must be stored in PEP 503 normalised form or it can never match"
+            );
+        }
+    }
+
+    // [STUBRES-TYPESHED-PYPI]: one candidate package whose wheels carry
+    // DIFFERENT digests is ambiguous in exactly the way two candidate packages
+    // are — nothing marks one as the stdlib source, so pinning either would
+    // make the checked stdlib depend on lock-file ordering.
+    #[test]
+    fn find_typeshed_package_pin_is_none_when_one_package_has_differing_wheel_digests() {
+        let content = r#"
+version = 1
+
+[[package]]
+name = "micropython-stdlib-stubs"
+version = "1.0.0"
+wheels = [
+    { url = "https://files.pythonhosted.org/a.whl", hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    { url = "https://files.pythonhosted.org/b.whl", hash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+]
+"#;
+        let lock: LockFile = toml::from_str(content).unwrap();
+        assert_eq!(find_typeshed_package_pin(&lock), None);
+    }
+
+    // Repeating the SAME digest is not ambiguous — it names one artifact, so
+    // the pin resolves. This keeps the ambiguity rule from over-rejecting.
+    #[test]
+    fn find_typeshed_package_pin_accepts_repeated_identical_wheel_digests() {
+        let content = r#"
+version = 1
+
+[[package]]
+name = "micropython-stdlib-stubs"
+version = "1.0.0"
+wheels = [
+    { url = "https://files.pythonhosted.org/a.whl", hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    { url = "https://files.pythonhosted.org/b.whl", hash = "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" },
+]
+"#;
+        let lock: LockFile = toml::from_str(content).unwrap();
+        assert_eq!(
+            find_typeshed_package_pin(&lock),
+            Some((
+                "micropython-stdlib-stubs".to_owned(),
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
+            ))
+        );
     }
 
     // A recognised package whose wheel has no hash (or a malformed hash) does

@@ -164,6 +164,16 @@ pub fn decode_zip(
 /// the authoritative [`decode_zip`] path (the `zip` crate), which either
 /// decodes it correctly (owned) or reports the precise error.
 ///
+/// The walk reads **only the trailing central directory**, never a LOCAL
+/// header ([STUBRES-TYPESHED-BASELINE]). That is a cold-start requirement, not
+/// a style choice: LOCAL headers sit immediately before their own data, so
+/// probing all ~750 of them first-touches EVERY page of the 3 MB embedded
+/// constant, and on a code-signed binary each first touch also pays kernel
+/// signature validation of that page — ~1.6 ms on every `basilisk check`, to
+/// locate stub bodies a short run never opens. Data offsets are instead
+/// derived arithmetically from the central directory and proven by
+/// [`contiguous_data_offsets`].
+///
 /// The embedded archive's integrity is a build invariant: its digest and
 /// gates run under test via the owned [`decode_zip`] path (see
 /// `verify_bundled_assets`), and the static/owned decoders are pinned equal
@@ -226,70 +236,161 @@ fn stored_entries_borrowed(bytes: &'static [u8], limits: &DecodeLimits) -> Optio
     if entry_count > limits.max_entries {
         return None;
     }
-    let mut raw = Vec::with_capacity(entry_count);
+    // Exactly one LOCAL header is inspected — the archive's first, at offset 0,
+    // confirming the container really opens with one. Every other entry's data
+    // offset is proven by the tiling chain instead of probed, which is what
+    // keeps this decode off pages nothing has asked to read.
+    if read_u32(bytes, 0)? != LOCAL_SIGNATURE {
+        return None;
+    }
+    let records = read_central_directory(bytes, directory_offset, entry_count)?;
+    let starts = contiguous_data_offsets(&records, directory_offset)?;
+    let mut raw = Vec::with_capacity(records.len());
     let mut total: u64 = 0;
+    for (record, start) in records.iter().zip(starts) {
+        if record.is_directory() {
+            continue;
+        }
+        let size = u64::from(record.size);
+        if size > limits.max_entry_bytes {
+            return None;
+        }
+        total = total.checked_add(size)?;
+        if total > limits.max_total_bytes {
+            return None;
+        }
+        let data = bytes.get(start..start.checked_add(usize::try_from(size).ok()?)?)?;
+        raw.push((record.name.to_owned(), record.mode, Cow::Borrowed(data)));
+    }
+    Some(raw)
+}
+
+/// One central-directory record, read without touching the entry's own data.
+struct CentralRecord {
+    /// The entry name exactly as stored (still layout-prefixed).
+    name: &'static str,
+    /// Git file mode derived from the external attributes.
+    mode: FileMode,
+    /// Offset of this entry's LOCAL header from the start of the archive.
+    local_offset: u32,
+    /// STORED size, which equals the uncompressed size.
+    size: u32,
+}
+
+impl CentralRecord {
+    /// Whether the record names a directory rather than a file.
+    fn is_directory(&self) -> bool {
+        self.name.ends_with('/')
+    }
+
+    /// Where this entry's data starts if its LOCAL header repeats the central
+    /// record's name and carries no extra field — the layout
+    /// [`contiguous_data_offsets`] proves before any offset is trusted.
+    fn derived_data_start(&self) -> Option<usize> {
+        usize::try_from(self.local_offset)
+            .ok()?
+            .checked_add(LOCAL_LEN)?
+            .checked_add(self.name.len())
+    }
+
+    /// The first byte after this entry's derived data.
+    fn derived_data_end(&self) -> Option<usize> {
+        self.derived_data_start()?
+            .checked_add(usize::try_from(self.size).ok()?)
+    }
+}
+
+/// Walk the trailing central directory, one record per entry in directory
+/// order. Reads nothing outside the directory itself.
+fn read_central_directory(
+    bytes: &'static [u8],
+    directory_offset: u32,
+    entry_count: usize,
+) -> Option<Vec<CentralRecord>> {
+    let mut records = Vec::with_capacity(entry_count);
     let mut at = usize::try_from(directory_offset).ok()?;
     for _ in 0..entry_count {
-        if read_u32(bytes, at)? != CENTRAL_SIGNATURE {
-            return None;
-        }
-        let made_by_os = read_u16(bytes, at.checked_add(4)?)? >> 8;
-        let flags = read_u16(bytes, at.checked_add(8)?)?;
-        let method = read_u16(bytes, at.checked_add(10)?)?;
-        let compressed = read_u32(bytes, at.checked_add(20)?)?;
-        let uncompressed = read_u32(bytes, at.checked_add(24)?)?;
-        let name_len = usize::from(read_u16(bytes, at.checked_add(28)?)?);
-        let extra_len = usize::from(read_u16(bytes, at.checked_add(30)?)?);
-        let comment_len = usize::from(read_u16(bytes, at.checked_add(32)?)?);
-        let external = read_u32(bytes, at.checked_add(38)?)?;
-        let local_offset = read_u32(bytes, at.checked_add(42)?)?;
-        let name_start = at.checked_add(CENTRAL_LEN)?;
-        let name =
-            std::str::from_utf8(bytes.get(name_start..name_start.checked_add(name_len)?)?).ok()?;
-        // Encrypted, compressed, or zip64-marked entries: authoritative path.
-        if flags & 0x1 != 0
-            || method != 0
-            || compressed != uncompressed
-            || compressed == u32::MAX
-            || local_offset == u32::MAX
-        {
-            return None;
-        }
-        if !name.ends_with('/') {
-            let size = u64::from(compressed);
-            if size > limits.max_entry_bytes {
-                return None;
-            }
-            total = total.checked_add(size)?;
-            if total > limits.max_total_bytes {
-                return None;
-            }
-            // Data starts after the LOCAL header, whose name/extra lengths can
-            // differ from the central directory's.
-            let local = usize::try_from(local_offset).ok()?;
-            if read_u32(bytes, local)? != LOCAL_SIGNATURE {
-                return None;
-            }
-            let local_name = usize::from(read_u16(bytes, local.checked_add(26)?)?);
-            let local_extra = usize::from(read_u16(bytes, local.checked_add(28)?)?);
-            let start = local
-                .checked_add(LOCAL_LEN)?
-                .checked_add(local_name)?
-                .checked_add(local_extra)?;
-            let data = bytes.get(start..start.checked_add(usize::try_from(size).ok()?)?)?;
-            // Unix modes live in the external attributes' high half only when
-            // the entry was made on unix (`made_by` OS 3) — same rule as the
-            // `zip` crate's `unix_mode()`.
-            let mode = mode_from_unix((made_by_os == 3).then_some(external >> 16));
-            raw.push((name.to_owned(), mode, Cow::Borrowed(data)));
-        }
+        let (record, name_len, extra_len, comment_len) = read_central_record(bytes, at)?;
+        records.push(record);
         at = at
             .checked_add(CENTRAL_LEN)?
             .checked_add(name_len)?
             .checked_add(extra_len)?
             .checked_add(comment_len)?;
     }
-    Some(raw)
+    Some(records)
+}
+
+/// Decode the central-directory record at `at`, plus the variable-length field
+/// sizes the caller needs to advance to the next one.
+fn read_central_record(
+    bytes: &'static [u8],
+    at: usize,
+) -> Option<(CentralRecord, usize, usize, usize)> {
+    if read_u32(bytes, at)? != CENTRAL_SIGNATURE {
+        return None;
+    }
+    let made_by_os = read_u16(bytes, at.checked_add(4)?)? >> 8;
+    let flags = read_u16(bytes, at.checked_add(8)?)?;
+    let method = read_u16(bytes, at.checked_add(10)?)?;
+    let compressed = read_u32(bytes, at.checked_add(20)?)?;
+    let uncompressed = read_u32(bytes, at.checked_add(24)?)?;
+    let name_len = usize::from(read_u16(bytes, at.checked_add(28)?)?);
+    let extra_len = usize::from(read_u16(bytes, at.checked_add(30)?)?);
+    let comment_len = usize::from(read_u16(bytes, at.checked_add(32)?)?);
+    let external = read_u32(bytes, at.checked_add(38)?)?;
+    let local_offset = read_u32(bytes, at.checked_add(42)?)?;
+    let name_start = at.checked_add(CENTRAL_LEN)?;
+    let name =
+        std::str::from_utf8(bytes.get(name_start..name_start.checked_add(name_len)?)?).ok()?;
+    // Encrypted (bit 0), streamed behind a data descriptor (bit 3), compressed,
+    // or zip64-marked entries: hand the whole archive to the authoritative path.
+    if flags & 0x9 != 0
+        || method != 0
+        || compressed != uncompressed
+        || compressed == u32::MAX
+        || local_offset == u32::MAX
+    {
+        return None;
+    }
+    let record = CentralRecord {
+        name,
+        // Unix modes live in the external attributes' high half only when the
+        // entry was made on unix (`made_by` OS 3) — same rule as the `zip`
+        // crate's `unix_mode()`.
+        mode: mode_from_unix((made_by_os == 3).then_some(external >> 16)),
+        local_offset,
+        size: compressed,
+    };
+    Some((record, name_len, extra_len, comment_len))
+}
+
+/// Prove — from the central directory alone — that every entry's data begins
+/// exactly where [`CentralRecord::derived_data_start`] says, and return those
+/// offsets in record order.
+///
+/// The proof is that the entries tile the entire pre-directory region with no
+/// gaps: the first LOCAL header sits at offset 0, each entry's derived data end
+/// is precisely the next entry's LOCAL header, and the last one ends precisely
+/// at the central directory. A LOCAL extra field, or a LOCAL name disagreeing
+/// with the central record, would push that entry's real data past its
+/// successor's header — so no layout satisfies the chain except the derived
+/// one. `None` means the archive is arranged some other way, and the
+/// authoritative decoder takes over rather than this guessing at an offset.
+fn contiguous_data_offsets(records: &[CentralRecord], directory_offset: u32) -> Option<Vec<usize>> {
+    let mut order: Vec<&CentralRecord> = records.iter().collect();
+    order.sort_by_key(|record| record.local_offset);
+    let mut cursor: usize = 0;
+    for record in order {
+        if usize::try_from(record.local_offset).ok()? != cursor {
+            return None;
+        }
+        cursor = record.derived_data_end()?;
+    }
+    if cursor != usize::try_from(directory_offset).ok()? {
+        return None;
+    }
+    records.iter().map(CentralRecord::derived_data_start).collect()
 }
 
 /// Strip the layout prefix and build the final [`Archive`].

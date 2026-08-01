@@ -115,7 +115,21 @@ result nor licenses re-baselining to slower numbers.
       analogue of `is_full_commit_sha` for the package pin.
 - [x] `TypeshedActiveSource::PyPIPackage` + `TypeshedSource::PyPIPackage`.
 - [x] Config-editor allowlists wired (`TypeshedConfigKey`, `TypeshedSettingKey`, mutation validation, `typeshed_policy_changed`, snapshot projection).
-- [x] Tests: selector pin suppresses advisories; config merge/spec-shape; mutation 3-way exclusion.
+- [x] The package source is **reachable** in the configuration editor. It is the only source with no
+      value the editor can supply on the user's behalf — a commit falls back to the bundled SHA and a
+      folder comes from the picker — and the server describes sources by their *value*, so until a pin
+      exists the snapshot cannot report `PyPIPackage`. Selecting it therefore reveals an empty pin field
+      from client presentation state (`pendingPackageEntry`, the same class of state as `advancedOpen`);
+      without that, the field that creates a pin would only exist once a pin already existed.
+- [x] Selecting the package source is **non-destructive**: it writes nothing. Exclusivity is enforced by
+      the write that SETS a source clearing the other two keys in one atomic mutation, never by a
+      speculative pre-clear — the same reasoning the cancellable folder picker already used.
+- [x] The webview's inline pin pattern matches the server's grammar (PEP 508 name + 64-hex), so a bad
+      name is explained in the field instead of round-tripping to a server rejection.
+- [x] Tests: selector pin suppresses advisories; config merge/spec-shape; mutation 3-way exclusion;
+      the editor rejection carries the parser's specific reason (shape / digest / name), not one generic
+      sentence; a real-webview DOM journey selects the package source, is refused in place on a
+      non-PEP 508 name, and writes the valid pin with both competing keys cleared in one mutation.
 
 ### S2 — Offline verification backend · `TYPESHEDPYPI-S2`
 
@@ -125,6 +139,10 @@ result nor licenses re-baselining to slower numbers.
       as a path component. Documented normatively in
       [§STUBRES-TYPESHED-STORE](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-STORE).
 - [x] `RuntimeBackend::load_pypi_package`: read stored wheel, SHA-256-hash it, assert == pin.
+- [x] The digest is validated as canonical 64-hex **before** it is joined onto a path, on the read side as
+      well as the write side. Validating afterwards still refuses the snapshot, but only after a
+      caller-supplied component had already been used to stat and read a file that may sit outside the
+      store; a traversal digest now fails outright and touches nothing.
 - [x] Build snapshot from the wheel's `stdlib/` via the archive VFS; identity `PyPIPackage`; no advisories.
 - [x] Missing → `BackendError::Missing`; hash mismatch → `BackendError::Corrupt`; both surface as `NO SOURCE`.
 - [x] **Open item (resolved for the contract):** the Shape gate IS the guard — a synthetic wheel shipping `stdlib/` + root `LICENSE` passes it (`fake_wheel()` in `testing.rs`, exercised end-to-end by the S3 round-trip test). A real wheel whose layout differs would be rejected at download time and at read time; a layout *mapping* is **not** assumed — if the target package ships a different tree, that is an integration-time follow-up, not an S2 gap.
@@ -147,7 +165,19 @@ result nor licenses re-baselining to slower numbers.
 - [x] Extend `basilisk-uv` lockfile parser to capture `wheels[].hash` (`LockWheel { url, hash, extra }` on `LockPackage`; `extra` no longer swallows it).
 - [x] When `typeshed-package` is unset, if `uv.lock` pins exactly one recognised typeshed-distribution package, auto-resolve from its wheel hash (`find_typeshed_package_pin` + `resolve_typeshed_package_pin` in `lockfile.rs`; `apply_uv_typeshed_override` in `basilisk-lsp::config`, called from `load_cli_workspace_config` and MCP `status_for_workspace`).
 - [x] Ambiguous or absent → no auto-pin (bundled default + `typeshed_source_unpinned`).
-- [x] Tests: `uv.lock` pinning the package → auto-pinned, no advisory; two candidates → no auto-pin; explicit source wins; no `uv.lock` → no-op (`lockfile.rs` × 5, `config.rs` × 4).
+- [x] Candidate matching uses [PEP 503](https://peps.python.org/pep-0503/#normalized-names) normalisation
+      (every run of `-`, `_`, `.` folds to one `-`, then lower-case), so each spelling `uv.lock` may record
+      for the recognised distribution resolves and a merely similar name does not. The recognised list is
+      asserted to be stored already-normalised, or an entry could never match.
+- [x] Ambiguity is refused, not resolved: one candidate package whose wheels carry **differing** digests
+      yields no auto-pin, exactly as two candidate packages do — nothing in a lock file marks one wheel as
+      the stdlib source, so pinning the first would make the checked stdlib depend on file ordering. The
+      same digest repeated in a different case is one artifact, not two, and the pin is canonicalised to
+      lower case because the store compares it against a lower-case re-hash.
+- [x] Tests: `uv.lock` pinning the package → auto-pinned, no advisory; two candidates → no auto-pin; one
+      candidate with differing wheel digests → no auto-pin; repeated identical digests still resolve; every
+      PEP 503 spelling matches and near-misses do not; explicit source wins; no `uv.lock` → no-op
+      (`lockfile.rs` × 9, `config.rs` × 4).
 
 ### Cross-cutting gates
 

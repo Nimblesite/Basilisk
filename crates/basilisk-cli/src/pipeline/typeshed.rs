@@ -128,15 +128,19 @@ fn deferred_bundled_activation(
     let thread_request = request.clone();
     let thread_target = target.clone();
     let loader = std::thread::spawn(move || {
+        crate::tmark!("loader thread start");
         let manager = basilisk_stubs::typeshed::runtime::production_manager(thread_request);
         let snapshot = manager.snapshot().map_err(|error| error.to_string())?;
+        crate::tmark!("loader snapshot ready");
         basilisk_checker::imports::prewarm_builtin_classes(&snapshot, thread_target.as_ref());
+        crate::tmark!("loader prewarm done");
         Ok(snapshot)
     });
     Some(basilisk_checker::imports::ActiveTypeshed::deferred(
         identity,
         target,
         move || {
+            crate::tmark!("loader join begin");
             loader
                 .join()
                 .unwrap_or_else(|_panic| Err("typeshed loader thread panicked".to_owned()))

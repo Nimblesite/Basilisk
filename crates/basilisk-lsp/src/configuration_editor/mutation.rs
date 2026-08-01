@@ -195,15 +195,13 @@ fn validate_typeshed_value(key: TypeshedSettingKey, value: &str) -> LspResult<St
             key,
             "typeshed-commit must be a full 40-character hexadecimal SHA",
         )),
-        TypeshedSettingKey::TypeshedPackage
-            if basilisk_config::parse_typeshed_package(value).is_ok() =>
-        {
-            Ok(value.to_owned())
-        }
-        TypeshedSettingKey::TypeshedPackage => Err(invalid_typeshed_setting(
-            key,
-            "typeshed-package must be of the form `name@sha256:<64-hex>`",
-        )),
+        // The pin parser already distinguishes *why* a spec is bad — wrong
+        // shape, bad digest, non-PEP 508 name — so its reason is surfaced
+        // verbatim rather than flattened to one generic sentence. A rejection
+        // that does not say what is wrong cannot be acted on.
+        TypeshedSettingKey::TypeshedPackage => basilisk_config::parse_typeshed_package(value)
+            .map(|_parsed| value.to_owned())
+            .map_err(|reason| invalid_typeshed_setting(key, &reason)),
         TypeshedSettingKey::TypeshedPath | TypeshedSettingKey::TypeshedStorePath
             if !value.trim().is_empty() =>
         {

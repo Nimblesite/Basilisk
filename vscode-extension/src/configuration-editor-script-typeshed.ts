@@ -29,9 +29,25 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
     // download's spinner lands on the button that started it and on nothing
     // else ([LSPCFGED-TYPESHED-DOWNLOAD]).
     let pendingDownload;
+    // A package pin is the ONE source with no value the editor can supply for
+    // the user: a commit falls back to the bundled SHA and a folder comes from
+    // the picker, but a wheel digest can only be typed. The server describes
+    // sources by their VALUE, so until a pin exists the snapshot cannot report
+    // 'PyPIPackage' — and without this, choosing it would render the pinned
+    // source straight back and the input to type into would never appear.
+    // Presentation only, exactly like 'advancedOpen': it selects which empty
+    // field to show and never stands in for server state
+    // ([LSPCFGED-TYPESHED], [STUBRES-TYPESHED-PYPI]).
+    let pendingPackageEntry = false;
 
     function typeshedState() { return snapshot.typeshed; }
-    function typeshedSourceMode() { return kind(typeshedState().source, 'ExactCommit'); }
+    function serverSourceMode() { return kind(typeshedState().source, 'ExactCommit'); }
+    function typeshedSourceMode() {
+      // A pin the server already knows about always wins: the moment a real
+      // package source lands, the pending flag is spent.
+      if (serverSourceMode() === 'PyPIPackage') { pendingPackageEntry = false; return 'PyPIPackage'; }
+      return pendingPackageEntry ? 'PyPIPackage' : serverSourceMode();
+    }
     function typeshedLifecycle() { return kind(typeshedState().status.lifecycle, 'Ready'); }
     function typeshedDownloading() { return typeshedLifecycle() === 'Downloading'; }
     function shortCommit(commit) { return commit ? commit.slice(0, 12) : ''; }
@@ -104,7 +120,10 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
     // pin. No other source's field exists in the DOM ([LSPCFGED-TYPESHED]).
     function renderSourceValue(target) {
       const source = typeshedState().source;
-      const mode = kind(source, 'ExactCommit');
+      // typeshedSourceMode(), not the raw snapshot: while a package pin is
+      // being entered there is no server-side package source yet, and the
+      // empty field is the only way to create one.
+      const mode = typeshedSourceMode();
       if (mode === 'CustomFolder') { target.append(folderField('TypeshedPath', 'Folder', source.path)); return; }
       if (mode === 'PyPIPackage') { target.append(packageField(source.name, source.sha256)); return; }
       target.append(commitField(source.commit));
@@ -256,32 +275,40 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
       );
       restoreTypeshedFocus(focus);
     }
-    // The three sources are mutually exclusive: selecting one clears the other
-    // two keys, so no combination of source values can ever be written
+    // The three sources are mutually exclusive, and exclusivity is enforced by
+    // the write that SETS a source clearing the other two keys in the same
+    // atomic mutation — never by a speculative pre-clear
     // ([LSPCFGED-TYPESHED], [STUBRES-TYPESHED-PYPI]). Nothing locks while the
     // mutation round-trips — every control re-renders from the snapshot.
-    function selectSource(mode) {
-      const clears = {
-        ExactCommit: ['TypeshedPath', 'TypeshedPackage'],
-        PyPIPackage: ['TypeshedCommit', 'TypeshedPath'],
-      };
-      const others = clears[mode] || [];
-      postPreview(others.map(typeshedRemove));
-    }
     function chooseTypeshedSource(mode) {
       if (mode === typeshedSourceMode()) return;
       if (mode === 'CustomFolder') {
-        // Deliberately NO pre-clear here: the folder picker is cancellable, so
-        // clearing the competing keys up front would destroy the user's pin
-        // even when they back out. The host's pickTypeshedFolder writes the
-        // folder and clears the other two source keys in ONE atomic mutation,
-        // and posts nothing at all when cancelled ([LSPCFGED-TYPESHED]).
+        // No pre-clear: the folder picker is cancellable, so clearing the
+        // competing keys up front would destroy the user's pin even when they
+        // back out. The host's pickTypeshedFolder writes the folder and clears
+        // the other two source keys in ONE atomic mutation, and posts nothing
+        // at all when cancelled ([LSPCFGED-TYPESHED]).
+        pendingPackageEntry = false;
         vscode.postMessage({ type: 'pickTypeshedFolder', key: 'TypeshedPath' });
         announce('Switching to a custom folder');
         return;
       }
-      selectSource(mode);
-      if (mode === 'PyPIPackage') { announce('Switching to a PyPI package pin'); return; }
+      if (mode === 'PyPIPackage') {
+        // Same reasoning as the folder picker, and for the same reason it is
+        // not a pre-clear: a pin does not exist until it is typed, so this only
+        // reveals the empty field. 'packageEdited' performs the exclusive write
+        // once the pin is valid; abandoning the field leaves the configuration
+        // exactly as it was.
+        pendingPackageEntry = true;
+        renderTypeshedControls();
+        announce('Switching to a PyPI package pin');
+        return;
+      }
+      // The pinned commit is the one source with a value the editor can always
+      // supply — an unset pin IS the bundled commit — so it is selectable on
+      // its own, and selecting it drops the two sources that would outrank it.
+      pendingPackageEntry = false;
+      postPreview([typeshedRemove('TypeshedPath'), typeshedRemove('TypeshedPackage')]);
       announce('Using the pinned standard-library commit');
     }
     // An invalid SHA is never sent: it is rejected in place, where the user
@@ -305,12 +332,21 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
     }
     // An invalid package pin is rejected in place, mirroring 'commitEdited'.
     // Setting a package atomically clears the commit and folder pins.
-    const PACKAGE_PATTERN = /^[^@]+@sha256:[0-9a-f]{64}$/i;
+    // The name half is the PEP 508 grammar the server's single parser enforces
+    // ([STUBRES-TYPESHED-PYPI]) — alphanumeric at both ends, '.', '_' or '-'
+    // between. Matching it here means the field explains the problem in place
+    // instead of shipping a value the server will only bounce back; the server
+    // remains the authority, this is presentation.
+    const PACKAGE_PATTERN = /^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?@sha256:[0-9a-f]{64}$/i;
     function packageEdited(input) {
+      // Typing in this field keeps the user in it. Without this, emptying the
+      // box would drop the package source and snap the editor back to the
+      // pinned commit mid-edit.
+      pendingPackageEntry = true;
       const value = input.value.trim();
       const error = byId('typeshed-package-error');
       if (value !== '' && !PACKAGE_PATTERN.test(value)) {
-        error.textContent = 'Enter name@sha256:<64-hex> (0-9, a-f).';
+        error.textContent = 'Enter name@sha256:<64-hex>. Name: letters, digits, . _ - (letter or digit at each end).';
         error.hidden = false;
         input.setAttribute('aria-invalid', 'true');
         announce('Invalid package pin');

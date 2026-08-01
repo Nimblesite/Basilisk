@@ -228,7 +228,21 @@ fn handle_version(args: &[String]) -> bool {
     }
 }
 
+pub(crate) static TSTART: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+/// Temporary phase timer.
+#[macro_export]
+macro_rules! tmark {
+    ($label:expr) => {
+        if std::env::var_os("BSK_TMARK").is_some() {
+            let t = crate::TSTART.get_or_init(std::time::Instant::now);
+            eprintln!("  [T] {:>32} {:>8.3} ms", $label, t.elapsed().as_secs_f64() * 1e3);
+        }
+    };
+}
+
 fn main() -> ExitCode {
+    let _ = TSTART.get_or_init(std::time::Instant::now);
+    tmark!("main entry");
     let args: Vec<String> = std::env::args().skip(1).collect();
     if handle_version(&args) {
         return ExitCode::SUCCESS;

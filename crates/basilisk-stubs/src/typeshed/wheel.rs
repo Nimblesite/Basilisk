@@ -116,9 +116,17 @@ pub fn write_wheel(store_root: &Path, sha256: &str, wheel: &[u8]) -> Result<(), 
 /// # Errors
 ///
 /// Returns [`WheelError::Missing`] when no entry exists, and
-/// [`WheelError::Corrupt`] on any SHA-256 mismatch, decode failure, or gate
-/// violation.
+/// [`WheelError::Corrupt`] on a malformed digest, any SHA-256 mismatch, decode
+/// failure, or gate violation.
 pub fn read_snapshot(store_root: &Path, name: &str, sha256: &str) -> Result<Snapshot, WheelError> {
+    // The digest is the entry directory NAME, so it is validated before it is
+    // ever joined onto a path — exactly as [`write_wheel`] does. Checking it
+    // afterwards would still refuse the snapshot, but only after a
+    // caller-supplied component had already been used to stat and read a file
+    // that may sit outside the store entirely.
+    if !is_hex_sha256(sha256) {
+        return Err(WheelError::Corrupt);
+    }
     let dir = entry_dir(store_root, sha256);
     if !dir.is_dir() {
         return Err(WheelError::Missing);
@@ -126,7 +134,7 @@ pub fn read_snapshot(store_root: &Path, name: &str, sha256: &str) -> Result<Snap
     let bytes = fs::read(dir.join(WHEEL_FILE)).map_err(|_error| WheelError::Missing)?;
     // Step 1: re-hash the stored wheel and require the pinned digest. This is
     // the content gate for a PyPI source — never waivable.
-    if !is_hex_sha256(sha256) || sha256_hex(&bytes) != sha256 {
+    if sha256_hex(&bytes) != sha256 {
         return Err(WheelError::Corrupt);
     }
     // Step 2: decode the verified bytes into the in-memory archive model. A
@@ -313,6 +321,37 @@ mod tests {
             read_snapshot(root.path(), PACKAGE_NAME, OTHER_SHA).err(),
             Some(WheelError::Missing),
         );
+    }
+
+    /// A digest that is not a canonical 64-hex SHA-256 is refused **before** it
+    /// is joined onto a path, so no caller-supplied component can be used to
+    /// stat or read a file outside the store — the same ordering `write_wheel`
+    /// uses ([STUBRES-TYPESHED-STORE]).
+    #[test]
+    fn a_malformed_digest_never_reaches_the_filesystem() {
+        let root = tempfile::tempdir().expect("tempdir");
+        // Plant a readable wheel one level ABOVE the store, the file a
+        // traversing digest would reach if the path were built first.
+        let outside = root.path().join("outside");
+        fs::create_dir_all(&outside).expect("outside dir");
+        fs::write(outside.join(WHEEL_FILE), fixture_wheel()).expect("write wheel");
+        let store = root.path().join("store");
+        fs::create_dir_all(&store).expect("store dir");
+        for digest in [
+            "../outside",
+            "..",
+            "",
+            // Right alphabet, wrong length.
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b8",
+            // Right length, wrong alphabet.
+            "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        ] {
+            assert_eq!(
+                read_snapshot(&store, PACKAGE_NAME, digest).err(),
+                Some(WheelError::Corrupt),
+                "`{digest}` is not a canonical SHA-256 and must be refused outright",
+            );
+        }
     }
 
     /// A wheel that decodes but lacks the `stdlib/` tree the Shape gate

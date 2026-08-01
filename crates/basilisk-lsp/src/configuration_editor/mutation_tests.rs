@@ -307,6 +307,25 @@ fn typeshed_package_is_mutually_exclusive_and_shape_validated() {
         validate_typeshed_value(TypeshedSettingKey::TypeshedPackage, "name@sha256:abc").is_err(),
         "a short digest must be rejected"
     );
+    // A rejection must say WHAT is wrong, not just that something is. The pin
+    // parser distinguishes the three failure modes, and the editor surfaces its
+    // reason verbatim instead of flattening them to one generic sentence.
+    for (spec, expected_fragment) in [
+        ("name@sha256:abc", "64 hex characters"),
+        (
+            "stubs/json@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "PEP 508",
+        ),
+        ("not-a-pin", "name@sha256:"),
+    ] {
+        let error = validate_typeshed_value(TypeshedSettingKey::TypeshedPackage, spec)
+            .expect_err("a malformed pin must be rejected");
+        assert!(
+            error.message.contains(expected_fragment),
+            "`{spec}` must be rejected with the reason that explains why, got: {}",
+            error.message
+        );
+    }
     // Pairing a package with a commit is mutually exclusive.
     let config = BasiliskConfig {
         typeshed_commit: Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
