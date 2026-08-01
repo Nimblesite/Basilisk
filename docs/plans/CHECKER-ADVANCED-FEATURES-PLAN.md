@@ -24,6 +24,23 @@ the prime directive (PEP conformance) — it is opt-in surface area beyond the s
 - [ ] No-implicit-coercion checks (int→float, bool→int, bytes→str) ([CHKARCH-MOJO-COERCION]).
 - [ ] Mojo-concept → Basilisk-check mapping table backing the above ([CHKARCH-MOJO-COMPAT]).
 
+### Dependency hygiene {#CHKADVPLAN-TODO-DEPHYGIENE}
+
+- [ ] First-party / third-party package-name collision
+  ([#47](https://github.com/Nimblesite/Basilisk/issues/47)). When a declared PyPI
+  dependency shares a name with a package the project itself ships, an unrelated
+  distribution is silently pulled into the graph and precedence depends on
+  install order — dependency confusion that never fails loudly. Basilisk already
+  holds all three inputs: local package roots (import resolution), declared
+  dependencies (`basilisk-config`), and installed site-packages contents
+  (`missing_type_stubs`), so the check is a three-way join. Warning by default,
+  gradable per project. Must handle hyphen/underscore variants (PyPI
+  `pydantic-ai` → import `pydantic_ai`), stay silent when the package is purely
+  first-party or the dependency has no local twin, and offer a quick fix that
+  removes the dependency line or renames the local package. The real case that
+  prompted it: a project shipping `src/nap/` that also declared `nap>=2.0.0`,
+  pulling an unrelated HTTP library.
+
 ### Plugin host {#CHKADVPLAN-TODO-PLUGINS}
 
 - [ ] WASM-sandboxed plugin host architecture ([CHKARCH-PLUGINS-ARCH]).
