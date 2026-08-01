@@ -177,9 +177,10 @@ impl Default for WorkspaceConfig {
 /// Invalid or mutually exclusive raw settings fail closed here, including when
 /// a file bypassed the configuration editor's stronger source validation.
 ///
-/// There are exactly two sources ([STUBRES-TYPESHED]): a pinned commit or a
-/// custom folder. An unset `typeshed-commit` resolves to the bundled commit as
-/// an implicit pin (still `typeshed_source_unpinned`); resolution never downloads.
+/// There are exactly three sources ([STUBRES-TYPESHED], [STUBRES-TYPESHED-PYPI]):
+/// a pinned commit, a custom folder, or a SHA-256-addressed PyPI package. An
+/// unset `typeshed-commit` resolves to the bundled commit as an implicit pin
+/// (still `typeshed_source_unpinned`); resolution never downloads.
 ///
 /// # Errors
 ///
@@ -195,8 +196,19 @@ pub fn typeshed_request(
         return Err(error.clone());
     }
 
-    if config.typeshed_path.is_some() && config.typeshed_commit.is_some() {
-        return Err("typeshed-path and typeshed-commit are mutually exclusive".to_owned());
+    let source_count = [
+        config.typeshed_path.is_some(),
+        config.typeshed_commit.is_some(),
+        config.typeshed_package.is_some(),
+    ]
+    .iter()
+    .filter(|&&set| set)
+    .count();
+    if source_count > 1 {
+        return Err(
+            "typeshed-path, typeshed-commit, and typeshed-package are mutually exclusive"
+                .to_owned(),
+        );
     }
     let selection = if let Some(path) = config.typeshed_path.as_deref() {
         SourceSelection::Custom {
@@ -212,6 +224,9 @@ pub fn typeshed_request(
             })?,
             explicit: true,
         }
+    } else if let Some(spec) = config.typeshed_package.as_deref() {
+        let (name, sha256) = parse_typeshed_package(spec)?;
+        SourceSelection::PyPIPackage { name, sha256 }
     } else {
         SourceSelection::Pinned {
             commit: Oid::from_hex(bundled_commit_sha())
@@ -223,6 +238,31 @@ pub fn typeshed_request(
         selection,
         store_path: config.typeshed_store_path.clone(),
     })
+}
+
+/// Parse a `typeshed-package` pin spec of the form `"name@sha256:<hex>"`
+/// ([STUBRES-TYPESHED-PYPI], issue #312).
+///
+/// The distribution name precedes the last `@`; the hash must be a 64-hex
+/// SHA-256 prefixed with `sha256:`.
+///
+/// # Errors
+///
+/// Returns a redacted, user-facing reason for a malformed spec.
+fn parse_typeshed_package(spec: &str) -> Result<(String, String), String> {
+    let (name, hash) = spec
+        .rsplit_once('@')
+        .ok_or_else(|| "typeshed-package must be of the form `name@sha256:<hex>`".to_owned())?;
+    if name.is_empty() {
+        return Err("typeshed-package distribution name is empty".to_owned());
+    }
+    let sha256 = hash
+        .strip_prefix("sha256:")
+        .ok_or_else(|| "typeshed-package hash must be prefixed with `sha256:`".to_owned())?;
+    if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("typeshed-package sha256 must be 64 hex characters".to_owned());
+    }
+    Ok((name.to_owned(), sha256.to_ascii_lowercase()))
 }
 
 /// The rule-tag every typeshed source-status advisory carries.
@@ -458,6 +498,13 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
         cfg.typeshed_commit = Some(v.to_owned());
     }
     if let Some(v) = obj
+        .get("typeshedPackage")
+        .or_else(|| obj.get("typeshed-package"))
+        .and_then(|v| v.as_str())
+    {
+        cfg.typeshed_package = Some(v.to_owned());
+    }
+    if let Some(v) = obj
         .get("typeshedStorePath")
         .or_else(|| obj.get("typeshed-store-path"))
         .and_then(|v| v.as_str())
@@ -539,6 +586,9 @@ fn workspace_config_from_toml(section: &toml::Table) -> WorkspaceConfig {
     if let Some(v) = toml_str(section, &["typeshed-commit", "typeshedCommit"]) {
         cfg.typeshed_commit = Some(v.to_owned());
     }
+    if let Some(v) = toml_str(section, &["typeshed-package", "typeshedPackage"]) {
+        cfg.typeshed_package = Some(v.to_owned());
+    }
     if let Some(v) = toml_str(section, &["typeshed-store-path", "typeshedStorePath"]) {
         cfg.typeshed_store_path = Some(PathBuf::from(v));
     }
@@ -552,11 +602,13 @@ fn toml_str<'a>(table: &'a toml::Table, keys: &[&str]) -> Option<&'a str> {
 }
 
 /// Every typeshed key holds a string ([STUBRES-TYPESHED-CONFIG]).
-const TYPESHED_STRING_KEYS: [&str; 6] = [
+const TYPESHED_STRING_KEYS: [&str; 8] = [
     "typeshed-path",
     "typeshedPath",
     "typeshed-commit",
     "typeshedCommit",
+    "typeshed-package",
+    "typeshedPackage",
     "typeshed-store-path",
     "typeshedStorePath",
 ];
@@ -932,7 +984,7 @@ mod tests {
         // then fails with both sides printed instead of a bare panic.
         let pinned = match default_request.selection {
             SourceSelection::Pinned { commit, explicit } => Some((commit.to_hex(), explicit)),
-            SourceSelection::Custom { .. } => None,
+            SourceSelection::Custom { .. } | SourceSelection::PyPIPackage { .. } => None,
         };
         assert_eq!(
             pinned,

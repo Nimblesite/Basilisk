@@ -212,7 +212,7 @@ Pyright “ships with a bundled copy of typeshed type stubs”
 ([`microsoft/pyright@1bec65c`](https://github.com/microsoft/pyright/blob/1bec65c15fba26016281d44d977bf667b89b9d30/docs/configuration.md#L23)).
 Basilisk likewise never mixes a source's names, bodies, `VERSIONS`, or indexes.
 
-There are exactly **two** sources, both already on this machine when checking
+There are exactly **three** sources, all already on this machine when checking
 starts. There is no "track latest" source: freshness is an action a person takes
 ([§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD)), never something the
 checker does on their behalf.
@@ -221,8 +221,9 @@ checker does on their behalf.
 |---|---|---|
 | Pinned commit *(default)* | `typeshed-commit`; unset selects the bundled commit | the local tree carrying exactly that SHA — the embedded ZIP when the SHA is the bundled one, else that commit's store entry |
 | Custom folder | `typeshed-path` | that tree verbatim, user-managed |
+| PyPI package *(pinned by wheel SHA-256)* | `typeshed-package` | the stored wheel whose SHA-256 is the pin ([§STUBRES-TYPESHED-PYPI](#STUBRES-TYPESHED-PYPI)) |
 
-Both fail closed. Custom is reported unpinned
+All three fail closed. Custom is reported unpinned
 ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)); a *module* miss in a custom
 tree still continues to step 4.
 
@@ -258,6 +259,28 @@ commit. That authenticity rests on GitHub/TLS at download time, and typeshed
 publishes no signed release ([Git `commit-tree`](https://git-scm.com/docs/git-commit-tree),
 [GitHub Git-commit API](https://docs.github.com/en/rest/git/commits)). Whoever can
 rewrite the store can rewrite its commit object with it.
+
+#### A PyPI package pin {#STUBRES-TYPESHED-PYPI}
+
+A third source is a PyPI typeshed distribution pinned by its **wheel SHA-256** —
+the hash `uv` records in `uv.lock` `wheels[].hash`
+([uv lockfile format](https://docs.astral.sh/uv/reference/files/#lockfile-format);
+issue #312). The source is the stored wheel archive: Basilisk reads its
+`stdlib/` subtree via the archive VFS, so the checked bytes are the pinned bytes.
+
+Acquisition is segregated and user-invoked (`basilisk typeshed download
+--package`), like a commit pin
+([§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD)); the fetch crate
+downloads the wheel from PyPI, verifies its SHA-256 equals the pin, and stores
+it under `<sha256>/`. Check-time verification is offline
+([§STUBRES-TYPESHED-OFFLINE](#STUBRES-TYPESHED-OFFLINE)): re-hash the stored
+wheel and assert equality; missing or mismatched fails hard as `NO SOURCE`.
+
+**Trust boundary.** Proves the stored wheel is the registry-attested artifact;
+cannot prove offline the SHA is an *official* typeshed release (PyPI publishes
+no signed releases; authenticity rests on PyPI/TLS at download) — same shape as a
+commit pin ([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)). Advisory behaviour
+follows [§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN).
 
 #### The store {#STUBRES-TYPESHED-STORE}
 
@@ -296,7 +319,9 @@ below, reconstruct the commit object and assert it hashes to the requested SHA,
 then dump the accepted tree into the store. There is no mirror setting — an
 air-gapped or firewalled machine uses a custom folder. A download that fails at
 any step writes **nothing** — no partial entry, no unverified entry, no config
-change. URLs are redacted in logs.
+change. URLs are redacted in logs. Package-pin acquisition downloads a wheel
+from PyPI under the same segregation; see
+[§STUBRES-TYPESHED-PYPI](#STUBRES-TYPESHED-PYPI).
 
 | Gate | Rule |
 |---|---|
@@ -424,6 +449,9 @@ deciding, each code keeps its intrinsic default — advisory conditions render
 `disabled`/`off` silences it: the only supported way to make an advisory go
 away. The resolved severity sets the banner label and whether the advisory
 renders at all; it never moves the advisory onto the scored diagnostic stream.
+A verified PyPI package pin ([§STUBRES-TYPESHED-PYPI](#STUBRES-TYPESHED-PYPI))
+suppresses these advisories — the "specifically instructed to accept" path
+(issue #312); without a pin they fire as above.
 
 All surfaces show the full SHA when known; the UI also provides a safe View
 License action. MCP fields are `active_source`, commit/tree identity,
@@ -446,13 +474,18 @@ open. Every one is exposed as a control in the configuration UI
 |---|---|---|---|---|
 | `typeshed-commit` | full SHA | unset _(= the bundled commit)_ | The pinned commit, verified offline. | checker |
 | `typeshed-path` | `string` | _(unset)_ | The canonical custom step-3 tree; excludes the pin and the bundle. | checker |
+| `typeshed-package` | `name@sha256:<hex>` | _(unset)_ | A PyPI typeshed distribution pinned by wheel SHA-256 ([§STUBRES-TYPESHED-PYPI](#STUBRES-TYPESHED-PYPI)). Mutually exclusive with `typeshed-commit` and `typeshed-path`. | checker |
 | `typeshed-store-path` | path | OS cache | Where downloads are dumped and pins are resolved. | both |
 
-That is the whole *source-selection* surface: three keys. There are no
+That is the whole *source-selection* surface: four keys. `typeshed-commit`,
+`typeshed-path`, and `typeshed-package` are mutually exclusive — exactly one
+source may be active. There are no
 cache-reuse, expiry, verification-waiver, or mirror settings, and no one-run
 flags: nothing is cached, nothing expires, a pin always verifies
-([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)), and downloads come only from
-GitHub ([§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD)).
+([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)); commit-pin downloads come from
+GitHub, package-pin downloads from PyPI
+([§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD),
+[§STUBRES-TYPESHED-PYPI](#STUBRES-TYPESHED-PYPI)).
 
 Separately, the **severity** of each source-status advisory
 ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)) is graded through the ordinary

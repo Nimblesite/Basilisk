@@ -15,7 +15,7 @@ linked to an active plan.
 |---|---|
 | [Checker architecture](specs/CHECKER-ARCHITECTURE-SPEC.md) | Configuration, rules, diagnostics, analysis pipeline, CLI, and quality gates. |
 | [Type inference](specs/CHECKER-TYPE-INFERENCE-SPEC.md) | Expression/type inference and narrowing contracts, plus the target bidirectional/constraint architecture and its research grounding. |
-| [Stub resolution](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | Pinned typing-spec import order, custom typeshed, offline pin verification against the store, the segregated download component, bundled stdlib ZIP, and generation. |
+| [Stub resolution](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | Pinned typing-spec import order, custom typeshed, offline pin verification against the store, a PyPI-package wheel pin, the segregated download component, bundled stdlib ZIP, and generation. |
 | [Checker MCP service](specs/CHECKER-MCP-SPEC.md) | Packaged stdio lifecycle and the structured typeshed source/status tool. |
 | [Checker cache](specs/CHECKER-CACHE-SPEC.md) | Opt-in content-addressed cross-session result cache, its `[tool.basilisk]` keys, and how it differs from always-on Salsa memoization. |
 | [Rule tagging](specs/CHECKER-RULE-TAGGING-SPEC.md) | Rule provenance/category/free-form tags and conflict rules. |
@@ -58,6 +58,7 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [Activity panel](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Settings wiring, Modules-panel context menus and multi-select, and remaining cross-editor/test quality. |
 | [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Annotation name resolution (Stage 0.5), bidirectional/constraint-based inference engine, flow analysis, shared subtyping, and PEP 827 readiness. |
 | [Runtime typeshed resolution](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Two open items: a socket-instrumented witness that checking is offline across CLI/LSP/MCP, and byte-exact per-artifact licensing verification inside the VSIX (binaries and wheels are already verified). |
+| [PyPI typeshed package pin](plans/CHECKER-TYPESHED-PYPI-PLAN.md) | Pin a PyPI typeshed distribution by wheel SHA-256, verify offline, auto-resolve from `uv.lock`; suppresses the source-status advisory (issue #312). |
 | [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Replace remaining raw-source rule scans with AST data. |
 | [WASM](plans/WASM-PLAN.md) | CI wasm build and size ratchet, multi-file in-memory VFS, and the playground site. |
 | [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Dependency-hygiene rules, Mojo checks, plugin host, migration, and CI helpers. |
