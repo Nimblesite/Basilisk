@@ -7,7 +7,7 @@
 //! GitHub #388: member lookup used the annotation's raw source text as a
 //! class-name key, so `list[int]` matched nothing while bare `list` worked.
 
-use basilisk_checker::types_parsing::annotation_class_name;
+use basilisk_checker::class_naming::annotation_class_name;
 
 /// Type arguments do not change which class an annotation names.
 #[test]

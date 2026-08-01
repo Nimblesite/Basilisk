@@ -386,50 +386,6 @@ fn parse_callable_annotation(inner: &str) -> InferredType {
     })
 }
 
-/// The name of the class an annotation NAMES, ignoring type arguments.
-///
-/// `list[int]` names `list`; `dict[str, int]` names `dict`; a bare `Model`
-/// names `Model`. Returns `None` for annotations that name no single class —
-/// unions, `Optional[...]`, callables — so a caller cannot mistake an ambiguous
-/// receiver for a concrete one.
-///
-/// Decided on the **AST**, via `ruff`, never by slicing the source text: the
-/// project rule is "avoid regex to parse anything, use ruff", and
-/// [NARROWPLAN-ANNOTATION-RESOLUTION] is explicit that annotation text must
-/// stop being parsed by hand. Case is preserved, which
-/// [`InferredType::from_annotation`] cannot do — it lowercases — and which a
-/// user-class receiver depends on.
-///
-/// This is a narrow stand-in for the shared
-/// `resolve_annotation(module, expr) → InferredType` entry point that
-/// [NARROWPLAN-CHECKLIST] Stage 0.5 will introduce. When that lands, this
-/// function's callers move to it and this goes away; keeping the logic here
-/// rather than in a consumer means there is exactly one call site to migrate.
-#[must_use]
-pub fn annotation_class_name(annotation: &str) -> Option<String> {
-    let parsed = ruff_python_parser::parse_expression(annotation).ok()?;
-    class_name_of(parsed.expr())
-}
-
-/// The class an annotation expression names, if it names exactly one.
-fn class_name_of(expr: &ruff_python_ast::Expr) -> Option<String> {
-    match expr {
-        // `list` / `Model`.
-        ruff_python_ast::Expr::Name(name) => Some(name.id.to_string()),
-        // `list[int]` — the subscript carries type arguments, not identity.
-        ruff_python_ast::Expr::Subscript(subscript) => class_name_of(&subscript.value),
-        // `typing.List` / `t.List` — the attribute tail is the class.
-        ruff_python_ast::Expr::Attribute(attribute) => Some(attribute.attr.to_string()),
-        // `"Model"` in a quoted forward reference.
-        ruff_python_ast::Expr::StringLiteral(literal) => {
-            annotation_class_name(literal.value.to_str())
-        }
-        // Everything else names no single class: `X | None`, `Callable[...]`
-        // written as a call, literals, and anything unparseable as a type.
-        _ => None,
-    }
-}
-
 /// Split Callable parameter list by top-level commas.
 fn split_callable_params(param_list: &str) -> Vec<&str> {
     let mut parts = Vec::new();

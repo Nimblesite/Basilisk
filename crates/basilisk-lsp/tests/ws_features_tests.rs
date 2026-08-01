@@ -26,8 +26,8 @@ mod ws_test_code_lens;
 mod ws_test_completion;
 #[path = "lsp/ws_test_completion_advanced.rs"]
 mod ws_test_completion_advanced;
-#[path = "lsp/ws_test_completion_generics.rs"]
-mod ws_test_completion_generics;
+#[path = "lsp/ws_test_completion_receivers.rs"]
+mod ws_test_completion_receivers;
 #[path = "lsp/ws_test_configuration_adoption.rs"]
 mod ws_test_configuration_adoption;
 #[path = "lsp/ws_test_configuration_editor.rs"]
