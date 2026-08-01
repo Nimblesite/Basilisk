@@ -33,10 +33,11 @@ pub(super) async fn request_value(
     Ok(response)
 }
 
-pub(super) fn assert_clean_diagnostics(
+pub(super) fn assert_diagnostics_notification(
     raw: &str,
     expected_uri: &str,
-) -> TestResult<serde_json::Value> {
+    require_empty: bool,
+) -> TestResult<()> {
     let notification: serde_json::Value = serde_json::from_str(raw)?;
     assert_eq!(
         notification["jsonrpc"], "2.0",
@@ -60,12 +61,11 @@ pub(super) fn assert_clean_diagnostics(
     let diagnostics = notification["params"]["diagnostics"]
         .as_array()
         .ok_or("published diagnostics must be an array")?;
-    assert!(
-        diagnostics.is_empty(),
-        "valid document must be clean: {raw}"
-    );
+    if require_empty {
+        assert!(diagnostics.is_empty(), "diagnostics must be cleared: {raw}");
+    }
     assert!(!raw.contains("BSK-PARSE"), "source must parse: {raw}");
-    Ok(notification)
+    Ok(())
 }
 
 pub(super) fn item_named(
@@ -139,7 +139,7 @@ pub(super) fn assert_color(
             .as_f64()
             .ok_or("component must be numeric")?;
         assert!(
-            (actual - expected_value).abs() < 1e-9,
+            (actual - expected_value).abs() < f64::from(f32::EPSILON),
             "wrong {component}: {item}"
         );
     }

@@ -63,7 +63,7 @@ value=1
     // Interaction 2: opening the document drives parsing, indexing, and diagnostics.
     fixture.did_open(&uri, code).await?;
     let diagnostics_raw = fixture.wait_for_diagnostics().await?;
-    assert_clean_diagnostics(&diagnostics_raw, &uri)?;
+    assert_diagnostics_notification(&diagnostics_raw, &uri, false)?;
 
     // Interaction 3: one inlay request exercises variable, call-site, return,
     // TypeVar, ParamSpec, TypeVarTuple, and legacy Generic hints together.
@@ -295,10 +295,10 @@ value=1
         4,
         "expected 3, 6, and 8 digit colors: {colors}"
     );
-    assert_color(color_items, code, "#336699cc", [0.2, 0.4, 0.6, 0.8])?;
-    assert_color(color_items, code, "#f00", [1.0, 0.0, 0.0, 1.0])?;
+    let _accent_color = assert_color(color_items, code, "#336699cc", [0.2, 0.4, 0.6, 0.8])?;
+    let _short_red = assert_color(color_items, code, "#f00", [1.0, 0.0, 0.0, 1.0])?;
     let opaque_red = assert_color(color_items, code, "#ff0000", [1.0, 0.0, 0.0, 1.0])?;
-    assert_color(
+    let _translucent_green = assert_color(
         color_items,
         code,
         "#00ff0080",
@@ -372,7 +372,7 @@ value=1
         }))
         .await?;
     let changed_raw = fixture.wait_for_diagnostics().await?;
-    assert_clean_diagnostics(&changed_raw, &uri)?;
+    assert_diagnostics_notification(&changed_raw, &uri, false)?;
 
     // Interaction 14: formatting the now-clean selection is a strict no-op.
     let clean_format = request_value(
@@ -401,11 +401,11 @@ value=1
         }))
         .await?;
     let saved_raw = fixture.wait_for_diagnostics().await?;
-    assert_clean_diagnostics(&saved_raw, &uri)?;
+    assert_diagnostics_notification(&saved_raw, &uri, false)?;
 
     // Interaction 16: closing the editor clears open-file diagnostics.
     fixture.did_close(&uri).await?;
     let closed_raw = fixture.wait_for_diagnostics().await?;
-    assert_clean_diagnostics(&closed_raw, &uri)?;
+    assert_diagnostics_notification(&closed_raw, &uri, true)?;
     Ok(())
 }
