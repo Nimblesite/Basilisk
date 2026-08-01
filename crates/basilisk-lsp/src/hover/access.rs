@@ -11,7 +11,7 @@
 
 use basilisk_resolver::{ImportInfo, ImportKind, ResolvedModule, Span};
 
-use crate::util::{annotation_text, find_definition_by_name, SymbolHit};
+use crate::util::{find_definition_by_name, span_text, SymbolHit};
 
 /// How the identifier under the cursor is reached.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,7 +142,7 @@ pub(crate) fn receiver_type_name(
         SymbolHit::Parameter { param, .. } => (param.annotation_span, None, None),
         _ => return None,
     };
-    if let Some(annotation) = annotation_text(annotation_span, source) {
+    if let Some(annotation) = span_text(annotation_span, source) {
         let literal = annotation == "LiteralString" || annotation == "typing.LiteralString";
         return Some((
             if literal {
@@ -153,7 +153,7 @@ pub(crate) fn receiver_type_name(
             literal,
         ));
     }
-    let inferred = crate::util::rhs_type_display(rhs_kind?);
+    let inferred = crate::util::rhs_or_expr_type_display(rhs_kind?, rhs_span, source);
     if inferred.is_empty() {
         return call_return_type(resolved, rhs_span).map(|name| (name, false));
     }
@@ -192,7 +192,7 @@ fn free_callee_return_type(resolved: &ResolvedModule, callee: &str) -> Option<St
         .iter()
         .find(|func| func.name == callee && func.class_name.is_none())
     {
-        if let Some(annotation) = annotation_text(func.return_annotation_span, &resolved.source) {
+        if let Some(annotation) = span_text(func.return_annotation_span, &resolved.source) {
             return Some(annotation);
         }
     }

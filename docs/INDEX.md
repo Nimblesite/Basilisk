@@ -56,9 +56,15 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [Formatting](plans/LSP-FORMATTING-PLAN.md) | VS Code default-formatter opt-in and published-artifact verification. |
 | [AI-assisted LSP](plans/LSP-AI-PLAN.md) | First opt-in provider slice and privacy/safety gate. |
 | [Activity panel](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Settings wiring and remaining cross-editor/test quality. |
-| [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Bidirectional/constraint-based inference engine, flow analysis, shared subtyping, and PEP 827 readiness. |
+| [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Annotation name resolution (Stage 0.5), bidirectional/constraint-based inference engine, flow analysis, shared subtyping, and PEP 827 readiness. |
 | [Runtime typeshed resolution](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Two open items: a socket-instrumented witness that checking is offline across CLI/LSP/MCP, and byte-exact per-artifact licensing verification inside the VSIX (binaries and wheels are already verified). |
 | [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Replace remaining raw-source rule scans with AST data. |
 | [WASM](plans/WASM-PLAN.md) | CI wasm build and size ratchet, multi-file in-memory VFS, and the playground site. |
 | [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Mojo checks, plugin host, migration, and CI helpers. |
 | [Native compiler](plans/COMPILER-ARCHITECTURE-PLAN.md) | HIR, backend, runtime, interop, CLI, and native acceptance. |
+
+## Defect triage
+
+| File | Contents |
+|---|---|
+| [Typing puzzles](puzzles/puzzles.md) | User-reported typing puzzles from X, with minimal repros, PEP-bug vs house-rule classification, and the resulting issues (#371, #378–#383). |

@@ -323,17 +323,9 @@ fn is_identifier(text: &str) -> bool {
 
 /// Check basic type compatibility.
 fn type_compatible(actual: &str, expected: &str) -> bool {
-    if actual == expected {
-        return true;
-    }
-    // Numeric tower: bool <: int <: float <: complex
-    if expected == "int" && actual == "bool" {
-        return true;
-    }
-    if expected == "float" && (actual == "int" || actual == "bool") {
-        return true;
-    }
-    if expected == "complex" && matches!(actual, "int" | "float" | "bool") {
+    // Identity and the numeric tower via the shared core
+    // ([NARROWPLAN-SUBTYPING]).
+    if crate::subtyping::name_subtype(actual, expected) {
         return true;
     }
     // Any accepts everything.

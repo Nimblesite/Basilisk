@@ -27,6 +27,8 @@
 //!
 //! PEP 544: <https://typing.readthedocs.io/en/latest/spec/protocol.html#generic-protocols>
 
+#[cfg(test)]
+mod helper_parity_tests;
 mod helpers;
 
 use std::collections::HashMap;

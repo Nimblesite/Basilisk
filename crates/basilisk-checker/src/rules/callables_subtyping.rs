@@ -103,11 +103,15 @@ fn parse_callable_sig(s: &str) -> Option<CallableSig> {
 // ---------------------------------------------------------------------------
 
 /// Returns `true` when `candidate` is a subtype of `required`.
+///
+/// The gradual `Any`/`object` acceptances stay local; the tower delegates to
+/// the shared core ([NARROWPLAN-SUBTYPING]), with parity pinned in
+/// `tests/subtyping_context_tests.rs`.
 fn is_subtype(candidate: &str, required: &str) -> bool {
-    if candidate == required || required == "object" || required == "Any" || candidate == "Any" {
-        return true;
-    }
-    is_numeric_subtype(candidate, required)
+    required == "object"
+        || required == "Any"
+        || candidate == "Any"
+        || is_numeric_subtype(candidate, required)
 }
 
 /// Returns `true` when the return type of the *source* callable is compatible

@@ -83,6 +83,66 @@ The target architecture that supersedes this conservative core — bidirectional
 checking over a subtype-constraint solver — is specified in
 [TYPEINF-TARGET](#TYPEINF-TARGET).
 
+### [TYPEINF-ANNOTATION-RESOLUTION] Annotation name resolution {#TYPEINF-ANNOTATION-RESOLUTION}
+
+An annotation is a **type expression**, and turning it into a type is a
+*name-resolution* problem, not a text-matching one. Every rule that compares a
+value against a declared type must obtain the declared type through the
+resolution cascade below, never by pattern-matching annotation source text.
+
+Resolution order for a bare or dotted name in a type expression:
+
+1. **Type-alias table** — PEP 695 `type X = ...` (`module.type_statements`),
+   explicit `X: TypeAlias = ...`, and implicit `X = <type expression>`.
+2. **Class table** — classes declared in the module (`module.classes`).
+3. **Import table** — names bound by `import` / `from ... import`, resolved
+   through [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561) to
+   the defining module.
+4. **Typeshed / builtins** — stdlib and builtin symbols.
+5. **Forward reference** — a string annotation is parsed as a type expression
+   and resolved by this same cascade.
+
+**Alias transparency.** A type alias is *transparent*: it introduces a name for
+a type, never a distinct type. `type MyStr = int` means every use of `MyStr` in
+a type expression behaves exactly as `int` does, in every rule, at every
+nesting depth, and regardless of whether the alias is declared before or after
+its use.
+
+```python
+type MyStr = int
+
+def answer() -> MyStr:
+    return "not an int"   # returns_compatibility — identical to `-> int`
+
+def take(x: MyStr) -> None: ...
+take("nope")              # calls_argument_type — identical to `x: int`
+
+y: MyStr = "nope"         # assignment_compatibility — identical to `y: int`
+
+def wrapped() -> list[MyStr]:
+    return ["nope"]       # nesting does not weaken the check
+```
+
+Alias chains (`type A = int; type B = A`) resolve to their ultimate target.
+Cycle detection during expansion must distinguish a *legal recursive alias*,
+which has a finite form and is expanded lazily
+([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL)), from a
+non-terminating expansion, which is a policy rejection and not a PEP error.
+
+**Unresolved names must not silently disable a rule.** When the cascade cannot
+resolve a name, the resulting type is `Unknown`
+([TYPEINF-EXCEEDS-NOUNKNOWN](#TYPEINF-EXCEEDS-NOUNKNOWN)) and the rule
+suppresses its diagnostic — that is the correct conservative behaviour. What is
+**not** permitted is
+treating a *resolvable* nominal name as unverifiable: a class, alias, or
+imported symbol that the cascade can resolve must be checked. Blanket-skipping
+every nominal annotation converts a soundness gap into silence across the whole
+rule set, which is the defect class tracked by
+[#378](https://github.com/Nimblesite/Basilisk/issues/378).
+
+Delivery is tracked in
+[NARROWPLAN-ANNOTATION-RESOLUTION](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-ANNOTATION-RESOLUTION).
+
 ## [TYPEINF-VARS] Variable Type Inference {#TYPEINF-VARS}
 
 ### [TYPEINF-VARS-SIMPLE] Simple Assignment {#TYPEINF-VARS-SIMPLE}
@@ -707,7 +767,7 @@ model remains tracked by
 
 **Builtin numeric tower.** The typing-spec promotions ([Special cases for float and complex](https://typing.python.org/en/latest/spec/special-types.html#special-cases-for-float-and-complex)) hold: `bool`/`int` are accepted where `float` is expected, and `bool`/`int`/`float` where `complex` is expected. Two layers implement this:
 
-- Annotation-text level (the conformance rules): `rules/shared.rs::is_numeric_subtype` encodes the full `bool <: int <: float <: complex` chain, mirrored by rule-local helpers (`narrowing_typeis`, `narrowing_typeis_2`, `overloads_evaluation`, `generics_typevartuple_callable`, `aliases_implicit`, `generics_syntax_scoping`).
+- Annotation-text level (the conformance rules): the single home is `crates/basilisk-checker/src/subtyping.rs::name_subtype`, encoding the full `bool <: int <: float <: complex` chain; `rules/shared.rs::is_numeric_subtype` and the rule-local helpers (`narrowing_typeis`, `narrowing_typeis_2`, `overloads_evaluation`, `generics_typevartuple_callable`, `aliases_implicit`, `generics_syntax_scoping`, `callables_subtyping`, `generics_defaults_referential`) delegate to it, with the accepted/rejected table pinned in `tests/subtyping_context_tests.rs` ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)).
 - `InferredType` level: the annotation parser folds `complex` into `Float` (`types_parsing.rs`: `"float" | "complex" => Float`), so the `int → float` and `int`/`float → complex` promotions hold by construction (`bool` acceptance lives at the text level). Accepted trade-off: a `complex`-typed value is not rejected where `float` is expected — the conformance suite does not exercise that direction.
 
 **Other builtin relations:**
@@ -840,7 +900,7 @@ Subtyping is decided by `InferredType::is_assignable_to(&self, other)` in `crate
 
 `Named` types (user classes and unparameterised imports) compare by base name before `[`: `Foo[int]` and `Foo[float]` are treated as compatible. This is deliberate — without whole-program generic variance analysis, stricter matching would emit false positives, and the conformance gate holds `max_false_positives` at zero.
 
-Nominal MRO walking and structural Protocol/TypedDict compatibility are NOT centralized here: they live in the per-conformance-area rule modules (`rules/protocols_*`, `rules/typeddicts_*`, and the class-bases-walking `is_subtype_of` helper in `rules/generics_basic_3/helpers.rs`). There is no shared `SubtypeContext` or MRO cache.
+Nominal MRO walking and structural Protocol/TypedDict compatibility are decided today by the per-conformance-area rule modules (`rules/protocols_*`, `rules/typeddicts_*`, and the class-bases-walking `is_subtype_of` helper in `rules/generics_basic_3/helpers.rs`). The shared home now exists — `crates/basilisk-checker/src/subtyping.rs` (`SubtypingContext`: cycle-guarded nominal walk, structural Protocol satisfaction, `TypedDict` schemas, declared variance, `Callable` kinds) — and the rule modules migrate onto it behind the parity pins in `tests/subtyping_context_tests.rs` and the in-module `helper_parity_tests` at the Integration stage ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)).
 
 ---
 

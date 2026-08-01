@@ -18,6 +18,8 @@
 //! 3. **Generic metaclass usage**: Using a parameterized generic class as a metaclass
 //!    (`metaclass=SomeGeneric[T]`) is not supported by the Python type system.
 
+#[cfg(test)]
+mod helper_parity_tests;
 mod helpers;
 
 use ruff_python_ast::{Expr, Stmt};

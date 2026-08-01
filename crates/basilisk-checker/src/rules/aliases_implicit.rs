@@ -744,20 +744,14 @@ fn check_single_annotation(
 
 /// Check if a type argument is assignable to a `TypeVar` bound.
 ///
-/// Uses simple subtype rules: `int` and `bool` are subtypes of `float`,
-/// `bool` is a subtype of `int`, etc.
+/// Numeric-tower bounds delegate to the shared core
+/// ([NARROWPLAN-SUBTYPING], parity pinned in
+/// `tests/subtyping_context_tests.rs`); any other bound accepts
+/// conservatively.
 fn is_assignable_to_bound(arg: &str, bound: &str) -> bool {
-    if arg == bound {
-        return true;
-    }
     match bound {
-        "float" => matches!(arg, "int" | "bool" | "float"),
-        "int" => matches!(arg, "int" | "bool"),
-        "complex" => matches!(arg, "int" | "float" | "bool" | "complex"),
-        _ => {
-            // For unknown bounds, accept conservatively
-            true
-        }
+        "int" | "float" | "complex" => crate::subtyping::name_subtype(arg, bound),
+        _ => true,
     }
 }
 

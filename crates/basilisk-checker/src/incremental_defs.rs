@@ -507,11 +507,15 @@ pub fn module_interface(db: &dyn Db, file: SourceFile) -> ModuleInterface {
 /// [TYPEINF-TARGET-NARROWING] at definition granularity.
 ///
 /// Re-parses and re-resolves the definition's own slice (so the query
-/// depends on nothing but the tracked `source` field: an edit elsewhere in
-/// the file leaves this memo untouched), seeds the narrowing environment
-/// from the parameter annotations, and runs the flow walker
-/// ([`crate::narrow::analyse_function`]) with its branch frames and
-/// `phi`-joins over the resolver-collected guards.
+/// depends on the tracked `source` field plus the backdated
+/// [`callable_interface`]: a body-only edit elsewhere leaves this memo
+/// untouched, while a sibling SIGNATURE change correctly invalidates), seeds
+/// the narrowing environment from the parameter annotations, and runs the
+/// flow walker ([`crate::narrow::analyse_function_in`]) with its branch
+/// frames and `phi`-joins over the resolver-collected guards. The module's
+/// callable interfaces flow into the [`crate::narrow::NarrowContext`] so
+/// `x = f()` narrows through `f`'s return and a `Never`-returning sibling
+/// call diverges (inference-driven reachability).
 #[salsa::tracked(returns(ref))]
 pub fn narrowed_uses<'db>(
     db: &'db dyn Db,
@@ -537,10 +541,19 @@ pub fn narrowed_uses<'db>(
     let Some(Stmt::FunctionDef(function_def)) = reparsed.syntax().body.first() else {
         return Vec::new();
     };
-    crate::narrow::analyse_function(
+    let ctx = crate::narrow::NarrowContext {
+        callables: callable_interface(db, def.file(db))
+            .0
+            .iter()
+            .cloned()
+            .collect(),
+        ..Default::default()
+    };
+    crate::narrow::analyse_function_in(
         &function_def.body,
         crate::narrow::NarrowEnv::new(declared),
         &function.narrowing_guards,
+        &ctx,
     )
     .narrowed_uses
 }

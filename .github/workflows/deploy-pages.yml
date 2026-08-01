@@ -1,39 +1,28 @@
 name: Deploy GitHub Pages
 
+# A RELEASE is the only thing that publishes this site. There is DELIBERATELY no
+# `push:` trigger — a merge to `main` must NOT deploy, and adding one back is a
+# regression, not a convenience.
+#
+# Why: the site is not static data. The playground embeds the checker itself,
+# compiled to WebAssembly at build time ([WASM-BUILD]), and the docs quote the
+# conformance score and the released binary's behaviour. Publishing on merge
+# would put an UNRELEASED checker in front of users — the playground would
+# answer differently from the `basilisk` anyone can install, and the docs would
+# describe a version that does not exist yet. Deploying only on release keeps
+# the site in lockstep with the binary it documents.
+#
+# A change merged to `main` is verified pre-merge by ci.yml's `Website Build`
+# job (same build, same playground e2e) and ships with the next release.
 on:
-  workflow_dispatch:
   # Called by release.yml after a stable GitHub Release is created. A release
   # created with the default GITHUB_TOKEN does not emit a `release: published`
   # event that can start another workflow, so the release pipeline invokes this
   # one directly instead of relying on that event.
   workflow_call:
-  # Deploy straight from `main` on merge so a site refresh goes live WITHOUT
-  # cutting a binary release (release.yml builds 5 platforms + VSIX + marketplace
-  # publishes — all wasted work for a site change). A real release still
-  # redeploys via workflow_call.
-  #
-  # The site is no longer pure static data: the playground embeds the checker
-  # itself, compiled to WebAssembly at build time ([WASM-BUILD]). A change to
-  # any crate the playground links therefore changes what the PUBLISHED site
-  # answers, and must redeploy — otherwise a checker fix ships to the CLI while
-  # the playground keeps demonstrating the old, wrong behaviour. The list below
-  # is `basilisk-wasm`'s dependency closure; extend it when that closure grows.
-  push:
-    branches: [main]
-    paths:
-      - "website/**"
-      - "benchmarks/status/**"
-      - ".github/workflows/deploy-pages.yml"
-      - "crates/basilisk-wasm/**"
-      - "crates/basilisk-checker/**"
-      - "crates/basilisk-common/**"
-      - "crates/basilisk-config/**"
-      - "crates/basilisk-db/**"
-      - "crates/basilisk-parser/**"
-      - "crates/basilisk-resolver/**"
-      - "crates/basilisk-stubs/**"
-      - "crates/basilisk-uv/**"
-      - "Cargo.lock"
+  # Manual escape hatch for an out-of-band site fix between releases (a typo, a
+  # dead link). Deliberately a human decision — never automatic.
+  workflow_dispatch:
 
 permissions:
   contents: read

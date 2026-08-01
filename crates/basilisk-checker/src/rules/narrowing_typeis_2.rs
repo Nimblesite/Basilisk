@@ -104,24 +104,14 @@ fn is_consistent(narrowed: &str, input: &str) -> bool {
         return true;
     }
 
-    // Same type is always consistent
-    if narrowed == input {
+    // Identity and the numeric tower via the shared core
+    // ([NARROWPLAN-SUBTYPING]).
+    if crate::subtyping::name_subtype(narrowed, input) {
         return true;
     }
 
     // `Any` is consistent with anything
     if input == "Any" || narrowed == "Any" {
-        return true;
-    }
-
-    // Check numeric tower: int <: float <: complex
-    if input == "float" && (narrowed == "int" || narrowed == "bool") {
-        return true;
-    }
-    if input == "complex" && (narrowed == "int" || narrowed == "float" || narrowed == "bool") {
-        return true;
-    }
-    if input == "int" && narrowed == "bool" {
         return true;
     }
 

@@ -114,6 +114,68 @@ usable behavior but make it configurable for security-sensitive users.
 Reachability becomes **inference-driven** (ty's model) rather than
 pattern-matched idioms.
 
+## Annotation name resolution {#NARROWPLAN-ANNOTATION-RESOLUTION}
+
+Spec: [TYPEINF-ANNOTATION-RESOLUTION](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ANNOTATION-RESOLUTION).
+
+**This is the highest-value gap in the plan and a prerequisite for the rest of
+it.** The bidirectional engine and constraint solver landed in Stage 0, but the
+conformance rules still obtain a declared type by parsing annotation *source
+text*: `returns_compatibility.rs` calls
+`InferredType::from_annotation(slice_span(&module.source, ann_span))`, and any
+name it does not recognise becomes `InferredType::Named(..)`. `shared.rs`'s
+`is_unverifiable_return_type` then treats **every** `Named` as unverifiable and
+suppresses the diagnostic, recursing through unions, containers, optionals,
+tuples, and callables so that one nominal name anywhere in an annotation
+silences the whole check.
+
+The consequence is that `-> MyAlias` and `-> MyClass` disable the return check
+that `-> int` performs correctly — for PEP 695 aliases, `TypeAlias`, implicit
+aliases, same-file classes, and imported classes alike
+([#378](https://github.com/Nimblesite/Basilisk/issues/378)). No amount of solver
+sophistication helps while the front door takes text.
+
+Work:
+
+- Build the resolution cascade specified in
+  [TYPEINF-ANNOTATION-RESOLUTION](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ANNOTATION-RESOLUTION)
+  (alias table → class table → import table → typeshed → forward reference) as
+  one shared entry point that every rule and the `bidir` engine consume.
+- Expand alias chains transparently, with cycle detection that terminates on
+  legal recursive aliases rather than rejecting them
+  ([#371](https://github.com/Nimblesite/Basilisk/issues/371)).
+- Retire `is_unverifiable_return_type`'s blanket `Named` skip in favour of
+  "resolved → check it, unresolved → `Unknown` → suppress". The skip is a
+  false-positive guard today; it may only be removed as the cascade makes each
+  category genuinely resolvable, one category at a time, with the conformance
+  false-positive ceiling held at zero throughout.
+- Resolve **decorators** through the same binding table so a decorator reached
+  via a local alias (`o = overload`) is recognised as the symbol it is bound to
+  ([#380](https://github.com/Nimblesite/Basilisk/issues/380)).
+
+Sequencing: aliases and same-file classes first (pure `ResolvedModule` data,
+no new dependencies), then imported project symbols, then typeshed — the last
+of which is gated on [#324](https://github.com/Nimblesite/Basilisk/issues/324)
+and must not block the first two.
+
+## Call-site and expression coverage {#NARROWPLAN-CALLSITES}
+
+Rules that fire on a call must fire wherever the call *appears*, not only where
+it is convenient to find. Two confirmed position-sensitivity defects:
+
+- `constructors_call_init` only fires when the constructor call is the
+  outermost expression of a statement or an assignment RHS: `C(1)` is caught,
+  `C(1).method()` is not
+  ([#381](https://github.com/Nimblesite/Basilisk/issues/381)). Chained
+  construction is a mainstream idiom, so this is a large hole.
+- A function assigned into a class body is not bound as a method, so the
+  implicit receiver is never counted against the declared parameters
+  ([#382](https://github.com/Nimblesite/Basilisk/issues/382)).
+
+Both want the same remedy the expression-inference work already implies: a
+single traversal that visits every `Call`/`Attribute` node with a resolved
+callee type, replacing per-rule statement-shape matching.
+
 ## Expression inference {#NARROWPLAN-EXPRESSIONS}
 
 Infer same-module and imported function/method return types; constructor,
@@ -193,6 +255,59 @@ Introduce each shared component behind existing checker APIs; do not create an
 alternate checking mode. Migrate assignment, return, call, and `assert_type`
 rules incrementally, deleting the replaced local logic in the same change. Add
 spec-ID-linked mutation-resistant tests for each migrated behavior.
+
+**A shared component with no production caller is on-plan, not dead code.**
+Stage 2 deliberately lands each core *and its pinning tests* one change ahead
+of the rules that consume it, because [NARROWPLAN-SUBTYPING] requires parity
+tests to pin current accepted/rejected cases *before* any helper is replaced,
+and [NARROWPLAN-CONSTRAINTS] requires the generic interactions to be covered
+*before* the solver reaches rule decisions. Wiring earlier would put unproven
+inference behind live diagnostics and risk the zero-false-positive gate.
+`bidir::generics::GenericEnv` and `subtyping::SubtypingContext` are in exactly
+that state now; both module headers record it. They are removed from this
+limbo by **wiring them up here**, never by deleting them and never by
+suppressing a lint — each stays `pub` from the crate root, which is what
+keeps the workspace's `dead_code = "deny"` satisfied without an `#[allow]`.
+
+**The flow walker's synthesis path is UNTIMED until it is wired, and must be
+made cheap BEFORE the first rule consumes it.** The same staging that keeps
+these cores off live diagnostics also keeps them off every performance gate:
+`narrow::analyse_function_in` is reached only through the `narrowed_uses`
+Salsa query, whose sole callers today are tests and
+`examples/ift_measure.rs`. `make bench` times `basilisk check`, which never
+enters this code — so no ratchet is watching it, and a cost that small
+fixtures hide will land as a *regression on the first wiring change*, when
+the zero-tolerance benchmark gate ([CHKARCH-TESTING-BENCH-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET))
+is suddenly live over it and the change is also carrying diagnostic risk.
+
+The known cost is in `FlowWalker::synth_type` (`narrow/flow.rs`), called per
+assign/ann-assign RHS, per `for` iterable, per bare-expression statement and
+per `while` test. Each call:
+
+- rebuilds a fresh `HashMap<String, Ty>` from **the entire module's**
+  `ctx.callables` (production seeds this from `callable_interface` for the
+  whole file), then
+- extends it with `NarrowEnv::visible()`, which itself clones `declared` +
+  `scope` + every open frame, then
+- constructs a fresh `BidirEngine` and calls `finish()`, discarding all
+  solver state so nothing amortizes.
+
+Per-expression work therefore scales with module size, making the total
+scale as roughly function-size × module-size. Compounding it, divergence is
+probed and then re-walked: `walk_if` calls `body_diverges(&node.body)` and
+then walks that same body, whose `walk_stmts` re-runs `one_diverges` on each
+statement, so nested control flow re-synthesizes the same expressions.
+(Frequency is bounded — `stmts_diverge` probes only `stmts.last()`, and
+`stmt_diverges` synthesizes only for `Stmt::Expr` and a `while` test — so the
+defect is cost-per-call and redundancy, not call count.)
+
+Required before wiring, as a gate and not a follow-up: convert
+`ctx.callables` to `Ty` **once** at walker construction; hold one long-lived
+`BidirEngine` and push/pop the visible-binding overlay instead of rebuilding
+it; and memoize divergence per statement so the probe/walk overlap cannot
+re-synthesize. Fixing it while the component still has no consumers is
+strictly cheaper — there is no caller to break, no diagnostic to hold steady,
+and no conformance run to re-certify.
 
 ## Measurable targets {#NARROWPLAN-TARGETS}
 
@@ -358,6 +473,50 @@ reproducible, write-always, ratcheted:
   projection idempotence, and polar-variable resolution over 300+ real
   annotations.
 
+### Stage 0.5 — annotation name resolution
+
+Prerequisite for Stage 2; see
+[NARROWPLAN-ANNOTATION-RESOLUTION](#NARROWPLAN-ANNOTATION-RESOLUTION). Each box
+lands with a regression test that fails before it and passes after, and holds
+the conformance ratchets (100% / 0 false positives) at every step.
+
+- [ ] Add one shared `resolve_annotation(module, expr) → InferredType` entry
+  point implementing the
+  [TYPEINF-ANNOTATION-RESOLUTION](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ANNOTATION-RESOLUTION)
+  cascade over the Ruff AST annotation node, replacing
+  `InferredType::from_annotation(<source text>)`. No rule may parse annotation
+  text after this lands.
+- [ ] Resolve PEP 695 `type` aliases, `X: TypeAlias = ...`, and implicit
+  aliases, including alias chains and use-before-declaration; expand
+  transparently at every nesting depth.
+- [ ] Resolve same-file classes, then imported project symbols; leave typeshed
+  behind the same entry point so [#324](https://github.com/Nimblesite/Basilisk/issues/324)
+  can fill it without a second call path.
+- [ ] Replace the blanket `Named` skip in `rules/shared.rs::is_unverifiable_return_type`
+  with a resolved/unresolved split, narrowing it one category at a time as the
+  cascade covers that category.
+- [ ] Terminating cycle detection for recursive aliases: `type J = list[J]`,
+  `type J = int | list[J]`, `type J = dict[str, J]`, and the canonical
+  `JsonValue` union all produce **no** diagnostic
+  ([#371](https://github.com/Nimblesite/Basilisk/issues/371)).
+- [ ] Add PEP 695 `type`-statement counterparts of every recursive case in
+  upstream `aliases_recursive.py` to our own suite — the upstream file contains
+  zero `type` statements, which is why this false positive survived a 100%
+  score. Coverage of a syntax the upstream suite omits is our responsibility.
+- [ ] Resolve decorator expressions through the binding table so `o = overload`
+  is recognised as `typing.overload`; cover `from typing import overload as ov`
+  and `typing.overload` / `t.overload` attribute spellings
+  ([#380](https://github.com/Nimblesite/Basilisk/issues/380)).
+- [ ] Visit calls in every expression position rather than statement-outermost
+  only, so `C(1).method()` reports the same constructor-arity error as `C(1)`
+  ([#381](https://github.com/Nimblesite/Basilisk/issues/381)).
+- [ ] Bind functions assigned in a class body as methods — implicit receiver
+  consumed on instance access, unbound on class access, `staticmethod` /
+  `classmethod` honoured ([#382](https://github.com/Nimblesite/Basilisk/issues/382)).
+- [ ] Wire the shared entry point into the `bidir` engine, which currently has
+  no name resolution at all and is consumed by only two rules
+  (`narrowing_typeguard`, `narrowing_typeis_2`).
+
 ### Stage 1 — incrementality
 
 - [x] Move inference onto definition-level and expression-level Salsa tracked
@@ -451,8 +610,17 @@ reproducible, write-always, ratcheted:
   the sound-but-strict behavior
   (`BasiliskConfig::narrow_attributes_across_calls`, parsed + merged in
   `crates/basilisk-config/src/parse.rs`).
-- [ ] Replace pattern-matched reachability idioms with inference-driven
+- [x] Replace pattern-matched reachability idioms with inference-driven
   reachability.
+  — `narrow/reachability.rs`: divergence is decided by ASKING THE ENGINE
+  (a `SynthFn` synthesis oracle) — a call statement diverges iff its
+  synthesized type is `Never`, never by matching callee names. Compound
+  forms recurse (`if`/`else` both diverge, `while True` without `break`,
+  fully-diverging `match` with a wildcard arm, `try`/`finally`), and the
+  flow walker records everything after a proven-diverging statement as
+  unreachable (`narrow/flow.rs::walk_stmts`). Gradual posture: `Unknown`
+  never fabricates divergence. Unit tests in `reachability.rs`; pipeline
+  tests in `tests/narrow_flow_tests.rs`.
 - [x] Measure narrowing richness against the utahplt/ifT-benchmark
   (<https://github.com/utahplt/ift-benchmark>).
   — Harness: `crates/basilisk-checker/examples/ift_measure.rs` over a fresh
@@ -493,8 +661,25 @@ reproducible, write-always, ratcheted:
   the engine's call synthesis; argument-dependent builtins deliberately
   stay `Unknown` rather than guessed. Existing rule-local tables migrate
   onto it at the Integration stage.
-- [ ] Reuse the same inference results for diagnostics, hover, completions, and
+- [x] Reuse the same inference results for diagnostics, hover, completions, and
   inlay hints.
+  — One entry point: `crates/basilisk-lsp/src/util.rs::rhs_or_expr_type_display`
+  answers from the resolver's `RhsKind` table first (stable displays) and
+  falls back to the SAME bidirectional engine the checker's
+  `expression_types` query uses (`inference::infer_expression_source` +
+  `display_widened`, gated by `is_fully_known` so a partial
+  `list[Unknown]` renders as silence, [TYPEINF-TARGET-GRADUAL]).
+  Consumers: hover variable/attribute signatures and member-access
+  receiver resolution (`hover/access.rs::receiver_type_name`), dot
+  completions (`hover/members.rs::dot_receiver_builtin_type`; the
+  completion handler now enriches its re-resolve via
+  `resolve_module_imports`, which also made builtin-receiver dot
+  completions live), and inlay hints (`inlay_hints.rs`). E2E: engine-only
+  receivers (`name = "a".upper()`) hover, complete, and hint in
+  `ws_test_hover.rs` / `ws_test_completion.rs` / `ws_test_inlay_hints.rs`.
+  Known limit: function return-type inlay hints still go through
+  `infer_return_type_display` (the resolver's `ReturnStmtInfo` carries no
+  value span to hand the engine).
 - [x] Infer unannotated parameter types from body constraints and call sites
   so `BSK-0001` becomes unnecessary where types are recoverable (issue
   [#317](https://github.com/MelbourneDeveloper/Basilisk/issues/317)).
@@ -519,20 +704,70 @@ reproducible, write-always, ratcheted:
 
 ### Stage 2 — generic constraints
 
-- [ ] Collect lower, upper, constrained, default, and expected-return bounds for
+- [x] Collect lower, upper, constrained, default, and expected-return bounds for
   TypeVars.
-- [ ] Solve bounds deterministically and report ambiguity without guessing.
-- [ ] Cover constrained/bound TypeVars, PEP 696 defaults, ParamSpec, and
+  — `crates/basilisk-checker/src/bidir/generics.rs` (`GenericEnv`): the
+  declared-generics layer over the engine's anonymous `TyVarStore`.
+  Declarations carry `bound=`, constrained value sets, and PEP 696
+  defaults; evidence accumulates as deduplicated lower bounds (argument
+  flows), upper bounds (expected-return propagation records the demanded
+  type), `ParamSpec` parameter-list captures, and `TypeVarTuple` element
+  captures — wrong-kind evidence is flagged, never silently dropped.
+- [x] Solve bounds deterministically and report ambiguity without guessing.
+  — `GenericEnv::resolve`: the answer depends only on the declaration and
+  deduplicated evidence. Joins keep literal precision (deferred
+  generalization); a constrained var solves to exactly ONE listed
+  constraint; evidence supporting several incomparable answers returns
+  `Resolution::Ambiguous` with every candidate, no evidence and no
+  default returns `Unsolved`, and contradictions return `Unsatisfiable`
+  with both sides — never a guess ([TYPEINF-EXCEEDS-NOUNKNOWN]). Ground
+  checks delegate to `is_assignable_to`, so `Any` stays gradual.
+- [x] Cover constrained/bound TypeVars, PEP 696 defaults, ParamSpec, and
   TypeVarTuple interactions before wiring the solver into rule decisions.
+  — `tests/generic_constraints_tests.rs` (21 tests): bound enforcement,
+  constraint selection/widening (`Literal["a"]` → the `str` constraint),
+  split-selection ambiguity, upper-narrowed constraint sets, defaults
+  used only without evidence (including the gradual `...` `ParamSpec`
+  default), capture conflicts, elementwise `TypeVarTuple` joins with
+  mixed-length ambiguity, and kind-conflict reporting. Rule wiring is
+  Integration-stage by design ([NARROWPLAN-INTEGRATION]).
 
 ### Stage 2 — shared subtyping
 
-- [ ] Build a context for nominal class relationships, Protocol members,
+- [x] Build a context for nominal class relationships, Protocol members,
   TypedDict schemas, generic variance, and Callable parameter kinds.
-- [ ] Replace duplicated rule-local subtype helpers only after parity tests pin
+  — `crates/basilisk-checker/src/subtyping.rs` (`SubtypingContext`):
+  cycle-guarded transitive nominal walk, structural Protocol satisfaction
+  (inherited members count, missing/incompatible members reject),
+  `TypedDict` schemas (required/`NotRequired`, `ReadOnly` covariant vs
+  mutable invariant), declared per-position variance
+  (invariant-by-default), and `Callable` contravariant-params /
+  covariant-return with gradual `...`. Tested in
+  `tests/subtyping_context_tests.rs`; rules consume it at the
+  Integration stage ([NARROWPLAN-INTEGRATION]).
+- [x] Replace duplicated rule-local subtype helpers only after parity tests pin
   their current accepted/rejected cases.
-- [ ] Keep `Any`/`Unknown` gradual behavior and the numeric tower consistent
+  — The text-level tower now has ONE home (`subtyping::name_subtype`),
+  pinned by the parity table in `tests/subtyping_context_tests.rs`; the
+  provably-identical helpers delegate to it (`rules/shared.rs::
+  is_numeric_subtype`, `narrowing_typeis`, `narrowing_typeis_2`,
+  `overloads_evaluation`, `generics_typevartuple_callable`,
+  `generics_syntax_scoping/alias_misuse`, `callables_subtyping` keeping
+  its local `Any`/`object` acceptances, `aliases_implicit` keeping its
+  conservative unknown-bound accept). The two DELIBERATELY-different
+  helpers stay local with their behavior pinned in place
+  (`rules/generics_basic_3/helper_parity_tests.rs`: bool<:int-only table
+  + nominal walk; `rules/protocols_generic/helper_parity_tests.rs`:
+  conservative TypeVar heuristic) — they merge into `SubtypingContext`
+  at Integration behind those same pins.
+- [x] Keep `Any`/`Unknown` gradual behavior and the numeric tower consistent
   across annotation parsing and inferred types.
+  — `tests/subtyping_context_tests.rs`: `Any`/`Unknown` bidirectional at
+  the `InferredType` layer and `Any`-either-side/`object`-top at the
+  context layer; the tower asserted to answer identically at the
+  annotation-text and `InferredType` layers wherever both define the
+  relation (`complex` stays text-level only — the parser folds it to
+  `Float`, the documented [TYPEINF-SUBTYPING-NOMINAL] trade-off).
 
 ### Stage 3 — type-level evaluation groundwork
 
@@ -570,6 +805,20 @@ reproducible, write-always, ratcheted:
 
 ### Integration and acceptance
 
+- [ ] **Blocks every item below.** Make `FlowWalker::synth_type` cheap before
+  any rule consumes `narrowed_uses` — see [NARROWPLAN-INTEGRATION](#NARROWPLAN-INTEGRATION).
+  Today it rebuilds the whole module's callables map plus a full
+  `NarrowEnv::visible()` clone and a fresh `BidirEngine` **per expression**, so
+  per-expression cost scales with module size. Three concrete changes:
+  (a) convert `ctx.callables` to `Ty` once at walker construction, not per
+  call; (b) hold one long-lived `BidirEngine`, pushing/popping the
+  visible-binding overlay instead of rebuilding it; (c) memoize divergence per
+  statement so the `walk_if` probe-then-walk and the `walk_stmts` re-probe stop
+  re-synthesizing the same expressions. Land it while the walker still has no
+  production consumer: no caller to break, no diagnostic to hold steady.
+- [ ] Record a `make bench` baseline on a fixture that actually exercises the
+  flow walker **in the same change that first wires it**, so the walker stops
+  being invisible to the ratchet the moment it starts costing real time.
 - [ ] Introduce each shared component behind existing checker APIs; do not
   create an alternate checking mode.
 - [ ] Migrate assignment, return, call, and `assert_type` rules incrementally,

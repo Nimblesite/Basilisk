@@ -31,6 +31,11 @@ pub struct NarrowContext {
     /// `@final` class names — the classes whose `type(x) is not C` branch
     /// may soundly exclude `C` ([TYPEINF-NARROWING-TYPEOF]).
     pub final_classes: std::collections::HashSet<String>,
+    /// Same-module callable interfaces (name → `Callable` type), seeding the
+    /// flow walker's expression synthesis so `x = f()` narrows through `f`'s
+    /// return and a `Never`-returning call statement counts as divergence
+    /// (inference-driven reachability, [TYPEINF-TARGET-NARROWING]).
+    pub callables: HashMap<String, InferredType>,
 }
 
 /// What one guard does to one variable in each branch.
@@ -173,7 +178,8 @@ fn project_optional_truthiness(
 }
 
 /// Python truthiness for the literal values represented by [`InferredType`].
-fn literal_is_truthy(literal: &LiteralValue) -> bool {
+/// Shared with [`super::reachability`] for `while True:` divergence.
+pub(crate) fn literal_is_truthy(literal: &LiteralValue) -> bool {
     match literal {
         LiteralValue::Int(value) => *value != 0,
         LiteralValue::Str(value) => !value.is_empty(),

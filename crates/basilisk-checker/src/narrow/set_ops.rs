@@ -40,20 +40,31 @@ pub fn intersect(declared: &InferredType, guard: &InferredType) -> InferredType 
 
 /// Intersection of a non-union declared atom with the guard type.
 fn intersect_atom(atom: &InferredType, guard: &InferredType) -> InferredType {
-    if matches!(guard, InferredType::Any | InferredType::Unknown) {
-        return atom.clone();
+    match guard {
+        InferredType::Any | InferredType::Unknown => atom.clone(),
+        // A union guard distributes member-wise: `int ∧ (bool | str)` keeps
+        // the overlapping member `bool` — a whole-union assignability check
+        // would wrongly collapse the intersection to `Never`.
+        InferredType::Union(members) => members
+            .iter()
+            .map(|member| intersect_atom(atom, member))
+            .fold(InferredType::Never, InferredType::union),
+        InferredType::Optional(inner) => InferredType::union(
+            intersect_atom(atom, inner),
+            intersect_atom(atom, &InferredType::None_),
+        ),
+        _ if atom.is_assignable_to(guard) => {
+            // The declared side is at least as precise — keep it (`Literal[1]`
+            // narrowed by `int` stays `Literal[1]`).
+            atom.clone()
+        }
+        _ if guard.is_assignable_to(atom) => {
+            // The guard is more precise (`int | str` member `int` guarded by
+            // `bool` becomes `bool`).
+            guard.clone()
+        }
+        _ => InferredType::Never,
     }
-    if atom.is_assignable_to(guard) {
-        // The declared side is at least as precise — keep it (`Literal[1]`
-        // narrowed by `int` stays `Literal[1]`).
-        return atom.clone();
-    }
-    if guard.is_assignable_to(atom) {
-        // The guard is more precise (`int | str` member `int` guarded by
-        // `bool` becomes `bool`).
-        return guard.clone();
-    }
-    InferredType::Never
 }
 
 /// The complement branch: remove from `declared` everything that would have
@@ -134,6 +145,34 @@ mod tests {
     fn literal_survives_broader_guard() {
         let literal = InferredType::Literal(LiteralValue::Int(3));
         assert_eq!(intersect(&literal, &InferredType::Int), literal);
+    }
+
+    /// A UNION guard over an ATOMIC declared type distributes member-wise:
+    /// `int ∧ (bool | str)` is `bool`, never a collapsed `Never`
+    /// (`isinstance(x, (bool, str))` with `x: int`).
+    #[test]
+    fn union_guard_over_atom_distributes_memberwise() {
+        let guard = InferredType::Union(vec![InferredType::Bool, InferredType::Str]);
+        assert_eq!(intersect(&InferredType::Int, &guard), InferredType::Bool);
+
+        let literals = InferredType::Union(vec![
+            InferredType::Literal(LiteralValue::Int(1)),
+            InferredType::Literal(LiteralValue::Str("a".to_owned())),
+        ]);
+        assert_eq!(
+            intersect(&InferredType::Int, &literals),
+            InferredType::Literal(LiteralValue::Int(1)),
+            "`x in (1, \"a\")` with x: int keeps exactly the int literal"
+        );
+    }
+
+    /// An `Optional` guard over an atom keeps the overlapping side.
+    #[test]
+    fn optional_guard_over_atom_keeps_the_overlap() {
+        let guard = InferredType::Optional(Box::new(InferredType::Int));
+        assert_eq!(intersect(&InferredType::Int, &guard), InferredType::Int);
+        assert_eq!(intersect(&InferredType::None_, &guard), InferredType::None_);
+        assert_eq!(intersect(&InferredType::Str, &guard), InferredType::Never);
     }
 
     /// Disjoint atoms narrow to `Never` positively and stay put negatively.

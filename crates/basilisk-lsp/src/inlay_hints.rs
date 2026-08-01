@@ -5,7 +5,7 @@
 use basilisk_resolver::{ResolvedModule, VariableInfo};
 use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel};
 
-use crate::util::{byte_offset_to_position, infer_return_type_display, rhs_type_display};
+use crate::util::{byte_offset_to_position, infer_return_type_display, rhs_or_expr_type_display};
 
 /// Compute inlay hints for a resolved module.
 #[must_use]
@@ -44,7 +44,11 @@ fn push_variable_type_hints(vars: &[VariableInfo], source: &str, hints: &mut Vec
         if var.has_annotation {
             continue;
         }
-        let type_name = inlay_type_display(&rhs_type_display(&var.rhs_kind));
+        let type_name = inlay_type_display(&rhs_or_expr_type_display(
+            &var.rhs_kind,
+            var.rhs_span,
+            source,
+        ));
         if type_name.is_empty() {
             continue;
         }

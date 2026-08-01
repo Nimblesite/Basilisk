@@ -71,6 +71,20 @@ impl NarrowEnv {
         self.declared.get(name)
     }
 
+    /// Every currently-visible binding — declared types shadowed by
+    /// whole-scope facts shadowed by branch frames (innermost last). This is
+    /// the scope the flow walker seeds expression synthesis with, so
+    /// `x = y` narrows through `y`'s *flow* type.
+    #[must_use]
+    pub fn visible(&self) -> HashMap<String, InferredType> {
+        let mut merged = self.declared.clone();
+        merged.extend(self.scope.clone());
+        for frame in &self.frames {
+            merged.extend(frame.clone());
+        }
+        merged
+    }
+
     /// Enter a branch: subsequent narrows apply only inside it.
     pub fn push_branch(&mut self) {
         self.frames.push(Frame::new());

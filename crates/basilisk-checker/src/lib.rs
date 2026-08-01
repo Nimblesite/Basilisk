@@ -48,6 +48,7 @@ pub mod rule_tags;
 pub mod rules;
 pub mod span_util;
 pub mod stub_constructor;
+pub mod subtyping;
 pub mod suppression;
 mod suppression_audit;
 /// Bounded type-level alias evaluation groundwork.

@@ -347,3 +347,28 @@ async fn test_ws_hover_local_annotated_variable() -> TestResult<()> {
 
     Ok(())
 }
+
+/// [NARROWPLAN-CHECKLIST] Stage 2 — member-access hover resolves the
+/// receiver's type through the SAME bidirectional engine as checker
+/// diagnostics (`receiver_type_name` → `rhs_or_expr_type_display` in
+/// `crates/basilisk-lsp/src/hover/access.rs`): a variable bound to a method
+/// call the `RhsKind` table cannot type still resolves for `str` methods.
+/// Dot completions share this exact receiver path.
+#[tokio::test]
+async fn test_ws_hover_member_access_via_engine_inferred_receiver() -> TestResult<()> {
+    let uri = "file:///hover_engine_receiver.py";
+    let code = "name = \"a\".upper()\nshort = name.strip()\n";
+    // Hover over `strip` on line 1 (`name.strip()`, col 13 hits "strip").
+    let resp = hover_at(uri, code, 1, 13, 320).await?;
+
+    assert!(
+        resp.contains("strip"),
+        "hover must resolve str.strip through the engine-inferred receiver: {resp}"
+    );
+    assert!(
+        resp.contains("str"),
+        "should present the str method: {resp}"
+    );
+
+    Ok(())
+}

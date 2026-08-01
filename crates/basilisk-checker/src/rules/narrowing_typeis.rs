@@ -107,14 +107,11 @@ fn extract_guard_inner(ann: &str) -> Option<&str> {
 
 /// `true` when `sub` is a subtype of `sup` for the implicit numeric tower
 /// (`bool <: int <: float <: complex`), or they are identical.
+///
+/// Delegates to the shared tower ([NARROWPLAN-SUBTYPING]); parity with the
+/// former local table is pinned in `tests/subtyping_context_tests.rs`.
 fn is_subtype(sub: &str, sup: &str) -> bool {
-    sub == sup
-        || matches!(
-            (sub, sup),
-            ("bool", "int" | "float" | "complex")
-                | ("int", "float" | "complex")
-                | ("float", "complex")
-        )
+    crate::subtyping::name_subtype(sub, sup)
 }
 
 /// Check whether the expected return type is compatible with the actual
