@@ -65,3 +65,48 @@ installed `site-packages` tree (the stored wheel is the source).
 `scripts/check-dependency-shape.sh` — `basilisk-stubs` still links no HTTP client), `deslop`,
 `make bench` (zero-tolerance baseline gate — no perf regression), conformance 100 % / 0 FP
 unchanged (advisories never enter the scored stream).
+
+## TODO {#TYPESHEDPYPI-TODO}
+
+### S1 — Source model & config (no transport) · `TYPESHEDPYPI-S1`
+
+- [x] `SourceSelection`/`SourceKind`/`SourceIdentity::PyPIPackage { name, sha256 }`.
+- [x] Selector arm: validate identity + active-source, emit **no** advisory.
+- [x] `SourceBackend::load_pypi_package` + `SelectionError`/`BackendError::PyPIPackage` (fail-closed).
+- [x] `typeshed-package` parsing (TOML + JSON) + mutual exclusion with `typeshed-commit`/`typeshed-path`.
+- [x] `TypeshedActiveSource::PyPIPackage` + `TypeshedSource::PyPIPackage`.
+- [x] Config-editor allowlists wired (`TypeshedConfigKey`, `TypeshedSettingKey`, mutation validation, `typeshed_policy_changed`, snapshot projection).
+- [x] Tests: selector pin suppresses advisories; config merge/spec-shape; mutation 3-way exclusion.
+
+### S2 — Offline verification backend · `TYPESHEDPYPI-S2`
+
+- [ ] Store layout `<store>/<64-hex sha256>/wheel.whl` + manifest (40-hex = commit, 64-hex = wheel — no collision).
+- [ ] `RuntimeBackend::load_pypi_package`: read stored wheel, SHA-256-hash it, assert == pin.
+- [ ] Build snapshot from the wheel's `stdlib/` via the archive VFS; identity `PyPIPackage`; no advisories.
+- [ ] Missing → `BackendError::Missing`; hash mismatch → `BackendError::Corrupt`; both surface as `NO SOURCE`.
+- [ ] **Open item:** confirm the target package's wheel ships a `stdlib/` tree; shape gate rejects otherwise. If the real layout differs, a mapping is required — flagged, not assumed.
+- [ ] Tests: verified wheel activates & suppresses; missing → `NO SOURCE` naming `basilisk typeshed download --package`; tampered → `NO SOURCE`.
+
+### S3 — Segregated acquisition · `TYPESHEDPYPI-S3`
+
+- [ ] Extend `basilisk-typeshed-fetch` (the only HTTP crate): `<name>` → PyPI JSON API → select wheel whose SHA-256 == pin.
+- [ ] Stream through the safety/shape/license gates reused from commit download; write `<store>/<sha256>/wheel.whl` + manifest.
+- [ ] Write nothing on failure; `GITHUB_TOKEN` never sent to PyPI.
+- [ ] CLI `basilisk typeshed download --package <name>@sha256:<hex>`.
+- [ ] Tests: verify+store; write-nothing-on-failure; `scripts/check-dependency-shape.sh` still passes (only `basilisk-typeshed-fetch` links HTTP).
+
+### S4 — uv auto-detection · `TYPESHEDPYPI-S4`
+
+- [ ] Extend `basilisk-uv` lockfile parser to capture `wheels[].hash` (currently dropped into `extra`).
+- [ ] When `typeshed-package` is unset, if `uv.lock` pins exactly one recognised typeshed-distribution package, auto-resolve from its wheel hash.
+- [ ] Ambiguous or absent → no auto-pin (bundled default + `typeshed_source_unpinned`).
+- [ ] Tests: `uv.lock` pinning the package → auto-pinned, no advisory; two candidates → no auto-pin.
+
+### Cross-cutting gates
+
+- [ ] `make test` green (coverage ratchet up).
+- [ ] clippy + fmt at strictest.
+- [ ] `make lint` (incl. `scripts/check-dependency-shape.sh` — `basilisk-stubs` links no HTTP client).
+- [ ] `deslop` clean.
+- [ ] `make bench` — zero-tolerance baseline gate, no perf regression.
+- [ ] Conformance 100 % / 0 FP unchanged (advisories never enter the scored stream).

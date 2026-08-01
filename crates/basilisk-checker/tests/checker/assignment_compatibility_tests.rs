@@ -37,6 +37,30 @@ def build_refs_dict() -> RefsDictT:
 }
 
 #[test]
+fn empty_dict_to_explicit_typealias_dict_alias_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Regression test for issue #282: the *explicit* `TypeAlias`-annotated form
+    // (`RefsDictT: TypeAlias = dict[...]`) must be treated as a value alias too,
+    // so the empty dict literal is assignable to it. The implicit form is
+    // covered by `empty_dict_to_implicit_dict_alias_no_diagnostic` above.
+    let source = r#"
+from typing import TypeAlias
+RefsDictT: TypeAlias = dict[tuple[str, str], str]
+
+def build_refs_dict() -> RefsDictT:
+    refs_dict: RefsDictT = {}
+    return refs_dict
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "assignment_compatibility");
+    assert!(
+        msgs.is_empty(),
+        "empty dict is assignable to an explicit TypeAlias dict alias; should not fire, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn mismatched_dict_literal_to_implicit_dict_alias_fires() -> Result<(), Box<dyn std::error::Error>>
 {
     // A dict literal whose key type contradicts the alias definition must

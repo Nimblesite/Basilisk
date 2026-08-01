@@ -73,7 +73,7 @@ pub(super) fn collect_value_aliases(module: &ResolvedModule) -> HashMap<String, 
         .collect();
     let mut aliases = HashMap::new();
     for var in &module.module_vars {
-        if var.has_annotation {
+        if var.has_annotation && !is_typealias_annotation(var, &module.source) {
             continue;
         }
         let Some(text) = alias_rhs_text(var, &module.source) else {
@@ -131,7 +131,7 @@ pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String
     let mut generics: HashMap<String, GenericAlias> = HashMap::new();
 
     for var in &module.module_vars {
-        if var.has_annotation {
+        if var.has_annotation && !is_typealias_annotation(var, &module.source) {
             continue;
         }
         let Some(text) = alias_rhs_text(var, &module.source) else {
@@ -152,7 +152,7 @@ pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String
 
     let mut specialised: Vec<(String, GenericAlias)> = Vec::new();
     for var in &module.module_vars {
-        if var.has_annotation {
+        if var.has_annotation && !is_typealias_annotation(var, &module.source) {
             continue;
         }
         let key = var.name.to_ascii_lowercase();
@@ -193,6 +193,21 @@ pub(super) fn alias_value_assignable(
         return Some(match_named_target(value, declared_name, ctx, 0));
     }
     None
+}
+
+/// Returns `true` when `var` carries an explicit `TypeAlias` annotation, i.e.
+/// `Name: TypeAlias = ...` (also `typing.TypeAlias`). Such assignments are
+/// value aliases too and must be collected despite `has_annotation` being set.
+fn is_typealias_annotation(var: &VariableInfo, source: &str) -> bool {
+    let Some(span) = var.annotation_span else {
+        return false;
+    };
+    let Some(text) = slice_span(source, span) else {
+        return false;
+    };
+    let trimmed = text.trim();
+    let base = trimmed.rsplit('.').next().unwrap_or(trimmed);
+    base == "TypeAlias"
 }
 
 /// The trimmed RHS source text of an alias assignment, if non-empty.
