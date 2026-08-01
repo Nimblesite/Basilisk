@@ -2,7 +2,7 @@
 //!
 //! Basilisk's own ownership analysis: scaffolding for the planned
 //! mutation-of-borrowed diagnostic ([CHKARCH-SAFETY-OWNERSHIP]). The concepts
-//! are borrowed from Mojo's ownership model; the rules are Basilisk's, spelled
+//! are inspired by Mojo's ownership model; the rules are Basilisk's, spelled
 //! in standard Python `Annotated` conventions.
 //!
 //! This is **not** wired into the checker pipeline and registers no rule, so it
