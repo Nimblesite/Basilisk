@@ -54,6 +54,7 @@ fn make_registry() -> Arc<PackageRegistry> {
         }),
         dependencies: deps,
         dev_dependencies: HashMap::new(),
+        wheels: Vec::new(),
         extra: HashMap::new(),
     };
     let root = LockPackage {
@@ -66,6 +67,7 @@ fn make_registry() -> Arc<PackageRegistry> {
         }),
         dependencies: vec![dep("requests", "2.31.0")],
         dev_dependencies: HashMap::from([("dev".to_owned(), vec![dep("pytest", "8.0.0")])]),
+        wheels: Vec::new(),
         extra: HashMap::new(),
     };
     let lock = LockFile {

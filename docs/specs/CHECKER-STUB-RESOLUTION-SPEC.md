@@ -282,6 +282,17 @@ no signed releases; authenticity rests on PyPI/TLS at download) — same shape a
 commit pin ([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)). Advisory behaviour
 follows [§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN).
 
+**uv auto-detection.** When `typeshed-package` is unset (and neither
+`typeshed-commit` nor `typeshed-path` is set), Basilisk reads `uv.lock`
+`wheels[].hash` and, if exactly one recognised typeshed-distribution package
+(e.g. `micropython-stdlib-stubs`) is pinned, treats that wheel SHA-256 as the
+effective `typeshed-package` pin — no key required (issue #312). Ambiguous (more
+than one candidate) or absent → no auto-pin; the bundled default stands with
+`typeshed_source_unpinned`. This is an effective-resolution override, never a
+configured key: nothing writes it to `pyproject.toml`, and an explicit source
+always wins. The recognised-package list is curated so a random dependency
+never silently replaces the stdlib source.
+
 #### The store {#STUBRES-TYPESHED-STORE}
 
 One immutable directory per commit under `typeshed-store-path`, read by the

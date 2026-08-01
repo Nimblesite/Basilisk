@@ -16,7 +16,13 @@ use std::time::{Duration, Instant};
 /// inside the budget, so the ceiling measures interpreter health, not runner
 /// load. The timeout is injectable ([`read_python_platform_within`]) so the
 /// timeout path is exercised without spending this full budget in tests.
-const PLATFORM_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+/// Probe ceiling. Generous so an honest interpreter never loses a race
+/// against runner load; the timeout path is exercised in tests via
+/// [`read_python_platform_within`] with an injected short budget. On macOS,
+/// `execve` of a shebang script *with arguments* incurs a multi-second kernel
+/// delay (a real interpreter binary is unaffected), so the ceiling must clear
+/// that window when tests spawn freshly-written script interpreters.
+const PLATFORM_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Read `sys.platform` from the interpreter that will execute the project.
 ///

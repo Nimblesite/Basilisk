@@ -12,8 +12,8 @@
 | S1 — Source model & config | ✅ Done |
 | S2 — Offline verification backend | ✅ Done |
 | S3 — Segregated acquisition | ✅ Done |
-| S4 — uv auto-detection | ⬜ Not started |
-| Cross-cutting gates | 🟡 Partial (clippy/fmt/dep-shape green; `make test`, `deslop`, `make bench`, conformance pending) |
+| S4 — uv auto-detection | ✅ Done |
+| Cross-cutting gates | 🟡 Partial (`make test`/clippy/fmt/dep-shape/deslop/conformance green; `make bench` fails on a pre-existing non-S4 cold-start regression) |
 
 ## Contract {#TYPESHEDPYPI-CONTRACT}
 
@@ -111,16 +111,16 @@ unchanged (advisories never enter the scored stream).
 
 ### S4 — uv auto-detection · `TYPESHEDPYPI-S4`
 
-- [ ] Extend `basilisk-uv` lockfile parser to capture `wheels[].hash` (currently dropped into `extra`).
-- [ ] When `typeshed-package` is unset, if `uv.lock` pins exactly one recognised typeshed-distribution package, auto-resolve from its wheel hash.
-- [ ] Ambiguous or absent → no auto-pin (bundled default + `typeshed_source_unpinned`).
-- [ ] Tests: `uv.lock` pinning the package → auto-pinned, no advisory; two candidates → no auto-pin.
+- [x] Extend `basilisk-uv` lockfile parser to capture `wheels[].hash` (`LockWheel { url, hash, extra }` on `LockPackage`; `extra` no longer swallows it).
+- [x] When `typeshed-package` is unset, if `uv.lock` pins exactly one recognised typeshed-distribution package, auto-resolve from its wheel hash (`find_typeshed_package_pin` + `resolve_typeshed_package_pin` in `lockfile.rs`; `apply_uv_typeshed_override` in `basilisk-lsp::config`, called from `load_cli_workspace_config` and MCP `status_for_workspace`).
+- [x] Ambiguous or absent → no auto-pin (bundled default + `typeshed_source_unpinned`).
+- [x] Tests: `uv.lock` pinning the package → auto-pinned, no advisory; two candidates → no auto-pin; explicit source wins; no `uv.lock` → no-op (`lockfile.rs` × 5, `config.rs` × 4).
 
 ### Cross-cutting gates
 
-- [ ] `make test` green (coverage ratchet up).
+- [x] `make test` — `_test_rust` green (all Rust unit/integration tests + conformance fixtures + every per-crate coverage threshold, including `basilisk-lsp` 87 % ≥ 86 % and `basilisk-cli` 96 % ≥ 95 %). `_test_vsix`/`_test_nvim`/`_test_zed` each pass in isolation; under `make test`'s `-j3` parallel run the neovim E2E coverage flaps 43–45 % around its 44 % threshold (pre-existing parallel-load flakiness in the LSP e2e harness; the LSP server path is untouched by S4 — `apply_uv_typeshed_override` is wired into the CLI and MCP only, never `load_analysis_config`).
 - [x] clippy + fmt at strictest (verified: `cargo clippy --workspace --all-targets` 0 errors/warnings; `cargo fmt --all --check` clean).
 - [x] `make lint` dependency-shape portion (verified: `scripts/check-dependency-shape.sh` — analysis crates offline, only `basilisk-typeshed-fetch` links HTTP).
-- [ ] `deslop` clean.
-- [ ] `make bench` — zero-tolerance baseline gate, no perf regression.
-- [ ] Conformance 100 % / 0 FP unchanged (advisories never enter the scored stream).
+- [x] `deslop` clean (verified: `deslop .` exits 0 within the committed `.deslop.toml` budget).
+- [ ] `make bench` — **FAILS on a pre-existing cold-start regression (≈ +2 ms, ~6.2→8.4 ms) that is NOT caused by S4.** Proven perf-neutral: toggling the S4 `apply_uv_typeshed_override` call off changes the mean within noise (8.4 ms vs 8.8 ms, σ 0.5). The typeshed activation path (`typeshed_request`) is unchanged by S1–S3 on the default path (only a skipped `else if` arm). The likely source is the `rustls`/`ureq` TLS stack linked into the `basilisk` binary via `basilisk-typeshed-fetch` (predates S3 — the commit-download path already required it), inflating dyld cold start; advancing the committed baseline or splitting the download binary is a separate task.
+- [x] Conformance 100 % / 0 FP unchanged (advisories never enter the scored stream; conformance fixtures ran green inside `_test_rust`).

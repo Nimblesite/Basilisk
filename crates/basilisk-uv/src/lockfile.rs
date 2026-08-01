@@ -179,8 +179,7 @@ fn is_typeshed_distribution(name: &str) -> bool {
 /// raw 64-hex digest, or `None` if it is absent/malformed.
 fn wheel_sha256_hex(hash: &str) -> Option<&str> {
     let hex = hash.strip_prefix("sha256:")?;
-    (hex.len() == 64 && hex.as_bytes().iter().all(u8::is_ascii_hexdigit))
-        .then_some(hex)
+    (hex.len() == 64 && hex.as_bytes().iter().all(u8::is_ascii_hexdigit)).then_some(hex)
 }
 
 /// If `uv.lock` pins **exactly one** recognised typeshed-distribution package,
@@ -215,18 +214,18 @@ pub fn find_typeshed_package_pin(lock: &LockFile) -> Option<(String, String)> {
 
 /// Resolve the typeshed-distribution pin a `uv.lock` carries, as a
 /// `name@sha256:<hex>` spec string ready for `typeshed-package`
-/// ([STUBRES-TYPESHED-PYPI], issue #312). Returns `None` when this is not a uv
-/// project, has no lockfile, the lockfile is unreadable, or no single
-/// recognised package is pinned — callers then fall back to the bundled
-/// default. Disk I/O is confined to this function.
+/// ([STUBRES-TYPESHED-PYPI], issue #312). Returns `None` when this project has
+/// no `uv.lock`, the lockfile is unreadable, or no single recognised package is
+/// pinned — callers then fall back to the bundled default. The common case (no
+/// `uv.lock`) is a single `is_file()` stat so the check is negligible on the
+/// CLI hot path; disk I/O is confined to this function.
 #[must_use]
 pub fn resolve_typeshed_package_pin(project_root: &Path) -> Option<String> {
-    use crate::detect::detect_uv_project;
-    let uv_info = detect_uv_project(&[project_root.to_path_buf()])?;
-    if !uv_info.has_lockfile {
+    let lock_path = project_root.join("uv.lock");
+    if !lock_path.is_file() {
         return None;
     }
-    let lock = parse_lock_file(&uv_info.root.join("uv.lock")).ok()?;
+    let lock = parse_lock_file(&lock_path).ok()?;
     let (name, sha256) = find_typeshed_package_pin(&lock)?;
     Some(format!("{name}@sha256:{sha256}"))
 }
@@ -486,8 +485,7 @@ wheels = [
             find_typeshed_package_pin(&lock),
             Some((
                 "micropython-stdlib-stubs".to_owned(),
-                "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-                    .to_owned(),
+                "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_owned(),
             ))
         );
     }

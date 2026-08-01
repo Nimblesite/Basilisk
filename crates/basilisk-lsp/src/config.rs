@@ -994,4 +994,121 @@ mod tests {
         );
         assert_eq!(default_request.store_path, None);
     }
+
+    // [STUBRES-TYPESHED-PYPI] (issue #312): when no typeshed source is
+    // configured, `uv.lock` pinning exactly one recognised typeshed
+    // distribution auto-resolves to a `PyPI` package pin — no advisory.
+    #[test]
+    fn apply_uv_typeshed_override_auto_pins_from_uv_lock() {
+        use basilisk_stubs::typeshed::source::SourceSelection;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("uv.lock"),
+            r#"
+version = 1
+
+[[package]]
+name = "micropython-stdlib-stubs"
+version = "1.0.0"
+wheels = [
+    { hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+]
+"#,
+        )
+        .unwrap();
+        let mut config = WorkspaceConfig::default();
+        apply_uv_typeshed_override(&mut config, dir.path());
+        let spec = config
+            .typeshed_package
+            .as_deref()
+            .expect("uv.lock pin should populate typeshed_package");
+        assert_eq!(
+            spec,
+            "micropython-stdlib-stubs@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        );
+        let request = typeshed_request(&config).expect("valid PyPI request");
+        assert!(
+            matches!(
+                request.selection,
+                SourceSelection::PyPIPackage { ref name, .. } if name == "micropython-stdlib-stubs"
+            ),
+            "auto-resolved pin must select the PyPI package source"
+        );
+    }
+
+    // An explicit source configured by the user wins — uv.lock never overrides
+    // an intentional choice ([STUBRES-TYPESHED-PYPI]).
+    #[test]
+    fn apply_uv_typeshed_override_skips_when_a_source_is_configured() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("uv.lock"),
+            r#"
+version = 1
+
+[[package]]
+name = "micropython-stdlib-stubs"
+version = "1.0.0"
+wheels = [
+    { hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+]
+"#,
+        )
+        .unwrap();
+        let mut config = WorkspaceConfig {
+            typeshed_commit: Some("83C2518A9E6ABBDA0C44592C3483DE459198F887".to_owned()),
+            ..WorkspaceConfig::default()
+        };
+        apply_uv_typeshed_override(&mut config, dir.path());
+        assert!(
+            config.typeshed_package.is_none(),
+            "an explicit commit pin must not be overwritten by uv.lock"
+        );
+    }
+
+    // An ambiguous lock (two recognised distributions) does not auto-pin — the
+    // bundled default + `typeshed_source_unpinned` advisory stand.
+    #[test]
+    fn apply_uv_typeshed_override_skips_when_lock_is_ambiguous() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("uv.lock"),
+            r#"
+version = 1
+
+[[package]]
+name = "micropython-stdlib-stubs"
+version = "1.0.0"
+wheels = [
+    { hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+]
+
+[[package]]
+name = "MicroPython_Stdlib_Stubs"
+version = "1.0.0"
+wheels = [
+    { hash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+]
+"#,
+        )
+        .unwrap();
+        let mut config = WorkspaceConfig::default();
+        apply_uv_typeshed_override(&mut config, dir.path());
+        assert!(
+            config.typeshed_package.is_none(),
+            "an ambiguous lock must not auto-pin"
+        );
+    }
+
+    // A project without `uv.lock` is left untouched (the common case).
+    #[test]
+    fn apply_uv_typeshed_override_is_a_noop_without_uv_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = WorkspaceConfig::default();
+        apply_uv_typeshed_override(&mut config, dir.path());
+        assert!(
+            config.typeshed_package.is_none(),
+            "no uv.lock must leave the config untouched"
+        );
+    }
 }
