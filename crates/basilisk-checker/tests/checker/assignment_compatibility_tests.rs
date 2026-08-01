@@ -61,6 +61,34 @@ def build_refs_dict() -> RefsDictT:
 }
 
 #[test]
+fn empty_dict_to_quoted_typealias_dict_alias_no_diagnostic(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Any annotation may be written as a string, so `RefsDictT: "TypeAlias"` and
+    // `RefsDictT: "typing.TypeAlias"` declare exactly the same alias as the bare
+    // forms. Recognising only the bare spelling would reinstate the issue #282
+    // false positive for anyone using string annotations.
+    let source = r#"
+from typing import TypeAlias
+import typing
+RefsDictT: "TypeAlias" = dict[tuple[str, str], str]
+OtherT: 'typing.TypeAlias' = dict[str, int]
+
+def build_refs_dict() -> RefsDictT:
+    refs_dict: RefsDictT = {}
+    other: OtherT = {}
+    print(other)
+    return refs_dict
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "assignment_compatibility");
+    assert!(
+        msgs.is_empty(),
+        "a string-annotated TypeAlias is still a TypeAlias; should not fire, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn paramspec_callable_typealias_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     // A `TypeAlias`-annotated alias whose body is a `Callable` parameterised by
     // a `ParamSpec` must NOT be treated as a textually-substitutable generic

@@ -6,7 +6,10 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::{is_full_commit_sha, parse_typeshed_package, BasiliskConfig, RuleSeverity};
+use super::{
+    is_full_commit_sha, is_valid_distribution_name, parse_typeshed_package, BasiliskConfig,
+    RuleSeverity,
+};
 
 /// [STUBRES-TYPESHED-CONFIG]: only a full 40-char hex SHA is a valid pin.
 #[test]
@@ -141,6 +144,9 @@ fn typeshed_package_spec_rejects_malformed_pins() {
     const MALFORMED: &str = "typeshed-package must be of the form `name@sha256:<64-hex>`";
     const BAD_DIGEST: &str = "typeshed-package sha256 must be 64 hex characters";
     const NO_NAME: &str = "typeshed-package distribution name is empty";
+    const BAD_NAME: &str =
+        "typeshed-package distribution name must be a PEP 508 name: ASCII letters, digits, \
+         `.`, `_`, or `-`, beginning and ending with a letter or digit";
     let cases = [
         ("micropython-stdlib-stubs", MALFORMED),
         (
@@ -164,12 +170,65 @@ fn typeshed_package_spec_rejects_malformed_pins() {
             "name@sha256:x@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             BAD_DIGEST,
         ),
+        // [STUBRES-TYPESHED-PYPI]: the name becomes a path segment of the PyPI
+        // index URL, so anything outside the PEP 508 alphabet — a separator, a
+        // query/fragment introducer, an escape, or a traversal — is refused at
+        // the parser, before a request could ever be built from it.
+        (
+            "../typeshed@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            BAD_NAME,
+        ),
+        (
+            "stubs/json@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            BAD_NAME,
+        ),
+        (
+            "stubs?x=1@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            BAD_NAME,
+        ),
+        (
+            "stubs%2f@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            BAD_NAME,
+        ),
+        // PEP 508 requires the first and last character to be alphanumeric, so
+        // a leading or trailing separator is not a name either.
+        (
+            "-stubs@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            BAD_NAME,
+        ),
+        (
+            "stubs.@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            BAD_NAME,
+        ),
     ];
     for (spec, expected_reason) in cases {
         assert_eq!(
             parse_typeshed_package(spec),
             Err(expected_reason.to_owned()),
             "`{spec}` must be rejected with the reason that explains why"
+        );
+    }
+}
+
+/// [STUBRES-TYPESHED-PYPI]: the name check exists to keep a hostile value out
+/// of the index URL, so it must not also reject the ordinary names real stub
+/// distributions publish. Every separator PEP 508 allows is legal *between*
+/// alphanumerics, in any case, including a single-character name.
+#[test]
+fn valid_distribution_names_cover_the_real_pep_508_alphabet() {
+    for name in [
+        "micropython-stdlib-stubs",
+        "types_requests",
+        "zope.interface",
+        "Django",
+        "ruamel.yaml.clib",
+        "a",
+        "A1",
+        "backports.tarfile",
+    ] {
+        assert!(
+            is_valid_distribution_name(name),
+            "`{name}` is a PEP 508 distribution name and must be accepted"
         );
     }
 }

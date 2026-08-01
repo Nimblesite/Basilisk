@@ -110,6 +110,16 @@ impl PypiClient {
 
 impl PypiApi for PypiClient {
     fn fetch_wheel(&self, name: &str, sha256: &str) -> Result<Vec<u8>, TransportError> {
+        // `name` becomes a path segment of the index URL, so it is constrained
+        // to the PEP 508 alphabet *before* a request is built — a name that
+        // could redirect the lookup to another resource never reaches the
+        // network ([STUBRES-TYPESHED-PYPI]). The config layer rejects the same
+        // shape at parse time; this is the boundary that makes it structural
+        // rather than a caller convention, since `PypiApi` is public.
+        if !basilisk_config::is_valid_distribution_name(name) {
+            tracing::warn!("typeshed package name is not a PEP 508 distribution name; not fetched");
+            return Err(TransportError::Metadata);
+        }
         let url = format!("{PYPI_JSON_ROOT}/{name}/json");
         let project: PyPIProject = self.get_json(&url)?;
         let wheel_url = find_wheel(&project, sha256).ok_or(TransportError::Metadata)?;
@@ -218,6 +228,31 @@ mod tests {
             find_wheel(&project, PINNED).is_none(),
             "an sdist or a mismatched wheel must never be selected"
         );
+    }
+
+    /// [STUBRES-TYPESHED-PYPI]: the distribution name is a path segment of the
+    /// index URL, so a name outside the PEP 508 alphabet is refused **before**
+    /// a request exists. This runs offline precisely because the rejection
+    /// happens ahead of the transport — a name that reached `get_json` would
+    /// try to open a socket and this test would not be hermetic.
+    #[test]
+    fn fetch_wheel_refuses_a_name_outside_the_pep_508_alphabet() {
+        let client = PypiClient::new();
+        for name in [
+            "../../etc/passwd",
+            "name/json?x=",
+            "name#frag",
+            "name%2fjson",
+            "",
+            ".leading-dot",
+            "trailing-dot.",
+        ] {
+            assert_eq!(
+                client.fetch_wheel(name, PINNED).err(),
+                Some(TransportError::Metadata),
+                "`{name}` must be rejected before any request is built",
+            );
+        }
     }
 
     #[test]

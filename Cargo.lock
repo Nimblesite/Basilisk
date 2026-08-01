@@ -432,6 +432,7 @@ dependencies = [
 name = "basilisk-typeshed-fetch"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
+ "basilisk-config",
  "basilisk-stubs",
  "serde",
  "serde_json",

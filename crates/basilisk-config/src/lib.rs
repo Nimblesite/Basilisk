@@ -30,7 +30,8 @@ pub use editor::{
     RuleConfigUpdate, TypeshedConfigKey, TypeshedConfigUpdate,
 };
 pub use parse::{
-    is_full_commit_sha, parse_typeshed_package, BasiliskConfig, RuleTables, DEFAULT_CACHE_DIR,
+    is_full_commit_sha, is_valid_distribution_name, parse_typeshed_package, BasiliskConfig,
+    RuleTables, DEFAULT_CACHE_DIR,
 };
 pub use paths::{is_virtualenv_dir, path_matches_pattern};
 pub use severity::RuleSeverity;

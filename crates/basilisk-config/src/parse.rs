@@ -442,11 +442,40 @@ pub fn is_full_commit_sha(sha: &str) -> bool {
     sha.len() == 40 && sha.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
+/// Whether `name` is a legal Python distribution name — the only accepted
+/// `typeshed-package` name form ([STUBRES-TYPESHED-PYPI]).
+///
+/// This is the grammar [PEP 508](https://peps.python.org/pep-0508/#names)
+/// defines for a distribution name (`[A-Za-z0-9]` at each end, and
+/// `[A-Za-z0-9._-]` throughout), checked here rather than with a regex so the
+/// alphabet is explicit.
+///
+/// The name is the analogue of [`is_full_commit_sha`] for the package pin: it
+/// is the caller-supplied half of an identity that later becomes a **path
+/// segment of the `PyPI` index URL**. Restricting it to this alphabet means a
+/// configured name can never carry `/`, `?`, `#`, `%`, or a bare `..` into
+/// that URL, so a pin cannot be written that redirects the request to a
+/// different resource. The digest half is separately constrained to 64 hex,
+/// and the fetched bytes must re-hash to it regardless — but a name is
+/// rejected *before* any request is built, not compensated for afterwards.
+#[must_use]
+pub fn is_valid_distribution_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    let (Some(first), Some(last)) = (bytes.first(), bytes.last()) else {
+        return false;
+    };
+    first.is_ascii_alphanumeric()
+        && last.is_ascii_alphanumeric()
+        && bytes
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(*b, b'.' | b'_' | b'-'))
+}
+
 /// Parse a `typeshed-package` pin spec of the form `"name@sha256:<hex>"`
 /// ([STUBRES-TYPESHED-PYPI], issue #312). The distribution name precedes the
-/// `@sha256:` separator; the hash must be 64 hex characters. This is the one
-/// parser for the pin — the LSP and config editor call it rather than
-/// carrying a divergent twin.
+/// `@sha256:` separator and must satisfy [`is_valid_distribution_name`]; the
+/// hash must be 64 hex characters. This is the one parser for the pin — the
+/// LSP and config editor call it rather than carrying a divergent twin.
 ///
 /// # Errors
 ///
@@ -457,6 +486,13 @@ pub fn parse_typeshed_package(spec: &str) -> Result<(String, String), String> {
         .ok_or_else(|| "typeshed-package must be of the form `name@sha256:<64-hex>`".to_owned())?;
     if name.is_empty() {
         return Err("typeshed-package distribution name is empty".to_owned());
+    }
+    if !is_valid_distribution_name(name) {
+        return Err(
+            "typeshed-package distribution name must be a PEP 508 name: ASCII letters, digits, \
+             `.`, `_`, or `-`, beginning and ending with a letter or digit"
+                .to_owned(),
+        );
     }
     if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err("typeshed-package sha256 must be 64 hex characters".to_owned());

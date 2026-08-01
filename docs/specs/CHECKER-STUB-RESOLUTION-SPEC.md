@@ -272,9 +272,21 @@ Acquisition is segregated and user-invoked (`basilisk typeshed download
 --package`), like a commit pin
 ([§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD)); the fetch crate
 downloads the wheel from PyPI, verifies its SHA-256 equals the pin, and stores
-it under `<sha256>/`. Check-time verification is offline
-([§STUBRES-TYPESHED-OFFLINE](#STUBRES-TYPESHED-OFFLINE)): re-hash the stored
-wheel and assert equality; missing or mismatched fails hard as `NO SOURCE`.
+it as the wheel entry described in
+[§STUBRES-TYPESHED-STORE](#STUBRES-TYPESHED-STORE). Check-time verification is
+offline ([§STUBRES-TYPESHED-OFFLINE](#STUBRES-TYPESHED-OFFLINE)): re-hash the
+stored wheel and assert equality; missing or mismatched fails hard as
+`NO SOURCE`.
+
+**Both halves of the pin are validated before use.** The digest must be exactly
+64 hex characters, and the distribution name must be a
+[PEP 508](https://peps.python.org/pep-0508/#names) name — ASCII letters, digits,
+`.`, `_`, or `-`, beginning and ending with a letter or digit. The name is not
+merely a label: it becomes a path segment of the PyPI index URL, so restricting
+it to that alphabet is what makes it impossible to write a pin whose lookup
+resolves to a different resource. A name outside it is rejected where the pin is
+parsed **and** at the transport boundary that builds the URL, so no caller can
+route around it; a rejected pin fails closed and no request is made.
 
 **Trust boundary.** Proves the stored wheel is the registry-attested artifact;
 cannot prove offline the SHA is an *official* typeshed release (PyPI publishes
@@ -295,8 +307,14 @@ never silently replaces the stdlib source.
 
 #### The store {#STUBRES-TYPESHED-STORE}
 
-One immutable directory per commit under `typeshed-store-path`, read by the
-checker and written only by the download action:
+One immutable directory per acquired source under `typeshed-store-path`, read by
+the checker and written only by the download action. Every entry is
+**content-addressed**: the directory name is the digest the entry's bytes must
+re-hash to, so reading an entry is what verifies it. There are two entry
+shapes, one per acquirable source.
+
+A **commit** entry, addressed by its 40-hex Git commit SHA
+([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)):
 
 ```
 <typeshed-store-path>/<40-hex commit sha>/
@@ -305,9 +323,30 @@ checker and written only by the download action:
   stdlib/… LICENSE NOTICE…
 ```
 
-No expiry, no reuse policy, no cache-off mode: an entry is a commit and bytes do
-not go stale. Deleting a directory is the only eviction, and only a download
-recreates it.
+A **PyPI package** entry, addressed by its 64-hex wheel SHA-256
+([§STUBRES-TYPESHED-PYPI](#STUBRES-TYPESHED-PYPI)):
+
+```
+<typeshed-store-path>/<64-hex wheel sha256>/
+  wheel.whl       # the exact wheel; hashes to the directory name
+```
+
+The wheel entry holds **no manifest and no extracted tree**. It does not need
+one: a commit entry stores an unpacked tree, so it needs `manifest.json` +
+`commit-object` to bind those loose files back to the pinned SHA, whereas the
+wheel is stored whole and its own SHA-256 already binds every byte the resolver
+will read. The `stdlib/` subtree is read out of the archive in memory rather
+than unpacked, so there is nothing on disk left for a manifest to attest.
+
+The two namespaces share one root and **cannot collide**: a Git commit SHA-1 is
+always 40 hex characters and a wheel SHA-256 always 64, so the digest length
+alone determines which shape an entry is. Both readers reject a digest that is
+not exactly their own length before it is used as a path component, so a
+malformed pin never reaches the filesystem.
+
+No expiry, no reuse policy, no cache-off mode: an entry is an immutable
+artifact and bytes do not go stale. Deleting a directory is the only eviction,
+and only a download recreates it.
 
 #### Downloading is a separate component {#STUBRES-TYPESHED-DOWNLOAD}
 

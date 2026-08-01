@@ -207,6 +207,12 @@ pub(super) fn alias_value_assignable(
 /// Returns `true` when `var` carries an explicit `TypeAlias` annotation, i.e.
 /// `Name: TypeAlias = ...` (also `typing.TypeAlias`). Such assignments are
 /// value aliases too and must be collected despite `has_annotation` being set.
+///
+/// The annotation may be written as a string — `Name: "TypeAlias" = ...` is the
+/// same declaration to a type checker, since any annotation may appear as a
+/// forward reference ([annotation expressions](https://typing.python.org/en/latest/spec/annotations.html#string-annotations)).
+/// [`alias_base`] strips those quotes for the same reason, so the two agree on
+/// what a name is.
 fn is_typealias_annotation(var: &VariableInfo, source: &str) -> bool {
     let Some(span) = var.annotation_span else {
         return false;
@@ -214,8 +220,8 @@ fn is_typealias_annotation(var: &VariableInfo, source: &str) -> bool {
     let Some(text) = slice_span(source, span) else {
         return false;
     };
-    let trimmed = text.trim();
-    let base = trimmed.rsplit('.').next().unwrap_or(trimmed);
+    let unquoted = alias_base(text.trim());
+    let base = unquoted.rsplit('.').next().unwrap_or(unquoted);
     base == "TypeAlias"
 }
 
