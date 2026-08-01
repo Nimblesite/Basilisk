@@ -40,8 +40,10 @@
 #                                        website reads this file, so the published
 #                                        numbers are never hand-typed and never
 #                                        stale relative to the last run.
-#   benchmarks/results/*.json         — raw hyperfine output (untracked)
-#   benchmarks/results/summary.md     — human-readable summary (untracked)
+#   benchmarks/results/*.json         — raw hyperfine output (untracked: ~9.6k
+#                                        lines rewritten every run, pure diff noise)
+#   benchmarks/results/summary.md     — human-readable summary (tracked: the
+#                                        highlights, small enough to review)
 #
 # Competitor tools are OPTIONAL — any that are not installed are skipped (their
 # column is left blank). Only `basilisk` and `hyperfine` are required. Fixtures

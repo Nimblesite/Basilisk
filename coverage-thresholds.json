@@ -13,10 +13,7 @@
       "threshold": 100
     },
     "basilisk-lsp": {
-      "threshold": 86
-    },
-    "basilisk-mojo": {
-      "threshold": 90
+      "threshold": 87
     },
     "basilisk-parser": {
       "threshold": 100

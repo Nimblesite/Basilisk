@@ -108,6 +108,11 @@ deslop-*.log
 # =============================================================================
 benchmarks/results/.mypycache/
 benchmarks/results/.warmcache/
+# Raw per-fixture hyperfine output: ~9.6k lines rewritten on EVERY `make bench`,
+# which buried real changes in diff noise. The published record of a run is
+# benchmarks/status/<machine>.csv (the regression gate reads it from git) plus
+# the summary.md / coverage.tsv highlights, all still tracked.
+benchmarks/results/*.json
 
 
 # =============================================================================

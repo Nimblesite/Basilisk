@@ -35,8 +35,8 @@
 
 <p align="center">
   <a href="https://www.basilisk-python.dev/zh/docs/conformance/"><strong>PEP 一致性 <!--g:score-->100.0%<!--/g:score--></strong></a> &mdash; 官方
-  <a href="https://github.com/python/typing/tree/3410759355c3018063d3a446102f88621fc43eb5/conformance"><code>python/typing</code></a>
-  一致性套件（提交 <code><!--g:short-->3410759<!--/g:short--></code>）<!--g:total-->141<!--/g:total--> 项测试中通过 <!--g:pass-->141<!--/g:pass--> 项，
+  <a href="https://github.com/python/typing/tree/60df123ccfe9ae0472b1409ef4a00d51ffc5d972/conformance"><code>python/typing</code></a>
+  一致性套件（提交 <code><!--g:short-->60df123<!--/g:short--></code>）<!--g:total-->141<!--/g:total--> 项测试中通过 <!--g:pass-->141<!--/g:pass--> 项，
   由真实的上游评分器在默认配置下对 wheel 安装的 CLI 评出。
   我们以 <code>python/typing@main</code> 为目标，且分数只升不降。
 </p>
@@ -57,14 +57,14 @@ Basilisk 是**唯一**在官方
 
 | 类型检查器 | 冷检查中位数 |
 | --- | --- |
-| ⚡ **Basilisk** | **<!--g:benchBasilisk-->10<!--/g:benchBasilisk--> ms** |
+| ⚡ **Basilisk** | **<!--g:benchBasilisk-->13<!--/g:benchBasilisk--> ms** |
 | zuban | <!--g:benchZuban-->28<!--/g:benchZuban--> ms |
-| ty | <!--g:benchTy-->40<!--/g:benchTy--> ms |
+| ty | <!--g:benchTy-->39<!--/g:benchTy--> ms |
 | Pyrefly | <!--g:benchPyrefly-->110<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->573<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->574<!--/g:benchMypy--> ms |
+| Pyright | <!--g:benchPyright-->563<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->583<!--/g:benchMypy--> ms |
 
-在 <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> 上对 <!--g:benchCount-->26<!--/g:benchCount--> 个单一构造的类型规范压力用例测得的整文件冷检查中位数 &mdash; 越低越好。Basilisk 的热重检查可降至约 <!--g:benchWarm-->4<!--/g:benchWarm--> ms。每个数字都由 [`hyperfine`](https://github.com/sharkdp/hyperfine) 产生并按机器提交，没有一个是手写的。**克隆仓库，在你自己的硬件上运行 `make bench`，并把 CSV 发给我们 &mdash; 欢迎独立复核。** [完整基准与方法论 &rarr;](https://www.basilisk-python.dev/zh/docs/benchmarks/)
+在 <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> 上对 <!--g:benchCount-->26<!--/g:benchCount--> 个单一构造的类型规范压力用例测得的整文件冷检查中位数 &mdash; 越低越好。Basilisk 的热重检查可降至约 <!--g:benchWarm-->5<!--/g:benchWarm--> ms。每个数字都由 [`hyperfine`](https://github.com/sharkdp/hyperfine) 产生并按机器提交，没有一个是手写的。**克隆仓库，在你自己的硬件上运行 `make bench`，并把 CSV 发给我们 &mdash; 欢迎独立复核。** [完整基准与方法论 &rarr;](https://www.basilisk-python.dev/zh/docs/benchmarks/)
 
 ## 一个扩展，覆盖全部
 
