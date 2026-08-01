@@ -207,6 +207,46 @@ limbo by **wiring them up here**, never by deleting them and never by
 suppressing a lint — each stays `pub` from the crate root, which is what
 keeps the workspace's `dead_code = "deny"` satisfied without an `#[allow]`.
 
+**The flow walker's synthesis path is UNTIMED until it is wired, and must be
+made cheap BEFORE the first rule consumes it.** The same staging that keeps
+these cores off live diagnostics also keeps them off every performance gate:
+`narrow::analyse_function_in` is reached only through the `narrowed_uses`
+Salsa query, whose sole callers today are tests and
+`examples/ift_measure.rs`. `make bench` times `basilisk check`, which never
+enters this code — so no ratchet is watching it, and a cost that small
+fixtures hide will land as a *regression on the first wiring change*, when
+the zero-tolerance benchmark gate ([CHKARCH-TESTING-BENCH-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET))
+is suddenly live over it and the change is also carrying diagnostic risk.
+
+The known cost is in `FlowWalker::synth_type` (`narrow/flow.rs`), called per
+assign/ann-assign RHS, per `for` iterable, per bare-expression statement and
+per `while` test. Each call:
+
+- rebuilds a fresh `HashMap<String, Ty>` from **the entire module's**
+  `ctx.callables` (production seeds this from `callable_interface` for the
+  whole file), then
+- extends it with `NarrowEnv::visible()`, which itself clones `declared` +
+  `scope` + every open frame, then
+- constructs a fresh `BidirEngine` and calls `finish()`, discarding all
+  solver state so nothing amortizes.
+
+Per-expression work therefore scales with module size, making the total
+scale as roughly function-size × module-size. Compounding it, divergence is
+probed and then re-walked: `walk_if` calls `body_diverges(&node.body)` and
+then walks that same body, whose `walk_stmts` re-runs `one_diverges` on each
+statement, so nested control flow re-synthesizes the same expressions.
+(Frequency is bounded — `stmts_diverge` probes only `stmts.last()`, and
+`stmt_diverges` synthesizes only for `Stmt::Expr` and a `while` test — so the
+defect is cost-per-call and redundancy, not call count.)
+
+Required before wiring, as a gate and not a follow-up: convert
+`ctx.callables` to `Ty` **once** at walker construction; hold one long-lived
+`BidirEngine` and push/pop the visible-binding overlay instead of rebuilding
+it; and memoize divergence per statement so the probe/walk overlap cannot
+re-synthesize. Fixing it while the component still has no consumers is
+strictly cheaper — there is no caller to break, no diagnostic to hold steady,
+and no conformance run to re-certify.
+
 ## Measurable targets {#NARROWPLAN-TARGETS}
 
 The axes on which inference superiority is defined and measured. Each axis has
@@ -659,6 +699,20 @@ reproducible, write-always, ratcheted:
 
 ### Integration and acceptance
 
+- [ ] **Blocks every item below.** Make `FlowWalker::synth_type` cheap before
+  any rule consumes `narrowed_uses` — see [NARROWPLAN-INTEGRATION](#NARROWPLAN-INTEGRATION).
+  Today it rebuilds the whole module's callables map plus a full
+  `NarrowEnv::visible()` clone and a fresh `BidirEngine` **per expression**, so
+  per-expression cost scales with module size. Three concrete changes:
+  (a) convert `ctx.callables` to `Ty` once at walker construction, not per
+  call; (b) hold one long-lived `BidirEngine`, pushing/popping the
+  visible-binding overlay instead of rebuilding it; (c) memoize divergence per
+  statement so the `walk_if` probe-then-walk and the `walk_stmts` re-probe stop
+  re-synthesizing the same expressions. Land it while the walker still has no
+  production consumer: no caller to break, no diagnostic to hold steady.
+- [ ] Record a `make bench` baseline on a fixture that actually exercises the
+  flow walker **in the same change that first wires it**, so the walker stops
+  being invisible to the ratchet the moment it starts costing real time.
 - [ ] Introduce each shared component behind existing checker APIs; do not
   create an alternate checking mode.
 - [ ] Migrate assignment, return, call, and `assert_type` rules incrementally,

@@ -454,6 +454,17 @@ impl FlowWalker<'_> {
     /// the module's callable interfaces and every currently-visible flow
     /// binding — the SAME engine the definition-level queries run
     /// ([TYPEINF-TARGET-BIDIRECTIONAL]).
+    ///
+    /// # Rebuild the seed BEFORE wiring this into a rule ([NARROWPLAN-INTEGRATION])
+    ///
+    /// Every call clones the WHOLE module's callables plus a full
+    /// [`NarrowEnv::visible`] snapshot (itself `declared` + `scope` + every
+    /// open frame) into a fresh map, then discards the engine's solver state
+    /// via `finish()` — so per-expression cost scales with module size and
+    /// nothing amortizes. That is survivable only because the flow walker has
+    /// no production consumer yet and so no benchmark gate times it; the
+    /// plan makes fixing it a precondition for the first rule migration,
+    /// not a follow-up. Do not wire a rule to this without doing that first.
     fn synth_type(&self, expr: &Expr) -> InferredType {
         let mut globals: HashMap<String, Ty> = self
             .ctx
