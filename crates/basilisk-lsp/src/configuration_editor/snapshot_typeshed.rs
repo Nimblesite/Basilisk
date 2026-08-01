@@ -87,6 +87,7 @@ pub(crate) fn ready_projection(status: &TypeshedStatus) -> TypeshedStatusState {
             SourceKind::Custom => TypeshedActiveSource::Custom,
             SourceKind::ExactCommit => TypeshedActiveSource::ExactCommit,
             SourceKind::Bundled => TypeshedActiveSource::Bundled,
+            SourceKind::PyPIPackage => TypeshedActiveSource::PyPIPackage,
         }),
         commit_identity: status.commit.map(|oid| oid.to_hex()),
         license_status: match status.license_status {

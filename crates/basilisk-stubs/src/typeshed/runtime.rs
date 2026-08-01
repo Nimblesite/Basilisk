@@ -56,6 +56,17 @@ impl SourceBackend for RuntimeBackend {
     fn load_bundled(&self) -> Result<Snapshot, BackendError> {
         bundled_snapshot().map_err(|_error| BackendError::Bundle)
     }
+
+    fn load_pypi_package(
+        &self,
+        _name: &str,
+        _sha256: &str,
+    ) -> Result<Snapshot, BackendError> {
+        // On-disk SHA-256 verification of an installed PyPI package is the
+        // next slice ([STUBRES-TYPESHED-PYPI]); until that backend lands,
+        // a package pin fails closed rather than serving unverified bytes.
+        Err(BackendError::PyPIPackage)
+    }
 }
 
 /// Construct the one-generation manager consumed by CLI/LSP/MCP.

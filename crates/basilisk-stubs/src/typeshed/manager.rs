@@ -151,6 +151,14 @@ mod tests {
                 SourceKind::Bundled,
             ))
         }
+
+        fn load_pypi_package(
+            &self,
+            _name: &str,
+            _sha256: &str,
+        ) -> Result<Snapshot, BackendError> {
+            Err(BackendError::PyPIPackage)
+        }
     }
 
     fn pinned_request() -> TypeshedRequest {

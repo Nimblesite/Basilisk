@@ -55,12 +55,12 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [Configuration editor](plans/LSP-CONFIGURATION-EDITOR-PLAN.md) | Canonical fixability metadata, DTO drift test, config-projection consolidation, field provenance, protocol/adoption/suppression E2E coverage, accessibility verification, cross-editor clients, and release gates. |
 | [Formatting](plans/LSP-FORMATTING-PLAN.md) | VS Code default-formatter opt-in and published-artifact verification. |
 | [AI-assisted LSP](plans/LSP-AI-PLAN.md) | First opt-in provider slice and privacy/safety gate. |
-| [Activity panel](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Settings wiring and remaining cross-editor/test quality. |
+| [Activity panel](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Settings wiring, Modules-panel context menus and multi-select, and remaining cross-editor/test quality. |
 | [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Annotation name resolution (Stage 0.5), bidirectional/constraint-based inference engine, flow analysis, shared subtyping, and PEP 827 readiness. |
 | [Runtime typeshed resolution](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Two open items: a socket-instrumented witness that checking is offline across CLI/LSP/MCP, and byte-exact per-artifact licensing verification inside the VSIX (binaries and wheels are already verified). |
 | [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Replace remaining raw-source rule scans with AST data. |
 | [WASM](plans/WASM-PLAN.md) | CI wasm build and size ratchet, multi-file in-memory VFS, and the playground site. |
-| [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Mojo checks, plugin host, migration, and CI helpers. |
+| [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Dependency-hygiene rules, Mojo checks, plugin host, migration, and CI helpers. |
 | [Native compiler](plans/COMPILER-ARCHITECTURE-PLAN.md) | HIR, backend, runtime, interop, CLI, and native acceptance. |
 
 ## Defect triage

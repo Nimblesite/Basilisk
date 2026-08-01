@@ -122,6 +122,12 @@ pub struct WorkspaceConfig {
     /// Exact full `python/typeshed` commit pin; unset resolves to the bundled
     /// commit with a `typeshed_source_unpinned` warning ([STUBRES-TYPESHED-CONFIG]).
     pub typeshed_commit: Option<String>,
+    /// A PyPI-distributed typeshed package pin, `"name@sha256:<hex>"`,
+    /// content-addressed by the distribution's SHA-256 ([STUBRES-TYPESHED-PYPI],
+    /// issue #312). A package pin suppresses `typeshed_source_unpinned` and
+    /// `typeshed_source_user_managed`; mutually exclusive with `typeshed_path`
+    /// and `typeshed_commit`.
+    pub typeshed_package: Option<String>,
     /// Optional verified content-addressed store directory
     /// ([STUBRES-TYPESHED-STORE]); unset uses the per-user OS default.
     pub typeshed_store_path: Option<PathBuf>,
@@ -158,6 +164,7 @@ impl Default for WorkspaceConfig {
             stub_paths: Vec::new(),
             typeshed_path: None,
             typeshed_commit: None,
+            typeshed_package: None,
             typeshed_store_path: None,
             typeshed_configuration_error: None,
             formatter: FormatterEngine::Ruff,

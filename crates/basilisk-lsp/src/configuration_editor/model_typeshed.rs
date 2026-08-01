@@ -44,6 +44,7 @@ pub enum TypeshedActiveSource {
     Custom,
     ExactCommit,
     Bundled,
+    PyPIPackage,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
