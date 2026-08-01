@@ -15,17 +15,24 @@ use crate::server::typeshed_status::TypeshedGeneration;
 /// unset pin IS the bundled commit ([STUBRES-TYPESHED]): the picker shows the
 /// effective SHA and the `typeshed_source_unpinned` warning says it is not yet reproducible.
 fn source(config: &BasiliskConfig) -> TypeshedSource {
-    config.typeshed_path.as_ref().map_or_else(
-        || TypeshedSource::ExactCommit {
+    if let Some(path) = config.typeshed_path.as_ref() {
+        TypeshedSource::CustomFolder {
+            path: path.to_string_lossy().into_owned(),
+        }
+    } else if let Some(spec) = config.typeshed_package.as_deref() {
+        // `typeshed-package` is validated as `name@sha256:<hex>` before it
+        // reaches the editor model, so a parse failure here is a wiring bug.
+        let (name, sha256) = crate::config::parse_typeshed_package(spec)
+            .unwrap_or((String::new(), String::new()));
+        TypeshedSource::PyPIPackage { name, sha256 }
+    } else {
+        TypeshedSource::ExactCommit {
             commit: config
                 .typeshed_commit
                 .clone()
                 .unwrap_or_else(|| bundled_commit_sha().to_owned()),
-        },
-        |path| TypeshedSource::CustomFolder {
-            path: path.to_string_lossy().into_owned(),
-        },
-    )
+        }
+    }
 }
 
 /// The store directory pins resolve from. A custom folder resolves nothing
@@ -49,6 +56,13 @@ fn license_available(source: &TypeshedSource, generation: Option<&TypeshedGenera
             .and_then(TypeshedGeneration::ready_status)
             .and_then(|status| status.commit)
             .is_some_and(|active| active.to_hex() == *commit),
+        // A PyPI package's license ships inside the verified wheel; it is
+        // available exactly when that wheel's snapshot is active.
+        TypeshedSource::PyPIPackage { .. } => generation
+            .and_then(TypeshedGeneration::ready_status)
+            .is_some_and(|status| {
+                status.active_source == basilisk_stubs::typeshed::source::SourceKind::PyPIPackage
+            }),
     }
 }
 

@@ -28,7 +28,7 @@ pub enum SourceKind {
     ExactCommit,
     /// The bundled offline snapshot (unpinned unless it equals a user pin).
     Bundled,
-    /// A PyPI-distributed typeshed package, content-addressed by the
+    /// A `PyPI`-distributed typeshed package, content-addressed by the
     /// distribution's SHA-256 ([STUBRES-TYPESHED-PYPI], issue #312). Pinned:
     /// suppresses `typeshed_source_unpinned` and `typeshed_source_user_managed`.
     PyPIPackage,
@@ -83,10 +83,10 @@ pub enum SourceIdentity {
         /// A digest (e.g. SHA-256 hex) of the resolved custom path.
         digest: String,
     },
-    /// A PyPI-distributed typeshed package, content-addressed by the
+    /// A `PyPI`-distributed typeshed package, content-addressed by the
     /// distribution's SHA-256 ([STUBRES-TYPESHED-PYPI], issue #312).
     PyPIPackage {
-        /// Normalised PyPI distribution name (e.g. `micropython-stdlib-stubs`).
+        /// Normalised `PyPI` distribution name (e.g. `micropython-stdlib-stubs`).
         name: String,
         /// The distribution's SHA-256, hex-encoded.
         sha256: String,
@@ -116,7 +116,7 @@ impl SourceIdentity {
     }
 
     /// Whether the user explicitly pinned this source. Only an explicit
-    /// `typeshed-commit` or a SHA-256-addressed PyPI package suppresses the
+    /// `typeshed-commit` or a SHA-256-addressed `PyPI` package suppresses the
     /// `typeshed_source_unpinned` advisory ([STUBRES-TYPESHED-PYPI], issue #312).
     #[must_use]
     pub const fn is_pinned(&self) -> bool {
@@ -130,7 +130,7 @@ impl SourceIdentity {
 /// Which source the user configured, free of any `basilisk-config` type.
 ///
 /// There are exactly **three** sources ([STUBRES-TYPESHED], [STUBRES-TYPESHED-PYPI]):
-/// a pinned commit, a custom folder, or a SHA-256-addressed PyPI package. There
+/// a pinned commit, a custom folder, or a SHA-256-addressed `PyPI` package. There
 /// is no "track latest" selection — freshness is the separate, user-invoked
 /// download component ([STUBRES-TYPESHED-DOWNLOAD]).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,13 +148,13 @@ pub enum SourceSelection {
         /// the bundled default an unset key resolves to (still `typeshed_source_unpinned`).
         explicit: bool,
     },
-    /// A PyPI-distributed typeshed package, content-addressed by the
+    /// A `PyPI`-distributed typeshed package, content-addressed by the
     /// distribution's SHA-256 ([STUBRES-TYPESHED-PYPI], issue #312). A package
     /// pin is a pinned source: it suppresses `typeshed_source_unpinned` and
     /// `typeshed_source_user_managed`, because the registry attests the
     /// contents by hash rather than the user managing a loose folder.
     PyPIPackage {
-        /// Normalised PyPI distribution name (e.g. `micropython-stdlib-stubs`).
+        /// Normalised `PyPI` distribution name (e.g. `micropython-stdlib-stubs`).
         name: String,
         /// The distribution's SHA-256, hex-encoded.
         sha256: String,

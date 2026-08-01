@@ -31,13 +31,16 @@ pub struct RuleConfigUpdate {
 }
 
 /// Closed persistence allowlist for typeshed settings — the whole runtime
-/// surface is these three keys ([STUBRES-TYPESHED-CONFIG]).
+/// surface is these four keys ([STUBRES-TYPESHED-CONFIG]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TypeshedConfigKey {
     /// Custom typeshed folder.
     TypeshedPath,
     /// Exact full commit SHA pin.
     TypeshedCommit,
+    /// `PyPI` typeshed distribution pinned by wheel SHA-256
+    /// ([STUBRES-TYPESHED-PYPI]).
+    TypeshedPackage,
     /// Verified content-addressed store directory.
     TypeshedStorePath,
 }
@@ -47,6 +50,7 @@ impl TypeshedConfigKey {
         match self {
             Self::TypeshedPath => "typeshed-path",
             Self::TypeshedCommit => "typeshed-commit",
+            Self::TypeshedPackage => "typeshed-package",
             Self::TypeshedStorePath => "typeshed-store-path",
         }
     }

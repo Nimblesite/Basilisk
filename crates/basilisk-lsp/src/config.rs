@@ -122,7 +122,7 @@ pub struct WorkspaceConfig {
     /// Exact full `python/typeshed` commit pin; unset resolves to the bundled
     /// commit with a `typeshed_source_unpinned` warning ([STUBRES-TYPESHED-CONFIG]).
     pub typeshed_commit: Option<String>,
-    /// A PyPI-distributed typeshed package pin, `"name@sha256:<hex>"`,
+    /// A `PyPI`-distributed typeshed package pin, `"name@sha256:<hex>"`,
     /// content-addressed by the distribution's SHA-256 ([STUBRES-TYPESHED-PYPI],
     /// issue #312). A package pin suppresses `typeshed_source_unpinned` and
     /// `typeshed_source_user_managed`; mutually exclusive with `typeshed_path`
@@ -178,7 +178,7 @@ impl Default for WorkspaceConfig {
 /// a file bypassed the configuration editor's stronger source validation.
 ///
 /// There are exactly three sources ([STUBRES-TYPESHED], [STUBRES-TYPESHED-PYPI]):
-/// a pinned commit, a custom folder, or a SHA-256-addressed PyPI package. An
+/// a pinned commit, a custom folder, or a SHA-256-addressed `PyPI` package. An
 /// unset `typeshed-commit` resolves to the bundled commit as an implicit pin
 /// (still `typeshed_source_unpinned`); resolution never downloads.
 ///
@@ -249,7 +249,7 @@ pub fn typeshed_request(
 /// # Errors
 ///
 /// Returns a redacted, user-facing reason for a malformed spec.
-fn parse_typeshed_package(spec: &str) -> Result<(String, String), String> {
+pub(crate) fn parse_typeshed_package(spec: &str) -> Result<(String, String), String> {
     let (name, hash) = spec
         .rsplit_once('@')
         .ok_or_else(|| "typeshed-package must be of the form `name@sha256:<hex>`".to_owned())?;

@@ -6,7 +6,7 @@ use super::*;
 
 const OTHER_SHA: &str = "0123456789012345678901234567890123456789";
 const BUNDLE_SHA: &str = "83c2518a9e6abbda0c44592c3483de459198f887";
-/// A 64-hex SHA-256 fixture for the PyPI-package source (issue #312).
+/// A 64-hex SHA-256 fixture for the `PyPI`-package source (issue #312).
 const PACKAGE_SHA256: &str =
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
@@ -311,7 +311,7 @@ fn an_inconsistent_backend_identity_fails_closed() {
 }
 
 /// [STUBRES-TYPESHED-PYPI] (issue #312, agreed solution): a typeshed source
-/// pinned to a PyPI package — content-addressed by the distribution's SHA-256 —
+/// pinned to a `PyPI` package — content-addressed by the distribution's SHA-256 —
 /// is a PINNED source. It activates as `SourceKind::PyPIPackage` and suppresses
 /// BOTH `typeshed_source_unpinned` and `typeshed_source_user_managed`, because
 /// the registry attests the contents by hash rather than the user managing a

@@ -1,11 +1,12 @@
 //! Implements [STUBRES-TYPESHED] source selection. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED
 //!
-//! The policy layer over local source backends. There are exactly two sources
-//! and both fail closed: a custom folder never falls back, and a pinned commit
-//! is served from the embedded bundle (when it IS that commit) or from the
-//! local store — never from the network, which this crate cannot even reach
-//! ([STUBRES-TYPESHED-OFFLINE]). A pin that is not on this machine is the
-//! terminal `NO SOURCE` failure and analysis does not run.
+//! The policy layer over local source backends. There are exactly three
+//! sources and all fail closed: a custom folder never falls back, a pinned
+//! commit is served from the embedded bundle (when it IS that commit) or from
+//! the local store, and a `PyPI` package is served from its stored wheel
+//! ([STUBRES-TYPESHED-PYPI]) — never from the network, which this crate cannot
+//! even reach ([STUBRES-TYPESHED-OFFLINE]). A source that is not on this machine
+//! is the terminal `NO SOURCE` failure and analysis does not run.
 
 use super::gittree::Oid;
 use super::snapshot::Snapshot;
@@ -36,7 +37,7 @@ pub enum BackendError {
     /// A custom source could not be read or indexed.
     #[error("custom typeshed source is unavailable")]
     Custom,
-    /// A PyPI package source is not installed or failed SHA-256 verification
+    /// A `PyPI` package source is not installed or failed SHA-256 verification
     /// ([STUBRES-TYPESHED-PYPI], issue #312).
     #[error("pypi typeshed package is unavailable or failed verification")]
     PyPIPackage,
@@ -73,7 +74,7 @@ pub trait SourceBackend: Send + Sync {
     /// Returns a redacted failure when embedded assets fail their gates.
     fn load_bundled(&self) -> Result<Snapshot, BackendError>;
 
-    /// Load and offline-verify a PyPI-distributed typeshed package,
+    /// Load and offline-verify a `PyPI`-distributed typeshed package,
     /// content-addressed by the distribution's SHA-256
     /// ([STUBRES-TYPESHED-PYPI], issue #312).
     ///
@@ -100,7 +101,7 @@ pub enum SelectionError {
     /// Custom is the sole step-3 source and could not activate.
     #[error("custom typeshed failed without fallback: {0}")]
     Custom(BackendError),
-    /// A PyPI package source is not installed or failed SHA-256 verification
+    /// A `PyPI` package source is not installed or failed SHA-256 verification
     /// ([STUBRES-TYPESHED-PYPI], issue #312).
     #[error("pypi typeshed package failed without fallback: {0}")]
     PyPIPackage(BackendError),
@@ -245,7 +246,7 @@ fn set_warnings(snapshot: &mut Snapshot, warnings: &[TypeshedWarning]) {
     snapshot.status.warnings = StatusWarning::list(warnings);
 }
 
-/// Select a SHA-256-addressed PyPI package as a PINNED source
+/// Select a SHA-256-addressed `PyPI` package as a PINNED source
 /// ([STUBRES-TYPESHED-PYPI], issue #312). The registry attests the contents by
 /// hash, so — unlike a custom folder — the source is neither `unpinned` nor
 /// `user-managed`: it emits no source-status advisories. The backend is the

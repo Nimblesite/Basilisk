@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::{is_full_commit_sha, BasiliskConfig, RuleSeverity};
+use super::{is_full_commit_sha, is_valid_typeshed_package_spec, BasiliskConfig, RuleSeverity};
 
 /// [STUBRES-TYPESHED-CONFIG]: only a full 40-char hex SHA is a valid pin.
 #[test]
@@ -79,6 +79,56 @@ fn malformed_same_table_path_and_pin_remain_visible_to_fail_closed() {
     let merged = BasiliskConfig::default().merged_with(child);
     assert!(merged.typeshed_path.is_some());
     assert!(merged.typeshed_commit.is_some());
+}
+
+/// [STUBRES-TYPESHED-PYPI] (issue #312): `typeshed-package` is a third,
+/// mutually-exclusive source selector — a child that sets it replaces an
+/// inherited `typeshed-path`/`typeshed-commit` as a unit, and vice-versa, so a
+/// merge can never manufacture a path+package or commit+package combination
+/// that appeared in no source file.
+#[test]
+fn typeshed_package_replaces_inherited_selection_as_a_unit() {
+    const PACKAGE_SPEC: &str =
+        "micropython-stdlib-stubs@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    let ancestor_pin = BasiliskConfig {
+        typeshed_commit: Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
+        ..Default::default()
+    };
+    let child_package = BasiliskConfig {
+        typeshed_package: Some(PACKAGE_SPEC.to_owned()),
+        ..Default::default()
+    };
+    let result = ancestor_pin.merged_with(child_package);
+    assert!(result.typeshed_commit.is_none());
+    assert_eq!(result.typeshed_package.as_deref(), Some(PACKAGE_SPEC));
+
+    // And the reverse: a child commit clears an inherited package.
+    let ancestor_package = BasiliskConfig {
+        typeshed_package: Some(PACKAGE_SPEC.to_owned()),
+        ..Default::default()
+    };
+    let child_pin = BasiliskConfig {
+        typeshed_commit: Some("0123456789abcdef0123456789abcdef01234567".to_owned()),
+        ..Default::default()
+    };
+    let result = ancestor_package.merged_with(child_pin);
+    assert!(result.typeshed_package.is_none());
+    assert!(result.typeshed_commit.is_some());
+}
+
+#[test]
+fn typeshed_package_spec_shape_is_validated() {
+    assert!(is_valid_typeshed_package_spec(
+        "micropython-stdlib-stubs@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ));
+    assert!(!is_valid_typeshed_package_spec("micropython-stdlib-stubs"));
+    assert!(!is_valid_typeshed_package_spec("name@sha256:abc"));
+    assert!(!is_valid_typeshed_package_spec(
+        "name@md5:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ));
+    assert!(!is_valid_typeshed_package_spec(
+        "@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ));
 }
 
 /// Build a `[tool.basilisk.rules]`-shaped table directly, so the fixture
