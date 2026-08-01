@@ -497,7 +497,8 @@ mod tests {
     /// A malformed `--package` spec is a configuration error (exit `2`) before
     /// any transport work — the parser the config surface shares validates it.
     #[test]
-    fn a_malformed_package_spec_is_a_configuration_error() -> Result<(), Box<dyn std::error::Error>> {
+    fn a_malformed_package_spec_is_a_configuration_error() -> Result<(), Box<dyn std::error::Error>>
+    {
         let api = FakePypiApi::new(fake_wheel());
         let workspace = tempfile::tempdir()?;
         assert_eq!(

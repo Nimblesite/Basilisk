@@ -43,9 +43,13 @@ shape gate rejects otherwise. If the real layout differs, a mapping is required 
 
 ### S3 — Segregated acquisition · `TYPESHEDPYPI-S3`
 Extend `basilisk-typeshed-fetch` (the only HTTP crate): resolve `<name>` → PyPI JSON API →
-select the wheel whose SHA-256 == pin → stream through the safety/shape/license gates reused
-from commit download → write `<store>/<sha256>/wheel.whl` + manifest. Write nothing on failure.
-CLI `basilisk typeshed download --package <name>@sha256:<hex>`.
+select the wheel whose SHA-256 == pin → re-hash the fetched bytes (the index digest is never
+trusted) → run the **Safety and Shape** gates reused from the commit download path → write
+`<store>/<sha256>/wheel.whl` + manifest. The **License** and **Content** gates are intentionally
+skipped: the License gate attests the build-approved *typeshed* `LICENSE` identity (a third-party
+wheel ships its own license), and the Content gate reconstructs a Git root tree (a wheel is not a
+Git tree) — the wheel SHA-256 *is* the content attestation for a `PyPI` source. Write nothing on
+failure. CLI `basilisk typeshed download --package <name>@sha256:<hex>`.
 **Acceptance:** verify+store; write-nothing-on-failure; `scripts/check-dependency-shape.sh` still
 passes (only `basilisk-typeshed-fetch` links HTTP); `GITHUB_TOKEN` never sent to PyPI.
 
@@ -89,11 +93,11 @@ unchanged (advisories never enter the scored stream).
 
 ### S3 — Segregated acquisition · `TYPESHEDPYPI-S3`
 
-- [ ] Extend `basilisk-typeshed-fetch` (the only HTTP crate): `<name>` → PyPI JSON API → select wheel whose SHA-256 == pin.
-- [ ] Stream through the safety/shape/license gates reused from commit download; write `<store>/<sha256>/wheel.whl` + manifest.
-- [ ] Write nothing on failure; `GITHUB_TOKEN` never sent to PyPI.
-- [ ] CLI `basilisk typeshed download --package <name>@sha256:<hex>`.
-- [ ] Tests: verify+store; write-nothing-on-failure; `scripts/check-dependency-shape.sh` still passes (only `basilisk-typeshed-fetch` links HTTP).
+- [x] Extend `basilisk-typeshed-fetch` (the only HTTP crate): `<name>` → PyPI JSON API → select wheel whose SHA-256 == pin (`pypi.rs` — `PypiApi` trait + `PypiClient`, anonymous HTTPS-only, no credential).
+- [x] Re-hash fetched bytes; run Safety + Shape gates (License/Content intentionally skipped — see slice text); write `<store>/<sha256>/wheel.whl` + manifest (`download_package` in `lib.rs`, `write_wheel` in `wheel.rs`).
+- [x] Write nothing on failure; `GITHUB_TOKEN` never sent to PyPI (`PypiClient` holds no credential).
+- [x] CLI `basilisk typeshed download --package <name>@sha256:<hex>` (`typeshed_cli.rs` — `--package` flag, mutually exclusive with `--commit`).
+- [x] Tests: verify+store round-trip via `read_snapshot`; byte-mismatch/resolve/download failures write nothing; unknown digest fails closed; `--package` CLI exit codes (0/2/3); `scripts/check-dependency-shape.sh` still passes (only `basilisk-typeshed-fetch` links HTTP).
 
 ### S4 — uv auto-detection · `TYPESHEDPYPI-S4`
 
