@@ -109,7 +109,7 @@ function isTypeshedWarning(value: unknown): boolean {
 function hasTypeshedStateKinds(fields: Record<string, unknown>): boolean {
   return hasKind(fields.lifecycle, ["Downloading", "Ready", "NoSource"])
     && hasKind(fields.licenseStatus, ["Unavailable", "Approved", "Changed", "NotSupplied"])
-    && hasOptionalKind(fields.activeSource, ["Custom", "ExactCommit", "Bundled"]);
+    && hasOptionalKind(fields.activeSource, ["Custom", "ExactCommit", "Bundled", "PyPIPackage"]);
 }
 
 function hasTypeshedIdentityFields(fields: Record<string, unknown>): boolean {

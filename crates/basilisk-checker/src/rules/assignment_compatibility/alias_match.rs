@@ -122,6 +122,15 @@ fn free_typevars(lowered: &str, typevars: &HashSet<String>) -> Vec<String> {
 /// Two passes: roots whose body references a `TypeVar` (e.g.
 /// `G = list["G[T]" | T]`), then specialisations that reference a root via a
 /// subscript (e.g. `S = G[str]`) and therefore bind no params of their own.
+///
+/// Unlike [`collect_value_aliases`], annotated assignments are skipped even
+/// when the annotation is an explicit `TypeAlias`. Substituting into a generic
+/// alias is textual here, which is sound for the container bodies this pass
+/// targets but not for a `Callable` body parameterised by a `ParamSpec` —
+/// `Callback: TypeAlias = Callable[P, str]` used as `Callback[...]` needs real
+/// `ParamSpec` semantics, and approximating it produced false positives on the
+/// conformance suite's `callables_annotation` / `callables_subtyping` fixtures.
+/// Those forms are left to the callable-compatibility path that does model them.
 pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String, GenericAlias> {
     let typevars: HashSet<String> = module
         .typevar_calls
@@ -131,7 +140,7 @@ pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String
     let mut generics: HashMap<String, GenericAlias> = HashMap::new();
 
     for var in &module.module_vars {
-        if var.has_annotation && !is_typealias_annotation(var, &module.source) {
+        if var.has_annotation {
             continue;
         }
         let Some(text) = alias_rhs_text(var, &module.source) else {
@@ -152,7 +161,7 @@ pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String
 
     let mut specialised: Vec<(String, GenericAlias)> = Vec::new();
     for var in &module.module_vars {
-        if var.has_annotation && !is_typealias_annotation(var, &module.source) {
+        if var.has_annotation {
             continue;
         }
         let key = var.name.to_ascii_lowercase();

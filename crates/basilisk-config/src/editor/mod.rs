@@ -270,13 +270,27 @@ fn validate_typeshed_settings(
     path: &Path,
     basilisk: &toml::Table,
 ) -> Result<(), ConfigDocumentError> {
-    for key in ["typeshed-path", "typeshed-commit", "typeshed-store-path"] {
+    for key in [
+        "typeshed-path",
+        "typeshed-commit",
+        "typeshed-package",
+        "typeshed-store-path",
+    ] {
         require_value_type(path, basilisk, key, "string", toml::Value::is_str)?;
     }
-    if basilisk.contains_key("typeshed-path") && basilisk.contains_key("typeshed-commit") {
+    // The three step-3 sources are mutually exclusive ([STUBRES-TYPESHED-PYPI]).
+    // Rejecting every pairing here keeps the document validator in step with the
+    // runtime's own check, so the editor can never write a document the checker
+    // would then refuse to load.
+    if SOURCE_KEYS
+        .iter()
+        .filter(|key| basilisk.contains_key(**key))
+        .count()
+        > 1
+    {
         return invalid(
             path,
-            "`typeshed-path` and `typeshed-commit` are mutually exclusive",
+            "`typeshed-path`, `typeshed-commit`, and `typeshed-package` are mutually exclusive",
         );
     }
     if let Some(commit) = basilisk
@@ -290,8 +304,21 @@ fn validate_typeshed_settings(
             );
         }
     }
+    if let Some(spec) = basilisk
+        .get("typeshed-package")
+        .and_then(toml::Value::as_str)
+    {
+        // The one shared pin parser, so the document validator and the runtime
+        // can never disagree about what a well-formed pin is.
+        if let Err(reason) = crate::parse_typeshed_package(spec) {
+            return invalid(path, &format!("`typeshed-package` is invalid: {reason}"));
+        }
+    }
     Ok(())
 }
+
+/// The mutually-exclusive step-3 typeshed source keys ([STUBRES-TYPESHED-PYPI]).
+const SOURCE_KEYS: [&str; 3] = ["typeshed-path", "typeshed-commit", "typeshed-package"];
 
 fn validate_toml_severity_table(
     path: &Path,

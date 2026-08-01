@@ -109,6 +109,7 @@ function decodeTypeshedKey(value: unknown): TypeshedSettingKey | undefined {
   switch (value.kind) {
     case "TypeshedPath": return { kind: "TypeshedPath" };
     case "TypeshedCommit": return { kind: "TypeshedCommit" };
+    case "TypeshedPackage": return { kind: "TypeshedPackage" };
     case "TypeshedStorePath": return { kind: "TypeshedStorePath" };
     default: return undefined;
   }

@@ -196,7 +196,7 @@ fn validate_typeshed_value(key: TypeshedSettingKey, value: &str) -> LspResult<St
             "typeshed-commit must be a full 40-character hexadecimal SHA",
         )),
         TypeshedSettingKey::TypeshedPackage
-            if crate::config::parse_typeshed_package(value).is_ok() =>
+            if basilisk_config::parse_typeshed_package(value).is_ok() =>
         {
             Ok(value.to_owned())
         }

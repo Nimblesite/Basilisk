@@ -20,11 +20,18 @@ fn source(config: &BasiliskConfig) -> TypeshedSource {
             path: path.to_string_lossy().into_owned(),
         }
     } else if let Some(spec) = config.typeshed_package.as_deref() {
-        // `typeshed-package` is validated as `name@sha256:<hex>` before it
-        // reaches the editor model, so a parse failure here is a wiring bug.
-        let (name, sha256) =
-            crate::config::parse_typeshed_package(spec).unwrap_or((String::new(), String::new()));
-        TypeshedSource::PyPIPackage { name, sha256 }
+        // A malformed `typeshed-package` spec is NOT a valid source: fall
+        // through to the bundled commit so the editor never renders a fake
+        // `PyPIPackage { name: "", sha256: "" }` identity. The runtime's
+        // `typeshed_request` surfaces the parse error as a config failure, and
+        // `warn_on_malformed_typeshed_values` logs it; the editor stays
+        // fail-closed ([STUBRES-TYPESHED-PYPI], house rule).
+        match basilisk_config::parse_typeshed_package(spec) {
+            Ok((name, sha256)) => TypeshedSource::PyPIPackage { name, sha256 },
+            Err(_) => TypeshedSource::ExactCommit {
+                commit: bundled_commit_sha().to_owned(),
+            },
+        }
     } else {
         TypeshedSource::ExactCommit {
             commit: config

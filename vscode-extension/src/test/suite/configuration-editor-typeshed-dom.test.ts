@@ -6,7 +6,8 @@
 //     every control — the deleted lock screen must STAY deleted: no overlay
 //     node, no inert shell, no transient disabled state, ever;
 //   * a "Latest" source radio was rendered although no such source exists —
-//     exactly two sources may ever appear;
+//     only the real, mutually-exclusive sources may ever appear (a pinned
+//     commit, a custom folder, and a PyPI package pin [STUBRES-TYPESHED-PYPI]);
 //   * a running download must show progress ON the button that started it
 //     while every other control stays live and editable;
 //   * a missing source must surface as a persistent inline row carrying its
@@ -86,13 +87,19 @@ function action(entry: DomStep, name: string): Action {
   return found;
 }
 
-/** Exactly the two sources exist — a "Latest" radio may NEVER render. */
+/**
+ * Exactly the three real sources exist, in order — a "Latest" radio may NEVER
+ * render. `PyPIPackage` is the third step-3 source ([STUBRES-TYPESHED-PYPI]);
+ * it is mutually exclusive with the other two, not additive to them.
+ */
+const SOURCE_MODES = ["ExactCommit", "CustomFolder", "PyPIPackage"];
+
 function assertSelected(entry: DomStep, mode: string): void {
   const sources = sourcesOf(entry);
   assert.deepStrictEqual(
     sources.map((candidate) => candidate.mode),
-    ["ExactCommit", "CustomFolder"],
-    `step "${entry.label}" must offer exactly the two sources — no Latest, ever`,
+    SOURCE_MODES,
+    `step "${entry.label}" must offer exactly the three real sources — no Latest, ever`,
   );
   assert.deepStrictEqual(
     sources.filter((candidate) => candidate.checked).map((candidate) => candidate.mode),
@@ -317,9 +324,14 @@ function assertPinnedAndCommitEditing(steps: DomStep[] | undefined, intents: rea
   assert.strictEqual(repinned.commitError, null, "the error must clear once the SHA is valid");
   assert.strictEqual(repinned.commitInvalid, null);
   assert.strictEqual(repinned.dialogOpen, false, "a Typeshed edit never opens the impact dialog");
+  // Selecting one source clears BOTH others in the same atomic mutation. A
+  // leftover competing key would make the server reject the save as mutually
+  // exclusive, stranding the user in a config the UI cannot undo
+  // ([LSPCFGED-TYPESHED], [STUBRES-TYPESHED-PYPI]).
   assert.deepStrictEqual(mutationsOf(intents, 1), [
     { kind: "SetTypeshedSetting", key: { kind: "TypeshedCommit" }, value: OTHER_COMMIT },
     { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedPath" } },
+    { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedPackage" } },
   ]);
 }
 
@@ -369,7 +381,8 @@ function assertCustomFolder(steps: DomStep[] | undefined, intents: readonly Reco
 
   assert.deepStrictEqual(mutationsOf(intents, 3), [
     { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedPath" } },
-  ], "returning to the pinned source clears exactly the folder");
+    { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedPackage" } },
+  ], "returning to the pinned source clears every competing source key");
   const repinned = step(steps, "repinned-from-custom");
   assertSelected(repinned, "ExactCommit");
   assert.strictEqual(
@@ -419,6 +432,7 @@ function assertDownloadLatest(steps: DomStep[] | undefined, intents: readonly Re
   assert.deepStrictEqual(mutationsOf(intents, 2), [
     { kind: "SetTypeshedSetting", key: { kind: "TypeshedCommit" }, value: OTHER_COMMIT },
     { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedPath" } },
+    { kind: "RemoveTypeshedSetting", key: { kind: "TypeshedPackage" } },
   ], "an SHA edit mid-download still writes — configuration never waits on the network");
   assert.strictEqual(edited.commitValue, OTHER_COMMIT);
   assertNothingLocked(edited);
@@ -480,7 +494,7 @@ function assertNoSource(steps: DomStep[] | undefined, intents: readonly Record<s
 }
 
 suite("Configuration editor — Typeshed source in a real webview DOM", () => {
-  test("switching between the two sources writes one atomic mutation and never locks the panel", async function () {
+  test("switching between sources writes one atomic mutation and never locks the panel", async function () {
     this.timeout(RESULT_TIMEOUT_MS + 20_000);
     const host = new ScenarioHost({ folders: [CUSTOM_FOLDER, undefined] });
     const { result, intents } = await runScenario(sourceJourneyDriver, host);

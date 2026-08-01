@@ -61,6 +61,34 @@ def build_refs_dict() -> RefsDictT:
 }
 
 #[test]
+fn paramspec_callable_typealias_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // A `TypeAlias`-annotated alias whose body is a `Callable` parameterised by
+    // a `ParamSpec` must NOT be treated as a textually-substitutable generic
+    // alias — `Callback1[...]` needs real `ParamSpec` semantics. Approximating
+    // it made the conformance suite's `callables_annotation` (line 174) and
+    // `callables_subtyping` (line 213) cases emit false positives, which the
+    // 0-false-positive ceiling forbids ([CHKARCH-CONFORMANCE]).
+    let source = r#"
+from typing import Callable, ParamSpec, TypeAlias
+
+P = ParamSpec("P")
+Callback1: TypeAlias = Callable[P, str]
+
+
+def func6(cb1: Callable[[], str], cb2: Callable[[int], str]) -> None:
+    f1: Callback1[...] = cb1
+    f3: Callback1[...] = cb2
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "assignment_compatibility");
+    assert!(
+        msgs.is_empty(),
+        "a ParamSpec-parameterised Callable TypeAlias must not fire; got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn mismatched_dict_literal_to_implicit_dict_alias_fires() -> Result<(), Box<dyn std::error::Error>>
 {
     // A dict literal whose key type contradicts the alias definition must

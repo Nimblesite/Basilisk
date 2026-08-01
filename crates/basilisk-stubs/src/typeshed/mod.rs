@@ -10,8 +10,7 @@
 //! folder**, or a **`PyPI` package** pinned by wheel SHA-256
 //! ([STUBRES-TYPESHED-PYPI]). Resolution performs no network activity of any
 //! kind — structurally: this crate links no HTTP client, so the analysis path
-//! cannot
-//! reach the network even by mistake ([STUBRES-TYPESHED-OFFLINE]). Downloading
+//! cannot reach the network even by mistake ([STUBRES-TYPESHED-OFFLINE]). Downloading
 //! lives in the separate `basilisk-typeshed-fetch` crate and runs only on
 //! explicit user action ([STUBRES-TYPESHED-DOWNLOAD]).
 //!

@@ -225,7 +225,7 @@ pub fn typeshed_request(
             explicit: true,
         }
     } else if let Some(spec) = config.typeshed_package.as_deref() {
-        let (name, sha256) = parse_typeshed_package(spec)?;
+        let (name, sha256) = basilisk_config::parse_typeshed_package(spec)?;
         SourceSelection::PyPIPackage { name, sha256 }
     } else {
         SourceSelection::Pinned {
@@ -238,31 +238,6 @@ pub fn typeshed_request(
         selection,
         store_path: config.typeshed_store_path.clone(),
     })
-}
-
-/// Parse a `typeshed-package` pin spec of the form `"name@sha256:<hex>"`
-/// ([STUBRES-TYPESHED-PYPI], issue #312).
-///
-/// The distribution name precedes the last `@`; the hash must be a 64-hex
-/// SHA-256 prefixed with `sha256:`.
-///
-/// # Errors
-///
-/// Returns a redacted, user-facing reason for a malformed spec.
-pub(crate) fn parse_typeshed_package(spec: &str) -> Result<(String, String), String> {
-    let (name, hash) = spec
-        .rsplit_once('@')
-        .ok_or_else(|| "typeshed-package must be of the form `name@sha256:<hex>`".to_owned())?;
-    if name.is_empty() {
-        return Err("typeshed-package distribution name is empty".to_owned());
-    }
-    let sha256 = hash
-        .strip_prefix("sha256:")
-        .ok_or_else(|| "typeshed-package hash must be prefixed with `sha256:`".to_owned())?;
-    if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err("typeshed-package sha256 must be 64 hex characters".to_owned());
-    }
-    Ok((name.to_owned(), sha256.to_ascii_lowercase()))
 }
 
 /// The rule-tag every typeshed source-status advisory carries.

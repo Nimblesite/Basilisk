@@ -2,9 +2,10 @@
 /** Typeshed fragment of the dependency-free webview runtime. */
 
 export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
-    // The two mutually exclusive sources and no third ([LSPCFGED-TYPESHED]).
-    // The server states which one is ACTIVE (carrying the value that defines
-    // it); the copy below is client presentation, not server state.
+    // The three mutually exclusive sources and no fourth ([LSPCFGED-TYPESHED],
+    // [STUBRES-TYPESHED-PYPI]). The server states which one is ACTIVE (carrying
+    // the value that defines it); the copy below is client presentation, not
+    // server state.
     const SOURCE_CHOICES = [
       {
         mode: 'ExactCommit',
@@ -15,6 +16,11 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
         mode: 'CustomFolder',
         label: 'Custom folder',
         description: 'Use a stdlib tree you manage yourself. Nothing is downloaded.',
+      },
+      {
+        mode: 'PyPIPackage',
+        label: 'PyPI package',
+        description: 'Pin a stdlib-stubs wheel by SHA-256. Reproducible across machines once downloaded.',
       },
     ];
     const COMMIT_PATTERN = /^[0-9a-f]{40}$/i;
@@ -94,12 +100,13 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
       SOURCE_CHOICES.forEach((choice) => group.append(sourceChoice(choice)));
       target.append(group);
     }
-    // The active source's own value: a SHA to pin, or a folder to use. No
-    // other source's field exists in the DOM ([LSPCFGED-TYPESHED]).
+    // The active source's own value: a commit SHA, a folder, or a package
+    // pin. No other source's field exists in the DOM ([LSPCFGED-TYPESHED]).
     function renderSourceValue(target) {
       const source = typeshedState().source;
       const mode = kind(source, 'ExactCommit');
       if (mode === 'CustomFolder') { target.append(folderField('TypeshedPath', 'Folder', source.path)); return; }
+      if (mode === 'PyPIPackage') { target.append(packageField(source.name, source.sha256)); return; }
       target.append(commitField(source.commit));
     }
     function commitField(commit) {
@@ -137,10 +144,32 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
       field.append(picker);
       return field;
     }
-    // A custom folder downloads nothing, so it has no store folder and the
-    // Advanced disclosure does not exist ([LSPCFGED-TYPESHED]).
+    // A PyPI package pin is the literal 'name@sha256:<64-hex>' spec the
+    // runtime stores; the field edits it as one string so the server's single
+    // parser ([STUBRES-TYPESHED-PYPI]) validates it.
+    function packageField(name, sha256) {
+      const field = document.createElement('label');
+      field.className = 'typeshed-field';
+      field.append(textNode('span', 'Package'), textNode('small', 'name@sha256:<64-hex> wheel digest.'));
+      const input = document.createElement('input');
+      input.type = 'text';
+      const value = name && sha256 ? name + '@sha256:' + sha256 : '';
+      input.value = value;
+      input.placeholder = 'micropython-stdlib-stubs@sha256:<64-hex>';
+      input.dataset.typeshedPackage = 'TypeshedPackage';
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      const error = textNode('small', '', 'field-error');
+      error.id = 'typeshed-package-error';
+      error.hidden = true;
+      field.append(input, error);
+      return field;
+    }
+    // A custom folder downloads nothing and has no store folder; a commit pin
+    // and a PyPI package both resolve from the store, so the Advanced
+    // disclosure exists for either ([LSPCFGED-TYPESHED], [STUBRES-TYPESHED-STORE]).
     function renderStore(target) {
-      if (typeshedSourceMode() !== 'ExactCommit') return;
+      if (typeshedSourceMode() === 'CustomFolder') return;
       const details = document.createElement('details');
       details.className = 'typeshed-advanced';
       // Every write re-renders from the fresh snapshot, so the disclosure has
@@ -185,6 +214,7 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
       if (!active || !active.dataset) return undefined;
       if (active.dataset.typeshedSource) return '[data-typeshed-source="' + active.dataset.typeshedSource + '"]';
       if (active.dataset.typeshedCommit) return '[data-typeshed-commit]';
+      if (active.dataset.typeshedPackage) return '[data-typeshed-package]';
       if (active.dataset.pickTypeshedFolder) return '[data-pick-typeshed-folder="' + active.dataset.pickTypeshedFolder + '"]';
       if (active.dataset.typeshedAction) return '[data-typeshed-action="' + active.dataset.typeshedAction + '"]';
       return undefined;
@@ -226,22 +256,37 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
       );
       restoreTypeshedFocus(focus);
     }
-    // Choosing a source is one atomic transition ([LSPCFGED-TYPESHED]):
-    // pinning clears any folder and a folder clears the pin, so no
-    // combination of source values can ever be written. Nothing locks while
-    // the mutation round-trips — every control re-renders from the snapshot
-    // the write returns.
+    // The three sources are mutually exclusive: selecting one clears the other
+    // two keys, so no combination of source values can ever be written
+    // ([LSPCFGED-TYPESHED], [STUBRES-TYPESHED-PYPI]). Nothing locks while the
+    // mutation round-trips — every control re-renders from the snapshot.
+    function selectSource(mode) {
+      const clears = {
+        ExactCommit: ['TypeshedPath', 'TypeshedPackage'],
+        PyPIPackage: ['TypeshedCommit', 'TypeshedPath'],
+      };
+      const others = clears[mode] || [];
+      postPreview(others.map(typeshedRemove));
+    }
     function chooseTypeshedSource(mode) {
       if (mode === typeshedSourceMode()) return;
-      if (mode === 'ExactCommit') {
-        postPreview([typeshedRemove('TypeshedPath')]);
-        announce('Using the pinned standard-library commit');
+      if (mode === 'CustomFolder') {
+        // Deliberately NO pre-clear here: the folder picker is cancellable, so
+        // clearing the competing keys up front would destroy the user's pin
+        // even when they back out. The host's pickTypeshedFolder writes the
+        // folder and clears the other two source keys in ONE atomic mutation,
+        // and posts nothing at all when cancelled ([LSPCFGED-TYPESHED]).
+        vscode.postMessage({ type: 'pickTypeshedFolder', key: 'TypeshedPath' });
+        announce('Switching to a custom folder');
         return;
       }
-      vscode.postMessage({ type: 'pickTypeshedFolder', key: 'TypeshedPath' });
+      selectSource(mode);
+      if (mode === 'PyPIPackage') { announce('Switching to a PyPI package pin'); return; }
+      announce('Using the pinned standard-library commit');
     }
     // An invalid SHA is never sent: it is rejected in place, where the user
-    // can see why, and the configuration is left untouched.
+    // can see why, and the configuration is left untouched. Setting a commit
+    // atomically clears the folder and package pins.
     function commitEdited(input) {
       const value = input.value.trim();
       const error = byId('typeshed-commit-error');
@@ -256,12 +301,32 @@ export const CONFIGURATION_EDITOR_SCRIPT_TYPESHED = String.raw`
       input.removeAttribute('aria-invalid');
       postPreview(value === ''
         ? [typeshedRemove('TypeshedCommit')]
-        : [typeshedSetText('TypeshedCommit', value), typeshedRemove('TypeshedPath')]);
+        : [typeshedSetText('TypeshedCommit', value), typeshedRemove('TypeshedPath'), typeshedRemove('TypeshedPackage')]);
+    }
+    // An invalid package pin is rejected in place, mirroring 'commitEdited'.
+    // Setting a package atomically clears the commit and folder pins.
+    const PACKAGE_PATTERN = /^[^@]+@sha256:[0-9a-f]{64}$/i;
+    function packageEdited(input) {
+      const value = input.value.trim();
+      const error = byId('typeshed-package-error');
+      if (value !== '' && !PACKAGE_PATTERN.test(value)) {
+        error.textContent = 'Enter name@sha256:<64-hex> (0-9, a-f).';
+        error.hidden = false;
+        input.setAttribute('aria-invalid', 'true');
+        announce('Invalid package pin');
+        return;
+      }
+      error.hidden = true;
+      input.removeAttribute('aria-invalid');
+      postPreview(value === ''
+        ? [typeshedRemove('TypeshedPackage')]
+        : [typeshedSetText('TypeshedPackage', value), typeshedRemove('TypeshedCommit'), typeshedRemove('TypeshedPath')]);
     }
     /** Every Typeshed control change, routed from the one delegated listener. */
     function typeshedChanged(target) {
       if (target.dataset.typeshedSource) { chooseTypeshedSource(target.value); return true; }
       if (target.dataset.typeshedCommit) { commitEdited(target); return true; }
+      if (target.dataset.typeshedPackage) { packageEdited(target); return true; }
       return false;
     }
 `;

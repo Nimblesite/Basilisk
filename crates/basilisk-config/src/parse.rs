@@ -442,16 +442,26 @@ pub fn is_full_commit_sha(sha: &str) -> bool {
     sha.len() == 40 && sha.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
-/// Whether `spec` is a well-formed `typeshed-package` pin — `name@sha256:<hex>`
-/// with a 64-character hex digest ([STUBRES-TYPESHED-PYPI], issue #312). The
-/// distribution name is otherwise unchecked; `PyPI`'s normalisation applies at
-/// acquisition. A bad spec is kept verbatim so the runtime fails closed.
-#[must_use]
-pub fn is_valid_typeshed_package_spec(spec: &str) -> bool {
-    let Some((name, hash)) = spec.split_once("@sha256:") else {
-        return false;
-    };
-    !name.is_empty() && hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit())
+/// Parse a `typeshed-package` pin spec of the form `"name@sha256:<hex>"`
+/// ([STUBRES-TYPESHED-PYPI], issue #312). The distribution name precedes the
+/// `@sha256:` separator; the hash must be 64 hex characters. This is the one
+/// parser for the pin — the LSP and config editor call it rather than
+/// carrying a divergent twin.
+///
+/// # Errors
+///
+/// Returns a redacted, user-facing reason for a malformed spec.
+pub fn parse_typeshed_package(spec: &str) -> Result<(String, String), String> {
+    let (name, hash) = spec
+        .split_once("@sha256:")
+        .ok_or_else(|| "typeshed-package must be of the form `name@sha256:<64-hex>`".to_owned())?;
+    if name.is_empty() {
+        return Err("typeshed-package distribution name is empty".to_owned());
+    }
+    if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("typeshed-package sha256 must be 64 hex characters".to_owned());
+    }
+    Ok((name.to_owned(), hash.to_ascii_lowercase()))
 }
 
 /// Emit a structured warning for a malformed `typeshed-commit` pin
@@ -468,7 +478,7 @@ fn warn_on_malformed_typeshed_values(cfg: &BasiliskConfig) {
         }
     }
     if let Some(spec) = cfg.typeshed_package.as_deref() {
-        if !is_valid_typeshed_package_spec(spec) {
+        if parse_typeshed_package(spec).is_err() {
             tracing::warn!(
                 "typeshed-package is not `name@sha256:<64-hex>`; the package pin will fail closed"
             );

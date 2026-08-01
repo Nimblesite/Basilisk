@@ -145,6 +145,9 @@ nohup.out
 .claude/scheduled_tasks.lock
 .claude/*.local.json
 
+# Per-developer pi agent state (machine-local; never committed)
+.pi/
+
 # =============================================================================
 # Temporary
 # =============================================================================

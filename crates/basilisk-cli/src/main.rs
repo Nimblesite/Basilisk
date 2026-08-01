@@ -337,7 +337,7 @@ fn run_command(command: Command) -> u8 {
 /// - `1` — error diagnostics found
 /// - `2` — invalid configuration (a `pep` rule resolved to `disabled`,
 ///   [CHKARCH-CONFIG-MODEL])
-/// - `3` — internal error
+/// - `3` — internal error, or a terminal typeshed source failure (`NO SOURCE`)
 fn run_scoped_check(args: &CheckArgs, scope: DiagnosticScope) -> u8 {
     args.color.apply();
     let cache = cache_check::CacheOptions {
@@ -368,6 +368,13 @@ fn run_scoped_check(args: &CheckArgs, scope: DiagnosticScope) -> u8 {
         Err(PipelineError::Config(message)) => {
             error!(%message, "configuration error");
             2
+        }
+        Err(PipelineError::NoSource(message)) => {
+            // The message IS the spec's `NO SOURCE` status line with its
+            // recovery command — print it verbatim, not branded as an
+            // internal bug ([STUBRES-TYPESHED-OFFLINE]).
+            error!(%message);
+            3
         }
         Err(PipelineError::Internal(message)) => {
             error!(%message, "internal error");
