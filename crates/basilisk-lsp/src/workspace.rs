@@ -43,6 +43,27 @@ pub struct FileEntry {
     pub version: i32,
     /// `true` iff the editor currently has this file open; editor text is authoritative.
     pub is_open: bool,
+    /// The most recent revision that parsed AND resolved, carried across
+    /// failures so display surfaces can serve a stale-but-coherent view.
+    ///
+    /// Kept separate from `text`/`resolved`: those two must stay current
+    /// (completion patches `text`, diagnostics describe it), while this pair is
+    /// only ever read together — a resolved module's spans index the exact
+    /// source it came from. Implements [ANALYSIS-INDEX-LASTGOOD].
+    pub last_good: Option<Arc<LastGoodResolve>>,
+}
+
+/// A source text and the resolved module built from it, kept as one unit.
+///
+/// The pairing is the point: `ResolvedModule` holds byte spans into the text it
+/// was resolved from, so rendering it against any other revision misplaces
+/// every position. Implements [ANALYSIS-INDEX-LASTGOOD].
+#[derive(Debug)]
+pub struct LastGoodResolve {
+    /// The source text that produced [`Self::resolved`].
+    pub text: String,
+    /// The symbol table resolved from [`Self::text`].
+    pub resolved: Arc<basilisk_resolver::ResolvedModule>,
 }
 
 /// Whether a workspace re-analysis publishes every file or only real changes.
@@ -611,16 +632,80 @@ impl WorkspaceIndex {
         Arc<basilisk_resolver::ResolvedModule>,
         Vec<basilisk_checker::Diagnostic>,
     )> {
-        let path = uri.to_file_path().ok()?;
-        // Try the literal path first, then canonicalized (handles symlinks).
-        let entry = self.files.get(&path).or_else(|| {
-            let canonical = path.canonicalize().ok()?;
-            self.files.get(&canonical)
-        })?;
+        let entry = self.entry_for_uri(uri)?;
         let resolved = entry.resolved.clone()?;
         let text = entry.text.clone();
         let diagnostics = entry.diagnostics.clone();
         Some((text, resolved, diagnostics))
+    }
+
+    /// The indexed entry for a URI, trying the literal path first and then the
+    /// canonicalized one (macOS `/var` → `/private/var` and other symlinks).
+    fn entry_for_uri(
+        &self,
+        uri: &Url,
+    ) -> Option<dashmap::mapref::one::Ref<'_, PathBuf, FileEntry>> {
+        let path = uri.to_file_path().ok()?;
+        self.files.get(&path).or_else(|| {
+            let canonical = path.canonicalize().ok()?;
+            self.files.get(&canonical)
+        })
+    }
+
+    /// The text and resolved module a DISPLAY surface should render, falling
+    /// back to the last revision that parsed when the current one does not.
+    ///
+    /// A buffer stops parsing on the way through almost every edit — typing `.`
+    /// to reach an attribute leaves a mid-token line for one keystroke — and
+    /// blanking a file's hints because of it discards work that is still
+    /// correct for every line the user is not on (GitHub #386). The returned
+    /// text is whichever revision the module was resolved from, never a mix.
+    ///
+    /// Diagnostics deliberately have no equivalent: a stale error under the
+    /// cursor is a wrong claim about the code, whereas a stale hint is a
+    /// momentarily out-of-date description of a line nobody is editing.
+    /// Implements [ANALYSIS-INDEX-LASTGOOD].
+    #[must_use]
+    pub fn get_for_display(
+        &self,
+        uri: &Url,
+    ) -> Option<(String, Arc<basilisk_resolver::ResolvedModule>)> {
+        let entry = self.entry_for_uri(uri)?;
+        if let Some(resolved) = entry.resolved.clone() {
+            return Some((entry.text.clone(), resolved));
+        }
+        entry
+            .last_good
+            .as_ref()
+            .map(|last| (last.text.clone(), Arc::clone(&last.resolved)))
+    }
+
+    /// Store an entry, carrying the last parsing revision forward.
+    ///
+    /// The single write path into [`Self::files`], so a revision that fails to
+    /// parse can never erase the snapshot display surfaces fall back to
+    /// ([`Self::get_for_display`]). Implements [ANALYSIS-INDEX-LASTGOOD].
+    ///
+    /// Only OPEN buffers carry a snapshot. The snapshot costs a second copy of
+    /// the file's text, and only a buffer someone is typing in can reach a
+    /// non-parsing revision — so the cost scales with open editor tabs, not
+    /// with workspace size, and closing a file frees it.
+    fn store_entry(&self, path: PathBuf, mut entry: FileEntry) {
+        entry.last_good = match (entry.is_open, entry.resolved.clone()) {
+            (false, _) => None,
+            // This revision resolved — it becomes the snapshot.
+            (true, Some(resolved)) => Some(Arc::new(LastGoodResolve {
+                text: entry.text.clone(),
+                resolved,
+            })),
+            // It did not: keep whatever the previous revision left behind.
+            (true, None) => entry.last_good.take().or_else(|| {
+                self.files
+                    .get(&path)
+                    .and_then(|prev| prev.last_good.clone())
+            }),
+        };
+        let _ = self.files.insert(path, entry);
     }
 
     /// Return just the source text for a URI (used by handlers that don't need
@@ -630,12 +715,7 @@ impl WorkspaceIndex {
     /// handlers like completion can attempt their own recovery.
     #[must_use]
     pub fn get_text(&self, uri: &Url) -> Option<String> {
-        let path = uri.to_file_path().ok()?;
-        let entry = self.files.get(&path).or_else(|| {
-            let canonical = path.canonicalize().ok()?;
-            self.files.get(&canonical)
-        })?;
-        Some(entry.text.clone())
+        Some(self.entry_for_uri(uri)?.text.clone())
     }
 
     /// Analyse a file from in-memory text (called on `didOpen` / `didChange`).
@@ -663,7 +743,7 @@ impl WorkspaceIndex {
         entry.is_open = true;
         entry.version = version;
 
-        let _ = self.files.insert(path, entry);
+        self.store_entry(path, entry);
         lsp_diags
     }
 
@@ -674,7 +754,7 @@ impl WorkspaceIndex {
     /// Ready; no fallback generation is allowed to produce interim results.
     pub(crate) fn set_open_without_analysis(&self, uri: &Url, text: &str, version: i32) {
         let path = uri.to_file_path().unwrap_or_default();
-        let _ = self.files.insert(
+        self.store_entry(
             path,
             FileEntry {
                 source_hash: fnv1a(text),
@@ -683,6 +763,7 @@ impl WorkspaceIndex {
                 diagnostics: Vec::new(),
                 version,
                 is_open: true,
+                last_good: None,
             },
         );
     }
@@ -707,7 +788,7 @@ impl WorkspaceIndex {
         let (mut entry, diagnostics) = self.analyse_and_resolve(&next, &path);
         entry.version = version;
         entry.is_open = is_open;
-        let _ = self.files.insert(path, entry);
+        self.store_entry(path, entry);
         Some(diagnostics)
     }
 
@@ -793,7 +874,7 @@ impl WorkspaceIndex {
         }
 
         let (entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
-        let _ = self.files.insert(path, entry);
+        self.store_entry(path, entry);
         Some((uri.clone(), lsp_diags))
     }
 
@@ -817,7 +898,7 @@ impl WorkspaceIndex {
             return (uri.clone(), vec![]);
         };
         let (entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
-        let _ = self.files.insert(path, entry);
+        self.store_entry(path, entry);
         (uri.clone(), lsp_diags)
     }
 
@@ -940,7 +1021,7 @@ impl WorkspaceIndex {
                 PublishPolicy::Always => true,
                 PublishPolicy::ChangedOnly => entry.diagnostics != prev_diagnostics,
             };
-            let _ = self.files.insert(path.clone(), entry);
+            self.store_entry(path.clone(), entry);
             if publish {
                 if let Some(uri) = path_to_uri(&path) {
                     results.push((uri, lsp_diags));
@@ -1061,7 +1142,7 @@ impl WorkspaceIndex {
             .filter_map(|(path, text)| {
                 let uri = path_to_uri(&path)?;
                 let (entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
-                let _ = self.files.insert(path, entry);
+                self.store_entry(path, entry);
                 Some((uri, lsp_diags))
             })
             .collect();
@@ -1108,7 +1189,7 @@ impl WorkspaceIndex {
         }
         for (path, text) in sources {
             let (entry, _diagnostics_for_client) = self.analyse_and_resolve(&text, &path);
-            let _ = self.files.insert(path, entry);
+            self.store_entry(path, entry);
         }
         self.files
             .iter()

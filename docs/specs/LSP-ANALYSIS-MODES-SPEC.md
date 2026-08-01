@@ -116,12 +116,54 @@ WorkspaceIndex {
 
 FileEntry {
     source_hash: u64,
-    resolved: Arc<ResolvedModule>,
+    text: String,
+    resolved: Option<Arc<ResolvedModule>>,   // None when the revision did not parse
     diagnostics: Vec<Diagnostic>,
     version: u64,
     is_open: bool,
+    last_good: Option<Arc<LastGoodResolve>>, // see [ANALYSIS-INDEX-LASTGOOD]
+}
+
+LastGoodResolve {
+    text: String,
+    resolved: Arc<ResolvedModule>,
 }
 ```
+
+### Last-Good Revision {#ANALYSIS-INDEX-LASTGOOD}
+
+A buffer stops parsing on the way through most edits: typing `.` to reach an
+attribute leaves a mid-token line for one keystroke. `FileEntry.resolved` is
+`None` for that revision, so a surface that reads it alone has nothing to show
+for **any** line in the file — including the lines the user is not editing,
+whose types have not changed (GitHub #386).
+
+`LastGoodResolve` retains the most recent revision that both parsed and
+resolved. `WorkspaceIndex::store_entry` is the single write path into `files`
+and maintains it: a revision that resolves becomes the new snapshot, a revision
+that does not inherits the previous one. A failed parse therefore never erases
+it.
+
+Only **open** buffers carry a snapshot. It costs a second copy of the file's
+text, and only a buffer someone is typing in can reach a non-parsing revision —
+so the cost scales with open editor tabs rather than with workspace size, and
+`didClose` frees it ([ANALYSIS-INDEX-OPEN]).
+
+Text and resolved module are retained **as one unit** because a
+`ResolvedModule` holds byte spans into the exact source it was resolved from;
+rendering it against any other revision misplaces every position.
+
+Two reader shapes, deliberately different:
+
+| Reader | Accessor | On a non-parsing revision |
+|---|---|---|
+| Display surfaces (inlay hints) | `get_for_display` | serve the last-good pair |
+| Diagnostics, and anything positional under the cursor | `get_by_uri` | serve nothing |
+
+The asymmetry is the point. A stale hint is a momentarily out-of-date
+description of a line nobody is touching; a stale diagnostic is a wrong claim
+about code as it now stands, and a stale position under the cursor points at
+the wrong token.
 
 ### Invalidation {#ANALYSIS-INDEX-INVAL}
 

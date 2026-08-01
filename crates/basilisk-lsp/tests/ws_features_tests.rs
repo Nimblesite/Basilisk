@@ -48,6 +48,8 @@ mod ws_test_hover;
 mod ws_test_inlay_hints;
 #[path = "lsp/ws_test_inlay_hints_display.rs"]
 mod ws_test_inlay_hints_display;
+#[path = "lsp/ws_test_inlay_hints_recovery.rs"]
+mod ws_test_inlay_hints_recovery;
 #[path = "lsp/ws_test_memory.rs"]
 mod ws_test_memory;
 #[path = "lsp/ws_test_processes.rs"]
