@@ -1,7 +1,9 @@
-//! Implements [CHKARCH-MOJO-SAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-MOJO-SAFETY
+//! Implements [CHKARCH-SAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-SAFETY
 //!
-//! Mojo-inspired ownership analysis: scaffolding for the planned
-//! mutation-of-borrowed diagnostic ([CHKARCH-MOJO-OWNERSHIP]).
+//! Basilisk's own ownership analysis: scaffolding for the planned
+//! mutation-of-borrowed diagnostic ([CHKARCH-SAFETY-OWNERSHIP]). The concepts
+//! are borrowed from Mojo's ownership model; the rules are Basilisk's, spelled
+//! in standard Python `Annotated` conventions.
 //!
 //! This is **not** wired into the checker pipeline and registers no rule, so it
 //! never contributes a diagnostic — shipping PEP rules must not reuse these
@@ -19,7 +21,7 @@ const MUTATING_METHODS: &[&str] = &[
     "discard",
 ];
 
-/// Check a Python source string for Mojo-inspired ownership violations.
+/// Check a Python source string for ownership violations.
 ///
 /// Detects mutation of `Borrowed` parameters via mutating method calls.
 #[must_use]
@@ -84,7 +86,7 @@ fn borrowed_parameter_name(part: &str) -> Option<&str> {
 mod tests {
     use super::*;
 
-    // [CHKARCH-MOJO-OWNERSHIP]: a borrowed parameter mutated in place is the
+    // [CHKARCH-SAFETY-OWNERSHIP]: a borrowed parameter mutated in place is the
     // violation this scaffolding exists to describe.
     #[test]
     fn mutation_of_a_borrowed_parameter_is_reported() {

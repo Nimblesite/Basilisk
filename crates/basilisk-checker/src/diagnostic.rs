@@ -25,7 +25,7 @@ pub enum Severity {
     /// A type error that must be resolved.
     Error,
     /// Critical safety violation reported by the opt-in, off-by-default
-    /// ownership/move-semantics rules inspired by Mojo.
+    /// ownership/move-semantics rules ([CHKARCH-SAFETY]).
     SafetyViolation,
 }
 

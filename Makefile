@@ -402,6 +402,7 @@ _lint_rust:
 	cargo clippy --workspace --all-targets -- -D warnings && \
 	cargo audit && \
 	bash scripts/check-dependency-shape.sh && \
+	bash scripts/check-illegal-tags.sh && \
 	echo -e '\033[0;32m✓ Rust lint passed\033[0m'
 
 _lint_vsix:

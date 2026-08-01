@@ -381,42 +381,46 @@ Tests: `crates/basilisk-checker/tests/checker/version_target_tests.rs`.
 
 ---
 
-## Mojo-inspired safety analysis {#CHKARCH-MOJO-SAFETY}
+## Ownership and safety analysis {#CHKARCH-SAFETY}
 
 Status: planned, opt-in, and not wired into the checker pipeline. The
-scaffolding lives in `basilisk-checker`'s `mojo_safety` module — there is no
+scaffolding lives in `basilisk-checker`'s `ownership` module — there is no
 separate crate for it, and it registers no rule; shipping PEP rules must not
 reuse these anchors or diagnostic descriptions. Its scan is textual, so it must
 be rebuilt on the Ruff AST before any rule is registered against it.
 
-The concepts are borrowed from [Mojo's ownership model](https://docs.modular.com/mojo/manual/values/ownership)
-— the analysis is Basilisk's own, expressed in standard Python `Annotated`
-conventions, not a port of Mojo's checker. Because none of it works today it is
-also **not advertised**: it stays out of the README, the website, and the
-user-facing docs until it ships as a working, opt-in rule set. Only complete,
-production-ready features are advertised.
+These are Basilisk rules. The concepts are borrowed from
+[Mojo's ownership model](https://docs.modular.com/mojo/manual/values/ownership),
+but the analysis is Basilisk's own, expressed in standard Python `Annotated`
+conventions — not a port of Mojo's checker. `mojo` is therefore not a legal
+identifier here: it must never appear in a spec ID, module path, file name, or
+rule name. Prose may credit the inspiration; tags may not carry it.
 
-### Ownership tracking {#CHKARCH-MOJO-OWNERSHIP}
+Because none of it works today it is also **not advertised**: it stays out of
+the README, the website, and the user-facing docs until it ships as a working,
+opt-in rule set. Only complete, production-ready features are advertised.
+
+### Ownership tracking {#CHKARCH-SAFETY-OWNERSHIP}
 
 The target is explicit `Annotated[T, Borrowed|InOut|Owned]` analysis for
 mutation-of-borrowed and use-after-transfer diagnostics.
 
-### Parameter immutability {#CHKARCH-MOJO-IMMUTABLE}
+### Parameter immutability {#CHKARCH-SAFETY-IMMUTABLE}
 
 The target is an opt-in rule that treats mutable parameters as read-only unless
 marked `InOut`; it does not change Python runtime semantics.
 
-### Structural discipline {#CHKARCH-MOJO-STRUCTURAL}
+### Structural discipline {#CHKARCH-SAFETY-STRUCTURAL}
 
 The target is opt-in checks for dynamic attributes and related typed-class
 structure. Existing PEP/dataclass rules remain separate.
 
-### Explicit coercion {#CHKARCH-MOJO-COERCION}
+### Explicit coercion {#CHKARCH-SAFETY-COERCION}
 
 The target is opt-in diagnostics for selected implicit conversions. It must not
 contradict the typing-spec numeric tower used by default PEP rules.
 
-### Compatibility contract {#CHKARCH-MOJO-COMPAT}
+### Compatibility contract {#CHKARCH-SAFETY-COMPAT}
 
 All metadata uses standard Python typing constructs, all rules are off by
 default, and the implementation plan is
@@ -636,8 +640,8 @@ Source Files (.py)
   Windsurf / Zed /
   Neovim
 
-  (planned: basilisk-checker::mojo_safety — Mojo-inspired ownership /
-   immutability / coercion analysis — is not yet wired into the pipeline.)
+  (planned: basilisk-checker::ownership — ownership / immutability /
+   coercion analysis — is not yet wired into the pipeline.)
 ```
 
 All stages are backed by:
@@ -692,8 +696,8 @@ basilisk/
   crates/
     basilisk-parser/       # Python AST parsing (wraps or extends ruff_python_parser)
     basilisk-resolver/     # Name resolution, scope analysis, import resolution
-    basilisk-checker/      # Core type checking engine (incl. mojo_safety:
-                           #   planned Mojo-inspired safety analysis, unwired)
+    basilisk-checker/      # Core type checking engine (incl. ownership:
+                           #   planned safety analysis, unwired)
     basilisk-lsp/          # Language Server Protocol implementation
     basilisk-cli/          # Command-line interface
     basilisk-stubs/        # Stub generation, loading, registry client

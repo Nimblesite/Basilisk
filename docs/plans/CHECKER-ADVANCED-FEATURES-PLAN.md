@@ -16,18 +16,21 @@ the prime directive (PEP conformance) — it is opt-in surface area beyond the s
 
 ## TODO {#CHKADVPLAN-TODO}
 
-### Mojo-inspired safety checks (`basilisk-checker::mojo_safety`) {#CHKADVPLAN-TODO-MOJO}
+### Ownership and safety checks (`basilisk-checker::ownership`) {#CHKADVPLAN-TODO-SAFETY}
 
-The concepts are borrowed from [Mojo's ownership model](https://docs.modular.com/mojo/manual/values/ownership);
+These are Basilisk rules. The concepts are borrowed from
+[Mojo's ownership model](https://docs.modular.com/mojo/manual/values/ownership);
 the analysis is Basilisk's own, expressed in Python's `Annotated` conventions.
+`mojo` is not a legal identifier — prose may credit the inspiration, but no spec
+ID, module path, file name, or rule name may carry it ([CHKARCH-SAFETY]).
 Unbuilt and unadvertised: the module is unwired scaffolding, registers no rule,
 and stays out of user-facing docs until it ships as a working, opt-in rule set.
 
-- [ ] Ownership tracking via `Borrowed`/`InOut`/`Owned` `Annotated` conventions: mutation-of-borrowed and use-after-move detection ([CHKARCH-MOJO-OWNERSHIP]).
-- [ ] Parameter-immutability-by-default analysis with `InOut` opt-out + frozen-dataclass nudges ([CHKARCH-MOJO-IMMUTABLE]).
-- [ ] Structural-discipline checks: dynamic-attribute-on-typed-class, missing `__init__`, `__slots__` suggestions ([CHKARCH-MOJO-STRUCTURAL]).
-- [ ] No-implicit-coercion checks (int→float, bool→int, bytes→str) ([CHKARCH-MOJO-COERCION]).
-- [ ] Mojo-concept → Basilisk-check mapping table backing the above ([CHKARCH-MOJO-COMPAT]).
+- [ ] Ownership tracking via `Borrowed`/`InOut`/`Owned` `Annotated` conventions: mutation-of-borrowed and use-after-move detection ([CHKARCH-SAFETY-OWNERSHIP]).
+- [ ] Parameter-immutability-by-default analysis with `InOut` opt-out + frozen-dataclass nudges ([CHKARCH-SAFETY-IMMUTABLE]).
+- [ ] Structural-discipline checks: dynamic-attribute-on-typed-class, missing `__init__`, `__slots__` suggestions ([CHKARCH-SAFETY-STRUCTURAL]).
+- [ ] No-implicit-coercion checks (int→float, bool→int, bytes→str) ([CHKARCH-SAFETY-COERCION]).
+- [ ] Source-concept → Basilisk-check mapping table backing the above ([CHKARCH-SAFETY-COMPAT]).
 - [ ] Only once the above land and are wired into the pipeline: surface the rule
       set in the website docs. Nothing here is advertised before then.
 
