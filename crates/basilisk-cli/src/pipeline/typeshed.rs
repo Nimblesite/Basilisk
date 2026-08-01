@@ -24,6 +24,11 @@ pub(super) fn load_cli_workspace_config(
         config.python_platform =
             basilisk_lsp::debug::python_platform_evidence(config.python_interpreter.as_deref());
     }
+    // [STUBRES-TYPESHED-PYPI] (issue #312): when no typeshed source is
+    // configured, auto-resolve a `PyPI` typeshed distribution pin from
+    // `uv.lock` so a uv-pinned project is reproducible without an explicit
+    // `typeshed-package` key. No-op for non-uv projects.
+    basilisk_lsp::config::apply_uv_typeshed_override(&mut config, project_root);
     config
 }
 

@@ -439,4 +439,116 @@ dependencies = [
             Some("sys_platform == 'win32'")
         );
     }
+
+    // [STUBRES-TYPESHED-PYPI] (issue #312): `wheels[].hash` is captured so a
+    // recognised typeshed distribution can be auto-pinned by its wheel SHA-256.
+    #[test]
+    fn wheels_hash_is_captured() {
+        let content = r#"
+version = 1
+
+[[package]]
+name = "micropython-stdlib-stubs"
+version = "1.0.0"
+wheels = [
+    { url = "https://files.pythonhosted.org/x.whl", hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+]
+"#;
+        let lock: LockFile = toml::from_str(content).unwrap();
+        let pkg = pkg(&lock, "micropython-stdlib-stubs");
+        assert_eq!(pkg.wheels.len(), 1);
+        assert_eq!(
+            pkg.wheels[0].hash.as_deref(),
+            Some("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+    }
+
+    // [STUBRES-TYPESHED-PYPI] (issue #312): exactly one recognised typeshed
+    // distribution pinned in uv.lock → auto-resolve its wheel SHA-256.
+    #[test]
+    fn find_typeshed_package_pin_resolves_a_single_candidate() {
+        let content = r#"
+version = 1
+
+[[package]]
+name = "my-project"
+source = { virtual = "." }
+
+[[package]]
+name = "micropython-stdlib-stubs"
+version = "1.0.0"
+wheels = [
+    { url = "https://files.pythonhosted.org/x.whl", hash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+]
+"#;
+        let lock: LockFile = toml::from_str(content).unwrap();
+        assert_eq!(
+            find_typeshed_package_pin(&lock),
+            Some((
+                "micropython-stdlib-stubs".to_owned(),
+                "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                    .to_owned(),
+            ))
+        );
+    }
+
+    // [STUBRES-TYPESHED-PYPI] (issue #312): two candidates is ambiguous → no
+    // auto-pin (the bundled default + `typeshed_source_unpinned` stand).
+    #[test]
+    fn find_typeshed_package_pin_is_none_when_ambiguous() {
+        let content = r#"
+version = 1
+
+[[package]]
+name = "micropython-stdlib-stubs"
+version = "1.0.0"
+wheels = [
+    { hash = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" },
+]
+
+[[package]]
+name = "MicroPython_Stdlib_Stubs"
+version = "1.0.0"
+wheels = [
+    { hash = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" },
+]
+"#;
+        let lock: LockFile = toml::from_str(content).unwrap();
+        assert_eq!(find_typeshed_package_pin(&lock), None);
+    }
+
+    // [STUBRES-TYPESHED-PYPI] (issue #312): no recognised package → no auto-pin.
+    #[test]
+    fn find_typeshed_package_pin_is_none_when_absent() {
+        let content = r#"
+version = 1
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+wheels = [
+    { hash = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" },
+]
+"#;
+        let lock: LockFile = toml::from_str(content).unwrap();
+        assert_eq!(find_typeshed_package_pin(&lock), None);
+    }
+
+    // A recognised package whose wheel has no hash (or a malformed hash) does
+    // not count toward a pin — the content attestation IS the pin.
+    #[test]
+    fn find_typeshed_package_pin_ignores_a_wheel_without_a_valid_hash() {
+        let content = r#"
+version = 1
+
+[[package]]
+name = "micropython-stdlib-stubs"
+version = "1.0.0"
+wheels = [
+    { url = "https://files.pythonhosted.org/x.whl" },
+]
+"#;
+        let lock: LockFile = toml::from_str(content).unwrap();
+        assert_eq!(find_typeshed_package_pin(&lock), None);
+    }
 }

@@ -240,7 +240,30 @@ pub fn typeshed_request(
     })
 }
 
-/// The rule-tag every typeshed source-status advisory carries.
+/// When no typeshed source is configured, auto-resolve a `PyPI` typeshed
+/// distribution pin from `uv.lock` `wheels[].hash` ([STUBRES-TYPESHED-PYPI],
+/// issue #312). Mutates `config` in place: sets `typeshed_package` only when
+/// `typeshed-path`/`typeshed-commit`/`typeshed-package` are all unset and the
+/// lock pins exactly one recognised distribution. No-op otherwise — the
+/// bundled default and `typeshed_source_unpinned` advisory stand. This is an
+/// effective-resolution override, never a configured key: nothing writes it to
+/// `pyproject.toml` and the configuration editor does not project it.
+pub fn apply_uv_typeshed_override(config: &mut WorkspaceConfig, project_root: &std::path::Path) {
+    if config.typeshed_path.is_some()
+        || config.typeshed_commit.is_some()
+        || config.typeshed_package.is_some()
+    {
+        return;
+    }
+    if let Some(spec) = basilisk_uv::resolve_typeshed_package_pin(project_root) {
+        tracing::debug!(
+            spec = %spec,
+            "auto-resolved typeshed package pin from uv.lock"
+        );
+        config.typeshed_package = Some(spec);
+    }
+}
+
 ///
 /// These advisories are Basilisk's own house diagnostics
 /// ([STUBRES-TYPESHED-WARN]), so they resolve severity through the SAME
