@@ -7,8 +7,7 @@ use super::*;
 const OTHER_SHA: &str = "0123456789012345678901234567890123456789";
 const BUNDLE_SHA: &str = "83c2518a9e6abbda0c44592c3483de459198f887";
 /// A 64-hex SHA-256 fixture for the `PyPI`-package source (issue #312).
-const PACKAGE_SHA256: &str =
-    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+const PACKAGE_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 #[derive(Default)]
 struct FakeBackend {
@@ -52,11 +51,7 @@ impl SourceBackend for FakeBackend {
         Self::take(&self.bundle)
     }
 
-    fn load_pypi_package(
-        &self,
-        _name: &str,
-        _sha256: &str,
-    ) -> Result<Snapshot, BackendError> {
+    fn load_pypi_package(&self, _name: &str, _sha256: &str) -> Result<Snapshot, BackendError> {
         self.record("pypi");
         Self::take(&self.pypi)
     }

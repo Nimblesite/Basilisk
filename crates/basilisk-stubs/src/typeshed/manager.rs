@@ -152,11 +152,7 @@ mod tests {
             ))
         }
 
-        fn load_pypi_package(
-            &self,
-            _name: &str,
-            _sha256: &str,
-        ) -> Result<Snapshot, BackendError> {
+        fn load_pypi_package(&self, _name: &str, _sha256: &str) -> Result<Snapshot, BackendError> {
             Err(BackendError::PyPIPackage)
         }
     }

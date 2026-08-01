@@ -57,11 +57,7 @@ impl SourceBackend for RuntimeBackend {
         bundled_snapshot().map_err(|_error| BackendError::Bundle)
     }
 
-    fn load_pypi_package(
-        &self,
-        _name: &str,
-        _sha256: &str,
-    ) -> Result<Snapshot, BackendError> {
+    fn load_pypi_package(&self, _name: &str, _sha256: &str) -> Result<Snapshot, BackendError> {
         // On-disk SHA-256 verification of an installed PyPI package is the
         // next slice ([STUBRES-TYPESHED-PYPI]); until that backend lands,
         // a package pin fails closed rather than serving unverified bytes.

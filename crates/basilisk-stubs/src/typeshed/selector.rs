@@ -86,11 +86,7 @@ pub trait SourceBackend: Send + Sync {
     ///
     /// Returns a redacted failure when the package is not installed or its
     /// contents fail SHA-256 verification.
-    fn load_pypi_package(
-        &self,
-        name: &str,
-        sha256: &str,
-    ) -> Result<Snapshot, BackendError>;
+    fn load_pypi_package(&self, name: &str, sha256: &str) -> Result<Snapshot, BackendError>;
 }
 
 /// A terminal source-selection failure. Analysis does not run
@@ -157,9 +153,7 @@ pub fn select_snapshot(
     match &request.selection {
         SourceSelection::Custom { path } => select_custom(path, backend),
         SourceSelection::Pinned { commit, explicit } => select_pinned(*commit, *explicit, backend),
-        SourceSelection::PyPIPackage { name, sha256 } => {
-            select_pypi_package(name, sha256, backend)
-        }
+        SourceSelection::PyPIPackage { name, sha256 } => select_pypi_package(name, sha256, backend),
     }
 }
 

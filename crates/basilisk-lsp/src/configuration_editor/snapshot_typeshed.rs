@@ -22,8 +22,8 @@ fn source(config: &BasiliskConfig) -> TypeshedSource {
     } else if let Some(spec) = config.typeshed_package.as_deref() {
         // `typeshed-package` is validated as `name@sha256:<hex>` before it
         // reaches the editor model, so a parse failure here is a wiring bug.
-        let (name, sha256) = crate::config::parse_typeshed_package(spec)
-            .unwrap_or((String::new(), String::new()));
+        let (name, sha256) =
+            crate::config::parse_typeshed_package(spec).unwrap_or((String::new(), String::new()));
         TypeshedSource::PyPIPackage { name, sha256 }
     } else {
         TypeshedSource::ExactCommit {
