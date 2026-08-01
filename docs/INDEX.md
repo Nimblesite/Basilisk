@@ -62,3 +62,9 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [WASM](plans/WASM-PLAN.md) | CI wasm build and size ratchet, multi-file in-memory VFS, and the playground site. |
 | [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Mojo checks, plugin host, migration, and CI helpers. |
 | [Native compiler](plans/COMPILER-ARCHITECTURE-PLAN.md) | HIR, backend, runtime, interop, CLI, and native acceptance. |
+
+## Defect triage
+
+| File | Contents |
+|---|---|
+| [Typing puzzles](puzzles/puzzles.md) | User-reported typing puzzles from X, with minimal repros, PEP-bug vs house-rule classification, and the resulting issues (#371, #378–#383). |
