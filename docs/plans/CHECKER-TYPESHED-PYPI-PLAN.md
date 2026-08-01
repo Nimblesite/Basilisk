@@ -5,6 +5,16 @@
 > pin a PyPI package, verify by SHA, integrate with uv, and suppress the source-status
 > advisory unless unpinned.
 
+## Status
+
+| Slice | State |
+| --- | --- |
+| S1 — Source model & config | ✅ Done |
+| S2 — Offline verification backend | ✅ Done |
+| S3 — Segregated acquisition | ✅ Done |
+| S4 — uv auto-detection | ⬜ Not started |
+| Cross-cutting gates | 🟡 Partial (clippy/fmt/dep-shape green; `make test`, `deslop`, `make bench`, conformance pending) |
+
 ## Contract {#TYPESHEDPYPI-CONTRACT}
 
 The spec is the authority; this plan is the means. The agreed behaviour, point for point:
@@ -84,12 +94,12 @@ unchanged (advisories never enter the scored stream).
 
 ### S2 — Offline verification backend · `TYPESHEDPYPI-S2`
 
-- [ ] Store layout `<store>/<64-hex sha256>/wheel.whl` + manifest (40-hex = commit, 64-hex = wheel — no collision).
-- [ ] `RuntimeBackend::load_pypi_package`: read stored wheel, SHA-256-hash it, assert == pin.
-- [ ] Build snapshot from the wheel's `stdlib/` via the archive VFS; identity `PyPIPackage`; no advisories.
-- [ ] Missing → `BackendError::Missing`; hash mismatch → `BackendError::Corrupt`; both surface as `NO SOURCE`.
-- [ ] **Open item:** confirm the target package's wheel ships a `stdlib/` tree; shape gate rejects otherwise. If the real layout differs, a mapping is required — flagged, not assumed.
-- [ ] Tests: verified wheel activates & suppresses; missing → `NO SOURCE` naming `basilisk typeshed download --package`; tampered → `NO SOURCE`.
+- [x] Store layout `<store>/<64-hex sha256>/wheel.whl` + manifest (40-hex = commit, 64-hex = wheel — no collision).
+- [x] `RuntimeBackend::load_pypi_package`: read stored wheel, SHA-256-hash it, assert == pin.
+- [x] Build snapshot from the wheel's `stdlib/` via the archive VFS; identity `PyPIPackage`; no advisories.
+- [x] Missing → `BackendError::Missing`; hash mismatch → `BackendError::Corrupt`; both surface as `NO SOURCE`.
+- [x] **Open item (resolved for the contract):** the Shape gate IS the guard — a synthetic wheel shipping `stdlib/` + root `LICENSE` passes it (`fake_wheel()` in `testing.rs`, exercised end-to-end by the S3 round-trip test). A real wheel whose layout differs would be rejected at download time and at read time; a layout *mapping* is **not** assumed — if the target package ships a different tree, that is an integration-time follow-up, not an S2 gap.
+- [x] Tests: verified wheel activates & suppresses; missing → `NO SOURCE` naming `basilisk typeshed download --package`; tampered → `NO SOURCE` (`wheel.rs`, `runtime/tests.rs`, `selector/tests.rs`).
 
 ### S3 — Segregated acquisition · `TYPESHEDPYPI-S3`
 
@@ -109,8 +119,8 @@ unchanged (advisories never enter the scored stream).
 ### Cross-cutting gates
 
 - [ ] `make test` green (coverage ratchet up).
-- [ ] clippy + fmt at strictest.
-- [ ] `make lint` (incl. `scripts/check-dependency-shape.sh` — `basilisk-stubs` links no HTTP client).
+- [x] clippy + fmt at strictest (verified: `cargo clippy --workspace --all-targets` 0 errors/warnings; `cargo fmt --all --check` clean).
+- [x] `make lint` dependency-shape portion (verified: `scripts/check-dependency-shape.sh` — analysis crates offline, only `basilisk-typeshed-fetch` links HTTP).
 - [ ] `deslop` clean.
 - [ ] `make bench` — zero-tolerance baseline gate, no perf regression.
 - [ ] Conformance 100 % / 0 FP unchanged (advisories never enter the scored stream).

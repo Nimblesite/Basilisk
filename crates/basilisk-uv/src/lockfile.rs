@@ -37,9 +37,9 @@ pub struct LockFile {
 /// Tolerates unknown fields (`sdist`, `wheels`, `metadata`, etc.) that are
 /// present in real `uv.lock` files but not needed for type checking.
 //
-// Implements [LSPUV-LOCK-EXTRACT] — extracts name, version, source, and
-// dependencies. Top-level `resolution-markers` are retained in `extra` rather
-// than interpreted.
+// Implements [LSPUV-LOCK-EXTRACT] — extracts name, version, source,
+// dependencies, and wheel hashes. Top-level `resolution-markers` are retained
+// in `extra` rather than interpreted.
 #[derive(Debug, Clone, Deserialize)]
 pub struct LockPackage {
     /// Normalised package name.
@@ -70,7 +70,13 @@ pub struct LockPackage {
     #[serde(rename = "dev-dependencies", default)]
     pub dev_dependencies: std::collections::HashMap<String, Vec<LockDependency>>,
 
-    /// Catch-all for unknown fields (`sdist`, `wheels`, `metadata`, etc.).
+    /// Wheel artifacts and their content hashes (`wheels[].hash`), captured so
+    /// a recognised typeshed-distribution package can be auto-pinned by its
+    /// wheel SHA-256 ([STUBRES-TYPESHED-PYPI], issue #312).
+    #[serde(default)]
+    pub wheels: Vec<LockWheel>,
+
+    /// Catch-all for unknown fields (`sdist`, `metadata`, etc.).
     #[serde(flatten)]
     pub extra: std::collections::HashMap<String, toml::Value>,
 }
@@ -89,6 +95,27 @@ pub struct LockSource {
     /// Virtual source marker.
     #[serde(rename = "virtual", default)]
     pub virtual_field: Option<String>,
+}
+
+/// A wheel artifact recorded for a locked package, carrying the content hash
+/// `uv` records as `hash = "sha256:<hex>"`
+/// ([uv lockfile format](https://docs.astral.sh/uv/reference/files/#lockfile-format)).
+///
+/// Only `hash` is interpreted; `url` and any future fields are retained in
+/// `extra` so an unknown wheel attribute never rejects the whole lock file.
+#[derive(Debug, Clone, Deserialize)]
+pub struct LockWheel {
+    /// Wheel download URL (`files.pythonhosted.org` for registry packages).
+    #[serde(default)]
+    pub url: Option<String>,
+
+    /// Content hash, e.g. `"sha256:<64-hex>"`.
+    #[serde(default)]
+    pub hash: Option<String>,
+
+    /// Catch-all for unknown wheel fields (e.g. `filename`).
+    #[serde(flatten)]
+    pub extra: std::collections::HashMap<String, toml::Value>,
 }
 
 /// A dependency reference within a lock entry.
@@ -132,6 +159,76 @@ pub fn parse_lock_file(path: &Path) -> Result<LockFile, UvError> {
         path: display,
         source,
     })
+}
+
+/// Package names `uv.lock` may pin that ship a typeshed-shaped `stdlib/` tree
+/// Basilisk can use as a step-3 source ([STUBRES-TYPESHED-PYPI], issue #312).
+/// Recognised by normalised name (case- and `-`/`_`-insensitive). Curated so a
+/// random dependency never silently replaces the stdlib source.
+const TYPESHED_DISTRIBUTION_PACKAGES: &[&str] = &["micropython-stdlib-stubs"];
+
+/// Whether a locked package name is a recognised typeshed distribution.
+fn is_typeshed_distribution(name: &str) -> bool {
+    let normalised = name.to_lowercase().replace('-', "_");
+    TYPESHED_DISTRIBUTION_PACKAGES
+        .iter()
+        .any(|recognised| recognised.to_lowercase().replace('-', "_") == normalised)
+}
+
+/// Strip the `sha256:` prefix from a `uv.lock` wheel `hash` and return the
+/// raw 64-hex digest, or `None` if it is absent/malformed.
+fn wheel_sha256_hex(hash: &str) -> Option<&str> {
+    let hex = hash.strip_prefix("sha256:")?;
+    (hex.len() == 64 && hex.as_bytes().iter().all(u8::is_ascii_hexdigit))
+        .then_some(hex)
+}
+
+/// If `uv.lock` pins **exactly one** recognised typeshed-distribution package,
+/// return its name and the 64-hex SHA-256 of its (first hashed) wheel
+/// ([STUBRES-TYPESHED-PYPI], issue #312). Ambiguous (more than one candidate)
+/// or absent → `None`: no auto-pin, the bundled default stands with
+/// `typeshed_source_unpinned`.
+///
+/// This is pure over a parsed lock file — no disk I/O — so it is trivially
+/// testable. A package with no hashed wheel does not count.
+#[must_use]
+pub fn find_typeshed_package_pin(lock: &LockFile) -> Option<(String, String)> {
+    let mut found: Option<(String, String)> = None;
+    for pkg in &lock.packages {
+        if !is_typeshed_distribution(&pkg.name) {
+            continue;
+        }
+        let Some(hex) = pkg
+            .wheels
+            .iter()
+            .find_map(|wheel| wheel.hash.as_deref().and_then(wheel_sha256_hex))
+        else {
+            continue;
+        };
+        if found.is_some() {
+            return None;
+        }
+        found = Some((pkg.name.clone(), hex.to_owned()));
+    }
+    found
+}
+
+/// Resolve the typeshed-distribution pin a `uv.lock` carries, as a
+/// `name@sha256:<hex>` spec string ready for `typeshed-package`
+/// ([STUBRES-TYPESHED-PYPI], issue #312). Returns `None` when this is not a uv
+/// project, has no lockfile, the lockfile is unreadable, or no single
+/// recognised package is pinned — callers then fall back to the bundled
+/// default. Disk I/O is confined to this function.
+#[must_use]
+pub fn resolve_typeshed_package_pin(project_root: &Path) -> Option<String> {
+    use crate::detect::detect_uv_project;
+    let uv_info = detect_uv_project(&[project_root.to_path_buf()])?;
+    if !uv_info.has_lockfile {
+        return None;
+    }
+    let lock = parse_lock_file(&uv_info.root.join("uv.lock")).ok()?;
+    let (name, sha256) = find_typeshed_package_pin(&lock)?;
+    Some(format!("{name}@sha256:{sha256}"))
 }
 
 #[cfg(test)]
