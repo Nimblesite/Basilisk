@@ -46,7 +46,7 @@ fn embedded_index_serves_every_target_minor_exactly() -> Result<(), BuiltinsInde
             python_version: (3, u32::from(minor)),
             platform: StubTargetPlatform::All,
         };
-        let live = extract_for_minor(&logical_uri, source_text, minor)?;
+        let live = extract_for_target(&logical_uri, source_text, minor, &StubTargetPlatform::All)?;
         assert_eq!(
             bundled_builtins_classes(Some(&target)),
             Some(live),
@@ -74,25 +74,52 @@ fn targets_past_the_generated_range_reuse_the_final_interval() {
     assert_eq!(served, bundled_builtins_classes(Some(&last)));
 }
 
-/// Platform is not part of the key, and regeneration proves it cannot be: the
-/// same version must serve the same map whatever platform evidence exists.
+/// Platform is part of the key, and it must be served exactly: `builtins.pyi`
+/// guards `OSError.winerror` behind `sys.platform == "win32"`, so a Windows
+/// target has to get that member and a non-Windows one must not. Serving one
+/// platform's map to another would silently invent or delete an attribute.
 #[test]
-fn platform_evidence_does_not_change_the_served_map() {
+fn each_platform_class_serves_its_own_live_map() -> Result<(), BuiltinsIndexError> {
+    let (logical_uri, source_text) = bundled_builtins_source()?;
     let map_for = |platform: StubTargetPlatform| {
         bundled_builtins_classes(Some(&StubTarget {
             python_version: (3, 13),
             platform,
         }))
     };
-    let all = map_for(StubTargetPlatform::All);
-    assert!(all.is_some());
-    for platform in ["darwin", "linux", "win32"] {
+    for platform in [
+        StubTargetPlatform::All,
+        StubTargetPlatform::Concrete("win32".to_owned()),
+        StubTargetPlatform::Concrete("darwin".to_owned()),
+        StubTargetPlatform::Concrete("linux".to_owned()),
+    ] {
+        let live = extract_for_target(&logical_uri, source_text, 13, &platform)?;
         assert_eq!(
-            map_for(StubTargetPlatform::Concrete(platform.to_owned())),
-            all,
-            "platform {platform} must not change the builtins map"
+            map_for(platform.clone()),
+            Some(live),
+            "artifact must match the live parse for {platform:?}"
         );
     }
+    let has_winerror = |platform: StubTargetPlatform| {
+        map_for(platform)
+            .and_then(|classes| classes.get("OSError").cloned())
+            .is_some_and(|class| class.attributes.iter().any(|a| a.name == "winerror"))
+    };
+    assert!(
+        has_winerror(StubTargetPlatform::Concrete("win32".to_owned())),
+        "a win32 target must keep OSError.winerror"
+    );
+    for platform in [
+        StubTargetPlatform::All,
+        StubTargetPlatform::Concrete("darwin".to_owned()),
+        StubTargetPlatform::Concrete("basilisk-never-a-platform".to_owned()),
+    ] {
+        assert!(
+            !has_winerror(platform.clone()),
+            "{platform:?} must not see the win32-only OSError.winerror"
+        );
+    }
+    Ok(())
 }
 
 /// A major version the artifact does not model must fall back to live
@@ -106,19 +133,21 @@ fn a_non_three_major_target_falls_back_to_live_extraction() {
     assert_eq!(bundled_builtins_classes(Some(&target)), None);
 }
 
-/// The pool must actually pool: six variants of ~100 classes each must not
-/// cost six full copies. Guards the space half of the design — without
-/// dedup the artifact would be several hundred KB of duplicated class bodies
-/// inside every shipped binary.
+/// The pool must actually pool: every (platform, version) variant repeats
+/// nearly all of the same ~100 classes, so storing them separately would put
+/// well over a megabyte of duplicated class bodies inside every shipped
+/// binary. Guards the space half of the design.
 #[test]
-fn pooling_keeps_the_artifact_near_the_size_of_one_variant() -> Result<(), BuiltinsIndexError> {
+fn pooling_keeps_the_artifact_far_below_its_unpooled_size() -> Result<(), BuiltinsIndexError> {
     let (_, artifact) = codec::decode(EMBEDDED_INDEX)?;
     let variants = artifact.variant_count();
     assert!(variants > 1, "the bundle must produce several variants");
-    let one_variant = artifact.pooled_bytes_of_variant(0)?;
+    let unpooled: usize = (0..variants)
+        .map(|variant| artifact.pooled_bytes_of_variant(variant))
+        .sum::<Result<usize, BuiltinsIndexError>>()?;
     assert!(
-        EMBEDDED_INDEX.len() < one_variant * 2,
-        "artifact is {} bytes for {variants} variants; one variant is {one_variant} bytes — \
+        EMBEDDED_INDEX.len() * 3 < unpooled,
+        "artifact is {} bytes for {variants} variants whose bodies total {unpooled} bytes — \
          class pooling has stopped working",
         EMBEDDED_INDEX.len()
     );
@@ -241,15 +270,29 @@ fn synthetic_classes() -> HashMap<String, StubClass> {
         .collect()
 }
 
-/// A two-variant synthetic artifact: `Empty` is shared, `Widget` exists only
-/// below 3.12 — the exact shape the real bundle produces, in miniature.
+/// A synthetic artifact in the real one's shape: `Empty` is shared, `Widget`
+/// exists only below 3.12, and only the `win32` platform class keeps it at all.
 fn synthetic_artifact() -> Artifact {
     let all = synthetic_classes();
     let mut modern = all.clone();
     let _ = modern.remove("Widget");
     Artifact {
-        default_classes: all.clone(),
-        intervals: vec![(0, all), (12, modern)],
+        default_classes: modern.clone(),
+        groups: vec![
+            (
+                PlatformKey::Literal("win32".to_owned()),
+                vec![(0, all), (12, modern.clone())],
+            ),
+            (PlatformKey::All, vec![(0, modern.clone())]),
+            (PlatformKey::Other, vec![(0, modern)]),
+        ],
+    }
+}
+
+fn target(minor: u32, platform: StubTargetPlatform) -> StubTarget {
+    StubTarget {
+        python_version: (3, minor),
+        platform,
     }
 }
 
@@ -260,24 +303,44 @@ fn roundtrip_preserves_every_field_shape() -> Result<(), BuiltinsIndexError> {
     let (sha, decoded) = codec::decode(&encoded)?;
     assert_eq!(sha, "deadbeef");
     assert_eq!(decoded.classes(0)?, artifact.default_classes);
-    for (index, (_, expected)) in artifact.intervals.iter().enumerate() {
-        assert_eq!(&decoded.classes(index + 1)?, expected);
+    let expected: Vec<&HashMap<String, StubClass>> = artifact
+        .groups
+        .iter()
+        .flat_map(|(_, intervals)| intervals.iter().map(|(_, classes)| classes))
+        .collect();
+    for (index, classes) in expected.into_iter().enumerate() {
+        assert_eq!(&decoded.classes(index + 1)?, classes);
     }
     Ok(())
 }
 
 #[test]
-fn decoded_intervals_select_the_right_variant() -> Result<(), BuiltinsIndexError> {
+fn decoded_keys_select_the_right_variant() -> Result<(), BuiltinsIndexError> {
     let encoded = codec::encode(&synthetic_artifact(), "cafe")?;
     let (_, decoded) = codec::decode(&encoded)?;
+    let win32 = || StubTargetPlatform::Concrete("win32".to_owned());
     assert_eq!(decoded.variant_for(None), Some(0));
     for minor in [0_u32, 5, 11] {
-        assert_eq!(decoded.variant_for(Some((3, minor))), Some(1), "3.{minor}");
+        let selected = decoded.variant_for(Some(&target(minor, win32())));
+        assert_eq!(selected, Some(1), "win32 3.{minor}");
     }
     for minor in [12_u32, 13, 99] {
-        assert_eq!(decoded.variant_for(Some((3, minor))), Some(2), "3.{minor}");
+        let selected = decoded.variant_for(Some(&target(minor, win32())));
+        assert_eq!(selected, Some(2), "win32 3.{minor}");
     }
-    assert_eq!(decoded.variant_for(Some((4, 0))), None);
+    let all = decoded.variant_for(Some(&target(13, StubTargetPlatform::All)));
+    assert_eq!(all, Some(3), "the All platform class has its own variant");
+    let unnamed = StubTargetPlatform::Concrete("haiku".to_owned());
+    let other = decoded.variant_for(Some(&target(13, unnamed)));
+    assert_eq!(other, Some(4), "an unnamed platform lands in the Other class");
+    let four = target(0, win32());
+    assert_eq!(
+        decoded.variant_for(Some(&StubTarget {
+            python_version: (4, 0),
+            ..four
+        })),
+        None
+    );
     Ok(())
 }
 
@@ -292,7 +355,7 @@ fn encoding_is_deterministic_across_map_orderings() -> Result<(), BuiltinsIndexE
     pairs.sort_by(|left, right| right.0.cmp(&left.0));
     let reversed = Artifact {
         default_classes: pairs.into_iter().collect(),
-        intervals: artifact.intervals.clone(),
+        groups: artifact.groups.clone(),
     };
     assert_eq!(
         codec::encode(&artifact, "cafe")?,

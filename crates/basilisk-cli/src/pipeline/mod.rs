@@ -190,7 +190,6 @@ where
     // concerns (include expansion, version detection, cache location); rule
     // config is resolved per checked file below, so diagnostics never depend
     // on argument order (GitHub #311).
-    crate::tmark!("pipeline start");
     let config_root = first_path_dir(paths);
     // Project metadata can live above the checked path (for example,
     // `conformance/tests/case.py` inherits `conformance/pyproject.toml`).
@@ -205,10 +204,8 @@ where
             basilisk_uv::python_version::resolve_target_python_version(&project_root);
     }
 
-    crate::tmark!("config loaded");
     let workspace_config =
         load_cli_workspace_config(&project_root, config.python_version.as_deref());
-    crate::tmark!("workspace config loaded");
     if config.python_platform.is_none() {
         config
             .python_platform
@@ -225,7 +222,6 @@ where
     // ([STUBRES-TYPESHED-CONFIG]), so the project-root config is handed in.
     let mut typeshed_activation = crate::import_search::roots_only(Vec::new());
     activate_typeshed(&mut typeshed_activation, &workspace_config, &config)?;
-    crate::tmark!("typeshed activation kicked off");
 
     let excluded = excluded_dirs_and_log(&config, &config_root);
 
@@ -248,9 +244,7 @@ where
     // Per-file rule config, memoized per directory ([CHKARCH-CONFIG-DISCOVERY]).
     // The cache fingerprint covers every directory's config so a child config
     // edit invalidates cached results.
-    crate::tmark!("search paths built");
     let dir_configs = resolve_dir_configs(&python_files, &config);
-    crate::tmark!("dir configs resolved");
 
     // A config that disables a PEP rule is invalid and fails the run before
     // any checking ([CHKARCH-CONFIG-MODEL], [CHKARCH-CLI-EXITCODES] code 2).
@@ -278,7 +272,6 @@ where
     let cache_context =
         cache_check::build_context(cache, &config, &dir_configs, &search_paths, &project_root);
 
-    crate::tmark!("cache context built");
     let mut all_diagnostics = Vec::new();
     let mut sources = Vec::new();
     let mut failures = Vec::new();
@@ -302,7 +295,6 @@ where
         }
     }
 
-    crate::tmark!("files checked");
     // A deferred typeshed load that failed must fail the run loudly — inside
     // the loop the miss can only surface as unresolved imports. A run that
     // never needed the archive (all cache hits) never forces the load and is

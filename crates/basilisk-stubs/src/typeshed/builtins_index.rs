@@ -13,8 +13,10 @@
 //! that pins `python-version` is the common case, and serving only the
 //! unpinned case would leave that project paying the live parse on every
 //! invocation. `builtins.pyi`'s class map is a step function of the target
-//! minor version — six distinct maps across the whole `(3, minor)` range — so
-//! the artifact stores one variant per interval over a shared class pool
+//! version, and of the target platform only through the `sys.platform`
+//! literals the stub itself names, so the artifact enumerates one variant per
+//! (platform class, minor-version interval) — a provably complete, finite set
+//! — over a shared class pool that keeps the repetition out of the bytes
 //! ([`codec`]).
 //!
 //! Safety model: the artifact header carries the manifest bundle SHA-256. A
@@ -85,10 +87,10 @@ pub enum BuiltinsIndexError {
 /// `None` means "extract live" — callers must treat the two paths as
 /// interchangeable.
 ///
-/// `target`'s platform is deliberately ignored: regeneration proves
-/// `builtins.pyi` carries no `sys.platform` guard
-/// ([`BuiltinsIndexError::PlatformDependent`]), so its class map cannot vary
-/// with one.
+/// `target`'s platform selects a variant through the stub's OWN guard
+/// literals: an exact match on one it names, otherwise the single class
+/// covering every platform it does not — a partition regeneration proves is
+/// complete ([`BuiltinsIndexError::PlatformFallbackSplit`]).
 #[must_use]
 pub fn bundled_builtins_classes(target: Option<&StubTarget>) -> Option<HashMap<String, StubClass>> {
     let expected = match bundle::manifest_bundle_sha() {
