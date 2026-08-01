@@ -531,6 +531,46 @@ mod tests {
             commit.as_deref(),
             Some("83c2518a9e6abbda0c44592c3483de459198f887")
         );
+
+        // `--package` acquires a PyPI wheel pinned by SHA-256 and is mutually
+        // exclusive with `--commit` ([STUBRES-TYPESHED-PYPI]).
+        let package = Cli::try_parse_from([
+            "basilisk",
+            "typeshed",
+            "download",
+            "--package",
+            "types-stdlib@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        ])
+        .expect("download --package must parse");
+        let Command::Typeshed {
+            action:
+                typeshed_cli::TypeshedAction::Download {
+                    commit, package, ..
+                },
+        } = package.command
+        else {
+            panic!("expected typeshed download");
+        };
+        assert!(commit.is_none(), "--package excludes --commit");
+        assert_eq!(
+            package.as_deref(),
+            Some("types-stdlib@sha256:1111111111111111111111111111111111111111111111111111111111111111")
+        );
+
+        // The two source flags are mutually exclusive.
+        let conflict = Cli::try_parse_from([
+            "basilisk",
+            "typeshed",
+            "download",
+            "--commit",
+            "83c2518a9e6abbda0c44592c3483de459198f887",
+            "--package",
+            "types-stdlib@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        ]);
+        assert!(
+            conflict.is_err(),
+            "--commit and --package must be mutually exclusive"
+        );
     }
 
     /// An isolated project that opts the annotation house rule in, holding

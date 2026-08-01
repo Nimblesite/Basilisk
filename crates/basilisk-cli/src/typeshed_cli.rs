@@ -1,5 +1,5 @@
 //! Implements the [STUBRES-TYPESHED-DOWNLOAD] CLI surface:
-//! `basilisk typeshed download [--commit <sha>]`.
+//! `basilisk typeshed download [--commit <sha> | --package <name@sha256:<hex>>]`.
 //!
 //! This command — like the editor's Download buttons — is the ONLY way
 //! typeshed bytes arrive on a machine ([TYPESHEDRT-SEGREGATION]). `check` and
@@ -9,22 +9,29 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use basilisk_typeshed_fetch::{DownloadPhase, GithubApi, GithubClient};
+use basilisk_typeshed_fetch::{
+    DownloadPhase, GithubApi, GithubClient, PackageDownloadPhase, PypiApi, PypiClient,
+};
 use colored::Colorize as _;
 use tracing::error;
 
 /// The `basilisk typeshed` action surface.
 #[derive(Debug, clap::Subcommand)]
 pub(crate) enum TypeshedAction {
-    /// Download and verify one typeshed commit into the content-addressed
-    /// store. With no `--commit` this resolves the latest
-    /// `python/typeshed@main` and writes the resolved SHA as the workspace's
-    /// `typeshed-commit` pin; with `--commit` it materialises that exact,
-    /// already-configured pin and writes no configuration.
+    /// Download and verify one typeshed source into the content-addressed
+    /// store. With no flag this resolves the latest `python/typeshed@main` and
+    /// writes the resolved SHA as the workspace's `typeshed-commit` pin;
+    /// `--commit` materialises that exact, already-configured pin and writes
+    /// no configuration; `--package` acquires a `PyPI` typeshed distribution
+    /// wheel pinned by SHA-256 and writes no configuration.
     Download {
         /// Exact full 40-hex commit SHA to download (defaults to latest).
-        #[arg(long, value_name = "SHA")]
+        #[arg(long, value_name = "SHA", conflicts_with = "package")]
         commit: Option<String>,
+        /// A `PyPI` typeshed distribution pin `name@sha256:<hex>` to download
+        /// and verify into the store. Mutually exclusive with `--commit`.
+        #[arg(long, value_name = "SPEC", conflicts_with = "commit")]
+        package: Option<String>,
         /// Workspace whose configuration supplies the store location and, for
         /// a latest download, receives the pin.
         #[arg(long, default_value = ".", value_name = "DIR")]
@@ -36,13 +43,28 @@ pub(crate) enum TypeshedAction {
 /// ([CHKARCH-CLI-EXITCODES]: `0` ok, `2` invalid configuration, `3` failure).
 pub(crate) fn run(action: TypeshedAction) -> u8 {
     match action {
-        TypeshedAction::Download { commit, workspace } => run_download(commit, &workspace),
+        TypeshedAction::Download {
+            commit,
+            package,
+            workspace,
+        } => {
+            if let Some(spec) = package {
+                run_download_package(&spec, &workspace)
+            } else {
+                run_download(commit, &workspace)
+            }
+        }
     }
 }
 
 fn run_download(commit: Option<String>, workspace: &Path) -> u8 {
     let client = GithubClient::new();
     download_action(commit, workspace, &client)
+}
+
+fn run_download_package(spec: &str, workspace: &Path) -> u8 {
+    let client = PypiClient::new();
+    download_package_action(spec, workspace, &client)
 }
 
 /// The download action with its transport injected, so tests drive the whole
@@ -54,6 +76,39 @@ fn download_action(commit: Option<String>, workspace: &Path, api: &dyn GithubApi
     match commit {
         Some(sha) => download_exact(&sha, store, api, &progress),
         None => download_latest_and_pin(workspace, store, api, &progress),
+    }
+}
+
+/// The `--package` download with its transport injected, so tests drive the
+/// whole surface — config discovery, store resolution, progress — offline.
+/// Writes no configuration: the pin (`typeshed-package`) is the caller's
+/// contract, exactly like `--commit` ([STUBRES-TYPESHED-DOWNLOAD]).
+fn download_package_action(spec: &str, workspace: &Path, api: &dyn PypiApi) -> u8 {
+    let (name, sha256) = match basilisk_config::parse_typeshed_package(spec) {
+        Ok(parsed) => parsed,
+        Err(message) => {
+            error!(spec, reason = %message, "--package must be name@sha256:<64-hex>");
+            return 2;
+        }
+    };
+    let config = basilisk_lsp::config::load_analysis_config(workspace);
+    let store = config.typeshed_store_path;
+    let progress =
+        |phase: PackageDownloadPhase| println!("  {}", package_phase_label(phase).dimmed());
+    println!("Downloading {name}@sha256:{sha256} into the verified store…");
+    match basilisk_typeshed_fetch::download_package(&name, &sha256, store, api, &progress) {
+        Ok(()) => {
+            println!(
+                "{} {}@sha256:{sha256} is now available offline",
+                "ok:".green().bold(),
+                name
+            );
+            0
+        }
+        Err(download_error) => {
+            error!(%download_error, "typeshed download failed; nothing was written");
+            3
+        }
     }
 }
 
@@ -158,9 +213,19 @@ const fn phase_label(phase: DownloadPhase) -> &'static str {
     }
 }
 
+const fn package_phase_label(phase: PackageDownloadPhase) -> &'static str {
+    match phase {
+        PackageDownloadPhase::Resolving => "resolving the package index",
+        PackageDownloadPhase::Verifying => "verifying the wheel against the pin",
+        PackageDownloadPhase::Writing => "writing the store entry",
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use basilisk_typeshed_fetch::testing::{fake_repo, FakeApi, Faults};
+    use basilisk_typeshed_fetch::testing::{
+        fake_repo, fake_wheel, FakeApi, FakePypiApi, Faults, PypiFaults,
+    };
 
     use super::*;
 
@@ -233,6 +298,7 @@ mod tests {
         let dir = tempfile::tempdir()?;
         let action = TypeshedAction::Download {
             commit: Some("short".to_owned()),
+            package: None,
             workspace: dir.path().to_path_buf(),
         };
         assert_eq!(run(action), 2);
@@ -390,6 +456,91 @@ mod tests {
             phase_label(DownloadPhase::FetchingArchive),
             phase_label(DownloadPhase::Verifying),
             phase_label(DownloadPhase::Writing),
+        ];
+        let unique: std::collections::BTreeSet<&str> = labels.iter().copied().collect();
+        assert_eq!(unique.len(), labels.len());
+        assert!(labels.iter().all(|label| !label.is_empty()));
+    }
+
+    /// [STUBRES-TYPESHED-PYPI]: `basilisk typeshed download --package
+    /// <name@sha256:<hex>>` acquires the wheel, verifies it, and writes no
+    /// configuration (the pin is the caller's contract).
+    #[test]
+    fn download_package_materialises_the_wheel_into_the_store(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let workspace = tempfile::tempdir()?;
+        let store = tempfile::tempdir()?;
+        std::fs::write(
+            workspace.path().join("pyproject.toml"),
+            format!(
+                "[tool.basilisk]\ntypeshed-store-path = \"{}\"\n",
+                store.path().display()
+            ),
+        )?;
+        let api = FakePypiApi::new(fake_wheel());
+        let spec = format!("micropython-stdlib-stubs@sha256:{}", api.sha256);
+        assert_eq!(download_package_action(&spec, workspace.path(), &api), 0);
+        assert_eq!(
+            std::fs::read_dir(store.path())?.count(),
+            1,
+            "exactly one verified store entry must exist"
+        );
+        // No configuration is written for a package download.
+        let written = std::fs::read_to_string(workspace.path().join("pyproject.toml"))?;
+        assert!(
+            !written.contains("typeshed-package"),
+            "a package download must not write a pin: {written}"
+        );
+        Ok(())
+    }
+
+    /// A malformed `--package` spec is a configuration error (exit `2`) before
+    /// any transport work — the parser the config surface shares validates it.
+    #[test]
+    fn a_malformed_package_spec_is_a_configuration_error() -> Result<(), Box<dyn std::error::Error>> {
+        let api = FakePypiApi::new(fake_wheel());
+        let workspace = tempfile::tempdir()?;
+        assert_eq!(
+            download_package_action("not-a-spec", workspace.path(), &api),
+            2
+        );
+        Ok(())
+    }
+
+    /// A download failure is exit `3` and writes nothing.
+    #[test]
+    fn a_package_download_failure_writes_nothing() -> Result<(), Box<dyn std::error::Error>> {
+        let workspace = tempfile::tempdir()?;
+        let store = tempfile::tempdir()?;
+        std::fs::write(
+            workspace.path().join("pyproject.toml"),
+            format!(
+                "[tool.basilisk]\ntypeshed-store-path = \"{}\"\n",
+                store.path().display()
+            ),
+        )?;
+        let mut api = FakePypiApi::new(fake_wheel());
+        api.faults = PypiFaults {
+            download_fails: true,
+            ..PypiFaults::default()
+        };
+        let spec = format!("micropython-stdlib-stubs@sha256:{}", api.sha256);
+        assert_eq!(download_package_action(&spec, workspace.path(), &api), 3);
+        assert_eq!(
+            std::fs::read_dir(store.path())?.count(),
+            0,
+            "nothing may be written on failure"
+        );
+        Ok(())
+    }
+
+    /// Every `PyPI`-package phase renders a distinct, human-readable label.
+    #[test]
+    fn every_package_download_phase_has_a_distinct_label() {
+        let labels = [
+            package_phase_label(PackageDownloadPhase::Resolving),
+            package_phase_label(PackageDownloadPhase::Verifying),
+            package_phase_label(PackageDownloadPhase::Writing),
         ];
         let unique: std::collections::BTreeSet<&str> = labels.iter().copied().collect();
         assert_eq!(unique.len(), labels.len());

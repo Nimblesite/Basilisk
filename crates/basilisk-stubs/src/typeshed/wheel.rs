@@ -61,6 +61,51 @@ pub fn entry_dir(store_root: &Path, sha256: &str) -> std::path::PathBuf {
     store_root.join(sha256)
 }
 
+/// Why writing a `PyPI`-package store entry failed. As with [`super::store`],
+/// no variant carries a path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum WheelStoreError {
+    /// The verified wheel could not be written to the store.
+    #[error("typeshed store write failed")]
+    Store,
+}
+
+/// Write one verified wheel into the store atomically
+/// ([STUBRES-TYPESHED-PYPI], [STUBRES-TYPESHED-DOWNLOAD]). The caller has
+/// already hashed `wheel` and confirmed its SHA-256 is `sha256`; this function
+/// only lands it on disk: everything stages in a temp directory that is
+/// renamed into place, so an interrupted download leaves **nothing**. An
+/// existing entry for the digest is kept — entries are content-addressed and
+/// immutable, so there is nothing to update.
+///
+/// # Errors
+///
+/// Returns [`WheelStoreError::Store`] on any I/O failure.
+pub fn write_wheel(store_root: &Path, sha256: &str, wheel: &[u8]) -> Result<(), WheelStoreError> {
+    use super::store::{promote_dir, staging_dir};
+    // The digest is a path component (the entry directory name); a malformed
+    // value must never reach the filesystem, so reject anything that is not a
+    // canonical 64-hex SHA-256 before touching a path.
+    if !is_hex_sha256(sha256) {
+        return Err(WheelStoreError::Store);
+    }
+    let target = entry_dir(store_root, sha256);
+    if target.is_dir() {
+        return Ok(());
+    }
+    fs::create_dir_all(store_root).map_err(|_error| WheelStoreError::Store)?;
+    let staging = staging_dir(store_root, "wheel");
+    let result = (|| {
+        fs::create_dir(&staging).map_err(|_error| WheelStoreError::Store)?;
+        fs::write(staging.join(WHEEL_FILE), wheel).map_err(|_error| WheelStoreError::Store)?;
+        promote_dir(&staging, &target).map_err(|_error| WheelStoreError::Store)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&staging);
+    }
+    result
+}
+
 /// Read and verify one stored wheel into an immutable snapshot
 /// ([STUBRES-TYPESHED-PYPI]).
 ///
