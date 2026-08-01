@@ -26,4 +26,4 @@ source text ➜ [basilisk-parser] ➜ AST ➜ resolver ➜ checker ➜ diagnosti
 
 ## Status
 
-Complete — stable API consumed by `basilisk-resolver`, `basilisk-checker`, `basilisk-lsp`, and `basilisk-compiler`.
+Complete — stable API consumed by `basilisk-resolver`, `basilisk-checker`, and `basilisk-lsp`.

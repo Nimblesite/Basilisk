@@ -127,7 +127,7 @@ python3 -m unittest discover -s "$REPO_ROOT/benchmarks" -p 'test_*.py'
 python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_DIR" --sync-tests
 
 set +e
-cargo test --profile ci --workspace --exclude basilisk-compiler --all-targets
+cargo test --profile ci --workspace --all-targets
 TESTS_EXIT=$?
 set -e
 if [[ "$TESTS_EXIT" -ne 0 ]]; then
@@ -255,7 +255,7 @@ check_crate() {
     fi
 }
 RUST_CRATES=(
-    basilisk-checker basilisk-cli basilisk-db basilisk-lsp basilisk-mojo
+    basilisk-checker basilisk-cli basilisk-db basilisk-lsp
     basilisk-parser basilisk-resolver basilisk-stubs basilisk-config
 )
 for crate in "${RUST_CRATES[@]}"; do

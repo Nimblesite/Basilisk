@@ -282,19 +282,6 @@ name = "basilisk-common"
 version = "0.0.0-PLACEHOLDER"
 
 [[package]]
-name = "basilisk-compiler"
-version = "0.0.0-PLACEHOLDER"
-dependencies = [
- "basilisk-checker",
- "basilisk-parser",
- "basilisk-resolver",
- "basilisk-stubs",
- "ruff_python_ast",
- "thiserror",
- "walkdir",
-]
-
-[[package]]
 name = "basilisk-config"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
@@ -351,10 +338,6 @@ dependencies = [
  "tower-service",
  "tracing",
 ]
-
-[[package]]
-name = "basilisk-mojo"
-version = "0.0.0-PLACEHOLDER"
 
 [[package]]
 name = "basilisk-parser"

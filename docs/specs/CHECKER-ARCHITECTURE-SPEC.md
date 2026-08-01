@@ -384,8 +384,10 @@ Tests: `crates/basilisk-checker/tests/checker/version_target_tests.rs`.
 ## Mojo-inspired safety analysis {#CHKARCH-MOJO-SAFETY}
 
 Status: planned, opt-in, and not wired into the checker pipeline. The
-`basilisk-mojo` crate is scaffolding; shipping PEP rules must not reuse these
-anchors or diagnostic descriptions.
+scaffolding lives in `basilisk-checker`'s `mojo_safety` module — there is no
+separate crate for it, and it registers no rule; shipping PEP rules must not
+reuse these anchors or diagnostic descriptions. Its scan is textual, so it must
+be rebuilt on the Ruff AST before any rule is registered against it.
 
 ### Ownership tracking {#CHKARCH-MOJO-OWNERSHIP}
 
@@ -627,8 +629,8 @@ Source Files (.py)
   Windsurf / Zed /
   Neovim
 
-  (planned: basilisk-mojo — Mojo-inspired ownership / immutability / coercion
-   analysis — is not yet wired into the pipeline.)
+  (planned: basilisk-checker::mojo_safety — Mojo-inspired ownership /
+   immutability / coercion analysis — is not yet wired into the pipeline.)
 ```
 
 All stages are backed by:
@@ -683,8 +685,8 @@ basilisk/
   crates/
     basilisk-parser/       # Python AST parsing (wraps or extends ruff_python_parser)
     basilisk-resolver/     # Name resolution, scope analysis, import resolution
-    basilisk-checker/      # Core type checking engine
-    basilisk-mojo/         # Mojo-inspired safety analysis passes
+    basilisk-checker/      # Core type checking engine (incl. mojo_safety:
+                           #   planned Mojo-inspired safety analysis, unwired)
     basilisk-lsp/          # Language Server Protocol implementation
     basilisk-cli/          # Command-line interface
     basilisk-stubs/        # Stub generation, loading, registry client
@@ -703,9 +705,8 @@ basilisk-db (foundation)
   <- basilisk-parser
        <- basilisk-resolver
             <- basilisk-checker
-                 <- basilisk-mojo
-                      <- basilisk-lsp (leaf: IDE)
-                      <- basilisk-cli (leaf: terminal)
+                 <- basilisk-lsp (leaf: IDE)
+                 <- basilisk-cli (leaf: terminal)
 
 basilisk-stubs (standalone, used by basilisk-resolver)
 ```

@@ -16,7 +16,7 @@ the prime directive (PEP conformance) — it is opt-in surface area beyond the s
 
 ## TODO {#CHKADVPLAN-TODO}
 
-### Mojo-style safety checks (`basilisk-mojo`) {#CHKADVPLAN-TODO-MOJO}
+### Mojo-style safety checks (`basilisk-checker::mojo_safety`) {#CHKADVPLAN-TODO-MOJO}
 
 - [ ] Ownership tracking via `Borrowed`/`InOut`/`Owned` `Annotated` conventions: mutation-of-borrowed and use-after-move detection ([CHKARCH-MOJO-OWNERSHIP]).
 - [ ] Parameter-immutability-by-default analysis with `InOut` opt-out + frozen-dataclass nudges ([CHKARCH-MOJO-IMMUTABLE]).

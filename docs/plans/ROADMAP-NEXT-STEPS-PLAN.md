@@ -163,8 +163,7 @@ complete:
   — the bidirectional/constraint-based inference-engine upgrade (fixes
   inference-gap issues like #317, PEP 827 readiness), flow analysis, and
   shared subtyping.
-- [LSP-AI-PLAN.md](LSP-AI-PLAN.md),
-  [COMPILER-ARCHITECTURE-PLAN.md](COMPILER-ARCHITECTURE-PLAN.md), and
+- [LSP-AI-PLAN.md](LSP-AI-PLAN.md) and
   [CHECKER-ADVANCED-FEATURES-PLAN.md](CHECKER-ADVANCED-FEATURES-PLAN.md) — larger,
   optional product tracks.
 

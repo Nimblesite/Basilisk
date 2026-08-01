@@ -75,7 +75,7 @@ Basilisk 正在**积极开发中**——核心检查器、LSP 服务器和编辑
 
 ## 架构
 
-Basilisk 是一个 Cargo 工作区，包含 19 个 Rust crate，每个拥有系统的一层：
+Basilisk 是一个 Cargo 工作区，包含 18 个 Rust crate，每个拥有系统的一层：
 
 | 层 | Crate |
 |-------|--------|
@@ -84,7 +84,7 @@ Basilisk 是一个 Cargo 工作区，包含 19 个 Rust crate，每个拥有系�
 | **Typeshed 下载** | `basilisk-typeshed-fetch` — 工作区中唯一的 HTTP 客户端；仅在用户显式操作时下载 typeshed，与类型检查严格隔离 |
 | **测试基础设施** | `basilisk-test-utils`, `basilisk-test-macros` |
 | **编辑器扩展** | VS Code (`vscode-extension`), Neovim (`basilisk.nvim`), Zed (`basilisk-zed`) |
-| **未来** | `basilisk-mojo`（所有权），`basilisk-compiler`（原生），WASM 插件 |
+| **未来** | `basilisk-checker::mojo_safety`（所有权），WASM 插件 |
 
 ## 下一步
 

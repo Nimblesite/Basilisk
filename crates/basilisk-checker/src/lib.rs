@@ -41,6 +41,7 @@ pub mod imports;
 pub mod incremental;
 pub mod incremental_defs;
 pub mod inference;
+pub mod mojo_safety;
 pub mod narrow;
 pub mod param_infer;
 pub mod rule_catalog;

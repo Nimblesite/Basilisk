@@ -19,7 +19,6 @@ linked to an active plan.
 | [Checker MCP service](specs/CHECKER-MCP-SPEC.md) | Packaged stdio lifecycle and the structured typeshed source/status tool. |
 | [Checker cache](specs/CHECKER-CACHE-SPEC.md) | Opt-in content-addressed cross-session result cache, its `[tool.basilisk]` keys, and how it differs from always-on Salsa memoization. |
 | [Rule tagging](specs/CHECKER-RULE-TAGGING-SPEC.md) | Rule provenance/category/free-form tags and conflict rules. |
-| [Compiler prototype](specs/COMPILER-ARCHITECTURE-SPEC.md) | Current checker-gated AST interpreter and fixture contract. |
 | [LSP architecture](specs/LSP-ARCHITECTURE-SPEC.md) | Shared server protocol, analysis, commands, and capabilities. |
 | [Configuration editor](specs/LSP-CONFIGURATION-EDITOR-SPEC.md) | Typed preview/apply configuration transaction and VS Code shell. |
 | [Analysis modes](specs/LSP-ANALYSIS-MODES-SPEC.md) | Open-file, whole-module, and cross-module analysis. |
@@ -62,7 +61,6 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Replace remaining raw-source rule scans with AST data. |
 | [WASM](plans/WASM-PLAN.md) | CI wasm build and size ratchet, multi-file in-memory VFS, and the playground site. |
 | [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Dependency-hygiene rules, Mojo checks, plugin host, migration, and CI helpers. |
-| [Native compiler](plans/COMPILER-ARCHITECTURE-PLAN.md) | HIR, backend, runtime, interop, CLI, and native acceptance. |
 
 ## Defect triage
 

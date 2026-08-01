@@ -84,7 +84,7 @@ Basilisk is under **active development** — the core checker, LSP server, and e
 
 ## Architecture
 
-Basilisk is a Cargo workspace with 19 Rust crates, each owning one layer of the system:
+Basilisk is a Cargo workspace with 18 Rust crates, each owning one layer of the system:
 
 | Layer | Crates |
 |-------|--------|
@@ -93,7 +93,7 @@ Basilisk is a Cargo workspace with 19 Rust crates, each owning one layer of the 
 | **Typeshed downloads** | `basilisk-typeshed-fetch` — the workspace's only HTTP client; it downloads typeshed on an explicit user action, strictly segregated from checking |
 | **Test infrastructure** | `basilisk-test-utils`, `basilisk-test-macros` |
 | **Editor extensions** | VS Code (`vscode-extension`), Neovim (`basilisk.nvim`), Zed (`basilisk-zed`) |
-| **Future** | `basilisk-mojo` (ownership), `basilisk-compiler` (native), WASM plugins |
+| **Future** | `basilisk-checker::mojo_safety` (ownership), WASM plugins |
 
 ## Next steps
 

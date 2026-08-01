@@ -10,8 +10,6 @@ members = [
     "crates/basilisk-typeshed-fetch",
     "crates/basilisk-config",
     "crates/basilisk-lsp",
-    "crates/basilisk-mojo",
-    "crates/basilisk-compiler",
     "crates/basilisk-common",
     "crates/basilisk-buildinfo",
     "crates/basilisk-test-macros",
@@ -73,7 +71,6 @@ basilisk-parser   = { path = "crates/basilisk-parser" }
 basilisk-resolver = { path = "crates/basilisk-resolver" }
 basilisk-checker  = { path = "crates/basilisk-checker" }
 basilisk-lsp      = { path = "crates/basilisk-lsp" }
-basilisk-compiler = { path = "crates/basilisk-compiler" }
 basilisk-stubs      = { path = "crates/basilisk-stubs" }
 basilisk-typeshed-fetch = { path = "crates/basilisk-typeshed-fetch" }
 basilisk-config     = { path = "crates/basilisk-config" }
