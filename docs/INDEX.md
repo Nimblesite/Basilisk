@@ -60,7 +60,7 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [PyPI typeshed package pin](plans/CHECKER-TYPESHED-PYPI-PLAN.md) | Pin a PyPI typeshed distribution by wheel SHA-256, verify offline, auto-resolve from `uv.lock`; suppresses the source-status advisory (issue #312). |
 | [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Replace remaining raw-source rule scans with AST data. |
 | [WASM](plans/WASM-PLAN.md) | CI wasm build and size ratchet, multi-file in-memory VFS, and the playground site. |
-| [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Dependency-hygiene rules, Mojo checks, plugin host, migration, and CI helpers. |
+| [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Dependency-hygiene rules, Mojo-inspired checks, plugin host, migration, and CI helpers. |
 
 ## Defect triage
 

@@ -19,7 +19,7 @@ const MUTATING_METHODS: &[&str] = &[
     "discard",
 ];
 
-/// Check a Python source string for Mojo-style ownership violations.
+/// Check a Python source string for Mojo-inspired ownership violations.
 ///
 /// Detects mutation of `Borrowed` parameters via mutating method calls.
 #[must_use]

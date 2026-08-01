@@ -68,10 +68,9 @@ Basilisk 正在**积极开发中**——核心检查器、LSP 服务器和编辑
 | 1 | 解析器、解析器、类型检查器、CLI | 完成 |
 | 2 | LSP 服务器、编辑器扩展（VS Code、Cursor、Zed、Neovim） | 完成 |
 | 3 | 扩展规则集，PEP 符合性（对照 `python/typing@main` 达 {{ conformance.scorePct }}%），渐进式采用 | 进行中 |
-| 4 | 所有权与不可变性分析（Mojo 启发） | 计划中 |
-| 5 | WASM 插件，Django/Pydantic/SQLAlchemy | 计划中 |
-| 6 | SARIF/JUnit 输出，JetBrains 扩展 | 计划中 |
-| 7 | 插件市场，社区存根，生态系统 | 计划中 |
+| 4 | WASM 插件，Django/Pydantic/SQLAlchemy | 计划中 |
+| 5 | SARIF/JUnit 输出，JetBrains 扩展 | 计划中 |
+| 6 | 插件市场，社区存根，生态系统 | 计划中 |
 
 ## 架构
 
@@ -84,7 +83,6 @@ Basilisk 是一个 Cargo 工作区，包含 18 个 Rust crate，每个拥有系�
 | **Typeshed 下载** | `basilisk-typeshed-fetch` — 工作区中唯一的 HTTP 客户端；仅在用户显式操作时下载 typeshed，与类型检查严格隔离 |
 | **测试基础设施** | `basilisk-test-utils`, `basilisk-test-macros` |
 | **编辑器扩展** | VS Code (`vscode-extension`), Neovim (`basilisk.nvim`), Zed (`basilisk-zed`) |
-| **未来** | `basilisk-checker::mojo_safety`（所有权），WASM 插件 |
 
 ## 下一步
 

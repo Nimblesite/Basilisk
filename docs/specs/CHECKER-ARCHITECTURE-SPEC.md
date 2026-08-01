@@ -389,6 +389,13 @@ separate crate for it, and it registers no rule; shipping PEP rules must not
 reuse these anchors or diagnostic descriptions. Its scan is textual, so it must
 be rebuilt on the Ruff AST before any rule is registered against it.
 
+The concepts are borrowed from [Mojo's ownership model](https://docs.modular.com/mojo/manual/values/ownership)
+— the analysis is Basilisk's own, expressed in standard Python `Annotated`
+conventions, not a port of Mojo's checker. Because none of it works today it is
+also **not advertised**: it stays out of the README, the website, and the
+user-facing docs until it ships as a working, opt-in rule set. Only complete,
+production-ready features are advertised.
+
 ### Ownership tracking {#CHKARCH-MOJO-OWNERSHIP}
 
 The target is explicit `Annotated[T, Borrowed|InOut|Owned]` analysis for

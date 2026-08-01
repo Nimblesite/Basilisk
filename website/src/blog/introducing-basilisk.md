@@ -87,10 +87,9 @@ Basilisk (alpha) implements Phase 1 of a seven-phase roadmap.
 
 **On the roadmap:**
 - Phase 3: 80% PEP coverage, `basilisk migrate`, gradual adoption
-- Phase 4: opt-in, off-by-default ownership & immutability rules (inspired by Mojo)
-- Phase 5: WASM plugin system, Django/Pydantic/SQLAlchemy plugins, auto-stub generation
-- Phase 6: 95%+ PEP coverage, SARIF/JUnit output, enterprise hardening
-- Phase 7: Plugin marketplace, community stubs, ecosystem
+- Phase 4: WASM plugin system, Django/Pydantic/SQLAlchemy plugins, auto-stub generation
+- Phase 5: 95%+ PEP coverage, SARIF/JUnit output, enterprise hardening
+- Phase 6: Plugin marketplace, community stubs, ecosystem
 
 ## Try it
 
