@@ -6,65 +6,12 @@
 //! a JSON-RPC message over the same WebSocket transport used by the VSIX.
 
 use super::ws_test_common::*;
-
-async fn request_value(
-    fixture: &mut WsTestFixture,
-    id: u64,
-    method: &str,
-    params: serde_json::Value,
-) -> TestResult<serde_json::Value> {
-    let raw = fixture
-        .request(id, method, params)
-        .await?
-        .ok_or_else(|| format!("no response to {method}"))?;
-    let response: serde_json::Value = serde_json::from_str(&raw)?;
-    assert_eq!(
-        response["jsonrpc"], "2.0",
-        "invalid JSON-RPC response: {raw}"
-    );
-    assert_eq!(response["id"], id, "response id did not match: {raw}");
-    assert!(
-        response.get("error").is_none_or(serde_json::Value::is_null),
-        "{method} returned an error: {raw}"
-    );
-    assert!(
-        response.get("result").is_some(),
-        "{method} omitted its result: {raw}"
-    );
-    Ok(response)
-}
-
-fn item_named(items: &[serde_json::Value], label: &str) -> TestResult<serde_json::Value> {
-    items
-        .iter()
-        .find(|item| item["label"].as_str() == Some(label))
-        .cloned()
-        .ok_or_else(|| format!("missing completion item `{label}`").into())
-}
-
-fn source_position(source: &str, fragment: &str) -> TestResult<serde_json::Value> {
-    let (line, text) = source
-        .lines()
-        .enumerate()
-        .find(|(_, text)| text.contains(fragment))
-        .ok_or_else(|| format!("missing source fragment `{fragment}`"))?;
-    let character = text
-        .find(fragment)
-        .ok_or_else(|| format!("missing source fragment `{fragment}`"))?;
-    Ok(serde_json::json!({
-        "line": u32::try_from(line)?,
-        "character": u32::try_from(character)?,
-    }))
-}
-
-fn labels(items: &[serde_json::Value]) -> Vec<&str> {
-    items
-        .iter()
-        .filter_map(|item| item["label"].as_str())
-        .collect()
-}
+#[path = "ws_test_editor_journey_assertions.rs"]
+mod ws_test_editor_journey_assertions;
+use ws_test_editor_journey_assertions::*;
 
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn test_ws_editor_journey_resolves_and_refreshes_rich_features() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
 
@@ -116,15 +63,7 @@ value=1
     // Interaction 2: opening the document drives parsing, indexing, and diagnostics.
     fixture.did_open(&uri, code).await?;
     let diagnostics_raw = fixture.wait_for_diagnostics().await?;
-    let diagnostics: serde_json::Value = serde_json::from_str(&diagnostics_raw)?;
-    assert_eq!(diagnostics["jsonrpc"], "2.0");
-    assert_eq!(diagnostics["method"], "textDocument/publishDiagnostics");
-    assert_eq!(diagnostics["params"]["uri"], uri);
-    assert!(diagnostics["params"]["diagnostics"].is_array());
-    assert!(
-        !diagnostics_raw.contains("BSK-PARSE"),
-        "source must parse: {diagnostics_raw}"
-    );
+    assert_clean_diagnostics(&diagnostics_raw, &uri)?;
 
     // Interaction 3: one inlay request exercises variable, call-site, return,
     // TypeVar, ParamSpec, TypeVarTuple, and legacy Generic hints together.
@@ -166,6 +105,22 @@ value=1
     );
     assert!(hint_labels.iter().any(|label| label == &": int"));
     assert!(!hint_labels.iter().any(|label| label.contains("T_plain]")));
+    for (label, source_line) in [
+        ("  covariant, bound: str, default: bytes", "T_co ="),
+        ("  contravariant, int | str", "T_contra ="),
+        ("  infer_variance", "T_auto ="),
+        ("  TypeVarTuple, default: tuple", "Ts ="),
+        ("  ParamSpec, default: str", "P ="),
+    ] {
+        let hint = item_named(hints, label)?;
+        assert_eq!(hint["position"], line_end_position(code, source_line)?);
+        assert_eq!(hint["kind"], 1);
+        assert_eq!(hint["paddingLeft"], true);
+        assert!(hint["paddingRight"].is_null());
+        assert!(hint["tooltip"].is_null());
+        assert!(hint["textEdits"].is_null());
+        assert!(hint["data"].is_null());
+    }
     for hint in hints {
         let label = hint["label"].as_str().ok_or("hint label must be text")?;
         let expected_kind = if label.ends_with('=') { 2 } else { 1 };
@@ -192,10 +147,7 @@ value=1
         "Generic type parameters from Generic[...] base"
     );
     let palette_position = source_position(code, "Palette")?;
-    assert_eq!(
-        generic_hint["position"]["line"],
-        palette_position["line"]
-    );
+    assert_eq!(generic_hint["position"]["line"], palette_position["line"]);
     assert_eq!(
         generic_hint["position"]["character"].as_u64(),
         palette_position["character"]
@@ -343,31 +295,15 @@ value=1
         4,
         "expected 3, 6, and 8 digit colors: {colors}"
     );
-    for color in color_items {
-        assert!(color["range"]["start"]["line"].is_u64());
-        assert!(color["range"]["end"]["character"].is_u64());
-        for component in ["red", "green", "blue", "alpha"] {
-            let value = color["color"][component]
-                .as_f64()
-                .ok_or("color component must be numeric")?;
-            assert!((0.0..=1.0).contains(&value), "invalid {component}: {color}");
-        }
-    }
-    let red_position = source_position(code, "#ff0000")?;
-    let opaque_red = color_items
-        .iter()
-        .find(|item| {
-            item["color"]["red"].as_f64() == Some(1.0)
-                && item["color"]["green"].as_f64() == Some(0.0)
-                && item["color"]["alpha"].as_f64() == Some(1.0)
-                && item["range"]["start"] == red_position
-        })
-        .ok_or("missing opaque red color")?;
-    assert_eq!(opaque_red["range"]["start"], red_position);
-    assert_eq!(
-        opaque_red["range"]["end"]["character"].as_u64(),
-        red_position["character"].as_u64().map(|column| column + 7)
-    );
+    assert_color(color_items, code, "#336699cc", [0.2, 0.4, 0.6, 0.8])?;
+    assert_color(color_items, code, "#f00", [1.0, 0.0, 0.0, 1.0])?;
+    let opaque_red = assert_color(color_items, code, "#ff0000", [1.0, 0.0, 0.0, 1.0])?;
+    assert_color(
+        color_items,
+        code,
+        "#00ff0080",
+        [0.0, 1.0, 0.0, 128.0 / 255.0],
+    )?;
 
     // Interaction 11: opening VS Code's color picker asks for presentations.
     let presentations = request_value(
@@ -436,12 +372,7 @@ value=1
         }))
         .await?;
     let changed_raw = fixture.wait_for_diagnostics().await?;
-    let changed: serde_json::Value = serde_json::from_str(&changed_raw)?;
-    assert_eq!(changed["jsonrpc"], "2.0");
-    assert_eq!(changed["method"], "textDocument/publishDiagnostics");
-    assert_eq!(changed["params"]["uri"], uri);
-    assert!(changed["params"]["diagnostics"].is_array());
-    assert!(!changed_raw.contains("BSK-PARSE"));
+    assert_clean_diagnostics(&changed_raw, &uri)?;
 
     // Interaction 14: formatting the now-clean selection is a strict no-op.
     let clean_format = request_value(
@@ -470,20 +401,11 @@ value=1
         }))
         .await?;
     let saved_raw = fixture.wait_for_diagnostics().await?;
-    let saved: serde_json::Value = serde_json::from_str(&saved_raw)?;
-    assert_eq!(saved["jsonrpc"], "2.0");
-    assert_eq!(saved["method"], "textDocument/publishDiagnostics");
-    assert_eq!(saved["params"]["uri"], uri);
-    assert!(saved["params"]["diagnostics"].is_array());
-    assert!(!saved_raw.contains("BSK-PARSE"));
+    assert_clean_diagnostics(&saved_raw, &uri)?;
 
     // Interaction 16: closing the editor clears open-file diagnostics.
     fixture.did_close(&uri).await?;
     let closed_raw = fixture.wait_for_diagnostics().await?;
-    let closed: serde_json::Value = serde_json::from_str(&closed_raw)?;
-    assert_eq!(closed["jsonrpc"], "2.0");
-    assert_eq!(closed["method"], "textDocument/publishDiagnostics");
-    assert_eq!(closed["params"]["uri"], uri);
-    assert_eq!(closed["params"]["diagnostics"], serde_json::json!([]));
+    assert_clean_diagnostics(&closed_raw, &uri)?;
     Ok(())
 }

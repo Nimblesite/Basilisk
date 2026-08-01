@@ -13,7 +13,7 @@
       "threshold": 100
     },
     "basilisk-lsp": {
-      "threshold": 85
+      "threshold": 86
     },
     "basilisk-mojo": {
       "threshold": 90
