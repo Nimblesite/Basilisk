@@ -46,6 +46,8 @@ mod ws_test_execute_uv;
 mod ws_test_hover;
 #[path = "lsp/ws_test_inlay_hints.rs"]
 mod ws_test_inlay_hints;
+#[path = "lsp/ws_test_inlay_hints_display.rs"]
+mod ws_test_inlay_hints_display;
 #[path = "lsp/ws_test_memory.rs"]
 mod ws_test_memory;
 #[path = "lsp/ws_test_processes.rs"]
