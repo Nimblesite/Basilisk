@@ -144,14 +144,18 @@ pub(crate) fn receiver_type_name(
     };
     if let Some(annotation) = span_text(annotation_span, source) {
         let literal = annotation == "LiteralString" || annotation == "typing.LiteralString";
-        return Some((
-            if literal {
-                "str".to_owned()
-            } else {
-                annotation
-            },
-            literal,
-        ));
+        if literal {
+            return Some(("str".to_owned(), true));
+        }
+        // The annotation names a CLASS; its type arguments do not change which
+        // class that is. Ask the shared annotation helper — which decides on
+        // the ruff AST — so `list[int]` keys the lookup as `list` instead of
+        // missing entirely (GitHub #388). A name it cannot reduce (a union, a
+        // callable) falls through unchanged, so an ambiguous receiver still
+        // resolves to nothing rather than to a guess.
+        let name = basilisk_checker::types_parsing::annotation_class_name(&annotation)
+            .unwrap_or(annotation);
+        return Some((name, false));
     }
     let inferred = crate::util::rhs_or_expr_type_display(rhs_kind?, rhs_span, source);
     if inferred.is_empty() {
