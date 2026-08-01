@@ -1,11 +1,14 @@
 //! Tests for [TYPEINF-ANNOTATION-RESOLUTION]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ANNOTATION-RESOLUTION
-//! Covers `annotation_class_name` in `crates/basilisk-checker/src/types_parsing.rs`,
+//! Covers `crates/basilisk-checker/src/class_naming.rs` — naming the class a
+//! type or annotation refers to;
 //! the narrow stand-in for the shared `resolve_annotation` entry point that
 //! [NARROWPLAN-CHECKLIST] Stage 0.5 will introduce
 //! (docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-CHECKLIST).
 //!
 //! GitHub #388: member lookup used the annotation's raw source text as a
 //! class-name key, so `list[int]` matched nothing while bare `list` worked.
+//! GitHub #389: the inferred path used a rendered display string instead.
+//! GitHub #390: a loop variable binds an ELEMENT of what it iterates.
 
 use basilisk_checker::class_naming::annotation_class_name;
 
@@ -98,5 +101,103 @@ fn optional_names_the_construct_not_the_wrapped_class() {
     assert_eq!(
         annotation_class_name("Union[int, str]").as_deref(),
         Some("Union")
+    );
+}
+
+// ── Element types and type arguments (GitHub #390) ───────────────────────────
+
+use basilisk_checker::class_naming::{
+    annotation_type_argument, class_name_of_type, element_type_of,
+};
+use basilisk_checker::types::{InferredType, LiteralValue};
+
+/// A loop variable binds an ELEMENT, not the container.
+#[test]
+fn iterating_a_container_yields_its_element() {
+    let ints = InferredType::List(Box::new(InferredType::Int));
+    assert_eq!(element_type_of(&ints), Some(InferredType::Int));
+
+    let names = InferredType::Set(Box::new(InferredType::Str));
+    assert_eq!(element_type_of(&names), Some(InferredType::Str));
+
+    // `for k in d` walks the KEYS.
+    let mapping = InferredType::Dict(Box::new(InferredType::Str), Box::new(InferredType::Int));
+    assert_eq!(element_type_of(&mapping), Some(InferredType::Str));
+
+    // Iterating a string yields one-character strings, not characters.
+    assert_eq!(element_type_of(&InferredType::Str), Some(InferredType::Str));
+    assert_eq!(
+        element_type_of(&InferredType::LiteralString),
+        Some(InferredType::Str)
+    );
+}
+
+/// A type whose iteration behaviour lives in its class declaration answers
+/// `None` here — the caller resolves it from the stub.
+#[test]
+fn named_and_non_iterable_types_have_no_structural_element() {
+    assert_eq!(element_type_of(&InferredType::Named("range".into())), None);
+    assert_eq!(element_type_of(&InferredType::Int), None);
+    assert_eq!(element_type_of(&InferredType::Unknown), None);
+}
+
+/// The element type is read out of an iteration protocol's return annotation.
+#[test]
+fn type_argument_is_extracted_from_an_annotation() {
+    assert_eq!(
+        annotation_type_argument("Iterator[int]").as_deref(),
+        Some("int")
+    );
+    assert_eq!(
+        annotation_type_argument("dict[str, int]").as_deref(),
+        Some("str"),
+        "the FIRST argument, matching what iterating a mapping yields"
+    );
+    assert_eq!(annotation_type_argument("int"), None);
+}
+
+/// A union names a class only when every arm agrees — the case a list of
+/// literals produces (`[1, 2, 3]` elements as `Literal[1] | Literal[2] | ...`).
+#[test]
+fn a_union_names_a_class_only_when_every_arm_agrees() {
+    let int_literals = InferredType::Union(vec![
+        InferredType::Literal(LiteralValue::Int(1)),
+        InferredType::Literal(LiteralValue::Int(2)),
+    ]);
+    assert_eq!(
+        class_name_of_type(&int_literals),
+        Some(("int".to_owned(), false))
+    );
+
+    let mixed = InferredType::Union(vec![InferredType::Int, InferredType::Str]);
+    assert_eq!(
+        class_name_of_type(&mixed),
+        None,
+        "`int | str` is not any single class — offering one arm's members would be a guess"
+    );
+
+    // The LiteralString refinement survives only if EVERY arm carries it.
+    let all_literal = InferredType::Union(vec![
+        InferredType::LiteralString,
+        InferredType::LiteralString,
+    ]);
+    assert_eq!(
+        class_name_of_type(&all_literal),
+        Some(("str".to_owned(), true))
+    );
+    let one_dynamic = InferredType::Union(vec![InferredType::LiteralString, InferredType::Str]);
+    assert_eq!(
+        class_name_of_type(&one_dynamic),
+        Some(("str".to_owned(), false)),
+        "a dynamic arm makes the whole union non-literal"
+    );
+}
+
+/// An optional receiver offers nothing: the value may be `None`.
+#[test]
+fn optional_names_no_class() {
+    assert_eq!(
+        class_name_of_type(&InferredType::Optional(Box::new(InferredType::Str))),
+        None
     );
 }

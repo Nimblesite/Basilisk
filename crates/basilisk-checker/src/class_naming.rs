@@ -102,15 +102,92 @@ pub fn class_name_of_type(ty: &InferredType) -> Option<(String, bool)> {
             LiteralValue::Bytes(_) => plain("bytes"),
         },
         InferredType::Named(name) => Some((name.clone(), false)),
+        // A union names a class exactly when EVERY arm names the same one:
+        // `int | int` (a list of int literals, a conditional expression) is an
+        // int, while `int | str` is not any single class. The `LiteralString`
+        // refinement survives only if every arm carries it.
+        InferredType::Union(members) => {
+            let mut named = members.iter().map(class_name_of_type);
+            let first = named.next().flatten()?;
+            named.try_fold(first, |(name, literal), arm| {
+                arm.filter(|(arm_name, _)| *arm_name == name)
+                    .map(|(_, arm_literal)| (name, literal && arm_literal))
+            })
+        }
         // Names no single class — offering one arm's members would be a guess.
         InferredType::Unknown
         | InferredType::Any
         | InferredType::Never
         | InferredType::None_
-        | InferredType::Union(_)
         | InferredType::Optional(_)
         | InferredType::Callable(_)
         | InferredType::Generator(_, _, _)
         | InferredType::TypeForm(_) => None,
     }
+}
+
+/// The type produced by ITERATING a value of this type.
+///
+/// `list[int]` yields `int`; iterating a `dict` yields its KEYS; a `str` yields
+/// `str`. Returns `None` when the element type is not decidable from the type
+/// alone — notably [`InferredType::Named`], whose iteration behaviour lives in
+/// its class declaration and must be resolved by a caller that can read one.
+///
+/// A loop variable's type is exactly this ([#390]) — `for x in xs` binds an
+/// element, not the container.
+#[must_use]
+pub fn element_type_of(ty: &InferredType) -> Option<InferredType> {
+    match ty {
+        InferredType::List(element) | InferredType::Set(element) => Some((**element).clone()),
+        // Iterating a mapping yields its keys, as `for k in d` does.
+        InferredType::Dict(key, _) => Some((**key).clone()),
+        // A heterogeneous tuple yields the union of what it holds.
+        InferredType::Tuple(elements) => elements.split_first().map(|(first, rest)| {
+            rest.iter().fold(first.clone(), |acc, next| {
+                InferredType::union(acc, next.clone())
+            })
+        }),
+        // Iterating a string yields one-character strings.
+        InferredType::Str
+        | InferredType::LiteralString
+        | InferredType::Literal(LiteralValue::Str(_)) => Some(InferredType::Str),
+        InferredType::Generator(yielded, _, _) => Some((**yielded).clone()),
+        // Decidable only from the class declaration, or not iterable at all.
+        InferredType::Named(_)
+        | InferredType::Unknown
+        | InferredType::Any
+        | InferredType::Never
+        | InferredType::None_
+        | InferredType::Int
+        | InferredType::Float
+        | InferredType::Bool
+        | InferredType::Bytes
+        | InferredType::Literal(_)
+        | InferredType::Union(_)
+        | InferredType::Optional(_)
+        | InferredType::Callable(_)
+        | InferredType::TypeForm(_) => None,
+    }
+}
+
+/// The class named by an annotation's FIRST type argument.
+///
+/// `Iterator[int]` → `int`, `Sequence[str]` → `str`. Used to read an element
+/// type out of a class's own `__iter__`/`__next__` declaration, so the answer
+/// comes from the stub rather than from a hardcoded table of what builtin
+/// containers yield.
+///
+/// Decided on the ruff AST, like [`annotation_class_name`].
+#[must_use]
+pub fn annotation_type_argument(annotation: &str) -> Option<String> {
+    let parsed = ruff_python_parser::parse_expression(annotation).ok()?;
+    let ruff_python_ast::Expr::Subscript(subscript) = parsed.expr() else {
+        return None;
+    };
+    // `X[a, b]` parses its arguments as a tuple; `X[a]` as the bare element.
+    let first = match subscript.slice.as_ref() {
+        ruff_python_ast::Expr::Tuple(tuple) => tuple.elts.first()?,
+        other => other,
+    };
+    class_name_of(first)
 }

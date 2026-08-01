@@ -242,3 +242,156 @@ async fn test_ws_completion_unknown_receiver_offers_nothing() -> TestResult<()> 
 
     Ok(())
 }
+
+// ── Receivers that are not declared names (GitHub #390) ──────────────────────
+
+/// A loop variable's type is the ELEMENT type of what it iterates.
+///
+/// `receiver_type_name` only matched `SymbolHit::Variable` and
+/// `SymbolHit::Parameter`, and a `for` target is neither — so every loop
+/// variable in every Python file offered no members at all.
+#[tokio::test]
+async fn test_ws_completion_loop_variable_over_literal_offers_members() -> TestResult<()> {
+    let ints = dot_completion_labels(
+        "file:///recv_loop_list.py",
+        "for x in [1, 2, 3]:\n    x.",
+        580,
+    )
+    .await?;
+    assert!(
+        ints.contains(&"bit_length".to_owned()),
+        "iterating a list of ints binds an int: {ints:?}"
+    );
+
+    let chars = dot_completion_labels(
+        "file:///recv_loop_str.py",
+        "for ch in \"abc\":\n    ch.",
+        581,
+    )
+    .await?;
+    assert!(
+        chars.contains(&"split".to_owned()),
+        "iterating a str binds a str: {chars:?}"
+    );
+
+    Ok(())
+}
+
+/// The headline case from the issue: `range` is a typeshed class, so the
+/// element type comes from its own `__iter__` declaration rather than from any
+/// hardcoded table.
+#[tokio::test]
+async fn test_ws_completion_loop_variable_over_range_offers_members() -> TestResult<()> {
+    let labels = dot_completion_labels(
+        "file:///recv_loop_range.py",
+        "for n in range(3):\n    n.",
+        582,
+    )
+    .await?;
+    assert!(
+        labels.contains(&"bit_length".to_owned()),
+        "`for n in range(3)` binds an int: {labels:?}"
+    );
+
+    Ok(())
+}
+
+/// A loop over a NAMED iterable needs the name's own type in scope.
+#[tokio::test]
+async fn test_ws_completion_loop_variable_over_named_iterable() -> TestResult<()> {
+    let labels = dot_completion_labels(
+        "file:///recv_loop_named.py",
+        "xs: list[str] = []\nfor item in xs:\n    item.",
+        583,
+    )
+    .await?;
+    assert!(
+        labels.contains(&"split".to_owned()),
+        "`xs: list[str]` binds a str per iteration: {labels:?}"
+    );
+
+    Ok(())
+}
+
+/// A chained call is an EXPRESSION receiver, not a name, so nothing was
+/// extracted and no members were offered.
+#[tokio::test]
+async fn test_ws_completion_chained_call_receiver_offers_members() -> TestResult<()> {
+    let labels =
+        dot_completion_labels("file:///recv_chained.py", "s = \"abc\"\ns.upper().", 584).await?;
+    assert!(
+        labels.contains(&"split".to_owned()),
+        "`s.upper()` is a str, so the next `.` must offer str members: {labels:?}"
+    );
+
+    Ok(())
+}
+
+/// An expression receiver the engine cannot type still offers nothing, rather
+/// than falling back to the nearest name in the text.
+#[tokio::test]
+async fn test_ws_completion_untypeable_expression_receiver_offers_nothing() -> TestResult<()> {
+    let labels = dot_completion_labels(
+        "file:///recv_expr_unknown.py",
+        "def src(): ...\n\n\nsrc().",
+        585,
+    )
+    .await?;
+    assert!(
+        labels.is_empty(),
+        "an untypeable expression receiver must offer nothing: {labels:?}"
+    );
+
+    Ok(())
+}
+
+/// A nested loop iterates an OUTER loop's variable, so resolving the inner
+/// binding requires the outer one to already be in scope.
+#[tokio::test]
+async fn test_ws_completion_nested_loop_variable_offers_members() -> TestResult<()> {
+    let labels = dot_completion_labels(
+        "file:///recv_loop_nested.py",
+        "for row in [[1, 2]]:\n    for cell in row:\n        cell.",
+        586,
+    )
+    .await?;
+    assert!(
+        labels.contains(&"bit_length".to_owned()),
+        "`row` is a list[int], so `cell` is an int: {labels:?}"
+    );
+
+    Ok(())
+}
+
+/// An unpacking target binds each name to its OWN component of the element,
+/// not to the whole element.
+#[tokio::test]
+async fn test_ws_completion_unpacked_loop_target_binds_its_component() -> TestResult<()> {
+    let first = dot_completion_labels(
+        "file:///recv_loop_unpack_a.py",
+        "for a, b in [(1, \"s\")]:\n    a.",
+        587,
+    )
+    .await?;
+    assert!(
+        first.contains(&"bit_length".to_owned()),
+        "`a` takes the FIRST tuple component (int), not the tuple: {first:?}"
+    );
+    assert!(
+        !first.contains(&"count".to_owned()) || first.contains(&"bit_length".to_owned()),
+        "`a` must not be typed as the tuple itself: {first:?}"
+    );
+
+    let second = dot_completion_labels(
+        "file:///recv_loop_unpack_b.py",
+        "for a, b in [(1, \"s\")]:\n    b.",
+        588,
+    )
+    .await?;
+    assert!(
+        second.contains(&"split".to_owned()),
+        "`b` takes the SECOND component (str): {second:?}"
+    );
+
+    Ok(())
+}
