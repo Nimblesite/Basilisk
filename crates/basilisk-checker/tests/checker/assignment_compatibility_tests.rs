@@ -37,8 +37,8 @@ def build_refs_dict() -> RefsDictT:
 }
 
 #[test]
-fn empty_dict_to_explicit_typealias_dict_alias_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
-{
+fn empty_dict_to_explicit_typealias_dict_alias_no_diagnostic(
+) -> Result<(), Box<dyn std::error::Error>> {
     // Regression test for issue #282: the *explicit* `TypeAlias`-annotated form
     // (`RefsDictT: TypeAlias = dict[...]`) must be treated as a value alias too,
     // so the empty dict literal is assignable to it. The implicit form is

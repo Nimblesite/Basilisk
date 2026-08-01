@@ -62,10 +62,12 @@ impl TypeshedFailure {
             SelectionError::NoSource { reason, .. } if *reason == BackendError::LicenseChanged => {
                 TypeshedFailureKind::LicenseChanged
             }
-            SelectionError::PyPIPackage(reason) if *reason == BackendError::LicenseChanged => {
+            SelectionError::PyPIPackage { reason, .. }
+                if *reason == BackendError::LicenseChanged =>
+            {
                 TypeshedFailureKind::LicenseChanged
             }
-            SelectionError::NoSource { .. } | SelectionError::PyPIPackage(_) => {
+            SelectionError::NoSource { .. } | SelectionError::PyPIPackage { .. } => {
                 TypeshedFailureKind::NoSource
             }
             SelectionError::InconsistentIdentity => TypeshedFailureKind::ResolutionFailed,

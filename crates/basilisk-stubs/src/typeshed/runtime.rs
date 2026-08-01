@@ -19,6 +19,7 @@ use super::selector::{BackendError, SourceBackend};
 use super::snapshot::Snapshot;
 use super::source::TypeshedRequest;
 use super::store::{self, StoreError};
+use super::wheel;
 
 /// Production policy backend shared by CLI/LSP/MCP managers.
 #[derive(Debug)]
@@ -57,11 +58,16 @@ impl SourceBackend for RuntimeBackend {
         bundled_snapshot().map_err(|_error| BackendError::Bundle)
     }
 
-    fn load_pypi_package(&self, _name: &str, _sha256: &str) -> Result<Snapshot, BackendError> {
-        // On-disk SHA-256 verification of an installed PyPI package is the
-        // next slice ([STUBRES-TYPESHED-PYPI]); until that backend lands,
-        // a package pin fails closed rather than serving unverified bytes.
-        Err(BackendError::PyPIPackage)
+    fn load_pypi_package(&self, name: &str, sha256: &str) -> Result<Snapshot, BackendError> {
+        let root = self
+            .store_root
+            .clone()
+            .or_else(default_store_path)
+            .ok_or(BackendError::Missing)?;
+        wheel::read_snapshot(&root, name, sha256).map_err(|error| match error {
+            wheel::WheelError::Missing => BackendError::Missing,
+            wheel::WheelError::Corrupt => BackendError::Corrupt,
+        })
     }
 }
 

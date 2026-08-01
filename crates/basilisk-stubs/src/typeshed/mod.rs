@@ -37,3 +37,4 @@ pub mod source;
 pub mod store;
 pub mod versions;
 pub mod warning;
+pub mod wheel;

@@ -346,3 +346,48 @@ fn a_pypi_package_pin_is_pinned_and_emits_no_source_advisories() {
         "selection must consult the PyPI-package backend and nothing else"
     );
 }
+
+/// [STUBRES-TYPESHED-PYPI] / [STUBRES-TYPESHED-WARN]: a `PyPI` package that is
+/// not on this machine is terminal `NO SOURCE` — never substituted, never
+/// degraded — and the recovery line names the exact
+/// `basilisk typeshed download --package <name>@sha256:<hex>` command, mirroring
+/// the commit pin's status line. A corrupt wheel (failed SHA-256 verification)
+/// surfaces the same way.
+#[test]
+fn a_missing_pypi_package_fails_hard_naming_the_package_download_command() {
+    const NAME: &str = "micropython-stdlib-stubs";
+    for reason in [BackendError::Missing, BackendError::Corrupt] {
+        let backend = FakeBackend {
+            pypi: Mutex::new(Some(Err(reason))),
+            ..FakeBackend::default()
+        };
+        let error = select_snapshot(
+            &request(SourceSelection::PyPIPackage {
+                name: NAME.to_owned(),
+                sha256: PACKAGE_SHA256.to_owned(),
+            }),
+            &backend,
+        )
+        .expect_err("a missing/corrupt PyPI package must fail closed");
+        assert!(
+            matches!(
+                error,
+                SelectionError::PyPIPackage { reason: r, .. } if r == reason
+            ),
+            "the reason must ride along: {error:?}"
+        );
+        let message = error.to_string();
+        assert!(
+            message.contains("NO SOURCE"),
+            "a terminal PyPI failure is a NO SOURCE status: {message}"
+        );
+        assert!(
+            message.contains("basilisk typeshed download --package"),
+            "the recovery line must name the package download command: {message}"
+        );
+        assert!(
+            message.contains(NAME) && message.contains(PACKAGE_SHA256),
+            "the full pin must ride along: {message}"
+        );
+    }
+}

@@ -5,10 +5,15 @@
 //! ([STUBRES-TYPESHED-OFFLINE], [TYPESHEDRT-ACCEPTANCE]).
 
 use std::fs;
+use std::io::Write as _;
+
+use zip::write::{SimpleFileOptions, ZipWriter};
+use zip::CompressionMethod;
 
 use super::super::gittree::Oid;
 use super::super::selector::{BackendError, SelectionError};
 use super::super::source::{SourceKind, SourceSelection, TypeshedRequest};
+use super::super::wheel;
 use super::*;
 
 const OTHER_SHA: &str = "0123456789012345678901234567890123456789";
@@ -164,5 +169,108 @@ fn pins_resolve_from_the_configured_store_root() {
     assert_eq!(
         other_backend.load_pinned(commit, true).err(),
         Some(BackendError::Missing)
+    );
+}
+
+/// A minimal wheel shipping the contract `stdlib/` tree plus a root `LICENSE`.
+fn fixture_wheel_bytes() -> Vec<u8> {
+    let entries: &[(&str, &[u8], u32)] = &[
+        ("stdlib/VERSIONS", b"os: 3.0-\nsys: 3.0-\n", 0o644),
+        ("stdlib/os.pyi", b"def getcwd() -> str: ...\n", 0o644),
+        ("LICENSE", b"MIT\n\nCopyright (c)\n", 0o644),
+    ];
+    let mut buf = Vec::new();
+    {
+        let mut writer = ZipWriter::new(std::io::Cursor::new(&mut buf));
+        for (name, data, mode) in entries {
+            let options = SimpleFileOptions::default()
+                .compression_method(CompressionMethod::Stored)
+                .unix_permissions(*mode);
+            writer.start_file(*name, options).expect("start_file");
+            writer.write_all(data).expect("write_all");
+        }
+        let _ = writer.finish().expect("finish");
+    }
+    buf
+}
+
+/// Write `fixture_wheel_bytes()` into `<store>/<sha256>/wheel.whl` and return
+/// the SHA-256 that addresses it.
+fn install_fixture_wheel(store: &std::path::Path) -> String {
+    use super::super::gate::manifest::sha256_hex;
+    let bytes = fixture_wheel_bytes();
+    let sha256 = sha256_hex(&bytes);
+    let dir = wheel::entry_dir(store, &sha256);
+    fs::create_dir_all(&dir).expect("entry dir");
+    fs::write(dir.join(wheel::WHEEL_FILE), &bytes).expect("write wheel");
+    sha256
+}
+
+const PACKAGE_NAME: &str = "micropython-stdlib-stubs";
+
+/// [STUBRES-TYPESHED-PYPI] end-to-end: a stored, SHA-256-verified wheel
+/// resolves through the production backend as a PINNED `PyPIPackage` source —
+/// no `unpinned`/`user-managed` advisories — and the resolver reads the wheel's
+/// `stdlib/` subtree through the archive VFS.
+#[test]
+fn a_stored_wheel_resolves_as_a_pinned_pypi_source_with_no_advisories() {
+    let store = tempfile::tempdir().expect("tempdir");
+    let sha256 = install_fixture_wheel(store.path());
+    let manager = production_manager(TypeshedRequest {
+        selection: SourceSelection::PyPIPackage {
+            name: PACKAGE_NAME.to_owned(),
+            sha256,
+        },
+        store_path: Some(store.path().to_path_buf()),
+    });
+    let snapshot = manager.snapshot().expect("verified wheel resolves");
+    assert_eq!(snapshot.status.active_source, SourceKind::PyPIPackage);
+    assert!(
+        snapshot.status.warnings.is_empty(),
+        "a content-addressed PyPI package is pinned: {:?}",
+        snapshot.status.warnings
+    );
+    assert_eq!(
+        snapshot.read_stub("os").map(|(_, body)| body),
+        Some("def getcwd() -> str: ...\n")
+    );
+}
+
+/// [STUBRES-TYPESHED-PYPI] / [STUBRES-TYPESHED-OFFLINE]: a `PyPI` package pin
+/// with no stored wheel is terminal `NO SOURCE` naming the
+/// `basilisk typeshed download --package` recovery command, and resolution
+/// never writes the store.
+#[test]
+fn a_missing_pypi_package_is_terminal_no_source_naming_the_package_command() {
+    const ABSENT_SHA: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    let store = tempfile::tempdir().expect("tempdir");
+    let manager = production_manager(TypeshedRequest {
+        selection: SourceSelection::PyPIPackage {
+            name: PACKAGE_NAME.to_owned(),
+            sha256: ABSENT_SHA.to_owned(),
+        },
+        store_path: Some(store.path().to_path_buf()),
+    });
+    let error = manager.snapshot().expect_err("missing package must fail");
+    assert!(
+        matches!(
+            error,
+            SelectionError::PyPIPackage {
+                reason: BackendError::Missing,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+    let message = error.to_string();
+    assert!(message.contains("NO SOURCE"), "{message}");
+    assert!(
+        message.contains("basilisk typeshed download --package"),
+        "recovery line must name the package command: {message}"
+    );
+    assert_eq!(
+        fs::read_dir(store.path()).expect("readdir").count(),
+        0,
+        "resolution must never write the store"
     );
 }
