@@ -15,6 +15,41 @@ Current baseline:
 - VS Code, Neovim, and Zed share the Rust LSP. Editor-specific manual publication
   and clean-install validation remain.
 
+## Coverage beyond the upstream suite {#NEXTSTEPS-BEYOND-CONFORMANCE}
+
+Conformance remains the prime directive and both ratchets stand. But a batch of
+user-reported typing puzzles (2026-08-01, issues
+[#378](https://github.com/Nimblesite/Basilisk/issues/378)–[#383](https://github.com/Nimblesite/Basilisk/issues/383),
+[#371](https://github.com/Nimblesite/Basilisk/issues/371)) established something
+we should hold onto: **every one of those defects coexisted with a clean 141/141
+run**, and each reproduced on the CLI as well as the playground.
+
+The suite is a floor, not a ceiling. Two concrete blind spots it does not cover:
+
+- `conformance/tests/aliases_recursive.py` contains **zero** PEP 695 `type`
+  statements — every recursive case upstream uses the legacy spelling — so
+  rejecting every non-generic recursive `type` alias scored 100%.
+- Nothing upstream pins "return a `str` literal from a function annotated with
+  an alias-of-`int`", so skipping assignability for every nominal annotation
+  scored 100%.
+
+Neither is an upstream flaw to route around: a syntax the suite omits is *our*
+responsibility to cover.
+
+- [ ] **`[AGENT]`** Own a Basilisk-side regression suite for constructs the
+  upstream suite omits, starting with a PEP 695 `type`-statement counterpart of
+  every recursive case in `aliases_recursive.py`. It grows whenever a
+  user-reported defect turns out to be uncovered upstream; it never substitutes
+  for the live harness.
+- [ ] **`[AGENT]`** For each user-reported defect, record whether the upstream
+  suite covered the construct. A "no" is a coverage-gap ticket in its own right,
+  not just a bug fix.
+- [ ] **`[AGENT]`** Treat "an entire rule family went silent" as its own defect
+  class. Both [#380](https://github.com/Nimblesite/Basilisk/issues/380) (aliased
+  decorator) and [#381](https://github.com/Nimblesite/Basilisk/issues/381)
+  (call not in outermost position) disable real rules with no signal, which no
+  pass-percentage metric can surface.
+
 ## Distribution follow-ups {#NEXTSTEPS-DISTRIBUTION}
 
 - [ ] **`[HYBRID]`** Validate a tagged release end to end with the real

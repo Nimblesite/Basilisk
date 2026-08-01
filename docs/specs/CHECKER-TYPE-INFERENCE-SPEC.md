@@ -83,6 +83,66 @@ The target architecture that supersedes this conservative core — bidirectional
 checking over a subtype-constraint solver — is specified in
 [TYPEINF-TARGET](#TYPEINF-TARGET).
 
+### [TYPEINF-ANNOTATION-RESOLUTION] Annotation name resolution {#TYPEINF-ANNOTATION-RESOLUTION}
+
+An annotation is a **type expression**, and turning it into a type is a
+*name-resolution* problem, not a text-matching one. Every rule that compares a
+value against a declared type must obtain the declared type through the
+resolution cascade below, never by pattern-matching annotation source text.
+
+Resolution order for a bare or dotted name in a type expression:
+
+1. **Type-alias table** — PEP 695 `type X = ...` (`module.type_statements`),
+   explicit `X: TypeAlias = ...`, and implicit `X = <type expression>`.
+2. **Class table** — classes declared in the module (`module.classes`).
+3. **Import table** — names bound by `import` / `from ... import`, resolved
+   through [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561) to
+   the defining module.
+4. **Typeshed / builtins** — stdlib and builtin symbols.
+5. **Forward reference** — a string annotation is parsed as a type expression
+   and resolved by this same cascade.
+
+**Alias transparency.** A type alias is *transparent*: it introduces a name for
+a type, never a distinct type. `type MyStr = int` means every use of `MyStr` in
+a type expression behaves exactly as `int` does, in every rule, at every
+nesting depth, and regardless of whether the alias is declared before or after
+its use.
+
+```python
+type MyStr = int
+
+def answer() -> MyStr:
+    return "not an int"   # returns_compatibility — identical to `-> int`
+
+def take(x: MyStr) -> None: ...
+take("nope")              # calls_argument_type — identical to `x: int`
+
+y: MyStr = "nope"         # assignment_compatibility — identical to `y: int`
+
+def wrapped() -> list[MyStr]:
+    return ["nope"]       # nesting does not weaken the check
+```
+
+Alias chains (`type A = int; type B = A`) resolve to their ultimate target.
+Cycle detection during expansion must distinguish a *legal recursive alias*,
+which has a finite form and is expanded lazily
+([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL)), from a
+non-terminating expansion, which is a policy rejection and not a PEP error.
+
+**Unresolved names must not silently disable a rule.** When the cascade cannot
+resolve a name, the resulting type is `Unknown`
+([TYPEINF-EXCEEDS-NOUNKNOWN](#TYPEINF-EXCEEDS-NOUNKNOWN)) and the rule
+suppresses its diagnostic — that is the correct conservative behaviour. What is
+**not** permitted is
+treating a *resolvable* nominal name as unverifiable: a class, alias, or
+imported symbol that the cascade can resolve must be checked. Blanket-skipping
+every nominal annotation converts a soundness gap into silence across the whole
+rule set, which is the defect class tracked by
+[#378](https://github.com/Nimblesite/Basilisk/issues/378).
+
+Delivery is tracked in
+[NARROWPLAN-ANNOTATION-RESOLUTION](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-ANNOTATION-RESOLUTION).
+
 ## [TYPEINF-VARS] Variable Type Inference {#TYPEINF-VARS}
 
 ### [TYPEINF-VARS-SIMPLE] Simple Assignment {#TYPEINF-VARS-SIMPLE}

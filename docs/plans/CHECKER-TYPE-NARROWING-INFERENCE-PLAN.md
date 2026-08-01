@@ -114,6 +114,68 @@ usable behavior but make it configurable for security-sensitive users.
 Reachability becomes **inference-driven** (ty's model) rather than
 pattern-matched idioms.
 
+## Annotation name resolution {#NARROWPLAN-ANNOTATION-RESOLUTION}
+
+Spec: [TYPEINF-ANNOTATION-RESOLUTION](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ANNOTATION-RESOLUTION).
+
+**This is the highest-value gap in the plan and a prerequisite for the rest of
+it.** The bidirectional engine and constraint solver landed in Stage 0, but the
+conformance rules still obtain a declared type by parsing annotation *source
+text*: `returns_compatibility.rs` calls
+`InferredType::from_annotation(slice_span(&module.source, ann_span))`, and any
+name it does not recognise becomes `InferredType::Named(..)`. `shared.rs`'s
+`is_unverifiable_return_type` then treats **every** `Named` as unverifiable and
+suppresses the diagnostic, recursing through unions, containers, optionals,
+tuples, and callables so that one nominal name anywhere in an annotation
+silences the whole check.
+
+The consequence is that `-> MyAlias` and `-> MyClass` disable the return check
+that `-> int` performs correctly — for PEP 695 aliases, `TypeAlias`, implicit
+aliases, same-file classes, and imported classes alike
+([#378](https://github.com/Nimblesite/Basilisk/issues/378)). No amount of solver
+sophistication helps while the front door takes text.
+
+Work:
+
+- Build the resolution cascade specified in
+  [TYPEINF-ANNOTATION-RESOLUTION](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ANNOTATION-RESOLUTION)
+  (alias table → class table → import table → typeshed → forward reference) as
+  one shared entry point that every rule and the `bidir` engine consume.
+- Expand alias chains transparently, with cycle detection that terminates on
+  legal recursive aliases rather than rejecting them
+  ([#371](https://github.com/Nimblesite/Basilisk/issues/371)).
+- Retire `is_unverifiable_return_type`'s blanket `Named` skip in favour of
+  "resolved → check it, unresolved → `Unknown` → suppress". The skip is a
+  false-positive guard today; it may only be removed as the cascade makes each
+  category genuinely resolvable, one category at a time, with the conformance
+  false-positive ceiling held at zero throughout.
+- Resolve **decorators** through the same binding table so a decorator reached
+  via a local alias (`o = overload`) is recognised as the symbol it is bound to
+  ([#380](https://github.com/Nimblesite/Basilisk/issues/380)).
+
+Sequencing: aliases and same-file classes first (pure `ResolvedModule` data,
+no new dependencies), then imported project symbols, then typeshed — the last
+of which is gated on [#324](https://github.com/Nimblesite/Basilisk/issues/324)
+and must not block the first two.
+
+## Call-site and expression coverage {#NARROWPLAN-CALLSITES}
+
+Rules that fire on a call must fire wherever the call *appears*, not only where
+it is convenient to find. Two confirmed position-sensitivity defects:
+
+- `constructors_call_init` only fires when the constructor call is the
+  outermost expression of a statement or an assignment RHS: `C(1)` is caught,
+  `C(1).method()` is not
+  ([#381](https://github.com/Nimblesite/Basilisk/issues/381)). Chained
+  construction is a mainstream idiom, so this is a large hole.
+- A function assigned into a class body is not bound as a method, so the
+  implicit receiver is never counted against the declared parameters
+  ([#382](https://github.com/Nimblesite/Basilisk/issues/382)).
+
+Both want the same remedy the expression-inference work already implies: a
+single traversal that visits every `Call`/`Attribute` node with a resolved
+callee type, replacing per-rule statement-shape matching.
+
 ## Expression inference {#NARROWPLAN-EXPRESSIONS}
 
 Infer same-module and imported function/method return types; constructor,
@@ -410,6 +472,50 @@ reproducible, write-always, ratcheted:
   `tests/fixtures/typeshed/TYPESHED_COMMIT.txt`): solver reflexivity,
   projection idempotence, and polar-variable resolution over 300+ real
   annotations.
+
+### Stage 0.5 — annotation name resolution
+
+Prerequisite for Stage 2; see
+[NARROWPLAN-ANNOTATION-RESOLUTION](#NARROWPLAN-ANNOTATION-RESOLUTION). Each box
+lands with a regression test that fails before it and passes after, and holds
+the conformance ratchets (100% / 0 false positives) at every step.
+
+- [ ] Add one shared `resolve_annotation(module, expr) → InferredType` entry
+  point implementing the
+  [TYPEINF-ANNOTATION-RESOLUTION](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ANNOTATION-RESOLUTION)
+  cascade over the Ruff AST annotation node, replacing
+  `InferredType::from_annotation(<source text>)`. No rule may parse annotation
+  text after this lands.
+- [ ] Resolve PEP 695 `type` aliases, `X: TypeAlias = ...`, and implicit
+  aliases, including alias chains and use-before-declaration; expand
+  transparently at every nesting depth.
+- [ ] Resolve same-file classes, then imported project symbols; leave typeshed
+  behind the same entry point so [#324](https://github.com/Nimblesite/Basilisk/issues/324)
+  can fill it without a second call path.
+- [ ] Replace the blanket `Named` skip in `rules/shared.rs::is_unverifiable_return_type`
+  with a resolved/unresolved split, narrowing it one category at a time as the
+  cascade covers that category.
+- [ ] Terminating cycle detection for recursive aliases: `type J = list[J]`,
+  `type J = int | list[J]`, `type J = dict[str, J]`, and the canonical
+  `JsonValue` union all produce **no** diagnostic
+  ([#371](https://github.com/Nimblesite/Basilisk/issues/371)).
+- [ ] Add PEP 695 `type`-statement counterparts of every recursive case in
+  upstream `aliases_recursive.py` to our own suite — the upstream file contains
+  zero `type` statements, which is why this false positive survived a 100%
+  score. Coverage of a syntax the upstream suite omits is our responsibility.
+- [ ] Resolve decorator expressions through the binding table so `o = overload`
+  is recognised as `typing.overload`; cover `from typing import overload as ov`
+  and `typing.overload` / `t.overload` attribute spellings
+  ([#380](https://github.com/Nimblesite/Basilisk/issues/380)).
+- [ ] Visit calls in every expression position rather than statement-outermost
+  only, so `C(1).method()` reports the same constructor-arity error as `C(1)`
+  ([#381](https://github.com/Nimblesite/Basilisk/issues/381)).
+- [ ] Bind functions assigned in a class body as methods — implicit receiver
+  consumed on instance access, unbound on class access, `staticmethod` /
+  `classmethod` honoured ([#382](https://github.com/Nimblesite/Basilisk/issues/382)).
+- [ ] Wire the shared entry point into the `bidir` engine, which currently has
+  no name resolution at all and is consumed by only two rules
+  (`narrowing_typeguard`, `narrowing_typeis_2`).
 
 ### Stage 1 — incrementality
 
