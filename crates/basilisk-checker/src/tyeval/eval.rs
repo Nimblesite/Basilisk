@@ -162,16 +162,14 @@ impl Evaluator {
     /// An undecidable scrutinee (gradual `Unknown`) makes the whole
     /// conditional gradual rather than guessing a branch.
     fn eval_cond(&mut self, env: &AliasEnv, cond: &CondTerm, args: &[TypeTerm], depth: u32) -> Eval {
-        let scrutinee = match self.eval_at(env, &cond.scrutinee, args, depth + 1) {
-            Eval::Value(ty) => ty,
-            Eval::Divergent => return Eval::Divergent,
+        let Some(scrutinee) = self.force_value(env, &cond.scrutinee, args, depth) else {
+            return Eval::Divergent;
         };
         if let InferredType::Union(members) = scrutinee {
             return self.distribute_cond(env, cond, members, args, depth);
         }
-        let against = match self.eval_at(env, &cond.against, args, depth + 1) {
-            Eval::Value(ty) => ty,
-            Eval::Divergent => return Eval::Divergent,
+        let Some(against) = self.force_value(env, &cond.against, args, depth) else {
+            return Eval::Divergent;
         };
         if matches!(scrutinee, InferredType::Unknown) {
             // Cannot decide the rewrite gradually — do not guess a branch.
@@ -183,6 +181,21 @@ impl Evaluator {
             &cond.else_arm
         };
         self.eval_at(env, arm, args, depth + 1)
+    }
+
+    /// Force a subterm one level deeper to a whnf value; `None` signals
+    /// divergence for the caller to short-circuit.
+    fn force_value(
+        &mut self,
+        env: &AliasEnv,
+        term: &TypeTerm,
+        args: &[TypeTerm],
+        depth: u32,
+    ) -> Option<InferredType> {
+        match self.eval_at(env, term, args, depth + 1) {
+            Eval::Value(ty) => Some(ty),
+            Eval::Divergent => None,
+        }
     }
 
     /// Distribution of a conditional over a union scrutinee: rewrite each
@@ -305,6 +318,20 @@ mod tests {
         TypeTerm::Ground(InferredType::Str)
     }
 
+    /// Arrange: an env holding the accepted 1-ary `wrap` operator
+    /// (`type wrap[T] = list[T]`).
+    fn env_with_wrap() -> AliasEnv {
+        let mut env = AliasEnv::default();
+        assert!(env.insert(
+            "wrap",
+            AliasDef {
+                arity: 1,
+                body: TypeTerm::List(Box::new(TypeTerm::Param(0))),
+            },
+        ));
+        env
+    }
+
     /// A mapped-type operator (`type Pair[T] = tuple[T, T]`) applies lazily.
     #[test]
     fn mapped_alias_applies_arguments() {
@@ -393,14 +420,7 @@ mod tests {
     /// again (the second call is a cache hit even with zero fuel left).
     #[test]
     fn applications_are_memoized() {
-        let mut env = AliasEnv::default();
-        assert!(env.insert(
-            "wrap",
-            AliasDef {
-                arity: 1,
-                body: TypeTerm::List(Box::new(TypeTerm::Param(0))),
-            },
-        ));
+        let env = env_with_wrap();
         let mut evaluator = Evaluator::new();
         let term = TypeTerm::Alias("wrap".to_owned(), vec![int()]);
         let first = evaluator.evaluate(&env, &term);
@@ -515,14 +535,7 @@ mod tests {
     /// passed as an argument applies through `Apply` (higher-order).
     #[test]
     fn operator_argument_applies_higher_order() {
-        let mut env = AliasEnv::default();
-        assert!(env.insert(
-            "wrap",
-            AliasDef {
-                arity: 1,
-                body: TypeTerm::List(Box::new(TypeTerm::Param(0))),
-            },
-        ));
+        let mut env = env_with_wrap();
         // type ApplyToInt[F] = F[int]  — F is an operator-kinded parameter.
         assert!(env.insert(
             "apply_to_int",
@@ -546,14 +559,7 @@ mod tests {
     /// never an invented error.
     #[test]
     fn ill_kinded_applications_are_gradual() {
-        let mut env = AliasEnv::default();
-        assert!(env.insert(
-            "wrap",
-            AliasDef {
-                arity: 1,
-                body: TypeTerm::List(Box::new(TypeTerm::Param(0))),
-            },
-        ));
+        let env = env_with_wrap();
         let wrong_arity = TypeTerm::Alias("wrap".to_owned(), vec![int(), int()]);
         assert_eq!(Evaluator::new().evaluate(&env, &wrong_arity), Eval::Divergent);
 

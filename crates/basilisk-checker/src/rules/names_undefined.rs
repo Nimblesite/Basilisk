@@ -55,16 +55,12 @@ impl Rule for UndefinedVariable {
 
         // Module-level class names are in scope for any function body, just like
         // module-level functions, variables, and imports.
-        let class_names: Vec<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
+        let class_names: Vec<&str> = basilisk_resolver::collect_names(&module.classes);
 
         // A PEP 695 `type` statement binds its alias name to a lazily evaluated
         // `TypeAliasType` object — a first-class runtime value (issue #372).
-        let type_alias_names: Vec<&str> = module
-            .pep695_scoping
-            .aliases
-            .iter()
-            .map(|alias| alias.name.as_str())
-            .collect();
+        let type_alias_names: Vec<&str> =
+            basilisk_resolver::collect_names(&module.pep695_scoping.aliases);
 
         let scope = ModuleScope {
             import_names: &import_names,
