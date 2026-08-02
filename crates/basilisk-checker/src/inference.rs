@@ -218,11 +218,32 @@ pub fn rhs_fully_determines_type(rhs: &RhsKind) -> bool {
 /// `Unknown` — never a guess.
 #[must_use]
 pub fn infer_expression_source(source: &str) -> InferredType {
+    infer_expression_source_in_scope(source, &std::collections::HashMap::new())
+}
+
+/// [`infer_expression_source`] with the surrounding scope's names bound.
+///
+/// The engine has no name resolution of its own, so a free name synthesizes to
+/// `Unknown` and every expression built on one goes with it — `s.upper()` is
+/// typeable only if `s` is. Callers that know what the names in view are
+/// (a display surface reading a resolved module) supply them here, so an
+/// expression receiver can be typed at all (GitHub #390).
+///
+/// An empty scope reproduces [`infer_expression_source`] exactly.
+#[must_use]
+pub fn infer_expression_source_in_scope<S: std::hash::BuildHasher>(
+    source: &str,
+    scope: &std::collections::HashMap<String, InferredType, S>,
+) -> InferredType {
     let Ok(parsed) = ruff_python_parser::parse_expression(source) else {
         return InferredType::Unknown;
     };
     let module = parsed.into_syntax();
-    let mut engine = crate::bidir::BidirEngine::new(std::collections::HashMap::new());
+    let globals = scope
+        .iter()
+        .map(|(name, ty)| (name.clone(), crate::bidir::Ty::from_inferred(ty)))
+        .collect();
+    let mut engine = crate::bidir::BidirEngine::new(globals);
     let ty = engine.synth(&module.body);
     let solution = engine.finish();
     ty.to_inferred(&solution.vars)

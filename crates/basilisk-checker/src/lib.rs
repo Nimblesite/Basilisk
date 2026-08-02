@@ -33,6 +33,7 @@
 
 pub mod bidir;
 pub mod cached;
+pub mod class_naming;
 pub mod collection_inference;
 pub mod context;
 pub mod diagnostic;

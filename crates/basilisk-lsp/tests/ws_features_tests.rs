@@ -26,6 +26,8 @@ mod ws_test_code_lens;
 mod ws_test_completion;
 #[path = "lsp/ws_test_completion_advanced.rs"]
 mod ws_test_completion_advanced;
+#[path = "lsp/ws_test_completion_receivers.rs"]
+mod ws_test_completion_receivers;
 #[path = "lsp/ws_test_configuration_adoption.rs"]
 mod ws_test_configuration_adoption;
 #[path = "lsp/ws_test_configuration_editor.rs"]
@@ -46,6 +48,10 @@ mod ws_test_execute_uv;
 mod ws_test_hover;
 #[path = "lsp/ws_test_inlay_hints.rs"]
 mod ws_test_inlay_hints;
+#[path = "lsp/ws_test_inlay_hints_display.rs"]
+mod ws_test_inlay_hints_display;
+#[path = "lsp/ws_test_inlay_hints_recovery.rs"]
+mod ws_test_inlay_hints_recovery;
 #[path = "lsp/ws_test_memory.rs"]
 mod ws_test_memory;
 #[path = "lsp/ws_test_processes.rs"]
