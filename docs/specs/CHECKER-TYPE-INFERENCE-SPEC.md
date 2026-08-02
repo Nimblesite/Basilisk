@@ -1157,44 +1157,40 @@ eviction (keep only interfaces) sits behind the query layer — see the threshol
 
 ### [TYPEINF-TARGET-TYPELEVEL] Type-level evaluation (PEP 827 readiness) {#TYPEINF-TARGET-TYPELEVEL}
 
-The `tyeval` module (`crates/basilisk-checker/src/tyeval/`) implements the
-complete Stage 3 groundwork: a bounded, memoized, call-by-need
-normalization-by-evaluation engine over type-level terms — ground, alias
-application, parameter, container (`list`/`set`/`dict`/`tuple`), union, named,
-**kind `Type → Type` operators** (`term::Kind`, `TypeTerm::Op`/`Apply`,
-higher-order application through parameters), and **conditional types**
-(`TypeTerm::Cond`: assignability-guarded rewrites that distribute over union
-scrutinees and never force the untaken arm) — with a gradual `Divergent`
-fallback, fuel/depth bounds, and Paterson/Coverage-analogue acceptance
-conditions (`accept::classify`) plus an opt-in `insert_undecidable` escape
-hatch. Normalization is exposed as memoized Salsa queries returning whnf types
-(`queries::{type_alias_env, alias_whnf}`), with cross-revision memoization via
-backdating pinned by `tests/tyeval_salsa_tests.rs`. The acceptance front door
-is wired into production through `generics_syntax_scoping`'s circular-alias
-check (`rules/generics_syntax_scoping/violations.rs::check_type_alias_circular`,
-the issue-#371 fix); full annotation-resolution wiring is Integration-stage
-([NARROWPLAN-INTEGRATION]). The engine is constrained as follows.
-
 Type-level computation with conditional/mapped types is Turing-complete
 territory (proven for both TypeScript and Python type hints — see
 [TYPEINF-RESEARCH-TYPELEVEL](#TYPEINF-RESEARCH-TYPELEVEL)), so the only safe
-engineering path is **bounded evaluation**: a call-by-need
-normalization-by-evaluation engine over type-level functions, built as
-memoized Salsa queries returning types in weak-head normal form (whnf), with:
+engineering path is **bounded evaluation**.
+`crates/basilisk-checker/src/tyeval/` implements it: a call-by-need
+normalization-by-evaluation engine over type-level terms, exposed as memoized
+Salsa queries returning weak-head normal forms
+(`queries::{type_alias_env, alias_whnf}`; cross-revision memoization via
+backdating pinned by `tests/tyeval_salsa_tests.rs`), with:
 
-- **fuel/depth bounds** (TypeScript's instantiation-depth model);
-- **memoization** of normalized results;
-- a **`Divergent`/`@Todo`-style fallback** that preserves the gradual
-  guarantee when evaluation is truncated;
+- **fuel/depth bounds** (TypeScript's instantiation-depth model) —
+  `eval::{EVAL_FUEL, EVAL_DEPTH}`;
+- **memoization** of normalized results — a per-evaluator application memo
+  under the Salsa layer;
+- a **`Divergent`/`@Todo`-style fallback** preserving the gradual guarantee on
+  truncation — `Eval::Divergent` projects to `Unknown`
+  ([TYPEINF-TARGET-GRADUAL](#TYPEINF-TARGET-GRADUAL)), never a diagnostic;
 - **GHC-style acceptance conditions** (Paterson/Coverage analogues) that
-  statically reject obviously-nonterminating type-level definitions, with an
-  opt-in "undecidable" escape hatch.
+  statically reject obviously-nonterminating definitions — `accept::classify`
+  gates `AliasEnv::insert` (self-references must sit under a type
+  constructor; union arms do not guard; self-application arguments must not
+  grow) — with the opt-in `insert_undecidable` escape hatch falling back to
+  fuel.
 
-Mapped types are **kind `Type → Type` operators**; conditional types are
-guarded rewrites keyed on a consistency/assignability check (`IsAssignable`
-in PEP 827), evaluated lazily so unused branches never diverge. Because
-bounded evaluation cannot be complete, some legitimate type-level programs
-will hit the bound — an inherent limitation, not an implementation gap.
+Mapped types are **kind `Type → Type` operators** (`term::Kind`,
+`TypeTerm::Op`/`Apply`, higher-order through parameters); conditional types
+are guarded rewrites keyed on a consistency/assignability check
+(`IsAssignable` in PEP 827) that distribute over union scrutinees and never
+force the untaken arm (`TypeTerm::Cond`). The acceptance conditions drive
+`generics_syntax_scoping`'s circular-alias check (issue #371); wiring
+normalization into annotation resolution is Integration-stage
+([NARROWPLAN-INTEGRATION]). Because bounded evaluation cannot be complete,
+some legitimate type-level programs will hit the bound — an inherent
+limitation, not an implementation gap.
 
 ---
 

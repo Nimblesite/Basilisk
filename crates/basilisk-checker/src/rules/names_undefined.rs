@@ -5,8 +5,9 @@
 //! base of an attribute/subscript chain (`return x.y`), a call argument, or the
 //! **callee of a call** (`return x()`) — that is not defined in scope. A name is
 //! considered defined if it is a parameter, a local assignment (`=`, `for`,
-//! `with`), a module-level function, class, variable, or import, an enclosing
-//! scope's binding, a cross-module imported symbol, or a builtin.
+//! `with`), a module-level function, class, variable, import, or PEP 695
+//! `type` alias, an enclosing scope's binding, a cross-module imported symbol,
+//! or a builtin.
 //!
 //! ```python
 //! def compute() -> int:
@@ -56,10 +57,20 @@ impl Rule for UndefinedVariable {
         // module-level functions, variables, and imports.
         let class_names: Vec<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
 
+        // A PEP 695 `type` statement binds its alias name to a lazily evaluated
+        // `TypeAliasType` object — a first-class runtime value (issue #372).
+        let type_alias_names: Vec<&str> = module
+            .pep695_scoping
+            .aliases
+            .iter()
+            .map(|alias| alias.name.as_str())
+            .collect();
+
         let scope = ModuleScope {
             import_names: &import_names,
             module_var_names: &module_var_names,
             class_names: &class_names,
+            type_alias_names: &type_alias_names,
             imported_symbols: &module.imported_symbols,
         };
 
@@ -74,6 +85,7 @@ struct ModuleScope<'a> {
     import_names: &'a [&'a str],
     module_var_names: &'a [&'a str],
     class_names: &'a [&'a str],
+    type_alias_names: &'a [&'a str],
     imported_symbols:
         &'a std::collections::HashMap<String, basilisk_resolver::scope::ExternalSymbol>,
 }
@@ -234,6 +246,7 @@ fn check_function(
             || scope.import_names.contains(&name_str)
             || scope.module_var_names.contains(&name_str)
             || scope.class_names.contains(&name_str)
+            || scope.type_alias_names.contains(&name_str)
             || scope.imported_symbols.contains_key(name_str)
             // Any function defined in the module (sibling, nested, or the function
             // itself for recursion) is a name in scope — `return helper()` and

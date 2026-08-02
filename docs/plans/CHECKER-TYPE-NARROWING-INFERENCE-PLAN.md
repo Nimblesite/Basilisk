@@ -773,55 +773,40 @@ the conformance ratchets (100% / 0 false positives) at every step.
 
 - [x] Build the normalization-by-evaluation engine for type-level functions as
   memoized Salsa queries returning whnf types.
-  — `crates/basilisk-checker/src/tyeval/` (`term`, `eval`, `lower`,
-  `queries`): PEP 695 `type` statements lower from the Ruff AST (including
-  string forward references, re-parsed via `ruff_python_parser`) into
-  `TypeTerm`s; `Evaluator::eval_at` normalizes to weak head normal form.
-  `queries::type_alias_env` and `queries::alias_whnf` are
-  `#[salsa::tracked]` queries; `tests/tyeval_salsa_tests.rs` proves via
-  the `EventDb` `WillExecute` log that an edit outside every alias
-  backdates the env and serves the whnf memo with ZERO re-executions,
-  while editing a definition re-normalizes exactly once.
+  — `crates/basilisk-checker/src/tyeval/`: PEP 695 `type` statements
+  lower from the Ruff AST (string forward refs re-parsed) into
+  `TypeTerm`s; `Evaluator::eval_at` normalizes to whnf behind the
+  `#[salsa::tracked]` queries `type_alias_env` / `alias_whnf`.
+  `tests/tyeval_salsa_tests.rs` proves via the `EventDb` `WillExecute`
+  log that an unrelated edit backdates the env and serves the memo (zero
+  re-executions) while an alias edit re-normalizes exactly once.
 - [x] Enforce fuel/depth bounds and memoization of normalized results.
-  — `eval.rs`: `EVAL_FUEL = 256` unfoldings and `EVAL_DEPTH = 64`
-  nesting, plus a per-`(alias, args)` memo inside the evaluator and the
-  Salsa memo across revisions. `tyeval_public_api_tests.rs` pins that
-  mutually recursive `Left`/`Right` burn fuel and truncate instead of
-  hanging.
+  — `eval.rs`: `EVAL_FUEL = 256`, `EVAL_DEPTH = 64`, per-`(alias, args)`
+  memo under the Salsa layer; `tyeval_public_api_tests.rs` pins that
+  mutually recursive `Left`/`Right` truncate instead of hanging.
 - [x] Add the `Divergent`/`@Todo` fallback preserving the gradual guarantee on
   truncated evaluation.
-  — `Eval::Divergent` projects to `InferredType::Unknown` via
-  `into_inferred` ([TYPEINF-TARGET-GRADUAL]): exhausted fuel/depth,
-  ill-kinded applications, and `Unknown` conditional scrutinees all
-  truncate gradually — never an invented diagnostic
-  (`undecidable_alias_truncates_gradually`,
-  `ill_kinded_applications_are_gradual`).
+  — `Eval::Divergent` projects to `InferredType::Unknown`
+  ([TYPEINF-TARGET-GRADUAL]): exhausted fuel/depth, ill-kinded
+  applications, and `Unknown` conditional scrutinees all truncate
+  gradually — never an invented diagnostic.
 - [x] Add GHC-style (Paterson/Coverage-analogue) acceptance conditions with an
   opt-in "undecidable" escape hatch.
-  — `accept.rs::classify`: `Unguarded` rejects self-references not under
-  a type constructor (union arms do NOT guard — conformance
-  `aliases_recursive.py` requires `type R3 = R3` and
-  `type R4[T] = T | R4[str]` to error while `T | list[R1[T]]` stays
-  clean); `NonRegular` rejects growing self-application arguments
-  (each must be a bare `Param` or closed). `AliasEnv::insert` is
-  acceptance-gated; `insert_undecidable` is the opt-in escape hatch with
-  fuel as the safety net. Wired into production via
-  `generics_syntax_scoping::check_type_alias_circular` — this replaced
-  the textual self-reference scan and fixed issue #371
-  (`recursive_pep695_alias_under_a_constructor_is_accepted`,
-  `unguarded_self_reference_is_still_rejected`).
+  — `accept::classify`: `Unguarded` (self-reference not under a type
+  constructor; union arms do NOT guard, matching conformance
+  `aliases_recursive.py`) and `NonRegular` (growing self-application
+  args). `AliasEnv::insert` is acceptance-gated; `insert_undecidable`
+  opts out with fuel as the safety net. Wired into
+  `generics_syntax_scoping::check_type_alias_circular`, fixing issue
+  #371 (pins in `tests/checker/generics_syntax_scoping_tests.rs`).
 - [x] Represent mapped types as kind `Type → Type` operators and conditional
   types as guarded rewrites on assignability, evaluated lazily
   (call-by-need).
-  — `term.rs`: `Kind::{Type, Operator}` with `AliasDef::kind()`;
-  `TypeTerm::Op`/`Apply` give aliases-as-operators first-class standing,
-  including higher-order application through parameters
-  (`operator_argument_applies_higher_order`). `TypeTerm::Cond`
-  (`CondTerm`) rewrites on `InferredType::is_assignable_to`, forces only
-  the taken arm (`conditional_rewrites_lazily`), distributes over union
-  scrutinees, and stays gradual on `Unknown` scrutinees. Annotation
-  surface syntax for conditionals awaits a ratified PEP 827; the engine
-  is ready behind it.
+  — `term.rs`: `Kind::{Type, Operator}`, `TypeTerm::Op`/`Apply` with
+  higher-order application through parameters; `TypeTerm::Cond` rewrites
+  on `is_assignable_to`, forces only the taken arm, distributes over
+  union scrutinees, and stays gradual on `Unknown` scrutinees. Surface
+  syntax awaits a ratified PEP 827; the engine is ready behind it.
 
 ### Superiority gate
 

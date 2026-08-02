@@ -1,8 +1,17 @@
 //! Implements [`aliases_type_statement`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 //! `aliases_type_statement`: Invalid RHS in a PEP 695 `type X = rhs` statement.
 //!
-//! PEP 695 requires the RHS of a `type` statement to be a valid type expression.
-//! The same restrictions as `TypeAlias` (`aliases_implicit`) apply.
+//! PEP 695 requires the RHS of a `type` statement to be a valid type
+//! expression. The RHS is validated **structurally** on the parsed `ruff`
+//! expression tree (issue #379 — substring matching both missed invalid
+//! forms and misfired on identifiers containing matched text): names,
+//! dotted names, `X | Y` unions, `None`, string forward references, and
+//! subscriptions of those are type expressions; every other expression
+//! form (literals, calls, lambdas, conditionals, comparisons,
+//! comprehensions, boolean operators) is not. Subscript *arguments* are
+//! never descended into — special forms like `Literal[...]`,
+//! `Callable[[...], X]`, and `Annotated[X, ...]` legitimately hold
+//! non-type expressions there.
 //!
 //! ```python
 //! type BadAlias1 = [int, str]   # E — list literal
@@ -13,6 +22,7 @@
 use std::collections::HashSet;
 
 use basilisk_resolver::{ResolvedModule, RhsKind, Span};
+use ruff_python_ast::{Expr, Operator};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
@@ -37,79 +47,29 @@ fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
     )
 }
 
-fn span_text(source: &str, span: Span) -> Option<&str> {
-    slice_span(source, span)
-}
-
-fn is_invalid_rhs(rhs: &str) -> bool {
-    let rhs = rhs.trim();
-    if rhs == "True" || rhs == "False" {
-        return true;
-    }
-    if rhs.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-        return true;
-    }
-    if rhs.starts_with('-')
-        && rhs[1..]
-            .trim()
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_digit())
-    {
-        return true;
-    }
-    if rhs.starts_with("f\"") || rhs.starts_with("f'") {
-        return true;
-    }
-    if rhs.starts_with('[') {
-        return true;
-    }
-    if rhs.starts_with('{') {
-        return true;
-    }
-    if rhs.starts_with('(') && paren_has_top_level_comma(rhs) {
-        return true;
-    }
-    if has_top_level_token(rhs, " if ") {
-        return true;
-    }
-    if has_top_level_token(rhs, " or ") || has_top_level_token(rhs, " and ") {
-        return true;
-    }
-    if rhs.contains("lambda") {
-        return true;
-    }
-    if rhs.starts_with("eval(") {
-        return true;
-    }
-    false
-}
-
-fn has_top_level_token(s: &str, token: &str) -> bool {
-    let mut depth = 0i32;
-    let bytes = s.as_bytes();
-    let tok = token.as_bytes();
-    let tok_len = tok.len();
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes.get(i).copied() {
-            Some(b'[' | b'(' | b'{') => depth += 1,
-            Some(b']' | b')' | b'}') => depth -= 1,
-            Some(_) if depth == 0 && bytes.get(i..i + tok_len) == Some(tok) => {
-                return true;
-            }
-            _ => {}
+/// Whether `expr` has the structural shape of a type expression.
+///
+/// A bare name bound to a non-type module variable (e.g. `x = 42` then
+/// `type Bad = x`) is rejected; subscript arguments are deliberately not
+/// descended into (special forms hold non-type expressions there).
+fn is_type_expression(expr: &Expr, non_type_names: &HashSet<&str>) -> bool {
+    match expr {
+        Expr::Name(name) => !non_type_names.contains(name.id.as_str()),
+        Expr::Attribute(_) | Expr::NoneLiteral(_) | Expr::StringLiteral(_) => true,
+        Expr::Subscript(subscript) => is_type_expression(&subscript.value, non_type_names),
+        Expr::BinOp(binop) if binop.op == Operator::BitOr => {
+            is_type_expression(&binop.left, non_type_names)
+                && is_type_expression(&binop.right, non_type_names)
         }
-        i += 1;
+        _ => false,
     }
-    false
 }
 
-fn paren_has_top_level_comma(s: &str) -> bool {
-    if s.len() < 2 {
-        return false;
-    }
-    crate::rules::shared::contains_top_level_comma(&s[1..s.len() - 1])
+/// Parse the RHS source text and validate it structurally. Text that does
+/// not parse as an expression is left to the parser's own diagnostics.
+fn rhs_is_invalid(rhs: &str, non_type_names: &HashSet<&str>) -> bool {
+    ruff_python_parser::parse_expression(rhs.trim())
+        .is_ok_and(|parsed| !is_type_expression(parsed.expr(), non_type_names))
 }
 
 /// Collect names of module-level variables that are not valid types.
@@ -135,15 +95,6 @@ fn collect_non_type_names(module: &ResolvedModule) -> HashSet<&str> {
         .collect()
 }
 
-/// Returns `true` when the RHS text is a bare identifier bound to a non-type variable.
-fn is_non_type_name(rhs: &str, non_type_names: &HashSet<&str>) -> bool {
-    let rhs = rhs.trim();
-    if rhs.contains('[') || rhs.contains('.') || rhs.contains('(') || rhs.contains(' ') {
-        return false;
-    }
-    non_type_names.contains(rhs)
-}
-
 /// Emits `aliases_type_statement` when a `type X = rhs` statement has an invalid type expression.
 pub(crate) struct TypeStatementInvalidRhs;
 
@@ -159,11 +110,10 @@ impl Rule for TypeStatementInvalidRhs {
         let non_type_names = collect_non_type_names(module);
 
         for stmt in &module.type_statements {
-            let Some(rhs) = span_text(source, stmt.rhs_span) else {
+            let Some(rhs) = slice_span(source, stmt.rhs_span) else {
                 continue;
             };
-            let rhs_trimmed = rhs.trim();
-            if is_invalid_rhs(rhs_trimmed) || is_non_type_name(rhs_trimmed, &non_type_names) {
+            if rhs_is_invalid(rhs, &non_type_names) {
                 diagnostics.push(make_diag(&stmt.name, stmt.name_span, path));
             }
         }
