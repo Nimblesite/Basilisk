@@ -126,7 +126,6 @@ fn collect_alias(alias: &StmtTypeAlias, ctx: &Ctx<'_>, source: &str, out: &mut P
     out.aliases.push(Pep695AliasDef {
         name: name.clone(),
         name_span: text_range_to_span(alias.name.range()),
-        self_ref_args: find_self_ref_args(&alias.value, &name),
         params,
         rhs_refs,
         rhs_bare_refs,
@@ -236,42 +235,6 @@ fn collect_bare_refs(expr: &Expr, out: &mut Vec<String>) {
             collect_bare_refs(&bin.right, out);
         }
         _ => {}
-    }
-}
-
-fn find_self_ref_args(expr: &Expr, alias_name: &str) -> Option<Vec<String>> {
-    match expr {
-        Expr::Subscript(sub) => {
-            if expr_simple_name(&sub.value).as_deref() == Some(alias_name) {
-                return Some(subscript_arg_names(&sub.slice));
-            }
-            find_self_ref_args(&sub.value, alias_name)
-                .or_else(|| find_self_ref_args(&sub.slice, alias_name))
-        }
-        Expr::BinOp(bin) => find_self_ref_args(&bin.left, alias_name)
-            .or_else(|| find_self_ref_args(&bin.right, alias_name)),
-        Expr::Tuple(tup) => tup
-            .elts
-            .iter()
-            .find_map(|elt| find_self_ref_args(elt, alias_name)),
-        Expr::Call(call) => call
-            .arguments
-            .args
-            .iter()
-            .find_map(|arg| find_self_ref_args(arg, alias_name)),
-        Expr::Starred(s) => find_self_ref_args(&s.value, alias_name),
-        _ => None,
-    }
-}
-
-fn subscript_arg_names(slice: &Expr) -> Vec<String> {
-    match slice {
-        Expr::Tuple(tup) => tup
-            .elts
-            .iter()
-            .map(|elt| expr_simple_name(elt).unwrap_or_default())
-            .collect(),
-        other => vec![expr_simple_name(other).unwrap_or_default()],
     }
 }
 

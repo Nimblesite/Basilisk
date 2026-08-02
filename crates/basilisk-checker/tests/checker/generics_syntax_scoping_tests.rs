@@ -142,3 +142,49 @@ fn self_recursion_through_list_ok() -> Result<(), Box<dyn std::error::Error>> {
     );
     Ok(())
 }
+
+/// Regression for [#371](https://github.com/Nimblesite/Basilisk/issues/371):
+/// a NON-generic PEP 695 alias whose self-reference sits under a type
+/// constructor is ordinary, terminating recursion — PEP 695 mandates it works.
+/// Every form below was rejected as "Circular type alias definition"; the
+/// generic spellings of the same shapes were already accepted, so the rule was
+/// inverted precisely for the parameterless case.
+/// Acceptance is decided by [TYPEINF-TARGET-TYPELEVEL]'s guardedness condition
+/// (`tyeval::accept`), not by "does the RHS mention my own name".
+#[test]
+fn recursive_pep695_alias_under_a_constructor_is_accepted(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for source in [
+        "type J = list[J]\n",
+        "type J = int | list[J]\n",
+        "type J = dict[str, J]\n",
+        "type JsonValue = None | bool | int | float | str | list[JsonValue] | dict[str, JsonValue]\n",
+        "type JsonValue = dict[str, JsonValue] | list[JsonValue] | str | int | float | bool | None\n",
+        "type RecursiveTuple = str | int | tuple[\"RecursiveTuple\", ...]\n",
+    ] {
+        let diags = run(source)?;
+        assert!(
+            !codes(&diags).contains(&"generics_syntax_scoping"),
+            "guarded recursive alias must not fire generics_syntax_scoping.\n\
+             source: {source}\n got: {:?}",
+            messages_for(&diags, "generics_syntax_scoping")
+        );
+    }
+    Ok(())
+}
+
+/// Companion to the above: unguarded self-reference — the self-reference is
+/// NOT under a constructor, so unfolding never reaches a head constructor —
+/// must still be rejected. This is the half of the old check that was right.
+#[test]
+fn unguarded_self_reference_is_still_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    for source in ["type X = X\n", "type X = int | X\n"] {
+        let diags = run(source)?;
+        assert!(
+            codes(&diags).contains(&"generics_syntax_scoping"),
+            "unguarded self-referential alias must still fire.\nsource: {source}\n got: {:?}",
+            codes(&diags)
+        );
+    }
+    Ok(())
+}

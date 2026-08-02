@@ -1157,11 +1157,23 @@ eviction (keep only interfaces) sits behind the query layer — see the threshol
 
 ### [TYPEINF-TARGET-TYPELEVEL] Type-level evaluation (PEP 827 readiness) {#TYPEINF-TARGET-TYPELEVEL}
 
-`tyeval.rs` implements isolated Stage 3 groundwork: a bounded, memoized,
-call-by-need evaluator for ground/alias/parameter/list/tuple/union terms with a
-gradual `Divergent` fallback and guarded-recursion acceptance. It is not wired
-into annotation resolution and does not yet implement conditional or mapped
-types. The target extension is constrained as follows.
+The `tyeval` module (`crates/basilisk-checker/src/tyeval/`) implements the
+complete Stage 3 groundwork: a bounded, memoized, call-by-need
+normalization-by-evaluation engine over type-level terms — ground, alias
+application, parameter, container (`list`/`set`/`dict`/`tuple`), union, named,
+**kind `Type → Type` operators** (`term::Kind`, `TypeTerm::Op`/`Apply`,
+higher-order application through parameters), and **conditional types**
+(`TypeTerm::Cond`: assignability-guarded rewrites that distribute over union
+scrutinees and never force the untaken arm) — with a gradual `Divergent`
+fallback, fuel/depth bounds, and Paterson/Coverage-analogue acceptance
+conditions (`accept::classify`) plus an opt-in `insert_undecidable` escape
+hatch. Normalization is exposed as memoized Salsa queries returning whnf types
+(`queries::{type_alias_env, alias_whnf}`), with cross-revision memoization via
+backdating pinned by `tests/tyeval_salsa_tests.rs`. The acceptance front door
+is wired into production through `generics_syntax_scoping`'s circular-alias
+check (`rules/generics_syntax_scoping/violations.rs::check_type_alias_circular`,
+the issue-#371 fix); full annotation-resolution wiring is Integration-stage
+([NARROWPLAN-INTEGRATION]). The engine is constrained as follows.
 
 Type-level computation with conditional/mapped types is Turing-complete
 territory (proven for both TypeScript and Python type hints — see

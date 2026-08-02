@@ -448,3 +448,46 @@ def lookup(items: dict[str, int], key: str) -> int | None:
     );
     Ok(())
 }
+
+#[test]
+fn pep695_type_alias_in_return_cast_is_defined() -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #372: a PEP 695 `type` statement binds its name at module scope
+    // (a lazily evaluated `TypeAliasType` object), so referencing the alias
+    // in a return-position `cast(...)` call is NOT an undefined name.
+    let source = "\
+from typing import cast
+
+type Fahrenheit = float
+
+
+def to_f(celsius: float) -> Fahrenheit:
+    return cast(Fahrenheit, celsius * 9 / 5 + 32)
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a `type` statement alias used in a return cast must not fire E0018, got: {:?}",
+        messages_for(&diags, "names_undefined")
+    );
+    Ok(())
+}
+
+#[test]
+fn pep695_type_alias_returned_bare_is_defined() -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #372 (general form): the alias object itself is a first-class
+    // runtime value — `return Alias` is a defined-name reference.
+    let source = "\
+type Point = tuple[float, float]
+
+
+def alias() -> object:
+    return Point
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "returning the alias object itself must not fire E0018, got: {:?}",
+        messages_for(&diags, "names_undefined")
+    );
+    Ok(())
+}
