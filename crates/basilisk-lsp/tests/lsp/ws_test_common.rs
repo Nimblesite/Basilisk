@@ -203,15 +203,16 @@ python-version = \"3.12\"\n\
     ///
     /// Returns an error if no diagnostics notification arrives within the timeout.
     pub async fn wait_for_diagnostics(&mut self) -> TestResult<String> {
-        for _ in 0..10 {
+        for _ in 0..20 {
             let Some(msg) = self.recv().await else {
                 return Err("wait_for_diagnostics: timed out waiting for server message".into());
             };
             if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") {
                 return Ok(msg);
             }
+            self.auto_respond_if_server_request(&msg).await;
         }
-        Err("wait_for_diagnostics: received 10 messages but none were publishDiagnostics".into())
+        Err("wait_for_diagnostics: received 20 messages but none were publishDiagnostics".into())
     }
 
     /// Send a `textDocument/didClose` notification for `uri`.
@@ -232,6 +233,10 @@ python-version = \"3.12\"\n\
 
     /// Send a request and wait for a response with a matching id.
     ///
+    /// Server-initiated requests (e.g. `workspace/applyEdit`) arriving while
+    /// waiting are auto-answered so the server never blocks waiting on the
+    /// client — mirroring `LspStdioFixture::auto_respond_if_server_request`.
+    ///
     /// # Errors
     ///
     /// Returns an error if sending the request fails.
@@ -250,13 +255,45 @@ python-version = \"3.12\"\n\
         .await?;
 
         let id_str = format!("\"id\":{id}");
-        for _ in 0..10 {
+        for _ in 0..20 {
             let Some(msg) = self.recv().await else { break };
             if msg.contains(&id_str) {
                 return Ok(Some(msg));
             }
+            self.auto_respond_if_server_request(&msg).await;
         }
         Ok(None)
+    }
+
+    /// If `msg` is a server-to-client request (it has both `id` and `method`),
+    /// send back a success response so the server does not block. `workspace/
+    /// applyEdit` is answered with `{ "applied": true }`; anything else gets
+    /// `null`. This is the WebSocket analogue of the stdio fixture's helper and
+    /// lets fix/organize-imports commands complete against an in-process server.
+    async fn auto_respond_if_server_request(&mut self, msg: &str) {
+        let Ok(parsed) = serde_json::from_str::<serde_json::Value>(msg) else {
+            return;
+        };
+        let Some(req_id) = parsed.get("id") else {
+            return;
+        };
+        if parsed.get("method").is_none() {
+            return;
+        }
+        let result = if parsed.get("method")
+            == Some(&serde_json::Value::String("workspace/applyEdit".to_owned()))
+        {
+            serde_json::json!({ "applied": true })
+        } else {
+            serde_json::Value::Null
+        };
+        let _ = self
+            .send_json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": result
+            }))
+            .await;
     }
 }
 

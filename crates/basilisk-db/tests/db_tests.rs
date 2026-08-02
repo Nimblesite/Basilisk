@@ -23,7 +23,7 @@ use salsa::{Database, Setter};
 
 /// A derived query whose only input is the file text. We assert on its
 /// execution count by name.
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn observed_len(db: &dyn Db, file: SourceFile) -> usize {
     file.text(db).len()
 }

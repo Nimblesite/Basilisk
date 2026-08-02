@@ -7,3 +7,20 @@
 # and the fresh clone under target/ are git-ignored and already skipped by Ruff's
 # respect-gitignore default, so no extra excludes are needed.
 extend-exclude = []
+
+# Ruff 0.16 added `*.md` to the default `include`, which formats Python fenced
+# blocks inside Markdown. That is out of scope here: our prose (docs/specs/,
+# book/manuscript/, website/src/) hand-aligns inline comments so a snippet reads
+# as a table of "expression → inferred type", and the formatter collapses that
+# alignment and injects PEP 8 blank lines into three-line illustrations. Declare
+# the scope positively — Ruff's own pre-0.16 default set, minus Markdown — so a
+# future default-list change cannot silently widen the gate again.
+include = [
+    "*.py",
+    "*.pyi",
+    "*.pyw",
+    "*.ipynb",
+    "**/pyproject.toml",
+    "**/ruff.toml",
+    "**/.ruff.toml",
+]

@@ -38,7 +38,7 @@ use crate::types::InferredType;
 const CYCLE_ITERATION_CAP: u32 = 16;
 
 /// What kind of top-level definition a [`Definition`] is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub enum DefKind {
     /// A `def`/`async def` at module level.
     Function,
@@ -57,11 +57,13 @@ pub enum DefKind {
 #[salsa::tracked(debug)]
 pub struct Definition<'db> {
     /// The file this definition belongs to.
+    #[returns(copy)]
     pub file: SourceFile,
     /// The defined name.
     #[returns(ref)]
     pub name: String,
     /// Definition kind.
+    #[returns(copy)]
     pub kind: DefKind,
     /// The definition's own source slice (decorators included).
     #[returns(ref)]
@@ -121,7 +123,7 @@ fn create_definition<'db>(
 /// sentinel ([`cycle_initial`] = `Unknown`, [TYPEINF-EXCEEDS-NOUNKNOWN])
 /// until the types stabilise or [`CYCLE_ITERATION_CAP`] falls back to the
 /// sentinel.
-#[salsa::tracked(cycle_fn = definition_type_cycle_recover, cycle_initial = definition_type_cycle_initial)]
+#[salsa::tracked(returns(clone), cycle_fn = definition_type_cycle_recover, cycle_initial = definition_type_cycle_initial)]
 pub fn definition_type<'db>(db: &'db dyn Db, def: Definition<'db>) -> InferredType {
     match def.kind(db) {
         DefKind::Function => function_type(def.source(db)),

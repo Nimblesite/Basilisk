@@ -56,11 +56,11 @@
         "perPlatformArtifact": false
       },
       "asset": {
-        "source": "pip:debugpy==1.8.20",
+        "source": "pip:debugpy==1.8.21",
         "target": "bundled/debugpy",
         "bundle": true,
       "contentHash": true,
-      "sha256": "5be9bed9ae3be00665a06acaa48f8329d2b9632f15fd09f6a9a8c8d9907e54d7",
+      "sha256": "b1e37d333663c8851516a47364ef473da127f9caebe4417e6df6f5825a7e9a92",
         "downloadOnFirstUse": false
       },
       "verifyStartup": false,

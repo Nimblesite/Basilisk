@@ -1,5 +1,5 @@
 {
-  "carrier_sha256": "3c915e37fbd19cd48681f19d4624d392746e5575633ed8d4d2ff901f463b5b52",
+  "carrier_sha256": "9b531de5400220c09af0fdbf8c243f4eec43b4dcc10b887de9ba10f948f8d4bb",
   "dependencies": [
     {
       "name": "@nimblesite/shipwright-core",
@@ -56,18 +56,18 @@
       "legal_files": [
         {
           "label": "LICENSE.md",
-          "source": "node_modules/brace-expansion/node_modules/balanced-match/LICENSE.md",
+          "source": "node_modules/balanced-match/LICENSE.md",
           "sha256": "d408f38ffa3355c5faec517153295338892eb0f1ea43f57874bb23c6075979b5"
         }
       ]
     },
     {
       "name": "brace-expansion",
-      "version": "5.0.7",
+      "version": "5.0.9",
       "license": "MIT",
       "repository": "git+https://github.com/juliangruber/brace-expansion.git",
-      "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.7.tgz",
-      "integrity": "sha512-7oFy703dxfY3/NLxC1fh2SUCQ0H9rmAY+5EpDVfXjUTTs+HEwR2nYaqLv+GWcTsumwxPfiz6CzCNkwXwBUwqCA==",
+      "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.9.tgz",
+      "integrity": "sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==",
       "legal_files": [
         {
           "label": "LICENSE",
@@ -78,11 +78,11 @@
     },
     {
       "name": "minimatch",
-      "version": "10.2.5",
+      "version": "10.2.6",
       "license": "BlueOak-1.0.0",
       "repository": "git@github.com:isaacs/minimatch",
-      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.5.tgz",
-      "integrity": "sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg==",
+      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.6.tgz",
+      "integrity": "sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==",
       "legal_files": [
         {
           "label": "LICENSE.md",
@@ -93,11 +93,11 @@
     },
     {
       "name": "semver",
-      "version": "7.8.2",
+      "version": "7.8.5",
       "license": "ISC",
       "repository": "git+https://github.com/npm/node-semver.git",
-      "resolved": "https://registry.npmjs.org/semver/-/semver-7.8.2.tgz",
-      "integrity": "sha512-c8jsqUZm3omBOI66G90z1Dyw5z622G8oLG+omfsHBJf3CWQTlOcwOjvOG6wtiNfW6anKm/eA39LMwMtMez2TiQ==",
+      "resolved": "https://registry.npmjs.org/semver/-/semver-7.8.5.tgz",
+      "integrity": "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==",
       "legal_files": [
         {
           "label": "LICENSE",
@@ -202,5 +202,5 @@
       ]
     }
   ],
-  "production_graph_sha256": "922d9bba467a8f83be41a8d8781c1c25de27456c0effbef572ce65952ade6aa6"
+  "production_graph_sha256": "fde5a25b5c691b39aebc36a41d962ca60c7bbe4bb7e0e61093d88505a383e010"
 }

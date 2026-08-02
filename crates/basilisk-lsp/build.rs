@@ -14,10 +14,10 @@ use std::error::Error;
 use std::path::Path;
 
 /// The pinned Ruff rev and the upstream release tag it corresponds to.
-/// Must match the `rev` pinned in the workspace `Cargo.toml` (rev 7c645a9 ==
-/// tag 0.15.17). The pip-installed `ruff` binary in CI pins the same release.
-const PINNED_RUFF_REV: &str = "7c645a9a1be8258b9f9e005208a55a0b7e8e18f0";
-const PINNED_RUFF_VERSION: &str = "0.15.17";
+/// Must match the `rev` pinned in the workspace `Cargo.toml` (rev 80790b3 ==
+/// tag 0.16.1). The pip-installed `ruff` binary in CI pins the same release.
+const PINNED_RUFF_REV: &str = "80790b348b5188e7fc253665540f442c6ec7dd05";
+const PINNED_RUFF_VERSION: &str = "0.16.1";
 
 fn main() -> Result<(), Box<dyn Error>> {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;

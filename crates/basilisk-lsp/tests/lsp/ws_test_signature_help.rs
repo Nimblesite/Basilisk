@@ -223,26 +223,28 @@ p: Point = Point(1, 2)
         "signature help for constructor should not be null: {resp}"
     );
 
-    // If we get a valid signature, verify it shows the parameters.
-    if let Some(signatures) = result["signatures"].as_array() {
-        if let Some(sig) = signatures.first() {
-            let label = sig["label"].as_str().unwrap_or("");
-            assert!(
-                label.contains('x') && label.contains('y'),
-                "constructor signature should show parameters x and y: {label}"
-            );
-            // self should not appear in the label.
-            let params = sig["parameters"].as_array();
-            if let Some(params) = params {
-                let param_labels: Vec<&str> =
-                    params.iter().filter_map(|p| p["label"].as_str()).collect();
-                assert!(
-                    !param_labels.contains(&"self"),
-                    "constructor signature should NOT include 'self': {param_labels:?}"
-                );
-            }
-        }
-    }
+    // Assert on the signature itself. Nesting these in `if let Some(..)` meant
+    // an absent or empty `signatures` array verified nothing at all.
+    let signatures = result["signatures"]
+        .as_array()
+        .ok_or_else(|| format!("signature help must carry a signatures array: {resp}"))?;
+    let sig = signatures
+        .first()
+        .ok_or_else(|| format!("signature help must offer at least one signature: {resp}"))?;
+    let label = sig["label"].as_str().unwrap_or_default();
+    assert!(
+        label.contains('x') && label.contains('y'),
+        "constructor signature should show parameters x and y: {label}"
+    );
+    // `self` is implicit for a constructor and must never be offered.
+    let param_labels: Vec<&str> = sig["parameters"]
+        .as_array()
+        .map(|params| params.iter().filter_map(|p| p["label"].as_str()).collect())
+        .unwrap_or_default();
+    assert!(
+        !param_labels.contains(&"self"),
+        "constructor signature should NOT include 'self': {param_labels:?}"
+    );
 
     Ok(())
 }
