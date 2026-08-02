@@ -59,8 +59,13 @@ impl Rule for UndefinedVariable {
 
         // A PEP 695 `type` statement binds its alias name to a lazily evaluated
         // `TypeAliasType` object — a first-class runtime value (issue #372).
-        let type_alias_names: Vec<&str> =
-            basilisk_resolver::collect_names(&module.pep695_scoping.aliases);
+        // Only MODULE-scope aliases are visible to every function body:
+        // class-scope names don't nest, and function-scope aliases are local
+        // (they reach `all_local_assigns`, so same-function use stays clean).
+        let type_alias_names: Vec<&str> = basilisk_resolver::collect_names_where(
+            &module.pep695_scoping.aliases,
+            |alias| !alias.in_function && !alias.in_class,
+        );
 
         let scope = ModuleScope {
             import_names: &import_names,

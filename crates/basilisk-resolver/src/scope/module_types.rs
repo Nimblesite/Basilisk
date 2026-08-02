@@ -311,6 +311,10 @@ pub struct TypeStatementInfo {
     pub rhs_span: Span,
     /// Span of the name token.
     pub name_span: Span,
+    /// The statement's own type-parameter names (`T` in `type X[T] = rhs`).
+    /// PEP 695 binds these in the alias's annotation scope, shadowing any
+    /// module-level binding of the same name inside the RHS.
+    pub param_names: Vec<String>,
 }
 
 /// Information about an `Annotated[...]` subscription with too few arguments.

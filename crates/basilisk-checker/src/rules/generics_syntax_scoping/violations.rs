@@ -291,6 +291,7 @@ pub(super) fn check_type_alias_circular(
 ) {
     use crate::tyeval::{classify, lower_module_aliases, Acceptance};
 
+    let mut reported: HashSet<String> = HashSet::new();
     if let Some(parsed) = crate::rules::shared::parse_module(module) {
         for lowered in lower_module_aliases(&parsed.ast) {
             let detail = match classify(&lowered.name, &lowered.def) {
@@ -298,6 +299,7 @@ pub(super) fn check_type_alias_circular(
                 Acceptance::Unguarded => "references itself",
                 Acceptance::NonRegular => "references itself with different type arguments",
             };
+            let _ = reported.insert(lowered.name.clone());
             push_circular(
                 &lowered.name,
                 crate::span_util::text_range_to_span(lowered.name_range),
@@ -308,15 +310,17 @@ pub(super) fn check_type_alias_circular(
         }
     }
 
-    check_mutual_alias_cycles(scoping, path, diagnostics);
+    check_mutual_alias_cycles(scoping, &reported, path, diagnostics);
 }
 
 /// Detect *mutual* / longer cycles between aliases connected by bare references
 /// (`type A = B`, `type B = A`). Only top-level bare references count — recursion
 /// through a container (`type A = list[B]`) terminates and is legitimate, so it
-/// is excluded via `rhs_bare_refs`.
+/// is excluded via `rhs_bare_refs`. Aliases in `already_reported` were flagged
+/// by the acceptance pass and are skipped — one diagnostic per alias.
 fn check_mutual_alias_cycles(
     scoping: &Pep695Scoping,
+    already_reported: &HashSet<String>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -329,7 +333,9 @@ fn check_mutual_alias_cycles(
         .collect();
 
     for alias in &scoping.aliases {
-        if reaches_self(&alias.name, alias, &alias_by_name) {
+        if !already_reported.contains(alias.name.as_str())
+            && reaches_self(&alias.name, alias, &alias_by_name)
+        {
             push_circular(
                 &alias.name,
                 alias.name_span,

@@ -10,7 +10,7 @@
 
 use std::collections::HashSet;
 
-use ruff_python_ast::{Expr, ExceptHandler, ModModule, Operator, Stmt, StmtTypeAlias};
+use ruff_python_ast::{Expr, ExceptHandler, ExprSubscript, ModModule, Operator, Stmt, StmtTypeAlias};
 use ruff_text_size::{Ranged as _, TextRange};
 
 use crate::types::InferredType;
@@ -29,8 +29,10 @@ pub struct LoweredAlias {
 }
 
 /// Lower every PEP 695 `type` statement in `module` (at any nesting depth)
-/// into [`LoweredAlias`] definitions. Later duplicates shadow earlier ones,
-/// matching Python's rebinding semantics.
+/// into [`LoweredAlias`] definitions, in source order. Duplicate names are
+/// all returned; a caller registering them in order gets last-binding-wins
+/// (modulo [`super::AliasEnv::insert`]'s acceptance gate, which skips
+/// rejected definitions).
 #[must_use]
 pub fn lower_module_aliases(module: &ModModule) -> Vec<LoweredAlias> {
     let mut stmts: Vec<&StmtTypeAlias> = Vec::new();
@@ -133,7 +135,7 @@ impl LowerCtx<'_> {
     pub fn lower(&self, expr: &Expr) -> TypeTerm {
         match expr {
             Expr::Name(name) => self.lower_name(name.id.as_str()),
-            Expr::Subscript(sub) => self.lower_subscript(&sub.value, &sub.slice),
+            Expr::Subscript(sub) => self.lower_subscript(sub),
             Expr::BinOp(bin) if bin.op == Operator::BitOr => {
                 let mut arms = Vec::new();
                 self.lower_union_arm(&bin.left, &mut arms);
@@ -168,12 +170,30 @@ impl LowerCtx<'_> {
     /// A subscript `base[args]`: builtin containers get their dedicated
     /// constructors, module aliases become applications, and any other
     /// base is a [`TypeTerm::Named`] constructor head.
-    fn lower_subscript(&self, base: &Expr, slice: &Expr) -> TypeTerm {
-        let args = self.lower_subscript_args(slice);
-        let Some(base_name) = dotted_text(base) else {
+    ///
+    /// `Union[..]`, `Optional[..]`, and `Annotated[..]` (bare or
+    /// `typing.`-qualified) are *transparent* type operators — semantically
+    /// identical to their `|`-spellings — so they lower to [`TypeTerm::Union`]
+    /// (or the underlying type), NEVER to a `Named` constructor: they must
+    /// not guard recursion (`type X = Union[int, X]` is as circular as
+    /// `type X = int | X`).
+    fn lower_subscript(&self, sub: &ExprSubscript) -> TypeTerm {
+        let args = self.lower_subscript_args(sub);
+        let Some(base_name) = dotted_text(&sub.value) else {
             return TypeTerm::Ground(InferredType::Unknown);
         };
         match (base_name.as_str(), args.len()) {
+            ("Union" | "typing.Union", _) => TypeTerm::Union(args),
+            ("Optional" | "typing.Optional", 1) => match args.into_iter().next() {
+                Some(inner) => {
+                    TypeTerm::Union(vec![inner, TypeTerm::Ground(InferredType::None_)])
+                }
+                None => TypeTerm::Ground(InferredType::Unknown),
+            },
+            ("Annotated" | "typing.Annotated", _) => args
+                .into_iter()
+                .next()
+                .unwrap_or(TypeTerm::Ground(InferredType::Unknown)),
             ("list" | "List", 1) => match args.into_iter().next() {
                 Some(element) => TypeTerm::List(Box::new(element)),
                 None => TypeTerm::Ground(InferredType::Unknown),
@@ -198,12 +218,8 @@ impl LowerCtx<'_> {
     /// Subscript arguments: a tuple slice contributes each element;
     /// `...` (as in `tuple[X, ...]` / `Callable[..., R]`) contributes
     /// nothing structural and is dropped.
-    fn lower_subscript_args(&self, slice: &Expr) -> Vec<TypeTerm> {
-        let elements: Vec<&Expr> = match slice {
-            Expr::Tuple(tuple) => tuple.elts.iter().collect(),
-            other => vec![other],
-        };
-        elements
+    fn lower_subscript_args(&self, sub: &ExprSubscript) -> Vec<TypeTerm> {
+        basilisk_parser::subscript_elements(sub)
             .into_iter()
             .filter(|element| !matches!(element, Expr::EllipsisLiteral(_)))
             .map(|element| self.lower(element))
@@ -311,6 +327,74 @@ mod tests {
                 "{source}"
             );
         }
+    }
+
+    /// `Union[..]`, `Optional[..]`, and `Annotated[..]` are transparent type
+    /// operators, not constructors: recursion through them is exactly as
+    /// unguarded as through their `|`-spellings, while recursion through a
+    /// real constructor INSIDE them stays accepted.
+    #[test]
+    fn transparent_special_forms_do_not_guard_recursion() {
+        for (source, name, expected) in [
+            ("type X = Union[int, X]\n", "X", Acceptance::Unguarded),
+            ("type X = typing.Union[int, X]\n", "X", Acceptance::Unguarded),
+            ("type Y = Optional[Y]\n", "Y", Acceptance::Unguarded),
+            ("type Y = typing.Optional[Y]\n", "Y", Acceptance::Unguarded),
+            ("type Z = Annotated[Z, \"meta\"]\n", "Z", Acceptance::Unguarded),
+            ("type A = Union[int, list[A]]\n", "A", Acceptance::Accepted),
+            ("type B = Optional[list[B]]\n", "B", Acceptance::Accepted),
+            ("type C = Annotated[list[C], \"meta\"]\n", "C", Acceptance::Accepted),
+        ] {
+            assert_eq!(classify_source_alias(source, name), Some(expected), "{source}");
+        }
+    }
+
+    /// Every compound-statement body is walked for `type` statements —
+    /// deleting any [`collect_type_aliases`] arm loses an alias here.
+    #[test]
+    fn aliases_are_collected_from_every_compound_statement_body() {
+        let source = "\
+if cond:
+    type A1 = int
+elif cond:
+    type A2 = int
+else:
+    type A3 = int
+for item in items:
+    type B1 = int
+else:
+    type B2 = int
+while cond:
+    type C1 = int
+else:
+    type C2 = int
+with ctx:
+    type D1 = int
+try:
+    type E1 = int
+except Exception:
+    type E2 = int
+else:
+    type E3 = int
+finally:
+    type E4 = int
+match value:
+    case 1:
+        type F1 = int
+class Holder:
+    type G1 = int
+def scope():
+    type H1 = int
+";
+        let aliases = lower_all(source);
+        let names: Vec<&str> = aliases.iter().map(|alias| alias.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "A1", "A2", "A3", "B1", "B2", "C1", "C2", "D1", "E1", "E2", "E3", "E4", "F1",
+                "G1", "H1"
+            ]
+        );
     }
 
     /// Growing recursion lowers as non-regular (the Paterson/Coverage

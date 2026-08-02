@@ -51,7 +51,10 @@ fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
 ///
 /// A bare name bound to a non-type module variable (e.g. `x = 42` then
 /// `type Bad = x`) is rejected; subscript arguments are deliberately not
-/// descended into (special forms hold non-type expressions there).
+/// descended into (special forms hold non-type expressions there). The
+/// caller must already have removed the statement's own type parameters
+/// from `non_type_names` — PEP 695 binds them in the alias's annotation
+/// scope, shadowing same-named module bindings.
 fn is_type_expression(expr: &Expr, non_type_names: &HashSet<&str>) -> bool {
     match expr {
         Expr::Name(name) => !non_type_names.contains(name.id.as_str()),
@@ -113,7 +116,15 @@ impl Rule for TypeStatementInvalidRhs {
             let Some(rhs) = slice_span(source, stmt.rhs_span) else {
                 continue;
             };
-            if rhs_is_invalid(rhs, &non_type_names) {
+            // The statement's own type parameters shadow module bindings
+            // inside the RHS (PEP 695 annotation scope): `T = 1` followed by
+            // `type Wrapper[T] = T | None` is valid.
+            let visible: HashSet<&str> = non_type_names
+                .iter()
+                .copied()
+                .filter(|name| !stmt.param_names.iter().any(|param| param == name))
+                .collect();
+            if rhs_is_invalid(rhs, &visible) {
                 diagnostics.push(make_diag(&stmt.name, stmt.name_span, path));
             }
         }

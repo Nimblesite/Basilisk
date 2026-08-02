@@ -496,10 +496,7 @@ pub(crate) fn class_generic_param_names(cls: &ruff_python_ast::StmtClassDef) -> 
         if base_name != "Protocol" && base_name != "Generic" {
             continue;
         }
-        let args: Vec<&Expr> = match sub.slice.as_ref() {
-            Expr::Tuple(t) => t.elts.iter().collect(),
-            other => vec![other],
-        };
+        let args = basilisk_parser::subscript_elements(sub);
         names.extend(args.iter().filter_map(|a| match a {
             Expr::Name(n) => Some(n.id.to_string()),
             _ => None,

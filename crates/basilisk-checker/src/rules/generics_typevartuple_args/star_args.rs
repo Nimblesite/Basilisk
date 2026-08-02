@@ -110,10 +110,7 @@ fn parse_star_shape(expr: &Expr) -> Option<StarShape> {
     if ann_str(&sub.value) != "tuple" {
         return None;
     }
-    let elts: Vec<&Expr> = match sub.slice.as_ref() {
-        Expr::Tuple(t) => t.elts.iter().collect(),
-        single => vec![single],
-    };
+    let elts = basilisk_parser::subscript_elements(sub);
 
     if let [elem, Expr::EllipsisLiteral(_)] = elts.as_slice() {
         return Some(StarShape::Homogeneous(ann_str(elem)));

@@ -417,6 +417,11 @@ pub(super) fn collect_type_statements(stmts: &[Stmt]) -> Vec<TypeStatementInfo> 
                         name: name_str,
                         rhs_span: text_range_to_span(ta.value.range()),
                         name_span: text_range_to_span(ta.name.range()),
+                        param_names: ta
+                            .type_params
+                            .as_deref()
+                            .map(|tps| tps.type_params.iter().map(type_param_name).collect())
+                            .unwrap_or_default(),
                     });
                 }
             }

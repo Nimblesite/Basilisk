@@ -129,6 +129,38 @@ fn bytes_literal_rhs_fires() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// The statement's own type parameters shadow module-level bindings inside
+/// the RHS (PEP 695 annotation scope): `T = 1` must not make `T` invalid in
+/// `type Wrapper[T] = ...` — the RHS `T` is the type parameter, not the
+/// module variable.
+#[test]
+fn alias_own_type_parameter_shadowing_a_module_var_is_not_flagged(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for form in [
+        "T = 1\ntype Wrapper[T] = T | None\n",
+        "T = 1\ntype Alias[T] = T\n",
+        "T = 1\ntype Boxed[T] = list[T]\n",
+    ] {
+        assert!(
+            !fires(form)?,
+            "the alias's own type parameter must shadow the module var: {form}"
+        );
+    }
+    Ok(())
+}
+
+/// The shadowing is per-statement: a DIFFERENT alias without that type
+/// parameter still sees the non-type module binding.
+#[test]
+fn non_type_module_var_still_fires_without_the_shadowing_param(
+) -> Result<(), Box<dyn std::error::Error>> {
+    assert!(
+        fires("T = 1\ntype Wrapper[U] = U | None\ntype Bad = T\n")?,
+        "an alias without the `T` parameter still sees the non-type `T = 1`"
+    );
+    Ok(())
+}
+
 /// Special-form subscript ARGUMENTS legitimately contain literals, lists,
 /// and ellipses — the validator must never descend into them.
 #[test]

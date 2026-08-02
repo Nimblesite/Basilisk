@@ -79,6 +79,13 @@ fn collect_statement_assigns(stmts: &[Stmt]) -> Vec<String> {
                 // like a nested function. Do NOT recurse into the class body.
                 out.push(class.name.to_string());
             }
+            Stmt::TypeAlias(node) => {
+                // A PEP 695 `type` statement binds its alias name in the
+                // enclosing scope, exactly like a `def`.
+                if let Some(name) = expr_simple_name(&node.name) {
+                    out.push(name);
+                }
+            }
             Stmt::Import(node) => {
                 // A function-local import binds names in the enclosing scope and
                 // is reachable by nested scopes (incl. methods of nested classes).
@@ -149,6 +156,12 @@ pub(super) fn collect_unconditional_assigns(stmts: &[Stmt]) -> Vec<String> {
             }
             Stmt::ClassDef(class) => {
                 assignments.push(class.name.to_string());
+            }
+            Stmt::TypeAlias(node) => {
+                // A `type` statement binds unconditionally, like a `def`.
+                if let Some(name) = expr_simple_name(&node.name) {
+                    assignments.push(name);
+                }
             }
             Stmt::Import(node) => {
                 // Top-level imports bind their names unconditionally.

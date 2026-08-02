@@ -188,3 +188,82 @@ fn unguarded_self_reference_is_still_rejected() -> Result<(), Box<dyn std::error
     }
     Ok(())
 }
+
+/// `Union[..]`/`Optional[..]`/`Annotated[..]` are transparent operators —
+/// semantically the `|`-spellings — so recursion through them is exactly as
+/// circular as `type X = int | X` (conformance `aliases_recursive.py` marks
+/// the old-style twin `# E: cyclical reference`), while recursion through a
+/// real constructor INSIDE them stays valid.
+#[test]
+fn union_spelled_self_reference_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    for source in [
+        "type X = Union[int, X]\n",
+        "type Y = Optional[Y]\n",
+        "type Z = Annotated[Z, \"meta\"]\n",
+    ] {
+        let diags = run(source)?;
+        assert!(
+            messages_for(&diags, "generics_syntax_scoping")
+                .iter()
+                .any(|m| m.contains("Circular")),
+            "Union/Optional/Annotated-spelled self-reference must fire.\nsource: {source}"
+        );
+    }
+    for source in [
+        "type A = Union[int, list[A]]\n",
+        "type B = Optional[list[B]]\n",
+    ] {
+        let diags = run(source)?;
+        assert!(
+            !codes(&diags).contains(&"generics_syntax_scoping"),
+            "guarded recursion inside a transparent form is valid.\nsource: {source}\n got: {:?}",
+            messages_for(&diags, "generics_syntax_scoping")
+        );
+    }
+    Ok(())
+}
+
+/// One diagnostic per circular alias: an alias flagged as unguarded by the
+/// acceptance pass must not be reported AGAIN by the mutual-cycle pass at
+/// the same span.
+#[test]
+fn circular_alias_is_reported_exactly_once() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("type A = A | B\ntype B = A\n")?;
+    let circular: Vec<_> = messages_for(&diags, "generics_syntax_scoping")
+        .into_iter()
+        .filter(|m| m.contains("Circular"))
+        .collect();
+    assert_eq!(
+        circular.len(),
+        2,
+        "exactly one circular diagnostic per alias (A unguarded, B in the chain): {circular:?}"
+    );
+    Ok(())
+}
+
+/// Mutual cycles hidden behind transparent forms — `Union[..]` subscripts
+/// and string forward references — are still cycles: no arm ever reaches a
+/// constructor head.
+#[test]
+fn mutual_cycle_through_transparent_forms_fires() -> Result<(), Box<dyn std::error::Error>> {
+    for source in [
+        "type A = Union[int, B]\ntype B = A\n",
+        "type A = \"B\"\ntype B = A\n",
+    ] {
+        let diags = run(source)?;
+        assert!(
+            messages_for(&diags, "generics_syntax_scoping")
+                .iter()
+                .any(|m| m.contains("Circular")),
+            "a mutual cycle through a transparent form must fire.\nsource: {source}"
+        );
+    }
+    // A constructor inside the transparent form guards: NOT a cycle.
+    let diags = run("type A = Union[int, list[B]]\ntype B = A\n")?;
+    assert!(
+        !codes(&diags).contains(&"generics_syntax_scoping"),
+        "recursion through list[..] inside Union[..] is valid, got: {:?}",
+        messages_for(&diags, "generics_syntax_scoping")
+    );
+    Ok(())
+}

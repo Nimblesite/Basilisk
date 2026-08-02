@@ -1177,9 +1177,11 @@ backdating pinned by `tests/tyeval_salsa_tests.rs`), with:
 - **GHC-style acceptance conditions** (Paterson/Coverage analogues) that
   statically reject obviously-nonterminating definitions — `accept::classify`
   gates `AliasEnv::insert` (self-references must sit under a type
-  constructor; union arms do not guard; self-application arguments must not
-  grow) — with the opt-in `insert_undecidable` escape hatch falling back to
-  fuel.
+  constructor; union arms do not guard, and the transparent
+  `Union[..]`/`Optional[..]`/`Annotated[..]` spellings lower to unions so
+  they cannot guard either (`lower::LowerCtx::lower_subscript`);
+  self-application arguments must not grow) — with the opt-in
+  `insert_undecidable` escape hatch falling back to fuel.
 
 Mapped types are **kind `Type → Type` operators** (`term::Kind`,
 `TypeTerm::Op`/`Apply`, higher-order through parameters); conditional types

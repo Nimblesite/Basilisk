@@ -491,3 +491,71 @@ def alias() -> object:
     );
     Ok(())
 }
+
+#[test]
+fn class_scope_type_alias_is_not_visible_from_a_function(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Class-body names do not nest: a `type` alias declared inside a class
+    // is reachable only as `C.Inner`, so a bare `Inner` in a module-level
+    // function is still an undefined name.
+    let source = "\
+class C:
+    type Inner = int
+
+
+def f() -> object:
+    return Inner
+";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"names_undefined"),
+        "a class-scope alias must not leak into module scope, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn function_scope_type_alias_is_not_visible_from_a_sibling(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // A `type` alias declared inside one function is local to it — a
+    // sibling function referencing the name is an undefined name.
+    let source = "\
+def g() -> None:
+    type T = int
+
+
+def f() -> object:
+    return T
+";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"names_undefined"),
+        "a function-scope alias must not leak into sibling functions, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn function_scope_type_alias_is_visible_in_its_own_function(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Inside the declaring function (and its nested functions) the alias
+    // is an ordinary local binding.
+    let source = "\
+def f() -> object:
+    type T = int
+
+    def inner() -> object:
+        return T
+
+    return T
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a function-local alias is defined in its own scope, got: {:?}",
+        messages_for(&diags, "names_undefined")
+    );
+    Ok(())
+}
