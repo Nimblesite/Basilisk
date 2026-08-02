@@ -276,7 +276,7 @@ fn bind_to_tree(archive: &Archive, trusted: &[TreeEntry]) -> Result<Archive, Dow
     let mut entries = Vec::with_capacity(archive.len());
     for entry in archive.entries() {
         let metadata = by_path
-            .get(entry.path.as_str())
+            .get(entry.path.as_ref())
             .ok_or(DownloadError::Validation)?;
         if !matches!(metadata.mode, FileMode::Regular | FileMode::Executable)
             || git_blob_oid(&entry.data) != metadata.oid

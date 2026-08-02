@@ -414,21 +414,68 @@ constants and runs every gate over the decoded archive. Because
 invariant — activation itself only decodes, never re-hashes, keeping cold
 start free of per-process verification of immutable inputs.
 
+**Activation must not touch pages nothing asked to read.** The embedded ZIP
+lives in the signed binary's `__TEXT,__const`, where the kernel validates each
+page's code signature on its FIRST touch — measured at ~1.6 ms to fault in all
+of this bundle's ~2.9 MB. So `decode_zip_static`
+(`src/typeshed/codec.rs`) derives every entry's data offset from the trailing
+central directory alone; reading the ~750 LOCAL headers scattered through the
+archive would fault in essentially all of it, because each sits immediately
+before its own data. Exactly one LOCAL header is read — the archive's first, at
+offset 0 — and the rest are *proven* rather than probed: the entries must tile
+the whole pre-directory region with no gaps, each derived data end landing
+exactly on the next entry's LOCAL offset and the last exactly on the central
+directory. That chain forces `local_name_len + local_extra_len ==
+central_name_len` for every entry, which is precisely the condition under which
+the derived offset equals the real one. Any archive arranged otherwise fails the
+chain and falls through to the authoritative `decode_zip`, so the fast path can
+never guess an offset — it only takes the shortcut where the layout proves it
+correct.
+
 #### Precomputed builtins class index {#STUBRES-TYPESHED-BUILTINS-INDEX}
 
-The no-target extraction of `builtins.pyi`
-([§STUBRES-TYPESHED-VERSION](#STUBRES-TYPESHED-VERSION)) is a pure function of
-the bundled ZIP and the largest fixed cost on a cold `check`, so it is
-precomputed (`cargo run -p basilisk-stubs --bin gen_builtins_index`),
-committed as `crates/basilisk-stubs/data/typeshed/builtins_index.bin`, and
-embedded (`src/typeshed/builtins_index.rs`). Three guards make it slow-path'd
-but never wrong: the checker consults it only for a `SourceIdentity::Bundled`
-snapshot with no `StubTarget` (`builtins_class_map`,
-`crates/basilisk-checker/src/imports/builtins.rs`) — pins, custom trees, and
-version evidence always extract live; the header's bundle SHA-256 must match
-the manifest or the loader falls back to live extraction; and CI's drift gate
+Extracting `builtins.pyi` ([§STUBRES-TYPESHED-VERSION](#STUBRES-TYPESHED-VERSION))
+is a pure function of the bundled ZIP and the target, and the largest fixed
+cost on a cold `check` (~3 ms of every run). So it is precomputed (`cargo run -p
+basilisk-stubs --bin gen_builtins_index`), committed as
+`crates/basilisk-stubs/data/typeshed/builtins_index.bin`, and embedded
+(`src/typeshed/builtins_index.rs`).
+
+**Every target is covered, not just the unpinned intersection.** A project that
+pins `python-version` is the common case, and serving only the no-target case
+left exactly those projects paying the live parse on every invocation. The
+extracted class map is a step function of the target: of the version only
+through the `sys.version_info` comparisons the stub itself makes, and of the
+platform only through the `sys.platform` literals it itself names
+(`guard::platform_guard_literals`, the sole source of platform sensitivity —
+`crates/basilisk-stubs/src/pyi_parser/guard.rs`). The artifact therefore
+enumerates one variant per (platform class, minor-version interval), which is a
+finite and provably complete set:
+
+- **Platform classes** are `All`, one per named literal, and a single `Other`
+  for every platform the stub does not name. `Other`'s completeness is not
+  assumed — regeneration extracts three probe platforms spread across the string
+  ordering and fails with `PlatformFallbackSplit` if they disagree, which is
+  what an ordered `sys.platform` comparison would cause.
+- **Version intervals** are found by extracting `(3, 0..=40)` at each platform
+  class and collapsing consecutive minors that yield the same map. Generating
+  well past every version the file names makes the final interval's open-ended
+  reading a measured fact rather than an assumption.
+
+Variants share one deduplicated class-blob pool (`builtins_index/codec.rs`), so
+covering all of them costs a fraction of their unpooled size — a ratio a test
+pins. A decode reads only the pool blobs its selected variant references.
+
+Three guards keep it fast-path'd but never wrong: the checker consults it only
+for a `SourceIdentity::Bundled` snapshot (`builtins_class_map`,
+`crates/basilisk-checker/src/imports/builtins.rs`) — pins to other commits and
+custom trees always extract live, and so does any target the artifact does not
+cover (a non-3 major); the header's bundle SHA-256 must match the manifest or
+the loader falls back to live extraction; and CI's drift gate
 (`embedded_index_matches_regenerated_bytes`) re-extracts with the real parser
-and asserts byte equality, so a bundle refresh cannot land unregenerated.
+and asserts byte equality, so a bundle refresh cannot land unregenerated. Every
+fallback is slower, never different: tests pin the decoded map equal to the live
+extraction at every generated minor and at each platform class.
 
 #### License and attribution {#STUBRES-TYPESHED-LICENSE}
 

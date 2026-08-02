@@ -56,7 +56,7 @@ pub enum ZipLayout {
 
 /// One decoded entry before layout prefix-stripping: raw name, Git mode, and
 /// bytes (borrowed from a static archive or owned).
-type RawEntry = (String, FileMode, Cow<'static, [u8]>);
+type RawEntry = (Cow<'static, str>, FileMode, Cow<'static, [u8]>);
 
 /// A ZIP decode failure.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -150,7 +150,7 @@ pub fn decode_zip(
         let remaining = limits.max_total_bytes.saturating_sub(total);
         let data = read_entry_data(&mut file, &raw_name, limits, remaining)?;
         total = total.saturating_add(u64::try_from(data.len()).unwrap_or(u64::MAX));
-        raw.push((raw_name, mode, Cow::Owned(data)));
+        raw.push((Cow::Owned(raw_name), mode, Cow::Owned(data)));
     }
     finish_archive(raw, layout)
 }
@@ -260,7 +260,7 @@ fn stored_entries_borrowed(bytes: &'static [u8], limits: &DecodeLimits) -> Optio
             return None;
         }
         let data = bytes.get(start..start.checked_add(usize::try_from(size).ok()?)?)?;
-        raw.push((record.name.to_owned(), record.mode, Cow::Borrowed(data)));
+        raw.push((Cow::Borrowed(record.name), record.mode, Cow::Borrowed(data)));
     }
     Some(raw)
 }
@@ -397,16 +397,19 @@ fn contiguous_data_offsets(records: &[CentralRecord], directory_offset: u32) -> 
 fn finish_archive(raw: Vec<RawEntry>, layout: ZipLayout) -> Result<Archive, DecodeError> {
     let prefix = match layout {
         ZipLayout::CodeloadPrefixed => {
-            Some(common_root(raw.iter().map(|(name, _, _)| name.as_str()))?)
+            Some(common_root(raw.iter().map(|(name, _, _)| name.as_ref()))?)
         }
         ZipLayout::BundledRootless => None,
     };
     let entries = raw
         .into_iter()
         .map(|(name, mode, data)| ArchiveEntry {
+            // No prefix (the bundled layout) keeps the name exactly as
+            // decoded, so a borrowed name stays borrowed all the way into the
+            // archive; stripping a codeload prefix necessarily allocates.
             path: prefix
                 .as_deref()
-                .map_or_else(|| name.clone(), |root| strip_root(&name, root)),
+                .map_or_else(|| name.clone(), |root| strip_root(&name, root).into()),
             mode,
             data,
         })

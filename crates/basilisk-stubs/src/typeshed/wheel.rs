@@ -399,17 +399,17 @@ mod tests {
         const SHA: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
         let archive = super::super::archive::Archive::new(vec![
             ArchiveEntry {
-                path: "stdlib/VERSIONS".to_owned(),
+                path: "stdlib/VERSIONS".to_owned().into(),
                 mode: FileMode::Regular,
                 data: b"os: 3.0-\n".to_vec().into(),
             },
             ArchiveEntry {
-                path: "stdlib/os.pyi".to_owned(),
+                path: "stdlib/os.pyi".to_owned().into(),
                 mode: FileMode::Regular,
                 data: b"def getcwd() -> str: ...\n".to_vec().into(),
             },
             ArchiveEntry {
-                path: "LICENSE".to_owned(),
+                path: "LICENSE".to_owned().into(),
                 mode: FileMode::Regular,
                 data: b"MIT\n".to_vec().into(),
             },

@@ -101,6 +101,25 @@ fi
 BENCH_GATE="1"
 # Zero-tolerance ratchet: any slower fixture is a regression.
 BENCH_TOLERANCE_PCT="0"
+# LOCAL ITERATION MODE (make bench-basilisk). Times ONLY the basilisk columns
+# and skips the competitor pull, discovery, preflight, and timing. Closing a
+# basilisk performance gap needs the basilisk number in a minute, not the many
+# minutes five 0.5s-per-invocation competitors add to every iteration — and
+# re-timing them proves nothing about a change to THIS tree.
+#
+# It relaxes nothing that decides anything: the full `cargo clean` + fresh
+# release build, the noisy-measurement stability policy, and the zero-tolerance
+# gate against the COMMITTED baseline all run exactly as in a full sweep. The
+# competitor cells are CARRIED FORWARD verbatim from the status CSV rather than
+# blanked (a blank cell means "not installed / failed preflight" and must keep
+# meaning that), and the CSV header records which tools this run measured and
+# which it carried, so the file never implies a competitor was re-timed.
+# CI always runs the full sweep, so the mode is refused there.
+BENCH_ONLY_BASILISK="${BENCH_ONLY_BASILISK:-}"
+if [[ -n "$BENCH_ONLY_BASILISK" && "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  echo "ERROR: BENCH_ONLY_BASILISK is a local iteration mode; CI must run the full sweep." >&2
+  exit 2
+fi
 mkdir -p "$OUT" "$STATUS_DIR"
 
 # Canonical tool column order for the status CSV / website (stable schema).
@@ -181,7 +200,10 @@ echo "  fresh binary: $BSK"
 # measured number. Recognized package names == CLI command names for all five.
 RECOGNIZED_CHECKERS="pyright mypy ty pyrefly zuban"
 echo "─── Pull latest competitor versions (officially recognized checkers) ────"
-if python3 -m pip --version >/dev/null 2>&1; then
+if [[ -n "$BENCH_ONLY_BASILISK" ]]; then
+  echo "  basilisk-only run — competitors are neither pulled nor timed; their"
+  echo "  columns carry forward from the status CSV unchanged."
+elif python3 -m pip --version >/dev/null 2>&1; then
   for _tool in $RECOGNIZED_CHECKERS; do
     _before="$(command -v "$_tool" >/dev/null 2>&1 && "$_tool" --version 2>&1 | head -1 || echo 'not installed')"
     if python3 -m pip install --upgrade --quiet --disable-pip-version-check "$_tool" >/dev/null 2>&1; then
@@ -204,17 +226,24 @@ echo ""
 # Each entry: "name|command-template"  where {} is replaced by the fixture path.
 declare -a TOOL_NAMES=() TOOL_CMDS=()
 add_tool() { TOOL_NAMES+=("$1"); TOOL_CMDS+=("$2"); }
+# A competitor is measured when it is installed AND this is not a basilisk-only
+# iteration run. Skipped-because-uninstalled and skipped-by-mode look identical
+# here on purpose; they differ only in what the CSV does with the empty column
+# (blank vs carried forward), which summarize.py decides from BENCH_CARRY_FORWARD.
+want_competitor() {
+  [[ -z "$BENCH_ONLY_BASILISK" ]] && command -v "$1" >/dev/null 2>&1
+}
 
 # Warm caches start empty; the hyperfine warmup populates them so the measured
 # warm runs are hits.
 rm -rf "$WARMCACHE" "$MYPYCACHE"; mkdir -p "$WARMCACHE" "$MYPYCACHE"
 add_tool "basilisk"      "$BSK check {}"
 add_tool "basilisk-warm" "$BSK check {} --cache --cache-dir $WARMCACHE"
-if command -v pyright >/dev/null 2>&1; then
+if want_competitor pyright; then
   # No cross-run result cache → cold-only (a repeat run would just equal cold).
   add_tool "pyright" "pyright {}"
 fi
-if command -v mypy >/dev/null 2>&1; then
+if want_competitor mypy; then
   # --strict so mypy does the strict-mode analysis the fixtures stress; plain
   # mypy reports "no issues" on missing-annotation fixtures and times nothing.
   # cold = --no-incremental (full check); warm = incremental .mypy_cache hit.
@@ -227,15 +256,15 @@ if command -v mypy >/dev/null 2>&1; then
   add_tool "mypy"      "mypy --strict --no-incremental --no-error-summary {}"
   add_tool "mypy-warm" "mypy --strict --cache-dir $MYPYCACHE --no-error-summary {}"
 fi
-if command -v ty >/dev/null 2>&1; then
+if want_competitor ty; then
   # No cross-run result cache → cold-only.
   add_tool "ty" "ty check {}"
 fi
-if command -v pyrefly >/dev/null 2>&1; then
+if want_competitor pyrefly; then
   # No cross-run result cache → cold-only.
   add_tool "pyrefly" "pyrefly check {}"
 fi
-if command -v zuban >/dev/null 2>&1; then
+if want_competitor zuban; then
   # `zuban mypy --strict` (alias of `zmypy --strict`) so it performs the
   # strict-mode analysis the fixtures stress — zuban's default `zuban check`
   # mode skips these strictness rules and reports "no issues" on the
@@ -359,6 +388,18 @@ export BENCH_SLUG BENCH_MACHINE BENCH_CPU BENCH_ARCH BENCH_OS BENCH_CORES \
   BENCH_TOLERANCE_PCT="$BENCH_TOLERANCE_PCT" BENCH_COVERAGE="$COVERAGE" \
   BENCH_MAX_CV="$MAX_BASILISK_CV" BENCH_STABILITY_RUNS="$MIN_STABILITY_RUNS" \
   BENCH_ROOT="$ROOT" BENCH_BASELINE_REF="${BENCH_BASELINE_REF:-HEAD}"
+
+# Snapshot the PRE-RUN status CSV as the carry-forward source, once, before the
+# first incremental write replaces it. Reading the live file instead would make
+# each fixture's write carry from the write before it — and only the first
+# fixture would still find the competitor cells. The snapshot lives outside the
+# status dir so it can never be mistaken for a machine's results.
+if [[ -n "$BENCH_ONLY_BASILISK" ]]; then
+  CARRY_FROM="$OUT/.carry-forward.csv"
+  rm -f "$CARRY_FROM"
+  [[ -f "$STATUS_DIR/${BENCH_SLUG}.csv" ]] && cp "$STATUS_DIR/${BENCH_SLUG}.csv" "$CARRY_FROM"
+  export BENCH_CARRY_FROM="$CARRY_FROM"
+fi
 
 # ─── Preflight: diagnostic coverage + crash screening ─────────────────────────
 # One un-timed run of every base tool on every fixture BEFORE anything is timed.

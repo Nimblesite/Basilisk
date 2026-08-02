@@ -64,22 +64,22 @@ pub fn safety_gate(archive: &Archive, limits: &SafetyLimits) -> Result<(), Safet
         let size = u64::try_from(entry.data.len()).unwrap_or(u64::MAX);
         if size > limits.max_entry_bytes {
             return Err(SafetyViolation::EntryTooLarge {
-                path: entry.path.clone(),
+                path: entry.path.clone().into_owned(),
                 size,
                 limit: limits.max_entry_bytes,
             });
         }
         match entry.mode {
             FileMode::Symlink => {
-                return Err(SafetyViolation::DisallowedSymlink(entry.path.clone()))
+                return Err(SafetyViolation::DisallowedSymlink(entry.path.clone().into_owned()))
             }
             FileMode::Submodule => {
-                return Err(SafetyViolation::DisallowedSubmodule(entry.path.clone()))
+                return Err(SafetyViolation::DisallowedSubmodule(entry.path.clone().into_owned()))
             }
             FileMode::Regular | FileMode::Executable => {}
         }
-        if !seen.insert(entry.path.as_str()) {
-            return Err(SafetyViolation::DuplicatePath(entry.path.clone()));
+        if !seen.insert(entry.path.as_ref()) {
+            return Err(SafetyViolation::DuplicatePath(entry.path.clone().into_owned()));
         }
     }
     let total = archive.total_data_len();
@@ -270,7 +270,7 @@ mod tests {
 
     fn reg(path: &str, data: &[u8]) -> ArchiveEntry {
         ArchiveEntry {
-            path: path.to_owned(),
+            path: path.to_owned().into(),
             mode: FileMode::Regular,
             data: data.to_vec().into(),
         }

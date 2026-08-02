@@ -1589,6 +1589,24 @@ never suppress the other (`benchmarks/summarize.py`):
   non-increasing. It lives in the tracked script, not an env var; the gate itself
   cannot be disabled or widened at runtime (`BENCH_NO_GATE` /
   `BENCH_REGRESS_PCT` / `BENCH_TOLERANCE_PCT` overrides are rejected).
+- **Basilisk-only iteration (`make bench-basilisk`, `BENCH_ONLY_BASILISK=1`).**
+  Closing a basilisk performance gap is a tight edit-measure loop, and five
+  competitors at ~0.5 s per invocation add minutes to every turn of it while
+  saying nothing about a change to this tree. This mode times the basilisk
+  columns alone and skips the competitor pull, discovery, preflight, and timing.
+  It relaxes **nothing that decides anything**: the full `cargo clean` + fresh
+  release build, the noisy-measurement stability policy, and the zero-tolerance
+  gate against the committed baseline all run exactly as in a full sweep — a
+  regression fails it identically. Two honesty rules keep the partial CSV
+  truthful: the untimed tools' `_ms`/`_diags` cells and version strings are
+  **carried forward verbatim** from the file rather than blanked (a blank cell
+  means "not installed / failed preflight" and must keep meaning that), and a
+  `# measured:` header line names which tools this run timed and which it
+  carried, with the date they came from — so the fresh `# generated` stamp can
+  never imply a competitor was re-timed. Nothing measured is ever carried, so
+  the write-always rule is untouched. CI always runs the full sweep: the mode
+  exits 2 under `GITHUB_ACTIONS`. **A number published or committed as a full
+  benchmark must come from `make bench`** — this mode is for iteration.
 - Run it whenever checker hot paths change (resolver visitors, rule `check` loops,
   conformance-driven additions). Conformance logic that blows the gate must be
   optimised or restructured. A machine without a baseline establishes one only

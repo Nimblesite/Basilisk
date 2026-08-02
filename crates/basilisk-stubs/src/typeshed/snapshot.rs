@@ -1,6 +1,7 @@
 //! One immutable resolver-facing Typeshed generation.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::borrow::Cow;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
 use super::archive::ArchiveVfs;
@@ -8,21 +9,38 @@ use super::source::{SourceIdentity, TypeshedStatus};
 use super::versions::{VersionsError, VersionsIndex};
 
 /// Module-name to immutable VFS path index derived from one snapshot.
+///
+/// Both halves are `Cow` because both are usually substrings of an archive
+/// path the bundled snapshot already holds as `&'static str`: `stdlib/os.pyi`
+/// yields the path verbatim and the module name `os` as a slice of it. Only a
+/// package module (`os/path.pyi` → `os.path`) has to allocate, so indexing the
+/// ~750-module bundle costs a few dozen allocations instead of ~1500 on every
+/// cold start ([STUBRES-TYPESHED-BASELINE]).
+///
+/// A hash map, not an ordered one: every cold start builds the whole index and
+/// then performs a handful of lookups, so the ~750 inserts are the cost that
+/// matters and `iter`'s ordering is not. The deterministic order `iter`
+/// promises is produced by sorting there instead — paid only by the callers
+/// that actually walk the index, none of which are on the cold path.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ModuleIndex(BTreeMap<String, String>);
+pub struct ModuleIndex(HashMap<Cow<'static, str>, Cow<'static, str>>);
 
 impl ModuleIndex {
     /// Look up the exact archive path for a dotted stdlib module.
     #[must_use]
     pub fn path(&self, module: &str) -> Option<&str> {
-        self.0.get(module).map(String::as_str)
+        self.0.get(module).map(Cow::as_ref)
     }
 
-    /// Iterate module/path pairs in deterministic order.
+    /// Iterate module/path pairs in deterministic (module-name) order.
     pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
-        self.0
+        let mut pairs: Vec<(&str, &str)> = self
+            .0
             .iter()
-            .map(|(module, path)| (module.as_str(), path.as_str()))
+            .map(|(module, path)| (module.as_ref(), path.as_ref()))
+            .collect();
+        pairs.sort_unstable();
+        pairs.into_iter()
     }
 }
 
@@ -178,24 +196,31 @@ pub enum SnapshotError {
 }
 
 fn build_module_index(vfs: &ArchiveVfs) -> Result<ModuleIndex, SnapshotError> {
-    // The entry API moves the module name into the map on the vacant path, so
-    // the common case allocates each name once — cloning per insert to keep a
-    // copy for the never-taken duplicate branch doubled this loop's allocations
-    // across ~750 stdlib modules, on the cold-start critical path.
-    let mut modules: BTreeMap<String, String> = BTreeMap::new();
+    // Entries are walked rather than `vfs.paths()` so each path keeps its
+    // `Cow`: for the bundled archive both the key and the value are then
+    // slices of the `include_bytes!` constant, and the whole index builds
+    // without touching the allocator. The entry API moves the name in on the
+    // vacant path, so even the allocating cases allocate once — cloning per
+    // insert to hold a copy for the never-taken duplicate branch doubled this
+    // loop's cost across ~750 stdlib modules, on the cold-start critical path.
+    let mut modules: HashMap<Cow<'static, str>, Cow<'static, str>> =
+        HashMap::with_capacity(vfs.archive().len());
     for path in vfs
-        .paths()
+        .archive()
+        .entries()
+        .iter()
+        .map(|entry| &entry.path)
         .filter(|path| path.starts_with("stdlib/") && is_pyi_path(path))
     {
         match modules.entry(stdlib_module_name(path)) {
-            std::collections::btree_map::Entry::Vacant(slot) => {
-                let _ = slot.insert(path.to_owned());
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                let _ = slot.insert(path.clone());
             }
-            std::collections::btree_map::Entry::Occupied(slot) => {
+            std::collections::hash_map::Entry::Occupied(slot) => {
                 return Err(SnapshotError::DuplicateModule {
-                    module: slot.key().clone(),
-                    first: slot.get().clone(),
-                    second: path.to_owned(),
+                    module: slot.key().clone().into_owned(),
+                    first: slot.get().clone().into_owned(),
+                    second: path.clone().into_owned(),
                 })
             }
         }
@@ -203,13 +228,40 @@ fn build_module_index(vfs: &ArchiveVfs) -> Result<ModuleIndex, SnapshotError> {
     Ok(ModuleIndex(modules))
 }
 
-fn stdlib_module_name(path: &str) -> String {
+/// The dotted module name for a `stdlib/…` path, borrowed straight out of the
+/// path whenever the two coincide — which they do for every top-level module,
+/// the large majority of the stdlib.
+fn stdlib_module_name(path: &Cow<'static, str>) -> Cow<'static, str> {
+    match path {
+        // Matching on the variant is what recovers the `'static` lifetime: a
+        // slice of a borrowed path is itself borrowable into the index.
+        Cow::Borrowed(text) => module_slice(text).map_or_else(
+            || Cow::Owned(dotted_module_name(text)),
+            Cow::Borrowed,
+        ),
+        Cow::Owned(text) => Cow::Owned(
+            module_slice(text).map_or_else(|| dotted_module_name(text), str::to_owned),
+        ),
+    }
+}
+
+/// The module name when it is a plain slice of the path — i.e. nothing is left
+/// to rewrite into a dot, so the name and the slice are byte-identical.
+fn module_slice(path: &str) -> Option<&str> {
+    let relative = module_relative_path(path);
+    (!relative.contains('/')).then_some(relative)
+}
+
+fn dotted_module_name(path: &str) -> String {
+    module_relative_path(path).replace('/', ".")
+}
+
+fn module_relative_path(path: &str) -> &str {
     let relative = path
         .strip_prefix("stdlib/")
         .and_then(|path| path.strip_suffix(".pyi"))
         .unwrap_or(path);
-    let relative = relative.strip_suffix("/__init__").unwrap_or(relative);
-    relative.replace('/', ".")
+    relative.strip_suffix("/__init__").unwrap_or(relative)
 }
 
 fn derive_distribution_index(vfs: &ArchiveVfs) -> DistributionIndex {
@@ -286,7 +338,7 @@ mod tests {
 
     fn reg(path: &str, data: &[u8]) -> ArchiveEntry {
         ArchiveEntry {
-            path: path.to_owned(),
+            path: path.to_owned().into(),
             mode: FileMode::Regular,
             data: data.to_vec().into(),
         }

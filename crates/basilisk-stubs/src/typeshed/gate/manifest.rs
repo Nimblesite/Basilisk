@@ -40,7 +40,7 @@ impl LicenseManifest {
             .entries()
             .iter()
             .filter(|entry| is_legal_file(&entry.path))
-            .map(|entry| (entry.path.clone(), sha256_hex(&entry.data)))
+            .map(|entry| (entry.path.clone().into_owned(), sha256_hex(&entry.data)))
             .collect();
         Self { files }
     }
@@ -97,7 +97,7 @@ mod tests {
 
     fn reg(path: &str, data: &[u8]) -> ArchiveEntry {
         ArchiveEntry {
-            path: path.to_owned(),
+            path: path.to_owned().into(),
             mode: FileMode::Regular,
             data: data.to_vec().into(),
         }
