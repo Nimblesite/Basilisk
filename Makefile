@@ -5,7 +5,7 @@
 # Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup book mutation-test conformance bench reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease
+.PHONY: build test lint fmt clean ci setup book mutation-test conformance bench bench-basilisk reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -246,6 +246,15 @@ conformance:
 bench:
 	@bash benchmarks/run.sh
 
+## bench-basilisk: Re-time ONLY basilisk (local iteration on a perf fix).
+## Same clean release rebuild, same stability policy, same zero-tolerance gate
+## against the committed baseline — it just skips the five competitors, which
+## add minutes per iteration and say nothing about a change to this tree. Their
+## CSV cells and versions carry forward verbatim and the header records that
+## they were not re-timed. Refused in CI, which always runs the full sweep.
+bench-basilisk:
+	@BENCH_ONLY_BASILISK=1 bash benchmarks/run.sh
+
 ## smoke-micropython: Real-world smoke test for typeshed-path
 ## [STUBRES-CUSTOM-TYPESHED] — points the checker at a pinned, unmodified
 ## micropython-stdlib-stubs release and asserts MicroPython stdlib resolves
@@ -402,6 +411,7 @@ _lint_rust:
 	cargo clippy --workspace --all-targets -- -D warnings && \
 	cargo audit && \
 	bash scripts/check-dependency-shape.sh && \
+	bash scripts/check-illegal-tags.sh && \
 	echo -e '\033[0;32m✓ Rust lint passed\033[0m'
 
 _lint_vsix:

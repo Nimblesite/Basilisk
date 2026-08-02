@@ -45,12 +45,13 @@ pub enum TagKind {
 }
 
 /// Closed allowlist of runtime Typeshed configuration keys — the whole
-/// surface is three keys, every one a string ([LSPCFGED-TYPESHED]).
+/// surface is four keys, every one a string ([LSPCFGED-TYPESHED]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum TypeshedSettingKey {
     TypeshedPath,
     TypeshedCommit,
+    TypeshedPackage,
     TypeshedStorePath,
 }
 

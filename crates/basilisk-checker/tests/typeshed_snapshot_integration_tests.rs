@@ -25,7 +25,7 @@ use basilisk_test_utils::EventDb;
 
 fn entry(path: &str, source: &str) -> ArchiveEntry {
     ArchiveEntry {
-        path: path.to_owned(),
+        path: path.to_owned().into(),
         mode: FileMode::Regular,
         data: source.as_bytes().to_vec().into(),
     }

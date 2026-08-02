@@ -212,7 +212,7 @@ Pyright “ships with a bundled copy of typeshed type stubs”
 ([`microsoft/pyright@1bec65c`](https://github.com/microsoft/pyright/blob/1bec65c15fba26016281d44d977bf667b89b9d30/docs/configuration.md#L23)).
 Basilisk likewise never mixes a source's names, bodies, `VERSIONS`, or indexes.
 
-There are exactly **two** sources, both already on this machine when checking
+There are exactly **three** sources, all already on this machine when checking
 starts. There is no "track latest" source: freshness is an action a person takes
 ([§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD)), never something the
 checker does on their behalf.
@@ -221,8 +221,9 @@ checker does on their behalf.
 |---|---|---|
 | Pinned commit *(default)* | `typeshed-commit`; unset selects the bundled commit | the local tree carrying exactly that SHA — the embedded ZIP when the SHA is the bundled one, else that commit's store entry |
 | Custom folder | `typeshed-path` | that tree verbatim, user-managed |
+| PyPI package *(pinned by wheel SHA-256)* | `typeshed-package` | the stored wheel whose SHA-256 is the pin ([§STUBRES-TYPESHED-PYPI](#STUBRES-TYPESHED-PYPI)) |
 
-Both fail closed. Custom is reported unpinned
+All three fail closed. Custom is reported unpinned
 ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)); a *module* miss in a custom
 tree still continues to step 4.
 
@@ -259,10 +260,61 @@ publishes no signed release ([Git `commit-tree`](https://git-scm.com/docs/git-co
 [GitHub Git-commit API](https://docs.github.com/en/rest/git/commits)). Whoever can
 rewrite the store can rewrite its commit object with it.
 
+#### A PyPI package pin {#STUBRES-TYPESHED-PYPI}
+
+A third source is a PyPI typeshed distribution pinned by its **wheel SHA-256** —
+the hash `uv` records in `uv.lock` `wheels[].hash`
+([uv lockfile format](https://docs.astral.sh/uv/reference/files/#lockfile-format);
+issue #312). The source is the stored wheel archive: Basilisk reads its
+`stdlib/` subtree via the archive VFS, so the checked bytes are the pinned bytes.
+
+Acquisition is segregated and user-invoked (`basilisk typeshed download
+--package`), like a commit pin
+([§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD)); the fetch crate
+downloads the wheel from PyPI, verifies its SHA-256 equals the pin, and stores
+it as the wheel entry described in
+[§STUBRES-TYPESHED-STORE](#STUBRES-TYPESHED-STORE). Check-time verification is
+offline ([§STUBRES-TYPESHED-OFFLINE](#STUBRES-TYPESHED-OFFLINE)): re-hash the
+stored wheel and assert equality; missing or mismatched fails hard as
+`NO SOURCE`.
+
+**Both halves of the pin are validated before use.** The digest must be exactly
+64 hex characters, and the distribution name must be a
+[PEP 508](https://peps.python.org/pep-0508/#names) name — ASCII letters, digits,
+`.`, `_`, or `-`, beginning and ending with a letter or digit. The name is not
+merely a label: it becomes a path segment of the PyPI index URL, so restricting
+it to that alphabet is what makes it impossible to write a pin whose lookup
+resolves to a different resource. A name outside it is rejected where the pin is
+parsed **and** at the transport boundary that builds the URL, so no caller can
+route around it; a rejected pin fails closed and no request is made.
+
+**Trust boundary.** Proves the stored wheel is the registry-attested artifact;
+cannot prove offline the SHA is an *official* typeshed release (PyPI publishes
+no signed releases; authenticity rests on PyPI/TLS at download) — same shape as a
+commit pin ([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)). Advisory behaviour
+follows [§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN).
+
+**uv auto-detection.** When `typeshed-package` is unset (and neither
+`typeshed-commit` nor `typeshed-path` is set), Basilisk reads `uv.lock`
+`wheels[].hash` and, if exactly one recognised typeshed-distribution package
+(e.g. `micropython-stdlib-stubs`) is pinned, treats that wheel SHA-256 as the
+effective `typeshed-package` pin — no key required (issue #312). Ambiguous (more
+than one candidate) or absent → no auto-pin; the bundled default stands with
+`typeshed_source_unpinned`. This is an effective-resolution override, never a
+configured key: nothing writes it to `pyproject.toml`, and an explicit source
+always wins. The recognised-package list is curated so a random dependency
+never silently replaces the stdlib source.
+
 #### The store {#STUBRES-TYPESHED-STORE}
 
-One immutable directory per commit under `typeshed-store-path`, read by the
-checker and written only by the download action:
+One immutable directory per acquired source under `typeshed-store-path`, read by
+the checker and written only by the download action. Every entry is
+**content-addressed**: the directory name is the digest the entry's bytes must
+re-hash to, so reading an entry is what verifies it. There are two entry
+shapes, one per acquirable source.
+
+A **commit** entry, addressed by its 40-hex Git commit SHA
+([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)):
 
 ```
 <typeshed-store-path>/<40-hex commit sha>/
@@ -271,9 +323,30 @@ checker and written only by the download action:
   stdlib/… LICENSE NOTICE…
 ```
 
-No expiry, no reuse policy, no cache-off mode: an entry is a commit and bytes do
-not go stale. Deleting a directory is the only eviction, and only a download
-recreates it.
+A **PyPI package** entry, addressed by its 64-hex wheel SHA-256
+([§STUBRES-TYPESHED-PYPI](#STUBRES-TYPESHED-PYPI)):
+
+```
+<typeshed-store-path>/<64-hex wheel sha256>/
+  wheel.whl       # the exact wheel; hashes to the directory name
+```
+
+The wheel entry holds **no manifest and no extracted tree**. It does not need
+one: a commit entry stores an unpacked tree, so it needs `manifest.json` +
+`commit-object` to bind those loose files back to the pinned SHA, whereas the
+wheel is stored whole and its own SHA-256 already binds every byte the resolver
+will read. The `stdlib/` subtree is read out of the archive in memory rather
+than unpacked, so there is nothing on disk left for a manifest to attest.
+
+The two namespaces share one root and **cannot collide**: a Git commit SHA-1 is
+always 40 hex characters and a wheel SHA-256 always 64, so the digest length
+alone determines which shape an entry is. Both readers reject a digest that is
+not exactly their own length before it is used as a path component, so a
+malformed pin never reaches the filesystem.
+
+No expiry, no reuse policy, no cache-off mode: an entry is an immutable
+artifact and bytes do not go stale. Deleting a directory is the only eviction,
+and only a download recreates it.
 
 #### Downloading is a separate component {#STUBRES-TYPESHED-DOWNLOAD}
 
@@ -296,7 +369,9 @@ below, reconstruct the commit object and assert it hashes to the requested SHA,
 then dump the accepted tree into the store. There is no mirror setting — an
 air-gapped or firewalled machine uses a custom folder. A download that fails at
 any step writes **nothing** — no partial entry, no unverified entry, no config
-change. URLs are redacted in logs.
+change. URLs are redacted in logs. Package-pin acquisition downloads a wheel
+from PyPI under the same segregation; see
+[§STUBRES-TYPESHED-PYPI](#STUBRES-TYPESHED-PYPI).
 
 | Gate | Rule |
 |---|---|
@@ -339,21 +414,68 @@ constants and runs every gate over the decoded archive. Because
 invariant — activation itself only decodes, never re-hashes, keeping cold
 start free of per-process verification of immutable inputs.
 
+**Activation must not touch pages nothing asked to read.** The embedded ZIP
+lives in the signed binary's `__TEXT,__const`, where the kernel validates each
+page's code signature on its FIRST touch — measured at ~1.6 ms to fault in all
+of this bundle's ~2.9 MB. So `decode_zip_static`
+(`src/typeshed/codec.rs`) derives every entry's data offset from the trailing
+central directory alone; reading the ~750 LOCAL headers scattered through the
+archive would fault in essentially all of it, because each sits immediately
+before its own data. Exactly one LOCAL header is read — the archive's first, at
+offset 0 — and the rest are *proven* rather than probed: the entries must tile
+the whole pre-directory region with no gaps, each derived data end landing
+exactly on the next entry's LOCAL offset and the last exactly on the central
+directory. That chain forces `local_name_len + local_extra_len ==
+central_name_len` for every entry, which is precisely the condition under which
+the derived offset equals the real one. Any archive arranged otherwise fails the
+chain and falls through to the authoritative `decode_zip`, so the fast path can
+never guess an offset — it only takes the shortcut where the layout proves it
+correct.
+
 #### Precomputed builtins class index {#STUBRES-TYPESHED-BUILTINS-INDEX}
 
-The no-target extraction of `builtins.pyi`
-([§STUBRES-TYPESHED-VERSION](#STUBRES-TYPESHED-VERSION)) is a pure function of
-the bundled ZIP and the largest fixed cost on a cold `check`, so it is
-precomputed (`cargo run -p basilisk-stubs --bin gen_builtins_index`),
-committed as `crates/basilisk-stubs/data/typeshed/builtins_index.bin`, and
-embedded (`src/typeshed/builtins_index.rs`). Three guards make it slow-path'd
-but never wrong: the checker consults it only for a `SourceIdentity::Bundled`
-snapshot with no `StubTarget` (`builtins_class_map`,
-`crates/basilisk-checker/src/imports/builtins.rs`) — pins, custom trees, and
-version evidence always extract live; the header's bundle SHA-256 must match
-the manifest or the loader falls back to live extraction; and CI's drift gate
+Extracting `builtins.pyi` ([§STUBRES-TYPESHED-VERSION](#STUBRES-TYPESHED-VERSION))
+is a pure function of the bundled ZIP and the target, and the largest fixed
+cost on a cold `check` (~3 ms of every run). So it is precomputed (`cargo run -p
+basilisk-stubs --bin gen_builtins_index`), committed as
+`crates/basilisk-stubs/data/typeshed/builtins_index.bin`, and embedded
+(`src/typeshed/builtins_index.rs`).
+
+**Every target is covered, not just the unpinned intersection.** A project that
+pins `python-version` is the common case, and serving only the no-target case
+left exactly those projects paying the live parse on every invocation. The
+extracted class map is a step function of the target: of the version only
+through the `sys.version_info` comparisons the stub itself makes, and of the
+platform only through the `sys.platform` literals it itself names
+(`guard::platform_guard_literals`, the sole source of platform sensitivity —
+`crates/basilisk-stubs/src/pyi_parser/guard.rs`). The artifact therefore
+enumerates one variant per (platform class, minor-version interval), which is a
+finite and provably complete set:
+
+- **Platform classes** are `All`, one per named literal, and a single `Other`
+  for every platform the stub does not name. `Other`'s completeness is not
+  assumed — regeneration extracts three probe platforms spread across the string
+  ordering and fails with `PlatformFallbackSplit` if they disagree, which is
+  what an ordered `sys.platform` comparison would cause.
+- **Version intervals** are found by extracting `(3, 0..=40)` at each platform
+  class and collapsing consecutive minors that yield the same map. Generating
+  well past every version the file names makes the final interval's open-ended
+  reading a measured fact rather than an assumption.
+
+Variants share one deduplicated class-blob pool (`builtins_index/codec.rs`), so
+covering all of them costs a fraction of their unpooled size — a ratio a test
+pins. A decode reads only the pool blobs its selected variant references.
+
+Three guards keep it fast-path'd but never wrong: the checker consults it only
+for a `SourceIdentity::Bundled` snapshot (`builtins_class_map`,
+`crates/basilisk-checker/src/imports/builtins.rs`) — pins to other commits and
+custom trees always extract live, and so does any target the artifact does not
+cover (a non-3 major); the header's bundle SHA-256 must match the manifest or
+the loader falls back to live extraction; and CI's drift gate
 (`embedded_index_matches_regenerated_bytes`) re-extracts with the real parser
-and asserts byte equality, so a bundle refresh cannot land unregenerated.
+and asserts byte equality, so a bundle refresh cannot land unregenerated. Every
+fallback is slower, never different: tests pin the decoded map equal to the live
+extraction at every generated minor and at each platform class.
 
 #### License and attribution {#STUBRES-TYPESHED-LICENSE}
 
@@ -424,6 +546,9 @@ deciding, each code keeps its intrinsic default — advisory conditions render
 `disabled`/`off` silences it: the only supported way to make an advisory go
 away. The resolved severity sets the banner label and whether the advisory
 renders at all; it never moves the advisory onto the scored diagnostic stream.
+A verified PyPI package pin ([§STUBRES-TYPESHED-PYPI](#STUBRES-TYPESHED-PYPI))
+suppresses these advisories — the "specifically instructed to accept" path
+(issue #312); without a pin they fire as above.
 
 All surfaces show the full SHA when known; the UI also provides a safe View
 License action. MCP fields are `active_source`, commit/tree identity,
@@ -446,13 +571,18 @@ open. Every one is exposed as a control in the configuration UI
 |---|---|---|---|---|
 | `typeshed-commit` | full SHA | unset _(= the bundled commit)_ | The pinned commit, verified offline. | checker |
 | `typeshed-path` | `string` | _(unset)_ | The canonical custom step-3 tree; excludes the pin and the bundle. | checker |
+| `typeshed-package` | `name@sha256:<hex>` | _(unset)_ | A PyPI typeshed distribution pinned by wheel SHA-256 ([§STUBRES-TYPESHED-PYPI](#STUBRES-TYPESHED-PYPI)). Mutually exclusive with `typeshed-commit` and `typeshed-path`. | checker |
 | `typeshed-store-path` | path | OS cache | Where downloads are dumped and pins are resolved. | both |
 
-That is the whole *source-selection* surface: three keys. There are no
+That is the whole *source-selection* surface: four keys. `typeshed-commit`,
+`typeshed-path`, and `typeshed-package` are mutually exclusive — exactly one
+source may be active. There are no
 cache-reuse, expiry, verification-waiver, or mirror settings, and no one-run
 flags: nothing is cached, nothing expires, a pin always verifies
-([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)), and downloads come only from
-GitHub ([§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD)).
+([§STUBRES-TYPESHED-PIN](#STUBRES-TYPESHED-PIN)); commit-pin downloads come from
+GitHub, package-pin downloads from PyPI
+([§STUBRES-TYPESHED-DOWNLOAD](#STUBRES-TYPESHED-DOWNLOAD),
+[§STUBRES-TYPESHED-PYPI](#STUBRES-TYPESHED-PYPI)).
 
 Separately, the **severity** of each source-status advisory
 ([§STUBRES-TYPESHED-WARN](#STUBRES-TYPESHED-WARN)) is graded through the ordinary

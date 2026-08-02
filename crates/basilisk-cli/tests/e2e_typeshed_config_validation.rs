@@ -271,19 +271,49 @@ fn pinning_a_downloaded_commit_retires_the_custom_folder() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The one reason every mutually-exclusive source pairing must report. All
+/// three step-3 sources are named so the user can see which keys compete
+/// ([STUBRES-TYPESHED-CONFIG]).
+const EXCLUSION_REASON: &str =
+    "typeshed-path, typeshed-commit, and typeshed-package are mutually exclusive";
+
+/// A well-formed package pin, pinned by wheel SHA-256 ([STUBRES-TYPESHED-PYPI]).
+const PACKAGE_PIN: &str =
+    "micropython-stdlib-stubs@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+/// Every pairing of the three mutually-exclusive step-3 sources fails closed
+/// with the same reason — no pair may slip through as a silently-preferred
+/// source ([STUBRES-TYPESHED-CONFIG], [STUBRES-TYPESHED-PYPI]).
 #[test]
-fn typeshed_path_with_commit_pin_fails_closed() {
-    let dir = unique_dir("path_commit_conflict");
-    std::fs::create_dir_all(dir.join("ts/stdlib")).expect("create custom tree");
-    let output = check_with_config(
-        &dir,
-        "typeshed-path = \"ts\"\ntypeshed-commit = \"0123456789012345678901234567890123456789\"\n",
-    );
-    assert_fails_closed(
-        &output,
-        "typeshed-path and typeshed-commit are mutually exclusive",
-    );
-    let _ = std::fs::remove_dir_all(&dir);
+fn every_pair_of_typeshed_sources_fails_closed() {
+    let commit = "0123456789012345678901234567890123456789";
+    let cases = [
+        (
+            "path_commit_conflict",
+            format!("typeshed-path = \"ts\"\ntypeshed-commit = \"{commit}\"\n"),
+        ),
+        (
+            "path_package_conflict",
+            format!("typeshed-path = \"ts\"\ntypeshed-package = \"{PACKAGE_PIN}\"\n"),
+        ),
+        (
+            "commit_package_conflict",
+            format!("typeshed-commit = \"{commit}\"\ntypeshed-package = \"{PACKAGE_PIN}\"\n"),
+        ),
+        (
+            "all_three_conflict",
+            format!(
+                "typeshed-path = \"ts\"\ntypeshed-commit = \"{commit}\"\ntypeshed-package = \"{PACKAGE_PIN}\"\n"
+            ),
+        ),
+    ];
+    for (label, config) in cases {
+        let dir = unique_dir(label);
+        std::fs::create_dir_all(dir.join("ts/stdlib")).expect("create custom tree");
+        let output = check_with_config(&dir, &config);
+        assert_fails_closed(&output, EXCLUSION_REASON);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 /// A well-formed pin clears configuration validation: whatever happens next

@@ -55,6 +55,12 @@ pub(crate) enum PipelineError {
     /// Invalid configuration (exit code `2`) — e.g. a config that resolves a
     /// `pep` rule to `disabled` ([CHKARCH-CONFIG-MODEL]).
     Config(String),
+    /// A terminal typeshed source failure (exit code `3`) — the configured
+    /// source is not on this machine or failed verification. The message is
+    /// the spec's `NO SOURCE` status line with its recovery command, so it
+    /// reads as a user-actionable failure, not a Basilisk bug
+    /// ([STUBRES-TYPESHED-OFFLINE]).
+    NoSource(String),
     /// Internal failure (exit code `3`).
     Internal(String),
 }
@@ -63,7 +69,10 @@ impl std::fmt::Display for PipelineError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Config(message) => write!(f, "invalid configuration: {message}"),
-            Self::Internal(message) => write!(f, "{message}"),
+            // Both already carry a fully-formed message: `NoSource` the spec's
+            // `NO SOURCE` status line with its recovery command, `Internal` the
+            // underlying failure. Neither takes a prefix.
+            Self::NoSource(message) | Self::Internal(message) => write!(f, "{message}"),
         }
     }
 }

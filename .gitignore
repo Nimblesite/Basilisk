@@ -108,6 +108,14 @@ deslop-*.log
 # =============================================================================
 benchmarks/results/.mypycache/
 benchmarks/results/.warmcache/
+# Pre-run snapshots a partial run (make bench-basilisk) carries un-measured
+# tools forward from. Scratch input to summarize.py, never a published record.
+benchmarks/results/.carry/
+# Raw per-fixture hyperfine output: ~9.6k lines rewritten on EVERY `make bench`,
+# which buried real changes in diff noise. The published record of a run is
+# benchmarks/status/<machine>.csv (the regression gate reads it from git) plus
+# the summary.md / coverage.tsv highlights, all still tracked.
+benchmarks/results/*.json
 
 
 # =============================================================================
@@ -144,6 +152,9 @@ nohup.out
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
 .claude/*.local.json
+
+# Per-developer pi agent state (machine-local; never committed)
+.pi/
 
 # =============================================================================
 # Temporary

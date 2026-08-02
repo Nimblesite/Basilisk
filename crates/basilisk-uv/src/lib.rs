@@ -18,7 +18,9 @@ pub mod workspace;
 pub use binary::{find_uv_binary, is_uv_available};
 pub use detect::{detect_uv_project, UvProjectInfo};
 pub use error::UvError;
-pub use lockfile::{parse_lock_file, LockFile};
+pub use lockfile::{
+    find_typeshed_package_pin, parse_lock_file, resolve_typeshed_package_pin, LockFile, LockWheel,
+};
 pub use pyproject::extract_pyproject_deps;
 pub use registry::{DepKind, PackageInfo, PackageRegistry};
 pub use workspace::{discover_workspace_members, parse_uv_workspace, UvWorkspace};

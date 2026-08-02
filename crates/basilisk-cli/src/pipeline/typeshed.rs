@@ -24,6 +24,11 @@ pub(super) fn load_cli_workspace_config(
         config.python_platform =
             basilisk_lsp::debug::python_platform_evidence(config.python_interpreter.as_deref());
     }
+    // [STUBRES-TYPESHED-PYPI] (issue #312): when no typeshed source is
+    // configured, auto-resolve a `PyPI` typeshed distribution pin from
+    // `uv.lock` so a uv-pinned project is reproducible without an explicit
+    // `typeshed-package` key. No-op for non-uv projects.
+    basilisk_lsp::config::apply_uv_typeshed_override(&mut config, project_root);
     config
 }
 
@@ -68,9 +73,23 @@ pub(super) fn activate_production_typeshed(
         return Ok(());
     }
     let manager = basilisk_stubs::typeshed::runtime::production_manager(request);
-    let snapshot = manager
-        .snapshot()
-        .map_err(|error| PipelineError::Internal(error.to_string()))?;
+    let snapshot = manager.snapshot().map_err(|error| match error {
+        // A terminal source failure (missing/corrupt pin, missing/corrupt
+        // `PyPI` package) is a user-actionable `NO SOURCE`, not an internal
+        // bug — the message carries the recovery command
+        // ([STUBRES-TYPESHED-OFFLINE]).
+        basilisk_stubs::typeshed::selector::SelectionError::NoSource { .. }
+        | basilisk_stubs::typeshed::selector::SelectionError::PyPIPackage { .. }
+        | basilisk_stubs::typeshed::selector::SelectionError::Custom(_) => {
+            PipelineError::NoSource(error.to_string())
+        }
+        // A backend handing back a source it was not asked for is a Basilisk
+        // bug, not something the user can fix — the only genuinely internal
+        // selection failure.
+        inconsistent @ basilisk_stubs::typeshed::selector::SelectionError::InconsistentIdentity => {
+            PipelineError::Internal(inconsistent.to_string())
+        }
+    })?;
     report_typeshed_status(&snapshot.status, rule_config, &mut std::io::stderr().lock());
     search_paths.typeshed_snapshot = Some(basilisk_checker::imports::ActiveTypeshed::new(
         snapshot, target,

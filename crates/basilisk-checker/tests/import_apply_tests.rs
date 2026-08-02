@@ -54,6 +54,7 @@ fn make_registry() -> Arc<PackageRegistry> {
         }),
         dependencies: deps,
         dev_dependencies: HashMap::new(),
+        wheels: Vec::new(),
         extra: HashMap::new(),
     };
     let root = LockPackage {
@@ -66,6 +67,7 @@ fn make_registry() -> Arc<PackageRegistry> {
         }),
         dependencies: vec![dep("requests", "2.31.0")],
         dev_dependencies: HashMap::from([("dev".to_owned(), vec![dep("pytest", "8.0.0")])]),
+        wheels: Vec::new(),
         extra: HashMap::new(),
     };
     let lock = LockFile {
@@ -515,12 +517,12 @@ fn make_custom_typeshed(stdlib_files: &[(&str, &str)]) -> Arc<Snapshot> {
             versions
         });
     let mut entries = vec![ArchiveEntry {
-        path: "stdlib/VERSIONS".to_owned(),
+        path: "stdlib/VERSIONS".to_owned().into(),
         mode: FileMode::Regular,
         data: versions.into_bytes().into(),
     }];
     entries.extend(stdlib_files.iter().map(|(name, body)| ArchiveEntry {
-        path: format!("stdlib/{name}"),
+        path: format!("stdlib/{name}").into(),
         mode: FileMode::Regular,
         data: body.as_bytes().to_vec().into(),
     }));

@@ -233,6 +233,25 @@ where
     }
 }
 
+/// The reason line shown when a uv command is skipped for want of a project.
+fn no_uv_project_reason(label: &str) -> String {
+    format!("{label} skipped — no `pyproject.toml` found in this workspace")
+}
+
+/// The JSON payload returned when a uv command is skipped for want of a
+/// project. `skipped` marks the no-op so the client can distinguish it from a
+/// real uv failure, and the reason line is Basilisk's own wording — never uv's
+/// "No `pyproject.toml` found in current directory or any parent directory"
+/// parse error (issue #23).
+fn no_uv_project_payload(label: &str) -> serde_json::Value {
+    serde_json::json!({
+        "success": false,
+        "stdout": "",
+        "stderr": no_uv_project_reason(label),
+        "skipped": true,
+    })
+}
+
 /// Build a no-op JSON response for uv commands that require a project file
 /// when none exists. The handler logs a clear non-error message and returns
 /// success=false with a stderr explaining why nothing happened, instead of
@@ -242,18 +261,13 @@ async fn no_uv_project_response(
     server: &LspServer,
     label: &str,
 ) -> LspResult<Option<serde_json::Value>> {
-    let msg = format!("Basilisk: {label} skipped — no `pyproject.toml` found in this workspace");
+    let msg = format!("Basilisk: {}", no_uv_project_reason(label));
     info!("{msg}");
     server
         .client
         .log_message(MessageType::INFO, msg.clone())
         .await;
-    Ok(Some(serde_json::json!({
-        "success": false,
-        "stdout": "",
-        "stderr": format!("{label} skipped — no `pyproject.toml` found in this workspace"),
-        "skipped": true,
-    })))
+    Ok(Some(no_uv_project_payload(label)))
 }
 
 /// Handle `basilisk.uv.sync`.
@@ -523,5 +537,47 @@ mod tests {
     fn strip_ansi_passes_plain_text_through() {
         let plain = "no escapes here";
         assert_eq!(strip_ansi(plain), plain);
+    }
+
+    /// Regression for issue #23: skipping a uv command because the workspace
+    /// has no project must be reported as a *no-op*, never as a uv failure.
+    /// The payload must carry `skipped: true` so the client can tell the two
+    /// apart, and must not leak uv's own
+    /// "No `pyproject.toml` found in current directory or any parent directory"
+    /// error — the very string the bug report shows surfacing as
+    /// "Basilisk: uv sync failed: ...".
+    #[test]
+    fn no_uv_project_payload_is_a_skip_not_a_uv_failure() {
+        for label in ["uv sync", "uv add", "uv add --dev", "uv remove", "uv lock"] {
+            let payload = no_uv_project_payload(label);
+
+            assert_eq!(
+                payload.get("skipped").and_then(serde_json::Value::as_bool),
+                Some(true),
+                "`{label}` must be marked skipped so the client does not report a failure"
+            );
+            assert_eq!(
+                payload.get("success").and_then(serde_json::Value::as_bool),
+                Some(false),
+                "`{label}` did not run, so it cannot claim success"
+            );
+
+            let stderr = payload
+                .get("stderr")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            assert!(
+                stderr.contains(label) && stderr.contains("skipped"),
+                "`{label}` must explain the skip in Basilisk's own words; got {stderr:?}"
+            );
+            assert!(
+                !stderr.contains("current directory or any parent directory"),
+                "uv's parse error must never reach the user for `{label}`; got {stderr:?}"
+            );
+            assert!(
+                strip_ansi(stderr) == stderr,
+                "`{label}` skip message must be free of ANSI escapes; got {stderr:?}"
+            );
+        }
     }
 }

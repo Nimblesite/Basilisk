@@ -95,22 +95,39 @@ Freshness is the default; determinism is one control away. Every key in
 [STUBRES-TYPESHED-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-CONFIG)
 is editable here.
 
-There are **two** sources and no third. The snapshot carries ONE active source
-holding the value that defines it — `ExactCommit { commit }` or
-`CustomFolder { path }` — so "a pin plus a custom folder" cannot be described at
-all. Alongside it the server sends the store folder (absent for a custom
-folder), and whether a license document exists to open. There are no per-control
-widget, label, or enabled descriptors: copy is client presentation, availability
-is the data itself.
+There are **three** sources and no fourth. The snapshot carries ONE active
+source holding the value that defines it — `ExactCommit { commit }`,
+`CustomFolder { path }`, or `PyPIPackage { name, sha256 }` — so "a pin plus a
+custom folder" cannot be described at all. Alongside it the server sends the
+store folder (absent for a custom folder), and whether a license document exists
+to open. There are no per-control widget, label, or enabled descriptors: copy is
+client presentation, availability is the data itself.
 
 | Source | Chosen by | Writes | Step-3 effect |
 |---|---|---|---|
-| **Pinned commit** *(default)* | editing the SHA, or **Download latest** | full `typeshed-commit`, clears `typeshed-path` | that SHA, verified offline; fails closed if it is not on this machine |
-| **Custom folder** | selecting it (folder-picker) | `typeshed-path`, clears `typeshed-commit` | canonical user-managed tree |
+| **Pinned commit** *(default)* | editing the SHA, or **Download latest** | full `typeshed-commit`, clears the other two | that SHA, verified offline; fails closed if it is not on this machine |
+| **Custom folder** | selecting it (folder-picker) | `typeshed-path`, clears the other two | canonical user-managed tree |
+| **PyPI package** | typing the pin spec | `typeshed-package`, clears the other two | that wheel, verified offline ([STUBRES-TYPESHED-PYPI](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-PYPI)) |
 
-Selecting a source is one atomic transition, and only the ACTIVE source's own
-field is rendered. A SHA that is not 40 hexadecimal characters is refused in the
-field and never reaches the configuration.
+Only the ACTIVE source's own field is rendered, and **exclusivity is a property
+of the write that sets a source**: it clears the other two keys in the same
+atomic mutation. Selecting a source never pre-clears anything, because two of
+the three cannot produce their value at selection time — the folder picker is
+cancellable and a wheel digest has to be typed — so clearing up front would
+destroy the configuration of a user who then backs out.
+
+That in turn means a source the server cannot yet describe must still be
+selectable. A commit always has a value (an unset pin IS the bundled commit) and
+a folder arrives from the picker, but a package pin exists only once it is
+typed. Choosing **PyPI package** therefore reveals an empty pin field from
+client presentation state; without it the field that creates a pin would exist
+only after a pin already existed, and the source would be unreachable.
+
+A value that cannot be a source is refused in its field and never reaches the
+configuration: a SHA that is not 40 hexadecimal characters, and a pin that is
+not a [PEP 508](https://peps.python.org/pep-0508/#names) distribution name
+followed by `@sha256:` and 64 hexadecimal characters. The field states which
+rule was broken — the server's own reason, not a generic "invalid".
 
 | Control | Key | Widget |
 |---|---|---|
@@ -123,12 +140,18 @@ and every control re-renders from the snapshot that results. The impact dialog
 remains for rule and tag entries; dismissing it discards the change and returns
 every control to the configuration that still holds.
 
-Only a pinned commit suppresses `typeshed_source_unpinned`; Custom says its folder can change and
-should be versioned or content-addressed externally, and shows user-managed terms
-rather than the typeshed composite license
+The two content-addressed sources — a pinned commit and a PyPI package — suppress
+`typeshed_source_unpinned`, because each names bytes that cannot change under it.
+Custom does not: its folder can change, and should be versioned or
+content-addressed externally, so it shows user-managed terms rather than the
+typeshed composite license
 ([STUBRES-TYPESHED-WARN](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-WARN)).
-`ViewLicense` returns the active immutable license document, or `not supplied`
-for custom. Clients execute nothing locally.
+`ViewLicense` returns the active immutable license document. It is `not supplied`
+for a custom folder and for a PyPI package alike: a third-party wheel ships
+whatever license it ships, and the wheel's SHA-256 attests its bytes, not the
+build-approved *typeshed* license identity
+([STUBRES-TYPESHED-PYPI](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-PYPI)).
+Clients execute nothing locally.
 
 The two directory keys render with a native folder-picker rather than free text;
 they are the only path-typed settings the editor exposes, distinct from the

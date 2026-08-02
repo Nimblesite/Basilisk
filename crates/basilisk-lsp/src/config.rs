@@ -122,6 +122,12 @@ pub struct WorkspaceConfig {
     /// Exact full `python/typeshed` commit pin; unset resolves to the bundled
     /// commit with a `typeshed_source_unpinned` warning ([STUBRES-TYPESHED-CONFIG]).
     pub typeshed_commit: Option<String>,
+    /// A `PyPI`-distributed typeshed package pin, `"name@sha256:<hex>"`,
+    /// content-addressed by the distribution's SHA-256 ([STUBRES-TYPESHED-PYPI],
+    /// issue #312). A package pin suppresses `typeshed_source_unpinned` and
+    /// `typeshed_source_user_managed`; mutually exclusive with `typeshed_path`
+    /// and `typeshed_commit`.
+    pub typeshed_package: Option<String>,
     /// Optional verified content-addressed store directory
     /// ([STUBRES-TYPESHED-STORE]); unset uses the per-user OS default.
     pub typeshed_store_path: Option<PathBuf>,
@@ -158,6 +164,7 @@ impl Default for WorkspaceConfig {
             stub_paths: Vec::new(),
             typeshed_path: None,
             typeshed_commit: None,
+            typeshed_package: None,
             typeshed_store_path: None,
             typeshed_configuration_error: None,
             formatter: FormatterEngine::Ruff,
@@ -170,9 +177,10 @@ impl Default for WorkspaceConfig {
 /// Invalid or mutually exclusive raw settings fail closed here, including when
 /// a file bypassed the configuration editor's stronger source validation.
 ///
-/// There are exactly two sources ([STUBRES-TYPESHED]): a pinned commit or a
-/// custom folder. An unset `typeshed-commit` resolves to the bundled commit as
-/// an implicit pin (still `typeshed_source_unpinned`); resolution never downloads.
+/// There are exactly three sources ([STUBRES-TYPESHED], [STUBRES-TYPESHED-PYPI]):
+/// a pinned commit, a custom folder, or a SHA-256-addressed `PyPI` package. An
+/// unset `typeshed-commit` resolves to the bundled commit as an implicit pin
+/// (still `typeshed_source_unpinned`); resolution never downloads.
 ///
 /// # Errors
 ///
@@ -188,8 +196,19 @@ pub fn typeshed_request(
         return Err(error.clone());
     }
 
-    if config.typeshed_path.is_some() && config.typeshed_commit.is_some() {
-        return Err("typeshed-path and typeshed-commit are mutually exclusive".to_owned());
+    let source_count = [
+        config.typeshed_path.is_some(),
+        config.typeshed_commit.is_some(),
+        config.typeshed_package.is_some(),
+    ]
+    .iter()
+    .filter(|&&set| set)
+    .count();
+    if source_count > 1 {
+        return Err(
+            "typeshed-path, typeshed-commit, and typeshed-package are mutually exclusive"
+                .to_owned(),
+        );
     }
     let selection = if let Some(path) = config.typeshed_path.as_deref() {
         SourceSelection::Custom {
@@ -205,6 +224,9 @@ pub fn typeshed_request(
             })?,
             explicit: true,
         }
+    } else if let Some(spec) = config.typeshed_package.as_deref() {
+        let (name, sha256) = basilisk_config::parse_typeshed_package(spec)?;
+        SourceSelection::PyPIPackage { name, sha256 }
     } else {
         SourceSelection::Pinned {
             commit: Oid::from_hex(bundled_commit_sha())
@@ -218,7 +240,30 @@ pub fn typeshed_request(
     })
 }
 
-/// The rule-tag every typeshed source-status advisory carries.
+/// When no typeshed source is configured, auto-resolve a `PyPI` typeshed
+/// distribution pin from `uv.lock` `wheels[].hash` ([STUBRES-TYPESHED-PYPI],
+/// issue #312). Mutates `config` in place: sets `typeshed_package` only when
+/// `typeshed-path`/`typeshed-commit`/`typeshed-package` are all unset and the
+/// lock pins exactly one recognised distribution. No-op otherwise — the
+/// bundled default and `typeshed_source_unpinned` advisory stand. This is an
+/// effective-resolution override, never a configured key: nothing writes it to
+/// `pyproject.toml` and the configuration editor does not project it.
+pub fn apply_uv_typeshed_override(config: &mut WorkspaceConfig, project_root: &std::path::Path) {
+    if config.typeshed_path.is_some()
+        || config.typeshed_commit.is_some()
+        || config.typeshed_package.is_some()
+    {
+        return;
+    }
+    if let Some(spec) = basilisk_uv::resolve_typeshed_package_pin(project_root) {
+        tracing::debug!(
+            spec = %spec,
+            "auto-resolved typeshed package pin from uv.lock"
+        );
+        config.typeshed_package = Some(spec);
+    }
+}
+
 ///
 /// These advisories are Basilisk's own house diagnostics
 /// ([STUBRES-TYPESHED-WARN]), so they resolve severity through the SAME
@@ -451,6 +496,13 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
         cfg.typeshed_commit = Some(v.to_owned());
     }
     if let Some(v) = obj
+        .get("typeshedPackage")
+        .or_else(|| obj.get("typeshed-package"))
+        .and_then(|v| v.as_str())
+    {
+        cfg.typeshed_package = Some(v.to_owned());
+    }
+    if let Some(v) = obj
         .get("typeshedStorePath")
         .or_else(|| obj.get("typeshed-store-path"))
         .and_then(|v| v.as_str())
@@ -532,6 +584,9 @@ fn workspace_config_from_toml(section: &toml::Table) -> WorkspaceConfig {
     if let Some(v) = toml_str(section, &["typeshed-commit", "typeshedCommit"]) {
         cfg.typeshed_commit = Some(v.to_owned());
     }
+    if let Some(v) = toml_str(section, &["typeshed-package", "typeshedPackage"]) {
+        cfg.typeshed_package = Some(v.to_owned());
+    }
     if let Some(v) = toml_str(section, &["typeshed-store-path", "typeshedStorePath"]) {
         cfg.typeshed_store_path = Some(PathBuf::from(v));
     }
@@ -545,11 +600,13 @@ fn toml_str<'a>(table: &'a toml::Table, keys: &[&str]) -> Option<&'a str> {
 }
 
 /// Every typeshed key holds a string ([STUBRES-TYPESHED-CONFIG]).
-const TYPESHED_STRING_KEYS: [&str; 6] = [
+const TYPESHED_STRING_KEYS: [&str; 8] = [
     "typeshed-path",
     "typeshedPath",
     "typeshed-commit",
     "typeshedCommit",
+    "typeshed-package",
+    "typeshedPackage",
     "typeshed-store-path",
     "typeshedStorePath",
 ];
@@ -925,7 +982,7 @@ mod tests {
         // then fails with both sides printed instead of a bare panic.
         let pinned = match default_request.selection {
             SourceSelection::Pinned { commit, explicit } => Some((commit.to_hex(), explicit)),
-            SourceSelection::Custom { .. } => None,
+            SourceSelection::Custom { .. } | SourceSelection::PyPIPackage { .. } => None,
         };
         assert_eq!(
             pinned,
@@ -936,5 +993,122 @@ mod tests {
             "an unset config must resolve to the unpinned bundled commit"
         );
         assert_eq!(default_request.store_path, None);
+    }
+
+    // [STUBRES-TYPESHED-PYPI] (issue #312): when no typeshed source is
+    // configured, `uv.lock` pinning exactly one recognised typeshed
+    // distribution auto-resolves to a `PyPI` package pin — no advisory.
+    #[test]
+    fn apply_uv_typeshed_override_auto_pins_from_uv_lock() {
+        use basilisk_stubs::typeshed::source::SourceSelection;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("uv.lock"),
+            r#"
+version = 1
+
+[[package]]
+name = "micropython-stdlib-stubs"
+version = "1.0.0"
+wheels = [
+    { hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+]
+"#,
+        )
+        .unwrap();
+        let mut config = WorkspaceConfig::default();
+        apply_uv_typeshed_override(&mut config, dir.path());
+        let spec = config
+            .typeshed_package
+            .as_deref()
+            .expect("uv.lock pin should populate typeshed_package");
+        assert_eq!(
+            spec,
+            "micropython-stdlib-stubs@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        );
+        let request = typeshed_request(&config).expect("valid PyPI request");
+        assert!(
+            matches!(
+                request.selection,
+                SourceSelection::PyPIPackage { ref name, .. } if name == "micropython-stdlib-stubs"
+            ),
+            "auto-resolved pin must select the PyPI package source"
+        );
+    }
+
+    // An explicit source configured by the user wins — uv.lock never overrides
+    // an intentional choice ([STUBRES-TYPESHED-PYPI]).
+    #[test]
+    fn apply_uv_typeshed_override_skips_when_a_source_is_configured() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("uv.lock"),
+            r#"
+version = 1
+
+[[package]]
+name = "micropython-stdlib-stubs"
+version = "1.0.0"
+wheels = [
+    { hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+]
+"#,
+        )
+        .unwrap();
+        let mut config = WorkspaceConfig {
+            typeshed_commit: Some("83C2518A9E6ABBDA0C44592C3483DE459198F887".to_owned()),
+            ..WorkspaceConfig::default()
+        };
+        apply_uv_typeshed_override(&mut config, dir.path());
+        assert!(
+            config.typeshed_package.is_none(),
+            "an explicit commit pin must not be overwritten by uv.lock"
+        );
+    }
+
+    // An ambiguous lock (two recognised distributions) does not auto-pin — the
+    // bundled default + `typeshed_source_unpinned` advisory stand.
+    #[test]
+    fn apply_uv_typeshed_override_skips_when_lock_is_ambiguous() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("uv.lock"),
+            r#"
+version = 1
+
+[[package]]
+name = "micropython-stdlib-stubs"
+version = "1.0.0"
+wheels = [
+    { hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+]
+
+[[package]]
+name = "MicroPython_Stdlib_Stubs"
+version = "1.0.0"
+wheels = [
+    { hash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+]
+"#,
+        )
+        .unwrap();
+        let mut config = WorkspaceConfig::default();
+        apply_uv_typeshed_override(&mut config, dir.path());
+        assert!(
+            config.typeshed_package.is_none(),
+            "an ambiguous lock must not auto-pin"
+        );
+    }
+
+    // A project without `uv.lock` is left untouched (the common case).
+    #[test]
+    fn apply_uv_typeshed_override_is_a_noop_without_uv_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = WorkspaceConfig::default();
+        apply_uv_typeshed_override(&mut config, dir.path());
+        assert!(
+            config.typeshed_package.is_none(),
+            "no uv.lock must leave the config untouched"
+        );
     }
 }

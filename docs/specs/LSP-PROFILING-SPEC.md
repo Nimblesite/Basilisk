@@ -246,6 +246,17 @@ Snapshot/diff payloads use minted temporary files where debugpy stdout would tru
 The editor reads and deletes the file, then sends the content to ingest. Paths are encoded as
 Python string literals rather than interpolated raw.
 
+The reserved path is published atomically (sibling `.part` + `os.replace`) so a poll sees
+either the empty reservation or the whole payload, never a truncation. That rename is
+**retried**, and the whole write is inside the worker's `try`: on Windows a rename onto a path
+another process currently has open fails, and the editor polls this exact path while the
+worker renders, so the collision is designed in rather than exceptional. If every retry loses
+its race the payload is written straight to the reserved path, and any remaining failure
+writes its own error text there — a rare torn read is recoverable, a permanently empty
+reservation is not. A payload that reaches ingest without a recognized marker is rejected with
+the delivered text quoted back, so a lost race, an expired wait, and a genuinely broken script
+are distinguishable instead of collapsing into one opaque error.
+
 #### Final snapshot {#PROFILE-MEMORY-FINAL}
 
 Start arms an exit/signal hook that writes one final snapshot file. The editor finalizes only

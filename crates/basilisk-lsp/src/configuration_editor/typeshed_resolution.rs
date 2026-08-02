@@ -136,10 +136,11 @@ pub(crate) async fn resolve_and_activate(
 }
 
 /// Whether a configuration change touches the Typeshed source policy — the
-/// whole surface is three keys ([LSPCFGED-TYPESHED]).
+/// whole surface is four keys ([LSPCFGED-TYPESHED]).
 fn typeshed_policy_changed(before: &BasiliskConfig, after: &BasiliskConfig) -> bool {
     before.typeshed_path != after.typeshed_path
         || before.typeshed_commit != after.typeshed_commit
+        || before.typeshed_package != after.typeshed_package
         || before.typeshed_store_path != after.typeshed_store_path
 }
 
@@ -154,7 +155,7 @@ mod tests {
     use super::{stage_configuration_change, typeshed_policy_changed};
 
     #[test]
-    fn staging_is_limited_to_the_three_typeshed_settings() {
+    fn staging_is_limited_to_the_four_typeshed_settings() {
         let before = BasiliskConfig::default();
         let mut rule_only = before.clone();
         rule_only.python_version = Some("3.12".to_owned());
@@ -163,6 +164,11 @@ mod tests {
         let mut pin = before.clone();
         pin.typeshed_commit = Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned());
         assert!(typeshed_policy_changed(&before, &pin));
+
+        let mut package = before.clone();
+        package.typeshed_package =
+            Some("micropython-stdlib-stubs@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_owned());
+        assert!(typeshed_policy_changed(&before, &package));
 
         let mut store = before.clone();
         store.typeshed_store_path = Some(std::path::PathBuf::from("stores/typeshed"));

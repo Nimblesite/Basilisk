@@ -168,7 +168,7 @@ fn verified_archive(dir: &Path, manifest: &StoreManifest) -> Result<Archive, Sto
                 return Err(StoreError::Corrupt);
             }
             entries.push(ArchiveEntry {
-                path: file.path.clone(),
+                path: file.path.clone().into(),
                 mode,
                 data: data.into(),
             });
@@ -275,10 +275,10 @@ pub fn write_entry(store_root: &Path, entry: &StoreEntry) -> Result<(), StoreErr
         return Ok(());
     }
     fs::create_dir_all(store_root).map_err(|_error| StoreError::Corrupt)?;
-    let sequence = STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let staging = store_root.join(format!(".stage-{}-{sequence}", std::process::id()));
+    let staging = staging_dir(store_root, "commit");
     let staged = stage_entry(&staging, entry);
-    match staged.and_then(|()| promote(&staging, &target)) {
+    match staged.and_then(|()| promote_dir(&staging, &target).map_err(|_error| StoreError::Corrupt))
+    {
         Ok(()) => Ok(()),
         Err(error) => {
             let _ = fs::remove_dir_all(&staging);
@@ -295,7 +295,7 @@ fn stage_entry(staging: &Path, entry: &StoreEntry) -> Result<(), StoreError> {
         serde_json::to_vec_pretty(&entry.manifest).map_err(|_error| StoreError::Corrupt)?;
     fs::write(staging.join(MANIFEST_FILE), manifest).map_err(|_error| StoreError::Corrupt)?;
     for file in &entry.files {
-        let path = staging.join(&file.path);
+        let path = staging.join(&*file.path);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|_error| StoreError::Corrupt)?;
         }
@@ -304,16 +304,27 @@ fn stage_entry(staging: &Path, entry: &StoreEntry) -> Result<(), StoreError> {
     Ok(())
 }
 
-fn promote(staging: &Path, target: &Path) -> Result<(), StoreError> {
+/// A fresh staging directory under `store_root`, uniquely named per process
+/// and per call so concurrent downloads never collide. The shared primitive
+/// behind every atomic store write — commit entries ([`write_entry`]) and
+/// `PyPI`-package wheels ([`super::wheel::write_wheel`]).
+pub(crate) fn staging_dir(store_root: &Path, kind: &str) -> PathBuf {
+    let sequence = STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    store_root.join(format!(".stage-{kind}-{}-{sequence}", std::process::id()))
+}
+
+/// Atomically promote a staged directory to its content-addressed target. A
+/// concurrent download that already won the rename is fine: the entry is
+/// content-addressed, so the winner's bytes are equally correct. Returns the
+/// raw I/O error so each caller maps it to its own error type.
+pub(crate) fn promote_dir(staging: &Path, target: &Path) -> Result<(), std::io::Error> {
     match fs::rename(staging, target) {
         Ok(()) => Ok(()),
-        // A concurrent download of the same commit won the rename; the entry
-        // is content-addressed, so the winner's bytes are equally correct.
         Err(_error) if target.is_dir() => {
             let _ = fs::remove_dir_all(staging);
             Ok(())
         }
-        Err(_error) => Err(StoreError::Corrupt),
+        Err(error) => Err(error),
     }
 }
 
@@ -333,17 +344,17 @@ mod tests {
         let license_body = bundle.vfs.read("LICENSE").expect("bundle LICENSE").to_vec();
         let files = vec![
             ArchiveEntry {
-                path: "LICENSE".to_owned(),
+                path: "LICENSE".to_owned().into(),
                 mode: FileMode::Regular,
                 data: license_body.into(),
             },
             ArchiveEntry {
-                path: "stdlib/VERSIONS".to_owned(),
+                path: "stdlib/VERSIONS".to_owned().into(),
                 mode: FileMode::Regular,
                 data: b"os: 3.0-\n".to_vec().into(),
             },
             ArchiveEntry {
-                path: "stdlib/os.pyi".to_owned(),
+                path: "stdlib/os.pyi".to_owned().into(),
                 mode: FileMode::Regular,
                 data: b"def getcwd() -> str: ...\n".to_vec().into(),
             },
@@ -356,7 +367,7 @@ mod tests {
         let mut git_files: Vec<GitFile> = files
             .iter()
             .map(|entry| GitFile {
-                path: entry.path.clone(),
+                path: entry.path.clone().into(),
                 oid: git_blob_oid(&entry.data),
                 mode: entry.mode,
             })
@@ -456,7 +467,7 @@ mod tests {
             .files
             .iter()
             .map(|file| GitFile {
-                path: file.path.clone(),
+                path: file.path.clone().into(),
                 oid: git_blob_oid(&file.data),
                 mode: file.mode,
             })

@@ -17,7 +17,7 @@ use basilisk_config::{
 use super::{
     build_impact, build_update, require_mutations, require_no_pep_disable, require_revision,
     require_valid_typeshed_configuration, resolved_changes, resolved_typeshed_changes,
-    selection_error, validate_document_rules,
+    selection_error, validate_document_rules, validate_typeshed_value,
 };
 use crate::configuration_editor::catalog::{descriptors, SelectionError};
 use crate::configuration_editor::model::{
@@ -284,6 +284,72 @@ fn typeshed_source_combination_and_shape_are_validated() {
     require_valid_typeshed_configuration(&config)
         .expect("a custom source with a materialised stdlib validates");
     let _ = std::fs::remove_dir_all(root);
+}
+
+/// [STUBRES-TYPESHED-PYPI] (issue #312): `typeshed-package` is a third,
+/// mutually-exclusive source selector. Pairing it with either `typeshed-commit`
+/// or `typeshed-path` must fail closed, and its value must be `name@sha256:<hex>`.
+#[test]
+fn typeshed_package_is_mutually_exclusive_and_shape_validated() {
+    const PACKAGE: &str =
+        "micropython-stdlib-stubs@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    // A well-formed package spec validates on its own.
+    assert_eq!(
+        validate_typeshed_value(TypeshedSettingKey::TypeshedPackage, PACKAGE).as_deref(),
+        Ok(PACKAGE)
+    );
+    // A malformed spec is rejected.
+    assert!(
+        validate_typeshed_value(TypeshedSettingKey::TypeshedPackage, "not-a-pin").is_err(),
+        "a malformed typeshed-package spec must be rejected"
+    );
+    assert!(
+        validate_typeshed_value(TypeshedSettingKey::TypeshedPackage, "name@sha256:abc").is_err(),
+        "a short digest must be rejected"
+    );
+    // A rejection must say WHAT is wrong, not just that something is. The pin
+    // parser distinguishes the three failure modes, and the editor surfaces its
+    // reason verbatim instead of flattening them to one generic sentence.
+    for (spec, expected_fragment) in [
+        ("name@sha256:abc", "64 hex characters"),
+        (
+            "stubs/json@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "PEP 508",
+        ),
+        ("not-a-pin", "name@sha256:"),
+    ] {
+        let error = validate_typeshed_value(TypeshedSettingKey::TypeshedPackage, spec)
+            .expect_err("a malformed pin must be rejected");
+        assert!(
+            error.message.contains(expected_fragment),
+            "`{spec}` must be rejected with the reason that explains why, got: {}",
+            error.message
+        );
+    }
+    // Pairing a package with a commit is mutually exclusive.
+    let config = BasiliskConfig {
+        typeshed_commit: Some("83c2518a9e6abbda0c44592c3483de459198f887".to_owned()),
+        typeshed_package: Some(PACKAGE.to_owned()),
+        ..BasiliskConfig::default()
+    };
+    assert!(require_valid_typeshed_configuration(&config).is_err());
+    // Pairing a package with a path is mutually exclusive.
+    let config = BasiliskConfig {
+        typeshed_path: Some(PathBuf::from("custom")),
+        typeshed_package: Some(PACKAGE.to_owned()),
+        ..BasiliskConfig::default()
+    };
+    assert!(require_valid_typeshed_configuration(&config).is_err());
+    // A package alone is not a path/commit combination and clears the check
+    // (the backend verifies the wheel at activation).
+    let config = BasiliskConfig {
+        typeshed_package: Some(PACKAGE.to_owned()),
+        ..BasiliskConfig::default()
+    };
+    assert!(
+        require_valid_typeshed_configuration(&config).is_ok(),
+        "a lone package pin is a valid source selection"
+    );
 }
 
 /// [CONFIGEDITOR-MODEL]: a preview reports fully resolved effective-severity

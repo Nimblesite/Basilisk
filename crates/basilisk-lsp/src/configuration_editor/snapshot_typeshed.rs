@@ -15,17 +15,31 @@ use crate::server::typeshed_status::TypeshedGeneration;
 /// unset pin IS the bundled commit ([STUBRES-TYPESHED]): the picker shows the
 /// effective SHA and the `typeshed_source_unpinned` warning says it is not yet reproducible.
 fn source(config: &BasiliskConfig) -> TypeshedSource {
-    config.typeshed_path.as_ref().map_or_else(
-        || TypeshedSource::ExactCommit {
+    if let Some(path) = config.typeshed_path.as_ref() {
+        TypeshedSource::CustomFolder {
+            path: path.to_string_lossy().into_owned(),
+        }
+    } else if let Some(spec) = config.typeshed_package.as_deref() {
+        // A malformed `typeshed-package` spec is NOT a valid source: fall
+        // through to the bundled commit so the editor never renders a fake
+        // `PyPIPackage { name: "", sha256: "" }` identity. The runtime's
+        // `typeshed_request` surfaces the parse error as a config failure, and
+        // `warn_on_malformed_typeshed_values` logs it; the editor stays
+        // fail-closed ([STUBRES-TYPESHED-PYPI], house rule).
+        match basilisk_config::parse_typeshed_package(spec) {
+            Ok((name, sha256)) => TypeshedSource::PyPIPackage { name, sha256 },
+            Err(_) => TypeshedSource::ExactCommit {
+                commit: bundled_commit_sha().to_owned(),
+            },
+        }
+    } else {
+        TypeshedSource::ExactCommit {
             commit: config
                 .typeshed_commit
                 .clone()
                 .unwrap_or_else(|| bundled_commit_sha().to_owned()),
-        },
-        |path| TypeshedSource::CustomFolder {
-            path: path.to_string_lossy().into_owned(),
-        },
-    )
+        }
+    }
 }
 
 /// The store directory pins resolve from. A custom folder resolves nothing
@@ -49,6 +63,13 @@ fn license_available(source: &TypeshedSource, generation: Option<&TypeshedGenera
             .and_then(TypeshedGeneration::ready_status)
             .and_then(|status| status.commit)
             .is_some_and(|active| active.to_hex() == *commit),
+        // A PyPI package's license ships inside the verified wheel; it is
+        // available exactly when that wheel's snapshot is active.
+        TypeshedSource::PyPIPackage { .. } => generation
+            .and_then(TypeshedGeneration::ready_status)
+            .is_some_and(|status| {
+                status.active_source == basilisk_stubs::typeshed::source::SourceKind::PyPIPackage
+            }),
     }
 }
 
@@ -87,6 +108,7 @@ pub(crate) fn ready_projection(status: &TypeshedStatus) -> TypeshedStatusState {
             SourceKind::Custom => TypeshedActiveSource::Custom,
             SourceKind::ExactCommit => TypeshedActiveSource::ExactCommit,
             SourceKind::Bundled => TypeshedActiveSource::Bundled,
+            SourceKind::PyPIPackage => TypeshedActiveSource::PyPIPackage,
         }),
         commit_identity: status.commit.map(|oid| oid.to_hex()),
         license_status: match status.license_status {

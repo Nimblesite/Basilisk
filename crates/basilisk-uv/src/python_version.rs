@@ -14,9 +14,12 @@ use std::time::{Duration, Instant};
 /// It is deliberately well clear of scheduling stalls on a saturated machine:
 /// a trivial probe that merely waits for CPU under heavy load must still finish
 /// inside the budget, so the ceiling measures interpreter health, not runner
-/// load. The timeout is injectable ([`read_python_platform_within`]) so the
-/// timeout path is exercised without spending this full budget in tests.
-const PLATFORM_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+/// load. On macOS an `execve` of a *shebang script with arguments* adds a
+/// multi-second kernel delay — real interpreter binaries are unaffected, but
+/// tests that stand up script interpreters are, so the ceiling clears that
+/// window too. The timeout is injectable ([`read_python_platform_within`]), so
+/// the timeout path is exercised without ever spending this full budget.
+const PLATFORM_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Read `sys.platform` from the interpreter that will execute the project.
 ///

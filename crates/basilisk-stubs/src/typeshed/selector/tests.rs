@@ -6,12 +6,15 @@ use super::*;
 
 const OTHER_SHA: &str = "0123456789012345678901234567890123456789";
 const BUNDLE_SHA: &str = "83c2518a9e6abbda0c44592c3483de459198f887";
+/// A 64-hex SHA-256 fixture for the `PyPI`-package source (issue #312).
+const PACKAGE_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 #[derive(Default)]
 struct FakeBackend {
     custom: Mutex<Option<Result<Snapshot, BackendError>>>,
     pinned: Mutex<Option<Result<Snapshot, BackendError>>>,
     bundle: Mutex<Option<Result<Snapshot, BackendError>>>,
+    pypi: Mutex<Option<Result<Snapshot, BackendError>>>,
     calls: Mutex<Vec<&'static str>>,
 }
 
@@ -47,6 +50,11 @@ impl SourceBackend for FakeBackend {
         self.record("bundle");
         Self::take(&self.bundle)
     }
+
+    fn load_pypi_package(&self, _name: &str, _sha256: &str) -> Result<Snapshot, BackendError> {
+        self.record("pypi");
+        Self::take(&self.pypi)
+    }
 }
 
 fn request(selection: SourceSelection) -> TypeshedRequest {
@@ -61,6 +69,14 @@ fn bundle() -> Snapshot {
     fixture_snapshot(SourceIdentity::Bundled { commit }, SourceKind::Bundled)
 }
 
+fn pypi_package(name: &str, sha256: &str) -> Snapshot {
+    let identity = SourceIdentity::PyPIPackage {
+        name: name.to_owned(),
+        sha256: sha256.to_owned(),
+    };
+    fixture_snapshot(identity, SourceKind::PyPIPackage)
+}
+
 fn stored(commit: Oid, explicit: bool) -> Snapshot {
     let identity = SourceIdentity::Commit {
         commit,
@@ -73,12 +89,12 @@ fn fixture_snapshot(identity: SourceIdentity, active_source: SourceKind) -> Snap
     let commit = identity.commit();
     let archive = Archive::new(vec![
         ArchiveEntry {
-            path: "stdlib/VERSIONS".to_owned(),
+            path: "stdlib/VERSIONS".to_owned().into(),
             mode: FileMode::Regular,
             data: b"os: 3.0-\n".to_vec().into(),
         },
         ArchiveEntry {
-            path: "stdlib/os.pyi".to_owned(),
+            path: "stdlib/os.pyi".to_owned().into(),
             mode: FileMode::Regular,
             data: b"name: str\n".to_vec().into(),
         },
@@ -287,4 +303,91 @@ fn an_inconsistent_backend_identity_fails_closed() {
         .err(),
         Some(SelectionError::InconsistentIdentity)
     );
+}
+
+/// [STUBRES-TYPESHED-PYPI] (issue #312, agreed solution): a typeshed source
+/// pinned to a `PyPI` package — content-addressed by the distribution's SHA-256 —
+/// is a PINNED source. It activates as `SourceKind::PyPIPackage` and suppresses
+/// BOTH `typeshed_source_unpinned` and `typeshed_source_user_managed`, because
+/// the registry attests the contents by hash rather than the user managing a
+/// loose folder. This is the contract that lets a user (e.g. Josverl) install a
+/// stdlib-stubs package via uv/pip and get an advisory-free, reproducible
+/// source instead of the `UNPINNED`/`USER-MANAGED` warnings a custom folder
+/// always carries.
+#[test]
+fn a_pypi_package_pin_is_pinned_and_emits_no_source_advisories() {
+    let snapshot = pypi_package("micropython-stdlib-stubs", PACKAGE_SHA256);
+    let backend = FakeBackend {
+        pypi: Mutex::new(Some(Ok(snapshot))),
+        ..FakeBackend::default()
+    };
+    let selected = select_snapshot(
+        &request(SourceSelection::PyPIPackage {
+            name: "micropython-stdlib-stubs".to_owned(),
+            sha256: PACKAGE_SHA256.to_owned(),
+        }),
+        &backend,
+    )
+    .expect("a SHA-256-verified PyPI package activates");
+    assert_eq!(
+        selected.status.active_source,
+        SourceKind::PyPIPackage,
+        "a PyPI package pin reports its own source kind"
+    );
+    assert!(
+        selected.status.warnings.is_empty(),
+        "a content-addressed PyPI package is pinned — no unpinned/user-managed \
+         advisories may be emitted: {:?}",
+        selected.status.warnings
+    );
+    assert_eq!(
+        backend.calls.lock().ok().map(|calls| calls.clone()),
+        Some(vec!["pypi"]),
+        "selection must consult the PyPI-package backend and nothing else"
+    );
+}
+
+/// [STUBRES-TYPESHED-PYPI] / [STUBRES-TYPESHED-WARN]: a `PyPI` package that is
+/// not on this machine is terminal `NO SOURCE` — never substituted, never
+/// degraded — and the recovery line names the exact
+/// `basilisk typeshed download --package <name>@sha256:<hex>` command, mirroring
+/// the commit pin's status line. A corrupt wheel (failed SHA-256 verification)
+/// surfaces the same way.
+#[test]
+fn a_missing_pypi_package_fails_hard_naming_the_package_download_command() {
+    const NAME: &str = "micropython-stdlib-stubs";
+    for reason in [BackendError::Missing, BackendError::Corrupt] {
+        let backend = FakeBackend {
+            pypi: Mutex::new(Some(Err(reason))),
+            ..FakeBackend::default()
+        };
+        let error = select_snapshot(
+            &request(SourceSelection::PyPIPackage {
+                name: NAME.to_owned(),
+                sha256: PACKAGE_SHA256.to_owned(),
+            }),
+            &backend,
+        )
+        .expect_err("a missing/corrupt PyPI package must fail closed");
+        assert!(
+            matches!(
+                error,
+                SelectionError::PyPIPackage { reason: r, .. } if r == reason
+            ),
+            "the reason must ride along: {error:?}"
+        );
+        let message = error.to_string();
+        assert!(
+            message.contains("NO SOURCE"),
+            "a terminal PyPI failure is a NO SOURCE status: {message}"
+        );
+        assert!(
+            message.contains("basilisk typeshed download --package"),
+            "the recovery line must name the package download command: {message}"
+        );
+        assert!(
+            message.contains(NAME) && message.contains(PACKAGE_SHA256),
+            "the full pin must ride along: {message}"
+        );
+    }
 }

@@ -17,6 +17,7 @@
 
 mod commit;
 mod github;
+mod pypi;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
 
@@ -25,14 +26,19 @@ use std::path::PathBuf;
 use basilisk_stubs::typeshed::archive::{Archive, ArchiveEntry};
 use basilisk_stubs::typeshed::bundle::approved_license_manifest;
 use basilisk_stubs::typeshed::codec::{decode_zip, DecodeLimits, ZipLayout};
-use basilisk_stubs::typeshed::gate::{run_activation, GateConfig, GateError, SafetyLimits};
+use basilisk_stubs::typeshed::gate::{
+    manifest::sha256_hex, run_activation, safety_gate, shape_gate, GateConfig, GateError,
+    SafetyLimits,
+};
 use basilisk_stubs::typeshed::gittree::{git_blob_oid, FileMode, Oid};
 use basilisk_stubs::typeshed::runtime::default_store_path;
 use basilisk_stubs::typeshed::store::{
     self, is_materialized, StoreEntry, StoreManifest, StoreTreeFile,
 };
+use basilisk_stubs::typeshed::wheel;
 
 pub use github::{CommitInfo, GithubApi, GithubClient, TransportError, TreeEntry};
+pub use pypi::{PypiApi, PypiClient};
 
 /// Coarse download progress, for surfaces that render it on the invoking
 /// control ([LSPCFGED-TYPESHED-DOWNLOAD]).
@@ -189,6 +195,69 @@ fn download(
     })
 }
 
+/// Coarse progress for a `PyPI`-package wheel download, for surfaces that
+/// render it on the invoking control ([STUBRES-TYPESHED-PYPI]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackageDownloadPhase {
+    /// Resolving the project index and selecting the pinned wheel.
+    Resolving,
+    /// Re-hashing the fetched bytes and running the structural gates.
+    Verifying,
+    /// Writing the store entry.
+    Writing,
+}
+
+/// Download one `PyPI` typeshed distribution wheel into the store
+/// ([STUBRES-TYPESHED-PYPI], [STUBRES-TYPESHED-DOWNLOAD]). `name` and
+/// `sha256` are the configured pin (`name@sha256:<hex>`). The wheel is
+/// resolved from `PyPI`'s JSON index by the pinned digest, **re-hashed** on
+/// arrival (the index's reported digest is never trusted on its own), run
+/// through the same Safety and Shape gates the check-time read path runs, and
+/// written to `<store>/<sha256>/wheel.whl`. **A failure at any step writes
+/// nothing.** No configuration is written — the pin is the caller's contract.
+///
+/// The License and Content gates are intentionally not run: the License gate
+/// attests the build-approved *typeshed* `LICENSE` identity (a third-party
+/// wheel ships its own license), and the Content gate reconstructs a Git root
+/// tree (a wheel is not a Git tree). The wheel SHA-256 IS the content
+/// attestation for a `PyPI` source.
+///
+/// # Errors
+///
+/// Returns a redacted [`DownloadError`]; on any error nothing was written.
+pub fn download_package(
+    name: &str,
+    sha256: &str,
+    store_path: Option<PathBuf>,
+    api: &dyn PypiApi,
+    progress: &dyn Fn(PackageDownloadPhase),
+) -> Result<(), DownloadError> {
+    let store_root = store_path
+        .or_else(default_store_path)
+        .ok_or(DownloadError::Store)?;
+    progress(PackageDownloadPhase::Resolving);
+    let bytes = api
+        .fetch_wheel(name, sha256)
+        .map_err(|_error| DownloadError::Download)?;
+    progress(PackageDownloadPhase::Verifying);
+    // The wheel SHA-256 IS the pin: re-hash the fetched bytes and require the
+    // pinned digest. PyPI's index digest is never the basis of trust.
+    if sha256_hex(&bytes) != sha256 {
+        return Err(DownloadError::Validation);
+    }
+    // Defense in depth: decode and run the same structural gates the
+    // check-time read path (`wheel::read_snapshot`) runs, so a malformed wheel
+    // never lands in the store to fail later as `NO SOURCE`.
+    let archive = decode_zip(&bytes, ZipLayout::BundledRootless, &DecodeLimits::default())
+        .map_err(|_error| DownloadError::Validation)?;
+    safety_gate(&archive, &SafetyLimits::default()).map_err(|_error| DownloadError::Validation)?;
+    shape_gate(&archive).map_err(|_error| DownloadError::Validation)?;
+    progress(PackageDownloadPhase::Writing);
+    wheel::write_wheel(&store_root, sha256, &bytes).map_err(|_error| DownloadError::Store)?;
+    tracing::info!(name, sha256, "typeshed package wheel downloaded and stored");
+    Ok(())
+}
+
 /// Bind the decoded archive to the trusted tree: exact path set, trusted
 /// modes, and per-blob object IDs. Codeload archives do not preserve Git
 /// modes, so the tree's modes are authoritative
@@ -207,7 +276,7 @@ fn bind_to_tree(archive: &Archive, trusted: &[TreeEntry]) -> Result<Archive, Dow
     let mut entries = Vec::with_capacity(archive.len());
     for entry in archive.entries() {
         let metadata = by_path
-            .get(entry.path.as_str())
+            .get(entry.path.as_ref())
             .ok_or(DownloadError::Validation)?;
         if !matches!(metadata.mode, FileMode::Regular | FileMode::Executable)
             || git_blob_oid(&entry.data) != metadata.oid

@@ -180,6 +180,7 @@ mod tests {
             source,
             dependencies: deps,
             dev_dependencies: dev_deps,
+            wheels: Vec::new(),
             extra: HashMap::new(),
         }
     }

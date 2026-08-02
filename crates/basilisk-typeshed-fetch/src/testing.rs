@@ -1,9 +1,10 @@
-//! Offline fake-GitHub fixture for [STUBRES-TYPESHED-DOWNLOAD] tests: a
-//! synthetic-but-honest repository at one commit (real Git hashing, real zip
-//! encoding, the real approved LICENSE bytes). Shared by this crate's own
-//! pipeline tests and — behind the `test-support` feature — by consumers
-//! (`basilisk-cli`) exercising their download-invoking surfaces without a
-//! network. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-DOWNLOAD.
+//! Offline fake fixtures for [STUBRES-TYPESHED-DOWNLOAD] tests: a
+//! synthetic-but-honest GitHub repository at one commit (real Git hashing, real
+//! zip encoding, the real approved LICENSE bytes) and a fake `PyPI` index
+//! serving one wheel by SHA-256. Shared by this crate's own pipeline tests and
+//! — behind the `test-support` feature — by consumers (`basilisk-cli`)
+//! exercising their download-invoking surfaces without a network. See
+//! docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-DOWNLOAD.
 
 use std::io::Write as _;
 
@@ -15,7 +16,7 @@ use zip::write::{SimpleFileOptions, ZipWriter};
 use zip::CompressionMethod;
 
 use crate::github::CommitInfo;
-use crate::{GithubApi, TransportError, TreeEntry};
+use crate::{GithubApi, PypiApi, TransportError, TreeEntry};
 
 /// A complete fake repository at one commit: the trusted tree, the raw commit
 /// object (unsigned, so payload == raw), and the file bytes. Fields are public
@@ -167,5 +168,96 @@ impl GithubApi for FakeApi {
             return Err(TransportError::Download);
         }
         Ok(self.archive.clone())
+    }
+}
+
+/// A minimal wheel that ships the contract `stdlib/` tree plus a root
+/// `LICENSE` — exactly what the Safety and Shape gates require of a
+/// typeshed-like distribution. Shared by the fetch crate's package-download
+/// tests and — behind `test-support` — by `basilisk-cli`'s `--package` surface.
+#[must_use]
+pub fn fake_wheel() -> Vec<u8> {
+    let entries: &[(&str, &[u8], u32)] = &[
+        ("stdlib/VERSIONS", b"os: 3.0-\nsys: 3.0-\n", 0o644),
+        ("stdlib/os.pyi", b"def getcwd() -> str: ...\n", 0o644),
+        ("LICENSE", b"MIT\n\nCopyright (c)\n", 0o644),
+        (
+            "micropython_stdlib_stubs-1.0.dist-info/METADATA",
+            b"Metadata-Version: 2.1\nName: micropython-stdlib-stubs\n",
+            0o644,
+        ),
+    ];
+    let mut buf = Vec::new();
+    {
+        let mut writer = ZipWriter::new(std::io::Cursor::new(&mut buf));
+        for (name, data, mode) in entries {
+            let options = SimpleFileOptions::default()
+                .compression_method(CompressionMethod::Stored)
+                .unix_permissions(*mode);
+            if writer.start_file(*name, options).is_err() {
+                return Vec::new();
+            }
+            if writer.write_all(data).is_err() {
+                return Vec::new();
+            }
+        }
+        if writer.finish().is_err() {
+            return Vec::new();
+        }
+    }
+    buf
+}
+
+/// One switchable failure per `PyPI`-package pipeline phase.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct PypiFaults {
+    /// Fail the index/selection resolution.
+    pub resolve_fails: bool,
+    /// Fail the wheel-byte download.
+    pub download_fails: bool,
+}
+
+/// A [`PypiApi`] serving one wheel addressed by its SHA-256, with switchable
+/// [`PypiFaults`]. A request for a digest the fake does not hold resolves to
+/// `Metadata` — no matching file in the index — exactly like the production
+/// client when a pin names an unknown distribution.
+#[derive(Debug)]
+pub struct FakePypiApi {
+    /// The wheel bytes served for `sha256`.
+    pub wheel: Vec<u8>,
+    /// The digest that addresses `wheel` (the re-hash of `wheel`).
+    pub sha256: String,
+    /// Which pipeline phases fail.
+    pub faults: PypiFaults,
+}
+
+impl FakePypiApi {
+    /// Serve `wheel`, addressing it by its own SHA-256.
+    #[must_use]
+    pub fn new(wheel: Vec<u8>) -> Self {
+        use basilisk_stubs::typeshed::gate::manifest::sha256_hex;
+        let sha256 = sha256_hex(&wheel);
+        Self {
+            wheel,
+            sha256,
+            faults: PypiFaults::default(),
+        }
+    }
+}
+
+impl PypiApi for FakePypiApi {
+    fn fetch_wheel(&self, _name: &str, sha256: &str) -> Result<Vec<u8>, TransportError> {
+        if self.faults.resolve_fails {
+            return Err(TransportError::Metadata);
+        }
+        // The index carries exactly one wheel; a pin for any other digest
+        // selects nothing.
+        if sha256 != self.sha256 {
+            return Err(TransportError::Metadata);
+        }
+        if self.faults.download_fails {
+            return Err(TransportError::Download);
+        }
+        Ok(self.wheel.clone())
     }
 }

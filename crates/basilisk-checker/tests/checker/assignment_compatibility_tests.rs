@@ -37,6 +37,86 @@ def build_refs_dict() -> RefsDictT:
 }
 
 #[test]
+fn empty_dict_to_explicit_typealias_dict_alias_no_diagnostic(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Regression test for issue #282: the *explicit* `TypeAlias`-annotated form
+    // (`RefsDictT: TypeAlias = dict[...]`) must be treated as a value alias too,
+    // so the empty dict literal is assignable to it. The implicit form is
+    // covered by `empty_dict_to_implicit_dict_alias_no_diagnostic` above.
+    let source = r#"
+from typing import TypeAlias
+RefsDictT: TypeAlias = dict[tuple[str, str], str]
+
+def build_refs_dict() -> RefsDictT:
+    refs_dict: RefsDictT = {}
+    return refs_dict
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "assignment_compatibility");
+    assert!(
+        msgs.is_empty(),
+        "empty dict is assignable to an explicit TypeAlias dict alias; should not fire, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_dict_to_quoted_typealias_dict_alias_no_diagnostic(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Any annotation may be written as a string, so `RefsDictT: "TypeAlias"` and
+    // `RefsDictT: "typing.TypeAlias"` declare exactly the same alias as the bare
+    // forms. Recognising only the bare spelling would reinstate the issue #282
+    // false positive for anyone using string annotations.
+    let source = r#"
+from typing import TypeAlias
+import typing
+RefsDictT: "TypeAlias" = dict[tuple[str, str], str]
+OtherT: 'typing.TypeAlias' = dict[str, int]
+
+def build_refs_dict() -> RefsDictT:
+    refs_dict: RefsDictT = {}
+    other: OtherT = {}
+    print(other)
+    return refs_dict
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "assignment_compatibility");
+    assert!(
+        msgs.is_empty(),
+        "a string-annotated TypeAlias is still a TypeAlias; should not fire, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn paramspec_callable_typealias_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // A `TypeAlias`-annotated alias whose body is a `Callable` parameterised by
+    // a `ParamSpec` must NOT be treated as a textually-substitutable generic
+    // alias — `Callback1[...]` needs real `ParamSpec` semantics. Approximating
+    // it made the conformance suite's `callables_annotation` (line 174) and
+    // `callables_subtyping` (line 213) cases emit false positives, which the
+    // 0-false-positive ceiling forbids ([CHKARCH-CONFORMANCE]).
+    let source = r#"
+from typing import Callable, ParamSpec, TypeAlias
+
+P = ParamSpec("P")
+Callback1: TypeAlias = Callable[P, str]
+
+
+def func6(cb1: Callable[[], str], cb2: Callable[[int], str]) -> None:
+    f1: Callback1[...] = cb1
+    f3: Callback1[...] = cb2
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "assignment_compatibility");
+    assert!(
+        msgs.is_empty(),
+        "a ParamSpec-parameterised Callable TypeAlias must not fire; got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn mismatched_dict_literal_to_implicit_dict_alias_fires() -> Result<(), Box<dyn std::error::Error>>
 {
     // A dict literal whose key type contradicts the alias definition must

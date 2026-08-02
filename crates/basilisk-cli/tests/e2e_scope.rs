@@ -183,6 +183,28 @@ fn check_emits_pep_diagnostics_with_stable_json_shape() {
 
 // ── the check/analyze split is never silent ([CHKARCH-CLI-SCOPE-NOTICE]) ─────
 
+/// Refs #334. `analyze` is the ONLY command that runs the opt-in rule layer,
+/// so a user who cannot see it in `basilisk --help` cannot discover that their
+/// configured rules were never evaluated. This guard keeps the subcommand
+/// discoverable; the remaining #334 gap (a clean `check` not naming the
+/// unrun rules) is covered by the scope-notice tests below.
+#[test]
+fn top_level_help_lists_every_rule_running_command() {
+    let out = Command::new(env!("CARGO_BIN_EXE_basilisk"))
+        .arg("--help")
+        .output()
+        .expect("spawn basilisk");
+    let text = stdout(&out);
+
+    for command in ["check", "analyze", "fix"] {
+        assert!(
+            text.lines()
+                .any(|line| line.trim_start().starts_with(&format!("{command} "))),
+            "`basilisk --help` must list the `{command}` subcommand, got: {text}"
+        );
+    }
+}
+
 /// Refs #334. A clean `check` on a project whose configuration selects
 /// analyze-scope rules must say so. Otherwise a silent clean run is
 /// indistinguishable from a real one: the reporter's project graded eight rule

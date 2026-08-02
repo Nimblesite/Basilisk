@@ -28,6 +28,10 @@ pub enum SourceKind {
     ExactCommit,
     /// The bundled offline snapshot (unpinned unless it equals a user pin).
     Bundled,
+    /// A `PyPI`-distributed typeshed package, content-addressed by the
+    /// distribution's SHA-256 ([STUBRES-TYPESHED-PYPI], issue #312). Pinned:
+    /// suppresses `typeshed_source_unpinned` and `typeshed_source_user_managed`.
+    PyPIPackage,
 }
 
 impl SourceKind {
@@ -38,6 +42,7 @@ impl SourceKind {
             Self::Custom => "custom",
             Self::ExactCommit => "exact-commit",
             Self::Bundled => "bundled",
+            Self::PyPIPackage => "pypi-package",
         }
     }
 }
@@ -78,6 +83,14 @@ pub enum SourceIdentity {
         /// A digest (e.g. SHA-256 hex) of the resolved custom path.
         digest: String,
     },
+    /// A `PyPI`-distributed typeshed package, content-addressed by the
+    /// distribution's SHA-256 ([STUBRES-TYPESHED-PYPI], issue #312).
+    PyPIPackage {
+        /// Normalised `PyPI` distribution name (e.g. `micropython-stdlib-stubs`).
+        name: String,
+        /// The distribution's SHA-256, hex-encoded.
+        sha256: String,
+    },
 }
 
 impl SourceIdentity {
@@ -89,6 +102,7 @@ impl SourceIdentity {
             Self::Commit { commit, .. } => commit.to_hex(),
             Self::Bundled { commit } => format!("bundled-{}", commit.to_hex()),
             Self::Custom { digest } => format!("custom-{digest}"),
+            Self::PyPIPackage { name, sha256 } => format!("pypi-{name}-{sha256}"),
         }
     }
 
@@ -97,23 +111,28 @@ impl SourceIdentity {
     pub const fn commit(&self) -> Option<Oid> {
         match self {
             Self::Commit { commit, .. } | Self::Bundled { commit } => Some(*commit),
-            Self::Custom { .. } => None,
+            Self::Custom { .. } | Self::PyPIPackage { .. } => None,
         }
     }
 
     /// Whether the user explicitly pinned this source. Only an explicit
-    /// `typeshed-commit` suppresses the `typeshed_source_unpinned` advisory.
+    /// `typeshed-commit` or a SHA-256-addressed `PyPI` package suppresses the
+    /// `typeshed_source_unpinned` advisory ([STUBRES-TYPESHED-PYPI], issue #312).
     #[must_use]
     pub const fn is_pinned(&self) -> bool {
-        matches!(self, Self::Commit { pinned: true, .. })
+        matches!(
+            self,
+            Self::Commit { pinned: true, .. } | Self::PyPIPackage { .. }
+        )
     }
 }
 
 /// Which source the user configured, free of any `basilisk-config` type.
 ///
-/// There are exactly **two** sources ([STUBRES-TYPESHED]): a pinned commit or a
-/// custom folder. There is no "track latest" selection — freshness is the
-/// separate, user-invoked download component ([STUBRES-TYPESHED-DOWNLOAD]).
+/// There are exactly **three** sources ([STUBRES-TYPESHED], [STUBRES-TYPESHED-PYPI]):
+/// a pinned commit, a custom folder, or a SHA-256-addressed `PyPI` package. There
+/// is no "track latest" selection — freshness is the separate, user-invoked
+/// download component ([STUBRES-TYPESHED-DOWNLOAD]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceSelection {
     /// A custom `typeshed-path` folder (resolved, absolute).
@@ -128,6 +147,17 @@ pub enum SourceSelection {
         /// `true` for an explicit `typeshed-commit`; `false` when the pin is
         /// the bundled default an unset key resolves to (still `typeshed_source_unpinned`).
         explicit: bool,
+    },
+    /// A `PyPI`-distributed typeshed package, content-addressed by the
+    /// distribution's SHA-256 ([STUBRES-TYPESHED-PYPI], issue #312). A package
+    /// pin is a pinned source: it suppresses `typeshed_source_unpinned` and
+    /// `typeshed_source_user_managed`, because the registry attests the
+    /// contents by hash rather than the user managing a loose folder.
+    PyPIPackage {
+        /// Normalised `PyPI` distribution name (e.g. `micropython-stdlib-stubs`).
+        name: String,
+        /// The distribution's SHA-256, hex-encoded.
+        sha256: String,
     },
 }
 

@@ -8,9 +8,10 @@
 use std::cell::RefCell;
 
 use basilisk_stubs::typeshed::gittree::{git_commit_oid, reconstruct_root_tree_oid, GitFile};
+use basilisk_stubs::typeshed::source::SourceKind;
 use basilisk_stubs::typeshed::store::read_snapshot;
 
-use super::testing::{fake_repo, FakeApi, Faults};
+use super::testing::{fake_repo, fake_wheel, FakeApi, FakePypiApi, Faults, PypiFaults};
 use super::*;
 
 fn store_entry_count(root: &std::path::Path) -> usize {
@@ -249,5 +250,117 @@ mod cases {
         let second = download_latest(store, &api, &|_phase| {}).expect("second download");
         assert_eq!(first, second);
         assert_eq!(store_entry_count(root.path()), 1);
+    }
+    /// [STUBRES-TYPESHED-PYPI]: a `PyPI`-package download fetches the pinned wheel,
+    /// re-hashes it, runs the structural gates, and writes exactly one store entry
+    /// — which the checker's own offline reader (`wheel::read_snapshot`) then
+    /// verifies and activates as a `PyPIPackage` source with no advisories.
+    #[test]
+    fn a_pypi_package_download_stores_a_wheel_that_activates_offline() {
+        use basilisk_stubs::typeshed::wheel::read_snapshot;
+
+        let root = tempfile::tempdir().expect("tempdir");
+        let store = root.path().to_path_buf();
+        let api = FakePypiApi::new(fake_wheel());
+        let sha256 = api.sha256.clone();
+        assert_eq!(
+            download_package(
+                "micropython-stdlib-stubs",
+                &sha256,
+                Some(store.clone()),
+                &api,
+                &|_phase| {}
+            ),
+            Ok(()),
+            "the pinned wheel must download and verify"
+        );
+        assert_eq!(
+            store_entry_count(&store),
+            1,
+            "exactly one verified store entry must exist"
+        );
+        // The checker's own offline reader activates what was written — the full
+        // download → read round trip, with no advisories on a pinned source.
+        let snapshot =
+            read_snapshot(&store, "micropython-stdlib-stubs", &sha256).expect("verified wheel");
+        assert_eq!(snapshot.status.active_source, SourceKind::PyPIPackage);
+        assert!(snapshot.status.warnings.is_empty());
+        assert_eq!(
+            snapshot.read_stub("os").map(|(_, body)| body),
+            Some("def getcwd() -> str: ...\n"),
+        );
+    }
+
+    /// A wheel whose fetched bytes do not re-hash to the pin is rejected and
+    /// writes nothing — `PyPI`'s reported digest is never the basis of trust.
+    #[test]
+    fn a_wheel_whose_bytes_do_not_match_the_pin_writes_nothing() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let store = root.path().to_path_buf();
+        let mut api = FakePypiApi::new(fake_wheel());
+        // Tamper: serve different bytes but keep the original digest as the pin,
+        // so the re-hash diverges from the requested SHA-256.
+        *api.wheel.first_mut().expect("non-empty wheel") ^= 0xff;
+        let requested = api.sha256.clone();
+        assert_eq!(
+            download_package("x", &requested, Some(store.clone()), &api, &|_phase| {}),
+            Err(DownloadError::Validation),
+            "a byte-mismatched wheel must fail verification"
+        );
+        assert_eq!(
+            store_entry_count(&store),
+            0,
+            "nothing may be written on failure"
+        );
+    }
+
+    /// Every failure phase writes nothing — the atomic-write contract
+    /// ([STUBRES-TYPESHED-DOWNLOAD]) holds for `PyPI` packages too.
+    #[test]
+    fn pypi_download_failures_write_nothing() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let store = root.path().to_path_buf();
+
+        let mut resolve_fail = FakePypiApi::new(fake_wheel());
+        resolve_fail.faults = PypiFaults {
+            resolve_fails: true,
+            ..PypiFaults::default()
+        };
+        let sha = resolve_fail.sha256.clone();
+        assert_eq!(
+            download_package("x", &sha, Some(store.clone()), &resolve_fail, &|_phase| {}),
+            Err(DownloadError::Download),
+            "index resolution failure is a download failure"
+        );
+        assert_eq!(store_entry_count(&store), 0);
+
+        let mut download_fail = FakePypiApi::new(fake_wheel());
+        download_fail.faults = PypiFaults {
+            download_fails: true,
+            ..PypiFaults::default()
+        };
+        let sha = download_fail.sha256.clone();
+        assert_eq!(
+            download_package("x", &sha, Some(store.clone()), &download_fail, &|_phase| {}),
+            Err(DownloadError::Download),
+            "wheel-byte download failure is a download failure"
+        );
+        assert_eq!(store_entry_count(&store), 0);
+    }
+
+    /// A pin for a digest the index does not carry selects nothing: resolution
+    /// fails closed and writes nothing.
+    #[test]
+    fn a_pin_for_an_unknown_digest_fails_closed() {
+        const UNKNOWN: &str = "1111111111111111111111111111111111111111111111111111111111111111";
+        let root = tempfile::tempdir().expect("tempdir");
+        let store = root.path().to_path_buf();
+        let api = FakePypiApi::new(fake_wheel());
+        assert_eq!(
+            download_package("x", UNKNOWN, Some(store.clone()), &api, &|_phase| {}),
+            Err(DownloadError::Download),
+            "an unknown digest must not resolve"
+        );
+        assert_eq!(store_entry_count(&store), 0);
     }
 }

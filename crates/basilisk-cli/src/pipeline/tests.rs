@@ -146,7 +146,7 @@ fn a_missing_pin_tanks_the_check_instead_of_downloading() -> Result<(), Box<dyn 
     // or downloads ([STUBRES-TYPESHED-STORE]).
     let store_entries = std::fs::read_dir(&store)?.count();
     let _ = std::fs::remove_dir_all(project);
-    let Err(PipelineError::Internal(message)) = result else {
+    let Err(PipelineError::NoSource(message)) = result else {
         return Err("a missing pin must tank the run".into());
     };
     assert!(message.contains("NO SOURCE"), "got: {message}");
@@ -736,6 +736,12 @@ fn pep_disable_config_fails_the_run() -> Result<(), Box<dyn std::error::Error>> 
                 )
                 .into())
             }
+            Err(PipelineError::NoSource(message)) => {
+                return Err(format!(
+                    "`{command}` must fail with a Config error, got NoSource: {message}"
+                )
+                .into())
+            }
             Ok(outcome) => {
                 return Err(format!(
                     "`{command}` must fail with a Config error, got Ok with {} diagnostics",
@@ -980,6 +986,10 @@ fn pipeline_errors_preserve_the_exit_code_category_in_display() {
     assert_eq!(
         PipelineError::Internal("read failed".to_owned()).to_string(),
         "read failed"
+    );
+    assert_eq!(
+        PipelineError::NoSource("NO SOURCE — missing".to_owned()).to_string(),
+        "NO SOURCE — missing"
     );
 }
 

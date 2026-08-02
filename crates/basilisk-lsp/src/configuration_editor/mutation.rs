@@ -181,6 +181,7 @@ fn typeshed_config_key(key: TypeshedSettingKey) -> TypeshedConfigKey {
     match key {
         TypeshedSettingKey::TypeshedPath => TypeshedConfigKey::TypeshedPath,
         TypeshedSettingKey::TypeshedCommit => TypeshedConfigKey::TypeshedCommit,
+        TypeshedSettingKey::TypeshedPackage => TypeshedConfigKey::TypeshedPackage,
         TypeshedSettingKey::TypeshedStorePath => TypeshedConfigKey::TypeshedStorePath,
     }
 }
@@ -194,6 +195,13 @@ fn validate_typeshed_value(key: TypeshedSettingKey, value: &str) -> LspResult<St
             key,
             "typeshed-commit must be a full 40-character hexadecimal SHA",
         )),
+        // The pin parser already distinguishes *why* a spec is bad — wrong
+        // shape, bad digest, non-PEP 508 name — so its reason is surfaced
+        // verbatim rather than flattened to one generic sentence. A rejection
+        // that does not say what is wrong cannot be acted on.
+        TypeshedSettingKey::TypeshedPackage => basilisk_config::parse_typeshed_package(value)
+            .map(|_parsed| value.to_owned())
+            .map_err(|reason| invalid_typeshed_setting(key, &reason)),
         TypeshedSettingKey::TypeshedPath | TypeshedSettingKey::TypeshedStorePath
             if !value.trim().is_empty() =>
         {
@@ -216,10 +224,20 @@ fn invalid_typeshed_setting(key: TypeshedSettingKey, message: &str) -> Error {
 /// Reject impossible source combinations and malformed custom trees after all
 /// mutations have been folded into the hypothetical configuration.
 pub(super) fn require_valid_typeshed_configuration(config: &BasiliskConfig) -> LspResult<()> {
-    if config.typeshed_path.is_some() && config.typeshed_commit.is_some() {
+    // The three source selectors are mutually exclusive
+    // ([STUBRES-TYPESHED-CONFIG]).
+    let active = [
+        config.typeshed_path.is_some(),
+        config.typeshed_commit.is_some(),
+        config.typeshed_package.is_some(),
+    ]
+    .iter()
+    .filter(|&&set| set)
+    .count();
+    if active > 1 {
         return Err(rpc_error(
             "invalidTypeshedSetting",
-            "typeshed-path and typeshed-commit are mutually exclusive",
+            "typeshed-path, typeshed-commit, and typeshed-package are mutually exclusive",
         ));
     }
     let Some(path) = config.typeshed_path.as_ref() else {
@@ -314,6 +332,7 @@ fn config_typeshed_value(config: &BasiliskConfig, key: TypeshedSettingKey) -> Op
             .as_ref()
             .map(|path| path.to_string_lossy().into_owned()),
         TypeshedSettingKey::TypeshedCommit => config.typeshed_commit.clone(),
+        TypeshedSettingKey::TypeshedPackage => config.typeshed_package.clone(),
         TypeshedSettingKey::TypeshedStorePath => config
             .typeshed_store_path
             .as_ref()
@@ -329,6 +348,7 @@ pub(super) fn resolved_typeshed_changes(
     [
         TypeshedSettingKey::TypeshedPath,
         TypeshedSettingKey::TypeshedCommit,
+        TypeshedSettingKey::TypeshedPackage,
         TypeshedSettingKey::TypeshedStorePath,
     ]
     .into_iter()

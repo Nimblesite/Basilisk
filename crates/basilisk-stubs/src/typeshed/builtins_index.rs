@@ -1,12 +1,23 @@
 //! Implements [STUBRES-TYPESHED-BUILTINS-INDEX]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-BUILTINS-INDEX
 //!
-//! Precomputed no-target `builtins.pyi` class index for the bundled snapshot.
+//! Precomputed `builtins.pyi` class index for the bundled snapshot.
 //!
-//! Parsing `builtins.pyi` and intersecting its guarded branches with no
-//! version evidence is the single largest fixed cost on a cold `check`. That
-//! extraction is a pure function of the bundled ZIP, so it is computed once at
-//! development time (`cargo run -p basilisk-stubs --bin gen_builtins_index`),
-//! committed as `data/typeshed/builtins_index.bin`, and embedded here.
+//! Parsing `builtins.pyi` and resolving its guarded branches is the single
+//! largest fixed cost on a cold `check` — ~3 ms of the run, every run. That
+//! extraction is a pure function of the bundled ZIP and the target version, so
+//! it is computed once at development time (`cargo run -p basilisk-stubs --bin
+//! gen_builtins_index`), committed as `data/typeshed/builtins_index.bin`, and
+//! embedded here.
+//!
+//! **Every** target is covered, not just the no-target intersection: a project
+//! that pins `python-version` is the common case, and serving only the
+//! unpinned case would leave that project paying the live parse on every
+//! invocation. `builtins.pyi`'s class map is a step function of the target
+//! version, and of the target platform only through the `sys.platform`
+//! literals the stub itself names, so the artifact enumerates one variant per
+//! (platform class, minor-version interval) — a provably complete, finite set
+//! — over a shared class pool that keeps the repetition out of the bytes
+//! ([`codec`]).
 //!
 //! Safety model: the artifact header carries the manifest bundle SHA-256. A
 //! stale, missing, or corrupt artifact makes [`bundled_builtins_classes`]
@@ -15,10 +26,14 @@
 //! regenerates the bytes from the real parser in CI, so a bundle refresh that
 //! forgets to regenerate the index cannot land.
 
+mod codec;
+
 use std::collections::HashMap;
 
+use codec::{Artifact, ClassMap, PlatformKey, VersionIntervals};
+
 use super::bundle::{self, BundleError};
-use crate::types::{StubClass, StubFunction, StubParam, StubParamKind, StubSpan, StubVariable};
+use crate::types::{StubClass, StubTarget, StubTargetPlatform};
 
 /// The committed precomputed index (see module docs for regeneration).
 static EMBEDDED_INDEX: &[u8] = include_bytes!(concat!(
@@ -26,8 +41,11 @@ static EMBEDDED_INDEX: &[u8] = include_bytes!(concat!(
     "/data/typeshed/builtins_index.bin"
 ));
 
-/// Artifact magic: name + format version. Bump on any codec change.
-const MAGIC: &[u8; 8] = b"BSKBIX1\0";
+/// Highest `(3, minor)` the generator materialises. Guarded branches in
+/// `builtins.pyi` compare against versions the file itself names, so the map
+/// is constant above the largest one; generating well past it makes the final
+/// interval's open-ended reading a measured fact rather than an assumption.
+const MAX_GENERATED_MINOR: u8 = 40;
 
 /// A failure regenerating, encoding, or decoding the precomputed index.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -47,13 +65,34 @@ pub enum BuiltinsIndexError {
     /// The artifact bytes are truncated or malformed.
     #[error("builtins index: truncated or malformed artifact at byte {0}")]
     Malformed(usize),
+    /// Two platform values that `builtins.pyi` never names produced different
+    /// class maps, so "every unnamed platform behaves alike" — the premise
+    /// behind the artifact's single `Other` platform class — does not hold.
+    #[error(
+        "builtins index: unnamed platforms {left} and {right} extract different class maps at \
+         3.{minor}; the artifact's single fallback platform class cannot represent both"
+    )]
+    PlatformFallbackSplit {
+        /// First probe platform.
+        left: String,
+        /// Second probe platform, which disagreed with it.
+        right: String,
+        /// The target minor version where they diverged.
+        minor: u8,
+    },
 }
 
-/// The precomputed no-target `builtins` class map, when the embedded artifact
-/// is present and bound to the current bundle. `None` means "extract live" —
-/// callers must treat the two paths as interchangeable.
+/// The precomputed `builtins` class map for `target`, when the embedded
+/// artifact is present, bound to the current bundle, and covers that target.
+/// `None` means "extract live" — callers must treat the two paths as
+/// interchangeable.
+///
+/// `target`'s platform selects a variant through the stub's OWN guard
+/// literals: an exact match on one it names, otherwise the single class
+/// covering every platform it does not — a partition regeneration proves is
+/// complete ([`BuiltinsIndexError::PlatformFallbackSplit`]).
 #[must_use]
-pub fn bundled_builtins_classes() -> Option<HashMap<String, StubClass>> {
+pub fn bundled_builtins_classes(target: Option<&StubTarget>) -> Option<HashMap<String, StubClass>> {
     let expected = match bundle::manifest_bundle_sha() {
         Ok(sha) => sha,
         Err(error) => {
@@ -61,21 +100,26 @@ pub fn bundled_builtins_classes() -> Option<HashMap<String, StubClass>> {
             return None;
         }
     };
-    match decode_classes(EMBEDDED_INDEX) {
-        Ok((sha, classes)) if sha == expected => Some(classes),
-        Ok((sha, _)) => {
-            tracing::warn!(
-                embedded = %sha,
-                manifest = %expected,
-                "builtins index: stale artifact; using live extraction"
-            );
-            None
-        }
-        Err(error) => {
-            tracing::warn!(%error, "builtins index: undecodable artifact; using live extraction");
-            None
-        }
+    let (sha, artifact) = codec::decode(EMBEDDED_INDEX)
+        .inspect_err(
+            |error| tracing::warn!(%error, "builtins index: undecodable artifact; using live extraction"),
+        )
+        .ok()?;
+    if sha != expected {
+        tracing::warn!(
+            embedded = %sha,
+            manifest = %expected,
+            "builtins index: stale artifact; using live extraction"
+        );
+        return None;
     }
+    let variant = artifact.variant_for(target)?;
+    artifact
+        .classes(variant)
+        .inspect_err(
+            |error| tracing::warn!(%error, "builtins index: unreadable variant; using live extraction"),
+        )
+        .ok()
 }
 
 /// Recompute the artifact bytes from the embedded bundle with the REAL
@@ -85,316 +129,155 @@ pub fn bundled_builtins_classes() -> Option<HashMap<String, StubClass>> {
 /// # Errors
 ///
 /// Returns a [`BuiltinsIndexError`] if the bundle cannot be decoded, the
-/// `builtins` stub is missing or unparsable, or encoding overflows.
+/// `builtins` stub is missing or unparsable, encoding overflows, or the stub
+/// grew a platform guard the version-keyed artifact cannot express.
 pub fn regenerate() -> Result<Vec<u8>, BuiltinsIndexError> {
     let snapshot = bundle::bundled_snapshot()?;
     let (logical_uri, source_text) = snapshot
         .read_stub("builtins")
         .ok_or(BuiltinsIndexError::MissingBuiltins)?;
-    let module = crate::parse_pyi_source(
+    let path = std::path::Path::new(&logical_uri);
+    let literals = crate::pyi_parser::platform_guard_literals(source_text, path)
+        .map_err(|error| BuiltinsIndexError::Parse(error.to_string()))?;
+    let mut groups = vec![(
+        PlatformKey::All,
+        extract_intervals(&logical_uri, source_text, &StubTargetPlatform::All)?,
+    )];
+    for literal in &literals {
+        groups.push((
+            PlatformKey::Literal(literal.clone()),
+            extract_intervals(
+                &logical_uri,
+                source_text,
+                &StubTargetPlatform::Concrete(literal.clone()),
+            )?,
+        ));
+    }
+    groups.push((
+        PlatformKey::Other,
+        extract_unnamed_platform_intervals(&logical_uri, source_text, &literals)?,
+    ));
+    let artifact = Artifact {
+        default_classes: extract_untargeted(&logical_uri, source_text)?,
+        groups,
+    };
+    codec::encode(&artifact, &bundle::manifest_bundle_sha()?)
+}
+
+/// Platforms the stub never names, used to pin down its `Other` class. They
+/// are spread across the string ordering so an ordered `sys.platform`
+/// comparison — which would split the fallback class in two — cannot pass
+/// unnoticed.
+const UNNAMED_PLATFORM_PROBES: [&str; 3] = [
+    "basilisk-unnamed-aaaa",
+    "basilisk-unnamed-mmmm",
+    "basilisk-unnamed-zzzz",
+];
+
+/// The intervals for every platform the stub does not name, proven to be one
+/// class by extracting each probe and requiring them all to agree.
+fn extract_unnamed_platform_intervals(
+    logical_uri: &str,
+    source_text: &str,
+    literals: &std::collections::BTreeSet<String>,
+) -> Result<VersionIntervals, BuiltinsIndexError> {
+    let probes: Vec<&str> = UNNAMED_PLATFORM_PROBES
+        .into_iter()
+        .filter(|probe| !literals.contains(*probe))
+        .collect();
+    let mut agreed: Option<(&str, VersionIntervals)> = None;
+    for probe in probes {
+        let platform = StubTargetPlatform::Concrete((*probe).to_owned());
+        let intervals = extract_intervals(logical_uri, source_text, &platform)?;
+        match &agreed {
+            None => agreed = Some((probe, intervals)),
+            Some((first, expected)) if *expected != intervals => {
+                return Err(disagreement(first, probe, expected, &intervals))
+            }
+            Some(_) => {}
+        }
+    }
+    agreed
+        .map(|(_, intervals)| intervals)
+        .ok_or(BuiltinsIndexError::MissingBuiltins)
+}
+
+/// Name the first minor version at which two probes' intervals diverge.
+fn disagreement(
+    left: &str,
+    right: &str,
+    expected: &[(u8, ClassMap)],
+    actual: &[(u8, ClassMap)],
+) -> BuiltinsIndexError {
+    let minor = expected
+        .iter()
+        .zip(actual)
+        .find(|(one, other)| one != other)
+        .map_or(0, |(one, _)| one.0);
+    BuiltinsIndexError::PlatformFallbackSplit {
+        left: left.to_owned(),
+        right: right.to_owned(),
+        minor,
+    }
+}
+
+/// The no-target intersection map.
+fn extract_untargeted(
+    logical_uri: &str,
+    source_text: &str,
+) -> Result<ClassMap, BuiltinsIndexError> {
+    crate::parse_pyi_source(
         source_text,
-        std::path::Path::new(&logical_uri),
+        std::path::Path::new(logical_uri),
         "builtins",
         crate::StubSource::Typeshed,
         crate::StubTier::Tier1,
     )
-    .map_err(|error| BuiltinsIndexError::Parse(error.to_string()))?;
-    encode_classes(&module.classes, &bundle::manifest_bundle_sha()?)
+    .map(|module| module.classes)
+    .map_err(|error| BuiltinsIndexError::Parse(error.to_string()))
 }
 
-// ---------------------------------------------------------------------------
-// Encoding — deterministic (classes sorted by name) so the committed artifact
-// is byte-reproducible and the drift gate can compare bytes, not semantics.
-// ---------------------------------------------------------------------------
-
-fn encode_classes(
-    classes: &HashMap<String, StubClass>,
-    bundle_sha_hex: &str,
-) -> Result<Vec<u8>, BuiltinsIndexError> {
-    let mut sorted: Vec<(&String, &StubClass)> = classes.iter().collect();
-    sorted.sort_by(|left, right| left.0.cmp(right.0));
-    let mut out = Vec::with_capacity(1 << 20);
-    out.extend_from_slice(MAGIC);
-    put_str(&mut out, bundle_sha_hex)?;
-    put_len(&mut out, sorted.len())?;
-    for (_, class) in sorted {
-        put_class(&mut out, class)?;
-    }
-    Ok(out)
-}
-
-fn put_len(out: &mut Vec<u8>, len: usize) -> Result<(), BuiltinsIndexError> {
-    let value = u32::try_from(len).map_err(|_overflow| BuiltinsIndexError::LengthOverflow)?;
-    out.extend_from_slice(&value.to_le_bytes());
-    Ok(())
-}
-
-fn put_str(out: &mut Vec<u8>, text: &str) -> Result<(), BuiltinsIndexError> {
-    put_len(out, text.len())?;
-    out.extend_from_slice(text.as_bytes());
-    Ok(())
-}
-
-fn put_opt_str(out: &mut Vec<u8>, text: Option<&str>) -> Result<(), BuiltinsIndexError> {
-    match text {
-        None => {
-            out.push(0);
-            Ok(())
-        }
-        Some(text) => {
-            out.push(1);
-            put_str(out, text)
+/// One `(min_minor, classes)` entry per distinct map across `(3, minor)` at a
+/// fixed platform. Consecutive minors that extract the same map collapse into
+/// one interval.
+fn extract_intervals(
+    logical_uri: &str,
+    source_text: &str,
+    platform: &StubTargetPlatform,
+) -> Result<VersionIntervals, BuiltinsIndexError> {
+    let mut intervals: VersionIntervals = Vec::new();
+    for minor in 0..=MAX_GENERATED_MINOR {
+        let classes = extract_for_target(logical_uri, source_text, minor, platform)?;
+        if intervals
+            .last()
+            .is_none_or(|(_, previous)| *previous != classes)
+        {
+            intervals.push((minor, classes));
         }
     }
+    Ok(intervals)
 }
 
-fn put_class(out: &mut Vec<u8>, class: &StubClass) -> Result<(), BuiltinsIndexError> {
-    put_str(out, &class.name)?;
-    put_len(out, class.bases.len())?;
-    for base in &class.bases {
-        put_str(out, base)?;
-    }
-    put_opt_str(out, class.metaclass.as_deref())?;
-    put_len(out, class.methods.len())?;
-    for method in &class.methods {
-        put_function(out, method)?;
-    }
-    put_len(out, class.attributes.len())?;
-    for attribute in &class.attributes {
-        put_variable(out, attribute)?;
-    }
-    Ok(())
-}
-
-fn put_function(out: &mut Vec<u8>, function: &StubFunction) -> Result<(), BuiltinsIndexError> {
-    put_str(out, &function.name)?;
-    match &function.receiver {
-        None => out.push(0),
-        Some(receiver) => {
-            out.push(1);
-            put_param(out, receiver)?;
-        }
-    }
-    put_len(out, function.params.len())?;
-    for param in &function.params {
-        put_param(out, param)?;
-    }
-    put_opt_str(out, function.return_type.as_deref())?;
-    out.push(u8::from(function.is_overload));
-    out.push(u8::from(function.is_async));
-    put_len(out, function.decorators.len())?;
-    for decorator in &function.decorators {
-        put_str(out, decorator)?;
-    }
-    put_opt_str(out, function.class_name.as_deref())?;
-    out.extend_from_slice(&function.source_span.start.to_le_bytes());
-    out.extend_from_slice(&function.source_span.end.to_le_bytes());
-    Ok(())
-}
-
-fn put_param(out: &mut Vec<u8>, param: &StubParam) -> Result<(), BuiltinsIndexError> {
-    put_str(out, &param.name)?;
-    put_opt_str(out, param.annotation.as_deref())?;
-    out.push(u8::from(param.has_default));
-    out.push(param_kind_tag(param.kind));
-    Ok(())
-}
-
-fn put_variable(out: &mut Vec<u8>, variable: &StubVariable) -> Result<(), BuiltinsIndexError> {
-    put_str(out, &variable.name)?;
-    put_opt_str(out, variable.annotation.as_deref())
-}
-
-const fn param_kind_tag(kind: StubParamKind) -> u8 {
-    match kind {
-        StubParamKind::Regular => 0,
-        StubParamKind::Vararg => 1,
-        StubParamKind::Kwarg => 2,
-        StubParamKind::KeywordOnly => 3,
-        StubParamKind::PositionalOnly => 4,
-    }
-}
-
-const fn param_kind_from(tag: u8) -> Option<StubParamKind> {
-    match tag {
-        0 => Some(StubParamKind::Regular),
-        1 => Some(StubParamKind::Vararg),
-        2 => Some(StubParamKind::Kwarg),
-        3 => Some(StubParamKind::KeywordOnly),
-        4 => Some(StubParamKind::PositionalOnly),
-        _ => None,
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Decoding — every read is bounds-checked; corrupt input yields `Malformed`,
-// never a panic or over-allocation (no length-prefix preallocation).
-// ---------------------------------------------------------------------------
-
-fn decode_classes(
-    bytes: &[u8],
-) -> Result<(String, HashMap<String, StubClass>), BuiltinsIndexError> {
-    let mut cursor = Cursor { bytes, pos: 0 };
-    if cursor.take(MAGIC.len())? != MAGIC {
-        return Err(BuiltinsIndexError::Malformed(0));
-    }
-    let sha = cursor.str()?;
-    let count = cursor.u32()?;
-    let mut classes = HashMap::new();
-    for _ in 0..count {
-        let class = read_class(&mut cursor)?;
-        let _ = classes.insert(class.name.clone(), class);
-    }
-    if cursor.pos != cursor.bytes.len() {
-        return Err(BuiltinsIndexError::Malformed(cursor.pos));
-    }
-    Ok((sha, classes))
-}
-
-struct Cursor<'bytes> {
-    bytes: &'bytes [u8],
-    pos: usize,
-}
-
-impl<'bytes> Cursor<'bytes> {
-    fn take(&mut self, len: usize) -> Result<&'bytes [u8], BuiltinsIndexError> {
-        let end = self
-            .pos
-            .checked_add(len)
-            .ok_or(BuiltinsIndexError::Malformed(self.pos))?;
-        let slice = self
-            .bytes
-            .get(self.pos..end)
-            .ok_or(BuiltinsIndexError::Malformed(self.pos))?;
-        self.pos = end;
-        Ok(slice)
-    }
-
-    fn u8(&mut self) -> Result<u8, BuiltinsIndexError> {
-        let position = self.pos;
-        self.take(1)?
-            .first()
-            .copied()
-            .ok_or(BuiltinsIndexError::Malformed(position))
-    }
-
-    fn u32(&mut self) -> Result<u32, BuiltinsIndexError> {
-        let raw = self.take(4)?;
-        let array: [u8; 4] = raw
-            .try_into()
-            .map_err(|_size| BuiltinsIndexError::Malformed(self.pos))?;
-        Ok(u32::from_le_bytes(array))
-    }
-
-    fn str(&mut self) -> Result<String, BuiltinsIndexError> {
-        let len = usize::try_from(self.u32()?)
-            .map_err(|_overflow| BuiltinsIndexError::Malformed(self.pos))?;
-        let start = self.pos;
-        std::str::from_utf8(self.take(len)?)
-            .map(str::to_owned)
-            .map_err(|_utf8| BuiltinsIndexError::Malformed(start))
-    }
-
-    fn opt_str(&mut self) -> Result<Option<String>, BuiltinsIndexError> {
-        match self.u8()? {
-            0 => Ok(None),
-            1 => self.str().map(Some),
-            _ => Err(BuiltinsIndexError::Malformed(self.pos)),
-        }
-    }
-
-    fn bool(&mut self) -> Result<bool, BuiltinsIndexError> {
-        match self.u8()? {
-            0 => Ok(false),
-            1 => Ok(true),
-            _ => Err(BuiltinsIndexError::Malformed(self.pos)),
-        }
-    }
-}
-
-fn read_class(cursor: &mut Cursor<'_>) -> Result<StubClass, BuiltinsIndexError> {
-    let name = cursor.str()?;
-    let base_count = cursor.u32()?;
-    let mut bases = Vec::new();
-    for _ in 0..base_count {
-        bases.push(cursor.str()?);
-    }
-    let metaclass = cursor.opt_str()?;
-    let method_count = cursor.u32()?;
-    let mut methods = Vec::new();
-    for _ in 0..method_count {
-        methods.push(read_function(cursor)?);
-    }
-    let attribute_count = cursor.u32()?;
-    let mut attributes = Vec::new();
-    for _ in 0..attribute_count {
-        attributes.push(read_variable(cursor)?);
-    }
-    Ok(StubClass {
-        name,
-        bases,
-        metaclass,
-        methods,
-        attributes,
-    })
-}
-
-fn read_function(cursor: &mut Cursor<'_>) -> Result<StubFunction, BuiltinsIndexError> {
-    let name = cursor.str()?;
-    let receiver = match cursor.u8()? {
-        0 => None,
-        1 => Some(read_param(cursor)?),
-        _ => return Err(BuiltinsIndexError::Malformed(cursor.pos)),
+fn extract_for_target(
+    logical_uri: &str,
+    source_text: &str,
+    minor: u8,
+    platform: &StubTargetPlatform,
+) -> Result<ClassMap, BuiltinsIndexError> {
+    let target = StubTarget {
+        python_version: (3, u32::from(minor)),
+        platform: platform.clone(),
     };
-    let param_count = cursor.u32()?;
-    let mut params = Vec::new();
-    for _ in 0..param_count {
-        params.push(read_param(cursor)?);
-    }
-    let return_type = cursor.opt_str()?;
-    let is_overload = cursor.bool()?;
-    let is_async = cursor.bool()?;
-    let decorator_count = cursor.u32()?;
-    let mut decorators = Vec::new();
-    for _ in 0..decorator_count {
-        decorators.push(cursor.str()?);
-    }
-    let class_name = cursor.opt_str()?;
-    let source_span = StubSpan {
-        start: cursor.u32()?,
-        end: cursor.u32()?,
-    };
-    Ok(StubFunction {
-        name,
-        receiver,
-        params,
-        return_type,
-        is_overload,
-        is_async,
-        decorators,
-        class_name,
-        source_span,
-    })
-}
-
-fn read_param(cursor: &mut Cursor<'_>) -> Result<StubParam, BuiltinsIndexError> {
-    let name = cursor.str()?;
-    let annotation = cursor.opt_str()?;
-    let has_default = cursor.bool()?;
-    let tag = cursor.u8()?;
-    let kind = param_kind_from(tag).ok_or(BuiltinsIndexError::Malformed(cursor.pos))?;
-    Ok(StubParam {
-        name,
-        annotation,
-        has_default,
-        kind,
-    })
-}
-
-fn read_variable(cursor: &mut Cursor<'_>) -> Result<StubVariable, BuiltinsIndexError> {
-    let name = cursor.str()?;
-    let annotation = cursor.opt_str()?;
-    Ok(StubVariable { name, annotation })
+    crate::pyi_parser::parse_pyi_source_for_target(
+        source_text,
+        std::path::Path::new(logical_uri),
+        "builtins",
+        crate::StubSource::Typeshed,
+        crate::StubTier::Tier1,
+        &target,
+    )
+    .map(|module| module.classes)
+    .map_err(|error| BuiltinsIndexError::Parse(error.to_string()))
 }
 
 #[cfg(test)]

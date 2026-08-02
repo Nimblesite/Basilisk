@@ -121,9 +121,10 @@ fn shared_builtins_index(
 }
 
 /// The `builtins` class map for `(snapshot, target)`: the precomputed bundled
-/// index when it applies ([STUBRES-TYPESHED-BUILTINS-INDEX] — bundled
-/// snapshot, no version target), else a live parse of the located stub body.
-/// The drift gate in `basilisk-stubs` pins the two paths equal.
+/// index when it applies ([STUBRES-TYPESHED-BUILTINS-INDEX] — the bundled
+/// snapshot, at any target the artifact covers), else a live parse of the
+/// located stub body. The drift gate in `basilisk-stubs` pins the two paths
+/// equal.
 fn builtins_class_map(
     snapshot: &basilisk_stubs::typeshed::snapshot::Snapshot,
     target: Option<&basilisk_stubs::types::StubTarget>,
@@ -135,8 +136,9 @@ fn builtins_class_map(
         snapshot.identity,
         basilisk_stubs::typeshed::source::SourceIdentity::Bundled { .. }
     );
-    if target.is_none() && bundled {
-        if let Some(classes) = basilisk_stubs::typeshed::builtins_index::bundled_builtins_classes()
+    if bundled {
+        if let Some(classes) =
+            basilisk_stubs::typeshed::builtins_index::bundled_builtins_classes(target)
         {
             return Some(classes);
         }

@@ -28,8 +28,10 @@ async function pickFolder(
 
 /**
  * Choosing the Typeshed source folder is one atomic transition — it also
- * clears the pin, so no combination of source values can be written
- * ([LSPCFGED-TYPESHED]).
+ * clears the commit pin AND the package pin, so no combination of source
+ * values can be written ([LSPCFGED-TYPESHED], [STUBRES-TYPESHED-PYPI]).
+ * Cancelling the picker returns `undefined` and writes nothing, so the
+ * current source survives a backed-out switch.
  */
 export async function pickTypeshedFolder(
   snapshot: ConfigurationSnapshot,
@@ -47,6 +49,7 @@ export async function pickTypeshedFolder(
   }];
   if (isSource) {
     mutations.push({ kind: "RemoveTypeshedSetting", key: { kind: "TypeshedCommit" } });
+    mutations.push({ kind: "RemoveTypeshedSetting", key: { kind: "TypeshedPackage" } });
   }
   return { type: "preview", mutations };
 }

@@ -4,12 +4,13 @@
 //!
 //! Runtime `python/typeshed` source resolution core.
 //!
-//! There are exactly two sources, both already on this machine when checking
+//! There are exactly three sources, all already on this machine when checking
 //! starts ([STUBRES-TYPESHED]): a **pinned commit** (the embedded bundle when
-//! the SHA is the bundled one, else that commit's [`store`] entry) or a
-//! **custom folder**. Resolution performs no network activity of any kind —
-//! structurally: this crate links no HTTP client, so the analysis path cannot
-//! reach the network even by mistake ([STUBRES-TYPESHED-OFFLINE]). Downloading
+//! the SHA is the bundled one, else that commit's [`store`] entry), a **custom
+//! folder**, or a **`PyPI` package** pinned by wheel SHA-256
+//! ([STUBRES-TYPESHED-PYPI]). Resolution performs no network activity of any
+//! kind — structurally: this crate links no HTTP client, so the analysis path
+//! cannot reach the network even by mistake ([STUBRES-TYPESHED-OFFLINE]). Downloading
 //! lives in the separate `basilisk-typeshed-fetch` crate and runs only on
 //! explicit user action ([STUBRES-TYPESHED-DOWNLOAD]).
 //!
@@ -35,3 +36,4 @@ pub mod source;
 pub mod store;
 pub mod versions;
 pub mod warning;
+pub mod wheel;

@@ -151,6 +151,10 @@ mod tests {
                 SourceKind::Bundled,
             ))
         }
+
+        fn load_pypi_package(&self, _name: &str, _sha256: &str) -> Result<Snapshot, BackendError> {
+            Err(BackendError::PyPIPackage)
+        }
     }
 
     fn pinned_request() -> TypeshedRequest {
@@ -168,12 +172,12 @@ mod tests {
         let commit = identity.commit();
         let archive = Archive::new(vec![
             ArchiveEntry {
-                path: "stdlib/VERSIONS".to_owned(),
+                path: "stdlib/VERSIONS".to_owned().into(),
                 mode: FileMode::Regular,
                 data: b"os: 3.0-\n".to_vec().into(),
             },
             ArchiveEntry {
-                path: "stdlib/os.pyi".to_owned(),
+                path: "stdlib/os.pyi".to_owned().into(),
                 mode: FileMode::Regular,
                 data: b"name: str\n".to_vec().into(),
             },

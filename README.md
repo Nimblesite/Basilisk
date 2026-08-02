@@ -29,8 +29,8 @@
 
 <p align="center">
   <a href="https://www.basilisk-python.dev/docs/conformance/"><strong><!--g:score-->100.0%<!--/g:score--> PEP conformance</strong></a> &mdash; <!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> tests in the official
-  <a href="https://github.com/python/typing/tree/3410759355c3018063d3a446102f88621fc43eb5/conformance"><code>python/typing</code></a>
-  conformance suite (commit <code><!--g:short-->3410759<!--/g:short--></code>), scored on the wheel-installed CLI in its default config by the real upstream harness.
+  <a href="https://github.com/python/typing/tree/60df123ccfe9ae0472b1409ef4a00d51ffc5d972/conformance"><code>python/typing</code></a>
+  conformance suite (commit <code><!--g:short-->60df123<!--/g:short--></code>), scored on the wheel-installed CLI in its default config by the real upstream harness.
   We target <code>python/typing@main</code> and ratchet the score up only.
 </p>
 
@@ -51,10 +51,10 @@ And it is the **fastest checker we&rsquo;ve measured** &mdash; median cold full-
 | --- | --- |
 | ⚡ **Basilisk** | **<!--g:benchBasilisk-->10<!--/g:benchBasilisk--> ms** |
 | zuban | <!--g:benchZuban-->28<!--/g:benchZuban--> ms |
-| ty | <!--g:benchTy-->40<!--/g:benchTy--> ms |
+| ty | <!--g:benchTy-->39<!--/g:benchTy--> ms |
 | Pyrefly | <!--g:benchPyrefly-->110<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->573<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->574<!--/g:benchMypy--> ms |
+| Pyright | <!--g:benchPyright-->563<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->583<!--/g:benchMypy--> ms |
 
 Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> single-construct typing-spec stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better. Basilisk&rsquo;s warm re-check drops to ~<!--g:benchWarm-->4<!--/g:benchWarm--> ms. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 

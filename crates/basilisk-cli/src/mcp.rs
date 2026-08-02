@@ -369,7 +369,8 @@ fn error_response(id: Value, code: i64, message: &str) -> Value {
 /// transport; CLI/LSP/MCP therefore serialize one status model and preserve
 /// its warning order. [STUBRES-TYPESHED-WARN]
 fn status_for_workspace(workspace: &Path) -> Result<Value, String> {
-    let config = basilisk_lsp::config::load_analysis_config(workspace);
+    let mut config = basilisk_lsp::config::load_analysis_config(workspace);
+    basilisk_lsp::config::apply_uv_typeshed_override(&mut config, workspace);
     let request = basilisk_lsp::config::typeshed_request(&config)?;
     let manager = basilisk_stubs::typeshed::runtime::production_manager(request);
     let status = manager.status().map_err(|error| error.to_string())?;

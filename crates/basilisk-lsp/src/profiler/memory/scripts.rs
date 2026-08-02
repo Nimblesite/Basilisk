@@ -322,6 +322,20 @@ def _basilisk_snapshot_payload(_max_stats):
 ///   poll sees either an empty reservation or the whole payload, never a
 ///   truncation. A render failure writes the error text instead — marker-less
 ///   on purpose, so ingest fails fast and honestly rather than timing out.
+/// - That `os.replace` is RETRIED, and the whole write tail is inside the
+///   `try`. On Windows a rename onto a path another process currently has open
+///   fails with `PermissionError`, and the editor is polling this very path
+///   every 100 ms while the worker renders — so the two collide by design.
+///   Left unguarded (as it was), the exception killed the worker thread and the
+///   reservation stayed EMPTY forever: the editor polled its full 60 s and then
+///   handed the bare `__BASILISK_MEM_FILE__` line to ingest, which rejected it
+///   as "no recognized marker" — a win32-only flake that read as a broken
+///   injection script ([VSIX-CI-PLATFORM-COVERAGE]). The poll's read window is
+///   sub-millisecond, so a short retry wins; if every attempt loses, the
+///   payload is written straight to the reserved path, because a rare torn read
+///   is recoverable and a permanently empty file never is. Any remaining
+///   failure writes its own `repr` into the file, so the courier always
+///   delivers something that names the cause.
 /// - The printed marker is split (`'__BASILISK_MEM_' + 'FILE__'`) so the full
 ///   marker never appears verbatim in the script SOURCE: pydevd quotes the
 ///   source in its diagnostics, and a quoted-source line containing the real
@@ -329,6 +343,27 @@ def _basilisk_snapshot_payload(_max_stats):
 ///   failure behind the original bug report).
 fn spawn_render_worker_helper() -> &'static str {
     r"
+def _basilisk_publish(_path, _payload):
+    import os, time
+    _tmp = _path + '.part'
+    with open(_tmp, 'w') as _f:
+        _f.write(_payload)
+    _deadline = time.time() + 5.0
+    while True:
+        try:
+            os.replace(_tmp, _path)
+            return
+        except OSError:
+            if time.time() >= _deadline:
+                break
+            time.sleep(0.02)
+    with open(_path, 'w') as _f:
+        _f.write(_payload)
+    try:
+        os.remove(_tmp)
+    except OSError:
+        pass
+
 def _basilisk_spawn_render(_render):
     import tempfile, os, sys, threading
     _fd, _path = tempfile.mkstemp(prefix='basilisk_mem_', suffix='.txt')
@@ -339,10 +374,14 @@ def _basilisk_spawn_render(_render):
             _payload = _render()
         except Exception as _exc:
             _payload = 'basilisk render worker failed: ' + repr(_exc)
-        _tmp = _path + '.part'
-        with open(_tmp, 'w') as _f:
-            _f.write(_payload)
-        os.replace(_tmp, _path)
+        try:
+            _basilisk_publish(_path, _payload)
+        except Exception as _exc:
+            try:
+                with open(_path, 'w') as _f:
+                    _f.write('basilisk render publish failed: ' + repr(_exc))
+            except OSError:
+                pass
     _t = threading.Thread(target=_basilisk_work, name='basilisk-mem-render')
     _t.pydev_do_not_trace = True
     _t.daemon = False

@@ -1,11 +1,12 @@
 //! Implements [STUBRES-TYPESHED] source selection. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED
 //!
-//! The policy layer over local source backends. There are exactly two sources
-//! and both fail closed: a custom folder never falls back, and a pinned commit
-//! is served from the embedded bundle (when it IS that commit) or from the
-//! local store — never from the network, which this crate cannot even reach
-//! ([STUBRES-TYPESHED-OFFLINE]). A pin that is not on this machine is the
-//! terminal `NO SOURCE` failure and analysis does not run.
+//! The policy layer over local source backends. There are exactly three
+//! sources and all fail closed: a custom folder never falls back, a pinned
+//! commit is served from the embedded bundle (when it IS that commit) or from
+//! the local store, and a `PyPI` package is served from its stored wheel
+//! ([STUBRES-TYPESHED-PYPI]) — never from the network, which this crate cannot
+//! even reach ([STUBRES-TYPESHED-OFFLINE]). A source that is not on this machine
+//! is the terminal `NO SOURCE` failure and analysis does not run.
 
 use super::gittree::Oid;
 use super::snapshot::Snapshot;
@@ -36,6 +37,10 @@ pub enum BackendError {
     /// A custom source could not be read or indexed.
     #[error("custom typeshed source is unavailable")]
     Custom,
+    /// A `PyPI` package source is not installed or failed SHA-256 verification
+    /// ([STUBRES-TYPESHED-PYPI], issue #312).
+    #[error("pypi typeshed package is unavailable or failed verification")]
+    PyPIPackage,
     /// The embedded bundle could not be activated.
     #[error("bundled typeshed snapshot is unavailable")]
     Bundle,
@@ -68,6 +73,20 @@ pub trait SourceBackend: Send + Sync {
     ///
     /// Returns a redacted failure when embedded assets fail their gates.
     fn load_bundled(&self) -> Result<Snapshot, BackendError>;
+
+    /// Load and offline-verify a `PyPI`-distributed typeshed package,
+    /// content-addressed by the distribution's SHA-256
+    /// ([STUBRES-TYPESHED-PYPI], issue #312).
+    ///
+    /// Implementations must verify the on-disk contents match `sha256` and
+    /// return a [`Snapshot`] whose identity is
+    /// [`SourceIdentity::PyPIPackage`] with the same `name` and `sha256`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted failure when the package is not installed or its
+    /// contents fail SHA-256 verification.
+    fn load_pypi_package(&self, name: &str, sha256: &str) -> Result<Snapshot, BackendError>;
 }
 
 /// A terminal source-selection failure. Analysis does not run
@@ -78,6 +97,19 @@ pub enum SelectionError {
     /// Custom is the sole step-3 source and could not activate.
     #[error("custom typeshed failed without fallback: {0}")]
     Custom(BackendError),
+    /// A `PyPI` package source is not installed or failed SHA-256 verification
+    /// ([STUBRES-TYPESHED-PYPI], issue #312). Carries the configured pin so the
+    /// recovery line can name the exact `basilisk typeshed download --package`
+    /// command, mirroring the commit pin's `NO SOURCE` status line.
+    #[error("{}", pypi_terminal_status_line(.name, .sha256, *.reason))]
+    PyPIPackage {
+        /// Normalised `PyPI` distribution name.
+        name: String,
+        /// The pinned distribution SHA-256 (hex).
+        sha256: String,
+        /// The redacted category (missing, corrupt…).
+        reason: BackendError,
+    },
     /// The pinned commit is not on this machine, or the entry that IS on this
     /// machine failed a gate. The message is the matching spec status line
     /// ([STUBRES-TYPESHED-WARN]) — the two persistent statuses stay distinct,
@@ -110,8 +142,30 @@ fn terminal_status_line(commit: &Oid, reason: BackendError) -> String {
         | BackendError::Missing
         | BackendError::Corrupt
         | BackendError::Custom
+        | BackendError::PyPIPackage
         | BackendError::Bundle => format!(
             "NO SOURCE — {commit} is not on this machine; run Download latest or basilisk typeshed download --commit {commit}"
+        ),
+    }
+}
+
+/// The spec's persistent status line for a terminal `PyPI`-package failure
+/// ([STUBRES-TYPESHED-PYPI], [STUBRES-TYPESHED-WARN]). Mirrors
+/// [`terminal_status_line`]: license drift is its own status; every other
+/// category is the `NO SOURCE` recovery line naming the exact
+/// `basilisk typeshed download --package` command. The full pin rides along so
+/// every surface shows what it needed.
+fn pypi_terminal_status_line(name: &str, sha256: &str, reason: BackendError) -> String {
+    match reason {
+        BackendError::LicenseChanged => TypeshedWarning::LicenseChanged.message(),
+        BackendError::InvalidConfiguration
+        | BackendError::Missing
+        | BackendError::Corrupt
+        | BackendError::Custom
+        | BackendError::PyPIPackage
+        | BackendError::Bundle => format!(
+            "NO SOURCE — {name}@sha256:{sha256} is not on this machine; \
+             run basilisk typeshed download --package {name}@sha256:{sha256}",
         ),
     }
 }
@@ -129,6 +183,7 @@ pub fn select_snapshot(
     match &request.selection {
         SourceSelection::Custom { path } => select_custom(path, backend),
         SourceSelection::Pinned { commit, explicit } => select_pinned(*commit, *explicit, backend),
+        SourceSelection::PyPIPackage { name, sha256 } => select_pypi_package(name, sha256, backend),
     }
 }
 
@@ -213,6 +268,43 @@ fn pinned_bundle(
 
 fn set_warnings(snapshot: &mut Snapshot, warnings: &[TypeshedWarning]) {
     snapshot.status.warnings = StatusWarning::list(warnings);
+}
+
+/// Select a SHA-256-addressed `PyPI` package as a PINNED source
+/// ([STUBRES-TYPESHED-PYPI], issue #312). The registry attests the contents by
+/// hash, so — unlike a custom folder — the source is neither `unpinned` nor
+/// `user-managed`: it emits no source-status advisories. The backend is the
+/// sole authority on whether the package is installed and whether its bytes
+/// match the pin; this policy layer only validates the returned identity and
+/// clears the advisory list.
+fn select_pypi_package(
+    name: &str,
+    sha256: &str,
+    backend: &dyn SourceBackend,
+) -> Result<Snapshot, SelectionError> {
+    let mut snapshot =
+        backend
+            .load_pypi_package(name, sha256)
+            .map_err(|reason| SelectionError::PyPIPackage {
+                name: name.to_owned(),
+                sha256: sha256.to_owned(),
+                reason,
+            })?;
+    if !matches!(
+        &snapshot.identity,
+        SourceIdentity::PyPIPackage {
+            name: actual_name,
+            sha256: actual_sha256,
+        } if actual_name == name && actual_sha256 == sha256
+    ) || !identity_matches_vfs(&snapshot)
+        || snapshot.status.active_source != SourceKind::PyPIPackage
+    {
+        return Err(SelectionError::InconsistentIdentity);
+    }
+    // A content-addressed PyPI package is pinned: no `unpinned`, no
+    // `user-managed` advisory.
+    set_warnings(&mut snapshot, &[]);
+    Ok(snapshot)
 }
 
 fn identity_matches_vfs(snapshot: &Snapshot) -> bool {

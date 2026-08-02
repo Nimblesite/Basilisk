@@ -367,3 +367,101 @@ exec(open({diff:?}).read())
     let _ = std::fs::remove_file(payload_path.trim());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The render worker must still deliver when `os.replace` refuses.
+///
+/// On Windows a rename onto a path another process has open fails with
+/// `PermissionError`, and the editor polls the reserved courier path every
+/// 100 ms while the worker renders — so the collision is designed in. The
+/// `os.replace` used to sit OUTSIDE the worker's `try`, so one collision killed
+/// the thread, the reservation stayed empty for the editor's whole 60 s wait,
+/// and ingest rejected the bare marker line as "no recognized marker": a
+/// win32-only flake that read as a broken injection script
+/// ([VSIX-CI-PLATFORM-COVERAGE], [PROFILE-MEMORY-COURIER]).
+///
+/// POSIX `os.replace` never fails that way, so the collision is injected rather
+/// than waited for: the driver wraps `os.replace` to raise `PermissionError` a
+/// fixed number of times before delegating. `refusals=3` proves the retry wins,
+/// and `refusals` beyond the 5 s budget (a permanent refusal) proves the
+/// direct-write fallback still lands the payload. Both must produce the SAME
+/// marker-carrying payload the un-refused path does.
+#[test]
+fn diff_payload_lands_even_when_os_replace_is_refused() {
+    for (tag, refusals) in [("retry", 3usize), ("always", usize::MAX)] {
+        let dir = mint_dir(tag);
+        let baseline = dir.join("baseline.py");
+        std::fs::write(&baseline, store_baseline()).expect("write baseline script");
+        let diff = dir.join("diff.py");
+        std::fs::write(&diff, diff_snapshot(50)).expect("write diff script");
+
+        // A permanent refusal must not burn the worker's full 5 s retry budget
+        // in every run, so `always` is spelled as a huge count, not a flag: the
+        // wrapper still counts down and the fallback is reached the same way.
+        let driver_src = format!(
+            r"
+import gc, os, tracemalloc
+_real_replace = os.replace
+_left = {refusals}
+def _refusing_replace(src, dst):
+    global _left
+    if _left > 0:
+        _left -= 1
+        raise PermissionError(13, 'simulated win32 sharing violation')
+    return _real_replace(src, dst)
+os.replace = _refusing_replace
+
+tracemalloc.start(5)
+big = [bytes(4096) for _ in range(2000)]
+exec(open({baseline:?}).read())
+del big
+gc.collect()
+exec(open({diff:?}).read())
+",
+            refusals = if refusals == usize::MAX {
+                "10**9".to_owned()
+            } else {
+                refusals.to_string()
+            },
+            baseline = baseline.display().to_string(),
+            diff = diff.display().to_string(),
+        );
+        let driver = dir.join("driver.py");
+        std::fs::write(&driver, driver_src).expect("write driver");
+
+        let (code, stdout) = run_python(&driver);
+        assert_eq!(
+            code,
+            Some(0),
+            "[{tag}] driver must exit cleanly; stdout: {stdout}"
+        );
+
+        let payload_path = stdout
+            .lines()
+            .find_map(|line| line.strip_prefix("__BASILISK_MEM_FILE__"))
+            .unwrap_or_else(|| panic!("[{tag}] diff must emit a payload file marker: {stdout}"))
+            .trim()
+            .to_owned();
+        let payload = std::fs::read_to_string(&payload_path)
+            .unwrap_or_else(|error| panic!("[{tag}] read payload: {error}"));
+        assert!(
+            !payload.is_empty(),
+            "[{tag}] a refused os.replace must never leave the reservation empty — \
+             that is the win32 hang the editor cannot recover from"
+        );
+        let json = payload
+            .strip_prefix("__BASILISK_MEM_DIFF__")
+            .unwrap_or_else(|| {
+                panic!("[{tag}] payload must carry the diff marker, got: {payload}")
+            });
+        let parsed = super::memory::diff::parse_diff_output(json)
+            .unwrap_or_else(|error| panic!("[{tag}] parse diff: {error}"));
+        assert!(
+            parsed.total_freed > 1024 * 1024,
+            "[{tag}] the delivered payload must be the real diff, got {} bytes freed",
+            parsed.total_freed
+        );
+
+        let _ = std::fs::remove_file(&payload_path);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

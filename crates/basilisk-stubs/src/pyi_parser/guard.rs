@@ -219,3 +219,41 @@ fn string_literal(expr: &Expr) -> Option<String> {
         _ => None,
     }
 }
+
+/// Every string literal a `sys.platform` comparison anywhere in `body` tests
+/// against.
+///
+/// [`platform_guard`] is the only thing that makes an extracted stub depend on
+/// the target platform, and it only ever compares the target against these
+/// literals. Two platform values that compare identically against all of them
+/// therefore select identical declarations — which is what lets the
+/// precomputed builtins index enumerate a finite, provably complete set of
+/// platform variants ([STUBRES-TYPESHED-BUILTINS-INDEX]).
+pub(crate) fn platform_guard_literals(body: &[Stmt]) -> std::collections::BTreeSet<String> {
+    use ruff_python_ast::visitor::Visitor as _;
+
+    let mut collector = PlatformLiterals {
+        found: std::collections::BTreeSet::new(),
+    };
+    for stmt in body {
+        collector.visit_stmt(stmt);
+    }
+    collector.found
+}
+
+struct PlatformLiterals {
+    found: std::collections::BTreeSet<String>,
+}
+
+impl ruff_python_ast::visitor::Visitor<'_> for PlatformLiterals {
+    fn visit_expr(&mut self, expr: &Expr) {
+        if let Expr::Compare(compare) = expr {
+            let sides = std::iter::once(compare.left.as_ref()).chain(compare.comparators.iter());
+            let names_platform = sides.clone().any(|side| is_sys_attribute(side, "platform"));
+            if names_platform {
+                self.found.extend(sides.filter_map(string_literal));
+            }
+        }
+        ruff_python_ast::visitor::walk_expr(self, expr);
+    }
+}

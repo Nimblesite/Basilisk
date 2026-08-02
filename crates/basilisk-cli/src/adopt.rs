@@ -105,6 +105,10 @@ fn report_failure(err: &PipelineError, context: &'static str) -> u8 {
             error!(%message, "{context}: configuration error");
             2
         }
+        PipelineError::NoSource(message) => {
+            error!(%message, "{context}");
+            3
+        }
         PipelineError::Internal(message) => {
             error!(%message, "{context}");
             3

@@ -144,6 +144,31 @@ pub fn parse_pyi_source_for_target(
     )
 }
 
+/// Every string literal a `sys.platform` guard in this stub tests against.
+///
+/// A stub's extracted shape depends on the target platform ONLY through these
+/// comparisons, so this is the complete set of platform values that can change
+/// the result — everything else falls in one indistinguishable class. The
+/// precomputed builtins index uses it to enumerate a provably complete set of
+/// platform variants ([STUBRES-TYPESHED-BUILTINS-INDEX]).
+///
+/// # Errors
+///
+/// Returns [`StubParseError::Syntax`] if the source has parse errors.
+pub fn platform_guard_literals(
+    content: &str,
+    path: &Path,
+) -> Result<std::collections::BTreeSet<String>, StubParseError> {
+    let module_ast =
+        basilisk_parser::parse_source(content.to_owned(), path.to_string_lossy().into_owned())
+            .map_err(|err| StubParseError::Syntax {
+                path: path.to_path_buf(),
+                message: err.to_string(),
+            })?
+            .ast;
+    Ok(guard::platform_guard_literals(&module_ast.body))
+}
+
 fn parse_pyi_source_with_target(
     content: &str,
     path: &Path,

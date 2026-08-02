@@ -42,6 +42,7 @@ export type TagKind =
 export type TypeshedSettingKey =
   | { kind: "TypeshedPath" }
   | { kind: "TypeshedCommit" }
+  | { kind: "TypeshedPackage" }
   | { kind: "TypeshedStorePath" };
 
 /**
@@ -64,13 +65,14 @@ export type EditorMutation =
   | { kind: "RemoveCacheSetting"; key: CacheSettingKey };
 
 /**
- * There are exactly two sources, each carrying the value that defines it:
- * "a pinned commit plus a custom folder" is unrepresentable, and there is no
- * "track latest" source at all ([LSPCFGED-TYPESHED]).
+ * There are exactly three sources, each carrying the value that defines it:
+ * only one may be active at a time, and there is no "track latest" source
+ * ([LSPCFGED-TYPESHED], [STUBRES-TYPESHED-PYPI]).
  */
 export type TypeshedSource =
   | { kind: "ExactCommit"; commit: string }
-  | { kind: "CustomFolder"; path: string };
+  | { kind: "CustomFolder"; path: string }
+  | { kind: "PyPIPackage"; name: string; sha256: string };
 
 export type TypeshedLifecycle =
   | { kind: "Downloading" }
@@ -90,7 +92,8 @@ export type TypeshedAction =
 export type TypeshedActiveSource =
   | { kind: "Custom" }
   | { kind: "ExactCommit" }
-  | { kind: "Bundled" };
+  | { kind: "Bundled" }
+  | { kind: "PyPIPackage" };
 
 export type TypeshedLicenseStatus =
   | { kind: "Unavailable" }

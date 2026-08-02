@@ -50,13 +50,13 @@ fn custom_snapshot(modules: &[(&str, &str)]) -> ActiveTypeshed {
         Vec::new()
     } else {
         vec![ArchiveEntry {
-            path: "stdlib/VERSIONS".to_owned(),
+            path: "stdlib/VERSIONS".to_owned().into(),
             mode: FileMode::Regular,
             data: versions.into_bytes().into(),
         }]
     };
     entries.extend(modules.iter().map(|(module, body)| ArchiveEntry {
-        path: format!("stdlib/{module}.pyi"),
+        path: format!("stdlib/{module}.pyi").into(),
         mode: FileMode::Regular,
         data: body.as_bytes().to_vec().into(),
     }));

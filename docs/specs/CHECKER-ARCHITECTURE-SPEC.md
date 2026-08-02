@@ -264,7 +264,7 @@ configuration/editor behavior is specified by
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->3410759<!--/g:short-->`](https://github.com/python/typing/tree/3410759355c3018063d3a446102f88621fc43eb5/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
+Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->60df123<!--/g:short-->`](https://github.com/python/typing/tree/60df123ccfe9ae0472b1409ef4a00d51ffc5d972/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -381,33 +381,46 @@ Tests: `crates/basilisk-checker/tests/checker/version_target_tests.rs`.
 
 ---
 
-## Mojo-inspired safety analysis {#CHKARCH-MOJO-SAFETY}
+## Ownership and safety analysis {#CHKARCH-SAFETY}
 
 Status: planned, opt-in, and not wired into the checker pipeline. The
-`basilisk-mojo` crate is scaffolding; shipping PEP rules must not reuse these
-anchors or diagnostic descriptions.
+scaffolding lives in `basilisk-checker`'s `ownership` module — there is no
+separate crate for it, and it registers no rule; shipping PEP rules must not
+reuse these anchors or diagnostic descriptions. Its scan is textual, so it must
+be rebuilt on the Ruff AST before any rule is registered against it.
 
-### Ownership tracking {#CHKARCH-MOJO-OWNERSHIP}
+These are Basilisk rules. The concepts are borrowed from
+[Mojo's ownership model](https://docs.modular.com/mojo/manual/values/ownership),
+but the analysis is Basilisk's own, expressed in standard Python `Annotated`
+conventions — not a port of Mojo's checker. `mojo` is therefore not a legal
+identifier here: it must never appear in a spec ID, module path, file name, or
+rule name. Prose may credit the inspiration; tags may not carry it.
+
+Because none of it works today it is also **not advertised**: it stays out of
+the README, the website, and the user-facing docs until it ships as a working,
+opt-in rule set. Only complete, production-ready features are advertised.
+
+### Ownership tracking {#CHKARCH-SAFETY-OWNERSHIP}
 
 The target is explicit `Annotated[T, Borrowed|InOut|Owned]` analysis for
 mutation-of-borrowed and use-after-transfer diagnostics.
 
-### Parameter immutability {#CHKARCH-MOJO-IMMUTABLE}
+### Parameter immutability {#CHKARCH-SAFETY-IMMUTABLE}
 
 The target is an opt-in rule that treats mutable parameters as read-only unless
 marked `InOut`; it does not change Python runtime semantics.
 
-### Structural discipline {#CHKARCH-MOJO-STRUCTURAL}
+### Structural discipline {#CHKARCH-SAFETY-STRUCTURAL}
 
 The target is opt-in checks for dynamic attributes and related typed-class
 structure. Existing PEP/dataclass rules remain separate.
 
-### Explicit coercion {#CHKARCH-MOJO-COERCION}
+### Explicit coercion {#CHKARCH-SAFETY-COERCION}
 
 The target is opt-in diagnostics for selected implicit conversions. It must not
 contradict the typing-spec numeric tower used by default PEP rules.
 
-### Compatibility contract {#CHKARCH-MOJO-COMPAT}
+### Compatibility contract {#CHKARCH-SAFETY-COMPAT}
 
 All metadata uses standard Python typing constructs, all rules are off by
 default, and the implementation plan is
@@ -627,8 +640,8 @@ Source Files (.py)
   Windsurf / Zed /
   Neovim
 
-  (planned: basilisk-mojo — Mojo-inspired ownership / immutability / coercion
-   analysis — is not yet wired into the pipeline.)
+  (planned: basilisk-checker::ownership — ownership / immutability /
+   coercion analysis — is not yet wired into the pipeline.)
 ```
 
 All stages are backed by:
@@ -683,8 +696,8 @@ basilisk/
   crates/
     basilisk-parser/       # Python AST parsing (wraps or extends ruff_python_parser)
     basilisk-resolver/     # Name resolution, scope analysis, import resolution
-    basilisk-checker/      # Core type checking engine
-    basilisk-mojo/         # Mojo-inspired safety analysis passes
+    basilisk-checker/      # Core type checking engine (incl. ownership:
+                           #   planned safety analysis, unwired)
     basilisk-lsp/          # Language Server Protocol implementation
     basilisk-cli/          # Command-line interface
     basilisk-stubs/        # Stub generation, loading, registry client
@@ -703,9 +716,8 @@ basilisk-db (foundation)
   <- basilisk-parser
        <- basilisk-resolver
             <- basilisk-checker
-                 <- basilisk-mojo
-                      <- basilisk-lsp (leaf: IDE)
-                      <- basilisk-cli (leaf: terminal)
+                 <- basilisk-lsp (leaf: IDE)
+                 <- basilisk-cli (leaf: terminal)
 
 basilisk-stubs (standalone, used by basilisk-resolver)
 ```
@@ -1452,7 +1464,7 @@ that official check did not run against a freshly cloned suite is a BUILD FAILUR
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
 - **Current score** — measured against `python/typing@main` at the exact graded
   commit recorded in `conformance_report.json`, currently
-  [`<!--g:short-->3410759<!--/g:short-->`](https://github.com/python/typing/tree/3410759355c3018063d3a446102f88621fc43eb5/conformance):
+  [`<!--g:short-->60df123<!--/g:short-->`](https://github.com/python/typing/tree/60df123ccfe9ae0472b1409ef4a00d51ffc5d972/conformance):
   **<!--g:pass-->141<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->100.0%<!--/g:score-->**, **<!--g:fp-->0<!--/g:fp--> false positives**, **<!--g:missed-->0<!--/g:missed--> missed required errors**, with
   **<!--g:caught-->970<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
   PEP conformance set — over a fresh `python/typing` clone whose tree holds no
@@ -1577,6 +1589,27 @@ never suppress the other (`benchmarks/summarize.py`):
   non-increasing. It lives in the tracked script, not an env var; the gate itself
   cannot be disabled or widened at runtime (`BENCH_NO_GATE` /
   `BENCH_REGRESS_PCT` / `BENCH_TOLERANCE_PCT` overrides are rejected).
+- **Basilisk-only iteration (`make bench-basilisk`, `BENCH_ONLY_BASILISK=1`).**
+  Closing a basilisk performance gap is a tight edit-measure loop, and five
+  competitors at ~0.5 s per invocation add minutes to every turn of it while
+  saying nothing about a change to this tree. This mode times the basilisk
+  columns alone and skips the competitor pull, discovery, preflight, and timing.
+  It relaxes **nothing that decides anything**: the full `cargo clean` + fresh
+  release build, the noisy-measurement stability policy, and the zero-tolerance
+  gate against the committed baseline all run exactly as in a full sweep — a
+  regression fails it identically. Two honesty rules keep the partial CSV
+  truthful: the untimed tools' `_ms`/`_diags` cells and version strings are
+  **carried forward verbatim** from the file rather than blanked (a blank cell
+  means "not installed / failed preflight" and must keep meaning that) — the
+  same carry applies to the tracked `benchmarks/results/coverage.tsv`, whose
+  rows for the skipped tools are preserved instead of being truncated away —
+  and a
+  `# measured:` header line names which tools this run timed and which it
+  carried, with the date they came from — so the fresh `# generated` stamp can
+  never imply a competitor was re-timed. Nothing measured is ever carried, so
+  the write-always rule is untouched. CI always runs the full sweep: the mode
+  exits 2 under `GITHUB_ACTIONS`. **A number published or committed as a full
+  benchmark must come from `make bench`** — this mode is for iteration.
 - Run it whenever checker hot paths change (resolver visitors, rule `check` loops,
   conformance-driven additions). Conformance logic that blows the gate must be
   optimised or restructured. A machine without a baseline establishes one only

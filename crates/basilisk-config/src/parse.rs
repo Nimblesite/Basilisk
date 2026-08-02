@@ -90,6 +90,12 @@ pub struct BasiliskConfig {
     /// another SHA; a pin not on this machine is `NO SOURCE`.
     pub typeshed_commit: Option<String>,
 
+    /// A `PyPI` typeshed distribution pinned by wheel SHA-256, `name@sha256:<hex>`
+    /// ([STUBRES-TYPESHED-PYPI], issue #312). Mutually exclusive with
+    /// `typeshed-commit` and `typeshed-path`; a verified pin suppresses the
+    /// source-status advisories.
+    pub typeshed_package: Option<String>,
+
     /// The verified content-addressed typeshed store directory
     /// ([STUBRES-TYPESHED-STORE]). Unset uses the OS cache directory.
     pub typeshed_store_path: Option<PathBuf>,
@@ -142,6 +148,7 @@ impl Default for BasiliskConfig {
             stub_paths: Vec::new(),
             typeshed_path: None,
             typeshed_commit: None,
+            typeshed_package: None,
             typeshed_store_path: None,
             cache_enabled: None,
             cache_dir: None,
@@ -261,30 +268,18 @@ impl BasiliskConfig {
         // The nearest config's directory anchors root-relative interpretation
         // (`include`/`exclude` globs).
         self.project_root = child.project_root.or(self.project_root);
-        // `typeshed-path` and `typeshed-commit` are one source selection. A
-        // nearer directory that chooses either replaces the inherited choice
-        // as a unit; merging the two fields independently could manufacture
-        // an invalid path+pin combination that appeared in no source file.
-        match (
-            child.typeshed_path.is_some(),
-            child.typeshed_commit.is_some(),
-        ) {
-            (true, false) => {
-                self.typeshed_path = child.typeshed_path;
-                self.typeshed_commit = None;
-            }
-            (false, true) => {
-                self.typeshed_path = None;
-                self.typeshed_commit = child.typeshed_commit;
-            }
-            // Neither choice inherits the ancestor. Both choices in one table
-            // remain visible so validation fails closed instead of repairing
-            // malformed user configuration silently.
-            (false, false) => {}
-            (true, true) => {
-                self.typeshed_path = child.typeshed_path;
-                self.typeshed_commit = child.typeshed_commit;
-            }
+        // `typeshed-path`, `typeshed-commit`, and `typeshed-package` are one
+        // mutually-exclusive source selection. A nearer directory that
+        // chooses any one replaces the inherited choice as a unit; merging
+        // the fields independently could manufacture an invalid combination
+        // (e.g. path+package) that appeared in no source file.
+        let child_selects_source = child.typeshed_path.is_some()
+            || child.typeshed_commit.is_some()
+            || child.typeshed_package.is_some();
+        if child_selects_source {
+            self.typeshed_path = child.typeshed_path;
+            self.typeshed_commit = child.typeshed_commit;
+            self.typeshed_package = child.typeshed_package;
         }
         self.typeshed_store_path = child.typeshed_store_path.or(self.typeshed_store_path);
         self.cache_enabled = child.cache_enabled.or(self.cache_enabled);
@@ -352,6 +347,12 @@ pub(crate) fn parse_pyproject_content(content: &str) -> Option<BasiliskConfig> {
     // verified store. That is the whole runtime surface.
     if let Some(val) = basilisk.get("typeshed-commit").and_then(|v| v.as_str()) {
         cfg.typeshed_commit = Some(val.to_owned());
+    }
+    // [STUBRES-TYPESHED-PYPI] (issue #312): `typeshed-package` pins a PyPI
+    // typeshed distribution by wheel SHA-256 (`name@sha256:<hex>`); mutually
+    // exclusive with `typeshed-commit` and `typeshed-path`.
+    if let Some(val) = basilisk.get("typeshed-package").and_then(|v| v.as_str()) {
+        cfg.typeshed_package = Some(val.to_owned());
     }
     if let Some(val) = basilisk.get("typeshed-store-path").and_then(|v| v.as_str()) {
         cfg.typeshed_store_path = Some(PathBuf::from(val));
@@ -441,6 +442,64 @@ pub fn is_full_commit_sha(sha: &str) -> bool {
     sha.len() == 40 && sha.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
+/// Whether `name` is a legal Python distribution name — the only accepted
+/// `typeshed-package` name form ([STUBRES-TYPESHED-PYPI]).
+///
+/// This is the grammar [PEP 508](https://peps.python.org/pep-0508/#names)
+/// defines for a distribution name (`[A-Za-z0-9]` at each end, and
+/// `[A-Za-z0-9._-]` throughout), checked here rather than with a regex so the
+/// alphabet is explicit.
+///
+/// The name is the analogue of [`is_full_commit_sha`] for the package pin: it
+/// is the caller-supplied half of an identity that later becomes a **path
+/// segment of the `PyPI` index URL**. Restricting it to this alphabet means a
+/// configured name can never carry `/`, `?`, `#`, `%`, or a bare `..` into
+/// that URL, so a pin cannot be written that redirects the request to a
+/// different resource. The digest half is separately constrained to 64 hex,
+/// and the fetched bytes must re-hash to it regardless — but a name is
+/// rejected *before* any request is built, not compensated for afterwards.
+#[must_use]
+pub fn is_valid_distribution_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    let (Some(first), Some(last)) = (bytes.first(), bytes.last()) else {
+        return false;
+    };
+    first.is_ascii_alphanumeric()
+        && last.is_ascii_alphanumeric()
+        && bytes
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(*b, b'.' | b'_' | b'-'))
+}
+
+/// Parse a `typeshed-package` pin spec of the form `"name@sha256:<hex>"`
+/// ([STUBRES-TYPESHED-PYPI], issue #312). The distribution name precedes the
+/// `@sha256:` separator and must satisfy [`is_valid_distribution_name`]; the
+/// hash must be 64 hex characters. This is the one parser for the pin — the
+/// LSP and config editor call it rather than carrying a divergent twin.
+///
+/// # Errors
+///
+/// Returns a redacted, user-facing reason for a malformed spec.
+pub fn parse_typeshed_package(spec: &str) -> Result<(String, String), String> {
+    let (name, hash) = spec
+        .split_once("@sha256:")
+        .ok_or_else(|| "typeshed-package must be of the form `name@sha256:<64-hex>`".to_owned())?;
+    if name.is_empty() {
+        return Err("typeshed-package distribution name is empty".to_owned());
+    }
+    if !is_valid_distribution_name(name) {
+        return Err(
+            "typeshed-package distribution name must be a PEP 508 name: ASCII letters, digits, \
+             `.`, `_`, or `-`, beginning and ending with a letter or digit"
+                .to_owned(),
+        );
+    }
+    if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("typeshed-package sha256 must be 64 hex characters".to_owned());
+    }
+    Ok((name.to_owned(), hash.to_ascii_lowercase()))
+}
+
 /// Emit a structured warning for a malformed `typeshed-commit` pin
 /// ([STUBRES-TYPESHED-CONFIG]). The value is kept verbatim on the config so
 /// the runtime fails closed on a bad pin rather than silently dropping it;
@@ -451,6 +510,13 @@ fn warn_on_malformed_typeshed_values(cfg: &BasiliskConfig) {
             tracing::warn!(
                 len = sha.len(),
                 "typeshed-commit is not a full 40-char hex SHA; the exact pin will fail closed"
+            );
+        }
+    }
+    if let Some(spec) = cfg.typeshed_package.as_deref() {
+        if parse_typeshed_package(spec).is_err() {
+            tracing::warn!(
+                "typeshed-package is not `name@sha256:<64-hex>`; the package pin will fail closed"
             );
         }
     }

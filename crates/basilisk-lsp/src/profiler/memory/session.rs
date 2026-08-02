@@ -136,7 +136,10 @@ impl MemorySession {
                 debug!(session_id = %self.session_id, "ingested ack");
                 Ok(no_diagnostics(IngestOutcome::Ack))
             }
-            None => Err("no recognized __BASILISK_MEM*__ marker in script output".to_owned()),
+            None => Err(format!(
+                "no recognized __BASILISK_MEM*__ marker in script output: {}",
+                marker_less_evidence(output)
+            )),
         }
     }
 
@@ -222,6 +225,42 @@ fn empty_diff() -> MemoryDiff {
         net_growth: 0,
         grown_allocations: Vec::new(),
         freed_allocations: Vec::new(),
+    }
+}
+
+/// Longest marker-less payload excerpt quoted back in the ingest error. Long
+/// enough to carry a Python `repr` or an editor fallback line whole, short
+/// enough that a truncated 200 KB snapshot cannot flood the log.
+const EVIDENCE_LIMIT: usize = 400;
+
+/// What the courier actually delivered, as one line, for a marker-less ingest.
+///
+/// Every distinct way this round-trip can fail — the render worker raising, the
+/// editor's payload-file wait expiring and falling back to the bare
+/// `__BASILISK_MEM_FILE__` line, a marker-line delivery that timed out
+/// mid-flight — arrives here as the same "no recognized marker" rejection. With
+/// nothing quoted back, all three read as a broken injection script and the
+/// win32 flake could not be told apart from a real regression
+/// ([VSIX-CI-PLATFORM-COVERAGE]). Newlines are folded so the evidence stays one
+/// grep-able line, and the excerpt is bounded by [`EVIDENCE_LIMIT`].
+fn marker_less_evidence(output: &str) -> String {
+    let trimmed = output.trim();
+    if trimmed.is_empty() {
+        return "<empty>".to_owned();
+    }
+    let folded: String = trimmed
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect();
+    match folded.char_indices().nth(EVIDENCE_LIMIT) {
+        Some((end, _)) => format!("{}… ({} bytes total)", &folded[..end], output.len()),
+        None => folded,
     }
 }
 

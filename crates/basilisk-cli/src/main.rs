@@ -337,7 +337,7 @@ fn run_command(command: Command) -> u8 {
 /// - `1` — error diagnostics found
 /// - `2` — invalid configuration (a `pep` rule resolved to `disabled`,
 ///   [CHKARCH-CONFIG-MODEL])
-/// - `3` — internal error
+/// - `3` — internal error, or a terminal typeshed source failure (`NO SOURCE`)
 fn run_scoped_check(args: &CheckArgs, scope: DiagnosticScope) -> u8 {
     args.color.apply();
     let cache = cache_check::CacheOptions {
@@ -368,6 +368,13 @@ fn run_scoped_check(args: &CheckArgs, scope: DiagnosticScope) -> u8 {
         Err(PipelineError::Config(message)) => {
             error!(%message, "configuration error");
             2
+        }
+        Err(PipelineError::NoSource(message)) => {
+            // The message IS the spec's `NO SOURCE` status line with its
+            // recovery command — print it verbatim, not branded as an
+            // internal bug ([STUBRES-TYPESHED-OFFLINE]).
+            error!(%message);
+            3
         }
         Err(PipelineError::Internal(message)) => {
             error!(%message, "internal error");
@@ -523,6 +530,46 @@ mod tests {
         assert_eq!(
             commit.as_deref(),
             Some("83c2518a9e6abbda0c44592c3483de459198f887")
+        );
+
+        // `--package` acquires a PyPI wheel pinned by SHA-256 and is mutually
+        // exclusive with `--commit` ([STUBRES-TYPESHED-PYPI]).
+        let package = Cli::try_parse_from([
+            "basilisk",
+            "typeshed",
+            "download",
+            "--package",
+            "types-stdlib@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        ])
+        .expect("download --package must parse");
+        let Command::Typeshed {
+            action:
+                typeshed_cli::TypeshedAction::Download {
+                    commit, package, ..
+                },
+        } = package.command
+        else {
+            panic!("expected typeshed download");
+        };
+        assert!(commit.is_none(), "--package excludes --commit");
+        assert_eq!(
+            package.as_deref(),
+            Some("types-stdlib@sha256:1111111111111111111111111111111111111111111111111111111111111111")
+        );
+
+        // The two source flags are mutually exclusive.
+        let conflict = Cli::try_parse_from([
+            "basilisk",
+            "typeshed",
+            "download",
+            "--commit",
+            "83c2518a9e6abbda0c44592c3483de459198f887",
+            "--package",
+            "types-stdlib@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        ]);
+        assert!(
+            conflict.is_err(),
+            "--commit and --package must be mutually exclusive"
         );
     }
 

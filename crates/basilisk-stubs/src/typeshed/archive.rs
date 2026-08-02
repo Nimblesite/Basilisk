@@ -24,7 +24,13 @@ use super::gittree::{git_blob_oid, reconstruct_root_tree_oid, FileMode, GitFile,
 pub struct ArchiveEntry {
     /// Repo-relative path with the archive's top-level prefix removed
     /// (e.g. `stdlib/os.pyi`), always `/`-separated.
-    pub path: String,
+    ///
+    /// `Cow` for the same reason as [`ArchiveEntry::data`]: the embedded
+    /// bundle's ~750 entry names are already UTF-8 inside the `include_bytes!`
+    /// constant, so borrowing them keeps ~1500 `String` allocations (here and
+    /// in [`Archive::new`]'s index) off the cold-start path
+    /// ([STUBRES-TYPESHED-BASELINE]). Downloaded and on-disk sources own theirs.
+    pub path: Cow<'static, str>,
     /// The file's Git mode (regular, executable, symlink, or submodule).
     pub mode: FileMode,
     /// The file's raw bytes (for a symlink, the link target).
@@ -40,7 +46,7 @@ pub struct ArchiveEntry {
 #[derive(Debug, Clone)]
 pub struct Archive {
     entries: Vec<ArchiveEntry>,
-    by_path: HashMap<String, usize>,
+    by_path: HashMap<Cow<'static, str>, usize>,
 }
 
 impl Archive {
@@ -48,6 +54,9 @@ impl Archive {
     ///
     /// The path index keeps the **last** entry for any repeated path; duplicate
     /// detection is the Safety gate's job, not this constructor's.
+    ///
+    /// The index clones each path, which for a borrowed one is a pointer copy —
+    /// the bundled archive builds its whole index without allocating.
     #[must_use]
     pub fn new(entries: Vec<ArchiveEntry>) -> Self {
         let by_path = entries
@@ -99,7 +108,7 @@ impl Archive {
         self.entries
             .iter()
             .map(|entry| GitFile {
-                path: entry.path.clone(),
+                path: entry.path.clone().into_owned(),
                 oid: git_blob_oid(&entry.data),
                 mode: entry.mode,
             })
@@ -175,7 +184,7 @@ impl ArchiveVfs {
         self.archive
             .entries()
             .iter()
-            .map(|entry| entry.path.as_str())
+            .map(|entry| entry.path.as_ref())
     }
 
     /// The underlying archive.
@@ -191,7 +200,7 @@ mod tests {
 
     fn entry(path: &str, data: &[u8]) -> ArchiveEntry {
         ArchiveEntry {
-            path: path.to_owned(),
+            path: path.to_owned().into(),
             mode: FileMode::Regular,
             data: data.to_vec().into(),
         }

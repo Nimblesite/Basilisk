@@ -45,6 +45,8 @@ export const DRIVER_PRELUDE = String.raw`
   const probe = () => {
     const commit = el('[data-typeshed-commit]');
     const commitError = document.getElementById('typeshed-commit-error');
+    const pkg = el('[data-typeshed-package]');
+    const packageError = document.getElementById('typeshed-package-error');
     const path = el('[data-typeshed-path="TypeshedPath"]');
     const storeFolder = el('[data-typeshed-path="TypeshedStorePath"]');
     const pickFolder = el('[data-pick-typeshed-folder="TypeshedPath"]');
@@ -64,6 +66,10 @@ export const DRIVER_PRELUDE = String.raw`
       commitDisabled: commit ? commit.disabled : null,
       commitInvalid: commit ? commit.getAttribute('aria-invalid') : null,
       commitError: commitError && !commitError.hidden ? text(commitError) : null,
+      packagePresent: pkg !== null,
+      packageValue: pkg ? pkg.value : null,
+      packageInvalid: pkg ? pkg.getAttribute('aria-invalid') : null,
+      packageError: packageError && !packageError.hidden ? text(packageError) : null,
       pathPresent: path !== null,
       pathValue: path ? path.value : null,
       pickFolderDisabled: pickFolder ? pickFolder.disabled : null,

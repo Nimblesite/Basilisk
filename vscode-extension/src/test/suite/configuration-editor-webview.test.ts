@@ -26,10 +26,13 @@ suite("Configuration editor — untrusted intent decoder", () => {
     assert.strictEqual(decodeConfigurationEditorIntent({
       type: "preview", mutations: [{ kind: "RemoveTag", tag: "basilisk" }],
     })?.type, "preview");
-    // [LSPCFGED-TYPESHED]: the three surviving keys are all text-typed, so the
-    // model carries a bare String — `SetTypeshedSetting { key, value: String }`
-    // in models/configuration_editor.td.
-    for (const key of ["TypeshedPath", "TypeshedCommit", "TypeshedStorePath"]) {
+    // [LSPCFGED-TYPESHED] / [STUBRES-TYPESHED-PYPI]: every surviving key is
+    // text-typed, so the model carries a bare String —
+    // `SetTypeshedSetting { key, value: String }` in
+    // models/configuration_editor.td. This list must hold EVERY variant of the
+    // Rust `TypeshedSettingKey`: a key the webview can post but the decoder
+    // does not know is silently dropped, losing the user's edit.
+    for (const key of ["TypeshedPath", "TypeshedCommit", "TypeshedPackage", "TypeshedStorePath"]) {
       assert.strictEqual(decodeConfigurationEditorIntent({
         type: "preview",
         mutations: [{ kind: "SetTypeshedSetting", key: { kind: key }, value: "configured" }],
@@ -175,13 +178,14 @@ suite("Configuration editor — hardened, accessible document", () => {
     assert.ok(html.includes("viewport.scrollTop = target * ROW_HEIGHT"));
   });
 
-  // [LSPCFGED-TYPESHED] / [LSPCFGED-TYPESHED-DOWNLOAD]: two sources and no
-  // third, download buttons instead of lifecycle locks, and none of the
-  // deleted cache/verify/URL controls.
-  test("ships the two-source Typeshed panel with download buttons and no deleted controls", () => {
+  // [LSPCFGED-TYPESHED] / [LSPCFGED-TYPESHED-DOWNLOAD] / [STUBRES-TYPESHED-PYPI]:
+  // the three real sources and no invented fourth, download buttons instead of
+  // lifecycle locks, and none of the deleted cache/verify/URL controls.
+  test("ships the three-source Typeshed panel with download buttons and no deleted controls", () => {
     const html = buildConfigurationEditorDocument();
     assert.ok(html.includes("'Pinned commit'"), "the pinned-commit radio exists");
     assert.ok(html.includes("'Custom folder'"), "the custom-folder radio exists");
+    assert.ok(html.includes("'PyPI package'"), "the PyPI package radio exists");
     assert.ok(!html.includes("'Latest'"), "no Latest source radio may ever render");
     assert.ok(html.includes("'DownloadLatest', 'Download latest'"), "Download latest is a real button");
     assert.ok(html.includes("'DownloadPinned', 'Download pinned'"), "Download pinned is the NO SOURCE fix");

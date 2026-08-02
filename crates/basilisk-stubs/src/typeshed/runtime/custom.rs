@@ -110,7 +110,7 @@ fn collect_files(
             .ok_or(BackendError::Custom)?
             .replace(std::path::MAIN_SEPARATOR, "/");
         entries.push(ArchiveEntry {
-            path,
+            path: path.into(),
             mode: file_mode(&file_metadata),
             data: data.into(),
         });

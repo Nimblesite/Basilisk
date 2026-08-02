@@ -24,12 +24,12 @@ fn metaclass_snapshot() -> Arc<Snapshot> {
     };
     let archive = Archive::new(vec![
         ArchiveEntry {
-            path: "stdlib/VERSIONS".to_owned(),
+            path: "stdlib/VERSIONS".to_owned().into(),
             mode: FileMode::Regular,
             data: b"unittest: 3.8-\nunittest.mock: 3.8-\n".to_vec().into(),
         },
         ArchiveEntry {
-            path: "stdlib/unittest/mock.pyi".to_owned(),
+            path: "stdlib/unittest/mock.pyi".to_owned().into(),
             mode: FileMode::Regular,
             data: concat!(
                 "class SpecialMeta(type):\n",
