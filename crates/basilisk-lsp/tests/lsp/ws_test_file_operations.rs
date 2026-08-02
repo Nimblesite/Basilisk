@@ -44,7 +44,10 @@ async fn test_ws_will_rename_files_rewrites_importers() -> TestResult<()> {
     }
     // Open the importers so they are indexed.
     for (uri, src) in [
-        (&a_uri, "import oldmod\nimport oldmod as om\nprint(oldmod.VALUE)\n"),
+        (
+            &a_uri,
+            "import oldmod\nimport oldmod as om\nprint(oldmod.VALUE)\n",
+        ),
         (&b_uri, "from oldmod import VALUE\nprint(VALUE)\n"),
     ] {
         fixture.did_open(uri, src).await?;
@@ -64,11 +67,12 @@ async fn test_ws_will_rename_files_rewrites_importers() -> TestResult<()> {
 
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let changes = &parsed["result"]["changes"];
-    assert!(!changes.is_null(), "willRenameFiles must produce changes: {resp}");
+    assert!(
+        !changes.is_null(),
+        "willRenameFiles must produce changes: {resp}"
+    );
 
-    let a_edits = changes[&a_uri]
-        .as_array()
-        .ok_or("expected edits in a.py")?;
+    let a_edits = changes[&a_uri].as_array().ok_or("expected edits in a.py")?;
     assert!(
         a_edits.len() >= 2,
         "a.py should have at least 2 edits (import + aliased import): {resp}"
@@ -85,9 +89,7 @@ async fn test_ws_will_rename_files_rewrites_importers() -> TestResult<()> {
         );
     }
 
-    let b_edits = changes[&b_uri]
-        .as_array()
-        .ok_or("expected edits in b.py")?;
+    let b_edits = changes[&b_uri].as_array().ok_or("expected edits in b.py")?;
     assert_eq!(
         b_edits.len(),
         1,
@@ -133,10 +135,12 @@ async fn test_ws_will_rename_files_same_module_returns_null() -> TestResult<()> 
         }
     }
     fixture.did_open(&new_uri, "X: int = 1\n").await?;
-    fixture.did_open(
-        &format!("file://{}", dir.join("user.py").display()),
-        "import mod\n",
-    ).await?;
+    fixture
+        .did_open(
+            &format!("file://{}", dir.join("user.py").display()),
+            "import mod\n",
+        )
+        .await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture

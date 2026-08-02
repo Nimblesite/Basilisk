@@ -192,9 +192,7 @@ async fn test_ws_cross_file_type_definition_from_importer() -> TestResult<()> {
         parsed["result"] != serde_json::Value::Null,
         "cross-file type-def must resolve: {resp}"
     );
-    let result_uri = parsed["result"]["uri"]
-        .as_str()
-        .unwrap_or("");
+    let result_uri = parsed["result"]["uri"].as_str().unwrap_or("");
     assert!(
         result_uri.contains("helpers.py"),
         "cross-file type-def should jump to helpers.py, got {result_uri}: {resp}"
@@ -211,10 +209,7 @@ async fn test_ws_cross_file_type_definition_from_importer() -> TestResult<()> {
 async fn test_ws_cross_file_goto_definition_whole_module_from_importer() -> TestResult<()> {
     let dir = unique_temp_dir("bsk_cross_nav_whole");
     std::fs::create_dir_all(&dir)?;
-    std::fs::write(
-        dir.join("shapes.py"),
-        "class Circle:\n    radius: float\n",
-    )?;
+    std::fs::write(dir.join("shapes.py"), "class Circle:\n    radius: float\n")?;
     std::fs::write(
         dir.join("app.py"),
         "from shapes import Circle\n\nc: Circle = Circle()\n",
@@ -236,7 +231,10 @@ async fn test_ws_cross_file_goto_definition_whole_module_from_importer() -> Test
         .did_open(&shapes_uri, "class Circle:\n    radius: float\n")
         .await?;
     fixture
-        .did_open(&app_uri, "from shapes import Circle\n\nc: Circle = Circle()\n")
+        .did_open(
+            &app_uri,
+            "from shapes import Circle\n\nc: Circle = Circle()\n",
+        )
         .await?;
     let _ = fixture.wait_for_diagnostics().await;
 

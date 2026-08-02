@@ -79,9 +79,14 @@ async fn test_ws_discover_tests_workspace_emits_notification() -> TestResult<()>
     // Write a test file (must match test_*.py) under the workspace root so
     // workspace discovery finds it.
     let test_file = fixture.workspace_root.join("test_ws_discover.py");
-    std::fs::write(&test_file, "def test_workspace() -> None:\n    assert True\n")?;
+    std::fs::write(
+        &test_file,
+        "def test_workspace() -> None:\n    assert True\n",
+    )?;
     let uri = format!("file://{}", test_file.display());
-    fixture.did_open(&uri, "def test_workspace() -> None:\n    assert True\n").await?;
+    fixture
+        .did_open(&uri, "def test_workspace() -> None:\n    assert True\n")
+        .await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture

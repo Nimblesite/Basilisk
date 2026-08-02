@@ -399,38 +399,36 @@ async fn cross_module_goto_definition() -> TestResult<()> {
         )
         .await?;
 
-    // We should get a response (even if it's null for now — the test documents
-    // the expected behavior)
-    assert!(resp.is_some(), "should get a definition response");
+    let resp = resp.ok_or("should get a definition response")?;
+    let resp_json: serde_json::Value = serde_json::from_str(&resp)?;
 
-    let resp_json: serde_json::Value = serde_json::from_str(&resp.unwrap())?;
-    assert!(
-        resp_json.get("result").is_some(),
-        "definition response should have a result field: {resp_json}"
-    );
-
-    // When cross-file goto-def is working, result should point to definitions.py line 0.
+    // Cross-file goto-def MUST resolve. Guarding these behind `if !result.is_null()`
+    // made the test pass when the feature returned nothing at all — i.e. exactly
+    // the regression it exists to catch.
     let result = &resp_json["result"];
-    if !result.is_null() {
-        // Result may be a single Location or an array of Locations.
-        let location = if result.is_array() {
-            result.as_array().and_then(|arr| arr.first())
-        } else {
-            Some(result)
-        };
-        if let Some(loc) = location {
-            let target_uri = loc["uri"].as_str().unwrap_or("");
-            assert!(
-                target_uri.contains("definitions.py"),
-                "goto-def should point to definitions.py, got: {target_uri}"
-            );
-            assert_eq!(
-                loc["range"]["start"]["line"].as_u64(),
-                Some(0),
-                "goto-def should point to line 0 of definitions.py"
-            );
-        }
-    }
+    assert!(
+        !result.is_null(),
+        "cross-file goto-def must resolve `target_func`, not return null: {resp_json}"
+    );
+    // Result may be a single Location or an array of Locations.
+    let loc = if result.is_array() {
+        result
+            .as_array()
+            .and_then(|arr| arr.first())
+            .ok_or("goto-def returned an empty Location array")?
+    } else {
+        result
+    };
+    let target_uri = loc["uri"].as_str().unwrap_or_default();
+    assert!(
+        target_uri.contains("definitions.py"),
+        "goto-def should point to definitions.py, got: {target_uri}"
+    );
+    assert_eq!(
+        loc["range"]["start"]["line"].as_u64(),
+        Some(0),
+        "goto-def should point to line 0 of definitions.py"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
     Ok(())
@@ -558,46 +556,35 @@ async fn cross_module_find_references() -> TestResult<()> {
         )
         .await?;
 
-    assert!(resp.is_some(), "should get a references response");
-    let resp_json: serde_json::Value = serde_json::from_str(&resp.unwrap())?;
+    let resp = resp.ok_or("should get a references response")?;
+    let resp_json: serde_json::Value = serde_json::from_str(&resp)?;
+
+    // `find-references` MUST report the definition and BOTH usage sites.
+    // Previously the whole block sat inside `if let Some(locations) = …as_array()`
+    // — a null result skipped every assertion — and the cross-file half was
+    // gated on `if has_user1 && has_user2`, which is a tautology: it asserted
+    // the count only in the case where the thing it was checking already held.
+    let locations = resp_json["result"]
+        .as_array()
+        .ok_or_else(|| format!("references must return a Location array: {resp_json}"))?;
+    let names_a_file = |needle: &str| {
+        locations
+            .iter()
+            .any(|loc| loc["uri"].as_str().unwrap_or_default().contains(needle))
+    };
     assert!(
-        resp_json.get("result").is_some(),
-        "references response should have a result: {resp_json}"
+        names_a_file("shared.py"),
+        "references must include the definition in shared.py: {locations:#?}"
     );
-
-    // When cross-file references is working, result should include locations
-    // in shared.py, user1.py, and user2.py
-    if let Some(locations) = resp_json["result"].as_array() {
-        assert!(
-            !locations.is_empty(),
-            "should find at least the definition itself"
-        );
-
-        // Verify the definition site (shared.py) is included.
-        let has_shared = locations
-            .iter()
-            .any(|loc| loc["uri"].as_str().unwrap_or("").contains("shared.py"));
-        assert!(
-            has_shared,
-            "references should include definition in shared.py, got: {locations:#?}"
-        );
-
-        // When cross-file refs fully works, user1.py and user2.py should appear.
-        let has_user1 = locations
-            .iter()
-            .any(|loc| loc["uri"].as_str().unwrap_or("").contains("user1.py"));
-        let has_user2 = locations
-            .iter()
-            .any(|loc| loc["uri"].as_str().unwrap_or("").contains("user2.py"));
-        // These may not pass yet — documenting expected behavior.
-        if has_user1 && has_user2 {
-            assert!(
-                locations.len() >= 3,
-                "should find at least 3 references (def + 2 usage sites), got: {}",
-                locations.len()
-            );
-        }
-    }
+    assert!(
+        names_a_file("user1.py") && names_a_file("user2.py"),
+        "references must reach BOTH importers, not just the defining file: {locations:#?}"
+    );
+    assert!(
+        locations.len() >= 3,
+        "definition + 2 usage sites is at least 3 references, got {}: {locations:#?}",
+        locations.len()
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
     Ok(())

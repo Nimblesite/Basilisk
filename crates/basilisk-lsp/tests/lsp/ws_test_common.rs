@@ -274,7 +274,9 @@ python-version = \"3.12\"\n\
         let Ok(parsed) = serde_json::from_str::<serde_json::Value>(msg) else {
             return;
         };
-        let Some(req_id) = parsed.get("id") else { return };
+        let Some(req_id) = parsed.get("id") else {
+            return;
+        };
         if parsed.get("method").is_none() {
             return;
         }

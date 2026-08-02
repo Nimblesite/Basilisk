@@ -48,13 +48,13 @@ import logging
     );
 
     // Every import fold should span at least one line.
-    for fold in ranges.iter().filter(|r| r["kind"].as_str() == Some("imports")) {
+    for fold in ranges
+        .iter()
+        .filter(|r| r["kind"].as_str() == Some("imports"))
+    {
         let start = fold["startLine"].as_u64().unwrap_or(u64::MAX);
         let end = fold["endLine"].as_u64().unwrap_or(0);
-        assert!(
-            end >= start,
-            "import fold end should be >= start: {fold}"
-        );
+        assert!(end >= start, "import fold end should be >= start: {fold}");
     }
 
     Ok(())

@@ -32,7 +32,9 @@ async fn test_ws_did_change_republishes_diagnostics() -> TestResult<()> {
     // Wait for the republished diagnostics to carry BSK-0050.
     let mut settled = None;
     for _ in 0..20 {
-        let Some(text) = fixture.recv().await else { break };
+        let Some(text) = fixture.recv().await else {
+            break;
+        };
         if text.contains("publishDiagnostics") && text.contains("BSK-0050") {
             settled = Some(text);
             break;
@@ -82,7 +84,9 @@ async fn test_ws_did_change_incremental_range_edit() -> TestResult<()> {
     // Wait for a diagnostics publish that NO LONGER carries BSK-0050.
     let mut cleared = false;
     for _ in 0..20 {
-        let Some(text) = fixture.recv().await else { break };
+        let Some(text) = fixture.recv().await else {
+            break;
+        };
         if text.contains("publishDiagnostics") && text.contains(uri) && !text.contains("BSK-0050") {
             cleared = true;
             break;
@@ -116,13 +120,18 @@ async fn test_ws_did_save_republishes() -> TestResult<()> {
     // didSave republishes diagnostics — drain until we see one for this uri.
     let mut saw = false;
     for _ in 0..20 {
-        let Some(text) = fixture.recv().await else { break };
+        let Some(text) = fixture.recv().await else {
+            break;
+        };
         if text.contains("publishDiagnostics") && text.contains(uri) {
             saw = true;
             break;
         }
     }
-    assert!(saw, "didSave should republish diagnostics for the saved file");
+    assert!(
+        saw,
+        "didSave should republish diagnostics for the saved file"
+    );
 
     Ok(())
 }
@@ -148,7 +157,9 @@ async fn test_ws_did_close_clears_diagnostics() -> TestResult<()> {
     // Wait for an empty (or BSK-0050-free) diagnostics publish for this uri.
     let mut cleared = false;
     for _ in 0..20 {
-        let Some(text) = fixture.recv().await else { break };
+        let Some(text) = fixture.recv().await else {
+            break;
+        };
         if text.contains("publishDiagnostics") && text.contains(uri) && !text.contains("BSK-0050") {
             cleared = true;
             break;

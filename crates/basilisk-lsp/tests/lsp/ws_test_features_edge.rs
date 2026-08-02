@@ -259,10 +259,7 @@ async fn test_ws_document_color_and_presentations() -> TestResult<()> {
 async fn test_ws_completion_auto_import() -> TestResult<()> {
     let dir = unique_temp_dir("bsk_autoimport");
     std::fs::create_dir_all(&dir)?;
-    std::fs::write(
-        dir.join("lib.py"),
-        "class database_helper:\n    pass\n",
-    )?;
+    std::fs::write(dir.join("lib.py"), "class database_helper:\n    pass\n")?;
     std::fs::write(dir.join("main.py"), "def use():\n    database_helper")?;
 
     let root_uri = format!("file://{}", dir.display());

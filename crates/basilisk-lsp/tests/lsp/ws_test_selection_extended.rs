@@ -62,7 +62,11 @@ def compute(value: int) -> int:
     let ret_ranges = ret_parsed["result"]
         .as_array()
         .ok_or("return-annotation selection should be an array")?;
-    assert_eq!(ret_ranges.len(), 1, "one position → one range: {ret_parsed}");
+    assert_eq!(
+        ret_ranges.len(),
+        1,
+        "one position → one range: {ret_parsed}"
+    );
 
     Ok(())
 }
