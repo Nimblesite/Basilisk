@@ -136,14 +136,24 @@ class ReleaseAttributionTests(unittest.TestCase):
     def test_typeshed_runtime_license_gate_covers_archive_and_tls_dependencies(
         self,
     ) -> None:
-        self.assertEqual(
-            MODULE.TYPESHED_RUNTIME_LICENSE_PACKAGES["zip"],
-            "5.1.1",
-        )
-        self.assertEqual(
-            MODULE.TYPESHED_RUNTIME_LICENSE_PACKAGES["subtle"],
-            "2.6.1",
-        )
+        # The archive (`zip`) and TLS (`subtle`) crates must never fall out of
+        # the reviewed set — dropping either would ship their licences
+        # unattributed. Assert the reviewed version against Cargo.lock rather
+        # than a literal copied out of the script: a duplicated pin rots on the
+        # next dependency bump and fails HERE, far from the constant it mirrors.
+        locked = {
+            package["name"]: package["version"]
+            for package in tomllib.loads((REPO_ROOT / "Cargo.lock").read_text())[
+                "package"
+            ]
+        }
+        for package in ("zip", "subtle"):
+            with self.subTest(package=package):
+                self.assertIn(package, MODULE.TYPESHED_RUNTIME_LICENSE_PACKAGES)
+                self.assertEqual(
+                    MODULE.TYPESHED_RUNTIME_LICENSE_PACKAGES[package],
+                    locked[package],
+                )
 
     def test_policy_rejects_truncated_runtime_license_sections(self) -> None:
         # [STUBRES-TYPESHED-LICENSE] Keeping only a copyright sentinel is not
