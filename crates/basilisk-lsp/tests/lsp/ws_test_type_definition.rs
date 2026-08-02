@@ -16,7 +16,7 @@ async fn opened(code: &str, uri: &str) -> TestResult<WsTestFixture> {
 }
 
 /// Type-def on a variable annotation `x: MyClass` jumps to `class MyClass`.
-/// Also covers the `SymbolHit::Variable` annotation_span branch.
+/// Also covers the `SymbolHit::Variable` `annotation_span` branch.
 #[tokio::test]
 async fn test_ws_type_definition_variable_annotation() -> TestResult<()> {
     let code = "\
@@ -54,7 +54,7 @@ x: MyClass = MyClass()
 }
 
 /// Type-def on a parameter annotation `param: Foo` jumps to `class Foo`.
-/// Covers the `SymbolHit::Parameter` annotation_span branch.
+/// Covers the `SymbolHit::Parameter` `annotation_span` branch.
 #[tokio::test]
 async fn test_ws_type_definition_parameter_annotation() -> TestResult<()> {
     let code = "\
@@ -93,7 +93,7 @@ def consume(param: Foo) -> None:
 }
 
 /// Type-def on an attribute annotation `attr: Bar` jumps to `class Bar`.
-/// Covers the `SymbolHit::Attribute` annotation_span branch.
+/// Covers the `SymbolHit::Attribute` `annotation_span` branch.
 #[tokio::test]
 async fn test_ws_type_definition_attribute_annotation() -> TestResult<()> {
     let code = "\

@@ -60,7 +60,7 @@ import logging
     Ok(())
 }
 
-/// A document with NO foldable constructs returns null (or an empty array).
+/// A document with NO foldable constructs returns null.
 #[tokio::test]
 async fn test_ws_folding_empty_document() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
@@ -77,9 +77,11 @@ async fn test_ws_folding_empty_document() -> TestResult<()> {
         .await?
         .ok_or("no foldingRange response for empty doc")?;
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    // `folding_range` pipes through `none_if_empty`, so "nothing to fold" is
+    // ALWAYS null on the wire — never `[]`.
     assert!(
-        parsed["result"].is_null() || parsed["result"].as_array().is_some_and(Vec::is_empty),
-        "empty document should yield null/empty folds: {resp}"
+        parsed["result"].is_null(),
+        "an empty document has no folds, so the handler must return null: {resp}"
     );
 
     Ok(())

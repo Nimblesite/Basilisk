@@ -205,7 +205,7 @@ async fn test_ws_cross_file_type_definition_from_importer() -> TestResult<()> {
 }
 
 /// `goto_definition` from the IMPORTER on an imported symbol resolves
-/// cross-file in wholeModule mode (on-demand resolution via resolved_path).
+/// cross-file in wholeModule mode (on-demand resolution via `resolved_path`).
 /// This re-covers the on-demand path for a `from … import` binding.
 #[tokio::test]
 async fn test_ws_cross_file_goto_definition_whole_module_from_importer() -> TestResult<()> {

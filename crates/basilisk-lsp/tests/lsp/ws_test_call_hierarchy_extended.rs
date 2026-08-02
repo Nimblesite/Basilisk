@@ -109,9 +109,12 @@ def main() -> None:
         .await?
         .ok_or("no outgoingCalls response for helper")?;
     let parsed: serde_json::Value = serde_json::from_str(&empty)?;
+    // `outgoing_calls` pipes through `none_if_empty`, so "no callees" is
+    // ALWAYS JSON null — never `[]`. Pin that exactly; accepting either would
+    // let the handler silently switch representations on the wire.
     assert!(
-        parsed["result"].is_null() || parsed["result"].as_array().is_some_and(Vec::is_empty),
-        "outgoingCalls(helper) should be empty/null: {empty}"
+        parsed["result"].is_null(),
+        "outgoingCalls(helper) has no callees, so the handler must return null: {empty}"
     );
 
     Ok(())
@@ -163,10 +166,11 @@ class Greeter:
         .await?
         .ok_or("no prepareCallHierarchy response for blank position")?;
     let parsed: serde_json::Value = serde_json::from_str(&blank_prepare)?;
+    // `prepare` pipes through `none_if_empty`: a position with no symbol is
+    // ALWAYS null on the wire, never `[]`.
     assert!(
-        parsed["result"].is_null()
-            || parsed["result"].as_array().is_some_and(Vec::is_empty),
-        "prepare on a blank position should yield empty/null: {blank_prepare}"
+        parsed["result"].is_null(),
+        "prepare on a blank position resolves no symbol, so it must return null: {blank_prepare}"
     );
 
     Ok(())
@@ -232,10 +236,11 @@ def caller_b() -> None:
         .await?
         .ok_or("no incomingCalls response for caller_b")?;
     let parsed: serde_json::Value = serde_json::from_str(&no_callers)?;
+    // `incoming_calls` pipes through `none_if_empty`: nobody calls `caller_b`,
+    // so the wire value is ALWAYS null, never `[]`.
     assert!(
-        parsed["result"].is_null()
-            || parsed["result"].as_array().is_some_and(Vec::is_empty),
-        "incomingCalls(caller_b) should be empty/null: {no_callers}"
+        parsed["result"].is_null(),
+        "nothing calls caller_b, so incomingCalls must return null: {no_callers}"
     );
 
     Ok(())
