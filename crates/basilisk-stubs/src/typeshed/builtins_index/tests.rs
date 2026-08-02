@@ -332,7 +332,11 @@ fn decoded_keys_select_the_right_variant() -> Result<(), BuiltinsIndexError> {
     assert_eq!(all, Some(3), "the All platform class has its own variant");
     let unnamed = StubTargetPlatform::Concrete("haiku".to_owned());
     let other = decoded.variant_for(Some(&target(13, unnamed)));
-    assert_eq!(other, Some(4), "an unnamed platform lands in the Other class");
+    assert_eq!(
+        other,
+        Some(4),
+        "an unnamed platform lands in the Other class"
+    );
     let four = target(0, win32());
     assert_eq!(
         decoded.variant_for(Some(&StubTarget {

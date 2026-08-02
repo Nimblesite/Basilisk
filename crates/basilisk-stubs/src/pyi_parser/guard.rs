@@ -251,8 +251,7 @@ impl ruff_python_ast::visitor::Visitor<'_> for PlatformLiterals {
             let sides = std::iter::once(compare.left.as_ref()).chain(compare.comparators.iter());
             let names_platform = sides.clone().any(|side| is_sys_attribute(side, "platform"));
             if names_platform {
-                self.found
-                    .extend(sides.filter_map(string_literal));
+                self.found.extend(sides.filter_map(string_literal));
             }
         }
         ruff_python_ast::visitor::walk_expr(self, expr);

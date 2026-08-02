@@ -4,11 +4,12 @@
 //! The on-disk shape of `data/typeshed/builtins_index.bin`.
 //!
 //! The artifact holds every distinct `builtins.pyi` class map the bundled
-//! snapshot can produce — the no-target intersection plus one per target
-//! `(3, minor)` interval — over a **shared pool of encoded classes**. Nearly
-//! every builtin class is identical across target versions, so pooling stores
-//! one copy of each distinct class rather than one copy per variant: the
-//! artifact carries six variants for barely more than one variant's bytes.
+//! snapshot can produce — the no-target intersection plus one per (platform
+//! class, `(3, minor)` interval) — over a **shared pool of encoded classes**.
+//! Nearly every builtin class is identical across those variants, so pooling
+//! stores one copy of each distinct class rather than one copy per variant.
+//! `pooling_keeps_the_artifact_far_below_its_unpooled_size` pins the saving:
+//! the committed bytes stay under a third of the variants' unpooled total.
 //!
 //! Every read is bounds-checked; corrupt input yields
 //! [`BuiltinsIndexError::Malformed`], never a panic, and never a
@@ -24,6 +25,13 @@ use crate::types::{
 
 /// Artifact magic: name + format version. Bump on any codec change.
 pub(super) const MAGIC: &[u8; 8] = b"BSKBIX2\0";
+
+/// One extracted `builtins` class map: class name → its definition.
+pub(super) type ClassMap = HashMap<String, StubClass>;
+
+/// One platform class's `(min_minor, classes)` intervals over `(3, _)`,
+/// ascending by `min_minor` and starting at `0`.
+pub(super) type VersionIntervals = Vec<(u8, ClassMap)>;
 
 /// The platform dimension of the artifact's key.
 ///
@@ -71,9 +79,9 @@ impl PlatformKey {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Artifact {
     /// The no-target intersection map.
-    pub(super) default_classes: HashMap<String, StubClass>,
+    pub(super) default_classes: ClassMap,
     /// Per platform class, the `(min_minor, classes)` intervals over `(3, _)`.
-    pub(super) groups: Vec<(PlatformKey, Vec<(u8, HashMap<String, StubClass>)>)>,
+    pub(super) groups: Vec<(PlatformKey, VersionIntervals)>,
 }
 
 /// A decoded artifact: pooled class blobs plus the variant index that selects
@@ -108,7 +116,18 @@ impl DecodedArtifact<'_> {
             .iter()
             .rev()
             .find(|(start, _)| *start <= minor)
-            .map(|(_, variant)| *variant as usize)
+            .and_then(|(_, variant)| usize::try_from(*variant).ok())
+    }
+
+    /// One pooled class blob by index, or `Malformed` when the index is out of
+    /// range — the artifact is untrusted input, so a bad index is an error
+    /// rather than a panic.
+    fn blob(&self, index: u32) -> Result<&[u8], BuiltinsIndexError> {
+        usize::try_from(index)
+            .ok()
+            .and_then(|index| self.pool.get(index))
+            .copied()
+            .ok_or(BuiltinsIndexError::Malformed(0))
     }
 
     /// The platform literals the artifact was generated against.
@@ -140,31 +159,23 @@ impl DecodedArtifact<'_> {
             .get(variant)
             .ok_or(BuiltinsIndexError::Malformed(0))?
             .iter()
-            .map(|index| {
-                self.pool
-                    .get(*index as usize)
-                    .map(|blob| blob.len())
-                    .ok_or(BuiltinsIndexError::Malformed(0))
-            })
+            .map(|index| self.blob(*index).map(<[u8]>::len))
             .sum()
     }
 
     /// Decode one variant's classes.
-    pub(super) fn classes(
-        &self,
-        variant: usize,
-    ) -> Result<HashMap<String, StubClass>, BuiltinsIndexError> {
+    pub(super) fn classes(&self, variant: usize) -> Result<ClassMap, BuiltinsIndexError> {
         let indices = self
             .variants
             .get(variant)
             .ok_or(BuiltinsIndexError::Malformed(0))?;
         let mut classes = HashMap::with_capacity(indices.len());
         for index in indices {
-            let blob = self
-                .pool
-                .get(*index as usize)
-                .ok_or(BuiltinsIndexError::Malformed(0))?;
-            let mut cursor = Cursor { bytes: blob, pos: 0 };
+            let blob = self.blob(*index)?;
+            let mut cursor = Cursor {
+                bytes: blob,
+                pos: 0,
+            };
             let class = read_class(&mut cursor)?;
             if cursor.pos != blob.len() {
                 return Err(BuiltinsIndexError::Malformed(cursor.pos));
@@ -229,7 +240,9 @@ fn put_groups(out: &mut Vec<u8>, artifact: &Artifact) -> Result<Vec<u8>, Builtin
         for (min_minor, _) in intervals {
             out.push(*min_minor);
             put_len(out, variant)?;
-            variant = variant.checked_add(1).ok_or(BuiltinsIndexError::LengthOverflow)?;
+            variant = variant
+                .checked_add(1)
+                .ok_or(BuiltinsIndexError::LengthOverflow)?;
         }
     }
     Ok(std::mem::take(out))
@@ -408,9 +421,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<(String, DecodedArtifact<'_>), Buil
     ))
 }
 
-fn read_pool<'bytes>(
-    cursor: &mut Cursor<'bytes>,
-) -> Result<Vec<&'bytes [u8]>, BuiltinsIndexError> {
+fn read_pool<'bytes>(cursor: &mut Cursor<'bytes>) -> Result<Vec<&'bytes [u8]>, BuiltinsIndexError> {
     let count = cursor.u32()?;
     let mut pool = Vec::new();
     for _ in 0..count {

@@ -71,15 +71,21 @@ pub fn safety_gate(archive: &Archive, limits: &SafetyLimits) -> Result<(), Safet
         }
         match entry.mode {
             FileMode::Symlink => {
-                return Err(SafetyViolation::DisallowedSymlink(entry.path.clone().into_owned()))
+                return Err(SafetyViolation::DisallowedSymlink(
+                    entry.path.clone().into_owned(),
+                ))
             }
             FileMode::Submodule => {
-                return Err(SafetyViolation::DisallowedSubmodule(entry.path.clone().into_owned()))
+                return Err(SafetyViolation::DisallowedSubmodule(
+                    entry.path.clone().into_owned(),
+                ))
             }
             FileMode::Regular | FileMode::Executable => {}
         }
         if !seen.insert(entry.path.as_ref()) {
-            return Err(SafetyViolation::DuplicatePath(entry.path.clone().into_owned()));
+            return Err(SafetyViolation::DuplicatePath(
+                entry.path.clone().into_owned(),
+            ));
         }
     }
     let total = archive.total_data_len();

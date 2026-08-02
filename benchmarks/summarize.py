@@ -24,9 +24,10 @@ Two responsibilities, deliberately DECOUPLED so one can never suppress the other
 CARRY-FORWARD.  A run may deliberately measure only some tools — `make
 bench-basilisk` re-times basilisk alone, because five 0.5s-per-invocation
 competitors add minutes to every iteration and prove nothing about a change to
-this tree. With BENCH_CARRY_FORWARD set, the cells of the tools this run did not
-measure are copied verbatim out of the status CSV already on disk instead of
-being emptied: a blank cell means "not installed / failed preflight" and must
+this tree. With BENCH_CARRY_FROM set, the cells of the tools this run did not
+measure are copied verbatim out of the pre-run snapshot of the status CSV
+instead of being emptied: a blank cell means "not installed / failed preflight"
+and must
 keep meaning exactly that. Nothing measured is ever carried over — a carried
 cell is by definition one this run produced no number for — so the write-always
 rule above is untouched. The header records which tools the run measured and

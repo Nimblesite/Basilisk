@@ -30,7 +30,7 @@ mod codec;
 
 use std::collections::HashMap;
 
-use codec::{Artifact, PlatformKey};
+use codec::{Artifact, ClassMap, PlatformKey, VersionIntervals};
 
 use super::bundle::{self, BundleError};
 use crate::types::{StubClass, StubTarget, StubTargetPlatform};
@@ -180,12 +180,12 @@ fn extract_unnamed_platform_intervals(
     logical_uri: &str,
     source_text: &str,
     literals: &std::collections::BTreeSet<String>,
-) -> Result<Vec<(u8, HashMap<String, StubClass>)>, BuiltinsIndexError> {
+) -> Result<VersionIntervals, BuiltinsIndexError> {
     let probes: Vec<&str> = UNNAMED_PLATFORM_PROBES
         .into_iter()
         .filter(|probe| !literals.contains(*probe))
         .collect();
-    let mut agreed: Option<(&str, Vec<(u8, HashMap<String, StubClass>)>)> = None;
+    let mut agreed: Option<(&str, VersionIntervals)> = None;
     for probe in probes {
         let platform = StubTargetPlatform::Concrete((*probe).to_owned());
         let intervals = extract_intervals(logical_uri, source_text, &platform)?;
@@ -206,8 +206,8 @@ fn extract_unnamed_platform_intervals(
 fn disagreement(
     left: &str,
     right: &str,
-    expected: &[(u8, HashMap<String, StubClass>)],
-    actual: &[(u8, HashMap<String, StubClass>)],
+    expected: &[(u8, ClassMap)],
+    actual: &[(u8, ClassMap)],
 ) -> BuiltinsIndexError {
     let minor = expected
         .iter()
@@ -225,7 +225,7 @@ fn disagreement(
 fn extract_untargeted(
     logical_uri: &str,
     source_text: &str,
-) -> Result<HashMap<String, StubClass>, BuiltinsIndexError> {
+) -> Result<ClassMap, BuiltinsIndexError> {
     crate::parse_pyi_source(
         source_text,
         std::path::Path::new(logical_uri),
@@ -244,8 +244,8 @@ fn extract_intervals(
     logical_uri: &str,
     source_text: &str,
     platform: &StubTargetPlatform,
-) -> Result<Vec<(u8, HashMap<String, StubClass>)>, BuiltinsIndexError> {
-    let mut intervals: Vec<(u8, HashMap<String, StubClass>)> = Vec::new();
+) -> Result<VersionIntervals, BuiltinsIndexError> {
+    let mut intervals: VersionIntervals = Vec::new();
     for minor in 0..=MAX_GENERATED_MINOR {
         let classes = extract_for_target(logical_uri, source_text, minor, platform)?;
         if intervals
@@ -263,7 +263,7 @@ fn extract_for_target(
     source_text: &str,
     minor: u8,
     platform: &StubTargetPlatform,
-) -> Result<HashMap<String, StubClass>, BuiltinsIndexError> {
+) -> Result<ClassMap, BuiltinsIndexError> {
     let target = StubTarget {
         python_version: (3, u32::from(minor)),
         platform: platform.clone(),

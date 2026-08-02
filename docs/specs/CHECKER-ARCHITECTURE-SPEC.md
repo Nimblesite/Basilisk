@@ -1600,7 +1600,10 @@ never suppress the other (`benchmarks/summarize.py`):
   regression fails it identically. Two honesty rules keep the partial CSV
   truthful: the untimed tools' `_ms`/`_diags` cells and version strings are
   **carried forward verbatim** from the file rather than blanked (a blank cell
-  means "not installed / failed preflight" and must keep meaning that), and a
+  means "not installed / failed preflight" and must keep meaning that) — the
+  same carry applies to the tracked `benchmarks/results/coverage.tsv`, whose
+  rows for the skipped tools are preserved instead of being truncated away —
+  and a
   `# measured:` header line names which tools this run timed and which it
   carried, with the date they came from — so the fresh `# generated` stamp can
   never imply a competitor was re-timed. Nothing measured is ever carried, so

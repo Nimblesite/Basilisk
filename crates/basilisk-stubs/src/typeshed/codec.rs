@@ -390,7 +390,10 @@ fn contiguous_data_offsets(records: &[CentralRecord], directory_offset: u32) -> 
     if cursor != usize::try_from(directory_offset).ok()? {
         return None;
     }
-    records.iter().map(CentralRecord::derived_data_start).collect()
+    records
+        .iter()
+        .map(CentralRecord::derived_data_start)
+        .collect()
 }
 
 /// Strip the layout prefix and build the final [`Archive`].
@@ -553,7 +556,7 @@ mod tests {
             &DecodeLimits::default(),
         )
         .unwrap();
-        let mut paths: Vec<&str> = archive.entries().iter().map(|e| e.path.as_str()).collect();
+        let mut paths: Vec<&str> = archive.entries().iter().map(|e| e.path.as_ref()).collect();
         paths.sort_unstable();
         assert_eq!(paths, vec!["LICENSE", "stdlib/VERSIONS", "stdlib/os.pyi"]);
     }

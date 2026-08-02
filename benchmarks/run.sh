@@ -229,7 +229,7 @@ add_tool() { TOOL_NAMES+=("$1"); TOOL_CMDS+=("$2"); }
 # A competitor is measured when it is installed AND this is not a basilisk-only
 # iteration run. Skipped-because-uninstalled and skipped-by-mode look identical
 # here on purpose; they differ only in what the CSV does with the empty column
-# (blank vs carried forward), which summarize.py decides from BENCH_CARRY_FORWARD.
+# (blank vs carried forward), which summarize.py decides from BENCH_CARRY_FROM.
 want_competitor() {
   [[ -z "$BENCH_ONLY_BASILISK" ]] && command -v "$1" >/dev/null 2>&1
 }
@@ -392,14 +392,48 @@ export BENCH_SLUG BENCH_MACHINE BENCH_CPU BENCH_ARCH BENCH_OS BENCH_CORES \
 # Snapshot the PRE-RUN status CSV as the carry-forward source, once, before the
 # first incremental write replaces it. Reading the live file instead would make
 # each fixture's write carry from the write before it — and only the first
-# fixture would still find the competitor cells. The snapshot lives outside the
-# status dir so it can never be mistaken for a machine's results.
+# fixture would still find the competitor cells. The snapshots live in an
+# ignored scratch dir so they can never be mistaken for a published record.
+CARRY_DIR="$OUT/.carry"
+rm -rf "$CARRY_DIR"
 if [[ -n "$BENCH_ONLY_BASILISK" ]]; then
-  CARRY_FROM="$OUT/.carry-forward.csv"
-  rm -f "$CARRY_FROM"
+  mkdir -p "$CARRY_DIR"
+  CARRY_FROM="$CARRY_DIR/status.csv"
   [[ -f "$STATUS_DIR/${BENCH_SLUG}.csv" ]] && cp "$STATUS_DIR/${BENCH_SLUG}.csv" "$CARRY_FROM"
   export BENCH_CARRY_FROM="$CARRY_FROM"
 fi
+
+# coverage.tsv is git-tracked too, so a partial run must not delete the rows a
+# full sweep recorded for the tools it skipped — that would drop published
+# diagnostic counts on the floor. Same carry-forward contract as the status
+# CSV: keep the previous file's rows for every tool this run does NOT measure
+# and every fixture that still exists, then let the preflight append this run's
+# own rows on top. A full sweep measures every tool, so it carries nothing.
+carry_coverage_rows() {
+  local previous="$CARRY_DIR/coverage.tsv" stem tool code count
+  if [[ -n "$BENCH_ONLY_BASILISK" && -f "$COVERAGE" ]]; then
+    mv "$COVERAGE" "$previous"
+  fi
+  : > "$COVERAGE"
+  [[ -f "$previous" ]] || return 0
+  while IFS=$'\t' read -r stem tool code count; do
+    if ! measured_tool "$tool" && known_fixture "$stem"; then
+      printf '%s\t%s\t%s\t%s\n' "$stem" "$tool" "$code" "$count" >> "$COVERAGE"
+    fi
+  done < "$previous"
+}
+
+# Whether this run timed `$1` itself, and whether `$1` is still a live fixture.
+measured_tool() {
+  local name
+  for name in "${TOOL_NAMES[@]}"; do [[ "$name" == "$1" ]] && return 0; done
+  return 1
+}
+known_fixture() {
+  local file
+  for file in "${FIXTURES[@]}"; do [[ "${file%.py}" == "$1" ]] && return 0; done
+  return 1
+}
 
 # ─── Preflight: diagnostic coverage + crash screening ─────────────────────────
 # One un-timed run of every base tool on every fixture BEFORE anything is timed.
@@ -416,7 +450,7 @@ fi
 # (The pyright pip wrapper exits 0 even with findings, so 0 vs 1 carries no
 # meaning across tools — only >= 2 does.)
 # COVERAGE path is set + exported above (BENCH_COVERAGE); truncate it fresh here.
-: > "$COVERAGE"
+carry_coverage_rows
 INVALID_COMBOS=" "
 echo "─── Preflight: diagnostics per tool + crash screening ──────────────────"
 echo ""

@@ -78,7 +78,7 @@ pub fn entry_from_files(files: &[(String, Vec<u8>)]) -> StoreEntry {
             .iter()
             .filter(|(path, _)| is_materialized(path))
             .map(|(path, data)| ArchiveEntry {
-                path: path.clone(),
+                path: path.clone().into(),
                 mode: FileMode::Regular,
                 data: data.clone().into(),
             })

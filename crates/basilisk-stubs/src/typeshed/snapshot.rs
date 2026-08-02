@@ -212,15 +212,16 @@ fn build_module_index(vfs: &ArchiveVfs) -> Result<ModuleIndex, SnapshotError> {
         .map(|entry| &entry.path)
         .filter(|path| path.starts_with("stdlib/") && is_pyi_path(path))
     {
-        match modules.entry(stdlib_module_name(path)) {
+        let (module, path) = stdlib_module_entry(path.clone());
+        match modules.entry(module) {
             std::collections::hash_map::Entry::Vacant(slot) => {
-                let _ = slot.insert(path.clone());
+                let _ = slot.insert(path);
             }
             std::collections::hash_map::Entry::Occupied(slot) => {
                 return Err(SnapshotError::DuplicateModule {
                     module: slot.key().clone().into_owned(),
                     first: slot.get().clone().into_owned(),
-                    second: path.clone().into_owned(),
+                    second: path.into_owned(),
                 })
             }
         }
@@ -228,21 +229,23 @@ fn build_module_index(vfs: &ArchiveVfs) -> Result<ModuleIndex, SnapshotError> {
     Ok(ModuleIndex(modules))
 }
 
-/// The dotted module name for a `stdlib/…` path, borrowed straight out of the
-/// path whenever the two coincide — which they do for every top-level module,
-/// the large majority of the stdlib.
-fn stdlib_module_name(path: &Cow<'static, str>) -> Cow<'static, str> {
-    match path {
-        // Matching on the variant is what recovers the `'static` lifetime: a
-        // slice of a borrowed path is itself borrowable into the index.
-        Cow::Borrowed(text) => module_slice(text).map_or_else(
-            || Cow::Owned(dotted_module_name(text)),
-            Cow::Borrowed,
-        ),
-        Cow::Owned(text) => Cow::Owned(
-            module_slice(text).map_or_else(|| dotted_module_name(text), str::to_owned),
-        ),
-    }
+/// A `stdlib/…` path paired with its dotted module name, which is borrowed
+/// straight out of the path whenever the two coincide — as they do for every
+/// top-level module, the large majority of the stdlib.
+///
+/// The path is taken and handed back by value because the name may borrow from
+/// it: only the `Cow` variant carries the `'static` lifetime a slice of a
+/// bundled path needs to reach the index, and a `&Cow` parameter would erase it.
+fn stdlib_module_entry(path: Cow<'static, str>) -> (Cow<'static, str>, Cow<'static, str>) {
+    let module = match &path {
+        Cow::Borrowed(text) => {
+            module_slice(text).map_or_else(|| Cow::Owned(dotted_module_name(text)), Cow::Borrowed)
+        }
+        Cow::Owned(text) => {
+            Cow::Owned(module_slice(text).map_or_else(|| dotted_module_name(text), str::to_owned))
+        }
+    };
+    (module, path)
 }
 
 /// The module name when it is a plain slice of the path — i.e. nothing is left
