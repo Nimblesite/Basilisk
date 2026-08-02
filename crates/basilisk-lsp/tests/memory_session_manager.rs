@@ -81,14 +81,78 @@ async fn ingest_unknown_session_is_error() {
     assert!(result.is_err(), "unknown session must be rejected");
 }
 
-/// Output with no recognized marker is rejected with a clear error.
+/// Output with no recognized marker is rejected, and the rejection QUOTES what
+/// the courier actually delivered.
+///
+/// Every failure of the round-trip — a render worker that raised, an editor
+/// payload-file wait that expired and fell back to the bare
+/// `__BASILISK_MEM_FILE__` line, a marker line that timed out mid-delivery —
+/// lands on this one error. Without the evidence they are indistinguishable, and
+/// a win32 flake reads as a broken injection script ([VSIX-CI-PLATFORM-COVERAGE]).
 #[tokio::test]
 async fn ingest_without_marker_is_error() -> Result<(), String> {
     let manager = MemorySessionManager::new();
     let session_id = manager.start_session(25).await;
     let result = manager
-        .ingest(&session_id, "just some repl noise, no marker")
+        .ingest(&session_id, "basilisk render worker failed: OSError(13)")
         .await;
-    assert!(result.is_err(), "missing marker must be rejected");
+    let message = result.err().ok_or("missing marker must be rejected")?;
+    assert!(
+        message.contains("no recognized __BASILISK_MEM*__ marker"),
+        "error must name the missing marker: {message}"
+    );
+    assert!(
+        message.contains("basilisk render worker failed: OSError(13)"),
+        "error must quote the delivered payload: {message}"
+    );
+    Ok(())
+}
+
+/// A marker-less payload is folded to one line and bounded, so a truncated
+/// 200 KB snapshot cannot flood the log while still naming its own size.
+#[tokio::test]
+async fn ingest_evidence_is_single_line_and_bounded() -> Result<(), String> {
+    let manager = MemorySessionManager::new();
+    let session_id = manager.start_session(25).await;
+    let noise = format!("line one\nline two\n{}", "x".repeat(5_000));
+    let message = manager
+        .ingest(&session_id, &noise)
+        .await
+        .err()
+        .ok_or("missing marker must be rejected")?;
+    assert!(
+        !message.contains('\n'),
+        "evidence must be one line: {message}"
+    );
+    assert!(
+        message.contains("line one line two"),
+        "control characters must fold to spaces: {message}"
+    );
+    assert!(
+        message.contains(&format!("({} bytes total)", noise.len())),
+        "a truncated excerpt must state the real payload size: {message}"
+    );
+    assert!(
+        message.len() < 600,
+        "evidence must stay bounded, got {} chars",
+        message.len()
+    );
+    Ok(())
+}
+
+/// Empty output says so rather than quoting nothing at all.
+#[tokio::test]
+async fn ingest_empty_output_reports_empty_evidence() -> Result<(), String> {
+    let manager = MemorySessionManager::new();
+    let session_id = manager.start_session(25).await;
+    let message = manager
+        .ingest(&session_id, "   \n\t ")
+        .await
+        .err()
+        .ok_or("empty output must be rejected")?;
+    assert!(
+        message.contains("<empty>"),
+        "empty output must be named as empty: {message}"
+    );
     Ok(())
 }
