@@ -22,12 +22,12 @@ use crate::imports::ImportSearchPaths;
 /// The effective checker configuration, wrapped so it can be a Salsa input value.
 ///
 /// `BasiliskConfig` lives in the `basilisk-config` leaf crate, which must stay
-/// salsa-free. The `salsa::Update` derive on this newtype resolves the inner
+/// salsa-free. The `salsa::SalsaValue` derive on this newtype resolves the inner
 /// `BasiliskConfig` through its `PartialEq` impl — the same dispatch fallback
 /// `CachedDiagnostic` relies on for `Span`/`Severity`/`TypeProvenance` — so the
 /// salsa dependency stays inside `basilisk-checker` and never reaches
 /// `basilisk-config`. [CHKARCH-CONFIGURATION-ONLY]
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ConfigValue(pub BasiliskConfig);
 
 /// The effective checker configuration as a Salsa **input**.
@@ -63,7 +63,7 @@ pub struct SearchPathsInput {
 ///
 /// Runs the **pure** pipeline — parse → resolve → [`crate::check_with_config`] —
 /// and returns the result as owned [`CachedDiagnostic`]s so the value satisfies
-/// salsa's `Update` bound. The query is keyed on the `(file, config)` pair, so
+/// salsa's `SalsaValue` bound. The query is keyed on the `(file, config)` pair, so
 /// salsa re-executes it only when the file's [`SourceFile::text`] or the
 /// [`ConfigInput`] it read changes; an unchanged input is served from the memo
 /// ([CHKARCH-INCREMENTAL-SALSA]).
@@ -124,7 +124,7 @@ pub fn file_diagnostics(db: &dyn Db, file: SourceFile, config: ConfigInput) -> V
 /// Distinguishes a parse failure (which a consumer surfaces as `BSK-PARSE`) from
 /// a resolve failure (no module, no diagnostics) so a single memoized parse
 /// serves diagnostics, navigation, and parse-error reporting alike. `PartialEq`
-/// gives it salsa's `Update` via the fallback (`Arc<ResolvedModule>` compares by
+/// gives it salsa's `SalsaValue` via the fallback (`Arc<ResolvedModule>` compares by
 /// value; `basilisk-resolver` stays salsa-free).
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResolvedFile {
@@ -254,7 +254,7 @@ fn register_import_dependencies(
 /// A module's exported top-level symbols — the value of the [`module_exports`]
 /// query.
 ///
-/// `PartialEq` gives it salsa's `Update` via the fallback, and — more
+/// `PartialEq` gives it salsa's `SalsaValue` via the fallback, and — more
 /// importantly — enables **backdating**: when an edit re-runs [`module_exports`]
 /// but the export set is unchanged (a function-body edit), salsa marks the
 /// result unchanged and every importer's [`cross_resolved_module`] memo stays

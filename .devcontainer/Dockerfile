@@ -1,9 +1,10 @@
 # Dev container matching CI (.github/workflows/ci.yml — every job runs on
 # ubuntu-24.04, or vars.BIG_RUNNER, with dtolnay/rust-toolchain@stable).
 # CI resolves `stable` at run time; this image pins the concrete release so a
-# container rebuild is reproducible. 1.94 fails the workspace build
-# (sysinfo 0.39.3 requires rustc >= 1.95).
-FROM rust:1.96.0-bookworm
+# container rebuild is reproducible. The workspace floor is rustc 1.95
+# (`rust-version` in Cargo.toml, set by the pinned ruff 0.16.1 family); this
+# tracks the current `stable` release so the container matches what CI resolves.
+FROM rust:1.97.1-bookworm
 
 # System deps (pinned to Debian bookworm repository versions)
 # VS Code test runner requires: libnspr4, libnss3, libgbm1, libxkbfile1, libsecret-1-0,
@@ -40,10 +41,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# Node 22 (matches CI: actions/setup-node@v6 with node-version 22.x in the
-# `VS Code Extension` and `Shipwright Binary Gate` jobs — the ones this container
-# reproduces through `make test` / `make build`. Only the website-build job,
-# which this image does not run, pins Node 20.)
+# Node 22 (matches CI: every `actions/setup-node` in ci.yml and
+# deploy-pages.yml pins node-version 22.x, including the `VS Code Extension`
+# and `Shipwright Binary Gate` jobs this container reproduces through
+# `make test` / `make build`.)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs=22.* \
     && rm -rf /var/lib/apt/lists/*
@@ -55,7 +56,7 @@ RUN rustup component add rustfmt clippy llvm-tools-preview \
     && rustup target add wasm32-wasip2
 
 # Rust cargo tools (pinned)
-RUN cargo install cargo-llvm-cov --version 0.8.4 --locked \
+RUN cargo install cargo-llvm-cov --version 0.8.7 --locked \
     && cargo install cargo-audit --version 0.22.2 --locked
 
 # Python packages (pinned — ruff MUST match CI and the ruff_* crate tag in
@@ -63,7 +64,7 @@ RUN cargo install cargo-llvm-cov --version 0.8.4 --locked \
 # pinned to CI's version; jinja2/markdown/tomlkit are the REAL python/typing
 # conformance harness's own runtime deps, installed unpinned exactly as CI does.
 RUN pip install --break-system-packages \
-        debugpy==1.8.14 ruff==0.15.17 pytest==9.1.1 \
+        debugpy==1.8.21 ruff==0.16.1 pytest==9.1.1 \
         jinja2 markdown tomlkit
 
 # GitHub CLI (for PR creation, issue management)

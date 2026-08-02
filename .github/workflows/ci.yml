@@ -201,7 +201,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
+          node-version: 22.x
           cache: npm
           cache-dependency-path: website/package-lock.json
 
@@ -290,7 +290,7 @@ jobs:
       - name: Install lld and ruff
         run: |
           sudo apt-get update && sudo apt-get install -y lld
-          pip install ruff==0.15.17
+          pip install ruff==0.16.1
 
       - name: Format check (Rust + Python)
         run: |
@@ -417,7 +417,7 @@ jobs:
       # REAL python/typing harness's own runtime deps (conformance/run_conformance.py
       # runs the suite's unmodified src/main.py — see [CHKARCH-CONFORMANCE]).
       - name: Install Python test dependencies
-        run: pip install debugpy==1.8.14 ruff==0.15.17 jinja2 markdown tomlkit
+        run: pip install debugpy==1.8.21 ruff==0.16.1 jinja2 markdown tomlkit
 
       - name: Install lld
         run: sudo apt-get update && sudo apt-get install -y lld
@@ -476,7 +476,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python test dependencies
-        run: pip install debugpy==1.8.14 ruff==0.15.17
+        run: pip install debugpy==1.8.21 ruff==0.16.1
 
       - name: Install lld, xvfb, and VS Code test dependencies
         run: |
@@ -584,7 +584,7 @@ jobs:
       # Same pins as the Linux e2e job — the debug suites drive real debugpy
       # sessions and the LSP shells out to ruff.
       - name: Install Python test dependencies
-        run: pip install debugpy==1.8.14 ruff==0.15.17
+        run: pip install debugpy==1.8.21 ruff==0.16.1
 
       # Keyed on runner.os, so this is a Windows-only cache bucket and never
       # collides with the Linux job's VS Code download.
@@ -742,7 +742,7 @@ jobs:
           # tests/dap specs drive basilisk's debug adapter end to end, and
           # without it every one of them fails with "debugpy not found".
           # Pinned to the same version as test-vscode and the devcontainer.
-          pip install pytest==9.1.1 debugpy==1.8.14
+          pip install pytest==9.1.1 debugpy==1.8.21
           sudo apt-get install -y luarocks
           luarocks install --local luacov
 

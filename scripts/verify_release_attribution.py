@@ -21,8 +21,8 @@ LEGAL_FILES = (
 )
 TYPESHED_RUNTIME_LICENSE_PACKAGES = {
     "ring": "0.17.14",
-    "rustls": "0.23.42",
-    "rustls-pki-types": "1.15.0",
+    "rustls": "0.23.43",
+    "rustls-pki-types": "1.15.1",
     "rustls-webpki": "0.103.13",
     "subtle": "2.6.1",
     "untrusted": "0.9.0",
@@ -30,7 +30,7 @@ TYPESHED_RUNTIME_LICENSE_PACKAGES = {
     "ureq-proto": "0.6.0",
     "utf8-zero": "0.8.1",
     "webpki-roots": "1.0.9",
-    "zip": "5.1.1",
+    "zip": "8.6.0",
 }
 
 TYPESHED_RUNTIME_LICENSE_SECTIONS = {

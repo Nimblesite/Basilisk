@@ -45,7 +45,7 @@ async fn test_ws_format_document() -> TestResult<()> {
         .ok_or("first TextEdit must carry newText")?;
 
     // Pure passthrough of the embedded Ruff formatter ([LSPFMT-HONESTY]):
-    // byte-exact output, verified against `ruff format` 0.15.17.
+    // byte-exact output, verified against `ruff format` 0.16.1.
     assert_eq!(
         new_text,
         "x: int = 1\ny: str = \"hello\"\n\n\ndef greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n",
@@ -62,7 +62,7 @@ async fn test_ws_format_document() -> TestResult<()> {
 async fn test_ws_format_document_matches_real_ruff_binary_output() -> TestResult<()> {
     // Live parity check ([LSPFMT-ENGINE] acceptance): the embedded engine's
     // output must be byte-identical to `ruff format` at the pinned release.
-    // Runs wherever a `ruff` binary exists (CI pins ruff==0.15.17); the
+    // Runs wherever a `ruff` binary exists (CI pins ruff==0.16.1); the
     // functionality itself is exercised unconditionally by the tests above.
     let probe = std::process::Command::new("ruff").arg("--version").output();
     if probe.is_err() {

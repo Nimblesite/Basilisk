@@ -113,9 +113,9 @@ https://github.com/python/typeshed/blob/83c2518a9e6abbda0c44592c3483de459198f887
 
 Typeshed acquisition runtime
 Source:  https://github.com/algesten/ureq (v3.3.0)
-         https://github.com/rustls/rustls (v0.23.42)
+         https://github.com/rustls/rustls (v0.23.43)
          https://github.com/dalek-cryptography/subtle (v2.6.1)
-         https://github.com/zip-rs/zip2 (v5.1.1)
+         https://github.com/zip-rs/zip2 (v8.6.0)
 License: MIT OR Apache-2.0 (ureq)
          Apache-2.0 OR ISC OR MIT (rustls)
          BSD-3-Clause (subtle)
@@ -128,14 +128,14 @@ acquisition crates in the locked release graph are:
   ureq 3.3.0                    MIT OR Apache-2.0
   ureq-proto 0.6.0              MIT OR Apache-2.0
   utf8-zero 0.8.1               MIT OR Apache-2.0
-  rustls 0.23.42                Apache-2.0 OR ISC OR MIT
-  rustls-pki-types 1.15.0       MIT OR Apache-2.0
+  rustls 0.23.43                Apache-2.0 OR ISC OR MIT
+  rustls-pki-types 1.15.1       MIT OR Apache-2.0
   rustls-webpki 0.103.13        ISC
   subtle 2.6.1                  BSD-3-Clause
   ring 0.17.14                  Apache-2.0 AND ISC
   untrusted 0.9.0               ISC
   webpki-roots 1.0.9            CDLA-Permissive-2.0
-  zip 5.1.1                     MIT
+  zip 8.6.0                     MIT
 
 The corresponding MIT, BSD-3-Clause, ISC, Apache-2.0, and
 CDLA-Permissive-2.0 license texts and copyright notices are retained in

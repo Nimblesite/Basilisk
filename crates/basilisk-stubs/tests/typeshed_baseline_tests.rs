@@ -15,7 +15,7 @@
 
 use std::path::{Path, PathBuf};
 
-use sha2::{Digest as _, Sha256};
+use basilisk_stubs::typeshed::gate::manifest::sha256_hex;
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -40,7 +40,7 @@ fn assert_asset_matches_manifest(manifest: &serde_json::Value, relative: &str, p
     let path: &Path = &crate_dir().join(relative);
     let bytes = std::fs::read(path)
         .unwrap_or_else(|error| panic!("cannot read typeshed asset {}: {error}", path.display()));
-    let actual = format!("{:x}", Sha256::digest(&bytes));
+    let actual = sha256_hex(&bytes);
     assert_eq!(
         actual,
         expected,
