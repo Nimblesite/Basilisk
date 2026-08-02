@@ -14,6 +14,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use super::access::{self, Access};
+use super::receiver_scope;
 use super::render::{SymbolCard, SymbolKind};
 use crate::util::identifier_at_offset;
 
@@ -314,10 +315,31 @@ pub(crate) fn dot_receiver_builtin_type(
         }
         c if c.is_alphanumeric() || c == '_' => {
             let receiver = crate::completion::prefix::dot_receiver(source, byte_offset)?;
-            access::receiver_type_name(resolved, source, &receiver)
+            access::receiver_type_name(resolved, source, &receiver).or_else(|| {
+                // Declared nowhere — a `for` target binds it (GitHub #390).
+                let bound =
+                    receiver_scope::loop_binding_type(resolved, source, byte_offset, &receiver)?;
+                basilisk_checker::class_naming::class_name_of_type(&bound)
+            })
         }
-        _ => None,
+        // The receiver is an EXPRESSION, not a name: `s.upper().`, `f(a).`,
+        // `xs[0].`. Type it through the shared engine with the names in view
+        // bound, since the engine resolves none of its own (GitHub #390).
+        _ => expression_receiver_type(resolved, source, receiver_text),
     }
+}
+
+/// The class named by an expression receiver, typed through the shared engine.
+fn expression_receiver_type(
+    resolved: &ResolvedModule,
+    source: &str,
+    before_dot: &str,
+) -> Option<(String, bool)> {
+    let expression = receiver_scope::receiver_expression(before_dot)?;
+    let scope = receiver_scope::scope_at(resolved, source, before_dot.len());
+    let inferred =
+        basilisk_checker::inference::infer_expression_source_in_scope(expression, &scope);
+    basilisk_checker::class_naming::class_name_of_type(&inferred)
 }
 
 /// Best-effort check that the text ending in `quote` closes a *str* literal —

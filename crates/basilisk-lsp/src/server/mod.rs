@@ -317,6 +317,17 @@ impl LspServer {
         self.with_index(|idx| idx.get_by_uri(uri)).await
     }
 
+    /// Get the text and resolved module for a DISPLAY surface, falling back to
+    /// the last revision that parsed. See [`WorkspaceIndex::get_for_display`]
+    /// for why display surfaces read differently from diagnostics.
+    /// Implements [ANALYSIS-INDEX-LASTGOOD].
+    pub(super) async fn get_display_data(
+        &self,
+        uri: &Url,
+    ) -> Option<(String, Arc<basilisk_resolver::ResolvedModule>)> {
+        self.with_index(|idx| idx.get_for_display(uri)).await
+    }
+
     /// Run a position-based handler: extract document data, compute byte offset,
     /// call `handler`, and wrap the result in `LspResult`.
     pub(super) async fn at_position<T>(

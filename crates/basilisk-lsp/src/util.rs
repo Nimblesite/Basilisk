@@ -396,8 +396,12 @@ pub(crate) fn span_text(span: Option<Span>, source: &str) -> Option<String> {
 /// dict literal with str keys and values displays as `dict[str, str]`, not
 /// bare `dict` (GitHub #290) — by reusing the checker's collection inference.
 /// Returns an empty string when the type cannot be determined.
+///
+/// Gated by `is_fully_known`, the SAME guard [`expr_type_display`] applies, so
+/// the internal `InferredType::Unknown` sentinel cannot reach a label from
+/// either path (GitHub #385). A top-level check would only catch `Unknown`
+/// itself and let `list[Unknown]` / `tuple[Unknown, Unknown]` render through.
 pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> String {
-    use basilisk_checker::types::InferredType;
     use basilisk_resolver::RhsKind;
     match rhs {
         // Empty literals carry no element info — show the bare container name
@@ -408,10 +412,14 @@ pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> String {
         // Lambdas display nothing: the checker types them `Callable[[], Unknown]`
         // because parameter/return inference doesn't exist yet.
         RhsKind::Lambda => String::new(),
-        _ => match basilisk_checker::inference::infer_rhs(rhs) {
-            InferredType::Unknown => String::new(),
-            ty => ty.to_string(),
-        },
+        _ => {
+            let inferred = basilisk_checker::inference::infer_rhs(rhs);
+            if basilisk_checker::inference::is_fully_known(&inferred) {
+                inferred.to_string()
+            } else {
+                String::new()
+            }
+        }
     }
 }
 

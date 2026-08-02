@@ -53,12 +53,15 @@ pub(in crate::server) async fn signature_help(
 
 /// Handle `textDocument/inlayHint`.
 // Implements [LSPARCH-FEATURES-INLAYHINTS] — variable type, parameter name, and return type hints.
+// Reads through [ANALYSIS-INDEX-LASTGOOD] so a mid-token buffer — typing `.` to
+// reach an attribute makes the file stop parsing for one keystroke — does not
+// blank the hints on every OTHER line in the file (GitHub #386).
 pub(in crate::server) async fn inlay_hint(
     server: &LspServer,
     params: InlayHintParams,
 ) -> LspResult<Option<Vec<InlayHint>>> {
     let uri = params.text_document.uri;
-    let Some((text, resolved, _)) = server.get_document_data(&uri).await else {
+    let Some((text, resolved)) = server.get_display_data(&uri).await else {
         return Ok(None);
     };
     Ok(none_if_empty(inlay_hints::inlay_hints(&resolved, &text)))

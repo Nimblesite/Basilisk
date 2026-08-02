@@ -398,6 +398,7 @@ fn configure_severity_link(code: &str) -> Option<String> {
 
 pub(crate) mod access;
 pub(crate) mod members;
+pub(crate) mod receiver_scope;
 mod render;
 
 use members::find_class_init;

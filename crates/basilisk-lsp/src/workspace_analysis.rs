@@ -28,6 +28,10 @@ pub(crate) fn make_entry(
         diagnostics: checker_diags,
         version: 0,
         is_open: false,
+        // Populated by `WorkspaceIndex::store_entry`, the single write path
+        // into the index — it is the only caller that can see the revision this
+        // one replaces. Implements [ANALYSIS-INDEX-LASTGOOD].
+        last_good: None,
     }
 }
 
