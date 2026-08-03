@@ -204,6 +204,9 @@ fn build_resolved_module(
         module_vars,
         imports,
         match_stmts,
+        // Implements the module-scope binding census behind `names_undefined`'s
+        // module-level pass (issue #397).
+        module_bindings: assigns::collect_all_assigns(stmts).into_iter().collect(),
         calls,
         typevar_calls,
         reveal_type_calls: results.reveal_type_calls,

@@ -1,5 +1,6 @@
 //! Implements [`names_undefined`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-//! `names_undefined`: Undefined variable used in a return statement.
+//! `names_undefined`: Undefined variable used in a return statement or as a
+//! module-level callee.
 //!
 //! Flags any name referenced in a `return` expression — bare (`return x`), the
 //! base of an attribute/subscript chain (`return x.y`), a call argument, or the
@@ -8,10 +9,16 @@
 //! `with`), a module-level function, class, variable, or import, an enclosing
 //! scope's binding, a cross-module imported symbol, or a builtin.
 //!
+//! Also flags a module-level statement that calls a name bound nowhere in the
+//! module (issue #397) — code that raises `NameError` the moment the module is
+//! imported. A `from m import *` disables this pass: the star can bind any name.
+//!
 //! ```python
 //! def compute() -> int:
 //!     return undefined_name     # never defined → E0018
 //!     return undefined_fn()     # undefined callee → E0018
+//!
+//! a: int = print2("abc")        # no `print2` anywhere → E0018
 //! ```
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
@@ -66,7 +73,72 @@ impl Rule for UndefinedVariable {
         module.functions.iter().for_each(|func| {
             check_function(func, &module.functions, &scope, &module.path, diagnostics);
         });
+
+        check_module_level_callees(module, &scope, diagnostics);
     }
+}
+
+/// Flag module-level calls to names bound nowhere in the module (issue #397).
+///
+/// `module.calls` also contains calls from function and class bodies (its
+/// collector walks every body), where locals and parameters are legal callees —
+/// those are excluded by span containment against `def_span`s. A star import
+/// can bind any name, so its presence disables the pass entirely.
+fn check_module_level_callees(
+    module: &ResolvedModule,
+    scope: &ModuleScope<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
+    let has_star_import = module
+        .imports
+        .iter()
+        .any(|imp| matches!(imp.kind, basilisk_resolver::scope::ImportKind::Star));
+    if has_star_import {
+        return;
+    }
+
+    let inside_any_body = |span: &Span| {
+        module
+            .functions
+            .iter()
+            .map(|func| &func.def_span)
+            .chain(module.classes.iter().map(|class| &class.def_span))
+            .any(|body| body.start <= span.start && span.end <= body.end)
+    };
+
+    for call in &module.calls {
+        let callee = call.callee.as_str();
+        if call.receiver.is_some() || inside_any_body(&call.span) {
+            continue;
+        }
+        if module.module_bindings.contains(callee)
+            || scope.imported_symbols.contains_key(callee)
+            || BUILTINS.contains(&callee)
+            // `reveal_type` is special-cased by type checkers per the typing
+            // spec and needs no import.
+            || callee == "reveal_type"
+        {
+            continue;
+        }
+        out.push(module_level_diagnostic(callee, call.span, &module.path));
+    }
+}
+
+fn module_level_diagnostic(name: &str, span: Span, path: &str) -> Diagnostic {
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!("`{name}` is called here but defined nowhere in this module"),
+        span,
+        path,
+        Some(format!(
+            "Define `{name}`, import it, or check for a typo in the name"
+        )),
+        Some(
+            "A module-level call to an undefined name raises NameError as soon as the module \
+             is imported"
+                .to_owned(),
+        ),
+    )
 }
 
 /// Module-scope names visible to every function body.
@@ -99,9 +171,65 @@ fn is_in_enclosing_scope(name: &str, func: &FunctionInfo, all_functions: &[Funct
 
 /// Python builtin names that are always in scope.
 ///
-/// When a function returns one of these names (e.g. `return int`), it is not
-/// an undefined-variable error — it is a reference to a builtin type/function.
+/// When code references one of these names (e.g. `return int`, a module-level
+/// `divmod(...)`), it is not an undefined-variable error — it is a reference
+/// to a builtin type/function. The list is the complete `builtins` module
+/// surface (union across supported Python versions, so version-gated names
+/// like `anext` or `PythonFinalizationError` never false-positive), plus the
+/// module-level dunder globals every module receives and the `site`-installed
+/// interactive helpers (`help`, `exit`, ...).
 const BUILTINS: &[&str] = &[
+    "aiter",
+    "anext",
+    "ascii",
+    "breakpoint",
+    "compile",
+    "copyright",
+    "credits",
+    "divmod",
+    "eval",
+    "exec",
+    "exit",
+    "globals",
+    "help",
+    "license",
+    "locals",
+    "quit",
+    "__import__",
+    "__build_class__",
+    "__debug__",
+    "__name__",
+    "__file__",
+    "__doc__",
+    "__package__",
+    "__spec__",
+    "__loader__",
+    "__builtins__",
+    "__annotations__",
+    "__dict__",
+    "BaseExceptionGroup",
+    "ExceptionGroup",
+    "BlockingIOError",
+    "BrokenPipeError",
+    "ChildProcessError",
+    "ConnectionAbortedError",
+    "ConnectionError",
+    "ConnectionRefusedError",
+    "ConnectionResetError",
+    "EncodingWarning",
+    "EnvironmentError",
+    "FileExistsError",
+    "FloatingPointError",
+    "InterruptedError",
+    "IsADirectoryError",
+    "MemoryError",
+    "NotADirectoryError",
+    "PermissionError",
+    "ProcessLookupError",
+    "PythonFinalizationError",
+    "ReferenceError",
+    "TimeoutError",
+    "WindowsError",
     "int",
     "str",
     "float",
