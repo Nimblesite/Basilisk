@@ -102,6 +102,10 @@ deslop-report.json
 deslop-report.txt
 deslop-report.html
 deslop-*.log
+# Newer deslop releases write reports, logs and the fingerprint cache into a
+# .deslop/ directory instead of the repo root — the cache is untracked build
+# output, so ignore the whole tree rather than each artifact name.
+.deslop/
 
 # =============================================================================
 # Benchmarks

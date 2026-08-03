@@ -51,9 +51,12 @@ ok "debugpy"
 # ruff is a hard requirement of `make test` (scripts/audit.sh fails without it)
 # and of `make fmt`. Pin it to the version CI installs, which is also the
 # ruff_* crate tag in Cargo.toml — a mismatched CLI formats differently from the
-# formatter embedded in the binary ([LSPFMT-ENGINE]).
-command -v ruff &>/dev/null || python3 -m pip install --quiet --break-system-packages ruff==0.15.17
-ok "ruff"
+# formatter embedded in the binary ([LSPFMT-ENGINE]), so check the VERSION and
+# not merely that some `ruff` is on PATH.
+readonly RUFF_VERSION=0.16.1
+[[ "$(ruff --version 2>/dev/null)" == "ruff $RUFF_VERSION" ]] ||
+    python3 -m pip install --quiet --break-system-packages "ruff==$RUFF_VERSION"
+ok "ruff $RUFF_VERSION"
 
 # pytest drives the Neovim e2e harness; scripts/test-nvim.sh aborts without it.
 command -v pytest &>/dev/null || python3 -m pip install --quiet --break-system-packages pytest==9.1.1
