@@ -122,6 +122,103 @@ test.describe("homepage positioning", () => {
     expect(software.programmingLanguage).toBe("Rust");
     expect(software).not.toHaveProperty("softwareRequirements");
   });
+
+  test("serves the declared social image at its declared size", async ({
+    page,
+    request,
+  }) => {
+    const src = await page
+      .locator('meta[property="og:image"]')
+      .getAttribute("content");
+    const response = await request.get(src ?? "");
+    expect(response.status()).toBe(200);
+
+    // PNG IHDR: width and height are big-endian uint32 at byte offsets 16 and 20.
+    const png = await response.body();
+    expect(png.readUInt32BE(16)).toBe(1200);
+    expect(png.readUInt32BE(20)).toBe(630);
+  });
+});
+
+// The Chinese homepage is a translation of the English one, not a separate
+// pitch: same sections, same data gates, same proof links. These tests fail if
+// the two drift apart in structure or if a zh superlative escapes its gate.
+test.describe("Chinese homepage", () => {
+  const skeleton = (page: import("@playwright/test").Page) =>
+    page.evaluate(() =>
+      Array.from(
+        document.querySelectorAll(
+          "main section, main .stat-card, main .problem__bullets li, main .btn",
+        ),
+      ).map((element) => element.className),
+    );
+
+  test("mirrors the English page structure section for section", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const english = await skeleton(page);
+    await page.goto("/zh/");
+    const chinese = await skeleton(page);
+
+    expect(english.length).toBeGreaterThan(0);
+    expect(chinese).toEqual(english);
+  });
+
+  test("renders both headline claims beside their proof", async ({ page }) => {
+    await page.goto("/zh/");
+
+    await expect(page.locator("h1")).toHaveCount(1);
+    await expect(page.locator("h1")).toContainText(
+      "唯一在官方 Python typing 套件中取得 100% 的 Python 类型检查器。",
+    );
+    await expect(page.locator(".hero__headline-accent")).toHaveText(
+      "也是我们测过最快的。",
+    );
+
+    await expect(page.locator(".hero__subheadline")).toContainText(
+      "它是唯一通过官方 python/typing 符合性套件中每一个文件的检查器",
+    );
+    await expect(page.locator(".hero__subheadline")).toContainText(
+      /捕获 \d+ 个必需错误，0 处误报/,
+    );
+    await expect(
+      page.locator('.hero__subheadline a[href*="github.com/python/typing"]'),
+    ).toHaveCount(1);
+    await expect(
+      page.locator('.hero__subheadline a[href="/docs/benchmarks/"]'),
+    ).toHaveCount(1);
+
+    await expect(page.locator(".hero__proof .stat-card")).toHaveCount(2);
+    await expect(page.locator(".hero__proof")).toContainText(
+      "官方榜单中唯一取得满分的检查器",
+    );
+    await expect(page.locator(".hero__proof")).toContainText(
+      "我们公开的冷启动基准测试中最快",
+    );
+  });
+
+  test("keeps its comparative claims on the same gates as the English page", async ({
+    page,
+  }) => {
+    // A gate that fires on one locale and not the other means one of the two
+    // pages is asserting a comparative fact its data no longer supports.
+    await page.goto("/");
+    const englishAccents = await page
+      .locator(".hero__headline-accent")
+      .count();
+    await page.goto("/zh/");
+    expect(await page.locator(".hero__headline-accent").count()).toBe(
+      englishAccents,
+    );
+
+    // Chinese readers search the English product nouns too; both must be present.
+    const keywords = await page
+      .locator('meta[name="keywords"]')
+      .getAttribute("content");
+    expect(keywords).toContain("python type checker");
+    expect(keywords).toContain("python 类型检查器");
+  });
 });
 
 test.describe("homepage mobile usability", () => {

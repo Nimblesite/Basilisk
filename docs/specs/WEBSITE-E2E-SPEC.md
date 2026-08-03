@@ -30,6 +30,15 @@ CI that a visitor can navigate the site.
   and the published benchmark. False positives are asserted at 0 — a ratchet per
   [CHKARCH-CONFORMANCE] — while the caught-error count is left open, since
   upstream adds test cases over time.
+- **Social image matches its declared size** — the `og:image` URL resolves and
+  the PNG's own IHDR dimensions equal the advertised `og:image:width`/`height`,
+  so a re-exported image cannot silently desync from its metadata.
+- **The Chinese homepage is a translation, not a second pitch** — `/zh/` and `/`
+  are asserted to produce an identical structural skeleton (section, stat-card,
+  bullet and button class lists, in order). The zh page repeats both gated
+  claims with the same proof links, and its `.hero__headline-accent` count must
+  equal the English page's, so one locale can never assert a comparative fact
+  the other has already retired.
 - **Homepage mobile usability** — no horizontal overflow and visible calls to
   action retain a minimum 48 px touch target on the iPhone SE viewport.
 
