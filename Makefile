@@ -255,6 +255,15 @@ bench:
 bench-basilisk:
 	@BENCH_ONLY_BASILISK=1 bash benchmarks/run.sh
 
+## torture: Type-torture scoreboard — hard, spec-grounded typing problems
+## scored conformance-style (`# E` lines) against pyright/mypy/ty/pyrefly/zuban,
+## every tool in its out-of-the-box defaults, with hang detection as a
+## correctness axis. WRITE-ALWAYS to benchmarks/torture/status/torture.csv,
+## read-only regression gate against the committed baseline (exit 3).
+## Needs target/release/basilisk (or BASILISK_BIN); build it first.
+torture:
+	@python3 benchmarks/torture/run_torture.py
+
 ## smoke-micropython: Real-world smoke test for typeshed-path
 ## [STUBRES-CUSTOM-TYPESHED] — points the checker at a pinned, unmodified
 ## micropython-stdlib-stubs release and asserts MicroPython stdlib resolves

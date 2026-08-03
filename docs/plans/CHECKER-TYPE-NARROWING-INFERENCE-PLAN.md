@@ -495,14 +495,27 @@ the conformance ratchets (100% / 0 false positives) at every step.
 - [ ] Replace the blanket `Named` skip in `rules/shared.rs::is_unverifiable_return_type`
   with a resolved/unresolved split, narrowing it one category at a time as the
   cascade covers that category.
-- [ ] Terminating cycle detection for recursive aliases: `type J = list[J]`,
+- [x] Terminating cycle detection for recursive aliases: `type J = list[J]`,
   `type J = int | list[J]`, `type J = dict[str, J]`, and the canonical
   `JsonValue` union all produce **no** diagnostic
   ([#371](https://github.com/Nimblesite/Basilisk/issues/371)).
-- [ ] Add PEP 695 `type`-statement counterparts of every recursive case in
+  — Delivered by the Stage 3 acceptance conditions: `tyeval::accept::classify`
+  admits guarded recursion (constructor subscripts guard; union arms alone do
+  not), and `generics_syntax_scoping::check_type_alias_circular` reports only
+  `Unguarded`/`NonRegular` verdicts. All four #371 forms (plus a JsonValue
+  arm-order permutation) are pinned clean in
+  `tests/checker/generics_syntax_scoping_tests.rs`.
+- [x] Add PEP 695 `type`-statement counterparts of every recursive case in
   upstream `aliases_recursive.py` to our own suite — the upstream file contains
   zero `type` statements, which is why this false positive survived a 100%
   score. Coverage of a syntax the upstream suite omits is our responsibility.
+  — `tests/checker/aliases_recursive_tests.rs`: every recursive alias
+  DEFINITION (`Json`/`Json2`, `RecursiveTuple`, `RecursiveMapping`, both
+  generic aliases + specialization) pinned clean as a `type` statement, and
+  both `# E: cyclical reference` cases (`RecursiveUnion` in `|` and
+  `Union[..]` spellings, the `MutualReference` pair) pinned firing.
+  Value-level assignability THROUGH these aliases is the annotation-resolution
+  cascade's box above, not this one.
 - [ ] Resolve decorator expressions through the binding table so `o = overload`
   is recognised as `typing.overload`; cover `from typing import overload as ov`
   and `typing.overload` / `t.overload` attribute spellings
@@ -810,10 +823,32 @@ the conformance ratchets (100% / 0 false positives) at every step.
 
 ### Superiority gate
 
+- [x] Seed the scoreboard with a **type-torture corpus**: hard, spec-grounded
+  problems (several straight from the issue tracker) scored conformance-style
+  against every competitor, with hang detection as a correctness axis.
+  — `benchmarks/torture/`: eight cases (`cases/*.py`, each header citing the
+  typing-spec section/PEP that makes its expectations authoritative — #371
+  recursive aliases, #398 recursive-base termination, #374 enum literal
+  expansion, #317 gradual unannotated code, #284 tuple indexing, PEP 742
+  `TypeIs`, PEP 612 `ParamSpec` preservation, generic constructor solving) +
+  `run_torture.py` (out-of-the-box defaults for every tool, best-effort
+  latest-release pull, per-invocation timeout scored as `hang`, WRITE-ALWAYS
+  `status/torture.csv` after every case, read-only regression gate against
+  the committed baseline, exit 3). First measured run (2026-08-04, versions
+  in the CSV header): **basilisk 5/8 — behind mypy 8/8, pyrefly 8/8,
+  pyright 7/8, zuban 7/8; ahead of ty 4/8.** The three basilisk failures are
+  live defects, now pinned by the corpus: the #374 enum-expansion false
+  positive, the #398 recursive-base hang, and a module-level fixed-tuple
+  out-of-range index MISS (the function-scope twin of #284's false
+  positive). Taking this axis means fixing those three; the gate then holds
+  them fixed.
 - [ ] Build the inference scoreboard harness mirroring `benchmarks/`: pull the
   latest official release of each competitor (pyright, mypy, ty, pyrefly,
   zuban) every run; write scores to a status file immediately and
   unconditionally; gate read-only against the committed baseline.
+  (The torture runner above implements the full write-always/gate/pull
+  contract for its own corpus; this box widens the same mechanism to the
+  five measurable-target axes.)
 - [ ] Build the reveal_type-precision corpus
   (containers/comprehensions/lambdas/literal-generic precision) and score all
   checkers on it.
