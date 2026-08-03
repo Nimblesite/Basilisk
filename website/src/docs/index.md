@@ -27,17 +27,18 @@ Basilisk puts type checking, language features, formatting, debugging, and profi
 
 ## What Basilisk is
 
-- A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, a full [refactoring suite](/docs/refactoring/), code actions, inlay hints
-- **Editor extensions across major editors** — VS Code, Cursor, Windsurf, Neovim (0.10+), and Zed today; JetBrains (IntelliJ / PyCharm) is planned
-- **Annotation quick-fixes** — one-click code actions that insert a placeholder annotation (`: Any`, `-> None`) on unannotated code, so you can fill in the real type
-- An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
-- An **integrated profiler** — sampling CPU profiler with inline heatmap annotations, flame graphs, memory leak detection, and reference graph visualization, all inside your editor
-- A **PEP-conformant type checker by default** — the core spec rule set out of the box, with opt-in Basilisk rules for checking stricter than the spec
-- **Standard-library types out of the box** — a complete typeshed `stdlib/` tree is compiled into the binary and checking never downloads anything, so stdlib types work with no network and no configuration; pin an exact `python/typeshed` commit and it is verified offline against your local store
-- A **CLI tool** for CI integration — exits with code 1 when errors are found
-- A **migration assistant** that reads your existing `pyrightconfig.json` or `mypy.ini`
-- **uv integration** — workspace detection, lock file parsing, and package management commands
-- Written in **Rust** — ships as a single binary with no runtime dependencies
+- A **language server** — autocomplete, go-to-definition, hover, find references, rename, [refactoring](/docs/refactoring/), code actions, and inlay hints
+- **Editor extensions** — VS Code, Cursor, Windsurf, Neovim (0.11+), and Zed today; JetBrains (IntelliJ / PyCharm) is planned
+- **Annotation quick-fixes** — code actions that insert a placeholder annotation (`: Any`, `-> None`) on unannotated code for you to replace with the real type. They do not infer types
+- An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, brokered by the Basilisk LSP. Requires `debugpy` in your project environment. See [Debugging](/docs/debugging/)
+- An **integrated profiler** — sampling CPU profiler with inline heatmap annotations, flame graphs, memory leak detection, and reference graphs. See [Profiler](/docs/profiler/)
+- A **built-in formatter** — the Ruff formatter compiled into the binary, plus native import organizing. See [Formatting](/docs/formatting/)
+- A **type checker whose default rule set is the typing spec** — every PEP rule runs on `basilisk check`; opt-in Basilisk rules run on `basilisk analyze` once you enable them
+- **Standard-library types with no setup** — a complete typeshed `stdlib/` tree is compiled into the binary and checking never downloads anything. Pin an exact `python/typeshed` commit, or a typeshed distribution by wheel SHA-256, and it is verified offline against your local store
+- A **CLI for CI** — `basilisk check` exits 1 when errors are found; `basilisk format --check` exits 1 when a file would change
+- **uv integration** — workspace detection, lock-file parsing, and package management commands
+- An **MCP server** — `basilisk mcp` serves read-only typeshed source status over stdio to MCP clients
+- Written in **Rust** — a single binary with no Node.js and no Python runtime needed to check or to run the language server
 
 ![Basilisk activity panel in VS Code — Module Explorer with typed-coverage percentage, Python Processes for CPU and memory profiling, and type-checking status](/assets/images/vscode-module-explorer.png)
 
@@ -46,8 +47,9 @@ Basilisk puts type checking, language features, formatting, debugging, and profi
 ## What Basilisk is not
 
 - Not a compiler — your Python code runs on CPython as normal
-- Not a runtime type checker — analysis happens statically at development time
-- Not tied to one editor — the same server powers VS Code, Cursor, Windsurf, Zed, and Neovim
+- Not a runtime type checker — analysis happens statically, at development time
+- Not a Python runtime or package manager — running, testing, debugging, and memory profiling use your project's own interpreter
+- Not tied to one editor — the same server backs VS Code, Cursor, Windsurf, Zed, and Neovim, though what each editor surfaces differs
 
 ## Conformant by default, configurable from there
 
