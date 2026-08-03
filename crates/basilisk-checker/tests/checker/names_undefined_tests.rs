@@ -477,8 +477,8 @@ e = alias()
 }
 
 #[test]
-fn module_level_loop_and_unpack_targets_no_false_positive(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn module_level_loop_and_unpack_targets_no_false_positive() -> Result<(), Box<dyn std::error::Error>>
+{
     // Binding forms beyond plain `=`: tuple unpacking, `for` targets, `with`
     // targets, walrus, and `except ... as` names all bind at module scope.
     let source = r#"
@@ -522,8 +522,8 @@ fn module_level_star_import_disables_the_check() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
-fn function_body_local_callee_not_flagged_by_module_pass(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn function_body_local_callee_not_flagged_by_module_pass() -> Result<(), Box<dyn std::error::Error>>
+{
     // The resolver's call collector walks into function bodies; the
     // module-level pass must not treat a parameter callee as module scope.
     let source = "\
@@ -547,8 +547,7 @@ def apply(callback: Callable[[], int]) -> int:
 }
 
 #[test]
-fn module_level_full_builtin_surface_no_false_positive() -> Result<(), Box<dyn std::error::Error>>
-{
+fn module_level_full_builtin_surface_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
     // Builtins outside the original curated list (divmod, ascii, eval, vars,
     // globals) must be recognised at module level.
     let source = "\

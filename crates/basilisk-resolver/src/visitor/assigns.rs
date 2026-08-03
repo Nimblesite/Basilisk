@@ -52,7 +52,11 @@ fn extract_pattern_names(pattern: &ruff_python_ast::Pattern) -> Vec<String> {
     use ruff_python_ast::Pattern;
     match pattern {
         Pattern::MatchValue(_) | Pattern::MatchSingleton(_) => Vec::new(),
-        Pattern::MatchSequence(seq) => seq.patterns.iter().flat_map(extract_pattern_names).collect(),
+        Pattern::MatchSequence(seq) => seq
+            .patterns
+            .iter()
+            .flat_map(extract_pattern_names)
+            .collect(),
         Pattern::MatchMapping(map) => map
             .patterns
             .iter()

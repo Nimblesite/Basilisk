@@ -1,6 +1,6 @@
 {
-  "cargo_dependency_graph_sha256": "ddf7225e916f5ced36c220b670ab7ef80849e9ff7b04dd0b521c3a1c9b2d1f31",
-  "licenses_sha256": "9165e18b74e6d6d66b01313528d88f1e89453adf949f20fab11a095dadfbcc86",
+  "cargo_dependency_graph_sha256": "ac5d187729fd8be9be9f709d97c351e717615d9945bceeb1adb0c2c07b0ececd",
+  "licenses_sha256": "3219959622e8d671eff7deddc2376bc0b1ee481385c281dd9c8e7014ec5ebbf6",
   "targets": [
     "x86_64-unknown-linux-gnu",
     "aarch64-unknown-linux-gnu",
