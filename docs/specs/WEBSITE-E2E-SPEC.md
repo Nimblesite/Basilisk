@@ -8,9 +8,10 @@ CI that a visitor can navigate the site.
 
 ## Smoke Coverage {#WEBSITE-E2E-SMOKE}
 
-`website/tests/e2e/navigation.spec.ts`, driven by
+`website/tests/e2e/navigation.spec.ts` and `website/tests/e2e/homepage.spec.ts`, driven by
 `website/playwright.config.ts` (two projects: `desktop` = Desktop Chrome,
-`mobile` = Pixel 5), served by `website/tests/static-server.js`. Run with
+`mobile` = iPhone SE 3rd generation emulated in Chromium, 375 × 667), served by
+`website/tests/static-server.js`. Run with
 `npm run test:e2e` (`test:e2e:ui` locally). Asserts per viewport:
 
 - **Top navigation resolves** — the home page links to Docs, Rules, Blog,
@@ -21,6 +22,25 @@ CI that a visitor can navigate the site.
   between sections without any toggle.
 - **Mobile docs submenu** — see [WEBSITE-MOBILE-DOCS-NAV].
 - **Mobile top nav** — the hamburger reveals the collapsed top nav.
+- **Homepage positioning** — the title, H1 and opening answer identify Basilisk
+  as a Python type checker and language server, with only measured, linked proof.
+- **Headline claims carry their proof** — the hero's two comparative claims (sole
+  perfect official conformance score, and lowest median cold full-file CLI time)
+  each sit beside the link that grades them: the official `python/typing` results
+  and the published benchmark. False positives are asserted at 0 — a ratchet per
+  [CHKARCH-CONFORMANCE] — while the caught-error count is left open, since
+  upstream adds test cases over time.
+- **Social image matches its declared size** — the `og:image` URL resolves and
+  the PNG's own IHDR dimensions equal the advertised `og:image:width`/`height`,
+  so a re-exported image cannot silently desync from its metadata.
+- **The Chinese homepage is a translation, not a second pitch** — `/zh/` and `/`
+  are asserted to produce an identical structural skeleton (section, stat-card,
+  bullet and button class lists, in order). The zh page repeats both gated
+  claims with the same proof links, and its `.hero__headline-accent` count must
+  equal the English page's, so one locale can never assert a comparative fact
+  the other has already retired.
+- **Homepage mobile usability** — no horizontal overflow and visible calls to
+  action retain a minimum 48 px touch target on the iPhone SE viewport.
 
 ### CI constraint {#WEBSITE-E2E-NO-ARTIFACTS}
 

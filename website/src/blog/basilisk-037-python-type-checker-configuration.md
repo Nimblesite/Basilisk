@@ -10,9 +10,7 @@ imageAlt: "Basilisk 0.37.3 configuration editor showing tag-based Python type-ch
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - Python type checking
-  - configuration
-  - Basilisk
+  - Python typing
 category: announcements
 excerpt: "Basilisk's configuration is now one explicit pyproject.toml model: tags for broad policy, rules for exceptions, folder configs for scope, exact impact previews, reactive reloads, and offline Typeshed pins."
 keywords: python type checker configuration, python type checking, pyproject.toml, VS Code Python, static typing, type checker rules, Basilisk 0.37.3, Typeshed, Python language server

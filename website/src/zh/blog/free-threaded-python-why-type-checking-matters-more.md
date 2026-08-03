@@ -9,10 +9,8 @@ imageAlt: "并行的 Python 执行线程并排运行在一层严格类型检查�
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - posts
-  - free-threading
-  - Python 3.14
-  - concurrency
+  - Python performance
+  - Python typing
 category: deep-dives
 lang: zh
 excerpt: "Python 3.14 让自由线程 Python 获得正式支持。当线程真正并行运行时，类型错误就不再是一个安静的烦恼，而会变成一个并发 bug。本文解释为什么严格的、默认开启的类型检查是你能买到的最廉价的保护。"

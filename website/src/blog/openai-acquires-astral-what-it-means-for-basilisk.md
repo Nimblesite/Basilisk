@@ -9,9 +9,7 @@ imageAlt: "Abstract open-source toolchain constellations converging over a resil
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - Ruff
   - Python tooling
-  - Basilisk
 category: announcements
 excerpt: "Basilisk's parser is Ruff. Ruff's owner is about to become OpenAI. Here is what that means — backed by the primary sources, quote by quote — and why your Basilisk install is safe regardless."
 keywords: basilisk, astral, openai, ruff, uv, ty, charlie marsh, python type checker, open source, fork, mit license

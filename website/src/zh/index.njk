@@ -1,411 +1,151 @@
 ---
 layout: layouts/base.njk
-title: "Basilisk —— 唯一在官方 python/typing 一致性结果中取得满分 100% 的 Python 语言服务器"
-description: "开源 Python 语言服务器，官方类型符合性得分满分，并集成重构、调试、性能分析与主流编辑器扩展。"
+title: "Basilisk —— 快速的 Python 类型检查器与语言服务器"
+description: "Basilisk 是用 Rust 构建的开源 Python 类型检查器与语言服务器：在官方 python/typing 符合性套件中取得 100%，并在我们公开的基准测试中最快。"
+keywords: "python 类型检查器, python type checker, python 类型检查, python 语言服务器, python language server, python 类型检查器对比, rust python 类型检查器, typing conformance, 类型检查器基准测试"
+imageAlt: "Basilisk Python 类型检查器与语言服务器，附公开的符合性结果与冷启动基准测试"
+dateModified: 2026-08-04
 lang: zh
 permalink: /zh/
 ---
 
-<script src="/assets/js/demo.js" defer></script>
+{# 与英文首页逐字对应的声明门控（[WEBSITE-E2E-SMOKE]）：
+   “最快”只有在六款工具的中位数全部在场且 Basilisk 最低时才渲染；
+   “唯一”只有在官方快照中 Basilisk 是唯一满分者时才渲染。 #}
+{% set hasCompleteBenchmark = benchmarks.hasData
+  and benchmarks.toolMedians.ms.basilisk
+  and benchmarks.toolMedians.ms.pyright
+  and benchmarks.toolMedians.ms.mypy
+  and benchmarks.toolMedians.ms.ty
+  and benchmarks.toolMedians.ms.pyrefly
+  and benchmarks.toolMedians.ms.zuban %}
+{% set basiliskIsFastest = hasCompleteBenchmark and benchmarks.toolMedians.fastest == 'basilisk' %}
 
-<!-- ═══════════════════════════════════════════════════════
-     HERO — left text / right code, no glows, no grid
-═══════════════════════════════════════════════════════ -->
 <section class="hero">
   <div class="container">
     <div class="hero__split">
-
       <div class="hero__text">
-        <span class="hero__kicker">// basilisk — 100% 符合 PEP 规范</span>
+        <span class="hero__kicker">Python 类型检查器 &middot; 语言服务器</span>
 
         <h1 class="hero__headline">
-          开源的<br>
-          Python 类型检查与语言服务器。
+          {% if conformanceOfficial.basiliskIsSolePerfect %}唯一在官方 Python typing 套件中取得 {{ conformanceOfficial.basilisk.pct }}% 的 Python 类型检查器。{% elif conformance.hasData %}在官方 Python typing 套件中取得 {{ conformance.scorePct }}% 的 Python 类型检查器。{% else %}为速度与规范符合性打造的 Python 类型检查器。{% endif %}
+          {% if basiliskIsFastest %}<span class="hero__headline-accent">也是我们测过最快的。</span>{% endif %}
         </h1>
 
         <p class="hero__subheadline">
-          唯一在官方 <code>python/typing</code> 符合性套件中取得
-          {{ conformanceOfficial.basilisk.pct }}% 满分的 Python 类型检查器
-          —— 也是我们测过的最快的。使用 Rust 构建的完整开源 Python 开发环境：
-          类型检查器、语言服务器、调试器、性能分析器 —— 自动补全、跳转到定义、
-          悬停信息、重构、诊断与集成调试，支持 VS Code、Cursor、Zed 和 Neovim，
-          无专有锁定。默认严格。
+          Basilisk 是用 Rust 构建的开源 Python 类型检查器与语言服务器。
+          {% if conformance.hasData and conformance.pass == conformance.total %}它是{% if conformanceOfficial.basiliskIsSolePerfect %}唯一{% endif %}通过<a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">官方 <code>python/typing</code> 符合性套件中每一个文件</a>的检查器，捕获 {{ conformance.caught }} 个必需错误，{{ conformance.fp }} 处误报。{% elif conformance.hasData %}它在<a href="/zh/docs/conformance/">官方 <code>python/typing</code> 符合性套件</a>中取得 {{ conformance.scorePct }}%。{% endif %}
+          {% if basiliskIsFastest %}在<a href="/docs/benchmarks/">我们公开的基准测试</a>中，它的冷启动全文件 CLI 检查中位耗时也低于所有其他检查器。{% endif %}
         </p>
 
         <div class="hero__cta-group">
-          <a href="/zh/docs/installation/" class="btn btn--primary">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            立即开始
+          <a href="vscode:extension/Nimblesite.basilisk" class="btn btn--primary">
+            为 VS Code 安装
           </a>
-          <a href="https://marketplace.visualstudio.com/items?itemName=Nimblesite.basilisk" class="btn btn--mono" target="_blank" rel="noopener">
-            <span>为 VS Code 安装</span>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+          <a href="/zh/docs/comparison/" class="btn btn--secondary">
+            对比 Python 类型检查器
           </a>
-          <a href="https://discord.gg/4wBDSGEZQd" class="btn btn--secondary" target="_blank" rel="noopener">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
-            加入 Discord
+          <a href="/zh/docs/install-cli/" class="btn btn--mono">
+            安装 CLI
           </a>
         </div>
 
         <div class="hero__meta">
-          <span>完整 <strong>LSP</strong></span>
-          <span>用 <strong>Rust</strong> 构建</span>
-          <span><strong>增量</strong>重检</span>
-          <span>每款编辑器 &mdash; <strong>VS Code</strong>、<strong>Cursor</strong>、<strong>Windsurf</strong>、<strong>Zed</strong>、<strong>Neovim</strong></span>
+          <span>原生 <strong>Rust</strong> 分析</span>
+          <span><strong>VS Code</strong>、Cursor 和 Windsurf</span>
+          <span><strong>Zed</strong> 和 Neovim LSP</span>
           <span><strong>MIT</strong> 许可证</span>
         </div>
       </div>
 
-      <!-- Product video — Basilisk renaming a symbol across a project in VS Code.
-           Autoplays muted/inline on load (browser autoplay policy needs muted). -->
       <div class="hero__code">
-        <video class="hero__shot" autoplay muted loop playsinline preload="metadata" poster="/assets/images/rename-poster.jpg" width="1440" height="932" aria-label="Basilisk 在 VS Code 中执行项目级重命名重构 —— 重命名符号时，对它的每一处引用都会实时更新">
+        <video class="hero__shot" autoplay muted loop playsinline preload="metadata" poster="/assets/images/rename-poster.jpg" width="1440" height="932" aria-label="Basilisk 语言服务器分析驱动 VS Code 中的项目级 Python 重命名">
           <source src="/assets/images/rename.mp4" type="video/mp4">
         </video>
       </div>
-
     </div>
 
-    <!-- 证据面板 — PEP 符合性 + 冷启动检查速度，两个核心证据置于满屏 HERO 内部，
-         让首屏同时呈现承诺与证据。所有数字均来自真实数据（conformance.js +
-         benchmarks.js，来自已提交的 CSV），绝不手写，不会漂移。 -->
     {% if conformance.hasData or benchmarks.hasData %}
-    <div class="hero__proof">
+    <div class="hero__proof" aria-label="公开的类型检查器结果">
       {% if conformance.hasData %}
       <div class="stat-card">
         <span class="stat-card__num">{{ conformance.scorePct }}<span class="stat-card__unit">%</span></span>
-        <span class="stat-card__label">PEP&nbsp;符合性</span>
-        <span class="stat-card__sub">官方 <code>python/typing</code> 套件 {{ conformance.total }} 项测试中通过 {{ conformance.pass }} 项 &middot; {{ conformance.fp }} 处误报，对照 <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}" target="_blank" rel="noopener"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %}（{{ conformance.commitDate }}）{% endif %}评分</span>
+        <span class="stat-card__label">
+          {% if conformanceOfficial.basiliskIsSolePerfect %}官方榜单中唯一取得满分的检查器{% else %}官方类型符合性得分{% endif %}
+        </span>
+        <span class="stat-card__sub">
+          {{ conformance.total }} 个文件中有 {{ conformance.pass }} 个通过套件未经修改的评分器，
+          遗漏的必需错误 {{ conformance.missed }} 处，误报 {{ conformance.fp }} 处。
+          <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">官方结果，{{ conformanceOfficial.snapshot.date }}</a>。
+        </span>
       </div>
       {% endif %}
       {% if benchmarks.hasData and benchmarks.toolMedians.ms.basilisk %}
       <div class="stat-card">
         <span class="stat-card__num">{{ benchmarks.toolMedians.ms.basilisk }}<span class="stat-card__unit">&nbsp;ms</span></span>
-        <span class="stat-card__label">冷启动全文件检查</span>
-        <span class="stat-card__sub">基准文件中位数{% if benchmarks.toolMedians.fastest == 'basilisk' %}，实测最快{% endif %} &middot; 对比 Pyright {{ benchmarks.toolMedians.ms.pyright }} &middot; mypy {{ benchmarks.toolMedians.ms.mypy }} &middot; ty {{ benchmarks.toolMedians.ms.ty }} &middot; Pyrefly {{ benchmarks.toolMedians.ms.pyrefly }}{% if benchmarks.toolMedians.ms.zuban %} &middot; zuban {{ benchmarks.toolMedians.ms.zuban }}{% endif %}&nbsp;ms</span>
+        <span class="stat-card__label">
+          {% if basiliskIsFastest %}我们公开的冷启动基准测试中最快{% else %}公开的冷启动基准测试{% endif %}
+        </span>
+        <span class="stat-card__sub">
+          Basilisk 在 {{ benchmarks.meta.machine }} 上 {{ benchmarks.rows | length }} 个合成单文件基准用例的中位数。
+          全新进程 CLI 计时；不代表项目吞吐量或编辑器延迟。
+        </span>
       </div>
       {% endif %}
     </div>
     <p class="hero__proof-cta">
-      对照官方 <code>python/typing</code> 套件与已提交的基准 CSV 自测。
-      <a href="/zh/docs/conformance/">我们如何衡量符合性 &rarr;</a>
-      <a href="/docs/benchmarks/">完整基准测试与方法 &rarr;</a>
+      符合性由官方 Python typing 评分器评定；性能为自测且可复现。
+      <a href="/zh/docs/conformance/">验证符合性得分 &rarr;</a>
+      <a href="/docs/benchmarks/">阅读基准测试方法 &rarr;</a>
     </p>
     {% endif %}
-
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════
-     COMPARISON TABLE — 每一项竞品声明都内联链接到
-     该工具自己的文档，作为权威来源。
-═══════════════════════════════════════════════════ -->
-<section class="comparison-section">
+<section class="problem" aria-labelledby="what-is-basilisk">
   <div class="container">
-    <p class="section-label">对比情况</p>
-    <h2 class="section-heading">您期待的一切功能。<br>完全开源。</h2>
-    <p class="section-subhead">
-      功能完整的开源语言服务器，无专有锁定。{% if benchmarks.hasData and benchmarks.toolMedians.fastest == 'basilisk' %}
-      而且在我们自己的冷启动基准测试中，它的中位数在所有检查器里最低：冷启动全文件检查中位数仅
-      <strong>{{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms</strong>，对比 Pyright 的
-      {{ benchmarks.toolMedians.ms.pyright }}&nbsp;ms，以及用 Rust 编写的 ty、Pyrefly 和 zuban。{% endif %}
-      下方每一项竞品声明都链接到该工具自己的文档——<a href="/docs/benchmarks/">基准测试方法</a>详述了这些数字的测量方式。
-    </p>
-
-    <div class="table-wrapper">
-      <table class="comparison-table">
-        <thead>
-          <tr>
-            <th>功能</th>
-            <th class="col-basilisk">Basilisk</th>
-            <th><a href="https://github.com/microsoft/pyright" target="_blank" rel="noopener">Pyright</a></th>
-            <th><a href="https://github.com/python/mypy" target="_blank" rel="noopener">mypy</a></th>
-            <th><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">ty</a></th>
-            <th><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">Pyrefly</a></th>
-            <th><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">zuban</a></th>
-            <th><a href="https://github.com/JelleZijlstra/pycroscope" target="_blank" rel="noopener">pycroscope</a></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>PEP 符合性 <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
-            <td class="col-basilisk check-yes">{{ conformanceOfficial.byId.basilisk.pct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformanceOfficial.byId.basilisk.passLabel }}/{{ conformanceOfficial.byId.basilisk.total }})</em></td>
-            <td><a href="{{ conformanceOfficial.byId.pyright.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.pyright.pct }}%</a></td>
-            <td><a href="{{ conformanceOfficial.byId.mypy.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.mypy.pct }}%</a></td>
-            <td><a href="{{ conformanceOfficial.byId.ty.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.ty.pct }}%</a></td>
-            <td><a href="{{ conformanceOfficial.byId.pyrefly.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.pyrefly.pct }}%</a></td>
-            <td><a href="{{ conformanceOfficial.byId.zuban.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.zuban.pct }}%</a></td>
-            <td><a href="{{ conformanceOfficial.byId.pycroscope.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.pycroscope.pct }}%</a></td>
-          </tr>
-          {% if benchmarks.toolMedians %}
-          <tr>
-            <td>冷启动全文件检查 <a href="/docs/benchmarks/" style="color:var(--color-text-muted);font-size:0.75rem">（中位数）</a></td>
-            <td class="col-basilisk check-yes">{{ benchmarks.toolMedians.text.basilisk }}</td>
-            <td>{{ benchmarks.toolMedians.text.pyright }}</td>
-            <td>{{ benchmarks.toolMedians.text.mypy }}</td>
-            <td>{{ benchmarks.toolMedians.text.ty }}</td>
-            <td>{{ benchmarks.toolMedians.text.pyrefly }}</td>
-            <td>{{ benchmarks.toolMedians.text.zuban or "—" }}</td>
-            <td>—</td>
-          </tr>
-          {% endif %}
-          <tr>
-            <td>实现语言</td>
-            <td class="col-basilisk">Rust</td>
-            <td><a href="https://github.com/microsoft/pyright/tree/main/packages/pyright-internal/src" target="_blank" rel="noopener"><span class="cell-warn">TypeScript</span></a></td>
-            <td><a href="https://github.com/python/mypy#mypyc-and-compiled-mypy" target="_blank" rel="noopener"><span class="cell-warn">Python/C</span></a></td>
-            <td><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">Rust</a></td>
-            <td><a href="https://engineering.fb.com/2025/05/15/developer-tools/open-sourcing-pyrefly-a-faster-python-type-checker-written-in-rust/" target="_blank" rel="noopener">Rust</a></td>
-            <td><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">Rust</a></td>
-            <td><a href="https://github.com/JelleZijlstra/pycroscope" target="_blank" rel="noopener"><span class="cell-warn">Python</span></a></td>
-          </tr>
-          <tr>
-            <td>需要运行时</td>
-            <td class="col-basilisk check-yes">无</td>
-            <td><a href="https://microsoft.github.io/pyright/#/installation" target="_blank" rel="noopener"><span class="cell-warn">Node.js</span></a></td>
-            <td><a href="https://mypy.readthedocs.io/en/stable/getting_started.html" target="_blank" rel="noopener"><span class="cell-warn">Python</span></a></td>
-            <td><a href="https://docs.astral.sh/ty/installation/" target="_blank" rel="noopener" class="check-yes">无</a></td>
-            <td><a href="https://engineering.fb.com/2025/05/15/developer-tools/open-sourcing-pyrefly-a-faster-python-type-checker-written-in-rust/" target="_blank" rel="noopener" class="check-yes">无</a></td>
-            <td><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener" class="check-yes">无</a></td>
-            <td><a href="https://github.com/JelleZijlstra/pycroscope" target="_blank" rel="noopener"><span class="cell-warn">Python</span></a></td>
-          </tr>
-          <tr>
-            <td>完整 LSP（补全、悬停、跳转）</td>
-            <td class="col-basilisk check-yes">&#10003;</td>
-            <td><a href="https://microsoft.github.io/pyright/#/command-line" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
-            <td><a href="https://github.com/python/mypy" target="_blank" rel="noopener" class="check-no">&mdash;</a></td>
-            <td><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
-            <td><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
-            <td><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
-            <td class="check-no">&mdash;</td>
-          </tr>
-          <tr>
-            <td>集成调试器 <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup2;</a></td>
-            <td class="col-basilisk check-yes">&#10003;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-          </tr>
-          <tr>
-            <td>官方编辑器扩展</td>
-            <td class="col-basilisk">VS Code、Cursor、Zed、Neovim <em style="font-size:0.75rem;color:var(--color-text-muted)">(JetBrains 即将推出)</em></td>
-            <td><a href="https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance" target="_blank" rel="noopener"><span class="cell-warn">Pylance</span></a> &middot; <a href="https://microsoft.github.io/pyright/#/command-line" target="_blank" rel="noopener">LSP</a></td>
-            <td><a href="https://github.com/python/mypy#integrations" target="_blank" rel="noopener"><span class="cell-warn">linter 插件</span></a></td>
-            <td><a href="https://docs.astral.sh/ty/editors/" target="_blank" rel="noopener">VS Code、PyCharm、Neovim</a></td>
-            <td><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">VS Code、Neovim、Zed</a></td>
-            <td><a href="https://marketplace.visualstudio.com/items?itemName=zuban.zubanls" target="_blank" rel="noopener">VS Code (ZubanLS)</a></td>
-            <td class="check-no">&mdash;</td>
-          </tr>
-          <tr>
-            <td>许可证</td>
-            <td class="col-basilisk">MIT</td>
-            <td><a href="https://github.com/microsoft/pyright/blob/main/LICENSE.txt" target="_blank" rel="noopener">MIT</a></td>
-            <td><a href="https://github.com/python/mypy/blob/master/LICENSE" target="_blank" rel="noopener">MIT</a></td>
-            <td><a href="https://github.com/astral-sh/ty/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a></td>
-            <td><a href="https://github.com/facebook/pyrefly/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a></td>
-            <td><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener"><span class="cell-warn">AGPL-3.0 / 商业</span></a></td>
-            <td><a href="https://github.com/JelleZijlstra/pycroscope" target="_blank" rel="noopener">Apache-2.0</a></td>
-          </tr>
-        </tbody>
-      </table>
+    <p class="problem__label">什么是 Basilisk？</p>
+    <div class="problem__grid">
+      <h2 class="problem__statement" id="what-is-basilisk">
+        一个 Python 类型检查器与语言服务器，由同一个 Rust 分析引擎驱动。
+      </h2>
+      <ol class="problem__bullets">
+        <li>
+          <span class="problem__num">01</span>
+          <span><strong>在编辑器和 CI 中检查 Python。</strong>类型规范规则默认启用；可选的 <a href="/zh/docs/rules/">Basilisk 规则</a>可要求类型注解及其他团队约定。</span>
+        </li>
+        <li>
+          <span class="problem__num">02</span>
+          <span><strong>理解代码。</strong>自动补全、悬停、签名帮助、跳转到定义、查找引用和内嵌提示，都使用同一套类型信息。</span>
+        </li>
+        <li>
+          <span class="problem__num">03</span>
+          <span><strong>带上下文修改代码。</strong>内置 <a href="/docs/formatting/">Ruff 格式化与导入整理</a>，以及重命名、提取、内联、移动和<a href="/zh/docs/refactoring/">有针对性的代码操作</a>。</span>
+        </li>
+      </ol>
     </div>
-    <p class="table-note" style="font-size:0.8rem;color:var(--color-text-muted);margin-top:0.75rem">
-      PEP 符合性一行：取自官方
-      <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">python/typing 符合性套件</a>
-      的全通过得分 &mdash; 同一次运行为每个工具（含 Basilisk）评分。快照自
-      <a href="{{ conformanceOfficial.snapshot.prUrl }}" target="_blank" rel="noopener">python/typing@<code>{{ conformanceOfficial.snapshot.sha }}</code></a>
-      （{{ conformanceOfficial.snapshot.dateLabel }}）；每个分数均链接至该工具的实时结果目录，因为这些数字会随工具改进而变化。Basilisk 是唯一达到 {{ conformanceOfficial.basilisk.pct }}% 的检查器。
-    </p>
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════
-     FEATURES — alternating split rows
-═══════════════════════════════════════════════════════════ -->
-<section class="features">
-
-  <div class="feature-row">
-    <div class="feature-row__text">
-      <p class="feature-row__num">01 &mdash; 符合规范优先</p>
-      <h2 class="feature-row__title">{{ conformance.scorePct }}% 符合类型规范。<br>锚定到确切的提交。</h2>
-      <p class="feature-row__body">
-        由官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">python/typing 符合性套件</a>评分——同一套公开工具也为
-        Pyright、mypy 和 Pyrefly 打分——在真实二进制文件上运行，启用每一条符合性规则、不禁用任何规则：
-        {{ conformance.categoriesTotal }} 个类别中有 {{ conformance.categoriesPass100 }} 个达到 100%，误报 {{ conformance.fp }} 处、遗漏的必需错误 {{ conformance.missed }} 处。
-        每次发布都会从 <code>python/typing@main</code> 重新拉取套件并要求满分才能发布，因此该数字可复现——
-        绝非手工填写——且始终对照下方所示的确切提交评分。
-        Basilisk 现已<a href="{{ conformanceOfficial.snapshot.source }}">收录于官方 python/typing 结果</a> &mdash; 与所有其他检查器在同一次运行中评分，它是唯一达到满分 {{ conformanceOfficial.basilisk.pct }}% 的检查器，领先于 Microsoft、Meta 和 Astral 的工具。
-      </p>
-    </div>
-    <div class="feature-row__visual">
-      <div class="stat-block">
-        <span class="stat-block__number">{{ conformance.scorePct }}<span class="stat-block__unit">%</span></span>
-        <span class="stat-block__label">PEP 符合性得分</span>
-        <span class="stat-block__sub">对照 <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %}（{{ conformance.commitDate }}）{% endif %}评分 &mdash; 每次发布自动更新</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-row__visual">
-      <div class="stat-block">
-        <span class="stat-block__number">{{ benchmarks.toolMedians.ms.basilisk }}<span class="stat-block__unit">&nbsp;ms</span></span>
-        <span class="stat-block__label">冷启动全文件检查中位数</span>
-      </div>
-    </div>
-    <div class="feature-row__text">
-      <p class="feature-row__num">02 &mdash; 实测，而非承诺</p>
-      {% if benchmarks.toolMedians.fastest == 'basilisk' %}<h2 class="feature-row__title">我们基准测试过的<br>最低中位数。</h2>{% else %}<h2 class="feature-row__title">对比每一款<br>检查器实测。</h2>{% endif %}
-      <p class="feature-row__body">
-        数据来自 <code>make bench</code>——用 hyperfine 在相同的固定用例上对 Pyright、
-        mypy、ty、Pyrefly 和 zuban 测量挂钟时间，原始 CSV 提交到代码库，网站渲染的正是最后一次实测提交的数据。
-        {% if benchmarks.toolMedians.fastest == 'basilisk' %}在冷启动全文件检查上，Basilisk 的中位数在我们测量的每一款工具中最低——{{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms，对比 Pyright 的 {{ benchmarks.toolMedians.ms.pyright }}&nbsp;ms。{% else %}每款工具的冷启动全文件检查中位数并排展示。{% endif %}
-        而且由于重检是增量的——只重新分析被编辑的文件及其导入方——热编辑做的工作更少。<a href="/docs/benchmarks/">查看基准测试方法 &rarr;</a>
-      </p>
-    </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-row__text">
-      <p class="feature-row__num">03 &mdash; 快速修复与重构</p>
-      <h2 class="feature-row__title">灯泡随时可用。<br>每条诊断皆如此。</h2>
-      <p class="feature-row__body">
-        许多诊断都附带一键修复——添加缺失的注解、
-        将 <code>Optional[X]</code> 现代化为 <code>X | None</code>、转换为 f-string。
-        此外还有完整的重构套件：提取、内联、更改签名和移动符号。
-      </p>
-    </div>
-    <div class="feature-row__visual">
-      <div class="code-window" style="width:100%;max-width:400px">
-        <div class="code-window__chrome">
-          <span class="code-window__dot code-window__dot--close"></span>
-          <span class="code-window__dot code-window__dot--min"></span>
-          <span class="code-window__dot code-window__dot--expand"></span>
-          <span class="code-window__filename">quick-fix.py</span>
-        </div>
-        <div class="code-window__body">
-<pre><span class="tok-cmt"># 💡 快速修复可用</span>
-<span class="tok-kw">def</span> <span class="tok-fn">process</span>(data) <span class="tok-cmt"># BSK-0001</span>
-
-<span class="tok-cmt"># → 添加类型注解</span>
-<span class="tok-kw">def</span> <span class="tok-fn">process</span>(data<span class="tok-type">: str</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
-  <span class="tok-kw">return</span> data.upper()</pre>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-row__visual">
-      <div class="stat-block">
-        <span class="stat-block__number">{{ ruleStats.strictness }}</span>
-        <span class="stat-block__label">条让类型成为强制的可选规则</span>
-        <span class="stat-block__sub">属于 {{ ruleStats.optIn }} 条可选规则 &mdash; 默认关闭，从不计入符合性评分</span>
-      </div>
-    </div>
-    <div class="feature-row__text">
-      <p class="feature-row__num">04 &mdash; 超越规范</p>
-      <h2 class="feature-row__title">规范让类型可有可无。<br>这些规则让它成为强制。</h2>
-      <p class="feature-row__body">
-        类型规范将未注解的代码视为<em>推断</em>类型而非错误。Basilisk 的 {{ ruleStats.strictness }} 条可选严格规则拒绝如此：
-        要求每个参数、返回值、变量、<code>*args</code>/<code>**kwargs</code> 和类属性都有类型注解，
-        要求重写方法带 <code>@override</code>，拒绝隐式与显式的 <code>Any</code>，并标记未注解的 lambda。
-        每一条都默认关闭——可从编辑器或 <code>pyproject.toml</code> 按文件或路径开启，一键快速修复会插入占位注解（<code>: Any</code>、<code>-&gt; None</code>），方便您填入真实类型。
-        它们在符合性评分中从不运行，因此无法虚增得分。<a href="/zh/docs/rules/">查看规则 &rarr;</a>
-      </p>
-    </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-row__visual">
-      <img src="/assets/images/debug.png" alt="Basilisk 在 VS Code 中逐步调试 —— 在 debug_demo.py 的断点处暂停，变量、监视和调用堆栈面板均已填充，调试工具栏处于激活状态" class="feature-shot" loading="lazy">
-    </div>
-    <div class="feature-row__text">
-      <p class="feature-row__num">05 &mdash; 集成调试</p>
-      <h2 class="feature-row__title">按 F5 开始调试。<br>Basilisk 处理其余的。</h2>
-      <p class="feature-row__body">
-        设置断点、逐步执行代码、检查变量——全部通过 Basilisk LSP 代理。
-        Rust 服务器在空闲 TCP 端口上启动 debugpy 并自动连接 VS Code 的 DAP 客户端。
-        无需手动配置。无需单独的调试扩展。只需按 F5。
-      </p>
-    </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-row__text">
-      <p class="feature-row__num">06 &mdash; 单一二进制文件</p>
-      <h2 class="feature-row__title">放入 PATH。<br>这就是全部安装。</h2>
-      <p class="feature-row__body">
-        编译为独立的 Rust 二进制文件。无需 Node.js。无需 Python 解释器。
-        无需 <code>pip install</code>。无需 <code>npm install</code>。
-        从单次下载即可在 macOS、Linux 和 Windows 上运行。
-      </p>
-    </div>
-    <div class="feature-row__visual">
-      <div class="code-window" style="width:100%;max-width:400px">
-        <div class="code-window__chrome">
-          <span class="code-window__dot code-window__dot--close"></span>
-          <span class="code-window__dot code-window__dot--min"></span>
-          <span class="code-window__dot code-window__dot--expand"></span>
-          <span class="code-window__filename">终端</span>
-        </div>
-        <div class="code-window__body">
-<pre><span class="tok-cmt"># macOS / Linux (Homebrew)</span>
-<span class="tok-fn">brew</span> install Nimblesite/tap/basilisk
-
-<span class="tok-cmt"># Windows (Scoop)</span>
-<span class="tok-fn">scoop</span> install basilisk
-
-<span class="tok-cmt"># 然后直接运行</span>
-<span class="tok-fn">basilisk</span> check src/</pre>
-        </div>
-      </div>
-    </div>
-  </div>
-
-</section>
-
-<!-- ═══════════════════════════════════════════════════════
-     CTA — horizontal split, no glowing card
-═══════════════════════════════════════════════════════ -->
-<section class="cta-section">
+<section class="cta-section" aria-labelledby="editor-workflow">
   <div class="container">
     <div class="cta-inner">
-      <h2>开源。<br>默认符合规范。</h2>
+      <h2 id="editor-workflow">类型检查是核心。编辑器工作流走得更远。</h2>
       <div>
         <p>
-          类型检查器、LSP 服务器和编辑器
-          扩展今天即可使用——自动补全、跳转到定义、
-          悬停信息、诊断、重构、F5 调试和性能分析——
-          支持 VS Code、Cursor、Windsurf、Zed 和 Neovim。JetBrains 即将推出。
-          开源。无专有锁定。早期采用者共同塑造路线图。
+          VS Code 扩展（同样可安装到 Cursor 和 Windsurf）增加了测试发现与执行、
+          <code>debugpy</code> 调试、CPU 性能分析，以及调试会话内存分析。
+          这些运行时工作流使用您项目的 Python 解释器。
+        </p>
+        <p>
+          Zed 和 Neovim 连接到同一个 Basilisk 语言服务器内核；更高级的功能取决于各编辑器的集成能力。
         </p>
         <div class="cta-inner__actions">
-          <a href="/zh/docs/" class="btn btn--primary">阅读文档</a>
-          <a href="https://discord.gg/4wBDSGEZQd" class="btn btn--secondary" target="_blank" rel="noopener">加入 Discord</a>
+          <a href="vscode:extension/Nimblesite.basilisk" class="btn btn--primary">为 VS Code 安装</a>
+          <a href="/zh/docs/installation/" class="btn btn--secondary">选择您的编辑器</a>
+          <a href="/zh/docs/quick-start/" class="btn btn--secondary">检查一个项目</a>
         </div>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════
-     CITATIONS
-═══════════════════════════════════════════════════════ -->
-<section class="citations-section" id="citations">
-  <div class="container">
-    <h3 class="citations-heading">来源</h3>
-    <ol class="citations-list">
-      <li><strong>PEP 符合性。</strong>表中数字为官方 <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">python/typing 符合性套件</a>单次运行的全通过得分，该套件在同一测试集上为每款检查器（含 <a href="{{ conformanceOfficial.byId.basilisk.resultsUrl }}" target="_blank" rel="noopener">Basilisk</a>）评分。我们将其快照自 <a href="{{ conformanceOfficial.snapshot.prUrl }}" target="_blank" rel="noopener">python/typing@<code>{{ conformanceOfficial.snapshot.sha }}</code></a>（{{ conformanceOfficial.snapshot.dateLabel }}），并将每个分数链接到该工具的实时结果目录（<a href="{{ conformanceOfficial.byId.pyright.resultsUrl }}" target="_blank" rel="noopener">pyright</a>、<a href="{{ conformanceOfficial.byId.mypy.resultsUrl }}" target="_blank" rel="noopener">mypy</a>、<a href="{{ conformanceOfficial.byId.ty.resultsUrl }}" target="_blank" rel="noopener">ty</a>、<a href="{{ conformanceOfficial.byId.pyrefly.resultsUrl }}" target="_blank" rel="noopener">pyrefly</a>、<a href="{{ conformanceOfficial.byId.zuban.resultsUrl }}" target="_blank" rel="noopener">zuban</a>），因为这些得分会随工具改进而变化。Basilisk 得分 {{ conformanceOfficial.basilisk.pct }}%（{{ conformanceOfficial.basilisk.passLabel }}/{{ conformanceOfficial.basilisk.total }}）&mdash; 本次运行中唯一达到满分的检查器。作为可复现的交叉验证，我们每次发布还会在自己的二进制上重新运行未经修改的评分器（{{ conformance.scorePct }}%，{{ conformance.pass }}/{{ conformance.total }}，对照 <a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" target="_blank" rel="noopener">python/typing@<code>{{ conformance.pinnedRefShort }}</code></a>）；两项测量结果一致。</li>
-      <li><strong>基准（冷启动全文件检查）。</strong>每款工具 CLI 针对相同基准文件、至少 {{ benchmarks.meta.runsCount }} 次 <code>hyperfine</code> 运行的平均挂钟时间，测量于 {{ benchmarks.meta.cpu }}（{{ benchmarks.meta.os }}，{{ benchmarks.meta.arch }}，{{ benchmarks.meta.cores }} 核心），生成于 {{ benchmarks.meta.generated }}。所有工具在同一次运行中冷启动测量——{% for t in benchmarks.meta.toolVersions %}{{ t.tool }} {{ t.version }}{% if not loop.last %}、{% endif %}{% endfor %}。<code>mypy</code> 以 <code>--strict</code> 运行、<code>zuban</code> 以 <code>zuban mypy --strict</code> 运行，以执行测试文件所针对的严格分析。来源 <code>benchmarks/status/{{ benchmarks.primary }}.csv</code>；可用 <code>make bench</code> 复现。仅为冷启动全文件，并不反映热增量（LSP）性能。</li>
-      <li><strong>实现语言与运行时。</strong><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">ty</a>：“An extremely fast Python type checker and language server, written in Rust.”<a href="https://engineering.fb.com/2025/05/15/developer-tools/open-sourcing-pyrefly-a-faster-python-type-checker-written-in-rust/" target="_blank" rel="noopener">Pyrefly</a>：Meta 的公告标题即“Open-sourcing Pyrefly: A faster Python type checker written in Rust.”<a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">zuban</a>：“a high-performance Python Language Server and type checker implemented in Rust, by the author of Jedi.”<a href="https://microsoft.github.io/pyright/#/installation" target="_blank" rel="noopener">Pyright</a>（TypeScript）要求安装“node (which Pyright requires).”<a href="https://github.com/python/mypy#mypyc-and-compiled-mypy" target="_blank" rel="noopener">mypy</a>：“Mypy is itself compiled using mypyc”（Python 编译为 C 扩展），通过 <code>pip</code> 安装（需 Python）。ty、Pyrefly、zuban 与 Basilisk 均为已编译二进制，运行时无需语言运行时。</li>
-      <li><strong>语言服务器与编辑器。</strong><a href="https://microsoft.github.io/pyright/#/command-line" target="_blank" rel="noopener">Pyright</a> 提供开源语言服务器（<code>pyright-langserver --stdio</code>），可用于任何 LSP 编辑器；微软文档指出“core type checking functionality is associated with Pyright while language service functionality is associated with Pylance”——即专有的 <a href="https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance" target="_blank" rel="noopener">Pylance</a> VS Code 扩展。<a href="https://github.com/python/mypy#integrations" target="_blank" rel="noopener">mypy</a> 的编辑器插件以 linter 方式运行它（并非语言服务器）。<a href="https://docs.astral.sh/ty/editors/" target="_blank" rel="noopener">ty</a>：“Editor integrations for VS Code, PyCharm, Neovim and more.”<a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">Pyrefly</a>：“an extension for popular IDEs and editors such as VSCode, Neovim, Zed, and more.”<a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">zuban</a>：“Most important LSP features are supported… completions, goto, references, rename, hover…”，官方 <a href="https://marketplace.visualstudio.com/items?itemName=zuban.zubanls" target="_blank" rel="noopener">ZubanLS</a> 扩展。</li>
-      <li><strong>许可证。</strong>Basilisk、<a href="https://github.com/microsoft/pyright/blob/main/LICENSE.txt" target="_blank" rel="noopener">Pyright</a>、<a href="https://github.com/python/mypy/blob/master/LICENSE" target="_blank" rel="noopener">mypy</a>、<a href="https://github.com/astral-sh/ty/blob/main/LICENSE" target="_blank" rel="noopener">ty</a> 与 <a href="https://github.com/facebook/pyrefly/blob/main/LICENSE" target="_blank" rel="noopener">Pyrefly</a> 均为 MIT。<a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">zuban</a> 为 AGPL-3.0 或付费商业双许可（<a href="https://pypi.org/project/zuban/" target="_blank" rel="noopener">PyPI 分类：“Other/Proprietary License”</a>）。</li>
-      <li><strong>集成调试器。</strong>Basilisk 通过语言服务器代理 debugpy（按 F5）。<a href="https://github.com/microsoft/pyright" target="_blank" rel="noopener">Pyright</a>、<a href="https://github.com/python/mypy" target="_blank" rel="noopener">mypy</a>、<a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">ty</a>、<a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">Pyrefly</a> 或 <a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">zuban</a> 均未提供集成调试器——它们都自述为类型检查器和／或语言服务器。</li>
-      <li><strong>Pyrefly 吞吐量。</strong>“1.85 million lines of code per second”来自 <a href="https://pyrefly.org/" target="_blank" rel="noopener">pyrefly.org</a>，“Tested using Meta infrastructure (166 cores, 228 GB RAM)”——这是整项目吞吐量数字，与我们的单文件冷启动基准不可直接比较。</li>
-    </ol>
   </div>
 </section>

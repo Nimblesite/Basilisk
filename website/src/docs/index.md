@@ -1,10 +1,10 @@
 ---
 layout: layouts/docs.njk
-title: "Basilisk: The Only 100% PEP-Conformant Python Language Server"
-description: "Install, configure, and use Basilisk: an open-source Python type checker and language server with refactoring, debugging, profiling, and editor integrations."
-keywords: basilisk, best python type checker, python, language server, lsp, type checker, vs code, cursor, zed, neovim, strict, rust
+title: "Python Language Server & Type Checker — Basilisk Docs"
+description: "Install, configure, and use Basilisk: an open-source Python type checker and language server in Rust, with refactoring, formatting, debugging, profiling, and editor integrations."
+keywords: basilisk, python language server, python type checker, python typing, lsp, vs code, cursor, zed, neovim, rust
 date: 2026-02-28
-dateModified: 2026-03-31
+dateModified: 2026-08-04
 author: The Basilisk Project
 eleventyNavigation:
   key: Introduction
@@ -13,33 +13,32 @@ eleventyNavigation:
 
 # Introduction
 
-Basilisk is a **complete, open-source Python language server**. Everything you rely on a modern Python extension for — autocomplete, go-to-definition, hover information, refactoring, diagnostics, integrated debugging, profiling — Basilisk does too, fully open source and conformant to the Python typing spec by default.
+Basilisk is an open-source **Python type checker and language server** built in Rust. It adds code intelligence, formatting, type-aware refactoring, testing, debugging, and CPU and memory profiling to your editor, and its default rule set is the Python typing specification — no `--strict` flag to remember.
 
-It is also the **only Python type checker with a perfect 100% score** on the [official `python/typing` conformance results]({{ conformanceOfficial.snapshot.source }}) — published on the Python typing repository's own leaderboard, ahead of Pyright, mypy, Pyrefly and ty. See [how we measure it](/docs/conformance/), or weigh up the [best Python type checker](/docs/comparison/) for your project in the comparison.
+It scores **{{ conformanceOfficial.byId.basilisk.pct }}%** on the [official `python/typing` conformance results]({{ conformanceOfficial.snapshot.source }}) — {{ conformanceOfficial.byId.basilisk.passLabel }} of {{ conformanceOfficial.byId.basilisk.total }} test files{% if conformanceOfficial.basiliskIsSolePerfect %}, the only checker on that page at a perfect score{% endif %}. See [how it's measured](/docs/conformance/), or the [type checker comparison](/docs/comparison/) for how the tools differ.
 
-It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Cursor**, **Windsurf**, **Zed**, and **Neovim** — plus any other editor that speaks the Language Server Protocol. JetBrains support is planned. No proprietary extension, no Node.js — a single Rust binary, the same experience in every editor.
+Extensions ship for **VS Code**, **Cursor**, **Windsurf**, **Zed**, and **Neovim**; any editor that speaks the Language Server Protocol can use the same server. JetBrains support is planned. Feature coverage varies per editor — see [the integration matrix](/docs/installation/#integration-status-by-editor).
 
-## The problem Basilisk solves
+## Why Basilisk exists
 
-[Pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance) is the default Python language extension in VS Code. It is also **proprietary** — you cannot inspect, modify, or redistribute it. Pyright, the open-source type checker underneath, is powerful but is *only* a type checker — it does not provide completions, hover, go-to-definition, or refactoring without the proprietary Pylance wrapper.
+[Pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance), the default Python extension in VS Code, is [proprietary](https://github.com/microsoft/pylance-release/blob/main/FAQ.md) — you cannot inspect, modify, or redistribute it. [Pyright](https://microsoft.github.io/pyright/#/features), the open-source checker underneath it, is a type checker only: completions, hover, go-to-definition, and refactoring come from the proprietary Pylance layer. mypy, ty, and Pyrefly are checkers too, so a full workflow means assembling a language server, a debugger, and a profiler alongside them, then keeping that stack in step across a team.
 
-Every other Python type checker (mypy, ty, Pyrefly) is *only* a checker — no completions, no refactoring, no debugger. You assemble a language server separately and keep the two in step across the team.
-
-Basilisk takes a different position. Its default *is* the typing spec — full PEP conformance out of the box — and it brings the whole stack (type checking, language features, debugging, profiling) into a single open-source tool that runs the same in **every** editor, not just VS Code. Want checking stricter than the spec? Switch on the opt-in Basilisk rules. Type annotations are contracts, not documentation.
+Basilisk puts type checking, language features, formatting, debugging, and profiling in one open-source binary, with the typing spec as the default rule set. Checking stricter than the spec is available as opt-in rules you enable in configuration.
 
 ## What Basilisk is
 
-- A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, a full [refactoring suite](/docs/refactoring/), code actions, inlay hints
-- **Editor extensions across major editors** — VS Code, Cursor, Windsurf, Neovim (0.10+), and Zed today; JetBrains (IntelliJ / PyCharm) is planned
-- **Annotation quick-fixes** — one-click code actions that insert a placeholder annotation (`: Any`, `-> None`) on unannotated code, so you can fill in the real type
-- An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
-- An **integrated profiler** — sampling CPU profiler with inline heatmap annotations, flame graphs, memory leak detection, and reference graph visualization, all inside your editor
-- A **PEP-conformant type checker by default** — the core spec rule set out of the box, with opt-in Basilisk rules for checking stricter than the spec
-- **Standard-library types out of the box** — a complete typeshed `stdlib/` tree is compiled into the binary and checking never downloads anything, so stdlib types work with no network and no configuration; pin an exact `python/typeshed` commit and it is verified offline against your local store
-- A **CLI tool** for CI integration — exits with code 1 when errors are found
-- A **migration assistant** that reads your existing `pyrightconfig.json` or `mypy.ini`
-- **uv integration** — workspace detection, lock file parsing, and package management commands
-- Written in **Rust** — ships as a single binary with no runtime dependencies
+- A **language server** — autocomplete, go-to-definition, hover, find references, rename, [refactoring](/docs/refactoring/), code actions, and inlay hints
+- **Editor extensions** — VS Code, Cursor, Windsurf, Neovim (0.11+), and Zed today; JetBrains (IntelliJ / PyCharm) is planned
+- **Annotation quick-fixes** — code actions that insert a placeholder annotation (`: Any`, `-> None`) on unannotated code for you to replace with the real type. They do not infer types
+- An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, brokered by the Basilisk LSP. Requires `debugpy` in your project environment. See [Debugging](/docs/debugging/)
+- An **integrated profiler** — sampling CPU profiler with inline heatmap annotations, flame graphs, memory leak detection, and reference graphs. See [Profiler](/docs/profiler/)
+- A **built-in formatter** — the Ruff formatter compiled into the binary, plus native import organizing. See [Formatting](/docs/formatting/)
+- A **type checker whose default rule set is the typing spec** — every PEP rule runs on `basilisk check`; opt-in Basilisk rules run on `basilisk analyze` once you enable them
+- **Standard-library types with no setup** — a complete typeshed `stdlib/` tree is compiled into the binary and checking never downloads anything. Pin an exact `python/typeshed` commit, or a typeshed distribution by wheel SHA-256, and it is verified offline against your local store
+- A **CLI for CI** — `basilisk check` exits 1 when errors are found; `basilisk format --check` exits 1 when a file would change
+- **uv integration** — workspace detection, lock-file parsing, and package management commands
+- An **MCP server** — `basilisk mcp` serves read-only typeshed source status over stdio to MCP clients
+- Written in **Rust** — a single binary with no Node.js and no Python runtime needed to check or to run the language server
 
 ![Basilisk activity panel in VS Code — Module Explorer with typed-coverage percentage, Python Processes for CPU and memory profiling, and type-checking status](/assets/images/vscode-module-explorer.png)
 
@@ -48,8 +47,9 @@ Basilisk takes a different position. Its default *is* the typing spec — full P
 ## What Basilisk is not
 
 - Not a compiler — your Python code runs on CPython as normal
-- Not a runtime type checker — analysis happens statically at development time
-- Not tied to one editor — the same server powers VS Code, Cursor, Windsurf, Zed, and Neovim
+- Not a runtime type checker — analysis happens statically, at development time
+- Not a Python runtime or package manager — running, testing, debugging, and memory profiling use your project's own interpreter
+- Not tied to one editor — the same server backs VS Code, Cursor, Windsurf, Zed, and Neovim, though what each editor surfaces differs
 
 ## Conformant by default, configurable from there
 

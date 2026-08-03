@@ -54,7 +54,7 @@ Python 类型检查器的格局已经发生了重大变化。2025 年推出了�
 
 **来源：**
 
-¹ 完全通过得分来自[官方 python/typing 符合性套件]({{ conformanceOfficial.snapshot.source }})的一次运行，快照 [python/typing@`{{ conformanceOfficial.snapshot.sha }}`]({{ conformanceOfficial.snapshot.prUrl }})（{{ conformanceOfficial.snapshot.dateLabel }}）：basilisk {{ conformanceOfficial.byId.basilisk.version }}、pyright {{ conformanceOfficial.byId.pyright.version }}、mypy {{ conformanceOfficial.byId.mypy.version }}、ty {{ conformanceOfficial.byId.ty.version }}、pyrefly {{ conformanceOfficial.byId.pyrefly.version }}、zuban {{ conformanceOfficial.byId.zuban.version }}。Basilisk 是唯一取得完美 {{ conformanceOfficial.byId.basilisk.pct }}% 的检查器。这些得分会随工具改进而变化，因此每个都链接到其实时结果目录，而非固定数字。
+¹ 完全通过得分来自[官方 python/typing 符合性套件]({{ conformanceOfficial.snapshot.source }})的一次运行，快照 [python/typing@`{{ conformanceOfficial.snapshot.sha }}`]({{ conformanceOfficial.snapshot.commitUrl }})（{{ conformanceOfficial.snapshot.dateLabel }}）：basilisk {{ conformanceOfficial.byId.basilisk.version }}、pyright {{ conformanceOfficial.byId.pyright.version }}、mypy {{ conformanceOfficial.byId.mypy.version }}、ty {{ conformanceOfficial.byId.ty.version }}、pyrefly {{ conformanceOfficial.byId.pyrefly.version }}、zuban {{ conformanceOfficial.byId.zuban.version }}。Basilisk 是唯一取得完美 {{ conformanceOfficial.byId.basilisk.pct }}% 的检查器。这些得分会随工具改进而变化，因此每个都链接到其实时结果目录，而非固定数字。
 
 ² Basilisk 的快速修复插入的是**占位符**注解（参数和属性为 `: Any`，返回值为 `-> None`；空集合变量为 `list[Any]` / `dict[str, Any]`），供你替换为真实类型。它不推断类型。参见[缺失注解规则](/zh/docs/rules/missing-annotations/)。
 
