@@ -65,6 +65,14 @@ test.describe("homepage positioning", () => {
     await expect(page.locator(".hero__proof")).toContainText(
       "Fastest in our published cold-check benchmark",
     );
+    // Both counts are ratchets: the suite grades us at zero on each, and the
+    // headline "only checker" claim is only true while they stay there.
+    await expect(page.locator(".hero__proof")).toContainText(
+      "0 missed required errors and 0 false positives",
+    );
+    await expect(page.locator(".hero__proof-cta")).toContainText(
+      "performance is self-measured and reproducible",
+    );
     await expect(
       page.locator('.hero__proof a[href*="github.com/python/typing"]'),
     ).toHaveCount(1);

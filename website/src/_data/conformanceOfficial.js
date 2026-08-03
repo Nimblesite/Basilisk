@@ -31,7 +31,7 @@ const SNAPSHOT = {
   addedPrUrl: "https://github.com/python/typing/pull/2316",
   sha: "3410759",
   date: "2026-07-31",
-  dateLabel: "Jul 31 2026",
+  dateLabel: "Jul 31, 2026",
 };
 
 // Leaderboard grand-total row, verbatim from results.html. `org` names the

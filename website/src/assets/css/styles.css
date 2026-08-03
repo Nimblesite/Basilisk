@@ -650,7 +650,19 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   margin-bottom: var(--space-8);
   line-height: 1.7;
 }
-.hero__subheadline code { font-family: var(--font-mono); font-size: 0.9em; color: var(--color-code-type); background: var(--color-bg-secondary); padding: 0.1em 0.4em; border-radius: var(--radius-sm); border: 1px solid var(--color-border); }
+.hero__subheadline code { font-family: var(--font-mono); font-size: 0.9em; color: var(--color-code-type); background: var(--color-bg-secondary); padding: 0.1em 0.4em; border-radius: var(--radius-sm); border: 1px solid var(--color-border); white-space: nowrap; }
+
+/* Every headline claim is restated beside its proof link, so those links have to
+   read as links — without an affordance the proof looks like ordinary prose. */
+.hero__subheadline a,
+.stat-card__sub a {
+  color: var(--color-primary-light);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.hero__subheadline a:hover,
+.stat-card__sub a:hover { color: var(--color-primary); }
 
 .hero__cta-group {
   display: flex;
@@ -708,7 +720,9 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   grid-template-columns: 1fr 1fr;
   gap: var(--space-5);
 }
-.hero__proof-cta { text-align: center; font-size: 0.875rem; color: var(--color-text-muted); }
+/* Caveat text carries the methodology scoping, so it must clear WCAG AA on the
+   hero background (--color-text-muted is 2.5:1 here and would fail). */
+.hero__proof-cta { text-align: center; font-size: 0.875rem; color: var(--color-text-secondary); }
 .hero__proof-cta a { color: var(--color-primary); margin-left: var(--space-4); white-space: nowrap; }
 .hero__proof-cta code { font-family: var(--font-mono); font-size: 0.9em; color: var(--color-code-type); }
 .stat-card {
@@ -731,7 +745,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 .stat-card__unit { color: var(--color-primary); }
 .stat-card__label { font-size: 1.0625rem; font-weight: 600; color: var(--color-text-primary); }
-.stat-card__sub { font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.4; }
+.stat-card__sub { font-size: 0.8125rem; color: var(--color-text-secondary); line-height: 1.4; }
 
 @media (max-width: 760px) {
   .hero__proof { grid-template-columns: 1fr; }
