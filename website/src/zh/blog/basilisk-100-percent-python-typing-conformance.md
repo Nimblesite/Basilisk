@@ -9,10 +9,7 @@ imageAlt: "Python 类型检查器符合性排行榜，显示 Basilisk 取得完�
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - posts
   - Python typing
-  - conformance
-  - Basilisk
 category: announcements
 lang: zh
 excerpt: "本周 Basilisk 加入了官方 python/typing 符合性结果，并取得了完美的分数。它是排行榜上唯一达到 100% 的 Python 类型检查器。本文解释这个数字究竟意味着什么、榜上还有谁，以及我们为什么不会过度宣传它。"

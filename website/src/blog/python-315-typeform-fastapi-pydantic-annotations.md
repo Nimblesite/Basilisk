@@ -10,9 +10,9 @@ imageAlt: "A translucent specification plate is scanned in cyan as it activates 
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - type checking
   - FastAPI
   - Pydantic
+  - Python typing
 category: deep-dives
 excerpt: "Python 3.15 reaches its first release candidate today with three typing PEPs finalised. All three matter most in the code where annotations are not documentation — they are the program."
 keywords: Python 3.15, TypeForm, PEP 747, PEP 728, PEP 800, closed TypedDict, extra_items, disjoint base, Python annotations, Python type hints, FastAPI type hints, Pydantic TypeAdapter, Python type checker, Basilisk

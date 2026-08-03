@@ -10,7 +10,7 @@ imageAlt: "Python type shapes passing through a conditional evaluator and expand
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - type checking
+  - Python typing
 category: deep-dives
 excerpt: "PEP 827 is Python's boldest attempt yet at TypeScript-style type manipulation. It is powerful, controversial, and a serious implementation challenge for every Python type checker."
 keywords: PEP 827, Python typing, conditional types Python, mapped types Python, type manipulation, Python type system, TypeScript conditional types, Python type checker, static typing, Basilisk

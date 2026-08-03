@@ -9,11 +9,7 @@ imageAlt: "开源工具链星图汇聚在稳定 Basilisk 基础之上的抽象�
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - posts
-  - open source
-  - Ruff
   - Python tooling
-  - Basilisk
 category: announcements
 lang: zh
 excerpt: "Basilisk 的解析器就是 Ruff。Ruff 的所有者即将变成 OpenAI。本文将逐句、以一手资料为依据说明这意味着什么——以及为什么你的 Basilisk 安装无论如何都是安全的。"
