@@ -9,11 +9,8 @@ imageAlt: "Basilisk 类型检查流水线的抽象图像，包含验证节点与
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - posts
   - Python typing
-  - type checking
-  - Basilisk
-  - Rust
+  - Python tooling
 category: announcements
 lang: zh
 excerpt: "Python 类型注解生态系统有一个不可告人的秘密：没有人默认强制执行它。我们构建了 Basilisk 来解决这个问题。"

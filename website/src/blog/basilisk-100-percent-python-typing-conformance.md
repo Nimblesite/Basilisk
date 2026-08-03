@@ -10,8 +10,6 @@ imageWidth: 1200
 imageHeight: 675
 tags:
   - Python typing
-  - conformance
-  - Basilisk
 category: announcements
 excerpt: "Basilisk joined the official python/typing conformance results this week, and it landed at a perfect score. It is the only Python type checker on the board at 100%. Here is what that number actually means, who else is on the board, and why we are not going to oversell it."
 keywords: python type checker, python typing conformance, python/typing conformance results, basilisk, mypy, pyright, ty, pyrefly, zuban, pep conformance, strict typing

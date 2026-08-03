@@ -10,8 +10,8 @@ imageAlt: "An AI agent emitting Python that passes through a strict type-checkin
 imageWidth: 1200
 imageHeight: 675
 tags:
-  - ai coding
-  - type checking
+  - AI coding assistants
+  - Python typing
 category: deep-dives
 excerpt: "Claude Code and Codex can edit and test across a repository. With usable static types, a checker can catch nonexistent members, incompatible arguments, and unsupported calls before runtime. Here is where that guardrail works, where Python's Any escapes it, and what Basilisk checks today."
 keywords: ai coding agents, agentic coding, claude code, openai codex, ai code review, ai generated code bugs, python type checking, python type checker, hallucinated api, llm code quality, static typing, ci guardrail, basilisk

@@ -11,8 +11,7 @@ imageWidth: 1200
 imageHeight: 675
 tags:
   - Python typing
-  - type checking
-  - Basilisk
+  - Python tooling
 category: announcements
 excerpt: "The Python type annotation ecosystem has a dirty secret: nobody enforces it by default. We built Basilisk to fix that."
 keywords: basilisk, python type checker, strict typing, rust, announcement

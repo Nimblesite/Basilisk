@@ -13,7 +13,7 @@ Basilisk 是**唯一在[官方 `python/typing` 一致性测试结果](https://gi
 
 <p class="conf-links">
   <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener"><strong>官方 python/typing 结果 ↗</strong></a>
-  <a href="{{ conformanceOfficial.snapshot.prUrl }}" target="_blank" rel="noopener">收录 Basilisk 的 PR ↗</a>
+  <a href="{{ conformanceOfficial.snapshot.addedPrUrl }}" target="_blank" rel="noopener">收录 Basilisk 的 PR ↗</a>
   <a href="https://typing.python.org/en/latest/spec/" target="_blank" rel="noopener">Python 类型规范 ↗</a>
   <a href="https://github.com/python/typing/blob/main/conformance/README.md" target="_blank" rel="noopener">符合性 README ↗</a>
 </p>
@@ -37,7 +37,7 @@ Basilisk 是**唯一在[官方 `python/typing` 一致性测试结果](https://gi
 </table>
 </div>
 
-<p class="conf-note"><a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">results.html</a> 在 <a href="{{ conformanceOfficial.snapshot.prUrl }}" target="_blank" rel="noopener">python/typing@<code>{{ conformanceOfficial.snapshot.sha }}</code></a>（{{ conformanceOfficial.snapshot.dateLabel }}）的快照。这些数字会随其他工具的改进而变化，因此每个单元格都链接到该工具的**实时**结果目录——请自行核对当前数字。</p>
+<p class="conf-note"><a href="{{ conformanceOfficial.snapshot.snapshotUrl }}" target="_blank" rel="noopener">results.html</a> 在 <a href="{{ conformanceOfficial.snapshot.commitUrl }}" target="_blank" rel="noopener">python/typing@<code>{{ conformanceOfficial.snapshot.sha }}</code></a>（{{ conformanceOfficial.snapshot.dateLabel }}）的快照。这些数字会随其他工具的改进而变化，因此每个单元格都链接到该工具的**实时**结果目录——请自行核对当前数字。</p>
 
 ## 如何衡量
 
