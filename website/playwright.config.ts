@@ -29,7 +29,15 @@ export default defineConfig({
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile", use: { ...devices["Pixel 5"] } },
+    {
+      name: "mobile",
+      use: {
+        ...devices["iPhone SE (3rd gen)"],
+        // The descriptor defaults to WebKit; CI deliberately installs Chromium
+        // only, so pin the browser while retaining the 375 × 667 device profile.
+        browserName: "chromium",
+      },
+    },
   ],
   webServer: {
     command: "node tests/static-server.js",
