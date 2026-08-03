@@ -107,8 +107,11 @@ brew tap Nimblesite/tap && brew install basilisk
 scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
 scoop install basilisk
 
-# anywhere with a Rust toolchain
-cargo install basilisk-cli
+# anywhere with a Python toolchain
+uv tool install basilisk-python
+
+# anywhere with a Rust toolchain (builds from source)
+cargo install --git https://github.com/Nimblesite/Basilisk basilisk-cli
 ```
 
 That's it — diagnostics, hover, completions, formatting, debugging, tests, and profiling all run through this one plugin. Verify with `:checkhealth basilisk`.
@@ -116,7 +119,7 @@ That's it — diagnostics, hover, completions, formatting, debugging, tests, and
 ## Updating
 
 - **Plugin**: update like any other plugin — `:Lazy update` (lazy.nvim), `:PackerSync` (packer), `:PlugUpdate` (vim-plug).
-- **Binary**: when a new release is out, the plugin notifies you on startup. Run **`:BasiliskUpdate`** — it confirms, downloads the new version, and restarts the LSP in place. Installs owned by a package manager are never overwritten; the notice tells you to run `brew upgrade basilisk` / `scoop update basilisk` / `cargo install basilisk-cli` instead.
+- **Binary**: when a new release is out, the plugin notifies you on startup. Run **`:BasiliskUpdate`** — it confirms, downloads the new version, and restarts the LSP in place. Installs owned by a package manager are never overwritten; the notice tells you to run `brew upgrade basilisk` / `scoop update basilisk` / `cargo install --git https://github.com/Nimblesite/Basilisk basilisk-cli` instead.
 
 ## Configuration
 

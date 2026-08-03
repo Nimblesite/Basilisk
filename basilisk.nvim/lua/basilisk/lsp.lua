@@ -191,7 +191,7 @@ function M.start(config)
 
   local bin = binary.resolve(config.binary_path)
   if not bin then
-    log.error("binary not found. Install with: cargo install basilisk-cli")
+    log.error("binary not found. Run :BasiliskInstall to download the latest release")
     return false
   end
 

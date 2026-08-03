@@ -6,10 +6,13 @@
 
 local binary = require("basilisk.binary")
 
-local bin = binary.resolve()
-if not bin then
-  return
-end
+-- Neovim's LSP loader requires this file to evaluate to a table — a bare
+-- `return` surfaces as "after/lsp/basilisk.lua: not a table" (issue #370).
+-- When nothing resolves, degrade to the bare command name exactly as the
+-- nvim-lspconfig definition does: the client then fails to spawn with a
+-- readable "command not found" instead of a Lua error, and starts working the
+-- moment a basilisk lands on PATH — no reload needed.
+local bin = binary.resolve() or "basilisk"
 
 return {
   cmd = { bin, "lsp" },
