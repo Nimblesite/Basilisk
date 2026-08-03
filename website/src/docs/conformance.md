@@ -18,7 +18,7 @@ Basilisk is the **only Python type checker with a perfect {{ conformanceOfficial
 
 <p class="conf-links">
   <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener"><strong>Official python/typing results ↗</strong></a>
-  <a href="{{ conformanceOfficial.snapshot.prUrl }}" target="_blank" rel="noopener">The PR that added us ↗</a>
+  <a href="{{ conformanceOfficial.snapshot.addedPrUrl }}" target="_blank" rel="noopener">The PR that added us ↗</a>
   <a href="https://typing.python.org/en/latest/spec/" target="_blank" rel="noopener">Python typing spec ↗</a>
   <a href="https://github.com/python/typing/blob/main/conformance/README.md" target="_blank" rel="noopener">Conformance README ↗</a>
 </p>
@@ -42,7 +42,7 @@ Every score below comes from **one identical run** of the [official `python/typi
 </table>
 </div>
 
-<p class="conf-note">Snapshot of <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">results.html</a> at <a href="{{ conformanceOfficial.snapshot.prUrl }}" target="_blank" rel="noopener">python/typing@<code>{{ conformanceOfficial.snapshot.sha }}</code></a> ({{ conformanceOfficial.snapshot.dateLabel }}). These figures drift as the other tools improve, so every cell links to that tool's <strong>live</strong> results folder — check the current number yourself.</p>
+<p class="conf-note">Snapshot of <a href="{{ conformanceOfficial.snapshot.snapshotUrl }}" target="_blank" rel="noopener">results.html</a> at <a href="{{ conformanceOfficial.snapshot.commitUrl }}" target="_blank" rel="noopener">python/typing@<code>{{ conformanceOfficial.snapshot.sha }}</code></a> ({{ conformanceOfficial.snapshot.dateLabel }}). These figures drift as the other tools improve, so every cell links to that tool's <strong>live</strong> results folder — check the current number yourself.</p>
 
 ## How it's measured
 

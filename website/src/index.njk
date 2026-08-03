@@ -1,428 +1,153 @@
 ---
 layout: layouts/base.njk
-title: "Basilisk — The Only 100% PEP-Conformant Python Language Server"
-description: "Looking for the best Python type checker? Basilisk is the only one scoring 100% on the official typing-conformance suite — plus refactoring, debugging, profiling, and editor extensions."
-keywords: "best python type checker, basilisk, python type checker, python language server, 100% pep conformance, python/typing conformance results, lsp, strict typing, rust, vs code, cursor, zed, neovim"
+title: "Basilisk — Fast Python Type Checker & Language Server"
+description: "Basilisk is an open-source Python type checker and language server in Rust: 100% on the official Python typing conformance suite, fastest in our benchmark."
+keywords: "python type checker, python typing, python type checking, python language server, python type checker comparison, python type checker rust, typing conformance, type checker benchmark"
+imageAlt: "Basilisk Python type checker and language server, with published conformance results and cold-check benchmarks"
+dateModified: 2026-08-03
 permalink: /
 ---
 
-<script src="/assets/js/demo.js" defer></script>
+{% set hasCompleteBenchmark = benchmarks.hasData
+  and benchmarks.toolMedians.ms.basilisk
+  and benchmarks.toolMedians.ms.pyright
+  and benchmarks.toolMedians.ms.mypy
+  and benchmarks.toolMedians.ms.ty
+  and benchmarks.toolMedians.ms.pyrefly
+  and benchmarks.toolMedians.ms.zuban %}
+{% set basiliskIsFastest = hasCompleteBenchmark and benchmarks.toolMedians.fastest == 'basilisk' %}
 
-<!-- ═══════════════════════════════════════════════════════
-     HERO — left text / right code, no glows, no grid
-═══════════════════════════════════════════════════════ -->
 <section class="hero">
   <div class="container">
     <div class="hero__split">
-
       <div class="hero__text">
-        <span class="hero__kicker">// basilisk — 100% PEP conformant</span>
+        <span class="hero__kicker">Python type checker &middot; language server</span>
 
         <h1 class="hero__headline">
-          The open-source<br>
-          Python language server.
+          {% if conformanceOfficial.basiliskIsSolePerfect %}The only Python type checker that scores {{ conformanceOfficial.basilisk.pct }}% on the official Python typing suite.{% elif conformance.hasData %}A Python type checker that scores {{ conformance.scorePct }}% on the official Python typing suite.{% else %}A Python type checker built for speed and conformance.{% endif %}
+          {% if basiliskIsFastest %}<span class="hero__headline-accent">And the fastest we&rsquo;ve benchmarked.</span>{% endif %}
         </h1>
 
         <p class="hero__subheadline">
-          The only Python type checker scoring
-          {{ conformanceOfficial.basilisk.pct }}% on the official
-          <code>python/typing</code> conformance suite &mdash; and the fastest we&rsquo;ve
-          measured. A complete, open-source Python dev environment in Rust:
-          type checker, language server, debugger, profiler &mdash; autocomplete,
-          go-to-definition, hover, refactoring, diagnostics and integrated
-          debugging in VS Code, Cursor, Zed, and Neovim, without the proprietary
-          lock-in. Strict by default. Weighing up the
-          <a href="/docs/comparison/">best Python type checker</a> for your
-          codebase? Start with the scoreboard.
+          Basilisk is an open-source Python type checker and language server built in Rust.
+          {% if conformance.hasData and conformance.pass == conformance.total %}
+          {% if conformanceOfficial.basiliskIsSolePerfect %}It is the only checker that passes{% else %}It passes{% endif %}
+          <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">every file of the official <code>python/typing</code> conformance suite</a>,
+          with {{ conformance.caught }} required errors caught and {{ conformance.fp }} false positives.
+          {% elif conformance.hasData %}It scores
+          <a href="/docs/conformance/">{{ conformance.scorePct }}% on the official <code>python/typing</code> conformance suite</a>.{% endif %}
+          {% if basiliskIsFastest %}It also records the
+          <a href="/docs/benchmarks/">lowest median cold full-file CLI time of any checker in our published benchmark</a>.{% endif %}
         </p>
 
         <div class="hero__cta-group">
-          <a href="/docs/installation/" class="btn btn--primary">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            Get Started
+          <a href="vscode:extension/Nimblesite.basilisk" class="btn btn--primary">
+            Install for VS Code
           </a>
-          <a href="https://marketplace.visualstudio.com/items?itemName=Nimblesite.basilisk" class="btn btn--mono" target="_blank" rel="noopener">
-            <span>Install for VS Code</span>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+          <a href="/docs/comparison/" class="btn btn--secondary">
+            Compare Python type checkers
           </a>
-          <a href="https://discord.gg/4wBDSGEZQd" class="btn btn--secondary" target="_blank" rel="noopener">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
-            Join Discord
+          <a href="/docs/install-cli/" class="btn btn--mono">
+            Install the CLI
           </a>
         </div>
 
         <div class="hero__meta">
-          <span>Full <strong>LSP</strong></span>
-          <span>Built in <strong>Rust</strong></span>
-          <span><strong>Incremental</strong> re-checks</span>
-          <span>Every IDE &mdash; <strong>VS Code</strong>, <strong>Cursor</strong>, <strong>Windsurf</strong>, <strong>Zed</strong>, <strong>Neovim</strong></span>
-          <span><strong>MIT</strong> License</span>
+          <span>Native <strong>Rust</strong> analysis</span>
+          <span><strong>VS Code</strong>, Cursor &amp; Windsurf</span>
+          <span><strong>Zed</strong> &amp; Neovim LSP</span>
+          <span><strong>MIT</strong> licensed</span>
         </div>
       </div>
 
-      <!-- Product video — Basilisk renaming a symbol across a project in VS Code.
-           Autoplays muted/inline on load (browser autoplay policy needs muted). -->
       <div class="hero__code">
-        <video class="hero__shot" autoplay muted loop playsinline preload="metadata" poster="/assets/images/rename-poster.jpg" width="1440" height="932" aria-label="Basilisk performing a project-wide rename refactor in VS Code — every reference to the symbol updates live as it is renamed">
+        <video class="hero__shot" autoplay muted loop playsinline preload="metadata" poster="/assets/images/rename-poster.jpg" width="1440" height="932" aria-label="Basilisk language-server analysis powering a project-wide Python rename in VS Code">
           <source src="/assets/images/rename.mp4" type="video/mp4">
         </video>
       </div>
-
     </div>
 
-    <!-- Proof band — the two headline proofs (PEP conformance + cold-check
-         speed) sit in the hero directly beneath the fold-height split, so they
-         peek in under the promise + product video and are the first thing a
-         scroll reveals. Every number renders from real data (conformance.js +
-         benchmarks.js from the committed CSV) — never hand-typed, can't drift. -->
     {% if conformance.hasData or benchmarks.hasData %}
-    <div class="hero__proof">
+    <div class="hero__proof" aria-label="Published type-checker results">
       {% if conformance.hasData %}
       <div class="stat-card">
         <span class="stat-card__num">{{ conformance.scorePct }}<span class="stat-card__unit">%</span></span>
-        <span class="stat-card__label">PEP&nbsp;conformance &mdash; only checker at a perfect score</span>
-        <span class="stat-card__sub">{{ conformance.pass }} of {{ conformance.total }} tests in the official <code>python/typing</code> suite &middot; the <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">only tool on the board at {{ conformanceOfficial.basilisk.pct }}%</a> &middot; {{ conformance.fp }} false positives, graded against <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}" target="_blank" rel="noopener"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %} ({{ conformance.commitDate }}){% endif %}</span>
+        <span class="stat-card__label">
+          {% if conformanceOfficial.basiliskIsSolePerfect %}Only listed checker with a perfect official score{% else %}Official typing conformance score{% endif %}
+        </span>
+        <span class="stat-card__sub">
+          {{ conformance.pass }} of {{ conformance.total }} files pass the suite&rsquo;s unmodified harness,
+          with {{ conformance.missed }} missed required errors and {{ conformance.fp }} false positives.
+          <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">Official results, {{ conformanceOfficial.snapshot.dateLabel }}</a>.
+        </span>
       </div>
       {% endif %}
       {% if benchmarks.hasData and benchmarks.toolMedians.ms.basilisk %}
       <div class="stat-card">
         <span class="stat-card__num">{{ benchmarks.toolMedians.ms.basilisk }}<span class="stat-card__unit">&nbsp;ms</span></span>
-        <span class="stat-card__label">Cold full-file check</span>
-        <span class="stat-card__sub">Median across benchmark fixture files{% if benchmarks.toolMedians.fastest == 'basilisk' %}, fastest measured{% endif %} &middot; vs Pyright {{ benchmarks.toolMedians.ms.pyright }} &middot; mypy {{ benchmarks.toolMedians.ms.mypy }} &middot; ty {{ benchmarks.toolMedians.ms.ty }} &middot; Pyrefly {{ benchmarks.toolMedians.ms.pyrefly }}{% if benchmarks.toolMedians.ms.zuban %} &middot; zuban {{ benchmarks.toolMedians.ms.zuban }}{% endif %}&nbsp;ms</span>
+        <span class="stat-card__label">
+          {% if basiliskIsFastest %}Fastest in our published cold-check benchmark{% else %}Published cold-check benchmark{% endif %}
+        </span>
+        <span class="stat-card__sub">
+          Basilisk&rsquo;s median across {{ benchmarks.rows | length }} synthetic, single-file fixtures on {{ benchmarks.meta.machine }}.
+          Fresh-process CLI timing; not project throughput or editor latency.
+        </span>
       </div>
       {% endif %}
     </div>
     <p class="hero__proof-cta">
-      Self-measured against the official <code>python/typing</code> suite &amp; the committed benchmark CSV.
-      <a href="/docs/conformance/">How we measure conformance &rarr;</a>
-      <a href="/docs/benchmarks/">Full benchmarks &amp; methodology &rarr;</a>
+      Conformance uses the official Python typing harness; performance is self-measured and reproducible.
+      <a href="/docs/conformance/">Verify the conformance score &rarr;</a>
+      <a href="/docs/benchmarks/">Read the benchmark methodology &rarr;</a>
     </p>
     {% endif %}
-
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════
-     COMPARISON TABLE — every competitor claim carries an
-     inline link to the authoritative source that makes it.
-═══════════════════════════════════════════════════ -->
-<section class="comparison-section">
+<section class="problem" aria-labelledby="what-is-basilisk">
   <div class="container">
-    <p class="section-label">How it compares</p>
-    <h2 class="section-heading">Everything you expect.<br>Fully open source.</h2>
-    <p class="section-subhead">
-      A feature-complete, open-source language server with no proprietary lock-in.{% if benchmarks.hasData and benchmarks.toolMedians.fastest == 'basilisk' %}
-      And in our own cold-start benchmark it posts the lowest median of every checker we tested: a
-      <strong>{{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms</strong> median cold check, against
-      Pyright&rsquo;s {{ benchmarks.toolMedians.ms.pyright }}&nbsp;ms and the Rust-based ty, Pyrefly, and
-      zuban.{% endif %}
-      Every competitor claim below links to that tool&rsquo;s own docs &mdash; and the
-      <a href="/docs/benchmarks/">benchmark methodology</a> shows exactly how these were measured.
-    </p>
-
-    <div class="table-wrapper">
-      <table class="comparison-table">
-        <thead>
-          <tr>
-            <th>Feature</th>
-            <th class="col-basilisk">Basilisk</th>
-            <th><a href="https://github.com/microsoft/pyright" target="_blank" rel="noopener">Pyright</a></th>
-            <th><a href="https://github.com/python/mypy" target="_blank" rel="noopener">mypy</a></th>
-            <th><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">ty</a></th>
-            <th><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">Pyrefly</a></th>
-            <th><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">zuban</a></th>
-            <th><a href="https://github.com/JelleZijlstra/pycroscope" target="_blank" rel="noopener">pycroscope</a></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>PEP conformance <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
-            <td class="col-basilisk check-yes">{{ conformanceOfficial.byId.basilisk.pct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformanceOfficial.byId.basilisk.passLabel }}/{{ conformanceOfficial.byId.basilisk.total }})</em></td>
-            <td><a href="{{ conformanceOfficial.byId.pyright.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.pyright.pct }}%</a></td>
-            <td><a href="{{ conformanceOfficial.byId.mypy.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.mypy.pct }}%</a></td>
-            <td><a href="{{ conformanceOfficial.byId.ty.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.ty.pct }}%</a></td>
-            <td><a href="{{ conformanceOfficial.byId.pyrefly.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.pyrefly.pct }}%</a></td>
-            <td><a href="{{ conformanceOfficial.byId.zuban.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.zuban.pct }}%</a></td>
-            <td><a href="{{ conformanceOfficial.byId.pycroscope.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.pycroscope.pct }}%</a></td>
-          </tr>
-          {% if benchmarks.toolMedians %}
-          <tr>
-            <td>Cold full-file check <a href="/docs/benchmarks/" style="color:var(--color-text-muted);font-size:0.75rem">(median)</a></td>
-            <td class="col-basilisk check-yes">{{ benchmarks.toolMedians.text.basilisk }}</td>
-            <td>{{ benchmarks.toolMedians.text.pyright }}</td>
-            <td>{{ benchmarks.toolMedians.text.mypy }}</td>
-            <td>{{ benchmarks.toolMedians.text.ty }}</td>
-            <td>{{ benchmarks.toolMedians.text.pyrefly }}</td>
-            <td>{{ benchmarks.toolMedians.text.zuban or "—" }}</td>
-            <td>—</td>
-          </tr>
-          {% endif %}
-          <tr>
-            <td>Implementation</td>
-            <td class="col-basilisk">Rust</td>
-            <td><a href="https://github.com/microsoft/pyright/tree/main/packages/pyright-internal/src" target="_blank" rel="noopener"><span class="cell-warn">TypeScript</span></a></td>
-            <td><a href="https://github.com/python/mypy#mypyc-and-compiled-mypy" target="_blank" rel="noopener"><span class="cell-warn">Python/C</span></a></td>
-            <td><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">Rust</a></td>
-            <td><a href="https://engineering.fb.com/2025/05/15/developer-tools/open-sourcing-pyrefly-a-faster-python-type-checker-written-in-rust/" target="_blank" rel="noopener">Rust</a></td>
-            <td><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">Rust</a></td>
-            <td><a href="https://github.com/JelleZijlstra/pycroscope" target="_blank" rel="noopener"><span class="cell-warn">Python</span></a></td>
-          </tr>
-          <tr>
-            <td>Runtime required</td>
-            <td class="col-basilisk check-yes">None</td>
-            <td><a href="https://microsoft.github.io/pyright/#/installation" target="_blank" rel="noopener"><span class="cell-warn">Node.js</span></a></td>
-            <td><a href="https://mypy.readthedocs.io/en/stable/getting_started.html" target="_blank" rel="noopener"><span class="cell-warn">Python</span></a></td>
-            <td><a href="https://docs.astral.sh/ty/installation/" target="_blank" rel="noopener" class="check-yes">None</a></td>
-            <td><a href="https://engineering.fb.com/2025/05/15/developer-tools/open-sourcing-pyrefly-a-faster-python-type-checker-written-in-rust/" target="_blank" rel="noopener" class="check-yes">None</a></td>
-            <td><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener" class="check-yes">None</a></td>
-            <td><a href="https://github.com/JelleZijlstra/pycroscope" target="_blank" rel="noopener"><span class="cell-warn">Python</span></a></td>
-          </tr>
-          <tr>
-            <td>Full LSP (completions, hover, goto)</td>
-            <td class="col-basilisk check-yes">&#10003;</td>
-            <td><a href="https://microsoft.github.io/pyright/#/command-line" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
-            <td><a href="https://github.com/python/mypy" target="_blank" rel="noopener" class="check-no">&mdash;</a></td>
-            <td><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
-            <td><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
-            <td><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
-            <td class="check-no">&mdash;</td>
-          </tr>
-          <tr>
-            <td>Integrated debugger <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup2;</a></td>
-            <td class="col-basilisk check-yes">&#10003;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-          </tr>
-          <tr>
-            <td>Official editor extensions</td>
-            <td class="col-basilisk">VS Code, Cursor, Zed, Neovim <em style="font-size:0.75rem;color:var(--color-text-muted)">(JetBrains soon)</em></td>
-            <td><a href="https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance" target="_blank" rel="noopener"><span class="cell-warn">Pylance</span></a> &middot; <a href="https://microsoft.github.io/pyright/#/command-line" target="_blank" rel="noopener">LSP</a></td>
-            <td><a href="https://github.com/python/mypy#integrations" target="_blank" rel="noopener"><span class="cell-warn">linter plugins</span></a></td>
-            <td><a href="https://docs.astral.sh/ty/editors/" target="_blank" rel="noopener">VS Code, PyCharm, Neovim</a></td>
-            <td><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">VS Code, Neovim, Zed</a></td>
-            <td><a href="https://marketplace.visualstudio.com/items?itemName=zuban.zubanls" target="_blank" rel="noopener">VS Code (ZubanLS)</a></td>
-            <td class="check-no">&mdash;</td>
-          </tr>
-          <tr>
-            <td>License</td>
-            <td class="col-basilisk">MIT</td>
-            <td><a href="https://github.com/microsoft/pyright/blob/main/LICENSE.txt" target="_blank" rel="noopener">MIT</a></td>
-            <td><a href="https://github.com/python/mypy/blob/master/LICENSE" target="_blank" rel="noopener">MIT</a></td>
-            <td><a href="https://github.com/astral-sh/ty/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a></td>
-            <td><a href="https://github.com/facebook/pyrefly/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a></td>
-            <td><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener"><span class="cell-warn">AGPL-3.0 / commercial</span></a></td>
-            <td><a href="https://github.com/JelleZijlstra/pycroscope" target="_blank" rel="noopener">Apache-2.0</a></td>
-          </tr>
-        </tbody>
-      </table>
+    <p class="problem__label">What is Basilisk?</p>
+    <div class="problem__grid">
+      <h2 class="problem__statement" id="what-is-basilisk">
+        A Python type checker and language server, powered by one Rust analysis engine.
+      </h2>
+      <ol class="problem__bullets">
+        <li>
+          <span class="problem__num">01</span>
+          <span><strong>Check Python in your editor and CI.</strong> Typing-spec rules run by default; optional <a href="/docs/rules/">Basilisk rules</a> can require annotations and other team conventions.</span>
+        </li>
+        <li>
+          <span class="problem__num">02</span>
+          <span><strong>Understand the code.</strong> Autocomplete, hover, signature help, definitions, references, and inlay hints use the same type information.</span>
+        </li>
+        <li>
+          <span class="problem__num">03</span>
+          <span><strong>Change it with context.</strong> Embedded <a href="/docs/formatting/">Ruff formatting and import organization</a>, plus rename, extract, inline, move, and <a href="/docs/refactoring/">targeted code actions</a>.</span>
+        </li>
+      </ol>
     </div>
-    <p class="table-note" style="font-size:0.8rem;color:var(--color-text-muted);margin-top:0.75rem">
-      PEP-conformance row: full-pass scores from the official
-      <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">python/typing conformance suite</a>
-      &mdash; one identical run that grades every tool, Basilisk included. Snapshot of
-      <a href="{{ conformanceOfficial.snapshot.prUrl }}" target="_blank" rel="noopener">python/typing@<code>{{ conformanceOfficial.snapshot.sha }}</code></a>
-      ({{ conformanceOfficial.snapshot.dateLabel }}); each score links to that tool&rsquo;s live results folder, since these figures move as the tools improve.
-      Basilisk is the only checker at {{ conformanceOfficial.basilisk.pct }}%.
-    </p>
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════
-     FEATURES — alternating split rows
-═══════════════════════════════════════════════════════════ -->
-<section class="features">
-
-  <div class="feature-row">
-    <div class="feature-row__text">
-      <p class="feature-row__num">01 &mdash; Conformance first</p>
-      <h2 class="feature-row__title">{{ conformance.scorePct }}% to the typing spec.<br>Re-run against <code>main</code>, every release.</h2>
-      <p class="feature-row__body">
-        Scored by the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">python/typing conformance suite</a> &mdash; the same published
-        harness that grades Pyright, mypy, and Pyrefly &mdash; run on the real binary with every
-        conformance rule enabled and nothing disabled: {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories at 100%,
-        {{ conformance.fp }} false positives, {{ conformance.missed }} missed required errors. Every release re-pulls the suite from
-        <code>python/typing@main</code> and requires a perfect score to ship, so the number is
-        reproducible &mdash; never hand-typed &mdash; and always graded against the exact commit shown below.
-        Basilisk is now <a href="{{ conformanceOfficial.snapshot.source }}">listed in the official python/typing results</a> &mdash; graded on the same run as every other checker, it is the only one at a perfect {{ conformanceOfficial.basilisk.pct }}%, ahead of the tools from Microsoft, Meta and Astral.
-      </p>
-    </div>
-    <div class="feature-row__visual">
-      <div class="stat-block">
-        <span class="stat-block__number">{{ conformance.scorePct }}<span class="stat-block__unit">%</span></span>
-        <span class="stat-block__label">PEP conformance score</span>
-        <span class="stat-block__sub">graded against <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %} ({{ conformance.commitDate }}){% endif %} &mdash; re-cloned from <code>main</code> every release</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-row__visual">
-      <div class="stat-block">
-        <span class="stat-block__number">{{ benchmarks.toolMedians.ms.basilisk }}<span class="stat-block__unit">&nbsp;ms</span></span>
-        <span class="stat-block__label">median cold full-file check</span>
-      </div>
-    </div>
-    <div class="feature-row__text">
-      <p class="feature-row__num">02 &mdash; Measured, not promised</p>
-      {% if benchmarks.toolMedians.fastest == 'basilisk' %}<h2 class="feature-row__title">The lowest median<br>we&rsquo;ve benchmarked.</h2>{% else %}<h2 class="feature-row__title">Measured against<br>every checker.</h2>{% endif %}
-      <p class="feature-row__body">
-        The numbers come from <code>make bench</code> &mdash; hyperfine wall-clock against Pyright,
-        mypy, ty, Pyrefly, and zuban on identical fixtures &mdash; and the raw CSV is committed to
-        the repo, so the site renders exactly what was last measured.
-        {% if benchmarks.toolMedians.fastest == 'basilisk' %}Basilisk posts the lowest median cold full-file check of every tool we measured &mdash;
-        {{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms, against Pyright&rsquo;s {{ benchmarks.toolMedians.ms.pyright }}&nbsp;ms.{% else %}Each tool&rsquo;s median cold full-file check is published side by side.{% endif %}
-        And because re-checks are incremental &mdash; only the edited file and its importers are
-        re-analyzed &mdash; warm edits do even less work. <a href="/docs/benchmarks/">See the benchmark methodology &rarr;</a>
-      </p>
-    </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-row__text">
-      <p class="feature-row__num">03 &mdash; Quick fixes &amp; refactoring</p>
-      <h2 class="feature-row__title">Lightbulb-ready.<br>Every diagnostic.</h2>
-      <p class="feature-row__body">
-        Many diagnostics ship with a one-keystroke fix &mdash; add the missing annotation,
-        modernise <code>Optional[X]</code> to <code>X | None</code>, convert to an f-string.
-        Plus a full refactoring suite: extract, inline, change signature, and move symbol.
-      </p>
-    </div>
-    <div class="feature-row__visual">
-      <div class="code-window" style="width:100%;max-width:400px">
-        <div class="code-window__chrome">
-          <span class="code-window__dot code-window__dot--close"></span>
-          <span class="code-window__dot code-window__dot--min"></span>
-          <span class="code-window__dot code-window__dot--expand"></span>
-          <span class="code-window__filename">quick-fix.py</span>
-        </div>
-        <div class="code-window__body">
-<pre><span class="tok-cmt"># 💡 Quick Fix available</span>
-<span class="tok-kw">def</span> <span class="tok-fn">process</span>(data) <span class="tok-cmt"># BSK-0001</span>
-
-<span class="tok-cmt"># → Add type annotation</span>
-<span class="tok-kw">def</span> <span class="tok-fn">process</span>(data<span class="tok-type">: str</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
-  <span class="tok-kw">return</span> data.upper()</pre>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-row__visual">
-      <div class="stat-block">
-        <span class="stat-block__number">{{ ruleStats.strictness }}</span>
-        <span class="stat-block__label">opt-in rules that make typing mandatory</span>
-        <span class="stat-block__sub">part of {{ ruleStats.optIn }} opt-in rules &mdash; off by default, never scored for conformance</span>
-      </div>
-    </div>
-    <div class="feature-row__text">
-      <p class="feature-row__num">04 &mdash; Beyond the spec</p>
-      <h2 class="feature-row__title">The spec makes types optional.<br>These make them mandatory.</h2>
-      <p class="feature-row__body">
-        The typing spec treats unannotated code as <em>inferred</em>, not an error. Basilisk&rsquo;s
-        {{ ruleStats.strictness }} opt-in strictness rules refuse that: they require a type on every parameter,
-        return, variable, <code>*args</code>/<code>**kwargs</code>, and class attribute, demand
-        <code>@override</code> on overrides, reject implicit and explicit <code>Any</code>, and flag
-        unannotated lambdas. Every one is off by default &mdash; switch them on project-wide or per-folder
-        from your editor or <code>pyproject.toml</code>, and one-click quick-fixes drop in a placeholder
-        annotation (<code>: Any</code>, <code>-&gt; None</code>) so you can fill in the real type. They never run during conformance, so they can&rsquo;t pad that score.
-        <a href="/docs/rules/">See the rules &rarr;</a>
-      </p>
-    </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-row__visual">
-      <img src="/assets/images/debug.png" alt="Basilisk step-through debugging in VS Code — paused at a breakpoint in debug_demo.py with the Variables, Watch, and Call Stack panels populated and the debug toolbar active" class="feature-shot" loading="lazy">
-    </div>
-    <div class="feature-row__text">
-      <p class="feature-row__num">05 &mdash; Integrated debugging</p>
-      <h2 class="feature-row__title">F5 to debug.<br>Basilisk handles the rest.</h2>
-      <p class="feature-row__body">
-        Set breakpoints, step through code, inspect variables &mdash; all
-        brokered through the Basilisk LSP. The Rust server spawns debugpy on a free
-        TCP port and connects VS Code&rsquo;s DAP client automatically. No manual
-        configuration. No separate debug extension. Just press F5.
-      </p>
-    </div>
-  </div>
-
-  <div class="feature-row">
-    <div class="feature-row__text">
-      <p class="feature-row__num">06 &mdash; Single binary</p>
-      <h2 class="feature-row__title">Drop it in PATH.<br>That&rsquo;s the whole install.</h2>
-      <p class="feature-row__body">
-        Compiled to a standalone Rust binary. No Node.js. No Python interpreter.
-        No <code>pip install</code>. No <code>npm install</code>.
-        Works on macOS, Linux, and Windows from a single download.
-      </p>
-    </div>
-    <div class="feature-row__visual">
-      <div class="code-window" style="width:100%;max-width:400px">
-        <div class="code-window__chrome">
-          <span class="code-window__dot code-window__dot--close"></span>
-          <span class="code-window__dot code-window__dot--min"></span>
-          <span class="code-window__dot code-window__dot--expand"></span>
-          <span class="code-window__filename">terminal</span>
-        </div>
-        <div class="code-window__body">
-<pre><span class="tok-cmt"># macOS / Linux (Homebrew)</span>
-<span class="tok-fn">brew</span> install Nimblesite/tap/basilisk
-
-<span class="tok-cmt"># Windows (Scoop)</span>
-<span class="tok-fn">scoop</span> install basilisk
-
-<span class="tok-cmt"># then just run it</span>
-<span class="tok-fn">basilisk</span> check src/</pre>
-        </div>
-      </div>
-    </div>
-  </div>
-
-</section>
-
-<!-- ═══════════════════════════════════════════════════════
-     CTA — horizontal split, no glowing card
-═══════════════════════════════════════════════════════ -->
-<section class="cta-section">
+<section class="cta-section" aria-labelledby="editor-workflow">
   <div class="container">
     <div class="cta-inner">
-      <h2>Open source.<br>Conformant by default.</h2>
+      <h2 id="editor-workflow">Type checking is the core. The editor workflow goes further.</h2>
       <div>
         <p>
-          The type checker, LSP server, and editor
-          extensions are working today &mdash; autocomplete, go-to-definition,
-          hover info, diagnostics, refactoring, F5 debugging, and profiling &mdash;
-          in VS Code, Cursor, Windsurf, Zed, and Neovim. JetBrains is on the way.
-          Open source. No proprietary lock-in. Early adopters shape the roadmap.
+          The VS Code extension, also installable in Cursor and Windsurf, adds test discovery and execution,
+          <code>debugpy</code> debugging, CPU profiling, and debug-session memory analysis.
+          These runtime workflows use your project&rsquo;s Python interpreter.
+        </p>
+        <p>
+          Zed and Neovim connect to the same Basilisk language-server core; advanced surfaces follow each editor&rsquo;s integrations.
         </p>
         <div class="cta-inner__actions">
-          <a href="/docs/" class="btn btn--primary">Read the Docs</a>
-          <a href="https://discord.gg/4wBDSGEZQd" class="btn btn--secondary" target="_blank" rel="noopener">Join Discord</a>
+          <a href="vscode:extension/Nimblesite.basilisk" class="btn btn--primary">Install for VS Code</a>
+          <a href="/docs/installation/" class="btn btn--secondary">Choose your editor</a>
+          <a href="/docs/quick-start/" class="btn btn--secondary">Type-check a project</a>
         </div>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════
-     CITATIONS
-═══════════════════════════════════════════════════════ -->
-<section class="citations-section" id="citations">
-  <div class="container">
-    <h3 class="citations-heading">Sources</h3>
-    <ol class="citations-list">
-      <li><strong>PEP conformance.</strong> The table figures are full-pass scores from a single run of the official <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">python/typing conformance suite</a>, which grades every listed checker &mdash; <a href="{{ conformanceOfficial.byId.basilisk.resultsUrl }}" target="_blank" rel="noopener">Basilisk</a> included &mdash; on the identical test set. We snapshot them from <a href="{{ conformanceOfficial.snapshot.prUrl }}" target="_blank" rel="noopener">python/typing@<code>{{ conformanceOfficial.snapshot.sha }}</code></a> ({{ conformanceOfficial.snapshot.dateLabel }}) and link each score to that tool&rsquo;s live results folder (<a href="{{ conformanceOfficial.byId.pyright.resultsUrl }}" target="_blank" rel="noopener">pyright</a>, <a href="{{ conformanceOfficial.byId.mypy.resultsUrl }}" target="_blank" rel="noopener">mypy</a>, <a href="{{ conformanceOfficial.byId.ty.resultsUrl }}" target="_blank" rel="noopener">ty</a>, <a href="{{ conformanceOfficial.byId.pyrefly.resultsUrl }}" target="_blank" rel="noopener">pyrefly</a>, <a href="{{ conformanceOfficial.byId.zuban.resultsUrl }}" target="_blank" rel="noopener">zuban</a>), because those scores change as the tools improve. Basilisk scores {{ conformanceOfficial.basilisk.pct }}% ({{ conformanceOfficial.basilisk.passLabel }}/{{ conformanceOfficial.basilisk.total }}) &mdash; the only checker at a perfect score on this run. As a reproducible cross-check we also re-run the unmodified scorer on our own binary every release ({{ conformance.scorePct }}%, {{ conformance.pass }}/{{ conformance.total }}, graded against <a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" target="_blank" rel="noopener">python/typing@<code>{{ conformance.pinnedRefShort }}</code></a>); both measurements agree.</li>
-      <li><strong>Benchmark (cold full-file check).</strong> Mean wall-clock over at least {{ benchmarks.meta.runsCount }} <code>hyperfine</code> runs of each tool&rsquo;s CLI against identical fixture files, measured on {{ benchmarks.meta.cpu }} ({{ benchmarks.meta.os }}, {{ benchmarks.meta.arch }}, {{ benchmarks.meta.cores }} cores) on {{ benchmarks.meta.generated }}. All tools measured cold from the same run &mdash; {% for t in benchmarks.meta.toolVersions %}{{ t.tool }} {{ t.version }}{% if not loop.last %}, {% endif %}{% endfor %}. <code>mypy</code> runs with <code>--strict</code> and <code>zuban</code> as <code>zuban mypy --strict</code> so both perform the strict analysis the fixtures stress. Source <code>benchmarks/status/{{ benchmarks.primary }}.csv</code>; reproduce with <code>make bench</code>. Cold full-file only &mdash; not warm incremental (LSP) performance.</li>
-      <li><strong>Implementation &amp; runtime.</strong> <a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">ty</a>: &ldquo;An extremely fast Python type checker and language server, written in Rust.&rdquo; <a href="https://engineering.fb.com/2025/05/15/developer-tools/open-sourcing-pyrefly-a-faster-python-type-checker-written-in-rust/" target="_blank" rel="noopener">Pyrefly</a>: Meta&rsquo;s announcement is titled &ldquo;Open-sourcing Pyrefly: A faster Python type checker written in Rust.&rdquo; <a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">zuban</a>: &ldquo;a high-performance Python Language Server and type checker implemented in Rust, by the author of Jedi.&rdquo; <a href="https://microsoft.github.io/pyright/#/installation" target="_blank" rel="noopener">Pyright</a> (TypeScript) states you must install &ldquo;node (which Pyright requires).&rdquo; <a href="https://github.com/python/mypy#mypyc-and-compiled-mypy" target="_blank" rel="noopener">mypy</a>: &ldquo;Mypy is itself compiled using mypyc&rdquo; (Python compiled to C extensions) and installs via <code>pip</code> (needs Python). ty, Pyrefly, zuban and Basilisk are compiled binaries, so no language runtime is required to run them.</li>
-      <li><strong>Language server &amp; editors.</strong> <a href="https://microsoft.github.io/pyright/#/command-line" target="_blank" rel="noopener">Pyright</a> ships an open-source language server (<code>pyright-langserver --stdio</code>) usable in any LSP editor; Microsoft&rsquo;s docs note &ldquo;core type checking functionality is associated with Pyright while language service functionality is associated with Pylance&rdquo; &mdash; the <a href="https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance" target="_blank" rel="noopener">proprietary Pylance</a> VS Code extension. <a href="https://github.com/python/mypy#integrations" target="_blank" rel="noopener">mypy</a> has editor plugins that run it as a linter (not a language server). <a href="https://docs.astral.sh/ty/editors/" target="_blank" rel="noopener">ty</a>: &ldquo;Editor integrations for VS Code, PyCharm, Neovim and more.&rdquo; <a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">Pyrefly</a>: &ldquo;an extension for popular IDEs and editors such as VSCode, Neovim, Zed, and more.&rdquo; <a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">zuban</a>: &ldquo;Most important LSP features are supported&hellip; completions, goto, references, rename, hover&hellip;&rdquo; via the official <a href="https://marketplace.visualstudio.com/items?itemName=zuban.zubanls" target="_blank" rel="noopener">ZubanLS</a> extension.</li>
-      <li><strong>License.</strong> Basilisk, <a href="https://github.com/microsoft/pyright/blob/main/LICENSE.txt" target="_blank" rel="noopener">Pyright</a>, <a href="https://github.com/python/mypy/blob/master/LICENSE" target="_blank" rel="noopener">mypy</a>, <a href="https://github.com/astral-sh/ty/blob/main/LICENSE" target="_blank" rel="noopener">ty</a> and <a href="https://github.com/facebook/pyrefly/blob/main/LICENSE" target="_blank" rel="noopener">Pyrefly</a> are MIT. <a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">zuban</a> is dual-licensed AGPL-3.0 or a paid commercial license (<a href="https://pypi.org/project/zuban/" target="_blank" rel="noopener">PyPI classifier: &ldquo;Other/Proprietary License&rdquo;</a>).</li>
-      <li><strong>Integrated debugger.</strong> Basilisk brokers debugpy through the language server (press F5). None of <a href="https://github.com/microsoft/pyright" target="_blank" rel="noopener">Pyright</a>, <a href="https://github.com/python/mypy" target="_blank" rel="noopener">mypy</a>, <a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">ty</a>, <a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">Pyrefly</a>, or <a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">zuban</a> documents an integrated debugger &mdash; each self-describes as a type checker and/or language server.</li>
-      <li><strong>Pyrefly throughput.</strong> The &ldquo;1.85 million lines of code per second&rdquo; figure is from <a href="https://pyrefly.org/" target="_blank" rel="noopener">pyrefly.org</a>, &ldquo;Tested using Meta infrastructure (166 cores, 228 GB RAM)&rdquo; &mdash; a whole-project throughput number, not comparable to our single-file cold-check benchmark.</li>
-    </ol>
   </div>
 </section>

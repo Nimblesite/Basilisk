@@ -19,17 +19,19 @@
 //
 // Source of every value below:
 //   https://github.com/python/typing/blob/main/conformance/results/results.html
-// as published in python/typing@f051625 — PR #2316 "Add Basilisk to conformance
-// results", 2026-07-06. Re-transcribe (and bump `snapshot`) when upstream
-// re-runs the suite.
+// as published in python/typing@3410759355c3018063d3a446102f88621fc43eb5,
+// 2026-07-31. PR #2316 originally added Basilisk to the board. Re-transcribe
+// (and bump `snapshot`) when upstream re-runs the suite.
 
 const SNAPSHOT = {
   source: "https://github.com/python/typing/blob/main/conformance/results/results.html",
   resultsDir: "https://github.com/python/typing/tree/main/conformance/results",
-  sha: "f051625",
-  prUrl: "https://github.com/python/typing/pull/2316",
-  date: "2026-07-06",
-  dateLabel: "Jul 6 2026",
+  snapshotUrl: "https://github.com/python/typing/blob/3410759355c3018063d3a446102f88621fc43eb5/conformance/results/results.html",
+  commitUrl: "https://github.com/python/typing/commit/3410759355c3018063d3a446102f88621fc43eb5",
+  addedPrUrl: "https://github.com/python/typing/pull/2316",
+  sha: "3410759",
+  date: "2026-07-31",
+  dateLabel: "Jul 31 2026",
 };
 
 // Leaderboard grand-total row, verbatim from results.html. `org` names the
@@ -39,7 +41,7 @@ const TOOLS = [
   { id: "basilisk", name: "Basilisk", version: "0.27.0", org: null, pass: 141, total: 141 },
   { id: "pyright", name: "Pyright", version: "1.1.410", org: "Microsoft", pass: 136.5, total: 141 },
   { id: "mypy", name: "mypy", version: "2.1.0", org: null, pass: 109, total: 141 },
-  { id: "ty", name: "ty", version: "0.0.50", org: "Astral", pass: 116, total: 141 },
+  { id: "ty", name: "ty", version: "0.0.65", org: "Astral", pass: 122, total: 141 },
   { id: "pyrefly", name: "Pyrefly", version: "1.1.0", org: "Meta", pass: 138, total: 141 },
   { id: "zuban", name: "zuban", version: "0.8.2", org: null, pass: 140.5, total: 141 },
   { id: "pycroscope", name: "pycroscope", version: "0.4.0", org: null, pass: 130, total: 141 },
