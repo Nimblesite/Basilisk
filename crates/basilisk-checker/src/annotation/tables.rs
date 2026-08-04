@@ -37,8 +37,13 @@ pub(super) struct ImportedName {
 pub(super) struct Tables<'m> {
     /// Alias name → definition (all three alias spellings).
     pub(super) aliases: HashMap<String, AliasEntry<'m>>,
-    /// Same-file classes that denote a **checkable nominal type**.
+    /// Same-file classes, by declared name.
     pub(super) nominal: HashSet<String>,
+    /// The subset of [`Self::nominal`] whose assignability is **structural** —
+    /// `Protocol` and `TypedDict` classes. They resolve like any other class;
+    /// the set exists so a rule that can only compare *nominally* knows to
+    /// abstain rather than invent a mismatch.
+    pub(super) structural: HashSet<String>,
     /// Names bound by `from X import name`.
     pub(super) imports: HashMap<String, ImportedName>,
     /// Local binding → module path, for `import X` / `import X as Y`.
@@ -122,14 +127,13 @@ impl<'m> Tables<'m> {
         }
     }
 
-    /// A class declares a nominal type unless it is a `Protocol` (structural)
-    /// or a `TypedDict` (structural, dict-shaped) — those two stay gradual
-    /// until the cascade models structural assignability.
+    /// Every class declares a type the cascade can name. A `Protocol` or
+    /// `TypedDict` base additionally marks it **structural**, which is a fact
+    /// about how it is *compared*, not about whether the name resolves.
     fn insert_class(&mut self, class: &'m StmtClassDef) {
         let name = class.name.to_string();
         if class_is_structural(class) {
-            let _ = self.nominal.remove(&name);
-            return;
+            let _ = self.structural.insert(name.clone());
         }
         let _ = self.nominal.insert(name);
     }
@@ -276,8 +280,7 @@ fn class_is_structural(class: &StmtClassDef) -> bool {
 
 /// `TypeAlias` / `typing.TypeAlias` in annotation position (PEP 613).
 fn is_type_alias_annotation(annotation: &Expr) -> bool {
-    dotted_name(annotation)
-        .is_some_and(|name| name == "TypeAlias" || name.ends_with(".TypeAlias"))
+    dotted_name(annotation).is_some_and(|name| name == "TypeAlias" || name.ends_with(".TypeAlias"))
 }
 
 /// The top-level component of a dotted module path (`os.path` → `os`).

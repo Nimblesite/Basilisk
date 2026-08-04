@@ -31,6 +31,7 @@ mod typeform_check;
 use enum_expand::enum_expansion_assignable;
 use skip_names::{drop_unchecked_block_diagnostics, SkipNames};
 
+use crate::annotation::AnnotationResolver;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{ResolvedModule, RhsKind, Span, VariableInfo};
@@ -62,6 +63,9 @@ impl Rule for AssignmentTypeMismatch {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
         let empty_params = ParamMaps::default();
         let skip = SkipNames::collect(module);
         let call_index = callable_check::build_index(module);
@@ -74,8 +78,9 @@ impl Rule for AssignmentTypeMismatch {
             &skip,
             &module.functions,
             &call_index,
+            &resolver,
         );
-        check_local_vars(module, diagnostics, &skip, &call_index);
+        check_local_vars(module, diagnostics, &skip, &call_index, &resolver);
         check_tuple_reassignments(module, diagnostics);
         check_dataclass_attr_assignments(module, diagnostics);
         typeform_check::check_typeform_calls(module, diagnostics);
@@ -152,6 +157,7 @@ fn check_vars(
     skip: &SkipNames,
     functions: &[basilisk_resolver::FunctionInfo],
     call_index: &callable_check::CallIndex,
+    resolver: &AnnotationResolver<'_>,
 ) {
     vars.iter()
         .filter(|var| var.has_annotation && var.rhs_span.is_some())
@@ -164,7 +170,11 @@ fn check_vars(
                 return None;
             }
 
-            let declared_type = InferredType::from_annotation(annotation_text);
+            // The declared type is the annotation resolved through the shared
+            // cascade ([TYPEINF-ANNOTATION-RESOLUTION]), so an alias or a
+            // same-file class is the type it denotes rather than opaque text.
+            let declared_type = resolver.resolve_text(annotation_text)?;
+            let declared_nominal = nominal_name(&declared_type);
 
             // TypeForm assignments require type-expression validation, not
             // value-type inference.  Delegate to the dedicated module.
@@ -182,27 +192,11 @@ fn check_vars(
             }
 
             // Skip TypeAlias-annotated variables — E0048 handles validation.
-            // The annotation may be `TypeAlias`, `TA`, or any local alias.
-            {
-                let ann_lower = annotation_text.trim().to_ascii_lowercase();
-                if ann_lower == "typealias"
-                    || ann_lower.ends_with(".typealias")
-                    || matches!(declared_type, InferredType::Named(ref n) if n == "ta")
-                {
-                    return None;
-                }
-            }
-
-            // Skip annotations that reference a PEP 695 type alias or a
-            // `TypeAliasType(...)` alias. E0014 cannot evaluate the expanded alias
-            // type, so any assignment check would be unreliable (false positives).
-            if let InferredType::Named(ref name) = declared_type {
-                let base = name.split('[').next().unwrap_or(name);
-                if skip.type_alias.contains(base)
-                    || skip.type_alias_type.contains(&base.to_ascii_lowercase())
-                {
-                    return None;
-                }
+            // Every spelling — `TypeAlias`, `typing.TypeAlias`, `t.TypeAlias`,
+            // `from typing import TypeAlias as TA` — resolves to the same name
+            // through the cascade, so one comparison covers them all.
+            if declared_nominal.as_deref() == Some("typealias") {
+                return None;
             }
 
             // Skip dict literal assignments to TypedDict annotations. E0014 compares
@@ -239,9 +233,14 @@ fn check_vars(
             // A reference to a legacy value alias — a recursive `Union` alias
             // (`Json`) or a generic `list[...]`-bodied alias needing `TypeVar`
             // substitution (`G[str]`) — needs value-level matching against the
-            // expanded definition rather than the `Named`-vs-literal comparison
-            // below.
-            if let InferredType::Named(ref name) = declared_type {
+            // expanded definition. It is keyed by the annotation's own
+            // spelling, not by the resolved type: expanding a *recursive* alias
+            // through the cascade necessarily makes its recursive arm gradual
+            // ([TYPEINF-ANNOTATION-RESOLUTION] cycle guard), which would accept
+            // values this matcher rejects. The matcher dies with the alias
+            // tables in [NARROWPLAN-INTEGRATION] Step 7.
+            {
+                let name = &annotation_text.trim().to_ascii_lowercase();
                 let ctx = alias_match::AliasCtx {
                     union: &skip.value_aliases,
                     generic: &skip.generic_aliases,
@@ -267,8 +266,8 @@ fn check_vars(
             // cross-name assignment (`v: A = b` where `b: B`). Genuine mismatches
             // still fire. Only reachable when the RHS resolves to a TypedDict-typed
             // name (e.g. a parameter), so module-level checks are unaffected.
-            if let (InferredType::Named(decl), InferredType::Named(inf)) =
-                (&declared_type, &inferred_type)
+            if let (Some(decl), Some(inf)) =
+                (&declared_nominal, nominal_name(&inferred_type))
             {
                 if let (Some(target), Some(src)) = (
                     skip.typeddict_schemas.get(decl.as_str()),
@@ -345,10 +344,11 @@ fn check_local_vars(
     diagnostics: &mut Vec<Diagnostic>,
     skip: &SkipNames,
     call_index: &callable_check::CallIndex,
+    resolver: &AnnotationResolver<'_>,
 ) {
     let source = &module.source;
     for func in &module.functions {
-        let params = build_param_maps(&func.parameters, source);
+        let params = build_param_maps(&func.parameters, source, resolver);
         check_vars(
             &func.local_vars,
             source,
@@ -358,13 +358,18 @@ fn check_local_vars(
             skip,
             &module.functions,
             call_index,
+            resolver,
         );
     }
 }
 
 /// Build maps from parameter name to its declared `InferredType` and raw
 /// annotation text by reading the annotation from source spans.
-fn build_param_maps(params: &[basilisk_resolver::ParameterInfo], source: &str) -> ParamMaps {
+fn build_param_maps(
+    params: &[basilisk_resolver::ParameterInfo],
+    source: &str,
+    resolver: &AnnotationResolver<'_>,
+) -> ParamMaps {
     let mut maps = ParamMaps::default();
     for param in params {
         if !param.has_annotation {
@@ -376,13 +381,42 @@ fn build_param_maps(params: &[basilisk_resolver::ParameterInfo], source: &str) -
         let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
-        let inferred = InferredType::from_annotation(ann_text.trim());
+        // The parameter's declared type comes from the same cascade the
+        // assignment's annotation does ([TYPEINF-ANNOTATION-RESOLUTION]).
+        let Some(inferred) = resolver
+            .resolve_span(ann_span)
+            .or_else(|| resolver.resolve_text(ann_text))
+        else {
+            continue;
+        };
         let _ = maps.types.insert(param.name.clone(), inferred);
         let _ = maps
             .texts
             .insert(param.name.clone(), ann_text.trim().to_owned());
     }
     maps
+}
+
+/// A nominal type's spelling, folded to the case this rule's name tables use.
+///
+/// Those tables are keyed lower-case, a legacy of
+/// `InferredType::from_annotation` having lower-cased every annotation it
+/// parsed. The [TYPEINF-ANNOTATION-RESOLUTION] cascade preserves a class's real
+/// case, so every lookup folds here rather than at each site — and the tables
+/// can be re-keyed in one place once the last lower-casing consumer dies.
+fn nominal_name(ty: &InferredType) -> Option<String> {
+    match ty {
+        InferredType::Named(name) => Some(name.to_ascii_lowercase()),
+        _ => None,
+    }
+}
+
+/// [`nominal_name`] with any subscript stripped — `Pair[int]` keys as `pair`.
+fn nominal_key(ty: &InferredType) -> Option<String> {
+    nominal_name(ty).map(|name| match name.split_once('[') {
+        Some((base, _)) => base.to_owned(),
+        None => name,
+    })
 }
 
 /// `true` when a dict-literal assignment to a `TypedDict` annotation should
@@ -393,7 +427,7 @@ fn typeddict_literal_skipped(
     declared_type: &InferredType,
     skip: &SkipNames,
 ) -> bool {
-    let InferredType::Named(name) = declared_type else {
+    let Some(name) = nominal_key(declared_type) else {
         return false;
     };
     skip.typeddict.contains(name.as_str())
@@ -414,11 +448,10 @@ fn extra_items_dict_skipped(
     if !matches!(declared_type, InferredType::Dict(..)) {
         return false;
     }
-    let InferredType::Named(name) = inferred_type else {
+    let Some(base) = nominal_key(inferred_type) else {
         return false;
     };
-    let base = name.split('[').next().unwrap_or(name);
-    skip.typeddict_extra_items.contains(base)
+    skip.typeddict_extra_items.contains(base.as_str())
 }
 
 /// Create diagnostic for inference-based type mismatch.

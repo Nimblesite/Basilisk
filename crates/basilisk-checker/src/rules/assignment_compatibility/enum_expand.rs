@@ -15,8 +15,11 @@ use crate::rules::guards::is_enum_class;
 use crate::types::InferredType;
 
 /// Member names (lowercase) for every enum class in a module, keyed by the
-/// lowercase class name — matching the case-folded `InferredType::Named`
-/// spellings produced by annotation parsing.
+/// lowercase class name. Both sides of a comparison are folded on the way in
+/// ([`enum_expansion_assignable`]), so the table reads the same whether the
+/// `Named` spelling came from the [TYPEINF-ANNOTATION-RESOLUTION] cascade —
+/// which preserves a class's real case — or from the legacy case-folding
+/// annotation parser it replaces.
 pub(super) type EnumMembers = HashMap<String, Vec<String>>;
 
 /// Build the [`EnumMembers`] environment for a module.
@@ -57,9 +60,10 @@ pub(super) fn enum_expansion_assignable(
     declared: &InferredType,
     enums: &EnumMembers,
 ) -> bool {
-    let InferredType::Named(enum_name) = inferred else {
+    let InferredType::Named(spelling) = inferred else {
         return false;
     };
+    let enum_name = spelling.to_ascii_lowercase();
     let Some(members) = enums.get(enum_name.as_str()) else {
         return false;
     };
@@ -71,10 +75,13 @@ pub(super) fn enum_expansion_assignable(
         single => std::slice::from_ref(single),
     };
     let prefix = format!("{enum_name}.");
-    let covered: HashSet<&str> = arms
+    let covered: HashSet<String> = arms
         .iter()
         .filter_map(|arm| match arm {
-            InferredType::Named(name) => name.strip_prefix(prefix.as_str()),
+            InferredType::Named(name) => name
+                .to_ascii_lowercase()
+                .strip_prefix(prefix.as_str())
+                .map(str::to_owned),
             _ => None,
         })
         .collect();

@@ -25,7 +25,9 @@ pub(super) fn special_form(
     match head {
         "literal" => Some(literal_union(args)),
         "optional" => Some(InferredType::Optional(Box::new(first_type(args, &resolve)))),
-        "union" => Some(InferredType::Union(args.iter().map(|a| resolve(a)).collect())),
+        "union" => Some(InferredType::Union(
+            args.iter().map(|a| resolve(a)).collect(),
+        )),
         // `Annotated[T, ..]` and `Final[T]` are transparent wrappers.
         "annotated" | "final" => Some(first_type(args, &resolve)),
         "typeform" => Some(InferredType::TypeForm(Box::new(first_type(args, &resolve)))),
@@ -119,19 +121,18 @@ fn literal_value(expr: &Expr) -> InferredType {
         Expr::UnaryOp(unary) if unary.op == UnaryOp::USub => negate(literal_value(&unary.operand)),
         // An enum member (`Color.RED`) or a name: nominal, kept for display and
         // base-name comparison.
-        other => super::tables::dotted_name(other)
-            .map_or(InferredType::Unknown, InferredType::Named),
+        other => {
+            super::tables::dotted_name(other).map_or(InferredType::Unknown, InferredType::Named)
+        }
     }
 }
 
 /// An integer literal keeps its value; other numeric literals keep their kind.
 fn number_literal(number: &ruff_python_ast::Number) -> InferredType {
     match number {
-        ruff_python_ast::Number::Int(value) => value
-            .as_i64()
-            .map_or(InferredType::Int, |int| {
-                InferredType::Literal(LiteralValue::Int(int))
-            }),
+        ruff_python_ast::Number::Int(value) => value.as_i64().map_or(InferredType::Int, |int| {
+            InferredType::Literal(LiteralValue::Int(int))
+        }),
         ruff_python_ast::Number::Float(_) | ruff_python_ast::Number::Complex { .. } => {
             InferredType::Float
         }

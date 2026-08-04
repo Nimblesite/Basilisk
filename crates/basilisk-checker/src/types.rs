@@ -265,9 +265,15 @@ impl InferredType {
             )
             // None is always assignable to Optional[T]
             | (InferredType::None_, InferredType::Optional(_)) => true,
-            // `None` satisfies `Hashable` (it defines `__hash__`). The annotation
-            // parser lowercases names, so the ABC arrives as `Named("hashable")`.
-            (InferredType::None_, InferredType::Named(name)) if name == "hashable" => true,
+            // `None` satisfies `Hashable` (it defines `__hash__`). Compared
+            // case-insensitively: the [TYPEINF-ANNOTATION-RESOLUTION] cascade
+            // keeps the ABC's real spelling, the legacy annotation parser it
+            // replaces folded it to `Named("hashable")`.
+            (InferredType::None_, InferredType::Named(name))
+                if name.eq_ignore_ascii_case("hashable") =>
+            {
+                true
+            }
             // Union on the LEFT decomposes before Optional-target unwrapping:
             // `A | None <: Optional[B]` must check each variant against the
             // whole `Optional[B]` (so the `None` arm can satisfy it), not

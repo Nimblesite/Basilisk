@@ -19,10 +19,6 @@ pub(super) struct SkipNames {
     pub(super) typeddict: std::collections::HashSet<String>,
     /// `TypedDict` classes declaring `extra_items=` (PEP 728, lowercase).
     pub(super) typeddict_extra_items: std::collections::HashSet<String>,
-    /// PEP 695 type alias names (lowercase).
-    pub(super) type_alias: std::collections::HashSet<String>,
-    /// `TypeAliasType(...)` call LHS names (lowercase).
-    pub(super) type_alias_type: std::collections::HashSet<String>,
     /// Legacy value aliases — `Name = Union[...]` or a concrete container such
     /// as `Name = dict[K, V]` (lowercase → definition), used for alias-expanded
     /// value matching.
@@ -46,8 +42,6 @@ impl SkipNames {
         Self {
             typeddict: collect_typeddict_names(module),
             typeddict_extra_items: collect_extra_items_typeddict_names(module),
-            type_alias: collect_type_alias_names(module),
-            type_alias_type: collect_type_alias_type_names(module),
             value_aliases: alias_match::collect_value_aliases(module),
             generic_aliases: alias_match::collect_generic_aliases(module),
             typeddict_schemas: typeddict_struct::build_typeddict_schemas(module),
@@ -78,30 +72,6 @@ fn collect_typeddict_names(module: &ResolvedModule) -> std::collections::HashSet
     }
 
     names
-}
-
-/// Collect names of PEP 695 type aliases defined in this module (lowercased).
-///
-/// E0014 cannot evaluate expanded type alias types, so annotations that
-/// reference a type alias are skipped to avoid false positives.
-fn collect_type_alias_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
-    module
-        .type_statements
-        .iter()
-        .map(|ts| ts.name.to_ascii_lowercase())
-        .collect()
-}
-
-/// Collect names defined via `Name = TypeAliasType(...)` (lowercase).
-///
-/// E0014 cannot evaluate an expanded `TypeAliasType` alias, so assignments whose
-/// declared type references such an alias are skipped to avoid false positives.
-fn collect_type_alias_type_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
-    module
-        .type_alias_type_calls
-        .iter()
-        .map(|call| call.lhs_name.to_ascii_lowercase())
-        .collect()
 }
 
 /// Names of `TypedDict` classes declaring `extra_items=` (lowercase).

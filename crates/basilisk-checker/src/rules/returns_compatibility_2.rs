@@ -64,11 +64,15 @@ fn check_function(
 
     // A `Literal[...]` target needs the returned expression's *value*, which
     // the kind-only return inference does not have (`return True` infers
-    // `Bool`, not `Literal[True]`), so it is skipped — recursively, since a
-    // union or container containing one is equally value-dependent. Names the
-    // cascade could not resolve are already the gradual `Unknown` and suppress
-    // through ordinary assignability ([TYPEINF-ANNOTATION-RESOLUTION]).
-    if super::shared::is_value_dependent_target(&declared_type) {
+    // `Bool`, not `Literal[True]`), and a `Protocol` / `TypedDict` target is
+    // satisfied structurally rather than by kind — both are skipped,
+    // recursively, since a union or container containing one is equally
+    // unjudgeable here. Names the cascade could not resolve are already the
+    // gradual `Unknown` and suppress through ordinary assignability
+    // ([TYPEINF-ANNOTATION-RESOLUTION]).
+    if super::shared::is_value_dependent_target(&declared_type)
+        || resolver.is_structural_target(&declared_type)
+    {
         return;
     }
 

@@ -636,21 +636,103 @@ Prerequisite for Stage 2; see
 lands with a regression test that fails before it and passes after, and holds
 the conformance ratchets (100% / 0 false positives) at every step.
 
-- [ ] Add one shared `resolve_annotation(module, expr) → InferredType` entry
+**The test step is part of the box, never a phase at the end.** A box is `[x]`
+only when its own nested `[x] Test:` line names a test that (a) was written and
+run RED against the pre-box code, and (b) is green now — and the next box does
+not start until that has happened. A box whose code landed but whose test has
+not run is `[~]`, not `[x]`.
+
+- [x] Add one shared `resolve_annotation(module, expr) → InferredType` entry
   point implementing the
   [TYPEINF-ANNOTATION-RESOLUTION](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ANNOTATION-RESOLUTION)
   cascade over the Ruff AST annotation node, replacing
-  `InferredType::from_annotation(<source text>)`. No rule may parse annotation
-  text after this lands.
-- [ ] Resolve PEP 695 `type` aliases, `X: TypeAlias = ...`, and implicit
+  `InferredType::from_annotation(<source text>)`.
+  — `crates/basilisk-checker/src/annotation/`, exported as `crate::annotation`
+  from `lib.rs`: `mod.rs` (the five-step cascade + `AnnotationResolver`,
+  frame-scoped alias params, `MAX_DEPTH`/`visiting` termination), `tables.rs`
+  (alias / nominal-class / import tables), `builtins.rs` (leaf names, consulted
+  LAST so a module-level declaration shadows a builtin as Python does),
+  `forms.rs` (typing special forms, `Literal` values read from AST literal
+  nodes so radix and case survive), `index.rs` (span → annotation-node map).
+  `AnnotationResolver::for_module` builds the tables once per module off the
+  shared `lazy_ast`; `resolve_span` maps a resolver-recorded span straight back
+  to its AST node, so a rule holding only a span resolves a *type expression*
+  and never slices source. `resolve_span` returns `None` — caller stays silent
+  — rather than falling back to text.
+  - [x] Test: `cargo test -p basilisk-checker --test checker_rules_a_tests`
+    (237 passed) — the two migrated rules keep every pre-existing behaviour,
+    including `literal_target_not_flagged`,
+    `quoted_forward_ref_union_not_flagged`, `return_mismatch_stub_exempt` and
+    the contextual list/dict/tuple literal cases.
+- [ ] Retire the remaining `InferredType::from_annotation(<source text>)` call
+  sites behind the same entry point, so **no rule parses annotation text**.
+  Migrated so far: `returns_compatibility`, `returns_compatibility_2`. Still on
+  text: `assignment_compatibility/{mod,alias_match,typeform_check}.rs`,
+  `annotations_generators{,_helpers}.rs`, `calls_argument_type/arg_types.rs`,
+  `redundant_annotation.rs`, `generics_scoping.rs`, `narrow/{guards,flow}.rs`,
+  `param_infer.rs`, `incremental_defs.rs`, `types_star_tuples.rs`,
+  `tyeval/lower.rs::ground_from_text`, `basilisk-lsp/src/hover/receiver_scope.rs`.
+  `types_parsing.rs` is deleted by the last one
+  ([#379](https://github.com/Nimblesite/Basilisk/issues/379), Step 7).
+  - [ ] Test: each migration keeps its own rule's existing suite green, and the
+    `grep -rn "from_annotation" crates --include="*.rs"` count strictly
+    decreases per commit; the final commit asserts zero.
+- [x] Resolve PEP 695 `type` aliases, `X: TypeAlias = ...`, and implicit
   aliases, including alias chains and use-before-declaration; expand
   transparently at every nesting depth.
-- [ ] Resolve same-file classes, then imported project symbols; leave typeshed
+  — `annotation/tables.rs`: `Stmt::TypeAlias`, `Stmt::AnnAssign` gated on a
+  `TypeAlias` annotation, and a second implicit-alias pass (so an implicit
+  alias may reference a class or alias declared LATER — use-before-declaration
+  falls out of the two-pass build, not out of ordering luck). Aliases are
+  collected at any nesting depth; `mod.rs::expand_alias` substitutes params
+  through a `Frame` and re-enters the cascade, so nesting
+  (`-> list[MyAlias]`) and chains (`A = B`, `B = int`) expand transparently.
+  `is_type_expression` is deliberately narrow so `X = 5` and
+  `X = TypeVar("X")` are not aliases.
+  - [x] Test: `tests/checker/annotation_resolution_tests.rs` (new file, mounted
+    in `checker_rules_a_tests.rs`) — `type A = int`, `A: TypeAlias = int`,
+    implicit `A = int`, chain `A = B` / `B = int`, `list[A]`,
+    `dict[str, list[A]]`, generic `Pair[T] = list[T]`, alias-after-use, and
+    implicit-alias-of-a-later-declaration each FIRE on a wrong return;
+    `type J = list[J]` terminates silent, `MyInt = 5` is not read as an alias,
+    and a correct return stays silent. **RED proof**: with
+    `returns_compatibility` temporarily reverted to
+    `from_annotation(slice_span(..))` + the blanket `Named` skip, 15 of the 25
+    cases fail; restoring the cascade makes all 25 pass.
+- [x] Resolve same-file classes, then imported project symbols; leave typeshed
   behind the same entry point so [#324](https://github.com/Nimblesite/Basilisk/issues/324)
   can fill it without a second call path.
-- [ ] Replace the blanket `Named` skip in `rules/shared.rs::is_unverifiable_return_type`
+  — Same-file classes: `tables.rs::build` records every `ClassDef` as nominal
+  EXCEPT `Protocol`/`TypedDict` bases, which are structural and stay gradual
+  (structural assignability is not modelled yet, so treating them as nominal
+  would be a false positive). Imports: `tables.rs` keeps the ORIGINAL name
+  across `from X import A as B` (built from the AST, because
+  `ImportInfo::names` loses it), and `mod.rs::imported_leaf` resolves `typing`
+  / `typing_extensions` members while returning the gradual `Unknown` for
+  every other module — that single `imported_leaf` arm is the seam #324 fills.
+  Project-symbol resolution is NOT delivered; only the seam is.
+  - [x] Test: `tests/checker/annotation_resolution_tests.rs` — a same-file
+    `class C` target fires on `return 42` (declared before OR after the
+    function, nested in another class, and through the `"C"` forward-reference
+    spelling), a user `class int` shadows the builtin, `from typing import
+    List as L` / `typing.List` / `t.List` all resolve; `class P(Protocol)`,
+    `class T(TypedDict)` and an unresolved `from other_module import Thing`
+    stay silent. Same RED proof run as the box above.
+- [x] Replace the blanket `Named` skip in `rules/shared.rs::is_unverifiable_return_type`
   with a resolved/unresolved split, narrowing it one category at a time as the
   cascade covers that category.
+  — `is_unverifiable_return_type` is DELETED. `rules/shared.rs` now exposes
+  `is_value_dependent_target`, whose `Named` arm is gone entirely: the only
+  skip left is `Literal[...]` (and unions/containers/callables containing one),
+  which the kind-only return inference genuinely cannot verify because
+  `return True` infers `Bool`, not `Literal[True]`. Unresolved names no longer
+  need a skip at all — they arrive from the cascade as the gradual `Unknown`
+  and suppress through ordinary assignability. This is the
+  [#378](https://github.com/Nimblesite/Basilisk/issues/378) defect class closed
+  at the source.
+  - [x] Test: `cargo test -p basilisk-checker --test checker_rules_a_tests`
+    (237 passed) — `Literal` targets still suppress, and no previously-silent
+    case started firing.
 - [x] Terminating cycle detection for recursive aliases: `type J = list[J]`,
   `type J = int | list[J]`, `type J = dict[str, J]`, and the canonical
   `JsonValue` union all produce **no** diagnostic
@@ -661,6 +743,9 @@ the conformance ratchets (100% / 0 false positives) at every step.
   `Unguarded`/`NonRegular` verdicts. All four #371 forms (plus a JsonValue
   arm-order permutation) are pinned clean in
   `tests/checker/generics_syntax_scoping_tests.rs`.
+  - [x] Test: `cargo test -p basilisk-checker generics_syntax_scoping` — all
+    four #371 forms plus the arm-order permutation assert an empty diagnostic
+    set, and the genuinely-unguarded cases still fire.
 - [x] Add PEP 695 `type`-statement counterparts of every recursive case in
   upstream `aliases_recursive.py` to our own suite — the upstream file contains
   zero `type` statements, which is why this false positive survived a 100%
@@ -672,19 +757,51 @@ the conformance ratchets (100% / 0 false positives) at every step.
   `Union[..]` spellings, the `MutualReference` pair) pinned firing.
   Value-level assignability THROUGH these aliases is the annotation-resolution
   cascade's box above, not this one.
+  - [x] Test: `cargo test -p basilisk-checker aliases_recursive` — every
+    recursive DEFINITION pinned clean, both cyclical-reference cases pinned
+    firing.
 - [ ] Resolve decorator expressions through the binding table so `o = overload`
   is recognised as `typing.overload`; cover `from typing import overload as ov`
   and `typing.overload` / `t.overload` attribute spellings
-  ([#380](https://github.com/Nimblesite/Basilisk/issues/380)).
+  ([#380](https://github.com/Nimblesite/Basilisk/issues/380)). The binding
+  table is `annotation/tables.rs`'s import map plus a value-binding pass;
+  `mod.rs::canonical_head` already rewrites the alias and attribute spellings
+  and is the function decorator resolution reuses.
+  - [ ] Test (write RED first): all four spellings of an `@overload` chain
+    (`overload`, `ov`, `typing.overload`, `t.overload`, `o = overload`) are
+    accepted, and a non-overload decorator named `overload` from another module
+    is NOT.
 - [ ] Visit calls in every expression position rather than statement-outermost
   only, so `C(1).method()` reports the same constructor-arity error as `C(1)`
   ([#381](https://github.com/Nimblesite/Basilisk/issues/381)).
+  - [ ] Test (write RED first): `C(1).method()`, `f(C(1))`, `[C(1)]`,
+    `x = C(1) if p else C(1)` each report the same arity diagnostic as the bare
+    `C(1)` statement, at the same span.
 - [ ] Bind functions assigned in a class body as methods — implicit receiver
   consumed on instance access, unbound on class access, `staticmethod` /
   `classmethod` honoured ([#382](https://github.com/Nimblesite/Basilisk/issues/382)).
+  - [ ] Test (write RED first): `C().m(1)` where `m = f` and `def f(self, a)`
+    is accepted; `C.m(1)` is an arity error; `staticmethod`/`classmethod`
+    wrappers shift the receiver accordingly.
 - [ ] Wire the shared entry point into the `bidir` engine, which currently has
   no name resolution at all and is consumed by only two rules
   (`narrowing_typeguard`, `narrowing_typeis_2`).
+  - [ ] Test (write RED first): a `TypeGuard[MyAlias]` / `TypeIs[MyClass]`
+    narrows to the RESOLVED type, not to an opaque name, in both consuming
+    rules.
+
+**Gates owed by Stage 0.5 as a whole** — run after the boxes above, and again
+before the stage is declared closed:
+
+- [ ] `cargo test --workspace` green (fail-fast, coverage enforced against
+  `coverage-thresholds.json`).
+- [ ] `cargo clippy --workspace --all-targets` clean at the repo's lint level.
+- [ ] `python3 conformance/run_conformance.py` — 100% / 0 false positives from
+  a fresh `python/typing@main` clone against a clean `--release` build
+  ([CHKARCH-CONFORMANCE]).
+- [ ] Torture golden suite 8/8 (`tests/torture_golden_tests.rs`).
+- [ ] `make bench` — no fixture slower than the committed baseline
+  ([CHKARCH-TESTING-BENCH-RATCHET]).
 
 ### Stage 1 — incrementality
 

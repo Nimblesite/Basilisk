@@ -122,6 +122,55 @@ impl<'m> AnnotationResolver<'m> {
             .map(|expr| self.resolve(expr))
     }
 
+    /// Resolve an annotation the resolver holds only as **stored text** — a
+    /// `ResolvedModule` field that kept the annotation's rendering but not its
+    /// span.
+    ///
+    /// The text is parsed by `ruff` into the type expression it always was and
+    /// then run through this same cascade, so the caller gets alias expansion,
+    /// same-file classes and shadowing exactly as `resolve_span` does. It is
+    /// *not* the condemned text path: nothing here pattern-matches source
+    /// characters. `None` when the text is not a parseable type expression.
+    ///
+    /// Callers that can reach the annotation node should use [`Self::resolve`]
+    /// or [`Self::resolve_span`]; this seam closes as the resolver's structures
+    /// grow spans ([NARROWPLAN-INTEGRATION]).
+    #[must_use]
+    pub fn resolve_text(&self, text: &str) -> Option<InferredType> {
+        let parsed = ruff_python_parser::parse_expression(text.trim()).ok()?;
+        Some(self.resolve(parsed.expr()))
+    }
+
+    /// Does this type name a class whose assignability is **structural** — a
+    /// `Protocol` or a `TypedDict`?
+    ///
+    /// A rule that compares only *nominally* must abstain on such a target:
+    /// the name resolved fine, but "is this value that shape?" is a question
+    /// nominal comparison cannot answer, and answering it anyway is a false
+    /// positive on spec-valid code. Unions and containers are searched too, so
+    /// `list[P]` and `P | None` abstain exactly as `P` does.
+    #[must_use]
+    pub fn is_structural_target(&self, ty: &InferredType) -> bool {
+        match ty {
+            InferredType::Named(name) => self
+                .tables
+                .structural
+                .contains(name.split('[').next().unwrap_or(name)),
+            InferredType::Union(arms) => arms.iter().any(|arm| self.is_structural_target(arm)),
+            InferredType::Optional(inner)
+            | InferredType::List(inner)
+            | InferredType::Set(inner)
+            | InferredType::TypeForm(inner) => self.is_structural_target(inner),
+            InferredType::Dict(key, value) => {
+                self.is_structural_target(key) || self.is_structural_target(value)
+            }
+            InferredType::Tuple(elements) => {
+                elements.iter().any(|el| self.is_structural_target(el))
+            }
+            _ => false,
+        }
+    }
+
     /// The cascade over one type expression.
     pub(crate) fn eval(&self, expr: &Expr, frame: &Frame) -> InferredType {
         if frame.depth > MAX_DEPTH {
@@ -166,9 +215,15 @@ impl<'m> AnnotationResolver<'m> {
         let Some(dotted) = tables::dotted_name(expr) else {
             return InferredType::Unknown;
         };
-        match self.canonical_head(&dotted) {
-            Some(head) => self.name(&head, frame),
-            None => InferredType::Unknown,
+        let Some(head) = self.canonical_head(&dotted) else {
+            return InferredType::Unknown;
+        };
+        match self.name(&head, frame) {
+            // `canonical_head` only yields a member for a module the cascade
+            // knows, so a member with no modelled form is still a name it
+            // resolved — nominal, not gradual (see [`Self::imported_leaf`]).
+            InferredType::Unknown => InferredType::Named(head),
+            resolved => resolved,
         }
     }
 
@@ -182,7 +237,8 @@ impl<'m> AnnotationResolver<'m> {
         };
         let nested = frame.nested();
         if !self.shadows_special_form(&head) {
-            if let Some(ty) = forms::special_form(self, &head.to_ascii_lowercase(), &args, &nested) {
+            if let Some(ty) = forms::special_form(self, &head.to_ascii_lowercase(), &args, &nested)
+            {
                 return ty;
             }
         }
@@ -241,10 +297,14 @@ impl<'m> AnnotationResolver<'m> {
     }
 
     /// A name bound by `from typing import X` resolves to the special form it
-    /// names. Project and third-party symbols stay gradual until the import
-    /// cascade covers them — the seam
-    /// [#324](https://github.com/Nimblesite/Basilisk/issues/324) fills, behind
-    /// this same entry point.
+    /// names, or — for a member with no modelled form, such as the ABCs
+    /// `Iterable` and `Hashable` — to that member as a **nominal** type: it is
+    /// a name the cascade *did* resolve, and calling it gradual would silence
+    /// judgments the nominal comparison can still make
+    /// ([#378](https://github.com/Nimblesite/Basilisk/issues/378)). Project and
+    /// third-party symbols stay gradual until the import cascade covers them —
+    /// the seam [#324](https://github.com/Nimblesite/Basilisk/issues/324)
+    /// fills, behind this same entry point.
     fn imported_leaf(&self, name: &str) -> Option<InferredType> {
         let imported = self.tables.imports.get(name)?;
         if !builtins::is_typing_module(&imported.module) {
@@ -252,7 +312,7 @@ impl<'m> AnnotationResolver<'m> {
         }
         Some(
             builtins::leaf(&imported.original.to_ascii_lowercase())
-                .unwrap_or(InferredType::Unknown),
+                .unwrap_or_else(|| InferredType::Named(imported.original.clone())),
         )
     }
 

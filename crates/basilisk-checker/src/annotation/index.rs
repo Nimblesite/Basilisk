@@ -23,10 +23,7 @@ pub(super) fn annotation_nodes(module: &ModModule) -> HashMap<(u32, u32), &Expr>
 /// Record one annotation node, keyed by its exact span.
 fn record<'m>(expr: &'m Expr, index: &mut HashMap<(u32, u32), &'m Expr>) {
     let range = expr.range();
-    let _ = index.insert(
-        (u32::from(range.start()), u32::from(range.end())),
-        expr,
-    );
+    let _ = index.insert((u32::from(range.start()), u32::from(range.end())), expr);
 }
 
 /// Walk every statement body: annotations appear at any nesting depth.

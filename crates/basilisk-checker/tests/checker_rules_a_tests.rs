@@ -14,6 +14,8 @@
     clippy::uninlined_format_args,
     dead_code
 )]
+#[path = "checker/annotation_resolution_tests.rs"]
+mod annotation_resolution;
 #[path = "checker/annotations_typeexpr_tests.rs"]
 mod annotations_typeexpr;
 #[path = "checker/assignment_compatibility_tests.rs"]

@@ -11,6 +11,7 @@
 //! z: float = 42      # NO warning — annotation adds information (widening)
 //! ```
 
+use crate::annotation::AnnotationResolver;
 use crate::inference::infer_rhs;
 use crate::types::InferredType;
 use basilisk_resolver::ResolvedModule;
@@ -43,6 +44,13 @@ impl Rule for RedundantAnnotationWarning {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        // The declared type comes from the shared cascade
+        // ([TYPEINF-ANNOTATION-RESOLUTION]): an annotation that is redundant
+        // *through an alias* (`type Age = int` then `x: Age = 1`) is redundant
+        // all the same, and a name we cannot resolve is gradual, never a guess.
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
         // Check module-level variables
         module
             .module_vars
@@ -59,8 +67,7 @@ impl Rule for RedundantAnnotationWarning {
                     return None;
                 }
 
-                // Parse annotation text to InferredType using existing parser
-                let declared_type = InferredType::from_annotation(annotation_text);
+                let declared_type = resolver.resolve_text(annotation_text)?;
 
                 // Check if annotation is redundant (base type match)
                 if types_match_for_w0050(&inferred_type, &declared_type) {
@@ -112,8 +119,7 @@ impl Rule for RedundantAnnotationWarning {
                     return None;
                 }
 
-                // Parse annotation text to InferredType using existing parser
-                let declared_type = InferredType::from_annotation(annotation_text);
+                let declared_type = resolver.resolve_text(annotation_text)?;
 
                 // Check if annotation is redundant (base type match)
                 if types_match_for_w0050(&inferred_type, &declared_type) {

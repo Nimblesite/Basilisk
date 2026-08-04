@@ -87,13 +87,16 @@ fn check_return_type_mismatch(
         return;
     };
 
-    // Skip targets the kind-only return inference cannot verify: a
-    // `Literal[...]` target needs the returned expression's *value*
-    // (`return True` infers `Bool`, not `Literal[True]`). Names the cascade
+    // Skip targets this rule cannot verify: a `Literal[...]` target needs the
+    // returned expression's *value* (`return True` infers `Bool`, not
+    // `Literal[True]`), and a `Protocol` / `TypedDict` target is satisfied
+    // structurally, which a kind comparison cannot judge. Names the cascade
     // could not resolve are already the gradual `Unknown` and suppress through
     // ordinary assignability. Shared with E0013 so the two sibling
     // return-mismatch rules stay in lock-step.
-    if super::shared::is_value_dependent_target(&declared_type) {
+    if super::shared::is_value_dependent_target(&declared_type)
+        || resolver.is_structural_target(&declared_type)
+    {
         return;
     }
 
