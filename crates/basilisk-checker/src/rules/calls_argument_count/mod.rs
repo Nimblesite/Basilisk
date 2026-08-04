@@ -30,6 +30,8 @@ use crate::span_util::slice_span;
 use super::shared::annotation_is_classvar;
 use super::Rule;
 
+mod method_binding;
+
 const CODE: ErrorCode = ErrorCode {
     code: "calls_argument_count",
     docs_url: "https://www.basilisk-python.dev/errors/calls_argument_count",
@@ -47,6 +49,7 @@ impl Rule for TooFewArguments {
     ) {
         check_plain_function_calls(module, diagnostics);
         check_builtin_method_calls(module, diagnostics);
+        method_binding::check_method_calls(module, diagnostics);
         check_constructor_calls(module, diagnostics);
         check_namedtuple_calls(module, diagnostics);
     }

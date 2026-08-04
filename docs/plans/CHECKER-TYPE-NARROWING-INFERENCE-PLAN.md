@@ -810,12 +810,29 @@ not run is `[~]`, not `[x]`.
     span" without hard-coding the rule's anchor. **RED proof**: 2 of 6 passed
     before the collector fix (bare + silent); method receiver, call argument,
     list element, and conditional were all silently missed; 6/6 after.
-- [ ] Bind functions assigned in a class body as methods — implicit receiver
+- [x] Bind functions assigned in a class body as methods — implicit receiver
   consumed on instance access, unbound on class access, `staticmethod` /
   `classmethod` honoured ([#382](https://github.com/Nimblesite/Basilisk/issues/382)).
-  - [ ] Test (write RED first): `C().m(1)` where `m = f` and `def f(self, a)`
+  — Three pieces: (1) new `CallReceiver::Constructor` so `C().m(...)` is
+  representable as a call site (previously dropped entirely); (2)
+  `AttributeInfo.rhs_is_descriptor_call: bool` REPLACED by
+  `rhs_descriptor: Option<String>` (which wrapper) plus `rhs_name`
+  (the callable a class-body assignment binds), computed from the AST in
+  `class_info.rs::rhs_callable_binding`; (3) new
+  `rules/calls_argument_count/method_binding.rs` — resolves `C.m`/`C().m`
+  to literal `def`s or assignment-bound module functions, consumes the
+  receiver per access path and wrapper (`staticmethod` never, `classmethod`
+  always, plain on instance access only), abstains on unknown methods,
+  signature-changing decorators, keywords, and `*args`. The rule file moved
+  to directory form (`calls_argument_count/mod.rs`) to host the submodule.
+  - [x] Test (write RED first): `C().m(1)` where `m = f` and `def f(self, a)`
     is accepted; `C.m(1)` is an arity error; `staticmethod`/`classmethod`
     wrappers shift the receiver accordingly.
+    — `tests/checker/class_body_method_binding_tests.rs` (5 tests), pinned
+    against the literal-`def` baseline `C.n(1)` in the same class. **RED
+    proof**: 2 of 5 failed before the change — the baseline itself drew
+    nothing (no receiver-aware arity check existed) and `C().m()` was
+    uncollectable; 5/5 after.
 - [ ] Wire the shared entry point into the `bidir` engine, which currently has
   no name resolution at all and is consumed by only two rules
   (`narrowing_typeguard`, `narrowing_typeis_2`).
