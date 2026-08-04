@@ -174,13 +174,20 @@ mod tests {
         let cases = [
             TypeTerm::List(Box::new(self_ref(Vec::new()))),
             TypeTerm::Union(vec![int(), TypeTerm::List(Box::new(self_ref(Vec::new())))]),
-            TypeTerm::Dict(Box::new(TypeTerm::Ground(InferredType::Str)), Box::new(self_ref(Vec::new()))),
+            TypeTerm::Dict(
+                Box::new(TypeTerm::Ground(InferredType::Str)),
+                Box::new(self_ref(Vec::new())),
+            ),
             TypeTerm::Set(Box::new(self_ref(Vec::new()))),
             TypeTerm::Tuple(vec![self_ref(Vec::new()), int()]),
             TypeTerm::Named("Sequence".to_owned(), vec![self_ref(Vec::new())]),
         ];
         for body in cases {
-            assert_eq!(classify_body(0, body.clone()), Acceptance::Accepted, "{body:?}");
+            assert_eq!(
+                classify_body(0, body.clone()),
+                Acceptance::Accepted,
+                "{body:?}"
+            );
         }
     }
 
@@ -194,7 +201,11 @@ mod tests {
             TypeTerm::Union(vec![TypeTerm::Param(0), self_ref(vec![int()])]),
         ];
         for body in cases {
-            assert_eq!(classify_body(1, body.clone()), Acceptance::Unguarded, "{body:?}");
+            assert_eq!(
+                classify_body(1, body.clone()),
+                Acceptance::Unguarded,
+                "{body:?}"
+            );
         }
     }
 
@@ -250,7 +261,10 @@ mod tests {
     /// is non-regular.
     #[test]
     fn operator_forms_are_classified() {
-        assert_eq!(classify_body(1, TypeTerm::Op("X".to_owned())), Acceptance::Unguarded);
+        assert_eq!(
+            classify_body(1, TypeTerm::Op("X".to_owned())),
+            Acceptance::Unguarded
+        );
         let apply_growing = TypeTerm::List(Box::new(TypeTerm::Apply(
             Box::new(TypeTerm::Op("X".to_owned())),
             vec![TypeTerm::List(Box::new(TypeTerm::Param(0)))],

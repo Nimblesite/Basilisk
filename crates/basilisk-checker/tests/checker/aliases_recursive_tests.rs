@@ -65,8 +65,8 @@ fn upstream_recursive_definitions_as_type_statements_are_clean(
 /// names. Both must still be rejected in the PEP 695 spelling — including
 /// through the transparent `Union[..]` operator.
 #[test]
-fn upstream_cyclical_cases_as_type_statements_still_fire(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn upstream_cyclical_cases_as_type_statements_still_fire() -> Result<(), Box<dyn std::error::Error>>
+{
     let cases = [
         // RecursiveUnion (upstream line 72), `|` and Union[..] spellings.
         "type RecursiveUnion = RecursiveUnion | int\n",

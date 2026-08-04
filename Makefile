@@ -5,7 +5,7 @@
 # Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup book mutation-test conformance bench bench-basilisk reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease
+.PHONY: build test lint fmt clean ci setup book mutation-test conformance bench bench-basilisk reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease package-zed
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -509,8 +509,16 @@ _test_nvim:
 _test_zed:
 	@bash scripts/test-zed.sh
 
-_package_zed:
-	@echo -e '\033[1m\033[0;36m▶ Building basilisk CLI for Zed\033[0m' && \
+## package-zed: Build the local Zed dev loop — compile the extension to WASM,
+## install the basilisk CLI, then print the `zed: install dev extension` steps.
+## Point the dev extension at the locally built binary with
+## `BASILISK_PATH=$$(which basilisk)` or `lsp.basilisk.binary.path`
+## ([ZED-DIST]); with neither, it downloads the release binary.
+package-zed:
+	@echo -e '\033[1m\033[0;36m▶ Building Zed extension (wasm32-wasip2)\033[0m' && \
+	rustup target add wasm32-wasip2 && \
+	cargo build --release --target wasm32-wasip2 --manifest-path $(_ZED_DIR)/Cargo.toml && \
+	echo -e '\033[1m\033[0;36m▶ Building basilisk CLI for Zed\033[0m' && \
 	cargo install --path crates/basilisk-cli --force && \
 	echo "$$(which basilisk) installed" && \
 	echo "" && \

@@ -30,19 +30,19 @@ type Dotted = collections.abc.Sequence
 fn conformance_bad_alias_forms_all_fire() -> Result<(), Box<dyn std::error::Error>> {
     let var_prefix = "var1 = 3\n";
     let bad_forms = [
-        "type Bad = eval(\"int\")",             // BadTypeAlias1: call
-        "type Bad = [int, str]",                // BadTypeAlias2: list literal
-        "type Bad = ((int, str),)",             // BadTypeAlias3: tuple literal
-        "type Bad = [int for i in range(1)]",   // BadTypeAlias4: comprehension
-        "type Bad = {\"a\": \"b\"}",            // BadTypeAlias5: dict literal
-        "type Bad = (lambda: int)()",           // BadTypeAlias6: lambda call
-        "type Bad = [int][0]",                  // BadTypeAlias7: subscripted list
-        "type Bad = int if 1 < 3 else str",     // BadTypeAlias8: conditional
-        "type Bad = var1",                      // BadTypeAlias9: non-type variable
-        "type Bad = True",                      // BadTypeAlias10: bool literal
-        "type Bad = 1",                         // BadTypeAlias11: int literal
-        "type Bad = list or set",               // BadTypeAlias12: boolean op
-        "type Bad = f\"{'int'}\"",              // BadTypeAlias13: f-string
+        "type Bad = eval(\"int\")",           // BadTypeAlias1: call
+        "type Bad = [int, str]",              // BadTypeAlias2: list literal
+        "type Bad = ((int, str),)",           // BadTypeAlias3: tuple literal
+        "type Bad = [int for i in range(1)]", // BadTypeAlias4: comprehension
+        "type Bad = {\"a\": \"b\"}",          // BadTypeAlias5: dict literal
+        "type Bad = (lambda: int)()",         // BadTypeAlias6: lambda call
+        "type Bad = [int][0]",                // BadTypeAlias7: subscripted list
+        "type Bad = int if 1 < 3 else str",   // BadTypeAlias8: conditional
+        "type Bad = var1",                    // BadTypeAlias9: non-type variable
+        "type Bad = True",                    // BadTypeAlias10: bool literal
+        "type Bad = 1",                       // BadTypeAlias11: int literal
+        "type Bad = list or set",             // BadTypeAlias12: boolean op
+        "type Bad = f\"{'int'}\"",            // BadTypeAlias13: f-string
     ];
     for form in bad_forms {
         let source = format!("{var_prefix}{form}\n");
@@ -54,9 +54,9 @@ fn conformance_bad_alias_forms_all_fire() -> Result<(), Box<dyn std::error::Erro
 #[test]
 fn more_invalid_expression_forms_fire() -> Result<(), Box<dyn std::error::Error>> {
     for form in [
-        "type Bad = -1",           // unary minus
-        "type Bad = lambda: int",  // bare lambda
-        "type Bad = (int, str)",   // parenthesized tuple
+        "type Bad = -1",          // unary minus
+        "type Bad = lambda: int", // bare lambda
+        "type Bad = (int, str)",  // parenthesized tuple
     ] {
         let source = format!("{form}\n");
         assert!(fires(&source)?, "must fire on: {form}");
@@ -69,8 +69,8 @@ fn more_invalid_expression_forms_fire() -> Result<(), Box<dyn std::error::Error>
 /// A perfectly valid alias to a class whose NAME contains "lambda" must not
 /// fire — `rhs.contains("lambda")` was a substring false positive.
 #[test]
-fn identifier_containing_lambda_substring_is_not_flagged(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn identifier_containing_lambda_substring_is_not_flagged() -> Result<(), Box<dyn std::error::Error>>
+{
     let source = r"
 class Blambda:
     pass

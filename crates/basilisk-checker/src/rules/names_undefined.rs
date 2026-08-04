@@ -1,5 +1,5 @@
 //! Implements [`names_undefined`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-//! `names_undefined`: Undefined variable used in a return statement.
+//! `names_undefined`: Reference to a name with no visible definition.
 //!
 //! Flags any name referenced in a `return` expression — bare (`return x`), the
 //! base of an attribute/subscript chain (`return x.y`), a call argument, or the
@@ -9,10 +9,19 @@
 //! `type` alias, an enclosing scope's binding, a cross-module imported symbol,
 //! or a builtin.
 //!
+//! Also flags a class that lists **its own name among its bases** when no other
+//! binding of that name exists: a class name is not bound until its `class`
+//! statement completes, so `class C(C)` with no prior `C` is a guaranteed
+//! `NameError` at runtime (GitHub #398).
+//!
 //! ```python
 //! def compute() -> int:
 //!     return undefined_name     # never defined → E0018
 //!     return undefined_fn()     # undefined callee → E0018
+//!
+//!
+//! class Node(Node):             # `Node` is unbound in its own bases → E0018
+//!     pass
 //! ```
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
@@ -62,10 +71,10 @@ impl Rule for UndefinedVariable {
         // Only MODULE-scope aliases are visible to every function body:
         // class-scope names don't nest, and function-scope aliases are local
         // (they reach `all_local_assigns`, so same-function use stays clean).
-        let type_alias_names: Vec<&str> = basilisk_resolver::collect_names_where(
-            &module.pep695_scoping.aliases,
-            |alias| !alias.in_function && !alias.in_class,
-        );
+        let type_alias_names: Vec<&str> =
+            basilisk_resolver::collect_names_where(&module.pep695_scoping.aliases, |alias| {
+                !alias.in_function && !alias.in_class
+            });
 
         let scope = ModuleScope {
             import_names: &import_names,
@@ -78,6 +87,68 @@ impl Rule for UndefinedVariable {
         module.functions.iter().for_each(|func| {
             check_function(func, &module.functions, &scope, &module.path, diagnostics);
         });
+
+        check_class_self_referential_bases(module, &scope, diagnostics);
+    }
+}
+
+/// Flag classes whose bases name the class itself with no other binding of
+/// that name in the module (GitHub #398): the class name is unbound until the
+/// `class` statement completes, so the reference is a guaranteed `NameError`.
+///
+/// Deliberately conservative — any other binding of the name (a prior class or
+/// redefinition, a function, a variable, an import, a `type` alias, a builtin,
+/// or a possible `from m import *`) suppresses the diagnostic, because the base
+/// would then legally refer to that binding.
+fn check_class_self_referential_bases(
+    module: &ResolvedModule,
+    scope: &ModuleScope<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
+    let star_import = module
+        .imports
+        .iter()
+        .any(|imp| imp.names.iter().any(|n| n == "*"));
+    if star_import {
+        return;
+    }
+
+    for class in &module.classes {
+        let name = class.name.as_str();
+        if !class.bases.iter().any(|base| base == name) {
+            continue;
+        }
+        let other_binding = module.classes.iter().filter(|c| c.name == name).count() > 1
+            || BUILTINS.contains(&name)
+            || scope.import_names.contains(&name)
+            || scope.module_var_names.contains(&name)
+            || scope.type_alias_names.contains(&name)
+            || scope.imported_symbols.contains_key(name)
+            || module.functions.iter().any(|f| {
+                f.name == name
+                    || f.parameters.iter().any(|p| p.name == name)
+                    || f.all_local_assigns.iter().any(|a| a == name)
+            });
+        if other_binding {
+            continue;
+        }
+        out.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
+                "Class `{name}` lists itself as a base, but `{name}` is not defined until the \
+                 `class` statement completes"
+            ),
+            class.name_span,
+            &module.path,
+            Some(format!(
+                "Remove `{name}` from its own bases list, or derive from the class you meant"
+            )),
+            Some(
+                "A class name is bound only after its body evaluates, so using it in its own \
+                 bases raises `NameError` at runtime"
+                    .to_owned(),
+            ),
+        ));
     }
 }
 

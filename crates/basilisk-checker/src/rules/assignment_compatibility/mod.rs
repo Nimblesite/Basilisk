@@ -18,13 +18,18 @@ mod alias_match;
 mod callable_check;
 mod dataclass_check;
 mod default_spec;
+mod enum_expand;
 mod literal_parse;
 mod protocol_members;
 mod sig_model;
 mod sig_subtype;
+mod skip_names;
 mod tuple_check;
 mod typeddict_struct;
 mod typeform_check;
+
+use enum_expand::enum_expansion_assignable;
+use skip_names::{drop_unchecked_block_diagnostics, SkipNames};
 
 use crate::span_util::slice_span;
 use crate::types::InferredType;
@@ -58,15 +63,7 @@ impl Rule for AssignmentTypeMismatch {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         let empty_params = ParamMaps::default();
-        let skip = SkipNames {
-            typeddict: collect_typeddict_names(module),
-            typeddict_extra_items: collect_extra_items_typeddict_names(module),
-            type_alias: collect_type_alias_names(module),
-            type_alias_type: collect_type_alias_type_names(module),
-            value_aliases: alias_match::collect_value_aliases(module),
-            generic_aliases: alias_match::collect_generic_aliases(module),
-            typeddict_schemas: typeddict_struct::build_typeddict_schemas(module),
-        };
+        let skip = SkipNames::collect(module);
         let call_index = callable_check::build_index(module);
         check_vars(
             &module.module_vars,
@@ -85,107 +82,6 @@ impl Rule for AssignmentTypeMismatch {
         default_spec::check_default_specializations(module, diagnostics);
         drop_unchecked_block_diagnostics(module, diagnostics);
     }
-}
-
-/// Remove E0014 diagnostics inside `if not TYPE_CHECKING:` blocks — that code
-/// is explicitly excluded from type checking (PEP 484).
-fn drop_unchecked_block_diagnostics(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    use ruff_text_size::Ranged as _;
-
-    let Some(parsed) = crate::rules::shared::parse_module(module) else {
-        return;
-    };
-    let blocks: Vec<(u32, u32)> = parsed
-        .ast
-        .body
-        .iter()
-        .filter_map(|stmt| {
-            let ruff_python_ast::Stmt::If(if_stmt) = stmt else {
-                return None;
-            };
-            let ruff_python_ast::Expr::UnaryOp(unary) = if_stmt.test.as_ref() else {
-                return None;
-            };
-            let is_not_type_checking = unary.op == ruff_python_ast::UnaryOp::Not
-                && matches!(
-                    unary.operand.as_ref(),
-                    ruff_python_ast::Expr::Name(n) if n.id.as_str() == "TYPE_CHECKING"
-                );
-            is_not_type_checking.then(|| {
-                let range = if_stmt.range();
-                (range.start().to_u32(), range.end().to_u32())
-            })
-        })
-        .collect();
-    if blocks.is_empty() {
-        return;
-    }
-    diagnostics.retain(|diag| {
-        diag.code.code != CODE.code
-            || !blocks
-                .iter()
-                .any(|&(start, end)| diag.span.start >= start && diag.span.end <= end)
-    });
-}
-
-/// Collect names of `TypedDict` classes defined in this module.
-///
-/// `assignment_compatibility` cannot do structural field-level type checking on `TypedDict`
-/// subclasses, so dict literal assignments to `TypedDict` annotations are
-/// skipped to avoid false positives.
-fn collect_typeddict_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
-    // Recognise transitive TypedDict subclasses (`class Album(NamedDict): ...`),
-    // not just classes that name `TypedDict` directly. Otherwise E0014 stops
-    // skipping their dict-literal assignments and false-positives on every valid
-    // `album: Album = {...}` whose base — not the leaf — is the TypedDict.
-    let mut names: std::collections::HashSet<String> =
-        basilisk_resolver::transitive_typeddict_names(&module.classes)
-            .into_iter()
-            .map(str::to_ascii_lowercase)
-            .collect();
-
-    // Include functional-form TypedDicts: `Name = TypedDict("Name", {...})`.
-    for td_call in &module.typeddict_calls {
-        let _ = names.insert(td_call.lhs_name.to_ascii_lowercase());
-    }
-
-    names
-}
-
-/// Collect names of PEP 695 type aliases defined in this module (lowercased).
-///
-/// E0014 cannot evaluate expanded type alias types, so annotations that
-/// reference a type alias are skipped to avoid false positives.
-fn collect_type_alias_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
-    module
-        .type_statements
-        .iter()
-        .map(|ts| ts.name.to_ascii_lowercase())
-        .collect()
-}
-
-/// Names that E0014 must skip to avoid false positives.
-struct SkipNames {
-    /// `TypedDict` class names (lowercase).
-    typeddict: std::collections::HashSet<String>,
-    /// `TypedDict` classes declaring `extra_items=` (PEP 728, lowercase).
-    typeddict_extra_items: std::collections::HashSet<String>,
-    /// PEP 695 type alias names (lowercase).
-    type_alias: std::collections::HashSet<String>,
-    /// `TypeAliasType(...)` call LHS names (lowercase).
-    type_alias_type: std::collections::HashSet<String>,
-    /// Legacy value aliases — `Name = Union[...]` or a concrete container such
-    /// as `Name = dict[K, V]` (lowercase → definition), used for alias-expanded
-    /// value matching.
-    value_aliases: std::collections::HashMap<String, InferredType>,
-    /// Generic (`TypeVar`-parameterised) value aliases such as
-    /// `G = list["G[T]" | T]`, keyed by lowercase name. Used to validate
-    /// literal assignments against a specialised recursive alias (`G[str]`).
-    generic_aliases: std::collections::HashMap<String, alias_match::GenericAlias>,
-    /// Effective field schemas (class name → fields) for every `TypedDict`,
-    /// used for PEP 705 structural assignability of `TypedDict`-to-`TypedDict`
-    /// assignments instead of name equality.
-    typeddict_schemas: typeddict_struct::TdSchemas,
 }
 
 /// Collection literals are checked in the annotation's expected-type context.
@@ -225,34 +121,6 @@ fn literal_collection_assignable(
         generic: &skip.generic_aliases,
     };
     alias_match::alias_assignable(inferred, declared, &ctx, 0)
-}
-
-/// Collect names defined via `Name = TypeAliasType(...)` (lowercase).
-///
-/// E0014 cannot evaluate an expanded `TypeAliasType` alias, so assignments whose
-/// declared type references such an alias are skipped to avoid false positives.
-fn collect_type_alias_type_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
-    module
-        .type_alias_type_calls
-        .iter()
-        .map(|call| call.lhs_name.to_ascii_lowercase())
-        .collect()
-}
-
-/// Names of `TypedDict` classes declaring `extra_items=` (lowercase).
-///
-/// Such `TypedDict`s may be assignable to `dict[str, VT]` (PEP 728), which
-/// E0014's name-level comparison cannot evaluate — those assignments are
-/// skipped rather than flagged.
-fn collect_extra_items_typeddict_names(
-    module: &ResolvedModule,
-) -> std::collections::HashSet<String> {
-    module
-        .classes
-        .iter()
-        .filter(|cls| cls.class_keywords.iter().any(|kw| kw == "extra_items"))
-        .map(|cls| cls.name.to_ascii_lowercase())
-        .collect()
 }
 
 /// Declared parameter annotations for the enclosing function: parsed types
@@ -421,6 +289,7 @@ fn check_vars(
 
             if inferred_type.is_assignable_to(&declared_type)
                 || literal_collection_assignable(var, &inferred_type, &declared_type, skip)
+                || enum_expansion_assignable(&inferred_type, &declared_type, &skip.enum_members)
             {
                 None
             } else if callable_rescue(var, source, annotation_text, params, call_index) {

@@ -3,6 +3,7 @@
 
 const ENUM_BASES: &[&str] = &["Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"];
 
+mod annotated_tuple_index;
 mod annotations;
 mod assert_narrow;
 mod assigns;
@@ -192,11 +193,19 @@ fn build_resolved_module(
             typevar_calls.iter().map(|tv| tv.name.clone()).collect();
         type_alias::collect_type_alias_type_violations(stmts, &tv_names)
     };
-    let tuple_index_violations = key_lambda::collect_key_lambda_tuple_violations(
+    let mut tuple_index_violations = key_lambda::collect_key_lambda_tuple_violations(
         stmts,
         &functions,
         &module_vars,
         &module.source,
+    );
+    tuple_index_violations.extend(
+        annotated_tuple_index::collect_annotated_tuple_index_violations(
+            stmts,
+            &functions,
+            &module_vars,
+            &module.source,
+        ),
     );
     ResolvedModule {
         functions,

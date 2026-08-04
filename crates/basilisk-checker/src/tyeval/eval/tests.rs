@@ -256,10 +256,16 @@ fn operator_argument_applies_higher_order() {
 fn ill_kinded_applications_are_gradual() {
     let env = env_with_wrap();
     let wrong_arity = TypeTerm::Alias("wrap".to_owned(), vec![int(), int()]);
-    assert_eq!(Evaluator::new().evaluate(&env, &wrong_arity), Eval::Divergent);
+    assert_eq!(
+        Evaluator::new().evaluate(&env, &wrong_arity),
+        Eval::Divergent
+    );
 
     let apply_ground = TypeTerm::Apply(Box::new(int()), vec![int()]);
-    assert_eq!(Evaluator::new().evaluate(&env, &apply_ground), Eval::Divergent);
+    assert_eq!(
+        Evaluator::new().evaluate(&env, &apply_ground),
+        Eval::Divergent
+    );
 
     let unapplied_operator = TypeTerm::Op("wrap".to_owned());
     assert_eq!(

@@ -424,7 +424,9 @@ def variadic(*args: int) -> None:
     reveal_type(args)  # tuple[int, ...]
 ```
 
-> **Authority**: [Typing spec — Tuple types](https://typing.readthedocs.io/en/latest/spec/special-forms.html#tuple).
+**Index-range checking.** A value declared `tuple[T1, ..., Tn]` supports exactly the literal indices `[-n, n)`; any other literal index is a guaranteed runtime `IndexError` and draws `tuples_index` at **every** scope. The declared annotation of the innermost binding scope decides: an annotated local's tuple length applies; a parameter, `*args`/`**kwargs`, or unannotated rebinding in that scope opts the name out; otherwise an annotated module variable applies. Lambda parameters and comprehension targets shadow enclosing annotations. Variadic (`tuple[T, ...]`) and PEP 646 unpacked (`*tuple[...]`, `*Ts`) forms have no fixed length and are exempt. Collected in the resolver by `visitor/annotated_tuple_index.rs` (annotated variables), `visitor/key_lambda.rs` (`key=` lambda parameters), and the `tuples_index_2` rule (function parameters); all render through the `tuples_index` rule.
+
+> **Authority**: [Typing spec — Tuples](https://typing.python.org/en/latest/spec/tuples.html).
 
 ### [TYPEINF-COLLECTIONS-COMPREHENSIONS] Comprehensions {#TYPEINF-COLLECTIONS-COMPREHENSIONS}
 
@@ -863,6 +865,9 @@ y: Sequence[Animal] = dogs   # OK — Sequence is covariant
 - `Any` is bidirectionally compatible with all types (not a real subtype, an escape hatch)
 - `Never` <: everything (bottom type, assignable to all types)
 - the simplified annotation parser treats `object` as a gradual `Any` spelling
+- **Enum literal expansion**: an enum type with members is equivalent to the union of literals of all its members, so `Answer` <: `Literal[Answer.Yes, Answer.No]` exactly when `Yes`/`No` are ALL of `Answer`'s members; a partial member union is not a supertype. Membership follows the `Enum` metaclass's own rules: unannotated class-body value assignments, excluding sunder/dunder names and `nonmember`/descriptor/lambda values. Implemented by `rules/assignment_compatibility/enum_expand.rs`.
+
+> **Authority**: [Typing spec — Enums](https://typing.python.org/en/latest/spec/enums.html).
 
 ### [TYPEINF-SUBTYPING-CALLABLE] Callable Subtyping {#TYPEINF-SUBTYPING-CALLABLE}
 
@@ -897,6 +902,8 @@ Subtyping is decided by `InferredType::is_assignable_to(&self, other)` in `crate
 - `Optional`/`Union` decomposition: `A | B <: C` iff both sides do; `A <: A | B` ([TYPEINF-SUBTYPING-UNION](#TYPEINF-SUBTYPING-UNION)).
 - Bidirectional element compatibility (invariance, with gradual `Any`/`Unknown` consistency) for mutable `list`/`set`/`dict`; fixed-length, homogeneous `tuple[X, ...]`, and PEP 646 unpacked (`*tuple[...]`/`*Ts`) tuple matching ([TYPEINF-SUBTYPING-GENERIC](#TYPEINF-SUBTYPING-GENERIC), [TYPEINF-COLLECTIONS-TUPLES](#TYPEINF-COLLECTIONS-TUPLES)).
 - Callable contravariant parameters / covariant return, with `...` params gradual ([TYPEINF-SUBTYPING-CALLABLE](#TYPEINF-SUBTYPING-CALLABLE)); `TypeForm` covariance.
+
+Module-context equivalences that `is_assignable_to` cannot see run as ordered rescues in `rules/assignment_compatibility` after it returns false: expected-type literal-collection checking, the enum literal expansion (`enum_expand.rs`, needing the module's enum-member environment), then callable-signature rescue — all over the skip/alias/schema environment built once per module by `skip_names::SkipNames::collect`.
 
 `Named` types (user classes and unparameterised imports) compare by base name before `[`: `Foo[int]` and `Foo[float]` are treated as compatible. This is deliberate — without whole-program generic variance analysis, stricter matching would emit false positives, and the conformance gate holds `max_false_positives` at zero.
 

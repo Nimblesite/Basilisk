@@ -182,3 +182,6 @@ book/dist/
 # without this the residue gets committed and the next run type-checks a file
 # the suite believes it created fresh.
 vscode-extension/test-fixtures/workspace/ofo_no_scan_target.py
+
+
+.deslop/

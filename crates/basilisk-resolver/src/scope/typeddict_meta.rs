@@ -15,10 +15,6 @@ use std::hash::BuildHasher;
 
 use super::class_types::ClassInfo;
 
-/// Maximum inheritance depth walked before bailing out. Guards against cyclic
-/// `bases` (illegal Python, but must not hang the resolver).
-const MAX_DEPTH: u32 = 64;
-
 /// Build a `class name -> &ClassInfo` lookup over a module's classes.
 #[must_use]
 pub fn class_by_name(classes: &[ClassInfo]) -> HashMap<&str, &ClassInfo> {
@@ -32,7 +28,7 @@ pub fn is_transitive_typeddict<S: BuildHasher>(
     name: &str,
     class_map: &HashMap<&str, &ClassInfo, S>,
 ) -> bool {
-    walk_bases(name, class_map, 0, &|class| class.is_typed_dict)
+    walk_bases(name, class_map, &|class| class.is_typed_dict)
 }
 
 /// Returns `true` when this class — or any transitive `TypedDict` base — was
@@ -43,7 +39,7 @@ pub fn has_extra_items_transitive<S: BuildHasher>(
     name: &str,
     class_map: &HashMap<&str, &ClassInfo, S>,
 ) -> bool {
-    walk_bases(name, class_map, 0, &|class| {
+    walk_bases(name, class_map, &|class| {
         class.class_keywords.iter().any(|kw| kw == "extra_items")
     })
 }
@@ -99,23 +95,33 @@ fn try_strip_wrapper<'a>(lower: &str, original: &'a str, prefix: &str) -> Option
     Some(&original[prefix.len()..original.len() - 1])
 }
 
-/// Walk `name` and its transitive bases, returning `true` as soon as `predicate`
-/// holds for any class in the chain.
+/// Walk `name` and its transitive bases, returning `true` as soon as
+/// `predicate` holds for any class in the chain.
+///
+/// Stack-overflow-proof by construction: the walk is iterative (explicit
+/// worklist, zero recursion), so no hierarchy — however deep — grows the call
+/// stack. The `visited` set bounds work to one visit per class, so cyclic or
+/// self-referential `bases` — illegal Python, but reachable input (GitHub
+/// #398: a class listing itself twice made the old depth-capped recursive
+/// walk exponential) — terminate in linear time.
 fn walk_bases<S: BuildHasher>(
     name: &str,
     class_map: &HashMap<&str, &ClassInfo, S>,
-    depth: u32,
     predicate: &dyn Fn(&ClassInfo) -> bool,
 ) -> bool {
-    if depth >= MAX_DEPTH {
-        return false;
+    let mut visited: HashSet<&str> = HashSet::new();
+    let mut worklist: Vec<&str> = vec![name];
+    while let Some(current) = worklist.pop() {
+        if !visited.insert(current) {
+            continue;
+        }
+        let Some(class) = class_map.get(current) else {
+            continue;
+        };
+        if predicate(class) {
+            return true;
+        }
+        worklist.extend(class.bases.iter().map(String::as_str));
     }
-    let Some(class) = class_map.get(name) else {
-        return false;
-    };
-    predicate(class)
-        || class
-            .bases
-            .iter()
-            .any(|base| walk_bases(base, class_map, depth + 1, predicate))
+    false
 }

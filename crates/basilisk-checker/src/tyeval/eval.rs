@@ -90,7 +90,9 @@ impl Evaluator {
                 Some(def) if def.arity == 0 => self.eval_application(env, name, &[], args, depth),
                 _ => Eval::Divergent,
             },
-            TypeTerm::Apply(head, apply_args) => self.eval_apply(env, head, apply_args, args, depth),
+            TypeTerm::Apply(head, apply_args) => {
+                self.eval_apply(env, head, apply_args, args, depth)
+            }
             TypeTerm::Cond(cond) => self.eval_cond(env, cond, args, depth),
             TypeTerm::List(inner) => {
                 let element = self.eval_at(env, inner, args, depth + 1).into_inferred();
@@ -161,7 +163,13 @@ impl Evaluator {
     /// TypeScript/PEP 827 distribution rule — each arm rewritten lazily.
     /// An undecidable scrutinee (gradual `Unknown`) makes the whole
     /// conditional gradual rather than guessing a branch.
-    fn eval_cond(&mut self, env: &AliasEnv, cond: &CondTerm, args: &[TypeTerm], depth: u32) -> Eval {
+    fn eval_cond(
+        &mut self,
+        env: &AliasEnv,
+        cond: &CondTerm,
+        args: &[TypeTerm],
+        depth: u32,
+    ) -> Eval {
         let Some(scrutinee) = self.force_value(env, &cond.scrutinee, args, depth) else {
             return Eval::Divergent;
         };

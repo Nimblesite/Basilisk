@@ -47,10 +47,7 @@ fn unguarded_alias_projects_to_unknown_through_the_query() {
     let db = EventDb::default();
     let file = SourceFile::new(&db, "m.py".to_owned(), "type X = X\n".to_owned());
     assert!(type_alias_env(&db, file).get("X").is_none());
-    assert_eq!(
-        alias_whnf(&db, file, "X".to_owned()),
-        InferredType::Unknown
-    );
+    assert_eq!(alias_whnf(&db, file, "X".to_owned()), InferredType::Unknown);
 }
 
 /// **Memoization of normalized results across revisions**: an edit outside

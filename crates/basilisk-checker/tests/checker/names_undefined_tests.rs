@@ -493,8 +493,8 @@ def alias() -> object:
 }
 
 #[test]
-fn class_scope_type_alias_is_not_visible_from_a_function(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn class_scope_type_alias_is_not_visible_from_a_function() -> Result<(), Box<dyn std::error::Error>>
+{
     // Class-body names do not nest: a `type` alias declared inside a class
     // is reachable only as `C.Inner`, so a bare `Inner` in a module-level
     // function is still an undefined name.
@@ -555,6 +555,61 @@ def f() -> object:
     assert!(
         !codes(&diags).contains(&"names_undefined"),
         "a function-local alias is defined in its own scope, got: {:?}",
+        messages_for(&diags, "names_undefined")
+    );
+    Ok(())
+}
+
+#[test]
+fn self_referential_class_bases_terminate_and_flag() -> Result<(), Box<dyn std::error::Error>> {
+    // GitHub #398: `class C(C[int], C[bool])` sent the resolver's transitive
+    // base walk into an exponential recursion — checking must TERMINATE. And
+    // per Python semantics a class name is unbound until its `class` statement
+    // completes, so referencing it in its own bases list must draw
+    // `names_undefined` (both classes here have no other binding).
+    let (tx, rx) = std::sync::mpsc::channel();
+    let _worker = std::thread::spawn(move || {
+        let outcome = run("class C(C[int], C[bool]):\n    pass\n").map_err(|e| e.to_string());
+        let _ = tx.send(outcome);
+    });
+    let received = rx.recv_timeout(std::time::Duration::from_secs(30));
+    let Ok(outcome) = received else {
+        return Err("resolver spun for 30s on self-referential bases (GitHub #398)".into());
+    };
+    let diags = outcome?;
+    assert!(
+        codes(&diags).contains(&"names_undefined"),
+        "`class C(C[int], C[bool])` must flag the unbound self-reference, got: {:?}",
+        codes(&diags)
+    );
+
+    let diags = run("class D(D):\n    pass\n")?;
+    assert!(
+        codes(&diags).contains(&"names_undefined"),
+        "`class D(D)` must flag the unbound self-reference, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn prior_binding_and_builtin_self_named_bases_stay_clean() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Redefining a class over a prior binding is legal Python — the base
+    // names the OLD binding, not the class being defined.
+    let source = "class C:\n    pass\n\n\nclass C(C):\n    pass\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a prior binding makes `class C(C)` legal, got: {:?}",
+        messages_for(&diags, "names_undefined")
+    );
+
+    // `class int(int)` derives from the BUILTIN int — also legal.
+    let diags = run("class int(int):\n    pass\n")?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a builtin base name is always bound, got: {:?}",
         messages_for(&diags, "names_undefined")
     );
     Ok(())

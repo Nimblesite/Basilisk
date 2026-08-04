@@ -152,8 +152,8 @@ fn self_recursion_through_list_ok() -> Result<(), Box<dyn std::error::Error>> {
 /// Acceptance is decided by [TYPEINF-TARGET-TYPELEVEL]'s guardedness condition
 /// (`tyeval::accept`), not by "does the RHS mention my own name".
 #[test]
-fn recursive_pep695_alias_under_a_constructor_is_accepted(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn recursive_pep695_alias_under_a_constructor_is_accepted() -> Result<(), Box<dyn std::error::Error>>
+{
     for source in [
         "type J = list[J]\n",
         "type J = int | list[J]\n",

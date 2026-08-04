@@ -717,7 +717,7 @@
     "body": [
       {
         "type": "text",
-        "html": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> requires the RHS of a <code>type</code> statement to be a valid type expression. The same restrictions as <code>TypeAlias</code> (<code>aliases_implicit</code>) apply."
+        "html": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> requires the RHS of a <code>type</code> statement to be a valid type expression. The RHS is validated **structurally** on the parsed <code>ruff</code> expression tree (issue #379 \u2014 substring matching both missed invalid forms and misfired on identifiers containing matched text): names, dotted names, <code>X | Y</code> unions, <code>None</code>, string forward references, and subscriptions of those are type expressions; every other expression form (literals, calls, lambdas, conditionals, comparisons, comprehensions, boolean operators) is not. Subscript <em>arguments</em> are never descended into \u2014 special forms like <code>Literal...</code>, <code>Callable[..., X]</code>, and <code>AnnotatedX, ...</code> legitimately hold non-type expressions there."
       },
       {
         "type": "code",
@@ -5128,22 +5128,30 @@
     "tags": [
       "pep"
     ],
-    "summary": "Undefined variable used in a return statement",
-    "summaryHtml": "Undefined variable used in a return statement",
+    "summary": "Reference to a name with no visible definition",
+    "summaryHtml": "Reference to a name with no visible definition",
     "body": [
       {
         "type": "text",
-        "html": "Flags any name referenced in a <code>return</code> expression \u2014 bare (<code>return x</code>), the base of an attribute/subscript chain (<code>return x.y</code>), a call argument, or the **callee of a call** (<code>return x()</code>) \u2014 that is not defined in scope. A name is considered defined if it is a parameter, a local assignment (<code>=</code>, <code>for</code>, <code>with</code>), a module-level function, class, variable, or import, an enclosing scope&#x27;s binding, a cross-module imported symbol, or a builtin."
+        "html": "Flags any name referenced in a <code>return</code> expression \u2014 bare (<code>return x</code>), the base of an attribute/subscript chain (<code>return x.y</code>), a call argument, or the **callee of a call** (<code>return x()</code>) \u2014 that is not defined in scope. A name is considered defined if it is a parameter, a local assignment (<code>=</code>, <code>for</code>, <code>with</code>), a module-level function, class, variable, import, or <a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> <code>type</code> alias, an enclosing scope&#x27;s binding, a cross-module imported symbol, or a builtin."
+      },
+      {
+        "type": "text",
+        "html": "Also flags a class that lists **its own name among its bases** when no other binding of that name exists: a class name is not bound until its <code>class</code> statement completes, so <code>class C(C)</code> with no prior <code>C</code> is a guaranteed <code>NameError</code> at runtime (GitHub #398)."
       },
       {
         "type": "code",
         "lang": "python",
-        "code": "def compute() -> int:\n    return undefined_name     # never defined \u2192 E0018\n    return undefined_fn()     # undefined callee \u2192 E0018"
+        "code": "def compute() -> int:\n    return undefined_name     # never defined \u2192 E0018\n    return undefined_fn()     # undefined callee \u2192 E0018\n\n\nclass Node(Node):             # `Node` is unbound in its own bases \u2192 E0018\n    pass"
       }
     ],
     "group": "Type System",
     "docsUrl": "https://www.basilisk-python.dev/errors/names_undefined",
     "references": [
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
       {
         "label": "Python language reference: Naming and binding",
         "url": "https://docs.python.org/3/reference/executionmodel.html#naming-and-binding"

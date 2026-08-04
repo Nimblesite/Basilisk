@@ -10,7 +10,9 @@
 
 use std::collections::HashSet;
 
-use ruff_python_ast::{Expr, ExceptHandler, ExprSubscript, ModModule, Operator, Stmt, StmtTypeAlias};
+use ruff_python_ast::{
+    ExceptHandler, Expr, ExprSubscript, ModModule, Operator, Stmt, StmtTypeAlias,
+};
 use ruff_text_size::{Ranged as _, TextRange};
 
 use crate::types::InferredType;
@@ -185,9 +187,7 @@ impl LowerCtx<'_> {
         match (base_name.as_str(), args.len()) {
             ("Union" | "typing.Union", _) => TypeTerm::Union(args),
             ("Optional" | "typing.Optional", 1) => match args.into_iter().next() {
-                Some(inner) => {
-                    TypeTerm::Union(vec![inner, TypeTerm::Ground(InferredType::None_)])
-                }
+                Some(inner) => TypeTerm::Union(vec![inner, TypeTerm::Ground(InferredType::None_)]),
                 None => TypeTerm::Ground(InferredType::Unknown),
             },
             ("Annotated" | "typing.Annotated", _) => args
@@ -337,15 +337,31 @@ mod tests {
     fn transparent_special_forms_do_not_guard_recursion() {
         for (source, name, expected) in [
             ("type X = Union[int, X]\n", "X", Acceptance::Unguarded),
-            ("type X = typing.Union[int, X]\n", "X", Acceptance::Unguarded),
+            (
+                "type X = typing.Union[int, X]\n",
+                "X",
+                Acceptance::Unguarded,
+            ),
             ("type Y = Optional[Y]\n", "Y", Acceptance::Unguarded),
             ("type Y = typing.Optional[Y]\n", "Y", Acceptance::Unguarded),
-            ("type Z = Annotated[Z, \"meta\"]\n", "Z", Acceptance::Unguarded),
+            (
+                "type Z = Annotated[Z, \"meta\"]\n",
+                "Z",
+                Acceptance::Unguarded,
+            ),
             ("type A = Union[int, list[A]]\n", "A", Acceptance::Accepted),
             ("type B = Optional[list[B]]\n", "B", Acceptance::Accepted),
-            ("type C = Annotated[list[C], \"meta\"]\n", "C", Acceptance::Accepted),
+            (
+                "type C = Annotated[list[C], \"meta\"]\n",
+                "C",
+                Acceptance::Accepted,
+            ),
         ] {
-            assert_eq!(classify_source_alias(source, name), Some(expected), "{source}");
+            assert_eq!(
+                classify_source_alias(source, name),
+                Some(expected),
+                "{source}"
+            );
         }
     }
 
@@ -391,8 +407,8 @@ def scope():
         assert_eq!(
             names,
             [
-                "A1", "A2", "A3", "B1", "B2", "C1", "C2", "D1", "E1", "E2", "E3", "E4", "F1",
-                "G1", "H1"
+                "A1", "A2", "A3", "B1", "B2", "C1", "C2", "D1", "E1", "E2", "E3", "E4", "F1", "G1",
+                "H1"
             ]
         );
     }

@@ -834,14 +834,18 @@ the conformance ratchets (100% / 0 false positives) at every step.
   `run_torture.py` (out-of-the-box defaults for every tool, best-effort
   latest-release pull, per-invocation timeout scored as `hang`, WRITE-ALWAYS
   `status/torture.csv` after every case, read-only regression gate against
-  the committed baseline, exit 3). First measured run (2026-08-04, versions
-  in the CSV header): **basilisk 5/8 — behind mypy 8/8, pyrefly 8/8,
-  pyright 7/8, zuban 7/8; ahead of ty 4/8.** The three basilisk failures are
-  live defects, now pinned by the corpus: the #374 enum-expansion false
-  positive, the #398 recursive-base hang, and a module-level fixed-tuple
-  out-of-range index MISS (the function-scope twin of #284's false
-  positive). Taking this axis means fixing those three; the gate then holds
-  them fixed.
+  the committed baseline, exit 3). The first measured run (2026-08-04)
+  landed basilisk at 5/8, pinning three live defects; all three are fixed —
+  the #374 enum-expansion false positive (enum literal expansion
+  equivalence, `enum_expand.rs`), the #398 recursive-base hang (iterative
+  visited-set base walk, zero recursion), and the module-level fixed-tuple
+  index MISS (`visitor/annotated_tuple_index.rs`). Rerun same day, same
+  harness (versions in the CSV header): **basilisk 8/8 — tied with mypy and
+  pyrefly for the lead; ahead of pyright 7/8, zuban 7/8, ty 4/8.** The
+  standing is held twice over: the scoreboard's read-only gate, and
+  `crates/basilisk-checker/tests/torture_golden_tests.rs`, which scores all
+  eight cases in-process on every `cargo test` so CI breaks the moment a
+  case regresses.
 - [ ] Build the inference scoreboard harness mirroring `benchmarks/`: pull the
   latest official release of each competitor (pyright, mypy, ty, pyrefly,
   zuban) every run; write scores to a status file immediately and

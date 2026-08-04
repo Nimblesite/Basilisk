@@ -55,15 +55,16 @@ pub(crate) fn is_no_type_check(func: &FunctionInfo) -> bool {
     func.decorators.iter().any(|d| d == "no_type_check")
 }
 
-/// Returns `true` when a class is an Enum subclass.
+/// Returns `true` when a class is an Enum subclass, in either the bare
+/// (`class C(Enum)`) or module-qualified (`class C(enum.Enum)`) spelling.
 ///
 /// Enum members are unannotated by design — their type is `Literal[EnumClass.member]`,
 /// synthesised by the Enum metaclass.  Firing BSK-0005 on them is a false positive.
 pub(crate) fn is_enum_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| {
         matches!(
-            b.as_str(),
-            "Enum" | "IntEnum" | "StrEnum" | "Flag" | "IntFlag"
+            b.strip_prefix("enum.").unwrap_or(b),
+            "Enum" | "IntEnum" | "StrEnum" | "Flag" | "IntFlag" | "ReprEnum"
         )
     })
 }
