@@ -10,7 +10,7 @@ use basilisk_resolver::ResolvedModule;
 use super::Rule;
 use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diag_help_note, Diagnostic, ErrorCode};
-use crate::subtyping::SubtypingContext;
+use crate::subtyping::{module_context, SubtypingContext};
 use crate::types::InferredType;
 
 const CODE: ErrorCode = ErrorCode {
@@ -39,15 +39,6 @@ enum Verdict {
     Inconsistent,
     /// At least one side is not decidable here — no diagnostic.
     Unknown,
-}
-
-/// Nominal subtyping context over the module's classes.
-fn module_subtyping(module: &ResolvedModule) -> SubtypingContext {
-    let mut ctx = SubtypingContext::default();
-    for class in &module.classes {
-        ctx.register_class(&class.name, &class.bases);
-    }
-    ctx
 }
 
 /// The leaf name a type compares nominally by, or `None` when the type is not
@@ -226,7 +217,7 @@ impl Rule for TypeIsInconsistentNarrowing {
         let Some(resolver) = annotations else {
             return;
         };
-        let subtyping = module_subtyping(module);
+        let subtyping = module_context(module);
 
         for func in &module.functions {
             let Some(ann_span) = func.return_annotation_span else {

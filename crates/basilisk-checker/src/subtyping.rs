@@ -281,3 +281,16 @@ impl SubtypingContext {
         params_ok && self.is_subtype(source_return, target_return)
     }
 }
+
+/// The nominal context over one module's classes — every rule that judges
+/// class-to-class assignability seeds from this one constructor, so the
+/// registered hierarchy (and therefore every verdict) agrees across rules
+/// ([NARROWPLAN-INTEGRATION]: one subtyping implementation).
+#[must_use]
+pub fn module_context(module: &basilisk_resolver::ResolvedModule) -> SubtypingContext {
+    let mut context = SubtypingContext::default();
+    for class in &module.classes {
+        context.register_class(&class.name, &class.bases);
+    }
+    context
+}

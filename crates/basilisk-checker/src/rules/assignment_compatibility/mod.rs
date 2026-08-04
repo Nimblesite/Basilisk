@@ -11,15 +11,18 @@
 //! ratio: float = "1.5"   # str literal assigned to float annotation → E0014
 //! ```
 //!
-//! The check is performed by extracting the annotation text from the source
-//! around the variable's name span and comparing it against the RHS kind.
+//! Every right-hand side — literal, call, constructor, method, variable — is
+//! typed by the module's [`ModuleOracle`] ([NARROWPLAN-INTEGRATION] Step 1:
+//! `BidirEngine::synth`, with `synth_call` resolving call returns, GitHub
+//! #397/#378), collection displays are judged in the annotation's
+//! expected-type context by engine check mode, and nominal verdicts route
+//! through [`crate::subtyping::SubtypingContext`].
 
 mod alias_match;
 mod callable_check;
 mod dataclass_check;
 mod default_spec;
 mod enum_expand;
-mod literal_parse;
 mod protocol_members;
 mod sig_model;
 mod sig_subtype;
@@ -32,16 +35,18 @@ use enum_expand::enum_expansion_assignable;
 use skip_names::{drop_unchecked_block_diagnostics, SkipNames};
 
 use crate::annotation::AnnotationResolver;
+use crate::rules::shared::oracle::ModuleOracle;
 use crate::span_util::slice_span;
+use crate::subtyping::{module_context, SubtypingContext};
 use crate::types::InferredType;
-use basilisk_resolver::{ResolvedModule, RhsKind, Span, VariableInfo};
+use basilisk_resolver::{ResolvedModule, Span, VariableInfo};
+use ruff_python_ast::Expr;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
 use dataclass_check::check_dataclass_attr_assignments;
-use literal_parse::infer_with_literal_value;
 use tuple_check::check_tuple_reassignments;
 
 pub(crate) const CODE: ErrorCode = ErrorCode {
@@ -82,6 +87,8 @@ impl Rule for AssignmentTypeMismatch {
         let empty_params = ParamMaps::default();
         let skip = SkipNames::collect(module);
         let call_index = callable_check::build_index(module);
+        let oracle = ModuleOracle::build(module, resolver);
+        let subtyping = module_context(module);
         check_vars(
             &module.module_vars,
             &module.source,
@@ -92,8 +99,18 @@ impl Rule for AssignmentTypeMismatch {
             &module.functions,
             &call_index,
             resolver,
+            oracle.as_ref(),
+            &subtyping,
         );
-        check_local_vars(module, diagnostics, &skip, &call_index, resolver);
+        check_local_vars(
+            module,
+            diagnostics,
+            &skip,
+            &call_index,
+            resolver,
+            oracle.as_ref(),
+            &subtyping,
+        );
         check_tuple_reassignments(module, diagnostics);
         check_dataclass_attr_assignments(module, diagnostics);
         typeform_check::check_typeform_calls(module, diagnostics);
@@ -102,36 +119,40 @@ impl Rule for AssignmentTypeMismatch {
     }
 }
 
-/// Collection literals are checked in the annotation's expected-type context.
-/// This permits literal widening (`LiteralString` -> `str`, `int` -> `float`)
-/// and empty-container `Never` without weakening invariance between two
-/// already-typed mutable containers.
+/// The engine's answer for the RHS expression, `Unknown` when the module did
+/// not parse or the span names no expression — an unresolved right-hand side
+/// never manufactures a diagnostic ([CHKARCH-CONFORMANCE-MODE]).
+fn rhs_inferred(oracle: Option<&ModuleOracle<'_>>, var: &VariableInfo) -> InferredType {
+    oracle
+        .zip(var.rhs_span)
+        .and_then(|(oracle, span)| oracle.synth_span(span))
+        .unwrap_or(InferredType::Unknown)
+}
+
+/// Collection displays are checked in the annotation's expected-type context —
+/// engine check mode carries the declared element types INWARD and judges each
+/// element against them, the exact discipline `return`/`yield` positions use.
+/// Bottom-up inference alone would type `{"k": x}` as
+/// `dict[LiteralString, Unknown]` and reject it under dict invariance, so
+/// `d: dict[str, str] = {"k": x}` would fire while the identical
+/// `return {"k": x}` stays clean (GitHub #332). A genuine element mismatch
+/// still falls through to the alias check, then to the diagnostic.
 fn literal_collection_assignable(
     var: &VariableInfo,
+    oracle: Option<&ModuleOracle<'_>>,
     inferred: &InferredType,
     declared: &InferredType,
     skip: &SkipNames,
 ) -> bool {
+    let node = oracle.zip(var.rhs_span).and_then(|(o, span)| o.expr(span));
+    let Some(display) = node else { return false };
     if !matches!(
-        var.rhs_kind,
-        RhsKind::EmptyList
-            | RhsKind::EmptyDict
-            | RhsKind::List(_)
-            | RhsKind::Dict(_)
-            | RhsKind::Set(_)
-            | RhsKind::Tuple(_)
+        display,
+        Expr::List(_) | Expr::Dict(_) | Expr::Set(_) | Expr::Tuple(_)
     ) {
         return false;
     }
-    // Bidirectional (expected-type) inference: carry the declared element types
-    // INWARD and check each literal element against them — the exact check
-    // `returns`/`yield` already use. Without this the RHS is inferred bottom-up
-    // to e.g. `dict[LiteralString, Unknown]` (a value from a typed variable
-    // becomes `Unknown`, a string key becomes `LiteralString`) and then rejected
-    // under dict invariance, so `d: dict[str, str] = {"k": x}` fires while the
-    // identical `return {"k": x}` is clean (GitHub #332). A genuine element
-    // mismatch still yields `Some(false)` and falls through to the alias check.
-    if crate::inference::literal_collection_assignable_to(&var.rhs_kind, declared) == Some(true) {
+    if oracle.zip(var.rhs_span).and_then(|(o, span)| o.checks_span(span, declared)) == Some(true) {
         return true;
     }
     let ctx = alias_match::AliasCtx {
@@ -141,21 +162,88 @@ fn literal_collection_assignable(
     alias_match::alias_assignable(inferred, declared, &ctx, 0)
 }
 
-/// Declared parameter annotations for the enclosing function: parsed types
-/// for assignability checks, and raw annotation texts for structural
-/// callable-subtyping checks.
+/// Is the declared type one this rule can pass judgment on? Structural
+/// targets (`Protocol`, `TypedDict` — including inside unions/containers)
+/// need member-level judgment a nominal comparison cannot give, and a nominal
+/// leaf the module cannot ground (an unresolvable import, a `TypeVar` spelled
+/// as a name) is a question, not an answer. Firing on either would be a false
+/// positive on spec-valid code ([CHKARCH-CONFORMANCE-MODE]).
+fn declared_target_judgeable(resolver: &AnnotationResolver<'_>, declared: &InferredType) -> bool {
+    !resolver.is_structural_target(declared) && declared_target_grounded(resolver, declared)
+}
+
+/// Every top-level nominal leaf (through unions/optionals) is grounded.
+fn declared_target_grounded(resolver: &AnnotationResolver<'_>, declared: &InferredType) -> bool {
+    match declared {
+        InferredType::Named(name) => resolver.is_grounded_name(name),
+        InferredType::Union(arms) => {
+            arms.iter().all(|arm| declared_target_grounded(resolver, arm))
+        }
+        InferredType::Optional(inner) => declared_target_grounded(resolver, inner),
+        _ => true,
+    }
+}
+
+/// Nominal-subclass acceptance through the module's registered hierarchy:
+/// `x: Base = Derived()` and `x: int = MyInt()` are assignments
+/// `is_assignable_to` alone cannot bless because it has no class table
+/// ([NARROWPLAN-INTEGRATION]: nominal verdicts route through
+/// [`SubtypingContext`]). Union sides decompose exactly as assignability does.
+fn nominal_subclass_assignable(
+    inferred: &InferredType,
+    declared: &InferredType,
+    subtyping: &SubtypingContext,
+) -> bool {
+    match (inferred, declared) {
+        (InferredType::Union(arms), _) => arms
+            .iter()
+            .all(|arm| arm.is_assignable_to(declared) || nominal_subclass_assignable(arm, declared, subtyping)),
+        (_, InferredType::Union(arms)) => arms
+            .iter()
+            .any(|arm| inferred.is_assignable_to(arm) || nominal_subclass_assignable(inferred, arm, subtyping)),
+        (InferredType::Optional(inner), _) => {
+            nominal_subclass_assignable(inner, declared, subtyping)
+                && InferredType::None_.is_assignable_to(declared)
+        }
+        (_, InferredType::Optional(inner)) => {
+            nominal_subclass_assignable(inferred, inner, subtyping)
+        }
+        _ => match (nominal_leaf(inferred), nominal_leaf(declared)) {
+            (Some(sub), Some(sup)) => subtyping.is_subtype(&sub, &sup),
+            _ => false,
+        },
+    }
+}
+
+/// The name a type participates in the nominal walk under — a class's base
+/// spelling, or the builtin name of a concrete leaf.
+fn nominal_leaf(ty: &InferredType) -> Option<String> {
+    match ty {
+        InferredType::Named(name) => {
+            Some(name.split('[').next().unwrap_or(name).to_owned())
+        }
+        InferredType::Int => Some("int".to_owned()),
+        InferredType::Str | InferredType::LiteralString => Some("str".to_owned()),
+        InferredType::Float => Some("float".to_owned()),
+        InferredType::Bool => Some("bool".to_owned()),
+        InferredType::Bytes => Some("bytes".to_owned()),
+        _ => None,
+    }
+}
+
+/// Raw parameter-annotation texts for the enclosing function, consumed by the
+/// structural callable-subtyping rescue.
 #[derive(Default)]
 struct ParamMaps {
-    types: std::collections::HashMap<String, InferredType>,
     texts: std::collections::HashMap<String, String>,
 }
 
 /// Check a slice of annotated variables for type mismatches.
 ///
-/// `params` maps parameter names to their declared annotation types.
-/// When the RHS of an annotated local variable is a simple name reference
-/// that matches a parameter, the parameter's type is used for assignability
-/// checking instead of the generic `Unknown` fallback.
+/// Every RHS is typed by the module's [`ModuleOracle`] — a parameter name
+/// resolves through the engine's scope overlay, a call through
+/// `synth_call`, a display bottom-up with expected-type check mode as the
+/// acceptance path ([NARROWPLAN-INTEGRATION] Step 1).
 #[expect(
     clippy::too_many_arguments,
     clippy::too_many_lines,
@@ -171,6 +259,8 @@ fn check_vars(
     functions: &[basilisk_resolver::FunctionInfo],
     call_index: &callable_check::CallIndex,
     resolver: &AnnotationResolver<'_>,
+    oracle: Option<&ModuleOracle<'_>>,
+    subtyping: &SubtypingContext,
 ) {
     vars.iter()
         .filter(|var| var.has_annotation && var.rhs_span.is_some())
@@ -201,7 +291,7 @@ fn check_vars(
                 if typeform_check::is_valid_typeform_assignment(var, source, inner, functions) {
                     return None;
                 }
-                let inferred_type = infer_with_literal_value(var, source, &declared_type);
+                let inferred_type = rhs_inferred(oracle, var);
                 return Some((
                     var,
                     annotation_text.to_owned(),
@@ -221,26 +311,15 @@ fn check_vars(
             // Skip dict literal assignments to TypedDict annotations. E0014 compares
             // the top-level type (e.g. `dict[str, str|int]` vs `Movie`) which always
             // mismatches. Field-level checking is done by E0093 instead.
-            if typeddict_literal_skipped(var, source, &declared_type, skip) {
+            if typeddict_literal_skipped(var, oracle, &declared_type, skip) {
                 return None;
             }
 
-            // When the declared type is a Literal, try to infer the RHS as a
-            // literal value so we can compare values, not just kinds.
-            let mut inferred_type = infer_with_literal_value(var, source, &declared_type);
-
-            // When the inferred type is Unknown and the RHS text is a parameter
-            // name, use the parameter's declared type instead.
-            if matches!(inferred_type, InferredType::Unknown) {
-                if let Some(rhs_span) = var.rhs_span {
-                    if let Some(rhs_text) = slice_span(source, rhs_span) {
-                        let rhs_name = rhs_text.trim();
-                        if let Some(param_type) = params.types.get(rhs_name) {
-                            inferred_type = param_type.clone();
-                        }
-                    }
-                }
-            }
+            // The engine types every RHS form — a literal keeps its value
+            // (`Literal[...]`) so Literal-declared targets compare by value,
+            // a parameter name resolves through the scope overlay, and a
+            // call resolves through its callee's declared return.
+            let inferred_type = rhs_inferred(oracle, var);
 
             // PEP 728: a TypedDict declaring `extra_items=` may be assignable
             // to `dict[str, VT]`; the name-level comparison below cannot
@@ -304,8 +383,10 @@ fn check_vars(
             }
 
             if inferred_type.is_assignable_to(&declared_type)
-                || literal_collection_assignable(var, &inferred_type, &declared_type, skip)
+                || literal_collection_assignable(var, oracle, &inferred_type, &declared_type, skip)
                 || enum_expansion_assignable(&inferred_type, &declared_type, &skip.enum_members)
+                || !declared_target_judgeable(resolver, &declared_type)
+                || nominal_subclass_assignable(&inferred_type, &declared_type, subtyping)
             {
                 None
             } else if callable_rescue(var, source, annotation_text, params, call_index) {

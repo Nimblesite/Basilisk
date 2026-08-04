@@ -5,6 +5,7 @@
 //! to eliminate code duplication and improve maintainability.
 
 mod class_walks;
+pub(crate) mod oracle;
 mod text_scan;
 
 pub(crate) use class_walks::{
