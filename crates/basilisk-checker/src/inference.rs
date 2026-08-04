@@ -290,5 +290,4 @@ mod tests {
         assert!(!rhs_fully_determines_type(&RhsKind::List(vec![])));
         assert!(!rhs_fully_determines_type(&RhsKind::Dict(vec![])));
     }
-
 }

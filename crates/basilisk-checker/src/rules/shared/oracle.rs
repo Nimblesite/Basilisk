@@ -59,7 +59,7 @@ impl<'m> ModuleOracle<'m> {
     /// is reported separately and every query then abstains.
     pub(crate) fn build(
         module: &'m ResolvedModule,
-        resolver: &AnnotationResolver<'_>,
+        resolver: &AnnotationResolver<'m>,
     ) -> Option<Self> {
         let parsed = parse_module(module)?;
         let mut collector = Collector {
@@ -196,9 +196,13 @@ impl<'m> Collector<'m, '_> {
             .iter()
             .chain(def.parameters.args.iter())
             .map(|param| {
-                param.parameter.annotation.as_deref().map_or_else(Ty::unknown, |annotation| {
-                    Ty::from_inferred(&self.resolver.resolve(annotation))
-                })
+                param
+                    .parameter
+                    .annotation
+                    .as_deref()
+                    .map_or_else(Ty::unknown, |annotation| {
+                        Ty::from_inferred(&self.resolver.resolve(annotation))
+                    })
             })
             .collect()
     }

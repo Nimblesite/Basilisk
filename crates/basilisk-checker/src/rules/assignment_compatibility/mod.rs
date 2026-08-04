@@ -152,7 +152,11 @@ fn literal_collection_assignable(
     ) {
         return false;
     }
-    if oracle.zip(var.rhs_span).and_then(|(o, span)| o.checks_span(span, declared)) == Some(true) {
+    if oracle
+        .zip(var.rhs_span)
+        .and_then(|(o, span)| o.checks_span(span, declared))
+        == Some(true)
+    {
         return true;
     }
     let ctx = alias_match::AliasCtx {
@@ -176,9 +180,9 @@ fn declared_target_judgeable(resolver: &AnnotationResolver<'_>, declared: &Infer
 fn declared_target_grounded(resolver: &AnnotationResolver<'_>, declared: &InferredType) -> bool {
     match declared {
         InferredType::Named(name) => resolver.is_grounded_name(name),
-        InferredType::Union(arms) => {
-            arms.iter().all(|arm| declared_target_grounded(resolver, arm))
-        }
+        InferredType::Union(arms) => arms
+            .iter()
+            .all(|arm| declared_target_grounded(resolver, arm)),
         InferredType::Optional(inner) => declared_target_grounded(resolver, inner),
         _ => true,
     }
@@ -195,12 +199,12 @@ fn nominal_subclass_assignable(
     subtyping: &SubtypingContext,
 ) -> bool {
     match (inferred, declared) {
-        (InferredType::Union(arms), _) => arms
-            .iter()
-            .all(|arm| arm.is_assignable_to(declared) || nominal_subclass_assignable(arm, declared, subtyping)),
-        (_, InferredType::Union(arms)) => arms
-            .iter()
-            .any(|arm| inferred.is_assignable_to(arm) || nominal_subclass_assignable(inferred, arm, subtyping)),
+        (InferredType::Union(arms), _) => arms.iter().all(|arm| {
+            arm.is_assignable_to(declared) || nominal_subclass_assignable(arm, declared, subtyping)
+        }),
+        (_, InferredType::Union(arms)) => arms.iter().any(|arm| {
+            inferred.is_assignable_to(arm) || nominal_subclass_assignable(inferred, arm, subtyping)
+        }),
         (InferredType::Optional(inner), _) => {
             nominal_subclass_assignable(inner, declared, subtyping)
                 && InferredType::None_.is_assignable_to(declared)
@@ -219,9 +223,7 @@ fn nominal_subclass_assignable(
 /// spelling, or the builtin name of a concrete leaf.
 fn nominal_leaf(ty: &InferredType) -> Option<String> {
     match ty {
-        InferredType::Named(name) => {
-            Some(name.split('[').next().unwrap_or(name).to_owned())
-        }
+        InferredType::Named(name) => Some(name.split('[').next().unwrap_or(name).to_owned()),
         InferredType::Int => Some("int".to_owned()),
         InferredType::Str | InferredType::LiteralString => Some("str".to_owned()),
         InferredType::Float => Some("float".to_owned()),
@@ -434,19 +436,21 @@ fn callable_rescue(
 
 /// Check local variables in function bodies for type mismatches.
 ///
-/// Builds a map of parameter name to declared type for each function so that
-/// assignments like `x: Literal[False] = a` (where `a: Literal[0]`) can be
-/// checked for Literal-level incompatibility.
+/// The engine's scope overlay types parameter references
+/// (`x: Literal[False] = a` where `a: Literal[0]` compares by value); the
+/// raw annotation texts feed only the structural callable-subtyping rescue.
 fn check_local_vars(
     module: &ResolvedModule,
     diagnostics: &mut Vec<Diagnostic>,
     skip: &SkipNames,
     call_index: &callable_check::CallIndex,
     resolver: &AnnotationResolver<'_>,
+    oracle: Option<&ModuleOracle<'_>>,
+    subtyping: &SubtypingContext,
 ) {
     let source = &module.source;
     for func in &module.functions {
-        let params = build_param_maps(&func.parameters, source, resolver);
+        let params = build_param_maps(&func.parameters, source);
         check_vars(
             &func.local_vars,
             source,
@@ -457,37 +461,23 @@ fn check_local_vars(
             &module.functions,
             call_index,
             resolver,
+            oracle,
+            subtyping,
         );
     }
 }
 
-/// Build maps from parameter name to its declared `InferredType` and raw
-/// annotation text by reading the annotation from source spans.
-fn build_param_maps(
-    params: &[basilisk_resolver::ParameterInfo],
-    source: &str,
-    resolver: &AnnotationResolver<'_>,
-) -> ParamMaps {
+/// Raw annotation text per annotated parameter, for the structural
+/// callable-subtyping rescue ([`callable_rescue`]).
+fn build_param_maps(params: &[basilisk_resolver::ParameterInfo], source: &str) -> ParamMaps {
     let mut maps = ParamMaps::default();
     for param in params {
-        if !param.has_annotation {
-            continue;
-        }
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
         let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
-        // The parameter's declared type comes from the same cascade the
-        // assignment's annotation does ([TYPEINF-ANNOTATION-RESOLUTION]).
-        let Some(inferred) = resolver
-            .resolve_span(ann_span)
-            .or_else(|| resolver.resolve_text(ann_text))
-        else {
-            continue;
-        };
-        let _ = maps.types.insert(param.name.clone(), inferred);
         let _ = maps
             .texts
             .insert(param.name.clone(), ann_text.trim().to_owned());
@@ -518,10 +508,11 @@ fn nominal_key(ty: &InferredType) -> Option<String> {
 }
 
 /// `true` when a dict-literal assignment to a `TypedDict` annotation should
-/// be skipped (field-level checking is E0093's job).
+/// be skipped (field-level checking is E0093's job). The RHS is judged by its
+/// AST node, never by sniffing source text.
 fn typeddict_literal_skipped(
     var: &VariableInfo,
-    source: &str,
+    oracle: Option<&ModuleOracle<'_>>,
     declared_type: &InferredType,
     skip: &SkipNames,
 ) -> bool {
@@ -529,10 +520,10 @@ fn typeddict_literal_skipped(
         return false;
     };
     skip.typeddict.contains(name.as_str())
-        && var
-            .rhs_span
-            .and_then(|sp| slice_span(source, sp))
-            .is_some_and(|rhs| rhs.trim_start().starts_with('{'))
+        && oracle
+            .zip(var.rhs_span)
+            .and_then(|(o, span)| o.expr(span))
+            .is_some_and(|rhs| matches!(rhs, Expr::Dict(_) | Expr::DictComp(_)))
 }
 
 /// `true` when an `extra_items=` `TypedDict` is assigned to a `dict[...]`
