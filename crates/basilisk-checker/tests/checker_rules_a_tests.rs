@@ -26,6 +26,8 @@ mod callables_annotation;
 mod calls_argument_type;
 #[path = "checker/calls_expression_position_tests.rs"]
 mod calls_expression_position;
+#[path = "checker/class_body_method_binding_tests.rs"]
+mod class_body_method_binding;
 #[path = "checker/classes_override_tests.rs"]
 mod classes_override;
 #[path = "checker/classes_override_2_tests.rs"]

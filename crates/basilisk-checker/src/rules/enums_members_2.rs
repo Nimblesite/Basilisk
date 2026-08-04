@@ -166,7 +166,7 @@ fn is_non_member(cls: &ClassInfo, member_name: &str) -> bool {
     // Class body attributes explicitly declared with `nonmember(...)`, lambda, or descriptor.
     if cls.attributes.iter().any(|a| {
         a.name == member_name
-            && (a.rhs_is_nonmember_call || a.rhs_is_lambda || a.rhs_is_descriptor_call)
+            && (a.rhs_is_nonmember_call || a.rhs_is_lambda || a.rhs_descriptor.is_some())
     }) {
         return true;
     }

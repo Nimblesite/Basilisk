@@ -790,12 +790,26 @@ not run is `[~]`, not `[x]`.
     foreign name staying overload-silent. **RED proof**: 5 of 11 failed before
     the change (`ov`/`o` unrecognised; both foreign spellings falsely
     recognised); 11/11 after.
-- [ ] Visit calls in every expression position rather than statement-outermost
+- [x] Visit calls in every expression position rather than statement-outermost
   only, so `C(1).method()` reports the same constructor-arity error as `C(1)`
   ([#381](https://github.com/Nimblesite/Basilisk/issues/381)).
-  - [ ] Test (write RED first): `C(1).method()`, `f(C(1))`, `[C(1)]`,
+  — `visit_calls` rebuilt on the official `ruff_python_ast::visitor::Visitor`
+  (pre-order, every expression position: receivers, argument lists, container
+  literals, ternaries, comprehensions, f-strings, decorators, nested defs);
+  `collect_calls_from_stmts` now walks it via the new `call_site_from_call`,
+  so `module.calls` is complete. #335's special-case `cast_calls.rs` walker
+  DELETED — the field is now derived by filtering the complete `calls` vector
+  on `callee == "cast"`.
+  - [x] Test (write RED first): `C(1).method()`, `f(C(1))`, `[C(1)]`,
     `x = C(1) if p else C(1)` each report the same arity diagnostic as the bare
     `C(1)` statement, at the same span.
+    — `tests/checker/calls_expression_position_tests.rs` (6 tests): bare
+    baseline pin, method receiver, call argument, list element, conditional
+    expression, correct-everywhere-silent. The span assertion translates the
+    bare baseline's own anchoring to the wrapped occurrence, so it pins "same
+    span" without hard-coding the rule's anchor. **RED proof**: 2 of 6 passed
+    before the collector fix (bare + silent); method receiver, call argument,
+    list element, and conditional were all silently missed; 6/6 after.
 - [ ] Bind functions assigned in a class body as methods — implicit receiver
   consumed on instance access, unbound on class access, `staticmethod` /
   `classmethod` honoured ([#382](https://github.com/Nimblesite/Basilisk/issues/382)).

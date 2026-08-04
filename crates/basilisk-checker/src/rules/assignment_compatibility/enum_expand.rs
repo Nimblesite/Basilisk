@@ -49,7 +49,7 @@ fn is_enum_member(attr: &AttributeInfo) -> bool {
         && !attr.has_annotation
         && !attr.rhs_is_nonmember_call
         && !attr.rhs_is_lambda
-        && !attr.rhs_is_descriptor_call
+        && attr.rhs_descriptor.is_none()
         && !sunder_or_dunder
 }
 

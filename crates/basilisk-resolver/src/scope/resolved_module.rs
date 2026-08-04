@@ -339,6 +339,9 @@ impl ResolvedModule {
             super::CallReceiver::StringLiteral => ("str", true),
             super::CallReceiver::BytesLiteral => ("bytes", true),
             super::CallReceiver::Name(name) => self.builtin_type_of_name(name)?,
+            // A constructed instance's methods are resolved against the user
+            // class, not the builtin stub index ([#382]).
+            super::CallReceiver::Constructor(_) => return None,
         };
         self.builtin_classes
             .get(type_name)

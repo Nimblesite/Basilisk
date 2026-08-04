@@ -85,6 +85,10 @@ pub(super) fn call_site_from_call(call: &ruff_python_ast::ExprCall) -> Option<Ca
                 Expr::StringLiteral(_) => CallReceiver::StringLiteral,
                 Expr::BytesLiteral(_) => CallReceiver::BytesLiteral,
                 Expr::Name(name) => CallReceiver::Name(name.id.to_string()),
+                Expr::Call(constructor) => match constructor.func.as_ref() {
+                    Expr::Name(name) => CallReceiver::Constructor(name.id.to_string()),
+                    _ => return None,
+                },
                 _ => return None,
             };
             (attribute.attr.to_string(), Some(receiver))
