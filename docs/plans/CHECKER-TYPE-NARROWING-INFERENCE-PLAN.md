@@ -45,12 +45,16 @@ environment, expression inferrer, constraint solver, or subtype context.
 - Preserve the gradual guarantee as a testable invariant, keep the
   zero-false-positive conformance gate, and hold both benchmark ratchets
   ([CHKARCH-TESTING-BENCH-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET)).
-- **Superiority is the exit criterion, not an aspiration.** Basilisk MUST end
-  this plan with measurably better type inference than pyright, mypy, ty,
-  pyrefly, and zuban. The plan is not complete while any competitor leads any
-  axis in [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS); the mechanism that makes
-  the claim honest, enforceable, and permanent is the superiority gate in
-  [NARROWPLAN-SUPERIORITY](#NARROWPLAN-SUPERIORITY).
+- **Winning is the exit criterion, not an aspiration — and integration comes
+  first.** Basilisk MUST end this plan with measurably better type inference
+  than pyright, mypy, ty, pyrefly, and zuban, wired into the shipped checker —
+  a lead held by a detached engine counts for nothing. The plan is not
+  complete while any competitor leads any axis in
+  [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS); the mechanism that makes the
+  claim honest, enforceable, and permanent is the post-integration scoreboard
+  ratchet in [NARROWPLAN-SCOREBOARD](#NARROWPLAN-SCOREBOARD), which starts
+  only after [NARROWPLAN-INTEGRATION](#NARROWPLAN-INTEGRATION) has the engine
+  behind live diagnostics.
 
 **Non-goals**
 
@@ -342,21 +346,33 @@ forbidden, and nothing in this section licenses it:
 If replacing a rule's guts costs a required error, the engine is not ready for
 that rule yet — **fix the engine**, then come back. Do not ship the loss.
 
-### Order of demolition
+### Order of demolition — every step closes filed bugs
 
-Each step is one change: wire the rule to the engine, delete the legacy path
-it replaces, land the spec-ID-linked mutation-resistant tests, re-certify.
+This is not speculative refactoring: **each step fixes real, currently open
+issues** (`docs/open_issues.csv`). The demolition list IS the bug list. Each
+step is one change: wire the rule to the engine, delete the legacy path it
+replaces, land the spec-ID-linked mutation-resistant tests, re-certify. The
+sequenced checkboxes live in the checklist
+([Integration and acceptance](#NARROWPLAN-CHECKLIST)):
 
-1. `assignment_compatibility` — the biggest liar in the tree. Every call RHS
-   goes through `synth_call`; `RhsKind` shape-matching dies here first.
-2. `returns_compatibility` / `returns_compatibility_2` — the returned
-   expression is synthesized, not pattern-matched.
-3. `calls_argument_type` — arguments checked against parameters through
-   `SubtypingContext`, not through per-rule string comparison.
-4. `directives_assert_type` / `directives_reveal_type` — these must agree with
-   hover, byte for byte, because they are now the same oracle.
-5. The remaining 80-odd `slice_span` consumers, in descending call-site count,
-   until the grep returns zero.
+1. `assignment_compatibility` → engine (`synth_call` for call RHS), `RhsKind`
+   dies — fixes #397 (unfixed half) and the assignment half of #378.
+2. `returns_compatibility` / `returns_compatibility_2` → engine synthesis —
+   fixes the return half of #378; companion rule `returns_implicit_none`
+   (#401) lands in the same family.
+3. `calls_argument_type` → engine + `SubtypingContext` — fixes #356 (wrong in
+   both directions on `str.join`).
+4. One engine-driven traversal visiting **every** `Call` node, not just
+   outermost positions ([NARROWPLAN-CALLSITES](#NARROWPLAN-CALLSITES)) —
+   fixes #381, #382, and the position half of #335.
+5. `directives_assert_type` / `directives_reveal_type` = the hover oracle,
+   byte for byte — fixes #290 (solved generics surface everywhere).
+6. `BSK-0001` consults `param_infer` before demanding an inferable
+   annotation — fixes #317.
+7. Text-matching long tail: `slice_span` ~80 consumers → 0 — fixes #379 and
+   retires the mechanism behind #383.
+8. Flow-analysis dividend: `names_unbound` migrates to the walker's all-paths
+   divergence — fixes #285.
 
 ### Gates that stay armed the entire time
 
@@ -442,7 +458,7 @@ to re-certify.
 
 ## Measurable targets {#NARROWPLAN-TARGETS}
 
-The axes on which inference superiority is defined and measured. Each axis has
+The axes on which the inference lead is defined and measured. Each axis has
 a concrete metric so the lead is provable, not asserted:
 
 - **Bidirectional literal/generic inference:** deferred bounded type variables
@@ -463,12 +479,21 @@ a concrete metric so the lead is provable, not asserted:
   annotations and asserts no new errors — Pyrefly fails this by design;
   Basilisk should pass.
 
-## Superiority gate {#NARROWPLAN-SUPERIORITY}
+## Inference scoreboard ratchet {#NARROWPLAN-SCOREBOARD}
 
-Basilisk MUST have better type inference than every officially-recognized
-competitor. "Better" is defined operationally and enforced exactly the way
-this repo already enforces conformance and speed — self-measured,
-reproducible, write-always, ratcheted:
+**Sequencing: this section is POST-INTEGRATION.** A lead measured on a
+detached engine is a lead on nothing — until
+[NARROWPLAN-INTEGRATION](#NARROWPLAN-INTEGRATION) has the engine answering
+real diagnostics in the shipped binary, there is no product to score, and no
+scoreboard work outranks a single demolition step. The torture corpus already
+seeded (below, first checklist item) stays live because it scores the *shipped
+checker*; the remaining axes are built only after the wiring they would
+measure exists.
+
+Basilisk MUST end this plan with better type inference than every
+officially-recognized competitor. "Better" is defined operationally and
+enforced exactly the way this repo already enforces conformance and speed —
+self-measured, reproducible, write-always, ratcheted:
 
 - **Definition.** Basilisk is superior on an axis when it scores strictly
   better than the LATEST official release of every officially-recognized
@@ -492,10 +517,10 @@ reproducible, write-always, ratcheted:
   gate: falling behind any competitor on a led axis is a build failure. Leads
   only accumulate. The plan exits only when Basilisk leads **all five axes
   simultaneously** while the 100%/0-FP conformance gate and the speed
-  benchmark gate stay green — inference superiority must never be bought by
+  benchmark gate stay green — the inference lead must never be bought by
   regressing conformance or performance, and vice versa.
 - **Moving targets.** Because the harness pulls latest competitor releases,
-  superiority is continuously re-proven against competitors as they improve —
+  the lead is continuously re-proven against competitors as they improve —
   never against frozen versions. If a competitor release takes back an axis,
   CI goes red and reclaiming that axis becomes the top-priority work item on
   this plan.
@@ -543,9 +568,9 @@ reproducible, write-always, ratcheted:
   [TYPEINF-RESEARCH-COMPETITORS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-RESEARCH-COMPETITORS)
   are vendor/benchmark claims, not independently audited; treat them as
   directional. The only numbers Basilisk acts on are the ones its own
-  scoreboard harness produces ([NARROWPLAN-SUPERIORITY](#NARROWPLAN-SUPERIORITY)).
+  scoreboard harness produces ([NARROWPLAN-SCOREBOARD](#NARROWPLAN-SCOREBOARD)).
 - **Competitors are moving targets.** Pyrefly and ty ship fast and are well
-  funded; ty is actively closing its bidirectional gap. The superiority gate
+  funded; ty is actively closing its bidirectional gap. The scoreboard ratchet
   is designed for this: leads are re-proven against latest releases on every
   run, and a lost axis turns CI red rather than silently eroding the claim.
 
@@ -556,7 +581,7 @@ reproducible, write-always, ratcheted:
 - Hover/inlay results and checker diagnostics agree for the same expression.
 - The gradual-guarantee differential suite (strip annotations → assert no new
   errors) passes.
-- The inference scoreboard ([NARROWPLAN-SUPERIORITY](#NARROWPLAN-SUPERIORITY))
+- The inference scoreboard ([NARROWPLAN-SCOREBOARD](#NARROWPLAN-SCOREBOARD))
   shows Basilisk strictly ahead of the latest official releases of pyright,
   mypy, ty, pyrefly, and zuban on **every** axis in
   [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS), and the per-axis ratchet is wired
@@ -952,7 +977,81 @@ the conformance ratchets (100% / 0 false positives) at every step.
   union scrutinees, and stays gradual on `Unknown` scrutinees. Surface
   syntax awaits a ratified PEP 827; the engine is ready behind it.
 
-### Superiority gate
+### Integration and acceptance
+
+- [x] **Blocked every item below.** `FlowWalker::synth_type` is cheap before
+  any rule consumes `narrowed_uses` — see [NARROWPLAN-INTEGRATION](#NARROWPLAN-INTEGRATION)
+  for the measurements. All three changes landed with the walker still
+  unconsumed: (a) `ctx.callables` converts to `Ty` once at walker
+  construction; (b) one long-lived `BidirEngine` takes the visible-binding
+  overlay through `push_scope_with`/`pop_scope` and resets its solver through
+  `solve_expression`; (c) `one_diverges` memoizes by statement span, so the
+  `walk_if` probe-then-walk and the `walk_stmts` re-probe no longer
+  re-synthesize the same expressions. Cost went from linear in module size to
+  flat.
+- [ ] Record a `make bench` baseline on a fixture that actually exercises the
+  flow walker **in the same change that first wires it**, so the walker stops
+  being invisible to the ratchet the moment it starts costing real time.
+- [ ] **Step 1 — `assignment_compatibility` to the engine; delete its
+  `RhsKind` shape-matching in the same change.** Every right-hand side —
+  literal, call, constructor, method, variable — is typed by
+  `BidirEngine::synth` (`synth_call` resolves call returns), narrowed by
+  `narrow::analyse_function_in`, and judged by `SubtypingContext`.
+  `a: int = returns_str()` must fire. Fixes #397 (unfixed half) and the
+  assignment half of #378. Not optional.
+- [ ] **Step 2 — `returns_compatibility` / `returns_compatibility_2`
+  synthesize the returned expression through the engine**, deleting the
+  replaced pattern-matching. Fixes the return half of #378. Companion
+  default-on rule `returns_implicit_none` (#401) lands in the same family.
+- [ ] **Step 3 — `calls_argument_type` judges arguments through the engine +
+  `SubtypingContext`**, deleting the syntactic-shape comparison. Fixes #356
+  (false positives on valid `str.join` list displays AND a missed genuine
+  error).
+- [ ] **Step 4 — one engine-driven traversal visits every `Call` node with a
+  resolved callee**, not just outermost-expression positions
+  ([NARROWPLAN-CALLSITES](#NARROWPLAN-CALLSITES)). Fixes #381, #382, and the
+  position half of #335.
+- [ ] **Step 5 — `directives_assert_type` / `directives_reveal_type` answer
+  from the hover oracle, byte for byte** (the parked
+  `directives_assert_type_2` comes alive here). Fixes #290 — solved generic
+  parameters surface in hover and diagnostics alike.
+- [ ] **Step 6 — `BSK-0001` consults `param_infer` before demanding an
+  annotation the engine can already infer** from body constraints and call
+  sites. Fixes #317.
+- [ ] **Step 7 — text-matching long tail to zero.** Drive
+  `grep -rln slice_span crates/basilisk-checker/src/rules | wc -l` from
+  **86 to 0**, `RhsKind` (26 files) and `InferredType::from_annotation` over
+  source text (14 files) to **0**, and delete `rules/shared/text_scan.rs`
+  outright. An annotation is a type expression the engine evaluates — never a
+  string a rule slices out of the file. Fixes #379; retires the mechanism
+  behind #383.
+- [ ] **Step 8 — `names_unbound` migrates to the walker's all-paths
+  divergence analysis**, replacing the last-statement idiom. Fixes #285.
+- [ ] Route all 22 direct `name_subtype`/`is_numeric_subtype` call sites (12
+  files) through `subtyping::SubtypingContext` and delete the shims — runs
+  alongside steps 3–7. One subtyping implementation. Not two, not
+  twenty-two.
+- [ ] Delete every replaced code path **in the change that replaces it**. A
+  migration that leaves the legacy path alive alongside the new one is
+  incomplete and does not merge.
+- [ ] Never create an alternate checking mode, engine flag, or opt-in switch
+  for any of this. One code path. Basilisk has no modes
+  ([CHKARCH-CONFIGURATION-ONLY]).
+- [ ] Keep every rule registered and every diagnostic intact through the whole
+  demolition. The mechanism dies; the checking does not. A migration that
+  costs a required error means the engine is not ready — **fix the engine**,
+  never ship the loss ([CHKARCH-CONFORMANCE]).
+- [ ] Add spec-ID-linked mutation-resistant tests for each migrated behavior.
+- [ ] Verify hover/inlay results and checker diagnostics agree for the same
+  expression — byte for byte, because after this they are the same oracle.
+- [ ] `make test`, mutation/coverage ratchets, benchmarks for touched hot
+  paths, and the live conformance gate all pass with zero false positives.
+
+### Inference scoreboard ratchet — post-integration
+
+Nothing below (except the already-live torture corpus) starts before the
+demolition order above it is complete: score the shipped checker, not a
+detached engine.
 
 - [x] Seed the scoreboard with a **type-torture corpus**: hard, spec-grounded
   problems (several straight from the issue tracker) scored conformance-style
@@ -995,56 +1094,6 @@ the conformance ratchets (100% / 0 false positives) at every step.
 - [ ] Take and hold the lead on **all five axes simultaneously**, with the
   100%/0-FP conformance gate and the speed benchmark gate green in the same
   run.
-- [ ] Enforce claims discipline: every superiority statement in docs, website,
+- [ ] Enforce claims discipline: every better-than-competitor claim in docs, website,
   or marketing traces to the current committed scoreboard run and states the
   methodology.
-
-### Integration and acceptance
-
-- [x] **Blocked every item below.** `FlowWalker::synth_type` is cheap before
-  any rule consumes `narrowed_uses` — see [NARROWPLAN-INTEGRATION](#NARROWPLAN-INTEGRATION)
-  for the measurements. All three changes landed with the walker still
-  unconsumed: (a) `ctx.callables` converts to `Ty` once at walker
-  construction; (b) one long-lived `BidirEngine` takes the visible-binding
-  overlay through `push_scope_with`/`pop_scope` and resets its solver through
-  `solve_expression`; (c) `one_diverges` memoizes by statement span, so the
-  `walk_if` probe-then-walk and the `walk_stmts` re-probe no longer
-  re-synthesize the same expressions. Cost went from linear in module size to
-  flat.
-- [ ] Record a `make bench` baseline on a fixture that actually exercises the
-  flow walker **in the same change that first wires it**, so the walker stops
-  being invisible to the ratchet the moment it starts costing real time.
-- [ ] **Wire `assignment_compatibility` to the engine and delete `RhsKind`
-  shape-matching from it in the same change.** Every right-hand side —
-  literal, call, constructor, method, variable — is typed by
-  `BidirEngine::synth`, narrowed by `narrow::analyse_function_in`, and judged
-  by `SubtypingContext`. `a: int = returns_str()` must fire (Refs #397). This
-  is step one and it is not optional.
-- [ ] Migrate `returns_compatibility` / `returns_compatibility_2`,
-  `calls_argument_type`, and `directives_assert_type` /
-  `directives_reveal_type` — each one change, each deleting the legacy path it
-  replaces, each re-certified at 100% / 0 FP.
-- [ ] Drive `grep -rln slice_span crates/basilisk-checker/src/rules | wc -l`
-  from **86 to 0**. An annotation is a type expression the engine evaluates —
-  never a string a rule slices out of the file.
-- [ ] Drive `RhsKind` (26 files) and `InferredType::from_annotation` over
-  source text (14 files) to **0**, and delete `rules/shared/text_scan.rs`
-  outright.
-- [ ] Route all 22 direct `name_subtype`/`is_numeric_subtype` call sites (12
-  files) through `subtyping::SubtypingContext` and delete the shims. One
-  subtyping implementation. Not two, not twenty-two.
-- [ ] Delete every replaced code path **in the change that replaces it**. A
-  migration that leaves the legacy path alive alongside the new one is
-  incomplete and does not merge.
-- [ ] Never create an alternate checking mode, engine flag, or opt-in switch
-  for any of this. One code path. Basilisk has no modes
-  ([CHKARCH-CONFIGURATION-ONLY]).
-- [ ] Keep every rule registered and every diagnostic intact through the whole
-  demolition. The mechanism dies; the checking does not. A migration that
-  costs a required error means the engine is not ready — **fix the engine**,
-  never ship the loss ([CHKARCH-CONFORMANCE]).
-- [ ] Add spec-ID-linked mutation-resistant tests for each migrated behavior.
-- [ ] Verify hover/inlay results and checker diagnostics agree for the same
-  expression — byte for byte, because after this they are the same oracle.
-- [ ] `make test`, mutation/coverage ratchets, benchmarks for touched hot
-  paths, and the live conformance gate all pass with zero false positives.

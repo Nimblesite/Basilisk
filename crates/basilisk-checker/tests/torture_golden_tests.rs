@@ -1,4 +1,4 @@
-//! Golden gate for the type-torture corpus ([NARROWPLAN-SUPERIORITY] slice).
+//! Golden gate for the type-torture corpus ([NARROWPLAN-SCOREBOARD] slice).
 //! See docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md and
 //! `benchmarks/torture/run_torture.py` (the cross-checker scoreboard over the
 //! same cases).

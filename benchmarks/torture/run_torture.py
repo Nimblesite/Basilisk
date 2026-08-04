@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Type-torture scoreboard: Basilisk vs pyright, mypy, ty, pyrefly, zuban.
 
-Implements the first slice of [NARROWPLAN-SUPERIORITY] — see
-docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUPERIORITY.
+Implements the first slice of [NARROWPLAN-SCOREBOARD] — see
+docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SCOREBOARD.
 
 Eight small, hard typing problems (benchmarks/torture/cases/*.py), each
 grounded in a typing-spec section, an accepted PEP, or Python language
