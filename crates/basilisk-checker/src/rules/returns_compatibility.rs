@@ -15,8 +15,8 @@
 //!     return 42
 //! ```
 
+use crate::annotation::AnnotationResolver;
 use crate::inference::{infer_rhs, literal_collection_assignable_to};
-use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
@@ -44,10 +44,16 @@ impl Rule for ReturnTypeMismatch {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        // The declared type of every return annotation comes from the shared
+        // cascade ([TYPEINF-ANNOTATION-RESOLUTION]); its tables are built once
+        // per module, not once per function.
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
         for func in &module.functions {
             // @no_type_check suppresses body checks (E0011); E0041 arity still applies.
             if !is_stub_context(func, &module.classes) && !is_no_type_check(func) {
-                check_return_type_mismatch(func, module, diagnostics);
+                check_return_type_mismatch(func, module, &resolver, diagnostics);
             }
         }
     }
@@ -60,6 +66,7 @@ impl Rule for ReturnTypeMismatch {
 fn check_return_type_mismatch(
     func: &FunctionInfo,
     module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
     if !func.return_annotation.is_present() {
@@ -70,6 +77,23 @@ fn check_return_type_mismatch(
     // The return annotation (e.g. Generator[Y, S, R]) is not meant to be
     // checked directly against return statement values.
     if func.is_generator {
+        return;
+    }
+
+    let Some(declared_type) = func
+        .return_annotation_span
+        .and_then(|span| resolver.resolve_span(span))
+    else {
+        return;
+    };
+
+    // Skip targets the kind-only return inference cannot verify: a
+    // `Literal[...]` target needs the returned expression's *value*
+    // (`return True` infers `Bool`, not `Literal[True]`). Names the cascade
+    // could not resolve are already the gradual `Unknown` and suppress through
+    // ordinary assignability. Shared with E0013 so the two sibling
+    // return-mismatch rules stay in lock-step.
+    if super::shared::is_value_dependent_target(&declared_type) {
         return;
     }
 
@@ -84,32 +108,11 @@ fn check_return_type_mismatch(
             continue;
         }
 
-        let Some(ann_span) = func.return_annotation_span else {
-            continue;
-        };
-        let Some(ann_text) = slice_span(&module.source, ann_span) else {
-            continue;
-        };
-
         // Use inference system to get RHS type
         let inferred_type = infer_rhs(&return_stmt.rhs_kind);
 
         // Skip Unknown types - we can't prove they're incompatible
         if matches!(inferred_type, InferredType::Unknown) {
-            continue;
-        }
-
-        // Parse annotation text to InferredType
-        let declared_type = InferredType::from_annotation(ann_text);
-
-        // Skip targets the kind-only return inference cannot reliably verify —
-        // quoted forward references (`"int | Meta2"` → a union of `Named`
-        // fragments), structural `Named` types (`Sequence[int]`), and
-        // `Literal[...]` targets (`return True` infers `Bool`, not
-        // `Literal[True]`). Shared with E0013 so the two sibling return-mismatch
-        // rules stay in lock-step. Concrete primitive/None/container mismatches
-        // (e.g. `-> str: return 42`) are NOT unverifiable and still fire.
-        if super::shared::is_unverifiable_return_type(&declared_type) {
             continue;
         }
 

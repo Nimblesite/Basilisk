@@ -5,8 +5,8 @@
 //! assignable to the declared type. This extends the original `-> None` check to
 //! handle all return type mismatches using the inference system.
 
+use crate::annotation::AnnotationResolver;
 use crate::inference::{infer_rhs, literal_collection_assignable_to};
-use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnStmtInfo};
 
@@ -29,15 +29,25 @@ impl Rule for ReturnTypeMismatch {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        // One cascade per module ([TYPEINF-ANNOTATION-RESOLUTION]), shared by
+        // every function's return annotation.
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
         module
             .functions
             .iter()
             .filter(|func| func.return_annotation.is_present())
-            .for_each(|func| check_function(func, module, diagnostics));
+            .for_each(|func| check_function(func, module, &resolver, diagnostics));
     }
 }
 
-fn check_function(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Diagnostic>) {
+fn check_function(
+    func: &FunctionInfo,
+    module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
     // Generator functions have their own return type validation (E0120).
     // Return values in generators go through Generator[Y, S, R]'s ReturnType,
     // not the top-level annotation.
@@ -45,30 +55,20 @@ fn check_function(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Di
         return;
     }
 
-    let Some(ann_span) = func.return_annotation_span else {
-        return;
-    };
-    let Some(ann_text) = slice_span(&module.source, ann_span) else {
+    let Some(declared_type) = func
+        .return_annotation_span
+        .and_then(|span| resolver.resolve_span(span))
+    else {
         return;
     };
 
-    // Parse annotation text to InferredType
-    let declared_type = InferredType::from_annotation(ann_text);
-
-    // Named types (e.g. `Sequence[float]`, `Iterable[int]`, forward references
-    // like `"Class | Any"`) require structural subtyping or generic variance
-    // analysis that E0013 cannot perform.  A concrete return like `list[int]`
-    // IS assignable to `Sequence[float]` at runtime, but `InferredType` has no
-    // knowledge of the class hierarchy.  Skip the check to avoid FPs.
-    //
-    // This applies recursively: a union or container that *contains* a Named or
-    // Literal type is equally unverifiable. Quoted forward references such as
-    // `"int | Meta2"` parse (after `|`-splitting) into a union of `Named`
-    // fragments with no concrete member, so a valid `return 1` would otherwise
-    // be flagged. Empty-tuple forms like `tuple[()]` parse the `()` to
-    // `Named("()")`. `Literal[...]` targets need the returned value, which the
-    // kind-only return inference does not have. All are skipped.
-    if super::shared::is_unverifiable_return_type(&declared_type) {
+    // A `Literal[...]` target needs the returned expression's *value*, which
+    // the kind-only return inference does not have (`return True` infers
+    // `Bool`, not `Literal[True]`), so it is skipped — recursively, since a
+    // union or container containing one is equally value-dependent. Names the
+    // cascade could not resolve are already the gradual `Unknown` and suppress
+    // through ordinary assignability ([TYPEINF-ANNOTATION-RESOLUTION]).
+    if super::shared::is_value_dependent_target(&declared_type) {
         return;
     }
 

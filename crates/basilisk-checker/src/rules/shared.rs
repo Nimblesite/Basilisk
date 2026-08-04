@@ -330,42 +330,42 @@ impl StarParam {
 // Return-type verifiability (shared by E0011 and E0013)
 // ---------------------------------------------------------------------------
 
-/// Returns true when a return annotation cannot be reliably verified against a
-/// *value-less* inferred return type — at the top level or nested inside a
-/// union, container, optional, callable, or type-form.
+/// Returns true when a return target depends on the returned expression's
+/// **value**, which the kind-only return inference does not have — at the top
+/// level or nested inside a union, container, optional, callable, or type-form.
 ///
-/// Two kinds defeat kind-only return inference (`infer_rhs` knows the *kind* of
-/// a returned expression, never its value):
-/// - `Named`: protocols/classes/aliases (and quote-mangled forward references
-///   like `"int | Meta2"`) need class-hierarchy/structural analysis the return
-///   rules cannot perform.
-/// - `Literal`: verifying a `Literal[v]` target requires the *value* of the
-///   returned expression, but `return True` infers `Bool`, not `Literal[True]`.
-///   Any `Literal`-target check is therefore unreliable, so it is skipped.
+/// Verifying a `Literal[v]` target requires the value of the returned
+/// expression, but `return True` infers `Bool`, not `Literal[True]`. Such a
+/// check is unreliable, so it is skipped.
 ///
-/// Both E0011 and E0013 gate their assignability check on this to avoid false
-/// positives (consolidated here so the two sibling rules stay in lock-step).
-pub(crate) fn is_unverifiable_return_type(ty: &InferredType) -> bool {
+/// A *nominal* target is NOT in this category any more. It used to be: every
+/// `InferredType::Named` was treated as unverifiable, which silenced the whole
+/// return check for `-> MyClass` and `-> MyAlias`
+/// ([#378](https://github.com/Nimblesite/Basilisk/issues/378)). Names now
+/// arrive through the annotation cascade
+/// ([TYPEINF-ANNOTATION-RESOLUTION](../../../../docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ANNOTATION-RESOLUTION)),
+/// which yields `Named` only for a resolved same-file nominal class and the
+/// gradual `Unknown` for anything it cannot resolve — and `Unknown` suppresses
+/// through ordinary assignability, with no rule-level skip needed.
+///
+/// Both E0011 and E0013 gate their assignability check on this so the two
+/// sibling rules stay in lock-step.
+pub(crate) fn is_value_dependent_target(ty: &InferredType) -> bool {
     match ty {
-        InferredType::Named(_) | InferredType::Literal(_) => true,
+        InferredType::Literal(_) => true,
         InferredType::Optional(inner)
         | InferredType::List(inner)
         | InferredType::Set(inner)
-        | InferredType::TypeForm(inner) => is_unverifiable_return_type(inner),
+        | InferredType::TypeForm(inner) => is_value_dependent_target(inner),
         InferredType::Dict(key, value) => {
-            is_unverifiable_return_type(key) || is_unverifiable_return_type(value)
+            is_value_dependent_target(key) || is_value_dependent_target(value)
         }
-        InferredType::Union(types) => types.iter().any(is_unverifiable_return_type),
-        // The variable-length form `tuple[X, ...]` parses the `...` terminator to
-        // `Named("...")`; that is a structural marker handled by `is_assignable_to`,
-        // not an unresolvable type, so it must not trigger the skip.
-        InferredType::Tuple(types) => types.iter().any(|elem| {
-            !matches!(elem, InferredType::Named(name) if name == "...")
-                && is_unverifiable_return_type(elem)
-        }),
+        InferredType::Union(types) | InferredType::Tuple(types) => {
+            types.iter().any(is_value_dependent_target)
+        }
         InferredType::Callable(info) => {
-            is_unverifiable_return_type(&info.return_type)
-                || info.param_types.iter().any(is_unverifiable_return_type)
+            is_value_dependent_target(&info.return_type)
+                || info.param_types.iter().any(is_value_dependent_target)
         }
         _ => false,
     }
