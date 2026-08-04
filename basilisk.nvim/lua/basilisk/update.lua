@@ -1,7 +1,7 @@
 --- In-editor install and upgrade of the basilisk binary.
 ---
 --- Implements [NVIM-BINARY-UPGRADE] — the flows behind :BasiliskUpdate and
---- :BasiliskInstall. Reuses binary.download() (the resolve() step-7 engine);
+--- :BasiliskInstall. Reuses binary.download() (the resolve() step-8 engine);
 --- the curl/extract logic is never duplicated here.
 
 local binary = require("basilisk.binary")
@@ -16,7 +16,9 @@ local SOURCE_ADVICE = {
   dev = "resolved binary is a local dev build (0.0.0) — rebuild your checkout instead of overwriting it with a release",
   homebrew = "binary is managed by Homebrew — run `brew upgrade basilisk` instead",
   scoop = "binary is managed by Scoop — run `scoop update basilisk` instead",
-  cargo = "binary was installed by cargo — run `cargo install basilisk-cli` instead",
+  cargo = "binary was installed by cargo — run `cargo install --git "
+    .. binary.GITHUB_URL
+    .. " basilisk-cli` instead",
 }
 
 --- Ask before touching the network, so the update notice has a real accept
@@ -118,7 +120,12 @@ function M.install(config)
 
   local asset = binary.platform_asset_name()
   if not asset then
-    log.error("no prebuilt binary for this platform — install with `cargo install basilisk-cli`")
+    -- No release archive exists for this platform (Intel macOS), so the only
+    -- route is a from-source build ([NVIM-BINARY-UPGRADE-ASSETS]).
+    log.error(
+      "no prebuilt binary for this platform — build from source with `cargo install --git %s basilisk-cli`",
+      binary.GITHUB_URL
+    )
     return
   end
 

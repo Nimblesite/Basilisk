@@ -68,7 +68,8 @@ Basilisk is a strict-by-default Python type checker and comprehensive LSP
 built in Rust. It provides type checking, inlay hints, code actions,
 debugging, profiling, test exploration, and uv package manager integration.
 
-Install with `cargo install basilisk-cli` or download from GitHub releases.
+Install with `brew install basilisk`, `scoop install basilisk`,
+`uv tool install basilisk-python`, or download from GitHub releases.
 
 For the full-featured plugin (DAP, test explorer, profiling, keymaps), use
 [basilisk.nvim](https://github.com/Nimblesite/Basilisk/tree/main/basilisk.nvim)

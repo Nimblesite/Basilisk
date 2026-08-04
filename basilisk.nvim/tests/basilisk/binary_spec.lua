@@ -548,7 +548,24 @@ describe("basilisk.binary", function()
     it("points package-manager installs at their own upgrade command", function()
       assert.is_truthy(binary.upgrade_hint("homebrew"):find("brew upgrade basilisk", 1, true))
       assert.is_truthy(binary.upgrade_hint("scoop"):find("scoop update basilisk", 1, true))
-      assert.is_truthy(binary.upgrade_hint("cargo"):find("cargo install basilisk-cli", 1, true))
+      assert.is_truthy(
+        binary.upgrade_hint("cargo"):find(
+          "cargo install --git https://github.com/Nimblesite/Basilisk basilisk-cli",
+          1,
+          true
+        )
+      )
+    end)
+
+    it("never advises the unpublished bare cargo install (issue #370)", function()
+      -- `basilisk-cli` is not on crates.io, so the bare form always fails with
+      -- "could not find basilisk-cli in registry". Every cargo hint must carry
+      -- --git ([NVIM-BINARY-UPGRADE-SOURCES]).
+      for _, source in ipairs({ "managed", "manual", "homebrew", "scoop", "cargo" }) do
+        local hint = binary.upgrade_hint(source)
+        local bare = hint:find("cargo install basilisk%-cli")
+        assert.is_nil(bare, source .. " hint must not name the unpublished crates.io install")
+      end
     end)
 
     it("returns nil for dev builds (no upgrade nag)", function()

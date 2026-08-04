@@ -1,5 +1,5 @@
 {
-  "carrier_sha256": "9b531de5400220c09af0fdbf8c243f4eec43b4dcc10b887de9ba10f948f8d4bb",
+  "carrier_sha256": "f826cd08aed485527db45a2394ed34fb0083db2b514471e94958f36f6619d8e7",
   "dependencies": [
     {
       "name": "@nimblesite/shipwright-core",
@@ -56,7 +56,7 @@
       "legal_files": [
         {
           "label": "LICENSE.md",
-          "source": "node_modules/balanced-match/LICENSE.md",
+          "source": "node_modules/brace-expansion/node_modules/balanced-match/LICENSE.md",
           "sha256": "d408f38ffa3355c5faec517153295338892eb0f1ea43f57874bb23c6075979b5"
         }
       ]
@@ -78,11 +78,11 @@
     },
     {
       "name": "minimatch",
-      "version": "10.2.6",
+      "version": "10.2.5",
       "license": "BlueOak-1.0.0",
       "repository": "git@github.com:isaacs/minimatch",
-      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.6.tgz",
-      "integrity": "sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==",
+      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.5.tgz",
+      "integrity": "sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg==",
       "legal_files": [
         {
           "label": "LICENSE.md",
@@ -93,11 +93,11 @@
     },
     {
       "name": "semver",
-      "version": "7.8.5",
+      "version": "7.8.2",
       "license": "ISC",
       "repository": "git+https://github.com/npm/node-semver.git",
-      "resolved": "https://registry.npmjs.org/semver/-/semver-7.8.5.tgz",
-      "integrity": "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==",
+      "resolved": "https://registry.npmjs.org/semver/-/semver-7.8.2.tgz",
+      "integrity": "sha512-c8jsqUZm3omBOI66G90z1Dyw5z622G8oLG+omfsHBJf3CWQTlOcwOjvOG6wtiNfW6anKm/eA39LMwMtMez2TiQ==",
       "legal_files": [
         {
           "label": "LICENSE",
@@ -202,5 +202,5 @@
       ]
     }
   ],
-  "production_graph_sha256": "fde5a25b5c691b39aebc36a41d962ca60c7bbe4bb7e0e61093d88505a383e010"
+  "production_graph_sha256": "393945c298e4e686471c62592a55a0ecedde9a2fe5782e696613f4f79d5f2bba"
 }

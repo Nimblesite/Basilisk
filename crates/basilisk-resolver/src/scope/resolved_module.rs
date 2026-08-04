@@ -77,8 +77,23 @@ pub struct ResolvedModule {
     pub imports: Vec<ImportInfo>,
     /// All match statements found at any nesting level.
     pub match_stmts: Vec<MatchStmtInfo>,
-    /// Module-level call sites (calls appearing in module-level expressions or assignments).
+    /// Call sites from module-level expressions and assignments — and, because
+    /// the collector walks every body, from function and class bodies too.
+    /// Consumers that need genuinely module-level calls must filter by span
+    /// against `functions`/`classes` `def_span`s.
     pub calls: Vec<CallSite>,
+    /// Every name bound at module scope, whatever the binding form: `=`,
+    /// tuple/star unpacking, `for`/`with`/`except ... as` targets, walrus,
+    /// `match` captures, `def`/`class`/`type` names, and import bindings —
+    /// mapped to HOW MANY binding sites introduce it.
+    ///
+    /// `module_vars` only records plain single-target assignments, so rules
+    /// deciding whether a name exists at module scope (`names_undefined`,
+    /// issue #397) consult this map instead. The count distinguishes a name a
+    /// statement binds ONLY for itself (`class D(D)` — count 1, the base `D`
+    /// is unbound) from legal shadowing (`class D: ...` then `class D(D)` —
+    /// count 2, the base resolves to the earlier binding).
+    pub module_bindings: std::collections::HashMap<String, usize>,
     /// Module-level `TypeVar(...)` call sites.
     pub typevar_calls: Vec<TypeVarCallInfo>,
     /// All `reveal_type(...)` call sites found anywhere in the module.

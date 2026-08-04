@@ -15,8 +15,11 @@ use std::hash::BuildHasher;
 
 use super::class_types::ClassInfo;
 
-/// Maximum inheritance depth walked before bailing out. Guards against cyclic
-/// `bases` (illegal Python, but must not hang the resolver).
+/// Maximum inheritance depth walked before bailing out. Bounds stack growth on
+/// pathologically deep chains; cycles themselves are broken by the visited set
+/// in [`walk_bases`]. Depth alone is NOT a cycle guard: a class listing itself
+/// as a base twice (issue #398, `class C(C[int], C[bool])`) turns a
+/// depth-bounded walk into a 2^64-path DFS that never finishes.
 const MAX_DEPTH: u32 = 64;
 
 /// Build a `class name -> &ClassInfo` lookup over a module's classes.
@@ -32,7 +35,9 @@ pub fn is_transitive_typeddict<S: BuildHasher>(
     name: &str,
     class_map: &HashMap<&str, &ClassInfo, S>,
 ) -> bool {
-    walk_bases(name, class_map, 0, &|class| class.is_typed_dict)
+    walk_bases(name, class_map, &mut HashSet::new(), 0, &|class| {
+        class.is_typed_dict
+    })
 }
 
 /// Returns `true` when this class — or any transitive `TypedDict` base — was
@@ -43,7 +48,7 @@ pub fn has_extra_items_transitive<S: BuildHasher>(
     name: &str,
     class_map: &HashMap<&str, &ClassInfo, S>,
 ) -> bool {
-    walk_bases(name, class_map, 0, &|class| {
+    walk_bases(name, class_map, &mut HashSet::new(), 0, &|class| {
         class.class_keywords.iter().any(|kw| kw == "extra_items")
     })
 }
@@ -101,21 +106,30 @@ fn try_strip_wrapper<'a>(lower: &str, original: &'a str, prefix: &str) -> Option
 
 /// Walk `name` and its transitive bases, returning `true` as soon as `predicate`
 /// holds for any class in the chain.
-fn walk_bases<S: BuildHasher>(
+///
+/// `visited` breaks inheritance cycles (issue #398): each class is entered at
+/// most once, making the walk linear in the number of classes. Skipping a
+/// revisit is sound because the predicate is per-class — a repeat visit can
+/// never change the answer.
+fn walk_bases<'a, S: BuildHasher>(
     name: &str,
-    class_map: &HashMap<&str, &ClassInfo, S>,
+    class_map: &HashMap<&'a str, &'a ClassInfo, S>,
+    visited: &mut HashSet<&'a str>,
     depth: u32,
     predicate: &dyn Fn(&ClassInfo) -> bool,
 ) -> bool {
     if depth >= MAX_DEPTH {
         return false;
     }
-    let Some(class) = class_map.get(name) else {
+    let Some((key, class)) = class_map.get_key_value(name) else {
         return false;
     };
+    if !visited.insert(key) {
+        return false;
+    }
     predicate(class)
         || class
             .bases
             .iter()
-            .any(|base| walk_bases(base, class_map, depth + 1, predicate))
+            .any(|base| walk_bases(base, class_map, visited, depth + 1, predicate))
 }

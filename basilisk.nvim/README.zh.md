@@ -109,8 +109,11 @@ brew tap Nimblesite/tap && brew install basilisk
 scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
 scoop install basilisk
 
-# 任何有 Rust 工具链的环境
-cargo install basilisk-cli
+# 任何有 Python 工具链的环境
+uv tool install basilisk-python
+
+# 任何有 Rust 工具链的环境（从源码构建）
+cargo install --git https://github.com/Nimblesite/Basilisk basilisk-cli
 ```
 
 就这样 —— 诊断、悬停、补全、格式化、调试、测试与性能分析全部通过这一个插件运行。用 `:checkhealth basilisk` 验证。
@@ -118,7 +121,7 @@ cargo install basilisk-cli
 ## 更新
 
 - **插件**：像其他插件一样更新 —— `:Lazy update`（lazy.nvim）、`:PackerSync`（packer）、`:PlugUpdate`（vim-plug）。
-- **二进制文件**：有新版本时插件会在启动时通知你。运行 **`:BasiliskUpdate`** —— 确认后下载新版本并就地重启 LSP。由包管理器管理的安装不会被覆盖；通知会提示你改用 `brew upgrade basilisk` / `scoop update basilisk` / `cargo install basilisk-cli`。
+- **二进制文件**：有新版本时插件会在启动时通知你。运行 **`:BasiliskUpdate`** —— 确认后下载新版本并就地重启 LSP。由包管理器管理的安装不会被覆盖；通知会提示你改用 `brew upgrade basilisk` / `scoop update basilisk` / `cargo install --git https://github.com/Nimblesite/Basilisk basilisk-cli`。
 
 ## 配置
 
