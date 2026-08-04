@@ -42,6 +42,7 @@ pub mod class_naming;
 pub mod collection_inference;
 pub mod context;
 pub mod diagnostic;
+pub mod expr_type;
 pub mod exports;
 pub mod imports;
 pub mod incremental;
