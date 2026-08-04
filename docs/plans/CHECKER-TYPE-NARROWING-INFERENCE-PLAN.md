@@ -866,15 +866,107 @@ not run is `[~]`, not `[x]`.
 **Gates owed by Stage 0.5 as a whole** — run after the boxes above, and again
 before the stage is declared closed:
 
-- [ ] `cargo test --workspace` green (fail-fast, coverage enforced against
+- [x] `cargo test --workspace` green (fail-fast, coverage enforced against
   `coverage-thresholds.json`).
-- [ ] `cargo clippy --workspace --all-targets` clean at the repo's lint level.
-- [ ] `python3 conformance/run_conformance.py` — 100% / 0 false positives from
+  — Green via `scripts/test-rust.sh` (the CI job) and a plain
+  `cargo test --workspace`: 156 test binaries, 0 failures, per-crate coverage
+  thresholds enforced. `gradual_guarantee_tests` caught a real hole on the way
+  (see the metaclass note below) and is green on its own terms, not by
+  weakening.
+- [x] `cargo clippy --workspace --all-targets` clean at the repo's lint level.
+  — Clean at `-D warnings` with the repo's pedantic lint set. Fixed at source,
+  never suppressed: `similar_names` (two bindings renamed), `match_same_arms`
+  (the `Guard` arm folded into `Bool`'s, which is what it means),
+  `unnecessary_lazy_evaluations`, `bool_to_int_with_if`, `too_many_lines` on
+  `is_assignable_to` (the `Callable` arm extracted into `callable_assignable` /
+  `callable_params_assignable`), and a `type_complexity` in the #381 test.
+- [x] `python3 conformance/run_conformance.py` — 100% / 0 false positives from
   a fresh `python/typing@main` clone against a clean `--release` build
   ([CHKARCH-CONFORMANCE]).
-- [ ] Torture golden suite 8/8 (`tests/torture_golden_tests.rs`).
+  — 141/141, 0 false positives. The gate found SIX regressions this stage had
+  introduced, each fixed by teaching the checker, never by silencing a rule:
+  1. **`aliases_typealiastype`** (2 FP) — the legacy textual alias matcher
+     scooped up `X = TypeAliasType("X", body, ...)` and matched values against
+     the CALL text, so every valid use of such an alias failed. `alias_rhs_text`
+     now excludes them structurally (`module.type_alias_type_calls`); they
+     resolve through the cascade like every other alias.
+  2. **`narrowing_typeguard` / `narrowing_typeis`** (4 FP) — with `Guard` a
+     first-class type, `return False` in a guard function was "bool is not
+     assignable to `TypeGuard[int]`". `is_assignable_to` now carries the three
+     PEP 647/742 relations: guard-to-guard FIRST (TypeGuard covariant, TypeIs
+     invariant, never across forms), guard-to-anything as `bool`, and
+     anything-to-guard as the bool the body returns.
+  3. **`narrowing_typeis`** (1 missed) — narrowing `list[object]` to
+     `list[int]` must fail, but `object` was collapsed into `Any` by the
+     cascade, making `list[object]` and `list[Any]` indistinguishable in an
+     invariant position. `object` is now the real top-type leaf it always was;
+     `is_assignable_to` keeps its accept-everything posture in BOTH directions
+     so nothing else moved.
+  4. **`constructors_call_metaclass`** (2 FP) — #381 made `Class1()` inside
+     `assert_type(...)` visible, and the metaclass check only ever tested for
+     `*args, **kwargs`. It now implements the return-type half its own doc
+     comment promised: `Self`/TypeVar constructs, `NoReturn` / `int | Meta`
+     means the metaclass governs. An UNANNOTATED `__call__` is decided from its
+     BODY (does it delegate the construction?) so the judgment survives
+     [TYPEINF-TARGET-GRADUAL] — stripping a metaclass's annotations must not
+     turn a silent call into an error, which is exactly what
+     `gradual_guarantee_tests` caught.
+  5. **`typeforms_typeform`** (5 missed) — a BARE `TypeForm` resolved to a
+     plain name, so `x: TypeForm = <expr>` never reached the type-expression
+     validator at all. It is `TypeForm[Any]` (PEP 747), for the same reason a
+     bare `Callable` is `Callable[..., Any]`.
+  6. **`callables_annotation`** (3 missed) — `Concatenate` was unmodelled, so
+     `Callable[Concatenate[int, P], str]` accepted anything. The cascade now
+     produces the prefix plus an explicit gradual-tail marker
+     (`types::gradual_params` / `split_gradual`), which also makes
+     `Callable[[], R]` (takes NO parameters) distinguishable from
+     `Callable[..., R]` for the first time — the empty list used to mean both.
+- [x] Torture golden suite 8/8 (`tests/torture_golden_tests.rs`).
+  — 8/8 (`param_inference`, `typeis_narrowing`, `enum_literal_expansion`,
+  `tuple_index`, `recursive_aliases`, `generic_constructor`,
+  `paramspec_decorator`, `recursive_bases`).
 - [ ] `make bench` — no fixture slower than the committed baseline
-  ([CHKARCH-TESTING-BENCH-RATCHET]).
+  ([CHKARCH-TESTING-BENCH-RATCHET]). **STILL RED — the one gate this stage has
+  not met.** The stage's first `make bench` run failed on EVERY fixture, +2.0%
+  to +82.4%. Bisected to the branch, not to this stage's boxes: `da742832`
+  (main) checks `aliases_type_statement` in 8.9 ms, `84a7661e` (this branch,
+  2026-08-03) in 15.8 ms; the Stage 0.5 work added ~2% on top of that. It went
+  unseen because nothing ran the gate — there was no CI job for it until this
+  stage added one (`bench` in `.github/workflows/ci.yml`, wired to its own
+  change scope so `benchmarks/**` edits re-run it too).
+
+  Four fixes so far, each restructuring rather than reverting, with conformance
+  re-verified at 141/141 + 0 FP after every one:
+  1. `aliases_type_statement` re-parsed every `type X = rhs` RHS from source
+     text and rebuilt a per-statement `HashSet`. It now reads the RHS node out
+     of the module's already-parsed AST (indexed by the span the resolver
+     recorded) and resolves parameter shadowing at the leaf: `O(n + m)`, not
+     `O(n * m)`. Worst fixture 17.0 ms → 10.9 ms.
+  2. `narrowing_typeguard`, `narrowing_typeis_2` and the assignment /
+     redundant-annotation rules resolved annotations by slicing text and
+     re-parsing it; they now use `resolve_span`, the indexed-node seam the
+     spec already told callers to prefer.
+  3. FOURTEEN rules each built their own `AnnotationResolver` — two full AST
+     walks apiece, ~13% of runtime, and entirely new on this branch (the
+     baseline has zero such call sites). The driver now builds one per module
+     and hands it to rules through a defaulted `Rule::check_with_annotations`,
+     so the rule registry and the other ~150 rules are untouched.
+  4. `AnnotationResolver` memoises resolution BY SPAN: one function's return
+     annotation is asked about by both narrowing rules and both
+     return-compatibility rules, and the cascade is pure.
+
+  Result: worst fixture +82.4% → **+8.5%**, average ~+22% → **~+5%**. Still
+  RED — the ratchet's tolerance is zero and 25 of 26 fixtures remain above
+  baseline. What is left is not waste: the rule SET barely changed (167 vs 166
+  registered), so the residual is the annotation cascade doing real work inside
+  existing rules plus #381's call collection in every expression position.
+  Closing it means making the cascade itself cheaper (type interning / fewer
+  allocations) or buying the margin back elsewhere — a sized piece of work, not
+  a cleanup, and it must land before this stage can be declared closed.
+
+  The measured numbers are already in `benchmarks/status/<machine>.csv`
+  (write-always); the gate reads the COMMITTED baseline from git, so nothing is
+  laundered by that file.
 
 ### Stage 1 — incrementality
 

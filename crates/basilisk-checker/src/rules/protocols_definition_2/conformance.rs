@@ -268,7 +268,8 @@ pub(super) fn check_instance_var_conformance(
 fn property_members(cls: &ClassInfo) -> Vec<&str> {
     let mut members: Vec<&str> = Vec::new();
     for (name, decs) in &cls.method_decorators {
-        if crate::rules::shared::decorator_spelled(decs, "property") && !members.contains(&name.as_str())
+        if crate::rules::shared::decorator_spelled(decs, "property")
+            && !members.contains(&name.as_str())
         {
             members.push(name.as_str());
         }
@@ -397,7 +398,8 @@ pub(super) fn check_method_signature_conformance(
 
         // A `@staticmethod` whose first parameter is `self` cannot satisfy an
         // instance method — it has no bound receiver.
-        let impl_static = crate::rules::shared::decorator_spelled(&impl_fn.decorators, "staticmethod");
+        let impl_static =
+            crate::rules::shared::decorator_spelled(&impl_fn.decorators, "staticmethod");
         if impl_static && impl_fn.parameters.first().is_some_and(|p| p.name == "self") {
             push_signature_diag(
                 protocol_name,

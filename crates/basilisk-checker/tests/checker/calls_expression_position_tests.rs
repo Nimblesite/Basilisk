@@ -45,7 +45,11 @@ fn assert_same_arity_error(wrapped_stmt: &str, why: &str) -> TestResult {
         .ok_or("the bare statement must report an arity error to pin against")?;
 
     let wrapped = format!("{CLASS}\n{wrapped_stmt}\n");
-    let offset = u32::try_from(wrapped.find("C(1, 2)").ok_or("fixture must contain C(1, 2)")?)?;
+    let offset = u32::try_from(
+        wrapped
+            .find("C(1, 2)")
+            .ok_or("fixture must contain C(1, 2)")?,
+    )?;
     let expected_span = (
         offset + (bare_start - bare_offset),
         offset + (bare_end - bare_offset),

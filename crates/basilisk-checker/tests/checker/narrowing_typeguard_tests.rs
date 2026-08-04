@@ -61,8 +61,8 @@ class C:
 
 // Same resolution contract for the PEP 742 form.
 #[test]
-fn aliased_typeis_return_still_requires_narrowing_param(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn aliased_typeis_return_still_requires_narrowing_param() -> Result<(), Box<dyn std::error::Error>>
+{
     let source = r"
 from typing import TypeIs
 

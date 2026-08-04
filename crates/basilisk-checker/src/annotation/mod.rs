@@ -29,6 +29,7 @@ mod forms;
 mod index;
 mod tables;
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, Span};
@@ -59,6 +60,14 @@ pub fn resolve_annotation(module: &ResolvedModule, expr: &Expr) -> InferredType 
 pub struct AnnotationResolver<'m> {
     tables: Tables<'m>,
     annotations: HashMap<(u32, u32), &'m Expr>,
+    /// Memo of every annotation already resolved BY SPAN.
+    ///
+    /// One annotation is asked about by several rules — a function's return
+    /// type is read by the return-compatibility rules and by both narrowing
+    /// rules — and evaluating a type expression walks it and allocates the
+    /// resulting type. The cascade is pure, so the second answer is the first
+    /// one ([CHKARCH-TESTING-BENCH-RATCHET]).
+    resolved: RefCell<HashMap<(u32, u32), InferredType>>,
 }
 
 /// One step of resolution: the alias parameters currently bound, the aliases
@@ -103,6 +112,7 @@ impl<'m> AnnotationResolver<'m> {
         Some(AnnotationResolver {
             tables: Tables::build(&parsed.ast),
             annotations: index::annotation_nodes(&parsed.ast),
+            resolved: RefCell::default(),
         })
     }
 
@@ -117,9 +127,13 @@ impl<'m> AnnotationResolver<'m> {
     /// and must stay silent rather than fall back to reading text.
     #[must_use]
     pub fn resolve_span(&self, span: Span) -> Option<InferredType> {
-        self.annotations
-            .get(&(span.start, span.end))
-            .map(|expr| self.resolve(expr))
+        let key = (span.start, span.end);
+        if let Some(hit) = self.resolved.borrow().get(&key) {
+            return Some(hit.clone());
+        }
+        let resolved = self.resolve(self.annotations.get(&key)?);
+        let _ = self.resolved.borrow_mut().insert(key, resolved.clone());
+        Some(resolved)
     }
 
     /// Resolve an annotation the resolver holds only as **stored text** — a

@@ -10,7 +10,6 @@ use basilisk_resolver::ResolvedModule;
 use super::Rule;
 use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diag_help_note, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
 use crate::subtyping::SubtypingContext;
 use crate::types::InferredType;
 
@@ -91,9 +90,10 @@ fn consistency(
     }
     match (narrowed, input) {
         // A narrowed union is consistent when EVERY arm is.
-        (InferredType::Union(arms), _) => {
-            all_arms(arms.iter().map(|arm| consistency(resolver, ctx, arm, input)))
-        }
+        (InferredType::Union(arms), _) => all_arms(
+            arms.iter()
+                .map(|arm| consistency(resolver, ctx, arm, input)),
+        ),
         (InferredType::Optional(inner), _) => all_arms(
             [
                 consistency(resolver, ctx, inner, input),
@@ -102,9 +102,10 @@ fn consistency(
             .into_iter(),
         ),
         // An input union accepts a narrow into ANY of its arms.
-        (_, InferredType::Union(arms)) => {
-            any_arm(arms.iter().map(|arm| consistency(resolver, ctx, narrowed, arm)))
-        }
+        (_, InferredType::Union(arms)) => any_arm(
+            arms.iter()
+                .map(|arm| consistency(resolver, ctx, narrowed, arm)),
+        ),
         (_, InferredType::Optional(inner)) => any_arm(
             [
                 consistency(resolver, ctx, narrowed, inner),
@@ -206,11 +207,23 @@ impl Rule for TypeIsInconsistentNarrowing {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        // Standalone entry point (a single-rule test, or any caller outside the
+        // driver): build the cascade the driver would otherwise share.
+        let annotations = crate::annotation::AnnotationResolver::for_module(module);
+        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+    }
+
+    fn check_with_annotations(
+        &self,
+        module: &ResolvedModule,
+        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
-        let Some(resolver) = AnnotationResolver::for_module(module) else {
+        let Some(resolver) = annotations else {
             return;
         };
         let subtyping = module_subtyping(module);
@@ -219,17 +232,17 @@ impl Rule for TypeIsInconsistentNarrowing {
             let Some(ann_span) = func.return_annotation_span else {
                 continue;
             };
-            let Some(ann_text) = slice_span(source, ann_span) else {
-                continue;
-            };
 
             // Only `TypeIs` carries the consistency precondition — resolved,
             // so an alias of `TypeIs[X]` is checked exactly like the spelled
-            // form ([TYPEINF-ANNOTATION-RESOLUTION]).
+            // form ([TYPEINF-ANNOTATION-RESOLUTION]). Resolved from the
+            // annotation NODE the span points at: re-parsing the text would
+            // cost a `ruff` expression parse per annotated function, and the
+            // node is already indexed.
             let Some(InferredType::Guard {
                 type_is: true,
                 inner,
-            }) = resolver.resolve_text(ann_text)
+            }) = resolver.resolve_span(ann_span)
             else {
                 continue;
             };
@@ -245,10 +258,7 @@ impl Rule for TypeIsInconsistentNarrowing {
             let Some(param_ann_span) = param.annotation_span else {
                 continue;
             };
-            let Some(param_type) = slice_span(source, param_ann_span) else {
-                continue;
-            };
-            let Some(input) = resolver.resolve_text(param_type) else {
+            let Some(input) = resolver.resolve_span(param_ann_span) else {
                 continue;
             };
 
@@ -258,7 +268,7 @@ impl Rule for TypeIsInconsistentNarrowing {
                 continue;
             }
 
-            if consistency(&resolver, &subtyping, &inner, &input) == Verdict::Inconsistent {
+            if consistency(resolver, &subtyping, &inner, &input) == Verdict::Inconsistent {
                 diagnostics.push(error_diag_help_note(
                     CODE.clone(),
                     format!(

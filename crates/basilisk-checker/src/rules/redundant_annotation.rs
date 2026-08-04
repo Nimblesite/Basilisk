@@ -11,7 +11,6 @@
 //! z: float = 42      # NO warning — annotation adds information (widening)
 //! ```
 
-use crate::annotation::AnnotationResolver;
 use crate::inference::infer_rhs;
 use crate::types::InferredType;
 use basilisk_resolver::ResolvedModule;
@@ -41,6 +40,19 @@ impl Rule for RedundantAnnotationWarning {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        // Standalone entry point (a single-rule test, or any caller outside the
+        // driver): build the cascade the driver would otherwise share.
+        let annotations = crate::annotation::AnnotationResolver::for_module(module);
+        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+    }
+
+    fn check_with_annotations(
+        &self,
+        module: &ResolvedModule,
+        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
@@ -48,7 +60,7 @@ impl Rule for RedundantAnnotationWarning {
         // ([TYPEINF-ANNOTATION-RESOLUTION]): an annotation that is redundant
         // *through an alias* (`type Age = int` then `x: Age = 1`) is redundant
         // all the same, and a name we cannot resolve is gradual, never a guess.
-        let Some(resolver) = AnnotationResolver::for_module(module) else {
+        let Some(resolver) = annotations else {
             return;
         };
         // Check module-level variables
@@ -67,7 +79,10 @@ impl Rule for RedundantAnnotationWarning {
                     return None;
                 }
 
-                let declared_type = resolver.resolve_text(annotation_text)?;
+                let declared_type = var
+                    .annotation_span
+                    .and_then(|span| resolver.resolve_span(span))
+                    .or_else(|| resolver.resolve_text(annotation_text))?;
 
                 // Check if annotation is redundant (base type match)
                 if types_match_for_w0050(&inferred_type, &declared_type) {
@@ -119,7 +134,10 @@ impl Rule for RedundantAnnotationWarning {
                     return None;
                 }
 
-                let declared_type = resolver.resolve_text(annotation_text)?;
+                let declared_type = attr
+                    .annotation_span
+                    .and_then(|span| resolver.resolve_span(span))
+                    .or_else(|| resolver.resolve_text(annotation_text))?;
 
                 // Check if annotation is redundant (base type match)
                 if types_match_for_w0050(&inferred_type, &declared_type) {

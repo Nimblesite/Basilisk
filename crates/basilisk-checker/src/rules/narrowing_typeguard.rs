@@ -9,7 +9,6 @@
 use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
-use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 use crate::types::InferredType;
@@ -43,11 +42,24 @@ impl Rule for TypeGuardNoNarrowingParam {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        // Standalone entry point (a single-rule test, or any caller outside the
+        // driver): build the cascade the driver would otherwise share.
+        let annotations = crate::annotation::AnnotationResolver::for_module(module);
+        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+    }
+
+    fn check_with_annotations(
+        &self,
+        module: &ResolvedModule,
+        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         let source = &module.source;
-        let Some(resolver) = AnnotationResolver::for_module(module) else {
+        let Some(resolver) = annotations else {
             return;
         };
 
@@ -62,15 +74,11 @@ impl Rule for TypeGuardNoNarrowingParam {
                 continue;
             };
 
-            // Extract annotation text from source.
-            let Some(ann_text) = slice_span(source, ann_span) else {
-                continue;
-            };
-
             // The return type must RESOLVE to a narrowing form — through
             // aliases too, so `Guard = TypeGuard[int]` does not hide one.
-            let Some(InferredType::Guard { type_is, .. }) = resolver.resolve_text(ann_text)
-            else {
+            // Resolved from the indexed annotation NODE: slicing the text and
+            // re-parsing it costs a `ruff` parse per annotated method.
+            let Some(InferredType::Guard { type_is, .. }) = resolver.resolve_span(ann_span) else {
                 continue;
             };
 
@@ -80,6 +88,9 @@ impl Rule for TypeGuardNoNarrowingParam {
             }
 
             let guard_kind = if type_is { "TypeIs" } else { "TypeGuard" };
+            // Only the diagnostic path needs the annotation AS WRITTEN, so the
+            // source slice happens here rather than on every method checked.
+            let ann_text = slice_span(source, ann_span).unwrap_or(guard_kind);
 
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),

@@ -13,7 +13,6 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
-use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::shared::overload_decorated;
@@ -32,19 +31,32 @@ impl Rule for OverlappingOverloads {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        // Standalone entry point (a single-rule test, or any caller outside the
+        // driver): build the cascade the driver would otherwise share.
+        let annotations = crate::annotation::AnnotationResolver::for_module(module);
+        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+    }
+
+    fn check_with_annotations(
+        &self,
+        module: &ResolvedModule,
+        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         // Whether a decorator IS `typing.overload` is answered by the
         // resolver's binding tables ([#380]), shared with every overload rule.
-        let Some(resolver) = AnnotationResolver::for_module(module) else {
+        let Some(resolver) = annotations else {
             return;
         };
         // Group overloaded functions by (class_name, function_name) so overloads
         // in different classes with the same method name don't cross-contaminate.
         let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();
         for func in &module.functions {
-            if overload_decorated(&resolver, &func.decorators) {
+            if overload_decorated(resolver, &func.decorators) {
                 groups
                     .entry((func.class_name.as_deref(), &func.name))
                     .or_default()

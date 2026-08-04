@@ -139,7 +139,7 @@ dict_key_hashability	basilisk	1	2000
 enums_member_values	basilisk	1	480
 final_reassignment	basilisk	1	500
 generics_defaults_specialization	basilisk	1	560
-literals_semantics	basilisk	1	576
+literals_semantics	basilisk	1	1008
 match_exhaustiveness	basilisk	1	500
 narrowing_typeis	basilisk	1	520
 newtype_definition	basilisk	1	2000

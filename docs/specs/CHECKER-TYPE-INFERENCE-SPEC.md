@@ -725,7 +725,30 @@ def f(val: int | str) -> None:
         reveal_type(val)  # int  — complement narrowing
 ```
 
-> **Authority**: [PEP 742](https://peps.python.org/pep-0742/).
+**The guard type itself.** `TypeGuard[T]` and `TypeIs[T]` are one modelled type,
+`InferredType::Guard { type_is, inner }`, produced by the cascade so aliases
+expand through them. `is_assignable_to` gives it three relations, guard-to-guard
+tested FIRST so the two forms never collapse into each other:
+
+| Relation | Holds when | Why |
+|---|---|---|
+| `TypeGuard[B]` <: `TypeGuard[A]` | `B` <: `A` | `TypeGuard` is covariant in its argument |
+| `TypeIs[B]` <: `TypeIs[A]` | `B` IS `A` | "Unlike `TypeGuard`, `TypeIs` is invariant in its argument type" |
+| across the two forms | never | "`TypeIs` and `TypeGuard` are not compatible with each other" |
+| `Guard` <: `X` | `bool` <: `X` | in these contexts a guard "is treated as a subtype of `bool`", so `Callable[..., TypeIs[int]]` satisfies `Callable[..., bool]` but never `Callable[..., str]` |
+| `X` <: `Guard` | `X` <: `bool` | the body of a narrowing function returns an ordinary bool (`return False`) |
+
+**Consistency precondition.** `TypeIs[X]` additionally requires `X` to be
+consistent with the input parameter type — judged on RESOLVED types through
+`SubtypingContext`, three-valued, abstaining when either side is not grounded
+(`rules/narrowing_typeis_2.rs`). Invariant container positions are compared in
+BOTH directions, which is why `object` must stay distinct from `Any`
+([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL)): narrowing
+`list[object]` to `list[int]` is an error, narrowing `list[Any]` is not.
+
+> **Authority**: [PEP 742](https://peps.python.org/pep-0742/),
+> [PEP 647](https://peps.python.org/pep-0647/),
+> [Typing spec — TypeIs](https://typing.python.org/en/latest/spec/narrowing.html#typeis).
 
 ### [TYPEINF-NARROWING-ASSERT] `assert` Narrowing {#TYPEINF-NARROWING-ASSERT}
 
@@ -806,7 +829,13 @@ model remains tracked by
 The single home for this judgment is `crates/basilisk-checker/src/subtyping.rs` — `name_subtype` encodes the full `bool <: int <: float <: complex` chain, `SubtypingContext` is the judgment every consumer must go through, and the accepted/rejected table is pinned in `tests/subtyping_context_tests.rs` ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)). The rule-local delegates still calling `name_subtype` directly (`rules/shared.rs::is_numeric_subtype` and the helpers in `narrowing_typeis`, `narrowing_typeis_2`, `overloads_evaluation`, `generics_typevartuple_callable`, `aliases_implicit`, `generics_syntax_scoping`, `callables_subtyping`, `generics_defaults_referential`) are legacy shims on the demolition list ([TYPEINF-LEGACY](#TYPEINF-LEGACY)); the `types_parsing.rs` fold of `complex` into `Float` is a legacy-parser artifact that dies with that parser. One subtyping implementation — not two layers.
 
 **Other builtin relations:**
-- All classes <: `object` (`object` parses to the `Any` escape hatch for assignment purposes).
+- All classes <: `object`. The cascade resolves `object` to the named TOP type, not to `Any`:
+  it accepts every value as a target and is accepted everywhere as a source (the gradual
+  posture the `Any` spelling used to provide), but it stays a DISTINCT name so an invariant
+  judgment can tell `list[object]` from `list[Any]` — narrowing the former to `list[int]` is an
+  error the typing spec requires, while the latter is consistent with anything
+  ([TYPEINF-NARROWING-TYPEIS](#TYPEINF-NARROWING-TYPEIS)). The legacy `types_parsing.rs` string
+  parser still folds it into `Any`, and dies with that parser.
 - `Never` <: everything (bottom type).
 - There is **no** `bytearray <: bytes` promotion: the [current typing spec](https://typing.python.org/en/latest/spec/special-types.html#special-cases-for-float-and-complex) defines promotions only for `float`/`complex` (the historical `bytes` shorthand was removed), and no conformance test requires it. `bytearray` parses to `Named("bytearray")` and is assignable essentially only to itself, `object`, and `Any`.
 
@@ -897,7 +926,8 @@ y: Sequence[Animal] = dogs   # OK — Sequence is covariant
 - `Optional[T]` = `T | None`
 - `Any` is bidirectionally compatible with all types (not a real subtype, an escape hatch)
 - `Never` <: everything (bottom type, assignable to all types)
-- the simplified annotation parser treats `object` as a gradual `Any` spelling
+- the simplified annotation parser treats `object` as a gradual `Any` spelling; the cascade
+  keeps it as the named top type (see the builtin relations above)
 - **Enum literal expansion**: an enum type with members is equivalent to the union of literals of all its members, so `Answer` <: `Literal[Answer.Yes, Answer.No]` exactly when `Yes`/`No` are ALL of `Answer`'s members; a partial member union is not a supertype. Membership follows the `Enum` metaclass's own rules: unannotated class-body value assignments, excluding sunder/dunder names and `nonmember`/descriptor/lambda values. Implemented by `rules/assignment_compatibility/enum_expand.rs`.
 
 > **Authority**: [Typing spec — Enums](https://typing.python.org/en/latest/spec/enums.html).
@@ -923,6 +953,15 @@ g: Callable[[Dog], Animal]  # accepts Dog, returns Animal
 - Source may have fewer required parameters than target (extra defaults OK).
 - `*args`/`**kwargs` in source accepts any parameter count in target.
 - `Callable[..., R]` (ellipsis params) is compatible with any parameter signature.
+- **A gradual tail is not the same as no parameters.** `CallableInfo.param_types`
+  ends with the `types::GRADUAL_PARAMS` marker (`types::gradual_params` builds
+  it, `types::split_gradual` reads it) whenever the tail is unconstrained:
+  `Callable[..., R]`, a bare `ParamSpec`, and PEP 612
+  `Callable[Concatenate[int, P], R]` — which pins `int` as a REQUIRED leading
+  position and leaves the rest gradual. An EMPTY list therefore means a callable
+  that takes no parameters at all (`Callable[[], R]`), which is what lets
+  `Concatenate[int, P]` reject a zero-argument callable instead of silently
+  accepting it.
 
 > **Authority**: [PEP 484 §Callable](https://peps.python.org/pep-0484/#callable), [Typing spec — Callables](https://typing.readthedocs.io/en/latest/spec/callables.html)
 
@@ -949,9 +988,12 @@ Nominal MRO walking and structural Protocol/TypedDict compatibility are decided 
 ### [TYPEINF-SPECIAL-ANY] `Any` {#TYPEINF-SPECIAL-ANY}
 
 `Any` is bidirectionally compatible with all types. It arises from explicit
-`Any` and from typing-defined gradual spellings such as `object` and bare
-generics in the simplified annotation parser; it is never the fallback for a
-failed expression inference (that sentinel is `Unknown`). Unannotated
+`Any` and from typing-defined gradual spellings such as bare generics in the
+simplified annotation parser; it is never the fallback for a failed expression
+inference (that sentinel is `Unknown`). `object` is NOT one of those spellings
+in the cascade — it is the named top type, which accepts everything without
+erasing the distinction between `object` and `Any` (see
+[TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL)). Unannotated
 parameters do not silently become explicit `Any`; the opt-in annotation policy
 may report `BSK-0001`.
 

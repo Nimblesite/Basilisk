@@ -89,11 +89,24 @@ impl Rule for OverloadImplConsistency {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        // Standalone entry point (a single-rule test, or any caller outside the
+        // driver): build the cascade the driver would otherwise share.
+        let annotations = crate::annotation::AnnotationResolver::for_module(module);
+        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+    }
+
+    fn check_with_annotations(
+        &self,
+        module: &ResolvedModule,
+        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         // Overload membership is a binding question ([#380]).
-        let Some(resolver) = AnnotationResolver::for_module(module) else {
+        let Some(resolver) = annotations else {
             return;
         };
         let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();
@@ -104,7 +117,7 @@ impl Rule for OverloadImplConsistency {
                 .push(func);
         }
         for funcs in groups.values() {
-            check_group(funcs, &resolver, &module.source, &module.path, diagnostics);
+            check_group(funcs, resolver, &module.source, &module.path, diagnostics);
         }
     }
 }

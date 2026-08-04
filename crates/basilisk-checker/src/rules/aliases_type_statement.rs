@@ -19,13 +19,13 @@
 //! type BadAlias3 = 1            # E — int literal
 //! ```
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ResolvedModule, RhsKind, Span};
-use ruff_python_ast::{Expr, Operator};
+use ruff_python_ast::{Expr, Operator, Stmt};
+use ruff_text_size::Ranged;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -47,15 +47,31 @@ fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
     )
 }
 
+/// The names a statement must treat as non-types: module bindings that hold a
+/// value, minus the statement's OWN type parameters.
+///
+/// PEP 695 binds a `type` statement's parameters in its annotation scope, so
+/// `T = 1` followed by `type Wrapper[T] = T | None` is valid. The shadowing is
+/// resolved per NAME at the leaf rather than by rebuilding a filtered set per
+/// statement — a module of `n` aliases and `m` value bindings costs `O(n + m)`
+/// instead of `O(n * m)` ([CHKARCH-TESTING-BENCH-RATCHET]).
+struct NonTypes<'a> {
+    module: &'a HashSet<&'a str>,
+    shadowed: &'a [String],
+}
+
+impl NonTypes<'_> {
+    fn contains(&self, name: &str) -> bool {
+        self.module.contains(name) && !self.shadowed.iter().any(|param| param == name)
+    }
+}
+
 /// Whether `expr` has the structural shape of a type expression.
 ///
 /// A bare name bound to a non-type module variable (e.g. `x = 42` then
 /// `type Bad = x`) is rejected; subscript arguments are deliberately not
-/// descended into (special forms hold non-type expressions there). The
-/// caller must already have removed the statement's own type parameters
-/// from `non_type_names` — PEP 695 binds them in the alias's annotation
-/// scope, shadowing same-named module bindings.
-fn is_type_expression(expr: &Expr, non_type_names: &HashSet<&str>) -> bool {
+/// descended into (special forms hold non-type expressions there).
+fn is_type_expression(expr: &Expr, non_type_names: &NonTypes<'_>) -> bool {
     match expr {
         Expr::Name(name) => !non_type_names.contains(name.id.as_str()),
         Expr::Attribute(_) | Expr::NoneLiteral(_) | Expr::StringLiteral(_) => true,
@@ -68,11 +84,24 @@ fn is_type_expression(expr: &Expr, non_type_names: &HashSet<&str>) -> bool {
     }
 }
 
-/// Parse the RHS source text and validate it structurally. Text that does
-/// not parse as an expression is left to the parser's own diagnostics.
-fn rhs_is_invalid(rhs: &str, non_type_names: &HashSet<&str>) -> bool {
-    ruff_python_parser::parse_expression(rhs.trim())
-        .is_ok_and(|parsed| !is_type_expression(parsed.expr(), non_type_names))
+/// Index every `type X = rhs` value expression in the module's ALREADY-PARSED
+/// AST, keyed by the span the resolver recorded for it.
+///
+/// The RHS is a node in that tree, not text to be parsed again: re-parsing it
+/// per statement cost a full `ruff` expression parse for every alias in the
+/// file, which is most of the work on an alias-dense module.
+fn index_rhs_nodes<'ast>(stmts: &'ast [Stmt], out: &mut HashMap<(u32, u32), &'ast Expr>) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::TypeAlias(alias) => {
+                let range = alias.value.range();
+                let _ = out.insert((range.start().to_u32(), range.end().to_u32()), &alias.value);
+            }
+            Stmt::ClassDef(class) => index_rhs_nodes(&class.body, out),
+            Stmt::FunctionDef(function) => index_rhs_nodes(&function.body, out),
+            _ => {}
+        }
+    }
 }
 
 /// Collect names of module-level variables that are not valid types.
@@ -108,23 +137,26 @@ impl Rule for TypeStatementInvalidRhs {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
         let path = &module.path;
-        let non_type_names = collect_non_type_names(module);
+        // The module's own AST, parsed once and shared with every other rule
+        // that needs it. A module that does not parse has no type statements to
+        // judge — the parser reports that itself.
+        let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
+            return;
+        };
+        let mut rhs_nodes = HashMap::new();
+        index_rhs_nodes(&parsed.ast.body, &mut rhs_nodes);
+        let module_non_types = collect_non_type_names(module);
 
         for stmt in &module.type_statements {
-            let Some(rhs) = slice_span(source, stmt.rhs_span) else {
+            let Some(rhs) = rhs_nodes.get(&(stmt.rhs_span.start, stmt.rhs_span.end)) else {
                 continue;
             };
-            // The statement's own type parameters shadow module bindings
-            // inside the RHS (PEP 695 annotation scope): `T = 1` followed by
-            // `type Wrapper[T] = T | None` is valid.
-            let visible: HashSet<&str> = non_type_names
-                .iter()
-                .copied()
-                .filter(|name| !stmt.param_names.iter().any(|param| param == name))
-                .collect();
-            if rhs_is_invalid(rhs, &visible) {
+            let non_types = NonTypes {
+                module: &module_non_types,
+                shadowed: &stmt.param_names,
+            };
+            if !is_type_expression(rhs, &non_types) {
                 diagnostics.push(make_diag(&stmt.name, stmt.name_span, path));
             }
         }

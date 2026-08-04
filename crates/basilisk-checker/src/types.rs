@@ -74,10 +74,40 @@ pub enum InferredType {
 /// Represents a callable type's parameter and return type information.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CallableInfo {
-    /// Parameter types (empty for `Callable[..., R]`).
+    /// Parameter types, positionally.
+    ///
+    /// A trailing [`GRADUAL_PARAMS`] marker means "and then any parameters":
+    /// `Callable[..., R]` is `[…]`, a `ParamSpec` is `[…]`, and
+    /// `Callable[Concatenate[int, P], R]` is `[int, …]` — the prefix is
+    /// required, the tail unconstrained. An EMPTY list is therefore a callable
+    /// that takes NO parameters (`Callable[[], R]`), which is what lets
+    /// `Callable[Concatenate[int, P], str]` reject a zero-argument callable.
     pub param_types: Vec<InferredType>,
     /// Return type.
     pub return_type: Box<InferredType>,
+}
+
+/// The structural marker that ends an unconstrained parameter list. Shares the
+/// spelling of the `tuple[X, ...]` terminator: both mean "the rest is not
+/// pinned down here".
+pub const GRADUAL_PARAMS: &str = "...";
+
+/// A parameter list that is unconstrained past its (possibly empty) prefix.
+#[must_use]
+pub fn gradual_params(prefix: Vec<InferredType>) -> Vec<InferredType> {
+    let mut params = prefix;
+    params.push(InferredType::Named(GRADUAL_PARAMS.to_owned()));
+    params
+}
+
+/// Split a parameter list into its required prefix and whether an
+/// unconstrained tail follows.
+#[must_use]
+pub fn split_gradual(params: &[InferredType]) -> (&[InferredType], bool) {
+    match params.split_last() {
+        Some((InferredType::Named(marker), head)) if marker == GRADUAL_PARAMS => (head, true),
+        _ => (params, false),
+    }
 }
 
 /// Represents a literal value for literal type inference.
@@ -288,6 +318,52 @@ impl InferredType {
             {
                 true
             }
+            // `object` is the top type: every value IS an object, so it accepts
+            // anything as a target. In the SOURCE position it stays as
+            // permissive as the gradual `Any` it used to be modelled by —
+            // narrowing an `object`-typed value to a concrete type is how most
+            // `isinstance` code is written, and this level has no flow
+            // information to tell a narrowed use from an unnarrowed one, so
+            // rejecting it here would fire on spec-valid code.
+            (_, InferredType::Named(name)) | (InferredType::Named(name), _)
+                if name == "object" =>
+            {
+                true
+            }
+            // PEP 647/742 narrowing returns. Three distinct relations, and the
+            // guard-to-guard one must be tested FIRST or the bool relations
+            // below would make the two forms interchangeable:
+            // * `TypeGuard[B] <: TypeGuard[A]` when `B <: A` — TypeGuard is
+            //   covariant in its argument.
+            // * `TypeIs[B] <: TypeIs[A]` only when `B` IS `A` — "Unlike
+            //   TypeGuard, TypeIs is invariant in its argument type".
+            // * Never across forms: "TypeIs and TypeGuard are not compatible
+            //   with each other".
+            (
+                InferredType::Guard {
+                    type_is: source_is,
+                    inner: source_inner,
+                },
+                InferredType::Guard {
+                    type_is: target_is,
+                    inner: target_inner,
+                },
+            ) => {
+                source_is == target_is
+                    && if *target_is {
+                        source_inner == target_inner
+                    } else {
+                        source_inner.is_assignable_to(target_inner)
+                    }
+            }
+            // A guard VALUE is a `bool` ("in these contexts it is treated as a
+            // subtype of bool"), so `Callable[..., TypeIs[int]]` satisfies
+            // `Callable[..., bool]` but never `Callable[..., str]`.
+            (InferredType::Guard { .. }, target) => InferredType::Bool.is_assignable_to(target),
+            // Conversely a declared guard return is satisfied by any bool the
+            // body actually produces — `def f(x: object) -> TypeIs[int]: return
+            // False` is the canonical narrowing-function body, not a mismatch.
+            (source, InferredType::Guard { .. }) => source.is_assignable_to(&InferredType::Bool),
             // Union on the LEFT decomposes before Optional-target unwrapping:
             // `A | None <: Optional[B]` must check each variant against the
             // whole `Optional[B]` (so the `None` arm can satisfy it), not
@@ -404,18 +480,31 @@ fn callable_assignable(source: &CallableInfo, target: &CallableInfo) -> bool {
 
 /// Parameter-list half of [TYPEINF-SUBTYPING-CALLABLE].
 ///
-/// An empty list spells `...` (arbitrary parameters), which is gradual on
-/// either side. A source may require FEWER positions than the target — its
-/// trailing positions are satisfiable by defaults — but never more.
+/// Positions are contravariant: the target's parameter must be acceptable to
+/// the source. A source that requires FEWER positions than the target is fine —
+/// its trailing positions are satisfiable by defaults — but never more.
+///
+/// A gradual tail ([`GRADUAL_PARAMS`]) relaxes only what follows it. A gradual
+/// SOURCE accepts any call, so it satisfies every target. A gradual TARGET
+/// (`Callable[Concatenate[int, P], R]`) still pins its prefix: the source must
+/// be able to receive those leading arguments, which is exactly why a
+/// zero-parameter callable does not satisfy it.
 fn callable_params_assignable(source: &[InferredType], target: &[InferredType]) -> bool {
-    if source.is_empty() || target.is_empty() {
+    let (source_prefix, source_gradual) = split_gradual(source);
+    let (target_prefix, target_gradual) = split_gradual(target);
+    if source_gradual {
         return true;
     }
-    source.len() <= target.len()
-        && source
-            .iter()
-            .zip(target.iter())
-            .all(|(source_param, target_param)| target_param.is_assignable_to(source_param))
+    if target_gradual && source_prefix.len() < target_prefix.len() {
+        return false;
+    }
+    if !target_gradual && source_prefix.len() > target_prefix.len() {
+        return false;
+    }
+    source_prefix
+        .iter()
+        .zip(target_prefix.iter())
+        .all(|(source_param, target_param)| target_param.is_assignable_to(source_param))
 }
 
 /// Generator yield/return positions are covariant; the value sent back into

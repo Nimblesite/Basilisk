@@ -60,10 +60,23 @@ impl Rule for AssignmentTypeMismatch {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        // Standalone entry point (a single-rule test, or any caller outside the
+        // driver): build the cascade the driver would otherwise share.
+        let annotations = crate::annotation::AnnotationResolver::for_module(module);
+        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+    }
+
+    fn check_with_annotations(
+        &self,
+        module: &ResolvedModule,
+        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let Some(resolver) = AnnotationResolver::for_module(module) else {
+        let Some(resolver) = annotations else {
             return;
         };
         let empty_params = ParamMaps::default();
@@ -78,9 +91,9 @@ impl Rule for AssignmentTypeMismatch {
             &skip,
             &module.functions,
             &call_index,
-            &resolver,
+            resolver,
         );
-        check_local_vars(module, diagnostics, &skip, &call_index, &resolver);
+        check_local_vars(module, diagnostics, &skip, &call_index, resolver);
         check_tuple_reassignments(module, diagnostics);
         check_dataclass_attr_assignments(module, diagnostics);
         typeform_check::check_typeform_calls(module, diagnostics);
@@ -173,7 +186,13 @@ fn check_vars(
             // The declared type is the annotation resolved through the shared
             // cascade ([TYPEINF-ANNOTATION-RESOLUTION]), so an alias or a
             // same-file class is the type it denotes rather than opaque text.
-            let declared_type = resolver.resolve_text(annotation_text)?;
+            // Resolved from the annotation NODE where the resolver recorded its
+            // span; `resolve_text` re-parses, which costs a `ruff` expression
+            // parse per annotated variable ([CHKARCH-TESTING-BENCH-RATCHET]).
+            let declared_type = var
+                .annotation_span
+                .and_then(|span| resolver.resolve_span(span))
+                .or_else(|| resolver.resolve_text(annotation_text))?;
             let declared_nominal = nominal_name(&declared_type);
 
             // TypeForm assignments require type-expression validation, not
@@ -266,9 +285,7 @@ fn check_vars(
             // cross-name assignment (`v: A = b` where `b: B`). Genuine mismatches
             // still fire. Only reachable when the RHS resolves to a TypedDict-typed
             // name (e.g. a parameter), so module-level checks are unaffected.
-            if let (Some(decl), Some(inf)) =
-                (&declared_nominal, nominal_name(&inferred_type))
-            {
+            if let (Some(decl), Some(inf)) = (&declared_nominal, nominal_name(&inferred_type)) {
                 if let (Some(target), Some(src)) = (
                     skip.typeddict_schemas.get(decl.as_str()),
                     skip.typeddict_schemas.get(inf.as_str()),

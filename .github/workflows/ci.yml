@@ -67,6 +67,7 @@ jobs:
       zed: ${{ steps.classify.outputs.zed }}
       code: ${{ steps.classify.outputs.code }}
       website: ${{ steps.classify.outputs.website }}
+      bench: ${{ steps.classify.outputs.bench }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -92,6 +93,7 @@ jobs:
               echo "zed=false"
               echo "code=false"
               echo "website=false"
+              echo "bench=false"
             } >> "$GITHUB_OUTPUT"
             echo "Dependabot PR — skipping Rust/extension matrix and website build."
             exit 0
@@ -104,8 +106,16 @@ jobs:
           nvim=false
           zed=false
           website=false
+          benchtool=false
           while IFS= read -r f; do
             [ -z "$f" ] && continue
+            # The benchmark ratchet defends the CHECKER's speed, so it re-runs on
+            # any core change — but the harness that measures it (fixtures,
+            # run.sh, summarize.py, the baseline CSVs) is not core Rust and would
+            # otherwise change the gate without ever running it.
+            case "$f" in
+              benchmarks/*) benchtool=true ;;
+            esac
             # `website` gates the site build: only files the published site is
             # actually built from (templates/assets + the benchmark CSVs it reads).
             case "$f" in
@@ -160,6 +170,10 @@ jobs:
              [ "$nvim" = true ] || [ "$zed" = true ]; then
             code=true
           fi
+          bench=false
+          if [ "$core" = true ] || [ "$benchtool" = true ]; then
+            bench=true
+          fi
           {
             echo "core=$core"
             echo "vscode=$vscode"
@@ -167,8 +181,9 @@ jobs:
             echo "zed=$zed"
             echo "code=$code"
             echo "website=$website"
+            echo "bench=$bench"
           } >> "$GITHUB_OUTPUT"
-          echo "Scope — core:$core vscode:$vscode nvim:$nvim zed:$zed code:$code website:$website"
+          echo "Scope — core:$core vscode:$vscode nvim:$nvim zed:$zed code:$code website:$website bench:$bench"
 
   # ── Website build check (only when site/benchmark files change) ─────────────
   # Mirrors deploy-pages.yml's build so a broken template/data file is caught
@@ -984,6 +999,57 @@ jobs:
 
       - name: Build Rust (release)
         run: cargo build --release
+
+  # ── Benchmark ratchet ([CHKARCH-TESTING-BENCH-RATCHET]) ────────────────────
+  # Performance is a feature, and the conformance and benchmark ratchets must
+  # hold SIMULTANEOUSLY: a conformance fix that blows this gate is not done. Both
+  # halves of benchmarks/run.sh apply here exactly as they do locally —
+  #   WRITE-ALWAYS: every measured number lands in benchmarks/status/<slug>.csv;
+  #   GATE-SEPARATELY: summarize.py then compares this run's basilisk times
+  #   against the COMMITTED baseline (read from git, never the working copy) and
+  #   exits 3 on any fixture that got slower. The gate cannot be disabled or
+  #   widened — run.sh REJECTS BENCH_NO_GATE/BENCH_REGRESS_PCT/BENCH_TOLERANCE_PCT
+  #   and refuses the basilisk-only iteration mode when GITHUB_ACTIONS is set.
+  # Runner is pinned to the standard ubuntu-24.04 image on purpose: the machine
+  # slug (gha-linux-x64) is derived from RUNNER_OS/RUNNER_ARCH, so letting this
+  # job drift onto BIG_RUNNER would compare times from different hardware under
+  # one baseline. Per the script's own rule, a machine with no committed baseline
+  # establishes one instead of failing, so the gate goes live for the GH runner
+  # once a green run's CSV is committed.
+  bench:
+    name: Benchmark Ratchet
+    needs: changes
+    if: needs.changes.outputs.bench == 'true'
+    runs-on: ubuntu-24.04
+    # run.sh does a full `cargo clean` + release rebuild (the benchmark refuses
+    # to time a stale binary), pulls the five competitors, then runs hyperfine
+    # over every fixture with an auto-remeasure on unstable samples.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      # No rust-cache: run.sh `cargo clean`s before building, so a restored
+      # target dir would be deleted anyway — caching it would only cost upload.
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install lld
+        run: sudo apt-get update && sudo apt-get install -y lld
+
+      # hyperfine is the only hard prerequisite besides cargo; the five
+      # competitors are pulled by run.sh itself (latest official release each
+      # run) and any that fail to install are skipped with a loud warning.
+      - name: Install hyperfine
+        uses: taiki-e/install-action@81ee9698f20724138a785d788c7567d40f14cd2d # hyperfine
+        with:
+          tool: hyperfine
+
+      - name: Benchmark and enforce the regression gate
+        run: make bench
 
   # ── Dependency review ([GITHUB-DEP-REVIEW]) ────────────────────────────────
   # Blocks PRs that introduce dependencies with known-high vulnerabilities. This

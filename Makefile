@@ -39,6 +39,12 @@ PKG                        ?= basilisk-checker
 # new tests just for mutation. Slow/E2E-ish binaries are deliberately omitted so
 # the per-mutant test run stays cheap.
 #
+# The one class of NEW binary that belongs here is a `#[mutation_safe]` suite
+# WIDENING the examined scope ([CHKARCH-TESTING-MUTATION-RATCHET]): those tests
+# assert real rule behaviour first and would earn their place with the ratchet
+# switched off — they are listed so the functions they newly bring in-scope are
+# actually exercised, not scored as missed.
+#
 # Order matters, but only a little. `cargo test` stops at the first failing
 # binary, so a mutant dies as soon as a binary that kills it runs;
 # `mutation_kill_tests` exists to kill these mutants, so it runs first. Measured
@@ -47,6 +53,7 @@ PKG                        ?= basilisk-checker
 # what actually did ([CHKARCH-TESTING-MUTATION-RATCHET]).
 _CHECKER_MUTATION_TESTS := \
 	--test mutation_kill_tests \
+	--test mutation_kill_constructors_tests \
 	--test coverage_boost_tests \
 	--test coverage_boost_32_tests \
 	--test coverage_boost_33_tests \

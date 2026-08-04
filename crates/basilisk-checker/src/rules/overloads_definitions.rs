@@ -12,7 +12,6 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
-use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::guards::is_protocol_class;
@@ -35,12 +34,25 @@ impl Rule for MissingOverloadImpl {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        // Standalone entry point (a single-rule test, or any caller outside the
+        // driver): build the cascade the driver would otherwise share.
+        let annotations = crate::annotation::AnnotationResolver::for_module(module);
+        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+    }
+
+    fn check_with_annotations(
+        &self,
+        module: &ResolvedModule,
+        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         // Whether a decorator IS `typing.overload` is a binding question,
         // answered by the resolver's tables ([#380]) — never by its spelling.
-        let Some(resolver) = AnnotationResolver::for_module(module) else {
+        let Some(resolver) = annotations else {
             return;
         };
         // Build a set of Protocol class names so we can exempt their methods.
@@ -67,7 +79,7 @@ impl Rule for MissingOverloadImpl {
         for ((class_name, name), funcs) in &groups {
             let overloaded: Vec<&&FunctionInfo> = funcs
                 .iter()
-                .filter(|f| overload_decorated(&resolver, &f.decorators))
+                .filter(|f| overload_decorated(resolver, &f.decorators))
                 .collect();
 
             // No @overload decorators in this group — nothing to check.
@@ -77,7 +89,7 @@ impl Rule for MissingOverloadImpl {
 
             let non_overloaded: Vec<&&FunctionInfo> = funcs
                 .iter()
-                .filter(|f| !overload_decorated(&resolver, &f.decorators))
+                .filter(|f| !overload_decorated(resolver, &f.decorators))
                 .collect();
 
             // Case 1: ALL definitions carry @overload (no implementation).

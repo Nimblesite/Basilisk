@@ -7,7 +7,7 @@
 //! the file. No new code may call into this module; existing consumers are
 //! deleted per [NARROWPLAN-INTEGRATION], and this parser dies with them.
 
-use super::types::{CallableInfo, InferredType, LiteralValue};
+use super::types::{gradual_params, CallableInfo, InferredType, LiteralValue};
 
 impl InferredType {
     /// Parses annotation text into an `InferredType`.
@@ -35,9 +35,9 @@ impl InferredType {
             // Implements [TYPEINF-SPECIAL-LITERALSTRING].
             "literalstring" => InferredType::LiteralString,
             // A bare `Callable` annotation is `Callable[..., Any]` (PEP 484):
-            // empty `param_types` represents the arbitrary-parameter form.
+            // the gradual-tail marker represents the arbitrary-parameter form.
             "callable" => InferredType::Callable(CallableInfo {
-                param_types: Vec::new(),
+                param_types: gradual_params(Vec::new()),
                 return_type: Box::new(InferredType::Any),
             }),
             "generator" => InferredType::Generator(
@@ -354,9 +354,11 @@ fn parse_callable_annotation(inner: &str) -> InferredType {
     let return_type_str = inner[comma_idx + 1..].trim();
     let return_type = InferredType::from_annotation(return_type_str);
 
+    // `Callable[..., R]` constrains no parameter; `Callable[[], R]` below
+    // constrains them to none at all. The marker keeps the two apart.
     if param_spec == "..." {
         return InferredType::Callable(CallableInfo {
-            param_types: Vec::new(),
+            param_types: gradual_params(Vec::new()),
             return_type: Box::new(return_type),
         });
     }

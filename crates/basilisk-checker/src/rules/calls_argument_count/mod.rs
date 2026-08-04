@@ -246,18 +246,15 @@ fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Dia
 /// NOT the class being constructed (e.g. `-> NoReturn`, `-> int | Meta`), the
 /// metaclass fully controls the constructor call and we should NOT validate
 /// arguments against `__new__`/`__init__`.
-fn metaclass_passes_through(
-    metaclass_name: &str,
-    classes: &[ClassInfo],
-    functions: &[FunctionInfo],
-) -> bool {
+fn metaclass_passes_through(metaclass_name: &str, module: &ResolvedModule) -> bool {
     // First check that the metaclass class exists
-    if !classes.iter().any(|c| c.name == metaclass_name) {
+    if !module.classes.iter().any(|c| c.name == metaclass_name) {
         return false;
     }
 
     // Find the metaclass __call__ method
-    let call_method = functions
+    let call_method = module
+        .functions
         .iter()
         .find(|f| f.class_name.as_deref() == Some(metaclass_name) && f.name == "__call__");
 
@@ -267,7 +264,47 @@ fn metaclass_passes_through(
     };
 
     // The metaclass __call__ must use *args and **kwargs to pass through
-    call_fn.vararg.is_some() && call_fn.kwarg.is_some()
+    call_fn.vararg.is_some() && call_fn.kwarg.is_some() && constructs_an_instance(call_fn, module)
+}
+
+/// Does this metaclass `__call__` still yield an instance of the class being
+/// constructed, so `__new__`/`__init__` are evaluated as usual?
+///
+/// Per the [metaclass `__call__`](https://typing.python.org/en/latest/spec/constructors.html#metaclass-call-method)
+/// rules, a return annotated with a type variable
+/// (`def __call__(cls: type[T], ...) -> T`) or `Self` is the pass-through
+/// spelling. Any other concrete return — `NoReturn`, `int | Meta` — means the
+/// metaclass fully controls the call and the constructor signature is never
+/// consulted, so an arity judgment against `__new__` would be a false positive.
+///
+/// An UNANNOTATED `__call__` is decided from its body instead of assumed, so
+/// this judgment survives [TYPEINF-TARGET-GRADUAL]: stripping the annotations
+/// off a metaclass must not turn a silent constructor call into an error.
+fn constructs_an_instance(call_fn: &FunctionInfo, module: &ResolvedModule) -> bool {
+    let Some(span) = call_fn.return_annotation_span else {
+        return body_delegates_construction(call_fn);
+    };
+    let Some(text) = slice_span(&module.source, span) else {
+        return body_delegates_construction(call_fn);
+    };
+    let returned = text.trim();
+    returned == "Self"
+        || module
+            .typevar_calls
+            .iter()
+            .any(|typevar| typevar.name == returned)
+}
+
+/// Does an unannotated metaclass `__call__` hand construction back to the
+/// normal machinery?
+///
+/// `return type.__call__(cls, *args, **kwargs)` delegates, so `__new__` runs and
+/// its signature governs. A body that returns a value of its own (`return 1`) or
+/// never returns at all (`raise TypeError(...)`) produces something that is not
+/// an instance of the class, so the constructor is never consulted.
+fn body_delegates_construction(call_fn: &FunctionInfo) -> bool {
+    let mut returns_values = call_fn.return_stmts.iter().filter(|stmt| stmt.has_value);
+    returns_values.clone().next().is_some() && returns_values.all(|stmt| stmt.value_is_call)
 }
 
 /// Collects the positional (non-kw_only, non-init_false, non-ClassVar) fields of a
@@ -414,7 +451,7 @@ fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
         // Check metaclass: if the class has a metaclass that does NOT pass through
         // arguments, skip validation (the metaclass controls the call signature).
         if let Some(ref meta_name) = class_info.metaclass_name {
-            if !metaclass_passes_through(meta_name, &module.classes, &module.functions) {
+            if !metaclass_passes_through(meta_name, module) {
                 continue;
             }
         }

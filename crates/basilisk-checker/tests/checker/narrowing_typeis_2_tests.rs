@@ -85,8 +85,7 @@ def is_mine(x: Base) -> TypeIs[MyClass]:
 // The resolution work must not blunt the rule: a resolved alias that IS
 // inconsistent still fires.
 #[test]
-fn aliased_narrowed_type_still_fires_when_inconsistent(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn aliased_narrowed_type_still_fires_when_inconsistent() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeIs
 

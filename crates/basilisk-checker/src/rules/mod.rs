@@ -195,6 +195,26 @@ pub(crate) trait Rule {
     /// ([CHKARCH-VERSION-TARGET]) so rules never hardcode a Python version.
     fn check(&self, module: &ResolvedModule, ctx: &CheckContext, diagnostics: &mut Vec<Diagnostic>);
 
+    /// Run the rule with the module's SHARED annotation cascade.
+    ///
+    /// Building an [`AnnotationResolver`] walks the whole AST twice (the tables
+    /// and the span → node index), so the driver builds it once per module and
+    /// passes it here; a rule that builds its own pays that walk again, and a
+    /// dozen such rules made the walk the dominant cost of checking a file
+    /// ([CHKARCH-TESTING-BENCH-RATCHET]). Rules that read the cascade override
+    /// this; every other rule ignores the argument through the default. `None`
+    /// means the module does not parse, which is reported elsewhere.
+    fn check_with_annotations(
+        &self,
+        module: &ResolvedModule,
+        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
+        ctx: &CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        let _ = annotations;
+        self.check(module, ctx, diagnostics);
+    }
+
     /// This rule's opt-in tag declaration, or `None` for a core PEP rule.
     ///
     /// Returning `Some(..)` marks the rule as Basilisk-original: off by default,
@@ -410,10 +430,13 @@ pub fn run_all(module: &ResolvedModule, ctx: &CheckContext) -> Vec<Diagnostic> {
     .into_iter()
     .max()
     .unwrap_or(0);
+    // One cascade for the whole module: every rule that reads annotations
+    // shares these tables instead of rebuilding them ([CHKARCH-TESTING-BENCH-RATCHET]).
+    let annotations = crate::annotation::AnnotationResolver::for_module(module);
     all_rules()
         .iter()
         .fold(Vec::with_capacity(expected), |mut acc, rule| {
-            rule.check(module, ctx, &mut acc);
+            rule.check_with_annotations(module, annotations.as_ref(), ctx, &mut acc);
             acc
         })
 }

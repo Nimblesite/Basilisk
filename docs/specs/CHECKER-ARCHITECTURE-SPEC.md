@@ -1615,12 +1615,29 @@ never suppress the other (`benchmarks/summarize.py`):
   optimised or restructured. A machine without a baseline establishes one only
   after a successful run is committed.
 
-> **Planned — bench in the pipeline (CI).** Today `make bench` is run locally and
-> its results are committed. The intention is to eventually run the benchmark gate
-> in CI on a fixed runner class, on the same write-always / gate-separately
-> discipline described here, so a performance regression fails the pipeline the way
-> the conformance and coverage gates already do. Until that lands, the discipline
-> is enforced by running `make bench` locally and committing the updated status CSV.
+**Bench in the pipeline (CI).** The gate is a blocking CI job — `bench`
+("Benchmark Ratchet") in `.github/workflows/ci.yml` — running `make bench` under
+exactly the write-always / gate-separately discipline described above, so a
+performance regression fails the pipeline the way the conformance and coverage
+gates already do. Three properties make the job honest:
+
+- **Fixed runner class.** Pinned to the standard `ubuntu-24.04` image, never the
+  opt-in big runner. The machine slug is derived from `RUNNER_OS`/`RUNNER_ARCH`
+  (`gha-linux-x64`), so a job that drifted onto different hardware would compare
+  two machines' times under one baseline.
+- **Its own change scope.** The job runs when the `changes` classifier sets
+  `bench` — any core change (the checker speed it defends) **or** any
+  `benchmarks/**` change (fixtures, `run.sh`, `summarize.py`, the status CSVs),
+  which are not core Rust and would otherwise let the harness change without the
+  gate ever running.
+- **Nothing relaxed for CI.** `run.sh` rejects `BENCH_NO_GATE` /
+  `BENCH_REGRESS_PCT` / `BENCH_TOLERANCE_PCT` and exits 2 on the basilisk-only
+  mode under `GITHUB_ACTIONS`, so the CI run is always the full sweep at zero
+  tolerance.
+
+Locally the same command is the same gate; developers still run `make bench` and
+commit the updated status CSV, which is what advances the baseline (in CI, as
+locally, a machine with no committed baseline establishes one instead of failing).
 
 ### CI Artifact Storage Policy {#GITHUB-NO-ARTIFACTS}
 

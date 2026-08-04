@@ -43,7 +43,8 @@ pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
             // Lambda expressions have type Callable[..., Unknown] since we don't know
             // parameter types or return type without analyzing the lambda body
             InferredType::Callable(crate::types::CallableInfo {
-                param_types: Vec::new(), // Empty means we don't know parameter types
+                // The gradual tail: the lambda's parameters are not pinned here.
+                param_types: crate::types::gradual_params(Vec::new()),
                 return_type: Box::new(InferredType::Unknown),
             })
         }

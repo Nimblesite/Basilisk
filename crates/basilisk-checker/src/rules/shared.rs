@@ -33,10 +33,7 @@ use ruff_python_ast::{self as ast, Expr};
 /// answer yes; a decorator merely *named* `overload` but bound from another
 /// module answers no. Every rule that reasons about overload groups shares
 /// this one predicate so the groups they form agree.
-pub(crate) fn overload_decorated(
-    resolver: &AnnotationResolver<'_>,
-    decorators: &[String],
-) -> bool {
+pub(crate) fn overload_decorated(resolver: &AnnotationResolver<'_>, decorators: &[String]) -> bool {
     decorators
         .iter()
         .any(|decorator| resolver.decorator_denotes(decorator, "overload"))

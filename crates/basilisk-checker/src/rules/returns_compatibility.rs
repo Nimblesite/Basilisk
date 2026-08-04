@@ -41,19 +41,32 @@ impl Rule for ReturnTypeMismatch {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        // Standalone entry point (a single-rule test, or any caller outside the
+        // driver): build the cascade the driver would otherwise share.
+        let annotations = crate::annotation::AnnotationResolver::for_module(module);
+        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+    }
+
+    fn check_with_annotations(
+        &self,
+        module: &ResolvedModule,
+        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         // The declared type of every return annotation comes from the shared
         // cascade ([TYPEINF-ANNOTATION-RESOLUTION]); its tables are built once
         // per module, not once per function.
-        let Some(resolver) = AnnotationResolver::for_module(module) else {
+        let Some(resolver) = annotations else {
             return;
         };
         for func in &module.functions {
             // @no_type_check suppresses body checks (E0011); E0041 arity still applies.
             if !is_stub_context(func, &module.classes) && !is_no_type_check(func) {
-                check_return_type_mismatch(func, module, &resolver, diagnostics);
+                check_return_type_mismatch(func, module, resolver, diagnostics);
             }
         }
     }

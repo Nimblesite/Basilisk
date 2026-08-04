@@ -76,7 +76,7 @@ pub(super) fn collect_value_aliases(module: &ResolvedModule) -> HashMap<String, 
         if var.has_annotation && !is_typealias_annotation(var, &module.source) {
             continue;
         }
-        let Some(text) = alias_rhs_text(var, &module.source) else {
+        let Some(text) = alias_rhs_text(var, module) else {
             continue;
         };
         let def = InferredType::from_annotation(text.trim());
@@ -143,7 +143,7 @@ pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String
         if var.has_annotation {
             continue;
         }
-        let Some(text) = alias_rhs_text(var, &module.source) else {
+        let Some(text) = alias_rhs_text(var, module) else {
             continue;
         };
         let lowered = text.to_ascii_lowercase();
@@ -168,7 +168,7 @@ pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String
         if generics.contains_key(&key) {
             continue;
         }
-        let Some(text) = alias_rhs_text(var, &module.source) else {
+        let Some(text) = alias_rhs_text(var, module) else {
             continue;
         };
         let lowered = text.to_ascii_lowercase();
@@ -226,10 +226,31 @@ fn is_typealias_annotation(var: &VariableInfo, source: &str) -> bool {
 }
 
 /// The trimmed RHS source text of an alias assignment, if non-empty.
-fn alias_rhs_text(var: &VariableInfo, source: &str) -> Option<String> {
+///
+/// A `Name = TypeAliasType("Name", body, type_params=(T,))` definition is NOT a
+/// textual alias body: its body is the call's SECOND ARGUMENT, and the call
+/// expression itself denotes no type at all. Matching a value against that text
+/// asks whether e.g. `1` matches `typealiastype("goodalias4", …)`, which can
+/// only ever answer "no" — a false positive on every valid use of a
+/// `TypeAliasType` alias. These aliases are resolved by the
+/// [TYPEINF-ANNOTATION-RESOLUTION] cascade instead, so they are excluded here
+/// rather than approximated.
+fn alias_rhs_text(var: &VariableInfo, module: &ResolvedModule) -> Option<String> {
+    if is_type_alias_type_call(var, module) {
+        return None;
+    }
     let rhs_span = var.rhs_span?;
-    let rhs_text = slice_span(source, rhs_span)?.trim();
+    let rhs_text = slice_span(&module.source, rhs_span)?.trim();
     (!rhs_text.is_empty()).then(|| rhs_text.to_owned())
+}
+
+/// Whether `var` is the LHS of a `TypeAliasType(...)` call the resolver
+/// recognised (structural, never a text match on the RHS).
+fn is_type_alias_type_call(var: &VariableInfo, module: &ResolvedModule) -> bool {
+    module
+        .type_alias_type_calls
+        .iter()
+        .any(|call| call.lhs_name == var.name)
 }
 
 /// Returns `true` when `value` positively matches the (possibly recursive)

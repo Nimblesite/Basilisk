@@ -58,7 +58,14 @@ pub(super) fn check_method_calls(module: &ResolvedModule, diagnostics: &mut Vec<
         else {
             continue;
         };
-        check_bound_call(module, call, class_info, &bound, instance_access, diagnostics);
+        check_bound_call(
+            module,
+            call,
+            class_info,
+            &bound,
+            instance_access,
+            diagnostics,
+        );
     }
 }
 

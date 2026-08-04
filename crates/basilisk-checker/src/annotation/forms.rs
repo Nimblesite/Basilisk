@@ -9,9 +9,9 @@
 
 use ruff_python_ast::{Expr, UnaryOp};
 
-use crate::types::{CallableInfo, InferredType, LiteralValue};
+use crate::types::{gradual_params, CallableInfo, InferredType, LiteralValue};
 
-use super::{AnnotationResolver, Frame};
+use super::{tables, AnnotationResolver, Frame};
 
 /// Evaluate a subscripted special form. `None` means "not a special form" —
 /// the caller continues the cascade with aliases and classes.
@@ -45,7 +45,7 @@ pub(super) fn special_form(
         "set" | "frozenset" => Some(InferredType::Set(Box::new(first_type(args, &resolve)))),
         "dict" => Some(dict_type(args, &resolve)),
         "tuple" => Some(tuple_type(args, &resolve)),
-        "callable" => Some(callable_type(args, &resolve)),
+        "callable" => Some(callable_type(resolver, args, frame)),
         "generator" => Some(generator_type(args, &resolve)),
         // `type[X]` needs class-object modelling the cascade does not yet do:
         // gradual, so no rule invents a verdict from it.
@@ -80,19 +80,55 @@ fn tuple_type(args: &[&Expr], resolve: &dyn Fn(&Expr) -> InferredType) -> Inferr
 
 /// `Callable[[P..], R]`, `Callable[..., R]`, and `Callable[P, R]` for a
 /// `ParamSpec` `P` (whose parameter list is unknown — the arbitrary form).
-fn callable_type(args: &[&Expr], resolve: &dyn Fn(&Expr) -> InferredType) -> InferredType {
+fn callable_type(resolver: &AnnotationResolver<'_>, args: &[&Expr], frame: &Frame) -> InferredType {
     let [params, ret] = args else {
         return InferredType::Unknown;
     };
     let param_types = match params {
-        Expr::List(list) => list.elts.iter().map(resolve).collect(),
-        // `...` and a `ParamSpec` both mean "parameters not constrained here".
-        _ => Vec::new(),
+        // A written list pins the parameters exactly — including `[]`, the
+        // callable that takes none.
+        Expr::List(list) => list
+            .elts
+            .iter()
+            .map(|elt| resolver.eval(elt, frame))
+            .collect(),
+        // `Concatenate[X, .., P]` pins the leading positions and leaves the
+        // rest to the `ParamSpec` (PEP 612).
+        Expr::Subscript(sub) => concatenate_prefix(resolver, sub, frame),
+        // `...` and a bare `ParamSpec` both mean "parameters not constrained
+        // here" — no prefix, gradual tail.
+        _ => gradual_params(Vec::new()),
     };
     InferredType::Callable(CallableInfo {
         param_types,
-        return_type: Box::new(resolve(ret)),
+        return_type: Box::new(resolver.eval(ret, frame)),
     })
+}
+
+/// The parameter list denoted by a subscripted parameter specification.
+///
+/// `Concatenate[int, P]` becomes the required prefix `[int]` plus a gradual
+/// tail; the trailing `ParamSpec` itself is the tail, not a parameter. Any
+/// other subscript in this position is a form the cascade does not model, so it
+/// stays fully gradual rather than being guessed at.
+fn concatenate_prefix(
+    resolver: &AnnotationResolver<'_>,
+    sub: &ruff_python_ast::ExprSubscript,
+    frame: &Frame,
+) -> Vec<InferredType> {
+    let head = tables::dotted_name(&sub.value).and_then(|d| resolver.canonical_head(&d));
+    if head.as_deref().map(str::to_ascii_lowercase).as_deref() != Some("concatenate") {
+        return gradual_params(Vec::new());
+    }
+    let args = basilisk_parser::subscript_elements(sub);
+    let prefix = args
+        .split_last()
+        .map(|(_, leading)| leading)
+        .unwrap_or_default()
+        .iter()
+        .map(|expr| resolver.eval(expr, frame))
+        .collect();
+    gradual_params(prefix)
 }
 
 /// `Generator[Yield, Send, Return]`; any other arity is gradual.

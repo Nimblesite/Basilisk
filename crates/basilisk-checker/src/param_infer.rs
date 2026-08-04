@@ -258,7 +258,9 @@ pub fn imported_callable_globals(
             let ty = match symbol.kind {
                 ExternalSymbolKind::Function => {
                     InferredType::Callable(crate::types::CallableInfo {
-                        param_types: Vec::new(),
+                        // An imported function's parameters are not modelled
+                        // here — gradual tail, not "takes no arguments".
+                        param_types: crate::types::gradual_params(Vec::new()),
                         return_type: Box::new(
                             symbol
                                 .type_annotation

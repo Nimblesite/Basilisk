@@ -41,11 +41,24 @@ impl Rule for NoMatchingOverload {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        // Standalone entry point (a single-rule test, or any caller outside the
+        // driver): build the cascade the driver would otherwise share.
+        let annotations = crate::annotation::AnnotationResolver::for_module(module);
+        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+    }
+
+    fn check_with_annotations(
+        &self,
+        module: &ResolvedModule,
+        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         // Overload membership is a binding question ([#380]).
-        let Some(resolver) = crate::annotation::AnnotationResolver::for_module(module) else {
+        let Some(resolver) = annotations else {
             return;
         };
         let source = &module.source;
@@ -85,7 +98,7 @@ impl Rule for NoMatchingOverload {
             if func.name != "__getitem__" {
                 continue;
             }
-            if !super::shared::overload_decorated(&resolver, &func.decorators) {
+            if !super::shared::overload_decorated(resolver, &func.decorators) {
                 continue;
             }
             let Some(class_name) = func.class_name.as_deref() else {
