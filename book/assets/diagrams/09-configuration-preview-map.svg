@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">A Basilisk 0.39.0 root rule preview</title>
+  <desc id="desc">A conceptual preview tied to the Signal Box root source and revision shows BSK-0001 changing from error to warning, resulting diagnostic impact, and Cancel and Apply change actions.</desc>
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="#10141d" stroke="#252d3f" stroke-width="3"/>
+  <text x="82" y="110" fill="#e8500a" font-family="monospace" font-size="28" font-weight="700" letter-spacing="5">PREVIEW · NO FILE WRITTEN</text>
+  <text x="82" y="178" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="60" font-weight="800">Review the effective change and impact</text>
+  <text x="84" y="226" fill="#8892a4" font-family="system-ui,sans-serif" font-size="29">Signal Box checkpoint · explanatory map of the 0.39.0 preview contract</text>
+
+  <g transform="translate(170 286)">
+    <rect width="1260" height="584" rx="30" fill="#141820" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="42" y="62" fill="#7dd3fc" font-family="monospace" font-size="23" font-weight="700">ACTIVE SOURCE</text>
+    <text x="42" y="104" fill="#f0f2f7" font-family="monospace" font-size="24">signal-box/pyproject.toml</text>
+    <rect x="952" y="44" width="264" height="66" rx="16" fill="#0e1820" stroke="#365164" stroke-width="2"/>
+    <text x="1084" y="86" text-anchor="middle" fill="#bae6fd" font-family="monospace" font-size="20">revision · current</text>
+    <line x1="42" y1="142" x2="1218" y2="142" stroke="#252d3f" stroke-width="3"/>
+
+    <text x="42" y="200" fill="#8892a4" font-family="monospace" font-size="22">EFFECTIVE SEVERITY CHANGE</text>
+    <rect x="42" y="232" width="1176" height="112" rx="20" fill="#0f1218" stroke="#e8500a" stroke-width="3"/>
+    <text x="76" y="278" fill="#fb923c" font-family="monospace" font-size="25" font-weight="700">BSK-0001</text>
+    <text x="76" y="318" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25">Missing parameter type annotation</text>
+    <rect x="820" y="258" width="130" height="58" rx="29" fill="#3a1717" stroke="#f87171" stroke-width="2"/>
+    <text x="885" y="295" text-anchor="middle" fill="#fecaca" font-family="system-ui,sans-serif" font-size="23" font-weight="750">Error</text>
+    <text x="980" y="295" fill="#8892a4" font-family="system-ui,sans-serif" font-size="27">→</text>
+    <rect x="1030" y="258" width="150" height="58" rx="29" fill="#35251c" stroke="#fbbf24" stroke-width="2"/>
+    <text x="1105" y="295" text-anchor="middle" fill="#fde68a" font-family="system-ui,sans-serif" font-size="23" font-weight="750">Warning</text>
+
+    <text x="42" y="402" fill="#8892a4" font-family="monospace" font-size="22">CURRENT WORKSPACE IMPACT</text>
+    <g transform="translate(42 430)">
+      <rect width="260" height="92" rx="18" fill="#231414" stroke="#f87171" stroke-width="3"/>
+      <text x="28" y="38" fill="#fecaca" font-family="system-ui,sans-serif" font-size="22">Errors</text>
+      <text x="232" y="62" text-anchor="end" fill="#f0f2f7" font-family="monospace" font-size="30" font-weight="700">2 → 1</text>
+      <rect x="286" width="260" height="92" rx="18" fill="#2a2015" stroke="#fbbf24" stroke-width="3"/>
+      <text x="314" y="38" fill="#fde68a" font-family="system-ui,sans-serif" font-size="22">Warnings</text>
+      <text x="518" y="62" text-anchor="end" fill="#f0f2f7" font-family="monospace" font-size="30" font-weight="700">1 → 2</text>
+      <rect x="572" width="260" height="92" rx="18" fill="#17232c" stroke="#6ec5e9" stroke-width="3"/>
+      <text x="600" y="38" fill="#bae6fd" font-family="system-ui,sans-serif" font-size="22">Info</text>
+      <text x="804" y="62" text-anchor="end" fill="#f0f2f7" font-family="monospace" font-size="30" font-weight="700">0 → 0</text>
+    </g>
+    <rect x="930" y="444" width="118" height="62" rx="15" fill="#0f1218" stroke="#6ec5e9" stroke-width="2"/>
+    <text x="989" y="484" text-anchor="middle" fill="#bae6fd" font-family="system-ui,sans-serif" font-size="22">Cancel</text>
+    <rect x="1064" y="444" width="154" height="62" rx="15" fill="#e8500a"/>
+    <text x="1141" y="484" text-anchor="middle" fill="#0a0c12" font-family="system-ui,sans-serif" font-size="19" font-weight="750">Apply change</text>
+  </g>
+
+  <text x="800" y="922" text-anchor="middle" fill="#8892a4" font-family="system-ui,sans-serif" font-size="26">A changed source revision invalidates this proposal instead of overwriting newer text.</text>
+</svg>

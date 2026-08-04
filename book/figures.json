@@ -265,57 +265,27 @@
       "master": "assets/diagrams/09-configuration-resolution.svg",
       "path": "assets/diagrams/09-configuration-resolution.png",
       "title": "Preview one deliberate configuration change before applying it",
-      "alt": "One rule and test-path choice moves through Basilisk preview, human review, an approved pyproject.toml edit, and a project recheck."
+      "alt": "One root rule severity choice moves through Basilisk preview, human review, an approved versioned pyproject.toml edit, and a project recheck."
     },
     {
-      "id": "shot-09-config-editor",
+      "id": "fig-09-config-editor",
       "section": "09",
-      "kind": "screenshot",
-      "status": "draft-capture",
-      "master": "assets/screenshots/masters/09-configuration-editor-full.png",
-      "path": "assets/screenshots/09-configuration-editor.png",
-      "title": "Browse and preview rules in the configuration editor",
-      "alt": "The real VS Code configuration editor for Signal Box shows tag facets, searchable rule rows, diagnostic counts, and explicit severity controls.",
-      "capture": {
-        "date": "2026-07-12",
-        "environment": "macOS 26.5.1 arm64",
-        "editor": "VS Code 1.128.0 Extension Development Host",
-        "theme": "Dark Modern",
-        "zoom": "0; 1440x900 viewport at 2x device scale",
-        "pythonTarget": "3.12",
-        "basiliskVersion": "unreleased working-tree build (0.0.0-PLACEHOLDER)",
-        "fixture": "examples/signal-box",
-        "command": "make -C book screenshots",
-        "method": "headed VS Code test with real bundled Basilisk LSP, captured over Chrome DevTools Protocol",
-        "nativeSize": "2880x1800 master; deterministic 1600x1000 publication crop",
-        "sha256": "15d946f6228d9193254fd93e458f72fff2d49d6d722b34eba585a14752891639"
-      },
-      "publicationGate": "Recapture from the pinned Basilisk release before publication."
+      "kind": "diagram",
+      "status": "ready",
+      "master": "assets/diagrams/09-configuration-editor-map.svg",
+      "path": "assets/diagrams/09-configuration-editor-map.png",
+      "title": "Read the configuration editor as server-computed project policy",
+      "alt": "An explanatory map shows the five editor views, tag facets, searchable rule rows, diagnostic counts, severity controls, and active root source."
     },
     {
-      "id": "shot-09-config-preview",
+      "id": "fig-09-config-preview",
       "section": "09",
-      "kind": "screenshot",
-      "status": "draft-capture",
-      "master": "assets/screenshots/masters/09-configuration-preview-full.png",
-      "path": "assets/screenshots/09-configuration-preview.png",
-      "title": "Review a path-scoped rule change before writing it",
-      "alt": "The real Basilisk preview shows BSK-0002 changing from inherited to warning for tests, recalculated workspace impact, and separate editing and apply actions.",
-      "capture": {
-        "date": "2026-07-12",
-        "environment": "macOS 26.5.1 arm64",
-        "editor": "VS Code 1.128.0 Extension Development Host",
-        "theme": "Dark Modern",
-        "zoom": "0; 1440x900 viewport at 2x device scale",
-        "pythonTarget": "3.12",
-        "basiliskVersion": "unreleased working-tree build (0.0.0-PLACEHOLDER)",
-        "fixture": "examples/signal-box",
-        "command": "make -C book screenshots",
-        "method": "real LSP preview in headed VS Code, left unapplied and captured over Chrome DevTools Protocol",
-        "nativeSize": "2880x1800 master; deterministic 1600x1000 publication crop",
-        "sha256": "b1c790ed5a4ff4b393e5e86aa4cae5ceab45f29c2fe13c7de672654bea00a2ef"
-      },
-      "publicationGate": "Recapture from the pinned Basilisk release before publication."
+      "kind": "diagram",
+      "status": "ready",
+      "master": "assets/diagrams/09-configuration-preview-map.svg",
+      "path": "assets/diagrams/09-configuration-preview-map.png",
+      "title": "Review effective severity and workspace impact before applying",
+      "alt": "A root BSK-0001 preview shows its source revision, error-to-warning severity change, current diagnostic impact, and separate cancel and apply actions."
     },
     {
       "id": "fig-10-adoption-funnel",

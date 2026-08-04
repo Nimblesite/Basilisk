@@ -1,7 +1,54 @@
 //! Tests for [`aliases_recursive`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for aliases_recursive: Cyclical type alias.
 
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
 use super::common::*;
+
+/// Ceiling for a full check that must be effectively instant. Generous so slow
+/// CI machines never flake, yet far below the effectively-infinite hang it
+/// guards against.
+const CHECK_DEADLINE: Duration = Duration::from_secs(30);
+
+/// Run the full checker on `source` in a worker thread and fail the test if it
+/// does not finish within [`CHECK_DEADLINE`] — a hung checker must fail fast,
+/// not stall the suite. Checker-level twin of the resolver's #398 harness
+/// (`basilisk-resolver/tests/resolver/test_recursive_bases.rs`).
+fn check_within_deadline(source: &'static str) {
+    let (sender, receiver) = mpsc::channel();
+    // The handle is deliberately dropped: a hung worker cannot be joined, and
+    // the process exiting after the failed test reaps it.
+    drop(thread::spawn(move || {
+        // Stringify the error: `Box<dyn Error>` is not `Send`, so the raw
+        // check result cannot cross the channel.
+        let outcome = run(source).map(|_| ()).map_err(|e| e.to_string());
+        drop(sender.send(outcome));
+    }));
+    let checked = receiver
+        .recv_timeout(CHECK_DEADLINE)
+        .unwrap_or_else(|_| panic!("checker hung on:\n{source}"));
+    assert!(checked.is_ok(), "check failed: {:?}", checked.err());
+}
+
+/// The recursive-alias definitions from #371 and the genuinely cyclical
+/// rejections must both complete promptly under the full checker: the alias
+/// expander and the circularity walk are the same recursion shape the #398
+/// class-bases hang came from, so every spelling gets the same wall-clock
+/// bound (plan box: deadline-guard the hang-class regressions).
+#[test]
+fn recursive_alias_definitions_check_within_deadline() {
+    check_within_deadline(
+        "type JsonValue = str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]\n",
+    );
+    check_within_deadline("type RecursiveUnion = RecursiveUnion | int\n");
+    check_within_deadline(
+        "type MutualReference1 = MutualReference2 | int\n\
+         type MutualReference2 = MutualReference1 | str\n",
+    );
+    check_within_deadline("class C(C[int], C[bool]):\n    pass\n");
+}
 
 #[test]
 fn non_cyclical_alias() -> Result<(), Box<dyn std::error::Error>> {

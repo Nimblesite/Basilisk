@@ -449,6 +449,22 @@
       "authority": "The Basilisk Project",
       "versionScope": "Basilisk 0.39.0 source commit",
       "topics": ["stub resolution", "typeshed selection", "stub generation", "provenance"]
+    },
+    {
+      "key": "basilisk-checker-architecture-spec-0-39-0",
+      "title": "Basilisk v0.39.0 checker architecture specification",
+      "url": "https://github.com/Nimblesite/Basilisk/blob/b8ae454cfabc54d26d7e4efc029f2f01bd083bc8/docs/specs/CHECKER-ARCHITECTURE-SPEC.md",
+      "authority": "The Basilisk Project",
+      "versionScope": "Basilisk 0.39.0 source commit",
+      "topics": ["command partition", "rule severity", "folder configuration", "configuration discovery"]
+    },
+    {
+      "key": "basilisk-configuration-editor-spec-0-39-0",
+      "title": "Basilisk v0.39.0 configuration-editor specification",
+      "url": "https://github.com/Nimblesite/Basilisk/blob/b8ae454cfabc54d26d7e4efc029f2f01bd083bc8/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md",
+      "authority": "The Basilisk Project",
+      "versionScope": "Basilisk 0.39.0 source commit",
+      "topics": ["configuration editor", "preview", "apply", "path overrides"]
     }
   ]
 }

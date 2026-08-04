@@ -1295,8 +1295,13 @@ before the stage is declared closed:
   error).
 - [ ] **Step 4 — one engine-driven traversal visits every `Call` node with a
   resolved callee**, not just outermost-expression positions
-  ([NARROWPLAN-CALLSITES](#NARROWPLAN-CALLSITES)). Fixes #381, #382, and the
-  position half of #335.
+  ([NARROWPLAN-CALLSITES](#NARROWPLAN-CALLSITES)). The issues this step was
+  opened for — #381, #382, and the position half of #335 — shipped ahead of it
+  via resolver-side every-position collection, pinned green by
+  `tests/checker/calls_expression_position_tests.rs`,
+  `tests/checker/class_body_method_binding_tests.rs`, and
+  `tests/checker/directives_cast_tests.rs`; what remains here is consolidating
+  those per-rule walks onto the one engine traversal.
 - [ ] **Step 5 — `directives_assert_type` / `directives_reveal_type` answer
   from the hover oracle, byte for byte** (the parked
   `directives_assert_type_2` comes alive here). Fixes #290 — solved generic
@@ -1332,6 +1337,50 @@ before the stage is declared closed:
   expression — byte for byte, because after this they are the same oracle.
 - [ ] `make test`, mutation/coverage ratchets, benchmarks for touched hot
   paths, and the live conformance gate all pass with zero false positives.
+
+#### Assigned-issue audit — 2026-08-05
+
+Verification pass over the maintainer-assigned open issues, run against this
+branch on 2026-08-05 (every suite named below ran green). "Fixed" means the
+behavior is shipped AND pinned by tests; anything less stays unchecked and
+maps to the integration step that fixes it.
+
+- [x] #335 `directives_cast` — both halves shipped: quoted forward-reference
+  casts accepted (ruff TC006 parity), and casts validated in every expression
+  position (`tests/checker/directives_cast_tests.rs`, 9 tests).
+- [x] #371 valid recursive PEP 695 aliases accepted; genuine cycles still fire
+  (`tests/checker/aliases_recursive_tests.rs` +
+  `generics_syntax_scoping` suite).
+- [x] #372 a PEP 695 alias referenced from `cast(...)`/return position is a
+  defined name (`tests/checker/names_undefined_tests.rs`, issue-tagged
+  regressions).
+- [x] #379 `type`-statement RHS validated by walking the Ruff AST
+  (`is_type_expression`), never by source-text substring matching
+  (`tests/checker/aliases_type_statement_tests.rs`, 11 tests).
+- [x] #385 inlay hints never leak the internal `Unknown` sentinel
+  (`tests/lsp/ws_test_inlay_hints_display.rs`).
+- [x] #386 a transient syntax error no longer drops inlay hints file-wide
+  (`tests/lsp/ws_test_inlay_hints_recovery.rs`).
+- [x] #388 / #389 / #390 member completion answers on parameterized
+  annotations, unannotated literal bindings, loop targets, and chained calls
+  (`tests/lsp/ws_test_completion_receivers.rs`).
+- [ ] #290 — hover infers container-literal types today; solved generic
+  parameters surfacing in hover AND diagnostics is Step 5. Not
+  comprehensively fixed until Step 5 lands.
+- [ ] #317 — `param_infer` exists and is engine-wired, but `BSK-0001` never
+  consults it (no rule references `param_infer`). Fixed by Step 6.
+- [ ] #378 — the assignment half lands in Step 1, the return half in Step 2.
+  Not fixed until both land.
+- [x] Deadline-guard the hang-class regressions at the checker level: the
+  resolver pins the #398 recursive-bases hang with a 30 s `recv_timeout`
+  harness (`basilisk-resolver/tests/resolver/test_recursive_bases.rs`), and
+  the checker now has its own wall-clock bound —
+  `recursive_alias_definitions_check_within_deadline` in
+  `tests/checker/aliases_recursive_tests.rs` runs the #371 recursive-alias
+  spellings, the genuinely cyclical rejections, AND the #398 class shape
+  through the full checker under the same 30 s deadline, so a reintroduced
+  blow-up fails fast instead of hanging the suite; the torture golden suite
+  stays the end-to-end bound.
 
 ### Inference scoreboard ratchet — post-integration
 

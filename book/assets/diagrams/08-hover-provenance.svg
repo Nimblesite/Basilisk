@@ -19,8 +19,8 @@
     <text x="32" y="362" fill="#f0f2f7" font-family="monospace" font-size="21">stubs/vendor_sensor.pyi</text>
     <line x1="32" y1="402" x2="428" y2="402" stroke="#2f5b4d" stroke-width="3"/>
     <text x="32" y="450" fill="#86efac" font-family="system-ui,sans-serif" font-size="22" font-weight="800">REVIEW QUESTION</text>
-    <text x="32" y="490" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="24">What runtime evidence</text>
-    <text x="32" y="520" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="24">supports this promise?</text>
+    <text x="32" y="482" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="23">What runtime evidence</text>
+    <text x="32" y="512" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="23">supports this promise?</text>
   </g>
 
   <g transform="translate(570 292)">
@@ -34,8 +34,8 @@
     <text x="32" y="362" fill="#f0f2f7" font-family="monospace" font-size="20">83c2518a…f887</text>
     <line x1="32" y1="402" x2="428" y2="402" stroke="#365164" stroke-width="3"/>
     <text x="32" y="450" fill="#7dd3fc" font-family="system-ui,sans-serif" font-size="22" font-weight="800">REVIEW QUESTION</text>
-    <text x="32" y="490" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="24">Is this the snapshot</text>
-    <text x="32" y="520" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="24">the project selected?</text>
+    <text x="32" y="482" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="23">Is this the snapshot</text>
+    <text x="32" y="512" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="23">the project selected?</text>
   </g>
 
   <g transform="translate(1072 292)">
@@ -49,8 +49,8 @@
     <text x="32" y="362" fill="#f0f2f7" font-family="monospace" font-size="19">.basilisk/stubs/…</text>
     <line x1="32" y1="402" x2="428" y2="402" stroke="#625039" stroke-width="3"/>
     <text x="32" y="450" fill="#fcd34d" font-family="system-ui,sans-serif" font-size="22" font-weight="800">REVIEW QUESTION</text>
-    <text x="32" y="490" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="24">Which details did the</text>
-    <text x="32" y="520" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="24">generator fail to recover?</text>
+    <text x="32" y="482" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="23">Which details did the</text>
+    <text x="32" y="512" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="23">generator fail to recover?</text>
   </g>
 
   <rect x="202" y="872" width="1196" height="70" rx="20" fill="#0f1218" stroke="#4a5468" stroke-width="3"/>

@@ -124,6 +124,16 @@ maintenance model allow that. If the evidence only supports `object` or an
 incomplete declaration, keep the uncertainty visible rather than guessing a
 narrow type.
 
+Treat a reviewed stub as a dependency you now maintain. Record which package
+version its evidence describes, and re-run its runtime cases whenever that
+package changes. Review the public signature before refreshing generated
+output: an upstream parameter can become keyword-only, a default can change,
+or a result can acquire a new absence case without adding a new public name.
+If the package later publishes trustworthy inline types or a maintained stub
+package, compare that contract with the local override before removing it.
+Deleting the override first would silently change which source wins the next
+check; comparison makes that change a deliberate migration.
+
 ## Packages advertise type information
 
 The typing specification recognizes more than one way to publish a contract.

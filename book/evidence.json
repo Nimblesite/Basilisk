@@ -181,29 +181,34 @@
     },
     {
       "section": "09",
-      "decision": "withhold-until-versioned-release",
+      "release": "0.39.0",
+      "decision": "publish",
       "governingSpecs": [
         "docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md#CONFIGEDITOR",
-        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIGURATION-ONLY",
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS",
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL",
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY",
         "docs/specs/CHECKER-RULE-TAGGING-SPEC.md#CHKTAG",
         "docs/specs/VSIX-SPEC.md#VSIX-CONFIGURATION-EDITOR"
       ],
-      "releaseImplementation": [],
-      "workingTreeImplementation": [
-        "crates/basilisk-config/src/editor/",
-        "crates/basilisk-lsp/src/configuration_editor/",
-        "vscode-extension/src/configuration-editor.ts",
-        "vscode-extension/src/configuration-editor-script-render.ts"
+      "releaseImplementation": [
+        "Basilisk v0.39.0 release commit b8ae454cfabc54d26d7e4efc029f2f01bd083bc8",
+        "crates/basilisk-config/src/editor/ at v0.39.0",
+        "crates/basilisk-lsp/src/configuration_editor/ at v0.39.0",
+        "vscode-extension/src/configuration-editor.ts at v0.39.0",
+        "vscode-extension/src/configuration-editor-script-render.ts at v0.39.0"
       ],
       "executableEvidence": [
-        "cargo test -p basilisk-config: 32 passed on 2026-07-12",
-        "cargo test -p basilisk-checker --test config_override_tests: 13 passed on 2026-07-12",
-        "cargo test -p basilisk-lsp configuration_editor: 18 passed on 2026-07-12",
-        "npx vscode-test --grep 'Configuration editor': 17 passed on 2026-07-12",
-        "make -C book screenshots: real Signal Box/LSP captures passed on 2026-07-12",
-        "target/debug/basilisk check --color never . from examples/signal-box: 3 expected diagnostics on 2026-07-12"
+        "Official Basilisk 0.39.0 macOS arm64 archive checksum matched the published checksum on 2026-08-05",
+        "The official 0.39.0 binary ran the Signal Box runtime suite: 1 test passed under Python 3.14.6 on 2026-08-05",
+        "The official 0.39.0 binary ran basilisk check --color never with exit status 0 and no diagnostics, plus the expected analyze-scope note, on 2026-08-05",
+        "The official 0.39.0 binary ran basilisk analyze --color never and reported exactly BSK-0001 and BSK-0002 as source errors plus BSK-0002 as a test warning: 3 diagnostics, 2 errors, on 2026-08-05",
+        "cargo test -p basilisk-lsp --test ws_features_tests configuration_editor passed all 3 selected configuration-editor integration tests from the v0.39.0 source tag on 2026-08-05"
       ],
-      "blocker": "The current build identifies itself as 0.0.0-PLACEHOLDER. Pin a released Basilisk version, rerun the evidence, and recapture both screenshots before setting decision to publish."
+      "omitted": [
+        "The pre-release configuration-editor screenshots were removed rather than presented as 0.39.0 evidence.",
+        "Known CHKTAG specification drift is recorded in RELEASE-ACCURACY-NOTES.md and is not described as a released editor mutation."
+      ]
     },
     {"section": "10", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {"section": "11", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},

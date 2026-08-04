@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Anatomy of the Basilisk 0.39.0 configuration editor</title>
+  <desc id="desc">An explanatory editor map shows the five navigation views, tag facets, search, server-supplied rule rows with diagnostic counts and severity controls, and the root pyproject source.</desc>
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="#10141d" stroke="#252d3f" stroke-width="3"/>
+  <text x="82" y="110" fill="#e8500a" font-family="monospace" font-size="28" font-weight="700" letter-spacing="5">SERVER-COMPUTED PROJECT POLICY</text>
+  <text x="82" y="178" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="60" font-weight="800">Read the source, rule, and effect together</text>
+  <text x="84" y="226" fill="#8892a4" font-family="system-ui,sans-serif" font-size="29">Explanatory map · Basilisk 0.39.0 · moving totals intentionally omitted</text>
+
+  <g transform="translate(68 286)">
+    <rect width="260" height="590" rx="24" fill="#141820" stroke="#4a5468" stroke-width="3"/>
+    <text x="28" y="54" fill="#8892a4" font-family="monospace" font-size="22" letter-spacing="3">VIEWS</text>
+    <g font-family="system-ui,sans-serif" font-size="25">
+      <text x="32" y="116" fill="#cbd5e1">Overview</text>
+      <rect x="18" y="140" width="224" height="58" rx="14" fill="#35251c" stroke="#e8500a" stroke-width="3"/>
+      <text x="32" y="178" fill="#fed7aa" font-weight="750">Rules</text>
+      <text x="32" y="244" fill="#cbd5e1">Adoption</text>
+      <text x="32" y="306" fill="#cbd5e1">Path Overrides</text>
+      <text x="32" y="368" fill="#cbd5e1">Project</text>
+    </g>
+    <line x1="24" y1="410" x2="236" y2="410" stroke="#252d3f" stroke-width="3"/>
+    <text x="28" y="458" fill="#8892a4" font-family="monospace" font-size="20">ACTIVE SOURCE</text>
+    <text x="28" y="506" fill="#a7f3d0" font-family="monospace" font-size="20">signal-box/</text>
+    <text x="28" y="538" fill="#a7f3d0" font-family="monospace" font-size="20">pyproject.toml</text>
+    <text x="28" y="572" fill="#8892a4" font-family="system-ui,sans-serif" font-size="20">Open raw ↗</text>
+  </g>
+
+  <g transform="translate(360 286)">
+    <rect width="296" height="590" rx="24" fill="#17232c" stroke="#6ec5e9" stroke-width="3"/>
+    <text x="28" y="54" fill="#7dd3fc" font-family="monospace" font-size="22" letter-spacing="3">FACETS</text>
+    <text x="28" y="104" fill="#8892a4" font-family="system-ui,sans-serif" font-size="22">Source</text>
+    <rect x="28" y="128" width="104" height="48" rx="24" fill="#0e1820" stroke="#6ec5e9" stroke-width="2"/><text x="80" y="159" text-anchor="middle" fill="#bae6fd" font-family="monospace" font-size="21">pep</text>
+    <rect x="144" y="128" width="124" height="48" rx="24" fill="#261b13" stroke="#e8500a" stroke-width="2"/><text x="206" y="159" text-anchor="middle" fill="#fed7aa" font-family="monospace" font-size="21">basilisk</text>
+    <text x="28" y="226" fill="#8892a4" font-family="system-ui,sans-serif" font-size="22">Policy tag</text>
+    <rect x="28" y="250" width="170" height="48" rx="24" fill="#201a2c" stroke="#c4b5fd" stroke-width="2"/><text x="113" y="281" text-anchor="middle" fill="#ddd6fe" font-family="monospace" font-size="21">strictness</text>
+    <line x1="28" y1="340" x2="268" y2="340" stroke="#365164" stroke-width="3"/>
+    <text x="28" y="390" fill="#7dd3fc" font-family="monospace" font-size="21">SEARCH</text>
+    <rect x="28" y="414" width="240" height="58" rx="14" fill="#0e1820" stroke="#365164" stroke-width="2"/>
+    <text x="48" y="451" fill="#cbd5e1" font-family="monospace" font-size="19">tag:strictness</text>
+    <text x="28" y="524" fill="#8892a4" font-family="system-ui,sans-serif" font-size="21">Facets find rules.</text>
+    <text x="28" y="554" fill="#8892a4" font-family="system-ui,sans-serif" font-size="21">They are not modes.</text>
+  </g>
+
+  <g transform="translate(688 286)">
+    <rect width="844" height="590" rx="24" fill="#141820" stroke="#4a5468" stroke-width="3"/>
+    <text x="34" y="54" fill="#8892a4" font-family="monospace" font-size="22" letter-spacing="3">RULES · SERVER STATE</text>
+    <g transform="translate(28 92)">
+      <rect width="788" height="184" rx="20" fill="#0f1218" stroke="#e8500a" stroke-width="3"/>
+      <text x="28" y="48" fill="#fb923c" font-family="monospace" font-size="24" font-weight="700">BSK-0001</text>
+      <text x="28" y="88" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27" font-weight="700">Missing parameter type annotation</text>
+      <text x="28" y="130" fill="#8892a4" font-family="monospace" font-size="20">basilisk · strictness · 1 diagnostic</text>
+      <rect x="620" y="58" width="136" height="58" rx="29" fill="#3a1717" stroke="#f87171" stroke-width="3"/>
+      <text x="688" y="95" text-anchor="middle" fill="#fecaca" font-family="system-ui,sans-serif" font-size="23" font-weight="750">Error</text>
+    </g>
+    <g transform="translate(28 304)">
+      <rect width="788" height="184" rx="20" fill="#0f1218" stroke="#6ec5e9" stroke-width="3"/>
+      <text x="28" y="48" fill="#7dd3fc" font-family="monospace" font-size="24" font-weight="700">BSK-0002</text>
+      <text x="28" y="88" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27" font-weight="700">Missing return type annotation</text>
+      <text x="28" y="130" fill="#8892a4" font-family="monospace" font-size="20">basilisk · strictness · 2 diagnostics</text>
+      <rect x="620" y="58" width="136" height="58" rx="29" fill="#3a1717" stroke="#f87171" stroke-width="3"/>
+      <text x="688" y="95" text-anchor="middle" fill="#fecaca" font-family="system-ui,sans-serif" font-size="23" font-weight="750">Error</text>
+    </g>
+    <text x="422" y="548" text-anchor="middle" fill="#8892a4" font-family="system-ui,sans-serif" font-size="22">Select a title for occurrences; select a severity to preview.</text>
+  </g>
+
+  <text x="800" y="932" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="26"><tspan fill="#e8500a" font-weight="800">Durable state:</tspan> the editor is a view over pyproject.toml, not a second settings store.</text>
+</svg>
