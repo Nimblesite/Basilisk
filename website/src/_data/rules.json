@@ -2255,6 +2255,10 @@
       },
       {
         "type": "text",
+        "html": "A <code>cast()</code> is invalid wherever it appears, so every expression position is checked \u2014 <code>return cast(1, x)</code> and <code>print(cast(1, x))</code> are as wrong as <code>y = cast(1, x)</code> (issue #335)."
+      },
+      {
+        "type": "text",
         "html": "- <code>cast()</code> \u2014 too few arguments - <code>cast(1, x)</code> \u2014 first argument is a value literal, not a type - <code>cast(&quot;Widget&quot;, x)</code> \u2014 OK: string forward reference - <code>cast(int, x, y)</code> \u2014 too many arguments"
       }
     ],

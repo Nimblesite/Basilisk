@@ -79,6 +79,12 @@ pub struct ResolvedModule {
     pub match_stmts: Vec<MatchStmtInfo>,
     /// Module-level call sites (calls appearing in module-level expressions or assignments).
     pub calls: Vec<CallSite>,
+    /// Every `cast(...)` call site in the module, in **any** expression
+    /// position — `return cast(...)`, `f(cast(...))`, and nested expressions
+    /// included. `cast()` is invalid wherever it appears, so `directives_cast`
+    /// needs a complete view that [`Self::calls`] deliberately does not give
+    /// (issue #335).
+    pub cast_calls: Vec<CallSite>,
     /// Module-level `TypeVar(...)` call sites.
     pub typevar_calls: Vec<TypeVarCallInfo>,
     /// All `reveal_type(...)` call sites found anywhere in the module.
