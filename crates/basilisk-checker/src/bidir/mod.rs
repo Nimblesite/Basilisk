@@ -290,6 +290,63 @@ mod tests {
         let bad = check_and_solve("(1, \"x\")", &expected);
         assert_eq!(bad.errors.len(), 1, "{:?}", bad.errors);
     }
+
+    /// [NARROWPLAN-INTEGRATION]: one reused engine must answer EXACTLY as a
+    /// fresh engine per expression. `solve_expression` resets the variables
+    /// and constraints in place, so neither the inferred type nor the error
+    /// set of a later expression can be contaminated by an earlier one — the
+    /// property that lets the flow walker keep a single engine alive.
+    #[test]
+    fn reused_engine_matches_a_fresh_engine_per_expression() {
+        let sources = ["[1]", "[\"x\", \"y\"]", "{1: \"a\"}", "len(z)", "[[1], [2]]"];
+
+        let fresh: Vec<(InferredType, usize)> = sources
+            .iter()
+            .map(|source| {
+                let (ty, solution) = synth_and_solve(source, HashMap::new());
+                (ty, solution.errors.len())
+            })
+            .collect();
+
+        let mut engine = BidirEngine::new(HashMap::new());
+        let reused: Vec<(InferredType, usize)> = sources
+            .iter()
+            .map(|source| {
+                let module = parse_expr(source);
+                let ty = engine.synth(&module.body);
+                let solution = engine.solve_expression();
+                (ty.to_inferred(&solution.vars), solution.errors.len())
+            })
+            .collect();
+
+        assert_eq!(reused, fresh);
+    }
+
+    /// [NARROWPLAN-INTEGRATION]: a pushed overlay shadows the scope beneath it
+    /// and is gone after the pop — the flow walker's per-expression binding
+    /// layer over a fixed module-callable scope.
+    #[test]
+    fn pushed_overlay_shadows_and_then_disappears() {
+        let module = parse_expr("value");
+        let outer: HashMap<String, Ty> = [("value".to_owned(), Ty::Ground(InferredType::Int))]
+            .into_iter()
+            .collect();
+        let mut engine = BidirEngine::new(outer);
+
+        engine.push_scope_with(
+            [("value".to_owned(), Ty::Ground(InferredType::Str))]
+                .into_iter()
+                .collect(),
+        );
+        let shadowed = engine.synth(&module.body);
+        let solution = engine.solve_expression();
+        assert_eq!(shadowed.to_inferred(&solution.vars), InferredType::Str);
+
+        engine.pop_scope();
+        let restored = engine.synth(&module.body);
+        let solution = engine.solve_expression();
+        assert_eq!(restored.to_inferred(&solution.vars), InferredType::Int);
+    }
 }
 
 #[cfg(test)]

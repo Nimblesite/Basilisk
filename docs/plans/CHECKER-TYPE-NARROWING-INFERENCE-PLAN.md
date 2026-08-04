@@ -269,45 +269,73 @@ limbo by **wiring them up here**, never by deleting them and never by
 suppressing a lint — each stays `pub` from the crate root, which is what
 keeps the workspace's `dead_code = "deny"` satisfied without an `#[allow]`.
 
-**The flow walker's synthesis path is UNTIMED until it is wired, and must be
-made cheap BEFORE the first rule consumes it.** The same staging that keeps
-these cores off live diagnostics also keeps them off every performance gate:
-`narrow::analyse_function_in` is reached only through the `narrowed_uses`
-Salsa query, whose sole callers today are tests and
+**The flow walker's synthesis path stays UNTIMED until it is wired, so it was
+made cheap BEFORE the first rule consumed it — DONE.** The same staging that
+keeps these cores off live diagnostics also keeps them off every performance
+gate: `narrow::analyse_function_in` is reached only through the
+`narrowed_uses` Salsa query, whose sole callers today are tests and
 `examples/ift_measure.rs`. `make bench` times `basilisk check`, which never
 enters this code — so no ratchet is watching it, and a cost that small
-fixtures hide will land as a *regression on the first wiring change*, when
-the zero-tolerance benchmark gate ([CHKARCH-TESTING-BENCH-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET))
+fixtures hide would have landed as a *regression on the first wiring change*,
+when the zero-tolerance benchmark gate ([CHKARCH-TESTING-BENCH-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET))
 is suddenly live over it and the change is also carrying diagnostic risk.
 
-The known cost is in `FlowWalker::synth_type` (`narrow/flow.rs`), called per
+The cost was in `FlowWalker::synth_type` (`narrow/flow.rs`), called per
 assign/ann-assign RHS, per `for` iterable, per bare-expression statement and
-per `while` test. Each call:
+per `while` test. Every call rebuilt a fresh `HashMap<String, Ty>` from **the
+entire module's** `ctx.callables` (production seeds this from
+`callable_interface` for the whole file), extended it with
+`NarrowEnv::visible()`, constructed a fresh `BidirEngine`, and threw all
+solver state away via `finish()` — so per-expression work scaled with module
+size and the total scaled as roughly function-size × module-size. Divergence
+compounded it: `walk_if` probed `body_diverges(&node.body)` and then walked
+that same body, whose `walk_stmts` re-probed each statement, re-synthesizing
+the same expressions once per enclosing branch.
 
-- rebuilds a fresh `HashMap<String, Ty>` from **the entire module's**
-  `ctx.callables` (production seeds this from `callable_interface` for the
-  whole file), then
-- extends it with `NarrowEnv::visible()`, which itself clones `declared` +
-  `scope` + every open frame, then
-- constructs a fresh `BidirEngine` and calls `finish()`, discarding all
-  solver state so nothing amortizes.
+All three fixes have landed:
 
-Per-expression work therefore scales with module size, making the total
-scale as roughly function-size × module-size. Compounding it, divergence is
-probed and then re-walked: `walk_if` calls `body_diverges(&node.body)` and
-then walks that same body, whose `walk_stmts` re-runs `one_diverges` on each
-statement, so nested control flow re-synthesizes the same expressions.
-(Frequency is bounded — `stmts_diverge` probes only `stmts.last()`, and
-`stmt_diverges` synthesizes only for `Stmt::Expr` and a `while` test — so the
-defect is cost-per-call and redundancy, not call count.)
+- `ctx.callables` converts to `Ty` **once**, in `analyse_function_in`, and
+  stays in the engine's outermost scope for the whole walk.
+- The walker holds **one** `BidirEngine`. Each expression pushes only the
+  visible flow bindings (function-sized, not module-sized) with
+  `BidirEngine::push_scope_with`, then resets the solver in place with
+  `BidirEngine::solve_expression` rather than dropping the engine. The reset
+  is what keeps each expression's solve independent of its predecessors —
+  pinned by `bidir::tests::reused_engine_matches_a_fresh_engine_per_expression`,
+  which asserts a reused engine answers identically to a fresh one.
+- `FlowWalker::one_diverges` memoizes by statement span, so the probe and the
+  walk that follows it cannot re-synthesize. Keying on span alone is sound
+  because the only synthesis-dependent divergence forms are a call statement
+  typed `Never` and a `while` test proven to be a truthy literal, neither of
+  which a narrowing frame can change.
 
-Required before wiring, as a gate and not a follow-up: convert
-`ctx.callables` to `Ty` **once** at walker construction; hold one long-lived
-`BidirEngine` and push/pop the visible-binding overlay instead of rebuilding
-it; and memoize divergence per statement so the probe/walk overlap cannot
-re-synthesize. Fixing it while the component still has no consumers is
-strictly cheaper — there is no caller to break, no diagnostic to hold steady,
-and no conformance run to re-certify.
+The harness that made the cost visible is committed as
+`crates/basilisk-checker/examples/narrow_walk_cost.rs`, so the curve is
+reproducible rather than asserted:
+
+```sh
+cargo run --release -p basilisk-checker --example narrow_walk_cost
+```
+
+Self-measured (Apple silicon macOS, `--release`), one walk of a 60-branch
+function against a synthetic module of N callables it never mentions,
+averaged over 20 walks. The point is the *shape* of the curve, not the
+absolute times, which are machine-specific:
+
+| module callables | before | after |
+| --- | --- | --- |
+| 0 | 581 µs | 470 µs |
+| 100 | 957 µs | 462 µs |
+| 1 000 | 3.96 ms | 484 µs |
+| 5 000 | 18.02 ms | 606 µs |
+
+Cost was linear in module size and is now effectively flat; the residual
+growth is the single construction-time conversion of the callable seed,
+amortized over the whole walk. The harness also prints `narrowed_uses`, which
+must stay at 179 — a "faster" walk that stopped narrowing is a regression, not
+a win. Fixing this while the component still had no consumers was strictly
+cheaper: no caller to break, no diagnostic to hold steady, no conformance run
+to re-certify.
 
 ## Measurable targets {#NARROWPLAN-TARGETS}
 
@@ -870,17 +898,16 @@ the conformance ratchets (100% / 0 false positives) at every step.
 
 ### Integration and acceptance
 
-- [ ] **Blocks every item below.** Make `FlowWalker::synth_type` cheap before
-  any rule consumes `narrowed_uses` — see [NARROWPLAN-INTEGRATION](#NARROWPLAN-INTEGRATION).
-  Today it rebuilds the whole module's callables map plus a full
-  `NarrowEnv::visible()` clone and a fresh `BidirEngine` **per expression**, so
-  per-expression cost scales with module size. Three concrete changes:
-  (a) convert `ctx.callables` to `Ty` once at walker construction, not per
-  call; (b) hold one long-lived `BidirEngine`, pushing/popping the
-  visible-binding overlay instead of rebuilding it; (c) memoize divergence per
-  statement so the `walk_if` probe-then-walk and the `walk_stmts` re-probe stop
-  re-synthesizing the same expressions. Land it while the walker still has no
-  production consumer: no caller to break, no diagnostic to hold steady.
+- [x] **Blocked every item below.** `FlowWalker::synth_type` is cheap before
+  any rule consumes `narrowed_uses` — see [NARROWPLAN-INTEGRATION](#NARROWPLAN-INTEGRATION)
+  for the measurements. All three changes landed with the walker still
+  unconsumed: (a) `ctx.callables` converts to `Ty` once at walker
+  construction; (b) one long-lived `BidirEngine` takes the visible-binding
+  overlay through `push_scope_with`/`pop_scope` and resets its solver through
+  `solve_expression`; (c) `one_diverges` memoizes by statement span, so the
+  `walk_if` probe-then-walk and the `walk_stmts` re-probe no longer
+  re-synthesize the same expressions. Cost went from linear in module size to
+  flat.
 - [ ] Record a `make bench` baseline on a fixture that actually exercises the
   flow walker **in the same change that first wires it**, so the walker stops
   being invisible to the ratchet the moment it starts costing real time.

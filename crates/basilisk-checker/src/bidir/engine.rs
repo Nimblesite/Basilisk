@@ -60,6 +60,35 @@ impl BidirEngine {
         solve(self.vars, self.constraints.into_vec())
     }
 
+    /// [`BidirEngine::finish`] for one expression out of many: discharge the
+    /// constraints recorded since the last call and clear the solver state,
+    /// KEEPING the scope stack.
+    ///
+    /// A caller that synthesizes expression after expression against one set
+    /// of bindings (the flow walker, [NARROWPLAN-INTEGRATION]) would otherwise
+    /// have to rebuild those bindings for every expression. Resetting the
+    /// variables and constraints — rather than carrying them — keeps each
+    /// expression's solve independent, exactly as a fresh engine would, and
+    /// stops the constraint set growing without bound across the walk.
+    #[must_use]
+    pub fn solve_expression(&mut self) -> Solution {
+        let vars = std::mem::take(&mut self.vars);
+        let constraints = std::mem::take(&mut self.constraints);
+        solve(vars, constraints.into_vec())
+    }
+
+    /// Enter a nested binding scope, pre-populated, that shadows the ones
+    /// below it — the overlay form of [`BidirEngine::new`] for a caller whose
+    /// outer scopes are fixed for the whole run.
+    pub fn push_scope_with(&mut self, bindings: HashMap<String, Ty>) {
+        self.scopes.push(bindings);
+    }
+
+    /// Leave the innermost binding scope, dropping its bindings.
+    pub fn pop_scope(&mut self) {
+        let _ = self.scopes.pop();
+    }
+
     /// Allocate a fresh variable — the parameter-inference entry point
     /// (issue #317, [`crate::param_infer`]).
     pub fn fresh_param_var(&mut self, polarity: Polarity) -> super::tyvar::TyVarId {
