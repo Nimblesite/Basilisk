@@ -193,8 +193,11 @@ sites (issue #317).
 
 Collect lower, upper, constrained, default, and expected-return bounds for
 TypeVars; solve bounds deterministically and report ambiguity without
-guessing. Cover constrained/bound TypeVars, PEP 696 defaults, ParamSpec, and
-TypeVarTuple interactions before wiring the solver into rule decisions.
+guessing. Constrained/bound TypeVars, PEP 696 defaults, ParamSpec, and
+TypeVarTuple interactions are covered by the solver's pinning tests — the
+solver reaches rule decisions through the demolition order in
+[NARROWPLAN-INTEGRATION](#NARROWPLAN-INTEGRATION), and any interaction found
+uncovered on the way is a test to add, never a reason to stall the wiring.
 
 Type variables carry explicit lower/upper bounds (like Pyright's type
 intervals and Pyrefly's `Var`) with the input/output polarity discipline
@@ -208,11 +211,16 @@ type" and "might be more enjoyable" — Basilisk should ship it.
 
 ## Shared subtyping {#NARROWPLAN-SUBTYPING}
 
-Build a context for nominal class relationships, Protocol members, TypedDict
-schemas, generic variance, and Callable parameter kinds. Replace duplicated
-rule-local subtype helpers only after parity tests pin their current
-accepted/rejected cases. Keep `Any`/`Unknown` gradual behavior and the numeric
-tower consistent across annotation parsing and inferred types.
+`SubtypingContext` is the **only** subtyping judgment: nominal class
+relationships, Protocol members, TypedDict schemas, generic variance, Callable
+parameter kinds. The parity tables that once gated the rule-local helpers'
+replacement are pinned (`tests/subtyping_context_tests.rs`) — the gate is
+**satisfied and closed**. Every remaining rule-local subtype helper is
+condemned ([TYPEINF-LEGACY](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-LEGACY));
+delete each by routing its callers through `SubtypingContext`, per the
+demolition order in [NARROWPLAN-INTEGRATION](#NARROWPLAN-INTEGRATION).
+`Any`/`Unknown` gradual behavior and the numeric tower have one home each —
+never a per-rule copy.
 
 ## Incrementality {#NARROWPLAN-INCREMENTAL}
 
@@ -251,33 +259,128 @@ feature ships from this plan (see [NARROWPLAN-GOALS](#NARROWPLAN-GOALS)).
 
 ## Integration {#NARROWPLAN-INTEGRATION}
 
-Introduce each shared component behind existing checker APIs; do not create an
-alternate checking mode. Migrate assignment, return, call, and `assert_type`
-rules incrementally, deleting the replaced local logic in the same change. Add
-spec-ID-linked mutation-resistant tests for each migrated behavior.
+### The mandate
 
-**A shared component with no production caller is on-plan, not dead code.**
-Stage 2 deliberately lands each core *and its pinning tests* one change ahead
-of the rules that consume it, because [NARROWPLAN-SUBTYPING] requires parity
-tests to pin current accepted/rejected cases *before* any helper is replaced,
-and [NARROWPLAN-CONSTRAINTS] requires the generic interactions to be covered
-*before* the solver reaches rule decisions. Wiring earlier would put unproven
-inference behind live diagnostics and risk the zero-false-positive gate.
-`bidir::generics::GenericEnv` and `subtyping::SubtypingContext` are in exactly
-that state now; both module headers record it. They are removed from this
-limbo by **wiring them up here**, never by deleting them and never by
-suppressing a lint — each stays `pub` from the crate root, which is what
-keeps the workspace's `dead_code = "deny"` satisfied without an `#[allow]`.
+**The bidirectional engine is the checker's type oracle. Full stop.**
+
+There is exactly one component in this repository permitted to decide what
+type an expression has: `bidir::BidirEngine`, driven through
+`narrow::analyse_function_in` for flow-sensitive positions. Every rule that
+needs a type asks it. No rule computes a type any other way. No rule keeps a
+private opinion about a type "just for its case". No rule guesses from
+punctuation.
+
+Every mechanism that currently decides a type by looking at *source text* or
+at *syntactic shape* is legacy. Legacy code is not maintained here, not
+tolerated here, and not migrated around — it is **deleted**, in the same
+change that replaces it, by the engineer doing the replacing. A change that
+routes a rule through the engine while leaving the old path breathing next to
+it is **not done and must not merge**.
+
+### The demolition list
+
+Measured on this checkout — reproduce with `grep -rln <pattern>
+crates/basilisk-checker/src/rules | wc -l`:
+
+| Legacy mechanism | Rule files | Verdict |
+| --- | --- | --- |
+| `slice_span` — cutting the annotation out of the source as a **string** | 86 | DELETE |
+| `RhsKind` — branching on the syntactic *shape* of a right-hand side | 26 | DELETE |
+| `InferredType::from_annotation` over source text — a type parser that is not the parser | 14 | DELETE |
+| `rules/shared/text_scan.rs` — hand-rolled character scanning (151 LOC) | shared | DELETE |
+| Direct `name_subtype`/`is_numeric_subtype` calls bypassing `subtyping::SubtypingContext` | 22 call sites in 12 files | DELETE |
+
+Out of 172 rule modules. That is the floorboard count. Every one of those call
+sites is a rule that today answers a type question by reading characters
+instead of asking the engine, and every one of them is a place a real program
+gets checked wrong. `assignment_compatibility` is the flagship: it fires on
+literal right-hand sides and stays **silent on every call right-hand side**,
+which is why `a: int = returns_str()` passes today (Refs #397).
+
+This also finishes [LINESCANPLAN-ELIMINATION](CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md#LINESCANPLAN-ELIMINATION)
+by removing the *reason* line scanning exists, not just its call sites.
+
+### There is no obstacle — stop pretending there is
+
+Every piece needed to do this is already built, already tested, and already
+reachable from inside a `Rule::check`:
+
+- `rules::shared::parse_module(module)` (`rules/shared.rs:52`) hands any rule
+  the module's AST, parsed once and shared through `ResolvedModule::lazy_ast`.
+- `narrow::analyse_function_in` returns flow-narrowed types and
+  inference-driven unreachability for a function body.
+- `BidirEngine::synth` / `check` type any expression bidirectionally, and
+  `synth_call` already resolves call returns — the exact thing
+  `assignment_compatibility` fails to do.
+- `bidir::generics::GenericEnv` and `subtyping::SubtypingContext` are built,
+  pinned by tests, and waiting.
+
+Nothing is missing. The only thing that ever held this back was the staging
+discipline written in this very section, and the cost defect that discipline
+existed to protect against — which is now fixed and measured below. **The
+protection has expired. Wire it in.**
+
+`GenericEnv` and `SubtypingContext` leave limbo by being **wired up**, never by
+being deleted and never by an `#[allow]` — each stays `pub` from the crate
+root, which is what keeps the workspace's `dead_code = "deny"` satisfied.
+
+### What is NOT on the demolition list — read this before touching anything
+
+Ripping out legacy *mechanism* is mandatory. Weakening the *checker* is
+forbidden, and nothing in this section licenses it:
+
+- **Never delete, disable, or unregister a rule.** Not one. The rule survives;
+  its guts get replaced. See [CHKARCH-CONFORMANCE].
+- **Never remove a diagnostic.** Post-migration output is identical or
+  strictly better — same code, same span, same or clearer message.
+- **Never touch the scoreboard.** 100% / 0 false positives against a freshly
+  cloned `python/typing` harness is the prime directive and outranks this
+  entire plan. A migration that drops the number is reverted, not negotiated.
+- **Never add an alternate checking mode**, feature flag, or "new engine"
+  toggle. There is one code path. Basilisk has no modes.
+
+If replacing a rule's guts costs a required error, the engine is not ready for
+that rule yet — **fix the engine**, then come back. Do not ship the loss.
+
+### Order of demolition
+
+Each step is one change: wire the rule to the engine, delete the legacy path
+it replaces, land the spec-ID-linked mutation-resistant tests, re-certify.
+
+1. `assignment_compatibility` — the biggest liar in the tree. Every call RHS
+   goes through `synth_call`; `RhsKind` shape-matching dies here first.
+2. `returns_compatibility` / `returns_compatibility_2` — the returned
+   expression is synthesized, not pattern-matched.
+3. `calls_argument_type` — arguments checked against parameters through
+   `SubtypingContext`, not through per-rule string comparison.
+4. `directives_assert_type` / `directives_reveal_type` — these must agree with
+   hover, byte for byte, because they are now the same oracle.
+5. The remaining 80-odd `slice_span` consumers, in descending call-site count,
+   until the grep returns zero.
+
+### Gates that stay armed the entire time
+
+Non-negotiable, every step, no exceptions:
+
+- Live conformance run: **100% / 0 FP**, freshly cloned harness
+  ([CHKARCH-CONFORMANCE-MODE]).
+- `make bench`: no fixture slower than the committed baseline
+  ([CHKARCH-TESTING-BENCH-RATCHET]). The walker is real production cost the
+  moment step 1 lands — record the baseline **in that same change**.
+- `make test` fail-fast, coverage ratchet up, mutation ratchet up.
+- Torture golden gate green.
+
+### The cost defect that blocked all of this — FIXED
 
 **The flow walker's synthesis path stays UNTIMED until it is wired, so it was
 made cheap BEFORE the first rule consumed it — DONE.** The same staging that
-keeps these cores off live diagnostics also keeps them off every performance
+kept these cores off live diagnostics also kept them off every performance
 gate: `narrow::analyse_function_in` is reached only through the
 `narrowed_uses` Salsa query, whose sole callers today are tests and
-`examples/ift_measure.rs`. `make bench` times `basilisk check`, which never
-enters this code — so no ratchet is watching it, and a cost that small
-fixtures hide would have landed as a *regression on the first wiring change*,
-when the zero-tolerance benchmark gate ([CHKARCH-TESTING-BENCH-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET))
+`examples/`. `make bench` times `basilisk check`, which never enters this code
+— so no ratchet was watching it, and a cost that small fixtures hide would
+have landed as a *regression on the first wiring change*, when the
+zero-tolerance benchmark gate ([CHKARCH-TESTING-BENCH-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET))
 is suddenly live over it and the change is also carrying diagnostic risk.
 
 The cost was in `FlowWalker::synth_type` (`narrow/flow.rs`), called per
@@ -911,13 +1014,37 @@ the conformance ratchets (100% / 0 false positives) at every step.
 - [ ] Record a `make bench` baseline on a fixture that actually exercises the
   flow walker **in the same change that first wires it**, so the walker stops
   being invisible to the ratchet the moment it starts costing real time.
-- [ ] Introduce each shared component behind existing checker APIs; do not
-  create an alternate checking mode.
-- [ ] Migrate assignment, return, call, and `assert_type` rules incrementally,
-  deleting the replaced local logic in the same change.
+- [ ] **Wire `assignment_compatibility` to the engine and delete `RhsKind`
+  shape-matching from it in the same change.** Every right-hand side —
+  literal, call, constructor, method, variable — is typed by
+  `BidirEngine::synth`, narrowed by `narrow::analyse_function_in`, and judged
+  by `SubtypingContext`. `a: int = returns_str()` must fire (Refs #397). This
+  is step one and it is not optional.
+- [ ] Migrate `returns_compatibility` / `returns_compatibility_2`,
+  `calls_argument_type`, and `directives_assert_type` /
+  `directives_reveal_type` — each one change, each deleting the legacy path it
+  replaces, each re-certified at 100% / 0 FP.
+- [ ] Drive `grep -rln slice_span crates/basilisk-checker/src/rules | wc -l`
+  from **86 to 0**. An annotation is a type expression the engine evaluates —
+  never a string a rule slices out of the file.
+- [ ] Drive `RhsKind` (26 files) and `InferredType::from_annotation` over
+  source text (14 files) to **0**, and delete `rules/shared/text_scan.rs`
+  outright.
+- [ ] Route all 22 direct `name_subtype`/`is_numeric_subtype` call sites (12
+  files) through `subtyping::SubtypingContext` and delete the shims. One
+  subtyping implementation. Not two, not twenty-two.
+- [ ] Delete every replaced code path **in the change that replaces it**. A
+  migration that leaves the legacy path alive alongside the new one is
+  incomplete and does not merge.
+- [ ] Never create an alternate checking mode, engine flag, or opt-in switch
+  for any of this. One code path. Basilisk has no modes
+  ([CHKARCH-CONFIGURATION-ONLY]).
+- [ ] Keep every rule registered and every diagnostic intact through the whole
+  demolition. The mechanism dies; the checking does not. A migration that
+  costs a required error means the engine is not ready — **fix the engine**,
+  never ship the loss ([CHKARCH-CONFORMANCE]).
 - [ ] Add spec-ID-linked mutation-resistant tests for each migrated behavior.
 - [ ] Verify hover/inlay results and checker diagnostics agree for the same
-  expression.
+  expression — byte for byte, because after this they are the same oracle.
 - [ ] `make test`, mutation/coverage ratchets, benchmarks for touched hot
-  paths, and the live 141/141 conformance gate all pass with zero false
-  positives.
+  paths, and the live conformance gate all pass with zero false positives.

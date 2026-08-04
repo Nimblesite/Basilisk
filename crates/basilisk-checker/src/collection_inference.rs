@@ -1,8 +1,13 @@
-//! Implements [TYPEINF-COLLECTIONS] / [TYPEINF-EXCEEDS-CONTAINERS]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-COLLECTIONS
-//! Collection type inference for lists, dicts, sets, and tuples.
+//! ⚠️ LEGACY — condemned under [TYPEINF-LEGACY]. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-LEGACY.
 //!
-//! [TYPEINF-EXCEEDS-CONTAINERS]: the union-of-element-types inference below is
-//! unconditional — there is no loose mode and no switch to disable it.
+//! [`RhsKind`]-shape collection inference. NOT the engine — container
+//! synthesis lives in [`crate::bidir::BidirEngine`] with deferred
+//! generalization ([TYPEINF-COLLECTIONS], [TYPEINF-TARGET-CONSTRAINTS]); no
+//! new code may call into this module, and existing consumers are deleted per
+//! [NARROWPLAN-INTEGRATION]. The behavior it still carries until then:
+//! [TYPEINF-EXCEEDS-CONTAINERS] — union-of-element-types inference is
+//! unconditional, no loose mode, no switch.
 
 use crate::inference::infer_rhs;
 use crate::types::InferredType;

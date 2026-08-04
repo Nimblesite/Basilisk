@@ -1,6 +1,11 @@
-//! Implements helpers for [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
+//! ⚠️ LEGACY — condemned under [TYPEINF-LEGACY]. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-LEGACY.
+//!
 //! Source-text geometry, top-level splitting, and line tokenisation shared by
-//! rules that scan annotation or source text.
+//! rules that still scan annotation or source text ([CHKARCH-DIAG]). Text
+//! scanning is not a type mechanism: types come from the engine
+//! ([TYPEINF-ALGO]). No new code may call into this module — it is deleted
+//! outright per [NARROWPLAN-INTEGRATION] when its last consumer migrates.
 
 use basilisk_resolver::Span;
 

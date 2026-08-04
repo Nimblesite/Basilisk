@@ -1,8 +1,14 @@
-//! Implements [TYPEINF-OVERVIEW], [TYPEINF-INFERRED], [TYPEINF-ALGO],
-//! [TYPEINF-VARS], [TYPEINF-VARS-SIMPLE], and the shared predicates behind
-//! [TYPEINF-REQUIRED] / [TYPEINF-EXCEEDS]. See
-//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md.
-//! Type inference engine for Basilisk.
+//! ⚠️ LEGACY — condemned under [TYPEINF-LEGACY]. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-LEGACY.
+//!
+//! Syntactic [`RhsKind`] classification. NOT the inference engine — the
+//! engine is [`crate::bidir::BidirEngine`] ([TYPEINF-ALGO], [TYPEINF-TARGET]),
+//! and no new code may call into this module. Existing consumers are deleted
+//! rule-by-rule per the demolition order in [NARROWPLAN-INTEGRATION]
+//! (docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-INTEGRATION);
+//! this module dies with its last caller. Still referenced for
+//! [TYPEINF-VARS-SIMPLE] literal behavior and the [TYPEINF-REQUIRED] /
+//! [TYPEINF-EXCEEDS] predicates until then.
 
 use crate::types::InferredType;
 use basilisk_resolver::{RhsKind, VariableInfo};

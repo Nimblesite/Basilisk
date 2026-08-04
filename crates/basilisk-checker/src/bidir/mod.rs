@@ -298,7 +298,13 @@ mod tests {
     /// property that lets the flow walker keep a single engine alive.
     #[test]
     fn reused_engine_matches_a_fresh_engine_per_expression() {
-        let sources = ["[1]", "[\"x\", \"y\"]", "{1: \"a\"}", "len(z)", "[[1], [2]]"];
+        let sources = [
+            "[1]",
+            "[\"x\", \"y\"]",
+            "{1: \"a\"}",
+            "len(z)",
+            "[[1], [2]]",
+        ];
 
         let fresh: Vec<(InferredType, usize)> = sources
             .iter()

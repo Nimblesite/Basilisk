@@ -1,8 +1,11 @@
-//! Implements [TYPEINF-OVERVIEW]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVIEW
-//! Annotation parsing for [`InferredType`].
+//! ⚠️ LEGACY — condemned under [TYPEINF-LEGACY]. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-LEGACY.
 //!
-//! Converts Python annotation text (e.g. `"list[int]"`, `"Callable[[str], bool]"`)
-//! into [`InferredType`] values.
+//! Annotation-**string** parsing into [`InferredType`]. NOT the engine's
+//! path — an annotation is a type expression resolved through the
+//! [TYPEINF-ANNOTATION-RESOLUTION] cascade, never text a rule slices out of
+//! the file. No new code may call into this module; existing consumers are
+//! deleted per [NARROWPLAN-INTEGRATION], and this parser dies with them.
 
 use super::types::{CallableInfo, InferredType, LiteralValue};
 
