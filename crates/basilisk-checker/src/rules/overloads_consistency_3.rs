@@ -22,18 +22,14 @@ use crate::span_util::slice_span;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
+use super::shared::overload_decorated;
 use super::Rule;
+use crate::annotation::AnnotationResolver;
 
 const CODE: ErrorCode = ErrorCode {
     code: "overloads_consistency_3",
     docs_url: "https://www.basilisk-python.dev/errors/overloads_consistency_3",
 };
-
-fn has_overload(decorators: &[String]) -> bool {
-    decorators
-        .iter()
-        .any(|d| d == "overload" || d.ends_with(".overload"))
-}
 
 /// `true` if a decorator only conveys typing intent and leaves the call
 /// signature unchanged. Any *other* decorator may transform the effective
@@ -96,6 +92,10 @@ impl Rule for OverloadImplConsistency {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        // Overload membership is a binding question ([#380]).
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
         let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();
         for func in &module.functions {
             groups
@@ -104,17 +104,26 @@ impl Rule for OverloadImplConsistency {
                 .push(func);
         }
         for funcs in groups.values() {
-            check_group(funcs, &module.source, &module.path, diagnostics);
+            check_group(funcs, &resolver, &module.source, &module.path, diagnostics);
         }
     }
 }
 
-fn check_group(funcs: &[&FunctionInfo], source: &str, path: &str, out: &mut Vec<Diagnostic>) {
+fn check_group(
+    funcs: &[&FunctionInfo],
+    resolver: &AnnotationResolver<'_>,
+    source: &str,
+    path: &str,
+    out: &mut Vec<Diagnostic>,
+) {
     let overloads: Vec<&&FunctionInfo> = funcs
         .iter()
-        .filter(|f| has_overload(&f.decorators))
+        .filter(|f| overload_decorated(resolver, &f.decorators))
         .collect();
-    let Some(impl_fn) = funcs.iter().find(|f| !has_overload(&f.decorators)) else {
+    let Some(impl_fn) = funcs
+        .iter()
+        .find(|f| !overload_decorated(resolver, &f.decorators))
+    else {
         return;
     };
     if overloads.len() < 2 || group_is_transformed(funcs) {

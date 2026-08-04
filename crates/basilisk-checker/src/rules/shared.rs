@@ -17,11 +17,30 @@ pub(crate) use text_scan::{
 
 use std::collections::HashSet;
 
+use crate::annotation::AnnotationResolver;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_parser::ParsedModule;
 use basilisk_resolver::{ResolvedModule, Span, TypeVarCallInfo};
 use ruff_python_ast::{self as ast, Expr};
+
+/// Is one of `decorators` the `typing.overload` decorator?
+///
+/// Resolved through the module's binding tables
+/// ([TYPEINF-ANNOTATION-RESOLUTION], [#380](https://github.com/Nimblesite/Basilisk/issues/380)):
+/// `@overload`, `@ov` after `from typing import overload as ov`,
+/// `@typing.overload` / `@t.overload`, and `@o` after `o = overload` all
+/// answer yes; a decorator merely *named* `overload` but bound from another
+/// module answers no. Every rule that reasons about overload groups shares
+/// this one predicate so the groups they form agree.
+pub(crate) fn overload_decorated(
+    resolver: &AnnotationResolver<'_>,
+    decorators: &[String],
+) -> bool {
+    decorators
+        .iter()
+        .any(|decorator| resolver.decorator_denotes(decorator, "overload"))
+}
 
 /// Returns `true` when the annotation text denotes a `ClassVar[...]` type.
 ///

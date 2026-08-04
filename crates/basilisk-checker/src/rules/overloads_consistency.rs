@@ -13,8 +13,10 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
+use super::shared::overload_decorated;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -33,11 +35,16 @@ impl Rule for OverlappingOverloads {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        // Whether a decorator IS `typing.overload` is answered by the
+        // resolver's binding tables ([#380]), shared with every overload rule.
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
         // Group overloaded functions by (class_name, function_name) so overloads
         // in different classes with the same method name don't cross-contaminate.
         let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();
         for func in &module.functions {
-            if has_overload_decorator(&func.decorators) {
+            if overload_decorated(&resolver, &func.decorators) {
                 groups
                     .entry((func.class_name.as_deref(), &func.name))
                     .or_default()
@@ -121,13 +128,6 @@ fn signatures_overlap(a: &FunctionInfo, b: &FunctionInfo) -> bool {
         .zip(b.parameters.iter())
         .filter(|(pa, _)| !is_implicit(pa))
         .all(|(pa, pb)| pa.annotation_text == pb.annotation_text)
-}
-
-/// Returns `true` if `"overload"` (or `"typing.overload"`) is in the list.
-fn has_overload_decorator(decorators: &[String]) -> bool {
-    decorators
-        .iter()
-        .any(|d| d == "overload" || d.ends_with(".overload"))
 }
 
 fn make_diagnostic(func: &FunctionInfo, func_name: &str, path: &str) -> Diagnostic {

@@ -141,6 +141,48 @@ impl<'m> AnnotationResolver<'m> {
         Some(self.resolve(parsed.expr()))
     }
 
+    /// Does `spelling` — a decorator expression rendered as a dotted name —
+    /// denote the typing-module member `member`?
+    ///
+    /// The same binding question an annotation asks, answered by the same
+    /// tables ([#380](https://github.com/Nimblesite/Basilisk/issues/380)):
+    /// value re-bindings are followed first (`o = overload`, chains included),
+    /// then the import tables decide. `from typing import overload as ov`
+    /// and `t.overload` under `import typing as t` are the member; the same
+    /// spellings bound from any OTHER module are not — a decorator merely
+    /// *named* `overload` must not conjure an overload group. A bare unbound
+    /// spelling equal to `member` is accepted, matching Python's tolerance of
+    /// the name arriving via re-exports the table cannot see.
+    #[must_use]
+    pub fn decorator_denotes(&self, spelling: &str, member: &str) -> bool {
+        let mut current = spelling.to_owned();
+        for _ in 0..MAX_DEPTH {
+            match self.tables.values.get(&current) {
+                Some(next) => current = next.clone(),
+                None => break,
+            }
+        }
+        match current.split_once('.') {
+            Some((head, attr)) => attr == member && self.head_is_typing_module(head),
+            None => match self.tables.imports.get(&current) {
+                Some(imported) => {
+                    imported.original == member && builtins::is_typing_module(&imported.module)
+                }
+                None => current == member,
+            },
+        }
+    }
+
+    /// Is `head` a binding of (or literally) the typing module?
+    fn head_is_typing_module(&self, head: &str) -> bool {
+        match self.tables.modules.get(head) {
+            Some(module) => builtins::is_typing_module(module),
+            // Unbound heads keep the literal spellings only, so a foreign
+            // module aliased to `typing` cannot smuggle members in.
+            None => builtins::is_typing_module(head),
+        }
+    }
+
     /// Does this type name a class whose assignability is **structural** — a
     /// `Protocol` or a `TypedDict`?
     ///

@@ -42,6 +42,10 @@ impl Rule for OverloadUnionExpansionFailure {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        // Overload membership is a binding question ([#380]).
+        let Some(resolver) = crate::annotation::AnnotationResolver::for_module(module) else {
+            return;
+        };
         let source = &module.source;
         let path = &module.path;
 
@@ -54,11 +58,7 @@ impl Rule for OverloadUnionExpansionFailure {
             if !func.is_stub_body {
                 continue;
             }
-            if !func
-                .decorators
-                .iter()
-                .any(|d| d == "overload" || d.ends_with(".overload"))
-            {
+            if !super::shared::overload_decorated(&resolver, &func.decorators) {
                 continue;
             }
             overload_groups

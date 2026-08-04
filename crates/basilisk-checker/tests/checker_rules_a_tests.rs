@@ -29,6 +29,8 @@ mod classes_override;
 #[path = "checker/classes_override_2_tests.rs"]
 mod classes_override_2;
 mod common;
+#[path = "checker/decorator_resolution_tests.rs"]
+mod decorator_resolution;
 #[path = "checker/dict_key_hashable_tests.rs"]
 mod dict_key_hashable;
 #[path = "checker/dict_key_hashable_group_tests.rs"]
