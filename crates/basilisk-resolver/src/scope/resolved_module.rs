@@ -84,12 +84,16 @@ pub struct ResolvedModule {
     pub calls: Vec<CallSite>,
     /// Every name bound at module scope, whatever the binding form: `=`,
     /// tuple/star unpacking, `for`/`with`/`except ... as` targets, walrus,
-    /// `match` captures, `def`/`class`/`type` names, and import bindings.
+    /// `match` captures, `def`/`class`/`type` names, and import bindings —
+    /// mapped to HOW MANY binding sites introduce it.
     ///
     /// `module_vars` only records plain single-target assignments, so rules
     /// deciding whether a name exists at module scope (`names_undefined`,
-    /// issue #397) consult this set instead.
-    pub module_bindings: std::collections::HashSet<String>,
+    /// issue #397) consult this map instead. The count distinguishes a name a
+    /// statement binds ONLY for itself (`class D(D)` — count 1, the base `D`
+    /// is unbound) from legal shadowing (`class D: ...` then `class D(D)` —
+    /// count 2, the base resolves to the earlier binding).
+    pub module_bindings: std::collections::HashMap<String, usize>,
     /// Module-level `TypeVar(...)` call sites.
     pub typevar_calls: Vec<TypeVarCallInfo>,
     /// All `reveal_type(...)` call sites found anywhere in the module.

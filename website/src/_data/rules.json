@@ -5137,12 +5137,12 @@
       },
       {
         "type": "text",
-        "html": "Also flags a module-level statement that calls a name bound nowhere in the module (issue #397) \u2014 code that raises <code>NameError</code> the moment the module is imported. A <code>from m import *</code> disables this pass: the star can bind any name."
+        "html": "Also flags a module-level statement that calls a name bound nowhere in the module (issue #397), and a class that names its own yet-unbound self among its bases (issue #398) \u2014 Python evaluates the bases tuple before binding the class name, so both raise <code>NameError</code> the moment the module is imported. Shadowing stays legal: <code>class D(D)</code> is only flagged when the class statement is the SOLE binding of that name (no earlier class, import, assignment, or builtin to inherit from). A <code>from m import *</code> disables both module-level passes: the star can bind any name."
       },
       {
         "type": "code",
         "lang": "python",
-        "code": "def compute() -> int:\n    return undefined_name     # never defined \u2192 E0018\n    return undefined_fn()     # undefined callee \u2192 E0018\n\na: int = print2(\"abc\")        # no `print2` anywhere \u2192 E0018"
+        "code": "def compute() -> int:\n    return undefined_name     # never defined \u2192 E0018\n    return undefined_fn()     # undefined callee \u2192 E0018\n\na: int = print2(\"abc\")        # no `print2` anywhere \u2192 E0018\n\nclass D(D):                   # `D` unbound in its own bases \u2192 E0018\n    pass"
       }
     ],
     "group": "Type System",

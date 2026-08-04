@@ -10,8 +10,13 @@
 //! scope's binding, a cross-module imported symbol, or a builtin.
 //!
 //! Also flags a module-level statement that calls a name bound nowhere in the
-//! module (issue #397) — code that raises `NameError` the moment the module is
-//! imported. A `from m import *` disables this pass: the star can bind any name.
+//! module (issue #397), and a class that names its own yet-unbound self among
+//! its bases (issue #398) — Python evaluates the bases tuple before binding
+//! the class name, so both raise `NameError` the moment the module is
+//! imported. Shadowing stays legal: `class D(D)` is only flagged when the
+//! class statement is the SOLE binding of that name (no earlier class,
+//! import, assignment, or builtin to inherit from). A `from m import *`
+//! disables both module-level passes: the star can bind any name.
 //!
 //! ```python
 //! def compute() -> int:
@@ -19,6 +24,9 @@
 //!     return undefined_fn()     # undefined callee → E0018
 //!
 //! a: int = print2("abc")        # no `print2` anywhere → E0018
+//!
+//! class D(D):                   # `D` unbound in its own bases → E0018
+//!     pass
 //! ```
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
@@ -74,7 +82,18 @@ impl Rule for UndefinedVariable {
             check_function(func, &module.functions, &scope, &module.path, diagnostics);
         });
 
+        // A star import can bind any name, so it disables both module-level
+        // passes entirely.
+        let has_star_import = module
+            .imports
+            .iter()
+            .any(|imp| matches!(imp.kind, basilisk_resolver::scope::ImportKind::Star));
+        if has_star_import {
+            return;
+        }
+
         check_module_level_callees(module, &scope, diagnostics);
+        check_self_inheriting_classes(module, diagnostics);
     }
 }
 
@@ -82,21 +101,12 @@ impl Rule for UndefinedVariable {
 ///
 /// `module.calls` also contains calls from function and class bodies (its
 /// collector walks every body), where locals and parameters are legal callees —
-/// those are excluded by span containment against `def_span`s. A star import
-/// can bind any name, so its presence disables the pass entirely.
+/// those are excluded by span containment against `def_span`s.
 fn check_module_level_callees(
     module: &ResolvedModule,
     scope: &ModuleScope<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
-    let has_star_import = module
-        .imports
-        .iter()
-        .any(|imp| matches!(imp.kind, basilisk_resolver::scope::ImportKind::Star));
-    if has_star_import {
-        return;
-    }
-
     let inside_any_body = |span: &Span| {
         module
             .functions
@@ -111,7 +121,7 @@ fn check_module_level_callees(
         if call.receiver.is_some() || inside_any_body(&call.span) {
             continue;
         }
-        if module.module_bindings.contains(callee)
+        if module.module_bindings.contains_key(callee)
             || scope.imported_symbols.contains_key(callee)
             || BUILTINS.contains(&callee)
             // `reveal_type` is special-cased by type checkers per the typing
@@ -121,6 +131,39 @@ fn check_module_level_callees(
             continue;
         }
         out.push(module_level_diagnostic(callee, call.span, &module.path));
+    }
+}
+
+/// Flag a class that names its own yet-unbound self among its bases (#398).
+///
+/// Python evaluates the bases tuple BEFORE binding the class name, so
+/// `class D(D)` raises `NameError` at import time — unless the name was
+/// already bound (an earlier class, import, assignment, or a builtin), in
+/// which case the base legally resolves to that earlier binding. The binding
+/// census counts sites, so a count of exactly 1 means the class statement is
+/// the sole binder and the base reference cannot resolve.
+fn check_self_inheriting_classes(module: &ResolvedModule, out: &mut Vec<Diagnostic>) {
+    for class in &module.classes {
+        let name = class.name.as_str();
+        let sole_binding = module.module_bindings.get(name) == Some(&1);
+        if !sole_binding || !class.bases.iter().any(|base| base == name) || BUILTINS.contains(&name)
+        {
+            continue;
+        }
+        out.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!("Class `{name}` lists itself as a base, but `{name}` is not bound until the class statement completes"),
+            class.name_span,
+            &module.path,
+            Some(format!(
+                "Inherit from a different class, or bind another `{name}` (import or definition) before this one"
+            )),
+            Some(
+                "Python evaluates base classes before binding the class name, so this raises \
+                 NameError when the module is imported"
+                    .to_owned(),
+            ),
+        ));
     }
 }
 
