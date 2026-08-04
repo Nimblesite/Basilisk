@@ -74,7 +74,7 @@ require("basilisk").setup({})
 插件和二进制文件分别更新：
 
 - **插件**——和其他插件一样：`:Lazy update`、`:PackerSync` 或 `:PlugUpdate`。
-- **二进制文件**——当存在更新的发布版本时，启动时会有提示。运行 **`:BasiliskUpdate`**：它会请求确认、下载新版本并就地重启 LSP。如果您的二进制文件由某个包管理器管理，Basilisk 绝不会覆盖它——提示会给出正确的命令（`brew upgrade basilisk`、`scoop update basilisk` 或 `cargo install basilisk-cli`）。
+- **二进制文件**——当存在更新的发布版本时，启动时会有提示。运行 **`:BasiliskUpdate`**：它会请求确认、下载新版本并就地重启 LSP。如果您的二进制文件由某个包管理器管理，Basilisk 绝不会覆盖它——提示会给出正确的命令（`brew upgrade basilisk`、`scoop update basilisk` 或 `cargo install --git https://github.com/Nimblesite/Basilisk basilisk-cli`）。
 
 ## 配置 Basilisk 设置
 

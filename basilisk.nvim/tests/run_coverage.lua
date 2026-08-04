@@ -89,6 +89,39 @@ binary_mod.resolve()
 vim.env.BASILISK_PATH = orig_env
 -- well-known paths: exercised by resolve() above
 -- PATH fallback: exercised by resolve() above
+-- managed cache scan ([NVIM-BINARY-UPGRADE-MANAGED-DISCOVERY]): two installed
+-- versions (newest must win) plus a binary-less dir from a failed extraction.
+-- Earlier cascade steps are blinded, otherwise a real install on this machine
+-- answers first and the scan never runs.
+local managed_root = vim.fn.stdpath("data") .. "/basilisk"
+local coverage_dirs = { "v0.0.1-coverage", "v0.0.2-coverage", "v0.0.3-coverage-empty" }
+for index, version in ipairs(coverage_dirs) do
+  local dir = managed_root .. "/" .. version
+  vim.fn.mkdir(dir, "p")
+  if index < 3 then
+    vim.fn.writefile({ "#!/bin/sh", "echo 'basilisk 0.0.0'" }, dir .. "/basilisk")
+    vim.fn.setfperm(dir .. "/basilisk", "rwxr-xr-x")
+  end
+end
+local orig_exepath, orig_executable = vim.fn.exepath, vim.fn.executable
+vim.fn.exepath = function() return "" end
+vim.fn.executable = function(path)
+  return type(path) == "string" and path:find(managed_root, 1, true) == 1 and 1 or 0
+end
+binary_mod.locate(nil)
+vim.fn.exepath, vim.fn.executable = orig_exepath, orig_executable
+for _, version in ipairs(coverage_dirs) do
+  vim.fn.delete(managed_root .. "/" .. version, "rf")
+end
+-- and the absent-cache path, with the cache moved aside
+local stash = managed_root .. ".coverage-stash"
+local had_cache = vim.fn.isdirectory(managed_root) == 1
+if had_cache then vim.fn.rename(managed_root, stash) end
+binary_mod.locate(nil)
+if had_cache then
+  vim.fn.delete(managed_root, "rf")
+  vim.fn.rename(stash, managed_root)
+end
 -- version: nonexistent, valid
 binary_mod.version("/nonexistent")
 if ls_path ~= "" then binary_mod.version(ls_path) end

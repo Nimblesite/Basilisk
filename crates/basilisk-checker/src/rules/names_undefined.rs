@@ -9,10 +9,14 @@
 //! `type` alias, an enclosing scope's binding, a cross-module imported symbol,
 //! or a builtin.
 //!
-//! Also flags a class that lists **its own name among its bases** when no other
-//! binding of that name exists: a class name is not bound until its `class`
-//! statement completes, so `class C(C)` with no prior `C` is a guaranteed
-//! `NameError` at runtime (GitHub #398).
+//! Also flags a module-level statement that calls a name bound nowhere in the
+//! module (issue #397), and a class that lists **its own name among its bases**
+//! (issue #398) — Python evaluates the bases tuple before binding the class
+//! name, so both raise `NameError` the moment the module is imported.
+//! Shadowing stays legal: `class D(D)` is only flagged when the class statement
+//! is the SOLE binding of that name (no earlier class, import, assignment, or
+//! builtin to inherit from). A `from m import *` disables both module-level
+//! passes: the star can bind any name.
 //!
 //! ```python
 //! def compute() -> int:
@@ -20,7 +24,9 @@
 //!     return undefined_fn()     # undefined callee → E0018
 //!
 //!
-//! class Node(Node):             # `Node` is unbound in its own bases → E0018
+//! a: int = print2("abc")        # no `print2` anywhere → E0018
+//!
+//! class D(D):                   # `D` unbound in its own bases → E0018
 //!     pass
 //! ```
 
@@ -88,68 +94,106 @@ impl Rule for UndefinedVariable {
             check_function(func, &module.functions, &scope, &module.path, diagnostics);
         });
 
-        check_class_self_referential_bases(module, &scope, diagnostics);
+        // A star import can bind any name, so it disables both module-level
+        // passes entirely.
+        let has_star_import = module
+            .imports
+            .iter()
+            .any(|imp| matches!(imp.kind, basilisk_resolver::scope::ImportKind::Star));
+        if has_star_import {
+            return;
+        }
+
+        check_module_level_callees(module, &scope, diagnostics);
+        check_self_inheriting_classes(module, diagnostics);
     }
 }
 
-/// Flag classes whose bases name the class itself with no other binding of
-/// that name in the module (GitHub #398): the class name is unbound until the
-/// `class` statement completes, so the reference is a guaranteed `NameError`.
+/// Flag module-level calls to names bound nowhere in the module (issue #397).
 ///
-/// Deliberately conservative — any other binding of the name (a prior class or
-/// redefinition, a function, a variable, an import, a `type` alias, a builtin,
-/// or a possible `from m import *`) suppresses the diagnostic, because the base
-/// would then legally refer to that binding.
-fn check_class_self_referential_bases(
+/// `module.calls` also contains calls from function and class bodies (its
+/// collector walks every body), where locals and parameters are legal callees —
+/// those are excluded by span containment against `def_span`s.
+fn check_module_level_callees(
     module: &ResolvedModule,
     scope: &ModuleScope<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
-    let star_import = module
-        .imports
-        .iter()
-        .any(|imp| imp.names.iter().any(|n| n == "*"));
-    if star_import {
-        return;
-    }
+    let inside_any_body = |span: &Span| {
+        module
+            .functions
+            .iter()
+            .map(|func| &func.def_span)
+            .chain(module.classes.iter().map(|class| &class.def_span))
+            .any(|body| body.start <= span.start && span.end <= body.end)
+    };
 
-    for class in &module.classes {
-        let name = class.name.as_str();
-        if !class.bases.iter().any(|base| base == name) {
+    for call in &module.calls {
+        let callee = call.callee.as_str();
+        if call.receiver.is_some() || inside_any_body(&call.span) {
             continue;
         }
-        let other_binding = module.classes.iter().filter(|c| c.name == name).count() > 1
-            || BUILTINS.contains(&name)
-            || scope.import_names.contains(&name)
-            || scope.module_var_names.contains(&name)
-            || scope.type_alias_names.contains(&name)
-            || scope.imported_symbols.contains_key(name)
-            || module.functions.iter().any(|f| {
-                f.name == name
-                    || f.parameters.iter().any(|p| p.name == name)
-                    || f.all_local_assigns.iter().any(|a| a == name)
-            });
-        if other_binding {
+        if module.module_bindings.contains_key(callee)
+            || scope.imported_symbols.contains_key(callee)
+            || BUILTINS.contains(&callee)
+            // `reveal_type` is special-cased by type checkers per the typing
+            // spec and needs no import.
+            || callee == "reveal_type"
+        {
+            continue;
+        }
+        out.push(module_level_diagnostic(callee, call.span, &module.path));
+    }
+}
+
+/// Flag a class that names its own yet-unbound self among its bases (#398).
+///
+/// Python evaluates the bases tuple BEFORE binding the class name, so
+/// `class D(D)` raises `NameError` at import time — unless the name was
+/// already bound (an earlier class, import, assignment, or a builtin), in
+/// which case the base legally resolves to that earlier binding. The binding
+/// census counts sites, so a count of exactly 1 means the class statement is
+/// the sole binder and the base reference cannot resolve.
+fn check_self_inheriting_classes(module: &ResolvedModule, out: &mut Vec<Diagnostic>) {
+    for class in &module.classes {
+        let name = class.name.as_str();
+        let sole_binding = module.module_bindings.get(name) == Some(&1);
+        if !sole_binding || !class.bases.iter().any(|base| base == name) || BUILTINS.contains(&name)
+        {
             continue;
         }
         out.push(error_diagnostic_owned(
             CODE.clone(),
-            format!(
-                "Class `{name}` lists itself as a base, but `{name}` is not defined until the \
-                 `class` statement completes"
-            ),
+            format!("Class `{name}` lists itself as a base, but `{name}` is not bound until the class statement completes"),
             class.name_span,
             &module.path,
             Some(format!(
-                "Remove `{name}` from its own bases list, or derive from the class you meant"
+                "Inherit from a different class, or bind another `{name}` (import or definition) before this one"
             )),
             Some(
-                "A class name is bound only after its body evaluates, so using it in its own \
-                 bases raises `NameError` at runtime"
+                "Python evaluates base classes before binding the class name, so this raises \
+                 NameError when the module is imported"
                     .to_owned(),
             ),
         ));
     }
+}
+
+fn module_level_diagnostic(name: &str, span: Span, path: &str) -> Diagnostic {
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!("`{name}` is called here but defined nowhere in this module"),
+        span,
+        path,
+        Some(format!(
+            "Define `{name}`, import it, or check for a typo in the name"
+        )),
+        Some(
+            "A module-level call to an undefined name raises NameError as soon as the module \
+             is imported"
+                .to_owned(),
+        ),
+    )
 }
 
 /// Module-scope names visible to every function body.
@@ -183,9 +227,65 @@ fn is_in_enclosing_scope(name: &str, func: &FunctionInfo, all_functions: &[Funct
 
 /// Python builtin names that are always in scope.
 ///
-/// When a function returns one of these names (e.g. `return int`), it is not
-/// an undefined-variable error — it is a reference to a builtin type/function.
+/// When code references one of these names (e.g. `return int`, a module-level
+/// `divmod(...)`), it is not an undefined-variable error — it is a reference
+/// to a builtin type/function. The list is the complete `builtins` module
+/// surface (union across supported Python versions, so version-gated names
+/// like `anext` or `PythonFinalizationError` never false-positive), plus the
+/// module-level dunder globals every module receives and the `site`-installed
+/// interactive helpers (`help`, `exit`, ...).
 const BUILTINS: &[&str] = &[
+    "aiter",
+    "anext",
+    "ascii",
+    "breakpoint",
+    "compile",
+    "copyright",
+    "credits",
+    "divmod",
+    "eval",
+    "exec",
+    "exit",
+    "globals",
+    "help",
+    "license",
+    "locals",
+    "quit",
+    "__import__",
+    "__build_class__",
+    "__debug__",
+    "__name__",
+    "__file__",
+    "__doc__",
+    "__package__",
+    "__spec__",
+    "__loader__",
+    "__builtins__",
+    "__annotations__",
+    "__dict__",
+    "BaseExceptionGroup",
+    "ExceptionGroup",
+    "BlockingIOError",
+    "BrokenPipeError",
+    "ChildProcessError",
+    "ConnectionAbortedError",
+    "ConnectionError",
+    "ConnectionRefusedError",
+    "ConnectionResetError",
+    "EncodingWarning",
+    "EnvironmentError",
+    "FileExistsError",
+    "FloatingPointError",
+    "InterruptedError",
+    "IsADirectoryError",
+    "MemoryError",
+    "NotADirectoryError",
+    "PermissionError",
+    "ProcessLookupError",
+    "PythonFinalizationError",
+    "ReferenceError",
+    "TimeoutError",
+    "WindowsError",
     "int",
     "str",
     "float",

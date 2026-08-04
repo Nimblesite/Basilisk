@@ -7,7 +7,8 @@
 --- 4. /usr/local/bin/basilisk
 --- 5. /opt/homebrew/bin/basilisk
 --- 6. Fall back to OS PATH search
---- 7. Auto-download from GitHub releases (fallback)
+--- 7. Plugin-managed cache (a binary an earlier session downloaded)
+--- 8. Auto-download from GitHub releases (fallback)
 
 local log = require("basilisk.log")
 
@@ -18,6 +19,12 @@ local GITHUB_REPO = "Nimblesite/Basilisk"
 
 --- GitHub API URL for latest release.
 local RELEASES_API = "https://api.github.com/repos/" .. GITHUB_REPO .. "/releases/latest"
+
+--- Repo URL, the source of truth for every from-source install hint. Exported
+--- so update.lua composes its advice from the same string instead of
+--- hand-repeating the URL.
+local GITHUB_URL = "https://github.com/" .. GITHUB_REPO
+M.GITHUB_URL = GITHUB_URL
 
 --- Directory where downloaded binaries are cached.
 ---@return string
@@ -30,6 +37,30 @@ end
 ---@return boolean
 local function is_executable(path)
   return vim.fn.executable(path) == 1
+end
+
+--- The newest plugin-managed install already on disk, or nil.
+---
+--- Implements [NVIM-BINARY-UPGRADE-MANAGED-DISCOVERY]. Downloads land in a
+--- version-scoped directory (`<data>/basilisk/<tag>/`), so the path cannot be
+--- named without knowing the tag. Scanning for it keeps a managed install
+--- resolvable from disk alone — deriving the tag from GitHub instead makes an
+--- offline or rate-limited session unable to see its own binary (issue #370).
+---@return string?
+local function newest_managed()
+  local root = download_dir()
+  local best_path, best_version
+  for name, kind in vim.fs.dir(root) do
+    if kind == "directory" then
+      for _, binary_name in ipairs({ "basilisk", "basilisk.exe" }) do
+        local candidate = root .. "/" .. name .. "/" .. binary_name
+        if is_executable(candidate) and (not best_version or M.is_newer_version(best_version, name)) then
+          best_path, best_version = candidate, name
+        end
+      end
+    end
+  end
+  return best_path
 end
 
 --- Check whether a configured binary path is usable.
@@ -200,7 +231,7 @@ function M.download()
   return nil, nil
 end
 
---- Locate an already-installed basilisk binary (cascade steps 1-6, no
+--- Locate an already-installed basilisk binary (cascade steps 1-7, no
 --- download). :BasiliskInstall uses this to decide whether anything is
 --- installed without side effects ([NVIM-BINARY-UPGRADE-INSTALL]).
 ---@param configured_path? string User-configured path from setup().
@@ -238,7 +269,8 @@ function M.locate(configured_path)
     return on_path
   end
 
-  return nil
+  -- 7. Plugin-managed cache — an install this plugin downloaded earlier.
+  return newest_managed()
 end
 
 --- Resolve the basilisk binary path using the LSP-SPEC cascade.
@@ -250,7 +282,7 @@ function M.resolve(configured_path)
     return located
   end
 
-  -- 7. Auto-download from GitHub releases.
+  -- 8. Auto-download from GitHub releases.
   local downloaded_path = M.download()
   if downloaded_path then
     return downloaded_path
@@ -295,6 +327,11 @@ end
 
 --- The upgrade action owning an install source, for user-facing notices.
 --- nil for dev builds — a local build is never "behind" a release.
+---
+--- The cargo hint MUST carry --git: `basilisk-cli` is not published to
+--- crates.io, so the bare `cargo install basilisk-cli` fails for everyone with
+--- "could not find basilisk-cli in registry" ([NVIM-BINARY-UPGRADE-SOURCES],
+--- issue #370).
 ---@param source BasiliskInstallSource
 ---@return string?
 function M.upgrade_hint(source)
@@ -303,7 +340,7 @@ function M.upgrade_hint(source)
     manual = "run :BasiliskUpdate to install",
     homebrew = "run `brew upgrade basilisk`",
     scoop = "run `scoop update basilisk`",
-    cargo = "run `cargo install basilisk-cli`",
+    cargo = "run `cargo install --git " .. GITHUB_URL .. " basilisk-cli`",
   }
   return hints[source]
 end

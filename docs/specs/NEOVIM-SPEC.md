@@ -111,6 +111,12 @@ config sources itself and pushes refreshed diagnostics on every saved change —
 behaviour as every other IDE, no client watcher needed
 ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)).
 
+### Setup-Free Fallback {#NVIM-LSP-CLIENT-CONFIGURATION-FALLBACK}
+
+`after/lsp/basilisk.lua` is auto-discovered by Neovim's built-in LSP framework and gives basic LSP to users who never call `require("basilisk").setup()`. The loader **requires the file to evaluate to a table**, so it always returns one: when `binary.resolve()` finds nothing, `cmd` degrades to the bare `basilisk` command name — the same last resort the nvim-lspconfig definition uses (`lspconfig/basilisk.lua` `find_binary()`).
+
+Returning nothing instead makes Neovim raise `after/lsp/basilisk.lua: not a table` (issue #370). The degraded config fails at spawn with a readable "command not found", and starts working as soon as a `basilisk` is on PATH — no reload.
+
 ### Neovim API Mappings for LSP Features {#NVIM-LSP-CLIENT-CONFIGURATION-API-MAPPINGS}
 
 All 21 LSP features (LSP-ARCHITECTURE-SPEC.md) are native in Neovim 0.11+ — zero custom implementation:
@@ -342,7 +348,9 @@ The plugin owns the full lifecycle of the binary it downloads: detect → notify
 | macOS aarch64 (only) | `basilisk-aarch64-apple-darwin.zip` | `basilisk-darwin/{basilisk, basilisk-profiler-helper}` — extraction must flatten (`unzip -j`) and chmod both |
 | Windows x86_64 / aarch64 | `basilisk-<arch>-pc-windows-msvc.zip` | `basilisk.exe` at archive root — extraction must use in-box `tar.exe` (bsdtar reads zip; stock Windows has no `unzip`) |
 
-No `x86_64-apple-darwin` build is published; on Intel macs `platform_asset_name()` returns `nil` and the flows fall back to advising `cargo install basilisk-cli`. Any drift between this table and `release.yml` makes `download()` silently find no asset — the binary_spec contract test pins the exact names.
+No `x86_64-apple-darwin` build is published; on Intel macs `platform_asset_name()` returns `nil` and the flows fall back to advising a from-source build (`cargo install --git https://github.com/Nimblesite/Basilisk basilisk-cli`). Any drift between this table and `release.yml` makes `download()` silently find no asset — the binary_spec contract test pins the exact names.
+
+**No advice may name `cargo install basilisk-cli`.** That crate is not published to crates.io — the name resolves to [an unrelated 2021 crate](https://crates.io/crates/basilisk), and nothing in `release.yml` publishes the workspace — so the bare form fails with `could not find basilisk-cli in registry` for every user (issue #370). Cargo advice must carry `--git https://github.com/Nimblesite/Basilisk`, which builds from source and works today. The real install channels are `:BasiliskInstall`, Homebrew, Scoop, PyPI (`basilisk-python`), and the GitHub release archives ([install-cli](https://www.basilisk-python.dev/docs/install-cli/)).
 
 ### Install Sources & Refusal {#NVIM-BINARY-UPGRADE-SOURCES}
 
@@ -354,8 +362,14 @@ No `x86_64-apple-darwin` build is published; on Intel macs `platform_asset_name(
 | `manual` | anything unclassified | upgrade — installs into the managed cache, original file untouched |
 | `homebrew` | `/opt/homebrew/`, `/Cellar/`, `/linuxbrew/` | refuse → `brew upgrade basilisk` |
 | `scoop` | path contains `/scoop/` | refuse → `scoop update basilisk` |
-| `cargo` | `~/.cargo/bin/` | refuse → `cargo install basilisk-cli` |
+| `cargo` | `~/.cargo/bin/` | refuse → `cargo install --git https://github.com/Nimblesite/Basilisk basilisk-cli` |
 | `dev` | `--version` reports `0.0.0` (placeholder) | refuse → rebuild the checkout; never nagged by the update notice |
+
+### Managed-Install Discovery {#NVIM-BINARY-UPGRADE-MANAGED-DISCOVERY}
+
+A download lands in a **version-scoped** directory (`stdpath("data")/basilisk/<tag>/basilisk`), so its path cannot be named without knowing `<tag>`. `binary.locate()` therefore **scans** that cache — `vim.fs.dir()` over the version directories, newest by `is_newer_version()` wins, directories holding no executable (an interrupted extraction) are skipped — as cascade step 7, after the PATH search and before `resolve()` falls through to downloading.
+
+Deriving the tag from the GitHub API instead makes an existing install unresolvable whenever the API is unreachable or rate-limited (60 requests/hour unauthenticated, and a startup costs several), so a working binary and no binary at all become indistinguishable — issue #370. The scan is what makes startup offline-capable and download-free; a missing cache directory resolves to "nothing installed", never an error.
 
 ### Update Notice {#NVIM-BINARY-UPGRADE-NOTICE}
 
@@ -363,11 +377,11 @@ No `x86_64-apple-darwin` build is published; on Intel macs `platform_asset_name(
 
 ### Confirmation {#NVIM-BINARY-UPGRADE-CONFIRM}
 
-`:BasiliskUpdate` / `:BasiliskInstall` never touch the network without an accept step: `vim.ui.select({"Update now", "Later"})` (respectively `Install now`), with the version — and for installs the asset name — in the prompt. On accept, `update.lua` reuses `binary.download()` (the `resolve()` step-7 engine — never a second downloader), rewires `config.binary_path`, and force-restarts the LSP client.
+`:BasiliskUpdate` / `:BasiliskInstall` never touch the network without an accept step: `vim.ui.select({"Update now", "Later"})` (respectively `Install now`), with the version — and for installs the asset name — in the prompt. On accept, `update.lua` reuses `binary.download()` (the `resolve()` step-8 engine — never a second downloader), rewires `config.binary_path`, and force-restarts the LSP client.
 
 ### First-Use Install {#NVIM-BINARY-UPGRADE-INSTALL}
 
-`:BasiliskInstall` bootstraps when nothing is resolvable: `binary.locate()` (cascade steps 1–6, download-free) finds nothing → confirm → download → start. If a binary already exists it reports the path/version and points at `:BasiliskUpdate`. `:BasiliskUpdate` with no install falls through to this flow.
+`:BasiliskInstall` bootstraps when nothing is resolvable: `binary.locate()` (cascade steps 1–7, download-free — including the managed-cache scan, so it never re-downloads what is already installed) finds nothing → confirm → download → start. If a binary already exists it reports the path/version and points at `:BasiliskUpdate`. `:BasiliskUpdate` with no install falls through to this flow.
 
 ---
 

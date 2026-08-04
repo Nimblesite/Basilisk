@@ -78,7 +78,7 @@ Verify everything with `:checkhealth basilisk`.
 The plugin and the binary update separately:
 
 - **Plugin** — like any other plugin: `:Lazy update`, `:PackerSync`, or `:PlugUpdate`.
-- **Binary** — when a newer release exists, a startup notice tells you. Run **`:BasiliskUpdate`**: it asks for confirmation, downloads the new version, and restarts the LSP in place. If your binary is owned by a package manager, Basilisk never overwrites it — the notice names the right command instead (`brew upgrade basilisk`, `scoop update basilisk`, or `cargo install basilisk-cli`).
+- **Binary** — when a newer release exists, a startup notice tells you. Run **`:BasiliskUpdate`**: it asks for confirmation, downloads the new version, and restarts the LSP in place. If your binary is owned by a package manager, Basilisk never overwrites it — the notice names the right command instead (`brew upgrade basilisk`, `scoop update basilisk`, or `cargo install --git https://github.com/Nimblesite/Basilisk basilisk-cli`).
 
 ## Configure Basilisk settings
 

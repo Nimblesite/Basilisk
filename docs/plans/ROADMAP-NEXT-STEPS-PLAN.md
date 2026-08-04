@@ -96,7 +96,9 @@ responsibility to cover.
 - [ ] **`[HUMAN]`** Decide whether `release.yml` should add an
   `x86_64-apple-darwin` build if Intel-mac demand appears; until then
   `platform_asset_name()` deliberately returns `nil` there and the flows
-  advise `cargo install basilisk-cli` ([NVIM-BINARY-UPGRADE-ASSETS]).
+  advise a from-source build, `cargo install --git
+  https://github.com/Nimblesite/Basilisk basilisk-cli`
+  ([NVIM-BINARY-UPGRADE-ASSETS]).
 - [ ] **`[HYBRID]`** Confirm the Neovim mirror tag flow on a release and decide
   whether the mirror also needs GitHub Release objects; plugin managers consume
   tags directly.

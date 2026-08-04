@@ -171,7 +171,11 @@ describe("basilisk.update", function()
       update.update({ binary_path = nil })
 
       assert.is_false(downloaded)
-      assert.is_truthy(notified("cargo install basilisk-cli"), "should point at cargo")
+      assert.is_truthy(
+        notified("cargo install --git https://github.com/Nimblesite/Basilisk basilisk-cli"),
+        "should point at the cargo command that actually works — the bare "
+          .. "`cargo install basilisk-cli` is unpublished (issue #370)"
+      )
     end)
 
     it("refuses to clobber a local dev build", function()

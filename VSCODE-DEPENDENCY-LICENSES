@@ -2,7 +2,7 @@ Basilisk VS Code Production Dependency Licenses
 =================================================
 
 Generated from the exact npm production graph selected by package-lock.json.
-Production graph SHA-256: fde5a25b5c691b39aebc36a41d962ca60c7bbe4bb7e0e61093d88505a383e010
+Production graph SHA-256: 393945c298e4e686471c62592a55a0ecedde9a2fe5782e696613f4f79d5f2bba
 Regenerate with: npm run licenses:update
 
 ===============================================================================
@@ -155,7 +155,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ===============================================================================
-minimatch 10.2.6
+minimatch 10.2.5
 License: BlueOak-1.0.0
 Repository: git@github.com:isaacs/minimatch
 Source: LICENSE.md
@@ -218,7 +218,7 @@ will be liable to anyone for any damages related to this
 software or this license, under any kind of legal claim._**
 
 ===============================================================================
-semver 7.8.5
+semver 7.8.2
 License: ISC
 Repository: git+https://github.com/npm/node-semver.git
 Source: LICENSE

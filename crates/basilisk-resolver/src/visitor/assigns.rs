@@ -40,7 +40,48 @@ pub(super) fn extract_target_names(expr: &Expr) -> Vec<String> {
         Expr::Name(name) => vec![name.id.to_string()],
         Expr::Tuple(tuple) => tuple.elts.iter().flat_map(extract_target_names).collect(),
         Expr::List(list) => list.elts.iter().flat_map(extract_target_names).collect(),
+        // `a, *rest = ...` — the starred element binds `rest` like any other target.
+        Expr::Starred(starred) => extract_target_names(&starred.value),
         _ => Vec::new(),
+    }
+}
+
+/// Names bound by a `match` case pattern: `case [x, *rest]`, `case {**extra}`,
+/// `case Point(x=px) as pt` bind `x`, `rest`, `extra`, `px`, and `pt`.
+fn extract_pattern_names(pattern: &ruff_python_ast::Pattern) -> Vec<String> {
+    use ruff_python_ast::Pattern;
+    match pattern {
+        Pattern::MatchValue(_) | Pattern::MatchSingleton(_) => Vec::new(),
+        Pattern::MatchSequence(seq) => seq
+            .patterns
+            .iter()
+            .flat_map(extract_pattern_names)
+            .collect(),
+        Pattern::MatchMapping(map) => map
+            .patterns
+            .iter()
+            .flat_map(extract_pattern_names)
+            .chain(map.rest.iter().map(ToString::to_string))
+            .collect(),
+        Pattern::MatchClass(class) => class
+            .arguments
+            .patterns
+            .iter()
+            .chain(class.arguments.keywords.iter().map(|kw| &kw.pattern))
+            .flat_map(extract_pattern_names)
+            .collect(),
+        Pattern::MatchStar(star) => star.name.iter().map(ToString::to_string).collect(),
+        Pattern::MatchAs(as_pattern) => as_pattern
+            .pattern
+            .iter()
+            .flat_map(|inner| extract_pattern_names(inner))
+            .chain(as_pattern.name.iter().map(ToString::to_string))
+            .collect(),
+        Pattern::MatchOr(or_pattern) => or_pattern
+            .patterns
+            .iter()
+            .flat_map(extract_pattern_names)
+            .collect(),
     }
 }
 
@@ -123,6 +164,12 @@ fn collect_statement_assigns(stmts: &[Stmt]) -> Vec<String> {
                 }
                 out.extend(collect_statement_assigns(&node.orelse));
                 out.extend(collect_statement_assigns(&node.finalbody));
+            }
+            Stmt::Match(node) => {
+                for case in &node.cases {
+                    out.extend(extract_pattern_names(&case.pattern));
+                    out.extend(collect_statement_assigns(&case.body));
+                }
             }
             _ => {}
         }

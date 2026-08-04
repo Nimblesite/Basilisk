@@ -216,6 +216,15 @@ fn build_resolved_module(
         module_vars,
         imports,
         match_stmts,
+        // Implements the module-scope binding census behind `names_undefined`'s
+        // module-level passes (issues #397, #398): binding name -> site count.
+        module_bindings: assigns::collect_all_assigns(stmts).into_iter().fold(
+            std::collections::HashMap::new(),
+            |mut counts, name| {
+                *counts.entry(name).or_insert(0) += 1;
+                counts
+            },
+        ),
         calls,
         cast_calls: results.cast_calls,
         typevar_calls,

@@ -5141,12 +5141,12 @@
       },
       {
         "type": "text",
-        "html": "Also flags a class that lists **its own name among its bases** when no other binding of that name exists: a class name is not bound until its <code>class</code> statement completes, so <code>class C(C)</code> with no prior <code>C</code> is a guaranteed <code>NameError</code> at runtime (GitHub #398)."
+        "html": "Also flags a module-level statement that calls a name bound nowhere in the module (issue #397), and a class that lists **its own name among its bases** (issue #398) \u2014 Python evaluates the bases tuple before binding the class name, so both raise <code>NameError</code> the moment the module is imported. Shadowing stays legal: <code>class D(D)</code> is only flagged when the class statement is the SOLE binding of that name (no earlier class, import, assignment, or builtin to inherit from). A <code>from m import *</code> disables both module-level passes: the star can bind any name."
       },
       {
         "type": "code",
         "lang": "python",
-        "code": "def compute() -> int:\n    return undefined_name     # never defined \u2192 E0018\n    return undefined_fn()     # undefined callee \u2192 E0018\n\n\nclass Node(Node):             # `Node` is unbound in its own bases \u2192 E0018\n    pass"
+        "code": "def compute() -> int:\n    return undefined_name     # never defined \u2192 E0018\n    return undefined_fn()     # undefined callee \u2192 E0018\n\n\na: int = print2(\"abc\")        # no `print2` anywhere \u2192 E0018\n\nclass D(D):                   # `D` unbound in its own bases \u2192 E0018\n    pass"
       }
     ],
     "group": "Type System",

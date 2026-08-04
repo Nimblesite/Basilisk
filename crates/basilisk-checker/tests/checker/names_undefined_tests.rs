@@ -614,3 +614,235 @@ fn prior_binding_and_builtin_self_named_bases_stay_clean() -> Result<(), Box<dyn
     );
     Ok(())
 }
+
+#[test]
+fn module_level_undefined_callee_fires() -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #397 (verbatim repro): `print2` is defined nowhere, so this line
+    // raises NameError at import time. "All checked. No issues found." on it
+    // sent a first-time user straight to the issue tracker.
+    let source = "a: int = print2(\"abc\")\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"names_undefined"),
+        "a module-level call to an undefined name must fire names_undefined, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn module_level_defined_callees_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    // Every legitimate module-scope callee source: builtin, import, def, class,
+    // and a module variable holding a callable.
+    let source = r#"
+from functools import reduce
+
+def local_fn() -> int:
+    return 1
+
+class LocalCls:
+    pass
+
+alias = local_fn
+
+a = print("x")
+b = reduce(lambda acc, item: acc, [1])
+c = local_fn()
+d = LocalCls()
+e = alias()
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "defined module-level callees must not fire names_undefined, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "names_undefined")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn module_level_loop_and_unpack_targets_no_false_positive() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Binding forms beyond plain `=`: tuple unpacking, `for` targets, `with`
+    // targets, walrus, and `except ... as` names all bind at module scope.
+    let source = r#"
+import contextlib
+
+first, second = print, print
+for handler in [print]:
+    handler()
+with contextlib.suppress(ValueError) as guard:
+    pass
+if hit := print:
+    hit()
+first()
+second()
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "module-level loop/unpack/walrus targets must not fire names_undefined, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "names_undefined")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn module_level_star_import_disables_the_check() -> Result<(), Box<dyn std::error::Error>> {
+    // `from m import *` can bind any name, so the module-level pass must stay
+    // silent rather than guess.
+    let source = "from os.path import *\n\na = join(\"x\", \"y\")\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a star import must disable the module-level undefined-callee check, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn function_body_local_callee_not_flagged_by_module_pass() -> Result<(), Box<dyn std::error::Error>>
+{
+    // The resolver's call collector walks into function bodies; the
+    // module-level pass must not treat a parameter callee as module scope.
+    let source = "\
+from collections.abc import Callable
+
+def apply(callback: Callable[[], int]) -> int:
+    value = callback()
+    return value
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a parameter used as a callee inside a function must not fire names_undefined, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "names_undefined")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn module_level_full_builtin_surface_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    // Builtins outside the original curated list (divmod, ascii, eval, vars,
+    // globals) must be recognised at module level.
+    let source = "\
+a = divmod(7, 2)
+b = ascii(\"x\")
+c = eval(\"1\")
+d = vars()
+e = globals()
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "every real builtin callee must be in scope at module level, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "names_undefined")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn self_inheriting_class_with_no_prior_binding_fires() -> Result<(), Box<dyn std::error::Error>> {
+    // The minimal twin from the #398 torture case: Python evaluates the bases
+    // tuple BEFORE binding the class name, so this raises NameError at import
+    // time. The checker terminated (post-#398 fix) but stayed silent.
+    let source = "class D(D):\n    pass\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"names_undefined"),
+        "`class D(D)` with no prior `D` binding must fire names_undefined, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn self_inheriting_redefinition_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    // Legal shadowing: the base `D` resolves to the PREVIOUS class binding.
+    let source = "class D:\n    pass\n\n\nclass D(D):\n    pass\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "redefining `D` inheriting the previous `D` is legal, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "names_undefined")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn self_inheriting_imported_shadow_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    // Legal shadowing: the base `D` resolves to the imported binding.
+    let source = "from other_module import D\n\n\nclass D(D):\n    pass\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a class shadowing an imported name may inherit from it, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "names_undefined")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn self_inheriting_builtin_shadow_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    // Legal shadowing: `class int(int)` inherits the builtin `int`.
+    let source = "class int(int):\n    pass\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a class shadowing a builtin may inherit from it, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn self_inheriting_class_under_star_import_no_false_positive(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // A star import can bind any name, `D` included — stay silent.
+    let source = "from other_module import *\n\n\nclass D(D):\n    pass\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a star import may have bound `D`, so the check must stay silent, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn self_inheriting_assigned_shadow_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    // Legal shadowing: `D` is bound by assignment before the class statement.
+    let source = "D = object\n\n\nclass D(D):\n    pass\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a class shadowing an assigned name may inherit from it, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

@@ -193,7 +193,8 @@ Core: ~
   into the plugin's cache, and restarts the LSP on the new version. No-op
   when already up to date. Refuses to overwrite binaries owned by a package
   manager (use `brew upgrade basilisk` / `scoop update basilisk` /
-  `cargo install basilisk-cli`) or a local dev build.
+  `cargo install --git https://github.com/Nimblesite/Basilisk basilisk-cli`)
+  or a local dev build.
 
 Profiling: ~
 
@@ -416,7 +417,8 @@ Run `:checkhealth basilisk` to verify your setup.
 
 Binary not found: ~
   Run `:BasiliskInstall` to download the latest release.
-  Or install: `cargo install basilisk-cli`
+  Or install: `brew install basilisk` / `scoop install basilisk` /
+  `uv tool install basilisk-python`
   Or set: `vim.env.BASILISK_PATH = "/path/to/basilisk"`
 
 LSP not starting: ~
