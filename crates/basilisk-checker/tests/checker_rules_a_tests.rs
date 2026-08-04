@@ -24,6 +24,8 @@ mod assignment_compatibility;
 mod callables_annotation;
 #[path = "checker/calls_argument_type_tests.rs"]
 mod calls_argument_type;
+#[path = "checker/calls_expression_position_tests.rs"]
+mod calls_expression_position;
 #[path = "checker/classes_override_tests.rs"]
 mod classes_override;
 #[path = "checker/classes_override_2_tests.rs"]

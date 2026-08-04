@@ -760,17 +760,36 @@ not run is `[~]`, not `[x]`.
   - [x] Test: `cargo test -p basilisk-checker aliases_recursive` — every
     recursive DEFINITION pinned clean, both cyclical-reference cases pinned
     firing.
-- [ ] Resolve decorator expressions through the binding table so `o = overload`
+- [x] Resolve decorator expressions through the binding table so `o = overload`
   is recognised as `typing.overload`; cover `from typing import overload as ov`
   and `typing.overload` / `t.overload` attribute spellings
-  ([#380](https://github.com/Nimblesite/Basilisk/issues/380)). The binding
-  table is `annotation/tables.rs`'s import map plus a value-binding pass;
-  `mod.rs::canonical_head` already rewrites the alias and attribute spellings
-  and is the function decorator resolution reuses.
-  - [ ] Test (write RED first): all four spellings of an `@overload` chain
-    (`overload`, `ov`, `typing.overload`, `t.overload`, `o = overload`) are
-    accepted, and a non-overload decorator named `overload` from another module
-    is NOT.
+  ([#380](https://github.com/Nimblesite/Basilisk/issues/380)).
+  — Root cause was upstream of any table: the resolver's `decorator_name`
+  rendered `@t.overload` as bare `"overload"`, discarding the qualifier before
+  ANY consumer could discriminate. `class_info_ext.rs::decorator_name{,_and_span}`
+  now render the full dotted path. On top of that,
+  `annotation/tables.rs` gained the value-binding pass (`values`:
+  `o = overload`, chains included, cycle-capped) and
+  `annotation/mod.rs::decorator_denotes(spelling, member)` answers "is this
+  spelling `typing.<member>`?" through value chains → import map → module
+  map, with a bare unbound spelling accepted leniently. One shared predicate —
+  `rules/shared.rs::overload_decorated` — now backs ALL six group-forming
+  overload rules (`overloads_definitions`, `overloads_consistency{,_2,_3}`,
+  `overloads_basic`, `overloads_evaluation`); every remaining spelling-level
+  matcher across checker/LSP/resolver was swept onto suffix-tolerant
+  `decorator_spelled` / `rsplit('.')` so the dotted rendering changes no
+  guard behaviour.
+  - [x] Test (write RED first): `tests/checker/annotation_resolution_tests.rs`
+    sibling file `tests/checker/decorator_resolution_tests.rs` (11 tests,
+    mounted in `checker_rules_a_tests.rs`) — recognition observed through
+    `overloads_definitions` firing on an impl-less chain for `overload`, `ov`,
+    `typing.overload`, `t.overload`, `o = overload`, and
+    `o = typing.overload`; acceptance through two complete chains drawing zero
+    diagnostics; discrimination through `from mymod import overload`,
+    `import mymod as t` + `@t.overload`, and a value chain ending at the
+    foreign name staying overload-silent. **RED proof**: 5 of 11 failed before
+    the change (`ov`/`o` unrecognised; both foreign spellings falsely
+    recognised); 11/11 after.
 - [ ] Visit calls in every expression position rather than statement-outermost
   only, so `C(1).method()` reports the same constructor-arity error as `C(1)`
   ([#381](https://github.com/Nimblesite/Basilisk/issues/381)).

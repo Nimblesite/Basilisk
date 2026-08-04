@@ -109,7 +109,7 @@ fn check_class_scoped_typevars_in_self(
 
         for init_func in init_funcs {
             // Skip overload decorators — only check the implementation.
-            if init_func.decorators.iter().any(|d| d == "overload") {
+            if crate::rules::shared::decorator_spelled(&init_func.decorators, "overload") {
                 continue;
             }
 
@@ -307,7 +307,7 @@ fn check_subscript_constructor(
 
     if let Some(init_funcs) = method_map.get(&(class_name, "__init__")) {
         for init_func in init_funcs {
-            if init_func.decorators.iter().any(|d| d == "overload") {
+            if crate::rules::shared::decorator_spelled(&init_func.decorators, "overload") {
                 continue;
             }
             check_init_method_args(

@@ -36,45 +36,21 @@ pub(super) fn collect_reveal_type_calls(stmts: &[Stmt]) -> Vec<RevealTypeCallInf
 }
 
 /// Collect call sites from statements, including those inside function bodies.
+/// Every supported call site in every expression position, in source order.
+///
+/// The walk is [`crate::visit_calls`], so `C(1).method()`, `f(C(1))`,
+/// `[C(1)]`, and `C(1) if p else q` all record the `C(1)` site the bare
+/// statement records ([#381](https://github.com/Nimblesite/Basilisk/issues/381));
+/// [`call_site_from_expr`] still decides which callee/receiver shapes are
+/// representable.
 pub(super) fn collect_calls_from_stmts(stmts: &[Stmt]) -> Vec<CallSite> {
     let mut out = Vec::new();
-    collect_calls_from_stmts_internal(stmts, &mut out);
-    out
-}
-
-pub(super) fn collect_calls_from_stmts_internal(stmts: &[Stmt], out: &mut Vec<CallSite>) {
-    crate::walk_all_stmts(stmts, &mut |stmt| match stmt {
-        Stmt::AnnAssign(node) => {
-            if let Some(val) = node.value.as_deref() {
-                if let Some(site) = call_site_from_expr(val) {
-                    out.push(site);
-                }
-            }
+    crate::visit_calls(stmts, &mut |call| {
+        if let Some(site) = call_site_from_call(call) {
+            out.push(site);
         }
-        Stmt::Assign(node) => {
-            if let Some(site) = call_site_from_expr(&node.value) {
-                out.push(site);
-            }
-        }
-        Stmt::Expr(node) => {
-            if let Some(site) = call_site_from_expr(&node.value) {
-                out.push(site);
-            }
-        }
-        Stmt::If(node) => {
-            if let Some(site) = call_site_from_expr(&node.test) {
-                out.push(site);
-            }
-            for clause in &node.elif_else_clauses {
-                if let Some(ref test) = clause.test {
-                    if let Some(site) = call_site_from_expr(test) {
-                        out.push(site);
-                    }
-                }
-            }
-        }
-        _ => {}
     });
+    out
 }
 
 pub(super) fn collect_reveal_type_calls_from_stmts(
@@ -99,8 +75,9 @@ pub(super) fn collect_reveal_type_calls_from_stmts(
 /// any non-TypeVar (non-simple-name) argument spans from a class definition.
 ///
 /// Returns `(type_params, non_typevar_arg_spans)`.
-pub(super) fn call_site_from_expr(expr: &Expr) -> Option<CallSite> {
-    let Expr::Call(call) = expr else { return None };
+/// Build a [`CallSite`] from a call node, when its callee shape is one the
+/// site model represents (a bare name, or a method on a supported receiver).
+pub(super) fn call_site_from_call(call: &ruff_python_ast::ExprCall) -> Option<CallSite> {
     let (callee, receiver) = match call.func.as_ref() {
         Expr::Name(name) => (name.id.to_string(), None),
         Expr::Attribute(attribute) => {

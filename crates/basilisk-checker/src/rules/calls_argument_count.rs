@@ -547,7 +547,7 @@ fn find_constructor_method<'a>(
         // Use the first non-overload __new__, or the first one
         let new_fn = new_methods
             .iter()
-            .find(|f| !f.decorators.iter().any(|d| d == "overload"))
+            .find(|f| !super::shared::decorator_spelled(&f.decorators, "overload"))
             .or_else(|| new_methods.first());
         if let Some(func) = new_fn {
             return Some(func);
@@ -558,7 +558,7 @@ fn find_constructor_method<'a>(
     if let Some(init_methods) = method_map.get(&(class_name, "__init__")) {
         let init_fn = init_methods
             .iter()
-            .find(|f| !f.decorators.iter().any(|d| d == "overload"))
+            .find(|f| !super::shared::decorator_spelled(&f.decorators, "overload"))
             .or_else(|| init_methods.first());
         if let Some(func) = init_fn {
             return Some(func);

@@ -102,7 +102,9 @@ pub(super) fn build_field_specifier_overloads(
     let has_overloads = functions.iter().any(|f| {
         f.name == spec_name
             && f.class_name.is_none()
-            && f.decorators.iter().any(|d| d == "overload")
+            && f.decorators
+                .iter()
+                .any(|d| d.rsplit('.').next() == Some("overload"))
     });
 
     for stmt in stmts {

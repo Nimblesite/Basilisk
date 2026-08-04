@@ -290,13 +290,14 @@ fn annotation_defines_field(
 }
 
 /// attrs-style class decorators (`@define`, `@frozen`, `@mutable`, `@attr.s`,
-/// `@attr.attrs`, …). The resolver records only the final name segment, so
-/// `@attr.s` arrives as `"s"` and `@attrs.define` as `"define"`. A stray match
-/// merely suppresses a warning — safe — whereas a miss corrupts a model.
+/// `@attr.attrs`, …). The resolver records the decorator's dotted spelling,
+/// so the final name segment is compared: `@attr.s` arrives as `"attr.s"` and
+/// `@attrs.define` as `"attrs.define"`. A stray match merely suppresses a
+/// warning — safe — whereas a miss corrupts a model.
 fn has_attrs_class_decorator(class: &basilisk_resolver::ClassInfo) -> bool {
     class.decorator_spans.iter().any(|(name, _)| {
         matches!(
-            name.as_str(),
+            name.rsplit('.').next().unwrap_or(name.as_str()),
             "define" | "frozen" | "mutable" | "attrs" | "s"
         )
     })

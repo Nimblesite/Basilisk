@@ -42,6 +42,18 @@ pub(crate) fn overload_decorated(
         .any(|decorator| resolver.decorator_denotes(decorator, "overload"))
 }
 
+/// Spelling-level decorator match: `name` bare or as the final segment of a
+/// dotted path (`@typing.final`, `@abc.abstractmethod`).
+///
+/// For guards where a qualified false match merely *skips* a check — never
+/// invents a diagnostic. Rules whose diagnostics depend on what a decorator
+/// IS resolve it through the binding tables instead ([`overload_decorated`]).
+pub(crate) fn decorator_spelled(decorators: &[String], name: &str) -> bool {
+    decorators
+        .iter()
+        .any(|d| d == name || d.rsplit('.').next() == Some(name))
+}
+
 /// Returns `true` when the annotation text denotes a `ClassVar[...]` type.
 ///
 /// `ClassVar` fields are excluded from the dataclass `__init__` parameter list,

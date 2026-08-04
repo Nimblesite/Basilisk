@@ -80,11 +80,11 @@ fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
 fn is_implicit_receiver(func: &FunctionInfo, index: usize, param: &ParameterInfo) -> bool {
     if index != 0
         || func.class_name.is_none()
-        || func.decorators.iter().any(|name| name == "staticmethod")
+        || super::shared::decorator_spelled(&func.decorators, "staticmethod")
     {
         return false;
     }
-    let class_receiver = func.decorators.iter().any(|name| name == "classmethod")
+    let class_receiver = super::shared::decorator_spelled(&func.decorators, "classmethod")
         || matches!(func.name.as_str(), "__new__" | "__init_subclass__");
     param.name == if class_receiver { "cls" } else { "self" }
 }

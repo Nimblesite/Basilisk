@@ -37,8 +37,12 @@ fn decorator_lists<'a>(cls: &'a ClassInfo, member: &str) -> Vec<&'a Vec<String>>
 /// `(is_property, has_setter)` for `member` based on its decorators.
 fn property_kind(cls: &ClassInfo, member: &str) -> (bool, bool) {
     let lists = decorator_lists(cls, member);
-    let is_property = lists.iter().any(|ds| ds.iter().any(|d| d == "property"));
-    let has_setter = lists.iter().any(|ds| ds.iter().any(|d| d == "setter"));
+    let is_property = lists
+        .iter()
+        .any(|ds| crate::rules::shared::decorator_spelled(ds, "property"));
+    let has_setter = lists
+        .iter()
+        .any(|ds| crate::rules::shared::decorator_spelled(ds, "setter"));
     (is_property, has_setter)
 }
 
@@ -51,7 +55,7 @@ fn property_kind(cls: &ClassInfo, member: &str) -> (bool, bool) {
 fn readwrite_property_members(cls: &ClassInfo) -> Vec<&str> {
     let mut members: Vec<&str> = Vec::new();
     for (name, decs) in &cls.method_decorators {
-        let is_property = decs.iter().any(|d| d == "property");
+        let is_property = crate::rules::shared::decorator_spelled(decs, "property");
         let (_, has_setter) = property_kind(cls, name);
         if is_property && has_setter && !members.contains(&name.as_str()) {
             members.push(name.as_str());
@@ -264,7 +268,8 @@ pub(super) fn check_instance_var_conformance(
 fn property_members(cls: &ClassInfo) -> Vec<&str> {
     let mut members: Vec<&str> = Vec::new();
     for (name, decs) in &cls.method_decorators {
-        if decs.iter().any(|d| d == "property") && !members.contains(&name.as_str()) {
+        if crate::rules::shared::decorator_spelled(decs, "property") && !members.contains(&name.as_str())
+        {
             members.push(name.as_str());
         }
     }
@@ -327,7 +332,7 @@ fn find_method<'a>(
 /// Positional parameter names of a method, dropping the implicit `self`/`cls`
 /// receiver for instance and class methods (but not for static methods).
 fn logical_param_names(func: &FunctionInfo) -> Vec<&str> {
-    let is_static = func.decorators.iter().any(|d| d == "staticmethod");
+    let is_static = crate::rules::shared::decorator_spelled(&func.decorators, "staticmethod");
     let skip = usize::from(!is_static);
     func.parameters
         .iter()
@@ -392,7 +397,7 @@ pub(super) fn check_method_signature_conformance(
 
         // A `@staticmethod` whose first parameter is `self` cannot satisfy an
         // instance method — it has no bound receiver.
-        let impl_static = impl_fn.decorators.iter().any(|d| d == "staticmethod");
+        let impl_static = crate::rules::shared::decorator_spelled(&impl_fn.decorators, "staticmethod");
         if impl_static && impl_fn.parameters.first().is_some_and(|p| p.name == "self") {
             push_signature_diag(
                 protocol_name,

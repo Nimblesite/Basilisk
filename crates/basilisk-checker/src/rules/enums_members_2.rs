@@ -155,7 +155,8 @@ fn is_non_member(cls: &ClassInfo, member_name: &str) -> bool {
     // Method names defined with `def` in the class body — unless decorated with `@member`.
     if cls.method_names.iter().any(|m| m.as_str() == member_name) {
         let has_member_decorator = cls.method_decorators.iter().any(|(name, decorators)| {
-            name.as_str() == member_name && decorators.iter().any(|d| d == "member")
+            name.as_str() == member_name
+                && crate::rules::shared::decorator_spelled(decorators, "member")
         });
         if !has_member_decorator {
             return true;

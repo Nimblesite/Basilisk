@@ -9,7 +9,6 @@ mod assert_narrow;
 mod assigns;
 mod call_return;
 mod calls_and_reveal;
-mod cast_calls;
 mod class_info;
 mod class_info_ext;
 mod core;
@@ -100,7 +99,6 @@ fn reclassify_generic_params(
 
 /// Intermediate container for collected analysis results.
 struct AnalysisResults {
-    cast_calls: Vec<crate::scope::CallSite>,
     reveal_type_calls: Vec<crate::scope::RevealTypeCallInfo>,
     assert_type_calls: Vec<crate::scope::AssertTypeCallInfo>,
     typeddict_calls: Vec<crate::scope::TypedDictCallInfo>,
@@ -142,7 +140,6 @@ fn collect_analysis_results(
     isinstance_typeddict_spans.extend(typevar::collect_typevar_bound_typeddict_violations(stmts));
 
     AnalysisResults {
-        cast_calls: cast_calls::collect_cast_calls(stmts, source),
         reveal_type_calls: calls_and_reveal::collect_reveal_type_calls(stmts),
         assert_type_calls: calls_and_reveal::collect_assert_type_calls_from_stmts(stmts, source),
         typeddict_calls: typeddict::collect_typeddict_calls(stmts),
@@ -225,8 +222,14 @@ fn build_resolved_module(
                 counts
             },
         ),
+        // `calls` is complete over every expression position (#381), so the
+        // `cast(...)` view #335 needed is a filter of it, not a second walk.
+        cast_calls: calls
+            .iter()
+            .filter(|site| site.callee == "cast")
+            .cloned()
+            .collect(),
         calls,
-        cast_calls: results.cast_calls,
         typevar_calls,
         reveal_type_calls: results.reveal_type_calls,
         assert_type_calls: results.assert_type_calls,
