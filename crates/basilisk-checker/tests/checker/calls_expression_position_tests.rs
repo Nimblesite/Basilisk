@@ -11,12 +11,16 @@ use super::common::*;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+/// One arity diagnostic reduced to what these tests pin: its code and the
+/// `(start, end)` byte span it anchors at.
+type ArityDiagnostic = (String, (u32, u32));
+
 /// A dataclass with one `int` field: `C(1, 2)` is one positional too many,
 /// which `dataclasses_kwonly`'s arity check reports on the bare statement.
 const CLASS: &str = "from dataclasses import dataclass\n\n@dataclass\nclass C:\n    a: int\n";
 
 /// The arity diagnostics drawn by `source`, as `(code, span)` pairs.
-fn arity_spans(source: &str) -> Result<Vec<(String, (u32, u32))>, Box<dyn std::error::Error>> {
+fn arity_spans(source: &str) -> Result<Vec<ArityDiagnostic>, Box<dyn std::error::Error>> {
     let diags = run(source)?;
     Ok(diags
         .iter()

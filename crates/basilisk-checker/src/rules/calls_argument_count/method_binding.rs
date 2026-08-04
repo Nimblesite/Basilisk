@@ -105,7 +105,10 @@ fn resolve_bound_method<'a>(
         .filter(|f| f.class_name.is_none() && !f.nested_in_class && f.name == bound_name)
         .filter(|f| signature_preserving_decorators(&f.decorators))
         .collect();
-    (!candidates.is_empty()).then(|| BoundMethod {
+    if candidates.is_empty() {
+        return None;
+    }
+    Some(BoundMethod {
         candidates,
         wrapper: attribute.rhs_descriptor.as_deref(),
     })
@@ -131,12 +134,9 @@ fn receiver_params_consumed(
     let spelled =
         |name: &str| wrapper == Some(name) || shared::decorator_spelled(&func.decorators, name);
     if spelled("staticmethod") {
-        0
-    } else if spelled("classmethod") || instance_access {
-        1
-    } else {
-        0
+        return 0;
     }
+    usize::from(spelled("classmethod") || instance_access)
 }
 
 /// The positional arguments a signature requires once `consumed` leading

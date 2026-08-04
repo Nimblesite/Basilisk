@@ -353,54 +353,7 @@ impl InferredType {
             // Implements [TYPEINF-SUBTYPING-CALLABLE] — return type covariant
             // (source return <: target return), parameters contravariant
             // (target param <: source param), `...`/empty params gradual.
-            (InferredType::Callable(a), InferredType::Callable(b)) => {
-                // Check return type compatibility (covariant - source return must be assignable to target return)
-                // Special case: if source return type is Unknown, we can't verify compatibility
-                // This happens with lambda expressions where we can't infer the return type
-                // We should be conservative and return false unless target return type is Any or Unknown
-                match (&*a.return_type, &*b.return_type) {
-                    (InferredType::Unknown, _)
-                        if !matches!(
-                            &*b.return_type,
-                            InferredType::Any | InferredType::Unknown
-                        ) =>
-                    {
-                        // Source has unknown return type, target has known return type
-                        // This is unsafe - we don't know if they're compatible
-                        return false;
-                    }
-                    _ => {
-                        if !a.return_type.is_assignable_to(&b.return_type) {
-                            return false;
-                        }
-                    }
-                }
-
-                // Handle ellipsis/arbitrary parameters (empty param_types means `...`)
-                if a.param_types.is_empty() || b.param_types.is_empty() {
-                    // If target accepts arbitrary parameters (`...`), any callable is assignable
-                    // If source has arbitrary parameters, it can only be assigned to target with arbitrary parameters
-                    // or if target has specific parameter types that match the source's capabilities
-                    // For now, we allow if either has empty param_types (simplified)
-                    return true;
-                }
-
-                // Required parameter positions are contravariant. A source may
-                // require fewer parameters than the target because its trailing
-                // positions can be satisfied by defaults; it may not require more.
-                if a.param_types.len() > b.param_types.len() {
-                    return false;
-                }
-
-                // Check parameter type compatibility (contravariant - target param must be assignable to source param)
-                for (source_param, target_param) in a.param_types.iter().zip(b.param_types.iter()) {
-                    if !target_param.is_assignable_to(source_param) {
-                        return false;
-                    }
-                }
-
-                true
-            }
+            (InferredType::Callable(a), InferredType::Callable(b)) => callable_assignable(a, b),
             (a @ InferredType::Generator(..), b @ InferredType::Generator(..)) => {
                 generator_assignable(a, b)
             }
@@ -427,6 +380,42 @@ impl InferredType {
 
 fn invariantly_assignable(left: &InferredType, right: &InferredType) -> bool {
     left.is_assignable_to(right) && right.is_assignable_to(left)
+}
+
+/// Callable subtyping: returns covariant, parameters contravariant.
+///
+/// Implements [TYPEINF-SUBTYPING-CALLABLE]. An `Unknown` source return (a
+/// lambda whose body we could not infer) is only accepted against a gradual
+/// target — claiming compatibility with a KNOWN target return would assert
+/// something unverified.
+fn callable_assignable(source: &CallableInfo, target: &CallableInfo) -> bool {
+    let target_return_is_gradual = matches!(
+        &*target.return_type,
+        InferredType::Any | InferredType::Unknown
+    );
+    if matches!(&*source.return_type, InferredType::Unknown) && !target_return_is_gradual {
+        return false;
+    }
+    if !source.return_type.is_assignable_to(&target.return_type) {
+        return false;
+    }
+    callable_params_assignable(&source.param_types, &target.param_types)
+}
+
+/// Parameter-list half of [TYPEINF-SUBTYPING-CALLABLE].
+///
+/// An empty list spells `...` (arbitrary parameters), which is gradual on
+/// either side. A source may require FEWER positions than the target — its
+/// trailing positions are satisfiable by defaults — but never more.
+fn callable_params_assignable(source: &[InferredType], target: &[InferredType]) -> bool {
+    if source.is_empty() || target.is_empty() {
+        return true;
+    }
+    source.len() <= target.len()
+        && source
+            .iter()
+            .zip(target.iter())
+            .all(|(source_param, target_param)| target_param.is_assignable_to(source_param))
 }
 
 /// Generator yield/return positions are covariant; the value sent back into

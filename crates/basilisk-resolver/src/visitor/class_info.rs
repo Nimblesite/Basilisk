@@ -222,11 +222,11 @@ fn rhs_callable_binding(value: &Expr) -> (Option<String>, Option<String>) {
                 }
                 _ => return (None, None),
             };
-            let wrapped = match call.arguments.args.as_ref() {
+            let bound = match call.arguments.args.as_ref() {
                 [Expr::Name(inner)] => Some(inner.id.to_string()),
                 _ => None,
             };
-            (Some(wrapper), wrapped)
+            (Some(wrapper), bound)
         }
         _ => (None, None),
     }

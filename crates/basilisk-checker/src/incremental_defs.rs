@@ -406,14 +406,14 @@ pub fn guard_type_environment(db: &dyn Db, file: SourceFile) -> GuardTypes {
     let Ok(parsed) = basilisk_parser::parse_source(source.clone(), "module.py".to_owned()) else {
         return GuardTypes::default();
     };
-    let Ok(resolved) = basilisk_resolver::resolve(&parsed) else {
+    let Ok(module) = basilisk_resolver::resolve(&parsed) else {
         return GuardTypes::default();
     };
-    let Some(resolver) = crate::annotation::AnnotationResolver::for_module(&resolved) else {
+    let Some(resolver) = crate::annotation::AnnotationResolver::for_module(&module) else {
         return GuardTypes::default();
     };
     let mut map = std::collections::HashMap::new();
-    for function in &resolved.functions {
+    for function in &module.functions {
         for guard in &function.narrowing_guards {
             collect_guard_types(&guard.kind, &resolver, &mut map);
         }
