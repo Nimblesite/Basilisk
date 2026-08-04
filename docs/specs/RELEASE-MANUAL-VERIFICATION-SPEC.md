@@ -1,10 +1,10 @@
-# Release manual verification {#RELEASE-VERIFICATION}
+<a id="RELEASE-VERIFICATION"></a>
 
-Every release is manually driven **before** publishing **and again after
-publishing**, against the artifact users actually install. Automated gates
-(`/ci-prep`, `make ci`, `make test`, `make conformance`, `make bench`) are
-necessary and not sufficient: they run against the tree, not against the thing
-on the Marketplace.
+# Release manual verification
+
+Every release gets a manual pass **before** the tag is pushed and a second pass
+once the Marketplace VSIX is publicly available. Automated gates prove the
+tree; these passes prove the packaged product and the version users install.
 
 [RELEASE-LAW](#RELEASE-LAW) · [RELEASE-CI-PREP](#RELEASE-CI-PREP) ·
 [RELEASE-PROVENANCE](#RELEASE-PROVENANCE) ·
@@ -12,55 +12,55 @@ on the Marketplace.
 [RELEASE-SURFACE](#RELEASE-SURFACE) · [RELEASE-PRE](#RELEASE-PRE) ·
 [RELEASE-POST](#RELEASE-POST) · [RELEASE-TRIAGE](#RELEASE-TRIAGE)
 
-## The law {#RELEASE-LAW}
+<a id="RELEASE-LAW"></a>
+
+## The law
 
 > **The release person MUST manually test BEFORE the release AND AFTER the
 > release.**
 
-- **BEFORE** — against the real per-platform VSIX built by the shared
-  `_release_vsix` recipe, installed into VS Code:
-  `make reinstall-vsix-macos` (or `make reinstall-vsix` for the host default).
-  That recipe is the exact artifact the `release.yml` `vsix` job publishes.
-- **AFTER** — uninstall everything local, install **from the Marketplace /
-  Open VSX / brew / scoop / PyPI**, and run the same checklist against the
-  downloaded artifact.
+- **BEFORE** — install the local release candidate with
+  `make reinstall-vsix-macos` (or `make reinstall-vsix` for the host). It uses
+  the same `_release_vsix` packaging path as the release workflow.
+- **AFTER** — wait for the new version to appear in the VS Code Marketplace,
+  remove local builds, and install that VSIX through the Marketplace UI. Run
+  the full surface on at least three large, materially different real-world
+  codebases, then smoke-test the other published distributions.
 
-A release is not done when the tag is pushed. It is done when the AFTER pass
-is green.
+A release is complete only when that Marketplace-installed version passes
+provenance, responsiveness, and the full manual surface on all three codebases.
 
-## Automated gate first — `/ci-prep` {#RELEASE-CI-PREP}
+<a id="RELEASE-CI-PREP"></a>
 
-`/ci-prep` is the **automated** half, and it runs before anything else in this
-document. It reads `.github/workflows/ci.yml` fresh, builds a checklist from the
-actual CI steps, and loops until there is a complete clean run with zero
-failures: fmt · clippy · build · Rust tests + coverage
-(`coverage-thresholds.json`) · VSIX · neovim · zed · mutation.
+## Automated gate first — `/ci-prep`
 
-The division of labour:
-
-- **`/ci-prep` proves the tree is sound.** It never launches the editor, clicks
-  a code action, or runs the binary a user installs.
-- **The manual passes below prove the product works.** They cover exactly what
-  `/ci-prep` cannot reach: interactive surfaces, and the published artifact.
+`/ci-prep` runs first. It derives its checklist from
+`.github/workflows/ci.yml` and loops until one clean run passes formatting,
+linting, builds, tests and coverage, editor packages, and mutation checks. It
+proves the tree is sound; the manual passes cover interactive behavior and
+installed artifacts.
 
 Green `/ci-prep` is the **entry condition, not the finish line**. Do not begin a
 manual pass on a tree that is not already green.
 
 ```
-/ci-prep      →   RELEASE-PRE     →   push tag      →   RELEASE-POST
-automated         manual, against     release.yml       manual, against
-                  the local VSIX                        the published artifact
+/ci-prep  →  RELEASE-PRE  →  push tag  →  Marketplace live  →  RELEASE-POST
+automated    local VSIX       release.yml                  Marketplace VSIX
 ```
 
-## Artifact-provenance gate {#RELEASE-PROVENANCE}
+<a id="RELEASE-PROVENANCE"></a>
+
+## Artifact-provenance gate
 
 Run this **first**, before any feature testing. If it fails, stop — nothing
 below is meaningful.
 
-### The tag contains every claimed fix {#RELEASE-PROVENANCE-TAG}
+<a id="RELEASE-PROVENANCE-TAG"></a>
 
-For every issue/PR the release notes claim, resolve its commit and prove the
-tag contains it:
+### The tag contains every claimed fix
+
+Create the release tag locally before this gate, but do not push it yet. For
+every claimed issue or PR, prove that the tag contains its fix:
 
 ```bash
 git tag --contains <fix-commit>          # MUST list the release tag
@@ -68,178 +68,175 @@ git rev-list -n 1 <tag>                  # the exact SHA being shipped
 git log --oneline <previous-tag>..<tag>  # everything actually in the release
 ```
 
-Write the notes **from** `git log <prev>..<tag>`. Never from `main`.
+Write the notes from this range, never from `main`.
 
-### The binary's metadata matches the intended commit {#RELEASE-PROVENANCE-BINARY}
+<a id="RELEASE-PROVENANCE-BINARY"></a>
 
-The binary self-reports its provenance (stamped by `scripts/stamp-version.sh`
-in the `release.yml` `build` job):
+### The binary's metadata matches the intended commit
+
+Check the installed binary, not a local build:
 
 ```bash
 <installed-binary> --version          # "basilisk X.Y.Z" + "Ruff formatter: N.N.N"
 <installed-binary> --version --json   # version, gitSha, gitDirty, buildTime, target, toolchain
 ```
 
-Assert all of:
+BEFORE, confirm `gitSha` points at the local tag and the formatter version is
+expected. AFTER, also require the Marketplace version to match the tag,
+`gitDirty` to be `false`, and `buildTime` to follow the tag push. Any mismatch
+stops the release. On macOS, the helper binary must report the same version.
 
-- `version` equals the tag.
-- `gitSha` is a prefix of `git rev-list -n 1 <tag>`.
-- `gitDirty` is `false`. A dirty release build is a failed release.
-- `buildTime` is after the tag was pushed.
-- `Ruff formatter:` matches the tree's pinned ruff rev (`Cargo.toml`) — a
-  stale formatter version is a stale binary.
-- `basilisk-profiler-helper --version` reports the same version (macOS VSIX).
+Generate the release-note component block from the tested binary:
 
-`scripts/gen_release_notes.py <binary> <tag> shipwright.json` generates the
-component block straight from the binary and `shipwright.json`, so the notes
-cannot claim different bytes from the build ([LSPFMT-RELEASE-NOTES]; drift test
-`crates/basilisk-cli/tests/e2e_release_notes_block.rs`).
+```bash
+scripts/gen_release_notes.py <binary> <tag> shipwright.json
+```
 
-### You are testing the REAL installed artifact {#RELEASE-PROVENANCE-ARTIFACT}
+<a id="RELEASE-PROVENANCE-ARTIFACT"></a>
+
+### You are testing the real installed artifact
 
 **Never** test `target/release/basilisk`. Always test the binary VS Code
 actually launches:
 
 ```bash
-# the binary VS Code launches (+ basilisk-profiler-helper beside it):
+# Binary VS Code launches; basilisk-profiler-helper is beside it on macOS:
 ~/.vscode/extensions/nimblesite.basilisk-<version>-<platform>/bin/<platform>/basilisk
-code --list-extensions --show-versions | grep -i basilisk   # exactly ONE build installed
-ls -d ~/.vscode/extensions/nimblesite.basilisk-*            # remove stale copies first
+code --list-extensions --show-versions | grep -i basilisk
+ls -d ~/.vscode/extensions/nimblesite.basilisk-*
 ```
 
-Also confirm `basilisk.executablePath` / `basilisk.binaries.*` are **unset** in
-your settings, or you are testing someone else's binary.
+Confirm exactly one build is installed and `basilisk.executablePath` /
+`basilisk.binaries.*` are unset.
 
-## Known-hang / responsiveness smoke test {#RELEASE-RESPONSIVENESS}
+<a id="RELEASE-RESPONSIVENESS"></a>
+
+## Known-hang / responsiveness smoke test
 
 Run the shipped binary against pathological input. Every one must **terminate**.
 
 ```bash
-# self-referential and cyclic bases — regression tests live in
-# crates/basilisk-resolver/tests/resolver/test_recursive_bases.rs
-printf 'class C(C[int], C[bool]):\n    pass\n'          > /tmp/bsk/self_base.py
-printf 'class A(B):\n    pass\nclass B(A):\n    pass\n' > /tmp/bsk/cycle.py
+scratch_dir="$(mktemp -d)"
+printf 'class C(C[int], C[bool]):\n    pass\n' > "$scratch_dir/self_base.py"
+printf 'class A(B):\n    pass\nclass B(A):\n    pass\n' > "$scratch_dir/cycle.py"
 
-time timeout 30 <installed-binary> check /tmp/bsk/     # MUST exit well inside 30s
-time timeout 60 <installed-binary> check <large-repo>  # sanity: no runaway
+time <installed-binary> check "$scratch_dir"  # Must finish within 30 seconds.
+time <installed-binary> check <large-repo>     # Repeat for every release test repo.
 ```
 
 Then, with the extension running on a real project:
 
-1. Open the pathological file. Confirm diagnostics appear and the **Modules**
-   panel keeps updating (add a file → counts change). A frozen panel on stale
-   counts is the hang signature.
-2. Watch CPU (`top -o cpu` / Activity Monitor) — no `basilisk` process may sit
-   at ~100% of a core once analysis settles.
-3. Set `basilisk.enabled` to `false` (the **Diagnostics** row in the Basilisk
-   panel, `basilisk.info.runAction`). Published diagnostics must clear **and
-   CPU must drop**. Re-enable — diagnostics must come back.
-4. `Basilisk: Restart Language Server` recovers a wedged server.
+1. Open a pathological file; diagnostics must appear and the **Modules** panel
+   must still react when a file is added.
+2. After analysis settles, CPU must idle. Disable diagnostics: published
+   diagnostics must clear and CPU must drop; re-enable them and confirm return.
+3. `Basilisk: Restart Language Server` must recover the session.
 
-## Manual test surface {#RELEASE-SURFACE}
+<a id="RELEASE-SURFACE"></a>
 
-Every area below gets hands-on testing in both the BEFORE and AFTER passes.
+## Manual test surface
 
-### CLI {#RELEASE-SURFACE-CLI}
+Test every applicable area in both passes. Each checkbox is a representative
+journey with an observable result, not a requirement to try every flag or menu.
+In the AFTER pass, complete the surface separately on each of the three large
+release-test codebases.
 
-Command surface from `crates/basilisk-cli/src/main.rs`:
+<a id="RELEASE-SURFACE-CLI"></a>
 
-- [ ] `basilisk check <paths>` — text output, correct exit code
-- [ ] `basilisk check --output json` — parses; `--color always|never|auto`
-- [ ] `basilisk check --cache --cache-stats` and `--no-cache` / `--cache-dir`
-- [ ] `basilisk analyze <paths>` — opt-in non-`pep` rules only
-- [ ] `basilisk format <paths>` and `basilisk format --check`
-- [ ] `basilisk fix` — plus `--unsafe` and `--rules BSK-0001,…`
-- [ ] `basilisk adopt` / `basilisk adopt --status` / `basilisk unadopt`
-- [ ] `basilisk lsp --transport stdio` and `--transport ws --port <n>`
-- [ ] `basilisk mcp --workspace <dir>` — stdio tools respond
-- [ ] `basilisk typeshed download` (and `--commit` / `--package`)
-- [ ] `basilisk stubs generate` / `basilisk stubs status` / `basilisk --createstub`
-- [ ] `basilisk --version`, `--version --json`, `--help`
+### CLI
 
-### LSP features {#RELEASE-SURFACE-LSP}
+- [ ] `check` and `analyze` on representative passing and failing projects:
+      usable text/JSON, correct exit codes, color, and cache/no-cache behavior
+- [ ] `format` / `format --check` and `fix` (safe, unsafe, and rule-scoped) make
+      the expected changes
+- [ ] The adoption lifecycle works: adopt, status, and unadopt
+- [ ] LSP over stdio/WebSocket and MCP over stdio start and respond
+- [ ] Typeshed and stub workflows complete; version (text/JSON) and help output
+      are accurate
 
-From `crates/basilisk-lsp/src/server/handlers/`. Exercise each in a real file:
+<a id="RELEASE-SURFACE-LSP"></a>
 
-- [ ] **`features.rs`** — hover · signature help · inlay hints
-  (`basilisk.inlayHints.parameterNames` / `.variableTypes`) · semantic tokens ·
-  code actions / quick fixes · completion + completion resolve (incl.
-  auto-import) · formatting · range formatting · folding ranges · selection
-  ranges · code lens · document color + color presentation
-- [ ] **`navigation.rs`** — go-to-definition · go-to-declaration ·
-  go-to-type-definition · document symbols · workspace symbols · find
-  references · document highlight · prepare rename + rename · call hierarchy
-  (incoming + outgoing) · type hierarchy (supertypes + subtypes)
-- [ ] **`file_operations.rs`** — rename a file in the explorer; imports update
-- [ ] Diagnostics publish on open/edit/save and clear when fixed
-- [ ] `basilisk.analysisMode` switches (open-file / module / cross-module)
+### LSP features
 
-### VS Code extension {#RELEASE-SURFACE-VSCODE}
+Exercise these in representative real files:
 
-Views and commands from `vscode-extension/package.json`:
+- [ ] Authoring feedback is correct: diagnostics update and clear; hover,
+      signature help, completion/auto-import, quick fixes, inlay hints, and
+      semantic tokens respond
+- [ ] Cross-file navigation and refactoring work: definitions, symbols,
+      references/highlights, rename (including file-rename import updates), and
+      call/type hierarchies
+- [ ] Formatting and structural features work: full/range formatting,
+      folding/selection ranges, code lens, and color handling
+- [ ] Each `basilisk.analysisMode` setting analyzes the intended scope
 
-- [ ] **Modules** panel (`basilisk.moduleExplorer`) — refresh, sort, filter,
-      tree/flat toggle, Copy Import Path, Copy Qualified Name
-- [ ] **Python Processes** panel (`basilisk.pythonProcesses`) — refresh, sort,
-      group, filter, Copy PID, Reveal Script in Editor
-- [ ] **Basilisk** info panel (`basilisk.info`) — server state, version,
-      resolved python/uv/binary rows, Diagnostics toggle
-- [ ] Status bar item · `Basilisk: Status Menu` · `Basilisk: Show Output` ·
-      `Basilisk: Restart Language Server`
-- [ ] `Basilisk: Open Configuration Editor` — preview/apply a change
-- [ ] Mass autofix: Fix All (Safe) in File / All in File / in Workspace /
-      All in Workspace; Organize Imports
-- [ ] Adoption: Adopt File / Adopt Workspace / Un-adopt File
-- [ ] uv commands: Sync, Add, Add Dev, Remove, Lock, Create Virtual Environment
-- [ ] Test Explorer (`basilisk.testExplorer.*`) — discover, run, debug, coverage
-- [ ] `Basilisk: Getting Started` walkthrough — all three steps
-- [ ] The palette advertises no command the LSP does not implement
-      (`crates/basilisk-lsp/src/server/commands.rs`)
+<a id="RELEASE-SURFACE-VSCODE"></a>
 
-### Debugger / DAP {#RELEASE-SURFACE-DEBUG}
+### VS Code extension
 
-- [ ] `basilisk-debug` launch config starts, hits a breakpoint, steps, resumes
-- [ ] Variables + watch evaluation (`dap-evaluate.ts`), debug console output
-- [ ] Bundled `debugpy` is present under the installed extension's `bundled/`
-- [ ] Memory inspection during a paused debug session
+- [ ] Modules, Python Processes, and Basilisk info panels populate and refresh;
+      sample a sort/filter and contextual action in each panel
+- [ ] Status menu, output, server restart, diagnostics toggle, and configuration
+      editor work
+- [ ] Safe/all file/workspace fixes, import organization, and adoption commands
+      produce the expected changes
+- [ ] uv environment/dependency commands and Test Explorer discovery, run,
+      debug, and coverage work
+- [ ] The Getting Started walkthrough completes, and the palette exposes only
+      LSP-implemented commands
 
-### Profiler and memory {#RELEASE-SURFACE-PROFILER}
+<a id="RELEASE-SURFACE-DEBUG"></a>
 
-- [ ] Start / Stop / Snapshot profiling; Show Profile Results (flame graph)
-- [ ] Profile Debug Session; Run & Profile CPU (Current File)
-- [ ] Profile CPU / Track Memory from a row in **Python Processes**
-- [ ] Memory: Start, Snapshot, Stop, Compare Snapshots, Force GC,
-      Show Reference Graph; Run & Track Memory (Current File)
-- [ ] Inline heat map decorations appear and clear
+### Debugger / DAP
 
-### Typeshed {#RELEASE-SURFACE-TYPESHED}
+- [ ] A `basilisk-debug` launch hits a breakpoint; stepping, resume, variables,
+      watches, and console output work
+- [ ] Bundled `debugpy` is present, and memory inspection works while paused
 
-- [ ] Fresh workspace with no pin → the unpinned-source advisory fires
-- [ ] `basilisk typeshed download` writes the pin; advisory clears
-- [ ] `--commit <sha>` and `--package name@sha256:<hex>` verify and materialise
-- [ ] Configuration-editor typeshed Download buttons work
-- [ ] Checking **never** downloads ([STUBRES-TYPESHED-DOWNLOAD]) — re-run
-      offline and confirm
+<a id="RELEASE-SURFACE-PROFILER"></a>
 
-### Other editors {#RELEASE-SURFACE-EDITORS}
+### Profiler and memory
 
-- [ ] **Neovim** (`basilisk.nvim`) — plugin resolves a binary and attaches;
-      diagnostics, hover, go-to-definition ([NEOVIM-SPEC.md](NEOVIM-SPEC.md))
-- [ ] **Zed** (`basilisk-zed`) — dev extension installs, server starts,
-      diagnostics render ([ZED-SPEC.md](ZED-SPEC.md))
+- [ ] CPU profiling completes from a current file, debug session, and Python
+      Processes row; snapshots and results render
+- [ ] Memory tracking starts, snapshots/compares, forces GC, and shows references
+      from the advertised entry points
+- [ ] Inline heat-map decorations appear and clear
 
-### Distribution channels {#RELEASE-SURFACE-CHANNELS}
+<a id="RELEASE-SURFACE-TYPESHED"></a>
 
-Every publishing job in `.github/workflows/release.yml` must be green **and**
-its output installed and smoke-tested in the AFTER pass:
+### Typeshed
 
-- [ ] GitHub Release binaries + checksums (all five platforms)
-- [ ] VS Code Marketplace VSIX · Open VSX VSIX
-- [ ] Homebrew formula · Scoop manifest · PyPI wheels
-- [ ] Neovim plugin · Zed extension
-- [ ] GitHub Pages deploy (website + `/errors/BSK-XXXX` pages resolve)
+- [ ] A fresh unpinned workspace shows the advisory; download writes a pin and
+      clears it
+- [ ] Commit/package verification and configuration-editor downloads work
+- [ ] Checking never downloads ([STUBRES-TYPESHED-DOWNLOAD]); verify offline
 
-## Before publishing {#RELEASE-PRE}
+<a id="RELEASE-SURFACE-EDITORS"></a>
+
+### Other editors
+
+- [ ] Neovim resolves and attaches the binary; diagnostics, hover, and definition
+      work ([NEOVIM-SPEC.md](NEOVIM-SPEC.md))
+- [ ] Zed installs the development extension, starts the server, and renders
+      diagnostics ([ZED-SPEC.md](ZED-SPEC.md))
+
+<a id="RELEASE-SURFACE-CHANNELS"></a>
+
+### Distribution channels
+
+Every `release.yml` publish job must be green and its output smoke-tested after
+publishing on a compatible host:
+
+- [ ] GitHub Release binaries and checksums for all five platforms
+- [ ] VS Code Marketplace and Open VSX packages
+- [ ] Homebrew, Scoop, and PyPI packages
+- [ ] Neovim and Zed extensions
+- [ ] GitHub Pages, including `/errors/BSK-XXXX`
+
+<a id="RELEASE-PRE"></a>
+
+## Before publishing
 
 1. [ ] `/ci-prep` green — one complete clean run, zero failures, start to
    finish ([RELEASE-CI-PREP](#RELEASE-CI-PREP)). Nothing below starts until it is.
@@ -249,11 +246,10 @@ its output installed and smoke-tested in the AFTER pass:
 4. [ ] `python3 scripts/verify_release_attribution.py --policy-only` passes and
    licence manifests are current (`npm run licenses:check` in
    `vscode-extension/`).
-5. [ ] Draft release notes **from `git log <prev-tag>..HEAD`**, then run
-   [RELEASE-PROVENANCE-TAG](#RELEASE-PROVENANCE-TAG) against the commit you are
-   about to tag.
+5. [ ] Draft notes from `git log <prev-tag>..HEAD`, create the tag locally, and
+   run [RELEASE-PROVENANCE-TAG](#RELEASE-PROVENANCE-TAG) without pushing it.
 6. [ ] `make reinstall-vsix-macos` (or `make reinstall-vsix`) — installs the
-   exact release VSIX.
+   candidate built through the release packaging path.
 7. [ ] [RELEASE-PROVENANCE-BINARY](#RELEASE-PROVENANCE-BINARY) and
    [RELEASE-PROVENANCE-ARTIFACT](#RELEASE-PROVENANCE-ARTIFACT) against the
    installed binary.
@@ -261,9 +257,12 @@ its output installed and smoke-tested in the AFTER pass:
 9. [ ] Walk the whole of [RELEASE-SURFACE](#RELEASE-SURFACE).
 10. [ ] Only then push the tag.
 
-## After publishing {#RELEASE-POST}
+<a id="RELEASE-POST"></a>
 
-1. [ ] Every `release.yml` job succeeded — no skipped publish.
+## After publishing
+
+1. [ ] Every `release.yml` job succeeded and the new Marketplace version is
+   publicly installable — no skipped or merely queued publish.
 2. [ ] `code --uninstall-extension Nimblesite.basilisk`, delete every
    `~/.vscode/extensions/nimblesite.basilisk-*` directory, restart VS Code.
 3. [ ] Install **from the Marketplace UI** (not a local VSIX), on a machine
@@ -272,14 +271,17 @@ its output installed and smoke-tested in the AFTER pass:
    binary's `gitSha` must match the tag, `gitDirty` must be `false`, and the
    `Ruff formatter:` line must match the tree.
 5. [ ] Re-run [RELEASE-RESPONSIVENESS](#RELEASE-RESPONSIVENESS) against the
-   Marketplace binary.
-6. [ ] Re-run [RELEASE-SURFACE](#RELEASE-SURFACE) against the Marketplace build.
+   Marketplace binary and every large release-test codebase.
+6. [ ] Complete [RELEASE-SURFACE](#RELEASE-SURFACE) on at least three large,
+   materially different real-world codebases using the Marketplace build.
 7. [ ] Install and smoke-test each remaining channel in
    [RELEASE-SURFACE-CHANNELS](#RELEASE-SURFACE-CHANNELS).
-8. [ ] Anything red → unpublish/yank or ship a patch immediately. Do not leave
-   a known-bad artifact live.
+8. [ ] Keep the release incomplete while anything is red; contain a
+   user-impacting failure and unpublish, yank, or patch as its severity requires.
 
-## If it regresses in the field {#RELEASE-TRIAGE}
+<a id="RELEASE-TRIAGE"></a>
+
+## If it regresses in the field
 
 1. **Find the process and prove its version.**
    ```bash
@@ -289,23 +291,18 @@ its output installed and smoke-tested in the AFTER pass:
    ```
    A `gitSha` that is not the current tag means a stale artifact, not a new bug.
 
-2. **Sample a spinning process** (macOS):
+2. **Capture a ten-second process sample** (macOS) and attach it to the bug:
    ```bash
    sample <pid> 10 -f /tmp/basilisk-sample.txt
    ```
-   `100.0%` is one saturated core, not the whole machine, and a high thread
-   count is just the Tokio pool. Read the per-thread leaves: one worker deep in
-   self-recursion while the rest are parked in `__psynch_cvwait` / `kevent` is
-   the runaway-recursion signature. A wide, varying stack means a hot loop
-   instead; flat RSS rules out a leak.
 
 3. **Read the extension log.**
    ```
    ~/Library/Application Support/Code/logs/<session>/window<N>/exthost/Nimblesite.basilisk/Basilisk.log
    ~/Library/Application Support/Code/logs/<session>/window<N>/exthost/Nimblesite.basilisk/basilisk-debug-trace.log
    ```
-   Newest `<session>` directory wins. In-editor: `Basilisk: Show Output`, and
-   raise `basilisk.trace.server` for protocol traffic.
+   Use the newest `<session>`. Start with `Basilisk: Show Output`; raise
+   `basilisk.trace.server` only if the normal log is not enough.
 
 4. **Confirm which extension build is running.**
    ```bash
@@ -316,6 +313,5 @@ its output installed and smoke-tested in the AFTER pass:
    looking at.
 
 5. **Reduce and land the fix as a test first** — see the
-   [fix-bug skill](../../.claude/skills/fix-bug/SKILL.md). A hang gets a
-   deadline-bounded regression test, as in
-   `crates/basilisk-resolver/tests/resolver/test_recursive_bases.rs`.
+   [fix-bug skill](../../.claude/skills/fix-bug/SKILL.md). A hang needs a
+   deadline-bounded regression test.

@@ -414,7 +414,7 @@ pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> String {
         RhsKind::Lambda => String::new(),
         _ => {
             let inferred = basilisk_checker::inference::infer_rhs(rhs);
-            if basilisk_checker::inference::is_fully_known(&inferred) {
+            if basilisk_checker::expr_type::is_fully_known(&inferred) {
                 inferred.to_string()
             } else {
                 String::new()
@@ -431,7 +431,7 @@ pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> String {
 /// nothing is provable (never a guess, and never a partial `Unknown` inside
 /// a rendered type).
 pub(crate) fn expr_type_display(span: Option<Span>, source: &str) -> String {
-    use basilisk_checker::inference::{display_widened, infer_expression_source, is_fully_known};
+    use basilisk_checker::expr_type::{display_widened, infer_expression_source, is_fully_known};
     let Some(snippet) = span_text(span, source) else {
         return String::new();
     };

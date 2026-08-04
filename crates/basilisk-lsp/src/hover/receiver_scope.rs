@@ -129,7 +129,7 @@ pub(crate) fn loop_binding_type(
             continue;
         };
         let iterable_type =
-            basilisk_checker::inference::infer_expression_source_in_scope(iterable.trim(), &scope);
+            basilisk_checker::expr_type::infer_expression_source_in_scope(iterable.trim(), &scope);
         let Some(element) = basilisk_checker::class_naming::element_type_of(&iterable_type)
             .or_else(|| named_element_type(resolved, &iterable_type))
         else {

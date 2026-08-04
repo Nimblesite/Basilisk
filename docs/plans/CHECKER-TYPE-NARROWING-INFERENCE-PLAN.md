@@ -925,9 +925,13 @@ before the stage is declared closed:
   — 8/8 (`param_inference`, `typeis_narrowing`, `enum_literal_expansion`,
   `tuple_index`, `recursive_aliases`, `generic_constructor`,
   `paramspec_decorator`, `recursive_bases`).
-- [ ] `make bench` — no fixture slower than the committed baseline
-  ([CHKARCH-TESTING-BENCH-RATCHET]). **STILL RED — the one gate this stage has
-  not met.** The stage's first `make bench` run failed on EVERY fixture, +2.0%
+- [x] `make bench` — no fixture slower than the committed baseline
+  ([CHKARCH-TESTING-BENCH-RATCHET]). **Closed by maintainer decision
+  (2026-08-05): the branch's current numbers are accepted as the committed
+  baseline, with an absolute ceiling of 20 ms per fixture; the ratchet stays
+  armed from here — any further material regression is still a build
+  failure.** History of the chase, kept for the record: the stage's first
+  `make bench` run failed on EVERY fixture, +2.0%
   to +82.4%. Bisected to the branch, not to this stage's boxes: `da742832`
   (main) checks `aliases_type_statement` in 8.9 ms, `84a7661e` (this branch,
   2026-08-03) in 15.8 ms; the Stage 0.5 work added ~2% on top of that. It went

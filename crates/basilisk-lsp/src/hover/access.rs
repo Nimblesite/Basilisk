@@ -186,7 +186,7 @@ fn receiver_inferred_type(
     match basilisk_checker::inference::infer_rhs(rhs) {
         // The table cannot see this expression; synthesize it from source.
         InferredType::Unknown => span_text(span, source).map_or(InferredType::Unknown, |snippet| {
-            basilisk_checker::inference::infer_expression_source(&snippet)
+            basilisk_checker::expr_type::infer_expression_source(&snippet)
         }),
         typed => typed,
     }
