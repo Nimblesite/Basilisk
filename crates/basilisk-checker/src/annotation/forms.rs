@@ -31,6 +31,16 @@ pub(super) fn special_form(
         // `Annotated[T, ..]` and `Final[T]` are transparent wrappers.
         "annotated" | "final" => Some(first_type(args, &resolve)),
         "typeform" => Some(InferredType::TypeForm(Box::new(first_type(args, &resolve)))),
+        // PEP 647 / PEP 742 narrowing forms: the payload is the narrowing
+        // target, resolved by the same cascade so aliases expand.
+        "typeguard" => Some(InferredType::Guard {
+            type_is: false,
+            inner: Box::new(first_type(args, &resolve)),
+        }),
+        "typeis" => Some(InferredType::Guard {
+            type_is: true,
+            inner: Box::new(first_type(args, &resolve)),
+        }),
         "list" => Some(InferredType::List(Box::new(first_type(args, &resolve)))),
         "set" | "frozenset" => Some(InferredType::Set(Box::new(first_type(args, &resolve)))),
         "dict" => Some(dict_type(args, &resolve)),

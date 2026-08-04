@@ -833,12 +833,35 @@ not run is `[~]`, not `[x]`.
     proof**: 2 of 5 failed before the change — the baseline itself drew
     nothing (no receiver-aware arity check existed) and `C().m()` was
     uncollectable; 5/5 after.
-- [ ] Wire the shared entry point into the `bidir` engine, which currently has
+- [x] Wire the shared entry point into the `bidir` engine, which currently has
   no name resolution at all and is consumed by only two rules
   (`narrowing_typeguard`, `narrowing_typeis_2`).
-  - [ ] Test (write RED first): a `TypeGuard[MyAlias]` / `TypeIs[MyClass]`
+  — `TypeGuard`/`TypeIs` are now MODELLED: `InferredType::Guard { type_is,
+  inner }` (PEP 647/742), produced by the cascade's special forms so aliases
+  expand through it. `narrowing_typeguard` reads guard-ness from the RESOLVED
+  return type (the `contains("TypeGuard")` text sniff is DELETED);
+  `narrowing_typeis_2` judges consistency on RESOLVED types via the shared
+  `SubtypingContext` nominal walk with a three-valued verdict that abstains on
+  ungrounded names — its `extract_inner_type` bracket walker,
+  `contains_typevar` uppercase heuristic, string `is_consistent`, and
+  `generic_base` are ALL DELETED. The narrowing flow that seeds the engine
+  narrows `TypeGuard[X]`/`TypeIs[X]` through `NarrowContext.guard_types`
+  (file-level Salsa query `guard_type_environment` resolves every guard text
+  by the full-module cascade; the per-definition slice can't see aliases),
+  retiring both `from_annotation` guard sites in `narrow/guards.rs`.
+  - [x] Test (write RED first): a `TypeGuard[MyAlias]` / `TypeIs[MyClass]`
     narrows to the RESOLVED type, not to an opaque name, in both consuming
     rules.
+    — `narrowing_typeguard_tests.rs`: aliased `Guard = TypeGuard[int]` /
+    `IsInt = TypeIs[int]` returns still require a narrowing parameter;
+    `narrowing_typeis_2_tests.rs`: `TypeIs[MyAlias]` with `MyAlias = str` and
+    `TypeIs[MyClass]` narrowing its `Base` are consistent, plus an
+    assertiveness pin (resolved-but-inconsistent alias still fires);
+    `narrow/guards.rs::guard_types_resolve_through_the_module_context` pins
+    the engine seam (`MyAlias` → `Str`, `TypeIs` subtracts the resolved
+    type). **RED proof**: 4 of 5 rule tests failed before the change (both
+    alias forms invisible to the sniff; both resolution false positives
+    fired); 5/5 after, full checker suite green (51 binaries).
 
 **Gates owed by Stage 0.5 as a whole** — run after the boxes above, and again
 before the stage is declared closed:

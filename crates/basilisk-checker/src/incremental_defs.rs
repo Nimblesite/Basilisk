@@ -390,6 +390,59 @@ fn class_level_attributes(slice: &str) -> Option<Vec<(String, InferredType)>> {
     Some(attrs)
 }
 
+/// Guard-annotation text → the resolved narrowing target, for every
+/// `TypeGuard[X]` / `TypeIs[X]` guard in one file.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct GuardTypes(pub std::collections::HashMap<String, InferredType>);
+
+/// Tracked query: the file's guard texts resolved by the FULL-module
+/// [TYPEINF-ANNOTATION-RESOLUTION] cascade. The per-definition narrowing pass
+/// runs on a definition SLICE where module aliases and classes are invisible,
+/// so the resolved targets must arrive from this file-level view (Stage 0.5
+/// bidir wiring).
+#[salsa::tracked(returns(ref))]
+pub fn guard_type_environment(db: &dyn Db, file: SourceFile) -> GuardTypes {
+    let source = file.text(db);
+    let Ok(parsed) = basilisk_parser::parse_source(source.clone(), "module.py".to_owned()) else {
+        return GuardTypes::default();
+    };
+    let Ok(resolved) = basilisk_resolver::resolve(&parsed) else {
+        return GuardTypes::default();
+    };
+    let Some(resolver) = crate::annotation::AnnotationResolver::for_module(&resolved) else {
+        return GuardTypes::default();
+    };
+    let mut map = std::collections::HashMap::new();
+    for function in &resolved.functions {
+        for guard in &function.narrowing_guards {
+            collect_guard_types(&guard.kind, &resolver, &mut map);
+        }
+    }
+    GuardTypes(map)
+}
+
+/// Record the resolved target of one guard kind, recursing through `assert`.
+fn collect_guard_types(
+    kind: &basilisk_resolver::NarrowingGuardKind,
+    resolver: &crate::annotation::AnnotationResolver<'_>,
+    map: &mut std::collections::HashMap<String, InferredType>,
+) {
+    match kind {
+        basilisk_resolver::NarrowingGuardKind::TypeGuard { guard_type, .. }
+        | basilisk_resolver::NarrowingGuardKind::TypeIs { guard_type, .. } => {
+            if !map.contains_key(guard_type) {
+                if let Some(resolved) = resolver.resolve_text(guard_type) {
+                    let _ = map.insert(guard_type.clone(), resolved);
+                }
+            }
+        }
+        basilisk_resolver::NarrowingGuardKind::Assert { inner } => {
+            collect_guard_types(inner, resolver, map);
+        }
+        _ => {}
+    }
+}
+
 /// Tracked query: the `(name, type)` interface of the module's FUNCTIONS and
 /// CLASSES only — the backdating boundary variable inference reads its
 /// callables through (variables are excluded to keep variable↔variable
@@ -549,6 +602,7 @@ pub fn narrowed_uses<'db>(
             .iter()
             .cloned()
             .collect(),
+        guard_types: guard_type_environment(db, def.file(db)).0.clone(),
         ..Default::default()
     };
     crate::narrow::analyse_function_in(

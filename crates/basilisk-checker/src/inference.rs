@@ -271,7 +271,8 @@ pub fn is_fully_known(ty: &InferredType) -> bool {
         InferredType::List(inner)
         | InferredType::Set(inner)
         | InferredType::Optional(inner)
-        | InferredType::TypeForm(inner) => is_fully_known(inner),
+        | InferredType::TypeForm(inner)
+        | InferredType::Guard { inner, .. } => is_fully_known(inner),
         InferredType::Dict(key, value) => is_fully_known(key) && is_fully_known(value),
         InferredType::Tuple(elems) | InferredType::Union(elems) => elems.iter().all(is_fully_known),
         InferredType::Callable(info) => {
@@ -331,6 +332,10 @@ pub fn display_widened(ty: &InferredType) -> InferredType {
             .map(display_widened)
             .fold(InferredType::Never, InferredType::union),
         InferredType::TypeForm(inner) => InferredType::TypeForm(Box::new(display_widened(inner))),
+        InferredType::Guard { type_is, inner } => InferredType::Guard {
+            type_is: *type_is,
+            inner: Box::new(display_widened(inner)),
+        },
         InferredType::Callable(info) => InferredType::Callable(crate::types::CallableInfo {
             param_types: info.param_types.iter().map(display_widened).collect(),
             return_type: Box::new(display_widened(&info.return_type)),

@@ -59,6 +59,16 @@ pub enum InferredType {
     /// The inner type is what the type form represents (e.g. `TypeForm[int]`
     /// means a type form that represents `int`).
     TypeForm(Box<InferredType>),
+    /// `TypeGuard[T]` (PEP 647) or `TypeIs[T]` (PEP 742) — a user-defined
+    /// narrowing function's return form. `type_is` distinguishes the PEP 742
+    /// bidirectional form (narrows both branches, requires the narrowed type
+    /// to be consistent with the input) from the positive-only `TypeGuard`.
+    Guard {
+        /// `true` for `TypeIs[T]`, `false` for `TypeGuard[T]`.
+        type_is: bool,
+        /// The narrowing target `T`, resolved through the same cascade.
+        inner: Box<InferredType>,
+    },
 }
 
 /// Represents a callable type's parameter and return type information.
@@ -142,6 +152,10 @@ impl fmt::Display for InferredType {
                 InferredType::Any => write!(f, "TypeForm"),
                 other => write!(f, "TypeForm[{other}]"),
             },
+            InferredType::Guard { type_is, inner } => {
+                let form = if *type_is { "TypeIs" } else { "TypeGuard" };
+                write!(f, "{form}[{inner}]")
+            }
         }
     }
 }

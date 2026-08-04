@@ -213,6 +213,16 @@ impl<'m> AnnotationResolver<'m> {
         }
     }
 
+    /// Is `name` a leaf the module GROUNDS — a class declared here or a
+    /// builtin type? An unresolved spelling (a `TypeVar`, an imported class
+    /// this module cannot see into, a typo) is NOT grounded, and a judgment
+    /// that needs to know what the name IS must abstain rather than guess.
+    #[must_use]
+    pub fn is_grounded_name(&self, name: &str) -> bool {
+        let base = name.split('[').next().unwrap_or(name);
+        self.tables.nominal.contains(base) || builtins::is_builtin_type_name(base)
+    }
+
     /// The cascade over one type expression.
     pub(crate) fn eval(&self, expr: &Expr, frame: &Frame) -> InferredType {
         if frame.depth > MAX_DEPTH {

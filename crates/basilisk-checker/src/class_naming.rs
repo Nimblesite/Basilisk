@@ -102,6 +102,9 @@ pub fn class_name_of_type(ty: &InferredType) -> Option<(String, bool)> {
             LiteralValue::Bytes(_) => plain("bytes"),
         },
         InferredType::Named(name) => Some((name.clone(), false)),
+        // A narrowing function's VALUE is a `bool` (PEP 647/742: the return
+        // type is consistent with `bool`), so its members are bool's.
+        InferredType::Guard { .. } => plain("bool"),
         // A union names a class exactly when EVERY arm names the same one:
         // `int | int` (a list of int literals, a conditional expression) is an
         // int, while `int | str` is not any single class. The `LiteralString`
@@ -166,7 +169,8 @@ pub fn element_type_of(ty: &InferredType) -> Option<InferredType> {
         | InferredType::Union(_)
         | InferredType::Optional(_)
         | InferredType::Callable(_)
-        | InferredType::TypeForm(_) => None,
+        | InferredType::TypeForm(_)
+        | InferredType::Guard { .. } => None,
     }
 }
 
