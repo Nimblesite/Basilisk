@@ -1,8 +1,12 @@
 {
   "schemaVersion": 1,
   "title": "The Basilisk Book",
-  "status": "structural-prototype",
-  "basiliskRelease": null,
+  "status": "living-edition-in-progress",
+  "editionModel": "living-release-aligned",
+  "basiliskRelease": "0.39.0",
+  "basiliskReleaseTag": "v0.39.0",
+  "basiliskReleaseCommit": "b8ae454cfabc54d26d7e4efc029f2f01bd083bc8",
+  "bundledTypeshedCommit": "83c2518a9e6abbda0c44592c3483de459198f887",
   "targets": {
     "words": 29700,
     "printEquivalentPages": 105,
@@ -102,7 +106,7 @@
       "number": 8,
       "title": "Imports, packages, and the world of stubs",
       "file": "manuscript/08-imports-packages-stubs.md",
-      "status": "outline",
+      "status": "complete",
       "targetWords": 2300,
       "targetPages": 8,
       "targetFigures": 3

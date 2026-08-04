@@ -1,9 +1,11 @@
 [project]
 name = "signal-box"
 version = "0.1.0"
+requires-python = ">=3.9"
 
 [tool.basilisk]
 include = ["src", "tests"]
+typeshed-commit = "83c2518a9e6abbda0c44592c3483de459198f887"
 
 [tool.basilisk.rules]
 "BSK-0001" = "error"

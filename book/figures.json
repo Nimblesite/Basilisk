@@ -231,25 +231,28 @@
       "id": "fig-08-import-stack",
       "section": "08",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/08-import-resolution-stack.svg",
       "path": "assets/diagrams/08-import-resolution-stack.png",
       "title": "Basilisk searches type information in order",
       "alt": "Stacked search layers show project stub overrides, source packages, standard-library typeshed information, and installed typed packages."
     },
     {
-      "id": "shot-08-hover-provenance",
+      "id": "fig-08-hover-provenance",
       "section": "08",
-      "kind": "screenshot",
-      "status": "planned",
-      "path": "assets/screenshots/08-hover-provenance.png",
-      "title": "Hover shows where an imported signature came from",
-      "alt": "An editor hover identifies whether a sensor package signature came from source, a local stub, or a typeshed source."
+      "kind": "diagram",
+      "status": "ready",
+      "master": "assets/diagrams/08-hover-provenance.svg",
+      "path": "assets/diagrams/08-hover-provenance.png",
+      "title": "Read the signature and its provenance",
+      "alt": "Three explanatory cards pair imported signatures with a reviewed local stub, bundled typeshed snapshot, or generated best-effort stub."
     },
     {
       "id": "fig-08-stub-workflow",
       "section": "08",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/08-local-stub-workflow.svg",
       "path": "assets/diagrams/08-local-stub-workflow.png",
       "title": "Generate, inspect, narrow, and maintain a local stub",
       "alt": "A package without type information moves through stub generation, human review, project override, and a successful re-check."

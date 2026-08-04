@@ -151,7 +151,34 @@
       ],
       "blocker": "The complete chapter cannot enter a release build until the book edition pins a released Basilisk version. Rerun its static checkpoint with that binary and record the release implementation before setting decision to publish."
     },
-    {"section": "08", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {
+      "section": "08",
+      "release": "0.39.0",
+      "decision": "publish",
+      "governingSpecs": [
+        "docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-RESOLUTION-ORDER",
+        "docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED-SOURCE",
+        "docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-AUTOGEN",
+        "https://typing.python.org/en/latest/spec/distributing.html"
+      ],
+      "releaseImplementation": [
+        "Basilisk v0.39.0 release commit b8ae454cfabc54d26d7e4efc029f2f01bd083bc8",
+        "crates/basilisk-checker/src/module_resolution.rs at v0.39.0",
+        "crates/basilisk-stubs/src/generate/ at v0.39.0",
+        "crates/basilisk-typeshed/src/ at v0.39.0"
+      ],
+      "executableEvidence": [
+        "Official basilisk-aarch64-apple-darwin.zip SHA-256 71f16a1ba02d1e1f99c72d2253fc8fbd2a194a3ca93eac3baf899593900cfc68 matched checksums-sha256.txt on 2026-08-05",
+        "The extracted binary reported basilisk 0.39.0 with Ruff 0.15.17 on 2026-08-05",
+        "Python 3.14.6 ran the Chapter 8 checkpoint: 4 tests passed on 2026-08-05",
+        "The official 0.39.0 binary ran basilisk check --color never . for the Chapter 8 checkpoint with exit status 0 and no diagnostics on 2026-08-05",
+        "The official 0.39.0 binary generated the normalized vendor_sensor declarations recorded under generated/ on 2026-08-05"
+      ],
+      "omitted": [
+        "No current-branch-only type inference or package-supplied typeshed feature is described.",
+        "Known specification and implementation gaps are recorded outside the reader manuscript in RELEASE-ACCURACY-NOTES.md."
+      ]
+    },
     {
       "section": "09",
       "decision": "withhold-until-versioned-release",

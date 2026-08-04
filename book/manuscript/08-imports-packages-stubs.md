@@ -212,9 +212,8 @@ the chosen interpreter:
 PYTHONPATH=vendor basilisk stubs generate vendor_sensor --python python3
 ```
 
-The default hybrid mode first uses runtime introspection and falls back to AST
-generation if that attempt fails. Both approaches have blind spots. In the
-verified 0.39.0 run, the generated declaration was:
+The default hybrid mode produced the following declaration in the verified
+0.39.0 run:
 
 ```python
 # .basilisk/stubs/vendor_sensor.pyi
