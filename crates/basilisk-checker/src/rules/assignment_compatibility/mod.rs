@@ -166,6 +166,37 @@ fn literal_collection_assignable(
     alias_match::alias_assignable(inferred, declared, &ctx, 0)
 }
 
+/// `true` when the RHS is a surface the pre-engine rule already judged —
+/// a literal, a display, an f-string, a lambda, or a name bound to an
+/// annotated parameter. Every other surface (a call, an attribute, a name
+/// with no annotation in scope) only became visible through the engine, and
+/// the grounded-target abstention applies there so wider sight never turns
+/// into a new false positive ([CHKARCH-CONFORMANCE-MODE]).
+fn legacy_inference_surface(
+    var: &VariableInfo,
+    oracle: Option<&ModuleOracle<'_>>,
+    params: &ParamMaps,
+) -> bool {
+    let node = oracle.zip(var.rhs_span).and_then(|(o, span)| o.expr(span));
+    match node {
+        Some(
+            Expr::NumberLiteral(_)
+            | Expr::StringLiteral(_)
+            | Expr::BytesLiteral(_)
+            | Expr::BooleanLiteral(_)
+            | Expr::NoneLiteral(_)
+            | Expr::FString(_)
+            | Expr::List(_)
+            | Expr::Dict(_)
+            | Expr::Set(_)
+            | Expr::Tuple(_)
+            | Expr::Lambda(_),
+        ) => true,
+        Some(Expr::Name(name)) => params.texts.contains_key(name.id.as_str()),
+        _ => false,
+    }
+}
+
 /// Is the declared type one this rule can pass judgment on? Structural
 /// targets (`Protocol`, `TypedDict` — including inside unions/containers)
 /// need member-level judgment a nominal comparison cannot give, and a nominal
@@ -348,16 +379,22 @@ fn check_vars(
                 if let Some(matched) =
                     alias_match::alias_value_assignable(&inferred_type, name, &ctx)
                 {
-                    return if matched {
-                        None
-                    } else {
-                        Some((
+                    if matched {
+                        return None;
+                    }
+                    // A rejection is only evidence when the inferred value
+                    // carries evidence: `dict[Unknown, Unknown]` (an empty
+                    // display, an unresolved element) proves nothing, so the
+                    // judgment falls through to the general path instead of
+                    // firing on gradality ([CHKARCH-CONFORMANCE-MODE]).
+                    if crate::expr_type::is_fully_known(&inferred_type) {
+                        return Some((
                             var,
                             annotation_text.to_owned(),
                             inferred_type,
                             declared_type,
-                        ))
-                    };
+                        ));
+                    }
                 }
             }
 
@@ -384,10 +421,16 @@ fn check_vars(
                 }
             }
 
+            // The grounded-target abstention shields only NEWLY-visible
+            // surfaces (calls, attributes, unannotated names) — surfaces the
+            // rule always judged (literals, displays, annotated-parameter
+            // names) keep their full judgment even against a target the
+            // module cannot ground, e.g. `x: Literal[Answer.Yes] = a`.
+            let judged_before_engine = legacy_inference_surface(var, oracle, params);
             if inferred_type.is_assignable_to(&declared_type)
                 || literal_collection_assignable(var, oracle, &inferred_type, &declared_type, skip)
                 || enum_expansion_assignable(&inferred_type, &declared_type, &skip.enum_members)
-                || !declared_target_judgeable(resolver, &declared_type)
+                || (!judged_before_engine && !declared_target_judgeable(resolver, &declared_type))
                 || nominal_subclass_assignable(&inferred_type, &declared_type, subtyping)
             {
                 None

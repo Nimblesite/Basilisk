@@ -18,6 +18,8 @@
 mod annotation_resolution;
 #[path = "checker/annotations_typeexpr_tests.rs"]
 mod annotations_typeexpr;
+#[path = "checker/assignment_call_synthesis_tests.rs"]
+mod assignment_call_synthesis;
 #[path = "checker/assignment_compatibility_tests.rs"]
 mod assignment_compatibility;
 #[path = "checker/callables_annotation_tests.rs"]
