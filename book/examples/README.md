@@ -16,9 +16,8 @@ data, domain models, storage behavior, and generic report pages in
 an untyped runtime dependency from its generated and reviewed contracts in
 [`ch08-imports-and-stubs/`](ch08-imports-and-stubs/). Chapter 9 uses
 [`signal-box/`](signal-box/) with its explicit annotation policy and
-deliberately incomplete functions to capture the real configuration editor and
-its path preview. Run that capture reproducibly with `make -C book screenshots`
-from the repository root.
+deliberately incomplete functions to demonstrate a nested test-folder
+severity.
 
 Planned checkpoints:
 

@@ -29,7 +29,7 @@
     <rect x="28" y="148" width="264" height="66" rx="14" fill="#0f1218" stroke="#4a5468" stroke-width="2"/>
     <text x="48" y="189" fill="#fed7aa" font-family="'JetBrains Mono',monospace" font-size="23">BSK-0002</text>
     <rect x="28" y="230" width="264" height="66" rx="14" fill="#0f1218" stroke="#4a5468" stroke-width="2"/>
-    <text x="48" y="271" fill="#bae6fd" font-family="'JetBrains Mono',monospace" font-size="23">tests/**</text>
+    <text x="48" y="271" fill="#bae6fd" font-family="'JetBrains Mono',monospace" font-size="23">tests/</text>
     <rect x="28" y="312" width="264" height="52" rx="26" fill="#35251c" stroke="#e8500a" stroke-width="3"/>
     <text x="160" y="346" text-anchor="middle" fill="#fed7aa" font-family="'Space Grotesk',system-ui,sans-serif" font-size="23" font-weight="700">Warning</text>
   </g>
@@ -61,8 +61,8 @@
     <text x="88" y="58" fill="#f0f2f7" font-family="'Space Grotesk',system-ui,sans-serif" font-size="30" font-weight="750">REVIEW</text>
     <text x="28" y="116" fill="#8892a4" font-family="'Space Grotesk',system-ui,sans-serif" font-size="22">Nothing is written yet.</text>
     <rect x="28" y="150" width="244" height="118" rx="16" fill="#0f1218" stroke="#4a5468" stroke-width="2"/>
-    <text x="48" y="190" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="18">Path · tests/**</text>
-    <text x="48" y="232" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="21">Inherited →</text>
+    <text x="48" y="190" fill="#8892a4" font-family="'JetBrains Mono',monospace" font-size="18">Folder · tests/</text>
+    <text x="48" y="232" fill="#f0f2f7" font-family="'JetBrains Mono',monospace" font-size="21">root error →</text>
     <text x="196" y="232" fill="#fed7aa" font-family="'JetBrains Mono',monospace" font-size="21">Warning</text>
     <rect x="28" y="292" width="112" height="54" rx="12" fill="#0f1218" stroke="#6ec5e9" stroke-width="2"/>
     <text x="84" y="326" text-anchor="middle" fill="#bae6fd" font-family="'Space Grotesk',system-ui,sans-serif" font-size="20">Back</text>
