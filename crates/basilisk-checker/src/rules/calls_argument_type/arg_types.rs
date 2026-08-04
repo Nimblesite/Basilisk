@@ -2,7 +2,7 @@
 //! Type-directed argument resolution for bound built-in method calls.
 //!
 //! The resolver classifies a call argument by the *syntactic shape* of its
-//! expression ([`RhsKind`]): a name is `Other` whatever it was declared to be,
+//! expression (`RhsKind`): a name is `Other` whatever it was declared to be,
 //! and a display element is `Other` even when its declared type is known. A
 //! rule that matches on those shapes cannot tell a valid `[*p]` (`p: list[str]`)
 //! from an invalid `[1]`, so it must either reject both or accept both
@@ -16,12 +16,11 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{iter_all_params, ResolvedModule, RhsKind, Span};
+use basilisk_resolver::{iter_all_params, ResolvedModule, Span};
 use ruff_python_ast::visitor::{walk_body, walk_expr, walk_stmt, Visitor};
 use ruff_python_ast::{Expr, Stmt, StmtAnnAssign, StmtFunctionDef};
 use ruff_text_size::Ranged;
 
-use crate::inference::infer_rhs;
 use crate::rules::shared::{ann_str, parse_module};
 use crate::types::{InferredType, LiteralValue};
 
@@ -70,13 +69,18 @@ impl<'a> ScopedTypes<'a> {
 
     /// The type of the argument expression occupying `span`.
     ///
-    /// Falls back to the resolver's shape-derived inference when the span names
-    /// no expression (an unparsed module), which keeps the judgement gradual
-    /// rather than absent.
-    pub(crate) fn argument_type(&self, span: Span, rhs: &RhsKind) -> InferredType {
+    /// A span that names no expression means the module did not parse, so the
+    /// index is empty. That answers `Unknown`, which every compatibility
+    /// predicate here accepts — the parse error is reported separately and an
+    /// unparsed module never manufactures a type diagnostic
+    /// ([CHKARCH-CONFORMANCE-MODE]). Previously this fell back to the
+    /// resolver's `RhsKind` shape inference, a second inference path condemned
+    /// under [TYPEINF-LEGACY]; the shape could only ever be *less* informed
+    /// than the expression it was derived from.
+    pub(crate) fn argument_type(&self, span: Span) -> InferredType {
         self.expressions
             .get(&(span.start, span.end))
-            .map_or_else(|| infer_rhs(rhs), |expr| self.expr_type(expr))
+            .map_or(InferredType::Unknown, |expr| self.expr_type(expr))
     }
 
     /// The declared type of `name` as seen from `offset`, innermost scope first.

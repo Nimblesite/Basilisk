@@ -42,6 +42,7 @@ linked to an active plan.
 | [Website error pages](specs/WEBSITE-ERROR-PAGES-SPEC.md) | Generated per-diagnostic documentation. |
 | [READMEs](specs/DOCS-README-SPEC.md) | One authored README per language, generated to GitHub, the VSIX (Marketplace + Open VSX), and PyPI. |
 | [Repository standards](specs/REPO-STANDARDS-SPEC.md) | Root/`.github` gates: duplication budget, coverage thresholds, committed editor directories, Dependabot, CodeQL, and dependency review. |
+| [Release manual verification](specs/RELEASE-MANUAL-VERIFICATION-SPEC.md) | The manual passes a release person runs before publishing and again after, against the installed artifact: where `/ci-prep` fits, the artifact-provenance gate, the responsiveness smoke test, and the full hands-on test surface. |
 
 ## Active plans
 

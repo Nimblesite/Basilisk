@@ -41,7 +41,7 @@ pub(super) fn check_builtin_method_argument_types(
         let argument_types: Vec<InferredType> = call
             .args
             .iter()
-            .map(|(rhs, span)| types.argument_type(*span, rhs))
+            .map(|(_, span)| types.argument_type(*span))
             .collect();
         diagnostics.extend(incompatible_argument(
             call,
