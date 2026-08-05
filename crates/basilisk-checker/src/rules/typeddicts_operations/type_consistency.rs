@@ -6,13 +6,24 @@
 //! - `TypedDict` → `dict`: always an error
 //! - `TypedDict` → `Mapping[str, T]`: error unless T is `object` or `Any`
 //! - `TypedDict` → `TypedDict`: structural compatibility check
+//!
+//! Every verdict is structural over the parsed `ruff` AST
+//! ([LINESCANPLAN-AST-MIGRATION], issue #408): `dict`/`Dict`, `Mapping` from
+//! `typing` or `collections.abc`, `Required`/`NotRequired` under any import
+//! spelling, and the PEP 728 `extra_items=` keyword all resolve through the
+//! module's binding tables — never through sliced source text.
 
 use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, ResolvedModule};
+use ruff_python_ast::{Expr, ModModule, Operator, Stmt};
 
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
-use crate::span_util::slice_span;
+use crate::rules::shared::typing_form::{
+    denotes, denotes_abc, strip_qualifiers, subscript_args, subscript_of,
+};
+use crate::rules::shared::{ann_str, ExprIndex};
 
 use super::CODE;
 
@@ -21,7 +32,13 @@ pub(super) fn check_typeddict_assignability(
     module: &ResolvedModule,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let source = &module.source;
+    let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
+        return;
+    };
+    let Some(resolver) = AnnotationResolver::for_module(module) else {
+        return;
+    };
+    let index = ExprIndex::build(&parsed.ast);
 
     let td_classes: HashMap<&str, &ClassInfo> = module
         .classes
@@ -34,77 +51,85 @@ pub(super) fn check_typeddict_assignability(
         return;
     }
 
-    let var_td_types = build_var_typeddict_map(&module.module_vars, source, &td_classes);
+    let ctx = TdContext {
+        resolver: &resolver,
+        index: &index,
+        ast: &parsed.ast,
+        td_classes: &td_classes,
+    };
+    let var_td_types = build_var_typeddict_map(module, &ctx);
 
     for var in &module.module_vars {
-        let Some(rhs_span) = var.rhs_span else {
-            continue;
-        };
-        let Some(rhs_text) = slice_span(source, rhs_span) else {
-            continue;
-        };
-        let rhs_name = rhs_text.trim();
-
         // RHS must be a simple variable name referencing a TypedDict-typed var.
-        if !rhs_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        let Some(Expr::Name(rhs)) = var.rhs_span.and_then(|span| ctx.index.expr(span)) else {
             continue;
-        }
-        let Some(&rhs_td_name) = var_td_types.get(rhs_name) else {
+        };
+        let Some(&rhs_td_name) = var_td_types.get(rhs.id.as_str()) else {
             continue;
         };
 
-        // Get the LHS annotation — either from this statement or a prior declaration.
-        let ann_text = if let Some(ann_span) = var.annotation_span {
-            slice_span(source, ann_span).map(str::trim)
-        } else {
-            // Reassignment: look up original type of this variable.
-            var_td_types.get(var.name.as_str()).copied()
-        };
-
-        let Some(ann_text) = ann_text else {
+        // The LHS annotation — from this statement or a prior declaration.
+        let Some(annotation) = var.annotation_span.and_then(|span| ctx.index.expr(span)) else {
+            // Reassignment: the variable keeps its originally declared
+            // TypedDict type, which assigning another TypedDict never violates
+            // unless the two are structurally incompatible.
+            if let Some(td_name) = var_td_types.get(var.name.as_str()) {
+                check_td_to_td(
+                    &ctx,
+                    td_name,
+                    rhs_td_name,
+                    var.name_span,
+                    module,
+                    diagnostics,
+                );
+            }
             continue;
         };
 
         check_td_to_target(
-            ann_text,
+            &ctx,
+            annotation,
             rhs_td_name,
-            &td_classes,
             var.name_span,
-            &module.path,
-            source,
+            module,
             diagnostics,
         );
     }
 }
 
-/// Check an assignment where RHS is a `TypedDict` variable.
+/// Everything a `TypedDict` consistency verdict needs.
+struct TdContext<'m, 'ast> {
+    resolver: &'m AnnotationResolver<'m>,
+    index: &'m ExprIndex<'ast>,
+    ast: &'ast ModModule,
+    td_classes: &'m HashMap<&'m str, &'m ClassInfo>,
+}
+
+/// Check an assignment where the RHS is a `TypedDict` variable.
 fn check_td_to_target(
-    ann_text: &str,
+    ctx: &TdContext<'_, '_>,
+    annotation: &Expr,
     rhs_td_name: &str,
-    td_classes: &HashMap<&str, &ClassInfo>,
     span: basilisk_resolver::Span,
-    path: &str,
-    source: &str,
+    module: &ResolvedModule,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     // TypedDict → dict[...]: an error, except a PEP 728 `extra_items=`
     // TypedDict whose value types are all assignable to the dict value type.
-    if ann_text.starts_with("dict[") || ann_text == "dict" {
-        let dict_value = ann_text
-            .strip_prefix("dict[")
-            .and_then(|inner| inner.strip_suffix(']'))
-            .and_then(|inner| crate::rules::shared::split_top_level_commas(inner).pop())
-            .map(str::trim);
-        if let Some(value_type) = dict_value {
-            if extra_items_values_assignable(rhs_td_name, td_classes, source, value_type) {
+    if let Some(dict_target) = dict_target(ctx.resolver, annotation) {
+        if let DictTarget::Parameterized(value_type) = dict_target {
+            if extra_items_values_assignable(ctx, rhs_td_name, &ann_str(value_type)) {
                 return;
             }
         }
         emit_td_error(
             diagnostics,
             span,
-            path,
-            &format!("TypedDict `{rhs_td_name}` is not assignable to `{ann_text}`"),
+            &module.path,
+            &format!(
+                "TypedDict `{rhs_td_name}` is not assignable to `{}`",
+                ann_str(annotation)
+            ),
             "A TypedDict is not consistent with any dict[...] type",
         );
         return;
@@ -113,19 +138,22 @@ fn check_td_to_target(
     // TypedDict → Mapping[str, T]: error unless T is object/Any, or the
     // TypedDict declares `extra_items=` and every value type is assignable
     // to T (PEP 728).
-    if let Some(val_type) = parse_mapping_value_type(ann_text) {
-        if val_type != "object"
-            && val_type != "Any"
-            && !extra_items_values_assignable(rhs_td_name, td_classes, source, val_type)
-        {
+    if let Some(value_type) = mapping_value_type(ctx.resolver, annotation) {
+        let is_top = matches!(value_type, Expr::Name(name) if name.id.as_str() == "object")
+            || denotes(ctx.resolver, value_type, "Any");
+        if !is_top && !extra_items_values_assignable(ctx, rhs_td_name, &ann_str(value_type)) {
             emit_td_error(
                 diagnostics,
                 span,
-                path,
-                &format!("TypedDict `{rhs_td_name}` is not assignable to `{ann_text}`"),
+                &module.path,
+                &format!(
+                    "TypedDict `{rhs_td_name}` is not assignable to `{}`",
+                    ann_str(annotation)
+                ),
                 &format!(
                     "TypedDict is only assignable to Mapping[str, object], \
-                     not Mapping[str, {val_type}]"
+                     not Mapping[str, {}]",
+                    ann_str(value_type)
                 ),
             );
         }
@@ -133,26 +161,89 @@ fn check_td_to_target(
     }
 
     // TypedDict → TypedDict: structural compatibility.
-    let Some(lhs_cls) = td_classes.get(ann_text) else {
-        return;
-    };
-    let Some(rhs_cls) = td_classes.get(rhs_td_name) else {
-        return;
-    };
-    if ann_text == rhs_td_name {
+    if let Expr::Name(lhs_name) = annotation {
+        check_td_to_td(
+            ctx,
+            lhs_name.id.as_str(),
+            rhs_td_name,
+            span,
+            module,
+            diagnostics,
+        );
+    }
+}
+
+/// Structural compatibility between two named `TypedDict`s.
+fn check_td_to_td(
+    ctx: &TdContext<'_, '_>,
+    lhs_td_name: &str,
+    rhs_td_name: &str,
+    span: basilisk_resolver::Span,
+    module: &ResolvedModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if lhs_td_name == rhs_td_name {
         return;
     }
-
-    if let Some(detail) = check_structural_compat_with_classes(lhs_cls, rhs_cls, source, td_classes)
-    {
+    let (Some(lhs_cls), Some(rhs_cls)) = (
+        ctx.td_classes.get(lhs_td_name),
+        ctx.td_classes.get(rhs_td_name),
+    ) else {
+        return;
+    };
+    if let Some(detail) = structural_incompatibility(ctx, lhs_cls, rhs_cls) {
         emit_td_error(
             diagnostics,
             span,
-            path,
-            &format!("TypedDict `{rhs_td_name}` is not assignable to `{ann_text}`: {detail}"),
+            &module.path,
+            &format!("TypedDict `{rhs_td_name}` is not assignable to `{lhs_td_name}`: {detail}"),
             "TypedDict types use structural compatibility with invariant value types",
         );
     }
+}
+
+/// A `dict`-typed assignment target: bare `dict`, or `dict[K, V]` carrying a
+/// declared value type.
+enum DictTarget<'e> {
+    Bare,
+    Parameterized(&'e Expr),
+}
+
+/// When the annotation is `dict`/`Dict` (bare or subscripted), the target
+/// shape; `None` when the annotation is not a dict type at all.
+fn dict_target<'e>(
+    resolver: &AnnotationResolver<'_>,
+    annotation: &'e Expr,
+) -> Option<DictTarget<'e>> {
+    let is_dict_head = |head: &Expr| {
+        matches!(head, Expr::Name(name) if name.id.as_str() == "dict")
+            || denotes(resolver, head, "Dict")
+    };
+    match annotation {
+        Expr::Subscript(subscript) if is_dict_head(&subscript.value) => {
+            match subscript_args(&subscript.slice).get(1).copied() {
+                Some(value_type) => Some(DictTarget::Parameterized(value_type)),
+                None => Some(DictTarget::Bare),
+            }
+        }
+        head if is_dict_head(head) => Some(DictTarget::Bare),
+        _ => None,
+    }
+}
+
+/// The value type T of a `Mapping[str, T]` annotation, under any spelling of
+/// `Mapping` from `typing` or `collections.abc`.
+fn mapping_value_type<'e>(
+    resolver: &AnnotationResolver<'_>,
+    annotation: &'e Expr,
+) -> Option<&'e Expr> {
+    let Expr::Subscript(subscript) = annotation else {
+        return None;
+    };
+    if !denotes_abc(resolver, &subscript.value, "Mapping") {
+        return None;
+    }
+    subscript_args(&subscript.slice).get(1).copied()
 }
 
 /// Emit a `TypedDict` assignability error.
@@ -173,26 +264,19 @@ fn emit_td_error(
     ));
 }
 
-/// Build a map from variable name to its `TypedDict` type name.
-fn build_var_typeddict_map<'a>(
-    vars: &'a [basilisk_resolver::VariableInfo],
-    source: &'a str,
-    td_classes: &HashMap<&str, &ClassInfo>,
-) -> HashMap<&'a str, &'a str> {
+/// Map each annotated module variable to the `TypedDict` class it is typed as.
+fn build_var_typeddict_map<'m>(
+    module: &'m ResolvedModule,
+    ctx: &TdContext<'m, '_>,
+) -> HashMap<&'m str, &'m str> {
     let mut map = HashMap::new();
-    for var in vars {
-        if !var.has_annotation {
-            continue;
-        }
-        let Some(ann_span) = var.annotation_span else {
+    for var in &module.module_vars {
+        let Some(Expr::Name(ann)) = var.annotation_span.and_then(|span| ctx.index.expr(span))
+        else {
             continue;
         };
-        let Some(ann_text) = slice_span(source, ann_span) else {
-            continue;
-        };
-        let ann_text = ann_text.trim();
-        if td_classes.contains_key(ann_text) {
-            let _ = map.insert(var.name.as_str(), ann_text);
+        if let Some(cls) = ctx.td_classes.get(ann.id.as_str()) {
+            let _ = map.insert(var.name.as_str(), cls.name.as_str());
         }
     }
     map
@@ -200,139 +284,137 @@ fn build_var_typeddict_map<'a>(
 
 /// `true` when `td_name` declares `extra_items=` (PEP 728) and every value
 /// type of the `TypedDict` — field annotations plus the extra-items type — is
-/// assignable to `target_value_type`.
+/// assignable to `target_value_type` (rendered).
 fn extra_items_values_assignable(
+    ctx: &TdContext<'_, '_>,
     td_name: &str,
-    td_classes: &HashMap<&str, &ClassInfo>,
-    source: &str,
     target_value_type: &str,
 ) -> bool {
-    let Some(cls) = td_classes.get(td_name) else {
+    let Some(cls) = ctx.td_classes.get(td_name) else {
         return false;
     };
-    let Some(extra_type) = extra_items_type(cls, source) else {
+    let Some(extra_type) = class_keyword_value(ctx.ast, &cls.name, "extra_items") else {
         return false;
     };
-    let extra_type = basilisk_resolver::strip_typeddict_qualifiers(extra_type);
-    let mut members: Vec<&str> = vec![extra_type];
+    let mut members: Vec<&Expr> = vec![strip_qualifiers(ctx.resolver, extra_type)];
     for attr in &cls.attributes {
-        let Some(ann_span) = attr.annotation_span else {
-            continue;
-        };
-        let Some(ann) = slice_span(source, ann_span) else {
+        let Some(ann) = attr.annotation_span.and_then(|span| ctx.index.expr(span)) else {
             return false;
         };
-        members.push(basilisk_resolver::strip_typeddict_qualifiers(ann.trim()));
+        members.push(strip_qualifiers(ctx.resolver, ann));
     }
     members
         .iter()
-        .all(|member| crate::rules::shared::is_type_compatible(member, target_value_type))
+        .all(|member| crate::rules::shared::is_type_compatible(&ann_str(member), target_value_type))
 }
 
-/// The `extra_items=<type>` text from a `TypedDict` class header, if declared.
-fn extra_items_type<'a>(cls: &ClassInfo, source: &'a str) -> Option<&'a str> {
-    let header = source.get(cls.def_span.start_usize()..)?;
-    let open = header.find('(')?;
-    let mut depth = 0i32;
-    let mut close = None;
-    for (idx, ch) in header.get(open..)?.char_indices() {
-        match ch {
-            '(' | '[' => depth += 1,
-            ')' | ']' => {
-                depth -= 1;
-                if depth == 0 {
-                    close = Some(open + idx);
-                    break;
+/// The value expression of the class-definition keyword `keyword` on the class
+/// named `class_name`, found by walking the parsed module — the structural
+/// replacement for scanning the class-header text for `keyword=`.
+fn class_keyword_value<'ast>(
+    ast: &'ast ModModule,
+    class_name: &str,
+    keyword: &str,
+) -> Option<&'ast Expr> {
+    fn walk<'ast>(body: &'ast [Stmt], class_name: &str, keyword: &str) -> Option<&'ast Expr> {
+        for stmt in body {
+            match stmt {
+                Stmt::ClassDef(class_def) => {
+                    if class_def.name.as_str() == class_name {
+                        if let Some(arguments) = class_def.arguments.as_deref() {
+                            for kw in &*arguments.keywords {
+                                if kw.arg.as_ref().is_some_and(|arg| arg.as_str() == keyword) {
+                                    return Some(&kw.value);
+                                }
+                            }
+                        }
+                        return None;
+                    }
+                    if let Some(found) = walk(&class_def.body, class_name, keyword) {
+                        return Some(found);
+                    }
                 }
+                Stmt::FunctionDef(func_def) => {
+                    if let Some(found) = walk(&func_def.body, class_name, keyword) {
+                        return Some(found);
+                    }
+                }
+                _ => {}
             }
-            _ => {}
         }
+        None
     }
-    let bases = header.get(open + 1..close?)?;
-    let kw_start = bases.find("extra_items=")? + "extra_items=".len();
-    let rest = bases.get(kw_start..)?;
-    let mut depth = 0i32;
-    let mut end = rest.len();
-    for (idx, ch) in rest.char_indices() {
-        match ch {
-            '[' | '(' => depth += 1,
-            ']' | ')' => depth -= 1,
-            ',' if depth == 0 => {
-                end = idx;
-                break;
-            }
-            _ => {}
-        }
-    }
-    Some(rest.get(..end)?.trim())
+    walk(&ast.body, class_name, keyword)
 }
 
-/// Extract the value type T from `Mapping[str, T]`.
-fn parse_mapping_value_type(ann: &str) -> Option<&str> {
-    let inner = ann.strip_prefix("Mapping[")?.strip_suffix(']')?;
-    let mut depth = 0i32;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' => depth += 1,
-            ']' | ')' => depth -= 1,
-            ',' if depth == 0 => {
-                return Some(inner.get(idx + 1..)?.trim());
-            }
-            _ => {}
-        }
-    }
-    None
+/// One structural field: name, value-type node (qualifiers peeled), and
+/// required-ness under PEP 655.
+struct TdField<'m, 'ast> {
+    name: &'m str,
+    value_type: &'ast Expr,
+    required: bool,
 }
 
-/// Unwrap `Required[T]` or `NotRequired[T]` wrappers to get the inner type.
-fn unwrap_required(ann: &str) -> &str {
-    if let Some(inner) = ann.strip_prefix("Required[") {
-        inner.strip_suffix(']').unwrap_or(ann)
-    } else if let Some(inner) = ann.strip_prefix("NotRequired[") {
-        inner.strip_suffix(']').unwrap_or(ann)
-    } else {
-        ann
-    }
+/// Extract each field's name, value type, and required-ness structurally.
+fn extract_fields<'m, 'ast>(
+    ctx: &TdContext<'m, 'ast>,
+    cls: &'m ClassInfo,
+) -> Vec<TdField<'m, 'ast>> {
+    cls.attributes
+        .iter()
+        .filter_map(|attr| {
+            let ann = attr.annotation_span.and_then(|span| ctx.index.expr(span))?;
+            let required = if subscript_of(ctx.resolver, ann, "Required").is_some() {
+                true
+            } else if subscript_of(ctx.resolver, ann, "NotRequired").is_some() {
+                false
+            } else {
+                cls.is_typeddict_total
+            };
+            Some(TdField {
+                name: attr.name.as_str(),
+                value_type: strip_qualifiers(ctx.resolver, ann),
+                required,
+            })
+        })
+        .collect()
 }
 
-/// Check structural compatibility with access to all `TypedDict` classes
-/// for recursive structural comparison.
-fn check_structural_compat_with_classes(
+/// The first structural incompatibility between two `TypedDict`s, if any.
+fn structural_incompatibility(
+    ctx: &TdContext<'_, '_>,
     lhs: &ClassInfo,
     rhs: &ClassInfo,
-    source: &str,
-    td_classes: &HashMap<&str, &ClassInfo>,
 ) -> Option<String> {
-    let lhs_fields = extract_fields(lhs, source);
-    let rhs_fields = extract_fields(rhs, source);
+    let lhs_fields = extract_fields(ctx, lhs);
+    let rhs_fields = extract_fields(ctx, rhs);
 
-    let rhs_map: HashMap<&str, (&str, bool)> = rhs_fields
-        .iter()
-        .map(|(name, ann, req)| (*name, (*ann, *req)))
-        .collect();
+    let rhs_map: HashMap<&str, &TdField<'_, '_>> =
+        rhs_fields.iter().map(|field| (field.name, field)).collect();
 
-    for (lhs_name, lhs_ann, lhs_req) in &lhs_fields {
-        let Some(&(rhs_ann, rhs_req)) = rhs_map.get(lhs_name) else {
-            return Some(format!("missing key `{lhs_name}`"));
+    for lhs_field in &lhs_fields {
+        let Some(rhs_field) = rhs_map.get(lhs_field.name) else {
+            return Some(format!("missing key `{}`", lhs_field.name));
         };
 
-        let lhs_type = unwrap_required(lhs_ann);
-        let rhs_type = unwrap_required(rhs_ann);
-        if lhs_type != rhs_type && !types_structurally_equal(lhs_type, rhs_type, source, td_classes)
-        {
+        if !types_structurally_equal(ctx, lhs_field.value_type, rhs_field.value_type) {
             return Some(format!(
-                "value type for key `{lhs_name}` is `{rhs_type}`, expected `{lhs_type}`"
+                "value type for key `{}` is `{}`, expected `{}`",
+                lhs_field.name,
+                ann_str(rhs_field.value_type),
+                ann_str(lhs_field.value_type)
             ));
         }
 
-        if lhs_req != &rhs_req {
-            let (ls, rs) = if *lhs_req {
+        if lhs_field.required != rhs_field.required {
+            let (ls, rs) = if lhs_field.required {
                 ("required", "non-required")
             } else {
                 ("non-required", "required")
             };
             return Some(format!(
-                "key `{lhs_name}` is {rs} in source but {ls} in target"
+                "key `{}` is {rs} in source but {ls} in target",
+                lhs_field.name
             ));
         }
     }
@@ -340,53 +422,31 @@ fn check_structural_compat_with_classes(
     None
 }
 
-/// Check if two type annotations are structurally equal, considering
-/// `TypedDict` structural equivalence.
-fn types_structurally_equal(
-    lhs: &str,
-    rhs: &str,
-    source: &str,
-    td_classes: &HashMap<&str, &ClassInfo>,
-) -> bool {
-    if lhs == rhs {
+/// Are two value-type expressions structurally equal — same rendered form,
+/// equivalent `TypedDict` structure, or component-wise equal unions?
+fn types_structurally_equal(ctx: &TdContext<'_, '_>, lhs: &Expr, rhs: &Expr) -> bool {
+    // Same structure regardless of source formatting.
+    if ann_str(lhs) == ann_str(rhs) {
         return true;
     }
 
-    // If both are TypedDict names, check structural compatibility.
-    if let (Some(lhs_cls), Some(rhs_cls)) = (td_classes.get(lhs), td_classes.get(rhs)) {
-        return check_structural_compat_with_classes(lhs_cls, rhs_cls, source, td_classes)
-            .is_none();
+    // Both TypedDict names: structural equivalence.
+    if let (Expr::Name(lhs_name), Expr::Name(rhs_name)) = (lhs, rhs) {
+        if let (Some(lhs_cls), Some(rhs_cls)) = (
+            ctx.td_classes.get(lhs_name.id.as_str()),
+            ctx.td_classes.get(rhs_name.id.as_str()),
+        ) {
+            return structural_incompatibility(ctx, lhs_cls, rhs_cls).is_none();
+        }
     }
 
-    // For union types like `Literal[""] | Inner3`, split and compare components.
-    if lhs.contains(" | ") && rhs.contains(" | ") {
-        let lhs_parts: Vec<&str> = lhs.split(" | ").map(str::trim).collect();
-        let rhs_parts: Vec<&str> = rhs.split(" | ").map(str::trim).collect();
-        if lhs_parts.len() == rhs_parts.len() {
-            return lhs_parts
-                .iter()
-                .zip(rhs_parts.iter())
-                .all(|(l, r)| types_structurally_equal(l, r, source, td_classes));
+    // Unions compare component-wise, position by position.
+    if let (Expr::BinOp(lhs_op), Expr::BinOp(rhs_op)) = (lhs, rhs) {
+        if lhs_op.op == Operator::BitOr && rhs_op.op == Operator::BitOr {
+            return types_structurally_equal(ctx, &lhs_op.left, &rhs_op.left)
+                && types_structurally_equal(ctx, &lhs_op.right, &rhs_op.right);
         }
     }
 
     false
-}
-
-/// Extract field info: (name, `annotation_text`, `is_required`).
-fn extract_fields<'a>(cls: &'a ClassInfo, source: &'a str) -> Vec<(&'a str, &'a str, bool)> {
-    cls.attributes
-        .iter()
-        .filter_map(|attr| {
-            let ann_text = slice_span(source, attr.annotation_span?)?.trim();
-            let is_required = if ann_text.starts_with("Required[") {
-                true
-            } else if ann_text.starts_with("NotRequired[") {
-                false
-            } else {
-                cls.is_typeddict_total
-            };
-            Some((attr.name.as_str(), ann_text, is_required))
-        })
-        .collect()
 }

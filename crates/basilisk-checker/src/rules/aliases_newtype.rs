@@ -7,6 +7,12 @@
 //! - The base type must be a proper concrete class
 //! - `NewType` accepts exactly two arguments
 //!
+//! Every verdict is structural over the parsed `ruff` AST, with typing
+//! members resolved through the module's import cascade
+//! ([LINESCANPLAN-AST-MIGRATION], issue #408): `Literal` under a renamed
+//! import is still `Literal`, and a module-local class is never mistaken for
+//! a `TypeVar` because of its capitalisation.
+//!
 //! ```python
 //! from typing import NewType
 //! GoodName = NewType("BadName", int)  # E: name mismatch
@@ -14,10 +20,15 @@
 //! BadNewType7 = NewType("BadNewType7", Any)  # E: cannot be Any
 //! ```
 
-use basilisk_resolver::{NewTypeCallInfo, ResolvedModule, Span};
+use std::collections::{HashMap, HashSet};
 
+use basilisk_resolver::{NewTypeCallInfo, ResolvedModule, Span};
+use ruff_python_ast::{Expr, Operator};
+
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic, error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
+use crate::rules::shared::typing_form::{denotes, subscript_of};
+use crate::rules::shared::ExprIndex;
 
 use super::Rule;
 
@@ -37,13 +48,10 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     )
 }
 
-fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
-    let span = span?;
-    slice_span(source, span)
-}
-
-/// Known abstract protocol base classes that cannot be used as a `NewType` base.
-const KNOWN_PROTOCOLS: &[&str] = &[
+/// Typing-module abstract protocol classes that cannot be a `NewType` base.
+/// Membership is decided by resolving the base through the import cascade,
+/// never by comparing raw spelling.
+const ABSTRACT_TYPING_PROTOCOLS: &[&str] = &[
     "Hashable",
     "Iterable",
     "Iterator",
@@ -72,115 +80,74 @@ const KNOWN_PROTOCOLS: &[&str] = &[
     "SupportsRound",
 ];
 
-/// Returns an error reason if the base type text is invalid for `NewType`.
-fn is_invalid_base(base: &str, typeddict_names: &[&str]) -> Option<&'static str> {
-    let base = base.trim();
-
-    // `Any`
-    if base == "Any" {
+/// The error reason when this base-type expression is invalid for `NewType`.
+fn invalid_base_reason(
+    resolver: &AnnotationResolver<'_>,
+    base: &Expr,
+    typevar_names: &HashSet<&str>,
+    typeddict_names: &HashSet<&str>,
+) -> Option<&'static str> {
+    if denotes(resolver, base, "Any") {
         return Some("cannot use `Any` as a `NewType` base");
     }
-
-    // `Literal[...]`
-    if base.starts_with("Literal[") || base.starts_with("Literal [") {
+    if subscript_of(resolver, base, "Literal").is_some() || denotes(resolver, base, "Literal") {
         return Some("cannot use `Literal` as a `NewType` base");
     }
-
-    // Union type with `|` operator at depth 0
-    if has_top_level_union(base) {
+    if matches!(base, Expr::BinOp(binop) if binop.op == Operator::BitOr)
+        || subscript_of(resolver, base, "Union").is_some()
+    {
         return Some("cannot use a union type as a `NewType` base");
     }
-
-    // TypeVar-parameterized subscript: `list[T]`
-    if is_typevar_parameterized_subscript(base) {
+    if is_typevar_parameterized(base, typevar_names) {
         return Some("cannot use a TypeVar-parameterized generic as a `NewType` base");
     }
-
-    // Known abstract protocols
-    if KNOWN_PROTOCOLS.contains(&base) {
+    if ABSTRACT_TYPING_PROTOCOLS
+        .iter()
+        .any(|member| denotes(resolver, base, member))
+    {
         return Some("cannot use a Protocol class as a `NewType` base");
     }
-
-    // TypedDict subclass
-    if typeddict_names.contains(&base) {
+    if matches!(base, Expr::Name(name) if typeddict_names.contains(name.id.as_str())) {
         return Some("cannot use a `TypedDict` class as a `NewType` base");
     }
-
     None
 }
 
-fn has_top_level_union(s: &str) -> bool {
-    let mut depth = 0i32;
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes.get(i).copied() {
-            Some(b'[' | b'(' | b'{') => depth += 1,
-            Some(b']' | b')' | b'}') => depth -= 1,
-            Some(b'|') if depth == 0 => return true,
-            _ => {}
-        }
-        i += 1;
-    }
-    s.starts_with("Union[")
-}
-
-fn is_typevar_parameterized_subscript(s: &str) -> bool {
-    let Some(bracket_pos) = s.find('[') else {
+/// Is this a subscript whose type arguments reference a `TypeVar` this module
+/// actually declares? A generic parameterized over a concrete class
+/// (`list[MyClass]`) is a fine `NewType` base; one that still carries an open
+/// `TypeVar` (`list[T]`) is not.
+fn is_typevar_parameterized(base: &Expr, typevar_names: &HashSet<&str>) -> bool {
+    let Expr::Subscript(subscript) = base else {
         return false;
     };
-    let base_name = s[..bracket_pos].trim();
-    if !base_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        return false;
-    }
-    let inner_start = bracket_pos + 1;
-    let inner_end = s.rfind(']').unwrap_or(s.len());
-    if inner_end <= inner_start {
-        return false;
-    }
-    let inner = s[inner_start..inner_end].trim();
-    inner_has_typevar(inner)
+    slice_references_typevar(&subscript.slice, typevar_names)
 }
 
-fn inner_has_typevar(s: &str) -> bool {
-    let mut depth = 0i32;
-    let mut start = 0;
-    for (i, ch) in s.char_indices() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => {
-                let part = s[start..i].trim();
-                if looks_like_typevar(part) {
-                    return true;
-                }
-                start = i + 1;
-            }
-            _ => {}
+fn slice_references_typevar(expr: &Expr, typevar_names: &HashSet<&str>) -> bool {
+    match expr {
+        Expr::Name(name) => typevar_names.contains(name.id.as_str()),
+        Expr::Tuple(tuple) => tuple
+            .elts
+            .iter()
+            .any(|elt| slice_references_typevar(elt, typevar_names)),
+        Expr::Subscript(subscript) => slice_references_typevar(&subscript.slice, typevar_names),
+        Expr::BinOp(binop) => {
+            slice_references_typevar(&binop.left, typevar_names)
+                || slice_references_typevar(&binop.right, typevar_names)
         }
+        Expr::Starred(starred) => slice_references_typevar(&starred.value, typevar_names),
+        _ => false,
     }
-    let last = s[start..].trim();
-    looks_like_typevar(last)
-}
-
-fn looks_like_typevar(s: &str) -> bool {
-    let s = s.trim();
-    if s.len() == 1 && s.chars().next().is_some_and(char::is_uppercase) {
-        return true;
-    }
-    if s.starts_with(|c: char| c.is_uppercase())
-        && s.chars().all(|c| c.is_alphanumeric() || c == '_')
-    {
-        return true;
-    }
-    false
 }
 
 fn check_newtype_call(
     info: &NewTypeCallInfo,
-    source: &str,
+    resolver: &AnnotationResolver<'_>,
+    index: &ExprIndex<'_>,
     path: &str,
-    typeddict_names: &[&str],
+    typevar_names: &HashSet<&str>,
+    typeddict_names: &HashSet<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     // Wrong number of arguments
@@ -210,9 +177,9 @@ fn check_newtype_call(
         }
     }
 
-    // Validate base type
-    if let Some(base_text) = span_text(source, info.base_type_span) {
-        if let Some(reason) = is_invalid_base(base_text.trim(), typeddict_names) {
+    // Validate the base type node.
+    if let Some(base) = info.base_type_span.and_then(|span| index.expr(span)) {
+        if let Some(reason) = invalid_base_reason(resolver, base, typevar_names, typeddict_names) {
             diagnostics.push(make_diagnostic(
                 format!(
                     "Invalid base type for `NewType` `{}`: {reason}",
@@ -235,18 +202,43 @@ impl Rule for InvalidNewType {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
+        let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
+            return;
+        };
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
+        let index = ExprIndex::build(&parsed.ast);
         let path = &module.path;
 
-        let typeddict_names: Vec<&str> =
-            basilisk_resolver::collect_names_where(&module.classes, |c| c.is_typed_dict);
+        let typevar_names: HashSet<&str> = module
+            .typevar_calls
+            .iter()
+            .filter(|tv| !tv.is_paramspec && !tv.is_typevartuple)
+            .map(|tv| tv.name.as_str())
+            .collect();
+        let typeddict_names: HashSet<&str> = module
+            .classes
+            .iter()
+            .filter(|c| c.is_typed_dict)
+            .map(|c| c.name.as_str())
+            .chain(module.typeddict_calls.iter().map(|t| t.lhs_name.as_str()))
+            .collect();
 
         for info in &module.newtype_calls {
-            check_newtype_call(info, source, path, &typeddict_names, diagnostics);
+            check_newtype_call(
+                info,
+                &resolver,
+                &index,
+                path,
+                &typevar_names,
+                &typeddict_names,
+                diagnostics,
+            );
         }
 
         // Collect all NewType names defined in this module.
-        let newtype_names: std::collections::HashSet<&str> = module
+        let newtype_names: HashSet<&str> = module
             .newtype_calls
             .iter()
             .map(|nt| nt.lhs_name.as_str())
@@ -256,29 +248,32 @@ impl Rule for InvalidNewType {
             return;
         }
 
-        // Build map: newtype_name → base_type_text
-        let newtype_base: std::collections::HashMap<&str, &str> = module
+        // Map: newtype name → the builtin name its base denotes, when simple.
+        let newtype_base: HashMap<&str, &str> = module
             .newtype_calls
             .iter()
             .filter_map(|nt| {
-                let base_text = span_text(source, nt.base_type_span)?;
-                Some((nt.lhs_name.as_str(), base_text.trim()))
+                let base = nt.base_type_span.and_then(|span| index.expr(span))?;
+                let Expr::Name(name) = base else {
+                    return None;
+                };
+                Some((nt.lhs_name.as_str(), name.id.as_str()))
             })
             .collect();
 
         check_newtype_subclassing(module, &newtype_names, diagnostics);
-        check_newtype_subscript_uses(module, source, path, &newtype_names, diagnostics);
-        check_newtype_assigned_to_type(module, source, path, &newtype_names, diagnostics);
-        check_isinstance_with_newtype(module, source, path, &newtype_names, diagnostics);
-        check_newtype_call_arg_types(module, source, path, &newtype_base, diagnostics);
-        check_newtype_var_literal_assignments(module, source, path, &newtype_names, diagnostics);
+        check_newtype_subscript_uses(module, &index, &newtype_names, diagnostics);
+        check_newtype_assigned_to_type(module, &index, &newtype_names, diagnostics);
+        check_isinstance_with_newtype(module, &index, &newtype_names, diagnostics);
+        check_newtype_call_arg_types(module, &newtype_base, diagnostics);
+        check_newtype_var_literal_assignments(module, &index, &newtype_names, diagnostics);
     }
 }
 
 /// Subclassing a `NewType` is not allowed (PEP 484).
 fn check_newtype_subclassing(
     module: &ResolvedModule,
-    newtype_names: &std::collections::HashSet<&str>,
+    newtype_names: &HashSet<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let path = &module.path;
@@ -298,14 +293,31 @@ fn check_newtype_subclassing(
     }
 }
 
+/// The `NewType` name subscripted by this annotation, if any: `UserId[int]`.
+fn newtype_subscript_name<'e>(expr: &'e Expr, newtype_names: &HashSet<&str>) -> Option<&'e str> {
+    let Expr::Subscript(subscript) = expr else {
+        return None;
+    };
+    let Expr::Name(head) = subscript.value.as_ref() else {
+        return None;
+    };
+    newtype_names
+        .contains(head.id.as_str())
+        .then(|| head.id.as_str())
+}
+
 /// Using a `NewType` as a generic subscript (`MyNewType[int]`) is not allowed.
 fn check_newtype_subscript_uses(
     module: &ResolvedModule,
-    source: &str,
-    path: &str,
-    newtype_names: &std::collections::HashSet<&str>,
+    index: &ExprIndex<'_>,
+    newtype_names: &HashSet<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    let path = &module.path;
+    let subscripted = |span: Option<Span>| {
+        span.and_then(|span| index.expr(span))
+            .and_then(|expr| newtype_subscript_name(expr, newtype_names))
+    };
     for func in &module.functions {
         for param in func
             .parameters
@@ -313,47 +325,41 @@ fn check_newtype_subscript_uses(
             .chain(func.vararg.iter())
             .chain(func.kwarg.iter())
         {
-            if let Some(ann) = span_text(source, param.annotation_span) {
-                if is_newtype_subscript(ann.trim(), newtype_names) {
-                    diagnostics.push(make_diagnostic(
-                        format!(
-                            "Parameter `{}`: `NewType` cannot be used as a generic type",
-                            param.name
-                        ),
-                        param.name_span,
-                        path,
-                    ));
-                }
-            }
-        }
-    }
-    for var in &module.module_vars {
-        if let Some(ann) = span_text(source, var.annotation_span) {
-            if is_newtype_subscript(ann.trim(), newtype_names) {
+            if subscripted(param.annotation_span).is_some() {
                 diagnostics.push(make_diagnostic(
                     format!(
-                        "Variable `{}`: `NewType` cannot be used as a generic type",
-                        var.name
+                        "Parameter `{}`: `NewType` cannot be used as a generic type",
+                        param.name
                     ),
-                    var.name_span,
+                    param.name_span,
                     path,
                 ));
             }
         }
     }
+    for var in &module.module_vars {
+        if subscripted(var.annotation_span).is_some() {
+            diagnostics.push(make_diagnostic(
+                format!(
+                    "Variable `{}`: `NewType` cannot be used as a generic type",
+                    var.name
+                ),
+                var.name_span,
+                path,
+            ));
+        }
+    }
     for cls in &module.classes {
         for attr in &cls.attributes {
-            if let Some(ann) = span_text(source, attr.annotation_span) {
-                if is_newtype_subscript(ann.trim(), newtype_names) {
-                    diagnostics.push(make_diagnostic(
-                        format!(
-                            "Attribute `{}`: `NewType` cannot be used as a generic type",
-                            attr.name
-                        ),
-                        attr.name_span,
-                        path,
-                    ));
-                }
+            if subscripted(attr.annotation_span).is_some() {
+                diagnostics.push(make_diagnostic(
+                    format!(
+                        "Attribute `{}`: `NewType` cannot be used as a generic type",
+                        attr.name
+                    ),
+                    attr.name_span,
+                    path,
+                ));
             }
         }
     }
@@ -364,33 +370,30 @@ fn check_newtype_subscript_uses(
 /// PEP 484: `NewType(...)` does not return a class object; it returns a callable.
 fn check_newtype_assigned_to_type(
     module: &ResolvedModule,
-    source: &str,
-    path: &str,
-    newtype_names: &std::collections::HashSet<&str>,
+    index: &ExprIndex<'_>,
+    newtype_names: &HashSet<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for var in &module.module_vars {
-        let Some(ann_text) = span_text(source, var.annotation_span) else {
-            continue;
-        };
-        if ann_text.trim() != "type" {
+        let annotation_is_type = matches!(
+            var.annotation_span.and_then(|span| index.expr(span)),
+            Some(Expr::Name(name)) if name.id.as_str() == "type"
+        );
+        if !annotation_is_type {
             continue;
         }
-        let Some(rhs_span) = var.rhs_span else {
+        let Some(Expr::Name(rhs)) = var.rhs_span.and_then(|span| index.expr(span)) else {
             continue;
         };
-        let Some(rhs_text) = slice_span(source, rhs_span) else {
-            continue;
-        };
-        if newtype_names.contains(rhs_text.trim()) {
+        if newtype_names.contains(rhs.id.as_str()) {
             diagnostics.push(make_diagnostic(
                 format!(
                     "`{}` is a `NewType`, not an instance of `type`; \
                      `NewType()` does not return a class object",
-                    rhs_text.trim()
+                    rhs.id.as_str()
                 ),
                 var.name_span,
-                path,
+                &module.path,
             ));
         }
     }
@@ -402,9 +405,8 @@ fn check_newtype_assigned_to_type(
 /// used as the second argument to `isinstance` or `issubclass`.
 fn check_isinstance_with_newtype(
     module: &ResolvedModule,
-    source: &str,
-    path: &str,
-    newtype_names: &std::collections::HashSet<&str>,
+    index: &ExprIndex<'_>,
+    newtype_names: &HashSet<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for call in &module.calls {
@@ -414,30 +416,21 @@ fn check_isinstance_with_newtype(
         let Some((_, second_span)) = call.args.get(1) else {
             continue;
         };
-        let Some(arg_text) = slice_span(source, *second_span) else {
+        let Some(Expr::Name(arg)) = index.expr(*second_span) else {
             continue;
         };
-        if newtype_names.contains(arg_text.trim()) {
+        if newtype_names.contains(arg.id.as_str()) {
             diagnostics.push(make_diagnostic(
                 format!(
                     "`{}` is a `NewType` and cannot be used as the second argument \
                      to `isinstance`; `NewType` types are not runtime classes",
-                    arg_text.trim()
+                    arg.id.as_str()
                 ),
                 call.span,
-                path,
+                &module.path,
             ));
         }
     }
-}
-
-/// Returns `true` if the annotation text looks like `NewTypeName[...]`.
-fn is_newtype_subscript(ann: &str, newtype_names: &std::collections::HashSet<&str>) -> bool {
-    let Some(bracket_pos) = ann.find('[') else {
-        return false;
-    };
-    let name_part = ann[..bracket_pos].trim();
-    newtype_names.contains(name_part)
 }
 
 /// Check calls to `NewType` constructors for argument type mismatches.
@@ -445,9 +438,7 @@ fn is_newtype_subscript(ann: &str, newtype_names: &std::collections::HashSet<&st
 /// `UserId("user")` when `UserId = NewType("UserId", int)` → error because `str` ≠ `int`.
 fn check_newtype_call_arg_types(
     module: &ResolvedModule,
-    source: &str,
-    path: &str,
-    newtype_base: &std::collections::HashMap<&str, &str>,
+    newtype_base: &HashMap<&str, &str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for call in &module.calls {
@@ -459,10 +450,8 @@ fn check_newtype_call_arg_types(
             continue;
         };
 
-        if let Some(_description) = newtype_arg_mismatch(base_type, rhs_kind) {
-            let Some(arg_text) = slice_span(source, *arg_span) else {
-                continue;
-            };
+        if newtype_arg_mismatch(base_type, rhs_kind).is_some() {
+            let arg_text = crate::span_util::slice_span(&module.source, *arg_span).unwrap_or("");
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(
@@ -471,7 +460,7 @@ fn check_newtype_call_arg_types(
                     arg_text.trim()
                 ),
                 call.span,
-                path,
+                &module.path,
                 Some(format!(
                     "Pass a value of type `{base_type}` to the `{}` constructor",
                     call.callee
@@ -482,12 +471,12 @@ fn check_newtype_call_arg_types(
     }
 }
 
-/// Returns a description of the mismatch when `rhs` is incompatible with `base_type`, else `None`.
+/// Returns a description of the mismatch when `rhs` is incompatible with the
+/// builtin base type name, else `None`.
 fn newtype_arg_mismatch(base_type: &str, rhs: &basilisk_resolver::RhsKind) -> Option<&'static str> {
     use basilisk_resolver::RhsKind;
 
-    let base = base_type.trim().to_ascii_lowercase();
-    match (base.as_str(), rhs) {
+    match (base_type, rhs) {
         ("int" | "float" | "bool" | "bytes", RhsKind::StrLiteral) => Some("str literal"),
         ("int" | "str" | "float", RhsKind::BytesLiteral) => Some("bytes literal"),
         ("int" | "str" | "bool", RhsKind::FloatLiteral) => Some("float literal"),
@@ -502,18 +491,18 @@ fn newtype_arg_mismatch(base_type: &str, rhs: &basilisk_resolver::RhsKind) -> Op
 /// Only `UserId(42)` creates a proper `UserId`.
 fn check_newtype_var_literal_assignments(
     module: &ResolvedModule,
-    source: &str,
-    path: &str,
-    newtype_names: &std::collections::HashSet<&str>,
+    index: &ExprIndex<'_>,
+    newtype_names: &HashSet<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use basilisk_resolver::RhsKind;
 
     for var in &module.module_vars {
-        let Some(ann_text) = span_text(source, var.annotation_span) else {
+        let Some(Expr::Name(annotation)) = var.annotation_span.and_then(|span| index.expr(span))
+        else {
             continue;
         };
-        let ann = ann_text.trim();
+        let ann = annotation.id.as_str();
         if !newtype_names.contains(ann) {
             continue;
         }
@@ -537,7 +526,7 @@ fn check_newtype_var_literal_assignments(
                      use `{ann}(value)` to create a `{ann}` instance"
                 ),
                 var.name_span,
-                path,
+                &module.path,
                 Some(format!("Replace the literal with `{ann}(value)`")),
                 Some(
                     "NewType creates a distinct type; only the constructor call is valid"

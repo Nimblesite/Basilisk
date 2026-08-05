@@ -257,8 +257,7 @@ fn check_alias_parameterization(
     // Bound verdicts route through the module-seeded context
     // ([NARROWPLAN-SUBTYPING]).
     let subtyping = crate::subtyping::module_context(module);
-    let known_class_names: HashSet<&str> =
-        module.classes.iter().map(|c| c.name.as_str()).collect();
+    let known_class_names: HashSet<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
     let checker = ParameterizationChecker {
         module,
         index,
@@ -329,7 +328,9 @@ impl ParameterizationChecker<'_, '_> {
             format!("Type alias `{base}` is not generic and cannot be parameterized"),
             span,
             &self.module.path,
-            Some(format!("Remove the type arguments from `{annotation_text}`")),
+            Some(format!(
+                "Remove the type arguments from `{annotation_text}`"
+            )),
             Some(format!(
                 "`{base}` does not use any TypeVar parameters in its definition"
             )),
@@ -510,45 +511,50 @@ fn check_union_alias_instantiation(
     }
 }
 
-/// Check function parameter annotations that reference runtime (non-type) names.
+/// Check annotations that reference runtime (non-type) names.
 ///
 /// When a module-level name holds a runtime value (`BadTypeAlias1 = eval(...)`)
-/// and is used as a type annotation (`p1: BadTypeAlias1`), this is an error
-/// because the name does not resolve to a type.
+/// and is used as a type annotation — on a function parameter or a module
+/// variable — this is an error because the name does not resolve to a type.
 fn check_runtime_name_annotations(
     module: &ResolvedModule,
     index: &ExprIndex<'_>,
     runtime_vars: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    for func in &module.functions {
-        for param in &func.parameters {
-            let Some(span) = param.annotation_span else {
-                continue;
-            };
-            let Some(Expr::Name(name)) = index.expr(span) else {
-                continue;
-            };
-            let name = name.id.as_str();
-            if runtime_vars.contains(name) {
-                diagnostics.push(error_diagnostic_owned(
-                    CODE.clone(),
-                    format!(
-                        "Variable `{name}` is not a valid type and \
-                         cannot be used as an annotation"
-                    ),
-                    span,
-                    &module.path,
-                    Some(format!(
-                        "`{name}` is assigned a runtime value, not a type expression"
-                    )),
-                    Some(
-                        "Only type expressions (classes, type aliases, typing constructs) \
-                         are valid annotations"
-                            .to_owned(),
-                    ),
-                ));
-            }
+    let param_spans = module
+        .functions
+        .iter()
+        .flat_map(|func| &func.parameters)
+        .filter_map(|param| param.annotation_span);
+    let module_var_spans = module
+        .module_vars
+        .iter()
+        .filter_map(|var| var.annotation_span);
+
+    for span in param_spans.chain(module_var_spans) {
+        let Some(Expr::Name(name)) = index.expr(span) else {
+            continue;
+        };
+        let name = name.id.as_str();
+        if runtime_vars.contains(name) {
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
+                    "Variable `{name}` is not a valid type and \
+                     cannot be used as an annotation"
+                ),
+                span,
+                &module.path,
+                Some(format!(
+                    "`{name}` is assigned a runtime value, not a type expression"
+                )),
+                Some(
+                    "Only type expressions (classes, type aliases, typing constructs) \
+                     are valid annotations"
+                        .to_owned(),
+                ),
+            ));
         }
     }
 }

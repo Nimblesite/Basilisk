@@ -5,7 +5,7 @@
 # Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup book mutation-test conformance bench bench-basilisk reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease package-zed
+.PHONY: build test lint fmt clean ci setup book mutation-test conformance mutation-conformance bench bench-basilisk reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease package-zed
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -244,6 +244,15 @@ mutation-test:
 conformance:
 	@cargo build -p basilisk-cli --bin basilisk
 	@python3 conformance/run_conformance.py --bin target/debug/basilisk
+
+## mutation-conformance: Score basilisk on the AST-PRESERVING MUTATED suite
+## (consistent import renames + whitespace reformatting; sharkdp's harness,
+## vendored verbatim). Identical semantics, so a structural checker must hold
+## its verdicts; the pass rate is a RATCHET that may only rise. See
+## conformance/run_mutation_conformance.py and docs/CONFORMANCE-INTEGRITY-AUDIT.md.
+mutation-conformance:
+	@cargo build --release -p basilisk-cli --bin basilisk
+	@python3 conformance/run_mutation_conformance.py --bin target/release/basilisk
 
 ## bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly/zuban on the fixture suite.
 ## INDICATIVE ONLY — this runs on a developer workstation under whatever else it

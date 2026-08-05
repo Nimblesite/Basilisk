@@ -114,7 +114,9 @@ pub(crate) fn annotation_is_type_alias(
     span: Option<Span>,
 ) -> bool {
     span.and_then(|span| resolver.resolve_span(span))
-        .is_some_and(|ty| matches!(&ty, InferredType::Named(name) if name.eq_ignore_ascii_case("typealias")))
+        .is_some_and(
+            |ty| matches!(&ty, InferredType::Named(name) if name.eq_ignore_ascii_case("typealias")),
+        )
 }
 
 /// Every expression in a parsed module, keyed by its exact source range —

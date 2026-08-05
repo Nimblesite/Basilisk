@@ -8,6 +8,12 @@
 //! 2. Returning `ClassC[Never]()` from a function annotated `-> ClassC[U]`
 //!    where the class's type parameter is invariant (not covariant)
 //!
+//! Every verdict is structural over the parsed `ruff` AST
+//! ([LINESCANPLAN-AST-MIGRATION], issue #408): `Never` and `Any` resolve
+//! through the import cascade under any spelling, assignments are
+//! `AnnAssign` nodes, and return expressions are parsed calls — never
+//! reconstructed source lines or `"]("` shape matching.
+//!
 //! ```python
 //! from typing import Never, Any, Generic, TypeVar
 //!
@@ -26,10 +32,14 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
+use basilisk_resolver::{ResolvedModule, Span};
+use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
+use ruff_text_size::Ranged;
 
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
+use crate::rules::shared::ann_str;
+use crate::rules::shared::typing_form::denotes;
 
 use super::Rule;
 
@@ -48,361 +58,302 @@ impl Rule for NeverTypeCompatibility {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
-        let path = &module.path;
-
-        // Collect covariant TypeVar names so we can exclude covariant contexts.
+        let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
+            return;
+        };
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
+        // Covariant TypeVar names exclude covariant contexts from the check.
         let covariant_tvars: Vec<&str> =
             basilisk_resolver::collect_names_where(&module.typevar_calls, |tv| tv.is_covariant);
 
-        // Parse candidate annotated assignments (`var: annotation = rhs`) once
-        // for the whole file. Previously each function rescanned the entire
-        // source, making this O(functions · lines) ≈ O(n²); the candidates are
-        // source-position-independent, so one pass feeds every function.
-        let assign_lines = collect_assign_lines(source);
+        let ctx = NeverContext {
+            resolver: &resolver,
+            module,
+            covariant_tvars,
+        };
+        walk_functions(&parsed.ast.body, &ctx, diagnostics);
+    }
+}
 
-        // Index candidates by RHS name: each function only inspects the lines
-        // whose RHS is one of its own parameters, instead of every line.
-        let mut assign_by_rhs: HashMap<&str, Vec<usize>> = HashMap::new();
-        for (idx, cand) in assign_lines.iter().enumerate() {
-            assign_by_rhs.entry(cand.rhs_name).or_default().push(idx);
+/// Everything a `Never`-compatibility verdict needs.
+struct NeverContext<'m> {
+    resolver: &'m AnnotationResolver<'m>,
+    module: &'m ResolvedModule,
+    covariant_tvars: Vec<&'m str>,
+}
+
+/// Recursively visit every function definition, however nested.
+fn walk_functions(body: &[Stmt], ctx: &NeverContext<'_>, diagnostics: &mut Vec<Diagnostic>) {
+    for stmt in body {
+        match stmt {
+            Stmt::FunctionDef(func_def) => {
+                check_function(func_def, ctx, diagnostics);
+                walk_functions(&func_def.body, ctx, diagnostics);
+            }
+            Stmt::ClassDef(class_def) => {
+                walk_functions(&class_def.body, ctx, diagnostics);
+            }
+            _ => {}
         }
-
-        // Check function bodies for annotated local assignments and return stmts.
-        for func in &module.functions {
-            check_local_assignments(
-                func,
-                source,
-                path,
-                &assign_lines,
-                &assign_by_rhs,
-                diagnostics,
-            );
-            check_return_stmts(func, source, path, &covariant_tvars, module, diagnostics);
-        }
     }
 }
 
-/// One source line that parses as `var_name: annotation = rhs_name`, with the
-/// byte offset of the line start. Collected once per file so the per-function
-/// `Never` check matches against it without rescanning the source.
-struct AssignLine<'a> {
-    /// The original (un-trimmed) line text — used to locate `var_name` for the span.
-    line: &'a str,
-    /// Byte offset of the start of this line in the source.
-    line_offset: usize,
-    /// The trimmed left-hand-side variable name.
-    var_name: &'a str,
-    /// The trimmed annotation text (e.g. `list[int]`).
-    annotation: &'a str,
-    /// The trimmed right-hand-side identifier (a candidate parameter reference).
-    rhs_name: &'a str,
-    /// [`extract_generic_base`] of `annotation`, precomputed once per line.
-    ann_base: &'a str,
-    /// [`extract_generic_inner`] of `annotation`, precomputed once per line.
-    ann_inner: Option<&'a str>,
+/// A generic annotation split into its base name and single type argument.
+struct GenericForm<'e> {
+    base: &'e str,
+    arg: &'e Expr,
 }
 
-/// Parse a single line as `var_name: annotation = rhs_name`, returning the
-/// trimmed components when it matches the shape the `Never` check looks for.
-///
-/// Mirrors the original per-line filter exactly: both `": "` and `" = "` must be
-/// present, and the LHS name and RHS (after stripping a trailing comment) must be
-/// simple identifiers.
-fn parse_assign_line(line: &str) -> Option<(&str, &str, &str)> {
-    let trimmed = line.trim();
-    if !trimmed.contains(": ") || !trimmed.contains(" = ") {
+/// Split `Base[Arg]` where the base is a simple name; `None` otherwise.
+fn generic_form(expr: &Expr) -> Option<GenericForm<'_>> {
+    let Expr::Subscript(subscript) = expr else {
         return None;
-    }
-    let (var_name, rest) = trimmed.split_once(": ")?;
-    let var_name = var_name.trim();
-    if !is_simple_identifier(var_name) {
+    };
+    let Expr::Name(base) = subscript.value.as_ref() else {
         return None;
-    }
-    let (annotation, rhs_part) = rest.split_once(" = ")?;
-    let annotation = annotation.trim();
-    // Strip trailing comments from the RHS before checking it is a plain name.
-    let rhs_name = rhs_part.split('#').next().unwrap_or(rhs_part).trim();
-    if !is_simple_identifier(rhs_name) {
-        return None;
-    }
-    Some((var_name, annotation, rhs_name))
+    };
+    Some(GenericForm {
+        base: base.id.as_str(),
+        arg: &subscript.slice,
+    })
 }
 
-/// Scan the source once, collecting every line that parses as an annotated
-/// assignment. Line offsets accumulate exactly as the previous per-line
-/// `line_byte_offset` did (`+= line.len() + 1` over [`str::lines`]), so emitted
-/// spans are byte-for-byte identical.
-fn collect_assign_lines(source: &str) -> Vec<AssignLine<'_>> {
-    let mut result = Vec::new();
-    let mut offset = 0usize;
-    for line in source.lines() {
-        if let Some((var_name, annotation, rhs_name)) = parse_assign_line(line) {
-            result.push(AssignLine {
-                line,
-                line_offset: offset,
-                var_name,
-                annotation,
-                rhs_name,
-                ann_base: extract_generic_base(annotation),
-                ann_inner: extract_generic_inner(annotation),
-            });
-        }
-        offset += line.len() + 1;
-    }
-    result
-}
-
-/// Scan source lines for annotated local variable assignments where the RHS is
-/// a parameter typed `Container[Never]` and the LHS declares `Container[T]`
-/// with `T` not being `Never` or `Any`.
-fn check_local_assignments(
-    func: &FunctionInfo,
-    source: &str,
-    path: &str,
-    assign_lines: &[AssignLine<'_>],
-    assign_by_rhs: &HashMap<&str, Vec<usize>>,
+/// Check one function for both violation shapes.
+fn check_function(
+    func_def: &StmtFunctionDef,
+    ctx: &NeverContext<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Gather violations per parameter via the RHS-name index, then emit in
-    // line order (matching the previous candidate-major scan). Parameter names
-    // are unique, so each candidate still pairs with at most one parameter.
-    let mut matches: Vec<(usize, &str)> = Vec::new();
+    check_local_assignments(func_def, ctx, diagnostics);
+    check_return_stmts(func_def, ctx, diagnostics);
+}
 
-    for param in &func.parameters {
-        let Some(ann_span) = param.annotation_span else {
+/// Case 1: `v: Container[T] = param` where the parameter is
+/// `Container[Never]` and `T` is neither `Never` nor `Any`.
+fn check_local_assignments(
+    func_def: &StmtFunctionDef,
+    ctx: &NeverContext<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    // Parameters typed `Container[Never]`, mapped to their annotation node.
+    let mut never_params: HashMap<&str, &Expr> = HashMap::new();
+    for param in func_def.parameters.iter_non_variadic_params() {
+        let Some(annotation) = param.annotation() else {
             continue;
         };
-        let Some(ann_text) = slice_span(source, ann_span) else {
+        let Some(form) = generic_form(annotation) else {
             continue;
         };
-        let param_annotation = ann_text.trim();
-        let Some(indices) = assign_by_rhs.get(param.name.as_str()) else {
+        if denotes(ctx.resolver, form.arg, "Never") {
+            let _ = never_params.insert(param.name().as_str(), annotation);
+        }
+    }
+    if never_params.is_empty() {
+        return;
+    }
+
+    check_assign_body(&func_def.body, ctx, &never_params, diagnostics);
+}
+
+/// Walk one function body's statements (not nested defs) for the annotated
+/// assignments of case 1.
+fn check_assign_body(
+    body: &[Stmt],
+    ctx: &NeverContext<'_>,
+    never_params: &HashMap<&str, &Expr>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for stmt in body {
+        let Stmt::AnnAssign(assign) = stmt else {
             continue;
         };
-        // Only a `Container[Never]` parameter can produce a violation.
-        let Some(source_inner) = extract_generic_inner(param_annotation) else {
+        let Expr::Name(target) = assign.target.as_ref() else {
             continue;
         };
-        if source_inner != "Never" {
+        let Some(Expr::Name(rhs)) = assign.value.as_deref() else {
+            continue;
+        };
+        let Some(param_annotation) = never_params.get(rhs.id.as_str()) else {
+            continue;
+        };
+        let Some(param_form) = generic_form(param_annotation) else {
+            continue;
+        };
+        let Some(target_form) = generic_form(&assign.annotation) else {
+            continue;
+        };
+        // Same invariant container, target argument neither Never nor Any.
+        if target_form.base != param_form.base
+            || denotes(ctx.resolver, target_form.arg, "Never")
+            || denotes(ctx.resolver, target_form.arg, "Any")
+        {
             continue;
         }
-        let source_base = extract_generic_base(param_annotation);
 
-        for &idx in indices {
-            let Some(candidate) = assign_lines.get(idx) else {
-                continue;
-            };
-            // Check for invariant Never mismatch.
-            // E.g. annotation = "list[int]", param_annotation = "list[Never]"
-            let Some(target_inner) = candidate.ann_inner else {
-                continue;
-            };
-            if candidate.ann_base == source_base && target_inner != "Never" && target_inner != "Any"
-            {
-                matches.push((idx, param_annotation));
+        let range = target.range();
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
+                "Cannot assign `{}` to `{}` annotated `{}`: \
+                 `Never` is only compatible with `Never` and `Any` in invariant contexts",
+                ann_str(param_annotation),
+                target.id.as_str(),
+                ann_str(&assign.annotation)
+            ),
+            Span {
+                start: range.start().to_u32(),
+                end: range.end().to_u32(),
+            },
+            &ctx.module.path,
+            Some(
+                "Change the annotation to `Never` or `Any`, or change the assigned value"
+                    .to_owned(),
+            ),
+            Some(
+                "PEP 484: `Never` is a bottom type and cannot be assigned to other types \
+                 except in covariant contexts or when the target is `Any`"
+                    .to_owned(),
+            ),
+        ));
+    }
+}
+
+/// Case 2: `return ClassC[Never]()` from a function annotated `-> ClassC[U]`
+/// with `U` invariant.
+fn check_return_stmts(
+    func_def: &StmtFunctionDef,
+    ctx: &NeverContext<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Some(return_annotation) = func_def.returns.as_deref() else {
+        return;
+    };
+    let Some(ann_form) = generic_form(return_annotation) else {
+        return;
+    };
+
+    // The annotation's type argument must be invariant for the check to apply:
+    // not Never, not Any, not a covariant TypeVar, and the class must not
+    // declare a covariant parameter.
+    if denotes(ctx.resolver, ann_form.arg, "Never") || denotes(ctx.resolver, ann_form.arg, "Any") {
+        return;
+    }
+    if let Expr::Name(arg_name) = ann_form.arg {
+        if ctx.covariant_tvars.contains(&arg_name.id.as_str()) {
+            return;
+        }
+    }
+    if is_class_param_covariant(ann_form.base, ctx) {
+        return;
+    }
+
+    let walk = ReturnWalk {
+        ctx,
+        func_def,
+        return_annotation,
+        ann_form: &ann_form,
+    };
+    walk.check_body(&func_def.body, diagnostics);
+}
+
+/// The fixed context of one function's return-statement walk.
+struct ReturnWalk<'m> {
+    ctx: &'m NeverContext<'m>,
+    func_def: &'m StmtFunctionDef,
+    return_annotation: &'m Expr,
+    ann_form: &'m GenericForm<'m>,
+}
+
+impl ReturnWalk<'_> {
+    /// Walk one function body's statements (not nested defs) for the return
+    /// statements of case 2. Return statements inside nested blocks still
+    /// return from THIS function; nested defs do not.
+    fn check_body(&self, body: &[Stmt], diagnostics: &mut Vec<Diagnostic>) {
+        for stmt in body {
+            match stmt {
+                Stmt::Return(ret) => self.check_return(ret, diagnostics),
+                Stmt::If(if_stmt) => {
+                    self.check_body(&if_stmt.body, diagnostics);
+                    for clause in &if_stmt.elif_else_clauses {
+                        self.check_body(&clause.body, diagnostics);
+                    }
+                }
+                Stmt::For(for_stmt) => {
+                    self.check_body(&for_stmt.body, diagnostics);
+                    self.check_body(&for_stmt.orelse, diagnostics);
+                }
+                Stmt::While(while_stmt) => {
+                    self.check_body(&while_stmt.body, diagnostics);
+                    self.check_body(&while_stmt.orelse, diagnostics);
+                }
+                Stmt::With(with_stmt) => {
+                    self.check_body(&with_stmt.body, diagnostics);
+                }
+                Stmt::Try(try_stmt) => {
+                    self.check_body(&try_stmt.body, diagnostics);
+                    self.check_body(&try_stmt.orelse, diagnostics);
+                    self.check_body(&try_stmt.finalbody, diagnostics);
+                }
+                _ => {}
             }
         }
     }
 
-    matches.sort_unstable_by_key(|&(idx, _)| idx);
-    for (idx, param_annotation) in matches {
-        let Some(candidate) = assign_lines.get(idx) else {
-            continue;
+    /// One return statement: report `return ClassC[Never](...)` against the
+    /// invariant `-> ClassC[U]` annotation.
+    fn check_return(&self, ret: &ruff_python_ast::StmtReturn, diagnostics: &mut Vec<Diagnostic>) {
+        let Some(value) = ret.value.as_deref() else {
+            return;
         };
-        let name_start_in_line = candidate.line.find(candidate.var_name).unwrap_or(0);
-        let span_start = u32::try_from(candidate.line_offset + name_start_in_line).unwrap_or(0);
-        let span_end = span_start + u32::try_from(candidate.var_name.len()).unwrap_or(0);
+        // `ClassC[Never]()` returns an instance; a bare `ClassC[Never]`
+        // subscript expression is the class object itself.
+        let returned_type = match value {
+            Expr::Call(call) => call.func.as_ref(),
+            other => other,
+        };
+        let Some(ret_form) = generic_form(returned_type) else {
+            return;
+        };
+        if ret_form.base != self.ann_form.base || !denotes(self.ctx.resolver, ret_form.arg, "Never")
+        {
+            return;
+        }
 
-        diagnostics.push(make_assignment_diagnostic(
+        let range = ret.range();
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
+                "Cannot return `{}` from `{}` annotated \
+                 `-> {}`: `Never` is only compatible with `Never` \
+                 and `Any` in invariant contexts",
+                ann_str(returned_type),
+                self.func_def.name.as_str(),
+                ann_str(self.return_annotation)
+            ),
             Span {
-                start: span_start,
-                end: span_end,
+                start: range.start().to_u32(),
+                end: range.end().to_u32(),
             },
-            candidate.var_name,
-            candidate.annotation,
-            param_annotation,
-            path,
+            &self.ctx.module.path,
+            Some("Change the return type annotation or the returned value".to_owned()),
+            Some(
+                "PEP 484: `Never` is a bottom type and cannot substitute for invariant \
+                 type parameters"
+                    .to_owned(),
+            ),
         ));
     }
 }
 
-/// Check return statements for invariant Never violations.
-fn check_return_stmts(
-    func: &FunctionInfo,
-    source: &str,
-    path: &str,
-    covariant_tvars: &[&str],
-    module: &ResolvedModule,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    let Some(ann_span) = func.return_annotation_span else {
-        return;
-    };
-    let Some(ann_text) = slice_span(source, ann_span) else {
-        return;
-    };
-    let ann_text = ann_text.trim();
-
-    // Only handle generic return types like `ClassC[U]`.
-    let Some(ann_inner) = extract_generic_inner(ann_text) else {
-        return;
-    };
-    let ann_base = extract_generic_base(ann_text);
-
-    for ret_stmt in &func.return_stmts {
-        if !ret_stmt.has_value {
-            continue;
-        }
-        let Some(ret_full) = slice_span(source, ret_stmt.span) else {
-            continue;
-        };
-        let ret_full = ret_full.trim();
-
-        // Strip "return " prefix.
-        let ret_expr = ret_full.strip_prefix("return ").unwrap_or(ret_full).trim();
-
-        // Handle call expressions: `ClassC[Never]()` -> `ClassC[Never]`.
-        let ret_type_text = strip_call_parens(ret_expr);
-
-        let Some(ret_inner) = extract_generic_inner(ret_type_text) else {
-            continue;
-        };
-        let ret_base = extract_generic_base(ret_type_text);
-
-        // The generic bases must match.
-        if ret_base != ann_base {
-            continue;
-        }
-
-        // The return expression uses `Never` as a type argument.
-        if ret_inner != "Never" {
-            continue;
-        }
-
-        // The target type parameter is not `Never` or `Any`.
-        if ann_inner == "Never" || ann_inner == "Any" {
-            continue;
-        }
-
-        // Check if the annotation's type parameter is a covariant TypeVar.
-        if covariant_tvars.contains(&ann_inner) {
-            continue;
-        }
-
-        // Check if the class itself declares a covariant type parameter.
-        if is_class_param_covariant(ann_base, module, covariant_tvars) {
-            continue;
-        }
-
-        diagnostics.push(make_return_diagnostic(
-            ret_stmt.span,
-            &func.name,
-            ann_text,
-            ret_type_text,
-            path,
-        ));
-    }
-}
-
-/// Check if a class's generic type parameter is covariant.
-fn is_class_param_covariant(
-    class_name: &str,
-    module: &ResolvedModule,
-    covariant_tvars: &[&str],
-) -> bool {
-    module
+/// Does the class's declared generic parameter list include a covariant
+/// `TypeVar`?
+fn is_class_param_covariant(class_name: &str, ctx: &NeverContext<'_>) -> bool {
+    ctx.module
         .classes
         .iter()
         .filter(|cls| cls.name == class_name)
         .flat_map(|cls| &cls.generic_params)
-        .any(|param| covariant_tvars.contains(&param.name.as_str()))
-}
-
-/// Extract the inner type parameter from a generic annotation.
-///
-/// `"list[int]"` -> `Some("int")`, `"ClassC[Never]"` -> `Some("Never")`
-fn extract_generic_inner(text: &str) -> Option<&str> {
-    let bracket_pos = text.find('[')?;
-    let close_bracket = text.rfind(']')?;
-    if close_bracket <= bracket_pos {
-        return None;
-    }
-    Some(text.get(bracket_pos + 1..close_bracket)?.trim())
-}
-
-/// Extract the base name from a generic annotation.
-///
-/// `"list[int]"` -> `"list"`, `"ClassC[Never]"` -> `"ClassC"`
-fn extract_generic_base(text: &str) -> &str {
-    text.find('[')
-        .map_or(text, |pos| text.get(..pos).unwrap_or(text).trim())
-}
-
-/// Strip trailing `()` call from an expression.
-///
-/// `"ClassC[Never]()"` -> `"ClassC[Never]"`
-/// `"ClassC[Never](1, 2)"` -> `"ClassC[Never]"`
-fn strip_call_parens(text: &str) -> &str {
-    if let Some(stripped) = text.strip_suffix("()") {
-        return stripped;
-    }
-    if let Some(pos) = text.find("](") {
-        return text.get(..=pos).unwrap_or(text);
-    }
-    text
-}
-
-/// Check if a string looks like a simple Python identifier.
-fn is_simple_identifier(text: &str) -> bool {
-    basilisk_resolver::is_simple_ascii_python_identifier(text)
-}
-
-fn make_assignment_diagnostic(
-    span: Span,
-    var_name: &str,
-    annotation: &str,
-    source_type: &str,
-    path: &str,
-) -> Diagnostic {
-    error_diagnostic_owned(
-        CODE.clone(),
-        format!(
-            "Cannot assign `{source_type}` to `{var_name}` annotated `{annotation}`: \
-             `Never` is only compatible with `Never` and `Any` in invariant contexts"
-        ),
-        span,
-        path,
-        Some("Change the annotation to `Never` or `Any`, or change the assigned value".to_owned()),
-        Some(
-            "PEP 484: `Never` is a bottom type and cannot be assigned to other types \
-             except in covariant contexts or when the target is `Any`"
-                .to_owned(),
-        ),
-    )
-}
-
-fn make_return_diagnostic(
-    span: Span,
-    func_name: &str,
-    return_annotation: &str,
-    return_expr: &str,
-    path: &str,
-) -> Diagnostic {
-    error_diagnostic_owned(
-        CODE.clone(),
-        format!(
-            "Cannot return `{return_expr}` from `{func_name}` annotated \
-             `-> {return_annotation}`: `Never` is only compatible with `Never` \
-             and `Any` in invariant contexts"
-        ),
-        span,
-        path,
-        Some("Change the return type annotation or the returned value".to_owned()),
-        Some(
-            "PEP 484: `Never` is a bottom type and cannot substitute for invariant \
-             type parameters"
-                .to_owned(),
-        ),
-    )
+        .any(|param| ctx.covariant_tvars.contains(&param.name.as_str()))
 }

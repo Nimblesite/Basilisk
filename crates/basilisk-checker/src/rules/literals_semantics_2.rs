@@ -12,6 +12,13 @@
 //!    `a += 3` where `a` is typed `Literal[3, 4, 5]` produces an `int` result,
 //!    which is not assignable back to `Literal[3, 4, 5]`.
 //!
+//! Every verdict is structural over the parsed `ruff` AST
+//! ([LINESCANPLAN-AST-MIGRATION], issue #408): `Literal` resolves through the
+//! import cascade under any spelling, literal values compare as parsed values
+//! (`0x14` equals `20`; `0` never equals `False` because the AST keeps int
+//! and bool distinct), and assignments are `AnnAssign`/`AugAssign` nodes,
+//! never reconstructed source lines.
+//!
 //! ```python
 //! def func(a: Literal[0], b: Literal[False]):
 //!     x1: Literal[False] = a  # E — int 0 ≠ bool False in Literal
@@ -21,11 +28,16 @@
 //!     a += 3  # E — result type is `int`, not `Literal[3, 4, 5]`
 //! ```
 
-use basilisk_resolver::ResolvedModule;
+use std::collections::HashMap;
 
+use basilisk_resolver::{ResolvedModule, Span};
+use ruff_python_ast::{Expr, Operator, Stmt, UnaryOp};
+use ruff_text_size::Ranged;
+
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::rules::shared::{extract_literal_inner, split_top_level_commas};
-use crate::span_util::slice_span;
+use crate::rules::shared::ann_str;
+use crate::rules::shared::typing_form::{subscript_args, subscript_of};
 
 use super::Rule;
 
@@ -44,241 +56,190 @@ impl Rule for LiteralValueIncompatible {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
-        let path = &module.path;
+        let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
+            return;
+        };
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
+        walk_functions(&parsed.ast.body, &resolver, &module.path, diagnostics);
+    }
+}
 
-        for func in &module.functions {
-            // Build a map of param_name -> literal annotation text for Literal-typed params.
-            let param_literals: Vec<(&str, String)> = func
-                .parameters
-                .iter()
-                .filter_map(|param| {
-                    let ann_span = param.annotation_span?;
-                    let ann = slice_span(source, ann_span)?;
-                    let ann = ann.trim();
-                    // Only interested in Literal[...] annotations (including L[...] alias).
-                    if contains_literal_subscript(ann) {
-                        Some((param.name.as_str(), ann.to_owned()))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            if param_literals.is_empty() {
-                continue;
+/// Recursively visit every function definition, however nested.
+fn walk_functions(
+    body: &[Stmt],
+    resolver: &AnnotationResolver<'_>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for stmt in body {
+        match stmt {
+            Stmt::FunctionDef(func_def) => {
+                check_function(func_def, resolver, path, diagnostics);
+                walk_functions(&func_def.body, resolver, path, diagnostics);
             }
-
-            // Scan the source lines in the function body region.
-            let Some(body_start) = usize::try_from(func.def_span.start).ok() else {
-                continue;
-            };
-            let Some(func_source) = source.get(body_start..) else {
-                continue;
-            };
-
-            // Find the colon ending the def line, then scan body lines.
-            let Some(colon_offset) = func_source.find(':') else {
-                continue;
-            };
-            let Some(body_text) = func_source.get(colon_offset + 1..) else {
-                continue;
-            };
-            let body_byte_start = body_start + colon_offset + 1;
-
-            // Determine function body indentation from first non-empty line.
-            let body_indent = detect_body_indent(body_text);
-            if body_indent == 0 {
-                continue;
+            Stmt::ClassDef(class_def) => {
+                walk_functions(&class_def.body, resolver, path, diagnostics);
             }
-
-            for line in LineIter::new(body_text, body_byte_start) {
-                let trimmed = line.text.trim();
-                if trimmed.is_empty() || trimmed.starts_with('#') {
-                    continue;
-                }
-
-                // Stop when indentation drops below the function body level.
-                let line_indent = count_leading_spaces(line.text);
-                if !trimmed.is_empty() && line_indent < body_indent {
-                    break;
-                }
-
-                // Check for annotated assignment: `x: Literal[V] = param_name`
-                check_annotated_assignment(
-                    trimmed,
-                    line.byte_offset,
-                    &param_literals,
-                    diagnostics,
-                    path,
-                    source,
-                );
-
-                // Check for augmented assignment: `param_name += expr`
-                check_augmented_assignment(
-                    trimmed,
-                    line.byte_offset,
-                    &param_literals,
-                    diagnostics,
-                    path,
-                );
-            }
+            _ => {}
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Annotated assignment check (lines 24-25 pattern)
-// ---------------------------------------------------------------------------
+/// Check one function's body for Literal assignment violations.
+fn check_function(
+    func_def: &ruff_python_ast::StmtFunctionDef,
+    resolver: &AnnotationResolver<'_>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    // Parameters whose annotation is `Literal[...]`, mapped to their values.
+    let mut param_literals: HashMap<&str, (&Expr, Vec<String>)> = HashMap::new();
+    for param in func_def.parameters.iter_non_variadic_params() {
+        let Some(annotation) = param.annotation() else {
+            continue;
+        };
+        let Some(values) = literal_values(resolver, annotation) else {
+            continue;
+        };
+        let _ = param_literals.insert(param.name().as_str(), (annotation, values));
+    }
+    if param_literals.is_empty() {
+        return;
+    }
 
-/// Check `x: Literal[V] = rhs_name` where `rhs_name` has a different Literal type.
+    check_body(&func_def.body, resolver, &param_literals, path, diagnostics);
+}
+
+/// Walk statements of a function body (including nested blocks that are not
+/// new scopes) for the two violation shapes.
+fn check_body(
+    body: &[Stmt],
+    resolver: &AnnotationResolver<'_>,
+    param_literals: &HashMap<&str, (&Expr, Vec<String>)>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for stmt in body {
+        match stmt {
+            Stmt::AnnAssign(assign) => {
+                check_annotated_assignment(assign, resolver, param_literals, path, diagnostics);
+            }
+            Stmt::AugAssign(assign) => {
+                check_augmented_assignment(assign, param_literals, path, diagnostics);
+            }
+            Stmt::If(if_stmt) => {
+                check_body(&if_stmt.body, resolver, param_literals, path, diagnostics);
+                for clause in &if_stmt.elif_else_clauses {
+                    check_body(&clause.body, resolver, param_literals, path, diagnostics);
+                }
+            }
+            Stmt::For(for_stmt) => {
+                check_body(&for_stmt.body, resolver, param_literals, path, diagnostics);
+                check_body(
+                    &for_stmt.orelse,
+                    resolver,
+                    param_literals,
+                    path,
+                    diagnostics,
+                );
+            }
+            Stmt::While(while_stmt) => {
+                check_body(
+                    &while_stmt.body,
+                    resolver,
+                    param_literals,
+                    path,
+                    diagnostics,
+                );
+                check_body(
+                    &while_stmt.orelse,
+                    resolver,
+                    param_literals,
+                    path,
+                    diagnostics,
+                );
+            }
+            Stmt::With(with_stmt) => {
+                check_body(&with_stmt.body, resolver, param_literals, path, diagnostics);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// `x: Literal[V] = param` where the parameter's Literal values are not all
+/// members of the target's Literal values.
 fn check_annotated_assignment(
-    trimmed: &str,
-    line_byte_offset: usize,
-    param_literals: &[(&str, String)],
-    diagnostics: &mut Vec<Diagnostic>,
+    assign: &ruff_python_ast::StmtAnnAssign,
+    resolver: &AnnotationResolver<'_>,
+    param_literals: &HashMap<&str, (&Expr, Vec<String>)>,
     path: &str,
-    _source: &str,
-) {
-    // Pattern: `var_name: <annotation> = <rhs>`
-    let Some(colon_pos) = trimmed.find(':') else {
-        return;
-    };
-    let Some(var_name) = trimmed.get(..colon_pos).map(str::trim) else {
-        return;
-    };
-    if !is_simple_identifier(var_name) {
-        return;
-    }
-
-    let Some(after_colon) = trimmed.get(colon_pos + 1..) else {
-        return;
-    };
-    let Some(eq_pos) = find_top_level_eq(after_colon) else {
-        return;
-    };
-
-    let Some(annotation) = after_colon.get(..eq_pos).map(str::trim) else {
-        return;
-    };
-    let Some(rhs) = after_colon.get(eq_pos + 1..).map(str::trim) else {
-        return;
-    };
-
-    // Strip trailing comments from rhs.
-    let rhs = rhs.split_once('#').map_or(rhs, |(before, _)| before).trim();
-
-    // Both annotation and the param must be Literal types.
-    if !contains_literal_subscript(annotation) {
-        return;
-    }
-
-    // RHS must be a simple name that matches a Literal-typed parameter.
-    if !is_simple_identifier(rhs) {
-        return;
-    }
-
-    let Some((_param_name, param_ann)) = param_literals.iter().find(|(name, _)| *name == rhs)
-    else {
-        return;
-    };
-
-    // Extract the Literal inner values from both annotations.
-    let Some(target_values) = extract_literal_values(annotation) else {
-        return;
-    };
-    let Some(source_values) = extract_literal_values(param_ann) else {
-        return;
-    };
-
-    // Check if every source value is in the target values set (considering
-    // that int 0 ≠ bool False, int 1 ≠ bool True).
-    if !literal_values_assignable(&source_values, &target_values) {
-        let var_byte_start = find_var_in_line(trimmed, var_name, line_byte_offset);
-        let Some(span_start) = u32::try_from(var_byte_start).ok() else {
-            return;
-        };
-        let Some(span_end) = u32::try_from(var_byte_start + var_name.len()).ok() else {
-            return;
-        };
-
-        diagnostics.push(error_diagnostic_owned(
-            CODE.clone(),
-            format!(
-                "Type mismatch: `{var_name}` is annotated `{annotation}` but assigned \
-                 parameter `{rhs}` with type `{param_ann}`"
-            ),
-            basilisk_resolver::Span {
-                start: span_start,
-                end: span_end,
-            },
-            path,
-            Some("`Literal[0]` and `Literal[False]` are not equivalent (PEP 586)".to_owned()),
-            Some("int and bool Literal values are distinct even when numerically equal".to_owned()),
-        ));
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Augmented assignment check (line 33 pattern)
-// ---------------------------------------------------------------------------
-
-/// Check `param_name += expr` where param has a Literal type.
-fn check_augmented_assignment(
-    trimmed: &str,
-    line_byte_offset: usize,
-    param_literals: &[(&str, String)],
     diagnostics: &mut Vec<Diagnostic>,
-    path: &str,
 ) {
-    // Detect augmented assignment operators.
-    let aug_ops = [
-        "+=", "-=", "*=", "/=", "//=", "%=", "**=", "&=", "|=", "^=", "<<=", ">>=",
-    ];
-    let mut found_op = None;
-    for op in &aug_ops {
-        if let Some(pos) = trimmed.find(op) {
-            // Make sure the char before the op is not part of another operator.
-            let Some(before) = trimmed.get(..pos) else {
-                continue;
-            };
-            let target = before.trim();
-            if is_simple_identifier(target) {
-                found_op = Some((target, *op, pos));
-                break;
-            }
-        }
+    let Expr::Name(target) = assign.target.as_ref() else {
+        return;
+    };
+    let Some(target_values) = literal_values(resolver, &assign.annotation) else {
+        return;
+    };
+    let Some(Expr::Name(rhs)) = assign.value.as_deref() else {
+        return;
+    };
+    let Some((param_ann, source_values)) = param_literals.get(rhs.id.as_str()) else {
+        return;
+    };
+
+    let assignable = source_values
+        .iter()
+        .all(|value| target_values.contains(value));
+    if assignable {
+        return;
     }
-
-    let Some((target_name, op, _op_pos)) = found_op else {
-        return;
-    };
-
-    // Check if the target is a Literal-typed parameter.
-    let Some((_param_name, param_ann)) =
-        param_literals.iter().find(|(name, _)| *name == target_name)
-    else {
-        return;
-    };
-
-    let var_byte_start = find_var_in_line(trimmed, target_name, line_byte_offset);
-    let Some(span_start) = u32::try_from(var_byte_start).ok() else {
-        return;
-    };
-    let Some(span_end) = u32::try_from(var_byte_start + target_name.len()).ok() else {
-        return;
-    };
 
     diagnostics.push(error_diagnostic_owned(
         CODE.clone(),
         format!(
-            "Augmented assignment `{target_name} {op} ...` is incompatible with \
-             declared type `{param_ann}`"
+            "Type mismatch: `{}` is annotated `{}` but assigned \
+             parameter `{}` with type `{}`",
+            target.id.as_str(),
+            ann_str(&assign.annotation),
+            rhs.id.as_str(),
+            ann_str(param_ann)
         ),
-        basilisk_resolver::Span {
-            start: span_start,
-            end: span_end,
-        },
+        node_span(target.range()),
+        path,
+        Some("`Literal[0]` and `Literal[False]` are not equivalent (PEP 586)".to_owned()),
+        Some("int and bool Literal values are distinct even when numerically equal".to_owned()),
+    ));
+}
+
+/// `param op= expr` where the parameter is Literal-typed: the arithmetic
+/// result widens past the declared Literal, so the re-assignment is invalid.
+fn check_augmented_assignment(
+    assign: &ruff_python_ast::StmtAugAssign,
+    param_literals: &HashMap<&str, (&Expr, Vec<String>)>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Expr::Name(target) = assign.target.as_ref() else {
+        return;
+    };
+    let Some((param_ann, _)) = param_literals.get(target.id.as_str()) else {
+        return;
+    };
+    let op = augmented_op_text(assign.op);
+    let param_ann = ann_str(param_ann);
+
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
+            "Augmented assignment `{} {op} ...` is incompatible with \
+             declared type `{param_ann}`",
+            target.id.as_str()
+        ),
+        node_span(target.range()),
         path,
         Some(format!(
             "The result of `{op}` on `{param_ann}` widens to `int`, which is not \
@@ -292,199 +253,64 @@ fn check_augmented_assignment(
     ));
 }
 
-// ---------------------------------------------------------------------------
-// Literal value extraction and comparison
-// ---------------------------------------------------------------------------
-
-/// Returns `true` when the annotation text contains `Literal[` (or an alias like `L[`
-/// when imported as `from typing import Literal as L`).
-fn contains_literal_subscript(ann: &str) -> bool {
-    ann.starts_with("Literal[") || ann.contains(".Literal[") || ann.starts_with("L[")
+/// The `op=` spelling of an augmented-assignment operator.
+const fn augmented_op_text(op: Operator) -> &'static str {
+    match op {
+        Operator::Add => "+=",
+        Operator::Sub => "-=",
+        Operator::Mult => "*=",
+        Operator::MatMult => "@=",
+        Operator::Div => "/=",
+        Operator::Mod => "%=",
+        Operator::Pow => "**=",
+        Operator::LShift => "<<=",
+        Operator::RShift => ">>=",
+        Operator::BitOr => "|=",
+        Operator::BitXor => "^=",
+        Operator::BitAnd => "&=",
+        Operator::FloorDiv => "//=",
+    }
 }
 
-/// Extract individual values from a `Literal[v1, v2, ...]` annotation.
-/// Returns normalized string representations.
-fn extract_literal_values(ann: &str) -> Option<Vec<String>> {
-    let inner = extract_literal_inner(ann)?;
+/// The values of a `Literal[...]` annotation as canonical comparison keys, or
+/// `None` when the annotation is not a `Literal` subscript. Int and bool keys
+/// never collide because the AST keeps the node kinds distinct.
+fn literal_values(resolver: &AnnotationResolver<'_>, annotation: &Expr) -> Option<Vec<String>> {
+    let slice = subscript_of(resolver, annotation, "Literal")?;
     Some(
-        split_top_level_commas(inner)
+        subscript_args(slice)
             .into_iter()
-            .map(|v| v.trim().to_owned())
+            .map(literal_value_key)
             .collect(),
     )
 }
 
-/// Check if source Literal values are all assignable to target Literal values.
-/// `Literal[0]` is NOT assignable to `Literal[False]` and vice versa.
-fn literal_values_assignable(source_values: &[String], target_values: &[String]) -> bool {
-    source_values.iter().all(|source_val| {
-        target_values
-            .iter()
-            .any(|target_val| literal_value_eq(source_val, target_val))
-    })
-}
-
-/// Two Literal values are equal only if they are textually identical
-/// (after normalization). `0` and `False` are NOT equal.
-fn literal_value_eq(left: &str, right: &str) -> bool {
-    let left = normalize_literal_value(left);
-    let right = normalize_literal_value(right);
-    left == right
-}
-
-/// Normalize a literal value for comparison.
-/// - Convert hex/octal/binary integers to decimal.
-/// - Keep `True`, `False`, `None`, strings as-is.
-fn normalize_literal_value(value: &str) -> String {
-    let trimmed = value.trim();
-
-    // Boolean and None stay as-is.
-    if matches!(trimmed, "True" | "False" | "None") {
-        return trimmed.to_owned();
-    }
-
-    // Try to parse as integer (with optional sign and base prefix).
-    if let Some(int_val) = parse_int_literal(trimmed) {
-        return int_val.to_string();
-    }
-
-    trimmed.to_owned()
-}
-
-/// Parse a Python integer literal (decimal, hex, octal, binary, optionally signed).
-fn parse_int_literal(source: &str) -> Option<i64> {
-    let trimmed = source.trim();
-    let (is_negative, digits) = if let Some(rest) = trimmed.strip_prefix('-') {
-        (true, rest.trim())
-    } else if let Some(rest) = trimmed.strip_prefix('+') {
-        (false, rest.trim())
-    } else {
-        (false, trimmed)
-    };
-
-    let value = if let Some(hex) = digits
-        .strip_prefix("0x")
-        .or_else(|| digits.strip_prefix("0X"))
-    {
-        i64::from_str_radix(hex, 16).ok()?
-    } else if let Some(bin) = digits
-        .strip_prefix("0b")
-        .or_else(|| digits.strip_prefix("0B"))
-    {
-        i64::from_str_radix(bin, 2).ok()?
-    } else if let Some(oct) = digits
-        .strip_prefix("0o")
-        .or_else(|| digits.strip_prefix("0O"))
-    {
-        i64::from_str_radix(oct, 8).ok()?
-    } else {
-        digits.parse::<i64>().ok()?
-    };
-
-    if is_negative {
-        Some(-value)
-    } else {
-        Some(value)
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Source scanning helpers
-// ---------------------------------------------------------------------------
-
-/// A single line from the source with its byte offset.
-struct LineInfo<'a> {
-    text: &'a str,
-    byte_offset: usize,
-}
-
-/// Iterator over lines with byte offsets.
-struct LineIter<'a> {
-    remaining: &'a str,
-    offset: usize,
-}
-
-impl<'a> LineIter<'a> {
-    fn new(text: &'a str, start_offset: usize) -> Self {
-        Self {
-            remaining: text,
-            offset: start_offset,
+/// A canonical comparison key for one Literal value expression.
+///
+/// Parsed values, not source spellings: `0x14`, `0o24`, and `20` all key as
+/// `int:20`, while `True`/`False` key as `bool:` — so `Literal[0]` and
+/// `Literal[False]` can never compare equal (PEP 586).
+fn literal_value_key(value: &Expr) -> String {
+    match value {
+        Expr::BooleanLiteral(lit) => format!("bool:{}", lit.value),
+        Expr::NumberLiteral(lit) => format!("num:{:?}", lit.value),
+        Expr::NoneLiteral(_) => "none".to_owned(),
+        Expr::StringLiteral(lit) => format!("str:{}", lit.value.to_str()),
+        Expr::BytesLiteral(lit) => {
+            let bytes: Vec<u8> = lit.value.bytes().collect();
+            format!("bytes:{bytes:?}")
         }
-    }
-}
-
-impl<'a> Iterator for LineIter<'a> {
-    type Item = LineInfo<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.remaining.is_empty() {
-            return None;
+        Expr::UnaryOp(unary) if unary.op == UnaryOp::USub => {
+            format!("neg:{}", literal_value_key(&unary.operand))
         }
-        let newline_pos = self
-            .remaining
-            .find('\n')
-            .map_or(self.remaining.len(), |p| p);
-        let line = self.remaining.get(..newline_pos)?;
-        let info = LineInfo {
-            text: line,
-            byte_offset: self.offset,
-        };
-        let consumed = if newline_pos < self.remaining.len() {
-            newline_pos + 1
-        } else {
-            newline_pos
-        };
-        self.remaining = self.remaining.get(consumed..).map_or("", |s| s);
-        self.offset += consumed;
-        Some(info)
+        other => format!("expr:{}", ann_str(other)),
     }
 }
 
-/// Count leading spaces in a line.
-fn count_leading_spaces(line: &str) -> usize {
-    line.bytes().take_while(|b| *b == b' ').count()
-}
-
-/// Detect body indentation from the first non-empty line.
-fn detect_body_indent(body_text: &str) -> usize {
-    for line in body_text.lines() {
-        let trimmed = line.trim();
-        if !trimmed.is_empty() && !trimmed.starts_with('#') {
-            return count_leading_spaces(line);
-        }
+/// The resolver span of an AST node's range.
+fn node_span(range: ruff_text_size::TextRange) -> Span {
+    Span {
+        start: range.start().to_u32(),
+        end: range.end().to_u32(),
     }
-    0
-}
-
-/// Find the `=` sign at the top level (not inside brackets) after the annotation.
-fn find_top_level_eq(text: &str) -> Option<usize> {
-    let mut depth = 0i32;
-    for (idx, byte) in text.bytes().enumerate() {
-        match byte {
-            b'[' | b'(' | b'{' => depth += 1,
-            b']' | b')' | b'}' => depth -= 1,
-            b'=' if depth == 0
-                // Make sure it's not `==`.
-                && text.as_bytes().get(idx + 1) != Some(&b'=')
-                    && (idx == 0 || text.as_bytes().get(idx.wrapping_sub(1)) != Some(&b'='))
-                    // Also not `!=`, `<=`, `>=`
-                    && (idx == 0 || !matches!(text.as_bytes().get(idx.wrapping_sub(1)), Some(b'!' | b'<' | b'>'))) =>
-            {
-                return Some(idx);
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-/// Simple identifier check.
-fn is_simple_identifier(source: &str) -> bool {
-    basilisk_resolver::is_simple_python_identifier(source.trim())
-}
-
-/// Find the byte offset of a variable name within a line at a given base offset.
-fn find_var_in_line(line: &str, var_name: &str, line_byte_offset: usize) -> usize {
-    line.find(var_name)
-        .map_or(line_byte_offset, |pos| line_byte_offset + pos)
 }

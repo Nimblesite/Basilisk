@@ -1,22 +1,32 @@
 //! Implements [`tuples_type_compat`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
-//! Tuple annotation parsing and compatibility helpers for `tuples_type_compat`.
+//! Tuple annotation modelling and compatibility helpers for `tuples_type_compat`.
+//!
+//! The tuple model is built from the parsed `ruff` AST
+//! ([LINESCANPLAN-AST-MIGRATION], issue #408): starred unpacks are
+//! `Expr::Starred` nodes and element types are expression nodes rendered
+//! canonically — never `*tuple[` substring hits or comma-splitting of source
+//! text.
 
-use crate::rules::shared::split_top_level_commas;
+use ruff_python_ast::{Expr, Number};
+
+use crate::annotation::AnnotationResolver;
+use crate::rules::shared::ann_str;
+use crate::rules::shared::typing_form::{denotes, subscript_args};
 
 // ---------------------------------------------------------------------------
 // Parsed tuple annotation representation
 // ---------------------------------------------------------------------------
 
-/// A parsed representation of a tuple type annotation.
+/// A structured tuple type annotation.
 #[derive(Debug)]
-pub(super) enum TupleAnnotation {
+pub(super) enum TupleShape {
     /// `tuple[T1, T2, ..., Tn]` — fully fixed length.
     Fixed { count: usize },
     /// `tuple[T, ...]` — homogeneous unbounded.
     Homogeneous { element_type: String },
-    /// Mixed form with a starred unpack in the middle:
-    /// `tuple[P1, ..., Pm, *tuple[M, ...], S1, ..., Sk]`
-    /// or `tuple[P1, ..., Pm, *tuple[S1, ..., Sk]]` (fixed unpack, `has_unbounded=false`).
+    /// Mixed form with a starred unpack:
+    /// `tuple[P.., *tuple[M, ...], S..]` (`has_unbounded=true`) or
+    /// `tuple[P.., *tuple[F..], S..]` (fixed unpack, flattened into the prefix).
     Mixed {
         fixed_prefix: usize,
         fixed_suffix: usize,
@@ -27,186 +37,147 @@ pub(super) enum TupleAnnotation {
     },
 }
 
-/// Parse a `tuple[...]` annotation into a structured form.
+/// Is this annotation a `tuple[...]` subscript (builtin `tuple` or
+/// `typing.Tuple` under any spelling)?
+fn tuple_subscript<'e>(resolver: &AnnotationResolver<'_>, expr: &'e Expr) -> Option<Vec<&'e Expr>> {
+    let Expr::Subscript(subscript) = expr else {
+        return None;
+    };
+    let is_tuple = matches!(subscript.value.as_ref(), Expr::Name(name) if name.id.as_str() == "tuple")
+        || denotes(resolver, &subscript.value, "Tuple");
+    is_tuple.then(|| subscript_args(&subscript.slice))
+}
+
+/// Parse a tuple annotation node into a structured shape.
 ///
-/// Returns `None` for non-tuple annotations or unparseable forms.
-pub(super) fn parse_tuple_annotation(ann: &str) -> Option<TupleAnnotation> {
-    let ann = ann.trim();
-    let inner = ann.strip_prefix("tuple[")?;
-    // Strip outer trailing `]` (must be balanced).
-    let inner = strip_outer_bracket(inner)?;
-    let inner = inner.trim();
+/// Returns `None` for non-tuple annotations and forms the model does not
+/// cover (e.g. a `*Ts` `TypeVarTuple` unpack).
+pub(super) fn parse_tuple_shape(
+    resolver: &AnnotationResolver<'_>,
+    expr: &Expr,
+) -> Option<TupleShape> {
+    let args = tuple_subscript(resolver, expr)?;
 
-    // Empty tuple: `tuple[()]`
-    if inner == "()" {
-        return Some(TupleAnnotation::Fixed { count: 0 });
+    // Empty tuple: `tuple[()]`.
+    if let [Expr::Tuple(inner)] = args.as_slice() {
+        if inner.elts.is_empty() {
+            return Some(TupleShape::Fixed { count: 0 });
+        }
     }
 
-    let components: Vec<&str> = split_top_level_commas(inner)
-        .into_iter()
-        .map(str::trim)
-        .collect();
-
-    // Homogeneous unbounded: `tuple[T, ...]`
-    if components.len() == 2 && components.get(1).copied() == Some("...") {
-        let element_type = (*components.first()?).to_string();
-        return Some(TupleAnnotation::Homogeneous { element_type });
-    }
-
-    // Check for a starred unpack component `*tuple[...]`
-    let star_pos = components.iter().position(|c| c.starts_with('*'));
-
-    let Some(star_idx) = star_pos else {
-        // No starred unpack — plain fixed-length tuple.
-        return Some(TupleAnnotation::Fixed {
-            count: components.len(),
+    // Homogeneous unbounded: `tuple[T, ...]`.
+    if let [element, Expr::EllipsisLiteral(_)] = args.as_slice() {
+        return Some(TupleShape::Homogeneous {
+            element_type: ann_str(element),
         });
+    }
+
+    let star_idx = args.iter().position(|arg| matches!(arg, Expr::Starred(_)));
+    let Some(star_idx) = star_idx else {
+        return Some(TupleShape::Fixed { count: args.len() });
     };
 
-    let star_component = components.get(star_idx)?;
-    // Must be `*tuple[...]`
-    let unpack_inner = star_component
-        .strip_prefix('*')
-        .and_then(|s| s.strip_prefix("tuple["))
-        .and_then(|s| strip_outer_bracket(s))?;
-    let unpack_inner = unpack_inner.trim();
+    // The starred component must itself be a tuple form.
+    let Expr::Starred(starred) = args.get(star_idx)? else {
+        return None;
+    };
+    let unpack_args = tuple_subscript(resolver, &starred.value)?;
 
-    let prefix_types: Vec<String> = components
-        .get(..star_idx)
-        .unwrap_or_default()
+    let mut prefix_types: Vec<String> = args.get(..star_idx)?.iter().map(|e| ann_str(e)).collect();
+    let suffix_types: Vec<String> = args
+        .get(star_idx + 1..)?
         .iter()
-        .map(|s| (*s).to_owned())
+        .map(|e| ann_str(e))
         .collect();
-    let suffix_types: Vec<String> = components
-        .get(star_idx + 1..)
-        .unwrap_or_default()
-        .iter()
-        .map(|s| (*s).to_owned())
-        .collect();
-    let fixed_prefix = prefix_types.len();
     let fixed_suffix = suffix_types.len();
 
-    // Parse the unpack contents.
-    let unpack_parts: Vec<&str> = split_top_level_commas(unpack_inner)
-        .into_iter()
-        .map(str::trim)
-        .collect();
-
-    if unpack_parts.len() == 2 && unpack_parts.get(1).copied() == Some("...") {
-        // `*tuple[T, ...]` — unbounded middle.
-        let middle_type = Some((*unpack_parts.first()?).to_string());
-        Some(TupleAnnotation::Mixed {
-            fixed_prefix,
+    // `*tuple[M, ...]` — unbounded middle.
+    if let [middle, Expr::EllipsisLiteral(_)] = unpack_args.as_slice() {
+        return Some(TupleShape::Mixed {
+            fixed_prefix: prefix_types.len(),
             fixed_suffix,
             has_unbounded: true,
             prefix_types,
             suffix_types,
-            middle_type,
-        })
-    } else if unpack_parts == ["()"] || unpack_parts.is_empty() {
-        // `*tuple[()]` — empty fixed unpack.
-        Some(TupleAnnotation::Mixed {
-            fixed_prefix,
-            fixed_suffix,
-            has_unbounded: false,
-            prefix_types,
-            suffix_types,
-            middle_type: None,
-        })
-    } else {
-        // `*tuple[T1, T2]` — fixed unpack (adds T1, T2 to total count).
-        let extra_fixed = unpack_parts.len();
-        Some(TupleAnnotation::Mixed {
-            fixed_prefix: fixed_prefix + extra_fixed,
-            fixed_suffix,
-            has_unbounded: false,
-            prefix_types: {
-                let mut p = prefix_types;
-                p.extend(unpack_parts.iter().map(|s| (*s).to_owned()));
-                p
-            },
-            suffix_types,
-            middle_type: None,
-        })
+            middle_type: Some(ann_str(middle)),
+        });
     }
+
+    // `*tuple[()]` — empty fixed unpack.
+    let is_empty_unpack = matches!(
+        unpack_args.as_slice(),
+        [Expr::Tuple(inner)] if inner.elts.is_empty()
+    );
+    if !is_empty_unpack {
+        // `*tuple[T1, T2]` — fixed unpack: its elements join the prefix.
+        prefix_types.extend(unpack_args.iter().map(|e| ann_str(e)));
+    }
+    Some(TupleShape::Mixed {
+        fixed_prefix: prefix_types.len(),
+        fixed_suffix,
+        has_unbounded: false,
+        prefix_types,
+        suffix_types,
+        middle_type: None,
+    })
 }
 
-/// Check whether a variable annotation (for the source side) is incompatible
-/// with the target starred-unpack annotation.
+/// Does this tuple annotation contain a starred unpack component?
+pub(super) fn has_starred_unpack(resolver: &AnnotationResolver<'_>, expr: &Expr) -> bool {
+    tuple_subscript(resolver, expr)
+        .is_some_and(|args| args.iter().any(|arg| matches!(arg, Expr::Starred(_))))
+}
+
+/// Check whether a source variable's tuple shape is incompatible with the
+/// target's shape.
 ///
 /// Handles:
-/// - `tuple[T, ...]` (homogeneous) assigned to `tuple[int, *tuple[int, ...]]` (mixed) → E
-/// - `tuple[int, *tuple[int, ...]]` or `tuple[int, ...]` assigned to `tuple[int]` → E
-pub(super) fn check_var_against_annotation(
-    src_ann: &str,
-    target_ann: &str,
+/// - homogeneous `tuple[T, ...]` assigned to a mixed starred form → E
+/// - anything possibly longer than a fixed-length target → E
+pub(super) fn check_var_against_shape(
+    src: &TupleShape,
+    target: &TupleShape,
 ) -> Option<&'static str> {
-    // Parse the target annotation structure.
-    let target = parse_tuple_annotation(target_ann)?;
-    let src = parse_tuple_annotation(src_ann)?;
-
-    match (&target, &src) {
-        // target is a mixed starred form like tuple[int, *tuple[int, ...]]
-        // source is a homogeneous unbounded form like tuple[int, ...]
-        (TupleAnnotation::Mixed { .. }, TupleAnnotation::Homogeneous { .. }) => {
+    match (target, src) {
+        (TupleShape::Mixed { .. }, TupleShape::Homogeneous { .. }) => {
             Some("homogeneous unbounded tuple is not assignable to mixed starred-unpack form")
         }
-
-        // target is a fixed-length tuple like tuple[int]
-        // source is anything with potential unbounded length
-        (TupleAnnotation::Fixed { count: target_len }, src_t) => {
-            let src_may_be_longer = match src_t {
-                TupleAnnotation::Homogeneous { .. } => true,
-                TupleAnnotation::Mixed {
+        (TupleShape::Fixed { count: target_len }, src_shape) => {
+            let src_may_be_longer = match src_shape {
+                TupleShape::Homogeneous { .. } => true,
+                TupleShape::Mixed {
                     fixed_prefix,
                     fixed_suffix,
                     has_unbounded,
                     ..
                 } => *has_unbounded || (fixed_prefix + fixed_suffix > *target_len),
-                TupleAnnotation::Fixed { count: src_len } => src_len > target_len,
+                TupleShape::Fixed { count: src_len } => src_len > target_len,
             };
-            if src_may_be_longer {
-                Some("source tuple type may have more elements than the fixed-length target allows")
-            } else {
-                None
-            }
+            src_may_be_longer.then_some(
+                "source tuple type may have more elements than the fixed-length target allows",
+            )
         }
-
         _ => None,
     }
 }
 
-/// Check whether a tuple literal (list of element type strings) is compatible
-/// with a starred-unpack annotation.
+/// Check whether a tuple literal's elements are compatible with a tuple shape.
 ///
 /// Returns `Some(message)` when the literal violates the annotation.
-pub(super) fn check_literal_against_annotation(
-    elems: &[String],
-    annotation: &str,
+pub(super) fn check_literal_against_shape(
+    elems: &[&Expr],
+    shape: &TupleShape,
 ) -> Option<&'static str> {
-    let ann = parse_tuple_annotation(annotation)?;
+    match shape {
+        TupleShape::Fixed { count } => (elems.len() != *count)
+            .then_some("tuple literal length does not match fixed starred-unpack annotation"),
 
-    match ann {
-        TupleAnnotation::Fixed { count } => {
-            if elems.len() != count {
-                return Some("tuple literal length does not match fixed starred-unpack annotation");
-            }
-            None
-        }
+        TupleShape::Homogeneous { element_type } => elems
+            .iter()
+            .any(|elem| !elem_type_compatible(elem, element_type))
+            .then_some("tuple literal element type incompatible with homogeneous annotation"),
 
-        TupleAnnotation::Homogeneous { element_type } => {
-            // Every element must match element_type.
-            for elem in elems {
-                if !elem_type_compatible(elem, &element_type) {
-                    return Some(
-                        "tuple literal element type incompatible with homogeneous annotation",
-                    );
-                }
-            }
-            None
-        }
-
-        TupleAnnotation::Mixed {
+        TupleShape::Mixed {
             fixed_prefix,
             fixed_suffix,
             has_unbounded,
@@ -215,20 +186,20 @@ pub(super) fn check_literal_against_annotation(
             middle_type,
         } => check_literal_against_mixed(
             elems,
-            fixed_prefix,
-            fixed_suffix,
-            has_unbounded,
-            &prefix_types,
-            &suffix_types,
+            *fixed_prefix,
+            *fixed_suffix,
+            *has_unbounded,
+            prefix_types,
+            suffix_types,
             middle_type.as_deref(),
         ),
     }
 }
 
-/// Check a tuple literal against a mixed starred-unpack annotation
+/// Check a tuple literal against a mixed starred-unpack shape
 /// like `tuple[int, *tuple[str, ...], int]`.
 fn check_literal_against_mixed(
-    elems: &[String],
+    elems: &[&Expr],
     fixed_prefix: usize,
     fixed_suffix: usize,
     has_unbounded: bool,
@@ -244,59 +215,40 @@ fn check_literal_against_mixed(
         if n != min_len {
             return Some("tuple literal length does not match fixed starred-unpack annotation");
         }
-        // Check prefix types.
-        for (i, pt) in prefix_types.iter().enumerate() {
-            if let Some(elem) = elems.get(i) {
-                if !elem_type_compatible(elem, pt) {
-                    return Some("tuple literal element type incompatible with annotation prefix");
-                }
-            }
-        }
-        // Check suffix types (from the right).
-        for (j, st) in suffix_types.iter().enumerate() {
-            let elem_idx = n - fixed_suffix + j;
-            if let Some(elem) = elems.get(elem_idx) {
-                if !elem_type_compatible(elem, st) {
-                    return Some("tuple literal element type incompatible with annotation suffix");
-                }
-            }
-        }
-        return None;
-    }
-
-    // Unbounded middle: must have at least min_len elements.
-    if n < min_len {
+    } else if n < min_len {
         return Some("tuple literal has too few elements for starred-unpack annotation");
     }
 
     // Check fixed prefix.
-    for (i, pt) in prefix_types.iter().enumerate() {
+    for (i, prefix_type) in prefix_types.iter().enumerate() {
         if let Some(elem) = elems.get(i) {
-            if !elem_type_compatible(elem, pt) {
+            if !elem_type_compatible(elem, prefix_type) {
                 return Some("tuple literal element type incompatible with annotation prefix");
             }
         }
     }
 
     // Check fixed suffix (from the right).
-    for (j, st) in suffix_types.iter().enumerate() {
+    for (j, suffix_type) in suffix_types.iter().enumerate() {
         let elem_idx = n - fixed_suffix + j;
         if let Some(elem) = elems.get(elem_idx) {
-            if !elem_type_compatible(elem, st) {
+            if !elem_type_compatible(elem, suffix_type) {
                 return Some("tuple literal element type incompatible with annotation suffix");
             }
         }
     }
 
     // Check middle elements against the unbounded type.
-    if let Some(mid_type) = middle_type {
-        let middle_start = fixed_prefix;
-        let middle_end = n - fixed_suffix;
-        for elem in elems.get(middle_start..middle_end).unwrap_or_default() {
-            if !elem_type_compatible(elem, mid_type) {
-                return Some(
-                    "tuple literal middle element type incompatible with starred-unpack annotation",
-                );
+    if has_unbounded {
+        if let Some(mid_type) = middle_type {
+            let middle_start = fixed_prefix;
+            let middle_end = n - fixed_suffix;
+            for elem in elems.get(middle_start..middle_end).unwrap_or_default() {
+                if !elem_type_compatible(elem, mid_type) {
+                    return Some(
+                        "tuple literal middle element type incompatible with starred-unpack annotation",
+                    );
+                }
             }
         }
     }
@@ -308,105 +260,39 @@ fn check_literal_against_mixed(
 // Type compatibility helpers
 // ---------------------------------------------------------------------------
 
-/// Determine the inferred type of a tuple literal element (from source text).
-fn infer_elem_type(elem: &str) -> Option<&'static str> {
-    let elem = elem.trim();
-    if is_int_literal(elem) {
-        return Some("int");
+/// The inferred builtin type of a tuple literal element node, when knowable.
+fn infer_elem_type(elem: &Expr) -> Option<&'static str> {
+    match elem {
+        Expr::BooleanLiteral(_) => Some("bool"),
+        Expr::NumberLiteral(lit) => match &lit.value {
+            Number::Int(_) => Some("int"),
+            Number::Float(_) => Some("float"),
+            Number::Complex { .. } => Some("complex"),
+        },
+        Expr::StringLiteral(_) | Expr::FString(_) => Some("str"),
+        Expr::BytesLiteral(_) => Some("bytes"),
+        Expr::UnaryOp(unary) => infer_elem_type(&unary.operand),
+        _ => None,
     }
-    if is_float_literal(elem) {
-        return Some("float");
-    }
-    if is_str_literal(elem) {
-        return Some("str");
-    }
-    None
 }
 
-/// Check whether a literal element is compatible with an annotation type.
-pub(super) fn elem_type_compatible(elem: &str, ann_type: &str) -> bool {
+/// Check whether a literal element node is compatible with an annotation type
+/// rendering. Unknown element types are conservatively allowed.
+pub(super) fn elem_type_compatible(elem: &Expr, ann_type: &str) -> bool {
     let Some(inferred) = infer_elem_type(elem) else {
-        // Cannot infer type — be conservative and allow.
         return true;
     };
     types_assignable(inferred, ann_type)
 }
 
-/// Returns `true` when `src_type` is assignable to `target_type`.
+/// Returns `true` when `src` is assignable to `target` under the numeric
+/// tower, with `Any` compatible in both directions.
 pub(super) fn types_assignable(src: &str, target: &str) -> bool {
-    if src == target {
+    if src == target || src == "Any" || target == "Any" {
         return true;
     }
-    // int is assignable to float and complex (numeric tower).
-    if src == "int" && (target == "float" || target == "complex") {
-        return true;
-    }
-    if src == "bool" && (target == "int" || target == "float" || target == "complex") {
-        return true;
-    }
-    // float is assignable to complex.
-    if src == "float" && target == "complex" {
-        return true;
-    }
-    // Any is compatible with everything.
-    if src == "Any" || target == "Any" {
-        return true;
-    }
-    false
-}
-
-// ---------------------------------------------------------------------------
-// Literal parsing helpers
-// ---------------------------------------------------------------------------
-
-/// Returns `true` when `s` looks like a Python integer literal.
-pub(super) fn is_int_literal(s: &str) -> bool {
-    let s = s.trim().trim_start_matches('-');
-    !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
-}
-
-/// Returns `true` when `s` looks like a Python float literal (has a `.`).
-pub(super) fn is_float_literal(s: &str) -> bool {
-    let s = s.trim();
-    let s = s.trim_start_matches('-');
-    s.contains('.') && s.chars().all(|c| c.is_ascii_digit() || c == '.')
-}
-
-/// Returns `true` when `s` looks like a Python string literal.
-pub(super) fn is_str_literal(s: &str) -> bool {
-    let s = s.trim();
-    (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\''))
-}
-
-/// Returns `true` when `annotation` contains a starred unpack `*tuple[...]`.
-pub(super) fn annotation_has_starred_unpack(annotation: &str) -> bool {
-    annotation.contains("*tuple[")
-}
-
-/// Returns `true` when `s` is a simple Python identifier.
-pub(super) fn is_simple_name(s: &str) -> bool {
-    basilisk_resolver::is_simple_python_identifier(s)
-}
-
-// ---------------------------------------------------------------------------
-// Bracket and comma splitting utilities
-// ---------------------------------------------------------------------------
-
-/// Strip the outer `]` from a string that starts immediately after `[`.
-/// Handles nested brackets correctly.
-pub(super) fn strip_outer_bracket(s: &str) -> Option<&str> {
-    let mut depth = 1i32;
-    for (i, byte) in s.bytes().enumerate() {
-        match byte {
-            b'[' => depth += 1,
-            b']' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(&s[..i]);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
+    matches!(
+        (src, target),
+        ("int", "float" | "complex") | ("bool", "int" | "float" | "complex") | ("float", "complex")
+    )
 }

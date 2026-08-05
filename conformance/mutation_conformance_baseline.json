@@ -1,0 +1,6 @@
+{
+  "min_pass_rate": 0.2269,
+  "measured_passed": 32,
+  "measured_total": 141,
+  "note": "RATCHET — mutated-suite pass rate may only rise. See run_mutation_conformance.py."
+}

@@ -144,9 +144,9 @@ pub(super) fn check_instance_classvar_assignments(
             // `Starship.stats = {}` assigns on the class itself, which is legal.
             continue;
         };
-        let is_classvar_attr = classvar_attrs
-            .iter()
-            .any(|(cls, attrs)| *cls == class_name && attrs.contains(&assignment.attr_name.as_str()));
+        let is_classvar_attr = classvar_attrs.iter().any(|(cls, attrs)| {
+            *cls == class_name && attrs.contains(&assignment.attr_name.as_str())
+        });
         if is_classvar_attr {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),

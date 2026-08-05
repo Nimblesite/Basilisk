@@ -92,11 +92,25 @@ impl Rule for AnnotatedInvalidFirstArg {
             &module.functions,
         );
 
-        check_annotated_in_vars(module, &index, path, &defined_names, diagnostics);
+        check_annotated_in_vars(module, &resolver, &index, path, &defined_names, diagnostics);
         for cls in &module.classes {
-            check_annotated_in_attrs(&cls.attributes, &index, path, &defined_names, diagnostics);
+            check_annotated_in_attrs(
+                &cls.attributes,
+                &resolver,
+                &index,
+                path,
+                &defined_names,
+                diagnostics,
+            );
         }
-        check_annotated_in_functions(&module.functions, &index, path, &defined_names, diagnostics);
+        check_annotated_in_functions(
+            &module.functions,
+            &resolver,
+            &index,
+            path,
+            &defined_names,
+            diagnostics,
+        );
 
         // Detect direct calls to `Annotated` or `Annotated[...]` — always invalid.
         for span in &module.annotated_direct_call_spans {
@@ -123,7 +137,7 @@ impl Rule for AnnotatedInvalidFirstArg {
             .filter(|var| {
                 var.rhs_span
                     .and_then(|span| index.expr(span))
-                    .and_then(annotated_subscript)
+                    .and_then(|expr| annotated_subscript(&resolver, expr))
                     .is_some()
             })
             .map(|var| var.name.clone())
@@ -134,6 +148,7 @@ impl Rule for AnnotatedInvalidFirstArg {
         // PEP 593: Annotated is not type-compatible with `type` or `type[T]`.
         check_vars_type_annotation_incompatible(
             module,
+            &resolver,
             &index,
             path,
             &type_alias_names,
@@ -144,6 +159,7 @@ impl Rule for AnnotatedInvalidFirstArg {
         // Passing an Annotated expression or TypeAlias where `type[T]` is expected is invalid.
         check_calls_with_annotated_args(
             &module.calls,
+            &resolver,
             &index,
             source,
             path,
@@ -155,6 +171,7 @@ impl Rule for AnnotatedInvalidFirstArg {
 
 fn check_annotated_in_vars(
     module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
     index: &ExprIndex<'_>,
     path: &str,
     defined_names: &HashSet<String>,
@@ -164,12 +181,21 @@ fn check_annotated_in_vars(
         let Some(ann) = var.annotation_span.and_then(|span| index.expr(span)) else {
             continue;
         };
-        check_annotated_annotation(ann, var.name_span, &var.name, path, defined_names, diagnostics);
+        check_annotated_annotation(
+            resolver,
+            ann,
+            var.name_span,
+            &var.name,
+            path,
+            defined_names,
+            diagnostics,
+        );
     }
 }
 
 fn check_annotated_in_attrs(
     attrs: &[basilisk_resolver::AttributeInfo],
+    resolver: &AnnotationResolver<'_>,
     index: &ExprIndex<'_>,
     path: &str,
     defined_names: &HashSet<String>,
@@ -180,6 +206,7 @@ fn check_annotated_in_attrs(
             continue;
         };
         check_annotated_annotation(
+            resolver,
             ann,
             attr.name_span,
             &attr.name,
@@ -192,6 +219,7 @@ fn check_annotated_in_attrs(
 
 fn check_annotated_in_functions(
     funcs: &[basilisk_resolver::FunctionInfo],
+    resolver: &AnnotationResolver<'_>,
     index: &ExprIndex<'_>,
     path: &str,
     defined_names: &HashSet<String>,
@@ -208,6 +236,7 @@ fn check_annotated_in_functions(
                 continue;
             };
             check_annotated_annotation(
+                resolver,
                 ann,
                 param.name_span,
                 &param.name,
@@ -220,19 +249,19 @@ fn check_annotated_in_functions(
 }
 
 /// The subscript node when `expr` is `Annotated[...]` (bare or dotted base).
-fn annotated_subscript(expr: &Expr) -> Option<&ExprSubscript> {
+fn annotated_subscript<'e>(
+    resolver: &AnnotationResolver<'_>,
+    expr: &'e Expr,
+) -> Option<&'e ExprSubscript> {
     let Expr::Subscript(subscript) = expr else {
         return None;
     };
-    let base = match &*subscript.value {
-        Expr::Name(name) => name.id.as_str(),
-        Expr::Attribute(attr) => attr.attr.as_str(),
-        _ => return None,
-    };
-    (base == "Annotated").then_some(subscript)
+    crate::rules::shared::typing_form::denotes(resolver, &subscript.value, "Annotated")
+        .then_some(subscript)
 }
 
 fn check_annotated_annotation(
+    resolver: &AnnotationResolver<'_>,
     ann: &Expr,
     span: Span,
     name: &str,
@@ -240,7 +269,7 @@ fn check_annotated_annotation(
     defined_names: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let Some(subscript) = annotated_subscript(ann) else {
+    let Some(subscript) = annotated_subscript(resolver, ann) else {
         return;
     };
     let args: Vec<&Expr> = match &*subscript.slice {
@@ -324,6 +353,7 @@ fn annotation_is_type_subscript(ann: &Expr) -> bool {
 /// carries metadata, not a type constructor.
 fn check_vars_type_annotation_incompatible(
     module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
     index: &ExprIndex<'_>,
     path: &str,
     type_alias_names: &HashSet<String>,
@@ -340,7 +370,7 @@ fn check_vars_type_annotation_incompatible(
         let Some(rhs) = var.rhs_span.and_then(|span| index.expr(span)) else {
             continue;
         };
-        if annotated_subscript(rhs).is_some() {
+        if annotated_subscript(resolver, rhs).is_some() {
             diagnostics.push(make_diagnostic(
                 format!(
                     "`Annotated[...]` is not compatible with `type[...]` for `{}`",
@@ -371,6 +401,7 @@ fn check_vars_type_annotation_incompatible(
 /// a `type[T]` value is expected is always a type error.
 fn check_calls_with_annotated_args(
     calls: &[CallSite],
+    resolver: &AnnotationResolver<'_>,
     index: &ExprIndex<'_>,
     source: &str,
     path: &str,
@@ -386,7 +417,7 @@ fn check_calls_with_annotated_args(
             let Some(arg) = index.expr(*arg_span) else {
                 continue;
             };
-            if annotated_subscript(arg).is_some() {
+            if annotated_subscript(resolver, arg).is_some() {
                 let arg_text = span_text(source, Some(*arg_span)).unwrap_or("Annotated[...]");
                 diagnostics.push(make_diagnostic(
                     format!(

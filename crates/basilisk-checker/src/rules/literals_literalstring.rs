@@ -15,6 +15,12 @@
 //!    required (invariant generics like `list`, `Container`).
 //! 4. Assigning a `list[LiteralString]` to `list[str]` — lists are invariant.
 //!
+//! Every verdict is structural over the parsed `ruff` AST
+//! ([LINESCANPLAN-AST-MIGRATION]): the previous line reconstructor skipped
+//! statements by their leading keyword — including `assert_type`, a spelling
+//! fitted to the conformance fixtures ([CHKARCH-CONFORMANCE-MODE], issue
+//! #408) — and re-parsed annotations, f-strings, and calls from text.
+//!
 //! ```python
 //! def func(b: Literal["two"], non_literal: str):
 //!     x1: Literal[""] = b                          # E — different literal values
@@ -25,16 +31,17 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{FunctionInfo, ResolvedModule};
+use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
+use ruff_python_ast::{Expr, InterpolatedStringElement};
 
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::Diagnostic;
+use crate::rules::shared::typing_form::denotes;
+use crate::rules::shared::ExprIndex;
 
 use super::literals_literalstring_helpers::{
-    colon_newline_positions, emit_container_call_str_error, emit_fstring_literal_string_error,
-    emit_invariant_container_mismatch, emit_literal_value_mismatch, extract_fstring_names,
-    extract_literal_string_value, function_body_range, is_invariant_container, is_plain_str_type,
-    is_simple_identifier, param_annotations, parse_annotated_assigns, parse_simple_call,
-    split_generic, LocalAssign,
+    emit_container_call_str_error, emit_fstring_literal_string_error,
+    emit_invariant_container_mismatch, emit_literal_value_mismatch,
 };
 use super::Rule;
 
@@ -49,139 +56,238 @@ impl Rule for LiteralStringAssignment {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
-        let path = &module.path;
-
-        // Index every ":\n" once so each function's body range is a binary
-        // search rather than a scan to end-of-file (O(n²) → O(n + f·log n)).
-        let colon_newlines = colon_newline_positions(source);
+        let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
+            return;
+        };
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
+        let index = ExprIndex::build(&parsed.ast);
         for func in &module.functions {
-            check_function_body(func, source, &colon_newlines, path, diagnostics);
+            check_function_locals(func, &resolver, &index, &module.path, diagnostics);
         }
     }
 }
 
-/// Check all annotated local assignments in a function body for
+/// Check every annotated local assignment (`x: T = expr`) in one function for
 /// `LiteralString` / `Literal[...]` violations.
-fn check_function_body(
+fn check_function_locals(
     func: &FunctionInfo,
-    source: &str,
-    colon_newlines: &[usize],
+    resolver: &AnnotationResolver<'_>,
+    index: &ExprIndex<'_>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let Some((body_start, body_end)) = function_body_range(func, source, colon_newlines) else {
-        return;
-    };
-    let Some(body) = source.get(body_start..body_end) else {
-        return;
-    };
-
-    let param_anns = param_annotations(func, source);
-    let assigns = parse_annotated_assigns(body, body_start);
-
-    for assign in &assigns {
-        check_literal_value_mismatch(assign, &param_anns, path, diagnostics);
-        check_literal_string_fstring(assign, &param_anns, path, diagnostics);
-        check_invariant_generic_literal_string(assign, &param_anns, path, diagnostics);
+    let param_anns = param_annotation_nodes(func, index);
+    for var in &func.local_vars {
+        let Some(annotation) = var.annotation_span.and_then(|span| index.expr(span)) else {
+            continue;
+        };
+        let Some(rhs) = var.rhs_span.and_then(|span| index.expr(span)) else {
+            continue;
+        };
+        check_literal_value_mismatch(
+            resolver,
+            annotation,
+            rhs,
+            &param_anns,
+            var.name_span,
+            path,
+            diagnostics,
+        );
+        check_literal_string_fstring(
+            resolver,
+            annotation,
+            rhs,
+            &param_anns,
+            var.name_span,
+            path,
+            diagnostics,
+        );
+        check_invariant_generic_literal_string(
+            resolver,
+            annotation,
+            rhs,
+            &param_anns,
+            var.name_span,
+            path,
+            diagnostics,
+        );
     }
 }
 
+/// Map each parameter name to its annotation node.
+fn param_annotation_nodes<'m, 'ast>(
+    func: &'m FunctionInfo,
+    index: &'m ExprIndex<'ast>,
+) -> HashMap<&'m str, &'ast Expr> {
+    func.parameters
+        .iter()
+        .chain(func.vararg.iter())
+        .chain(func.kwarg.iter())
+        .filter_map(|param| {
+            let ann = param.annotation_span.and_then(|span| index.expr(span))?;
+            Some((param.name.as_str(), ann))
+        })
+        .collect()
+}
+
+/// The string value of a `Literal["value"]` annotation — the annotation must
+/// denote `typing.Literal` (under any import spelling) subscripted with a
+/// single string literal.
+fn literal_string_value<'e>(resolver: &AnnotationResolver<'_>, expr: &'e Expr) -> Option<&'e str> {
+    let Expr::Subscript(subscript) = expr else {
+        return None;
+    };
+    if !denotes(resolver, &subscript.value, "Literal") {
+        return None;
+    }
+    let Expr::StringLiteral(lit) = subscript.slice.as_ref() else {
+        return None;
+    };
+    Some(lit.value.to_str())
+}
+
+/// Does the annotation denote a bare `typing.LiteralString`?
+fn is_literal_string(resolver: &AnnotationResolver<'_>, expr: &Expr) -> bool {
+    denotes(resolver, expr, "LiteralString")
+}
+
+/// Does the annotation denote plain builtin `str` — not `LiteralString`, not
+/// `Literal[...]`, not a generic?
+fn is_plain_str(expr: &Expr) -> bool {
+    matches!(expr, Expr::Name(name) if name.id.as_str() == "str")
+}
+
 /// Case 1: `x: Literal["X"] = param` where param is `Literal["Y"]` and X ≠ Y.
-///
-/// Also covers: `x: Literal[""] = param` where param is `Literal["two"]`.
 fn check_literal_value_mismatch(
-    assign: &LocalAssign<'_>,
-    param_anns: &HashMap<&str, &str>,
+    resolver: &AnnotationResolver<'_>,
+    annotation: &Expr,
+    rhs: &Expr,
+    param_anns: &HashMap<&str, &Expr>,
+    name_span: Span,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Annotation must be Literal["..."] (string literal).
-    let Some(target_value) = extract_literal_string_value(assign.annotation) else {
+    let Some(target_value) = literal_string_value(resolver, annotation) else {
         return;
     };
-
     // RHS must be a simple name referring to a parameter.
-    let rhs_name = assign.rhs.trim();
-    if !is_simple_identifier(rhs_name) {
-        return;
-    }
-
-    let Some(param_ann) = param_anns.get(rhs_name) else {
+    let Expr::Name(rhs_name) = rhs else {
         return;
     };
-
-    // Parameter must also be Literal["..."].
-    let Some(source_value) = extract_literal_string_value(param_ann) else {
+    let Some(param_ann) = param_anns.get(rhs_name.id.as_str()) else {
         return;
     };
-
+    let Some(source_value) = literal_string_value(resolver, param_ann) else {
+        return;
+    };
     if target_value != source_value {
-        emit_literal_value_mismatch(assign, target_value, source_value, path, diagnostics);
+        emit_literal_value_mismatch(name_span, target_value, source_value, path, diagnostics);
     }
 }
 
 /// Case 2: `x: LiteralString = f"... {non_literal} ..."` where an
 /// interpolated variable has type `str` (not `LiteralString`).
 fn check_literal_string_fstring(
-    assign: &LocalAssign<'_>,
-    param_anns: &HashMap<&str, &str>,
+    resolver: &AnnotationResolver<'_>,
+    annotation: &Expr,
+    rhs: &Expr,
+    param_anns: &HashMap<&str, &Expr>,
+    name_span: Span,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Annotation must be LiteralString.
-    if assign.annotation.trim() != "LiteralString" {
+    if !is_literal_string(resolver, annotation) {
         return;
     }
-
-    // RHS must be an f-string.
-    let rhs = assign.rhs.trim();
-    if !rhs.starts_with("f\"") && !rhs.starts_with("f'") {
+    let Expr::FString(fstring) = rhs else {
         return;
-    }
-
-    // Extract interpolated names from f-string: `{name}` patterns.
-    let interpolated = extract_fstring_names(rhs);
-
-    // If any interpolated name is a parameter with type `str` (not
-    // `LiteralString` and not `Literal[...]`), emit a diagnostic.
-    for name in &interpolated {
-        if let Some(param_ann) = param_anns.get(name.as_str()) {
-            if is_plain_str_type(param_ann) {
-                emit_fstring_literal_string_error(assign, name, param_ann, path, diagnostics);
+    };
+    // Any interpolated name that is a parameter of plain type `str` breaks
+    // the `LiteralString` guarantee.
+    for element in fstring.value.elements() {
+        let InterpolatedStringElement::Interpolation(interpolation) = element else {
+            continue;
+        };
+        let Expr::Name(name) = interpolation.expression.as_ref() else {
+            continue;
+        };
+        if let Some(param_ann) = param_anns.get(name.id.as_str()) {
+            if is_plain_str(param_ann) {
+                emit_fstring_literal_string_error(
+                    name_span,
+                    name.id.as_str(),
+                    "str",
+                    path,
+                    diagnostics,
+                );
                 return; // one diagnostic per assignment is enough
             }
         }
     }
 }
 
-/// Case 3 & 4: Invariant generic mismatches involving `LiteralString`.
+/// The container head and single type argument of a generic annotation like
+/// `list[str]` — `None` for non-subscript annotations.
+fn split_generic(expr: &Expr) -> Option<(&Expr, &Expr)> {
+    let Expr::Subscript(subscript) = expr else {
+        return None;
+    };
+    Some((&subscript.value, &subscript.slice))
+}
+
+/// Is this container head an invariant (mutable) generic — builtin
+/// `list`/`dict`/`set`/`deque` or its `typing` capitalised form?
+fn is_invariant_container(resolver: &AnnotationResolver<'_>, head: &Expr) -> bool {
+    if let Expr::Name(name) = head {
+        if matches!(name.id.as_str(), "list" | "dict" | "set" | "deque") {
+            return true;
+        }
+    }
+    ["List", "Dict", "Set", "Deque"]
+        .iter()
+        .any(|member| denotes(resolver, head, member))
+}
+
+/// Do two container heads name the same container?
+fn same_container(left: &Expr, right: &Expr) -> bool {
+    match (left, right) {
+        (Expr::Name(a), Expr::Name(b)) => a.id == b.id,
+        _ => false,
+    }
+}
+
+/// Cases 3 & 4: invariant generic mismatches involving `LiteralString`.
 ///
 /// - `x: Container[LiteralString] = Container(s)` where `s: str`
 /// - `x: list[str] = val` where `val: list[LiteralString]`
 fn check_invariant_generic_literal_string(
-    assign: &LocalAssign<'_>,
-    param_anns: &HashMap<&str, &str>,
+    resolver: &AnnotationResolver<'_>,
+    annotation: &Expr,
+    rhs: &Expr,
+    param_anns: &HashMap<&str, &Expr>,
+    name_span: Span,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let ann = assign.annotation.trim();
-    let rhs = assign.rhs.trim();
+    let Some((ann_head, ann_arg)) = split_generic(annotation) else {
+        return;
+    };
 
     // Case 4: `list[str] = param` where param is `list[LiteralString]`.
-    if let Some((ann_container, ann_inner)) = split_generic(ann) {
-        if is_invariant_container(ann_container)
-            && is_plain_str_type(ann_inner)
-            && is_simple_identifier(rhs)
-        {
-            if let Some(param_ann) = param_anns.get(rhs) {
-                if let Some((param_container, param_inner)) = split_generic(param_ann) {
-                    if param_container == ann_container && param_inner.trim() == "LiteralString" {
+    if is_invariant_container(resolver, ann_head) && is_plain_str(ann_arg) {
+        if let Expr::Name(rhs_name) = rhs {
+            if let Some(param_ann) = param_anns.get(rhs_name.id.as_str()) {
+                if let Some((param_head, param_arg)) = split_generic(param_ann) {
+                    if same_container(ann_head, param_head)
+                        && is_literal_string(resolver, param_arg)
+                    {
                         emit_invariant_container_mismatch(
-                            assign,
-                            param_ann,
-                            ann,
-                            ann_container,
+                            name_span,
+                            &crate::rules::shared::ann_str(param_ann),
+                            &crate::rules::shared::ann_str(annotation),
+                            &crate::rules::shared::ann_str(ann_head),
                             path,
                             diagnostics,
                         );
@@ -193,25 +299,26 @@ fn check_invariant_generic_literal_string(
     }
 
     // Case 3: `Container[LiteralString] = Container(s)` where `s: str`.
-    if let Some((_ann_container, ann_inner)) = split_generic(ann) {
-        if ann_inner.trim() == "LiteralString" {
-            if let Some((callee, call_args)) = parse_simple_call(rhs) {
-                let _ = callee; // we only care about the args
-                for arg in &call_args {
-                    if let Some(param_ann) = param_anns.get(arg.as_str()) {
-                        if is_plain_str_type(param_ann) {
-                            emit_container_call_str_error(
-                                assign,
-                                rhs,
-                                ann,
-                                arg,
-                                param_ann,
-                                path,
-                                diagnostics,
-                            );
-                            return;
-                        }
-                    }
+    if is_literal_string(resolver, ann_arg) {
+        let Expr::Call(call) = rhs else {
+            return;
+        };
+        for arg in &*call.arguments.args {
+            let Expr::Name(arg_name) = arg else {
+                continue;
+            };
+            if let Some(param_ann) = param_anns.get(arg_name.id.as_str()) {
+                if is_plain_str(param_ann) {
+                    emit_container_call_str_error(
+                        name_span,
+                        &crate::rules::shared::ann_str(rhs),
+                        &crate::rules::shared::ann_str(annotation),
+                        arg_name.id.as_str(),
+                        "str",
+                        path,
+                        diagnostics,
+                    );
+                    return;
                 }
             }
         }

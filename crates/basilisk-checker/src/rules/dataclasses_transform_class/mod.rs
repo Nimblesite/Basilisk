@@ -29,9 +29,11 @@ mod helpers;
 use std::collections::HashMap;
 
 use basilisk_resolver::ResolvedModule;
+use ruff_python_ast::Expr;
 
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::Diagnostic;
-use crate::span_util::slice_span;
+use crate::rules::shared::ExprIndex;
 
 use super::Rule;
 
@@ -61,35 +63,37 @@ impl Rule for DataclassTransformClassViolation {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let transform_bases = collect_transform_base_classes(module);
+        let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
+            return;
+        };
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
+        let transform_bases = collect_transform_base_classes(&resolver, &parsed.ast);
         if transform_bases.is_empty() {
             return;
         }
 
-        let direct_settings = collect_transform_subclasses(module, &transform_bases);
+        let direct_settings = collect_transform_subclasses(&parsed.ast, &transform_bases);
         if direct_settings.is_empty() {
             return;
         }
 
-        let source = &module.source;
+        let index = ExprIndex::build(&parsed.ast);
         let path = &module.path;
 
         // Build a map of all transform-class instances at module level:
-        // variable_name -> (class_name, settings).
+        // variable_name -> (class_name, settings). The constructor is the
+        // parsed call's callee, never a substring of the RHS text.
         let mut instance_map: HashMap<&str, (&str, TransformClassSettings)> = HashMap::new();
         for var in &module.module_vars {
-            let Some(rhs_span) = var.rhs_span else {
+            let Some(Expr::Call(call)) = var.rhs_span.and_then(|span| index.expr(span)) else {
                 continue;
             };
-            let Some(rhs_text) = slice_span(source, rhs_span) else {
+            let Expr::Name(callee) = call.func.as_ref() else {
                 continue;
             };
-            let callee = rhs_text.split(['(', '[']).next().unwrap_or("").trim();
-            if callee.is_empty() {
-                continue;
-            }
-            let callee = callee.rsplit('.').next().unwrap_or(callee);
-
+            let callee = callee.id.as_str();
             if let Some(settings) = resolve_inherited_settings(callee, module, &direct_settings) {
                 let _ = instance_map.insert(var.name.as_str(), (callee, settings));
             }
@@ -102,17 +106,17 @@ impl Rule for DataclassTransformClassViolation {
         check_frozen_instance_assignment(module, &instance_map, path, diagnostics);
 
         // --- Check 3: Positional args to kw_only transform-class constructor ---
-        check_kw_only_positional_args(module, &direct_settings, source, path, diagnostics);
+        check_kw_only_positional_args(module, &index, &direct_settings, path, diagnostics);
 
         // --- Check 4: Comparison operator on instance without order=True ---
-        check_no_order_comparison(module, &instance_map, source, path, diagnostics);
+        check_no_order_comparison(&parsed.ast, &instance_map, path, diagnostics);
 
         // --- Check 5: Field-specifier `converter=` validation (PEP 681) ---
         // Calls come from the module's one shared walk ([NARROWPLAN-CALLSITES]).
         let Some(oracle) = types.oracle() else {
             return;
         };
-        let subclass_names: Vec<&str> = direct_settings.keys().copied().collect();
+        let subclass_names: Vec<&str> = direct_settings.keys().map(String::as_str).collect();
         converter::check_converters(module, &subclass_names, oracle.calls(), diagnostics);
     }
 }

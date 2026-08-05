@@ -8,6 +8,11 @@
 //! is valid, but passing them where e.g. `Callable[..., str]` is expected is
 //! an error.
 //!
+//! Every verdict is structural over the parsed `ruff` AST
+//! ([LINESCANPLAN-AST-MIGRATION], issue #408): `TypeGuard`, `TypeIs`, and
+//! `Callable` resolve through the module's import cascade under any spelling,
+//! and `TypeIs` invariance compares type structure, never source formatting.
+//!
 //! ```python
 //! def takes_callable_str(f: Callable[[object], str]) -> None: ...
 //! def simple_typeguard(val: object) -> TypeGuard[int]: ...
@@ -18,9 +23,12 @@
 use std::collections::HashMap;
 
 use basilisk_resolver::ResolvedModule;
+use ruff_python_ast::Expr;
 
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
+use crate::rules::shared::typing_form::{denotes_abc, subscript_args, subscript_of};
+use crate::rules::shared::{ann_str, ExprIndex};
 
 use super::guards::is_protocol_class;
 use super::Rule;
@@ -39,173 +47,155 @@ const CODE: ErrorCode = ErrorCode {
 /// invariant in `X` (and the two are not interchangeable).
 pub(crate) struct TypeGuardCallableReturnMismatch;
 
-/// Returns `true` if the annotation text indicates a `TypeGuard` or `TypeIs`
-/// return type.
-fn is_typeguard_or_typeis(ann_text: &str) -> bool {
-    let trimmed = ann_text.trim();
-    trimmed.starts_with("TypeGuard[") || trimmed.starts_with("TypeIs[")
+/// A narrowing-guard return annotation: which form, and its type argument.
+#[derive(Clone, Copy)]
+enum Guard<'e> {
+    TypeGuard(&'e Expr),
+    TypeIs(&'e Expr),
 }
 
-/// Extract the return type from a `Callable[[...], ReturnType]` annotation.
-///
-/// Finds the last `,` at bracket depth 0 (after the initial `Callable[`),
-/// then takes everything after it up to the closing `]`.
-fn extract_callable_return_type(ann_text: &str) -> Option<&str> {
-    let inner = ann_text.trim().strip_prefix("Callable[")?;
-    // Remove the trailing `]`
-    let inner = inner.strip_suffix(']')?;
+impl<'e> Guard<'e> {
+    /// Classify a return annotation as `TypeGuard[X]` / `TypeIs[X]`, resolved
+    /// through the import cascade.
+    fn of(resolver: &AnnotationResolver<'_>, expr: &'e Expr) -> Option<Self> {
+        if let Some(inner) = subscript_of(resolver, expr, "TypeGuard") {
+            return Some(Self::TypeGuard(inner));
+        }
+        subscript_of(resolver, expr, "TypeIs").map(Self::TypeIs)
+    }
 
-    // Find the last comma at depth 0
-    let mut depth: i32 = 0;
-    let mut last_comma_at_depth_0: Option<usize> = None;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' => depth += 1,
-            ']' | ')' => depth -= 1,
-            ',' if depth == 0 => last_comma_at_depth_0 = Some(idx),
-            _ => {}
+    fn kind(self) -> &'static str {
+        match self {
+            Self::TypeGuard(_) => "TypeGuard",
+            Self::TypeIs(_) => "TypeIs",
         }
     }
 
-    let comma_pos = last_comma_at_depth_0?;
-    let return_type = inner.get(comma_pos + 1..)?.trim();
-    if return_type.is_empty() {
-        return None;
+    fn inner(self) -> &'e Expr {
+        match self {
+            Self::TypeGuard(inner) | Self::TypeIs(inner) => inner,
+        }
     }
-    Some(return_type)
+
+    fn render(self) -> String {
+        format!("{}[{}]", self.kind(), ann_str(self.inner()))
+    }
 }
 
-/// For a Protocol class, find the return type of its `__call__` method.
-fn find_protocol_call_return_type<'a>(
+/// The return type of a `Callable[[...], R]` annotation, resolved through the
+/// cascade (`typing.Callable` and `collections.abc.Callable` alike).
+fn callable_return_type<'e>(
+    resolver: &AnnotationResolver<'_>,
+    annotation: &'e Expr,
+) -> Option<&'e Expr> {
+    let Expr::Subscript(subscript) = annotation else {
+        return None;
+    };
+    if !denotes_abc(resolver, &subscript.value, "Callable") {
+        return None;
+    }
+    subscript_args(&subscript.slice).last().copied()
+}
+
+/// For a Protocol class used as a callable parameter type, the return
+/// annotation node of its `__call__` method.
+fn protocol_call_return<'m>(
     class_name: &str,
-    module: &'a ResolvedModule,
-) -> Option<&'a str> {
-    // Verify the class is a Protocol
+    module: &'m ResolvedModule,
+    index: &'m ExprIndex<'_>,
+) -> Option<&'m Expr> {
     let cls = module
         .classes
         .iter()
         .find(|c| c.name == class_name && is_protocol_class(c))?;
-
-    // Find __call__ method
     let call_method = module
         .functions
         .iter()
         .find(|f| f.class_name.as_deref() == Some(cls.name.as_str()) && f.name == "__call__")?;
-
-    let ann_span = call_method.return_annotation_span?;
-    let ann_text = slice_span(&module.source, ann_span)?;
-    Some(ann_text.trim())
-}
-
-/// Extract the inner type argument from `TypeGuard[X]` or `TypeIs[X]`.
-fn extract_guard_inner(ann: &str) -> Option<&str> {
-    let inner = ann
-        .strip_prefix("TypeGuard[")
-        .or_else(|| ann.strip_prefix("TypeIs["))?;
-    inner.strip_suffix(']')
+    call_method
+        .return_annotation_span
+        .and_then(|span| index.expr(span))
 }
 
 /// Check whether the expected return type is compatible with the actual
-/// TypeGuard/TypeIs return type of the argument function.
+/// TypeGuard/TypeIs return of the argument function.
 ///
 /// - `bool` is always compatible (`TypeGuard` and `TypeIs` are subtypes of bool).
 /// - `TypeGuard[X]` is **covariant**: `TypeGuard[B]` is assignable to
 ///   `TypeGuard[A]` when `B` is a subtype of `A` (and not to `TypeIs`).
 /// - `TypeIs[X]` is only compatible with `TypeIs[X]` (not `TypeGuard`), and
-///   `TypeIs` is **invariant** in its type argument.
+///   `TypeIs` is **invariant** in its type argument — same STRUCTURE, not
+///   same source spelling.
 fn is_compatible_return_type(
+    resolver: &AnnotationResolver<'_>,
     subtyping: &crate::subtyping::SubtypingContext,
-    expected_return: &str,
-    actual_return: &str,
+    expected: &Expr,
+    actual: Guard<'_>,
 ) -> bool {
-    if expected_return == "bool" {
+    if matches!(expected, Expr::Name(name) if name.id.as_str() == "bool") {
         return true;
     }
-
-    let expected_is_typeguard = expected_return.starts_with("TypeGuard[");
-    let expected_is_typeis = expected_return.starts_with("TypeIs[");
-    let actual_is_typeguard = actual_return.starts_with("TypeGuard[");
-    let actual_is_typeis = actual_return.starts_with("TypeIs[");
-
-    // TypeGuard expected, TypeGuard actual — covariant: actual inner must be a
-    // subtype of the expected inner.
-    if expected_is_typeguard && actual_is_typeguard {
-        return match (
-            extract_guard_inner(expected_return),
-            extract_guard_inner(actual_return),
-        ) {
-            (Some(expected_inner), Some(actual_inner)) => {
-                subtyping.is_subtype(actual_inner, expected_inner)
-            }
-            _ => false,
-        };
+    match (Guard::of(resolver, expected), actual) {
+        (Some(Guard::TypeGuard(expected_inner)), Guard::TypeGuard(actual_inner)) => {
+            subtyping.is_subtype(&ann_str(actual_inner), &ann_str(expected_inner))
+        }
+        (Some(Guard::TypeIs(expected_inner)), Guard::TypeIs(actual_inner)) => {
+            ann_str(expected_inner) == ann_str(actual_inner)
+        }
+        // TypeGuard and TypeIs are NOT interchangeable, and any other
+        // expected type (e.g. str, int) is incompatible.
+        _ => false,
     }
-
-    // TypeIs expected, TypeIs actual — invariant, inner types must match exactly
-    if expected_is_typeis && actual_is_typeis {
-        let expected_inner = extract_guard_inner(expected_return);
-        let actual_inner = extract_guard_inner(actual_return);
-        return expected_inner == actual_inner;
-    }
-
-    // TypeGuard and TypeIs are NOT interchangeable
-    if (expected_is_typeguard && actual_is_typeis) || (expected_is_typeis && actual_is_typeguard) {
-        return false;
-    }
-
-    // Any other expected type (e.g. str, int) is incompatible
-    false
 }
 
-/// Build a map of module-level function names to functions returning TypeGuard/TypeIs.
-fn build_typeguard_func_map(module: &ResolvedModule) -> HashMap<&str, &str> {
-    let source = &module.source;
-    let mut typeguard_funcs: HashMap<&str, &str> = HashMap::new();
+/// Map module-level function names to their guard return annotations.
+fn build_guard_func_map<'m, 'ast>(
+    module: &'m ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
+    index: &'m ExprIndex<'ast>,
+) -> HashMap<&'m str, Guard<'ast>> {
+    let mut guard_funcs = HashMap::new();
     for func in &module.functions {
         if func.class_name.is_some() {
             continue;
         }
-        let Some(ann_span) = func.return_annotation_span else {
+        let Some(ann) = func
+            .return_annotation_span
+            .and_then(|span| index.expr(span))
+        else {
             continue;
         };
-        let Some(ann_text) = slice_span(source, ann_span) else {
-            continue;
-        };
-        if is_typeguard_or_typeis(ann_text) {
-            let _ = typeguard_funcs.insert(func.name.as_str(), ann_text.trim());
+        if let Some(guard) = Guard::of(resolver, ann) {
+            let _ = guard_funcs.insert(func.name.as_str(), guard);
         }
     }
-    typeguard_funcs
+    guard_funcs
 }
 
 /// Build context-appropriate diagnostic messages for a TypeGuard/TypeIs mismatch.
 fn build_mismatch_messages(
+    resolver: &AnnotationResolver<'_>,
     arg_name: &str,
-    guard_return_text: &str,
-    guard_kind: &str,
-    expected_return: &str,
+    actual: Guard<'_>,
+    expected: &Expr,
     callee: &str,
 ) -> (String, String, String) {
-    let expected_is_guard =
-        expected_return.starts_with("TypeGuard[") || expected_return.starts_with("TypeIs[");
+    let guard_return_text = actual.render();
+    let guard_kind = actual.kind();
+    let expected_text = ann_str(expected);
 
-    if expected_is_guard {
-        let expected_kind = if expected_return.starts_with("TypeIs[") {
-            "TypeIs"
-        } else {
-            "TypeGuard"
-        };
-
+    if let Some(expected_guard) = Guard::of(resolver, expected) {
+        let expected_kind = expected_guard.kind();
         if guard_kind == expected_kind {
             (
                 format!(
                     "Function `{arg_name}` returns `{guard_return_text}`, \
-                     but `{callee}` expects `{expected_return}`"
+                     but `{callee}` expects `{expected_text}`"
                 ),
                 format!(
                     "`{guard_kind}` is invariant in its type argument; \
                      `{guard_return_text}` is not assignable to \
-                     `{expected_return}`"
+                     `{expected_text}`"
                 ),
                 format!(
                     "`{guard_kind}[B]` is not a subtype of \
@@ -216,12 +206,12 @@ fn build_mismatch_messages(
             (
                 format!(
                     "Function `{arg_name}` returns `{guard_return_text}`, \
-                     but `{callee}` expects `{expected_return}`"
+                     but `{callee}` expects `{expected_text}`"
                 ),
                 format!(
                     "`{guard_kind}` and `{expected_kind}` are not \
                      interchangeable; use a function returning \
-                     `{expected_return}` instead"
+                     `{expected_text}` instead"
                 ),
                 "`TypeGuard` and `TypeIs` have different narrowing \
                  semantics and are not assignable to each other"
@@ -233,11 +223,11 @@ fn build_mismatch_messages(
             format!(
                 "Function `{arg_name}` returns `{guard_return_text}` \
                  (subtype of `bool`), but `{callee}` expects return \
-                 type `{expected_return}`"
+                 type `{expected_text}`"
             ),
             format!(
                 "`{guard_kind}` is a subtype of `bool`, not \
-                 `{expected_return}`; change the expected return type \
+                 `{expected_text}`; change the expected return type \
                  to `bool` or use a compatible callable"
             ),
             format!(
@@ -255,7 +245,13 @@ impl Rule for TypeGuardCallableReturnMismatch {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
+        let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
+            return;
+        };
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
+        let index = ExprIndex::build(&parsed.ast);
 
         let mut func_map: HashMap<&str, &basilisk_resolver::FunctionInfo> = HashMap::new();
         for func in &module.functions {
@@ -264,8 +260,8 @@ impl Rule for TypeGuardCallableReturnMismatch {
             }
         }
 
-        let typeguard_funcs = build_typeguard_func_map(module);
-        if typeguard_funcs.is_empty() {
+        let guard_funcs = build_guard_func_map(module, &resolver, &index);
+        if guard_funcs.is_empty() {
             return;
         }
         // TypeGuard covariance verdicts route through the module-seeded
@@ -278,50 +274,44 @@ impl Rule for TypeGuardCallableReturnMismatch {
             };
 
             for (arg_idx, (_rhs_kind, arg_span)) in call.args.iter().enumerate() {
-                let Some(arg_text) = slice_span(source, *arg_span) else {
+                // The argument must be a bare reference to a guard function.
+                let Some(Expr::Name(arg)) = index.expr(*arg_span) else {
                     continue;
                 };
-                let arg_name = arg_text.trim();
-
-                let Some(&guard_return_text) = typeguard_funcs.get(arg_name) else {
+                let Some(&guard) = guard_funcs.get(arg.id.as_str()) else {
                     continue;
-                };
-
-                let Some(param) = callee_func.parameters.get(arg_idx) else {
-                    continue;
-                };
-                let Some(param_ann_span) = param.annotation_span else {
-                    continue;
-                };
-                let Some(param_ann_text) = slice_span(source, param_ann_span) else {
-                    continue;
-                };
-                let param_ann = param_ann_text.trim();
-
-                let expected_return = if param_ann.starts_with("Callable[") {
-                    extract_callable_return_type(param_ann)
-                } else {
-                    find_protocol_call_return_type(param_ann, module)
                 };
 
+                let Some(param_ann) = callee_func
+                    .parameters
+                    .get(arg_idx)
+                    .and_then(|param| param.annotation_span)
+                    .and_then(|span| index.expr(span))
+                else {
+                    continue;
+                };
+
+                // The expected return type: from `Callable[..., R]`, or from a
+                // Protocol class's `__call__`.
+                let expected_return = match callable_return_type(&resolver, param_ann) {
+                    Some(ret) => Some(ret),
+                    None => match param_ann {
+                        Expr::Name(name) => protocol_call_return(name.id.as_str(), module, &index),
+                        _ => None,
+                    },
+                };
                 let Some(expected_return) = expected_return else {
                     continue;
                 };
 
-                if is_compatible_return_type(&subtyping, expected_return, guard_return_text) {
+                if is_compatible_return_type(&resolver, &subtyping, expected_return, guard) {
                     continue;
                 }
 
-                let guard_kind = if guard_return_text.starts_with("TypeIs[") {
-                    "TypeIs"
-                } else {
-                    "TypeGuard"
-                };
-
                 let (msg, help_text, note_text) = build_mismatch_messages(
-                    arg_name,
-                    guard_return_text,
-                    guard_kind,
+                    &resolver,
+                    arg.id.as_str(),
+                    guard,
                     expected_return,
                     &call.callee,
                 );

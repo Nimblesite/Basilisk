@@ -45,9 +45,7 @@ use crate::span_util::slice_span;
 
 use super::Rule;
 
-use scope::{
-    build_module_scope_names, is_circular_string_annotation, PYTHON_BUILTIN_TYPE_NAMES,
-};
+use scope::{build_module_scope_names, is_circular_string_annotation, PYTHON_BUILTIN_TYPE_NAMES};
 use type_checks::{
     collect_non_type_names, is_invalid_type_annotation, is_paramspec_invalid_annotation,
 };
@@ -110,7 +108,13 @@ fn check_invalid_type_annotations(
         &paramspec_generic_bases,
         diagnostics,
     );
-    check_module_var_annotations(module, index, &non_type_names, &paramspec_names, diagnostics);
+    check_module_var_annotations(
+        module,
+        index,
+        &non_type_names,
+        &paramspec_names,
+        diagnostics,
+    );
     check_local_var_annotations(module, index, &non_type_names, diagnostics);
     check_class_attr_annotations(
         module,

@@ -6,7 +6,10 @@
 //! that annotation.
 //!
 //! Covers module-level bare reassignments of annotated tuple variables and
-//! function-body variable assignments.
+//! function-body variable assignments. Every verdict is structural over the
+//! parsed `ruff` AST ([LINESCANPLAN-AST-MIGRATION], issue #408): declarations
+//! are `AnnAssign` nodes, reassignments are `Assign` nodes, and tuple shapes
+//! come from expression structure — never reconstructed source lines.
 //!
 //! ## Examples
 //!
@@ -30,22 +33,21 @@
 //! <https://typing.readthedocs.io/en/latest/spec/tuples.html#type-compatibility-rules>
 
 pub(super) mod annotation;
-pub(super) mod source;
 
-use basilisk_resolver::ResolvedModule;
+use std::collections::HashMap;
 
-use crate::diagnostic::{Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
+use basilisk_resolver::{ResolvedModule, Span};
+use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
+use ruff_text_size::Ranged;
+
+use crate::annotation::AnnotationResolver;
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
 use annotation::{
-    annotation_has_starred_unpack, check_literal_against_annotation, check_var_against_annotation,
-    is_simple_name,
-};
-use source::{
-    func_body_lines, iter_source_lines, line_span, make_diag, parse_annotated_decl,
-    parse_bare_assignment, parse_tuple_literal,
+    check_literal_against_shape, check_var_against_shape, has_starred_unpack, parse_tuple_shape,
+    TupleShape,
 };
 
 const CODE: ErrorCode = ErrorCode {
@@ -60,15 +62,42 @@ impl Rule for TupleStarredUnpackCompatibility {
     fn check(
         &self,
         module: &ResolvedModule,
-        ctx: &super::CheckContext,
+        _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
-        let path = &module.path;
+        let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
+            return;
+        };
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
 
-        check_module_level(source, path, diagnostics);
-        check_function_bodies(module, &ctx.line_index, source, path, diagnostics);
+        check_module_level(&parsed.ast.body, &resolver, &module.path, diagnostics);
+        walk_functions(&parsed.ast.body, &resolver, &module.path, diagnostics);
     }
+}
+
+/// The span of an AST node's source range.
+fn node_span(range: ruff_text_size::TextRange) -> Span {
+    Span {
+        start: range.start().to_u32(),
+        end: range.end().to_u32(),
+    }
+}
+
+fn make_diag(message: &str, span: Span, path: &str) -> Diagnostic {
+    error_diagnostic_owned(
+        CODE.clone(),
+        message.to_owned(),
+        span,
+        path,
+        Some("The assigned value must match the starred-unpack tuple structure".to_owned()),
+        Some(
+            "typing spec, tuples: a starred unpack constrains the minimum length and \
+             per-position element types of the tuple"
+                .to_owned(),
+        ),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -77,46 +106,44 @@ impl Rule for TupleStarredUnpackCompatibility {
 
 /// Check module-level bare assignments like `t2 = (1, 1, "")` after a
 /// preceding annotated declaration like `t2: tuple[int, *tuple[str, ...]] = ...`.
-fn check_module_level(source: &str, path: &str, diagnostics: &mut Vec<Diagnostic>) {
-    // Collect annotated module-level variables: name -> annotation text.
-    let mut known_annotations: Vec<(String, String)> = Vec::new();
+fn check_module_level(
+    body: &[Stmt],
+    resolver: &AnnotationResolver<'_>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    // Annotated module variables whose annotation carries a starred unpack.
+    let mut known_shapes: HashMap<&str, TupleShape> = HashMap::new();
 
-    for line_info in iter_source_lines(source) {
-        let trimmed = line_info.text.trim();
-
-        // Skip comment-only lines and blank lines.
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-
-        // Annotated declaration: `name: type` or `name: type = value`
-        if let Some((name, annotation)) = parse_annotated_decl(trimmed) {
-            if annotation_has_starred_unpack(&annotation) {
-                // Insert or update.
-                if let Some(existing) = known_annotations.iter_mut().find(|(n, _)| n == &name) {
-                    existing.1 = annotation;
-                } else {
-                    known_annotations.push((name, annotation));
+    for stmt in body {
+        match stmt {
+            Stmt::AnnAssign(assign) => {
+                let Expr::Name(target) = assign.target.as_ref() else {
+                    continue;
+                };
+                if !has_starred_unpack(resolver, &assign.annotation) {
+                    continue;
+                }
+                if let Some(shape) = parse_tuple_shape(resolver, &assign.annotation) {
+                    let _ = known_shapes.insert(target.id.as_str(), shape);
                 }
             }
-            continue;
-        }
-
-        // Bare assignment: `name = (...)` — only module-level (not indented).
-        if line_info.indent == 0 {
-            if let Some((lhs, rhs)) = parse_bare_assignment(trimmed) {
-                // Find previously declared annotation for this name.
-                if let Some((_, annotation)) = known_annotations.iter().find(|(n, _)| n == &lhs) {
-                    let annotation = annotation.clone();
-                    // Only check when RHS is a tuple literal.
-                    if let Some(elems) = parse_tuple_literal(rhs) {
-                        if let Some(msg) = check_literal_against_annotation(&elems, &annotation) {
-                            let span = line_span(source, line_info.offset);
-                            diagnostics.push(make_diag(msg, span, path, &CODE));
-                        }
-                    }
+            Stmt::Assign(assign) => {
+                let [Expr::Name(target)] = assign.targets.as_slice() else {
+                    continue;
+                };
+                let Some(shape) = known_shapes.get(target.id.as_str()) else {
+                    continue;
+                };
+                let Expr::Tuple(literal) = assign.value.as_ref() else {
+                    continue;
+                };
+                let elems: Vec<&Expr> = literal.elts.iter().collect();
+                if let Some(msg) = check_literal_against_shape(&elems, shape) {
+                    diagnostics.push(make_diag(msg, node_span(assign.range()), path));
                 }
             }
+            _ => {}
         }
     }
 }
@@ -125,86 +152,87 @@ fn check_module_level(source: &str, path: &str, diagnostics: &mut Vec<Diagnostic
 // Function-body checking
 // ---------------------------------------------------------------------------
 
-/// Check inside function bodies for incompatible assignments to starred-unpack
-/// annotated local variables, using parameter types as the source type.
-fn check_function_bodies(
-    module: &ResolvedModule,
-    index: &basilisk_common::text::LineIndex,
-    source: &str,
+/// Recursively visit every function definition, however nested.
+fn walk_functions(
+    body: &[Stmt],
+    resolver: &AnnotationResolver<'_>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    for func in &module.functions {
-        // Build a map: param_name -> annotation text.
-        let mut param_annotations: Vec<(String, String)> = Vec::new();
-        for param in &func.parameters {
-            if let Some(ann_span) = param.annotation_span {
-                if let Some(ann_text) = slice_span(source, ann_span) {
-                    param_annotations.push((param.name.clone(), ann_text.trim().to_owned()));
-                }
+    for stmt in body {
+        match stmt {
+            Stmt::FunctionDef(func_def) => {
+                check_function_body(func_def, resolver, path, diagnostics);
+                walk_functions(&func_def.body, resolver, path, diagnostics);
             }
+            Stmt::ClassDef(class_def) => {
+                walk_functions(&class_def.body, resolver, path, diagnostics);
+            }
+            _ => {}
         }
+    }
+}
 
-        // Collect local variable annotations declared inside the function.
-        let mut local_annotations: Vec<(String, String)> = Vec::new();
+/// Check one function's own body for incompatible assignments to
+/// tuple-annotated local variables, using parameter shapes as source types.
+fn check_function_body(
+    func_def: &StmtFunctionDef,
+    resolver: &AnnotationResolver<'_>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    // Parameter tuple shapes.
+    let mut param_shapes: HashMap<&str, TupleShape> = HashMap::new();
+    for param in func_def.parameters.iter_non_variadic_params() {
+        let Some(ann) = param.annotation() else {
+            continue;
+        };
+        if let Some(shape) = parse_tuple_shape(resolver, ann) {
+            let _ = param_shapes.insert(param.name().as_str(), shape);
+        }
+    }
 
-        // Extract the function body source (lines indented past the `def`).
-        let body_lines = func_body_lines(index, source, func.def_span.start_usize());
+    // Local tuple annotations, recorded as declarations are seen in order.
+    let mut local_shapes: HashMap<&str, TupleShape> = HashMap::new();
 
-        for line_info in &body_lines {
-            let trimmed = line_info.text.trim();
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-
-            // Local annotated decl: `v2: tuple[int, *tuple[int, ...]]` or `v3: tuple[int]`.
-            // Track all tuple annotations so we can check assignments where the source
-            // type has a starred unpack but the target is a plain fixed-length tuple.
-            if let Some((name, annotation)) = parse_annotated_decl(trimmed) {
-                if annotation.starts_with("tuple[") {
-                    if let Some(existing) = local_annotations.iter_mut().find(|(n, _)| n == &name) {
-                        existing.1 = annotation;
-                    } else {
-                        local_annotations.push((name, annotation));
-                    }
-                }
-                // Even if not a tuple annotation, continue — the annotated decl may
-                // also carry a value (handled below as a normal assignment line).
-            }
-
-            // Bare assignment: `v2 = t3` inside the function body.
-            if let Some((lhs, rhs)) = parse_bare_assignment(trimmed) {
-                // Target must have a starred-unpack annotation.
-                let target_ann = local_annotations
-                    .iter()
-                    .find(|(n, _)| n == &lhs)
-                    .map(|(_, a)| a.clone());
-                let Some(target_ann) = target_ann else {
+    for stmt in &func_def.body {
+        match stmt {
+            Stmt::AnnAssign(assign) => {
+                let Expr::Name(target) = assign.target.as_ref() else {
                     continue;
                 };
-
-                let rhs = rhs.trim();
-
-                // RHS is a simple name — look it up as a parameter annotation.
-                if is_simple_name(rhs) {
-                    if let Some((_, src_ann)) = param_annotations.iter().find(|(n, _)| n == rhs) {
-                        let src_ann = src_ann.clone();
-                        if let Some(msg) = check_var_against_annotation(&src_ann, &target_ann) {
-                            let span = line_span(source, line_info.source_offset);
-                            diagnostics.push(make_diag(msg, span, path, &CODE));
-                        }
-                    }
-                    continue;
-                }
-
-                // RHS is a tuple literal.
-                if let Some(elems) = parse_tuple_literal(rhs) {
-                    if let Some(msg) = check_literal_against_annotation(&elems, &target_ann) {
-                        let span = line_span(source, line_info.source_offset);
-                        diagnostics.push(make_diag(msg, span, path, &CODE));
-                    }
+                if let Some(shape) = parse_tuple_shape(resolver, &assign.annotation) {
+                    let _ = local_shapes.insert(target.id.as_str(), shape);
                 }
             }
+            Stmt::Assign(assign) => {
+                let [Expr::Name(target)] = assign.targets.as_slice() else {
+                    continue;
+                };
+                let Some(target_shape) = local_shapes.get(target.id.as_str()) else {
+                    continue;
+                };
+                match assign.value.as_ref() {
+                    // RHS is a parameter reference: shape-vs-shape check.
+                    Expr::Name(rhs) => {
+                        let Some(src_shape) = param_shapes.get(rhs.id.as_str()) else {
+                            continue;
+                        };
+                        if let Some(msg) = check_var_against_shape(src_shape, target_shape) {
+                            diagnostics.push(make_diag(msg, node_span(assign.range()), path));
+                        }
+                    }
+                    // RHS is a tuple literal: element-wise check.
+                    Expr::Tuple(literal) => {
+                        let elems: Vec<&Expr> = literal.elts.iter().collect();
+                        if let Some(msg) = check_literal_against_shape(&elems, target_shape) {
+                            diagnostics.push(make_diag(msg, node_span(assign.range()), path));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
         }
     }
 }

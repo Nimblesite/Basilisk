@@ -18,11 +18,11 @@ pub(crate) use class_walks::{
     any_base_name_matches, class_name_map, class_or_base_matches, method_name_map,
 };
 pub(crate) use runtime_names::{runtime_value_names, type_constructor_names};
-pub(crate) use type_expr::{
-    annotation_is_type_alias, is_type_expression, ExprIndex, StringPolicy, TypeExprJudge,
-};
 pub(crate) use text_scan::{
     identifiers_followed_by, leading_indent, span_for_line, split_top_level_commas,
+};
+pub(crate) use type_expr::{
+    annotation_is_type_alias, is_type_expression, ExprIndex, StringPolicy, TypeExprJudge,
 };
 
 use std::collections::HashSet;
@@ -61,19 +61,25 @@ pub(crate) fn decorator_spelled(decorators: &[String], name: &str) -> bool {
         .any(|d| d == name || d.rsplit('.').next() == Some(name))
 }
 
-/// Returns `true` when the annotation text denotes a `ClassVar[...]` type.
+/// Returns `true` when the annotation at `span` denotes `ClassVar`, bare or
+/// subscripted, under ANY import spelling ([TYPEINF-ANNOTATION-RESOLUTION]).
 ///
 /// `ClassVar` fields are excluded from the dataclass `__init__` parameter list,
-/// so dataclass rules (field ordering, constructor arity) skip them.
-pub(crate) fn annotation_is_classvar(source: &str, span: Option<Span>) -> bool {
+/// so dataclass rules (field ordering, constructor arity) skip them. The
+/// sliced text is parsed by `ruff` into the type expression it always was and
+/// judged through the cascade — never compared against a hardcoded spelling.
+pub(crate) fn annotation_is_classvar(
+    resolver: &AnnotationResolver<'_>,
+    source: &str,
+    span: Option<Span>,
+) -> bool {
     let Some(text) = span.and_then(|span| slice_span(source, span)) else {
         return false;
     };
-    let t = text.trim();
-    t.starts_with("ClassVar[")
-        || t.starts_with("ClassVar ")
-        || t == "ClassVar"
-        || t.contains(".ClassVar[")
+    let Ok(parsed) = ruff_python_parser::parse_expression(text.trim()) else {
+        return false;
+    };
+    typing_form::denotes_form(resolver, parsed.expr(), "ClassVar")
 }
 
 // ---------------------------------------------------------------------------
@@ -158,7 +164,13 @@ pub(crate) fn ann_str(expr: &Expr) -> String {
             "[{}]",
             l.elts.iter().map(ann_str).collect::<Vec<_>>().join(", ")
         ),
-        Expr::NumberLiteral(n) => format!("{:?}", n.value),
+        Expr::NumberLiteral(n) => match &n.value {
+            ast::Number::Int(int) => int.to_string(),
+            ast::Number::Float(float) => float.to_string(),
+            ast::Number::Complex { real, imag } => format!("complex({real}, {imag})"),
+        },
+        Expr::BooleanLiteral(b) => if b.value { "True" } else { "False" }.to_owned(),
+        Expr::Starred(s) => format!("*{}", ann_str(&s.value)),
         _ => "...".to_owned(),
     }
 }

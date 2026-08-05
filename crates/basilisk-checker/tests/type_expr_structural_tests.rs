@@ -16,17 +16,21 @@
 
 use std::collections::BTreeSet;
 
-use basilisk_checker::check;
-use basilisk_parser::parse_source;
-use basilisk_resolver::resolve;
+// The shared harness is compiled per test target; helpers this target does
+// not call are legitimately unused HERE while used by sibling targets.
+#[expect(
+    dead_code,
+    reason = "shared test harness; each target uses a subset of its helpers"
+)]
+mod common;
 
-fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
-    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
-    let resolved = resolve(&parsed)?;
-    Ok(check(&resolved))
-}
+/// The canonical harness: resolution against the release-bundled Typeshed
+/// generation, exactly like production. A bare `resolve` + `check` run leaves
+/// `typing` unresolved, and the gradual guarantee then suppresses the very
+/// diagnostics these tests assert on.
+use common::run;
 
-/// Names extracted from a rule's diagnostics via the `... for `NAME`` suffix.
+/// Names extracted from a rule's diagnostics via the ``... for `NAME` `` suffix.
 fn flagged_names(diags: &[basilisk_checker::Diagnostic], code: &str) -> BTreeSet<String> {
     diags
         .iter()
@@ -35,7 +39,7 @@ fn flagged_names(diags: &[basilisk_checker::Diagnostic], code: &str) -> BTreeSet
         .collect()
 }
 
-fn codes<'d>(diags: &'d [basilisk_checker::Diagnostic]) -> Vec<&'d str> {
+fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
     diags.iter().map(|d| d.code.code).collect()
 }
 
@@ -93,10 +97,22 @@ fn explicit_alias_battery_under_renamed_import() -> Result<(), Box<dyn std::erro
         "BadFString",
     ];
     for name in expected_bad {
-        assert!(flagged.contains(name), "`{name}` must be flagged; got {flagged:?}");
+        assert!(
+            flagged.contains(name),
+            "`{name}` must be flagged; got {flagged:?}"
+        );
     }
-    for name in ["GoodUnion", "GoodSubscript", "GoodForwardRef", "GoodNestedRef", "GoodNone"] {
-        assert!(!flagged.contains(name), "`{name}` must NOT be flagged; got {flagged:?}");
+    for name in [
+        "GoodUnion",
+        "GoodSubscript",
+        "GoodForwardRef",
+        "GoodNestedRef",
+        "GoodNone",
+    ] {
+        assert!(
+            !flagged.contains(name),
+            "`{name}` must NOT be flagged; got {flagged:?}"
+        );
     }
     assert_eq!(
         flagged.len(),
@@ -125,11 +141,24 @@ GoodSpacedUnion: AuditTypeAlias = int   |   str
 GoodSubscript: AuditTypeAlias = dict[ str , int ]
 "#;
     let flagged = flagged_names(&run(source)?, "aliases_implicit");
-    for name in ["BadTernary", "BadBoolOp", "BadAndOp", "BadLambdaCall", "BadTuple", "BadEval"] {
-        assert!(flagged.contains(name), "`{name}` must survive reformatting; got {flagged:?}");
+    for name in [
+        "BadTernary",
+        "BadBoolOp",
+        "BadAndOp",
+        "BadLambdaCall",
+        "BadTuple",
+        "BadEval",
+    ] {
+        assert!(
+            flagged.contains(name),
+            "`{name}` must survive reformatting; got {flagged:?}"
+        );
     }
     for name in ["GoodUnion", "GoodSpacedUnion", "GoodSubscript"] {
-        assert!(!flagged.contains(name), "`{name}` must NOT be flagged; got {flagged:?}");
+        assert!(
+            !flagged.contains(name),
+            "`{name}` must NOT be flagged; got {flagged:?}"
+        );
     }
     Ok(())
 }
@@ -165,12 +194,18 @@ fn type_statement_attribute_on_subscript_fires() -> Result<(), Box<dyn std::erro
     // #379: attribute access on a subscript is a value operation, not a
     // type. The old code accepted every Attribute node unconditionally.
     let diags = run("type Bad = list[int].attr\n")?;
-    assert_eq!(count_code(&diags, "aliases_type_statement"), 1, "{:?}", codes(&diags));
+    assert_eq!(
+        count_code(&diags, "aliases_type_statement"),
+        1,
+        "{:?}",
+        codes(&diags)
+    );
     Ok(())
 }
 
 #[test]
-fn type_statement_dotted_names_and_identifier_substrings_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn type_statement_dotted_names_and_identifier_substrings_ok(
+) -> Result<(), Box<dyn std::error::Error>> {
     let source = "
 import collections.abc
 class Blambda: pass
@@ -194,9 +229,19 @@ fn type_statement_forward_ref_contents_are_judged() -> Result<(), Box<dyn std::e
     // Lazily-evaluated statements accept strings anywhere, but content must
     // itself be a type expression.
     let good = run("type Recursive = \"Recursive\" | int\ntype Spaced = \"int   |   str\"\n")?;
-    assert_eq!(count_code(&good, "aliases_type_statement"), 0, "{:?}", codes(&good));
+    assert_eq!(
+        count_code(&good, "aliases_type_statement"),
+        0,
+        "{:?}",
+        codes(&good)
+    );
     let bad = run("type Bad = \"[int, str]\"\n")?;
-    assert_eq!(count_code(&bad, "aliases_type_statement"), 1, "{:?}", codes(&bad));
+    assert_eq!(
+        count_code(&bad, "aliases_type_statement"),
+        1,
+        "{:?}",
+        codes(&bad)
+    );
     Ok(())
 }
 
@@ -229,10 +274,16 @@ def f(
         .filter_map(|d| d.message.split('`').nth(1).map(str::to_owned))
         .collect();
     for name in ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9"] {
-        assert!(flagged.contains(name), "`{name}` must be flagged; got {flagged:?}");
+        assert!(
+            flagged.contains(name),
+            "`{name}` must be flagged; got {flagged:?}"
+        );
     }
     for name in ["p10", "p11"] {
-        assert!(!flagged.contains(name), "`{name}` must NOT be flagged; got {flagged:?}");
+        assert!(
+            !flagged.contains(name),
+            "`{name}` must NOT be flagged; got {flagged:?}"
+        );
     }
     Ok(())
 }
@@ -240,14 +291,24 @@ def f(
 #[test]
 fn string_operand_in_union_is_runtime_error() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("bad3: \"ClassA\" | int\nbad4: int | \"ClassA\"\nclass ClassA: ...\n")?;
-    assert_eq!(count_code(&diags, "annotations_forward_refs"), 2, "{:?}", codes(&diags));
+    assert_eq!(
+        count_code(&diags, "annotations_forward_refs"),
+        2,
+        "{:?}",
+        codes(&diags)
+    );
     Ok(())
 }
 
 #[test]
 fn triple_quoted_multiline_forward_ref_is_valid() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("value: \"\"\"\n    int |\n    str |\n    list[int]\n\"\"\"\n")?;
-    assert_eq!(count_code(&diags, "annotations_forward_refs"), 0, "{:?}", codes(&diags));
+    assert_eq!(
+        count_code(&diags, "annotations_forward_refs"),
+        0,
+        "{:?}",
+        codes(&diags)
+    );
     Ok(())
 }
 
@@ -260,7 +321,12 @@ def f(*args: *Ts) -> None: ...
 def g(*args: *tuple[int, ...]) -> None: ...
 ";
     let diags = run(source)?;
-    assert_eq!(count_code(&diags, "annotations_forward_refs"), 0, "{:?}", codes(&diags));
+    assert_eq!(
+        count_code(&diags, "annotations_forward_refs"),
+        0,
+        "{:?}",
+        codes(&diags)
+    );
     Ok(())
 }
 
@@ -284,16 +350,23 @@ Good3: Annotated[int|str, 3, "", max(1, 2)]
 "#;
     let flagged = flagged_names(&run(source)?, "qualifiers_annotated");
     for name in ["Bad1", "Bad2", "Bad3", "Bad4", "Bad5"] {
-        assert!(flagged.contains(name), "`{name}` must be flagged; got {flagged:?}");
+        assert!(
+            flagged.contains(name),
+            "`{name}` must be flagged; got {flagged:?}"
+        );
     }
     for name in ["Good1", "Good2", "Good3"] {
-        assert!(!flagged.contains(name), "`{name}` must NOT be flagged; got {flagged:?}");
+        assert!(
+            !flagged.contains(name),
+            "`{name}` must NOT be flagged; got {flagged:?}"
+        );
     }
     Ok(())
 }
 
 #[test]
-fn annotated_alias_calls_fire_but_class_alias_calls_do_not() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_alias_calls_fire_but_class_alias_calls_do_not(
+) -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Annotated, TypeAlias
 SmallInt: TypeAlias = Annotated[int, ""]
@@ -369,7 +442,8 @@ def also_good(x: Alias[..., None]) -> None: ...
 }
 
 #[test]
-fn typevar_bounds_checked_through_local_class_hierarchy() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bounds_checked_through_local_class_hierarchy() -> Result<(), Box<dyn std::error::Error>>
+{
     // #410: the bound check goes through the subtyping context — module-local
     // inheritance works, and str-vs-float uses the numeric tower. Unknown
     // names abstain instead of erroring.
@@ -395,9 +469,19 @@ bad2: Nums[str]
         .filter(|d| d.code.code == "aliases_implicit" && d.message.contains("does not satisfy"))
         .map(|d| d.message.as_str())
         .collect();
-    assert_eq!(bound_errors.len(), 2, "exactly Other and str violate: {bound_errors:?}");
-    assert!(bound_errors.iter().any(|m| m.contains("`Other`")), "{bound_errors:?}");
-    assert!(bound_errors.iter().any(|m| m.contains("`str`")), "{bound_errors:?}");
+    assert_eq!(
+        bound_errors.len(),
+        2,
+        "exactly Other and str violate: {bound_errors:?}"
+    );
+    assert!(
+        bound_errors.iter().any(|m| m.contains("`Other`")),
+        "{bound_errors:?}"
+    );
+    assert!(
+        bound_errors.iter().any(|m| m.contains("`str`")),
+        "{bound_errors:?}"
+    );
     Ok(())
 }
 
@@ -414,10 +498,9 @@ def f(p: Uppercase_value) -> None: ...
 ";
     let diags = run(source)?;
     assert!(
-        diags
-            .iter()
-            .any(|d| d.code.code == "aliases_implicit"
-                && d.message.contains("Cannot instantiate union type alias `lowercase_alias`")),
+        diags.iter().any(|d| d.code.code == "aliases_implicit"
+            && d.message
+                .contains("Cannot instantiate union type alias `lowercase_alias`")),
         "union alias instantiation must not depend on name casing: {:?}",
         diags.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
@@ -437,7 +520,8 @@ def f(p: Uppercase_value) -> None: ...
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn red_pin_assert_type_on_union_of_tuples_must_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn red_pin_assert_type_on_union_of_tuples_must_mismatch() -> Result<(), Box<dyn std::error::Error>>
+{
     // tuples_type_compat gap: a checker that does not narrow by len() must
     // still report that `val` is not `tuple[int]`. Today both resolver and
     // oracle abstain, and the file fails conformance. Previously this line
@@ -451,7 +535,9 @@ def func5(val: Func5Input):
 ";
     let diags = run(source)?;
     assert!(
-        diags.iter().any(|d| d.code.code.starts_with("directives_assert_type")),
+        diags
+            .iter()
+            .any(|d| d.code.code.starts_with("directives_assert_type")),
         "assert_type(val, tuple[int]) with val: tuple-union must mismatch \
          (or the checker must narrow); got {:?}",
         codes(&diags)

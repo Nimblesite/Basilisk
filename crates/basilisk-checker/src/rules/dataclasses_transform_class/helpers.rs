@@ -1,15 +1,23 @@
 //! Implements [`dataclasses_transform_class`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Helper types and functions for `dataclasses_transform_class`.
 //!
-//! Contains data types for transform-class settings, source text parsing
-//! utilities, and the four sub-checks that back [`DataclassTransformClassViolation`].
+//! Contains data types for transform-class settings and the four sub-checks
+//! that back [`DataclassTransformClassViolation`]. Every setting is read from
+//! the parsed `ruff` AST ([LINESCANPLAN-AST-MIGRATION], issue #408): decorator
+//! keywords, class-header keywords, constructor call shapes, and comparison
+//! expressions are structural facts, never re-parsed source lines.
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ResolvedModule, Span};
+use basilisk_resolver::ResolvedModule;
+use ruff_python_ast::visitor::{walk_expr, Visitor};
+use ruff_python_ast::{Arguments, CmpOp, Expr, ModModule, Stmt, StmtClassDef};
+use ruff_text_size::Ranged;
 
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
+use crate::rules::shared::typing_form::dotted_spelling;
+use crate::rules::shared::ExprIndex;
 
 pub(super) const CODE: ErrorCode = ErrorCode {
     code: "dataclasses_transform_class",
@@ -35,185 +43,104 @@ pub(super) struct TransformBaseDefaults {
     pub(super) order_default: bool,
 }
 
-/// Extract a boolean keyword argument value from a parenthesised argument text.
-pub(super) fn extract_bool_kwarg(args_text: &str, key: &str) -> Option<bool> {
-    let pattern = format!("{key}=");
-    let idx = args_text.find(&pattern)?;
-    let after = args_text[idx + pattern.len()..].trim_start();
-    if after.starts_with("True") {
-        Some(true)
-    } else if after.starts_with("False") {
-        Some(false)
-    } else {
-        None
-    }
+/// The boolean value of keyword `key` in an argument list, when present and
+/// literal.
+fn bool_keyword(arguments: &Arguments, key: &str) -> Option<bool> {
+    arguments.keywords.iter().find_map(|kw| {
+        let matches_key = kw.arg.as_ref().is_some_and(|arg| arg.as_str() == key);
+        match (&kw.value, matches_key) {
+            (Expr::BooleanLiteral(lit), true) => Some(lit.value),
+            _ => None,
+        }
+    })
 }
 
-/// Extract the text inside `(...)` following `end_pos` in `source`.
-pub(super) fn extract_paren_args(source: &str, name_end: usize) -> Option<&str> {
-    let rest = source.get(name_end..)?;
-    let open = rest.find('(')?;
-    let after_open = name_end + open + 1;
-    let inner = source.get(after_open..)?;
-    // Find the matching `)` respecting one level of bracket nesting.
-    let mut depth = 1i32;
-    let mut close = None;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '(' => depth += 1,
-            ')' => {
-                depth -= 1;
-                if depth == 0 {
-                    close = Some(idx);
-                    break;
-                }
+/// Visit every class definition in the module, however nested.
+fn for_each_class_def<'ast>(body: &'ast [Stmt], visit: &mut dyn FnMut(&'ast StmtClassDef)) {
+    for stmt in body {
+        match stmt {
+            Stmt::ClassDef(class_def) => {
+                visit(class_def);
+                for_each_class_def(&class_def.body, visit);
             }
+            Stmt::FunctionDef(func_def) => for_each_class_def(&func_def.body, visit),
             _ => {}
         }
     }
-    let close = close?;
-    source.get(after_open..after_open + close)
 }
 
-/// Find all class names (in this module) that are decorated with `@dataclass_transform`
-/// and parse their default settings.
+/// Find all class names decorated with `@dataclass_transform` (resolved
+/// through the import cascade, bare or called) and parse their defaults from
+/// the decorator call's keyword arguments.
 pub(super) fn collect_transform_base_classes(
-    module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
+    ast: &ModModule,
 ) -> HashMap<String, TransformBaseDefaults> {
-    let source = &module.source;
     let mut result = HashMap::new();
-
-    for cls in &module.classes {
-        let has_dt = cls
-            .decorator_spans
-            .iter()
-            .any(|(name, _)| name.rsplit('.').next() == Some("dataclass_transform"));
-        if !has_dt {
-            continue;
+    for_each_class_def(&ast.body, &mut |class_def| {
+        for decorator in &class_def.decorator_list {
+            let (callee, arguments) = match &decorator.expression {
+                Expr::Call(call) => (call.func.as_ref(), Some(&call.arguments)),
+                other => (other, None),
+            };
+            let denotes_transform = dotted_spelling(callee).is_some_and(|spelling| {
+                resolver.decorator_denotes(&spelling, "dataclass_transform")
+            });
+            if !denotes_transform {
+                continue;
+            }
+            let defaults = TransformBaseDefaults {
+                frozen_default: arguments
+                    .and_then(|args| bool_keyword(args, "frozen_default"))
+                    .unwrap_or(false),
+                kw_only_default: arguments
+                    .and_then(|args| bool_keyword(args, "kw_only_default"))
+                    .unwrap_or(false),
+                order_default: arguments
+                    .and_then(|args| bool_keyword(args, "order_default"))
+                    .unwrap_or(false),
+            };
+            let _ = result.insert(class_def.name.to_string(), defaults);
         }
-
-        let cls_start = cls.def_span.start_usize();
-        let search_end = cls_start
-            + source
-                .get(cls_start..)
-                .and_then(|s| s.find("class "))
-                .unwrap_or(0);
-
-        let search_region = source.get(..search_end).unwrap_or("");
-        let marker = "@dataclass_transform";
-        let Some(marker_pos) = search_region.rfind(marker) else {
-            continue;
-        };
-
-        let name_end = marker_pos + marker.len();
-        let mut defaults = TransformBaseDefaults {
-            frozen_default: false,
-            kw_only_default: false,
-            order_default: false,
-        };
-
-        if let Some(args_text) = extract_paren_args(source, name_end) {
-            if let Some(val) = extract_bool_kwarg(args_text, "frozen_default") {
-                defaults.frozen_default = val;
-            }
-            if let Some(val) = extract_bool_kwarg(args_text, "kw_only_default") {
-                defaults.kw_only_default = val;
-            }
-            if let Some(val) = extract_bool_kwarg(args_text, "order_default") {
-                defaults.order_default = val;
-            }
-        }
-
-        let _ = result.insert(cls.name.clone(), defaults);
-    }
-
+    });
     result
 }
 
-/// For each class in the module, determine if it inherits (directly) from a
-/// `@dataclass_transform` base class and compute its effective settings.
-pub(super) fn collect_transform_subclasses<'a>(
-    module: &'a ResolvedModule,
+/// For each class directly inheriting from a `@dataclass_transform` base,
+/// compute its effective settings: the base's defaults overridden by the
+/// class-header keywords (`class C(Base, frozen=True)`).
+pub(super) fn collect_transform_subclasses(
+    ast: &ModModule,
     transform_bases: &HashMap<String, TransformBaseDefaults>,
-) -> HashMap<&'a str, TransformClassSettings> {
-    let source = &module.source;
+) -> HashMap<String, TransformClassSettings> {
     let mut result = HashMap::new();
-
-    for cls in &module.classes {
-        let Some((_, base_defaults)) = cls
-            .bases
-            .iter()
-            .find_map(|b| transform_bases.get_key_value(b.as_str()))
-        else {
-            continue;
+    for_each_class_def(&ast.body, &mut |class_def| {
+        let Some(arguments) = class_def.arguments.as_deref() else {
+            return;
         };
-
-        let mut settings = TransformClassSettings {
-            frozen: base_defaults.frozen_default,
-            kw_only: base_defaults.kw_only_default,
-            order: base_defaults.order_default,
+        let base_defaults = arguments.args.iter().find_map(|base| match base {
+            Expr::Name(name) => transform_bases.get(name.id.as_str()),
+            _ => None,
+        });
+        let Some(base_defaults) = base_defaults else {
+            return;
         };
-
-        let name_end = cls.name_span.end_usize();
-        let Some(rest) = source.get(name_end..) else {
-            let _ = result.insert(cls.name.as_str(), settings);
-            continue;
+        let settings = TransformClassSettings {
+            frozen: bool_keyword(arguments, "frozen").unwrap_or(base_defaults.frozen_default),
+            kw_only: bool_keyword(arguments, "kw_only").unwrap_or(base_defaults.kw_only_default),
+            order: bool_keyword(arguments, "order").unwrap_or(base_defaults.order_default),
         };
-
-        let Some(open_paren) = rest.find('(') else {
-            let _ = result.insert(cls.name.as_str(), settings);
-            continue;
-        };
-
-        let paren_start = name_end + open_paren + 1;
-        let Some(inner) = source.get(paren_start..) else {
-            let _ = result.insert(cls.name.as_str(), settings);
-            continue;
-        };
-
-        let mut depth = 1i32;
-        let mut close_offset = inner.len();
-        for (idx, ch) in inner.char_indices() {
-            match ch {
-                '(' => depth += 1,
-                ')' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        close_offset = idx;
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        let Some(bases_text) = source.get(paren_start..paren_start + close_offset) else {
-            let _ = result.insert(cls.name.as_str(), settings);
-            continue;
-        };
-
-        if let Some(val) = extract_bool_kwarg(bases_text, "frozen") {
-            settings.frozen = val;
-        }
-        if let Some(val) = extract_bool_kwarg(bases_text, "kw_only") {
-            settings.kw_only = val;
-        }
-        if let Some(val) = extract_bool_kwarg(bases_text, "order") {
-            settings.order = val;
-        }
-
-        let _ = result.insert(cls.name.as_str(), settings);
-    }
-
+        let _ = result.insert(class_def.name.to_string(), settings);
+    });
     result
 }
 
 /// Compute the effective `frozen/kw_only/order` settings for a class that
 /// **inherits from another transform subclass** (not directly from the base).
-pub(super) fn resolve_inherited_settings<'a>(
+pub(super) fn resolve_inherited_settings(
     cls_name: &str,
-    module: &'a ResolvedModule,
-    direct_settings: &HashMap<&'a str, TransformClassSettings>,
+    module: &ResolvedModule,
+    direct_settings: &HashMap<String, TransformClassSettings>,
 ) -> Option<TransformClassSettings> {
     let mut visited = std::collections::HashSet::new();
     settings_walk(cls_name, module, direct_settings, &mut visited)
@@ -224,7 +151,7 @@ pub(super) fn resolve_inherited_settings<'a>(
 fn settings_walk<'a>(
     cls_name: &'a str,
     module: &'a ResolvedModule,
-    direct_settings: &HashMap<&'a str, TransformClassSettings>,
+    direct_settings: &HashMap<String, TransformClassSettings>,
     visited: &mut std::collections::HashSet<&'a str>,
 ) -> Option<TransformClassSettings> {
     if !visited.insert(cls_name) {
@@ -240,44 +167,10 @@ fn settings_walk<'a>(
         .find_map(|base| settings_walk(base, module, direct_settings, visited))
 }
 
-/// Return the byte offset of the start of a 1-based line.
-fn line_start_offset(source: &str, line: usize) -> Option<u32> {
-    let mut current = 1usize;
-    for (idx, ch) in source.char_indices() {
-        if current == line {
-            return u32::try_from(idx).ok();
-        }
-        if ch == '\n' {
-            current += 1;
-        }
-    }
-    u32::try_from(source.len()).ok()
-}
-
-/// Return a span covering the trimmed content of a source line (1-based).
-pub(super) fn span_for_source_line(source: &str, line: usize) -> Span {
-    let Some(start_u32) = line_start_offset(source, line) else {
-        return Span { start: 0, end: 0 };
-    };
-    let Ok(start) = usize::try_from(start_u32) else {
-        return Span { start: 0, end: 0 };
-    };
-    let line_text = source
-        .get(start..)
-        .and_then(|s| s.lines().next())
-        .unwrap_or("");
-    let trim_leading = line_text.len() - line_text.trim_start().len();
-    let trimmed = line_text.trim();
-    Span {
-        start: u32::try_from(start + trim_leading).unwrap_or(start_u32),
-        end: u32::try_from(start + trim_leading + trimmed.len()).unwrap_or(start_u32),
-    }
-}
-
 /// Check 1: A non-frozen class directly inheriting from a frozen transform subclass.
 pub(super) fn check_frozen_inheritance(
     module: &ResolvedModule,
-    direct_settings: &HashMap<&str, TransformClassSettings>,
+    direct_settings: &HashMap<String, TransformClassSettings>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -353,72 +246,14 @@ pub(super) fn check_frozen_instance_assignment(
     }
 }
 
-/// Parse the parenthesised argument list of a call site, returning whether any
-/// positional (non-keyword) arguments are present beyond the first.
-fn parse_call_positional(_source: &str, rhs_text: &str, _rhs_start: usize) -> bool {
-    let Some(paren_pos) = rhs_text.find('(') else {
-        return false;
-    };
-    let args_start_in_rhs = paren_pos + 1;
-    let args_text_raw = &rhs_text[args_start_in_rhs..];
-    let mut depth = 1i32;
-    let mut args_end = args_text_raw.len();
-    for (idx, ch) in args_text_raw.char_indices() {
-        match ch {
-            '(' => depth += 1,
-            ')' => {
-                depth -= 1;
-                if depth == 0 {
-                    args_end = idx;
-                    break;
-                }
-            }
-            _ => {}
-        }
-    }
-    let args_text = args_text_raw[..args_end].trim();
-    if args_text.is_empty() {
-        return false;
-    }
-
-    let first_arg = split_first_top_level_arg(args_text);
-    if first_arg.is_empty() {
-        return false;
-    }
-    !is_keyword_arg(first_arg)
-}
-
-/// Return the text of the first top-level comma-separated argument.
-fn split_first_top_level_arg(args: &str) -> &str {
-    let mut depth = 0i32;
-    for (idx, ch) in args.char_indices() {
-        match ch {
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => depth -= 1,
-            ',' if depth == 0 => return args[..idx].trim(),
-            _ => {}
-        }
-    }
-    args.trim()
-}
-
-/// Returns `true` if the argument text looks like a keyword arg (`name=value`).
-fn is_keyword_arg(arg: &str) -> bool {
-    let arg = arg.trim();
-    let Some(eq_pos) = arg.find('=') else {
-        return false;
-    };
-    basilisk_resolver::is_simple_ascii_python_identifier(arg[..eq_pos].trim())
-}
-
 /// Check 3: Positional arguments to a `kw_only` transform-class constructor.
 ///
-/// This scans module-level assignment RHS call expressions for the pattern
-/// `ClassName(positional_arg, ...)` where `ClassName` is a `kw_only` transform class.
+/// A module-level assignment whose RHS is a constructor call on a `kw_only`
+/// transform class must pass every argument by keyword.
 pub(super) fn check_kw_only_positional_args(
     module: &ResolvedModule,
-    direct_settings: &HashMap<&str, TransformClassSettings>,
-    source: &str,
+    index: &ExprIndex<'_>,
+    direct_settings: &HashMap<String, TransformClassSettings>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -426,25 +261,22 @@ pub(super) fn check_kw_only_positional_args(
         let Some(rhs_span) = var.rhs_span else {
             continue;
         };
-        let Some(rhs_text) = slice_span(source, rhs_span) else {
+        let Some(Expr::Call(call)) = index.expr(rhs_span) else {
             continue;
         };
-
-        let callee = rhs_text.split(['(', '[']).next().unwrap_or("").trim();
-        if callee.is_empty() {
+        let Expr::Name(callee) = call.func.as_ref() else {
             continue;
-        }
-        let callee = callee.rsplit('.').next().unwrap_or(callee);
+        };
+        let callee = callee.id.as_str();
 
         let Some(settings) = resolve_inherited_settings(callee, module, direct_settings) else {
             continue;
         };
-
         if !settings.kw_only {
             continue;
         }
 
-        if parse_call_positional(source, rhs_text, rhs_span.start_usize()) {
+        if !call.arguments.args.is_empty() {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(
@@ -466,14 +298,42 @@ pub(super) fn check_kw_only_positional_args(
     }
 }
 
+/// Every ordering comparison (`<`, `>`, `<=`, `>=`) whose operand is a bare
+/// name, with the comparison's source range.
+struct OrderingComparisons<'ast> {
+    hits: Vec<(&'ast str, basilisk_resolver::Span)>,
+}
+
+impl<'ast> Visitor<'ast> for OrderingComparisons<'ast> {
+    fn visit_expr(&mut self, expr: &'ast Expr) {
+        if let Expr::Compare(compare) = expr {
+            let is_ordering = compare
+                .ops
+                .iter()
+                .any(|op| matches!(op, CmpOp::Lt | CmpOp::Gt | CmpOp::LtE | CmpOp::GtE));
+            if is_ordering {
+                let range = compare.range();
+                let span = basilisk_resolver::Span {
+                    start: range.start().to_u32(),
+                    end: range.end().to_u32(),
+                };
+                for operand in
+                    std::iter::once(compare.left.as_ref()).chain(compare.comparators.iter())
+                {
+                    if let Expr::Name(name) = operand {
+                        self.hits.push((name.id.as_str(), span));
+                    }
+                }
+            }
+        }
+        walk_expr(self, expr);
+    }
+}
+
 /// Check 4: Comparison operator on a transform-class instance without `order=True`.
-///
-/// Scans source lines for binary comparison operators (`<`, `>`, `<=`, `>=`)
-/// where either operand is a known transform-class instance that lacks `order=True`.
 pub(super) fn check_no_order_comparison(
-    _module: &ResolvedModule,
+    ast: &ModModule,
     instance_map: &HashMap<&str, (&str, TransformClassSettings)>,
-    source: &str,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -481,41 +341,22 @@ pub(super) fn check_no_order_comparison(
         return;
     }
 
-    let no_order_vars: Vec<&str> = instance_map
-        .iter()
-        .filter(|(_, (_, s))| !s.order)
-        .map(|(name, _)| *name)
-        .collect();
-
-    if no_order_vars.is_empty() {
-        return;
+    let mut visitor = OrderingComparisons { hits: Vec::new() };
+    for stmt in &ast.body {
+        visitor.visit_stmt(stmt);
     }
 
-    for (line_idx, line) in source.lines().enumerate() {
-        let line_number = line_idx + 1;
-        let code_part = line.split('#').next().unwrap_or(line);
-
-        let has_comparison = code_part.contains(" < ")
-            || code_part.contains(" > ")
-            || code_part.contains(" <= ")
-            || code_part.contains(" >= ");
-
-        if !has_comparison {
+    let mut reported_spans = std::collections::HashSet::new();
+    for (operand_name, span) in visitor.hits {
+        let Some(&(class_name, ref settings)) = instance_map.get(operand_name) else {
+            continue;
+        };
+        if settings.order {
             continue;
         }
-
-        let offending_var = no_order_vars
-            .iter()
-            .find(|&&var_name| contains_identifier(code_part, var_name));
-
-        let Some(&var_name) = offending_var else {
-            continue;
-        };
-
-        let Some(&(class_name, _)) = instance_map.get(var_name) else {
-            continue;
-        };
-
+        if !reported_spans.insert((span.start, span.end)) {
+            continue; // One diagnostic per comparison expression.
+        }
         diagnostics.push(error_diagnostic_owned(
             CODE.clone(),
             format!(
@@ -523,7 +364,7 @@ pub(super) fn check_no_order_comparison(
                  `{class_name}` does not synthesise ordering methods \
                  (order=False by default)"
             ),
-            span_for_source_line(source, line_number),
+            span,
             path,
             Some(format!(
                 "Use `order=True` in `class {class_name}(...)` to enable ordering, \
@@ -536,31 +377,4 @@ pub(super) fn check_no_order_comparison(
             ),
         ));
     }
-}
-
-/// Returns `true` if `name` appears as a whole identifier in `text`.
-pub(super) fn contains_identifier(text: &str, name: &str) -> bool {
-    let name_bytes = name.as_bytes();
-    let text_bytes = text.as_bytes();
-    let mut start = 0;
-    while start + name.len() <= text.len() {
-        let Some(pos) = text.get(start..).and_then(|s| s.find(name)) else {
-            break;
-        };
-        let abs = start + pos;
-        let before_ok = abs == 0 || text_bytes.get(abs - 1).is_none_or(|&b| !is_ident_char(b));
-        let after_end = abs + name_bytes.len();
-        let after_ok = after_end >= text_bytes.len()
-            || text_bytes.get(after_end).is_none_or(|&b| !is_ident_char(b));
-        if before_ok && after_ok {
-            return true;
-        }
-        start = abs + 1;
-    }
-    false
-}
-
-/// Returns `true` for ASCII alphanumeric or underscore characters.
-const fn is_ident_char(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
 }

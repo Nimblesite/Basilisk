@@ -25,9 +25,7 @@ use crate::annotation::AnnotationResolver;
 pub(crate) fn dotted_spelling(expr: &Expr) -> Option<String> {
     match expr {
         Expr::Name(name) => Some(name.id.to_string()),
-        Expr::Attribute(attr) => {
-            Some(format!("{}.{}", dotted_spelling(&attr.value)?, attr.attr))
-        }
+        Expr::Attribute(attr) => Some(format!("{}.{}", dotted_spelling(&attr.value)?, attr.attr)),
         _ => None,
     }
 }
@@ -36,6 +34,19 @@ pub(crate) fn dotted_spelling(expr: &Expr) -> Option<String> {
 /// this module's imports and value bindings allow?
 pub(crate) fn denotes(resolver: &AnnotationResolver<'_>, expr: &Expr, member: &str) -> bool {
     dotted_spelling(expr).is_some_and(|spelling| resolver.decorator_denotes(&spelling, member))
+}
+
+/// Does `expr` denote the abstract collection `member` from `typing` OR
+/// `collections.abc`? The spec treats the two homes as the same protocol
+/// (`Mapping`, `Iterable`, ...), so recognition must too.
+pub(crate) fn denotes_abc(resolver: &AnnotationResolver<'_>, expr: &Expr, member: &str) -> bool {
+    dotted_spelling(expr).is_some_and(|spelling| {
+        resolver.spelling_denotes_from(
+            &spelling,
+            member,
+            &["typing", "typing_extensions", "collections.abc"],
+        )
+    })
 }
 
 /// When `expr` is `Member[...]` for the typing member `member`, the subscript
@@ -73,10 +84,7 @@ pub(crate) fn subscript_args(slice: &Expr) -> Vec<&Expr> {
 /// `Annotated[T, ...]`, `ClassVar[T]`, `Final[T]`, `Required[T]`,
 /// `NotRequired[T]`, `ReadOnly[T]`, `InitVar[T]` — returning the innermost
 /// type expression. A bare qualifier with no argument returns itself.
-pub(crate) fn strip_qualifiers<'e>(
-    resolver: &AnnotationResolver<'_>,
-    expr: &'e Expr,
-) -> &'e Expr {
+pub(crate) fn strip_qualifiers<'e>(resolver: &AnnotationResolver<'_>, expr: &'e Expr) -> &'e Expr {
     const QUALIFIERS: &[&str] = &[
         "Annotated",
         "ClassVar",

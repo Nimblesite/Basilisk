@@ -70,11 +70,12 @@ fn parse_complex_annotation(annotation: &str) -> InferredType {
                 .collect(),
         );
     }
-    // `Literal[...]`, including the common `from typing import Literal as L`
-    // alias spelled `L[...]` (lowercased to `l[`).
-    if let Some(inner) =
-        strip_subscript(annotation, "literal[").or_else(|| strip_subscript(annotation, "l["))
-    {
+    // `Literal[...]`. Import-aliased spellings (`from typing import Literal
+    // as L`) are NOT special-cased here: this text parser cannot see imports,
+    // and guessing from a one-letter head was fitted to a conformance
+    // fixture's alias ([CHKARCH-CONFORMANCE-MODE], issue #408). Alias-aware
+    // recognition belongs to the [TYPEINF-ANNOTATION-RESOLUTION] cascade.
+    if let Some(inner) = strip_subscript(annotation, "literal[") {
         return parse_literal_annotation(inner.trim());
     }
     if annotation.starts_with("callable[") && annotation.ends_with(']') {

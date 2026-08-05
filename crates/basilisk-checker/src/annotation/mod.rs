@@ -175,6 +175,17 @@ impl<'m> AnnotationResolver<'m> {
     /// the name arriving via re-exports the table cannot see.
     #[must_use]
     pub fn decorator_denotes(&self, spelling: &str, member: &str) -> bool {
+        self.spelling_denotes_from(spelling, member, &["typing", "typing_extensions"])
+    }
+
+    /// Does `spelling` denote `member` as exported by ANY of `modules`?
+    ///
+    /// The generalisation of [`Self::decorator_denotes`] for members that live
+    /// in more than one sanctioned home — `Mapping`, `Iterable`, and the other
+    /// ABCs are the same protocol whether imported from `typing` or
+    /// `collections.abc`, and the spec draws no distinction.
+    #[must_use]
+    pub fn spelling_denotes_from(&self, spelling: &str, member: &str, modules: &[&str]) -> bool {
         let mut current = spelling.to_owned();
         for _ in 0..MAX_DEPTH {
             match self.tables.values.get(&current) {
@@ -183,23 +194,23 @@ impl<'m> AnnotationResolver<'m> {
             }
         }
         match current.split_once('.') {
-            Some((head, attr)) => attr == member && self.head_is_typing_module(head),
+            Some((head, attr)) => attr == member && self.head_is_module_of(head, modules),
             None => match self.tables.imports.get(&current) {
                 Some(imported) => {
-                    imported.original == member && builtins::is_typing_module(&imported.module)
+                    imported.original == member && modules.contains(&imported.module.as_str())
                 }
                 None => current == member,
             },
         }
     }
 
-    /// Is `head` a binding of (or literally) the typing module?
-    fn head_is_typing_module(&self, head: &str) -> bool {
+    /// Is `head` a binding of (or literally) one of `modules`?
+    fn head_is_module_of(&self, head: &str, modules: &[&str]) -> bool {
         match self.tables.modules.get(head) {
-            Some(module) => builtins::is_typing_module(module),
+            Some(module) => modules.contains(&module.as_str()),
             // Unbound heads keep the literal spellings only, so a foreign
             // module aliased to `typing` cannot smuggle members in.
-            None => builtins::is_typing_module(head),
+            None => modules.contains(&head),
         }
     }
 
