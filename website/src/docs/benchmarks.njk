@@ -20,6 +20,16 @@ permalink: /docs/benchmarks/
   analysis, and diagnostic output. It does <strong>not</strong> measure one typing rule. Lower is better.
 </p>
 
+<p class="bench-caveat">
+  <strong>Treat these numbers as indicative, not authoritative.</strong> They are currently produced by
+  running <code>make bench</code> on a contributor's local workstation, so every tool's timing carries
+  that machine's background load — enough that a run taken under load can shift results by tens of
+  percent across the whole table at once. We are moving the benchmark onto dedicated, isolated
+  hardware in the CI pipeline so published figures come from a controlled environment and are
+  reproducible run to run. Until then, compare tools within a single run (they are all measured
+  back to back on the same machine) rather than comparing a figure here against one recorded elsewhere.
+</p>
+
 {% import "benchmark-section.njk" as benchmark %}
 {{ benchmark.resultsTable(benchmarks, site.github) }}
 

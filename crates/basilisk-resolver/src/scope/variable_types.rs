@@ -50,10 +50,19 @@ pub struct AttributeInfo {
     ///
     /// In enum class bodies, lambda attributes are non-members.
     pub rhs_is_lambda: bool,
-    /// `true` when the right-hand-side is a call to `staticmethod(...)` or `classmethod(...)`.
+    /// The descriptor wrapper name when the right-hand-side is a call to
+    /// `staticmethod(...)` or `classmethod(...)`, else `None`.
     ///
-    /// In enum class bodies, static/class method descriptors are non-members.
-    pub rhs_is_descriptor_call: bool,
+    /// In enum class bodies, static/class method descriptors are non-members;
+    /// in ordinary class bodies the wrapper decides which implicit receiver a
+    /// bound callable consumes
+    /// ([#382](https://github.com/Nimblesite/Basilisk/issues/382)).
+    pub rhs_descriptor: Option<String>,
+    /// The simple name of the callable this attribute binds, when the
+    /// right-hand-side is a bare name (`m = f`) or a descriptor wrapper around
+    /// one (`s = staticmethod(g)`), else `None`. Class-body assignments of
+    /// module-level functions bind them as methods ([#382]).
+    pub rhs_name: Option<String>,
     /// `true` when the annotation contains `ReadOnly[...]` (directly or nested).
     ///
     /// Used by `typeddicts_readonly` to detect mutation of read-only `TypedDict` fields.

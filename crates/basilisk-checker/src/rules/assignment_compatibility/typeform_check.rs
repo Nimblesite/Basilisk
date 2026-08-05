@@ -8,6 +8,7 @@
 //!
 //! Reference: <https://typing.readthedocs.io/en/latest/spec/type-forms.html>
 
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 use crate::span_util::slice_span;
 use crate::types::InferredType;
@@ -55,6 +56,7 @@ pub(super) fn is_valid_typeform_assignment(
     source: &str,
     inner: &InferredType,
     functions: &[FunctionInfo],
+    resolver: &AnnotationResolver<'_>,
 ) -> bool {
     let Some(rhs_span) = var.rhs_span else {
         return true; // No RHS to check
@@ -73,10 +75,10 @@ pub(super) fn is_valid_typeform_assignment(
         | basilisk_resolver::RhsKind::Tuple(_)
         | basilisk_resolver::RhsKind::TypeCall => return false,
         basilisk_resolver::RhsKind::CallExpr => {
-            return is_valid_call_typeform(rhs_text, inner, functions, source);
+            return is_valid_call_typeform(rhs_text, inner, functions, source, resolver);
         }
         basilisk_resolver::RhsKind::StrLiteral => {
-            return is_valid_string_typeform(rhs_text, inner);
+            return is_valid_string_typeform(rhs_text, inner, resolver);
         }
         basilisk_resolver::RhsKind::NoneValue => {
             // `None` is a valid type expression representing `NoneType`.
@@ -86,7 +88,7 @@ pub(super) fn is_valid_typeform_assignment(
     }
 
     // For `Other`/`Lambda`/etc., parse the RHS text as a type expression
-    is_valid_rhs_type_expression(rhs_text, inner)
+    is_valid_rhs_type_expression(rhs_text, inner, resolver)
 }
 
 /// Check whether a function call result is a valid `TypeForm` assignment.
@@ -100,6 +102,7 @@ fn is_valid_call_typeform(
     inner: &InferredType,
     functions: &[FunctionInfo],
     source: &str,
+    resolver: &AnnotationResolver<'_>,
 ) -> bool {
     // Extract the callee name (before `(`)
     let callee = rhs_text.split('(').next().unwrap_or("").trim();
@@ -110,36 +113,51 @@ fn is_valid_call_typeform(
         return false;
     }
 
-    // Look up user-defined function return types
-    if let Some(func) = functions.iter().find(|func| func.name == callee) {
-        if let Some(ret_span) = func.return_annotation_span {
-            if let Some(ret_text) = slice_span(source, ret_span) {
-                let ret_type = InferredType::from_annotation(ret_text.trim());
-                // If the function returns `TypeForm[S]`, check S assignable to inner
-                if let InferredType::TypeForm(ref ret_inner) = ret_type {
-                    return ret_inner.is_assignable_to(inner);
-                }
-                // If the function returns `type[S]`, check S assignable to inner
-                // (`type[T]` is a subtype of `TypeForm[T]`)
-                let ret_text_trimmed = ret_text.trim().to_ascii_lowercase();
-                if ret_text_trimmed.starts_with("type[") && ret_text_trimmed.ends_with(']') {
-                    let type_inner = &ret_text_trimmed["type[".len()..ret_text_trimmed.len() - 1];
-                    let type_inner_type = InferredType::from_annotation(type_inner);
-                    return type_inner_type.is_assignable_to(inner);
-                }
-            }
-        }
-    }
+    // Look up user-defined function return types; anything the cascade
+    // cannot answer falls through to the conservative acceptance below.
+    functions
+        .iter()
+        .find(|func| func.name == callee)
+        .and_then(|func| callee_return_typeform(func, inner, source, resolver))
+        .unwrap_or(true)
+}
 
-    // For unknown functions, accept conservatively to avoid FPs
-    true
+/// Whether `func`'s declared return type makes it a valid `TypeForm[inner]`
+/// producer. `None` when the annotation is missing or the cascade cannot
+/// resolve it — the caller then accepts conservatively.
+fn callee_return_typeform(
+    func: &FunctionInfo,
+    inner: &InferredType,
+    source: &str,
+    resolver: &AnnotationResolver<'_>,
+) -> Option<bool> {
+    let ret_span = func.return_annotation_span?;
+    let ret_text = slice_span(source, ret_span)?.trim();
+    // The return annotation is a type expression the cascade evaluates
+    // ([NARROWPLAN-INTEGRATION] Step 7).
+    let ret_type = resolver
+        .resolve_span(ret_span)
+        .or_else(|| resolver.resolve_text(ret_text))?;
+    // Returning `TypeForm[S]`: check S assignable to inner.
+    if let InferredType::TypeForm(ref ret_inner) = ret_type {
+        return Some(ret_inner.is_assignable_to(inner));
+    }
+    // `type[S]` is a subtype of `TypeForm[S]` (PEP 747), but the cascade
+    // collapses `type[..]` to the nominal `type` leaf, so `S` is resolved
+    // from the annotation's own subscript.
+    let type_inner = type_subscript_inner(ret_text)?;
+    Some(resolver.resolve_text(type_inner)?.is_assignable_to(inner))
 }
 
 /// Check if a string literal is a valid type form.
 ///
 /// The string content (without quotes) must parse as a valid type expression,
 /// and the represented type must be assignable to `inner`.
-fn is_valid_string_typeform(rhs_text: &str, inner: &InferredType) -> bool {
+fn is_valid_string_typeform(
+    rhs_text: &str,
+    inner: &InferredType,
+    resolver: &AnnotationResolver<'_>,
+) -> bool {
     // Strip quotes
     let content = if (rhs_text.starts_with('"') && rhs_text.ends_with('"'))
         || (rhs_text.starts_with('\'') && rhs_text.ends_with('\''))
@@ -155,8 +173,21 @@ fn is_valid_string_typeform(rhs_text: &str, inner: &InferredType) -> bool {
     }
 
     // Check assignability of the represented type to inner
-    let represented = InferredType::from_annotation(content);
-    represented.is_assignable_to(inner)
+    resolver
+        .resolve_text(content)
+        .is_some_and(|represented| represented.is_assignable_to(inner))
+}
+
+/// The argument text of a `type[...]` annotation, if that is its form.
+///
+/// The cascade collapses `type[X]` to the nominal `type` leaf (a class
+/// object is not its instance), so a caller that needs `X` — here, because
+/// PEP 747 makes `type[T]` a subtype of `TypeForm[T]` — reads the subscript
+/// and evaluates THAT through the cascade.
+fn type_subscript_inner(annotation: &str) -> Option<&str> {
+    let trimmed = annotation.trim();
+    let inner = trimmed.strip_prefix("type[")?.strip_suffix(']')?;
+    (!inner.trim().is_empty()).then(|| inner.trim())
 }
 
 /// Check whether a text parses as a valid Python type expression.
@@ -196,7 +227,11 @@ fn is_parseable_type_expression(text: &str) -> bool {
 
 /// Check if a non-string, non-literal RHS is a valid type expression
 /// assignable to the `TypeForm`'s inner type.
-fn is_valid_rhs_type_expression(rhs_text: &str, inner: &InferredType) -> bool {
+fn is_valid_rhs_type_expression(
+    rhs_text: &str,
+    inner: &InferredType,
+    resolver: &AnnotationResolver<'_>,
+) -> bool {
     let rhs_text = rhs_text.trim();
 
     let base_name = rhs_text.split('[').next().unwrap_or(rhs_text).trim();
@@ -224,13 +259,15 @@ fn is_valid_rhs_type_expression(rhs_text: &str, inner: &InferredType) -> bool {
         if type_part.is_empty() {
             return false;
         }
-        let represented = InferredType::from_annotation(type_part);
-        return represented.is_assignable_to(inner);
+        return resolver
+            .resolve_text(type_part)
+            .is_some_and(|represented| represented.is_assignable_to(inner));
     }
 
-    // Parse the RHS as a type annotation and check assignability
-    let represented = InferredType::from_annotation(rhs_text);
-    represented.is_assignable_to(inner)
+    // The RHS *is* a type expression — evaluate it through the cascade.
+    resolver
+        .resolve_text(rhs_text)
+        .is_some_and(|represented| represented.is_assignable_to(inner))
 }
 
 /// Check `TypeForm` constructor calls and function calls with `TypeForm` parameters.
@@ -238,18 +275,29 @@ fn is_valid_rhs_type_expression(rhs_text: &str, inner: &InferredType) -> bool {
 /// This catches:
 /// - `TypeForm("type(1)")` — invalid type expression as `TypeForm` constructor arg
 /// - `func1("not a type")` — invalid type expression passed to `TypeForm` param
-pub(super) fn check_typeform_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+pub(super) fn check_typeform_calls(
+    module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     let source = &module.source;
 
     for call in &module.calls {
         // Check `TypeForm()` constructor calls
         if call.callee == "TypeForm" {
-            check_typeform_constructor(call, source, &module.path, diagnostics);
+            check_typeform_constructor(call, source, &module.path, resolver, diagnostics);
             continue;
         }
 
         // Check function calls where parameters have `TypeForm` annotations
-        check_typeform_param_args(call, &module.functions, source, &module.path, diagnostics);
+        check_typeform_param_args(
+            call,
+            &module.functions,
+            source,
+            &module.path,
+            resolver,
+            diagnostics,
+        );
     }
 }
 
@@ -258,6 +306,7 @@ fn check_typeform_constructor(
     call: &basilisk_resolver::CallSite,
     source: &str,
     path: &str,
+    resolver: &AnnotationResolver<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     // `TypeForm()` takes exactly one argument
@@ -275,7 +324,7 @@ fn check_typeform_constructor(
 
     let is_invalid = match rhs_kind {
         basilisk_resolver::RhsKind::StrLiteral => {
-            !is_valid_string_typeform(arg_text, &InferredType::Any)
+            !is_valid_string_typeform(arg_text, &InferredType::Any, resolver)
         }
         basilisk_resolver::RhsKind::CallExpr
         | basilisk_resolver::RhsKind::TypeCall
@@ -314,6 +363,7 @@ fn check_typeform_param_args(
     functions: &[FunctionInfo],
     source: &str,
     path: &str,
+    resolver: &AnnotationResolver<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     // Find the function definition
@@ -334,11 +384,9 @@ fn check_typeform_param_args(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = slice_span(source, ann_span) else {
+        let Some(param_type) = resolver.resolve_span(ann_span) else {
             continue;
         };
-
-        let param_type = InferredType::from_annotation(ann_text.trim());
         let InferredType::TypeForm(ref inner) = param_type else {
             continue;
         };
@@ -350,7 +398,9 @@ fn check_typeform_param_args(
         let arg_text = arg_text.trim();
 
         let is_invalid = match rhs_kind {
-            basilisk_resolver::RhsKind::StrLiteral => !is_valid_string_typeform(arg_text, inner),
+            basilisk_resolver::RhsKind::StrLiteral => {
+                !is_valid_string_typeform(arg_text, inner, resolver)
+            }
             basilisk_resolver::RhsKind::IntLiteral
             | basilisk_resolver::RhsKind::FloatLiteral
             | basilisk_resolver::RhsKind::BoolLiteral

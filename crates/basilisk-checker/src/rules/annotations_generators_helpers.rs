@@ -8,7 +8,7 @@
 use basilisk_resolver::{FunctionInfo, ResolvedModule, RhsKind, YieldExprInfo};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::inference::infer_rhs;
+use crate::rules::shared::judge::TypeJudge;
 use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
@@ -25,52 +25,6 @@ pub(super) const SYNC_GENERATOR_TYPES: &[&str] = &["Generator", "Iterator", "Ite
 /// Valid return type base names for asynchronous generator functions.
 pub(super) const ASYNC_GENERATOR_TYPES: &[&str] =
     &["AsyncGenerator", "AsyncIterator", "AsyncIterable"];
-
-/// Infer the type of a yield expression value.
-pub(super) fn infer_yield_type(
-    rhs: &RhsKind,
-    call_name: Option<&String>,
-    module: &ResolvedModule,
-) -> InferredType {
-    if matches!(rhs, RhsKind::CallExpr) {
-        return call_name.map_or(InferredType::Unknown, |name| {
-            infer_call_result(name, module)
-        });
-    }
-    infer_rhs(rhs)
-}
-
-/// The result type of a direct call `name(...)`: a module-level function's
-/// declared return type, a local class's instance, or a builtin constructor
-/// (`str(...)`, `int(...)`). `Unknown` for anything unresolvable — a callee's
-/// bare name is never itself the yielded type (GitHub #281 inferred `get` as
-/// a type from `yield NAME_SYNONYMS.get(name, name)`).
-fn infer_call_result(name: &str, module: &ResolvedModule) -> InferredType {
-    // A module-level (or nested) function: its declared return type is the
-    // call's type. Methods are excluded — a direct call never targets one.
-    if let Some(callee) = module
-        .functions
-        .iter()
-        .find(|f| f.name == name && f.class_name.is_none())
-    {
-        return callee
-            .return_annotation_span
-            .and_then(|span| slice_span(&module.source, span))
-            .map_or(InferredType::Unknown, |ann| {
-                InferredType::from_annotation(ann.trim())
-            });
-    }
-    // A locally-defined class: constructing it yields an instance of it.
-    if module.classes.iter().any(|c| c.name == name) {
-        return InferredType::from_annotation(name);
-    }
-    // A builtin constructor parses to a concrete type; any other bare name
-    // parses to `Named(...)`, which is not evidence of the call's type.
-    match InferredType::from_annotation(name) {
-        InferredType::Named(_) => InferredType::Unknown,
-        builtin => builtin,
-    }
-}
 
 /// Extract the base type name (before `[`).
 pub(super) fn base_type_name(annotation: &str) -> &str {
@@ -115,27 +69,35 @@ pub(super) fn extract_return_type_from_generator(annotation: &str) -> Option<Str
     args.get(2).map(|arg| arg.trim().to_owned())
 }
 
+/// The outer generator's declared annotation, as the call branch renders it.
+pub(super) struct OuterAnnotation<'a> {
+    /// The full annotation text (`Generator[int, None, None]`).
+    pub(super) text: &'a str,
+    /// Its base name (`Generator`, `Iterator`, …).
+    pub(super) base: &'a str,
+}
+
 /// Check a `yield from expr` against the outer generator's declared yield type.
 pub(super) fn check_yield_from(
     func: &FunctionInfo,
     yield_expr: &YieldExprInfo,
     declared_yield_type: &InferredType,
-    outer_ann: &str,
-    outer_base: &str,
+    outer: &OuterAnnotation<'_>,
+    judge: &TypeJudge<'_, '_>,
     module: &ResolvedModule,
     out: &mut Vec<Diagnostic>,
 ) {
     match &yield_expr.rhs_kind {
-        RhsKind::List(elements) => {
-            check_yield_from_list(func, yield_expr, declared_yield_type, elements, module, out);
+        RhsKind::List(_) => {
+            check_yield_from_list(func, yield_expr, declared_yield_type, judge, module, out);
         }
         RhsKind::CallExpr => {
             check_yield_from_call(
                 func,
                 yield_expr,
                 declared_yield_type,
-                outer_ann,
-                outer_base,
+                outer,
+                judge,
                 module,
                 out,
             );
@@ -144,40 +106,44 @@ pub(super) fn check_yield_from(
     }
 }
 
-/// Check `yield from [literal_list]` against the declared yield type.
+/// Check `yield from [literal_list]` against the declared yield type — the
+/// iterated element type comes from the engine's synthesis of the sub-iterator
+/// expression ([NARROWPLAN-INTEGRATION] Step 2).
 fn check_yield_from_list(
     func: &FunctionInfo,
     yield_expr: &YieldExprInfo,
     declared_yield_type: &InferredType,
-    elements: &[RhsKind],
+    judge: &TypeJudge<'_, '_>,
     module: &ResolvedModule,
     out: &mut Vec<Diagnostic>,
 ) {
-    for elem_rhs in elements {
-        let elem_type = infer_rhs(elem_rhs);
-        if matches!(elem_type, InferredType::Unknown) {
-            continue;
-        }
-        if !elem_type.is_assignable_to(declared_yield_type) {
-            out.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Incompatible `yield from` in `{}`: list element type `{elem_type}` \
-                     is not assignable to yield type `{declared_yield_type}`",
-                    func.name
-                ),
-                yield_expr.span,
-                &module.path,
-                Some(
-                    "Ensure the sub-iterator yields values compatible with the outer \
-                     generator's yield type"
-                        .to_owned(),
-                ),
-                None,
-            ));
-            return; // One diagnostic per yield-from is enough.
-        }
+    let (InferredType::List(element) | InferredType::Set(element)) =
+        judge.inferred(yield_expr.value_span)
+    else {
+        return;
+    };
+    let elem_type = *element;
+    if !crate::expr_type::is_fully_known(&elem_type)
+        || elem_type.is_assignable_to(declared_yield_type)
+    {
+        return;
     }
+    out.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
+            "Incompatible `yield from` in `{}`: list element type `{elem_type}` \
+             is not assignable to yield type `{declared_yield_type}`",
+            func.name
+        ),
+        yield_expr.span,
+        &module.path,
+        Some(
+            "Ensure the sub-iterator yields values compatible with the outer \
+             generator's yield type"
+                .to_owned(),
+        ),
+        None,
+    ));
 }
 
 /// Check `yield from callee()` against the declared yield and send types.
@@ -185,11 +151,12 @@ fn check_yield_from_call(
     func: &FunctionInfo,
     yield_expr: &YieldExprInfo,
     declared_yield_type: &InferredType,
-    outer_ann: &str,
-    outer_base: &str,
+    outer: &OuterAnnotation<'_>,
+    judge: &TypeJudge<'_, '_>,
     module: &ResolvedModule,
     out: &mut Vec<Diagnostic>,
 ) {
+    let (outer_ann, outer_base) = (outer.text, outer.base);
     let Some(callee_name) = &yield_expr.call_name else {
         return;
     };
@@ -208,7 +175,12 @@ fn check_yield_from_call(
     if callee_yield_type_str.is_empty() {
         return;
     }
-    let callee_yield_type = InferredType::from_annotation(&callee_yield_type_str);
+    // The parameter is a type expression the CASCADE evaluates — the legacy
+    // parser folded class case (`A` → `a`), which can never equal the
+    // properly-cased declared side.
+    let callee_yield_type = judge
+        .resolve_annotation_text(&callee_yield_type_str)
+        .unwrap_or(InferredType::Unknown);
     if matches!(callee_yield_type, InferredType::Unknown) {
         return;
     }
@@ -241,6 +213,7 @@ fn check_yield_from_call(
         outer_base,
         callee_ann,
         callee_base,
+        judge,
         module,
         out,
     );
@@ -258,6 +231,7 @@ pub(super) fn check_send_type_compat(
     outer_base: &str,
     callee_ann: &str,
     callee_base: &str,
+    judge: &TypeJudge<'_, '_>,
     module: &ResolvedModule,
     out: &mut Vec<Diagnostic>,
 ) {
@@ -286,8 +260,16 @@ pub(super) fn check_send_type_compat(
         return;
     };
 
-    let outer_send = InferredType::from_annotation(outer_send_str.trim());
-    let callee_send = InferredType::from_annotation(callee_send_str.trim());
+    // A send type is a type expression the cascade evaluates — never a
+    // string this rule case-folds ([NARROWPLAN-INTEGRATION] Step 7,
+    // [#379](https://github.com/Nimblesite/Basilisk/issues/379)). An
+    // unresolvable one abstains, exactly as the gradual leaves below do.
+    let (Some(outer_send), Some(callee_send)) = (
+        judge.resolve_annotation_text(outer_send_str.trim()),
+        judge.resolve_annotation_text(callee_send_str.trim()),
+    ) else {
+        return;
+    };
 
     if matches!(outer_send, InferredType::Unknown | InferredType::Any)
         || matches!(callee_send, InferredType::Unknown | InferredType::Any)

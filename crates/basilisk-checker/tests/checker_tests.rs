@@ -2360,7 +2360,11 @@ fn compatible_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn call_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn mismatched_call_return_fires() -> Result<(), Box<dyn std::error::Error>> {
+    // [NARROWPLAN-INTEGRATION] Step 2 — the return half of GitHub #378. The
+    // pre-engine rule skipped every call return because it could not type one;
+    // the module oracle resolves `helper()` through its DECLARED return, so a
+    // genuine mismatch is no longer a miss.
     let src = "def helper() -> int: return 42\ndef foo() -> str:\n    return helper()\n";
     let diags = run(src)?;
     let e11: Vec<_> = diags
@@ -2368,8 +2372,41 @@ fn call_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|d| d.code.code == "returns_compatibility")
         .collect();
     assert!(
+        !e11.is_empty(),
+        "returning `int` from a `-> str` function must fire E0011, got: {diags:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn compatible_call_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def helper() -> int: return 42\ndef foo() -> int:\n    return helper()\n";
+    let diags = run(src)?;
+    let e11: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "returns_compatibility")
+        .collect();
+    assert!(
         e11.is_empty(),
-        "call return without full inference must not fire E0011"
+        "a call whose declared return matches must not fire E0011, got: {e11:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn undeclared_call_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // [TYPEINF-TARGET-GRADUAL]: an undeclared return is display-grade only.
+    // Enforcing the synthesized `int` here would mean removing an annotation
+    // ADDS errors, which the gradual guarantee forbids.
+    let src = "def helper(): return 42\ndef foo() -> str:\n    return helper()\n";
+    let diags = run(src)?;
+    let e11: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "returns_compatibility")
+        .collect();
+    assert!(
+        e11.is_empty(),
+        "an unannotated callee must not manufacture a return mismatch, got: {e11:?}"
     );
     Ok(())
 }

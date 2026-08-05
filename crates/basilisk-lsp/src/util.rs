@@ -5,6 +5,7 @@
 
 use std::fmt::Write as _;
 
+use basilisk_checker::expr_type::ModuleSpanTypes;
 use basilisk_resolver::{
     AttributeInfo, ClassInfo, FunctionInfo, ImportInfo, ImportKind, ParameterInfo, ResolvedModule,
     ReturnAnnotationKind, Span, VariableInfo,
@@ -232,20 +233,32 @@ fn is_ident_char(b: u8) -> bool {
 // ── Type signature formatting ────────────────────────────────────────────────
 
 /// Format a hover markdown string for a symbol hit.
+///
+/// Inferred (unannotated) types come from the module's span-indexed oracle —
+/// the SAME engine behind checker diagnostics ([NARROWPLAN-INTEGRATION]
+/// Step 5), so a rendered type and a diagnostic can never disagree.
 // Implements [LSPARCH-FEATURES-FINDSYM] — `format_type_signature` builds hover markdown for any symbol kind.
 #[must_use]
-pub fn format_type_signature(hit: &SymbolHit<'_>, source: &str) -> String {
+pub fn format_type_signature(hit: &SymbolHit<'_>, resolved: &ResolvedModule) -> String {
+    let source = &resolved.source;
+    let types = ModuleSpanTypes::build(resolved);
     match hit {
-        SymbolHit::Function(func) => format_function_signature(func, source),
+        SymbolHit::Function(func) => format_function_signature(func, source, &types),
         SymbolHit::Class(class) => format_class_signature(class),
-        SymbolHit::Variable(var) => format_variable_signature(var, source),
+        SymbolHit::Variable(var) => format_variable_signature(var, source, &types),
         SymbolHit::Parameter { param, .. } => format_parameter_signature(param, source),
-        SymbolHit::Attribute { class, attr } => format_attribute_signature(class, attr, source),
+        SymbolHit::Attribute { class, attr } => {
+            format_attribute_signature(class, attr, source, &types)
+        }
         SymbolHit::Import(imp) => format_import_signature(imp),
     }
 }
 
-fn format_function_signature(func: &FunctionInfo, source: &str) -> String {
+fn format_function_signature(
+    func: &FunctionInfo,
+    source: &str,
+    types: &ModuleSpanTypes<'_>,
+) -> String {
     let kind = if func.class_name.is_some() {
         "method"
     } else {
@@ -294,7 +307,7 @@ fn format_function_signature(func: &FunctionInfo, source: &str) -> String {
     match func.return_annotation {
         ReturnAnnotationKind::Missing => {
             // #253: no annotation — infer from the body's `return` statements.
-            let inferred = infer_return_type_display(func);
+            let inferred = infer_return_type_display(types, func);
             if !inferred.is_empty() {
                 let _ = write!(sig, " -> {inferred}");
             }
@@ -325,12 +338,16 @@ fn format_class_signature(class: &ClassInfo) -> String {
     sig
 }
 
-fn format_variable_signature(var: &VariableInfo, source: &str) -> String {
+fn format_variable_signature(
+    var: &VariableInfo,
+    source: &str,
+    types: &ModuleSpanTypes<'_>,
+) -> String {
     let mut sig = format!("(variable) {}", var.name);
     if let Some(ann) = span_text(var.annotation_span, source) {
         let _ = write!(sig, ": {ann}");
     } else {
-        let inferred = rhs_or_expr_type_display(&var.rhs_kind, var.rhs_span, source);
+        let inferred = span_type_display(types, var.rhs_span);
         if !inferred.is_empty() {
             let _ = write!(sig, ": {inferred}");
         }
@@ -346,12 +363,17 @@ fn format_parameter_signature(param: &ParameterInfo, source: &str) -> String {
     sig
 }
 
-fn format_attribute_signature(class: &ClassInfo, attr: &AttributeInfo, source: &str) -> String {
+fn format_attribute_signature(
+    class: &ClassInfo,
+    attr: &AttributeInfo,
+    source: &str,
+    types: &ModuleSpanTypes<'_>,
+) -> String {
     let mut sig = format!("(property) {}.{}", class.name, attr.name);
     if let Some(ann) = span_text(attr.annotation_span, source) {
         let _ = write!(sig, ": {ann}");
     } else {
-        let inferred = rhs_or_expr_type_display(&attr.rhs_kind, attr.rhs_span, source);
+        let inferred = span_type_display(types, attr.rhs_span);
         if !inferred.is_empty() {
             let _ = write!(sig, ": {inferred}");
         }
@@ -381,89 +403,30 @@ fn format_import_signature(imp: &ImportInfo) -> String {
 /// The trimmed source text a span covers, if it covers any.
 ///
 /// Purely positional — it neither knows nor cares what the span denotes.
-/// Most callers hand it an annotation span; [`expr_type_display`] hands it an
-/// RHS-expression span, which is why the name describes the SPAN and not the
-/// syntax at the other end of it.
 pub(crate) fn span_text(span: Option<Span>, source: &str) -> Option<String> {
     let span = span?;
     let text = span.slice_source(source)?;
     Some(text.trim().to_owned())
 }
 
-/// Type-name display for an inferred `RhsKind` (shared by inlay hints).
-///
-/// Container literals render with their inferred generic arguments — e.g. a
-/// dict literal with str keys and values displays as `dict[str, str]`, not
-/// bare `dict` (GitHub #290) — by reusing the checker's collection inference.
-/// Returns an empty string when the type cannot be determined.
-///
-/// Gated by `is_fully_known`, the SAME guard [`expr_type_display`] applies, so
-/// the internal `InferredType::Unknown` sentinel cannot reach a label from
-/// either path (GitHub #385). A top-level check would only catch `Unknown`
-/// itself and let `list[Unknown]` / `tuple[Unknown, Unknown]` render through.
-pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> String {
-    use basilisk_resolver::RhsKind;
-    match rhs {
-        // Empty literals carry no element info — show the bare container name
-        // rather than the checker-internal `list[Never]` / `dict[Never, Never]`.
-        RhsKind::EmptyList => "list".to_owned(),
-        RhsKind::EmptyDict => "dict".to_owned(),
-        RhsKind::KnownCall(result) => rhs_type_display(result),
-        // Lambdas display nothing: the checker types them `Callable[[], Unknown]`
-        // because parameter/return inference doesn't exist yet.
-        RhsKind::Lambda => String::new(),
-        _ => {
-            let inferred = basilisk_checker::inference::infer_rhs(rhs);
-            if basilisk_checker::inference::is_fully_known(&inferred) {
-                inferred.to_string()
-            } else {
-                String::new()
-            }
-        }
-    }
-}
-
-/// Bidirectional-engine fallback for expression display: when the `RhsKind`
-/// table cannot answer, synthesize the expression SOURCE through the
-/// checker's shared engine — the SAME inference behind checker diagnostics
-/// ([NARROWPLAN-CHECKLIST] Stage 2: one inference for diagnostics, hover,
-/// completions, and inlay hints) — widened to display form. Empty when
-/// nothing is provable (never a guess, and never a partial `Unknown` inside
-/// a rendered type).
-pub(crate) fn expr_type_display(span: Option<Span>, source: &str) -> String {
-    use basilisk_checker::inference::{display_widened, infer_expression_source, is_fully_known};
-    let Some(snippet) = span_text(span, source) else {
-        return String::new();
-    };
-    let inferred = infer_expression_source(&snippet);
-    if is_fully_known(&inferred) {
-        display_widened(&inferred).to_string()
-    } else {
-        String::new()
-    }
-}
-
-/// [`rhs_type_display`] with the shared-engine fallback: the `RhsKind` table
-/// answers first (existing displays stay stable), the bidirectional engine
-/// fills what the table cannot see (method calls, subscripts, arithmetic).
-pub(crate) fn rhs_or_expr_type_display(
-    rhs: &basilisk_resolver::RhsKind,
-    span: Option<Span>,
-    source: &str,
-) -> String {
-    let display = rhs_type_display(rhs);
-    if display.is_empty() {
-        expr_type_display(span, source)
-    } else {
-        display
-    }
+/// Display rendering for the expression at `span`, from the module's
+/// span-indexed oracle — the SAME engine behind checker diagnostics
+/// ([NARROWPLAN-INTEGRATION] Step 5: one inference for diagnostics, hover,
+/// completions, and inlay hints). Empty when nothing is provable (never a
+/// guess, and never the internal `Unknown` sentinel inside a rendered type —
+/// GitHub #385).
+pub(crate) fn span_type_display(types: &ModuleSpanTypes<'_>, span: Option<Span>) -> String {
+    span.map_or_else(String::new, |span| types.display_at(span))
 }
 
 /// Infer a display type for a function's return from its `return` statements.
 ///
 /// Shared by hover (#253) and inlay hints. Returns an empty string when the
 /// type cannot be determined.
-pub(crate) fn infer_return_type_display(func: &basilisk_resolver::FunctionInfo) -> String {
+pub(crate) fn infer_return_type_display(
+    types: &ModuleSpanTypes<'_>,
+    func: &basilisk_resolver::FunctionInfo,
+) -> String {
     if func.return_stmts.is_empty() {
         return "None".to_owned();
     }
@@ -471,7 +434,11 @@ pub(crate) fn infer_return_type_display(func: &basilisk_resolver::FunctionInfo) 
     // Collect the display names for every return statement.
     let mut common_type: Option<String> = None;
     for ret in &func.return_stmts {
-        let display = rhs_type_display(&ret.rhs_kind);
+        let display = if ret.has_value {
+            span_type_display(types, ret.value_span)
+        } else {
+            "None".to_owned()
+        };
         // If any return has an uninferrable type, bail out.
         if display.is_empty() {
             return String::new();

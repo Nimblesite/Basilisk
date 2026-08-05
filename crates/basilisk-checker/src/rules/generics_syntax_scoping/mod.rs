@@ -69,7 +69,7 @@ impl Rule for Pep695TypeParamScopingViolation {
             diagnostics,
         );
         violations::check_type_alias_in_function(scoping, path, diagnostics);
-        violations::check_type_alias_circular(scoping, path, diagnostics);
+        violations::check_type_alias_circular(module, scoping, path, diagnostics);
 
         alias_misuse::check_type_alias_misuse(module, scoping, diagnostics);
         alias_misuse::check_type_alias_bound_violations(module, scoping, diagnostics);

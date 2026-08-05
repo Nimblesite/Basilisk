@@ -423,9 +423,197 @@ def first_line(lines: list[str]) -> str | None:
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Issue #397 — an undefined callee at module level must fire
-// ---------------------------------------------------------------------------
+#[test]
+fn walrus_in_if_test_binds_the_name_for_a_later_top_level_return(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #339 (post-branch shape): an `if` test always evaluates, so a walrus
+    // inside it binds unconditionally — the name is live after the statement,
+    // whichever way the branch went. Recognising the binding must therefore not
+    // merely trade E0018 ("not defined") for E0019 ("may be unbound").
+    let source = "\
+def lookup(items: dict[str, int], key: str) -> int | None:
+    if hit := items.get(key):
+        print(hit)
+    return hit
+";
+    let diags = run(source)?;
+    let fired: Vec<&str> = codes(&diags)
+        .into_iter()
+        .filter(|c| *c == "names_undefined" || *c == "names_unbound")
+        .collect();
+    assert!(
+        fired.is_empty(),
+        "an `if`-test walrus binds unconditionally, so a later top-level return of the \
+         name must fire neither E0018 nor E0019, got: {fired:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn pep695_type_alias_in_return_cast_is_defined() -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #372: a PEP 695 `type` statement binds its name at module scope
+    // (a lazily evaluated `TypeAliasType` object), so referencing the alias
+    // in a return-position `cast(...)` call is NOT an undefined name.
+    let source = "\
+from typing import cast
+
+type Fahrenheit = float
+
+
+def to_f(celsius: float) -> Fahrenheit:
+    return cast(Fahrenheit, celsius * 9 / 5 + 32)
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a `type` statement alias used in a return cast must not fire E0018, got: {:?}",
+        messages_for(&diags, "names_undefined")
+    );
+    Ok(())
+}
+
+#[test]
+fn pep695_type_alias_returned_bare_is_defined() -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #372 (general form): the alias object itself is a first-class
+    // runtime value — `return Alias` is a defined-name reference.
+    let source = "\
+type Point = tuple[float, float]
+
+
+def alias() -> object:
+    return Point
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "returning the alias object itself must not fire E0018, got: {:?}",
+        messages_for(&diags, "names_undefined")
+    );
+    Ok(())
+}
+
+#[test]
+fn class_scope_type_alias_is_not_visible_from_a_function() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Class-body names do not nest: a `type` alias declared inside a class
+    // is reachable only as `C.Inner`, so a bare `Inner` in a module-level
+    // function is still an undefined name.
+    let source = "\
+class C:
+    type Inner = int
+
+
+def f() -> object:
+    return Inner
+";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"names_undefined"),
+        "a class-scope alias must not leak into module scope, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn function_scope_type_alias_is_not_visible_from_a_sibling(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // A `type` alias declared inside one function is local to it — a
+    // sibling function referencing the name is an undefined name.
+    let source = "\
+def g() -> None:
+    type T = int
+
+
+def f() -> object:
+    return T
+";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"names_undefined"),
+        "a function-scope alias must not leak into sibling functions, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn function_scope_type_alias_is_visible_in_its_own_function(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Inside the declaring function (and its nested functions) the alias
+    // is an ordinary local binding.
+    let source = "\
+def f() -> object:
+    type T = int
+
+    def inner() -> object:
+        return T
+
+    return T
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a function-local alias is defined in its own scope, got: {:?}",
+        messages_for(&diags, "names_undefined")
+    );
+    Ok(())
+}
+
+#[test]
+fn self_referential_class_bases_terminate_and_flag() -> Result<(), Box<dyn std::error::Error>> {
+    // GitHub #398: `class C(C[int], C[bool])` sent the resolver's transitive
+    // base walk into an exponential recursion — checking must TERMINATE. And
+    // per Python semantics a class name is unbound until its `class` statement
+    // completes, so referencing it in its own bases list must draw
+    // `names_undefined` (both classes here have no other binding).
+    let (tx, rx) = std::sync::mpsc::channel();
+    let _worker = std::thread::spawn(move || {
+        let outcome = run("class C(C[int], C[bool]):\n    pass\n").map_err(|e| e.to_string());
+        let _ = tx.send(outcome);
+    });
+    let received = rx.recv_timeout(std::time::Duration::from_secs(30));
+    let Ok(outcome) = received else {
+        return Err("resolver spun for 30s on self-referential bases (GitHub #398)".into());
+    };
+    let diags = outcome?;
+    assert!(
+        codes(&diags).contains(&"names_undefined"),
+        "`class C(C[int], C[bool])` must flag the unbound self-reference, got: {:?}",
+        codes(&diags)
+    );
+
+    let diags = run("class D(D):\n    pass\n")?;
+    assert!(
+        codes(&diags).contains(&"names_undefined"),
+        "`class D(D)` must flag the unbound self-reference, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn prior_binding_and_builtin_self_named_bases_stay_clean() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Redefining a class over a prior binding is legal Python — the base
+    // names the OLD binding, not the class being defined.
+    let source = "class C:\n    pass\n\n\nclass C(C):\n    pass\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a prior binding makes `class C(C)` legal, got: {:?}",
+        messages_for(&diags, "names_undefined")
+    );
+
+    // `class int(int)` derives from the BUILTIN int — also legal.
+    let diags = run("class int(int):\n    pass\n")?;
+    assert!(
+        !codes(&diags).contains(&"names_undefined"),
+        "a builtin base name is always bound, got: {:?}",
+        messages_for(&diags, "names_undefined")
+    );
+    Ok(())
+}
 
 #[test]
 fn module_level_undefined_callee_fires() -> Result<(), Box<dyn std::error::Error>> {
@@ -569,36 +757,6 @@ e = globals()
     );
     Ok(())
 }
-
-#[test]
-fn walrus_in_if_test_binds_the_name_for_a_later_top_level_return(
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Issue #339 (post-branch shape): an `if` test always evaluates, so a walrus
-    // inside it binds unconditionally — the name is live after the statement,
-    // whichever way the branch went. Recognising the binding must therefore not
-    // merely trade E0018 ("not defined") for E0019 ("may be unbound").
-    let source = "\
-def lookup(items: dict[str, int], key: str) -> int | None:
-    if hit := items.get(key):
-        print(hit)
-    return hit
-";
-    let diags = run(source)?;
-    let fired: Vec<&str> = codes(&diags)
-        .into_iter()
-        .filter(|c| *c == "names_undefined" || *c == "names_unbound")
-        .collect();
-    assert!(
-        fired.is_empty(),
-        "an `if`-test walrus binds unconditionally, so a later top-level return of the \
-         name must fire neither E0018 nor E0019, got: {fired:?}"
-    );
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Issue #398 (diagnostic axis) — a class naming its own unbound self as a base
-// ---------------------------------------------------------------------------
 
 #[test]
 fn self_inheriting_class_with_no_prior_binding_fires() -> Result<(), Box<dyn std::error::Error>> {

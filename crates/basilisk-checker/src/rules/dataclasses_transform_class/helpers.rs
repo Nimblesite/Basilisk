@@ -87,7 +87,7 @@ pub(super) fn collect_transform_base_classes(
         let has_dt = cls
             .decorator_spans
             .iter()
-            .any(|(name, _)| name == "dataclass_transform");
+            .any(|(name, _)| name.rsplit('.').next() == Some("dataclass_transform"));
         if !has_dt {
             continue;
         }

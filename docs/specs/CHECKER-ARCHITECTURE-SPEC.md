@@ -1337,9 +1337,8 @@ accept loop, process enumeration). What keeps an edit sub-10ms is Salsa's
 incremental invalidation ([CHKARCH-INCREMENTAL]), not thread count.
 
 File-level parallelism stays a future option. It is not implemented, and no
-benchmark number in this repository depends on it — so a change that adds it must
-still clear the benchmark ratchet on its own merits
-([CHKARCH-TESTING-BENCH-RATCHET]).
+benchmark number in this repository depends on it — so a change that adds it
+should be measured on its own merits ([CHKARCH-TESTING-BENCH]).
 
 ### Memory {#CHKARCH-PERF-MEMORY}
 
@@ -1354,10 +1353,10 @@ stress fixtures timed cold across Basilisk, Pyright, mypy, ty, Pyrefly, and
 zuban by `benchmarks/run.sh`. Each run does a full `cargo clean` + fresh
 `--release` build of basilisk, pulls the LATEST official release of every
 competitor, times all fixtures, and writes the measured numbers to the
-per-machine status CSV **immediately and unconditionally** — the write is never
-gated. A **separate** read-only regression gate then compares those numbers
-against the committed baseline and fails CI on a slip beyond a small noise
-tolerance. Full mechanism: [CHKARCH-TESTING-BENCH-RATCHET].
+per-machine status CSV **immediately and unconditionally**. Nothing gates on
+those numbers: they are indicative developer-machine measurements, to be
+compared between tools within a single run rather than across runs. Full
+mechanism: [CHKARCH-TESTING-BENCH].
 
 **Planned, not yet built:** a real-world-codebase suite — **PyTorch** (~600K
 LOC), **Django** (~250K LOC), **FastAPI** (~30K LOC), **Python standard
@@ -1376,7 +1375,7 @@ a design target, not a claim of existing measurement.
 | Golden file tests | Expected diagnostic output | Diagnostic regression |
 | Fuzzing | `cargo-fuzz` | Crash resistance, soundness |
 | Property tests | `proptest` crate | Type system invariants |
-| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Performance tracking (results written to `benchmarks/status/<machine>.csv` immediately, every run) + zero-tolerance regression gate that fails if basilisk gets slower than the **committed** baseline on any fixture ([CHKARCH-TESTING-BENCH-RATCHET]) |
+| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Indicative performance tracking, written to `benchmarks/status/<machine>.csv` immediately, every run. **Gates nothing** — developer-machine numbers, compared between tools within one run ([CHKARCH-TESTING-BENCH]) |
 
 ### PEP Conformance Scoring {#CHKARCH-CONFORMANCE}
 
@@ -1544,83 +1543,88 @@ Mutation testing proves the test suite actually asserts behaviour. Scope only ev
   (`make mutation-test ALL=1`); until then each checker-logic PR leaves the viable
   pool the same size or larger.
 
-### Benchmark Non-Regression {#CHKARCH-TESTING-BENCH-RATCHET}
+### Benchmark — Indicative, Not a Gate {#CHKARCH-TESTING-BENCH}
 
-Performance and conformance ratchet **together** — neither traded for the other.
-`make bench` (`benchmarks/run.sh`) runs the fixture suite and enforces the
-performance gate. Two responsibilities are deliberately **DECOUPLED**, so one can
-never suppress the other (`benchmarks/summarize.py`):
+`make bench` (`benchmarks/run.sh`) times the fixture suite against
+pyright/mypy/ty/pyrefly/zuban and records what it measured. **It gates nothing.
+No CI job passes or fails on a benchmark number, and none is to be
+reintroduced.**
 
-1. **WRITE — unconditional and immediate.** Every measured number is written
-   straight to the per-machine status CSV `benchmarks/status/<machine>.csv` the
-   instant it exists: `summarize.py` runs in `incremental` mode after **each**
-   fixture (rewriting the CSV from all results so far) and again in `final` mode
-   at the end. There is **no gate on the write, no branch, no "left unchanged"
-   path** — the file ALWAYS reflects exactly what this build just measured. A run
-   that measured a number but did not record it is a lie about the build's
-   performance, and the whole point of the suite is to KNOW the moment a number
-   slips. So the write happens regardless of what the gate later decides
-   (atomic tmp + `os.replace`, so a kill mid-write never tears the file).
+**Why there is no gate.** The benchmark runs on whichever workstation a
+contributor happens to use, against whatever else that machine is doing at the
+time. Background load moves every tool in the table together and can shift
+absolute times by tens of percent between two runs of *identical code* — far
+larger than the differences worth acting on. A pass/fail built on that signal
+fails honest work and waves through real regressions depending on what else was
+running, and a baseline recorded during a loaded run silently raises the bar for
+every later run compared against it. Reporting the numbers and letting a human
+read them is the honest treatment of a noisy measurement.
 
-2. **GATE — read-only, CI pass/fail, separate judgment.** In `final` mode, AFTER
-   the numbers are on disk, the run's basilisk times are compared against the
-   **COMMITTED** baseline — the status CSV read from git at `BENCH_BASELINE_REF`
-   (default `HEAD`) via `git show`, **never the working copy the run just
-   overwrote**, so a slower run can never launder its regression into the
-   baseline. Any backwards step on any fixture exits 3 →
-   CI FAILURE. The gate only READS; it never edits the file. The committed
-   baseline advances only when a run is committed, so it still ratchets toward
-   faster — while the live file never hides a slip.
+**WRITE — unconditional and immediate.** Every measured number is written
+straight to the per-machine status CSV `benchmarks/status/<machine>.csv` the
+instant it exists: `summarize.py` runs in `incremental` mode after **each**
+fixture (rewriting the CSV from all results so far) and again in `final` mode at
+the end. There is **no branch and no "left unchanged" path** — the file ALWAYS
+reflects exactly what this build just measured. A run that measured a number but
+did not record it is a lie about the build's performance (atomic tmp +
+`os.replace`, so a kill mid-write never tears the file).
 
-- **Fresh binary, every run.** `run.sh` ALWAYS does a full `cargo clean` + a
-  from-scratch `cargo build --release --bin basilisk` before timing a single
-  fixture. A number is only honest if it came from a from-scratch optimized build
-  of the exact tree under test — never a stale or incrementally-linked binary. The
-  `# generated` timestamp and the basilisk version recorded in the CSV header are
-  captured after this build, so the header proves the numbers came from it.
-- **Latest competitors, every run.** Before discovery/timing, `run.sh` upgrades
-  each officially-recognized checker (pyright, mypy, ty, pyrefly, zuban — only
-  those tracked by the `python/typing` conformance suite; never unofficial tools)
-  to its newest official release via `pip install --upgrade` (best-effort per
-  tool, loud warning on failure). Competitor columns therefore always reflect
-  current upstream, never a pinned build. The pull runs outside all timing.
-- **Zero-tolerance ratchet.** The committed tolerance is zero
-  (`BENCH_TOLERANCE_PCT=0`), so every fixture must be monotonically
-  non-increasing. It lives in the tracked script, not an env var; the gate itself
-  cannot be disabled or widened at runtime (`BENCH_NO_GATE` /
-  `BENCH_REGRESS_PCT` / `BENCH_TOLERANCE_PCT` overrides are rejected).
-- **Basilisk-only iteration (`make bench-basilisk`, `BENCH_ONLY_BASILISK=1`).**
-  Closing a basilisk performance gap is a tight edit-measure loop, and five
-  competitors at ~0.5 s per invocation add minutes to every turn of it while
-  saying nothing about a change to this tree. This mode times the basilisk
-  columns alone and skips the competitor pull, discovery, preflight, and timing.
-  It relaxes **nothing that decides anything**: the full `cargo clean` + fresh
-  release build, the noisy-measurement stability policy, and the zero-tolerance
-  gate against the committed baseline all run exactly as in a full sweep — a
-  regression fails it identically. Two honesty rules keep the partial CSV
-  truthful: the untimed tools' `_ms`/`_diags` cells and version strings are
-  **carried forward verbatim** from the file rather than blanked (a blank cell
-  means "not installed / failed preflight" and must keep meaning that) — the
-  same carry applies to the tracked `benchmarks/results/coverage.tsv`, whose
-  rows for the skipped tools are preserved instead of being truncated away —
-  and a
-  `# measured:` header line names which tools this run timed and which it
-  carried, with the date they came from — so the fresh `# generated` stamp can
-  never imply a competitor was re-timed. Nothing measured is ever carried, so
-  the write-always rule is untouched. CI always runs the full sweep: the mode
-  exits 2 under `GITHUB_ACTIONS`. **A number published or committed as a full
-  benchmark must come from `make bench`** — this mode is for iteration.
-- Run it whenever checker hot paths change (resolver visitors, rule `check` loops,
-  conformance-driven additions). Conformance logic that blows the gate must be
-  optimised or restructured. A machine without a baseline establishes one only
-  after a successful run is committed.
+**How to read the numbers.**
 
-> **Planned — bench in the pipeline (CI).** Today `make bench` is run locally and
-> its results are committed. The intention is to eventually run the benchmark gate
-> in CI on a fixed runner class, on the same write-always / gate-separately
-> discipline described here, so a performance regression fails the pipeline the way
-> the conformance and coverage gates already do. Until that lands, the discipline
-> is enforced by running `make bench` locally and committing the updated status CSV.
+- **Compare tools WITHIN one run.** Every tool in a row is measured back to back
+  on the same machine in the same conditions, so machine speed cancels out. This
+  is the comparison the published website table makes, and it is sound.
+- **Never compare across runs, machines, or time.** A figure from one run says
+  nothing when set against a figure recorded elsewhere or on another day.
+- **To answer a real performance question**, measure both revisions on one quiet
+  machine in one sitting. If a competitor's pinned binaries time roughly the same
+  across the two measurements, the machine conditions were comparable and a
+  difference in the basilisk column is real; if they did not, it is not.
+
+**Fresh binary, every run.** `run.sh` ALWAYS does a full `cargo clean` + a
+from-scratch `cargo build --release --bin basilisk` before timing a single
+fixture. A number is only honest if it came from a from-scratch optimized build
+of the exact tree under test — never a stale or incrementally-linked binary. The
+`# generated` timestamp and the basilisk version recorded in the CSV header are
+captured after this build, so the header proves the numbers came from it.
+
+**Latest competitors, every run.** Before discovery/timing, `run.sh` upgrades
+each officially-recognized checker (pyright, mypy, ty, pyrefly, zuban — only
+those tracked by the `python/typing` conformance suite; never unofficial tools)
+to its newest official release via `pip install --upgrade` (best-effort per
+tool, loud warning on failure). Competitor columns therefore always reflect
+current upstream, never a pinned build. The pull runs outside all timing. The
+versions actually used are recorded in the CSV `# tools:` header and published
+beside the table on the website, so a reader can always see what was measured.
+
+**Noisy-sample policy.** A basilisk measurement whose coefficient of variation
+exceeds 15% is automatically remeasured with at least 30 runs, so a scheduler
+spike surfaces as more evidence rather than as a misleading mean.
+
+**Basilisk-only iteration (`make bench-basilisk`, `BENCH_ONLY_BASILISK=1`).**
+Closing a basilisk performance gap is a tight edit-measure loop, and five
+competitors at ~0.5 s per invocation add minutes to every turn of it while
+saying nothing about a change to this tree. This mode times the basilisk columns
+alone and skips the competitor pull, discovery, preflight, and timing. The full
+`cargo clean` + fresh release build and the stability policy run exactly as in a
+full sweep. Two honesty rules keep the partial CSV truthful: the untimed tools'
+`_ms`/`_diags` cells and version strings are **carried forward verbatim** from
+the file rather than blanked (a blank cell means "not installed / failed
+preflight" and must keep meaning that) — the same carry applies to the tracked
+`benchmarks/results/coverage.tsv`, whose rows for the skipped tools are
+preserved instead of being truncated away — and a `# measured:` header line
+names which tools this run timed and which it carried, with the date they came
+from, so the fresh `# generated` stamp can never imply a competitor was
+re-timed. Nothing measured is ever carried, so the write-always rule is
+untouched. CI never runs benchmarks at all; **a number published as a full
+benchmark must come from `make bench`** — this mode is for iteration.
+
+**Publication.** The website reads the status CSV directly, so published figures
+are never hand-typed and never stale relative to the last committed run. The
+benchmark page carries the indicative-only caveat and the measured tool versions
+next to the table (`website/src/docs/benchmarks.njk`). Moving the benchmark onto
+dedicated, isolated hardware is the prerequisite for treating any of these
+numbers as authoritative.
 
 ### CI Artifact Storage Policy {#GITHUB-NO-ARTIFACTS}
 

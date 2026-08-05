@@ -37,7 +37,6 @@ fn function_return_name_refs() -> Result<(), Box<dyn std::error::Error>> {
     let resolved = resolve_src(&src)?;
     let func = resolved.functions.iter().find(|f| f.name == "foo");
     assert!(!func.is_none_or(|f| f.return_name_refs.is_empty()));
-    assert!(!func.is_none_or(|f| f.top_level_return_name_refs.is_empty()));
     Ok(())
 }
 

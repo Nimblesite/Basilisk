@@ -3,6 +3,7 @@
 
 const ENUM_BASES: &[&str] = &["Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"];
 
+mod annotated_tuple_index;
 mod annotations;
 mod assert_narrow;
 mod assigns;
@@ -31,7 +32,7 @@ mod typeddict_schema;
 mod typevar;
 mod unhashable;
 pub(crate) mod walks;
-mod walrus;
+pub(crate) mod walrus;
 mod yield_exprs;
 
 use basilisk_parser::ParsedModule;
@@ -192,11 +193,19 @@ fn build_resolved_module(
             typevar_calls.iter().map(|tv| tv.name.clone()).collect();
         type_alias::collect_type_alias_type_violations(stmts, &tv_names)
     };
-    let tuple_index_violations = key_lambda::collect_key_lambda_tuple_violations(
+    let mut tuple_index_violations = key_lambda::collect_key_lambda_tuple_violations(
         stmts,
         &functions,
         &module_vars,
         &module.source,
+    );
+    tuple_index_violations.extend(
+        annotated_tuple_index::collect_annotated_tuple_index_violations(
+            stmts,
+            &functions,
+            &module_vars,
+            &module.source,
+        ),
     );
     ResolvedModule {
         functions,
@@ -213,6 +222,13 @@ fn build_resolved_module(
                 counts
             },
         ),
+        // `calls` is complete over every expression position (#381), so the
+        // `cast(...)` view #335 needed is a filter of it, not a second walk.
+        cast_calls: calls
+            .iter()
+            .filter(|site| site.callee == "cast")
+            .cloned()
+            .collect(),
         calls,
         typevar_calls,
         reveal_type_calls: results.reveal_type_calls,

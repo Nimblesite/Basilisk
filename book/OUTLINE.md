@@ -38,7 +38,9 @@ toy fragments alone when the same lesson can be shown in the evolving project.
 Every chapter uses the same learning rhythm:
 
 1. **The problem** — a concrete failure, question, or maintenance task.
-2. **Basilisk in view** — a real screenshot showing the relevant feedback.
+2. **Basilisk in view** — a direct capture of the pinned release showing the
+   relevant feedback. A mock, redraw, generated image, or UI-shaped diagram can
+   never fill this slot.
 3. **The idea** — one evidence-rich diagram and the smallest necessary theory.
 4. **Before → diagnostic → after** — two to four short, executable examples.
 5. **Guided checkpoint** — a change to Signal Box with explicit steps.
@@ -47,7 +49,8 @@ Every chapter uses the same learning rhythm:
 8. **Authoritative sources** — adjacent citations plus a short chapter list.
 
 No chapter introduces more than four new conceptual families. Screenshots are
-evidence of behavior; diagrams explain relationships that screenshots cannot.
+direct evidence of behaviour; diagrams explain relationships that screenshots
+cannot and must never imitate product appearance.
 
 ## Front matter — How to use this book
 
@@ -227,7 +230,8 @@ use the real configuration editor to preview and apply a bounded change.
 - Project severity and one bounded test-path override
 - Presets as explicit recipes rather than policy modes
 - Checkpoint: required annotations in Signal Box source and a warning in tests
-- Visuals: configuration editor; preview transaction; real path preview
+- Visuals: real configuration-editor capture; preview transaction diagram;
+  real preview capture
 - Website destinations: configuration and rules
 
 ### Chapter 10 — Adopt a codebase without hiding it
@@ -235,16 +239,17 @@ use the real configuration editor to preview and apply a bounded change.
 **Target:** 2,200 words · 8 pages · 3 visuals
 
 **Reader outcome:** Move an existing codebase toward the chosen policy while
-keeping unfinished work visible and measurable.
+keeping unfinished work visible and reviewable.
 
 - Inventory before fixing
-- Fix the high-confidence transformations first
+- Apply bounded mechanical transformations first, then review their output
 - `fix`, `adopt`, status, and `unadopt` as an intentional workflow
 - Errors, warnings, and gradual change
 - Work from boundaries inward
 - Review generated annotations instead of worshipping them
 - Checkpoint: migrate the deliberately untyped Signal Box legacy module
-- Visuals: adoption funnel; CLI fix; file status before/after
+- Visuals: adoption funnel; real CLI fix and diff; real governing-folder rule
+  status with the surviving warning
 - Website destination: migration guide
 
 ### Chapter 11 — Let the editor carry context
@@ -300,4 +305,5 @@ make the same checks repeatable in CI.
 - A complete Python language tutorial
 - Competitor feature or performance comparisons
 - Unshipped commands or roadmap promises presented as current behavior
-- Generated UI screenshots or invented diagnostic output
+- Generated, mocked, redrawn, reconstructed, or hand-composed UI screenshots,
+  including UI imitations relabelled as diagrams

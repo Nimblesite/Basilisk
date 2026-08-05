@@ -12,11 +12,15 @@ assignment, function, collection, and callback compatibility in
 narrowing, a user-defined type guard, and exhaustive routing in
 [`ch06-narrowing/`](ch06-narrowing/). Chapter 7 separates validated external
 data, domain models, storage behavior, and generic report pages in
-[`ch07-structured-contracts/`](ch07-structured-contracts/). Chapter 9 uses
+[`ch07-structured-contracts/`](ch07-structured-contracts/). Chapter 8 separates
+an untyped runtime dependency from its generated and reviewed contracts in
+[`ch08-imports-and-stubs/`](ch08-imports-and-stubs/). Chapter 9 uses
 [`signal-box/`](signal-box/) with its explicit annotation policy and
-deliberately incomplete functions to capture the real configuration editor and
-its path preview. Run that capture reproducibly with `make -C book screenshots`
-from the repository root.
+deliberately incomplete functions to demonstrate a nested test-folder
+severity. Chapter 10 uses the independent
+[`ch10-adoption/`](ch10-adoption/) checkpoint to replay an immediate default
+fix, human review of its `Any` placeholders, one folder-rule adoption entry,
+and an honest `unadopt` round trip.
 
 Planned checkpoints:
 
@@ -26,7 +30,7 @@ Planned checkpoints:
 4. narrowing and exhaustive routing;
 5. a simulated untyped vendor package plus reviewed local stub;
 6. explicit project rule policy;
-7. bounded fixes and file adoption;
+7. bounded fixes and folder-rule adoption;
 8. cross-file navigation and refactoring; and
 9. tests, a debug scenario, a CPU hot path, and CI.
 

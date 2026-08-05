@@ -4,14 +4,14 @@ subtitle: "A practical guide to typed Python and the Basilisk developer workflow
 author:
   - "Christian Findlay"
 publisher: "NIMBLESITE PTY LTD"
-date: "2026-07-12"
+date: "2026-08-05"
 language: "en-AU"
 rights: "Copyright © 2026 Christian Findlay"
 description: >-
   A cover-to-cover guide to using Basilisk: understanding Python types,
   interpreting diagnostics, configuring and adopting projects, and connecting
   editor, refactoring, debugging, testing, profiling, and CI workflows.
-edition: "Structural prototype 0.1"
-basilisk-version: "TO BE PINNED BEFORE PUBLICATION"
+edition: "Living edition"
+basilisk-version: "0.39.0"
 website: "https://www.basilisk-python.dev/"
 ...

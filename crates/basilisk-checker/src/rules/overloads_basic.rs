@@ -41,9 +41,23 @@ impl Rule for NoMatchingOverload {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        super::check_with_own_types(self, module, ctx, diagnostics);
+    }
+
+    fn check_with_types(
+        &self,
+        module: &ResolvedModule,
+        types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        // Overload membership is a binding question ([#380]).
+        let Some(resolver) = types.annotations() else {
+            return;
+        };
         let source = &module.source;
         let path = &module.path;
 
@@ -81,11 +95,7 @@ impl Rule for NoMatchingOverload {
             if func.name != "__getitem__" {
                 continue;
             }
-            if !func
-                .decorators
-                .iter()
-                .any(|d| d == "overload" || d.ends_with(".overload"))
-            {
+            if !super::shared::overload_decorated(resolver, &func.decorators) {
                 continue;
             }
             let Some(class_name) = func.class_name.as_deref() else {

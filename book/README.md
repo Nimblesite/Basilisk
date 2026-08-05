@@ -73,8 +73,13 @@ make release           # strict checks, external links, EPUB, EPUBCheck
 4. Validate Basilisk commands against the release binary being documented.
 5. Omit any topic whose governing specification, release implementation, and
    executable tests do not agree. A caveat is not permission to publish it.
-6. Use real product captures for UI and terminal screenshots. Never generate a
-   fictional Basilisk interface.
+6. Any visual intended to show Basilisk, an editor, a terminal, diagnostics,
+   controls, or product output must be a direct capture of the edition's pinned
+   release. Never mock, redraw, reconstruct, generate, or hand-compose it —
+   even if it is labelled a diagram, wireframe, or conceptual map. Cropping and
+   uniform publication resizing are allowed, as are external callouts;
+   product pixels and text may not be repainted, replaced, or composited. If a
+   real capture is unavailable, omit the visual.
 7. Give every visual a useful caption, descriptive alt text, provenance, and a
    source master.
 8. Run `make release` before publishing the EPUB or website edition.

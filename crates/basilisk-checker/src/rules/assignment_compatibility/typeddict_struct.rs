@@ -36,10 +36,18 @@ const MAX_DEPTH: u32 = 64;
 /// Build the effective field schema of every `TypedDict` class, merging fields
 /// inherited from `TypedDict` bases (most-derived declaration wins).
 pub(super) fn build_typeddict_schemas(module: &ResolvedModule) -> TdSchemas {
+    // Membership is TRANSITIVE: a subclass of a `TypedDict` is a `TypedDict`
+    // (PEP 589 requires TypedDict bases), so `class Sub(Base)` where `Base`
+    // is one carries a schema too.
+    let all: HashMap<&str, &ClassInfo> = module
+        .classes
+        .iter()
+        .map(|c| (c.name.as_str(), c))
+        .collect();
     let by_name: HashMap<&str, &ClassInfo> = module
         .classes
         .iter()
-        .filter(|c| c.is_typed_dict)
+        .filter(|c| inherits_typeddict(c, &all, &mut std::collections::HashSet::new()))
         .map(|c| (c.name.as_str(), c))
         .collect();
     by_name
@@ -52,6 +60,25 @@ pub(super) fn build_typeddict_schemas(module: &ResolvedModule) -> TdSchemas {
             (name.to_ascii_lowercase(), schema)
         })
         .collect()
+}
+
+/// Does the class transitively inherit a `TypedDict`? Each class is visited
+/// at most once — self-referential bases (`class C(C[int], C[bool])`,
+/// GitHub #398) would otherwise make the walk exponential.
+fn inherits_typeddict<'m>(
+    cls: &'m ClassInfo,
+    all: &HashMap<&str, &'m ClassInfo>,
+    visited: &mut std::collections::HashSet<&'m str>,
+) -> bool {
+    if !visited.insert(cls.name.as_str()) {
+        return false;
+    }
+    cls.is_typed_dict
+        || cls.bases.iter().any(|base| {
+            let base = base.split('[').next().unwrap_or(base).trim();
+            all.get(base)
+                .is_some_and(|parent| inherits_typeddict(parent, all, visited))
+        })
 }
 
 /// Insert `name`'s own fields then recurse into bases. The first insertion of a

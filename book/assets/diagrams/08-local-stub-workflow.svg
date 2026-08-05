@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Turn an untyped dependency into an owned contract</title>
+  <desc id="desc">A five-stage workflow moves from an untyped package through release-verified generation and human review to a deliberate local override, runtime tests, and a static check.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0 0 L12 6 L0 12 Z" fill="#6ec5e9"/></marker>
+  </defs>
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="#10141d" stroke="#252d3f" stroke-width="3"/>
+  <text x="82" y="110" fill="#e8500a" font-family="monospace" font-size="28" font-weight="700" letter-spacing="5">LOCAL STUB WORKFLOW</text>
+  <text x="82" y="178" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="60" font-weight="800">Discovery becomes a maintained promise</text>
+  <text x="84" y="226" fill="#8892a4" font-family="system-ui,sans-serif" font-size="29">Generation saves typing; review, tests, and ownership create confidence.</text>
+
+  <g transform="translate(66 320)">
+    <g>
+      <circle cx="132" cy="132" r="116" fill="#201a2c" stroke="#c4b5fd" stroke-width="4"/>
+      <text x="132" y="94" text-anchor="middle" fill="#ddd6fe" font-family="monospace" font-size="24" font-weight="700">1 · OBSERVE</text>
+      <text x="132" y="142" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27">untyped</text>
+      <text x="132" y="178" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27">dependency</text>
+    </g>
+    <line x1="256" y1="132" x2="310" y2="132" stroke="#6ec5e9" stroke-width="5" marker-end="url(#arrow)"/>
+    <g transform="translate(324)">
+      <circle cx="132" cy="132" r="116" fill="#2a2015" stroke="#fbbf24" stroke-width="4"/>
+      <text x="132" y="94" text-anchor="middle" fill="#fde68a" font-family="monospace" font-size="24" font-weight="700">2 · GENERATE</text>
+      <text x="132" y="142" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27">0.39.0</text>
+      <text x="132" y="178" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27">best effort</text>
+    </g>
+    <line x1="580" y1="132" x2="634" y2="132" stroke="#6ec5e9" stroke-width="5" marker-end="url(#arrow)"/>
+    <g transform="translate(648)">
+      <circle cx="132" cy="132" r="116" fill="#261b13" stroke="#e8500a" stroke-width="5"/>
+      <text x="132" y="94" text-anchor="middle" fill="#fb923c" font-family="monospace" font-size="24" font-weight="700">3 · REVIEW</text>
+      <text x="132" y="142" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27">docs + source</text>
+      <text x="132" y="178" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27">+ runtime tests</text>
+    </g>
+    <line x1="904" y1="132" x2="958" y2="132" stroke="#6ec5e9" stroke-width="5" marker-end="url(#arrow)"/>
+    <g transform="translate(972)">
+      <circle cx="132" cy="132" r="116" fill="#123128" stroke="#34d399" stroke-width="4"/>
+      <text x="132" y="94" text-anchor="middle" fill="#86efac" font-family="monospace" font-size="24" font-weight="700">4 · OVERRIDE</text>
+      <text x="132" y="142" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27">reviewed .pyi</text>
+      <text x="132" y="178" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27">in stub-paths</text>
+    </g>
+    <line x1="1228" y1="132" x2="1282" y2="132" stroke="#6ec5e9" stroke-width="5" marker-end="url(#arrow)"/>
+    <g transform="translate(1296)">
+      <circle cx="132" cy="132" r="116" fill="#17232c" stroke="#6ec5e9" stroke-width="4"/>
+      <text x="132" y="94" text-anchor="middle" fill="#7dd3fc" font-family="monospace" font-size="24" font-weight="700">5 · VERIFY</text>
+      <text x="132" y="142" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27">runtime tests</text>
+      <text x="132" y="178" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27">+ static check</text>
+    </g>
+  </g>
+
+  <g transform="translate(150 646)">
+    <rect width="1300" height="180" rx="26" fill="#0f1218" stroke="#4a5468" stroke-width="3"/>
+    <text x="48" y="58" fill="#e8500a" font-family="monospace" font-size="25" font-weight="700">OWNERSHIP RECORD</text>
+    <text x="48" y="108" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="28">Record the winning path, retained uncertainty, dependency version,</text>
+    <text x="48" y="148" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="28">supporting tests, and the upgrade event that triggers another review.</text>
+  </g>
+
+  <text x="800" y="902" text-anchor="middle" fill="#8892a4" font-family="system-ui,sans-serif" font-size="27">A clean result is meaningful only for the contract and cases you actually verified.</text>
+</svg>

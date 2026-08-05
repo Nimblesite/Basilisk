@@ -4,13 +4,56 @@
 //! Consolidated from duplicated implementations in individual rule modules
 //! to eliminate code duplication and improve maintainability.
 
-use std::collections::{HashMap, HashSet};
+mod class_walks;
+pub(crate) mod judge;
+pub(crate) mod module_types;
+pub(crate) mod oracle;
+pub(crate) mod returns_judge;
+mod text_scan;
 
+pub(crate) use class_walks::{
+    any_base_name_matches, class_name_map, class_or_base_matches, method_name_map,
+};
+pub(crate) use text_scan::{
+    contains_top_level_comma, identifiers_followed_by, leading_indent, paren_has_top_level_comma,
+    span_for_line, split_top_level_commas,
+};
+
+use std::collections::HashSet;
+
+use crate::annotation::AnnotationResolver;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_parser::ParsedModule;
-use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, Span, TypeVarCallInfo};
+use basilisk_resolver::{ResolvedModule, Span, TypeVarCallInfo};
 use ruff_python_ast::{self as ast, Expr};
+
+/// Is one of `decorators` the `typing.overload` decorator?
+///
+/// Resolved through the module's binding tables
+/// ([TYPEINF-ANNOTATION-RESOLUTION], [#380](https://github.com/Nimblesite/Basilisk/issues/380)):
+/// `@overload`, `@ov` after `from typing import overload as ov`,
+/// `@typing.overload` / `@t.overload`, and `@o` after `o = overload` all
+/// answer yes; a decorator merely *named* `overload` but bound from another
+/// module answers no. Every rule that reasons about overload groups shares
+/// this one predicate so the groups they form agree.
+pub(crate) fn overload_decorated(resolver: &AnnotationResolver<'_>, decorators: &[String]) -> bool {
+    decorators
+        .iter()
+        .any(|decorator| resolver.decorator_denotes(decorator, "overload"))
+}
+
+/// Spelling-level decorator match: `name` bare or as the final segment of a
+/// dotted path (`@typing.final`, `@abc.abstractmethod`).
+///
+/// For guards where a qualified false match merely *skips* a check — never
+/// invents a diagnostic. Rules whose diagnostics depend on what a decorator
+/// IS resolve it through the binding tables instead ([`overload_decorated`]).
+pub(crate) fn decorator_spelled(decorators: &[String], name: &str) -> bool {
+    decorators
+        .iter()
+        .any(|d| d == name || d.rsplit('.').next() == Some(name))
+}
 
 /// Returns `true` when the annotation text denotes a `ClassVar[...]` type.
 ///
@@ -25,83 +68,6 @@ pub(crate) fn annotation_is_classvar(source: &str, span: Option<Span>) -> bool {
         || t.starts_with("ClassVar ")
         || t == "ClassVar"
         || t.contains(".ClassVar[")
-}
-
-// ---------------------------------------------------------------------------
-// Source-text geometry
-// ---------------------------------------------------------------------------
-
-/// Number of leading whitespace bytes on `line`. Identical to what every rule
-/// re-implemented as `line.len() - line.trim_start().len()`.
-pub(crate) fn leading_indent(line: &str) -> usize {
-    line.len() - line.trim_start().len()
-}
-
-/// Return the byte offset (as `u32`) of the start of the given 1-based line.
-/// If `target_line` is past the end of `source`, returns `source.len()`.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::as_conversions,
-    reason = "byte offsets fit u32 for source files"
-)]
-pub(crate) fn line_to_byte_offset(source: &str, target_line: usize) -> u32 {
-    let mut current = 1usize;
-    for (byte_idx, ch) in source.char_indices() {
-        if current == target_line {
-            return byte_idx as u32;
-        }
-        if ch == '\n' {
-            current += 1;
-        }
-    }
-    source.len() as u32
-}
-
-/// Returns `true` when `inner` contains a comma at bracket-depth zero.
-///
-/// Bracket-depth tracks `[`/`(`/`{` openers and their matching closers. Used
-/// by rules that need to decide whether a parenthesised expression like
-/// `(a, b)` is a tuple at top level versus a single bracketed group.
-pub(crate) fn contains_top_level_comma(inner: &str) -> bool {
-    let mut depth = 0i32;
-    for ch in inner.chars() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => return true,
-            _ => {}
-        }
-    }
-    false
-}
-
-/// Returns `true` when `s` is a `(...)` parenthesised expression whose
-/// contents contain a top-level comma (i.e. a tuple expression).
-pub(crate) fn paren_has_top_level_comma(s: &str) -> bool {
-    if s.len() < 2 || !s.starts_with('(') || !s.ends_with(')') {
-        return false;
-    }
-    contains_top_level_comma(&s[1..s.len() - 1])
-}
-
-/// Build a `Span` covering the trimmed content of a given 1-based line.
-#[expect(
-    clippy::as_conversions,
-    clippy::cast_possible_truncation,
-    reason = "u32<->usize safe on 32-bit+"
-)]
-pub(crate) fn span_for_line(source: &str, line_number: usize) -> Span {
-    let start = line_to_byte_offset(source, line_number) as usize;
-    let line_text = source
-        .get(start..)
-        .and_then(|s| s.lines().next())
-        .unwrap_or("");
-    let trimmed_start = start + (line_text.len() - line_text.trim_start().len());
-    let trimmed_end = start + line_text.trim_end().len();
-    Span {
-        start: trimmed_start as u32,
-        end: trimmed_end as u32,
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -120,108 +86,6 @@ pub(crate) fn parse_module(module: &ResolvedModule) -> Option<&ParsedModule> {
 }
 
 // ---------------------------------------------------------------------------
-// Class lookup
-// ---------------------------------------------------------------------------
-
-/// Build a `&str -> &ClassInfo` lookup map for every class in the module.
-///
-/// The returned map borrows from the slice; both must outlive the map.
-pub(crate) fn class_name_map(classes: &[ClassInfo]) -> HashMap<&str, &ClassInfo> {
-    classes.iter().map(|c| (c.name.as_str(), c)).collect()
-}
-
-// ---------------------------------------------------------------------------
-// Cycle-safe transitive base-class walks (GitHub #278)
-// ---------------------------------------------------------------------------
-// Base names resolve to same-module classes by SIMPLE name, so `class
-// Client(httpx.Client)` records the base as `Client` and the by-name lookup
-// makes the class its own ancestor. A naive recursive walk then never
-// terminates and overflows the stack, aborting the whole process. Every
-// transitive base walk must use these helpers or carry its own visited set /
-// depth cap.
-//
-// `resolve` and `matches` receive each base name EXACTLY as recorded
-// (subscripts included), so call sites keep their own normalisation and the
-// helpers change nothing but termination.
-
-/// Returns `true` when `predicate` holds for `cls` or for any class in its
-/// transitive same-module base chain (bases resolve through `resolve`).
-pub(crate) fn class_or_base_matches<'a>(
-    cls: &'a ClassInfo,
-    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
-    predicate: &dyn Fn(&'a ClassInfo) -> bool,
-) -> bool {
-    let mut visited: HashSet<&str> = HashSet::new();
-    let _ = visited.insert(cls.name.as_str());
-    walk_class_or_base(cls, resolve, predicate, &mut visited)
-}
-
-/// Recursive body of [`class_or_base_matches`]; `visited` breaks base-name
-/// cycles.
-fn walk_class_or_base<'a>(
-    cls: &'a ClassInfo,
-    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
-    predicate: &dyn Fn(&'a ClassInfo) -> bool,
-    visited: &mut HashSet<&'a str>,
-) -> bool {
-    if predicate(cls) {
-        return true;
-    }
-    cls.bases.iter().any(|base| {
-        visited.insert(base.as_str())
-            && resolve(base).is_some_and(|b| walk_class_or_base(b, resolve, predicate, visited))
-    })
-}
-
-/// Returns `true` when any base name in the transitive chain of `cls`
-/// satisfies `matches`. Each base name is first tested with `matches` and
-/// then resolved through `resolve` for the recursive step.
-pub(crate) fn any_base_name_matches<'a>(
-    cls: &'a ClassInfo,
-    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
-    matches: &dyn Fn(&str) -> bool,
-) -> bool {
-    let mut visited: HashSet<&str> = HashSet::new();
-    let _ = visited.insert(cls.name.as_str());
-    walk_base_names(cls, resolve, matches, &mut visited)
-}
-
-/// Recursive body of [`any_base_name_matches`]; `visited` breaks base-name
-/// cycles.
-fn walk_base_names<'a>(
-    cls: &'a ClassInfo,
-    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
-    matches: &dyn Fn(&str) -> bool,
-    visited: &mut HashSet<&'a str>,
-) -> bool {
-    cls.bases.iter().any(|base| {
-        matches(base)
-            || (visited.insert(base.as_str())
-                && resolve(base).is_some_and(|b| walk_base_names(b, resolve, matches, visited)))
-    })
-}
-
-/// Build a `(class_name, method_name) -> Vec<&FunctionInfo>` lookup for every
-/// method in the module (functions carrying a `class_name`).
-///
-/// Multiple definitions sharing a key (e.g. `@overload` signatures plus the
-/// implementation) are preserved in declaration order. The returned map borrows
-/// from the slice; both must outlive the map.
-pub(crate) fn method_name_map(
-    functions: &[FunctionInfo],
-) -> HashMap<(&str, &str), Vec<&FunctionInfo>> {
-    let mut map: HashMap<(&str, &str), Vec<&FunctionInfo>> = HashMap::new();
-    for func in functions {
-        if let Some(ref class_name) = func.class_name {
-            map.entry((class_name.as_str(), func.name.as_str()))
-                .or_default()
-                .push(func);
-        }
-    }
-    map
-}
-
-// ---------------------------------------------------------------------------
 // TypeVar helpers
 // ---------------------------------------------------------------------------
 
@@ -234,45 +98,6 @@ pub(crate) fn typevar_tuple_names(typevar_calls: &[TypeVarCallInfo]) -> HashSet<
         .filter(|tv| tv.is_typevartuple)
         .map(|tv| tv.name.as_str())
         .collect()
-}
-
-// ---------------------------------------------------------------------------
-// String splitting
-// ---------------------------------------------------------------------------
-
-/// Split `s` at every top-level comma, respecting bracket nesting and string
-/// literals — a comma inside quotes (`Literal[',']`) is part of the literal
-/// value, not a separator (issue #316).
-///
-/// Returns slices into the original string (no allocation for the parts
-/// themselves). Callers that need trimmed/owned values can chain
-/// `.iter().map(|p| p.trim().to_owned())`.
-pub(crate) fn split_top_level_commas(s: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth: usize = 0;
-    let mut in_string: Option<char> = None;
-    let mut start = 0;
-    for (idx, ch) in s.char_indices() {
-        match in_string {
-            Some(quote) => {
-                if ch == quote {
-                    in_string = None;
-                }
-            }
-            None => match ch {
-                '\'' | '"' => in_string = Some(ch),
-                '[' | '(' | '{' => depth += 1,
-                ']' | ')' | '}' => depth = depth.saturating_sub(1),
-                ',' if depth == 0 => {
-                    parts.push(&s[start..idx]);
-                    start = idx + 1;
-                }
-                _ => {}
-            },
-        }
-    }
-    parts.push(&s[start..]);
-    parts
 }
 
 // ---------------------------------------------------------------------------
@@ -352,40 +177,18 @@ pub(crate) fn infer_expr_literal_type(expr: &Expr) -> Option<&'static str> {
 // Type compatibility
 // ---------------------------------------------------------------------------
 
-/// Check numeric subtype relationship: `bool → int → float → complex`.
+/// Check if `actual` is assignable to `expected` with no class context:
+/// `Any`, `object`, the numeric tower, and `X | Y` unions.
 ///
-/// Delegates to the single text-level tower authority
-/// (`crate::subtyping::name_subtype`, [TYPEINF-SUBTYPING-NOMINAL]) so every
-/// rule agrees on it ([NARROWPLAN-SUBTYPING]).
-pub(crate) fn is_numeric_subtype(child: &str, parent: &str) -> bool {
-    crate::subtyping::name_subtype(child, parent)
-}
-
-/// Check if `actual` is assignable to `expected`.
-///
-/// Handles `Any`, `object`, the numeric tower (`bool → int → float → complex`),
-/// and union types (`X | Y`).
+/// Delegates to the ONE subtyping implementation
+/// (`subtyping::SubtypingContext::is_subtype`, [TYPEINF-SUBTYPING],
+/// [NARROWPLAN-SUBTYPING]) over an empty context — rules that know the
+/// module's class hierarchy seed `subtyping::module_context` instead.
 pub(crate) fn is_type_compatible(actual: &str, expected: &str) -> bool {
-    if actual == expected {
-        return true;
-    }
-    if expected == "Any" || actual == "Any" || expected == "object" {
-        return true;
-    }
-    if is_numeric_subtype(actual, expected) {
-        return true;
-    }
-    if expected.contains('|') {
-        return expected
-            .split('|')
-            .any(|part| is_type_compatible(actual, part.trim()));
-    }
-    false
+    static EMPTY: std::sync::LazyLock<crate::subtyping::SubtypingContext> =
+        std::sync::LazyLock::new(crate::subtyping::SubtypingContext::default);
+    EMPTY.is_subtype(actual, expected)
 }
-
-// ---------------------------------------------------------------------------
-// Identifier / typevar matching
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Literal helpers
@@ -496,10 +299,7 @@ pub(crate) fn class_generic_param_names(cls: &ruff_python_ast::StmtClassDef) -> 
         if base_name != "Protocol" && base_name != "Generic" {
             continue;
         }
-        let args: Vec<&Expr> = match sub.slice.as_ref() {
-            Expr::Tuple(t) => t.elts.iter().collect(),
-            other => vec![other],
-        };
+        let args = basilisk_parser::subscript_elements(sub);
         names.extend(args.iter().filter_map(|a| match a {
             Expr::Name(n) => Some(n.id.to_string()),
             _ => None,
@@ -544,85 +344,43 @@ impl StarParam {
 // Return-type verifiability (shared by E0011 and E0013)
 // ---------------------------------------------------------------------------
 
-/// Returns true when a return annotation cannot be reliably verified against a
-/// *value-less* inferred return type — at the top level or nested inside a
-/// union, container, optional, callable, or type-form.
+/// Returns true when a return target depends on the returned expression's
+/// **value**, which the kind-only return inference does not have — at the top
+/// level or nested inside a union, container, optional, callable, or type-form.
 ///
-/// Two kinds defeat kind-only return inference (`infer_rhs` knows the *kind* of
-/// a returned expression, never its value):
-/// - `Named`: protocols/classes/aliases (and quote-mangled forward references
-///   like `"int | Meta2"`) need class-hierarchy/structural analysis the return
-///   rules cannot perform.
-/// - `Literal`: verifying a `Literal[v]` target requires the *value* of the
-///   returned expression, but `return True` infers `Bool`, not `Literal[True]`.
-///   Any `Literal`-target check is therefore unreliable, so it is skipped.
+/// Verifying a `Literal[v]` target requires the value of the returned
+/// expression, but `return True` infers `Bool`, not `Literal[True]`. Such a
+/// check is unreliable, so it is skipped.
 ///
-/// Both E0011 and E0013 gate their assignability check on this to avoid false
-/// positives (consolidated here so the two sibling rules stay in lock-step).
-pub(crate) fn is_unverifiable_return_type(ty: &InferredType) -> bool {
+/// A *nominal* target is NOT in this category any more. It used to be: every
+/// `InferredType::Named` was treated as unverifiable, which silenced the whole
+/// return check for `-> MyClass` and `-> MyAlias`
+/// ([#378](https://github.com/Nimblesite/Basilisk/issues/378)). Names now
+/// arrive through the annotation cascade
+/// ([TYPEINF-ANNOTATION-RESOLUTION](../../../../docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ANNOTATION-RESOLUTION)),
+/// which yields `Named` only for a resolved same-file nominal class and the
+/// gradual `Unknown` for anything it cannot resolve — and `Unknown` suppresses
+/// through ordinary assignability, with no rule-level skip needed.
+///
+/// Both E0011 and E0013 gate their assignability check on this so the two
+/// sibling rules stay in lock-step.
+pub(crate) fn is_value_dependent_target(ty: &InferredType) -> bool {
     match ty {
-        InferredType::Named(_) | InferredType::Literal(_) => true,
+        InferredType::Literal(_) => true,
         InferredType::Optional(inner)
         | InferredType::List(inner)
         | InferredType::Set(inner)
-        | InferredType::TypeForm(inner) => is_unverifiable_return_type(inner),
+        | InferredType::TypeForm(inner) => is_value_dependent_target(inner),
         InferredType::Dict(key, value) => {
-            is_unverifiable_return_type(key) || is_unverifiable_return_type(value)
+            is_value_dependent_target(key) || is_value_dependent_target(value)
         }
-        InferredType::Union(types) => types.iter().any(is_unverifiable_return_type),
-        // The variable-length form `tuple[X, ...]` parses the `...` terminator to
-        // `Named("...")`; that is a structural marker handled by `is_assignable_to`,
-        // not an unresolvable type, so it must not trigger the skip.
-        InferredType::Tuple(types) => types.iter().any(|elem| {
-            !matches!(elem, InferredType::Named(name) if name == "...")
-                && is_unverifiable_return_type(elem)
-        }),
+        InferredType::Union(types) | InferredType::Tuple(types) => {
+            types.iter().any(is_value_dependent_target)
+        }
         InferredType::Callable(info) => {
-            is_unverifiable_return_type(&info.return_type)
-                || info.param_types.iter().any(is_unverifiable_return_type)
+            is_value_dependent_target(&info.return_type)
+                || info.param_types.iter().any(is_value_dependent_target)
         }
         _ => false,
     }
-}
-
-// ---------------------------------------------------------------------------
-// Line tokenisation
-// ---------------------------------------------------------------------------
-
-/// Yield `(identifier, index_after_delimiter)` for every identifier token in
-/// `line` that is immediately followed by `delim` (e.g. `[` for subscripts,
-/// `(` for calls).
-///
-/// Rules that scan source lines for `ClassName[...]` / `ClassName(...)`
-/// patterns use this to dispatch each line's tokens through a hash lookup —
-/// O(tokens) per line — instead of running a formatted substring search per
-/// known class per line, which is O(classes × line length) and dominated
-/// whole-file checks on class-heavy modules.
-pub(crate) fn identifiers_followed_by(
-    line: &str,
-    delim: char,
-) -> impl Iterator<Item = (&str, usize)> + '_ {
-    let mut chars = line.char_indices().peekable();
-    std::iter::from_fn(move || {
-        while let Some((start, ch)) = chars.next() {
-            if !(ch.is_alphanumeric() || ch == '_') {
-                continue;
-            }
-            let mut end = start + ch.len_utf8();
-            while let Some(&(idx, next)) = chars.peek() {
-                if next.is_alphanumeric() || next == '_' {
-                    let _ = chars.next();
-                    end = idx + next.len_utf8();
-                } else {
-                    break;
-                }
-            }
-            if let Some(&(idx, next)) = chars.peek() {
-                if next == delim {
-                    return Some((&line[start..end], idx + next.len_utf8()));
-                }
-            }
-        }
-        None
-    })
 }

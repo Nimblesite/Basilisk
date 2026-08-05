@@ -7,9 +7,8 @@
 use std::collections::HashMap;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::rules::shared::{
-    is_numeric_subtype, parse_subscript_annotation, split_top_level_commas,
-};
+use crate::rules::shared::{parse_subscript_annotation, split_top_level_commas};
+use crate::subtyping::SubtypingContext;
 
 use super::utils::span_for_line;
 use super::variance::Variance;
@@ -30,6 +29,7 @@ pub(super) fn split_top_level_params(text: &str) -> Vec<String> {
 
 /// Check module-level assignments like `v: Class[A] = Class[B]()`.
 pub(super) fn check_module_assignments(
+    subtyping: &SubtypingContext,
     lines: &[&str],
     known: &HashMap<String, Vec<Variance>>,
     source: &str,
@@ -69,6 +69,7 @@ pub(super) fn check_module_assignments(
         if let Some(vars) = known.get(lhs_cls) {
             emit_violations(
                 &ViolationCtx {
+                    subtyping,
                     class_name: lhs_cls,
                     lhs_args: &lhs_args,
                     rhs_args: &rhs_args,
@@ -85,6 +86,7 @@ pub(super) fn check_module_assignments(
 
 /// Check assignments inside function bodies.
 pub(super) fn check_fn_body_assignments(
+    subtyping: &SubtypingContext,
     lines: &[&str],
     known: &HashMap<String, Vec<Variance>>,
     source: &str,
@@ -144,6 +146,7 @@ pub(super) fn check_fn_body_assignments(
                     if let Some(vars) = known.get(lhs_cls) {
                         emit_violations(
                             &ViolationCtx {
+                                subtyping,
                                 class_name: lhs_cls,
                                 lhs_args: &lhs_args,
                                 rhs_args,
@@ -193,6 +196,7 @@ fn extract_rhs_generic(rhs: &str) -> Option<(String, Vec<String>)> {
 
 /// Context for emitting variance violation diagnostics.
 struct ViolationCtx<'a> {
+    subtyping: &'a SubtypingContext,
     class_name: &'a str,
     lhs_args: &'a [String],
     rhs_args: &'a [String],
@@ -212,8 +216,8 @@ fn emit_violations(ctx: &ViolationCtx<'_>, diagnostics: &mut Vec<Diagnostic>) {
             continue;
         }
         let ok = match var {
-            Variance::Covariant => is_numeric_subtype(rhs, lhs),
-            Variance::Contravariant => is_numeric_subtype(lhs, rhs),
+            Variance::Covariant => ctx.subtyping.is_subtype(rhs, lhs),
+            Variance::Contravariant => ctx.subtyping.is_subtype(lhs, rhs),
             Variance::Invariant => false,
         };
         if ok {

@@ -15,8 +15,10 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
+use super::shared::overload_decorated;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -37,9 +39,24 @@ impl Rule for OverloadDecoratorConsistency {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        super::check_with_own_types(self, module, ctx, diagnostics);
+    }
+
+    fn check_with_types(
+        &self,
+        module: &ResolvedModule,
+        types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        // Overload membership is a binding question ([#380]); the
+        // staticmethod/final/override checks below stay spelling-based.
+        let Some(resolver) = types.annotations() else {
+            return;
+        };
         let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();
         for func in &module.functions {
             groups
@@ -49,20 +66,27 @@ impl Rule for OverloadDecoratorConsistency {
         }
 
         for funcs in groups.values() {
-            check_group(funcs, &module.path, diagnostics);
+            check_group(funcs, resolver, &module.path, diagnostics);
         }
     }
 }
 
-fn check_group(funcs: &[&FunctionInfo], path: &str, out: &mut Vec<Diagnostic>) {
+fn check_group(
+    funcs: &[&FunctionInfo],
+    resolver: &AnnotationResolver<'_>,
+    path: &str,
+    out: &mut Vec<Diagnostic>,
+) {
     let overloads: Vec<&&FunctionInfo> = funcs
         .iter()
-        .filter(|f| has_dec(&f.decorators, "overload"))
+        .filter(|f| overload_decorated(resolver, &f.decorators))
         .collect();
     if overloads.is_empty() {
         return;
     }
-    let implementation = funcs.iter().find(|f| !has_dec(&f.decorators, "overload"));
+    let implementation = funcs
+        .iter()
+        .find(|f| !overload_decorated(resolver, &f.decorators));
 
     match implementation {
         // Group WITH an implementation: `@final`/`@override` belong on the

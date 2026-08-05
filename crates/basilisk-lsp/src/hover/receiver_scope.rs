@@ -35,9 +35,10 @@ pub(crate) fn scope_at(
     byte_offset: usize,
 ) -> HashMap<String, InferredType> {
     let mut scope = HashMap::new();
+    let types = basilisk_checker::expr_type::ModuleSpanTypes::build(resolved);
 
     for var in &resolved.module_vars {
-        insert_variable(&mut scope, var, source);
+        insert_variable(&mut scope, var, source, &types);
     }
 
     for func in &resolved.functions {
@@ -53,21 +54,28 @@ pub(crate) fn scope_at(
             }
         }
         for var in func.local_vars.iter().chain(&func.local_unannotated_vars) {
-            insert_variable(&mut scope, var, source);
+            insert_variable(&mut scope, var, source, &types);
         }
     }
 
     scope
 }
 
-/// Bind one variable's name to its declared or inferred type.
+/// Bind one variable's name to its declared or inferred type. The inferred
+/// side comes from the module's span-indexed oracle — the SAME engine behind
+/// checker diagnostics ([NARROWPLAN-INTEGRATION] Step 5).
 fn insert_variable(
     scope: &mut HashMap<String, InferredType>,
     var: &basilisk_resolver::VariableInfo,
     source: &str,
+    types: &basilisk_checker::expr_type::ModuleSpanTypes<'_>,
 ) {
     let ty = span_text(var.annotation_span, source).map_or_else(
-        || basilisk_checker::inference::infer_rhs(&var.rhs_kind),
+        || {
+            var.rhs_span
+                .and_then(|span| types.type_at(span))
+                .unwrap_or(InferredType::Unknown)
+        },
         |annotation| InferredType::from_annotation(&annotation),
     );
     if !matches!(ty, InferredType::Unknown) {
@@ -129,7 +137,7 @@ pub(crate) fn loop_binding_type(
             continue;
         };
         let iterable_type =
-            basilisk_checker::inference::infer_expression_source_in_scope(iterable.trim(), &scope);
+            basilisk_checker::expr_type::infer_expression_source_in_scope(iterable.trim(), &scope);
         let Some(element) = basilisk_checker::class_naming::element_type_of(&iterable_type)
             .or_else(|| named_element_type(resolved, &iterable_type))
         else {

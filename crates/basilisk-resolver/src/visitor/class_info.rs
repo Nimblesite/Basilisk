@@ -197,13 +197,39 @@ fn ann_attribute(
         rhs_span: ann.value.as_ref().map(|v| text_range_to_span(v.range())),
         rhs_is_nonmember_call: false,
         rhs_is_lambda: false,
-        rhs_is_descriptor_call: false,
+        rhs_descriptor: None,
+        rhs_name: None,
         is_readonly: annotation_contains_readonly_expr(&ann.annotation),
         is_kw_only,
         is_init_false: ann.value.as_deref().is_some_and(field_init_is_false),
         is_init_var: annotation_is_init_var(&ann.annotation),
         guard,
     })
+}
+
+/// Classify a class-body assignment's RHS as a callable binding: the
+/// descriptor wrapper (if any) and the simple name of the callable bound.
+///
+/// `m = f` → `(None, Some("f"))`; `s = staticmethod(g)` →
+/// `(Some("staticmethod"), Some("g"))`; anything else → names absent ([#382]).
+fn rhs_callable_binding(value: &Expr) -> (Option<String>, Option<String>) {
+    match value {
+        Expr::Name(name) => (None, Some(name.id.to_string())),
+        Expr::Call(call) => {
+            let wrapper = match call.func.as_ref() {
+                Expr::Name(n) if n.id == "staticmethod" || n.id == "classmethod" => {
+                    n.id.to_string()
+                }
+                _ => return (None, None),
+            };
+            let bound = match call.arguments.args.as_ref() {
+                [Expr::Name(inner)] => Some(inner.id.to_string()),
+                _ => None,
+            };
+            (Some(wrapper), bound)
+        }
+        _ => (None, None),
+    }
 }
 
 /// Append an [`AttributeInfo`] for each simple-name target of `name = value`.
@@ -217,13 +243,7 @@ fn assign_attributes(
         Expr::Call(c) if matches!(c.func.as_ref(), Expr::Name(n) if n.id == "nonmember")
     );
     let rhs_is_lambda = matches!(&*assign.value, Expr::Lambda(_));
-    let rhs_is_descriptor_call = matches!(
-        &*assign.value,
-        Expr::Call(c) if matches!(
-            c.func.as_ref(),
-            Expr::Name(n) if n.id == "staticmethod" || n.id == "classmethod"
-        )
-    );
+    let (rhs_descriptor, rhs_name) = rhs_callable_binding(&assign.value);
     for target in &assign.targets {
         if let Some(name) = expr_simple_name(target) {
             attributes.push(AttributeInfo {
@@ -236,7 +256,8 @@ fn assign_attributes(
                 rhs_span: Some(text_range_to_span(assign.value.range())),
                 rhs_is_nonmember_call,
                 rhs_is_lambda,
-                rhs_is_descriptor_call,
+                rhs_descriptor: rhs_descriptor.clone(),
+                rhs_name: rhs_name.clone(),
                 is_readonly: false,
                 is_kw_only: false,
                 is_init_false: false,

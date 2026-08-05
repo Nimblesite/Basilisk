@@ -1056,6 +1056,10 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .bench-meta { margin-top: var(--space-4); font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.6; }
 .bench-meta code { font-family: var(--font-mono); font-size: 0.9em; color: var(--color-text-secondary); }
 
+.bench-caveat { margin: var(--space-5) 0; padding: var(--space-4); font-size: 0.875rem; line-height: 1.7; color: var(--color-text-secondary); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-left: 3px solid var(--color-primary); border-radius: 6px; }
+.bench-caveat strong { color: var(--color-text-primary); }
+.bench-caveat code { font-family: var(--font-mono); font-size: 0.9em; }
+
 .benchmark-results {
   width: calc(min(100vw, var(--max-width)) - var(--sidebar-width) - var(--space-12) - var(--space-16));
   max-width: none;

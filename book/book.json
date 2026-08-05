@@ -1,8 +1,22 @@
 {
   "schemaVersion": 1,
   "title": "The Basilisk Book",
-  "status": "structural-prototype",
-  "basiliskRelease": null,
+  "status": "living-edition-in-progress",
+  "editionModel": "living-release-aligned",
+  "basiliskRelease": "0.39.0",
+  "basiliskReleaseTag": "v0.39.0",
+  "basiliskReleaseCommit": "b8ae454cfabc54d26d7e4efc029f2f01bd083bc8",
+  "bundledTypeshedCommit": "83c2518a9e6abbda0c44592c3483de459198f887",
+  "screenshotCapture": {
+    "editor": "Visual Studio Code 1.131.0",
+    "editorVersion": "1.131.0",
+    "releaseArtifacts": {
+      "darwin-arm64": {
+        "name": "basilisk-darwin-arm64.vsix",
+        "sha256": "74ef14d9e4e87469eb59c2493cfad16545ee49333c321e8672317fc8c010502e"
+      }
+    }
+  },
   "targets": {
     "words": 29700,
     "printEquivalentPages": 105,
@@ -102,7 +116,7 @@
       "number": 8,
       "title": "Imports, packages, and the world of stubs",
       "file": "manuscript/08-imports-packages-stubs.md",
-      "status": "outline",
+      "status": "complete",
       "targetWords": 2300,
       "targetPages": 8,
       "targetFigures": 3
@@ -113,7 +127,7 @@
       "number": 9,
       "title": "Configure the project, not a mood",
       "file": "manuscript/09-configure-the-project.md",
-      "status": "draft-complete",
+      "status": "complete",
       "targetWords": 2200,
       "targetPages": 8,
       "targetFigures": 3
@@ -124,7 +138,7 @@
       "number": 10,
       "title": "Adopt a codebase without hiding it",
       "file": "manuscript/10-adopt-without-hiding.md",
-      "status": "outline",
+      "status": "complete",
       "targetWords": 2200,
       "targetPages": 8,
       "targetFigures": 3
