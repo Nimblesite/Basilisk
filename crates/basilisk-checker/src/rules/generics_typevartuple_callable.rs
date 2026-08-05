@@ -75,22 +75,30 @@ impl Rule for TypeVarTupleCallableMismatch {
         // Class names for constructor detection.
         let class_names: Vec<&str> = basilisk_resolver::collect_names(&module.classes);
 
-        // Step 3: Walk module-level statements for calls.
+        // Step 3: Walk module-level statements for calls. Element verdicts
+        // route through the module-seeded context ([NARROWPLAN-SUBTYPING]).
+        let lookups = TvtLookups {
+            subtyping: crate::subtyping::module_context(module),
+            func_sigs,
+            method_sigs,
+            class_names,
+        };
         for stmt in &parsed.ast.body {
-            check_stmt_for_tvt_mismatch(
-                stmt,
-                source,
-                path,
-                &func_sigs,
-                &method_sigs,
-                &class_names,
-                diagnostics,
-            );
+            check_stmt_for_tvt_mismatch(stmt, source, path, &lookups, diagnostics);
         }
     }
 }
 
-/// Walk statements to find constructor calls with TypeVarTuple-linked parameters.
+/// Read-only lookups for the `TypeVarTuple` mismatch walk.
+struct TvtLookups<'a> {
+    subtyping: crate::subtyping::SubtypingContext,
+    func_sigs: HashMap<&'a str, &'a FunctionInfo>,
+    method_sigs: HashMap<(&'a str, &'a str), &'a FunctionInfo>,
+    class_names: Vec<&'a str>,
+}
+
+/// Walk statements to find constructor calls with `TypeVarTuple`-linked
+/// parameters.
 #[expect(
     clippy::too_many_lines,
     reason = "TypeVarTuple mismatch detection requires extensive AST traversal"
@@ -99,9 +107,7 @@ fn check_stmt_for_tvt_mismatch(
     stmt: &ruff_python_ast::Stmt,
     source: &str,
     path: &str,
-    func_sigs: &HashMap<&str, &FunctionInfo>,
-    method_sigs: &HashMap<(&str, &str), &FunctionInfo>,
-    class_names: &[&str],
+    lookups: &TvtLookups<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use ruff_python_ast::{Expr, Stmt};
@@ -130,12 +136,12 @@ fn check_stmt_for_tvt_mismatch(
     };
 
     // Only handle constructor calls (callee is a class name).
-    if !class_names.contains(&callee_name) {
+    if !lookups.class_names.contains(&callee_name) {
         return;
     }
 
     // Find the __init__ method.
-    let Some(init_fn) = method_sigs.get(&(callee_name, "__init__")) else {
+    let Some(init_fn) = lookups.method_sigs.get(&(callee_name, "__init__")) else {
         return;
     };
 
@@ -163,7 +169,7 @@ fn check_stmt_for_tvt_mismatch(
     };
 
     // Resolve the function signature for the callable.
-    let Some(target_fn) = func_sigs.get(callable_name.id.as_str()) else {
+    let Some(target_fn) = lookups.func_sigs.get(callable_name.id.as_str()) else {
         return;
     };
 
@@ -200,7 +206,7 @@ fn check_stmt_for_tvt_mismatch(
             continue;
         };
 
-        if !type_compatible(actual, expected) {
+        if !lookups.subtyping.is_subtype(actual, expected) {
             let range = call.range;
             let span = Span {
                 start: range.start().to_u32(),
@@ -319,22 +325,4 @@ fn extract_tvt_from_tuple(ann: &str) -> Option<String> {
 /// Check if a string is a valid Python identifier.
 fn is_identifier(text: &str) -> bool {
     basilisk_resolver::is_simple_ascii_python_identifier(text)
-}
-
-/// Check basic type compatibility.
-fn type_compatible(actual: &str, expected: &str) -> bool {
-    // Identity and the numeric tower via the shared core
-    // ([NARROWPLAN-SUBTYPING]).
-    if crate::subtyping::name_subtype(actual, expected) {
-        return true;
-    }
-    // Any accepts everything.
-    if expected == "Any" || actual == "Any" {
-        return true;
-    }
-    // object accepts everything.
-    if expected == "object" {
-        return true;
-    }
-    false
 }

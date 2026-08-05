@@ -177,35 +177,17 @@ pub(crate) fn infer_expr_literal_type(expr: &Expr) -> Option<&'static str> {
 // Type compatibility
 // ---------------------------------------------------------------------------
 
-/// Check numeric subtype relationship: `bool → int → float → complex`.
+/// Check if `actual` is assignable to `expected` with no class context:
+/// `Any`, `object`, the numeric tower, and `X | Y` unions.
 ///
-/// Delegates to the single text-level tower authority
-/// (`crate::subtyping::name_subtype`, [TYPEINF-SUBTYPING-NOMINAL]) so every
-/// rule agrees on it ([NARROWPLAN-SUBTYPING]).
-pub(crate) fn is_numeric_subtype(child: &str, parent: &str) -> bool {
-    crate::subtyping::name_subtype(child, parent)
-}
-
-/// Check if `actual` is assignable to `expected`.
-///
-/// Handles `Any`, `object`, the numeric tower (`bool → int → float → complex`),
-/// and union types (`X | Y`).
+/// Delegates to the ONE subtyping implementation
+/// (`subtyping::SubtypingContext::is_subtype`, [TYPEINF-SUBTYPING],
+/// [NARROWPLAN-SUBTYPING]) over an empty context — rules that know the
+/// module's class hierarchy seed `subtyping::module_context` instead.
 pub(crate) fn is_type_compatible(actual: &str, expected: &str) -> bool {
-    if actual == expected {
-        return true;
-    }
-    if expected == "Any" || actual == "Any" || expected == "object" {
-        return true;
-    }
-    if is_numeric_subtype(actual, expected) {
-        return true;
-    }
-    if expected.contains('|') {
-        return expected
-            .split('|')
-            .any(|part| is_type_compatible(actual, part.trim()));
-    }
-    false
+    static EMPTY: std::sync::LazyLock<crate::subtyping::SubtypingContext> =
+        std::sync::LazyLock::new(crate::subtyping::SubtypingContext::default);
+    EMPTY.is_subtype(actual, expected)
 }
 
 // ---------------------------------------------------------------------------

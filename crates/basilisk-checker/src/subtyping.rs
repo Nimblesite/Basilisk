@@ -9,33 +9,23 @@
 //! Two layers already exist and stay authoritative for what they cover:
 //! [`crate::types::InferredType::is_assignable_to`] for inferred types
 //! ([TYPEINF-SUBTYPING-IMPL]) and [`name_subtype`] here for the
-//! annotation-text numeric tower the conformance rules use. This module adds
-//! the *context-dependent* relations those layers cannot answer alone —
-//! MRO walks, structural Protocol satisfaction, `TypedDict` field
-//! compatibility, and declared variance.
+//! annotation-text numeric tower — the internal core [`is_subtype`] builds
+//! on. This module adds the *context-dependent* relations those layers
+//! cannot answer alone — MRO walks, structural Protocol satisfaction,
+//! `TypedDict` field compatibility, and declared variance.
 //!
-//! # [`SubtypingContext`] has no production caller yet — deliberately
+//! # Every rule-side text verdict routes through here
 //!
-//! [`name_subtype`] below IS wired (eight rules delegate to it).
-//! [`SubtypingContext`] is not, and that is the REQUIRED order, not an
-//! oversight: [NARROWPLAN-SUBTYPING] mandates that rule-local subtype helpers
-//! are replaced "only after parity tests pin their current accepted/rejected
-//! cases". Landing the context plus its parity tests in one change and
-//! migrating rules onto it in the next is what that instruction asks for —
-//! migrating in the same change would move behaviour and its pins together,
-//! which is exactly the drift the parity tests exist to prevent. The rules
-//! consume this at the Integration stage ([NARROWPLAN-INTEGRATION]), whose
-//! checklist item is "migrate assignment, return, call, and `assert_type`
-//! rules incrementally, deleting the replaced local logic in the same
-//! change". Until then this is a pure, fully-tested core.
+//! [NARROWPLAN-INTEGRATION]: one subtyping implementation. Engine-side rules
+//! reach the context through `rules::shared::ModuleTypes` (built once per
+//! module in `run_all`); pre-engine rules seed [`module_context`] at their
+//! entry and thread `&SubtypingContext` to their helpers; context-free
+//! shared helpers (`rules::shared::is_type_compatible`) delegate to
+//! [`SubtypingContext::is_subtype`] over an empty context. Do not add a
+//! rule-local subtype table or call [`name_subtype`] directly from a rule —
+//! it is the tower core, not the verdict.
 //!
-//! **Lint posture — do not "fix" this by narrowing visibility.** The
-//! workspace denies `dead_code`. This module satisfies it because it is
-//! `pub mod subtyping` at the crate root, so every item is reachable from
-//! outside the crate and therefore live. Demoting the module or any item to
-//! `pub(crate)` before the Integration-stage wiring lands would make
-//! `dead_code` fire on a deliberate placeholder — and the fix for THAT is to
-//! wire the rules up, never to add an `#[allow]`/`#[expect]`.
+//! [`is_subtype`]: SubtypingContext::is_subtype
 
 use std::collections::{HashMap, HashSet};
 
