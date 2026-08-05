@@ -161,10 +161,14 @@ def clone_suite(ref: str, dest: Path) -> tuple[Path, dict]:
     if dest.exists():
         raise RuntimeError(f"fresh clone destination must not already exist: {dest}")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    args = ["git", "clone", "--depth", "1"]
-    if ref != UPSTREAM_REF:
-        args += ["--branch", ref]
-    run(args + [UPSTREAM_URL, str(dest)])
+    if ref == UPSTREAM_REF:
+        run(["git", "clone", "--depth", "1", UPSTREAM_URL, str(dest)])
+    else:
+        # A pinned ref may be a commit SHA, which `--branch` cannot fetch;
+        # clone full history and check the ref out, exactly as
+        # run_mutation_conformance.py does.
+        run(["git", "clone", "--quiet", UPSTREAM_URL, str(dest)])
+        run(["git", "-C", str(dest), "checkout", "--quiet", ref])
     suite = _suite_paths(dest)
     run_id = os.environ.get(RUN_ID_ENV)
     if run_id:

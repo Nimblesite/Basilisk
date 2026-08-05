@@ -904,6 +904,7 @@
       "missed": 0,
       "falsePositives": 0,
       "codes": [
+        "aliases_implicit",
         "generics_syntax_scoping"
       ]
     },
@@ -1387,6 +1388,7 @@
       "falsePositives": 0,
       "codes": [
         "calls_argument_count",
+        "classes_classvar",
         "namedtuples_define_functional",
         "qualifiers_final_annotation",
         "qualifiers_final_annotation_2"
@@ -1471,7 +1473,7 @@
       "falsePositives": 0,
       "codes": [
         "assignment_compatibility",
-        "qualifiers_annotated",
+        "directives_assert_type_2",
         "tuples_type_compat"
       ]
     },
