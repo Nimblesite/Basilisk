@@ -80,8 +80,10 @@ suite('Chapter 10 book capture', function () {
             await delay(500);
             terminal.sendText('basilisk fix src/signal_box/legacy');
             await waitForText(decoder, 'raw: Any');
-            terminal.sendText('diff -u stages/decoder.before src/signal_box/legacy/decoder.py || true');
+            terminal.sendText('diff -u stages/decoder.before src/signal_box/legacy/decoder.py');
             await delay(1_200);
+            await vscode.commands.executeCommand('notifications.clearAll');
+            await delay(300);
             await takeWindowScreenshot('10-cli-fix-full.png');
 
             fs.copyFileSync(reviewedDecoder, decoder);
@@ -94,6 +96,8 @@ suite('Chapter 10 book capture', function () {
             await delay(800);
             terminal.sendText('basilisk check --color never src/signal_box/legacy');
             await delay(1_500);
+            await vscode.commands.executeCommand('notifications.clearAll');
+            await delay(300);
             await takeWindowScreenshot('10-adopt-status-full.png');
         } finally {
             terminal.dispose();

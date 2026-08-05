@@ -38,14 +38,11 @@ pub(super) struct SkipNames {
 
 impl SkipNames {
     /// Build the full skip environment for a module.
-    pub(super) fn collect(
-        module: &ResolvedModule,
-        resolver: &crate::annotation::AnnotationResolver<'_>,
-    ) -> Self {
+    pub(super) fn collect(module: &ResolvedModule) -> Self {
         Self {
             typeddict: collect_typeddict_names(module),
             typeddict_extra_items: collect_extra_items_typeddict_names(module),
-            value_aliases: alias_match::collect_value_aliases(module, resolver),
+            value_aliases: alias_match::collect_value_aliases(module),
             generic_aliases: alias_match::collect_generic_aliases(module),
             typeddict_schemas: typeddict_struct::build_typeddict_schemas(module),
             enum_members: enum_expand::collect_enum_member_sets(module),

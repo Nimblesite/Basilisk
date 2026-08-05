@@ -354,6 +354,15 @@ impl<'m> AnnotationResolver<'m> {
     /// arguments. A cycle (`type J = list[J]` re-entered) is gradual, which
     /// terminates expansion without rejecting the legal recursive alias
     /// ([#371](https://github.com/Nimblesite/Basilisk/issues/371)).
+    ///
+    /// The cut MUST stay gradual. Cutting to `Named(alias)` instead — to keep
+    /// the self-reference visible for a consumer that wants to keep matching —
+    /// was tried and reverted: `Named` is not accepting in
+    /// `is_assignable_to`, so `type A[T] = T | list[A[T]]` stopped accepting
+    /// `[1, [1, 2, 3]]` (`no_false_positive_on_pep695_type_alias_annotation`).
+    /// A consumer that needs the self-reference needs the alias body's own
+    /// shape, not a differently-cut expansion ([NARROWPLAN-INTEGRATION]
+    /// Step 7).
     fn expand_alias(&self, name: &str, args: &[&Expr], frame: &Frame) -> Option<InferredType> {
         let entry = self.tables.aliases.get(name)?;
         if frame.visiting.iter().any(|visited| visited == name) {

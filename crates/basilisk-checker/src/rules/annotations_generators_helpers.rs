@@ -213,6 +213,7 @@ fn check_yield_from_call(
         outer_base,
         callee_ann,
         callee_base,
+        judge,
         module,
         out,
     );
@@ -230,6 +231,7 @@ pub(super) fn check_send_type_compat(
     outer_base: &str,
     callee_ann: &str,
     callee_base: &str,
+    judge: &TypeJudge<'_, '_>,
     module: &ResolvedModule,
     out: &mut Vec<Diagnostic>,
 ) {
@@ -258,8 +260,16 @@ pub(super) fn check_send_type_compat(
         return;
     };
 
-    let outer_send = InferredType::from_annotation(outer_send_str.trim());
-    let callee_send = InferredType::from_annotation(callee_send_str.trim());
+    // A send type is a type expression the cascade evaluates — never a
+    // string this rule case-folds ([NARROWPLAN-INTEGRATION] Step 7,
+    // [#379](https://github.com/Nimblesite/Basilisk/issues/379)). An
+    // unresolvable one abstains, exactly as the gradual leaves below do.
+    let (Some(outer_send), Some(callee_send)) = (
+        judge.resolve_annotation_text(outer_send_str.trim()),
+        judge.resolve_annotation_text(callee_send_str.trim()),
+    ) else {
+        return;
+    };
 
     if matches!(outer_send, InferredType::Unknown | InferredType::Any)
         || matches!(callee_send, InferredType::Unknown | InferredType::Any)

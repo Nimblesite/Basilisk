@@ -24,7 +24,7 @@ TEST_DRIVER = Path(__file__).with_name("capture_ch10_terminal.test.ts")
 BOOK_MANIFEST = BOOK_ROOT / "book.json"
 FIGURE_LEDGER = BOOK_ROOT / "figures.json"
 CAPTURE_TEST = "Chapter 10 book capture"
-CROP_GEOMETRY = "2400x1500+240+150"
+PUBLICATION_TRANSFORM = "full 2880x1800 frame uniformly resized to 1600x1000"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -117,17 +117,7 @@ def publish(capture_dir: Path, magick: str) -> dict[str, str]:
         target = OUTPUT_DIR / target_name
         shutil.copy2(source, master)
         release_capture.run(
-            [
-                magick,
-                str(master),
-                "-crop",
-                CROP_GEOMETRY,
-                "+repage",
-                "-resize",
-                "1600x1000",
-                "-strip",
-                str(target),
-            ],
+            [magick, str(master), "-resize", "1600x1000", "-strip", str(target)],
             BOOK_ROOT,
         )
         digests[name] = sha256(master)
@@ -174,7 +164,7 @@ def update_capture_hashes(
                 "scripts/capture_adoption_screenshots.py"
             ),
             "capturedAt": dt.date.today().isoformat(),
-            "crop": f"{CROP_GEOMETRY} uniformly resized to 1600x1000",
+            "crop": PUBLICATION_TRANSFORM,
         }
         updated.add(str(figure["id"]))
     if updated != set(expected):
@@ -203,7 +193,10 @@ def main() -> None:
     if version != "0.39.0" or not tag or len(commit) != 40 or not editor:
         raise SystemExit("book.json release or screenshot editor pin is incomplete")
 
-    with tempfile.TemporaryDirectory(prefix=f"basilisk-book-ch10-{version}-") as temporary:
+    with (
+        tempfile.TemporaryDirectory(prefix=f"basilisk-book-ch10-{version}-") as temporary,
+        tempfile.TemporaryDirectory(prefix="bsk-ch10-", dir="/tmp") as fixture_temporary,
+    ):
         work = Path(temporary)
         checksums = work / "checksums-sha256.txt"
         vsix = work / artifact
@@ -227,7 +220,7 @@ def main() -> None:
         release_capture.run([npm, "ci"], source_extension)
         release_capture.run([npm, "run", "compile"], source_extension)
         release_capture.overlay_release_product(source_extension, release_extension)
-        workspace = stage_fixture(work / "workspace")
+        workspace = stage_fixture(Path(fixture_temporary))
         capture_dir = work / "captures"
         capture_dir.mkdir()
         binary_directory = source_extension / "bin" / platform_key

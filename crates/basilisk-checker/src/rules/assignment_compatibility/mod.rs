@@ -83,7 +83,7 @@ impl Rule for AssignmentTypeMismatch {
             return;
         };
         let empty_params = ParamMaps::default();
-        let skip = SkipNames::collect(module, resolver);
+        let skip = SkipNames::collect(module);
         let call_index = callable_check::build_index(module);
         let oracle = types.oracle();
         let subtyping = types.subtyping();
@@ -111,7 +111,7 @@ impl Rule for AssignmentTypeMismatch {
         );
         check_tuple_reassignments(module, diagnostics);
         check_dataclass_attr_assignments(module, diagnostics);
-        typeform_check::check_typeform_calls(module, diagnostics);
+        typeform_check::check_typeform_calls(module, resolver, diagnostics);
         default_spec::check_default_specializations(module, diagnostics);
         drop_unchecked_block_diagnostics(module, diagnostics);
     }
@@ -279,7 +279,7 @@ fn check_vars(
             // TypeForm assignments require type-expression validation, not
             // value-type inference.  Delegate to the dedicated module.
             if let InferredType::TypeForm(ref inner) = declared_type {
-                if typeform_check::is_valid_typeform_assignment(var, source, inner, functions) {
+                if typeform_check::is_valid_typeform_assignment(var, source, inner, functions, resolver) {
                     return None;
                 }
                 let inferred_type = rhs_inferred(oracle, var);

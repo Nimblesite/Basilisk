@@ -65,10 +65,7 @@ pub(super) struct AliasCtx<'a> {
 /// `Name = a | b | …`, or `Name = dict[tuple[str, str], str]`. Container-bodied
 /// definitions that reference a module `TypeVar` are deliberately excluded —
 /// [`collect_generic_aliases`] handles those with `TypeVar` substitution.
-pub(super) fn collect_value_aliases(
-    module: &ResolvedModule,
-    resolver: &crate::annotation::AnnotationResolver<'_>,
-) -> HashMap<String, InferredType> {
+pub(super) fn collect_value_aliases(module: &ResolvedModule) -> HashMap<String, InferredType> {
     let typevars: HashSet<String> = module
         .typevar_calls
         .iter()
@@ -82,12 +79,17 @@ pub(super) fn collect_value_aliases(
         let Some(text) = alias_rhs_text(var, module) else {
             continue;
         };
-        // The alias body is a type expression the cascade evaluates —
-        // never a string this rule case-folds ([NARROWPLAN-INTEGRATION]
-        // Step 7, [#379](https://github.com/Nimblesite/Basilisk/issues/379)).
-        let Some(def) = resolver.resolve_text(text.trim()) else {
-            continue;
-        };
+        // NOT `resolver.resolve_text`: this table feeds a depth-limited
+        // recursive matcher that needs the alias body's OWN shape, with
+        // self-references intact as leaves. The cascade expands aliases
+        // transparently and cuts the cycle to gradual `Unknown`, which
+        // erases exactly the leaf the matcher recurses on — measured to cost
+        // two recursive-alias acceptances (`fp_elimination_tests`).
+        // Retiring this site means deleting the matcher in favour of the
+        // cascade's own recursive-alias handling, not swapping the parser
+        // ([NARROWPLAN-INTEGRATION] Step 7,
+        // [#379](https://github.com/Nimblesite/Basilisk/issues/379)).
+        let def = InferredType::from_annotation(text.trim());
         let include = match def {
             InferredType::Union(_) => true,
             InferredType::Dict(..)
