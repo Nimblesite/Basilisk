@@ -465,6 +465,14 @@
       "authority": "The Basilisk Project",
       "versionScope": "Basilisk 0.39.0 source commit",
       "topics": ["configuration editor", "preview", "apply", "path overrides"]
+    },
+    {
+      "key": "basilisk-mass-autofix-spec-0-39-0",
+      "title": "Basilisk v0.39.0 mass-autofix and adoption specification",
+      "url": "https://github.com/Nimblesite/Basilisk/blob/b8ae454cfabc54d26d7e4efc029f2f01bd083bc8/docs/specs/LSP-MASS-AUTOFIX-SPEC.md",
+      "authority": "The Basilisk Project",
+      "versionScope": "Basilisk 0.39.0 source commit",
+      "topics": ["mass fix", "fix tiers", "adoption", "graduation", "folder configuration"]
     }
   ]
 }

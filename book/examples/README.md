@@ -17,7 +17,10 @@ an untyped runtime dependency from its generated and reviewed contracts in
 [`ch08-imports-and-stubs/`](ch08-imports-and-stubs/). Chapter 9 uses
 [`signal-box/`](signal-box/) with its explicit annotation policy and
 deliberately incomplete functions to demonstrate a nested test-folder
-severity.
+severity. Chapter 10 uses the independent
+[`ch10-adoption/`](ch10-adoption/) checkpoint to replay an immediate default
+fix, human review of its `Any` placeholders, one folder-rule adoption entry,
+and an honest `unadopt` round trip.
 
 Planned checkpoints:
 
@@ -27,7 +30,7 @@ Planned checkpoints:
 4. narrowing and exhaustive routing;
 5. a simulated untyped vendor package plus reviewed local stub;
 6. explicit project rule policy;
-7. bounded fixes and file adoption;
+7. bounded fixes and folder-rule adoption;
 8. cross-file navigation and refactoring; and
 9. tests, a debug scenario, a CPU hot path, and CI.
 

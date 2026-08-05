@@ -279,7 +279,9 @@ fn check_vars(
             // TypeForm assignments require type-expression validation, not
             // value-type inference.  Delegate to the dedicated module.
             if let InferredType::TypeForm(ref inner) = declared_type {
-                if typeform_check::is_valid_typeform_assignment(var, source, inner, functions, resolver) {
+                if typeform_check::is_valid_typeform_assignment(
+                    var, source, inner, functions, resolver,
+                ) {
                     return None;
                 }
                 let inferred_type = rhs_inferred(oracle, var);

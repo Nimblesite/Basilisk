@@ -211,7 +211,46 @@
         "Known CHKTAG specification drift is recorded in RELEASE-ACCURACY-NOTES.md and is not described as a released editor mutation."
       ]
     },
-    {"section": "10", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
+    {
+      "section": "10",
+      "release": "0.39.0",
+      "decision": "publish",
+      "governingSpecs": [
+        "docs/specs/LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-MASS",
+        "docs/specs/LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-CLASSIFY",
+        "docs/specs/LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-CONFLICTS",
+        "docs/specs/LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-ADOPTION",
+        "docs/specs/LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-ADOPTION-RULES",
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-COMMANDS",
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-MODEL",
+        "docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-DISCOVERY",
+        "https://typing.python.org/en/latest/spec/special-types.html",
+        "https://typing.python.org/en/latest/spec/typeddict.html"
+      ],
+      "releaseImplementation": [
+        "Basilisk v0.39.0 release commit b8ae454cfabc54d26d7e4efc029f2f01bd083bc8",
+        "crates/basilisk-cli/src/fix.rs at v0.39.0",
+        "crates/basilisk-cli/src/adopt.rs at v0.39.0",
+        "crates/basilisk-lsp/src/code_actions/fixes.rs at v0.39.0",
+        "crates/basilisk-lsp/src/code_actions/mass_fix.rs at v0.39.0",
+        "crates/basilisk-lsp/src/server/adoption.rs at v0.39.0"
+      ],
+      "executableEvidence": [
+        "Official basilisk-aarch64-apple-darwin.zip SHA-256 71f16a1ba02d1e1f99c72d2253fc8fbd2a194a3ca93eac3baf899593900cfc68 matched checksums-sha256.txt on 2026-08-05",
+        "The extracted binary reported basilisk 0.39.0 with Ruff 0.15.17 on 2026-08-05",
+        "The exact v0.39.0 source passed 27 CLI fix tests, 16 CLI adoption tests, and 3 LSP adoption tests on 2026-08-05",
+        "Python 3.14.6 ran the checked-in Chapter 10 checkpoint: 2 tests passed on 2026-08-05",
+        "The official 0.39.0 binary checked the Chapter 10 checkpoint and reported the calls_argument_type diagnostic as one warning with zero errors; analyze reported no issues on 2026-08-05",
+        "A disposable replay of the staged baseline produced BSK-0001 and BSK-0002, then the default fix made exactly the staged Any diff; under the strictness tag, re-analysis reported exactly two BSK-0014 errors while both runtime tests still passed on 2026-08-05",
+        "The official 0.39.0 binary adopted one governing folder and one calls_argument_type rule entry; adopt --status listed that folder and code, and unadopt removed one entry and restored the diagnostic to error on 2026-08-05",
+        "Clean headed VS Code 1.131.0 terminal captures executed the real fix, diff, adopt, status, and check commands using the official v0.39.0 macOS arm64 binary on 2026-08-05; the published VSIX SHA-256 matched 74ef14d9e4e87469eb59c2493cfad16545ee49333c321e8672317fc8c010502e"
+      ],
+      "omitted": [
+        "No current-branch-only type inference behavior is described.",
+        "The manuscript does not claim a fix preview, per-edit runtime-safety proof, file-level adoption, warning-entry ownership, background graduation, or migration coverage because 0.39.0 does not provide them.",
+        "Known mass-autofix and adoption specification, website, CLI, LSP, and editor gaps are recorded in RELEASE-ACCURACY-NOTES.md rather than promoted into reader claims."
+      ]
+    },
     {"section": "11", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []},
     {"section": "12", "decision": "withhold-until-verified", "governingSpecs": [], "releaseImplementation": [], "executableEvidence": []}
   ]

@@ -329,10 +329,11 @@
       "id": "fig-10-adoption-funnel",
       "section": "10",
       "kind": "diagram",
-      "status": "planned",
+      "status": "ready",
+      "master": "assets/diagrams/10-adoption-funnel.svg",
       "path": "assets/diagrams/10-adoption-funnel.png",
-      "title": "Reduce high-confidence work before adopting the remainder",
-      "alt": "An initial diagnostic set passes through safe fixes and review before the remaining files enter an explicit adopted-warning state."
+      "title": "Reduce mechanical work before adopting one visible remainder",
+      "alt": "Five conceptual checkpoints move Signal Box from three errors through Any placeholders and a reviewed TypedDict boundary to one folder-rule warning, then remove that warning entry after the remaining call is fixed."
     },
     {
       "id": "shot-10-cli-fix",
@@ -340,8 +341,8 @@
       "kind": "screenshot",
       "status": "ready",
       "path": "assets/screenshots/10-cli-fix.png",
-      "title": "Preview the work a safe fix actually performed",
-      "alt": "A terminal and source diff show a bounded Basilisk fix followed by diagnostics that still require a human decision.",
+      "title": "Review the immediate edit made by the default fix tier",
+      "alt": "A direct Basilisk 0.39.0 terminal capture shows the version, a fix of two diagnostics, and the resulting unified diff changing an untyped function to Any input and return annotations.",
       "master": "assets/screenshots/masters/10-cli-fix-full.png",
       "capture": {
         "authenticity": "direct-release-capture",
@@ -351,8 +352,9 @@
         "releaseArtifact": "basilisk-darwin-arm64.vsix",
         "releaseArtifactSha256": "74ef14d9e4e87469eb59c2493cfad16545ee49333c321e8672317fc8c010502e",
         "rawMaster": "assets/screenshots/masters/10-cli-fix-full.png",
-        "masterSha256": "4416133582885e8ed3e53a2bb80d91619b5fa974c78ff84eadacbea36d1533fa",
-        "fixture": "examples/ch10-adoption staged in a temporary workspace",
+        "masterSha256": "5cf91e1a3a60b5a1b4620af883bbf0909907890be9b02b21ca8f842b833bd2d6",
+        "fixture": "examples/ch10-adoption",
+        "fixtureStaging": "copied into an isolated temporary workspace before capture",
         "editor": "Visual Studio Code 1.131.0 Extension Development Host",
         "os": "Darwin 26.5.1",
         "architecture": "arm64",
@@ -360,7 +362,7 @@
         "viewport": "1440x900 CSS pixels at 2x device scale",
         "method": "Actual commands executed in a VS Code integrated terminal; headed workbench captured with CDP Page.captureScreenshot by scripts/capture_adoption_screenshots.py",
         "capturedAt": "2026-08-05",
-        "crop": "2400x1500+240+150 uniformly resized to 1600x1000"
+        "crop": "full 2880x1800 frame uniformly resized to 1600x1000"
       }
     },
     {
@@ -370,7 +372,7 @@
       "status": "ready",
       "path": "assets/screenshots/10-adopt-status.png",
       "title": "Adopted work remains visible",
-      "alt": "Basilisk adoption status lists migrated and remaining Signal Box files without removing their diagnostics from the workflow.",
+      "alt": "A direct Basilisk 0.39.0 terminal capture shows one governing folder and calls_argument_type warning entry in adoption status, followed by the surviving diagnostic and a summary of one warning with zero errors.",
       "master": "assets/screenshots/masters/10-adopt-status-full.png",
       "capture": {
         "authenticity": "direct-release-capture",
@@ -380,8 +382,9 @@
         "releaseArtifact": "basilisk-darwin-arm64.vsix",
         "releaseArtifactSha256": "74ef14d9e4e87469eb59c2493cfad16545ee49333c321e8672317fc8c010502e",
         "rawMaster": "assets/screenshots/masters/10-adopt-status-full.png",
-        "masterSha256": "2dd15cb4e573610316da3d9a236973a25283eb81f4e9e3f376d143ca856fbf0a",
-        "fixture": "examples/ch10-adoption staged in a temporary workspace",
+        "masterSha256": "cfe31b5ba38fbd2a0422a28d2c56e479242757b276917ab32df9cc1dfd3f0e6b",
+        "fixture": "examples/ch10-adoption",
+        "fixtureStaging": "copied into an isolated temporary workspace before capture",
         "editor": "Visual Studio Code 1.131.0 Extension Development Host",
         "os": "Darwin 26.5.1",
         "architecture": "arm64",
@@ -389,7 +392,7 @@
         "viewport": "1440x900 CSS pixels at 2x device scale",
         "method": "Actual commands executed in a VS Code integrated terminal; headed workbench captured with CDP Page.captureScreenshot by scripts/capture_adoption_screenshots.py",
         "capturedAt": "2026-08-05",
-        "crop": "2400x1500+240+150 uniformly resized to 1600x1000"
+        "crop": "full 2880x1800 frame uniformly resized to 1600x1000"
       }
     },
     {

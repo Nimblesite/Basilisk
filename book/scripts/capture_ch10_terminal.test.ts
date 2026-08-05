@@ -74,12 +74,13 @@ suite('Chapter 10 book capture', function () {
             await delay(800);
             await vscode.commands.executeCommand('workbench.action.toggleMaximizedPanel');
             terminal.sendText("export PROMPT='signal-box $ '; clear");
-            await delay(500);
+            await delay(1_200);
 
             terminal.sendText('basilisk --version');
-            await delay(500);
+            await delay(1_200);
             terminal.sendText('basilisk fix src/signal_box/legacy');
             await waitForText(decoder, 'raw: Any');
+            await delay(600);
             terminal.sendText('diff -u stages/decoder.before src/signal_box/legacy/decoder.py');
             await delay(1_200);
             await vscode.commands.executeCommand('notifications.clearAll');

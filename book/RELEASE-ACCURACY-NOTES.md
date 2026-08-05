@@ -10,7 +10,7 @@ was `71f16a1ba02d1e1f99c72d2253fc8fbd2a194a3ca93eac3baf899593900cfc68`,
 matching the published checksum. The extracted binary reported `basilisk
 0.39.0` and Ruff `0.15.17`.
 
-## Material deliberately excluded from Chapters 8 and 9
+## Material deliberately excluded from Chapters 8–10
 
 - The current branch's new bidirectional type-inference engine is not treated
   as released behavior.
@@ -28,6 +28,15 @@ matching the published checksum. The extracted binary reported `basilisk
   that VSIX's SHA-256 was
   `74ef14d9e4e87469eb59c2493cfad16545ee49333c321e8672317fc8c010502e`,
   matching the published checksum.
+- Chapter 10 does not describe a fix preview or dry run: v0.39.0 `fix` writes
+  immediately. It does not call the default tier universally runtime-safe,
+  treat an `Any` insertion as inferred domain knowledge, describe adoption as
+  file-specific, or claim that status calculates coverage.
+- The two Chapter 10 terminal figures were captured on 2026-08-05 by executing
+  the real commands in a headed isolated VS Code 1.131.0 integrated terminal
+  against the checksum-verified official v0.39.0 VSIX. Their untouched
+  2880×1800 masters and hashes are recorded in `figures.json`; the publication
+  copies are uniform full-frame resizes with no repainted or composited pixels.
 
 ## Specification and release gaps
 
@@ -67,10 +76,52 @@ specification, implementation, and tests agree.
    `SetRule` mutations; `SetTag` persists one `[tool.basilisk.rule-tags]` line,
    while selectors are read-side occurrence queries. Chapter 9 follows the
    released model and does not claim selector-based mutation.
+7. **Mass-autofix spec IDs block the structural audit.** Every behavioral
+   heading in `LSP-MASS-AUTOFIX-SPEC.md` at v0.39.0 uses a Pandoc-style
+   `{#AUTOFIX-...}` anchor rather than the bracketed requirement IDs required
+   by the `spec-check` skill. Its structural gate stopped before a full
+   spec-to-code coverage result could be claimed; Chapter 10 therefore uses a
+   manual exact-release audit plus executable evidence.
+8. **The default fix tier can produce an unresolved runtime name.** The
+   v0.39.0 BSK-0001, BSK-0002, and related fixers insert bare `Any` text but do
+   not add an import. Importing such output without an existing `Any` binding
+   raises `NameError` on the verified Python 3.12 and 3.13 runtimes. Under the
+   `strictness` tag, the Chapter 10 result also becomes two BSK-0014 errors.
+   The manuscript treats the tier label as a static rule allowlist, not a
+   per-edit safety proof.
+9. **Released website copy names the wrong return placeholder.** Several
+   v0.39.0 website pages say the missing-return fix inserts `-> None`; the
+   released implementation and binary insert `-> Any`. Chapter 10 and its real
+   capture use `Any`.
+10. **The configuration-editor fix boundary is inconsistent.** The v0.39.0
+    mass-autofix specification says the Configuration Editor has no fix
+    affordance of its own, while the released editor includes **Apply safe
+    fixes**. Chapter 10 teaches the independently verified CLI workflow and
+    makes no claim about that editor affordance.
+11. **Analyze-rule adoption never selects `disabled`.** The adoption flow in
+    the specification says analyze rules may be disabled. The v0.39.0 CLI and
+    LSP implementations write `warning` for every adopted error code. The
+    chapter describes only the observed warning representation.
+12. **Graduation is implemented only by the CLI recomputation.** The
+    specification says re-running adoption removes entries for rules that no
+    longer fire. The v0.39.0 CLI does this; the LSP `adoptFile` and
+    `adoptWorkspace` handlers add warning entries but do not remove stale ones.
+    Chapter 10 explicitly scopes graduation instructions to the CLI.
+13. **Warning entries have no adoption ownership.** `adopt --status` reports
+    every ordinary warning rule entry, including deliberate policy, and
+    `unadopt` deletes every such entry in the selected governing config. This
+    follows the no-marker representation but makes status and removal less
+    discriminating than their names suggest. The chapter warns readers to
+    inspect the configuration diff and maintain a strict fallback.
+14. **Released adoption summaries omit or overstate scope.** The editor's
+    adopted-rule count includes only below-error PEP rules, omitting adopted
+    Basilisk rules, while released copy says new violations still fail even
+    though a folder-level warning entry also grades new same-rule violations to
+    warning. Neither claim appears in Chapter 10.
 
 ## Existing chapter audit backlog
 
-- Chapters 2 and 3, and Chapters 10–12, remain outlines rather than finished
+- Chapters 2 and 3, and Chapters 11–12, remain outlines rather than finished
   chapters.
 - Chapters 0 and 1 still contain pre-0.39 command-scope and edition-evidence
   debt. In 0.39.0, `check` evaluates PEP typing rules and `analyze` evaluates

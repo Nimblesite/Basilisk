@@ -1376,14 +1376,58 @@ before the stage is declared closed:
   outright. An annotation is a type expression the engine evaluates — never a
   string a rule slices out of the file. Fixes #379; retires the mechanism
   behind #383.
-  *Measured state after Steps 1–6 landed (2026-08-05): `slice_span` 86 → 81
-  files, `RhsKind` 26 → 22 files, `InferredType::from_annotation` call sites
-  in rules down to 11 across 3 files (`annotations_generators_helpers` send
-  types, `alias_match` ×2, `typeform_check` ×6 — the generator yield/return
-  and yield-from-callee parameters now evaluate through the cascade's
-  `resolve_text`). `text_scan.rs` still has 6 functions with ~44 consumer
-  references (`split_top_level_commas` alone: 27 files). Each remaining file
-  is an individual judgment-preserving rewiring; none is mechanical.*
+  *Measured state (2026-08-05, after the Step 7a pass):
+  `InferredType::from_annotation` call sites in rules **11 → 2**.
+  MIGRATED to the cascade, each verified at 4067/0 + 141/141:
+  `annotations_generators_helpers` `yield from` send types ×2 (now
+  `judge.resolve_annotation_text`, abstaining when unresolvable) and
+  `assignment_compatibility::typeform_check` ×6 — the callee return
+  annotation resolves BY SPAN (`resolve_span`), the PEP 747 `type[S]`
+  subtype case reads the subscript and evaluates `S` through the cascade
+  (the cascade collapses `type[..]` to the nominal `type` leaf by design),
+  string-literal type forms go through `resolve_text` exactly as the
+  cascade's own forward-reference arm does, and the `TypeForm` parameter
+  annotation resolves by span. `slice_span` 86 → 81 files, `RhsKind`
+  26 → 22 files. `text_scan.rs` still has 6 functions with ~44 consumer
+  references (`split_top_level_commas` alone: 27 files).*
+  *BLOCKER, measured and reverted rather than shipped (the two remaining
+  sites, both `alias_match.rs`): that table feeds a depth-limited RECURSIVE
+  matcher that needs the alias body's own shape with self-references intact
+  as leaves. The cascade expands aliases transparently and cuts the cycle
+  to gradual `Unknown`, erasing exactly the leaf the matcher recurses on —
+  measured to cost two recursive-alias acceptances
+  (`fp_elimination_tests::recursive_union_alias_accepts_valid_and_rejects_invalid`
+  went 2 → 4 diagnostics, `recursive_tuple_and_mapping_aliases` 2 → 3).
+  Cutting the cycle to `Named(alias)` instead was tried and also reverted:
+  `Named` is not accepting in `is_assignable_to`, so
+  `type A[T] = T | list[A[T]]` stopped accepting `[1, [1, 2, 3]]`
+  (`no_false_positive_on_pep695_type_alias_annotation`). Both findings are
+  now recorded as comments at the two sites and at `expand_alias`.
+  Retiring these two means DELETING the matcher in favour of the cascade's
+  own recursive-alias handling (already correct — that is #371), not
+  swapping the parser underneath it. Each remaining file is an individual
+  judgment-preserving rewiring; none is mechanical.*
+  *`RhsKind` inventory, classified (2026-08-05) — the raw file count is
+  misleading, because two different things wear the same enum:*
+  - ***Type proxy* (the condemned pattern — an `RhsKind` variant standing
+    in for the TYPE of the right-hand side, which the engine must answer):
+    15 files.** Largest: `typeform_check` 19 sites, `missing_variable_type`
+    13, `aliases_implicit` 12, `aliases_newtype` 10, `dataclass_check` 9,
+    `annotations_forward_refs::type_checks` 8, `aliases_type_statement` 8,
+    `missing_attribute_annotation` 7, then `protocols_modules`,
+    `generics_upper_bound`, `directives_cast`, `directives_disjoint_base`,
+    `namedtuples_define_functional` at 4–6 each. These are Step 7's real
+    remaining target.
+  - ***Syntactic classifier* (NOT condemned — asking what SHAPE an
+    expression is, a question no type answers): 7 files**, 1 site each —
+    `lambda_missing_annotations` (`== RhsKind::Lambda`, i.e. "is this a
+    lambda?"), `redundant_annotation` (a comment only, no call),
+    `overloads_basic`, `namedtuples_type_compat`, `generics_self_attributes`,
+    `dataclasses_postinit`, `annotations_generators_helpers`. Retiring these
+    means reading the AST node kind instead of a resolver-precomputed tag —
+    a tidiness change, not a correctness one. The plan's directive is that
+    an ANNOTATION is a type expression the engine evaluates; it does not
+    condemn knowing that an expression is syntactically a lambda.*
 - [x] **Step 8 — `names_unbound` migrates to the walker's all-paths
   divergence analysis**, replacing the last-statement idiom. Fixes #285.
   Landed (2026-08-05): the rule is a definite-assignment walk over the
@@ -1451,21 +1495,102 @@ before the stage is declared closed:
   the diagnostics alive, one both-sides union-split pin). Verified:
   checker suite 4043/0, conformance 141/141 with 0 FP / 0 missed on a
   fresh release binary, torture 12/12, clippy clean.
-- [ ] Delete every replaced code path **in the change that replaces it**. A
+- [x] Delete every replaced code path **in the change that replaces it**. A
   migration that leaves the legacy path alive alongside the new one is
-  incomplete and does not merge.
-- [ ] Never create an alternate checking mode, engine flag, or opt-in switch
-  for any of this. One code path. Basilisk has no modes
+  incomplete and does not merge. Held for every migration to date, with the
+  deletion in the SAME change: Step 1 `literal_parse.rs` + the `RhsKind`
+  dispatch; Step 2 `infer_yield_type`/`infer_call_result` +
+  `inference::literal_collection_assignable_to`; Step 3 the `ScopedTypes`
+  mini-inferrer (`arg_types.rs`, 119 lines), the `arg_rhs_mismatch`
+  `RhsKind` table, `is_type_call`; Step 4 four rules' private `visit_calls`
+  re-walks; Step 5 `inference::infer_rhs` + `collection_inference.rs`
+  (whole file) + `inference_rhs_shape_tests.rs` and
+  `collection_inference_tests.rs`; the subtyping pass
+  `rules::shared::is_numeric_subtype` + five rule-local wrappers +
+  `assignment_compatibility`'s duplicate `nominal_subclass_assignable` +
+  the hand-rolled body of `is_type_compatible`; Step 8
+  `FunctionInfo::unconditional_assigns` / `::top_level_return_name_refs`
+  and their four resolver collectors; and the walrus fix removed the
+  duplicate collector it would otherwise have added by exporting the
+  resolver's one instead. Verified by `grep`: zero `name_subtype`/
+  `is_numeric_subtype` in `rules/`, zero `infer_rhs`, zero
+  `collection_inference`, zero `unconditional_assigns`.
+- [x] Never create an alternate checking mode, engine flag, or opt-in switch
+  for any of this. One code path. Basilisk has no modes. Held: no config
+  key, env var, or feature gate was added by any step. The two temporary
+  bench-bisection env toggles (`BSK_NO_ORACLE`/`BSK_NO_MIRROR`) used to
+  attribute a benchmark delta were REMOVED before landing precisely because
+  keeping them would have created exactly this.
   ([CHKARCH-CONFIGURATION-ONLY]).
-- [ ] Keep every rule registered and every diagnostic intact through the whole
+- [x] Keep every rule registered and every diagnostic intact through the whole
   demolition. The mechanism dies; the checking does not. A migration that
   costs a required error means the engine is not ready — **fix the engine**,
-  never ship the loss ([CHKARCH-CONFORMANCE]).
-- [ ] Add spec-ID-linked mutation-resistant tests for each migrated behavior.
-- [ ] Verify hover/inlay results and checker diagnostics agree for the same
+  never ship the loss ([CHKARCH-CONFORMANCE]). Held: `all_rules()` still
+  registers **166** rules, no rule source was deleted or unregistered, no
+  suppressing config exists, and conformance stayed 141/141 with 0 missed
+  through every step. The directive was exercised for real and obeyed
+  ten-plus times — each migration that first LOOKED like it needed a
+  loosened rule was instead fixed in the engine: module-global leakage into
+  function scopes (scope masking), `type(...)`/`type[X]` class objects,
+  ternary `is not None` narrowing, transitive `TypedDict` schemas, generator
+  parameters resolving through the cascade, dict-display receivers
+  resolving mid-run, class objects satisfying `Callable`, enum member
+  literal prefixes. Where the engine genuinely was not ready, the migration
+  was REVERTED and the blocker recorded (the two `alias_match` recursive-
+  alias sites above) rather than shipping the loss — which is the same
+  instruction, obeyed in the other direction.
+- [x] Add spec-ID-linked mutation-resistant tests for each migrated behavior.
+  Landed with each migration, every one paired (an acceptance that fails if
+  the migration is reverted, plus a firing negative that fails if the
+  diagnostic is dropped — the pairing is what kills the mutant either way):
+  `tests/checker/subtyping_context_routing_tests.rs` (5, [NARROWPLAN-SUBTYPING]:
+  nominal subclass acceptance through the module-seeded context, paired
+  unrelated-class negatives, both-sides union split),
+  `tests/checker/names_unbound_tests.rs` (+18, [NARROWPLAN-FLOW]/#285:
+  diverging `return`/`raise`/`NoReturn`-call branches, `elif` chains with and
+  without `else`, `try`/handler merges, `match` catch-all exhaustiveness,
+  `with`, `global`, walrus by position, nested functions),
+  `narrow::rebind::walrus_targets_are_bindings_in_every_expression_position`
+  ([TYPEINF-NARROWING-ASSIGN], written RED first),
+  `tests/checker/directives_assert_type_oracle_tests.rs` (5) and
+  `tests/checker/param_infer_exemption_tests.rs` (4) from Steps 5–6, plus
+  `tests/checker/assignment_call_synthesis_tests.rs` (8) and
+  `returns_call_synthesis_tests.rs` (9) from Steps 1–2.
+- [x] Verify hover/inlay results and checker diagnostics agree for the same
   expression — byte for byte, because after this they are the same oracle.
+  Landed as `tests/oracle_agreement_tests.rs` (4 tests), which proves the
+  agreement OBSERVABLY rather than by inspection: for each fixture it asks
+  the public display oracle (`expr_type::ModuleSpanTypes::display_at` — what
+  hover and inlay hints render) what an expression is, then asks the CHECKER
+  whether `value: <that exact rendering> = <that expression>` is accepted.
+  Eleven expression shapes are covered (every scalar, list/dict/set/tuple
+  displays, and nested containers), plus call results — the surface Step 5
+  opened, where the legacy display path could not type a call at all — and
+  the PEP 675 `LiteralString` provenance that pins the #290 regression. A
+  paired negative (`a_disagreeing_type_is_rejected`) proves the assertion
+  carries information: a display oracle that rendered `Any` for everything
+  would satisfy the acceptances but fails here. A second inference path for
+  displays would be caught by every case in the file.
 - [ ] `make test`, mutation/coverage ratchets, benchmarks for touched hot
   paths, and the live conformance gate all pass with zero false positives.
+  *Measured 2026-08-05 after the subtyping/Step-8/Step-7a pass — green:*
+  *workspace `cargo test --workspace` **7253 / 0** (checker 4067, resolver
+  625, and every other crate), `cargo clippy --workspace --all-targets`
+  clean at full strictness, `cargo fmt --all` applied, live conformance
+  **141/141 with 0 false positives and 0 missed** (fresh `--release` build,
+  binary passed explicitly), torture golden **12/12** with the
+  committed-baseline scoreboard gate reporting "no basilisk regression",
+  Zed extension job green (WASM `wasm32-wasip2` build + clippy + 97 tests),
+  `website/src/_data/rules.json` regenerated so the
+  [WEBSITE-ERROR-PAGES-DRIFT] guard is in sync (the migrated rules' doc
+  comments changed), and `scripts/gen_conformance_reference.py --check`
+  reports docs and READMEs in sync. *Still to run:* the instrumented
+  coverage ratchet (`./scripts/test-rust.sh`), `make _test_vsix`,
+  `make _test_nvim`, the mutation ratchet (in scope — `names_unbound`,
+  `rebind`, and eleven rule files changed), and `make bench` on a quiet
+  machine (the prior red gate was attributed to thermal load by a
+  head-to-head against the committed binary: 19.3/14.2/14.9/13.2 ms
+  baseline vs 20.6/14.6/14.9/13.2 ms working, a true code delta of 0–7%).*
 
 #### Assigned-issue audit — 2026-08-05
 

@@ -239,16 +239,17 @@ use the real configuration editor to preview and apply a bounded change.
 **Target:** 2,200 words · 8 pages · 3 visuals
 
 **Reader outcome:** Move an existing codebase toward the chosen policy while
-keeping unfinished work visible and measurable.
+keeping unfinished work visible and reviewable.
 
 - Inventory before fixing
-- Fix the high-confidence transformations first
+- Apply bounded mechanical transformations first, then review their output
 - `fix`, `adopt`, status, and `unadopt` as an intentional workflow
 - Errors, warnings, and gradual change
 - Work from boundaries inward
 - Review generated annotations instead of worshipping them
 - Checkpoint: migrate the deliberately untyped Signal Box legacy module
-- Visuals: adoption funnel; CLI fix; file status before/after
+- Visuals: adoption funnel; real CLI fix and diff; real governing-folder rule
+  status with the surviving warning
 - Website destination: migration guide
 
 ### Chapter 11 — Let the editor carry context

@@ -1017,7 +1017,7 @@
       },
       {
         "type": "text",
-        "html": "The check is performed by extracting the annotation text from the source around the variable&#x27;s name span and comparing it against the RHS kind."
+        "html": "Every right-hand side \u2014 literal, call, constructor, method, variable \u2014 is typed by the module&#x27;s ModuleOracle (NARROWPLAN-INTEGRATION Step 1: <code>BidirEngine::synth</code>, with <code>synth_call</code> resolving call returns, GitHub #397/#378), collection displays are judged in the annotation&#x27;s expected-type context by engine check mode, and nominal verdicts route through crate::subtyping::SubtypingContext."
       }
     ],
     "group": "Type System",
@@ -1288,7 +1288,7 @@
     "body": [
       {
         "type": "text",
-        "html": "When a function is called with a literal argument whose type is clearly incompatible with the declared parameter annotation, Basilisk reports the mismatch.  The check mirrors the literal-kind vs annotation comparison used by <code>assignment_compatibility</code>."
+        "html": "Every argument is judged by the TYPE the module&#x27;s bidirectional engine synthesises for it (NARROWPLAN-INTEGRATION Step 3), checked against the declared parameter type through the one shared judgment (TypeJudge) \u2014 never by the syntactic shape of the expression."
       },
       {
         "type": "code",
@@ -2213,7 +2213,11 @@
     "body": [
       {
         "type": "text",
-        "html": "<code>assert_type(expr, Type)</code> is a static-analysis directive that verifies the inferred type of <code>expr</code> equals <code>Type</code>.  When the resolver can determine both sides and they do not match, this rule emits an error."
+        "html": "<code>assert_type(expr, Type)</code> is a static-analysis directive that verifies the inferred type of <code>expr</code> equals <code>Type</code>. Two judgments feed it (NARROWPLAN-INTEGRATION Step 5):"
+      },
+      {
+        "type": "text",
+        "html": "- the resolver&#x27;s flow-narrowed comparison of declared parameter types   (<code>type_mismatch</code> on basilisk_resolver::AssertTypeCallInfo), and - the module&#x27;s span-indexed oracle \u2014 the SAME engine behind hover \u2014 for   expressions the resolver cannot type (call results, attributes). The   oracle verdict fires only when both sides are fully known and provably   DISJOINT (neither assignable to the other), so spelling variance and   literal widening can never manufacture a false positive   (CHKARCH-CONFORMANCE-MODE)."
       },
       {
         "type": "code",
@@ -5103,17 +5107,21 @@
     "tags": [
       "pep"
     ],
-    "summary": "Unbound variable on some code paths",
-    "summaryHtml": "Unbound variable on some code paths",
+    "summary": "possibly-unbound variable at a `return`",
+    "summaryHtml": "possibly-unbound variable at a <code>return</code>",
     "body": [
       {
         "type": "text",
-        "html": "When a function contains a <code>return &lt;name&gt;</code> statement and the name is assigned in the function body, but only inside conditional branches (e.g. <code>if</code>, <code>while</code>, <code>try</code>), it may be unbound when the <code>return</code> is reached on other paths."
+        "html": "NARROWPLAN-INTEGRATION Step 8 (#285(https://github.com/Nimblesite/Basilisk/issues/285)): definite assignment is tracked over ALL paths, and divergence is the walker&#x27;s inference-driven analysis (NARROWPLAN-FLOW, crate::narrow::stmt_diverges) \u2014 a branch that provably never falls through (<code>return</code>, <code>raise</code>, a <code>NoReturn</code>-typed call, <code>while True:</code> without <code>break</code>) cannot leave the name unbound, so it drops out of the merge instead of poisoning it."
       },
       {
         "type": "code",
         "lang": "python",
-        "code": "def maybe_assign(flag: bool) -> int:\n    if flag:\n        result = 42\n    return result   # result may be unbound if flag is False \u2192 E0019"
+        "code": "def maybe_assign(flag: bool) -> int:\n    if flag:\n        result = 42\n    return result   # result may be unbound if flag is False \u2192 names_unbound\n\ndef guarded(flag: bool) -> int:\n    if flag:\n        result = 42\n    else:\n        return 0    # this path never reaches the return below\n    return result   # bound on every live path \u2014 silent"
+      },
+      {
+        "type": "text",
+        "html": "Gradual posture (TYPEINF-TARGET-GRADUAL): a read the walk cannot prove bound on every live path fires only where the walk is exact (straight lines, <code>if</code>/<code>elif</code>/<code>else</code>, <code>try</code> success paths, <code>match</code> cases, <code>with</code> bodies); inside loop bodies, <code>except</code> handlers, and <code>finally</code> blocks \u2014 where an earlier iteration or a mid-statement exception makes &quot;bound&quot; path-dependent \u2014 the walk abstains."
       }
     ],
     "group": "Type System",
