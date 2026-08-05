@@ -83,7 +83,7 @@ impl Rule for AssignmentTypeMismatch {
             return;
         };
         let empty_params = ParamMaps::default();
-        let skip = SkipNames::collect(module);
+        let skip = SkipNames::collect(module, resolver);
         let call_index = callable_check::build_index(module);
         let oracle = types.oracle();
         let subtyping = types.subtyping();

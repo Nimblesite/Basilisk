@@ -17,6 +17,7 @@ pub use static_condition::{evaluate, parse_static_condition, BranchTruth, Static
 pub use visitor::walks::{
     is_name_or_attr_named, iter_all_params, visit_calls, walk_all_stmts, walk_function_stmts,
 };
+pub use visitor::walrus::{collect_walrus_targets, Reach};
 
 pub use scope::{
     class_by_name, collect_name_set, collect_name_set_where, collect_names, collect_names_where,

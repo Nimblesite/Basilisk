@@ -33,9 +33,8 @@
 
 use std::collections::HashSet;
 
-use basilisk_resolver::{ResolvedModule, Span};
-use ruff_python_ast::visitor::{walk_expr, walk_stmt, Visitor};
-use ruff_python_ast::{ElifElseClause, ExceptHandler, Expr, Pattern, Stmt};
+use basilisk_resolver::{collect_walrus_targets, Reach, ResolvedModule, Span};
+use ruff_python_ast::{ExceptHandler, Expr, Pattern, Stmt};
 use ruff_text_size::Ranged;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
@@ -195,7 +194,12 @@ impl<'a> UnboundScan<'a> {
         out: &mut Vec<Diagnostic>,
     ) -> bool {
         for stmt in stmts {
-            bind_definite_walruses(stmt, bound);
+            // PEP 572: a walrus in the statement's OWN expressions binds
+            // whenever control reaches it, exactly like a prior assignment.
+            bound.extend(collect_walrus_targets(
+                std::slice::from_ref(stmt),
+                Reach::Definite,
+            ));
             if self.walk_stmt(stmt, bound, synth, out) {
                 return true;
             }
@@ -570,70 +574,12 @@ fn collect_escaped(stmts: &[Stmt], out: &mut HashSet<String>) {
     }
 }
 
-/// Bind walrus targets a statement's own (unconditionally evaluated)
-/// expressions introduce — PEP 572: `if (x := f()):` binds `x` whenever the
-/// statement is reached, exactly like an assignment before it.
-fn bind_definite_walruses(stmt: &Stmt, bound: &mut HashSet<String>) {
-    let mut collector = DefiniteWalrus { out: Vec::new() };
-    collector.visit_stmt(stmt);
-    bound.extend(collector.out);
-}
-
-/// Visitor for [`bind_definite_walruses`]: never descends into nested
-/// bodies, `elif` tests, or short-circuiting operands that may not run.
-struct DefiniteWalrus {
-    out: Vec<String>,
-}
-
-impl Visitor<'_> for DefiniteWalrus {
-    fn visit_stmt(&mut self, stmt: &Stmt) {
-        if matches!(stmt, Stmt::FunctionDef(_) | Stmt::ClassDef(_)) {
-            return;
-        }
-        walk_stmt(self, stmt);
-    }
-
-    fn visit_body(&mut self, _body: &[Stmt]) {}
-
-    fn visit_elif_else_clause(&mut self, _clause: &ElifElseClause) {}
-
-    fn visit_expr(&mut self, expr: &Expr) {
-        match expr {
-            Expr::Named(node) => {
-                if let Expr::Name(name) = node.target.as_ref() {
-                    self.out.push(name.id.to_string());
-                }
-                self.visit_expr(&node.value);
-            }
-            // Short-circuiting forms: only the always-evaluated operand.
-            Expr::BoolOp(node) => {
-                if let Some(first) = node.values.first() {
-                    self.visit_expr(first);
-                }
-            }
-            Expr::If(node) => self.visit_expr(&node.test),
-            Expr::ListComp(node) => self.visit_first_iter(&node.generators),
-            Expr::SetComp(node) => self.visit_first_iter(&node.generators),
-            Expr::DictComp(node) => self.visit_first_iter(&node.generators),
-            Expr::Generator(node) => self.visit_first_iter(&node.generators),
-            Expr::Lambda(_) => {}
-            _ => walk_expr(self, expr),
-        }
-    }
-}
-
-impl DefiniteWalrus {
-    fn visit_first_iter(&mut self, generators: &[ruff_python_ast::Comprehension]) {
-        if let Some(generator) = generators.first() {
-            self.visit_expr(&generator.iter);
-        }
-    }
-}
-
 fn make_diagnostic(func_name: &str, name: &str, span: Span, path: &str) -> Diagnostic {
     error_diagnostic_owned(
         CODE.clone(),
-        format!("Function `{func_name}` returns `{name}` but `{name}` may be unbound on some paths"),
+        format!(
+            "Function `{func_name}` returns `{name}` but `{name}` may be unbound on some paths"
+        ),
         span,
         path,
         Some(format!(

@@ -8,7 +8,7 @@ use crate::scope::VariableInfo;
 
 use super::class_info_ext::{alias_name, expr_simple_name};
 use super::core::{classify_rhs, text_range_to_span};
-use super::walrus::collect_walrus_targets;
+use super::walrus::{collect_walrus_targets, Reach};
 
 /// Names a plain `import` statement binds into the enclosing scope.
 /// `import a.b.c` binds the top-level package `a`; `import a.b as d` binds `d`.
@@ -87,7 +87,7 @@ fn extract_pattern_names(pattern: &ruff_python_ast::Pattern) -> Vec<String> {
 
 /// Collect all names assigned anywhere in the function body (not in nested functions).
 pub(super) fn collect_all_assigns(stmts: &[Stmt]) -> Vec<String> {
-    let mut out = collect_walrus_targets(stmts);
+    let mut out = collect_walrus_targets(stmts, Reach::Any);
     out.extend(collect_statement_assigns(stmts));
     out
 }
@@ -176,7 +176,6 @@ fn collect_statement_assigns(stmts: &[Stmt]) -> Vec<String> {
     }
     out
 }
-
 
 // ---------------------------------------------------------------------------
 // Return name ref collection

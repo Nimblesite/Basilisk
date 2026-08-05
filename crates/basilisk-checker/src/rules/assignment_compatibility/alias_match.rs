@@ -65,7 +65,10 @@ pub(super) struct AliasCtx<'a> {
 /// `Name = a | b | …`, or `Name = dict[tuple[str, str], str]`. Container-bodied
 /// definitions that reference a module `TypeVar` are deliberately excluded —
 /// [`collect_generic_aliases`] handles those with `TypeVar` substitution.
-pub(super) fn collect_value_aliases(module: &ResolvedModule) -> HashMap<String, InferredType> {
+pub(super) fn collect_value_aliases(
+    module: &ResolvedModule,
+    resolver: &crate::annotation::AnnotationResolver<'_>,
+) -> HashMap<String, InferredType> {
     let typevars: HashSet<String> = module
         .typevar_calls
         .iter()
@@ -79,7 +82,12 @@ pub(super) fn collect_value_aliases(module: &ResolvedModule) -> HashMap<String, 
         let Some(text) = alias_rhs_text(var, module) else {
             continue;
         };
-        let def = InferredType::from_annotation(text.trim());
+        // The alias body is a type expression the cascade evaluates —
+        // never a string this rule case-folds ([NARROWPLAN-INTEGRATION]
+        // Step 7, [#379](https://github.com/Nimblesite/Basilisk/issues/379)).
+        let Some(def) = resolver.resolve_text(text.trim()) else {
+            continue;
+        };
         let include = match def {
             InferredType::Union(_) => true,
             InferredType::Dict(..)

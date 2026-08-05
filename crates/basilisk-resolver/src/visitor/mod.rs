@@ -32,7 +32,7 @@ mod typeddict_schema;
 mod typevar;
 mod unhashable;
 pub(crate) mod walks;
-mod walrus;
+pub(crate) mod walrus;
 mod yield_exprs;
 
 use basilisk_parser::ParsedModule;

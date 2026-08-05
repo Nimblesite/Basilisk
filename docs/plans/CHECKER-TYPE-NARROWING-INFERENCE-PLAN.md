@@ -1384,8 +1384,43 @@ before the stage is declared closed:
   `resolve_text`). `text_scan.rs` still has 6 functions with ~44 consumer
   references (`split_top_level_commas` alone: 27 files). Each remaining file
   is an individual judgment-preserving rewiring; none is mechanical.*
-- [ ] **Step 8 — `names_unbound` migrates to the walker's all-paths
+- [x] **Step 8 — `names_unbound` migrates to the walker's all-paths
   divergence analysis**, replacing the last-statement idiom. Fixes #285.
+  Landed (2026-08-05): the rule is a definite-assignment walk over the
+  parsed body — path-sensitive bound-sets, branch merges that INTERSECT
+  only the LIVE branches, and divergence answered by the walker's
+  inference-driven `narrow::stmt_diverges` (`return`/`raise`
+  definitional, `NoReturn`-typed call statements via the shared
+  `ModuleOracle`, `while True:` without `break`) — so a diverging branch
+  drops out of the merge instead of poisoning it, and
+  `if flag: result = 42 / else: return 0 / return result` is silent while
+  the same shape with a non-diverging `else` still fires. Coverage the
+  old idiom never had: `elif` chains (with and without a final `else`),
+  `try`/`except` per-path merges, `match` cases with catch-all
+  exhaustiveness, `with` bodies, `global`/`nonlocal` escapes, `del`
+  un-binding, nested functions analysed on their own flow, and PEP 572
+  walrus binds distinguished by position. The replaced resolver path is
+  DELETED in the same change: `FunctionInfo::unconditional_assigns` and
+  `::top_level_return_name_refs` fields, `collect_unconditional_assigns`,
+  `collect_if_else_assignments`, `collect_try_assignments`, and
+  `collect_top_level_return_name_refs`.
+  *Latent bug found and fixed by the migration (test-first):
+  `narrow::rebind::bound_names` documented itself as collecting every
+  binding form and warned that "missing one would leave a stale narrow",
+  but it only matched binding STATEMENTS — every PEP 572 walrus target was
+  invisible, so [TYPEINF-NARROWING-ASSIGN] could keep a narrow on a name a
+  walrus had already rebound. A RED unit test
+  (`walrus_targets_are_bindings_in_every_expression_position`, failing with
+  `{"d", "inner"}`) pinned it before the fix. The repair is DRY, not a
+  second visitor: the resolver's `visitor/walrus.rs` collector is now
+  exported once (`collect_walrus_targets(stmts, Reach)`), and the resolver
+  scope analysis, `bound_names`, and the new definite-assignment walk all
+  call THAT — one collector, no disagreement about what a walrus binds.*
+  Verified: checker 4067/0 (18 new `names_unbound` tests, each divergence
+  positive paired with a firing negative), resolver 625/0, workspace
+  3182/0, conformance 141/141 with 0 FP / 0 missed on a fresh release
+  binary, torture 12/12 with the committed-baseline gate green, clippy
+  clean at full strictness.
 - [x] Route all 22 direct `name_subtype`/`is_numeric_subtype` call sites (12
   files) through `subtyping::SubtypingContext` and delete the shims — runs
   alongside steps 3–7. One subtyping implementation. Not two, not

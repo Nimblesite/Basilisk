@@ -27,7 +27,7 @@ pub mod set_ops;
 
 pub use env::NarrowEnv;
 pub use flow::{analyse_function, analyse_function_in, FlowResult, NarrowedUse};
+pub use guards::{guard_outcomes, guard_outcomes_in, GuardOutcome, NarrowContext, TypedDictKeys};
 pub(crate) use reachability::{stmt_diverges, SynthFn};
 pub(crate) use rebind::{bound_names, target_names};
-pub use guards::{guard_outcomes, guard_outcomes_in, GuardOutcome, NarrowContext, TypedDictKeys};
 pub use set_ops::{intersect, subtract};
