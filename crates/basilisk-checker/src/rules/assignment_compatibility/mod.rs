@@ -32,7 +32,7 @@ use basilisk_resolver::{ResolvedModule, RhsKind, Span, VariableInfo};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::Rule;
+use super::{guards::is_enum_class, Rule};
 
 use dataclass_check::check_dataclass_attr_assignments;
 use literal_parse::infer_with_literal_value;
@@ -66,6 +66,7 @@ impl Rule for AssignmentTypeMismatch {
             value_aliases: alias_match::collect_value_aliases(module),
             generic_aliases: alias_match::collect_generic_aliases(module),
             typeddict_schemas: typeddict_struct::build_typeddict_schemas(module),
+            enum_members: collect_enum_members(module),
         };
         let call_index = callable_check::build_index(module);
         check_vars(
@@ -152,6 +153,75 @@ fn collect_typeddict_names(module: &ResolvedModule) -> std::collections::HashSet
     names
 }
 
+/// Collect each enum class's member names (both lowercased). Members are
+/// class-body assignments with a value; `nonmember(...)` attributes and
+/// sunder/dunder/private names are not members, and annotation-only
+/// declarations (`x: int`) never are.
+fn collect_enum_members(
+    module: &ResolvedModule,
+) -> std::collections::HashMap<String, std::collections::BTreeSet<String>> {
+    module
+        .classes
+        .iter()
+        .filter(|class| is_enum_class(class))
+        .map(|class| {
+            let members = class
+                .attributes
+                .iter()
+                .filter(|attr| {
+                    attr.has_value && !attr.rhs_is_nonmember_call && !attr.name.starts_with('_')
+                })
+                .map(|attr| attr.name.to_ascii_lowercase())
+                .collect();
+            (class.name.to_ascii_lowercase(), members)
+        })
+        .collect()
+}
+
+/// The member names a `Literal[...]` annotation spells for `enum_name`
+/// (`answer.yes` → `yes`), or `None` when any item is not a dotted member of
+/// that enum.
+fn literal_union_member_names<'decl>(
+    declared: &'decl InferredType,
+    enum_name: &str,
+) -> Option<std::collections::BTreeSet<&'decl str>> {
+    let items = match declared {
+        InferredType::Union(items) => items.as_slice(),
+        single => std::slice::from_ref(single),
+    };
+    items
+        .iter()
+        .map(|item| {
+            let InferredType::Named(item_name) = item else {
+                return None;
+            };
+            item_name
+                .strip_prefix(enum_name)
+                .and_then(|rest| rest.strip_prefix('.'))
+        })
+        .collect()
+}
+
+/// Implements the enums-expansion equivalence (typing spec, enums chapter):
+/// a complete union of all literal members is equivalent to the enum type, so
+/// an enum-typed value is assignable to `Literal[E.A, E.B]` when the union
+/// names EVERY member of `E`. Incomplete unions still mismatch.
+fn enum_complete_union_assignable(
+    inferred: &InferredType,
+    declared: &InferredType,
+    enums: &std::collections::HashMap<String, std::collections::BTreeSet<String>>,
+) -> bool {
+    let InferredType::Named(enum_name) = inferred else {
+        return false;
+    };
+    let Some(members) = enums.get(enum_name) else {
+        return false;
+    };
+    literal_union_member_names(declared, enum_name).is_some_and(|named| {
+        !members.is_empty() && members.iter().map(String::as_str).eq(named.iter().copied())
+    })
+}
+
 /// Collect names of PEP 695 type aliases defined in this module (lowercased).
 ///
 /// E0014 cannot evaluate expanded type alias types, so annotations that
@@ -186,6 +256,10 @@ struct SkipNames {
     /// used for PEP 705 structural assignability of `TypedDict`-to-`TypedDict`
     /// assignments instead of name equality.
     typeddict_schemas: typeddict_struct::TdSchemas,
+    /// Enum member names per enum class (both lowercase), for the
+    /// enums-expansion equivalence: a complete union of all literal members is
+    /// equivalent to the enum type (typing spec, enums chapter).
+    enum_members: std::collections::HashMap<String, std::collections::BTreeSet<String>>,
 }
 
 /// Collection literals are checked in the annotation's expected-type context.
@@ -421,6 +495,11 @@ fn check_vars(
 
             if inferred_type.is_assignable_to(&declared_type)
                 || literal_collection_assignable(var, &inferred_type, &declared_type, skip)
+                || enum_complete_union_assignable(
+                    &inferred_type,
+                    &declared_type,
+                    &skip.enum_members,
+                )
             {
                 None
             } else if callable_rescue(var, source, annotation_text, params, call_index) {

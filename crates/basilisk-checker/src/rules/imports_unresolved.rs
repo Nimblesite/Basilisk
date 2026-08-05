@@ -141,6 +141,7 @@ mod tests {
     fn make_import(module: &str, reason: Option<UnresolvedReason>) -> ImportInfo {
         ImportInfo {
             module: module.to_owned(),
+            relative_level: 0,
             names: vec![],
             span: Span::new(0, 15),
             name_spans: Vec::new(),

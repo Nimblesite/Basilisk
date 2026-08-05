@@ -117,6 +117,7 @@ pub fn module_with_plain_imports(modules: &[&str]) -> basilisk_resolver::Resolve
             .iter()
             .map(|module| basilisk_resolver::ImportInfo {
                 module: (*module).to_owned(),
+                relative_level: 0,
                 names: vec![],
                 span: basilisk_resolver::Span::new(0, 0),
                 name_spans: Vec::new(),

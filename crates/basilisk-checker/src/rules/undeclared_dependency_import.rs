@@ -95,6 +95,7 @@ mod tests {
     ) -> ImportInfo {
         ImportInfo {
             module: module.to_owned(),
+            relative_level: 0,
             names: vec![],
             span: Span::new(0, span_end),
             name_spans: Vec::new(),

@@ -359,6 +359,8 @@ pub(super) fn import_infos_from(node: &StmtImport) -> Vec<ImportInfo> {
         .iter()
         .map(|alias| ImportInfo {
             module: alias.name.to_string(),
+            // Plain `import X` is always absolute; Python has no relative form.
+            relative_level: 0,
             // `import X as Y` binds `Y`, not the module name — capture the alias so
             // scope-resolution rules (e.g. names_undefined) see the real binding. Plain
             // `import X` / `import X.Y` keeps `names` empty; its bound name is the
@@ -410,6 +412,7 @@ pub(super) fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
     if is_star {
         return vec![ImportInfo {
             module,
+            relative_level: node.level,
             names: Vec::new(),
             span: text_range_to_span(node.range),
             name_spans: module_span.into_iter().collect(),
@@ -431,6 +434,7 @@ pub(super) fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
         .collect();
     vec![ImportInfo {
         module,
+        relative_level: node.level,
         names,
         span: text_range_to_span(node.range),
         name_spans,

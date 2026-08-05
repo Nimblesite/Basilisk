@@ -372,15 +372,26 @@ pub fn resolve_relative_import(
     module_name: &str,
     _search_paths: &ImportSearchPaths,
 ) -> Option<ResolvedImport> {
-    let fs = FsCache::new();
+    resolve_relative_import_cached(importing_file, level, module_name, &FsCache::new())
+}
+
+/// [`resolve_relative_import`] with a caller-supplied [`FsCache`]; the
+/// per-module import loop in [`super::resolve_module_imports`] uses this so
+/// every import of a file shares one set of directory listings.
+pub(crate) fn resolve_relative_import_cached(
+    importing_file: &Path,
+    level: u32,
+    module_name: &str,
+    fs: &FsCache,
+) -> Option<ResolvedImport> {
     let mut base = importing_file.parent()?.to_path_buf();
     for _ in 1..level {
         base = base.parent()?.to_path_buf();
     }
     if module_name.is_empty() {
-        return try_resolve_init(&base, &fs);
+        return try_resolve_init(&base, fs);
     }
-    try_resolve_in_dir(module_name, &base, &fs)
+    try_resolve_in_dir(module_name, &base, fs)
 }
 
 /// Try resolving a dotted module name within a single directory.

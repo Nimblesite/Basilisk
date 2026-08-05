@@ -36,6 +36,7 @@ fn make_import(
 ) -> ImportInfo {
     ImportInfo {
         module: module.to_owned(),
+        relative_level: 0,
         names: vec![],
         span: Span::new(0, span_end),
         name_spans: Vec::new(),
@@ -230,6 +231,7 @@ fn skips_site_packages_package_with_py_typed_marker() -> Result<(), Box<dyn std:
 
     let import = ImportInfo {
         module: "httpx_fake".to_owned(),
+        relative_level: 0,
         names: vec![],
         span: Span::new(0, 16),
         name_spans: Vec::new(),
@@ -283,6 +285,7 @@ fn skips_nested_submodule_when_root_package_has_py_typed() -> Result<(), Box<dyn
 
     let import = ImportInfo {
         module: "sqlalchemy_fake.orm".to_owned(),
+        relative_level: 0,
         names: vec!["Session".to_owned()],
         span: Span::new(0, 32),
         name_spans: Vec::new(),
@@ -338,6 +341,7 @@ fn skips_flat_file_submodule_when_root_package_has_py_typed(
 
     let import = ImportInfo {
         module: "pydantic_ai_fake.direct".to_owned(),
+        relative_level: 0,
         names: vec!["model_request".to_owned()],
         span: Span::new(0, 40),
         name_spans: Vec::new(),
@@ -390,6 +394,7 @@ fn skips_deeper_nested_submodule_when_root_package_has_py_typed(
 
     let import = ImportInfo {
         module: "deeppkg_fake.sub.deep".to_owned(),
+        relative_level: 0,
         names: vec!["helper".to_owned()],
         span: Span::new(0, 40),
         name_spans: Vec::new(),
@@ -441,6 +446,7 @@ fn skips_httpx_underscore_flat_submodule_when_root_has_py_typed(
 
     let import = ImportInfo {
         module: "httpx_fake._client".to_owned(),
+        relative_level: 0,
         names: vec!["Client".to_owned()],
         span: Span::new(0, 34),
         name_spans: Vec::new(),

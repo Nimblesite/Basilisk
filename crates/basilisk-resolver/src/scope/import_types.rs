@@ -71,7 +71,12 @@ pub enum UnresolvedReason {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImportInfo {
     /// The dotted module name being imported (e.g. `"os.path"`, `"requests"`).
+    /// Empty for a bare relative import (`from . import x`).
     pub module: String,
+    /// Number of leading dots on a `from`-import (`from ..sub import x` → 2);
+    /// `0` for absolute imports. A nonzero level resolves `module` relative to
+    /// the importing file's package instead of the search paths (GitHub #369).
+    pub relative_level: u32,
     /// Locally-bound names introduced by the import.
     /// `from X import A, B` → `["A", "B"]` (alias-aware: `import C as D` → `["D"]`).
     /// Plain `import X` / `import X.Y` is empty — the bound name is the top-level

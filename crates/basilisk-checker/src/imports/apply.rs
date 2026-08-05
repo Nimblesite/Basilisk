@@ -7,7 +7,9 @@ use basilisk_resolver::scope::{ImportKind, ImportedModuleApi, PackageDepKind};
 
 use super::builtins::populate_builtin_classes;
 use super::fs_cache::FsCache;
-use super::resolve::{classify_unresolved, resolve_module_with_importer_cached};
+use super::resolve::{
+    classify_unresolved, resolve_module_with_importer_cached, resolve_relative_import_cached,
+};
 use super::ImportSearchPaths;
 
 /// Resolve every import in a single module against the search paths, in place.
@@ -36,21 +38,32 @@ pub fn resolve_module_imports(
     let mut captured: Vec<(String, ImportedModuleApi)> = Vec::new();
 
     for import in &mut resolved.imports {
-        let result = match import.kind {
-            ImportKind::Plain | ImportKind::From | ImportKind::Star => {
-                resolve_module_with_importer_cached(
-                    &import.module,
-                    search_paths,
-                    Some(&importing_file),
-                    &fs,
-                )
-            }
+        // A `from`-import with leading dots resolves against the importing
+        // file's package, never the search paths (GitHub #369). The absolute
+        // path's importer-directory fallback only ever reached single-dot
+        // siblings by accident; parent packages need the level walk.
+        let result = if import.relative_level > 0 {
+            resolve_relative_import_cached(
+                &importing_file,
+                import.relative_level,
+                &import.module,
+                &fs,
+            )
+        } else {
+            resolve_module_with_importer_cached(
+                &import.module,
+                search_paths,
+                Some(&importing_file),
+                &fs,
+            )
         };
         if let Some(r) = result {
             import.resolution = r.resolution;
             import.resolved_path = Some(r.path);
-        } else {
+        } else if import.relative_level == 0 {
             // Classify why the import is unresolved for actionable diagnostics.
+            // Relative imports are exempt: they name a workspace-local package,
+            // so the registry's "not installed" classification would mislead.
             import.unresolved_reason = Some(classify_unresolved(&import.module, search_paths));
         }
 
@@ -69,11 +82,15 @@ pub fn resolve_module_imports(
             captured.push((binding, api));
         }
 
-        import.stub_distribution =
-            stub_distribution(&import.module, search_paths, Some(importing_file.as_path()));
+        // A relative import names a workspace-local module; it can never be a
+        // typeshed distribution or a uv-managed package.
+        if import.relative_level == 0 {
+            import.stub_distribution =
+                stub_distribution(&import.module, search_paths, Some(importing_file.as_path()));
 
-        // Annotate with package metadata from the uv registry.
-        enrich_package_metadata(import, search_paths);
+            // Annotate with package metadata from the uv registry.
+            enrich_package_metadata(import, search_paths);
+        }
     }
 
     for (binding, api) in captured {

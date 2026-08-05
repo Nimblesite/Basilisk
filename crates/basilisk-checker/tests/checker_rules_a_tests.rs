@@ -18,6 +18,8 @@
 mod annotations_typeexpr;
 #[path = "checker/assignment_compatibility_tests.rs"]
 mod assignment_compatibility;
+#[path = "checker/assignment_compatibility_2_tests.rs"]
+mod assignment_compatibility_2;
 #[path = "checker/callables_annotation_tests.rs"]
 mod callables_annotation;
 #[path = "checker/calls_argument_type_tests.rs"]
