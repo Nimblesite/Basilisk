@@ -20,6 +20,10 @@ local GITHUB_REPO = "Nimblesite/Basilisk"
 --- GitHub API URL for latest release.
 local RELEASES_API = "https://api.github.com/repos/" .. GITHUB_REPO .. "/releases/latest"
 
+--- GitHub API URL for the full release list (newest first), used to skip past a
+--- newest-release that shipped no binaries. See [NVIM-BINARY-UPGRADE-ASSETS].
+local RELEASES_LIST_API = "https://api.github.com/repos/" .. GITHUB_REPO .. "/releases"
+
 --- Repo URL, the source of truth for every from-source install hint. Exported
 --- so update.lua composes its advice from the same string instead of
 --- hand-repeating the URL.
@@ -145,28 +149,83 @@ function M.fetch_latest_release()
   return data
 end
 
+--- Every release, newest first (synchronous, via curl).
+---@return table[]? releases
+function M.fetch_releases()
+  local ok, result = pcall(vim.fn.system, {
+    "curl", "-sSL",
+    "-H", "Accept: application/vnd.github+json",
+    RELEASES_LIST_API,
+  })
+  if not ok or vim.v.shell_error ~= 0 then
+    return nil
+  end
+  local decode_ok, data = pcall(vim.json.decode, result)
+  if not decode_ok or type(data) ~= "table" or type(data[1]) ~= "table" then
+    return nil
+  end
+  return data
+end
+
+--- The newest release that actually publishes `asset_name`.
+---
+--- Implements [NVIM-BINARY-UPGRADE-ASSETS]. The newest release is NOT always
+--- installable: a release is created from its tag the moment the tag is pushed,
+--- but its binaries are uploaded by a later job in the release workflow, so any
+--- gate that fails in between leaves a published release carrying ZERO assets.
+--- Resolving `releases/latest` and stopping there then hands the user a silent
+--- dead end — no binary, no error, nothing to act on (the #370 failure mode).
+--- Skipping to the newest release that DOES carry this platform's asset gives
+--- them a working checker instead, which is strictly better than nothing.
+---@param asset_name string
+---@return table? release, string? download_url
+function M.find_release_with_asset(asset_name)
+  local function match(release)
+    for _, asset in ipairs(release and release.assets or {}) do
+      if asset.name == asset_name then
+        return asset.browser_download_url
+      end
+    end
+    return nil
+  end
+
+  local latest = M.fetch_latest_release()
+  local url = match(latest)
+  if url then
+    return latest, url
+  end
+
+  for _, release in ipairs(M.fetch_releases() or {}) do
+    if not release.draft then
+      url = match(release)
+      if url then
+        log.warn(
+          "latest release %s publishes no %s — falling back to %s",
+          latest and latest.tag_name or "?",
+          asset_name,
+          release.tag_name
+        )
+        return release, url
+      end
+    end
+  end
+  return nil, nil
+end
+
 --- Download the basilisk binary from the latest GitHub release.
 --- Returns the path to the downloaded binary, or nil on failure.
 ---@return string? path, string? version
 function M.download()
-  local release = M.fetch_latest_release()
-  if not release then
-    return nil, nil
-  end
-
   local asset_name, is_windows = M.platform_asset_name()
   if not asset_name then
     return nil, nil
   end
 
-  local download_url
-  for _, asset in ipairs(release.assets or {}) do
-    if asset.name == asset_name then
-      download_url = asset.browser_download_url
-      break
-    end
-  end
-  if not download_url then
+  -- Not `fetch_latest_release()`: the newest release can carry zero assets when
+  -- its publish job never ran, and stopping there is a silent dead end.
+  -- [NVIM-BINARY-UPGRADE-ASSETS]
+  local release, download_url = M.find_release_with_asset(asset_name)
+  if not release or not download_url then
     return nil, nil
   end
 
