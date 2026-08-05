@@ -13,14 +13,8 @@ use super::core::{classify_rhs, text_range_to_span};
 
 pub(super) fn annotation_flags(expr: &Expr) -> (bool, bool, bool) {
     match expr {
-        Expr::Name(name) => {
-            let s = name.id.as_str();
-            (s == "Any", s == "None", false)
-        }
-        Expr::Attribute(attr) => {
-            let s = attr.attr.as_str();
-            (s == "Any", s == "None", false)
-        }
+        Expr::Name(name) => (false, name.id.as_str() == "None", false),
+        Expr::Attribute(attr) => (false, attr.attr.as_str() == "None", false),
         Expr::NoneLiteral(_) => (false, true, false),
         Expr::NumberLiteral(_) | Expr::BooleanLiteral(_) => (false, false, true),
         _ => (false, false, false),
@@ -46,29 +40,6 @@ pub(super) fn ann_assign_info_from(node: &StmtAnnAssign) -> Option<VariableInfo>
     })
 }
 
-pub(super) fn annotation_is_kw_only(ann: &Expr) -> bool {
-    matches!(ann, Expr::Name(n) if n.id.as_str() == "KW_ONLY")
-}
-
-/// Returns `true` when the annotation expression is `InitVar[T]`.
-///
-/// Matches both `InitVar[T]` and `dataclasses.InitVar[T]`.
-pub(super) fn annotation_is_init_var(ann: &Expr) -> bool {
-    match ann {
-        Expr::Subscript(sub) => {
-            // Check if the base is "InitVar" or "dataclasses.InitVar"
-            match sub.value.as_ref() {
-                Expr::Name(n) => n.id.as_str() == "InitVar",
-                Expr::Attribute(attr) => attr.attr.as_str() == "InitVar",
-                _ => false,
-            }
-        }
-        _ => false,
-    }
-}
-
-/// For a field value expression, returns `Some(true)` when it is `field(kw_only=True, ...)`,
-/// `Some(false)` when it is `field(kw_only=False, ...)`, and `None` otherwise.
 pub(super) fn count_unbounded_in_tuple_slice(slice: &Expr) -> usize {
     let elements: &[Expr] = match slice {
         Expr::Tuple(t) => &t.elts,

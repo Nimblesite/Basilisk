@@ -244,11 +244,6 @@ pub(super) fn collect_module_attr_assignments(
     out
 }
 
-// ---------------------------------------------------------------------------
-// Final violation collection stub
-// ---------------------------------------------------------------------------
-
-/// Returns `true` when the annotation text refers to `Final`.
 pub(super) fn collect_unconditional_self_assigns(
     stmts: &[Stmt],
 ) -> std::collections::HashSet<String> {

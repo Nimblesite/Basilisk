@@ -2,90 +2,15 @@
 //! Typeddict visitor functions.
 
 use ruff_python_ast::{Expr, Stmt, StmtAssign};
-use ruff_text_size::Ranged;
 
-use crate::scope::{
-    ClassInfo, TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind,
-    TypedDictSecondArgKind,
-};
+use crate::scope::{ClassInfo, TypedDictKeyViolation, TypedDictKeyViolationKind};
 
-use super::annotations::strip_annotated_wrapper;
 use super::class_info_ext::expr_simple_name;
 use super::core::{check_td_stmts, text_range_to_span};
 use super::typeddict_ext::{expr_literal_type_name, typeddict_field_type_compatible};
 
-pub(super) fn collect_typeddict_calls(stmts: &[Stmt]) -> Vec<TypedDictCallInfo> {
-    let mut out = Vec::new();
-    for stmt in stmts {
-        let Stmt::Assign(node) = stmt else { continue };
-        let Expr::Call(call) = node.value.as_ref() else {
-            continue;
-        };
-        // Callee must be `TypedDict` or `typing.TypedDict`.
-        let is_typeddict = if let Some(name) = expr_simple_name(&call.func) {
-            name == "TypedDict"
-        } else if let Expr::Attribute(attr) = call.func.as_ref() {
-            attr.attr.as_str() == "TypedDict"
-        } else {
-            false
-        };
-        if !is_typeddict {
-            continue;
-        }
-        // Determine the LHS name.
-        let Some(lhs_name) = node.targets.first().and_then(expr_simple_name) else {
-            continue;
-        };
-        // First positional arg: the declared name (must be a string literal).
-        let declared_name = call.arguments.args.first().and_then(|arg| {
-            if let Expr::StringLiteral(s) = arg {
-                Some(s.value.to_string())
-            } else {
-                None
-            }
-        });
-        // Second positional arg: expected to be a dict literal.
-        let has_positional_dict;
-        let (second_arg_kind, has_non_string_key) =
-            if let Some(second_arg) = call.arguments.args.get(1) {
-                has_positional_dict = true;
-                if let Expr::Dict(dict) = second_arg {
-                    // Check if every key is a string literal.
-                    let non_string = dict.items.iter().any(|item| {
-                        item.key
-                            .as_ref()
-                            .is_some_and(|k| !matches!(k, Expr::StringLiteral(_)))
-                    });
-                    (TypedDictSecondArgKind::DictLiteral, non_string)
-                } else {
-                    (TypedDictSecondArgKind::NotDictLiteral, false)
-                }
-            } else {
-                // No second arg — keyword syntax or zero args; treat as dict literal
-                // variant since we don't flag keyword-only syntax here.
-                has_positional_dict = false;
-                (TypedDictSecondArgKind::DictLiteral, false)
-            };
-        let keyword_names: Vec<String> = call
-            .arguments
-            .keywords
-            .iter()
-            .filter_map(|kw| kw.arg.as_ref().map(std::string::ToString::to_string))
-            .collect();
-        out.push(TypedDictCallInfo {
-            lhs_name,
-            declared_name,
-            second_arg_kind,
-            has_non_string_key,
-            has_positional_dict,
-            keyword_names,
-            span: text_range_to_span(call.range()),
-        });
-    }
-    out
-}
-
-/// Extracts the name from a PEP 695 `TypeParam` (`TypeVar`, `TypeVarTuple`, or `ParamSpec`).
+/// Resolve the statically-known type of an expression: a parameter's normalized
+/// annotation, or the builtin type of a literal.
 pub(super) fn resolve_actual_type(
     expr: &Expr,
     params: &std::collections::HashMap<String, String>,

@@ -5,7 +5,7 @@
 //! docstring content can never be mistaken for real declarations.
 
 use ruff_python_ast::{
-    Decorator, Expr, ExprSubscript, Stmt, StmtClassDef, StmtFunctionDef, StmtTypeAlias, TypeParam,
+    Decorator, Expr, Stmt, StmtClassDef, StmtFunctionDef, StmtTypeAlias, TypeParam,
 };
 use ruff_text_size::Ranged;
 
@@ -223,11 +223,9 @@ fn enclosing_params(ctx: &Ctx<'_>) -> Vec<String> {
 // ---------------------------------------------------------------------------
 
 /// Collect names that appear at the *same level* as a type-alias RHS: a bare
-/// `Name`, a member of an `X | Y` union, an argument of a transparent
-/// `Union[..]`/`Optional[..]`/`Annotated[..]` form, or a parsed string
-/// forward reference. Real constructor subscripts (`list[X]`) are NOT
-/// descended into — a reference through a container terminates and so is
-/// not a bare reference.
+/// `Name`, a member of an `X | Y` union, or a parsed string forward
+/// reference. Subscripts (`list[X]`) are NOT descended into — a reference
+/// through a container terminates and so is not a bare reference.
 fn collect_bare_refs(expr: &Expr, out: &mut Vec<String>) {
     match expr {
         Expr::Name(name) => out.push(name.id.to_string()),
@@ -241,33 +239,7 @@ fn collect_bare_refs(expr: &Expr, out: &mut Vec<String>) {
                 collect_bare_refs(&inner, out);
             }
         }
-        Expr::Subscript(sub) => {
-            for arg in transparent_subscript_args(sub) {
-                collect_bare_refs(arg, out);
-            }
-        }
         _ => {}
-    }
-}
-
-/// The same-level type arguments of a transparent special-form subscript —
-/// all of `Union[..]`'s, `Optional[..]`'s, `Annotated[..]`'s first (its
-/// remaining arguments are metadata, not types) — or empty for any other
-/// base, which is a real constructor and guards recursion. Both bare and
-/// `typing.`-qualified spellings count.
-fn transparent_subscript_args(sub: &ExprSubscript) -> Vec<&Expr> {
-    let head = match sub.value.as_ref() {
-        Expr::Name(name) => name.id.as_str(),
-        Expr::Attribute(attr) if expr_simple_name(&attr.value).as_deref() == Some("typing") => {
-            attr.attr.as_str()
-        }
-        _ => return Vec::new(),
-    };
-    let args = basilisk_parser::subscript_elements(sub);
-    match head {
-        "Union" | "Optional" => args,
-        "Annotated" => args.into_iter().take(1).collect(),
-        _ => Vec::new(),
     }
 }
 

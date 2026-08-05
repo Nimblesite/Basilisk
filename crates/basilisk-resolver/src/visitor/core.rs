@@ -392,67 +392,11 @@ pub(super) fn types_match(actual: &str, expected: &str) -> bool {
         return true;
     }
 
-    // Handle bare generic == specialized with All-Any params.
-    // e.g. `list` == `list[Any]`, `type` == `type[Any]`, `dict` == `dict[Any, Any]`
-    if !actual.contains('[') && !actual.contains('|') {
-        if let Some(rest) = expected.strip_prefix(actual) {
-            if let Some(inner) = rest.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-                let all_any = inner
-                    .split(',')
-                    .all(|p| matches!(p.trim(), "Any" | "..." | "*tuple[Any, ...]"));
-                if all_any {
-                    return true;
-                }
-            }
-        }
-    }
-
     // Equivalent-spelling fallback: `Union[a, b]` == `a | b`, and fixed unpacked
     // tuples flatten (`tuple[int, *tuple[bool, bool], str]` == `tuple[int, bool, bool, str]`).
     // Order is preserved, so genuinely different types (e.g. `int` vs `int | str`)
     // stay distinct. See [directives_assert_type_2].
     canonicalize_type_str(actual) == canonicalize_type_str(expected)
-}
-
-/// Recursively check if an expression contains `ReadOnly`.
-/// Whether a disallowed `TypedDict` mutator call should be flagged. Every method in
-/// the disallowed set is always rejected except `update`, which is an error only when
-/// the target declares a `ReadOnly` item whose key the argument `TypedDict` declares
-/// with a non-`Never` value type. A `Never`-typed source key cannot supply a value,
-/// so that update is sound (PEP 705). `typeddicts_operations`
-fn disallowed_mutator_flagged(
-    method: &str,
-    call: &ruff_python_ast::ExprCall,
-    target_field_types: &std::collections::HashMap<&str, String>,
-    var_type: &std::collections::HashMap<String, String>,
-    fields: &TdFieldMap<'_>,
-) -> bool {
-    if method != "update" {
-        return true;
-    }
-    // Resolve the update argument to a known `TypedDict` variable, if it is one.
-    let arg_entry = call
-        .arguments
-        .args
-        .first()
-        .and_then(expr_simple_name)
-        .and_then(|name| var_type.get(&name))
-        .and_then(|cls| fields.get(cls.as_str()));
-    let Some((_, arg_field_types, _, _)) = arg_entry else {
-        // A dict literal or otherwise-unresolved argument cannot prove read-only
-        // soundness, so the strict `TypedDict` mutation ban still applies.
-        return true;
-    };
-    // The argument is a known `TypedDict`: the update is sound unless the target has
-    // a `ReadOnly` key for which the argument supplies an actual (non-`Never`) value.
-    target_field_types
-        .iter()
-        .filter(|(_, ann)| ann.to_ascii_lowercase().contains("readonly"))
-        .any(|(key, _)| {
-            arg_field_types
-                .get(*key)
-                .is_some_and(|ann| crate::scope::strip_typeddict_qualifiers(ann).trim() != "Never")
-        })
 }
 
 pub(super) fn check_td_stmts(

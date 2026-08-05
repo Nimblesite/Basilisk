@@ -4,14 +4,12 @@
 use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
 use ruff_text_size::Ranged;
 
-use crate::scope::{FloatParamIntAttrAccess, FunctionInfo, Span};
+use crate::scope::{FloatParamIntAttrAccess, FunctionInfo};
 
 use super::class_info_ext::expr_simple_name;
 use super::core::{source_slice_range, source_slice_span, text_range_to_span};
 use super::enum_checks::INT_ONLY_FLOAT_ATTRS;
-use super::protocol_ext::{
-    base_type_name, unqualified_base, ASYNC_GENERATOR_TYPES, SYNC_GENERATOR_TYPES,
-};
+use super::protocol_ext::{base_type_name, unqualified_base};
 
 pub(crate) fn collect_float_param_int_attr_accesses(
     stmts: &[Stmt],
@@ -75,16 +73,6 @@ pub(super) fn collect_float_accesses_in_function(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Literal string vs enum member mismatch collection
-// ---------------------------------------------------------------------------
-
-/// Collect annotated assignments inside function bodies where the declared type is
-/// `Literal["X.Y"]` (a quoted string that looks like an enum member) but the RHS is
-/// a parameter typed as `Literal[X.Y]` (the actual unquoted enum member).
-///
-/// This detects the mismatch between `Literal["Color.RED"]` (string) and
-/// `Literal[Color.RED]` (enum member) when the RHS is the enum-literal-typed parameter.
 pub(super) fn collect_module_attr_accesses(
     stmts: &[Stmt],
 ) -> Vec<crate::scope::ModuleAttrAccessInfo> {
@@ -135,49 +123,6 @@ pub(super) fn collect_attr_accesses_from_expr(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Annotated() direct-call detection
-// ---------------------------------------------------------------------------
-
-/// Collect spans of module-level calls where `Annotated` itself is called as a
-/// function — either bare `Annotated(...)` or parameterized `Annotated[T, ...]()`.
-///
-/// Used by `qualifiers_annotated` to detect invalid direct invocation of `Annotated`.
-pub(super) fn collect_annotated_direct_calls(stmts: &[Stmt]) -> Vec<Span> {
-    let mut out = Vec::new();
-    for stmt in stmts {
-        if let Stmt::Expr(node) = stmt {
-            collect_annotated_calls_from_expr(&node.value, &mut out);
-        }
-    }
-    out
-}
-
-pub(super) fn collect_annotated_calls_from_expr(expr: &Expr, out: &mut Vec<Span>) {
-    let Expr::Call(call) = expr else { return };
-    let is_annotated_callee = match call.func.as_ref() {
-        // `Annotated(...)` — bare name call
-        Expr::Name(n) => n.id.as_str() == "Annotated",
-        // `Annotated[T, ...]()` — subscript then call
-        Expr::Subscript(s) => {
-            matches!(s.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Annotated")
-        }
-        _ => false,
-    };
-    if is_annotated_callee {
-        out.push(text_range_to_span(expr.range()));
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Unhashable dataclass `.__hash__()` call detection
-// ---------------------------------------------------------------------------
-
-/// Collect module-level `ClassName(args).__hash__()` calls where `ClassName` is a
-/// non-hashable dataclass (has `eq=True`, is not frozen, not `unsafe_hash`, and
-/// does not define `__hash__` explicitly).
-///
-/// Used by `dataclasses_hash`.
 pub(super) fn collect_module_order_comparisons(
     stmts: &[Stmt],
 ) -> Vec<crate::scope::ModuleOrderComparisonInfo> {
@@ -225,15 +170,6 @@ pub(super) fn collect_order_comparisons_from_expr(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Protocol Self-return conformance violation detection
-// ---------------------------------------------------------------------------
-
-/// Collect protocol `Self`-return conformance violations from function bodies.
-///
-/// When a function has a parameter typed as a `Protocol` with a `Self`-returning
-/// method, and that function is called with an argument whose class's corresponding
-/// method does not return `Self` or the class itself, this is a protocol violation.
 pub(super) fn collect_generator_violations(
     functions: &[FunctionInfo],
     source: &str,
@@ -250,17 +186,6 @@ pub(super) fn collect_generator_violations(
             continue;
         };
         let base = unqualified_base(base_type_name(ann_text));
-
-        let valid_types = if func.is_async {
-            ASYNC_GENERATOR_TYPES
-        } else {
-            SYNC_GENERATOR_TYPES
-        };
-
-        // Skip if the return type is a known generator-compatible type.
-        if valid_types.iter().any(|t| base.eq_ignore_ascii_case(t)) {
-            continue;
-        }
 
         // Skip user-defined types (may be Protocols with __next__/__anext__).
         // Only flag types that are clearly non-generator built-in types.

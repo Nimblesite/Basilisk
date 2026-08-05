@@ -1,8 +1,6 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! AST visitor that collects function definitions and module-level information.
 
-const ENUM_BASES: &[&str] = &["Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"];
-
 mod annotated_tuple_index;
 mod annotations;
 mod assert_narrow;
@@ -222,13 +220,7 @@ fn build_resolved_module(
                 counts
             },
         ),
-        // `calls` is complete over every expression position (#381), so the
-        // `cast(...)` view #335 needed is a filter of it, not a second walk.
-        cast_calls: calls
-            .iter()
-            .filter(|site| site.callee == "cast")
-            .cloned()
-            .collect(),
+        cast_calls: Vec::new(),
         calls,
         typevar_calls,
         reveal_type_calls: results.reveal_type_calls,
@@ -242,7 +234,7 @@ fn build_resolved_module(
         module_attr_accesses: module_level::collect_module_attr_accesses(stmts),
         module_order_comparisons: module_level::collect_module_order_comparisons(stmts),
         readonly_violations: results.readonly_issues,
-        annotated_direct_call_spans: module_level::collect_annotated_direct_calls(stmts),
+        annotated_direct_call_spans: Vec::new(),
         imported_final_names: final_readonly::collect_imported_final_names(stmts, &module.path),
         imported_final_methods: final_readonly::collect_imported_final_methods(stmts, &module.path),
         type_alias_type_calls: type_alias::collect_type_alias_type_calls(stmts),

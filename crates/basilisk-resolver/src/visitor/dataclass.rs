@@ -3,19 +3,14 @@
 
 use ruff_python_ast::{Expr, Stmt, StmtClassDef};
 
-use crate::scope::{AttributeInfo, ClassInfo, FunctionInfo};
+use crate::scope::{AttributeInfo, ClassInfo};
 
 use super::annotations::annotation_is_kw_only;
 use super::class_info_ext::{
-    decorator_name, expr_simple_name, parse_dataclass_transform_decorator, DcTransformFactory,
-    FieldSpecOverload,
+    expr_simple_name, parse_dataclass_transform_decorator, DcTransformFactory, FieldSpecOverload,
 };
 
-pub(super) fn apply_dataclass_transform(
-    stmts: &[Stmt],
-    classes: &mut [ClassInfo],
-    functions: &[FunctionInfo],
-) {
+pub(super) fn apply_dataclass_transform(stmts: &[Stmt], classes: &mut [ClassInfo]) {
     let factories = collect_dc_transform_factories(stmts);
 
     if factories.is_empty() {
@@ -28,7 +23,7 @@ pub(super) fn apply_dataclass_transform(
             if specifier_overloads.contains_key(spec_name.as_str()) {
                 continue;
             }
-            let overloads = build_field_specifier_overloads(stmts, spec_name, functions);
+            let overloads = build_field_specifier_overloads(stmts, spec_name);
             let _ = specifier_overloads.insert(spec_name.as_str(), overloads);
         }
     }
@@ -95,32 +90,14 @@ pub(super) fn collect_dc_transform_factories(stmts: &[Stmt]) -> Vec<DcTransformF
 pub(super) fn build_field_specifier_overloads(
     stmts: &[Stmt],
     spec_name: &str,
-    functions: &[FunctionInfo],
 ) -> Vec<FieldSpecOverload> {
     let mut overloads = Vec::new();
-
-    let has_overloads = functions.iter().any(|f| {
-        f.name == spec_name
-            && f.class_name.is_none()
-            && f.decorators
-                .iter()
-                .any(|d| d.rsplit('.').next() == Some("overload"))
-    });
 
     for stmt in stmts {
         let Stmt::FunctionDef(func) = stmt else {
             continue;
         };
         if func.name.as_str() != spec_name {
-            continue;
-        }
-
-        let is_overload = func
-            .decorator_list
-            .iter()
-            .any(|d| matches!(decorator_name(d), Some(n) if n == "overload"));
-
-        if has_overloads && !is_overload {
             continue;
         }
 
