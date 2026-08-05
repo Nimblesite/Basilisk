@@ -13,9 +13,8 @@
 <p align="center"><strong>English</strong> · <a href="{{altLangHref}}">简体中文</a></p>
 
 <p align="center">
-  <strong>The only Python type checker scoring 100% on the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> conformance suite</a> — and the fastest we&rsquo;ve measured.</strong><br>
+  <strong>Open-source Python type checking and developer tooling in Rust.</strong><br>
   Complete open-source Python dev environment in <strong>Rust</strong>: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed &amp; Neovim extensions. Strict by default.
-  Weighing up the <a href="https://www.basilisk-python.dev/docs/comparison/">best Python type checker</a> for your codebase? Start with the scoreboard.
 </p>
 
 <!--v:github-->
@@ -39,35 +38,18 @@
 </p>
 
 <p align="center">
-  <a href="https://www.basilisk-python.dev/docs/conformance/"><strong><!--g:score-->100.0%<!--/g:score--> PEP conformance</strong></a> &mdash; <!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> tests in the official
-  <a href="https://github.com/python/typing/tree/a4906624f170c169cf667f962080c56d5a5ba6ff/conformance"><code>python/typing</code></a>
-  conformance suite (commit <code><!--g:short-->a490662<!--/g:short--></code>), scored on the wheel-installed CLI in its default config by the real upstream harness.
-  We target <code>python/typing@main</code> and ratchet the score up only.
+  <strong>Current conformance: temporarily unknown.</strong> The former result and all published benchmark figures have been withdrawn pending a clean reimplementation and audit.
 </p>
 
-## The only 100% checker &mdash; and the fastest according to our benchmarks
+## Conformance and benchmark results withdrawn
 
-Basilisk is the **only** Python type checker with a perfect score on the official
-[`python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html):
-**<!--g:score-->100.0%<!--/g:score-->** (<!--g:pass-->141<!--/g:pass-->/<!--g:total-->141<!--/g:total--> files, <!--g:caught-->970<!--/g:caught--> required errors caught, <!--g:fp-->0<!--/g:fp--> false positives),
-measured by the real upstream harness on the wheel-installed CLI in its default config.
+> **Integrity notice:** We have retracted Basilisk&rsquo;s former 100% conformance claim. The result was not trustworthy: parts of the checker had been fitted to the exact text of upstream tests, and the score was not stable under semantics-preserving mutations such as consistent renames. At our request, Basilisk has been removed from the official [`python/typing` results table](https://github.com/python/typing/blob/main/conformance/results/results.html). Its actual conformance level is temporarily unknown.
+>
+> We have also withdrawn every published benchmark figure and performance ranking while we audit the measurement pipeline. We are deleting the fitted checker code and reimplementing the affected logic from the Python typing specification. Before we publish a replacement score or seek relisting, mutation tests &mdash; including semantics-preserving renames &mdash; must show that the result is robust. We will publish new conformance and benchmark results as soon as they are trustworthy, even if they are lower or slower than the figures withdrawn here. [Read the conformance audit and recovery plan &rarr;](https://www.basilisk-python.dev/docs/conformance/)
 
 <p align="center">
   <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
 </p>
-
-And it is the **fastest checker we&rsquo;ve measured** &mdash; median cold full-file check, from scratch:
-
-| Type checker | Median cold check |
-| --- | --- |
-| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
-| zuban | <!--g:benchZuban-->28<!--/g:benchZuban--> ms |
-| ty | <!--g:benchTy-->39<!--/g:benchTy--> ms |
-| Pyrefly | <!--g:benchPyrefly-->111<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->582<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->605<!--/g:benchMypy--> ms |
-
-Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> single-construct typing-spec stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better. Basilisk&rsquo;s warm re-check drops to ~<!--g:benchWarm-->5<!--/g:benchWarm--> ms. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 
 ## Everything in one extension
 

@@ -21,7 +21,7 @@ build-backend = "maturin"
 
 [project]
 name = "basilisk-python"
-description = "Basilisk — the only Python type checker scoring 100% on the official python/typing conformance suite (https://github.com/python/typing/blob/main/conformance/results/results.html) — and the fastest according to our benchmarks. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default."
+description = "Basilisk — an open-source Python type checker and language server in Rust, with debugging, profiling, and editor integrations for VS Code, Cursor, Zed, and Neovim."
 readme = "README-pypi.md"
 requires-python = ">=3.8"
 license = "Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND CDDL-1.0 AND CDLA-Permissive-2.0 AND ISC AND MIT AND MPL-2.0 AND Unicode-3.0 AND Unicode-DFS-2016 AND Zlib"

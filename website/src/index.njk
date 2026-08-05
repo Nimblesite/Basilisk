@@ -1,21 +1,12 @@
 ---
 layout: layouts/base.njk
 title: "Basilisk — Fast Python Type Checker & Language Server"
-description: "Basilisk is an open-source Python type checker and language server in Rust: 100% on the official Python typing conformance suite, fastest in our benchmark."
+description: "Basilisk is an open-source Python type checker and language server in Rust. Its conformance and benchmark results are withdrawn during an integrity review."
 keywords: "python type checker, python typing, python type checking, python language server, python type checker comparison, python type checker rust, typing conformance, type checker benchmark"
-imageAlt: "Basilisk Python type checker and language server, with published conformance results and cold-check benchmarks"
-dateModified: 2026-08-03
+imageAlt: "Basilisk Python type checker and language server"
+dateModified: 2026-08-06
 permalink: /
 ---
-
-{% set hasCompleteBenchmark = benchmarks.hasData
-  and benchmarks.toolMedians.ms.basilisk
-  and benchmarks.toolMedians.ms.pyright
-  and benchmarks.toolMedians.ms.mypy
-  and benchmarks.toolMedians.ms.ty
-  and benchmarks.toolMedians.ms.pyrefly
-  and benchmarks.toolMedians.ms.zuban %}
-{% set basiliskIsFastest = hasCompleteBenchmark and benchmarks.toolMedians.fastest == 'basilisk' %}
 
 <section class="hero">
   <div class="container">
@@ -24,20 +15,14 @@ permalink: /
         <span class="hero__kicker">Python type checker &middot; language server</span>
 
         <h1 class="hero__headline">
-          {% if conformanceOfficial.basiliskIsSolePerfect %}The only Python type checker that scores {{ conformanceOfficial.basilisk.pct }}% on the official Python typing suite.{% elif conformance.hasData %}A Python type checker that scores {{ conformance.scorePct }}% on the official Python typing suite.{% else %}A Python type checker built for speed and conformance.{% endif %}
-          {% if basiliskIsFastest %}<span class="hero__headline-accent">And the fastest we&rsquo;ve benchmarked.</span>{% endif %}
+          An open-source Python type checker and language server, built in Rust.
         </h1>
 
         <p class="hero__subheadline">
-          Basilisk is an open-source Python type checker and language server built in Rust.
-          {% if conformance.hasData and conformance.pass == conformance.total %}
-          {% if conformanceOfficial.basiliskIsSolePerfect %}It is the only checker that passes{% else %}It passes{% endif %}
-          <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">every file of the official <code>python/typing</code> conformance suite</a>,
-          with {{ conformance.caught }} required errors caught and {{ conformance.fp }} false positives.
-          {% elif conformance.hasData %}It scores
-          <a href="/docs/conformance/">{{ conformance.scorePct }}% on the official <code>python/typing</code> conformance suite</a>.{% endif %}
-          {% if basiliskIsFastest %}It also records the
-          <a href="/docs/benchmarks/">lowest median cold full-file CLI time of any checker in our published benchmark</a>.{% endif %}
+          We have withdrawn our former conformance claim and published benchmark figures.
+          Basilisk was removed from the official <code>python/typing</code> results at our request,
+          and its current conformance percentage is temporarily unknown while we replace
+          test-specific implementations and verify the new work with robustness and mutation testing.
         </p>
 
         <div class="hero__cta-group">
@@ -67,40 +52,30 @@ permalink: /
       </div>
     </div>
 
-    {% if conformance.hasData or benchmarks.hasData %}
-    <div class="hero__proof" aria-label="Published type-checker results">
-      {% if conformance.hasData %}
+    <div class="hero__proof" aria-label="Measurement integrity review">
       <div class="stat-card">
-        <span class="stat-card__num">{{ conformance.scorePct }}<span class="stat-card__unit">%</span></span>
-        <span class="stat-card__label">
-          {% if conformanceOfficial.basiliskIsSolePerfect %}Only listed checker with a perfect official score{% else %}Official typing conformance score{% endif %}
-        </span>
+        <span class="stat-card__num">Unknown</span>
+        <span class="stat-card__label">Current typing conformance</span>
         <span class="stat-card__sub">
-          {{ conformance.pass }} of {{ conformance.total }} files pass the suite&rsquo;s unmodified harness,
-          with {{ conformance.missed }} missed required errors and {{ conformance.fp }} false positives.
-          <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">Official results, {{ conformanceOfficial.snapshot.dateLabel }}</a>.
+          The former result is retracted. At our request, Basilisk has been
+          <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">removed from the official results table</a>.
+          We will publish a new result when the clean implementation is independently robust to test-preserving mutations.
         </span>
       </div>
-      {% endif %}
-      {% if benchmarks.hasData and benchmarks.toolMedians.ms.basilisk %}
       <div class="stat-card">
-        <span class="stat-card__num">{{ benchmarks.toolMedians.ms.basilisk }}<span class="stat-card__unit">&nbsp;ms</span></span>
-        <span class="stat-card__label">
-          {% if basiliskIsFastest %}Fastest in our published cold-check benchmark{% else %}Published cold-check benchmark{% endif %}
-        </span>
+        <span class="stat-card__num">Withdrawn</span>
+        <span class="stat-card__label">Published benchmark figures</span>
         <span class="stat-card__sub">
-          Basilisk&rsquo;s median across {{ benchmarks.rows | length }} synthetic, single-file fixtures on {{ benchmarks.meta.machine }}.
-          Fresh-process CLI timing; not project throughput or editor latency.
+          The benchmark numbers are also under integrity review and should not be used to compare tools.
+          The historical table remains available for transparency while the methodology and results are revalidated.
         </span>
       </div>
-      {% endif %}
     </div>
     <p class="hero__proof-cta">
-      Conformance uses the official Python typing harness; performance is self-measured and reproducible.
-      <a href="/docs/conformance/">Verify the conformance score &rarr;</a>
-      <a href="/docs/benchmarks/">Read the benchmark methodology &rarr;</a>
+      Both sets of figures are withdrawn pending a clean reimplementation and integrity review.
+      <a href="/docs/conformance/">Read the conformance correction &rarr;</a>
+      <a href="/docs/benchmarks/">Read the benchmark notice &rarr;</a>
     </p>
-    {% endif %}
   </div>
 </section>
 

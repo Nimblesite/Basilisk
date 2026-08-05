@@ -1,6 +1,6 @@
 [package]
 name        = "basilisk-cli"
-description = "Basilisk CLI — the only Python type checker scoring 100% on the official python/typing conformance suite (https://github.com/python/typing/blob/main/conformance/results/results.html) — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default."
+description = "Basilisk CLI — an open-source Python type checker and language server written in Rust."
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true

@@ -1,7 +1,7 @@
 {
   "name": "basilisk",
   "displayName": "Basilisk",
-  "description": "The only Python type checker scoring 100% on the official python/typing conformance suite — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default.",
+  "description": "Open-source Python development environment in Rust: type checker, language server, debugger, profiler, and editor tooling for VS Code, Cursor, and Windsurf.",
   "version": "0.0.0-PLACEHOLDER",
   "publisher": "Nimblesite",
   "license": "SEE LICENSE IN LICENSE.txt",

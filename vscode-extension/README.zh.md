@@ -10,7 +10,7 @@
 <p align="center"><a href="https://github.com/Nimblesite/Basilisk/blob/main/vscode-extension/README.md">English</a> · <strong>简体中文</strong></p>
 
 <p align="center">
-  <strong>唯一在官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> 一致性测试套件</a>上取得 100% 的 Python 类型检查器 —— 也是我们测得最快的。</strong><br>
+  <strong>使用 Rust 构建的开源 Python 类型检查与开发工具。</strong><br>
   用 <strong>Rust</strong> 打造的完整开源 Python 开发环境：类型检查器、语言服务器、调试器、性能分析器，以及 VS Code、Cursor、Zed 与 Neovim 扩展。默认严格。
 </p>
 
@@ -27,37 +27,18 @@
 </p>
 
 <p align="center">
-  <a href="https://www.basilisk-python.dev/zh/docs/conformance/"><strong>PEP 一致性 <!--g:score-->100.0%<!--/g:score--></strong></a> &mdash; 官方
-  <a href="https://github.com/python/typing/tree/a4906624f170c169cf667f962080c56d5a5ba6ff/conformance"><code>python/typing</code></a>
-  一致性套件（提交 <code><!--g:short-->a490662<!--/g:short--></code>）<!--g:total-->141<!--/g:total--> 项测试中通过 <!--g:pass-->141<!--/g:pass--> 项，
-  由真实的上游评分器在默认配置下对 wheel 安装的 CLI 评出。
-  我们以 <code>python/typing@main</code> 为目标，且分数只升不降。
+  <strong>当前一致性水平：暂时未知。</strong> 此前的一致性结果及所有已公布的基准测试数据均已撤回，待从头重做相关实现并完成审计。
 </p>
 
-## 唯一 100% 的检查器 &mdash; 按我们的基准测试也是最快的
+## 已撤回一致性与基准测试结果
 
-Basilisk 是**唯一**在官方
-[`python/typing` 一致性套件](https://github.com/python/typing/blob/main/conformance/results/results.html)
-上取得满分的 Python 类型检查器：**<!--g:score-->100.0%<!--/g:score-->**
-（<!--g:pass-->141<!--/g:pass-->/<!--g:total-->141<!--/g:total--> 个文件，捕获 <!--g:caught-->970<!--/g:caught--> 处必需错误，<!--g:fp-->0<!--/g:fp--> 个误报），
-由真实的上游评分器在默认配置下对 wheel 安装的 CLI 测得。
+> **诚信说明：** 我们已撤回 Basilisk 此前“100% 一致性”的说法。该结果并不可信：检查器的部分规则针对上游测试文件的具体文本进行了拟合；面对不改变程序语义的变异（例如一致地重命名类型变量），分数无法保持稳定。应我们的要求，Basilisk 已从官方 [`python/typing` 结果表](https://github.com/python/typing/blob/main/conformance/results/results.html)中移除。目前真实的一致性水平暂时未知。
+>
+> 在完成测量流程审计之前，我们也撤回所有已公布的基准测试数据与性能排名。我们正在删除这些针对测试拟合的代码，并依据 Python 类型规范从头重写受影响的逻辑。在公布新分数或申请重新收录之前，包括语义保持重命名在内的变异测试必须证明结果足够稳健。一旦得出可信结论，我们就会公布新的一致性与基准测试结果，即使结果低于或慢于此次撤回的数据也会如实发布。[查看一致性审计与修复计划 &rarr;](https://www.basilisk-python.dev/zh/docs/conformance/)
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/images/screenshot.png" alt="Basilisk 实战 —— 编辑器中的类型检查、诊断与重构" width="900">
 </p>
-
-它也是**我们测得最快的检查器** &mdash; 从零开始的整文件冷检查中位数：
-
-| 类型检查器 | 冷检查中位数 |
-| --- | --- |
-| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
-| zuban | <!--g:benchZuban-->28<!--/g:benchZuban--> ms |
-| ty | <!--g:benchTy-->39<!--/g:benchTy--> ms |
-| Pyrefly | <!--g:benchPyrefly-->111<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->582<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->605<!--/g:benchMypy--> ms |
-
-在 <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> 上对 <!--g:benchCount-->26<!--/g:benchCount--> 个单一构造的类型规范压力用例测得的整文件冷检查中位数 &mdash; 越低越好。Basilisk 的热重检查可降至约 <!--g:benchWarm-->5<!--/g:benchWarm--> ms。每个数字都由 [`hyperfine`](https://github.com/sharkdp/hyperfine) 产生并按机器提交，没有一个是手写的。**克隆仓库，在你自己的硬件上运行 `make bench`，并把 CSV 发给我们 &mdash; 欢迎独立复核。** [完整基准与方法论 &rarr;](https://www.basilisk-python.dev/zh/docs/benchmarks/)
 
 ## 一个扩展，覆盖全部
 

@@ -3,19 +3,21 @@
 
 Code here must comfortably pass review at a top-tier engineering org. Fix shortcomings as you find them.
 
-# Conformance Is the Prime Directive
+⚠️ USING STRING MATCHING OR REGEX TO FIND SPECIFIC TEXT IS ABSOLUTELY ILLEGAL. YOU MUST USE THE AST IN ALL CASES. IF YOU FIND ANY CASES OF STRING PATTERN MATCHING ON CODE, YOU MUST DELETE IT IMMEDIATELY ⚠️
 
-Target: **100% conformance** with the [Python typing spec](https://typing.python.org/en/latest/spec/index.html), measured ONLY by the [python/typing conformance suite](https://github.com/python/typing/tree/main/conformance/tests) — nothing else. This outranks every other concern in this file. Read the [conformance README](https://github.com/python/typing/blob/main/conformance/README.md) carefully. Python-version boundaries apply only where the typing spec, an accepted PEP, or Python language semantics defines one; Basilisk has no canonical Python release.
+# Conformance Integrity Is the Prime Directive
+
+Target: implement the [Python typing specification](https://typing.python.org/en/latest/spec/index.html) correctly. The official [`python/typing` suite](https://github.com/python/typing/tree/main/conformance/tests) is one required measurement, but a raw suite score is not proof of conformance: predicates fitted to the fixture text previously made the suite report 100% while AST-preserving mutations collapsed the result. That claim has been retracted, Basilisk has been removed from the official results table, and the current conformance percentage is **unknown** while the offending implementation is removed and rebuilt from the specification. Read the [conformance README](https://github.com/python/typing/blob/main/conformance/README.md) carefully. Python-version boundaries apply only where the typing spec, an accepted PEP, or Python language semantics defines one; Basilisk has no canonical Python release.
 
 ⚠️ **Never touch the scoreboard — move the number by FIXING the checker.** FORBIDDEN: disabling/deleting/unregistering any rule, deleting rule source (`crates/basilisk-checker/src/rules/*.rs`), removing rules from `all_rules()`, rule-suppressing config (the legacy `basilisk.json` is no longer read), hand-editing `conformance/conformance_status.csv`, loosening `coverage-thresholds.json` (`threshold` / `max_false_positives`). See [CHKARCH-CONFORMANCE], [CHKARCH-CONFORMANCE-MODE]. ⚠️
 
-⚠️ **One conformance path**, run fresh every CI run: `python3 conformance/run_conformance.py`. No step skippable — (1) `git clone` the tests **and** the harness from `python/typing@main` HEAD, no cache/committed fixtures; (2) clean `cargo build --release` from THIS checkout, never the PyPI wheel, never instrumented; (3) run the suite's OWN unmodified `conformance/src/main.py --only-run basilisk` (its `type_checker.py` ships the official `BasiliskTypeChecker`) against that binary via `BASILISK_BIN`, failing hard on ANY false positive or missed required error (100% / 0 FP); (4) regenerate `conformance_status.csv` from the harness's own `results/basilisk/*.toml`. A vendored scorer, reimplemented/injected adapter, cached fixtures, or committed results standing in for a live run is a **BUILD FAILURE**. ⚠️
+⚠️ **One upstream-suite path**, run fresh every CI run: `python3 conformance/run_conformance.py`. No step skippable — (1) `git clone` the tests **and** the harness from `python/typing@main` HEAD, no cache/committed fixtures; (2) clean `cargo build --release` from THIS checkout, never the PyPI wheel, never instrumented; (3) run the suite's OWN unmodified `conformance/src/main.py --only-run basilisk` (its `type_checker.py` ships the official `BasiliskTypeChecker`) against that binary via `BASILISK_BIN`; (4) regenerate `conformance_status.csv` from the harness's own `results/basilisk/*.toml`. A vendored scorer, reimplemented/injected adapter, cached fixtures, or committed results standing in for a live run is a **BUILD FAILURE**. The raw result is evidence, not a publishable conformance claim, until `make mutation-conformance` and independent off-suite regression tests confirm that semantics-preserving renames and formatting do not change it. ⚠️
 
-- The score is the binary in its default config — every PEP rule on, nothing configured ([CHKARCH-CONFIGURATION-ONLY]). Never quote a number produced any other way.
+- Score the binary in its default config — every PEP rule on, nothing configured ([CHKARCH-CONFIGURATION-ONLY]). Do not publish a replacement percentage until the clean implementation passes the upstream, mutation-conformance, and off-suite integrity gates. Historical generated score files are audit evidence, not a current claim.
 - **Precision is the whole game.** A file passes iff the upstream `errors_diff` is empty: an error on EVERY `# E` line, EVERY `# E[tag]` group satisfied, NOTHING on an unmarked line.
-- **Every failure is a false positive, not a miss.** The checker already catches every required error; files fail because a strict house rule fires on spec-valid code. Fix by teaching the checker to recognise the valid construct — never by missing a required error or silencing a rule ([CHKARCH-CONFORMANCE-MODE]).
-- **Ratchets, always.** Pass-% only up, FP ceiling only down (`coverage-thresholds.json`). Moving a ratchet the wrong way means the change isn't done. (Benchmark times are NOT a ratchet — see [CHKARCH-TESTING-BENCH].)
-- Basilisk is listed in the [official results](https://github.com/python/typing/blob/main/conformance/results/results.html) at 100%. Dropping below is ⛔️ ILLEGAL.
+- Treat every failure and every suspicious pass as evidence to investigate. Fix false positives, false negatives, and fixture-specific behaviour in the checker; never silence or delete a rule to move a score ([CHKARCH-CONFORMANCE-MODE]).
+- **Robustness ratchets, always.** The official suite and `make mutation-conformance` must improve from their audited baselines. A semantics-preserving rename or formatting change must not change a verdict. If removing fitted code lowers the raw suite number, publish the lower number once it is trustworthy.
+- Basilisk is **not currently listed** in the [official results](https://github.com/python/typing/blob/main/conformance/results/results.html). Do not describe it as listed until a new submission has been independently validated and accepted.
 
 # Design Principles
 
@@ -28,7 +30,7 @@ Basilisk has **no modes** — behaviour is per-rule configuration ([CHKARCH-CONF
 Trust is the product. Applies **everywhere** — specs, plans, README, website, marketing, code comments.
 
 - **Every empirical or comparative claim about the outside world** (stats, adoption, competitor capability/performance/conformance numbers, market facts, attributed quotes) MUST carry an inline link to the authoritative source that actually makes that claim. Link it or delete it — NEVER invent or approximate. A value that drifts (a competitor's conformance %, a download size) links to its live source, never a frozen figure.
-- **Self-measured, reproducible metrics are exempt** (e.g. our conformance score from the unmodified `python/typing` scorer) — but state how they're measured and don't compare them against numbers from a different methodology.
+- **Self-measured, reproducible metrics are exempt** only when the measurement is valid for the claim. The unmodified `python/typing` scorer measures performance on its fixtures; it does not by itself prove spec conformance. State the method, robustness checks, limitations, and never compare numbers produced by different methodologies.
 - **Book screenshots are direct release evidence.** Any visual that shows Basilisk, an editor, a terminal, diagnostics, controls, or product output MUST be captured from the book's pinned released build. NEVER mock, redraw, reconstruct, generate, or hand-compose product UI, even under a label such as diagram, wireframe, or conceptual map. Cropping, uniform publication resizing, and external callouts are allowed; repainting, replacing, or compositing product pixels or text is not. If a real capture is unavailable, omit the visual. Follow [`book/VISUAL-DESIGN-SYSTEM.md`](book/VISUAL-DESIGN-SYSTEM.md#screenshot-contract).
 
 
@@ -82,10 +84,12 @@ Git is off-limits unless explicitly asked. When git IS used:
 
 Performance is a feature, but the benchmark is **indicative, not a gate** ([CHKARCH-TESTING-BENCH]). It runs on a developer workstation against whatever else that machine is doing; background load moves every tool in the table together and can shift absolute times by tens of percent between two runs of identical code. **Nothing in CI passes or fails on a benchmark number, and no gate is to be reintroduced** — a pass/fail built on that signal fails honest work and waves through real regressions depending on what else was running.
 
+The previously published comparative figures are **under review** and may not be used as headline or superlative claims. Keep recorded CSVs as audit evidence, label any displayed table as withdrawn/pending remeasurement, and publish a replacement comparison only after the methodology and results have been independently checked.
+
 - Run `make bench` whenever you touch checker hot paths (resolver visitors, rule `check` loops, new conformance logic). Every run does `cargo clean` + a fresh `--release` build and pulls the latest official release of each competitor (pyright, mypy, ty, pyrefly, zuban) before timing.
 - **Write always.** Measured numbers go to `benchmarks/status/<machine>.csv` immediately and unconditionally — after every fixture and again at the end (`benchmarks/summarize.py`). A run that measured a number but didn't record it is a lie.
 - **Read it correctly.** Compare tools *within* one run — they are measured back to back on the same machine, so machine speed cancels. Never compare a number against one recorded on a different machine or at a different time. To answer a real performance question, measure both revisions on one quiet machine in one sitting.
-- The published website figures carry this caveat explicitly; see `website/src/docs/benchmarks.njk`.
+- Any website table retained during the review carries the withdrawal prominently; see `website/src/docs/benchmarks.njk`.
 
 ## Logging Standards
 
