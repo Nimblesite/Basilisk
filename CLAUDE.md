@@ -29,6 +29,7 @@ Trust is the product. Applies **everywhere** — specs, plans, README, website, 
 
 - **Every empirical or comparative claim about the outside world** (stats, adoption, competitor capability/performance/conformance numbers, market facts, attributed quotes) MUST carry an inline link to the authoritative source that actually makes that claim. Link it or delete it — NEVER invent or approximate. A value that drifts (a competitor's conformance %, a download size) links to its live source, never a frozen figure.
 - **Self-measured, reproducible metrics are exempt** (e.g. our conformance score from the unmodified `python/typing` scorer) — but state how they're measured and don't compare them against numbers from a different methodology.
+- **Book screenshots are direct release evidence.** Any visual that shows Basilisk, an editor, a terminal, diagnostics, controls, or product output MUST be captured from the book's pinned released build. NEVER mock, redraw, reconstruct, generate, or hand-compose product UI, even under a label such as diagram, wireframe, or conceptual map. Cropping, uniform publication resizing, and external callouts are allowed; repainting, replacing, or compositing product pixels or text is not. If a real capture is unavailable, omit the visual. Follow [`book/VISUAL-DESIGN-SYSTEM.md`](book/VISUAL-DESIGN-SYSTEM.md#screenshot-contract).
 
 
 # Documentation Structure

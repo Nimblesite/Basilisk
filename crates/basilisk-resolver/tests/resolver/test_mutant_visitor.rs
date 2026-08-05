@@ -3,47 +3,11 @@
 
 use super::common::resolve_src;
 
-#[test]
-fn collect_unconditional_assigns_ann_assign() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "def foo() -> str:\n",
-        "    result: str = 'hello'\n",
-        "    return result\n",
-    )
-    .to_owned();
-    let resolved = resolve_src(&src)?;
-    let func = resolved
-        .functions
-        .iter()
-        .find(|f| f.name == "foo")
-        .ok_or("foo not found")?;
-    assert!(
-        func.unconditional_assigns.contains(&"result".to_owned()),
-        "annotated assign must appear in unconditional_assigns"
-    );
-    Ok(())
-}
-
-#[test]
-fn collect_unconditional_assigns_for_target() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "def foo() -> None:\n",
-        "    for item in range(3):\n",
-        "        pass\n",
-    )
-    .to_owned();
-    let resolved = resolve_src(&src)?;
-    let func = resolved
-        .functions
-        .iter()
-        .find(|f| f.name == "foo")
-        .ok_or("foo not found")?;
-    assert!(
-        func.unconditional_assigns.contains(&"item".to_owned()),
-        "for loop variable must appear in unconditional_assigns"
-    );
-    Ok(())
-}
+// The definite-assignment collectors moved into the checker's
+// `names_unbound` walk ([NARROWPLAN-INTEGRATION] Step 8); the annotated-assign
+// and for-target acceptances are pinned end-to-end by
+// `annotated_assign_no_diagnostic` / `for_target_no_diagnostic` in
+// `basilisk-checker/tests/checker/names_unbound_tests.rs`.
 
 #[test]
 fn unhashable_keys_in_assign_stmt() -> Result<(), Box<dyn std::error::Error>> {

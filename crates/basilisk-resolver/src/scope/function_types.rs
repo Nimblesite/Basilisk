@@ -147,16 +147,8 @@ pub struct FunctionInfo {
     pub nested_in_class: bool,
     /// All names assigned anywhere in the function body (for scope analysis).
     pub all_local_assigns: Vec<String>,
-    /// Names assigned at the top level of the function body (unconditionally).
-    pub unconditional_assigns: Vec<String>,
     /// Names referenced directly in `return` expressions (simple `return name`).
     pub return_name_refs: Vec<(String, Span)>,
-    /// Names referenced in top-level (unconditional) `return` expressions only.
-    ///
-    /// Unlike `return_name_refs`, this excludes returns nested inside `if`/`for`/
-    /// `while`/`try`/`with` blocks.  Used by E0019 to avoid false positives where
-    /// a `return name` is inside the same branch that assigned `name`.
-    pub top_level_return_name_refs: Vec<(String, Span)>,
     /// Unhashable expressions used as dict keys in the function body.
     pub unhashable_keys: Vec<super::module_types::UnhashableKeyRef>,
     /// `true` when the entire function body is a stub (only `...` or `pass`).

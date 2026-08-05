@@ -1386,18 +1386,36 @@ before the stage is declared closed:
   is an individual judgment-preserving rewiring; none is mechanical.*
 - [ ] **Step 8 — `names_unbound` migrates to the walker's all-paths
   divergence analysis**, replacing the last-statement idiom. Fixes #285.
-- [ ] Route all 22 direct `name_subtype`/`is_numeric_subtype` call sites (12
+- [x] Route all 22 direct `name_subtype`/`is_numeric_subtype` call sites (12
   files) through `subtyping::SubtypingContext` and delete the shims — runs
   alongside steps 3–7. One subtyping implementation. Not two, not
-  twenty-two.
-  *Measured state (2026-08-05): 14 call sites across 11 rule files remain;
-  `is_numeric_subtype` already DELEGATES to the one `subtyping::name_subtype`
-  tower core, and the shared `TypeJudge`/`nominal_subclass_assignable`
-  judgment (now the single copy — `assignment_compatibility`'s duplicate was
-  deleted) routes every engine-side nominal verdict through
-  `SubtypingContext`. What remains is threading a context into the 11
-  pre-engine rules so the free-function tower calls become
-  `SubtypingContext::is_subtype` and the shims die.*
+  twenty-two. Landed (2026-08-05):
+  `grep -rn 'name_subtype\|is_numeric_subtype' crates/basilisk-checker/src/rules`
+  returns ZERO — `name_subtype` survives only as the tower core inside
+  `subtyping.rs` that `SubtypingContext::is_subtype` builds on. The
+  `rules::shared::is_numeric_subtype` shim and every rule-local wrapper
+  (`is_subtype_of`, `is_subtype`, `type_compatible`, `is_subtype_for_bound`)
+  are DELETED; `rules::shared::is_type_compatible` now delegates its whole
+  body to `SubtypingContext::is_subtype` over a shared empty context (its
+  hand-rolled Any/object/tower/union logic is gone), and the eleven
+  pre-engine rules seed `subtyping::module_context(module)` at their entry:
+  `generics_defaults_2`, `generics_defaults_referential{,_2}`,
+  `generics_variance_inference` (context carried on `ViolationCtx`),
+  `aliases_implicit`, `generics_syntax_scoping::alias_misuse`,
+  `generics_typevartuple_callable` (context carried on `TvtLookups`),
+  `narrowing_typeis`, `callables_subtyping`, `overloads_evaluation` (reads
+  `types.subtyping()` from `ModuleTypes`), and the whole
+  `assignment_compatibility::sig_subtype` signature-subtyping family
+  (context carried on `CallIndex`, threaded through all eleven
+  comparison functions). The routing is not just mechanical — rules now
+  accept module-declared SUBCLASSES where the bare tower rejected them
+  (a `TypeVar` `default=Sub` with `bound=Base` no longer false-positives),
+  pinned by `tests/checker/subtyping_context_routing_tests.rs` (5
+  mutation-resistant tests: two nominal-acceptance positives that FAIL if
+  any rule reverts to a tower-only verdict, two paired negatives keeping
+  the diagnostics alive, one both-sides union-split pin). Verified:
+  checker suite 4043/0, conformance 141/141 with 0 FP / 0 missed on a
+  fresh release binary, torture 12/12, clippy clean.
 - [ ] Delete every replaced code path **in the change that replaces it**. A
   migration that leaves the legacy path alive alongside the new one is
   incomplete and does not merge.

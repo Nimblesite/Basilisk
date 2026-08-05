@@ -1,5 +1,13 @@
 //! Tests for [`names_unbound`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for names_unbound: Unbound variable on some code paths.
+//! Integration tests for names_unbound: unbound variable on some code paths.
+//!
+//! [NARROWPLAN-INTEGRATION] Step 8
+//! ([#285](https://github.com/Nimblesite/Basilisk/issues/285)): the rule runs
+//! a definite-assignment walk with the walker's inference-driven divergence
+//! ([NARROWPLAN-FLOW]) — the divergence tests below are mutation-resistant
+//! pins: each no-diagnostic case passes ONLY because a diverging branch drops
+//! out of the merge, and each is paired with a firing case that keeps the
+//! diagnostic alive.
 
 use super::common::*;
 

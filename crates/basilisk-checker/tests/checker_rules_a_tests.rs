@@ -75,3 +75,5 @@ mod returns_call_synthesis;
 mod returns_compatibility;
 #[path = "checker/returns_compatibility_2_tests.rs"]
 mod returns_compatibility_2;
+#[path = "checker/subtyping_context_routing_tests.rs"]
+mod subtyping_context_routing;

@@ -209,8 +209,9 @@ type from an unexpected override is evidence worth investigating.
 
 ![Example provenance cards connect an imported signature to a local reviewed pyi path, the selected standard-library snapshot, or a generated best-effort source.](../assets/diagrams/08-hover-provenance.png)
 
-*Figure 8.2 — A signature is only half the answer. Its path and provenance tell
-you which contract won the static search.*
+*Figure 8.2 — This schematic comparison is not an editor capture. It shows why
+a signature is only half the answer: its path and provenance tell you which
+contract won the static search.*
 
 ## Generate, inspect, and own the result
 

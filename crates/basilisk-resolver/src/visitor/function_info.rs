@@ -9,7 +9,7 @@ use crate::scope::{
 };
 
 use super::annotations::{ann_assign_info_from, annotation_flags};
-use super::assigns::{assign_infos_from, collect_all_assigns, collect_unconditional_assigns};
+use super::assigns::{assign_infos_from, collect_all_assigns};
 use super::class_info_ext::{
     body_is_stub, decorator_name, decorator_name_and_span, extract_docstring,
 };
@@ -66,9 +66,7 @@ pub(super) fn function_info_from(
 
     let return_stmts = collect_return_stmts(&func.body);
     let all_local_assigns = collect_all_assigns(&func.body);
-    let unconditional_assigns = collect_unconditional_assigns(&func.body);
     let return_name_refs = collect_return_name_refs(&func.body);
-    let top_level_return_name_refs = collect_top_level_return_name_refs(&func.body);
     let unhashable_keys = collect_unhashable_keys_from_stmts(&func.body);
     let is_stub_body = body_is_stub(&func.body);
     let has_pep695_type_params = func.type_params.is_some();
@@ -97,9 +95,7 @@ pub(super) fn function_info_from(
         return_annotation_span,
         class_name,
         all_local_assigns,
-        unconditional_assigns,
         return_name_refs,
-        top_level_return_name_refs,
         unhashable_keys,
         is_stub_body,
         body_ends_with_return: func
@@ -303,27 +299,6 @@ fn collect_callee_name_refs(expr: &Expr, out: &mut Vec<(String, Span)>) {
         Expr::Starred(starred) => collect_callee_name_refs(&starred.value, out),
         _ => {}
     }
-}
-
-/// Collects `return <name>` references from the TOP LEVEL of a function body only.
-///
-/// Unlike [`collect_return_name_refs`], this does NOT recurse into `if`/`for`/
-/// `while`/`try`/`with` blocks.  A `return name` inside a conditional branch will
-/// only execute when that branch is taken, so `name` is always bound at that point
-/// if it was assigned earlier in the same branch.  Recursing would produce false
-/// positives; this conservative variant is used by E0019.
-pub(super) fn collect_top_level_return_name_refs(stmts: &[Stmt]) -> Vec<(String, Span)> {
-    stmts
-        .iter()
-        .filter_map(|stmt| {
-            if let Stmt::Return(ret) = stmt {
-                if let Some(Expr::Name(name)) = ret.value.as_deref() {
-                    return Some((name.id.to_string(), text_range_to_span(name.range)));
-                }
-            }
-            None
-        })
-        .collect()
 }
 
 // ---------------------------------------------------------------------------

@@ -113,10 +113,11 @@ Editor**. In 0.39.0 the command is capability-gated: it appears when the
 running server advertises the configuration-editor operations. It opens a full
 editor tab for the server-computed project view.
 
-![An explanatory map of the Basilisk 0.39.0 configuration editor connects its five views, tag facets, searchable rule rows, severity controls, and active pyproject source.](../assets/diagrams/09-configuration-editor-map.png)
+![A direct capture of the Basilisk 0.39.0 Configuration Editor in VS Code shows its five views, tag facets, searchable rule rows, severity controls, and active pyproject source.](../assets/screenshots/09-configuration-editor.png)
 
-*Figure 9.1 — The editor renders state supplied by the language server. The
-diagram deliberately omits moving catalog and diagnostic totals.*
+*Figure 9.1 — The real 0.39.0 Configuration Editor renders state supplied by
+the language server. Catalog and diagnostic totals belong to this captured
+Signal Box workspace, not to a permanent product contract.*
 
 Read the screen from left to right:
 
@@ -183,18 +184,19 @@ and their hypothetical diagnostic impact.
 *Figure 9.2 — Configuration is a short transaction: choose, preview, review,
 then apply once. Until the last step, `pyproject.toml` is unchanged.*
 
-Suppose Signal Box considers grading its missing-parameter policy from Error to
-Warning. Set the root control for `BSK-0001` to Warning and read what comes back
-before anything is written. The preview should name the root source, one
-effective severity change, and the current diagnostic whose category would
-change. The selected control and source badge identify the entry to be written.
+Suppose Signal Box considers grading its missing-return policy from Error to
+Warning. Set the root control for `BSK-0002` to Warning and read what comes back
+before anything is written. The preview names one effective severity change
+and shows the current diagnostic impact. The selected control and source badge
+identify the entry to be written.
 
-![An explanatory map of the Basilisk 0.39.0 preview shows one BSK-0001 severity change, its active source and revision, current diagnostic impact, and separate Cancel and Apply actions.](../assets/diagrams/09-configuration-preview-map.png)
+![A direct Basilisk 0.39.0 VS Code capture shows a BSK-0002 error-to-warning preview, the current error and warning impact, and separate Cancel and Apply change actions.](../assets/screenshots/09-configuration-preview.png)
 
-*Figure 9.3 — Preview is a proposal tied to a specific source revision. It has
-no durable effect until the reader approves the resulting edit.*
+*Figure 9.3 — This real 0.39.0 preview is a proposal tied to Signal Box's
+current source revision. It has no durable effect until the reader approves
+the resulting edit.*
 
-Read the lower line first: it names `BSK-0001` and the severity it moves from
+Read the lower line first: it names `BSK-0002` and the severity it moves from
 and to. The header's source badge names the file that will receive the entry.
 Then read the impact cards.
 Those numbers are a forecast for the current workspace, not a promise about
@@ -211,9 +213,10 @@ on which you based the decision have changed.
 
 ## Scope is a folder, not a pattern
 
-That preview considered `BSK-0001` for the whole project. The checkpoint makes
-a separate, narrower decision for `BSK-0002`: Basilisk scopes rules by folder,
-so it uses a second, smaller file, `tests/pyproject.toml`:
+That preview considered grading `BSK-0002` to Warning for the whole project.
+Cancel it. The checkpoint instead keeps the root rule at Error and makes a
+narrower decision for tests: Basilisk scopes rules by folder, so it uses a
+second, smaller file, `tests/pyproject.toml`:
 
 ```toml
 [tool.basilisk.rules]

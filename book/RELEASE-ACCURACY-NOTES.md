@@ -21,8 +21,13 @@ matching the published checksum. The extracted binary reported `basilisk
 - Working-tree performance changes to embedded typeshed indexing and archive
   activation are not used as book claims.
 - The old Chapter 9 screenshots came from an unreleased placeholder build and
-  showed obsolete rule codes, counts, controls, and path selectors. They have
-  been replaced by deterministic diagrams limited to the 0.39.0 contract.
+  showed obsolete rule codes, counts, controls, and path selectors. They were
+  replaced on 2026-08-05 by direct captures driven through the v0.39.0 source
+  tag with the official v0.39.0 macOS arm64 binaries. The Configuration Editor
+  JavaScript used for capture matched the published v0.39.0 VSIX byte for byte;
+  that VSIX's SHA-256 was
+  `74ef14d9e4e87469eb59c2493cfad16545ee49333c321e8672317fc8c010502e`,
+  matching the published checksum.
 
 ## Specification and release gaps
 
@@ -89,8 +94,9 @@ When Basilisk releases a new version, update these items as one review:
 1. `book.json`, `metadata.yaml`, and the chapter evidence release fields;
 2. the immutable release and source-spec URLs in `sources.json`;
 3. the bundled typeshed pin in every completed checkpoint that uses it;
-4. every exact command output, version string, diagnostic count, and diagram
-   label tied to the old release;
+4. every exact command output, version string, diagnostic count, diagram label,
+   screenshot, untouched capture master, and capture-provenance record tied to
+   the old release;
 5. the release artifact checksum and test results; and
 6. this gap list, moving implemented items into reader prose only after the
    specification, released implementation, and executable evidence agree.
