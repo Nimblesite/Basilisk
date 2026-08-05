@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
 """Aggregate hyperfine JSON into the git-tracked benchmark status CSV.
 
-Two responsibilities, deliberately DECOUPLED so one can never suppress the other:
+WRITE (unconditional, immediate).  On EVERY invocation — `incremental` (after
+each fixture completes) and `final` — the measured numbers are written straight
+to benchmarks/status/<slug>.csv. There is no branch and no "left unchanged"
+path: the file ALWAYS reflects exactly what this build just measured, the
+instant each score exists. A benchmark run that measured a number but did not
+record it is a lie about the build's performance.
 
-  1. WRITE (unconditional, immediate).  On EVERY invocation — `incremental`
-     (after each fixture completes) and `final` — the measured numbers are
-     written straight to benchmarks/status/<slug>.csv. There is no gate, no
-     branch, no "left unchanged" path: the file ALWAYS reflects exactly what
-     this build just measured, the instant each score exists. A benchmark run
-     that measured a number but did not record it is a lie about the build's
-     performance, and the whole point of the suite is to KNOW the moment a
-     number slips — so the write happens no matter what the gate later decides.
+THIS SCRIPT DOES NOT GATE ANYTHING, and nothing in CI fails on a benchmark
+number.  The benchmark is an INDICATIVE, developer-run measurement: `make bench`
+executes on whatever workstation a contributor happens to use, against whatever
+else that machine is doing at the time. Background load moves every tool in the
+table together and can shift absolute times by tens of percent between two runs
+of identical code, which is far larger than the changes worth acting on. A
+pass/fail gate built on that signal fails honest work and passes real
+regressions depending on what else was running, so there is no gate to tune,
+disable, or widen — the numbers are reported, and a human reads them.
 
-  2. GATE (CI pass/fail, read-only).  In `final` mode, AFTER the numbers are on
-     disk, the run's basilisk times are compared against the COMMITTED baseline
-     (the status CSV at BENCH_BASELINE_REF, default HEAD, read from git — never
-     the working copy we just overwrote, so a slower run can never launder its
-     regression into the baseline). A backwards step beyond BENCH_TOLERANCE_PCT
-     on any fixture exits 3 → CI FAILURE. The gate only READS; it never edits
-     the file. The committed baseline advances only when a run is committed, so
-     it still ratchets toward faster — but the live file never hides a slip.
+Compare tools WITHIN one run (they are measured back to back on the same
+machine, so machine speed cancels); do not compare a number from one run against
+a number recorded on a different machine or at a different time. When a real
+performance question needs an answer, measure both revisions on one quiet
+machine in one sitting.
 
 CARRY-FORWARD.  A run may deliberately measure only some tools — `make
 bench-basilisk` re-times basilisk alone, because five 0.5s-per-invocation
@@ -41,7 +44,6 @@ All machine/tool metadata + policy arrive via BENCH_* env vars (set by run.sh).
 import glob
 import json
 import os
-import subprocess
 import sys
 
 STATUS_NOTE = (
@@ -64,9 +66,12 @@ STATUS_NOTE = (
     "analysis the fixtures stress (plain mypy reports 'no issues' on the strictness "
     "fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default "
     "`zuban check` mode skips these strictness rules). This file is ALWAYS rewritten "
-    "with the latest measured numbers, even on a regression — the CI gate reads the "
-    "committed baseline, never this working copy, so a slip is recorded here AND "
-    "fails CI rather than being hidden."
+    "with the latest measured numbers. These are INDICATIVE developer-machine "
+    "measurements, not a gate: nothing in CI passes or fails on them. Background load "
+    "moves every tool in the table together and can shift absolute times by tens of "
+    "percent between two runs of identical code, so compare tools WITHIN one run "
+    "(measured back to back on the same machine) and never against numbers recorded "
+    "on another machine or at another time."
 )
 
 
@@ -293,61 +298,6 @@ def write_summary_md(out_dir, rows, tools):
     write_file(os.path.join(out_dir, "summary.md"), lines)
 
 
-def parse_basilisk_ms(text):
-    """basilisk_ms per fixture from status-CSV text (the committed baseline)."""
-    base, cols = {}, None
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split(",")
-        if cols is None:
-            cols = parts
-            continue
-        if "basilisk_ms" not in cols:
-            break
-        idx = cols.index("basilisk_ms")
-        val = parts[idx] if idx < len(parts) else ""
-        if val:
-            base[parts[0]] = float(val)
-    return base
-
-
-def read_committed_baseline(root, rel_path, ref):
-    """The COMMITTED status CSV at <ref> (default HEAD), read from git — NOT the
-    working copy this run overwrote. Empty dict if the file/ref/repo is absent
-    (a machine seeing its first run has no baseline to defend yet)."""
-    try:
-        result = subprocess.run(
-            ["git", "show", f"{ref}:{rel_path}"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except OSError:
-        return {}
-    if result.returncode != 0:
-        return {}
-    return parse_basilisk_ms(result.stdout)
-
-
-def find_regressions(rows, baseline, tolerance_pct):
-    """Fixtures slower than the committed baseline beyond ``tolerance_pct``.
-
-    Production runs hard-code that tolerance to zero; the parameter keeps this
-    pure comparison helper directly testable.
-    """
-    regressions = []
-    for stem, means in rows:
-        if "basilisk" not in means or stem not in baseline:
-            continue
-        old, new = baseline[stem], means["basilisk"]
-        if old > 0 and new > old * (1.0 + tolerance_pct / 100.0):
-            regressions.append((stem, old, new, (new / old - 1.0) * 100.0))
-    return regressions
-
-
 def main():
     out_dir = sys.argv[1]
     mode = sys.argv[2]
@@ -370,49 +320,25 @@ def main():
     published = carry_values(rows, all_tools, carry)
     csv_lines = build_csv_lines(published, all_tools, base_tools, coverage, carry)
 
-    # (1) WRITE — unconditional, immediate. The live file always tells the truth
-    # about this build, on every invocation, regardless of what the gate decides.
+    # WRITE — unconditional, immediate. The live file always tells the truth
+    # about this build, on every invocation.
     write_file(status_path, csv_lines)
 
     if mode != "final":
         return 0
 
-    # (2) GATE — read-only, AFTER the write. Compare against the COMMITTED
-    # baseline (from git), never the working copy we just overwrote.
-    # The console shows only what this run timed; summary.md mirrors the CSV.
+    # Report only. There is no gate: these are indicative developer-machine
+    # numbers and nothing passes or fails on them.
     print_console_table(rows, tools)
     write_summary_md(out_dir, published, columns_with_values(published, all_tools))
 
-    root = os.environ["BENCH_ROOT"]
-    ref = os.environ.get("BENCH_BASELINE_REF", "HEAD")
-    tolerance_pct = float(os.environ.get("BENCH_TOLERANCE_PCT", "0"))
-    rel_path = os.path.relpath(status_path, root)
-    baseline = read_committed_baseline(root, rel_path, ref)
-    regressions = find_regressions(rows, baseline, tolerance_pct)
-
     print(f"\n  Status CSV (written, git-tracked): {status_path}")
     print(f"  Summary:                  {os.path.join(out_dir, 'summary.md')}")
-    if regressions:
-        print(
-            f"\n  REGRESSION GATE — basilisk slower than the COMMITTED baseline "
-            f"({ref}) by >{tolerance_pct:.0f}%"
-        )
-        print(
-            "    The slower numbers are ALREADY written above — this fails CI so the slip is visible, not hidden."
-        )
-        print(f"    {'fixture':<34} {'baseline':>11} {'now':>11} {'change':>9}")
-        for stem, old, new, delta in regressions:
-            print(f"    {stem:<34} {old:>8.1f} ms {new:>8.1f} ms {delta:>+7.1f}%")
-        print("    Optimize the regression, then commit the file to move the baseline.")
-        return 3
-    if baseline:
-        print(
-            f"\n  No regression vs committed baseline ({ref}) — within {tolerance_pct:.0f}% on every fixture."
-        )
-    else:
-        print(
-            f"\n  No committed baseline at {ref} for this machine yet — this run establishes it once committed."
-        )
+    print(
+        "\n  Indicative only — measured on this machine, under whatever else it was\n"
+        "  running. Compare tools within this run; do not compare against numbers\n"
+        "  recorded on another machine or at another time."
+    )
     return 0
 
 

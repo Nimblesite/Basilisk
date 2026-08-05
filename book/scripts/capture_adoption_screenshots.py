@@ -195,8 +195,12 @@ def main() -> None:
         raise SystemExit("book.json release or screenshot editor pin is incomplete")
 
     with (
-        tempfile.TemporaryDirectory(prefix=f"basilisk-book-ch10-{version}-") as temporary,
-        tempfile.TemporaryDirectory(prefix="bsk-ch10-", dir="/tmp") as fixture_temporary,
+        tempfile.TemporaryDirectory(
+            prefix=f"basilisk-book-ch10-{version}-"
+        ) as temporary,
+        tempfile.TemporaryDirectory(
+            prefix="bsk-ch10-", dir="/tmp"
+        ) as fixture_temporary,
     ):
         work = Path(temporary)
         checksums = work / "checksums-sha256.txt"
@@ -205,7 +209,9 @@ def main() -> None:
         release_base = f"https://github.com/Nimblesite/Basilisk/releases/download/{tag}"
         release_capture.download(f"{release_base}/checksums-sha256.txt", checksums)
         if release_capture.published_checksum(checksums, artifact) != expected_digest:
-            raise SystemExit("book.json VSIX checksum does not match the published ledger")
+            raise SystemExit(
+                "book.json VSIX checksum does not match the published ledger"
+            )
         release_capture.download(f"{release_base}/{artifact}", vsix)
         if sha256(vsix) != expected_digest:
             raise SystemExit("Downloaded VSIX failed its published SHA-256")
@@ -214,9 +220,13 @@ def main() -> None:
             source_archive,
         )
 
-        source_extension = release_capture.extract_source(source_archive, work / "source")
+        source_extension = release_capture.extract_source(
+            source_archive, work / "source"
+        )
         release_extension = release_capture.extract_vsix(vsix, work / "vsix")
-        release_capture.verify_release_extension(release_extension, version, platform_key)
+        release_capture.verify_release_extension(
+            release_extension, version, platform_key
+        )
         install_driver(source_extension)
         release_capture.run([npm, "ci"], source_extension)
         release_capture.run([npm, "run", "compile"], source_extension)

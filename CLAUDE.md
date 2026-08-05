@@ -14,7 +14,7 @@ Target: **100% conformance** with the [Python typing spec](https://typing.python
 - The score is the binary in its default config — every PEP rule on, nothing configured ([CHKARCH-CONFIGURATION-ONLY]). Never quote a number produced any other way.
 - **Precision is the whole game.** A file passes iff the upstream `errors_diff` is empty: an error on EVERY `# E` line, EVERY `# E[tag]` group satisfied, NOTHING on an unmarked line.
 - **Every failure is a false positive, not a miss.** The checker already catches every required error; files fail because a strict house rule fires on spec-valid code. Fix by teaching the checker to recognise the valid construct — never by missing a required error or silencing a rule ([CHKARCH-CONFORMANCE-MODE]).
-- **Ratchets, always.** Pass-% only up, FP ceiling only down (`coverage-thresholds.json`); benchmark times only down ([CHKARCH-TESTING-BENCH-RATCHET]). Moving a ratchet the wrong way means the change isn't done.
+- **Ratchets, always.** Pass-% only up, FP ceiling only down (`coverage-thresholds.json`). Moving a ratchet the wrong way means the change isn't done. (Benchmark times are NOT a ratchet — see [CHKARCH-TESTING-BENCH].)
 - Basilisk is listed in the [official results](https://github.com/python/typing/blob/main/conformance/results/results.html) at 100%. Dropping below is ⛔️ ILLEGAL.
 
 # Design Principles
@@ -80,11 +80,12 @@ Git is off-limits unless explicitly asked. When git IS used:
 
 ## Benchmarks
 
-Performance is a feature; both the conformance and benchmark ratchets hold simultaneously ([CHKARCH-TESTING-BENCH-RATCHET]). A conformance fix that blows the benchmark gate is NOT done — optimize or restructure it.
+Performance is a feature, but the benchmark is **indicative, not a gate** ([CHKARCH-TESTING-BENCH]). It runs on a developer workstation against whatever else that machine is doing; background load moves every tool in the table together and can shift absolute times by tens of percent between two runs of identical code. **Nothing in CI passes or fails on a benchmark number, and no gate is to be reintroduced** — a pass/fail built on that signal fails honest work and waves through real regressions depending on what else was running.
 
 - Run `make bench` whenever you touch checker hot paths (resolver visitors, rule `check` loops, new conformance logic). Every run does `cargo clean` + a fresh `--release` build and pulls the latest official release of each competitor (pyright, mypy, ty, pyrefly, zuban) before timing.
 - **Write always.** Measured numbers go to `benchmarks/status/<machine>.csv` immediately and unconditionally — after every fixture and again at the end (`benchmarks/summarize.py`). A run that measured a number but didn't record it is a lie.
-- **Gate separately.** A zero-tolerance read-only gate compares those numbers against the **committed** baseline (read from git, not the working copy) and fails if basilisk is slower on any fixture. The gate cannot be disabled or widened. New machines establish a baseline only after a successful run is committed.
+- **Read it correctly.** Compare tools *within* one run — they are measured back to back on the same machine, so machine speed cancels. Never compare a number against one recorded on a different machine or at a different time. To answer a real performance question, measure both revisions on one quiet machine in one sitting.
+- The published website figures carry this caveat explicitly; see `website/src/docs/benchmarks.njk`.
 
 ## Logging Standards
 

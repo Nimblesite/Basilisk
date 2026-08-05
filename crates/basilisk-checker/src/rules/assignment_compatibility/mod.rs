@@ -269,7 +269,7 @@ fn check_vars(
             // same-file class is the type it denotes rather than opaque text.
             // Resolved from the annotation NODE where the resolver recorded its
             // span; `resolve_text` re-parses, which costs a `ruff` expression
-            // parse per annotated variable ([CHKARCH-TESTING-BENCH-RATCHET]).
+            // parse per annotated variable ([CHKARCH-TESTING-BENCH]).
             let declared_type = var
                 .annotation_span
                 .and_then(|span| resolver.resolve_span(span))

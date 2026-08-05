@@ -246,6 +246,9 @@ conformance:
 	@python3 conformance/run_conformance.py --bin target/debug/basilisk
 
 ## bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly/zuban on the fixture suite.
+## INDICATIVE ONLY — this runs on a developer workstation under whatever else it
+## is doing, so nothing passes or fails on the result. Compare tools within one
+## run; do not compare across machines or across time.
 ## Requires hyperfine; competitor tools are skipped if not installed.
 ## run.sh does the CLEAN release rebuild itself (fresh binary under test) before
 ## timing, so the guarantee holds even when run.sh is invoked directly — this
@@ -254,11 +257,10 @@ bench:
 	@bash benchmarks/run.sh
 
 ## bench-basilisk: Re-time ONLY basilisk (local iteration on a perf fix).
-## Same clean release rebuild, same stability policy, same zero-tolerance gate
-## against the committed baseline — it just skips the five competitors, which
-## add minutes per iteration and say nothing about a change to this tree. Their
-## CSV cells and versions carry forward verbatim and the header records that
-## they were not re-timed. Refused in CI, which always runs the full sweep.
+## Same clean release rebuild and same stability policy — it just skips the five
+## competitors, which add minutes per iteration and say nothing about a change to
+## this tree. Their CSV cells and versions carry forward verbatim and the header
+## records that they were not re-timed. Refused in CI, which runs the full sweep.
 bench-basilisk:
 	@BENCH_ONLY_BASILISK=1 bash benchmarks/run.sh
 

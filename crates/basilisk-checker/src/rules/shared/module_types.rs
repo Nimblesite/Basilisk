@@ -9,7 +9,7 @@
 //! tables and span index, the oracle indexes every expression and seeds the
 //! engine, the subtyping context registers every class. A rule that builds its
 //! own pays that walk again, and a dozen such rules made the walks the dominant
-//! cost of checking a file ([CHKARCH-TESTING-BENCH-RATCHET]). One context, one
+//! cost of checking a file ([CHKARCH-TESTING-BENCH]). One context, one
 //! set of walks, one answer per expression.
 
 use basilisk_resolver::ResolvedModule;

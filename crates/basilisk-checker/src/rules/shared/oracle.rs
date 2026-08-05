@@ -54,7 +54,7 @@ pub(crate) struct ModuleOracle<'m> {
     /// redundancy share every RHS; every call argument is seen by more than
     /// one pass), and each un-memoized query pays a scope-overlay clone plus
     /// a solver run — the dominant per-file cost once every rule rides the
-    /// engine ([CHKARCH-TESTING-BENCH-RATCHET]).
+    /// engine ([CHKARCH-TESTING-BENCH]).
     synth_cache: RefCell<HashMap<(u32, u32), Option<InferredType>>>,
 }
 

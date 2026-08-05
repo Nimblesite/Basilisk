@@ -44,7 +44,7 @@ environment, expression inferrer, constraint solver, or subtype context.
   sound home if adopted later.
 - Preserve the gradual guarantee as a testable invariant, keep the
   zero-false-positive conformance gate, and hold both benchmark ratchets
-  ([CHKARCH-TESTING-BENCH-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET)).
+  ([CHKARCH-TESTING-BENCH](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH)).
 - **Winning is the exit criterion, not an aspiration — and integration comes
   first.** Basilisk MUST end this plan with measurably better type inference
   than pyright, mypy, ty, pyrefly, and zuban, wired into the shipped checker —
@@ -381,7 +381,7 @@ Non-negotiable, every step, no exceptions:
 - Live conformance run: **100% / 0 FP**, freshly cloned harness
   ([CHKARCH-CONFORMANCE-MODE]).
 - `make bench`: no fixture slower than the committed baseline
-  ([CHKARCH-TESTING-BENCH-RATCHET]). The walker is real production cost the
+  ([CHKARCH-TESTING-BENCH]). The walker is real production cost the
   moment step 1 lands — record the baseline **in that same change**.
 - `make test` fail-fast, coverage ratchet up, mutation ratchet up.
 - Torture golden gate green.
@@ -396,7 +396,7 @@ gate: `narrow::analyse_function_in` is reached only through the
 `examples/`. `make bench` times `basilisk check`, which never enters this code
 — so no ratchet was watching it, and a cost that small fixtures hide would
 have landed as a *regression on the first wiring change*, when the
-zero-tolerance benchmark gate ([CHKARCH-TESTING-BENCH-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH-RATCHET))
+benchmark ([CHKARCH-TESTING-BENCH](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH), indicative, non-gating)
 is suddenly live over it and the change is also carrying diagnostic risk.
 
 The cost was in `FlowWalker::synth_type` (`narrow/flow.rs`), called per
@@ -517,7 +517,7 @@ self-measured, reproducible, write-always, ratcheted:
   gate: falling behind any competitor on a led axis is a build failure. Leads
   only accumulate. The plan exits only when Basilisk leads **all five axes
   simultaneously** while the 100%/0-FP conformance gate and the speed
-  benchmark gate stay green — the inference lead must never be bought by
+  benchmark stay healthy — the inference lead must never be bought by
   regressing conformance or performance, and vice versa.
 - **Moving targets.** Because the harness pulls latest competitor releases,
   the lead is continuously re-proven against competitors as they improve —
@@ -926,7 +926,7 @@ before the stage is declared closed:
   `tuple_index`, `recursive_aliases`, `generic_constructor`,
   `paramspec_decorator`, `recursive_bases`).
 - [x] `make bench` — no fixture slower than the committed baseline
-  ([CHKARCH-TESTING-BENCH-RATCHET]). **Closed by maintainer decision
+  ([CHKARCH-TESTING-BENCH]). **Closed by maintainer decision
   (2026-08-05): the branch's current numbers are accepted as the committed
   baseline, with an absolute ceiling of 20 ms per fixture; the ratchet stays
   armed from here — any further material regression is still a build
@@ -1690,7 +1690,7 @@ detached engine.
 - [ ] Add per-axis ratchet entries: once Basilisk leads an axis, falling
   behind any competitor on that axis fails CI; leads only accumulate.
 - [ ] Take and hold the lead on **all five axes simultaneously**, with the
-  100%/0-FP conformance gate and the speed benchmark gate green in the same
+  100%/0-FP conformance gate green and the speed benchmark healthy in the same
   run.
 - [ ] Enforce claims discipline: every better-than-competitor claim in docs, website,
   or marketing traces to the current committed scoreboard run and states the

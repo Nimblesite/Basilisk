@@ -203,7 +203,7 @@ pub(crate) trait Rule {
     /// Each of those costs a full walk of the module, so the driver builds them
     /// once and passes them here; a rule that builds its own pays the walk
     /// again, and a dozen such rules made the walks the dominant cost of
-    /// checking a file ([CHKARCH-TESTING-BENCH-RATCHET]). Rules that reason
+    /// checking a file ([CHKARCH-TESTING-BENCH]). Rules that reason
     /// about types override this; every other rule ignores the argument through
     /// the default. [NARROWPLAN-INTEGRATION]
     fn check_with_types(
@@ -434,7 +434,7 @@ pub fn run_all(module: &ResolvedModule, ctx: &CheckContext) -> Vec<Diagnostic> {
     .unwrap_or(0);
     // One type context for the whole module: every rule that reasons about
     // types shares the cascade, the oracle, and the class table instead of
-    // rebuilding them ([CHKARCH-TESTING-BENCH-RATCHET], [NARROWPLAN-INTEGRATION]).
+    // rebuilding them ([CHKARCH-TESTING-BENCH], [NARROWPLAN-INTEGRATION]).
     let types = shared::module_types::ModuleTypes::build(module);
     all_rules()
         .iter()

@@ -66,7 +66,7 @@ pub struct AnnotationResolver<'m> {
     /// type is read by the return-compatibility rules and by both narrowing
     /// rules — and evaluating a type expression walks it and allocates the
     /// resulting type. The cascade is pure, so the second answer is the first
-    /// one ([CHKARCH-TESTING-BENCH-RATCHET]).
+    /// one ([CHKARCH-TESTING-BENCH]).
     resolved: RefCell<HashMap<(u32, u32), InferredType>>,
 }
 

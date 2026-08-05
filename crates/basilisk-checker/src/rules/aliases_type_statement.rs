@@ -54,7 +54,7 @@ fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
 /// `T = 1` followed by `type Wrapper[T] = T | None` is valid. The shadowing is
 /// resolved per NAME at the leaf rather than by rebuilding a filtered set per
 /// statement — a module of `n` aliases and `m` value bindings costs `O(n + m)`
-/// instead of `O(n * m)` ([CHKARCH-TESTING-BENCH-RATCHET]).
+/// instead of `O(n * m)` ([CHKARCH-TESTING-BENCH]).
 struct NonTypes<'a> {
     module: &'a HashSet<&'a str>,
     shadowed: &'a [String],
