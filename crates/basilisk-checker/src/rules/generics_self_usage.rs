@@ -215,7 +215,7 @@ fn check_functions_self_usage(
                 }
             }
             Some(class_name) => {
-                let is_static = func.decorators.iter().any(|d| d == "staticmethod");
+                let is_static = super::shared::decorator_spelled(&func.decorators, "staticmethod");
                 if is_static {
                     check_func_annotations_for_self(
                         func,

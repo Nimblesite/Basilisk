@@ -25,24 +25,7 @@ fn elif_else_functions_collected() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[test]
-fn unconditional_assigns_from_if_else() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "def foo() -> None:\n",
-        "    if True:\n",
-        "        x = 1\n",
-        "    else:\n",
-        "        x = 2\n",
-        "    return x\n",
-    )
-    .to_owned();
-    let resolved = resolve_src(&src)?;
-    let Some(func) = resolved.functions.iter().find(|f| f.name == "foo") else {
-        return Err("function not found".into());
-    };
-    assert!(
-        func.unconditional_assigns.contains(&"x".to_owned()),
-        "x must be unconditionally assigned through if/else"
-    );
-    Ok(())
-}
+// The definite-assignment ("unconditional") analysis moved into the checker's
+// `names_unbound` walk ([NARROWPLAN-INTEGRATION] Step 8); its if/else merge is
+// pinned end-to-end by `if_else_both_assign_no_diagnostic` in
+// `basilisk-checker/tests/checker/names_unbound_tests.rs`.

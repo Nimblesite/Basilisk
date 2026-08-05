@@ -1,27 +1,28 @@
 //! Implements [`names_undefined`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-//! `names_undefined`: Undefined variable used in a return statement or as a
-//! module-level callee.
+//! `names_undefined`: Reference to a name with no visible definition.
 //!
 //! Flags any name referenced in a `return` expression — bare (`return x`), the
 //! base of an attribute/subscript chain (`return x.y`), a call argument, or the
 //! **callee of a call** (`return x()`) — that is not defined in scope. A name is
 //! considered defined if it is a parameter, a local assignment (`=`, `for`,
-//! `with`), a module-level function, class, variable, or import, an enclosing
-//! scope's binding, a cross-module imported symbol, or a builtin.
+//! `with`), a module-level function, class, variable, import, or PEP 695
+//! `type` alias, an enclosing scope's binding, a cross-module imported symbol,
+//! or a builtin.
 //!
 //! Also flags a module-level statement that calls a name bound nowhere in the
-//! module (issue #397), and a class that names its own yet-unbound self among
-//! its bases (issue #398) — Python evaluates the bases tuple before binding
-//! the class name, so both raise `NameError` the moment the module is
-//! imported. Shadowing stays legal: `class D(D)` is only flagged when the
-//! class statement is the SOLE binding of that name (no earlier class,
-//! import, assignment, or builtin to inherit from). A `from m import *`
-//! disables both module-level passes: the star can bind any name.
+//! module (issue #397), and a class that lists **its own name among its bases**
+//! (issue #398) — Python evaluates the bases tuple before binding the class
+//! name, so both raise `NameError` the moment the module is imported.
+//! Shadowing stays legal: `class D(D)` is only flagged when the class statement
+//! is the SOLE binding of that name (no earlier class, import, assignment, or
+//! builtin to inherit from). A `from m import *` disables both module-level
+//! passes: the star can bind any name.
 //!
 //! ```python
 //! def compute() -> int:
 //!     return undefined_name     # never defined → E0018
 //!     return undefined_fn()     # undefined callee → E0018
+//!
 //!
 //! a: int = print2("abc")        # no `print2` anywhere → E0018
 //!
@@ -69,12 +70,23 @@ impl Rule for UndefinedVariable {
 
         // Module-level class names are in scope for any function body, just like
         // module-level functions, variables, and imports.
-        let class_names: Vec<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
+        let class_names: Vec<&str> = basilisk_resolver::collect_names(&module.classes);
+
+        // A PEP 695 `type` statement binds its alias name to a lazily evaluated
+        // `TypeAliasType` object — a first-class runtime value (issue #372).
+        // Only MODULE-scope aliases are visible to every function body:
+        // class-scope names don't nest, and function-scope aliases are local
+        // (they reach `all_local_assigns`, so same-function use stays clean).
+        let type_alias_names: Vec<&str> =
+            basilisk_resolver::collect_names_where(&module.pep695_scoping.aliases, |alias| {
+                !alias.in_function && !alias.in_class
+            });
 
         let scope = ModuleScope {
             import_names: &import_names,
             module_var_names: &module_var_names,
             class_names: &class_names,
+            type_alias_names: &type_alias_names,
             imported_symbols: &module.imported_symbols,
         };
 
@@ -189,6 +201,7 @@ struct ModuleScope<'a> {
     import_names: &'a [&'a str],
     module_var_names: &'a [&'a str],
     class_names: &'a [&'a str],
+    type_alias_names: &'a [&'a str],
     imported_symbols:
         &'a std::collections::HashMap<String, basilisk_resolver::scope::ExternalSymbol>,
 }
@@ -405,6 +418,7 @@ fn check_function(
             || scope.import_names.contains(&name_str)
             || scope.module_var_names.contains(&name_str)
             || scope.class_names.contains(&name_str)
+            || scope.type_alias_names.contains(&name_str)
             || scope.imported_symbols.contains_key(name_str)
             // Any function defined in the module (sibling, nested, or the function
             // itself for recursion) is a name in scope — `return helper()` and

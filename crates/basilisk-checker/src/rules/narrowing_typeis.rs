@@ -105,15 +105,6 @@ fn extract_guard_inner(ann: &str) -> Option<&str> {
     inner.strip_suffix(']')
 }
 
-/// `true` when `sub` is a subtype of `sup` for the implicit numeric tower
-/// (`bool <: int <: float <: complex`), or they are identical.
-///
-/// Delegates to the shared tower ([NARROWPLAN-SUBTYPING]); parity with the
-/// former local table is pinned in `tests/subtyping_context_tests.rs`.
-fn is_subtype(sub: &str, sup: &str) -> bool {
-    crate::subtyping::name_subtype(sub, sup)
-}
-
 /// Check whether the expected return type is compatible with the actual
 /// TypeGuard/TypeIs return type of the argument function.
 ///
@@ -122,7 +113,11 @@ fn is_subtype(sub: &str, sup: &str) -> bool {
 ///   `TypeGuard[A]` when `B` is a subtype of `A` (and not to `TypeIs`).
 /// - `TypeIs[X]` is only compatible with `TypeIs[X]` (not `TypeGuard`), and
 ///   `TypeIs` is **invariant** in its type argument.
-fn is_compatible_return_type(expected_return: &str, actual_return: &str) -> bool {
+fn is_compatible_return_type(
+    subtyping: &crate::subtyping::SubtypingContext,
+    expected_return: &str,
+    actual_return: &str,
+) -> bool {
     if expected_return == "bool" {
         return true;
     }
@@ -139,7 +134,9 @@ fn is_compatible_return_type(expected_return: &str, actual_return: &str) -> bool
             extract_guard_inner(expected_return),
             extract_guard_inner(actual_return),
         ) {
-            (Some(expected_inner), Some(actual_inner)) => is_subtype(actual_inner, expected_inner),
+            (Some(expected_inner), Some(actual_inner)) => {
+                subtyping.is_subtype(actual_inner, expected_inner)
+            }
             _ => false,
         };
     }
@@ -271,6 +268,9 @@ impl Rule for TypeGuardCallableReturnMismatch {
         if typeguard_funcs.is_empty() {
             return;
         }
+        // TypeGuard covariance verdicts route through the module-seeded
+        // context ([NARROWPLAN-SUBTYPING]).
+        let subtyping = crate::subtyping::module_context(module);
 
         for call in &module.calls {
             let Some(callee_func) = func_map.get(call.callee.as_str()) else {
@@ -308,7 +308,7 @@ impl Rule for TypeGuardCallableReturnMismatch {
                     continue;
                 };
 
-                if is_compatible_return_type(expected_return, guard_return_text) {
+                if is_compatible_return_type(&subtyping, expected_return, guard_return_text) {
                     continue;
                 }
 

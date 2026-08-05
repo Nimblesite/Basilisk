@@ -412,6 +412,23 @@ pub(super) fn check_variance_assignments(
         return;
     }
 
-    check_module_assignments(&lines, &known, &module.source, &module.path, diagnostics);
-    check_fn_body_assignments(&lines, &known, &module.source, &module.path, diagnostics);
+    // Variance verdicts route through the module-seeded context
+    // ([NARROWPLAN-SUBTYPING]).
+    let subtyping = crate::subtyping::module_context(module);
+    check_module_assignments(
+        &subtyping,
+        &lines,
+        &known,
+        &module.source,
+        &module.path,
+        diagnostics,
+    );
+    check_fn_body_assignments(
+        &subtyping,
+        &lines,
+        &known,
+        &module.source,
+        &module.path,
+        diagnostics,
+    );
 }

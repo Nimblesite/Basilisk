@@ -38,17 +38,10 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
-use crate::rules::shared::is_numeric_subtype;
-
 const CODE: ErrorCode = ErrorCode {
     code: "generics_defaults_referential",
     docs_url: "https://www.basilisk-python.dev/errors/generics_defaults_referential",
 };
-
-/// Check if type `t1` is a subtype of type `t2` for bound compatibility.
-fn is_subtype_for_bound(t1: &str, t2: &str) -> bool {
-    is_numeric_subtype(t1, t2)
-}
 
 /// Check if constraints `c1` are a subset of constraints `c2`.
 fn is_constraint_subset(c1: &[String], c2: &[String]) -> bool {
@@ -106,6 +99,7 @@ fn check_ordering(
 
 /// Check bound compatibility: default's bound must be a subtype of this `TypeVar`'s bound.
 fn check_bound_compatibility(
+    subtyping: &crate::subtyping::SubtypingContext,
     tv: &basilisk_resolver::TypeVarCallInfo,
     default_tv: &basilisk_resolver::TypeVarCallInfo,
     default_name: &str,
@@ -118,7 +112,7 @@ fn check_bound_compatibility(
     if let (Some(ref tv_bound), Some(ref default_bound)) =
         (&tv.bound_type_name, &default_tv.bound_type_name)
     {
-        if !is_subtype_for_bound(default_bound, tv_bound) {
+        if !subtyping.is_subtype(default_bound, tv_bound) {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(
@@ -143,6 +137,7 @@ fn check_bound_compatibility(
 
 /// Check constraint compatibility between `TypeVar`s with defaults.
 fn check_constraint_compatibility(
+    subtyping: &crate::subtyping::SubtypingContext,
     tv: &basilisk_resolver::TypeVarCallInfo,
     default_tv: &basilisk_resolver::TypeVarCallInfo,
     default_name: &str,
@@ -180,17 +175,32 @@ fn check_constraint_compatibility(
 
     // Case 3b: Default has bound, this TypeVar has constraints
     if !tv.constraint_type_names.is_empty() && default_tv.has_bound {
-        check_default_bound_vs_constraints(tv, default_tv, default_name, path, diagnostics);
+        check_default_bound_vs_constraints(
+            subtyping,
+            tv,
+            default_tv,
+            default_name,
+            path,
+            diagnostics,
+        );
     }
 
     // Case 3c: Default has constraints, this TypeVar has bound
     if tv.has_bound && !default_tv.constraint_type_names.is_empty() {
-        check_default_constraints_vs_bound(tv, default_tv, default_name, path, diagnostics);
+        check_default_constraints_vs_bound(
+            subtyping,
+            tv,
+            default_tv,
+            default_name,
+            path,
+            diagnostics,
+        );
     }
 }
 
 /// Case 3b: Default has bound, this `TypeVar` has constraints.
 fn check_default_bound_vs_constraints(
+    subtyping: &crate::subtyping::SubtypingContext,
     tv: &basilisk_resolver::TypeVarCallInfo,
     default_tv: &basilisk_resolver::TypeVarCallInfo,
     default_name: &str,
@@ -203,7 +213,7 @@ fn check_default_bound_vs_constraints(
     let is_compatible = tv
         .constraint_type_names
         .iter()
-        .any(|constraint| is_subtype_for_bound(default_bound, constraint));
+        .any(|constraint| subtyping.is_subtype(default_bound, constraint));
 
     if !is_compatible {
         let tv_constraints = format_constraints(&tv.constraint_type_names);
@@ -232,6 +242,7 @@ fn check_default_bound_vs_constraints(
 
 /// Case 3c: Default has constraints, this ```TypeVar``` has bound.
 fn check_default_constraints_vs_bound(
+    subtyping: &crate::subtyping::SubtypingContext,
     tv: &basilisk_resolver::TypeVarCallInfo,
     default_tv: &basilisk_resolver::TypeVarCallInfo,
     default_name: &str,
@@ -244,7 +255,7 @@ fn check_default_constraints_vs_bound(
     let all_compatible = default_tv
         .constraint_type_names
         .iter()
-        .all(|constraint| is_subtype_for_bound(constraint, tv_bound));
+        .all(|constraint| subtyping.is_subtype(constraint, tv_bound));
 
     if !all_compatible {
         let default_constraints = format_constraints(&default_tv.constraint_type_names);
@@ -287,6 +298,10 @@ impl Rule for TypeVarDefaultReferential {
 
         let typevar_names: HashSet<&str> = typevar_by_name.keys().copied().collect();
 
+        // One subtyping implementation ([NARROWPLAN-SUBTYPING]): referential
+        // bound verdicts route through the module-seeded context.
+        let subtyping = crate::subtyping::module_context(module);
+
         let order_index: HashMap<&str, usize> = module
             .typevar_calls
             .iter()
@@ -310,8 +325,22 @@ impl Rule for TypeVarDefaultReferential {
             };
 
             check_ordering(tv, default_name, &order_index, &module.path, diagnostics);
-            check_bound_compatibility(tv, default_tv, default_name, &module.path, diagnostics);
-            check_constraint_compatibility(tv, default_tv, default_name, &module.path, diagnostics);
+            check_bound_compatibility(
+                &subtyping,
+                tv,
+                default_tv,
+                default_name,
+                &module.path,
+                diagnostics,
+            );
+            check_constraint_compatibility(
+                &subtyping,
+                tv,
+                default_tv,
+                default_name,
+                &module.path,
+                diagnostics,
+            );
         }
     }
 }

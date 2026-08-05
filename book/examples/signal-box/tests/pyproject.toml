@@ -1,0 +1,2 @@
+[tool.basilisk.rules]
+"BSK-0002" = "warning"

@@ -85,7 +85,9 @@ pub fn class_name_of_type(ty: &InferredType) -> Option<(String, bool)> {
         InferredType::Str => plain("str"),
         InferredType::Int => plain("int"),
         InferredType::Float => plain("float"),
-        InferredType::Bool => plain("bool"),
+        // A narrowing function's VALUE is a `bool` (PEP 647/742: the return type
+        // is consistent with `bool`), so `Guard` shares bool's members.
+        InferredType::Bool | InferredType::Guard { .. } => plain("bool"),
         InferredType::Bytes => plain("bytes"),
         // Type arguments do not change which class holds the members.
         InferredType::List(_) => plain("list"),
@@ -166,7 +168,8 @@ pub fn element_type_of(ty: &InferredType) -> Option<InferredType> {
         | InferredType::Union(_)
         | InferredType::Optional(_)
         | InferredType::Callable(_)
-        | InferredType::TypeForm(_) => None,
+        | InferredType::TypeForm(_)
+        | InferredType::Guard { .. } => None,
     }
 }
 

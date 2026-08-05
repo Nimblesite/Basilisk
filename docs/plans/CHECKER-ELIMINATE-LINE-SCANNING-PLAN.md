@@ -39,6 +39,22 @@ Expression-text scanners:
   as valid type expressions; reject everything else, including attribute access
   on a `Subscript`. Validation is eager at binding time — PEP 695 lazy
   evaluation defers *name resolution*, never *well-formedness*.
+- `aliases_implicit.rs` — carries a verbatim duplicate of the same
+  `is_invalid_rhs` scanner, plus three further text heuristics: implicit
+  aliases are detected by an uppercase-first-letter naming test
+  ([#411](https://github.com/Nimblesite/Basilisk/issues/411)), `TypeAlias as X`
+  imports are recovered by `match_indices` over raw import text duplicating the
+  real name cascade ([#412](https://github.com/Nimblesite/Basilisk/issues/412)),
+  and `looks_like_type_expression` gates on a character blacklist. The
+  parameterization checks layered on top are fitted to the same fixture — the
+  ParamSpec check is a shape guess that never locates the ParamSpec position
+  ([#409](https://github.com/Nimblesite/Basilisk/issues/409)) and
+  `is_assignable_to_bound` accepts every bound outside `int`/`float`/`complex`
+  ([#410](https://github.com/Nimblesite/Basilisk/issues/410)). Same fix shape as
+  `aliases_type_statement.rs`: validate the RHS expression node against the
+  type-expression grammar and resolve alias-hood from binding information, not
+  from name spelling. See [#408](https://github.com/Nimblesite/Basilisk/issues/408)
+  and [`CONFORMANCE-INTEGRITY-AUDIT.md`](../CONFORMANCE-INTEGRITY-AUDIT.md).
 - `returns_compatibility.rs` — builds the declared type from annotation source
   text via `InferredType::from_annotation`. Owned by
   [NARROWPLAN-ANNOTATION-RESOLUTION](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-ANNOTATION-RESOLUTION)

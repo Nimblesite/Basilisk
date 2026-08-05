@@ -154,6 +154,8 @@ pub(crate) mod redundant_annotation;
 pub(crate) mod returns_compatibility;
 pub(crate) mod returns_compatibility_2;
 pub(crate) mod shared;
+
+pub(crate) use shared::module_types::ModuleTypes;
 pub(crate) mod specialtypes_never;
 pub(crate) mod specialtypes_never_2;
 pub(crate) mod specialtypes_promotions;
@@ -194,6 +196,26 @@ pub(crate) trait Rule {
     /// `ctx` carries the configured target version/platform
     /// ([CHKARCH-VERSION-TARGET]) so rules never hardcode a Python version.
     fn check(&self, module: &ResolvedModule, ctx: &CheckContext, diagnostics: &mut Vec<Diagnostic>);
+
+    /// Run the rule with the module's SHARED type context — the annotation
+    /// cascade, the inference oracle, and the nominal subtyping table.
+    ///
+    /// Each of those costs a full walk of the module, so the driver builds them
+    /// once and passes them here; a rule that builds its own pays the walk
+    /// again, and a dozen such rules made the walks the dominant cost of
+    /// checking a file ([CHKARCH-TESTING-BENCH]). Rules that reason
+    /// about types override this; every other rule ignores the argument through
+    /// the default. [NARROWPLAN-INTEGRATION]
+    fn check_with_types(
+        &self,
+        module: &ResolvedModule,
+        types: &shared::module_types::ModuleTypes<'_>,
+        ctx: &CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        let _ = types;
+        self.check(module, ctx, diagnostics);
+    }
 
     /// This rule's opt-in tag declaration, or `None` for a core PEP rule.
     ///
@@ -410,12 +432,29 @@ pub fn run_all(module: &ResolvedModule, ctx: &CheckContext) -> Vec<Diagnostic> {
     .into_iter()
     .max()
     .unwrap_or(0);
+    // One type context for the whole module: every rule that reasons about
+    // types shares the cascade, the oracle, and the class table instead of
+    // rebuilding them ([CHKARCH-TESTING-BENCH], [NARROWPLAN-INTEGRATION]).
+    let types = shared::module_types::ModuleTypes::build(module);
     all_rules()
         .iter()
         .fold(Vec::with_capacity(expected), |mut acc, rule| {
-            rule.check(module, ctx, &mut acc);
+            rule.check_with_types(module, &types, ctx, &mut acc);
             acc
         })
+}
+
+/// Standalone entry point for a rule that reads the module's type context: a
+/// single-rule test, or any caller outside the driver. Builds exactly what
+/// [`run_all`] would otherwise share, so the two paths judge identically.
+pub(crate) fn check_with_own_types<R: Rule + ?Sized>(
+    rule: &R,
+    module: &ResolvedModule,
+    ctx: &CheckContext,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let types = shared::module_types::ModuleTypes::build(module);
+    rule.check_with_types(module, &types, ctx, diagnostics);
 }
 
 /// Each Basilisk-original rule's self-declared [`crate::rule_tags::OptInSpec`],

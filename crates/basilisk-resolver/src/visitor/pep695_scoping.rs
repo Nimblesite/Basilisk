@@ -5,7 +5,7 @@
 //! docstring content can never be mistaken for real declarations.
 
 use ruff_python_ast::{
-    Decorator, Expr, Stmt, StmtClassDef, StmtFunctionDef, StmtTypeAlias, TypeParam,
+    Decorator, Expr, ExprSubscript, Stmt, StmtClassDef, StmtFunctionDef, StmtTypeAlias, TypeParam,
 };
 use ruff_text_size::Ranged;
 
@@ -126,11 +126,11 @@ fn collect_alias(alias: &StmtTypeAlias, ctx: &Ctx<'_>, source: &str, out: &mut P
     out.aliases.push(Pep695AliasDef {
         name: name.clone(),
         name_span: text_range_to_span(alias.name.range()),
-        self_ref_args: find_self_ref_args(&alias.value, &name),
         params,
         rhs_refs,
         rhs_bare_refs,
         in_function: ctx.scope == Scope::Function,
+        in_class: ctx.scope == Scope::Class,
     });
     record_module_binding_offset(ctx, &name, alias.name.range().start().to_u32(), out);
 }
@@ -222,12 +222,12 @@ fn enclosing_params(ctx: &Ctx<'_>) -> Vec<String> {
 // Self-reference / attribute / binding helpers
 // ---------------------------------------------------------------------------
 
-/// Find the first `alias_name[args]` subscript anywhere in `expr` and return
-/// the simple names of its arguments.
-/// Collect names that appear at the *top level* of a type-alias RHS: a bare
-/// `Name`, or a direct member of a top-level `X | Y` union. Subscripts/calls are
-/// NOT descended into — a reference through a container terminates and so is not
-/// a bare reference. (Optional `X | None` contributes `X`; `None` is ignored.)
+/// Collect names that appear at the *same level* as a type-alias RHS: a bare
+/// `Name`, a member of an `X | Y` union, an argument of a transparent
+/// `Union[..]`/`Optional[..]`/`Annotated[..]` form, or a parsed string
+/// forward reference. Real constructor subscripts (`list[X]`) are NOT
+/// descended into — a reference through a container terminates and so is
+/// not a bare reference.
 fn collect_bare_refs(expr: &Expr, out: &mut Vec<String>) {
     match expr {
         Expr::Name(name) => out.push(name.id.to_string()),
@@ -235,43 +235,39 @@ fn collect_bare_refs(expr: &Expr, out: &mut Vec<String>) {
             collect_bare_refs(&bin.left, out);
             collect_bare_refs(&bin.right, out);
         }
+        // A string forward reference is evaluated at the same level.
+        Expr::StringLiteral(literal) => {
+            if let Some(inner) = basilisk_parser::parse_type_expression(literal.value.to_str()) {
+                collect_bare_refs(&inner, out);
+            }
+        }
+        Expr::Subscript(sub) => {
+            for arg in transparent_subscript_args(sub) {
+                collect_bare_refs(arg, out);
+            }
+        }
         _ => {}
     }
 }
 
-fn find_self_ref_args(expr: &Expr, alias_name: &str) -> Option<Vec<String>> {
-    match expr {
-        Expr::Subscript(sub) => {
-            if expr_simple_name(&sub.value).as_deref() == Some(alias_name) {
-                return Some(subscript_arg_names(&sub.slice));
-            }
-            find_self_ref_args(&sub.value, alias_name)
-                .or_else(|| find_self_ref_args(&sub.slice, alias_name))
+/// The same-level type arguments of a transparent special-form subscript —
+/// all of `Union[..]`'s, `Optional[..]`'s, `Annotated[..]`'s first (its
+/// remaining arguments are metadata, not types) — or empty for any other
+/// base, which is a real constructor and guards recursion. Both bare and
+/// `typing.`-qualified spellings count.
+fn transparent_subscript_args(sub: &ExprSubscript) -> Vec<&Expr> {
+    let head = match sub.value.as_ref() {
+        Expr::Name(name) => name.id.as_str(),
+        Expr::Attribute(attr) if expr_simple_name(&attr.value).as_deref() == Some("typing") => {
+            attr.attr.as_str()
         }
-        Expr::BinOp(bin) => find_self_ref_args(&bin.left, alias_name)
-            .or_else(|| find_self_ref_args(&bin.right, alias_name)),
-        Expr::Tuple(tup) => tup
-            .elts
-            .iter()
-            .find_map(|elt| find_self_ref_args(elt, alias_name)),
-        Expr::Call(call) => call
-            .arguments
-            .args
-            .iter()
-            .find_map(|arg| find_self_ref_args(arg, alias_name)),
-        Expr::Starred(s) => find_self_ref_args(&s.value, alias_name),
-        _ => None,
-    }
-}
-
-fn subscript_arg_names(slice: &Expr) -> Vec<String> {
-    match slice {
-        Expr::Tuple(tup) => tup
-            .elts
-            .iter()
-            .map(|elt| expr_simple_name(elt).unwrap_or_default())
-            .collect(),
-        other => vec![expr_simple_name(other).unwrap_or_default()],
+        _ => return Vec::new(),
+    };
+    let args = basilisk_parser::subscript_elements(sub);
+    match head {
+        "Union" | "Optional" => args,
+        "Annotated" => args.into_iter().take(1).collect(),
+        _ => Vec::new(),
     }
 }
 

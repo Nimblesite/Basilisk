@@ -348,3 +348,66 @@ class GeneratedReferenceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GateSuiteFreshnessTests(unittest.TestCase):
+    """The gate must refuse a score measured against a stale suite.
+
+    Implements [CHKARCH-CONFORMANCE]. The whole point of cloning
+    ``python/typing@main`` fresh is that a test upstream adds TODAY can fail us
+    today. Grading an older tree still reports 100% while proving nothing, and
+    three flags can reach one: ``--ref``, ``--suite-dir``, ``--reuse-clone``.
+    """
+
+    def test_current_upstream_tip_is_accepted(self) -> None:
+        """The live ``main`` sha passes without touching the network twice."""
+        live = "a" * 40
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=f"{live}\trefs/heads/main\n"
+        )
+        with patch("run_conformance.subprocess.run", return_value=completed):
+            run_conformance.assert_graded_commit_is_live_main(
+                {"sha": live, "short": live[:7], "date": "2026-08-04"}
+            )
+
+    def test_stale_graded_commit_fails_the_gate(self) -> None:
+        """A suite behind the tip is a hard failure, not a pass."""
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=f"{'a' * 40}\trefs/heads/main\n"
+        )
+        with patch("run_conformance.subprocess.run", return_value=completed):
+            with self.assertRaises(RuntimeError) as caught:
+                run_conformance.assert_graded_commit_is_live_main(
+                    {"sha": "b" * 40, "short": "bbbbbbb", "date": "2020-01-01"}
+                )
+        self.assertIn("STALE CONFORMANCE SUITE", str(caught.exception))
+
+    def test_unreachable_upstream_fails_closed(self) -> None:
+        """An unverifiable score is not a passing score — never skip the check."""
+        with patch(
+            "run_conformance.subprocess.run",
+            side_effect=OSError("network down"),
+        ):
+            with self.assertRaises(RuntimeError) as caught:
+                run_conformance.assert_graded_commit_is_live_main(
+                    {"sha": "c" * 40, "short": "ccccccc", "date": "2026-08-04"}
+                )
+        self.assertIn("cannot verify", str(caught.exception))
+
+    def test_empty_ls_remote_output_fails_closed(self) -> None:
+        """A missing ref must not read as "nothing to compare, so pass"."""
+        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="")
+        with patch("run_conformance.subprocess.run", return_value=completed):
+            with self.assertRaises(RuntimeError) as caught:
+                run_conformance.assert_graded_commit_is_live_main(
+                    {"sha": "d" * 40, "short": "ddddddd", "date": "2026-08-04"}
+                )
+        self.assertIn("could not resolve", str(caught.exception))
+
+    def test_gate_mode_calls_the_freshness_check(self) -> None:
+        """Wiring test: --gate must not be able to skip verification."""
+        source = (ROOT / "conformance" / "run_conformance.py").read_text(
+            encoding="utf-8"
+        )
+        gate_block = source.split('if not opts["gate"]:', 1)[1]
+        self.assertIn("assert_graded_commit_is_live_main(commit)", gate_block)

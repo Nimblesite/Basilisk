@@ -8,8 +8,10 @@
 use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diag_help_note, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
+use crate::subtyping::SubtypingContext;
+use crate::types::InferredType;
 
 const CODE: ErrorCode = ErrorCode {
     code: "narrowing_typeis_2",
@@ -21,158 +23,215 @@ const CODE: ErrorCode = ErrorCode {
 ///
 /// Implements [TYPEINF-NARROWING-TYPEIS] — the PEP 742 consistency precondition:
 /// because `TypeIs` narrows bidirectionally, the narrowed type `X` must be a
-/// subtype of (consistent with) the input parameter type.
+/// subtype of (consistent with) the input parameter type. Both sides resolve
+/// through [TYPEINF-ANNOTATION-RESOLUTION] first, so aliases expand and the
+/// nominal walk sees classes, not annotation text; a side the module cannot
+/// ground (a `TypeVar`, an unseen import) abstains rather than guesses.
 pub(crate) struct TypeIsInconsistentNarrowing;
 
-/// Extract the inner type from `TypeIs[X]` or `TypeGuard[X]`. Returns the inner type text.
-fn extract_inner_type(ann_text: &str) -> Option<&str> {
-    let prefix = "TypeIs[";
-    let start = ann_text.find(prefix)?;
-    let inner_start = start + prefix.len();
-    let rest = ann_text.get(inner_start..)?;
-    // Parsed annotations overwhelmingly end at this subscript. This covers
-    // both simple and nested arguments (`TypeIs[list[int]]`) without a second
-    // bracket walk; retain the general matcher for qualified/trailing forms.
-    if let Some(inner) = rest.strip_suffix(']') {
-        return Some(inner);
-    }
-    // Find matching closing bracket (handle nested brackets)
-    let mut depth = 1u32;
-    let mut end_pos = 0;
-    for (idx, ch) in rest.char_indices() {
-        match ch {
-            '[' => depth += 1,
-            ']' => {
-                depth -= 1;
-                if depth == 0 {
-                    end_pos = idx;
-                    break;
-                }
+/// The three-valued consistency judgment: a verdict either way requires both
+/// sides to be grounded; anything the judgment cannot decide abstains.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Verdict {
+    /// The narrowed type is assignable to the input type.
+    Consistent,
+    /// Both sides are grounded and the narrowed type is NOT assignable.
+    Inconsistent,
+    /// At least one side is not decidable here — no diagnostic.
+    Unknown,
+}
+
+/// The leaf name a type compares nominally by, or `None` when the type is not
+/// a groundable leaf (so the judgment must abstain or recurse structurally).
+fn leaf_name(resolver: &AnnotationResolver<'_>, ty: &InferredType) -> Option<String> {
+    match ty {
+        InferredType::Int => Some("int".to_owned()),
+        InferredType::Str | InferredType::LiteralString => Some("str".to_owned()),
+        InferredType::Float => Some("float".to_owned()),
+        InferredType::Bool => Some("bool".to_owned()),
+        InferredType::Bytes => Some("bytes".to_owned()),
+        InferredType::None_ => Some("None".to_owned()),
+        InferredType::Literal(value) => Some(
+            match value {
+                crate::types::LiteralValue::Int(_) => "int",
+                crate::types::LiteralValue::Str(_) => "str",
+                crate::types::LiteralValue::Float(_) => "float",
+                crate::types::LiteralValue::Bool(_) => "bool",
+                crate::types::LiteralValue::Bytes(_) => "bytes",
             }
-            _ => {}
-        }
-    }
-    if depth == 0 {
-        rest.get(..end_pos)
-    } else {
-        None
+            .to_owned(),
+        ),
+        InferredType::Named(name) => resolver.is_grounded_name(name).then(|| name.clone()),
+        _ => None,
     }
 }
 
-/// Returns `true` if the type text contains a `TypeVar` (single uppercase letter
-/// or a known TypeVar-like name). When `TypeVars` are present, we can't statically
-/// determine consistency without full type inference, so we assume consistent.
-fn contains_typevar(type_text: &str) -> bool {
-    if !type_text.as_bytes().iter().any(u8::is_ascii_uppercase) {
-        return false;
+/// Consistency of `narrowed` with `input` on RESOLVED types.
+fn consistency(
+    resolver: &AnnotationResolver<'_>,
+    ctx: &SubtypingContext,
+    narrowed: &InferredType,
+    input: &InferredType,
+) -> Verdict {
+    if narrowed == input
+        || matches!(narrowed, InferredType::Any | InferredType::Never)
+        || matches!(input, InferredType::Any)
+    {
+        return Verdict::Consistent;
     }
-    // Check for single-letter uppercase names that are TypeVars
-    // Also check common TypeVar patterns like T, T_A, T_co, etc.
-    for segment in type_text.split(&['[', ']', ',', ' ']) {
-        let segment = segment.trim();
-        if segment.is_empty() {
-            continue;
+    match (narrowed, input) {
+        // A narrowed union is consistent when EVERY arm is.
+        (InferredType::Union(arms), _) => all_arms(
+            arms.iter()
+                .map(|arm| consistency(resolver, ctx, arm, input)),
+        ),
+        (InferredType::Optional(inner), _) => all_arms(
+            [
+                consistency(resolver, ctx, inner, input),
+                consistency(resolver, ctx, &InferredType::None_, input),
+            ]
+            .into_iter(),
+        ),
+        // An input union accepts a narrow into ANY of its arms.
+        (_, InferredType::Union(arms)) => any_arm(
+            arms.iter()
+                .map(|arm| consistency(resolver, ctx, narrowed, arm)),
+        ),
+        (_, InferredType::Optional(inner)) => any_arm(
+            [
+                consistency(resolver, ctx, narrowed, inner),
+                matches!(narrowed, InferredType::None_)
+                    .then_some(Verdict::Consistent)
+                    .unwrap_or(Verdict::Inconsistent),
+            ]
+            .into_iter(),
+        ),
+        // Same-shape containers are invariant: equality was checked above, so
+        // grounded-but-different arguments are inconsistent.
+        (InferredType::List(a), InferredType::List(b))
+        | (InferredType::Set(a), InferredType::Set(b)) => {
+            invariant(resolver, ctx, &[a.as_ref().clone()], &[b.as_ref().clone()])
         }
-        // Single uppercase letter (T, U, V, etc.)
-        if segment.len() == 1
-            && segment
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_ascii_uppercase())
-        {
-            return true;
-        }
-        // TypeVar patterns like T_A, T_co, T_contra
-        if segment.starts_with("T_") || segment.starts_with("T1") || segment.starts_with("T2") {
-            return true;
-        }
+        (InferredType::Dict(ak, av), InferredType::Dict(bk, bv)) => invariant(
+            resolver,
+            ctx,
+            &[ak.as_ref().clone(), av.as_ref().clone()],
+            &[bk.as_ref().clone(), bv.as_ref().clone()],
+        ),
+        (InferredType::Tuple(a), InferredType::Tuple(b)) => invariant(resolver, ctx, a, b),
+        _ => leaf_consistency(resolver, ctx, narrowed, input),
     }
-    false
 }
 
-/// Check if `narrowed` type is consistent with `input` type.
-/// Returns `true` if they are consistent (no error).
-///
-/// For `TypeIs`, the narrowed type must be assignable to the input type.
-/// This means narrowed must be a subtype of input.
-fn is_consistent(narrowed: &str, input: &str) -> bool {
-    let narrowed = narrowed.trim();
-    let input = input.trim();
-
-    // `object` accepts anything
-    if input == "object" {
-        return true;
-    }
-
-    // Identity and the numeric tower via the shared core
-    // ([NARROWPLAN-SUBTYPING]).
-    if crate::subtyping::name_subtype(narrowed, input) {
-        return true;
-    }
-
-    // `Any` is consistent with anything
-    if input == "Any" || narrowed == "Any" {
-        return true;
-    }
-
-    // If either type contains TypeVars, we can't determine consistency
-    // without full type inference - assume consistent. Keep this after the
-    // concrete scalar fast paths so ordinary lowercase builtins do no token
-    // splitting.
-    if contains_typevar(narrowed) || contains_typevar(input) {
-        return true;
-    }
-
-    // For generic types like list[X] vs list[Y], check if it's the same base
-    // Lists, sets, dicts are invariant, so list[int] is NOT a subtype of list[object]
-    if let (Some(n_base), Some(i_base)) = (generic_base(narrowed), generic_base(input)) {
-        // Same generic base - invariant containers are not subtypes
-        if n_base == i_base {
-            // For invariant types (list, dict, set), exact match is required
-            // We already checked full string equality above, so if we're here
-            // the type args differ → not consistent
-            return false;
+/// Both sides as nominal leaves through the shared subtype walk; anything
+/// either side cannot ground abstains.
+fn leaf_consistency(
+    resolver: &AnnotationResolver<'_>,
+    ctx: &SubtypingContext,
+    narrowed: &InferredType,
+    input: &InferredType,
+) -> Verdict {
+    match (leaf_name(resolver, narrowed), leaf_name(resolver, input)) {
+        (Some(sub), Some(sup)) => {
+            if ctx.is_subtype(&sub, &sup) {
+                Verdict::Consistent
+            } else {
+                Verdict::Inconsistent
+            }
         }
+        _ => Verdict::Unknown,
     }
-
-    // For simple types with no obvious subtype relationship, reject
-    // This handles cases like str vs int
-    false
 }
 
-/// Split a generic type `Base[Args]` into `(base, args)` text.
-fn generic_base(type_text: &str) -> Option<&str> {
-    let bracket = type_text.find('[')?;
-    type_text.get(..bracket)
+/// Invariant positions: every pair must be mutually consistent; a grounded
+/// difference in either direction is inconsistent, arity mismatch too.
+fn invariant(
+    resolver: &AnnotationResolver<'_>,
+    ctx: &SubtypingContext,
+    a: &[InferredType],
+    b: &[InferredType],
+) -> Verdict {
+    if a.len() != b.len() {
+        return Verdict::Inconsistent;
+    }
+    all_arms(a.iter().zip(b).map(|(x, y)| {
+        match (
+            consistency(resolver, ctx, x, y),
+            consistency(resolver, ctx, y, x),
+        ) {
+            (Verdict::Consistent, Verdict::Consistent) => Verdict::Consistent,
+            (Verdict::Unknown, _) | (_, Verdict::Unknown) => Verdict::Unknown,
+            _ => Verdict::Inconsistent,
+        }
+    }))
+}
+
+/// Fold "every arm must be consistent": any inconsistency wins, any
+/// undecidable arm abstains the whole judgment.
+fn all_arms(verdicts: impl Iterator<Item = Verdict>) -> Verdict {
+    let mut result = Verdict::Consistent;
+    for verdict in verdicts {
+        match verdict {
+            Verdict::Inconsistent => return Verdict::Inconsistent,
+            Verdict::Unknown => result = Verdict::Unknown,
+            Verdict::Consistent => {}
+        }
+    }
+    result
+}
+
+/// Fold "some arm must accept": any consistent arm wins; otherwise abstain if
+/// anything was undecidable.
+fn any_arm(verdicts: impl Iterator<Item = Verdict>) -> Verdict {
+    let mut result = Verdict::Inconsistent;
+    for verdict in verdicts {
+        match verdict {
+            Verdict::Consistent => return Verdict::Consistent,
+            Verdict::Unknown => result = Verdict::Unknown,
+            Verdict::Inconsistent => {}
+        }
+    }
+    result
 }
 
 impl Rule for TypeIsInconsistentNarrowing {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        super::check_with_own_types(self, module, ctx, diagnostics);
+    }
+
+    fn check_with_types(
+        &self,
+        module: &ResolvedModule,
+        types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
+        let Some(resolver) = types.annotations() else {
+            return;
+        };
+        let subtyping = types.subtyping();
 
         for func in &module.functions {
-            // Must have a return annotation span.
             let Some(ann_span) = func.return_annotation_span else {
                 continue;
             };
 
-            // Extract annotation text.
-            let Some(ann_text) = slice_span(source, ann_span) else {
-                continue;
-            };
-
-            // Only check TypeIs (not TypeGuard - TypeGuard has no consistency requirement)
-            if !ann_text.contains("TypeIs[") {
-                continue;
-            }
-
-            // Extract the inner narrowed type.
-            let Some(narrowed_type) = extract_inner_type(ann_text) else {
+            // Only `TypeIs` carries the consistency precondition — resolved,
+            // so an alias of `TypeIs[X]` is checked exactly like the spelled
+            // form ([TYPEINF-ANNOTATION-RESOLUTION]). Resolved from the
+            // annotation NODE the span points at: re-parsing the text would
+            // cost a `ruff` expression parse per annotated function, and the
+            // node is already indexed.
+            let Some(InferredType::Guard {
+                type_is: true,
+                inner,
+            }) = resolver.resolve_span(ann_span)
+            else {
                 continue;
             };
 
@@ -181,31 +240,32 @@ impl Rule for TypeIsInconsistentNarrowing {
                 .parameters
                 .iter()
                 .find(|param| param.name != "self" && param.name != "cls");
-
             let Some(param) = first_param else {
                 continue;
             };
-
-            // Get the parameter's annotation text.
             let Some(param_ann_span) = param.annotation_span else {
                 continue;
             };
-
-            let Some(param_type) = slice_span(source, param_ann_span) else {
+            let Some(input) = resolver.resolve_span(param_ann_span) else {
                 continue;
             };
 
-            // Check consistency.
-            if !is_consistent(narrowed_type, param_type) {
+            // Structural targets (Protocols, TypedDicts) need a structural
+            // judgment this nominal walk cannot make — abstain.
+            if resolver.is_structural_target(&inner) || resolver.is_structural_target(&input) {
+                continue;
+            }
+
+            if consistency(resolver, subtyping, &inner, &input) == Verdict::Inconsistent {
                 diagnostics.push(error_diag_help_note(
                     CODE.clone(),
                     format!(
-                        "`TypeIs[{narrowed_type}]` narrows to a type inconsistent with parameter type `{param_type}`"
+                        "`TypeIs[{inner}]` narrows to a type inconsistent with parameter type `{input}`"
                     ),
                     ann_span,
                     &module.path,
                     format!(
-                        "The narrowed type `{narrowed_type}` must be consistent with the input type `{param_type}`"
+                        "The narrowed type `{inner}` must be consistent with the input type `{input}`"
                     ),
                     "Per the typing spec, TypeIs requires the narrowed type to be \
                      consistent with the input type",

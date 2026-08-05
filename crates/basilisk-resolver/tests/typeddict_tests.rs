@@ -28,3 +28,6 @@ mod test_unhashable_keys;
 
 #[path = "resolver/test_exception_handler.rs"]
 mod test_exception_handler;
+
+#[path = "resolver/test_deep_base_chains.rs"]
+mod test_deep_base_chains;

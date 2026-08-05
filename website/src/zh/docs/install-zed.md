@@ -5,7 +5,7 @@ description: 在 Zed 编辑器中安装并使用 Basilisk Python 语言服务器
 keywords: basilisk, zed, zed编辑器, python, 语言服务器, lsp, 安装, 扩展, 调试, 性能分析, 斜杠命令
 lang: zh
 date: 2026-02-28
-dateModified: 2026-03-31
+dateModified: 2026-08-04
 ---
 
 # Zed 版 Basilisk
@@ -14,13 +14,22 @@ Basilisk 提供了一个原生 [Zed](https://zed.dev) 扩展，为 Python 注册
 
 ## 安装扩展
 
-1. 打开扩展视图：命令面板（`Cmd+Shift+P`）→ **zed: extensions**
-2. 搜索 **Basilisk**
-3. 点击 **Install**
+Basilisk **尚未收录进 Zed 的扩展注册表**——向 [`zed-industries/extensions`](https://github.com/zed-industries/extensions) 的提交仍在进行中，因此在扩展视图中搜索“Basilisk”是找不到的。请改为直接安装；只需一次克隆和一个命令面板操作。
 
-就这样。打开一个 Python 文件，Basilisk 就是您的语言服务器。
+1. 克隆扩展仓库：
 
-> **从源代码安装？** 如果您正在存储库的检出目录中工作，请改为将其安装为开发扩展：命令面板 → **zed: install dev extension** → 选择 `basilisk-zed/` 目录。Zed 会自动将扩展编译为 WASM——您永远不需要预构建或复制 `.wasm` 文件。
+   ```sh
+   git clone https://github.com/Nimblesite/basilisk-zed.git
+   ```
+
+2. 打开命令面板（`Cmd+Shift+P` / `Ctrl+Shift+P`）→ **zed: install dev extension**
+3. 选择克隆下来的 `basilisk-zed` 目录
+
+Zed 会自行把扩展编译为 WASM——您永远不需要预构建或复制 `.wasm` 文件。打开一个 Python 文件，Basilisk 就是您的语言服务器。
+
+> **在 monorepo 中工作？** 直接选择 [Basilisk](https://github.com/Nimblesite/Basilisk) 检出目录下的 `basilisk-zed/`，无需另行克隆。`make package-zed` 会一步构建扩展和本地 `basilisk` 二进制文件。
+
+要更新，请在克隆目录中执行 `git pull`，然后重新运行 **zed: install dev extension**。等注册表收录完成后，扩展视图就会为您处理安装和更新。
 
 ## 二进制文件随扩展一同提供
 

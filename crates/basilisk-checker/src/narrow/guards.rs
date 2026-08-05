@@ -36,6 +36,21 @@ pub struct NarrowContext {
     /// return and a `Never`-returning call statement counts as divergence
     /// (inference-driven reachability, [TYPEINF-TARGET-NARROWING]).
     pub callables: HashMap<String, InferredType>,
+    /// Guard-annotation text → the RESOLVED narrowing target, produced by the
+    /// module-level [TYPEINF-ANNOTATION-RESOLUTION] cascade. A
+    /// `TypeGuard[MyAlias]` narrows to what `MyAlias` resolves to, not to an
+    /// opaque name; texts absent here fall back to the annotation-text
+    /// lowering (Stage 0.5 bidir wiring).
+    pub guard_types: HashMap<String, InferredType>,
+}
+
+/// The narrowing target a `TypeGuard[X]` / `TypeIs[X]` text denotes: the
+/// module-resolved type when the context has one, else the text lowering.
+fn resolved_guard_type(ctx: &NarrowContext, guard_type: &str) -> InferredType {
+    ctx.guard_types
+        .get(guard_type)
+        .cloned()
+        .unwrap_or_else(|| InferredType::from_annotation(guard_type))
 }
 
 /// What one guard does to one variable in each branch.
@@ -110,7 +125,7 @@ fn outcome_for_kind(
             ..
         } => Some(GuardOutcome {
             variable: variable.clone(),
-            positive: InferredType::from_annotation(guard_type),
+            positive: resolved_guard_type(ctx, guard_type),
             // PEP 647: TypeGuard narrows the positive branch ONLY.
             negative: current.clone(),
             whole_scope,
@@ -120,7 +135,7 @@ fn outcome_for_kind(
             guard_type,
             ..
         } => {
-            let narrowed_to = InferredType::from_annotation(guard_type);
+            let narrowed_to = resolved_guard_type(ctx, guard_type);
             Some(GuardOutcome {
                 variable: variable.clone(),
                 // PEP 742: TypeIs narrows BOTH branches.
@@ -570,6 +585,52 @@ mod tests {
             type_is.negative,
             InferredType::Str,
             "TypeIs: negative subtracts"
+        );
+    }
+
+    /// Stage 0.5 bidir wiring: a `TypeGuard[MyAlias]` / `TypeIs[MyAlias]`
+    /// narrows to the type the module RESOLVED for the alias, not to an
+    /// opaque lowered name ([TYPEINF-ANNOTATION-RESOLUTION]).
+    #[test]
+    fn guard_types_resolve_through_the_module_context() {
+        let current = InferredType::Union(vec![InferredType::Int, InferredType::Str]);
+        let ctx = NarrowContext {
+            guard_types: std::iter::once(("MyAlias".to_owned(), InferredType::Str)).collect(),
+            ..NarrowContext::default()
+        };
+        let type_guard = guard_outcomes_in(
+            &guard(NarrowingGuardKind::TypeGuard {
+                variable: "x".to_owned(),
+                guard_type: "MyAlias".to_owned(),
+                if_body_span: Span::new(0, 0),
+                else_body_span: None,
+            }),
+            &current,
+            &ctx,
+        )
+        .expect("outcome");
+        assert_eq!(
+            type_guard.positive,
+            InferredType::Str,
+            "the alias narrows to its RESOLVED type"
+        );
+
+        let type_is = guard_outcomes_in(
+            &guard(NarrowingGuardKind::TypeIs {
+                variable: "x".to_owned(),
+                guard_type: "MyAlias".to_owned(),
+                if_body_span: Span::new(0, 0),
+                else_body_span: None,
+            }),
+            &current,
+            &ctx,
+        )
+        .expect("outcome");
+        assert_eq!(type_is.positive, InferredType::Str);
+        assert_eq!(
+            type_is.negative,
+            InferredType::Int,
+            "TypeIs subtracts the RESOLVED type from the negative branch"
         );
     }
 

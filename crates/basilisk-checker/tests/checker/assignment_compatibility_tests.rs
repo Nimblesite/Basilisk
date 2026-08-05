@@ -478,3 +478,75 @@ _BAD: tuple[tuple[str, str], ...] = (("a", 1), ("c", "d"))
     );
     Ok(())
 }
+
+#[test]
+fn enum_type_assigns_to_complete_literal_member_union() -> Result<(), Box<dyn std::error::Error>> {
+    // GitHub #374: the enums chapter's literal expansion makes `Answer`
+    // equivalent to `Literal[Answer.Yes, Answer.No]` when Yes/No are ALL of
+    // its members, so the enum-typed value is assignable to that union —
+    // in both the bare-`Enum` and dotted `enum.Enum` base spellings.
+    let sources = [
+        r#"
+from enum import Enum
+from typing import Literal
+
+
+class Answer(Enum):
+    Yes = 1
+    No = 2
+
+
+def to_literal(a: Answer) -> None:
+    x: Literal[Answer.Yes, Answer.No] = a
+"#,
+        r#"
+import enum
+from typing import Literal
+
+
+class Answer(enum.Enum):
+    Yes = 1
+    No = 2
+
+
+def to_literal(a: Answer) -> None:
+    x: Literal[Answer.Yes, Answer.No] = a
+"#,
+    ];
+    for source in sources {
+        let diags = run(source)?;
+        let msgs = messages_for(&diags, "assignment_compatibility");
+        assert!(
+            msgs.is_empty(),
+            "a complete enum-member union must accept the enum type (#374), got: {msgs:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn enum_type_to_partial_literal_member_union_still_fires() -> Result<(), Box<dyn std::error::Error>>
+{
+    // The guard for #374's fix: a PARTIAL member union is NOT equivalent to
+    // the enum — `a` may hold `Answer.No`, so this stays an error.
+    let source = r#"
+from enum import Enum
+from typing import Literal
+
+
+class Answer(Enum):
+    Yes = 1
+    No = 2
+
+
+def to_literal(a: Answer) -> None:
+    x: Literal[Answer.Yes] = a
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "assignment_compatibility");
+    assert!(
+        !msgs.is_empty(),
+        "a partial member union must still reject the full enum type"
+    );
+    Ok(())
+}

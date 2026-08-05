@@ -15,9 +15,10 @@
 //!     return 42
 //! ```
 
-use crate::inference::{infer_rhs, literal_collection_assignable_to};
-use crate::span_util::slice_span;
-use crate::types::InferredType;
+use crate::annotation::AnnotationResolver;
+use crate::rules::shared::judge::TypeJudge;
+use crate::rules::shared::module_types::ModuleTypes;
+use crate::rules::shared::returns_judge::{judge_return, ReturnVerdict};
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
@@ -41,13 +42,31 @@ impl Rule for ReturnTypeMismatch {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        super::check_with_own_types(self, module, ctx, diagnostics);
+    }
+
+    fn check_with_types(
+        &self,
+        module: &ResolvedModule,
+        types: &ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        // The declared type of every return annotation comes from the shared
+        // cascade ([TYPEINF-ANNOTATION-RESOLUTION]) and every returned value
+        // from the shared oracle; both are built once per module, not once per
+        // function.
+        let Some(resolver) = types.annotations() else {
+            return;
+        };
+        let judge = TypeJudge::new(types.oracle(), resolver, types.subtyping());
         for func in &module.functions {
             // @no_type_check suppresses body checks (E0011); E0041 arity still applies.
             if !is_stub_context(func, &module.classes) && !is_no_type_check(func) {
-                check_return_type_mismatch(func, module, diagnostics);
+                check_return_type_mismatch(func, module, resolver, &judge, diagnostics);
             }
         }
     }
@@ -60,6 +79,8 @@ impl Rule for ReturnTypeMismatch {
 fn check_return_type_mismatch(
     func: &FunctionInfo,
     module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
+    judge: &TypeJudge<'_, '_>,
     out: &mut Vec<Diagnostic>,
 ) {
     if !func.return_annotation.is_present() {
@@ -73,52 +94,34 @@ fn check_return_type_mismatch(
         return;
     }
 
-    for return_stmt in &func.return_stmts {
-        if !return_stmt.has_value {
-            continue;
-        }
+    let Some(declared_type) = func
+        .return_annotation_span
+        .and_then(|span| resolver.resolve_span(span))
+    else {
+        return;
+    };
 
-        // Skip call expressions: without full type inference we cannot prove the
-        // callee returns an incompatible type
-        if return_stmt.value_is_call {
-            continue;
-        }
+    // Skip targets this rule cannot verify: a `Literal[...]` target needs the
+    // returned expression's *value* (`return True` infers `Bool`, not
+    // `Literal[True]`), and a `Protocol` / `TypedDict` target is satisfied
+    // structurally, which a kind comparison cannot judge. Names the cascade
+    // could not resolve are already the gradual `Unknown` and suppress through
+    // ordinary assignability. Shared with E0013 so the two sibling
+    // return-mismatch rules stay in lock-step.
+    if super::shared::is_value_dependent_target(&declared_type)
+        || resolver.is_structural_target(&declared_type)
+    {
+        return;
+    }
 
-        let Some(ann_span) = func.return_annotation_span else {
-            continue;
-        };
-        let Some(ann_text) = slice_span(&module.source, ann_span) else {
-            continue;
-        };
-
-        // Use inference system to get RHS type
-        let inferred_type = infer_rhs(&return_stmt.rhs_kind);
-
-        // Skip Unknown types - we can't prove they're incompatible
-        if matches!(inferred_type, InferredType::Unknown) {
-            continue;
-        }
-
-        // Parse annotation text to InferredType
-        let declared_type = InferredType::from_annotation(ann_text);
-
-        // Skip targets the kind-only return inference cannot reliably verify —
-        // quoted forward references (`"int | Meta2"` → a union of `Named`
-        // fragments), structural `Named` types (`Sequence[int]`), and
-        // `Literal[...]` targets (`return True` infers `Bool`, not
-        // `Literal[True]`). Shared with E0013 so the two sibling return-mismatch
-        // rules stay in lock-step. Concrete primitive/None/container mismatches
-        // (e.g. `-> str: return 42`) are NOT unverifiable and still fire.
-        if super::shared::is_unverifiable_return_type(&declared_type) {
-            continue;
-        }
-
-        // A returned collection literal is contextually typed against the
-        // declared type ([TYPEINF-SPECIAL-LITERAL-CONTEXT]); a stored value
-        // keeps invariant subtyping.
-        let is_assignable = literal_collection_assignable_to(&return_stmt.rhs_kind, &declared_type)
-            .unwrap_or_else(|| inferred_type.is_assignable_to(&declared_type));
-        if !is_assignable {
+    // Every returned expression — literal, display, call, name — is typed by
+    // the module oracle ([NARROWPLAN-INTEGRATION] Step 2), so a call whose
+    // callee declares an incompatible return is finally an error instead of a
+    // blanket skip. An unresolvable callee still types `Unknown` and abstains.
+    for return_stmt in func.return_stmts.iter().filter(|stmt| stmt.has_value) {
+        if let ReturnVerdict::Mismatch(inferred_type) =
+            judge_return(judge, return_stmt, &declared_type)
+        {
             out.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(

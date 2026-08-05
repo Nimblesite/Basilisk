@@ -25,7 +25,12 @@ pub(crate) type SynthFn<'a> = dyn FnMut(&Expr) -> InferredType + 'a;
 
 /// Whether a statement list definitely diverges (control never reaches the
 /// statement after it).
-pub(crate) fn stmts_diverge(stmts: &[Stmt], synth: &mut SynthFn<'_>) -> bool {
+///
+/// Private to the recursion: the flow walker asks about a body through its own
+/// memoized [`crate::narrow::flow`] entry point instead, so a probe and the
+/// walk that follows it cannot re-synthesize the same expressions
+/// ([NARROWPLAN-INTEGRATION]).
+fn stmts_diverge(stmts: &[Stmt], synth: &mut SynthFn<'_>) -> bool {
     stmts.last().is_some_and(|last| stmt_diverges(last, synth))
 }
 

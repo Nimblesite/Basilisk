@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import hashlib
 import json
 import shutil
 import subprocess
@@ -13,6 +15,26 @@ from urllib.parse import unquote, urlsplit
 
 
 BOOK_ROOT = Path(__file__).resolve().parents[1]
+SCREENSHOT_KINDS = {"screenshot", "annotated-screenshot"}
+CAPTURE_FIELDS = {
+    "authenticity",
+    "basiliskVersion",
+    "releaseTag",
+    "releaseCommit",
+    "releaseArtifact",
+    "releaseArtifactSha256",
+    "rawMaster",
+    "masterSha256",
+    "fixture",
+    "editor",
+    "os",
+    "architecture",
+    "theme",
+    "viewport",
+    "method",
+    "capturedAt",
+    "crop",
+}
 
 
 def load_json(name: str) -> dict[str, Any]:
@@ -132,6 +154,108 @@ def normalized_local_target(source: Path, target: str) -> Path | None:
     return (source.parent / target_path).resolve()
 
 
+def is_sha256(value: object) -> bool:
+    """Return whether a value is one lowercase hexadecimal SHA-256 digest."""
+    text = str(value)
+    return len(text) == 64 and all(
+        character in "0123456789abcdef" for character in text
+    )
+
+
+def file_sha256(path: Path) -> str:
+    """Return the SHA-256 digest of a file."""
+    with path.open("rb") as source:
+        return hashlib.file_digest(source, "sha256").hexdigest()
+
+
+def configured_release_artifacts(book: dict[str, Any]) -> set[tuple[str, str]]:
+    """Return the release artifact identities approved for screenshot capture."""
+    capture = book.get("screenshotCapture")
+    if not isinstance(capture, dict):
+        return set()
+    artifacts = capture.get("releaseArtifacts")
+    if not isinstance(artifacts, dict):
+        return set()
+    return {
+        (str(record.get("name", "")), str(record.get("sha256", "")))
+        for record in artifacts.values()
+        if isinstance(record, dict)
+    }
+
+
+def validate_screenshot(
+    figure: dict[str, Any], book: dict[str, Any], path: Path
+) -> list[str]:
+    """Validate direct-release provenance for one screenshot figure."""
+    errors: list[str] = []
+    figure_id = str(figure.get("id", ""))
+    screenshot_root = (BOOK_ROOT / "assets" / "screenshots").resolve()
+    if not path.resolve().is_relative_to(screenshot_root):
+        errors.append(f"Screenshot path is outside assets/screenshots: {figure_id}")
+    if figure.get("status") != "ready":
+        return errors
+
+    capture = figure.get("capture")
+    if not isinstance(capture, dict):
+        return [*errors, f"Ready screenshot has no capture provenance: {figure_id}"]
+    missing = sorted(CAPTURE_FIELDS - capture.keys())
+    if missing:
+        errors.append(
+            f"Screenshot provenance is incomplete for {figure_id}: {', '.join(missing)}"
+        )
+    if capture.get("authenticity") != "direct-release-capture":
+        errors.append(
+            f"Screenshot is not declared as a direct release capture: {figure_id}"
+        )
+    if capture.get("basiliskVersion") != book.get("basiliskRelease"):
+        errors.append(f"Screenshot release does not match book.json: {figure_id}")
+    if capture.get("releaseTag") != book.get("basiliskReleaseTag"):
+        errors.append(f"Screenshot tag does not match book.json: {figure_id}")
+    if capture.get("releaseCommit") != book.get("basiliskReleaseCommit"):
+        errors.append(f"Screenshot commit does not match book.json: {figure_id}")
+
+    artifact_identity = (
+        str(capture.get("releaseArtifact", "")),
+        str(capture.get("releaseArtifactSha256", "")),
+    )
+    if artifact_identity not in configured_release_artifacts(book):
+        errors.append(f"Screenshot artifact is not pinned in book.json: {figure_id}")
+    if not is_sha256(capture.get("releaseArtifactSha256")):
+        errors.append(f"Screenshot release artifact SHA-256 is invalid: {figure_id}")
+    if not is_sha256(capture.get("masterSha256")):
+        errors.append(f"Screenshot master SHA-256 is invalid: {figure_id}")
+
+    raw_master = (BOOK_ROOT / str(capture.get("rawMaster", ""))).resolve()
+    master_root = (screenshot_root / "masters").resolve()
+    if not raw_master.is_relative_to(master_root):
+        errors.append(
+            f"Screenshot raw master is outside screenshots/masters: {figure_id}"
+        )
+    elif not raw_master.is_file():
+        errors.append(f"Screenshot raw master is missing: {figure_id}")
+    elif file_sha256(raw_master) != capture.get("masterSha256"):
+        errors.append(f"Screenshot raw master SHA-256 does not match: {figure_id}")
+    if (
+        figure.get("kind") == "screenshot"
+        and Path(str(figure.get("master", ""))).as_posix()
+        != Path(str(capture.get("rawMaster", ""))).as_posix()
+    ):
+        errors.append(
+            f"Unannotated screenshot master is not the raw capture: {figure_id}"
+        )
+
+    fixture = BOOK_ROOT / str(capture.get("fixture", ""))
+    if not fixture.exists():
+        errors.append(f"Screenshot fixture does not exist: {figure_id}")
+    try:
+        dt.date.fromisoformat(str(capture.get("capturedAt", "")))
+    except ValueError:
+        errors.append(f"Screenshot capture date is invalid: {figure_id}")
+    if not all(str(capture.get(field, "")).strip() for field in CAPTURE_FIELDS):
+        errors.append(f"Screenshot provenance contains an empty field: {figure_id}")
+    return errors
+
+
 def validate(release: bool) -> list[str]:
     """Return all validation errors without stopping at the first one."""
     errors: list[str] = []
@@ -199,6 +323,8 @@ def validate(release: bool) -> list[str]:
         figures_by_section[section_key] = figures_by_section.get(section_key, 0) + 1
         path = BOOK_ROOT / str(figure.get("path", ""))
         figure_paths.add(path.resolve())
+        if figure.get("kind") in SCREENSHOT_KINDS:
+            errors.extend(validate_screenshot(figure, book, path))
         if figure.get("status") == "ready":
             if not path.is_file():
                 errors.append(f"Ready figure is missing: {path.relative_to(BOOK_ROOT)}")

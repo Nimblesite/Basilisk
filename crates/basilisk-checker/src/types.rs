@@ -59,15 +59,55 @@ pub enum InferredType {
     /// The inner type is what the type form represents (e.g. `TypeForm[int]`
     /// means a type form that represents `int`).
     TypeForm(Box<InferredType>),
+    /// `TypeGuard[T]` (PEP 647) or `TypeIs[T]` (PEP 742) — a user-defined
+    /// narrowing function's return form. `type_is` distinguishes the PEP 742
+    /// bidirectional form (narrows both branches, requires the narrowed type
+    /// to be consistent with the input) from the positive-only `TypeGuard`.
+    Guard {
+        /// `true` for `TypeIs[T]`, `false` for `TypeGuard[T]`.
+        type_is: bool,
+        /// The narrowing target `T`, resolved through the same cascade.
+        inner: Box<InferredType>,
+    },
 }
 
 /// Represents a callable type's parameter and return type information.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CallableInfo {
-    /// Parameter types (empty for `Callable[..., R]`).
+    /// Parameter types, positionally.
+    ///
+    /// A trailing [`GRADUAL_PARAMS`] marker means "and then any parameters":
+    /// `Callable[..., R]` is `[…]`, a `ParamSpec` is `[…]`, and
+    /// `Callable[Concatenate[int, P], R]` is `[int, …]` — the prefix is
+    /// required, the tail unconstrained. An EMPTY list is therefore a callable
+    /// that takes NO parameters (`Callable[[], R]`), which is what lets
+    /// `Callable[Concatenate[int, P], str]` reject a zero-argument callable.
     pub param_types: Vec<InferredType>,
     /// Return type.
     pub return_type: Box<InferredType>,
+}
+
+/// The structural marker that ends an unconstrained parameter list. Shares the
+/// spelling of the `tuple[X, ...]` terminator: both mean "the rest is not
+/// pinned down here".
+pub const GRADUAL_PARAMS: &str = "...";
+
+/// A parameter list that is unconstrained past its (possibly empty) prefix.
+#[must_use]
+pub fn gradual_params(prefix: Vec<InferredType>) -> Vec<InferredType> {
+    let mut params = prefix;
+    params.push(InferredType::Named(GRADUAL_PARAMS.to_owned()));
+    params
+}
+
+/// Split a parameter list into its required prefix and whether an
+/// unconstrained tail follows.
+#[must_use]
+pub fn split_gradual(params: &[InferredType]) -> (&[InferredType], bool) {
+    match params.split_last() {
+        Some((InferredType::Named(marker), head)) if marker == GRADUAL_PARAMS => (head, true),
+        _ => (params, false),
+    }
 }
 
 /// Represents a literal value for literal type inference.
@@ -142,6 +182,10 @@ impl fmt::Display for InferredType {
                 InferredType::Any => write!(f, "TypeForm"),
                 other => write!(f, "TypeForm[{other}]"),
             },
+            InferredType::Guard { type_is, inner } => {
+                let form = if *type_is { "TypeIs" } else { "TypeGuard" };
+                write!(f, "{form}[{inner}]")
+            }
         }
     }
 }
@@ -225,6 +269,9 @@ impl InferredType {
     /// checks live in out-of-scope rule modules (see the consolidated map).
     #[must_use]
     pub fn is_assignable_to(&self, other: &InferredType) -> bool {
+        if special_named_assignable(self, other) {
+            return true;
+        }
         match (self, other) {
             // Any is assignable to/from everything (PEP 484).
             // Unknown means we cannot determine the type — assume compatible to avoid false positives.
@@ -265,9 +312,40 @@ impl InferredType {
             )
             // None is always assignable to Optional[T]
             | (InferredType::None_, InferredType::Optional(_)) => true,
-            // `None` satisfies `Hashable` (it defines `__hash__`). The annotation
-            // parser lowercases names, so the ABC arrives as `Named("hashable")`.
-            (InferredType::None_, InferredType::Named(name)) if name == "hashable" => true,
+            // PEP 647/742 narrowing returns. Three distinct relations, and the
+            // guard-to-guard one must be tested FIRST or the bool relations
+            // below would make the two forms interchangeable:
+            // * `TypeGuard[B] <: TypeGuard[A]` when `B <: A` — TypeGuard is
+            //   covariant in its argument.
+            // * `TypeIs[B] <: TypeIs[A]` only when `B` IS `A` — "Unlike
+            //   TypeGuard, TypeIs is invariant in its argument type".
+            // * Never across forms: "TypeIs and TypeGuard are not compatible
+            //   with each other".
+            (
+                InferredType::Guard {
+                    type_is: source_is,
+                    inner: source_inner,
+                },
+                InferredType::Guard {
+                    type_is: target_is,
+                    inner: target_inner,
+                },
+            ) => {
+                source_is == target_is
+                    && if *target_is {
+                        source_inner == target_inner
+                    } else {
+                        source_inner.is_assignable_to(target_inner)
+                    }
+            }
+            // A guard VALUE is a `bool` ("in these contexts it is treated as a
+            // subtype of bool"), so `Callable[..., TypeIs[int]]` satisfies
+            // `Callable[..., bool]` but never `Callable[..., str]`.
+            (InferredType::Guard { .. }, target) => InferredType::Bool.is_assignable_to(target),
+            // Conversely a declared guard return is satisfied by any bool the
+            // body actually produces — `def f(x: object) -> TypeIs[int]: return
+            // False` is the canonical narrowing-function body, not a mismatch.
+            (source, InferredType::Guard { .. }) => source.is_assignable_to(&InferredType::Bool),
             // Union on the LEFT decomposes before Optional-target unwrapping:
             // `A | None <: Optional[B]` must check each variant against the
             // whole `Optional[B]` (so the `None` arm can satisfy it), not
@@ -333,54 +411,7 @@ impl InferredType {
             // Implements [TYPEINF-SUBTYPING-CALLABLE] — return type covariant
             // (source return <: target return), parameters contravariant
             // (target param <: source param), `...`/empty params gradual.
-            (InferredType::Callable(a), InferredType::Callable(b)) => {
-                // Check return type compatibility (covariant - source return must be assignable to target return)
-                // Special case: if source return type is Unknown, we can't verify compatibility
-                // This happens with lambda expressions where we can't infer the return type
-                // We should be conservative and return false unless target return type is Any or Unknown
-                match (&*a.return_type, &*b.return_type) {
-                    (InferredType::Unknown, _)
-                        if !matches!(
-                            &*b.return_type,
-                            InferredType::Any | InferredType::Unknown
-                        ) =>
-                    {
-                        // Source has unknown return type, target has known return type
-                        // This is unsafe - we don't know if they're compatible
-                        return false;
-                    }
-                    _ => {
-                        if !a.return_type.is_assignable_to(&b.return_type) {
-                            return false;
-                        }
-                    }
-                }
-
-                // Handle ellipsis/arbitrary parameters (empty param_types means `...`)
-                if a.param_types.is_empty() || b.param_types.is_empty() {
-                    // If target accepts arbitrary parameters (`...`), any callable is assignable
-                    // If source has arbitrary parameters, it can only be assigned to target with arbitrary parameters
-                    // or if target has specific parameter types that match the source's capabilities
-                    // For now, we allow if either has empty param_types (simplified)
-                    return true;
-                }
-
-                // Required parameter positions are contravariant. A source may
-                // require fewer parameters than the target because its trailing
-                // positions can be satisfied by defaults; it may not require more.
-                if a.param_types.len() > b.param_types.len() {
-                    return false;
-                }
-
-                // Check parameter type compatibility (contravariant - target param must be assignable to source param)
-                for (source_param, target_param) in a.param_types.iter().zip(b.param_types.iter()) {
-                    if !target_param.is_assignable_to(source_param) {
-                        return false;
-                    }
-                }
-
-                true
-            }
+            (InferredType::Callable(a), InferredType::Callable(b)) => callable_assignable(a, b),
             (a @ InferredType::Generator(..), b @ InferredType::Generator(..)) => {
                 generator_assignable(a, b)
             }
@@ -407,6 +438,95 @@ impl InferredType {
 
 fn invariantly_assignable(left: &InferredType, right: &InferredType) -> bool {
     left.is_assignable_to(right) && right.is_assignable_to(left)
+}
+
+/// Callable subtyping: returns covariant, parameters contravariant.
+///
+/// Implements [TYPEINF-SUBTYPING-CALLABLE]. An `Unknown` source return (a
+/// lambda whose body we could not infer) is only accepted against a gradual
+/// target — claiming compatibility with a KNOWN target return would assert
+/// something unverified.
+fn callable_assignable(source: &CallableInfo, target: &CallableInfo) -> bool {
+    let target_return_is_gradual = matches!(
+        &*target.return_type,
+        InferredType::Any | InferredType::Unknown
+    );
+    if matches!(&*source.return_type, InferredType::Unknown) && !target_return_is_gradual {
+        return false;
+    }
+    if !source.return_type.is_assignable_to(&target.return_type) {
+        return false;
+    }
+    callable_params_assignable(&source.param_types, &target.param_types)
+}
+
+/// Parameter-list half of [TYPEINF-SUBTYPING-CALLABLE].
+///
+/// Positions are contravariant: the target's parameter must be acceptable to
+/// the source. A source that requires FEWER positions than the target is fine —
+/// its trailing positions are satisfiable by defaults — but never more.
+///
+/// A gradual tail ([`GRADUAL_PARAMS`]) relaxes only what follows it. A gradual
+/// SOURCE accepts any call, so it satisfies every target. A gradual TARGET
+/// (`Callable[Concatenate[int, P], R]`) still pins its prefix: the source must
+/// be able to receive those leading arguments, which is exactly why a
+/// zero-parameter callable does not satisfy it.
+fn callable_params_assignable(source: &[InferredType], target: &[InferredType]) -> bool {
+    let (source_prefix, source_gradual) = split_gradual(source);
+    let (target_prefix, target_gradual) = split_gradual(target);
+    if source_gradual {
+        return true;
+    }
+    if target_gradual && source_prefix.len() < target_prefix.len() {
+        return false;
+    }
+    if !target_gradual && source_prefix.len() > target_prefix.len() {
+        return false;
+    }
+    source_prefix
+        .iter()
+        .zip(target_prefix.iter())
+        .all(|(source_param, target_param)| target_param.is_assignable_to(source_param))
+}
+
+/// Relations a `Named` leaf settles outright, hoisted ahead of the main
+/// assignability match — every one only ever ANSWERS `true`, never rejects:
+///
+/// * `object` is the top type: every value IS an object, so it accepts
+///   anything as a target, and in the SOURCE position it stays as permissive
+///   as the gradual `Any` it used to be modelled by — narrowing an
+///   `object`-typed value to a concrete type is how most `isinstance` code is
+///   written, and this level has no flow information to tell a narrowed use
+///   from an unnarrowed one, so rejecting it would fire on spec-valid code.
+/// * `None` satisfies `Hashable` (it defines `__hash__`). Compared
+///   case-insensitively: the [TYPEINF-ANNOTATION-RESOLUTION] cascade keeps
+///   the ABC's real spelling, the legacy annotation parser it replaces folded
+///   it to `Named("hashable")`.
+/// * A class object (`type` / `type[X]`) IS callable — calling it constructs
+///   an instance — and when the class itself is gradual (`type` means
+///   `type[Any]`) so is its constructor signature, so it satisfies every
+///   `Callable` target.
+fn special_named_assignable(source: &InferredType, target: &InferredType) -> bool {
+    let is_object = |ty: &InferredType| matches!(ty, InferredType::Named(name) if name == "object");
+    if is_object(source) || is_object(target) {
+        return true;
+    }
+    match (source, target) {
+        (InferredType::None_, InferredType::Named(name)) => name.eq_ignore_ascii_case("hashable"),
+        (InferredType::Named(name), InferredType::Callable(_)) => {
+            name == "type" || name.starts_with("type[")
+        }
+        // A `Named` value satisfies a `type` target: the engine's Stage-2
+        // class/instance conflation cannot tell `cls` (a class object) from
+        // an instance, so a nominal value MAY be a class object — rejecting
+        // it would fire on `def f(cls) -> type[Self]: return cls`. Values
+        // positively known NOT to be class objects (`None`, literals,
+        // containers) still mismatch.
+        (InferredType::Named(_), InferredType::Named(target_name)) => {
+            target_name == "type" || target_name.starts_with("type[")
+        }
+        _ => false,
+    }
 }
 
 /// Generator yield/return positions are covariant; the value sent back into

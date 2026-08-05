@@ -3,13 +3,13 @@
   "upstream": {
     "repo": "python/typing",
     "ref": "main",
-    "sha": "0dc9b5d23b368713af33ac25338eeb08b80f6360",
-    "shortSha": "0dc9b5d",
-    "commitDate": "2026-08-03",
+    "sha": "a4906624f170c169cf667f962080c56d5a5ba6ff",
+    "shortSha": "a490662",
+    "commitDate": "2026-08-04",
     "stale": false
   },
   "calculator": {
-    "file": "python/typing@0dc9b5d:conformance/src/main.py",
+    "file": "python/typing@a490662:conformance/src/main.py",
     "sha256": "3cb2a27bfc689e89a541528f8bdaa8ed24ae8845ce048eaff69717ef0205b112",
     "bytes": 10810,
     "funcs": [
@@ -60,8 +60,7 @@
       "missed": 0,
       "falsePositives": 0,
       "codes": [
-        "aliases_newtype",
-        "assignment_compatibility"
+        "aliases_newtype"
       ]
     },
     {
@@ -199,6 +198,7 @@
       "missed": 0,
       "falsePositives": 0,
       "codes": [
+        "assignment_compatibility",
         "callables_protocol_2"
       ]
     },
@@ -222,7 +222,6 @@
       "missed": 0,
       "falsePositives": 0,
       "codes": [
-        "assignment_compatibility",
         "classes_classvar",
         "protocols_definition_2",
         "qualifiers_final_annotation"
@@ -1055,6 +1054,7 @@
       "missed": 0,
       "falsePositives": 0,
       "codes": [
+        "calls_argument_type",
         "tuples_index_2"
       ]
     },
@@ -1295,6 +1295,7 @@
       "missed": 0,
       "falsePositives": 0,
       "codes": [
+        "assignment_compatibility",
         "protocols_definition_2",
         "protocols_explicit",
         "protocols_merging"
@@ -1385,7 +1386,6 @@
       "missed": 0,
       "falsePositives": 0,
       "codes": [
-        "assignment_compatibility",
         "calls_argument_count",
         "namedtuples_define_functional",
         "qualifiers_final_annotation",

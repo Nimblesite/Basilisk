@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Reduce mechanical debt, review the contract, then adopt one visible remainder</title>
+  <desc id="desc">Five conceptual stages follow the Signal Box checkpoint from three errors, through Any placeholders and a reviewed TypedDict boundary, to one folder-rule warning and finally a clean recomputation.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="20" markerHeight="20" refX="18" refY="10" orient="auto" markerUnits="userSpaceOnUse" viewBox="0 0 20 20">
+      <path d="M0 0 L20 10 L0 20 Z" fill="#e8500a"/>
+    </marker>
+  </defs>
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="#10141d" stroke="#252d3f" stroke-width="3"/>
+  <text x="82" y="108" fill="#e8500a" font-family="monospace" font-size="27" font-weight="700" letter-spacing="5">CONCEPTUAL WORKFLOW · VERIFIED CHECKPOINTS</text>
+  <text x="82" y="176" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="52" font-weight="800"><tspan>Reduce first.</tspan><tspan dx="18">Review.</tspan><tspan dx="18">Adopt only the remainder.</tspan></text>
+  <text x="84" y="224" fill="#8892a4" font-family="system-ui,sans-serif" font-size="28">Signal Box keeps every unfinished rule visible while its error budget falls.</text>
+
+  <g transform="translate(72 300)">
+    <g>
+      <rect width="270" height="430" rx="24" fill="#25191b" stroke="#f87171" stroke-width="4"/>
+      <circle cx="48" cy="50" r="27" fill="#f87171"/>
+      <text x="48" y="60" text-anchor="middle" fill="#0a0c12" font-family="monospace" font-size="26" font-weight="800">1</text>
+      <text x="88" y="60" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="29" font-weight="760">MEASURE</text>
+      <text x="28" y="118" fill="#8892a4" font-family="system-ui,sans-serif" font-size="22">Unchanged checkout</text>
+      <rect x="26" y="150" width="218" height="64" rx="14" fill="#160f11"/>
+      <text x="44" y="190" fill="#fecaca" font-family="monospace" font-size="21">check: 1 error</text>
+      <rect x="26" y="228" width="218" height="64" rx="14" fill="#160f11"/>
+      <text x="44" y="268" fill="#fecaca" font-family="monospace" font-size="19">analyze: 2 errors</text>
+      <rect x="26" y="326" width="218" height="64" rx="14" fill="#0e1c18" stroke="#2f5b4d" stroke-width="2"/>
+      <text x="44" y="366" fill="#a7f3d0" font-family="monospace" font-size="21">tests: 2 pass</text>
+    </g>
+    <line x1="274" y1="215" x2="286" y2="215" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow)"/>
+
+    <g transform="translate(296)">
+      <rect width="270" height="430" rx="24" fill="#261b13" stroke="#e8500a" stroke-width="4"/>
+      <circle cx="48" cy="50" r="27" fill="#e8500a"/>
+      <text x="48" y="60" text-anchor="middle" fill="#0a0c12" font-family="monospace" font-size="26" font-weight="800">2</text>
+      <text x="88" y="60" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27" font-weight="760">FIX TIER</text>
+      <text x="28" y="118" fill="#8892a4" font-family="system-ui,sans-serif" font-size="22">Mechanical rewrite</text>
+      <rect x="26" y="150" width="218" height="100" rx="14" fill="#17120e" stroke="#6f4326" stroke-width="2"/>
+      <text x="44" y="191" fill="#fed7aa" font-family="monospace" font-size="20">raw: Any</text>
+      <text x="44" y="226" fill="#fed7aa" font-family="monospace" font-size="20">-&gt; Any</text>
+      <text x="28" y="294" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="21">Still two BSK-0014</text>
+      <text x="28" y="326" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="21">errors under policy</text>
+      <text x="28" y="384" fill="#e8500a" font-family="system-ui,sans-serif" font-size="21" font-weight="700">Diff + tests required</text>
+    </g>
+    <line x1="570" y1="215" x2="582" y2="215" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow)"/>
+
+    <g transform="translate(592)">
+      <rect width="270" height="430" rx="24" fill="#17232c" stroke="#6ec5e9" stroke-width="4"/>
+      <circle cx="48" cy="50" r="27" fill="#6ec5e9"/>
+      <text x="48" y="60" text-anchor="middle" fill="#0a0c12" font-family="monospace" font-size="26" font-weight="800">3</text>
+      <text x="88" y="60" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27" font-weight="760">REVIEW</text>
+      <text x="28" y="118" fill="#8892a4" font-family="system-ui,sans-serif" font-size="22">Name the boundary</text>
+      <rect x="26" y="150" width="218" height="100" rx="14" fill="#0e1820" stroke="#365164" stroke-width="2"/>
+      <text x="44" y="191" fill="#bae6fd" font-family="monospace" font-size="20">VendorPacket</text>
+      <text x="44" y="226" fill="#bae6fd" font-family="monospace" font-size="20">-&gt; Reading</text>
+      <rect x="26" y="286" width="218" height="64" rx="14" fill="#0e1c18"/>
+      <text x="44" y="326" fill="#a7f3d0" font-family="monospace" font-size="21">analyze: clean</text>
+      <text x="28" y="390" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="21">One PEP error remains</text>
+    </g>
+    <line x1="866" y1="215" x2="878" y2="215" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow)"/>
+
+    <g transform="translate(888)">
+      <rect width="270" height="430" rx="24" fill="#201a2c" stroke="#c4b5fd" stroke-width="4"/>
+      <circle cx="48" cy="50" r="27" fill="#c4b5fd"/>
+      <text x="48" y="60" text-anchor="middle" fill="#0a0c12" font-family="monospace" font-size="26" font-weight="800">4</text>
+      <text x="88" y="60" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27" font-weight="760">ADOPT</text>
+      <text x="28" y="118" fill="#8892a4" font-family="system-ui,sans-serif" font-size="22">Folder + rule entry</text>
+      <rect x="26" y="150" width="218" height="110" rx="14" fill="#14101c" stroke="#4b3e63" stroke-width="2"/>
+      <text x="42" y="190" fill="#ddd6fe" font-family="monospace" font-size="17">calls_argument_type</text>
+      <text x="42" y="228" fill="#f0f2f7" font-family="monospace" font-size="20">= warning</text>
+      <rect x="26" y="296" width="218" height="64" rx="14" fill="#14101c"/>
+      <text x="44" y="336" fill="#ddd6fe" font-family="monospace" font-size="18">1 warning · 0 errors</text>
+      <text x="28" y="398" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="21">Debt stays visible</text>
+    </g>
+    <line x1="1162" y1="215" x2="1174" y2="215" stroke="#e8500a" stroke-width="5" marker-end="url(#arrow)"/>
+
+    <g transform="translate(1184)">
+      <rect width="270" height="430" rx="24" fill="#123128" stroke="#34d399" stroke-width="4"/>
+      <circle cx="48" cy="50" r="27" fill="#34d399"/>
+      <text x="48" y="60" text-anchor="middle" fill="#0a0c12" font-family="monospace" font-size="26" font-weight="800">5</text>
+      <text x="88" y="60" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="25" font-weight="760">RECOMPUTE</text>
+      <text x="28" y="118" fill="#8892a4" font-family="system-ui,sans-serif" font-size="22">After the real fix</text>
+      <rect x="26" y="150" width="218" height="100" rx="14" fill="#0e1c18" stroke="#2f5b4d" stroke-width="2"/>
+      <text x="44" y="190" fill="#a7f3d0" font-family="monospace" font-size="19">rerun adopt</text>
+      <text x="44" y="226" fill="#a7f3d0" font-family="monospace" font-size="19">entry removed</text>
+      <rect x="26" y="286" width="218" height="64" rx="14" fill="#0e1c18"/>
+      <text x="44" y="326" fill="#a7f3d0" font-family="monospace" font-size="21">check: clean</text>
+      <text x="28" y="390" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="21">Policy is strict again</text>
+    </g>
+  </g>
+
+  <rect x="162" y="808" width="1276" height="112" rx="22" fill="#0f1218" stroke="#4a5468" stroke-width="3"/>
+  <text x="800" y="854" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="27"><tspan fill="#e8500a" font-weight="800">No hidden mode:</tspan><tspan dx="10">every state is a test result, diagnostic, diff, or ordinary config entry.</tspan></text>
+  <text x="800" y="894" text-anchor="middle" fill="#8892a4" font-family="system-ui,sans-serif" font-size="24">The counts describe this fixture, not a permanent product total.</text>
+</svg>
