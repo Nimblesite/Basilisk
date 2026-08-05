@@ -24,37 +24,39 @@ from lines, but they miss rules that slice a span out of the source and then
 pattern-match the resulting **expression** text — which is the same defect one
 level down, and is not caught by either keyword query.
 
-Expression-text scanners:
+Expression-text scanners — **RESOLVED** (see
+[`CONFORMANCE-INTEGRITY-AUDIT.md`](../CONFORMANCE-INTEGRITY-AUDIT.md)). The
+shared structural judge lives in `rules/shared/type_expr.rs`
+([LINESCANPLAN-AST-MIGRATION]); `tests/type_expr_structural_tests.rs` pins the
+verdicts under import renames and whitespace mutation, with `red_pin_` tests
+holding the remaining honest gaps open:
 
-- `aliases_type_statement.rs` — `is_invalid_rhs` classifies the RHS of a
-  `type X = ...` statement by substring and prefix tests (`starts_with('[')`,
-  `contains("lambda")`, `has_top_level_token(rhs, " or ")`, …). It is an
-  allow-by-default list of textual shapes, so `type A = "the" + "thing"`,
-  `type B = list["of genshin"]`, and `type D = list[int].attr` all pass
-  silently, while a name containing the substring `lambda` is a false positive
-  waiting to happen ([#379](https://github.com/Nimblesite/Basilisk/issues/379)).
-  Replace it with type-expression grammar validation over the `StmtTypeAlias`
-  value node: allow `Name`, dotted `Attribute` chains, `Subscript` of an allowed
-  base, `BinOp(|)`, `None`, and forward-reference strings that themselves parse
-  as valid type expressions; reject everything else, including attribute access
-  on a `Subscript`. Validation is eager at binding time — PEP 695 lazy
-  evaluation defers *name resolution*, never *well-formedness*.
-- `aliases_implicit.rs` — carries a verbatim duplicate of the same
-  `is_invalid_rhs` scanner, plus three further text heuristics: implicit
-  aliases are detected by an uppercase-first-letter naming test
-  ([#411](https://github.com/Nimblesite/Basilisk/issues/411)), `TypeAlias as X`
-  imports are recovered by `match_indices` over raw import text duplicating the
-  real name cascade ([#412](https://github.com/Nimblesite/Basilisk/issues/412)),
-  and `looks_like_type_expression` gates on a character blacklist. The
-  parameterization checks layered on top are fitted to the same fixture — the
-  ParamSpec check is a shape guess that never locates the ParamSpec position
-  ([#409](https://github.com/Nimblesite/Basilisk/issues/409)) and
-  `is_assignable_to_bound` accepts every bound outside `int`/`float`/`complex`
-  ([#410](https://github.com/Nimblesite/Basilisk/issues/410)). Same fix shape as
-  `aliases_type_statement.rs`: validate the RHS expression node against the
-  type-expression grammar and resolve alias-hood from binding information, not
-  from name spelling. See [#408](https://github.com/Nimblesite/Basilisk/issues/408)
-  and [`CONFORMANCE-INTEGRITY-AUDIT.md`](../CONFORMANCE-INTEGRITY-AUDIT.md).
+- `aliases_type_statement.rs` — DONE. The rule validates the `StmtTypeAlias`
+  value node through the shared judge; attribute access on a `Subscript`
+  (`list[int].attr`) is rejected
+  ([#379](https://github.com/Nimblesite/Basilisk/issues/379)).
+- `aliases_implicit.rs` — DONE. `is_invalid_rhs`, its private
+  `has_top_level_token` / `paren_has_top_level_comma` copies, the
+  `match_indices("TypeAlias as ")` import scan
+  ([#412](https://github.com/Nimblesite/Basilisk/issues/412)), the
+  uppercase-first-letter implicit-alias heuristic
+  ([#411](https://github.com/Nimblesite/Basilisk/issues/411)), the
+  `looks_like_type_expression` character blacklist, the ParamSpec shape guess
+  ([#409](https://github.com/Nimblesite/Basilisk/issues/409)), and the
+  three-name `is_assignable_to_bound`
+  ([#410](https://github.com/Nimblesite/Basilisk/issues/410)) are all deleted.
+  Alias-hood resolves through the annotation cascade; type parameters,
+  ParamSpec positions (with the PEP 612 single-parameter auto-wrap), variadic
+  arity (PEP 646), and bounds (via the module subtyping context, abstaining on
+  unknown names) are computed from the AST.
+- `annotations_forward_refs/type_checks.rs` and
+  `qualifiers_annotated/helpers.rs` — DONE. The `is_invalid_type_annotation` /
+  `is_invalid_type_expr` text families (including the last two
+  `starts_with("eval(")` copies) are deleted; both rules judge annotation
+  nodes via a span→AST index, and forward-reference strings are parsed and
+  judged as expressions. The orphaned `text_scan::contains_top_level_comma` /
+  `paren_has_top_level_comma` helpers are deleted with them
+  ([#408](https://github.com/Nimblesite/Basilisk/issues/408)).
 - `returns_compatibility.rs` — builds the declared type from annotation source
   text via `InferredType::from_annotation`. Owned by
   [NARROWPLAN-ANNOTATION-RESOLUTION](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-ANNOTATION-RESOLUTION)
@@ -89,12 +91,16 @@ not infer Python structure.
   call records; extend the resolver when the required node is not exposed.
 - [ ] Add a string/comment regression fixture for each migrated rule before
   deleting its scanner.
-- [ ] Replace `aliases_type_statement::is_invalid_rhs` with AST type-expression
+- [x] Replace `aliases_type_statement::is_invalid_rhs` with AST type-expression
   validation, covering the reported cases above plus operators other than `|`,
   call expressions outside the sanctioned special forms, comparisons,
   comprehensions, and literal displays.
-- [ ] Preserve the exact diagnostics for real code and keep conformance at
-  141/141 with zero missed errors and zero false positives.
+- [ ] Preserve the exact diagnostics for real code and restore conformance to
+  141/141 with zero missed errors and zero false positives. Post-rewrite the
+  honest score is 140/141: `tuples_type_compat` requires either len()/match
+  tuple narrowing or an assert_type mismatch verdict on alias-typed values
+  (red-pinned in `tests/type_expr_structural_tests.rs`); its lines were
+  previously "passed" by a spurious text-scan diagnostic.
 
 Migrate `generics_variance_inference` first: it owns the largest cluster of raw
 line and keyword scans. Then take `aliases_type_statement`, which is the only

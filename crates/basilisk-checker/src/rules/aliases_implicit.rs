@@ -220,6 +220,7 @@ struct TypeParam {
     name: String,
     bound: Option<String>,
     is_paramspec: bool,
+    is_typevartuple: bool,
 }
 
 /// Information about a type alias definition.
@@ -253,25 +254,30 @@ fn ordered_name_refs(expr: &Expr) -> Vec<&str> {
 /// `ParamSpec` / `TypeVarTuple` referenced in the RHS, in first-appearance
 /// order, each carrying its declared bound.
 fn alias_type_params(module: &ResolvedModule, rhs: &Expr) -> Vec<TypeParam> {
-    let declared: HashMap<&str, (Option<&str>, bool)> = module
+    let declared: HashMap<&str, (Option<&str>, bool, bool)> = module
         .typevar_calls
         .iter()
         .map(|tv| {
             (
                 tv.name.as_str(),
-                (tv.bound_type_name.as_deref(), tv.is_paramspec),
+                (
+                    tv.bound_type_name.as_deref(),
+                    tv.is_paramspec,
+                    tv.is_typevartuple,
+                ),
             )
         })
         .collect();
     let mut seen = HashSet::new();
     let mut params = Vec::new();
     for name in ordered_name_refs(rhs) {
-        if let Some((bound, is_paramspec)) = declared.get(name) {
+        if let Some((bound, is_paramspec, is_typevartuple)) = declared.get(name) {
             if seen.insert(name) {
                 params.push(TypeParam {
                     name: name.to_owned(),
                     bound: bound.map(str::to_owned),
                     is_paramspec: *is_paramspec,
+                    is_typevartuple: *is_typevartuple,
                 });
             }
         }
@@ -391,7 +397,10 @@ impl ParameterizationChecker<'_, '_> {
             self.report_not_generic(base_name, span, diagnostics);
             return;
         }
-        if args.len() > info.params.len() {
+        // A TypeVarTuple parameter absorbs any number of type arguments
+        // (PEP 646), so the alias has no upper arity to enforce.
+        let variadic = info.params.iter().any(|param| param.is_typevartuple);
+        if !variadic && args.len() > info.params.len() {
             self.report_too_many(base_name, info, args.len(), span, diagnostics);
             return;
         }

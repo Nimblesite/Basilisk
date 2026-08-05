@@ -67,6 +67,9 @@ fn valid(expr: &Expr, judge: &TypeExprJudge<'_>, top: bool) -> bool {
         Expr::BinOp(binop) if binop.op == Operator::BitOr => {
             valid(&binop.left, judge, false) && valid(&binop.right, judge, false)
         }
+        // PEP 646: `*Ts` / `*tuple[int, ...]` unpacks a TypeVarTuple or
+        // tuple type — a type-expression form in variadic positions.
+        Expr::Starred(starred) => valid(&starred.value, judge, false),
         _ => false,
     }
 }

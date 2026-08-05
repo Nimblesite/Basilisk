@@ -583,11 +583,11 @@
     "body": [
       {
         "type": "text",
-        "html": "<a href=\"https://peps.python.org/pep-0613/\">PEP 613</a> requires that the RHS of an explicit <code>TypeAlias</code> annotation must be a valid type expression. The following are errors:"
+        "html": "<a href=\"https://peps.python.org/pep-0613/\">PEP 613</a> requires that the RHS of an explicit <code>TypeAlias</code> annotation must be a valid type expression, and the typing spec&#x27;s aliases chapter gives plain assignments the same split: an assignment whose RHS is a type expression is an implicit alias; any other assignment makes an ordinary variable, and a variable is not valid in a type expression. All verdicts are structural, over the parsed <code>ruff</code> AST (LINESCANPLAN-AST-MIGRATION, issue #408):"
       },
       {
         "type": "text",
-        "html": "- List literals: <code>x: TypeAlias = int, str</code> - Tuple literals: <code>x: TypeAlias = ((int, str),)</code> - Dict literals: <code>x: TypeAlias = {&quot;a&quot;: &quot;b&quot;}</code> - List comprehensions: <code>x: TypeAlias = int for i in range(1)</code> - Lambda calls: <code>x: TypeAlias = (lambda: int)()</code> - Conditional expressions: <code>x: TypeAlias = int if cond else str</code> - Boolean literals: <code>x: TypeAlias = True</code> - Integer literals: <code>x: TypeAlias = 1</code> - Binary boolean operators: <code>x: TypeAlias = list or set</code> - F-strings: <code>x: TypeAlias = f&quot;...&quot;</code> - Subscript-into-subscript: <code>x: TypeAlias = int0</code> - Runtime calls: <code>x: TypeAlias = eval(&quot;int&quot;)</code>"
+        "html": "- Literals, collection displays, comprehensions, lambdas, conditionals,   boolean operators, f-strings, and calls that are not recognised type   constructors (<code>TypeVar</code>, <code>ParamSpec</code>, <code>TypeVarTuple</code>, <code>NewType</code>,   <code>TypedDict</code>, <code>NamedTuple</code>, <code>TypeAliasType</code>, <code>type(...)</code>) all make   runtime values, not types. - Alias parameterization is checked against the alias&#x27;s own type   parameters: arity, <code>ParamSpec</code> argument shape (<a href=\"https://peps.python.org/pep-0612/\">PEP 612</a>), and <code>TypeVar</code>   bounds through the module&#x27;s subtyping context (NARROWPLAN-SUBTYPING)."
       },
       {
         "type": "code",
@@ -605,6 +605,10 @@
       {
         "label": "PEP 484",
         "url": "https://peps.python.org/pep-0484/"
+      },
+      {
+        "label": "PEP 612",
+        "url": "https://peps.python.org/pep-0612/"
       },
       {
         "label": "PEP 613",
@@ -717,7 +721,7 @@
     "body": [
       {
         "type": "text",
-        "html": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> requires the RHS of a <code>type</code> statement to be a valid type expression. The RHS is validated **structurally** on the parsed <code>ruff</code> expression tree (issue #379 \u2014 substring matching both missed invalid forms and misfired on identifiers containing matched text): names, dotted names, <code>X | Y</code> unions, <code>None</code>, string forward references, and subscriptions of those are type expressions; every other expression form (literals, calls, lambdas, conditionals, comparisons, comprehensions, boolean operators) is not. Subscript <em>arguments</em> are never descended into \u2014 special forms like <code>Literal...</code>, <code>Callable[..., X]</code>, and <code>AnnotatedX, ...</code> legitimately hold non-type expressions there."
+        "html": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> requires the RHS of a <code>type</code> statement to be a valid type expression. The RHS is validated **structurally** on the parsed <code>ruff</code> expression tree via the shared judge (LINESCANPLAN-AST-MIGRATION, issue #379 \u2014 substring matching both missed invalid forms and misfired on identifiers containing matched text): names, dotted names, <code>X | Y</code> unions, <code>None</code>, string forward references, and subscriptions of those are type expressions; every other expression form (literals, calls, lambdas, conditionals, comparisons, comprehensions, boolean operators, attribute access on a subscript) is not. The <code>type</code> statement is lazily evaluated, so string forward references are valid anywhere in the RHS, including as union operands \u2014 recursive aliases spell themselves that way."
       },
       {
         "type": "code",
@@ -821,15 +825,15 @@
       },
       {
         "type": "text",
-        "html": "- Names (<code>int</code>, <code>str</code>, <code>MyClass</code>) - Subscripts (<code>listint</code>, <code>dictstr, int</code>) - Binary-or unions (<code>int | str</code>) - String literals (forward references) - <code>None</code> - <code>...</code> (Ellipsis, in Callable signatures)"
+        "html": "- Names (<code>int</code>, <code>str</code>, <code>MyClass</code>) - Subscripts (<code>listint</code>, <code>dictstr, int</code>) - Binary-or unions (<code>int | str</code>) - String literals (forward references) - <code>None</code>"
       },
       {
         "type": "text",
-        "html": "The following are invalid and should be flagged:"
+        "html": "The following are invalid and are flagged structurally, on the parsed <code>ruff</code> AST (LINESCANPLAN-AST-MIGRATION, issue #408):"
       },
       {
         "type": "text",
-        "html": "- List literals: <code>int, str</code> - Dict literals: <code>{}</code> - Tuple literals: <code>(int, str)</code> - List comprehensions: <code>int for i in range(1)</code> - Lambda expressions (called or uncalled) - Conditional expressions: <code>int if cond else str</code> - Boolean binary operators: <code>int or str</code>, <code>int and str</code> - F-string literals: <code>f&quot;int&quot;</code> - Explicit function calls like <code>eval(...)</code> - Negative numeric literals (positive are caught by E0024) - Names that refer to module objects (<code>import types</code> \u2192 <code>types</code> is a module, not a type) - Names that refer to unannotated literal variables (<code>var1 = 3</code> \u2192 <code>var1</code> is <code>int</code>, not a type)"
+        "html": "- List literals: <code>int, str</code> - Dict literals: <code>{}</code> - Tuple literals: <code>(int, str)</code> - List comprehensions: <code>int for i in range(1)</code> - Lambda expressions (called or uncalled) - Conditional expressions: <code>int if cond else str</code> - Boolean binary operators: <code>int or str</code>, <code>int and str</code> - F-string literals: <code>f&quot;int&quot;</code> - Calls \u2014 any call, <code>eval(...)</code> included, is a runtime expression - Negative numeric literals (positive are caught by E0024) - Names that refer to module objects (<code>import types</code> \u2192 <code>types</code> is a module, not a type) - Names that refer to unannotated literal variables (<code>var1 = 3</code> \u2192 <code>var1</code> is <code>int</code>, not a type)"
       },
       {
         "type": "code",
@@ -6056,7 +6060,7 @@
     "body": [
       {
         "type": "text",
-        "html": "<a href=\"https://peps.python.org/pep-0593/\">PEP 593</a> requires that the first argument to <code>Annotated...</code> be a valid type expression. The following are errors:"
+        "html": "<a href=\"https://peps.python.org/pep-0593/\">PEP 593</a> requires that the first argument to <code>Annotated...</code> be a valid type expression. Verdicts are structural, over the parsed <code>ruff</code> AST (LINESCANPLAN-AST-MIGRATION, issue #408). The following are errors:"
       },
       {
         "type": "text",

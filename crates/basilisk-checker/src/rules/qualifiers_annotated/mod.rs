@@ -110,13 +110,22 @@ impl Rule for AnnotatedInvalidFirstArg {
             ));
         }
 
-        // Detect calls to TypeAlias names (e.g. `SmallInt(1)` where
-        // `SmallInt: TypeAlias = Annotated[int, ""]`). Alias-hood resolves
-        // through the shared cascade, covering every import spelling.
+        // Detect calls to `Annotated[...]` alias names (e.g. `SmallInt(1)`
+        // where `SmallInt: TypeAlias = Annotated[int, ""]`). Alias-hood
+        // resolves through the shared cascade, covering every import
+        // spelling. Only aliases whose VALUE is an `Annotated[...]` subscript
+        // participate — this rule enforces PEP 593, and an alias to a plain
+        // class (`ListAlias: TypeAlias = list`) is constructible.
         let type_alias_names: HashSet<String> = module
             .module_vars
             .iter()
             .filter(|var| annotation_is_type_alias(&resolver, var.annotation_span))
+            .filter(|var| {
+                var.rhs_span
+                    .and_then(|span| index.expr(span))
+                    .and_then(annotated_subscript)
+                    .is_some()
+            })
             .map(|var| var.name.clone())
             .collect();
         check_type_alias_calls(&module.calls, &type_alias_names, path, diagnostics);
