@@ -1,22 +1,13 @@
 //! `specialtypes_type`: Invalid `type[X]` usage violations.
 //!
-//! Detects several categories of invalid use of `type[X]` (or `Type[X]`):
+//! Detects several categories of invalid use of `type[X]`:
 //!
-//! 1. **Callable passed as `type[T]` argument** — `Callable` and other special
-//!    forms are not valid class objects and cannot be passed where `type[T]` is
-//!    expected.
-//!
-//! 2. **Incompatible class passed to `type[A | B]`** — when a function expects
+//! 1. **Incompatible class passed to `type[A | B]`** — when a function expects
 //!    `type[A | B]`, passing a class that is neither `A` nor `B` is an error.
 //!
-//! 3. **Unknown attribute access on `type[object]`** — unlike `type[Any]`,
+//! 2. **Unknown attribute access on `type[object]`** —
 //!    `type[object]` only exposes `object`'s own attributes; accessing any other
 //!    member is an error.
-//!
-//! 4. **Unknown attribute access on a `TypeAlias` bound to `type` / `Type`** —
-//!    a bare alias such as `TA1: TypeAlias = Type` resolves to `type[Any]`, but
-//!    the alias *name itself* (used at module scope like `TA1.unknown`) does not
-//!    expose arbitrary attributes.
 
 mod helpers;
 
@@ -32,8 +23,8 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 use helpers::{
-    expr_simple_name, expr_to_str, is_any_type_annotation, is_concrete_type_annotation,
-    is_known_type_attr, is_type_annotation, is_typevar_call, strip_type_bracket, SPECIAL_FORMS,
+    expr_simple_name, expr_to_str, is_concrete_type_annotation, is_known_type_attr,
+    strip_type_bracket,
 };
 
 const CODE: ErrorCode = ErrorCode {
@@ -68,10 +59,6 @@ impl Rule for TypeBracketViolation {
 struct ModuleCtx {
     /// Class names defined at module scope.
     class_names: Vec<String>,
-    /// `TypeVar` names (i.e., assigned via `TypeVar(...)`).
-    typevar_names: Vec<String>,
-    /// `TypeAlias` bindings: alias name → annotation text of the RHS.
-    type_aliases: HashMap<String, String>,
     /// Module-level function signatures: name → list of (`param_name`, `annotation_text`).
     func_params: HashMap<String, Vec<(String, String)>>,
 }
@@ -79,35 +66,12 @@ struct ModuleCtx {
 impl ModuleCtx {
     fn build(stmts: &[Stmt]) -> Self {
         let mut class_names = Vec::new();
-        let mut typevar_names = Vec::new();
-        let mut type_aliases: HashMap<String, String> = HashMap::new();
         let mut func_params: HashMap<String, Vec<(String, String)>> = HashMap::new();
 
         for stmt in stmts {
             match stmt {
                 Stmt::ClassDef(cls) => {
                     class_names.push(cls.name.to_string());
-                }
-                Stmt::Assign(assign) if assign.targets.len() == 1 => {
-                    if let Some(name) = assign.targets.first().and_then(expr_simple_name) {
-                        if is_typevar_call(&assign.value) {
-                            typevar_names.push(name.to_owned());
-                        }
-                    }
-                }
-                Stmt::AnnAssign(ann) => {
-                    let is_alias = match ann.annotation.as_ref() {
-                        Expr::Name(n) => n.id.as_str() == "TypeAlias",
-                        _ => false,
-                    };
-                    if is_alias {
-                        if let Some(name) = expr_simple_name(&ann.target) {
-                            if let Some(value) = &ann.value {
-                                let rhs = expr_to_str(value);
-                                let _ = type_aliases.insert(name.to_owned(), rhs);
-                            }
-                        }
-                    }
                 }
                 Stmt::FunctionDef(func) => {
                     let mut params: Vec<(String, String)> = Vec::new();
@@ -138,8 +102,6 @@ impl ModuleCtx {
 
         Self {
             class_names,
-            typevar_names,
-            type_aliases,
             func_params,
         }
     }
@@ -147,18 +109,6 @@ impl ModuleCtx {
     /// Returns true if `name` is a known module-level class.
     fn is_class(&self, name: &str) -> bool {
         self.class_names.iter().any(|c| c == name)
-    }
-
-    /// Returns true if `name` is a `TypeVar`.
-    fn is_typevar(&self, name: &str) -> bool {
-        self.typevar_names.iter().any(|t| t == name)
-    }
-
-    /// Returns true if `name` is a `TypeAlias` binding that resolves to a `type` / `Type` variant.
-    fn is_type_alias(&self, name: &str) -> bool {
-        self.type_aliases
-            .get(name)
-            .is_some_and(|rhs| is_type_annotation(rhs))
     }
 
     /// Return the union members if the annotation is `type[A | B | ...]`.
@@ -234,33 +184,6 @@ fn check_module_expr(expr: &Expr, ctx: &ModuleCtx, path: &str, diag: &mut Vec<Di
                     continue;
                 };
                 check_type_arg(arg_name, ann, arg_expr, ctx, path, diag);
-            }
-        }
-        Expr::Attribute(attr) => {
-            if let Some(obj_name) = expr_simple_name(&attr.value) {
-                if ctx.is_type_alias(obj_name) && !is_known_type_attr(attr.attr.as_str()) {
-                    let span = Span::from(attr.range());
-                    diag.push(error_diagnostic_owned(
-                        CODE.clone(),
-                        format!(
-                            "Attribute `{}` is not defined on `{obj_name}` \
-                             (a `TypeAlias` of `type`/`Type`)",
-                            attr.attr
-                        ),
-                        span,
-                        path,
-                        Some(format!(
-                            "`{obj_name}` is a `TypeAlias` for a `type` annotation; \
-                             it does not expose `{}`",
-                            attr.attr
-                        )),
-                        Some(
-                            "A `TypeAlias` binding to `type` or `Type` \
-                             does not expose arbitrary attributes."
-                                .to_owned(),
-                        ),
-                    ));
-                }
             }
         }
         _ => {}
@@ -380,38 +303,11 @@ fn check_type_arg(
 ) {
     let span = Span::from(arg_expr.range());
 
-    if SPECIAL_FORMS.contains(&arg_name) {
-        let inner = strip_type_bracket(param_ann).unwrap_or("T");
-        if is_any_type_annotation(param_ann) {
-            diag.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Argument `{arg_name}` is a special typing form, not a class object; \
-                     `type[{inner}]` requires a real class"
-                ),
-                span,
-                path,
-                Some(format!(
-                    "`{arg_name}` is a special form and cannot be used as `type[{inner}]`"
-                )),
-                Some(
-                    "Per the typing spec, only actual class objects satisfy `type[T]`; \
-                     special forms like `Callable` are not class objects."
-                        .to_owned(),
-                ),
-            ));
-        }
-        return;
-    }
-
     let Some(members) = ModuleCtx::type_union_members(param_ann) else {
         return;
     };
 
-    let is_member = members.contains(&arg_name);
-    let is_tv = ctx.is_typevar(arg_name);
-
-    if is_member || is_tv {
+    if members.contains(&arg_name) {
         return;
     }
 

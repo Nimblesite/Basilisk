@@ -136,9 +136,6 @@ fn check_module_level_callees(
         if module.module_bindings.contains_key(callee)
             || scope.imported_symbols.contains_key(callee)
             || BUILTINS.contains(&callee)
-            // `reveal_type` is special-cased by type checkers per the typing
-            // spec and needs no import.
-            || callee == "reveal_type"
         {
             continue;
         }

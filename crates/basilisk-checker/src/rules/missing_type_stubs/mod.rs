@@ -4,7 +4,7 @@
 //! Fires when a package is imported and resolves to a `.py` source file (not
 //! `.pyi`) without a `py.typed` marker. This means the package is installed
 //! but lacks type information, reducing type safety. This rule is off by
-//! default — the default configuration is pure PEP conformance — and a project
+//! default — the default configuration contains only PEP-tagged rules — and a project
 //! opts in with an explicit `BSK-0152` severity. Once enabled, an untyped
 //! third-party import is a hard error; a project can soften it per import
 //! (`# type: warning[BSK-0152]`) or globally (`"BSK-0152" = "warning"`) to

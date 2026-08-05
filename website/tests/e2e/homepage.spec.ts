@@ -13,14 +13,14 @@ test.describe("homepage positioning", () => {
     page,
   }) => {
     await expect(page).toHaveTitle(
-      "Basilisk — Fast Python Type Checker & Language Server",
+      "Basilisk — Python Type Checker & Language Server",
     );
     await expect(page.locator("h1")).toHaveCount(1);
     await expect(page.locator("h1")).toHaveText(
-      "The only Python type checker that scores 100% on the official Python typing suite. And the fastest we’ve benchmarked.",
+      "An open-source Python type checker and language server, built in Rust.",
     );
     await expect(page.locator(".hero__subheadline")).toContainText(
-      "Basilisk is an open-source Python type checker and language server built in Rust.",
+      "withdrawn our former conformance claim",
     );
     await expect(
       page.locator('a[href="vscode:extension/Nimblesite.basilisk"]'),
@@ -34,44 +34,34 @@ test.describe("homepage positioning", () => {
     expect(description?.length).toBeLessThanOrEqual(160);
   });
 
-  test("carries a proof link beside each headline claim", async ({ page }) => {
-    // The two comparative claims in the hero are only publishable while they
-    // are linked to the source that grades them: the conformance claim to the
-    // official python/typing results, the speed claim to our benchmark and its
-    // methodology. The false-positive count is asserted at 0 because that is a
-    // ratchet; the caught count is left open because upstream adds test cases.
+  test("puts the integrity correction beside the product introduction", async ({ page }) => {
     await expect(page.locator(".hero__subheadline")).toContainText(
-      "only checker that passes every file of the official python/typing conformance suite",
+      "withdrawn our former conformance claim and published benchmark figures",
     );
     await expect(page.locator(".hero__subheadline")).toContainText(
-      /\d+ required errors caught and 0 false positives/,
+      "removed from the official python/typing results at our request",
     );
     await expect(page.locator(".hero__subheadline")).toContainText(
-      "lowest median cold full-file CLI time of any checker in our published benchmark",
+      "current conformance percentage is temporarily unknown",
     );
-    await expect(
-      page.locator('.hero__subheadline a[href*="github.com/python/typing"]'),
-    ).toHaveCount(1);
-    await expect(
-      page.locator('.hero__subheadline a[href="/docs/benchmarks/"]'),
-    ).toHaveCount(1);
+    await expect(page.locator(".hero__subheadline")).toContainText(
+      "robustness and mutation testing",
+    );
   });
 
-  test("shows only linked and scoped headline proof", async ({ page }) => {
+  test("shows both withdrawn result notices and their detail links", async ({ page }) => {
     await expect(page.locator(".hero__proof .stat-card")).toHaveCount(2);
     await expect(page.locator(".hero__proof")).toContainText(
-      "Only listed checker with a perfect official score",
+      "Current typing conformance",
     );
     await expect(page.locator(".hero__proof")).toContainText(
-      "Fastest in our published cold-check benchmark",
+      "Published benchmark figures",
     );
-    // Both counts are ratchets: the suite grades us at zero on each, and the
-    // headline "only checker" claim is only true while they stay there.
     await expect(page.locator(".hero__proof")).toContainText(
-      "0 missed required errors and 0 false positives",
+      "removed from the official results table",
     );
     await expect(page.locator(".hero__proof-cta")).toContainText(
-      "performance is self-measured and reproducible",
+      "Both sets of figures are withdrawn",
     );
     await expect(
       page.locator('.hero__proof a[href*="github.com/python/typing"]'),
@@ -81,6 +71,8 @@ test.describe("homepage positioning", () => {
     ).toBeVisible();
 
     const body = await page.locator("body").innerText();
+    expect(body).not.toContain("scores 100%");
+    expect(body).not.toContain("fastest we’ve benchmarked");
     expect(body).not.toContain("Strict by default");
     expect(body).not.toContain("Every diagnostic");
     expect(body).not.toContain("One binary");
@@ -89,7 +81,7 @@ test.describe("homepage positioning", () => {
   test("publishes matching social and software metadata", async ({ page }) => {
     await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
       "content",
-      "Basilisk — Fast Python Type Checker & Language Server",
+      "Basilisk — Python Type Checker & Language Server",
     );
     await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
       "content",
@@ -141,8 +133,8 @@ test.describe("homepage positioning", () => {
 });
 
 // The Chinese homepage is a translation of the English one, not a separate
-// pitch: same sections, same data gates, same proof links. These tests fail if
-// the two drift apart in structure or if a zh superlative escapes its gate.
+// pitch: same sections and the same integrity disclosures. These tests fail if
+// one locale quietly retains a claim that the other has withdrawn.
 test.describe("Chinese homepage", () => {
   const skeleton = (page: import("@playwright/test").Page) =>
     page.evaluate(() =>
@@ -165,52 +157,37 @@ test.describe("Chinese homepage", () => {
     expect(chinese).toEqual(english);
   });
 
-  test("renders both headline claims beside their proof", async ({ page }) => {
+  test("renders the same correction and withdrawn-result notices", async ({ page }) => {
     await page.goto("/zh/");
 
     await expect(page.locator("h1")).toHaveCount(1);
     await expect(page.locator("h1")).toContainText(
-      "唯一在官方 Python typing 套件中取得 100% 的 Python 类型检查器。",
-    );
-    await expect(page.locator(".hero__headline-accent")).toHaveText(
-      "也是我们测过最快的。",
+      "用 Rust 构建的开源 Python 类型检查器与语言服务器。",
     );
 
     await expect(page.locator(".hero__subheadline")).toContainText(
-      "它是唯一通过官方 python/typing 符合性套件中每一个文件的检查器",
+      "已撤回此前的符合性声明和公开的基准测试数据",
     );
     await expect(page.locator(".hero__subheadline")).toContainText(
-      /捕获 \d+ 个必需错误，0 处误报/,
+      "当前符合性百分比暂时未知",
     );
-    await expect(
-      page.locator('.hero__subheadline a[href*="github.com/python/typing"]'),
-    ).toHaveCount(1);
-    await expect(
-      page.locator('.hero__subheadline a[href="/docs/benchmarks/"]'),
-    ).toHaveCount(1);
 
     await expect(page.locator(".hero__proof .stat-card")).toHaveCount(2);
     await expect(page.locator(".hero__proof")).toContainText(
-      "官方榜单中唯一取得满分的检查器",
+      "当前类型符合性",
     );
     await expect(page.locator(".hero__proof")).toContainText(
-      "我们公开的冷启动基准测试中最快",
+      "公开的基准测试数据",
     );
   });
 
-  test("keeps its comparative claims on the same gates as the English page", async ({
+  test("keeps its disclosure structure aligned with the English page", async ({
     page,
   }) => {
-    // A gate that fires on one locale and not the other means one of the two
-    // pages is asserting a comparative fact its data no longer supports.
     await page.goto("/");
-    const englishAccents = await page
-      .locator(".hero__headline-accent")
-      .count();
+    const englishCards = await page.locator(".hero__proof .stat-card").count();
     await page.goto("/zh/");
-    expect(await page.locator(".hero__headline-accent").count()).toBe(
-      englishAccents,
-    );
+    expect(await page.locator(".hero__proof .stat-card").count()).toBe(englishCards);
 
     // Chinese readers search the English product nouns too; both must be present.
     const keywords = await page

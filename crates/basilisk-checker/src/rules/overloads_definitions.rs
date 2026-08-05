@@ -53,9 +53,6 @@ impl Rule for MissingOverloadImpl {
             return;
         };
         // Build a set of Protocol class names so we can exempt their methods.
-        // ABC classes are NOT blanket-exempt: only their `@abstractmethod`
-        // overload groups skip the implementation requirement — a *non*-abstract
-        // overloaded method in an ABC still needs a concrete implementation.
         let protocol_classes: std::collections::HashSet<&str> = module
             .classes
             .iter()
@@ -92,17 +89,14 @@ impl Rule for MissingOverloadImpl {
             // Case 1: ALL definitions carry @overload (no implementation).
             if non_overloaded.is_empty() {
                 let is_protocol = class_name.is_some_and(|cls| protocol_classes.contains(cls));
-                let has_abstract = overloaded
-                    .iter()
-                    .any(|f| has_decorator(&f.decorators, "abstractmethod"));
 
                 // A lone `@overload` is invalid in any context: the spec requires
-                // at least two `@overload`-decorated definitions. Stubs/protocols/
-                // ABCs are exempt only from the *implementation* requirement below,
-                // not from the "at least two" rule. (Protocol/abstract single
+                // at least two `@overload`-decorated definitions. Stubs/protocols
+                // are exempt only from the *implementation* requirement below,
+                // not from the "at least two" rule. (Protocol single
                 // declarations are tolerated to avoid noise on partial code.)
                 if overloaded.len() == 1 {
-                    if !is_protocol && !has_abstract {
+                    if !is_protocol {
                         if let Some(first) = overloaded.first() {
                             diagnostics.push(make_single_overload_diagnostic(
                                 first,
@@ -114,13 +108,13 @@ impl Rule for MissingOverloadImpl {
                     continue;
                 }
 
-                // 2+ overloads with no implementation. Stub files (`.pyi`),
-                // Protocols and abstract methods legitimately omit it.
+                // 2+ overloads with no implementation. Stub files (`.pyi`)
+                // and Protocols legitimately omit it.
                 let is_stub = std::path::Path::new(&module.path)
                     .extension()
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("pyi"));
 
-                if !is_protocol && !has_abstract && !is_stub {
+                if !is_protocol && !is_stub {
                     if let Some(first) = overloaded.first() {
                         diagnostics.push(make_diagnostic(
                             first,
@@ -145,14 +139,6 @@ impl Rule for MissingOverloadImpl {
             // Case 3: 2+ @overload + at least 1 non-overload implementation — valid.
         }
     }
-}
-
-/// Returns `true` if `decorator_name` is in `decorators` (simple name match,
-/// ignoring the `typing.` prefix if callers have already stripped it).
-fn has_decorator(decorators: &[String], decorator_name: &str) -> bool {
-    decorators
-        .iter()
-        .any(|d| d == decorator_name || d.ends_with(&format!(".{decorator_name}")))
 }
 
 fn make_diagnostic(

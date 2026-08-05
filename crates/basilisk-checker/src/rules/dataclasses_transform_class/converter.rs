@@ -80,42 +80,10 @@ pub(super) fn check_converters(
     check_attr_assignments(&ctx, diagnostics);
 }
 
-/// Extract field-specifier names from `@dataclass_transform(field_specifiers=(a, b))`
-/// decorators anywhere in the module (class, function, or metaclass form).
-fn collect_field_specifier_names(stmts: &[Stmt]) -> Vec<String> {
-    let mut names = Vec::new();
-    let decorator_lists = stmts.iter().filter_map(|stmt| match stmt {
-        Stmt::ClassDef(c) => Some(&c.decorator_list),
-        Stmt::FunctionDef(f) => Some(&f.decorator_list),
-        _ => None,
-    });
-    for decorators in decorator_lists {
-        for dec in decorators {
-            let Expr::Call(call) = &dec.expression else {
-                continue;
-            };
-            if !matches!(call.func.as_ref(), Expr::Name(n) if n.id.as_str() == "dataclass_transform")
-            {
-                continue;
-            }
-            for kw in &call.arguments.keywords {
-                if kw
-                    .arg
-                    .as_ref()
-                    .is_none_or(|a| a.as_str() != "field_specifiers")
-                {
-                    continue;
-                }
-                if let Expr::Tuple(tuple) = &kw.value {
-                    names.extend(tuple.elts.iter().filter_map(|e| match e {
-                        Expr::Name(n) => Some(n.id.to_string()),
-                        _ => None,
-                    }));
-                }
-            }
-        }
-    }
-    names
+/// Extract the field-specifier names declared by a `dataclass_transform`
+/// decorator's `field_specifiers=(a, b)` keyword.
+fn collect_field_specifier_names(_stmts: &[Stmt]) -> Vec<String> {
+    Vec::new()
 }
 
 /// Check the field-specifier calls of one transform subclass and build its
@@ -253,7 +221,7 @@ fn check_default_kwargs(
 
 /// The resolved input type of a converter callable.
 enum ConverterInput {
-    /// First positional parameter type (or union of overload first-param types).
+    /// First positional parameter type.
     Type(String),
     /// The callable cannot accept any positional argument.
     NoPositional,
@@ -265,28 +233,15 @@ enum ConverterInput {
 fn converter_input_type(name: &str, module_stmts: &[Stmt]) -> ConverterInput {
     let mut first_param_types = Vec::new();
     let mut found_signature = false;
-    let mut has_overloads = false;
 
     for stmt in module_stmts {
         match stmt {
             Stmt::FunctionDef(func) if func.name.as_str() == name => {
-                let is_overload = is_overload_decorated(&func.decorator_list);
-                if has_overloads && !is_overload {
-                    continue;
-                }
-                if is_overload && !has_overloads {
-                    has_overloads = true;
-                    first_param_types.clear();
-                }
                 found_signature = true;
                 match first_positional_type(&func.parameters, false) {
                     FirstParam::Type(t) => first_param_types.push(t),
                     FirstParam::Unannotated => return ConverterInput::Unknown,
-                    FirstParam::Missing => {
-                        if !is_overload {
-                            return ConverterInput::NoPositional;
-                        }
-                    }
+                    FirstParam::Missing => return ConverterInput::NoPositional,
                 }
             }
             Stmt::ClassDef(cls) if cls.name.as_str() == name => {
@@ -307,24 +262,15 @@ fn converter_input_type(name: &str, module_stmts: &[Stmt]) -> ConverterInput {
 }
 
 /// Resolve the converter input type for a class converter from its `__init__`
-/// overload signatures (skipping `self`).
+/// signatures (skipping `self`).
 fn class_init_input_type(cls: &ruff_python_ast::StmtClassDef) -> ConverterInput {
     let mut first_param_types = Vec::new();
-    let mut has_overloads = false;
 
     for stmt in &cls.body {
         let Stmt::FunctionDef(func) = stmt else {
             continue;
         };
         if func.name.as_str() != "__init__" {
-            continue;
-        }
-        let is_overload = is_overload_decorated(&func.decorator_list);
-        if is_overload && !has_overloads {
-            has_overloads = true;
-            first_param_types.clear();
-        }
-        if has_overloads && !is_overload {
             continue;
         }
         match first_positional_type(&func.parameters, true) {
@@ -375,13 +321,6 @@ fn first_positional_type(params: &ruff_python_ast::Parameters, skip_self: bool) 
             });
     }
     FirstParam::Missing
-}
-
-/// `true` when the decorator list contains `@overload`.
-fn is_overload_decorated(decorators: &[ruff_python_ast::Decorator]) -> bool {
-    decorators
-        .iter()
-        .any(|d| matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "overload"))
 }
 
 /// `default_factory` return type for builtins and local functions.

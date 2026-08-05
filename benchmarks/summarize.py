@@ -74,6 +74,12 @@ STATUS_NOTE = (
     "on another machine or at another time."
 )
 
+INTEGRITY_NOTICE = (
+    "HISTORICAL, WITHDRAWN FIGURES — retained for audit only. The methodology "
+    "and every comparison are under review; do not use these values as current "
+    "performance claims or rankings."
+)
+
 
 def read_rows(out_dir):
     """(stem, {command: mean_ms}) for every per-fixture hyperfine JSON present."""
@@ -177,6 +183,7 @@ def build_csv_lines(rows, all_tools, base_tools, coverage, carry):
         f"> {float(os.environ['BENCH_MAX_CV']):.0%} is remeasured with at least "
         f"{os.environ['BENCH_STABILITY_RUNS']} runs (hyperfine mean wall-clock, milliseconds)",
         f"# generated: {os.environ['BENCH_GENERATED']}",
+        f"# integrity: {INTEGRITY_NOTICE}",
     ]
     lines += provenance_header(all_tools, carry)
     lines += [
@@ -284,6 +291,8 @@ def print_console_table(rows, tools):
 def write_summary_md(out_dir, rows, tools):
     lines = [
         "# Benchmark summary\n",
+        f"> **{INTEGRITY_NOTICE}**\n",
+        "",
         f"Machine: `{os.environ['BENCH_MACHINE']}`\n",
         "",
         "| fixture | " + " | ".join(tools) + " |",
@@ -335,9 +344,8 @@ def main():
     print(f"\n  Status CSV (written, git-tracked): {status_path}")
     print(f"  Summary:                  {os.path.join(out_dir, 'summary.md')}")
     print(
-        "\n  Indicative only — measured on this machine, under whatever else it was\n"
-        "  running. Compare tools within this run; do not compare against numbers\n"
-        "  recorded on another machine or at another time."
+        "\n  WITHDRAWN — retained for audit only while the methodology and every\n"
+        "  comparison are reviewed. Do not use these values as current claims."
     )
     return 0
 

@@ -78,12 +78,6 @@ impl Rule for UnboundTypeVarScope {
 
         // Check class body attributes for unbound TypeVar usage.
         check_class_attributes(module, &typevar_names, &class_generic_params, diagnostics);
-
-        // Check inner classes reusing outer class TypeVars.
-        check_inner_class_typevars(module, &typevar_names, diagnostics);
-
-        // Check class-level TypeAlias definitions.
-        check_class_type_aliases(module, &typevar_names, diagnostics);
     }
 }
 
@@ -289,14 +283,6 @@ fn check_class_attributes(
         // Check each attribute annotation.
         for attr in &cls.attributes {
             if let Some(ref ann_span) = attr.annotation_span {
-                let ann_text = annotation_text(&module.source, *ann_span).unwrap_or_default();
-
-                // Skip method definitions (they have their own scope).
-                // Skip TypeAlias annotations (handled separately).
-                if ann_text == "TypeAlias" {
-                    continue;
-                }
-
                 let unbound = find_unbound_typevars_in_annotation(
                     &module.source,
                     *ann_span,
@@ -328,99 +314,3 @@ fn check_class_attributes(
     }
 }
 
-/// Check inner classes that reuse outer class `TypeVar`s in their Generic bases.
-///
-/// For example:
-/// ```python
-/// class Outer(Generic[T]):
-///     class Bad(Iterable[T]):  # E — T is Outer's TypeVar
-///         ...
-///     class AlsoBad:
-///         x: list[T]  # E — T is Outer's TypeVar
-/// ```
-fn check_inner_class_typevars(
-    module: &ResolvedModule,
-    typevar_names: &HashSet<&str>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    for cls in &module.classes {
-        // Collect this class's own TypeVar params.
-        let class_params: HashSet<&str> = cls
-            .generic_params
-            .iter()
-            .map(|p| p.name.as_str())
-            .chain(cls.pep695_type_param_names.iter().map(String::as_str))
-            .collect();
-
-        if class_params.is_empty() {
-            continue;
-        }
-
-        // Check base_subscripts of inner classes. An inner class's bases are
-        // not directly available on ClassInfo. However, functions defined in the
-        // class with class_name matching an inner class pattern could be checked.
-        // For now, we handle the case where a class has base_subscripts
-        // containing the outer class's TypeVars. Since the resolver doesn't
-        // directly track nested class relationships, we check if any class
-        // has Generic[T] where T is from another class.
-        // This is handled indirectly: inner classes would appear as separate
-        // ClassInfo entries. We detect them by checking if their generic params
-        // or base expression names reference TypeVars from an enclosing class.
-
-        // Check class-level TypeAlias using class TypeVars.
-        for attr in &cls.attributes {
-            if let Some(ref ann_span) = attr.annotation_span {
-                let ann_text = annotation_text(&module.source, *ann_span).unwrap_or_default();
-                if ann_text == "TypeAlias" {
-                    // The RHS of a TypeAlias at class level using the class's
-                    // own TypeVars is an error.
-                    if let Some(ref rhs_span) = attr.rhs_span {
-                        let empty: HashSet<&str> = HashSet::new();
-                        let unbound = find_unbound_typevars_in_annotation(
-                            &module.source,
-                            *rhs_span,
-                            typevar_names,
-                            &empty,
-                        );
-                        for tv_name in &unbound {
-                            if class_params.contains(tv_name) {
-                                diagnostics.push(error_diagnostic_owned(
-                                    CODE.clone(),
-                                    format!(
-                                        "Type variable `{tv_name}` from class `{}` \
-                                         cannot be used in a TypeAlias definition",
-                                        cls.name,
-                                    ),
-                                    *rhs_span,
-                                    &module.path,
-                                    Some(
-                                        "Class-scoped type variables are not accessible \
-                                         in TypeAlias definitions"
-                                            .to_owned(),
-                                    ),
-                                    Some(
-                                        "TypeAlias definitions create module-level aliases \
-                                         and cannot capture class-scoped type variables"
-                                            .to_owned(),
-                                    ),
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Check class-level `TypeAlias` definitions that reference class `TypeVar`s.
-fn check_class_type_aliases(
-    module: &ResolvedModule,
-    _typevar_names: &HashSet<&str>,
-    _diagnostics: &mut [Diagnostic],
-) {
-    // This is already handled in check_inner_class_typevars for attributes
-    // annotated as TypeAlias. Additional module-level TypeAlias checks are
-    // handled through the existing type_alias_defs mechanism.
-    let _ = module;
-}

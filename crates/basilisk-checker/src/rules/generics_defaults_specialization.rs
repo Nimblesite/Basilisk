@@ -197,8 +197,8 @@ fn is_single_paramspec_generic(
 }
 
 /// A type argument occupying a `ParamSpec` parameter slot must be a
-/// parameters form: a list (`[int, str]`), `...`, another `ParamSpec`, or
-/// `Concatenate[...]`.  A plain type (`ClassA[int, int]`) is an error.
+/// parameters form: a list (`[int, str]`), `...`, or another `ParamSpec`.
+/// A plain type (`ClassA[int, int]`) is an error.
 ///
 /// Only multi-parameter generics are checked: a class generic over a single
 /// `ParamSpec` treats all arguments as the implicit parameter list (PEP 612).
@@ -275,10 +275,7 @@ fn subscript_arg_texts(text: &str) -> Option<Vec<&str>> {
 
 /// `true` when `arg` is a valid specialization for a `ParamSpec` slot.
 fn is_parameters_form(arg: &str, paramspec_names: &HashSet<&str>) -> bool {
-    arg.starts_with('[')
-        || arg == "..."
-        || paramspec_names.contains(arg)
-        || arg.starts_with("Concatenate[")
+    arg.starts_with('[') || arg == "..." || paramspec_names.contains(arg)
 }
 
 impl Rule for TooFewTypeArguments {

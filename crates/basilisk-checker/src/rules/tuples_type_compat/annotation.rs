@@ -286,9 +286,9 @@ pub(super) fn elem_type_compatible(elem: &Expr, ann_type: &str) -> bool {
 }
 
 /// Returns `true` when `src` is assignable to `target` under the numeric
-/// tower, with `Any` compatible in both directions.
+/// tower.
 pub(super) fn types_assignable(src: &str, target: &str) -> bool {
-    if src == target || src == "Any" || target == "Any" {
+    if src == target {
         return true;
     }
     matches!(

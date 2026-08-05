@@ -12,7 +12,6 @@ use crate::diagnostic::Diagnostic;
 use crate::rules::shared::judge::TypeJudge;
 use crate::types::InferredType;
 
-use super::arg_types::{may_be_str, satisfies_str_iterable};
 use super::make_diagnostic;
 
 /// Validate arguments to bound built-in methods against all applicable
@@ -141,15 +140,8 @@ fn describe_argument(argument: &InferredType, expected: &str) -> String {
 /// declares for it? Only a positively-known mismatch rejects
 /// ([CHKARCH-CONFORMANCE-MODE]).
 fn stub_argument_compatible(annotation: &str, argument: &InferredType) -> bool {
-    let normalized = annotation.replace(' ', "");
-    if normalized == "Any" || normalized == "object" {
+    if annotation.replace(' ', "") == "object" {
         return true;
-    }
-    if normalized.contains("Iterable[str]") || normalized.contains("Iterable[LiteralString]") {
-        return satisfies_str_iterable(argument);
-    }
-    if normalized.contains("LiteralString") {
-        return may_be_str(argument);
     }
     !scalar_annotation_mismatch(annotation, argument)
 }

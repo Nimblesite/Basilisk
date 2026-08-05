@@ -57,7 +57,7 @@ impl Rule for InstanceAttrOnClass {
 
         // Build a map: class_name -> set of instance-only attribute names.
         // An instance-only attribute is one that has an annotation but no
-        // default value AND is not wrapped in ClassVar.
+        // default value.
         let class_instance_attrs: HashMap<&str, HashSet<&str>> = module
             .classes
             .iter()
@@ -67,7 +67,6 @@ impl Rule for InstanceAttrOnClass {
                     .attributes
                     .iter()
                     .filter(|attr| attr.has_annotation && !attr.has_value)
-                    .filter(|attr| !is_classvar_annotation(source, attr.annotation_span))
                     .map(|attr| attr.name.as_str())
                     .collect();
                 if attrs.is_empty() {
@@ -125,17 +124,6 @@ impl Rule for InstanceAttrOnClass {
         };
         scan_source_lines(source, &ctx, diagnostics);
     }
-}
-
-/// Returns `true` when the annotation text starts with `ClassVar`.
-fn is_classvar_annotation(source: &str, annotation_span: Option<Span>) -> bool {
-    let Some(span) = annotation_span else {
-        return false;
-    };
-    slice_span(source, span).is_some_and(|text| {
-        let trimmed = text.trim();
-        trimmed == "ClassVar" || trimmed.starts_with("ClassVar[")
-    })
 }
 
 /// Scan the source text line-by-line for class-level instance attribute accesses.

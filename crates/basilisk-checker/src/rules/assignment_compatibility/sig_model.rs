@@ -62,10 +62,9 @@ pub(super) struct ClassEntry {
     pub(super) methods: HashMap<String, Vec<Sig>>,
     /// Annotated attribute names declared in the class body.
     pub(super) attrs: HashSet<String>,
-    /// Base class names (subscripts stripped, `Protocol`/`Generic` excluded).
+    /// Base class names (subscripts stripped).
     pub(super) bases: Vec<String>,
-    pub(super) is_protocol: bool,
-    /// Generic parameter names (PEP 695 or `Protocol[...]`/`Generic[...]`).
+    /// Generic parameter names.
     pub(super) generic_params: Vec<String>,
 }
 
@@ -92,41 +91,26 @@ pub(super) fn class_entry(cls: &ruff_python_ast::StmtClassDef) -> ClassEntry {
         .map(|(name, defs)| (name, overload_sigs(&defs)))
         .collect();
 
-    let mut is_protocol = false;
-    let mut bases = Vec::new();
-    for base in cls.bases() {
-        let base_name = match base {
+    let bases = cls
+        .bases()
+        .iter()
+        .map(|base| match base {
             Expr::Subscript(sub) => ann_str(&sub.value),
             other => ann_str(other),
-        };
-        match base_name.as_str() {
-            "Protocol" => is_protocol = true,
-            "Generic" => {}
-            _ => bases.push(base_name),
-        }
-    }
+        })
+        .collect();
 
     ClassEntry {
         methods: method_sigs,
         attrs,
         bases,
-        is_protocol,
         generic_params: crate::rules::shared::class_generic_param_names(cls),
     }
 }
 
-/// Reduce a method's definitions to its effective overload set.
+/// The signatures of every definition of a method.
 fn overload_sigs(defs: &[&ruff_python_ast::StmtFunctionDef]) -> Vec<Sig> {
-    let is_overload = |f: &ruff_python_ast::StmtFunctionDef| {
-        f.decorator_list
-            .iter()
-            .any(|d| matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "overload"))
-    };
-    let has_overloads = defs.iter().any(|f| is_overload(f));
-    defs.iter()
-        .filter(|f| !has_overloads || is_overload(f))
-        .map(|f| sig_from_function(f))
-        .collect()
+    defs.iter().map(|f| sig_from_function(f)).collect()
 }
 
 /// Build a [`Sig`] from a method definition (drops `self`).
@@ -160,21 +144,12 @@ pub(super) fn sig_from_function(func: &ruff_python_ast::StmtFunctionDef) -> Sig 
     });
     let ret = func.returns.as_deref().map(ann_str);
 
-    let mut sig = Sig {
+    Sig {
         positional,
         kwonly,
         vararg,
         kwarg,
         ret,
         gradual: false,
-    };
-    // `*args: Any, **kwargs: Any` (literally annotated or unannotated) is
-    // equivalent to `...` per the typing spec; other parameters are retained.
-    let is_any = |param: &StarParam| param.is_present() && param.ty().is_none_or(|ty| ty == "Any");
-    if is_any(&sig.vararg) && is_any(&sig.kwarg) {
-        sig.gradual = true;
-        sig.vararg = StarParam::Absent;
-        sig.kwarg = StarParam::Absent;
     }
-    sig
 }

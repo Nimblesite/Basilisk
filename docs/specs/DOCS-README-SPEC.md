@@ -9,7 +9,7 @@ claimed a retired typeshed behaviour months after the others were corrected.
 
 There is now exactly **one** README per language, and the published files are
 **identical except for a single line** that says which artifact you are looking
-at. Everything else — the conformance claim, the benchmark table, the install
+at. Everything else — the metrics retraction and status notice, the install
 options, the feature list, the typeshed section, the acknowledgments — is one
 body of text, generated to every storefront by `scripts/gen_readmes.py`.
 
@@ -47,6 +47,32 @@ statement expressed differently per target: `{{altLangHref}}` (the
 language-switch link, which must be absolute anywhere but GitHub) and, in the
 Chinese source, its mirror. They are not content.
 
+## Withdrawn metrics notice {#README-METRICS-WITHDRAWAL}
+
+Both canonical sources MUST carry a prominent retraction and current-status
+notice before the first product-feature section. The English and Chinese
+notices MUST communicate the same facts:
+
+- Basilisk's former 100% conformance claim is retracted because the result was
+  not robust under semantics-preserving mutations and was therefore not
+  trustworthy.
+- Basilisk has been removed from the official `python/typing` results table at
+  the project's request.
+- The current conformance level is temporarily unknown while test-fitted code
+  is deleted and the affected logic is reimplemented from the typing
+  specification.
+- All published benchmark figures and performance rankings are withdrawn while
+  the measurement pipeline is audited.
+- Replacement results will be published only after robustness and mutation
+  validation, even if the trustworthy result is less favourable.
+
+While that withdrawal is active, neither canonical source nor any generated
+target may present a current conformance percentage, passed-test total, error
+count, benchmark timing, comparative performance ranking, or numerical
+benchmark table. The former 100% figure may appear only as the clearly labelled
+historical claim being retracted. Removing the disclosure before trustworthy
+replacement results are available is a documentation-integrity failure.
+
 ## Rendering {#README-RENDER}
 
 The generator applies three transforms, in order:
@@ -62,14 +88,21 @@ The generator applies three transforms, in order:
    `github.com/.../blob/main/<path>`. A relative path that resolves to no file
    in the repository is a generation error, not a broken published link.
 
-## Stamped values {#README-STAMPED}
+## Withdrawn values and future stamping {#README-STAMPED}
 
-The conformance and benchmark figures are not typed by hand anywhere. They are
-`<!--g:NAME-->value<!--/g:NAME-->` markers stamped into the **source** by
-`scripts/gen_conformance_reference.py` from `conformance_report.json` and the
-committed benchmark CSVs ([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
-Generation runs after stamping, so every storefront quotes the same
-self-measured number.
+While [README-METRICS-WITHDRAWAL](#README-METRICS-WITHDRAWAL) is active, the
+canonical README sources intentionally contain no stamped conformance or
+benchmark values. `scripts/gen_readmes.py` propagates the shared retraction text
+unchanged to every target.
+
+If trustworthy figures are restored later, they MUST NOT be typed by hand.
+`<!--g:NAME-->value<!--/g:NAME-->` markers in the **canonical sources**, stamped
+by `scripts/gen_conformance_reference.py` from `conformance_report.json` and the
+committed benchmark CSVs, remain the only permitted publication path
+([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
+Generation must run after stamping so every storefront receives the same
+self-measured values. Restoring figures also requires replacing this temporary
+withdrawal contract with acceptance criteria for the validated methodology.
 
 ## Drift guard {#README-DRIFT}
 

@@ -5,6 +5,12 @@
 > pin a PyPI package, verify by SHA, integrate with uv, and suppress the source-status
 > advisory unless unpinned.
 
+> **Integrity status (2026-08-06):** Conformance and performance figures below
+> are dated implementation logs, not current product claims. Basilisk has
+> retracted the former 100% conformance claim, its official results entry was
+> removed, the actual conformance level is temporarily unknown, and all
+> benchmark comparisons are withdrawn while their methodology is audited.
+
 ## Status
 
 | Slice | State |
@@ -13,13 +19,12 @@
 | S2 — Offline verification backend | ✅ Done |
 | S3 — Segregated acquisition | ✅ Done |
 | S4 — uv auto-detection | ✅ Done |
-| Cross-cutting gates | ✅ Done for this plan (`make test`, clippy, fmt, dep-shape, deslop, conformance all green) |
+| Cross-cutting checks | ✅ Historical checks for this plan completed; its pristine fixture run did not establish specification conformance |
 
-The one gate this plan does **not** clear is `make bench`, and it is deliberately not this
-plan's to clear: the cold-start regression is not caused by S1–S4 and is tracked as its own
-task ([Cross-cutting gates](#cross-cutting-gates) records what has actually been established
-about it). No benchmark number is claimed here, and the committed baseline must not be
-advanced to slower numbers to close it.
+At the time this plan was implemented, `make bench` recorded a cold-start delta
+for later investigation. Those measurements are preserved below as historical
+engineering notes only. Benchmarks now report indicative workstation data and
+do not pass or fail this plan.
 
 ## Contract {#TYPESHEDPYPI-CONTRACT}
 
@@ -92,15 +97,16 @@ unset, if `uv.lock` pins exactly one recognised typeshed-distribution package, a
 Signed releases (PyPI has none); sdists (wheel required); pip `requirements.txt`; reading the
 installed `site-packages` tree (the stored wheel is the source).
 
-## CI gate {#TYPESHEDPYPI-CI}
+## Verification policy {#TYPESHEDPYPI-CI}
 `make test` (fail-fast, coverage ratchet up), clippy + fmt at strictest, `make lint` (incl.
-`scripts/check-dependency-shape.sh` — `basilisk-stubs` still links no HTTP client), `deslop`, and
-conformance 100 % / 0 FP unchanged (advisories never enter the scored stream) — all green.
+`scripts/check-dependency-shape.sh` — `basilisk-stubs` still links no HTTP client), and `deslop`
+remain required. The pristine conformance fixture result is a strict regression
+check, but it is not sufficient evidence of conformance; the AST-preserving
+mutation suite and independently derived off-suite cases are mandatory before
+any future public result.
 
-`make bench` (zero-tolerance baseline gate) also guards the branch, but its outstanding failure is
-**not attributable to this plan** and is tracked as its own task; see
-[Cross-cutting gates](#cross-cutting-gates) for the evidence. This plan neither claims a benchmark
-result nor licenses re-baselining to slower numbers.
+`make bench` records indicative measurements for human review. It is not a CI
+gate, and this plan makes no current performance claim from its output.
 
 ## TODO {#TYPESHEDPYPI-TODO}
 
@@ -185,10 +191,15 @@ result nor licenses re-baselining to slower numbers.
 - [x] clippy + fmt at strictest (verified: `cargo clippy --workspace --all-targets` 0 errors/warnings; `cargo fmt --all --check` clean).
 - [x] `make lint` dependency-shape portion (verified: `scripts/check-dependency-shape.sh` — analysis crates offline, only `basilisk-typeshed-fetch` links HTTP).
 - [x] `deslop` clean (verified: `deslop .` exits 0 within the committed `.deslop.toml` budget).
-- [ ] `make bench` — **FAILS on a cold-start regression (≈ +2 ms, ~6.2→9.4 ms on the fastest fixture) that this slice did not cause.** Tracked and owned OUTSIDE this plan; it does not gate S1–S4 and this plan claims no benchmark result. What is established:
+- [ ] `make bench` — **historical, withdrawn measurement record.** A run logged a
+  cold-start delta, but the figures have not survived the current methodology
+  audit and do not gate S1–S4. The contemporaneous investigation recorded:
   - **S4 is perf-neutral**: toggling the `apply_uv_typeshed_override` call off moves the mean within noise (8.4 ms vs 8.8 ms, σ 0.5). Its common-case cost is one `is_file()` stat. S1–S3 add only a skipped `else if` arm to `typeshed_request` on the default path.
   - **The `rustls`/`ureq` dyld hypothesis is disproven**, and any note repeating it is wrong: `basilisk-cli` already depended on `basilisk-typeshed-fetch` on `main`, so the TLS stack was linked into the binary that produced the 6.2 ms baseline.
   - **The committed baseline is stale, not just slow**: it was last written by `009f2556` (2026-07-18) while `main` has since merged through `e3e97d30` (2026-08-01, #377). Many merged PRs sit between the baseline and this branch, so nothing attributes the delta to this branch without a same-machine A/B of `main` HEAD vs this branch.
   - **Part of the delta is environmental**: the two runs pin identical competitor versions, and pyright/mypy/ty/pyrefly/zuban all shifted 3–10 % between them — real, but far short of basilisk's ~50 % on the fast fixtures, so a genuine fixed per-process cost remains to be found.
-  - The ratchet rule is unchanged: the baseline may not be advanced to slower numbers. Recovering the cost — not re-baselining — is the exit condition, and it belongs to the benchmark task, not to this one.
-- [x] Conformance 100 % / 0 FP unchanged (advisories never enter the scored stream; conformance fixtures ran green inside `_test_rust`).
+  - At the time, the team treated recovery rather than re-baselining as the exit
+    condition. That note is retained as history, not an active benchmark gate.
+- [x] The pristine conformance fixtures ran green inside `_test_rust` at the
+  time. That raw fixture outcome is historical regression evidence only; it
+  does not establish the current conformance level.

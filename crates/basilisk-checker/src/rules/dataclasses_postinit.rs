@@ -5,7 +5,7 @@
 //!
 //! 1. **`__post_init__` signature mismatch**: A dataclass with `InitVar` fields
 //!    must declare a `__post_init__` method whose parameters (after `self`)
-//!    match the `InitVar` fields in count and type.
+//!    match the `InitVar` fields in count.
 //!
 //! 2. **Access to `InitVar` fields as instance attributes**: `InitVar[T]` fields
 //!    are constructor-only parameters passed to `__post_init__`; they are not
@@ -19,7 +19,7 @@
 //!     x: InitVar[int]
 //!     y: InitVar[str]
 //!
-//!     def __post_init__(self, x: int, y: int) -> None:  # E: y should be str
+//!     def __post_init__(self, x: int) -> None:  # E: one parameter, two fields
 //!         pass
 //!
 //! dc1 = DC1(1, "")
@@ -54,21 +54,6 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     )
 }
 
-fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
-    let span = span?;
-    slice_span(source, span)
-}
-
-/// Extract the inner type from an `InitVar[T]` annotation text.
-/// Returns `Some("T")` for `InitVar[T]` or `dataclasses.InitVar[T]`.
-fn extract_initvar_inner(ann: &str) -> Option<&str> {
-    let s = ann.trim();
-    let rest = s
-        .strip_prefix("InitVar[")
-        .or_else(|| s.strip_prefix("dataclasses.InitVar["))?;
-    rest.strip_suffix(']').map(str::trim)
-}
-
 /// Emits `dataclasses_postinit` for `InitVar` field violations in dataclasses.
 pub(crate) struct InitVarViolation;
 
@@ -86,7 +71,6 @@ impl Rule for InitVarViolation {
 
 /// Validate `__post_init__` signatures against the class's `InitVar` fields.
 fn check_post_init_signatures(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    let source = &module.source;
     let path = &module.path;
 
     let class_map: HashMap<&str, _> = module
@@ -140,33 +124,6 @@ fn check_post_init_signatures(module: &ResolvedModule, diagnostics: &mut Vec<Dia
                 post_init_fn.name_span,
                 path,
             ));
-            continue;
-        }
-
-        for (param, field) in params.iter().zip(initvar_fields.iter()) {
-            let Some(field_ann) = span_text(source, field.annotation_span) else {
-                continue;
-            };
-            let Some(inner_type) = extract_initvar_inner(field_ann.trim()) else {
-                continue;
-            };
-            let Some(param_ann) = span_text(source, param.annotation_span) else {
-                continue;
-            };
-            if inner_type != param_ann.trim() {
-                diagnostics.push(make_diagnostic(
-                    format!(
-                        "`__post_init__` parameter `{}` has type `{}` but `InitVar` field \
-                         `{}` declares inner type `{}`",
-                        param.name,
-                        param_ann.trim(),
-                        field.name,
-                        inner_type,
-                    ),
-                    param.name_span,
-                    path,
-                ));
-            }
         }
     }
 }

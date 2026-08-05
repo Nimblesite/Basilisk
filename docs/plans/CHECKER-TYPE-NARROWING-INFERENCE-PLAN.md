@@ -4,8 +4,17 @@ Specs: [TYPEINF-OVERVIEW](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVI
 [TYPEINF-TARGET](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET), and
 [CHKARCH-INFERENCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INFERENCE).
 
-Basilisk already passes the typing conformance suite. This plan therefore has two
-tracks that share one implementation:
+> **Integrity status (2026-08-06):** The pristine-suite figures recorded below
+> predate the conformance retraction. They remain historical fixture-run records,
+> not evidence of specification conformance. The actual conformance level is
+> temporarily unknown while spelling- and fixture-fitted code is deleted and the
+> affected paths are rebuilt. All active gates in this plan now require the
+> AST-preserving mutation suite and off-suite regression cases as well as the
+> pristine fixture run. All performance and competitor-comparison figures below
+> are also withdrawn historical engineering records while their methodology is
+> audited; they do not establish a current ranking.
+
+This plan has two tracks that share one implementation:
 
 1. **Consolidation** — merge duplicated rule-local inference into shared
    components and improve editor/user behavior without weakening the
@@ -42,8 +51,11 @@ environment, expression inferrer, constraint solver, or subtype context.
   must become powerful enough (bidirectional context, constraint solving,
   bounded type-level evaluation) that PEP 827's conditional/mapped types have a
   sound home if adopted later.
-- Preserve the gradual guarantee as a testable invariant, keep the
-  zero-false-positive conformance gate, and hold both benchmark ratchets
+- Preserve the gradual guarantee as a testable invariant, keep the raw-suite
+  zero-false-positive gate, and improve the mutation-conformance ratchet
+  ([CHKARCH-CONFORMANCE-MUTATION](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE-MUTATION)).
+  Benchmarks remain indicative and their published figures are withdrawn during
+  the methodology audit
   ([CHKARCH-TESTING-BENCH](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH)).
 - **Winning is the exit criterion, not an aspiration — and integration comes
   first.** Basilisk MUST end this plan with measurably better type inference
@@ -337,9 +349,11 @@ forbidden, and nothing in this section licenses it:
   its guts get replaced. See [CHKARCH-CONFORMANCE].
 - **Never remove a diagnostic.** Post-migration output is identical or
   strictly better — same code, same span, same or clearer message.
-- **Never touch the scoreboard.** 100% / 0 false positives against a freshly
-  cloned `python/typing` harness is the prime directive and outranks this
-  entire plan. A migration that drops the number is reverted, not negotiated.
+- **Never fit the scoreboard.** Run the freshly cloned `python/typing` harness
+  and record its raw result, but corroborate it with `make mutation-conformance`
+  and off-suite cases chosen from the specification. Removing fitted code may
+  lower the pristine-suite result; record that honestly and continue rebuilding
+  rather than restoring an invalid predicate to protect the number.
 - **Never add an alternate checking mode**, feature flag, or "new engine"
   toggle. There is one code path. Basilisk has no modes.
 
@@ -378,11 +392,14 @@ sequenced checkboxes live in the checklist
 
 Non-negotiable, every step, no exceptions:
 
-- Live conformance run: **100% / 0 FP**, freshly cloned harness
+- Freshly cloned upstream harness run, with every raw result recorded
   ([CHKARCH-CONFORMANCE-MODE]).
-- `make bench`: no fixture slower than the committed baseline
-  ([CHKARCH-TESTING-BENCH]). The walker is real production cost the
-  moment step 1 lands — record the baseline **in that same change**.
+- `make mutation-conformance`, whose AST-preserving result may only improve,
+  plus off-suite tests derived from the specification for every migrated rule
+  ([CHKARCH-CONFORMANCE-MUTATION]).
+- `make bench` as an indicative measurement
+  ([CHKARCH-TESTING-BENCH]). Record the result, but do not gate the change on a
+  noisy workstation comparison or publish a ranking while the figures are under review.
 - `make test` fail-fast, coverage ratchet up, mutation ratchet up.
 - Torture golden gate green.
 
@@ -516,9 +533,10 @@ self-measured, reproducible, write-always, ratcheted:
 - **Ratchet.** Once Basilisk takes the lead on an axis, the lead becomes a CI
   gate: falling behind any competitor on a led axis is a build failure. Leads
   only accumulate. The plan exits only when Basilisk leads **all five axes
-  simultaneously** while the 100%/0-FP conformance gate and the speed
-  benchmark stay healthy — the inference lead must never be bought by
-  regressing conformance or performance, and vice versa.
+  simultaneously** while the pristine upstream gate, mutation-conformance
+  ratchet, and independently derived off-suite cases agree. Record the speed
+  benchmark in the same run as indicative evidence, not a pass/fail gate. An
+  inference lead must never be bought by regressing correctness.
 - **Moving targets.** Because the harness pulls latest competitor releases,
   the lead is continuously re-proven against competitors as they improve —
   never against frozen versions. If a competitor release takes back an axis,
@@ -569,10 +587,10 @@ self-measured, reproducible, write-always, ratcheted:
   are vendor/benchmark claims, not independently audited; treat them as
   directional. The only numbers Basilisk acts on are the ones its own
   scoreboard harness produces ([NARROWPLAN-SCOREBOARD](#NARROWPLAN-SCOREBOARD)).
-- **Competitors are moving targets.** Pyrefly and ty ship fast and are well
-  funded; ty is actively closing its bidirectional gap. The scoreboard ratchet
-  is designed for this: leads are re-proven against latest releases on every
-  run, and a lost axis turns CI red rather than silently eroding the claim.
+- **Competitors are moving targets.** Any future comparison must identify exact
+  versions and remeasure them with an independently reviewed methodology. No
+  comparative figure or CI gate is reinstated merely by rerunning the current
+  withdrawn scoreboard.
 
 ## Acceptance {#NARROWPLAN-ACCEPTANCE}
 
@@ -581,13 +599,14 @@ self-measured, reproducible, write-always, ratcheted:
 - Hover/inlay results and checker diagnostics agree for the same expression.
 - The gradual-guarantee differential suite (strip annotations → assert no new
   errors) passes.
-- The inference scoreboard ([NARROWPLAN-SCOREBOARD](#NARROWPLAN-SCOREBOARD))
-  shows Basilisk strictly ahead of the latest official releases of pyright,
-  mypy, ty, pyrefly, and zuban on **every** axis in
-  [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS), and the per-axis ratchet is wired
-  into CI so the lead cannot silently erode.
-- `make test`, mutation/coverage ratchets, benchmarks for touched hot paths, and
-  the live 141/141 conformance gate all pass with zero false positives.
+- After its methodology is independently reviewed, the inference scoreboard
+  ([NARROWPLAN-SCOREBOARD](#NARROWPLAN-SCOREBOARD)) reports reproducible results
+  for Basilisk and exact competitor versions on every axis in
+  [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS). Publish the measured outcome,
+  whether or not Basilisk leads.
+- `make test`, mutation/coverage ratchets, indicative measurements for touched
+  hot paths, the pristine fixture-regression gate, and independent off-suite
+  cases all pass with zero false positives.
 
 ## Checklist {#NARROWPLAN-CHECKLIST}
 
@@ -634,7 +653,7 @@ self-measured, reproducible, write-always, ratcheted:
 Prerequisite for Stage 2; see
 [NARROWPLAN-ANNOTATION-RESOLUTION](#NARROWPLAN-ANNOTATION-RESOLUTION). Each box
 lands with a regression test that fails before it and passes after, and holds
-the conformance ratchets (100% / 0 false positives) at every step.
+both the pristine-suite and mutation-conformance ratchets at every step.
 
 **The test step is part of the box, never a phase at the end.** A box is `[x]`
 only when its own nested `[x] Test:` line names a test that (a) was written and
@@ -880,10 +899,12 @@ before the stage is declared closed:
   `unnecessary_lazy_evaluations`, `bool_to_int_with_if`, `too_many_lines` on
   `is_assignable_to` (the `Callable` arm extracted into `callable_assignable` /
   `callable_params_assignable`), and a `type_complexity` in the #381 test.
-- [x] `python3 conformance/run_conformance.py` — 100% / 0 false positives from
-  a fresh `python/typing@main` clone against a clean `--release` build
-  ([CHKARCH-CONFORMANCE]).
-  — 141/141, 0 false positives. The gate found SIX regressions this stage had
+- [x] **Historical pristine-fixture record:**
+  `python3 conformance/run_conformance.py` returned 141/141 and 0 false
+  positives from the then-current `python/typing@main` clone against a clean
+  `--release` build. This predates the retraction and is not conformance
+  evidence ([CHKARCH-CONFORMANCE]). The fixture comparison found SIX
+  regressions this stage had
   introduced, each fixed by teaching the checker, never by silencing a rule:
   1. **`aliases_typealiastype`** (2 FP) — the legacy textual alias matcher
      scooped up `X = TypeAliasType("X", body, ...)` and matched values against
@@ -1275,9 +1296,10 @@ before the stage is declared closed:
   `walk_if` probe-then-walk and the `walk_stmts` re-probe no longer
   re-synthesize the same expressions. Cost went from linear in module size to
   flat.
-- [ ] Record a `make bench` baseline on a fixture that actually exercises the
-  flow walker **in the same change that first wires it**, so the walker stops
-  being invisible to the ratchet the moment it starts costing real time.
+- [ ] Record an indicative `make bench` measurement on a fixture that actually
+  exercises the flow walker **in the same change that first wires it**, so its
+  cost is visible for human review. Do not turn that workstation timing into a
+  pass/fail gate.
 - [x] **Step 1 — `assignment_compatibility` to the engine; delete its
   `RhsKind` shape-matching in the same change.** Landed: every right-hand side
   is typed by `rules/shared/oracle.rs` (`ModuleOracle`, a `BidirEngine` seeded
@@ -1571,14 +1593,16 @@ before the stage is declared closed:
   carries information: a display oracle that rendered `Any` for everything
   would satisfy the acceptances but fails here. A second inference path for
   displays would be caught by every case in the file.
-- [ ] `make test`, mutation/coverage ratchets, benchmarks for touched hot
-  paths, and the live conformance gate all pass with zero false positives.
+- [ ] `make test`, mutation/coverage ratchets, indicative measurements for
+  touched hot paths, the pristine fixture regression, and independent off-suite
+  cases all pass with zero false positives.
   *Measured 2026-08-05 after the subtyping/Step-8/Step-7a pass — green:*
   *workspace `cargo test --workspace` **7253 / 0** (checker 4067, resolver
   625, and every other crate), `cargo clippy --workspace --all-targets`
-  clean at full strictness, `cargo fmt --all` applied, live conformance
-  **141/141 with 0 false positives and 0 missed** (fresh `--release` build,
-  binary passed explicitly), torture golden **12/12** with the
+  clean at full strictness, `cargo fmt --all` applied, a historical pristine
+  fixture run recorded **141/141 with 0 false positives and 0 missed** (this is
+  a withdrawn fixture result, not conformance evidence), torture golden
+  **12/12** with the
   committed-baseline scoreboard gate reporting "no basilisk regression",
   Zed extension job green (WASM `wasm32-wasip2` build + clippy + 97 tests),
   `website/src/_data/rules.json` regenerated so the
@@ -1588,7 +1612,7 @@ before the stage is declared closed:
   coverage ratchet (`./scripts/test-rust.sh`), `make _test_vsix`,
   `make _test_nvim`, the mutation ratchet (in scope — `names_unbound`,
   `rebind`, and eleven rule files changed), and `make bench` on a quiet
-  machine (the prior red gate was attributed to thermal load by a
+  machine (the prior benchmark alert was attributed to thermal load by a
   head-to-head against the committed binary: 19.3/14.2/14.9/13.2 ms
   baseline vs 20.6/14.6/14.9/13.2 ms working, a true code delta of 0–7%).*
 
@@ -1642,6 +1666,11 @@ Nothing below (except the already-live torture corpus) starts before the
 demolition order above it is complete: score the shipped checker, not a
 detached engine.
 
+> **Withdrawn figures:** Completed scores and competitor standings below are
+> retained as dated investigation logs only. They are not current claims or
+> rankings. The harness and methodology must be independently reviewed before
+> any result is republished or used as a CI gate.
+
 - [x] Seed the scoreboard with a **type-torture corpus**: hard, spec-grounded
   problems (several straight from the issue tracker) scored conformance-style
   against every competitor, with hang detection as a correctness axis.
@@ -1652,7 +1681,7 @@ detached engine.
   `TypeIs`, PEP 612 `ParamSpec` preservation, generic constructor solving) +
   `run_torture.py` (out-of-the-box defaults for every tool, best-effort
   latest-release pull, per-invocation timeout scored as `hang`, WRITE-ALWAYS
-  `status/torture.csv` after every case, read-only regression gate against
+  `status/torture.csv` after every case, historical regression comparison against
   the committed baseline, exit 3). The first measured run (2026-08-04)
   landed basilisk at 5/8, pinning three live defects; all three are fixed —
   the #374 enum-expansion false positive (enum literal expansion
@@ -1674,11 +1703,13 @@ detached engine.
   class object per the special-types chapter), and `ternary_narrowing`
   (`x is [not] None` guards narrow conditional-expression arms). All twelve
   are pinned in-process by `torture_golden_tests.rs`; basilisk stands 12/12.
-- [ ] Build the inference scoreboard harness mirroring `benchmarks/`: pull the
+- [ ] After independent methodology review, build the inference scoreboard
+  harness mirroring `benchmarks/`: pull the
   latest official release of each competitor (pyright, mypy, ty, pyrefly,
   zuban) every run; write scores to a status file immediately and
-  unconditionally; gate read-only against the committed baseline.
-  (The torture runner above implements the full write-always/gate/pull
+  unconditionally; compare read-only against the committed baseline for human
+  review before any gate is considered.
+  (The torture runner above implements the historical write-always/comparison/pull
   contract for its own corpus; this box widens the same mechanism to the
   five measurable-target axes.)
 - [ ] Build the reveal_type-precision corpus
@@ -1687,11 +1718,13 @@ detached engine.
 - [ ] Wire the utahplt/ifT narrowing benchmark, the higher-order corpus, the
   gradual-guarantee differential suite, and the incremental-latency
   measurement into the scoreboard.
-- [ ] Add per-axis ratchet entries: once Basilisk leads an axis, falling
-  behind any competitor on that axis fails CI; leads only accumulate.
-- [ ] Take and hold the lead on **all five axes simultaneously**, with the
-  100%/0-FP conformance gate green and the speed benchmark healthy in the same
-  run.
+- [ ] Define publication thresholds only after the reviewed methodology proves
+  stable under reruns and independent cases; do not equate a self-measured lead
+  with an externally validated ranking.
+- [ ] Publish the measured result on all five axes, including losses or ties,
+  with the pristine fixture regression and mutation-conformance ratchet green,
+  independent off-suite support, and an indicative speed measurement recorded
+  in the same run.
 - [ ] Enforce claims discipline: every better-than-competitor claim in docs, website,
   or marketing traces to the current committed scoreboard run and states the
   methodology.

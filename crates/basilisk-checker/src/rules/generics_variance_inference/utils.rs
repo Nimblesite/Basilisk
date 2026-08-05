@@ -63,35 +63,6 @@ pub(super) fn collect_full_signature(lines: &[&str], start_idx: usize) -> String
     sig
 }
 
-/// Extract `TypeVar` names from a `Generic[T, S, ...]`, `Protocol[T]`, or
-/// similar parameterized base class. PEP 544 specifies that `Protocol[T]`
-/// implicitly binds `T` as a class-level `TypeVar`.
-pub(super) fn extract_typevars_from_generic_base(line: &str) -> std::collections::HashSet<String> {
-    let mut result = std::collections::HashSet::new();
-    // Both `Generic[...]` and `Protocol[...]` bind TypeVars in the class scope.
-    for keyword in &["Generic[", "Protocol["] {
-        if let Some(start) = line.find(keyword) {
-            let after = &line[start + keyword.len()..];
-            if let Some(end) = after.find(']') {
-                let params = &after[..end];
-                for param in params.split(',') {
-                    // Strip a leading `*` from a `TypeVarTuple` parameter (PEP 646)
-                    // so `Generic[*Ts]` binds `Ts` to match its use in annotations.
-                    let trimmed = param.trim().strip_prefix('*').unwrap_or(param.trim());
-                    if !trimmed.is_empty()
-                        && trimmed
-                            .chars()
-                            .all(|c| c.is_ascii_alphanumeric() || c == '_')
-                    {
-                        let _ = result.insert(trimmed.to_owned());
-                    }
-                }
-            }
-        }
-    }
-    result
-}
-
 /// Extract `TypeVar` names referenced in function parameter annotations and return type.
 pub(super) fn extract_typevars_from_function_sig(
     line: &str,
@@ -182,31 +153,6 @@ pub(super) fn extract_pep695_type_params_ordered(class_line: &str) -> Vec<String
     };
 
     inner[..close]
-        .split(',')
-        .map(|s| {
-            // Strip a leading `*` from a `TypeVarTuple` parameter (PEP 646).
-            let trimmed = s.trim();
-            trimmed.strip_prefix('*').unwrap_or(trimmed).to_owned()
-        })
-        .filter(|s| !s.is_empty())
-        .collect()
-}
-
-/// Extract the `TypeVar` names from a `Generic[T, S]` base expression.
-pub(super) fn extract_typevar_params_from_generic(source_line: &str) -> Vec<String> {
-    // Try `Generic[T, ...]` first, then `Protocol[T, ...]`.
-    let (start, prefix_len) = if let Some(pos) = source_line.find("Generic[") {
-        (pos, 8)
-    } else if let Some(pos) = source_line.find("Protocol[") {
-        (pos, 9)
-    } else {
-        return Vec::new();
-    };
-    let after = &source_line[start + prefix_len..];
-    let Some(end) = after.find(']') else {
-        return Vec::new();
-    };
-    after[..end]
         .split(',')
         .map(|s| {
             // Strip a leading `*` from a `TypeVarTuple` parameter (PEP 646).

@@ -154,52 +154,12 @@ fn check_class(
         if name.starts_with("__") && name.ends_with("__") {
             continue;
         }
-        // If ANY occurrence of this method name carries @override (e.g. the
-        // implementation or any overload variant), the whole group is covered.
-        if method_has_override_decorator(&child.method_decorators, name) {
-            continue;
-        }
-
-        // Overloaded methods: @override belongs on the implementation, not the
-        // overload variants.  If any occurrence is decorated with @overload,
-        // treat the whole group as present — the checker for override semantics
-        // on overload groups is handled by E0021/E0016, not BSK-0025.
-        if method_has_decorator(&child.method_decorators, name, "overload") {
-            continue;
-        }
-
         // Report at the method's own span; fall back to the class name span.
         let span = func_map
             .get(&(child.name.as_str(), name))
             .map_or(child.name_span, |f| f.name_span);
         out.push(make_diagnostic(child, name, span, path));
     }
-}
-
-/// Returns `true` when `method_name` has an `@override` (or `typing.override`)
-/// decorator recorded in `method_decorators`.
-fn method_has_override_decorator(
-    method_decorators: &[(String, Vec<String>)],
-    method_name: &str,
-) -> bool {
-    method_decorators
-        .iter()
-        .filter(|(name, _)| name == method_name)
-        .flat_map(|(_, decorators)| decorators.iter())
-        .any(|d| d == "override" || d.ends_with(".override"))
-}
-
-/// Returns `true` when any occurrence of `method_name` carries the given decorator.
-fn method_has_decorator(
-    method_decorators: &[(String, Vec<String>)],
-    method_name: &str,
-    decorator: &str,
-) -> bool {
-    method_decorators
-        .iter()
-        .filter(|(name, _)| name == method_name)
-        .flat_map(|(_, decorators)| decorators.iter())
-        .any(|d| d == decorator || d.ends_with(&format!(".{decorator}")))
 }
 
 fn make_diagnostic(

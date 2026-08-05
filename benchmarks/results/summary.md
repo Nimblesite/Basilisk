@@ -1,5 +1,7 @@
 # Benchmark summary
 
+> **HISTORICAL, WITHDRAWN FIGURES — retained for audit only. The methodology and every comparison are under review; do not use these values as current performance claims or rankings.**
+
 Machine: `Apple M4 Max`
 
 

@@ -54,7 +54,7 @@ fn custom_init_walk<'a>(
     visited: &mut std::collections::HashSet<&'a str>,
 ) -> bool {
     for base_name in all_base_names(class_info) {
-        if base_name == "object" || base_name == "Generic" || base_name == "Protocol" {
+        if base_name == "object" {
             continue;
         }
 
@@ -78,8 +78,8 @@ fn custom_init_walk<'a>(
 }
 
 /// Returns `true` if the class has a base the checker cannot resolve to a known
-/// definition — i.e. a base that is not `object`/`Generic`/`Protocol` and not a
-/// class defined in this module.
+/// definition — i.e. a base that is not `object` and not a class defined in this
+/// module.
 ///
 /// Such a base is an external import (e.g. pydantic `BaseModel`, attrs, msgspec)
 /// that may provide an argument-accepting constructor we cannot see. Callers
@@ -88,181 +88,9 @@ pub(super) fn has_unresolved_base(
     class_info: &ClassInfo,
     class_map: &HashMap<&str, &ClassInfo>,
 ) -> bool {
-    all_base_names(class_info).into_iter().any(|base_name| {
-        base_name != "object"
-            && base_name != "Generic"
-            && base_name != "Protocol"
-            && !class_map.contains_key(base_name)
-    })
-}
-
-/// Find `__init__` methods for a class, searching up the MRO.
-pub(super) fn find_init_in_hierarchy<'a>(
-    class_name: &str,
-    class_info: &ClassInfo,
-    class_map: &HashMap<&str, &ClassInfo>,
-    method_map: &'a HashMap<(&str, &str), Vec<&'a basilisk_resolver::FunctionInfo>>,
-) -> Option<Vec<&'a basilisk_resolver::FunctionInfo>> {
-    let mut visited = std::collections::HashSet::new();
-    let _ = visited.insert(class_info.name.as_str());
-    find_init_walk(class_name, class_info, class_map, method_map, &mut visited)
-}
-
-/// Recursive body of [`find_init_in_hierarchy`]; `visited` breaks base-name
-/// cycles (GitHub #278).
-fn find_init_walk<'a, 'b>(
-    class_name: &str,
-    class_info: &'b ClassInfo,
-    class_map: &HashMap<&str, &'b ClassInfo>,
-    method_map: &'a HashMap<(&str, &str), Vec<&'a basilisk_resolver::FunctionInfo>>,
-    visited: &mut std::collections::HashSet<&'b str>,
-) -> Option<Vec<&'a basilisk_resolver::FunctionInfo>> {
-    // Check the class itself first.
-    if let Some(funcs) = method_map.get(&(class_name, "__init__")) {
-        return Some(funcs.clone());
-    }
-
-    // Walk bases (both simple and subscripted).
-    for base_name in all_base_names(class_info) {
-        if base_name == "object" || base_name == "Generic" || base_name == "Protocol" {
-            continue;
-        }
-
-        if let Some(funcs) = method_map.get(&(base_name, "__init__")) {
-            return Some(funcs.clone());
-        }
-
-        if !visited.insert(base_name) {
-            continue;
-        }
-        if let Some(base_class) = class_map.get(base_name) {
-            if let Some(funcs) =
-                find_init_walk(base_name, base_class, class_map, method_map, visited)
-            {
-                return Some(funcs);
-            }
-        }
-    }
-
-    None
-}
-
-/// Check if `class_name` is a subclass of `base_name` by walking the class hierarchy.
-pub(super) fn is_subclass(
-    class_name: &str,
-    base_name: &str,
-    class_map: &HashMap<&str, &ClassInfo>,
-) -> bool {
-    let mut visited = std::collections::HashSet::new();
-    let _ = visited.insert(class_name);
-    subclass_walk(class_name, base_name, class_map, &mut visited)
-}
-
-/// Recursive body of [`is_subclass`]; `visited` breaks base-name cycles
-/// (GitHub #278).
-fn subclass_walk<'a>(
-    class_name: &str,
-    base_name: &str,
-    class_map: &HashMap<&str, &'a ClassInfo>,
-    visited: &mut std::collections::HashSet<&'a str>,
-) -> bool {
-    let Some(class_info) = class_map.get(class_name) else {
-        return false;
-    };
-
-    for base in all_base_names(class_info) {
-        if base == base_name {
-            return true;
-        }
-        if visited.insert(base) && subclass_walk(base, base_name, class_map, visited) {
-            return true;
-        }
-    }
-    false
-}
-
-/// Check if a class is a `NamedTuple` subclass (directly or transitively).
-pub(super) fn is_namedtuple_class(
-    class_info: &ClassInfo,
-    class_map: &HashMap<&str, &ClassInfo>,
-) -> bool {
-    let mut visited = std::collections::HashSet::new();
-    let _ = visited.insert(class_info.name.as_str());
-    namedtuple_walk(class_info, class_map, &mut visited)
-}
-
-/// Recursive body of [`is_namedtuple_class`]; `visited` breaks base-name
-/// cycles (GitHub #278).
-fn namedtuple_walk<'a>(
-    class_info: &'a ClassInfo,
-    class_map: &HashMap<&str, &'a ClassInfo>,
-    visited: &mut std::collections::HashSet<&'a str>,
-) -> bool {
-    for base_name in all_base_names(class_info) {
-        if base_name == "NamedTuple" {
-            return true;
-        }
-        if visited.insert(base_name) {
-            if let Some(base_class) = class_map.get(base_name) {
-                if namedtuple_walk(base_class, class_map, visited) {
-                    return true;
-                }
-            }
-        }
-    }
-    false
-}
-
-/// Return the tuple fields of a `NamedTuple` class.
-///
-/// Per the typing spec (namedtuples.html): "A named tuple class can be
-/// subclassed, but any fields added by the subclass are not considered part of
-/// the named tuple type." So a class that inherits `NamedTuple` *directly*
-/// contributes its own annotated attributes as fields; a subclass of another
-/// `NamedTuple` class inherits exactly that base's fields and its own added
-/// annotations are NOT tuple fields.
-pub(super) fn namedtuple_fields<'a>(
-    class_info: &'a ClassInfo,
-    class_map: &HashMap<&str, &'a ClassInfo>,
-) -> Vec<&'a basilisk_resolver::AttributeInfo> {
-    let mut visited = std::collections::HashSet::new();
-    let _ = visited.insert(class_info.name.as_str());
-    namedtuple_fields_walk(class_info, class_map, &mut visited)
-}
-
-/// Recursive body of [`namedtuple_fields`]; `visited` breaks base-name cycles
-/// (GitHub #278).
-fn namedtuple_fields_walk<'a>(
-    class_info: &'a ClassInfo,
-    class_map: &HashMap<&str, &'a ClassInfo>,
-    visited: &mut std::collections::HashSet<&'a str>,
-) -> Vec<&'a basilisk_resolver::AttributeInfo> {
-    let own_annotated = || {
-        class_info
-            .attributes
-            .iter()
-            .filter(|a| a.has_annotation)
-            .collect::<Vec<_>>()
-    };
-
-    // Direct `NamedTuple` inheritance: own annotated attributes are the fields.
-    if all_base_names(class_info)
+    all_base_names(class_info)
         .into_iter()
-        .any(|base| base == "NamedTuple")
-    {
-        return own_annotated();
-    }
-
-    // Subclass of another `NamedTuple` class: inherit that base's fields only.
-    for base_name in all_base_names(class_info) {
-        if let Some(base_class) = class_map.get(base_name) {
-            if is_namedtuple_class(base_class, class_map) && visited.insert(base_name) {
-                return namedtuple_fields_walk(base_class, class_map, visited);
-            }
-        }
-    }
-
-    own_annotated()
+        .any(|base_name| base_name != "object" && !class_map.contains_key(base_name))
 }
 
 /// Resolve a string annotation by stripping surrounding quotes.
@@ -328,89 +156,6 @@ pub(super) fn extract_type_args_text(slice: &ruff_python_ast::Expr, source: &str
                 .unwrap_or("")
                 .trim()
                 .to_owned()]
-        }
-    }
-}
-
-/// Check Self type incompatibility through inheritance in `__init__`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "self type incompatibility check needs class map, method map, and call context"
-)]
-pub(super) fn check_self_type_incompatibility(
-    call: &ruff_python_ast::ExprCall,
-    class_name: &str,
-    class_info: &basilisk_resolver::ClassInfo,
-    source: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    use ruff_text_size::Ranged as _;
-
-    // Find __init__ on the class or inherited.
-    let init_funcs = find_init_in_hierarchy(class_name, class_info, class_map, method_map);
-    let Some(init_funcs) = init_funcs else {
-        return;
-    };
-
-    for init_func in &init_funcs {
-        // Check if any non-self parameter has annotation containing "Self".
-        let has_self_annotation = init_func.parameters.iter().skip(1).any(|param| {
-            param
-                .annotation_span
-                .and_then(|span| slice_span(source, span))
-                .is_some_and(|ann_text| {
-                    let resolved = resolve_string_annotation(ann_text.trim());
-                    resolved.contains("Self")
-                })
-        });
-
-        if !has_self_annotation {
-            continue;
-        }
-
-        // Check each argument: if it's a call to a parent class, that's an error.
-        for arg_expr in &call.arguments.args {
-            let ruff_python_ast::Expr::Call(arg_call) = arg_expr else {
-                continue;
-            };
-            let ruff_python_ast::Expr::Name(arg_callee) = arg_call.func.as_ref() else {
-                continue;
-            };
-            let arg_class_name = arg_callee.id.as_str();
-
-            // Skip if the argument is the same class (that's OK).
-            if arg_class_name == class_name {
-                continue;
-            }
-
-            // Check if class_name is a subclass of arg_class_name.
-            if is_subclass(class_name, arg_class_name, class_map) {
-                let range = call.range();
-                let span = Span {
-                    start: range.start().to_u32(),
-                    end: range.end().to_u32(),
-                };
-
-                diagnostics.push(error_diagnostic_owned(
-                    CODE.clone(),
-                    format!(
-                        "`{arg_class_name}` instance is not compatible with `Self` type \
-                         of `{class_name}` in `__init__`"
-                    ),
-                    span,
-                    path,
-                    Some(format!(
-                        "Pass an instance of `{class_name}` (or a subclass) instead of `{arg_class_name}`"
-                    )),
-                    Some(format!(
-                        "`Self` in `__init__` of `{class_name}` refers to `{class_name}`, \
-                         not the base class `{arg_class_name}`"
-                    )),
-                ));
-            }
         }
     }
 }

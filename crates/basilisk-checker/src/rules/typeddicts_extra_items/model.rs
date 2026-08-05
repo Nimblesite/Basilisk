@@ -3,11 +3,9 @@
 //!
 //! The `TypedDict` model used by the PEP 728 `extra_items` / `closed` checks.
 //!
-//! Each `TypedDict` in the module — declared with the class syntax or the
-//! functional `TypedDict("Name", {...}, extra_items=...)` syntax — is captured
-//! as a [`TdModel`]. Inheritance is resolved transitively against a
-//! `name -> &TdModel` map so callers see effective fields and the effective
-//! `extra_items` pseudo-item.
+//! Each `TypedDict` in the module is captured as a [`TdModel`]. Inheritance is
+//! resolved transitively against a `name -> &TdModel` map so callers see
+//! effective fields and the effective `extra_items` pseudo-item.
 
 use std::collections::HashMap;
 
@@ -20,13 +18,6 @@ use crate::rules::shared::{ann_str, expr_name};
 
 /// Guards against cyclic `bases` (illegal Python, but must not hang).
 const MAX_DEPTH: u32 = 64;
-
-/// A wrapper qualifier that is illegal on `extra_items` (PEP 728).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Qualifier {
-    Required,
-    NotRequired,
-}
 
 /// An explicitly declared field of a `TypedDict`.
 #[derive(Debug, Clone)]
@@ -42,9 +33,6 @@ pub(super) struct TdField {
 pub(super) struct ExtraItems {
     /// Core value type with qualifiers stripped (e.g. `int | None`, `object`).
     pub(super) ty: String,
-    pub(super) readonly: bool,
-    /// `Some` when the value illegally wraps `Required`/`NotRequired`.
-    pub(super) qualifier: Option<Qualifier>,
 }
 
 /// A `closed=` declaration. `value` is `None` when the argument is not a literal
@@ -66,8 +54,8 @@ pub(super) struct TdModel {
     pub(super) span: Span,
 }
 
-/// The effective `extra_items` pseudo-item: type text and read-only flag.
-pub(super) type EffectiveExtra = (String, bool);
+/// The effective `extra_items` pseudo-item: its type text.
+pub(super) type EffectiveExtra = String;
 
 pub(super) fn mk_span(range: ruff_text_size::TextRange) -> Span {
     Span {
@@ -76,22 +64,9 @@ pub(super) fn mk_span(range: ruff_text_size::TextRange) -> Span {
     }
 }
 
-/// Split a qualified annotation text into `(core_type, readonly, qualifier)`.
-fn parse_qualified(text: &str) -> (String, bool, Option<Qualifier>) {
-    let trimmed = text.trim();
-    let readonly = trimmed.starts_with("ReadOnly[");
-    let qualifier = if trimmed.starts_with("Required[") {
-        Some(Qualifier::Required)
-    } else if trimmed.starts_with("NotRequired[") {
-        Some(Qualifier::NotRequired)
-    } else {
-        None
-    };
-    (
-        strip_typeddict_qualifiers(trimmed).to_owned(),
-        readonly,
-        qualifier,
-    )
+/// The core type of an annotation, with `TypedDict` qualifiers stripped.
+fn core_type(text: &str) -> String {
+    strip_typeddict_qualifiers(text.trim()).to_owned()
 }
 
 // ---------------------------------------------------------------------------
@@ -99,8 +74,8 @@ fn parse_qualified(text: &str) -> (String, bool, Option<Qualifier>) {
 // ---------------------------------------------------------------------------
 
 /// Collect every `TypedDict` in declaration order. A class is a `TypedDict` when
-/// it names `TypedDict` directly or inherits from a `TypedDict` collected
-/// earlier (Python requires a base be defined before use).
+/// it inherits from a `TypedDict` collected earlier (Python requires a base be
+/// defined before use).
 pub(super) fn collect_models(stmts: &[Stmt], target: Option<(u32, u32)>) -> Vec<TdModel> {
     let mut models: Vec<TdModel> = Vec::new();
     collect_into(stmts, &mut models, target);
@@ -109,29 +84,20 @@ pub(super) fn collect_models(stmts: &[Stmt], target: Option<(u32, u32)>) -> Vec<
 
 fn collect_into(stmts: &[Stmt], models: &mut Vec<TdModel>, target: Option<(u32, u32)>) {
     for stmt in stmts {
-        match stmt {
-            Stmt::ClassDef(cls) => {
-                if let Some(model) = model_from_class(cls, models, target) {
-                    models.push(model);
-                }
-                collect_into(&cls.body, models, target);
+        if let Stmt::ClassDef(cls) = stmt {
+            if let Some(model) = model_from_class(cls, models, target) {
+                models.push(model);
             }
-            Stmt::Assign(assign) => {
-                if let Some(model) = model_from_functional(assign) {
-                    models.push(model);
-                }
-            }
-            _ => {}
+            collect_into(&cls.body, models, target);
         }
     }
 }
 
 fn is_typeddict_class(cls: &ast::StmtClassDef, known: &[TdModel]) -> bool {
     cls.arguments.as_ref().is_some_and(|args| {
-        args.args.iter().any(|base| {
-            expr_name(base)
-                .is_some_and(|name| name == "TypedDict" || known.iter().any(|m| m.name == name))
-        })
+        args.args
+            .iter()
+            .any(|base| expr_name(base).is_some_and(|name| known.iter().any(|m| m.name == name)))
     })
 }
 
@@ -153,7 +119,6 @@ fn model_from_class(
             args.args
                 .iter()
                 .filter_map(expr_name)
-                .filter(|n| *n != "TypedDict")
                 .map(ToOwned::to_owned)
                 .collect()
         })
@@ -223,13 +188,12 @@ fn field_from_stmt(stmt: &Stmt, total: bool) -> Option<TdField> {
         return None;
     };
     let name = expr_name(&ann.target)?.to_owned();
-    let (ty, _readonly, qualifier) = parse_qualified(&ann_str(&ann.annotation));
-    let required = match qualifier {
-        Some(Qualifier::Required) => true,
-        Some(Qualifier::NotRequired) => false,
-        None => total,
-    };
-    Some(TdField { name, ty, required })
+    let ty = core_type(&ann_str(&ann.annotation));
+    Some(TdField {
+        name,
+        ty,
+        required: total,
+    })
 }
 
 fn class_total(cls: &ast::StmtClassDef) -> bool {
@@ -251,11 +215,8 @@ fn extra_items_keyword(cls: &ast::StmtClassDef) -> Option<ExtraItems> {
 }
 
 fn extra_items_from_expr(expr: &Expr) -> ExtraItems {
-    let (ty, readonly, qualifier) = parse_qualified(&ann_str(expr));
     ExtraItems {
-        ty,
-        readonly,
-        qualifier,
+        ty: core_type(&ann_str(expr)),
     }
 }
 
@@ -270,91 +231,6 @@ fn closed_keyword(cls: &ast::StmtClassDef) -> Option<ClosedKw> {
         _ => None,
     };
     Some(ClosedKw { value })
-}
-
-// ---------------------------------------------------------------------------
-// Functional syntax: Name = TypedDict("Name", {...}, extra_items=..., total=...)
-// ---------------------------------------------------------------------------
-
-fn model_from_functional(assign: &ast::StmtAssign) -> Option<TdModel> {
-    if assign.targets.len() != 1 {
-        return None;
-    }
-    let name = assign.targets.first().and_then(expr_name)?.to_owned();
-    let Expr::Call(call) = assign.value.as_ref() else {
-        return None;
-    };
-    if expr_name(&call.func) != Some("TypedDict") {
-        return None;
-    }
-    let total = functional_total(call);
-    let fields = call
-        .arguments
-        .args
-        .get(1)
-        .map(|arg| functional_fields(arg, total))
-        .unwrap_or_default();
-    Some(TdModel {
-        name,
-        bases: Vec::new(),
-        fields,
-        extra_items: functional_extra_items(call),
-        closed: functional_closed(call),
-        span: mk_span(assign.range()),
-    })
-}
-
-fn functional_fields(arg: &Expr, total: bool) -> Vec<TdField> {
-    let Expr::Dict(dict) = arg else {
-        return Vec::new();
-    };
-    dict.items
-        .iter()
-        .filter_map(|item| {
-            let key = item.key.as_ref()?;
-            let Expr::StringLiteral(s) = key else {
-                return None;
-            };
-            let (ty, _readonly, qualifier) = parse_qualified(&ann_str(&item.value));
-            let required = match qualifier {
-                Some(Qualifier::Required) => true,
-                Some(Qualifier::NotRequired) => false,
-                None => total,
-            };
-            Some(TdField {
-                name: s.value.to_str().to_owned(),
-                ty,
-                required,
-            })
-        })
-        .collect()
-}
-
-fn functional_keyword<'a>(call: &'a ast::ExprCall, name: &str) -> Option<&'a Expr> {
-    call.arguments
-        .keywords
-        .iter()
-        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == name))
-        .map(|kw| &kw.value)
-}
-
-fn functional_total(call: &ast::ExprCall) -> bool {
-    !functional_keyword(call, "total")
-        .is_some_and(|v| matches!(v, Expr::BooleanLiteral(b) if !b.value))
-}
-
-fn functional_extra_items(call: &ast::ExprCall) -> Option<ExtraItems> {
-    functional_keyword(call, "extra_items").map(extra_items_from_expr)
-}
-
-fn functional_closed(call: &ast::ExprCall) -> Option<ClosedKw> {
-    let value = functional_keyword(call, "closed")?;
-    Some(ClosedKw {
-        value: match value {
-            Expr::BooleanLiteral(b) => Some(b.value),
-            _ => None,
-        },
-    })
 }
 
 // ---------------------------------------------------------------------------
@@ -426,12 +302,9 @@ fn find_extra<'a>(
 }
 
 /// The effective `extra_items` pseudo-item every `TypedDict` carries: the
-/// explicit declaration, or the implicit read-only `object`.
+/// explicit declaration, or the implicit `object`.
 pub(super) fn effective_extra(name: &str, map: &HashMap<&str, &TdModel>) -> EffectiveExtra {
-    explicit_extra(name, map, true).map_or_else(
-        || ("object".to_owned(), true),
-        |e| (e.ty.clone(), e.readonly),
-    )
+    explicit_extra(name, map, true).map_or_else(|| "object".to_owned(), |e| e.ty.clone())
 }
 
 /// `true` when `name` or any ancestor sets `closed=True`.

@@ -26,7 +26,8 @@
 //! interaction suite (`tests/generic_constraints_tests.rs`) is that coverage;
 //! the wiring is Integration-stage work ([NARROWPLAN-INTEGRATION]). Wiring it
 //! earlier would put an unproven solver behind live diagnostics, risking the
-//! zero-false-positive conformance gate that outranks everything else.
+//! zero-false-positive pristine-fixture regression guard. That guard is only
+//! one evidence layer; mutation and independently derived cases are required.
 //!
 //! **Lint posture — do not "fix" this by narrowing visibility.** The
 //! workspace denies `dead_code`. This module satisfies it because it is

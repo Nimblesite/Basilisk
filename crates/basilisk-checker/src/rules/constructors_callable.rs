@@ -4,17 +4,8 @@
 //! Implements the typing spec rule "Converting a constructor to callable"
 //! (<https://typing.readthedocs.io/en/latest/spec/constructors.html#converting-a-constructor-to-callable>).
 //!
-//! When a class object flows through an identity-over-callable function such as
-//!
-//! ```python
-//! def accepts_callable(cb: Callable[P, R]) -> Callable[P, R]:
-//!     return cb
-//!
-//! r1 = accepts_callable(Class1)   # r1 has Class1's constructor signature
-//! ```
-//!
-//! the bound variable (`r1`) gains the *constructor-to-callable* signature of
-//! the class. Calls to that variable must match the synthesized signature:
+//! A variable that holds a class's *constructor-to-callable* signature must be
+//! called in a way that matches that synthesized signature:
 //!
 //! ```python
 //! r1()      # E0153: missing required argument `x`
@@ -23,12 +14,12 @@
 //!
 //! The synthesized signature is derived (in priority order) from the
 //! metaclass `__call__`, then `__new__` (when it returns a type other than the
-//! class / `Self`), then `__init__`, mirroring runtime construction.
+//! class), then `__init__`, mirroring runtime construction.
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, Span};
-use ruff_python_ast::{Expr, ExprCall, Number, Stmt};
+use basilisk_resolver::{ResolvedModule, Span};
+use ruff_python_ast::{Expr, ExprCall, Number};
 use ruff_text_size::Ranged as _;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
@@ -37,7 +28,7 @@ use super::Rule;
 
 mod conversion;
 
-use conversion::{build_converted_callables, CallableGroup, CallableVariant};
+use conversion::{CallableGroup, CallableVariant};
 
 const CODE: ErrorCode = ErrorCode {
     code: "constructors_callable",
@@ -59,139 +50,12 @@ impl Rule for ConstructorCallableMisuse {
 
     fn check_with_types(
         &self,
-        module: &ResolvedModule,
-        types: &super::shared::module_types::ModuleTypes<'_>,
+        _module: &ResolvedModule,
+        _types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
-        diagnostics: &mut Vec<Diagnostic>,
+        _diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
-        let Some(parsed) = super::shared::parse_module(module) else {
-            return;
-        };
-
-        let class_map = super::shared::class_name_map(&module.classes);
-        let method_map = super::shared::method_name_map(&module.functions);
-        let identity_fns = collect_identity_callables(&module.functions, source);
-        let var_to_class = map_vars_to_classes(&parsed.ast.body, &identity_fns, &class_map);
-        if var_to_class.is_empty() {
-            return;
-        }
-        let typevars = basilisk_resolver::collect_names(&module.typevar_calls);
-
-        // Every call in every expression position, from the module's one
-        // shared walk ([NARROWPLAN-CALLSITES]).
-        let Some(oracle) = types.oracle() else {
-            return;
-        };
-        for call in oracle.calls() {
-            let Expr::Name(callee) = call.func.as_ref() else {
-                continue;
-            };
-            let Some(class_name) = var_to_class.get(callee.id.as_str()) else {
-                continue;
-            };
-            let signatures = build_converted_callables(class_name, &class_map, &method_map, source);
-            validate_call(
-                call,
-                class_name,
-                &signatures,
-                &typevars,
-                &module.path,
-                diagnostics,
-            );
-        }
     }
-}
-
-/// Collect module-level identity-over-callable functions.
-///
-/// A function `f` is an identity callable when it has a single parameter
-/// annotated `Callable[...]` and an identical return annotation, e.g.
-/// `def f(cb: Callable[P, R]) -> Callable[P, R]`. Calling such a function with
-/// a class argument yields a value with that class's constructor signature.
-fn collect_identity_callables<'a>(functions: &'a [FunctionInfo], source: &str) -> Vec<&'a str> {
-    functions
-        .iter()
-        .filter(|f| is_identity_callable(f, source))
-        .map(|f| f.name.as_str())
-        .collect()
-}
-
-/// Returns `true` when `func` is a single-argument identity-over-callable.
-fn is_identity_callable(func: &FunctionInfo, source: &str) -> bool {
-    if func.class_name.is_some()
-        || func.vararg.is_some()
-        || func.kwarg.is_some()
-        || func.parameters.len() != 1
-    {
-        return false;
-    }
-    let Some(param_ann) = func
-        .parameters
-        .first()
-        .and_then(|p| p.annotation_text.as_deref())
-    else {
-        return false;
-    };
-    let Some(return_text) = func
-        .return_annotation_span
-        .and_then(|span| span.slice_source(source))
-    else {
-        return false;
-    };
-    let param = param_ann.trim();
-    param == return_text.trim() && is_callable_type_text(param)
-}
-
-/// Returns `true` when `text` denotes a `Callable[...]` type expression.
-fn is_callable_type_text(text: &str) -> bool {
-    text.starts_with("Callable[") || text.contains(".Callable[")
-}
-
-/// Build the map from a bound variable to the class whose constructor it wraps.
-///
-/// Only top-level `var = identity_fn(KnownClass)` assignments are recognized.
-fn map_vars_to_classes<'a>(
-    body: &[Stmt],
-    identity_fns: &[&str],
-    class_map: &HashMap<&'a str, &'a ClassInfo>,
-) -> HashMap<String, String> {
-    let mut map = HashMap::new();
-    for stmt in body {
-        let Stmt::Assign(assign) = stmt else {
-            continue;
-        };
-        let [Expr::Name(target)] = assign.targets.as_slice() else {
-            continue;
-        };
-        if let Some(class) = wrapped_class(assign.value.as_ref(), identity_fns, class_map) {
-            let _ = map.insert(target.id.to_string(), class.to_owned());
-        }
-    }
-    map
-}
-
-/// Extract the class name from `identity_fn(KnownClass)`, if the RHS matches.
-fn wrapped_class<'a>(
-    value: &Expr,
-    identity_fns: &[&str],
-    class_map: &HashMap<&'a str, &'a ClassInfo>,
-) -> Option<&'a str> {
-    let Expr::Call(call) = value else {
-        return None;
-    };
-    let Expr::Name(callee) = call.func.as_ref() else {
-        return None;
-    };
-    if !identity_fns.contains(&callee.id.as_str()) || !call.arguments.keywords.is_empty() {
-        return None;
-    }
-    let [Expr::Name(arg)] = call.arguments.args.as_ref() else {
-        return None;
-    };
-    class_map
-        .get_key_value(arg.id.as_str())
-        .map(|(name, _)| *name)
 }
 
 /// Validate a call against the synthesized signature, emitting one diagnostic.

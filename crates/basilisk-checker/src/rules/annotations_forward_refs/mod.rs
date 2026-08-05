@@ -108,13 +108,7 @@ fn check_invalid_type_annotations(
         &paramspec_generic_bases,
         diagnostics,
     );
-    check_module_var_annotations(
-        module,
-        index,
-        &non_type_names,
-        &paramspec_names,
-        diagnostics,
-    );
+    check_module_var_annotations(module, index, &non_type_names, diagnostics);
     check_local_var_annotations(module, index, &non_type_names, diagnostics);
     check_class_attr_annotations(
         module,
@@ -126,30 +120,23 @@ fn check_invalid_type_annotations(
     );
 }
 
-/// Names of classes and aliases that are generic over a `ParamSpec` — these
-/// may validly be subscripted with a bare `ParamSpec` (PEP 612).
+/// Names of aliases that are generic over a `ParamSpec` — these may validly be
+/// subscripted with a bare `ParamSpec` (PEP 612).
 fn collect_paramspec_generic_bases<'a>(
     module: &'a ResolvedModule,
     paramspec_names: &HashSet<&str>,
 ) -> HashSet<&'a str> {
-    let class_bases = module.classes.iter().filter_map(|cls| {
-        let is_paramspec_generic = cls.base_subscripts.iter().any(|base| {
-            matches!(base.base_name.as_str(), "Protocol" | "Generic")
-                && base
-                    .type_arg_names
-                    .iter()
-                    .any(|arg| paramspec_names.contains(arg.as_str()))
-        });
-        is_paramspec_generic.then_some(cls.name.as_str())
-    });
-    let alias_bases = module.type_alias_defs.iter().filter_map(|alias| {
-        alias
-            .rhs_names
-            .iter()
-            .any(|name| paramspec_names.contains(name.as_str()))
-            .then_some(alias.name.as_str())
-    });
-    class_bases.chain(alias_bases).collect()
+    module
+        .type_alias_defs
+        .iter()
+        .filter_map(|alias| {
+            alias
+                .rhs_names
+                .iter()
+                .any(|name| paramspec_names.contains(name.as_str()))
+                .then_some(alias.name.as_str())
+        })
+        .collect()
 }
 
 fn check_function_param_annotations(
@@ -194,7 +181,6 @@ fn check_module_var_annotations(
     module: &ResolvedModule,
     index: &ExprIndex<'_>,
     non_type_names: &HashSet<String>,
-    paramspec_names: &HashSet<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let path = &module.path;
@@ -208,34 +194,7 @@ fn check_module_var_annotations(
                 var.name_span,
                 path,
             ));
-            continue;
         }
-        if annotation_denotes_type_alias(ann) {
-            let rhs_is_paramspec = matches!(
-                var.rhs_span.and_then(|span| index.expr(span)),
-                Some(Expr::Name(rhs)) if paramspec_names.contains(rhs.id.as_str())
-            );
-            if rhs_is_paramspec {
-                diagnostics.push(make_diagnostic(
-                    format!(
-                        "`TypeAlias` `{}` has a `ParamSpec` as its type, which is invalid; \
-                         `ParamSpec` can only be used in `Callable[P, ReturnType]`",
-                        var.name
-                    ),
-                    var.name_span,
-                    path,
-                ));
-            }
-        }
-    }
-}
-
-/// Whether the annotation node spells `TypeAlias` (bare or dotted).
-fn annotation_denotes_type_alias(ann: &Expr) -> bool {
-    match ann {
-        Expr::Name(name) => name.id.as_str() == "TypeAlias",
-        Expr::Attribute(attr) => attr.attr.as_str() == "TypeAlias",
-        _ => false,
     }
 }
 

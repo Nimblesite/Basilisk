@@ -238,17 +238,19 @@ mutation-test:
 		fi; \
 	'
 
-## conformance: Score basilisk by RUNNING the REAL python/typing harness and
-## write conformance/conformance_status.csv + the website report. Clones the
-## suite FRESH every run (no cache); needs network + git. See [CHKARCH-CONFORMANCE].
+## conformance: Run the pristine fixture regression check with python/typing's
+## unmodified harness at the last revision carrying its Basilisk adapter. Writes
+## internal evidence only; it is not a current official conformance score.
+## Clones FRESH every run (no cache); needs network + git.
 conformance:
 	@cargo build -p basilisk-cli --bin basilisk
 	@python3 conformance/run_conformance.py --bin target/debug/basilisk
 
-## mutation-conformance: Score basilisk on the AST-PRESERVING MUTATED suite
+## mutation-conformance: Gate basilisk on the AST-PRESERVING MUTATED fixtures
 ## (consistent import renames + whitespace reformatting; sharkdp's harness,
 ## vendored verbatim). Identical semantics, so a structural checker must hold
-## its verdicts; the pass rate is a RATCHET that may only rise. See
+## its verdicts; the internal pass-rate ratchet may only rise. Neither this nor
+## the pristine result is a current official conformance score. See
 ## conformance/run_mutation_conformance.py and docs/CONFORMANCE-INTEGRITY-AUDIT.md.
 mutation-conformance:
 	@cargo build --release -p basilisk-cli --bin basilisk

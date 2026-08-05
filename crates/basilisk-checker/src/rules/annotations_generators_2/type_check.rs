@@ -129,9 +129,6 @@ pub(super) fn check_yield_value(
     let expected = &gen_ann.yield_type;
     let expr_text = &yield_expr.expr_text;
 
-    if expected == "Any" {
-        return;
-    }
     if expected == "None" && expr_text.is_empty() {
         return;
     }
@@ -283,7 +280,7 @@ fn is_send_type_compatible(outer_send: &str, inner_send: &str) -> bool {
 
 /// Check for missing return in generator with non-None return type.
 ///
-/// If a function is annotated `Generator[Y, S, R]` where `R` is not `None` and not `Any`,
+/// If a function is annotated `Generator[Y, S, R]` where `R` is not `None`,
 /// and the function has no return statements that could validly produce `R`, flag the def line.
 pub(super) fn check_missing_generator_return(
     func: &FunctionInfo,
@@ -300,7 +297,7 @@ pub(super) fn check_missing_generator_return(
         return;
     };
 
-    if return_type == "None" || return_type == "Any" {
+    if return_type == "None" {
         return;
     }
 

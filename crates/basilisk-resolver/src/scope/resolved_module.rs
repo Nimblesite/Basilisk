@@ -360,19 +360,12 @@ impl ResolvedModule {
         let Some((class, literal_receiver)) = self.builtin_class_for_receiver(receiver) else {
             return Vec::new();
         };
+        let _ = literal_receiver;
         class
             .declaration
             .methods
             .iter()
             .filter(|method| method.name == call.callee)
-            .filter(|method| {
-                literal_receiver
-                    || method
-                        .receiver
-                        .as_ref()
-                        .and_then(|receiver| receiver.annotation.as_deref())
-                        .is_none_or(|annotation| !annotation.contains("LiteralString"))
-            })
             .collect()
     }
 
@@ -407,7 +400,6 @@ impl ResolvedModule {
 fn builtin_annotation(annotation: &str) -> Option<(&str, bool)> {
     match annotation.trim() {
         "str" => Some(("str", false)),
-        "LiteralString" | "typing.LiteralString" => Some(("str", true)),
         "bytes" => Some(("bytes", false)),
         _ => None,
     }

@@ -38,13 +38,7 @@ const CODE: ErrorCode = ErrorCode {
 fn is_type_only_decorator(decorator: &str) -> bool {
     matches!(
         decorator.rsplit('.').next().unwrap_or(decorator),
-        "overload"
-            | "final"
-            | "override"
-            | "staticmethod"
-            | "classmethod"
-            | "abstractmethod"
-            | "property"
+        "staticmethod" | "classmethod" | "property"
     )
 }
 

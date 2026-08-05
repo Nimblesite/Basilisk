@@ -56,7 +56,7 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [Formatting](plans/LSP-FORMATTING-PLAN.md) | VS Code default-formatter opt-in and published-artifact verification. |
 | [AI-assisted LSP](plans/LSP-AI-PLAN.md) | First opt-in provider slice and privacy/safety gate. |
 | [Activity panel](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Settings wiring, Modules-panel context menus and multi-select, and remaining cross-editor/test quality. |
-| [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | The engine build-out and the demolition order: wire the bidirectional engine into every rule, delete every legacy text/shape-matching path, hold the conformance gate throughout and keep an eye on the benchmark. |
+| [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | The engine build-out and demolition order: delete every fitted text/shape-matching path, rebuild on the shared engine, hold pristine-fixture, mutation, and independent off-suite regressions throughout, and record only indicative performance measurements. |
 | [Runtime typeshed resolution](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Two open items: a socket-instrumented witness that checking is offline across CLI/LSP/MCP, and byte-exact per-artifact licensing verification inside the VSIX (binaries and wheels are already verified). |
 | [PyPI typeshed package pin](plans/CHECKER-TYPESHED-PYPI-PLAN.md) | Pin a PyPI typeshed distribution by wheel SHA-256, verify offline, auto-resolve from `uv.lock`; suppresses the source-status advisory (issue #312). |
 | [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Replace remaining raw-source rule scans with AST data. |
@@ -68,3 +68,10 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | File | Contents |
 |---|---|
 | [Typing puzzles](puzzles/puzzles.md) | User-reported typing puzzles from X, with minimal repros, PEP-bug vs house-rule classification, and the resulting issues (#371, #378–#383). |
+
+## Conformance integrity
+
+| File | Contents |
+|---|---|
+| [Conformance integrity audit](CONFORMANCE-INTEGRITY-AUDIT.md#CHKARCH-CONFORMANCE-INTEGRITY-AUDIT) | Phase 1: the fitted alias predicates, measured impact, wider checker scan, remediation status, and process changes found by the 2026-08 audit. |
+| [Spelling-cheat inventory](CONFORMANCE-SPELLING-CHEAT-INVENTORY.md) | Phase 2 [AUDIT-SPELLING-INVENTORY]: the full pre-deletion inventory of every site that recognised typing symbols by source spelling instead of resolving imports — ~154 resolver sites, ~277 checker sites — with the deletion mandate and rules of engagement. |

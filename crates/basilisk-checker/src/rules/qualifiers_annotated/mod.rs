@@ -337,13 +337,9 @@ fn annotation_is_type_subscript(ann: &Expr) -> bool {
     let Expr::Subscript(subscript) = ann else {
         return false;
     };
-    matches!(
-        &*subscript.value,
-        Expr::Name(name) if matches!(name.id.as_str(), "type" | "Type")
-    ) || matches!(
-        &*subscript.value,
-        Expr::Attribute(attr) if attr.attr.as_str() == "Type"
-    )
+    // Only the builtin `type` is matched by name — it needs no import.
+    // `typing.Type` must come from the cascade ([TYPEINF-ANNOTATION-RESOLUTION]).
+    matches!(&*subscript.value, Expr::Name(name) if name.id.as_str() == "type")
 }
 
 /// Emit E0045 for module variables annotated `type[...]` whose RHS is an `Annotated[...]`

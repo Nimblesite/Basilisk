@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Basilisk website for the open-source Python type checker and language server built in Rust, scoring 100% on the official python/typing conformance suite, with published cold-check benchmarks.",
+  "description": "Website for Basilisk, the open-source Python type checker and language server built in Rust.",
   "scripts": {
     "build": "npm run build:wasm && eleventy",
     "build:wasm": "npx --yes wasm-pack build ../crates/basilisk-wasm --target web --release --out-dir ../../website/src/assets/wasm --out-name basilisk_wasm",

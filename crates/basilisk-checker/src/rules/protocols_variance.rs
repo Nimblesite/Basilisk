@@ -28,22 +28,12 @@ const CODE: ErrorCode = ErrorCode {
 /// Methods exempt from variance inference per the typing spec.
 const EXEMPT_METHODS: &[&str] = &["__init__", "__new__"];
 
-/// Known covariant containers -- a `TypeVar` inside one of these in a return
-/// annotation is still purely in output position.
-const COVARIANT_CONTAINERS: &[&str] = &[
-    "type",
-    "Type",
-    "tuple",
-    "Tuple",
-    "FrozenSet",
-    "frozenset",
-    "Sequence",
-    "Iterator",
-    "Iterable",
-    "Mapping",
-    "AbstractSet",
-    "Collection",
-];
+/// Builtin covariant containers -- a `TypeVar` inside one of these in a return
+/// annotation is still purely in output position. Only builtins are listed:
+/// they need no import, so matching their name is not import resolution. The
+/// `typing` and `collections.abc` counterparts must be resolved through the
+/// annotation cascade ([TYPEINF-ANNOTATION-RESOLUTION]), never by spelling.
+const COVARIANT_CONTAINERS: &[&str] = &["type", "tuple", "frozenset"];
 
 /// The variance of a `TypeVar`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

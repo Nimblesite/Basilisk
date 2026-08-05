@@ -3,7 +3,7 @@ layout: layouts/blog.njk
 title: "Python 3.15: The Type Hints FastAPI and Pydantic Actually Run"
 description: "Python 3.15 rc1 ships TypeForm, closed TypedDicts, and disjoint bases. Here is what the three new typing PEPs change for FastAPI and Pydantic code."
 date: 2026-08-04
-dateModified: 2026-08-04
+dateModified: 2026-08-06
 author: The Basilisk Project
 image: /assets/images/blog/python-315-annotations-fastapi-pydantic.png
 imageAlt: "A translucent specification plate is scanned in cyan as it activates an orange-lit precision engine"
@@ -26,7 +26,7 @@ faq:
   - q: "What does closed=True do on a TypedDict?"
     a: "PEP 728 adds closed and extra_items class arguments to TypedDict. A closed TypedDict does not allow extra keys beyond those declared in the class body, while extra_items allows arbitrary extra items whose values are of the specified type."
   - q: "Does Basilisk support the Python 3.15 typing features?"
-    a: "Yes. Basilisk passes the official python/typing conformance suite files covering all three PEPs — typeforms_typeform.py, typeddicts_extra_items.py, and directives_disjoint_base.py — as part of a 100% score across all 141 files, graded by the suite's own unmodified upstream harness."
+    a: "Basilisk's support status for these features is being revalidated. The previously published pass counts and overall conformance result are withdrawn because test-specific implementation logic made the result untrustworthy."
 ---
 
 Python 3.15 reaches its first release candidate today. [PEP 790](https://peps.python.org/pep-0790/), the 3.15 release schedule, puts rc1 on 2026-08-04 and the final release on 2026-10-01. The feature set is frozen; what is in the tree now is what ships in October.
@@ -132,25 +132,15 @@ Here is the uncomfortable part. A frozen feature set in CPython is the *start* o
 
 `TypeForm`, `closed`, `extra_items`, and `disjoint_base` are runtime-importable in 3.15 whether or not the type checker in your editor understands what they mean. When it doesn't, you get the worst version of static typing: annotations that look precise, pass import, and are being interpreted by nothing. Meanwhile the runtime frameworks *are* interpreting them, so your editor and your production server now hold different beliefs about the same line of code.
 
-That gap is exactly what the [official `python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) exists to measure — and it is the reason we treat that suite as the only scoreboard that counts.
+That gap is part of what the [official `python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) exists to measure. Our integrity review has also shown that the suite alone is insufficient when an implementation has been developed against the exact fixtures; robustness and mutation testing are required as well.
 
 ## Where Basilisk stands
 
 Basilisk is an open-source Python type checker and language server that adds code intelligence, formatting, type-aware refactoring, testing, debugging, and CPU and memory profiling to VS Code, Cursor, and Windsurf, with the same Rust language-server core behind Zed and Neovim.
 
-All three of the Python 3.15 typing PEPs have conformance test files in the official suite, and Basilisk passes all three:
+All three Python 3.15 typing PEPs have conformance test files in the official suite. We previously published pass counts for those files and used them to assert support. **Those figures and that support claim are withdrawn.** Test-specific implementation logic elsewhere in the checker demonstrated that a pass against an exact fixture was not enough to establish a general implementation.
 
-| Suite file | Feature | Required errors caught | Missed | False positives |
-|---|---|---|---|---|
-| `typeforms_typeform.py` | [`TypeForm`](https://typing.python.org/en/latest/spec/type-forms.html#typeform) | 16 | 0 | 0 |
-| `typeddicts_extra_items.py` | `closed` / `extra_items` | 22 | 0 | 0 |
-| `directives_disjoint_base.py` | [`disjoint_base`](https://typing.python.org/en/latest/spec/directives.html#disjoint-base) | 8 | 0 | 0 |
-
-Those three sit inside a 100% score across the whole suite: 141 of 141 files, 970 required errors caught, 0 missed, 0 false positives.
-
-How that number is produced matters more than the number. Every Basilisk CI run clones the tests *and* the harness fresh from the latest `python/typing` commit, builds a clean release binary from the current checkout, and runs the suite's own unmodified `conformance/src/main.py` against it in Basilisk's default configuration — no vendored scorer, no cached fixtures, no project config file in the tree. The result is graded by upstream's code, not ours, and it is published in the [official conformance results](https://github.com/python/typing/blob/main/conformance/results/results.html).
-
-The false-positive column is the one to watch when a language adds features. A checker that does not know what `closed=True` means has two ways to be wrong: stay quiet about the extra key it should reject, or flag valid code it fails to understand. The second is worse, because it trains you to ignore the tool. Zero is the only acceptable figure there, and it is a ratchet in our build — it can go down, never up.
+Basilisk's support status for `TypeForm`, `closed` / `extra_items`, and `disjoint_base` is therefore being revalidated as part of the clean reimplementation and integrity audit. Until those rules pass semantics-preserving mutations and broader cases that were not present in the suite, do not rely on the old table. See the [conformance correction](/docs/conformance/) for the publication bar we will apply to the replacement result.
 
 ## What to do before October
 
@@ -165,4 +155,4 @@ The larger shift is worth naming. Python spent a decade treating annotations as 
 
 Which raises the standard for the tools that read those annotations. If your type hints are going to run, something had better be checking them.
 
-[Install Basilisk for VS Code](/docs/install-vscode/) · [See the official conformance results](https://github.com/python/typing/blob/main/conformance/results/results.html) · [See the benchmarks](/docs/benchmarks/)
+[Install Basilisk for VS Code](/docs/install-vscode/) · [Read the conformance correction](/docs/conformance/) · [Read the benchmark review notice](/docs/benchmarks/)

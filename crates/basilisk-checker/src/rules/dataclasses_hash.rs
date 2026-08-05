@@ -133,12 +133,13 @@ impl Rule for NonHashableDataclassAssignment {
     }
 }
 
-/// Returns `true` when the annotation text names the `Hashable` protocol.
-fn is_hashable_annotation(text: &str) -> bool {
-    matches!(
-        text,
-        "Hashable" | "typing.Hashable" | "collections.abc.Hashable"
-    )
+/// Returns `true` when the annotation denotes the `Hashable` protocol.
+///
+/// `Hashable` requires an import, so matching the annotation's source text
+/// against its spellings is not import resolution. Deleted pending a
+/// cascade-based recogniser ([TYPEINF-ANNOTATION-RESOLUTION]).
+fn is_hashable_annotation(_text: &str) -> bool {
+    false
 }
 
 /// Extract the simple callee name from an RHS expression string.

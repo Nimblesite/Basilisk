@@ -49,18 +49,6 @@ pub(crate) fn overload_decorated(resolver: &AnnotationResolver<'_>, decorators: 
         .any(|decorator| resolver.decorator_denotes(decorator, "overload"))
 }
 
-/// Spelling-level decorator match: `name` bare or as the final segment of a
-/// dotted path (`@typing.final`, `@abc.abstractmethod`).
-///
-/// For guards where a qualified false match merely *skips* a check — never
-/// invents a diagnostic. Rules whose diagnostics depend on what a decorator
-/// IS resolve it through the binding tables instead ([`overload_decorated`]).
-pub(crate) fn decorator_spelled(decorators: &[String], name: &str) -> bool {
-    decorators
-        .iter()
-        .any(|d| d == name || d.rsplit('.').next() == Some(name))
-}
-
 /// Returns `true` when the annotation at `span` denotes `ClassVar`, bare or
 /// subscripted, under ANY import spelling ([TYPEINF-ANNOTATION-RESOLUTION]).
 ///
@@ -209,38 +197,8 @@ pub(crate) fn is_type_compatible(actual: &str, expected: &str) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Literal helpers
+// RHS helpers
 // ---------------------------------------------------------------------------
-
-/// Extract the content between `Literal[` (or `L[`) and the matching `]`.
-pub(crate) fn extract_literal_inner(ann: &str) -> Option<&str> {
-    // Support both `Literal[` and `L[`.
-    let start_bracket = if let Some(pos) = ann.find("Literal[") {
-        pos + "Literal[".len()
-    } else if ann.starts_with("L[") {
-        2
-    } else {
-        return None;
-    };
-
-    let mut depth = 1i32;
-    let bytes = ann.as_bytes();
-    let mut idx = start_bracket;
-    while idx < bytes.len() {
-        match bytes.get(idx) {
-            Some(b'[') => depth += 1,
-            Some(b']') => {
-                depth -= 1;
-                if depth == 0 {
-                    return ann.get(start_bracket..idx);
-                }
-            }
-            Some(_) | None => {}
-        }
-        idx += 1;
-    }
-    None
-}
 
 /// Extract the callee name from a RHS text like `ClassName(...)` or `ClassName[T](...)`.
 pub(crate) fn extract_callee_name(rhs_text: &str) -> Option<&str> {
@@ -298,11 +256,9 @@ pub(crate) fn contains_typevar_reference(text: &str, name: &str) -> bool {
     false
 }
 
-/// Generic parameter names of a class definition: PEP 695 type parameters
-/// plus `Protocol[...]` / `Generic[...]` base subscript arguments.
+/// Generic parameter names of a class definition: its PEP 695 type parameters.
 pub(crate) fn class_generic_param_names(cls: &ruff_python_ast::StmtClassDef) -> Vec<String> {
-    let mut names: Vec<String> = cls
-        .type_params
+    cls.type_params
         .as_ref()
         .map(|tp| {
             tp.type_params
@@ -310,20 +266,7 @@ pub(crate) fn class_generic_param_names(cls: &ruff_python_ast::StmtClassDef) -> 
                 .map(|p| p.name().to_string())
                 .collect()
         })
-        .unwrap_or_default();
-    for base in cls.bases() {
-        let Expr::Subscript(sub) = base else { continue };
-        let base_name = ann_str(&sub.value);
-        if base_name != "Protocol" && base_name != "Generic" {
-            continue;
-        }
-        let args = basilisk_parser::subscript_elements(sub);
-        names.extend(args.iter().filter_map(|a| match a {
-            Expr::Name(n) => Some(n.id.to_string()),
-            _ => None,
-        }));
-    }
-    names
+        .unwrap_or_default()
 }
 
 /// A `*args` or `**kwargs` parameter slot in a parsed signature.

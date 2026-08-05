@@ -231,17 +231,12 @@ impl<'m> Collector<'m, '_> {
     /// A module-level `name: T` declaration binds the name to its DECLARED
     /// type — the annotation is the module's own statement of what the name
     /// holds, so every later reference carries it
-    /// ([TYPEINF-ANNOTATION-RESOLUTION]). An explicit `name: TypeAlias = …`
-    /// defines an ALIAS, not a value — binding it as one would type
-    /// `MyAlias()` as an instance of the marker.
+    /// ([TYPEINF-ANNOTATION-RESOLUTION]).
     fn bind_module_variable(&mut self, assign: &'m ruff_python_ast::StmtAnnAssign) {
         let Expr::Name(target) = assign.target.as_ref() else {
             return;
         };
         let resolved = self.resolver.resolve(&assign.annotation);
-        if matches!(&resolved, InferredType::Named(name) if name == "TypeAlias") {
-            return;
-        }
         let _ = self
             .globals
             .insert(target.id.to_string(), Ty::from_inferred(&resolved));

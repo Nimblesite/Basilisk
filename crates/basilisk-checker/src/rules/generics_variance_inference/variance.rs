@@ -19,7 +19,7 @@ use crate::diagnostic::Diagnostic;
 
 use crate::rules::shared::{contains_typevar_reference, parse_subscript_annotation};
 
-use super::utils::{extract_pep695_type_params_ordered, extract_typevar_params_from_generic};
+use super::utils::extract_pep695_type_params_ordered;
 use super::variance_check::{
     check_fn_body_assignments, check_module_assignments, split_top_level_params,
 };
@@ -38,24 +38,16 @@ struct ClassForVariance {
     type_params: Vec<String>,
     bases: Vec<String>,
     body_lines: Vec<String>,
-    is_frozen_dataclass: bool,
-    is_dataclass: bool,
 }
 
-/// Known invariant base classes (mutable containers).
+/// Known invariant base classes (builtin mutable containers).
 fn is_known_invariant_base(name: &str) -> bool {
-    matches!(
-        name,
-        "list" | "dict" | "set" | "deque" | "bytearray" | "MutableSequence" | "MutableMapping"
-    )
+    matches!(name, "list" | "dict" | "set" | "bytearray")
 }
 
-/// Known covariant base classes (read-only containers).
+/// Known covariant base classes (builtin read-only containers).
 fn is_known_covariant_base(name: &str) -> bool {
-    matches!(
-        name,
-        "Sequence" | "FrozenSet" | "frozenset" | "Iterator" | "Iterable" | "Mapping"
-    )
+    matches!(name, "frozenset")
 }
 
 /// Extract implicit type params from bases like `class Foo(dict[K, V]):`.
@@ -95,12 +87,9 @@ fn collect_classes(lines: &[&str], infer_tvs: &HashMap<String, Variance>) -> Vec
 
         let after_class = &trimmed[6..];
         let pep695 = extract_pep695_type_params_ordered(trimmed);
-        let generic = extract_typevar_params_from_generic(trimmed);
 
         let (type_params, is_pep695) = if !pep695.is_empty() {
             (pep695, true)
-        } else if !generic.is_empty() && generic.iter().all(|p| infer_tvs.contains_key(p)) {
-            (generic, false)
         } else {
             let implicit = extract_implicit_type_params(trimmed, infer_tvs);
             if implicit.is_empty() {
@@ -114,7 +103,6 @@ fn collect_classes(lines: &[&str], infer_tvs: &HashMap<String, Variance>) -> Vec
             .unwrap_or(after_class.len());
         let name = after_class[..name_end].trim().to_owned();
         let bases = extract_bases(trimmed, is_pep695);
-        let (is_dc, is_frozen) = check_decorators(lines, idx);
         let class_indent = raw_line.len() - raw_line.trim_start().len();
         let body_lines = collect_body(lines, idx + 1, class_indent);
 
@@ -123,14 +111,12 @@ fn collect_classes(lines: &[&str], infer_tvs: &HashMap<String, Variance>) -> Vec
             type_params,
             bases,
             body_lines,
-            is_frozen_dataclass: is_frozen,
-            is_dataclass: is_dc,
         });
     }
     classes
 }
 
-/// Extract base class expressions, filtering out `Generic[...]`.
+/// Extract base class expressions.
 fn extract_bases(class_line: &str, is_pep695: bool) -> Vec<String> {
     let after_class = &class_line.trim()[6..];
     let text = if is_pep695 {
@@ -145,31 +131,8 @@ fn extract_bases(class_line: &str, is_pep695: bool) -> Vec<String> {
     split_top_level_params(&text[open + 1..close])
         .into_iter()
         .map(|s| s.trim().to_owned())
-        .filter(|s| !s.is_empty() && !s.starts_with("Generic["))
+        .filter(|s| !s.is_empty())
         .collect()
-}
-
-/// Check preceding decorators for `@dataclass` variants.
-fn check_decorators(lines: &[&str], class_idx: usize) -> (bool, bool) {
-    let (mut is_dc, mut is_frozen) = (false, false);
-    let mut i = class_idx;
-    while i > 0 {
-        i -= 1;
-        let Some(prev) = lines.get(i).map(|l| l.trim()) else {
-            break;
-        };
-        if prev.starts_with('@') {
-            if prev.contains("dataclass") {
-                is_dc = true;
-                if prev.contains("frozen") && prev.contains("True") {
-                    is_frozen = true;
-                }
-            }
-        } else if !prev.is_empty() && !prev.starts_with('#') {
-            break;
-        }
-    }
-    (is_dc, is_frozen)
 }
 
 /// Collect trimmed class body lines.
@@ -222,24 +185,6 @@ fn infer_param_variance(
         }
     }
 
-    // Collect Final field names (read-only even with self.x = ...)
-    let final_fields: std::collections::HashSet<&str> = class
-        .body_lines
-        .iter()
-        .filter_map(|l| {
-            if l.starts_with("def ") || l.starts_with('@') || !l.contains(':') {
-                return None;
-            }
-            let (field, ann) = l.split_once(':')?;
-            let field = field.trim();
-            let ann = ann.split('=').next()?.trim();
-            (ann.contains("Final")
-                && !field.is_empty()
-                && field.chars().all(|c| c.is_alphanumeric() || c == '_'))
-            .then_some(field)
-        })
-        .collect();
-
     // Scan body for usage positions
     let mut in_init = false;
     let mut has_setter = false;
@@ -258,28 +203,20 @@ fn infer_param_variance(
             }
             continue;
         }
-        // Public attr assignment in __init__ (skip Final and private fields)
+        // Public attr assignment in __init__ (skip private fields)
         if in_init && line.contains('=') && !line.contains("==") {
             let attr = line
                 .strip_prefix("self.")
                 .and_then(|rest| rest.split(['=', '.', ' ']).next())
                 .unwrap_or("")
                 .trim();
-            if !attr.starts_with('_') && !attr.is_empty() && !final_fields.contains(attr) {
+            if !attr.starts_with('_') && !attr.is_empty() {
                 has_mutable_attr = true;
             }
         }
-        // Class-level field annotations
-        if !line.starts_with("def ")
-            && !line.starts_with('@')
-            && line.contains(':')
-            && !line.starts_with("self.")
-        {
-            scan_field(line, param, class, &mut cov, &mut contra);
-        }
     }
 
-    if has_mutable_attr && !class.is_frozen_dataclass {
+    if has_mutable_attr {
         return Variance::Invariant;
     }
     if has_setter && cov {
@@ -315,60 +252,6 @@ fn scan_method_sig(line: &str, param: &str, cov: &mut bool, contra: &mut bool) {
     }
 }
 
-/// Scan a class-level field annotation for variance implications.
-fn scan_field(
-    line: &str,
-    param: &str,
-    class: &ClassForVariance,
-    cov: &mut bool,
-    contra: &mut bool,
-) {
-    let Some((field, ann)) = line.split_once(':') else {
-        return;
-    };
-    let field = field.trim();
-    let ann = ann.split('=').next().unwrap_or(ann).trim();
-    if field.is_empty() || !field.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        return;
-    }
-    if !contains_typevar_reference(ann, param) {
-        return;
-    }
-    if ann.contains("Final") || class.is_frozen_dataclass {
-        *cov = true;
-    } else if class.is_dataclass {
-        *cov = true;
-        *contra = true;
-    }
-}
-
-/// Resolve traditional parent classes' Generic `TypeVar` variances.
-fn resolve_parent_variances(
-    lines: &[&str],
-    tv_declared: &HashMap<String, Variance>,
-) -> HashMap<String, Vec<Variance>> {
-    let mut result = HashMap::new();
-    for &line in lines {
-        let trimmed = line.trim();
-        // Match both `Generic[T]` and `Protocol[T]` bases.
-        if !trimmed.starts_with("class ")
-            || (!trimmed.contains("Generic[") && !trimmed.contains("Protocol["))
-        {
-            continue;
-        }
-        let after = &trimmed[6..];
-        let name_end = after.find(['(', '[', ':']).unwrap_or(after.len());
-        let name = after[..name_end].trim().to_owned();
-        let params = extract_typevar_params_from_generic(trimmed);
-        let vars: Vec<Variance> = params
-            .iter()
-            .map(|p| tv_declared.get(p).copied().unwrap_or(Variance::Invariant))
-            .collect();
-        let _ = result.insert(name, vars);
-    }
-    result
-}
-
 /// Main entry point: check variance-related assignment violations.
 pub(super) fn check_variance_assignments(
     module: &ResolvedModule,
@@ -376,7 +259,6 @@ pub(super) fn check_variance_assignments(
 ) {
     let lines: Vec<&str> = module.source.lines().collect();
     let mut infer_tvs: HashMap<String, Variance> = HashMap::new();
-    let mut tv_declared: HashMap<String, Variance> = HashMap::new();
 
     for tv in &module.typevar_calls {
         let var = if tv.is_covariant {
@@ -386,14 +268,12 @@ pub(super) fn check_variance_assignments(
         } else {
             Variance::Invariant
         };
-        let _ = tv_declared.insert(tv.name.clone(), var);
         if tv.has_infer_variance {
             let _ = infer_tvs.insert(tv.name.clone(), var);
         }
     }
 
-    // Build known variances: parent classes with explicitly declared variance.
-    let mut known: HashMap<String, Vec<Variance>> = resolve_parent_variances(&lines, &tv_declared);
+    let mut known: HashMap<String, Vec<Variance>> = HashMap::new();
 
     // Infer variances for classes that need it (PEP 695, infer_variance).
     let classes = collect_classes(&lines, &infer_tvs);

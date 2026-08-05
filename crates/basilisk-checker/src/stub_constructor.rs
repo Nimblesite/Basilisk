@@ -56,8 +56,8 @@ pub fn resolve_constructor<S: BuildHasher>(
 /// This is the linearization Python itself computes, so a diamond hierarchy
 /// (e.g. `Mock` reaching `Base` through both `CallableMixin` and
 /// `NonCallableMock`) correctly orders `NonCallableMock` *before* the shared
-/// `Base` — which a naive depth-first walk gets wrong. `object`, the dynamic
-/// `Any` base, and classes outside `classes` terminate a branch.
+/// `Base` — which a naive depth-first walk gets wrong. `object` and classes
+/// outside `classes` terminate a branch.
 #[must_use]
 pub fn simplified_mro<S: BuildHasher>(
     classes: &HashMap<String, StubClass, S>,
@@ -70,7 +70,7 @@ pub fn simplified_mro<S: BuildHasher>(
 /// `bases_of` ([STUBRES-PYI] #289).
 ///
 /// `bases_of(name)` returns the resolvable direct base names of `name` (already
-/// filtered of `object`/`Any`/unresolved terminals as the caller sees fit). This
+/// filtered of `object`/unresolved terminals as the caller sees fit). This
 /// lets the same linearization serve parsed [`StubClass`] hierarchies and the
 /// `ExternalSymbol` graph an importer sees, without duplicating the algorithm.
 #[must_use]
@@ -100,7 +100,7 @@ fn linearize(
     result
 }
 
-/// Direct base heads of `class_name`, excluding `object` and the dynamic `Any`.
+/// Direct base heads of `class_name`, excluding `object`.
 fn resolvable_bases<S: BuildHasher>(
     classes: &HashMap<String, StubClass, S>,
     class_name: &str,
@@ -110,7 +110,7 @@ fn resolvable_bases<S: BuildHasher>(
             .bases
             .iter()
             .map(|base| base_head(base).to_owned())
-            .filter(|head| head != "object" && head != "Any")
+            .filter(|head| head != "object")
             .collect()
     })
 }

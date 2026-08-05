@@ -26,9 +26,8 @@ pub(super) struct CallableGroup<'a> {
 ///
 /// A special metaclass `__call__` terminates conversion. Otherwise inherited
 /// non-`object` `__new__` and `__init__` signatures form callable-union members;
-/// a non-instance `__new__` return terminates before `__init__`. Overloads stay
-/// alternatives within their originating union member. Classes with neither
-/// method use the zero-argument `object` fallback.
+/// a non-instance `__new__` return terminates before `__init__`. Classes with
+/// neither method use the zero-argument `object` fallback.
 pub(super) fn build_converted_callables<'a>(
     class_name: &str,
     class_map: &HashMap<&'a str, &'a ClassInfo>,
@@ -82,8 +81,8 @@ fn method_group(methods: Vec<&FunctionInfo>) -> CallableGroup<'_> {
     }
 }
 
-/// Find the first class in the C3 MRO defining `method`, preserving all of its
-/// overload declarations and discarding a permissive implementation signature.
+/// Find the first class in the C3 MRO defining `method`, taking every
+/// declaration it makes.
 fn inherited_methods<'a>(
     class_name: &str,
     method: &str,
@@ -96,44 +95,13 @@ fn inherited_methods<'a>(
                 .bases
                 .iter()
                 .map(|base| crate::stub_constructor::base_head(base).to_owned())
-                .filter(|base| base != "object" && base != "Any")
+                .filter(|base| base != "object")
                 .collect()
         })
     })
     .into_iter()
-    .find_map(|class| {
-        method_map
-            .get(&(class.as_str(), method))
-            .map(|methods| declared_signatures(methods))
-    })
+    .find_map(|class| method_map.get(&(class.as_str(), method)).cloned())
     .unwrap_or_default()
-}
-
-/// Overloads are the callable contract; the implementation is used only when
-/// no overload declarations exist.
-fn declared_signatures<'a>(methods: &[&'a FunctionInfo]) -> Vec<&'a FunctionInfo> {
-    let overloads: Vec<_> = methods
-        .iter()
-        .copied()
-        .filter(|method| is_overload(method))
-        .collect();
-    if overloads.is_empty() {
-        methods
-            .iter()
-            .copied()
-            .find(|method| !is_overload(method))
-            .or_else(|| methods.first().copied())
-            .into_iter()
-            .collect()
-    } else {
-        overloads
-    }
-}
-
-fn is_overload(method: &FunctionInfo) -> bool {
-    method.decorators.iter().any(|decorator| {
-        decorator == "overload" || decorator.rsplit('.').next() == Some("overload")
-    })
 }
 
 /// Bind the constructor receiver to the class object/instance.
@@ -163,17 +131,14 @@ fn return_is_non_instance(
         })
 }
 
-/// Split PEP 604 and `Union[...]` spellings used by constructor returns.
+/// Split the PEP 604 union members of a constructor return annotation.
 fn union_members(annotation: &str) -> Vec<&str> {
-    let annotation = annotation.trim().trim_matches(['\'', '"']);
-    let union_body = annotation
-        .strip_prefix("Union[")
-        .or_else(|| annotation.strip_prefix("typing.Union["))
-        .and_then(|body| body.strip_suffix(']'));
-    union_body.map_or_else(
-        || annotation.split('|').map(str::trim).collect(),
-        |body| body.split(',').map(str::trim).collect(),
-    )
+    annotation
+        .trim()
+        .trim_matches(['\'', '"'])
+        .split('|')
+        .map(str::trim)
+        .collect()
 }
 
 fn is_instance_type(
@@ -182,9 +147,6 @@ fn is_instance_type(
     class_map: &HashMap<&str, &ClassInfo>,
 ) -> bool {
     let annotation = annotation.trim().trim_matches(['\'', '"']);
-    if annotation.rsplit('.').next() == Some("Self") {
-        return true;
-    }
     let head = crate::stub_constructor::base_head(annotation);
     let name = head.rsplit('.').next().unwrap_or(head);
     if name == class_name {

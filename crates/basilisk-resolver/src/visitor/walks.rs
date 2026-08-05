@@ -38,20 +38,6 @@ impl<'a, F: FnMut(&'a ExprCall)> ruff_python_ast::visitor::Visitor<'a> for CallW
     }
 }
 
-/// Returns `true` when `expr` is either the bare name `target` (`X`) or an
-/// attribute whose last segment is `target` (`<anything>.X`). Used to match
-/// decorators and callees that may be referenced via a module prefix.
-///
-/// For example, `is_name_or_attr_named(&expr, "dataclass")` is `true` for
-/// both `@dataclass` and `@dataclasses.dataclass`.
-pub fn is_name_or_attr_named(expr: &Expr, target: &str) -> bool {
-    match expr {
-        Expr::Name(n) => n.id.as_str() == target,
-        Expr::Attribute(a) => a.attr.as_str() == target,
-        _ => false,
-    }
-}
-
 /// Iterate every formal parameter of a function — positional-only, regular
 /// positional, and keyword-only — in declaration order. Replaces the
 /// `posonlyargs.iter().chain(args.iter()).chain(kwonlyargs.iter())` chain

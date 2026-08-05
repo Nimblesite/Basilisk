@@ -19,7 +19,7 @@ use super::typeddict::split_top_level_args;
 
 /// Builtins whose `key=` callback receives one element of the first argument
 /// (receiver for the `list.sort` method form).
-const KEY_CALLEES: &[&str] = &["sorted", "min", "max", "nlargest", "nsmallest", "sort"];
+const KEY_CALLEES: &[&str] = &["sorted", "min", "max", "sort"];
 
 /// Collect out-of-range tuple index violations on `key=` lambda parameters.
 pub(super) fn collect_key_lambda_tuple_violations(
@@ -244,15 +244,7 @@ fn uniform_tuple_len_from_rhs(rhs: &RhsKind) -> Option<usize> {
 /// `list[tuple[str, int, int]]` → `Some(3)`. Variadic inner tuples
 /// (`tuple[int, ...]`) and non-container bases yield `None`.
 fn fixed_tuple_len_from_container_annotation(annotation: &str) -> Option<usize> {
-    const ELEMENT_CONTAINERS: &[&str] = &[
-        "list",
-        "set",
-        "frozenset",
-        "sequence",
-        "iterable",
-        "collection",
-        "deque",
-    ];
+    const ELEMENT_CONTAINERS: &[&str] = &["list", "set", "frozenset"];
     let annotation = annotation.trim();
     let bracket = annotation.find('[')?;
     let base = annotation
@@ -273,10 +265,7 @@ fn fixed_tuple_len_from_container_annotation(annotation: &str) -> Option<usize> 
 /// Variadic (`tuple[int, ...]`) and PEP 646 unpacked (`tuple[int, *Ts]`,
 /// `tuple[int, *tuple[str, ...]]`) forms have no fixed length and yield `None`.
 pub(super) fn fixed_tuple_len(annotation: &str) -> Option<usize> {
-    let inner = annotation
-        .strip_prefix("tuple[")
-        .or_else(|| annotation.strip_prefix("Tuple["))?
-        .strip_suffix(']')?;
+    let inner = annotation.strip_prefix("tuple[")?.strip_suffix(']')?;
     let elements = split_top_level_args(inner);
     if elements
         .iter()

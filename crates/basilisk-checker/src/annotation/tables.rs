@@ -12,8 +12,8 @@ use std::collections::{HashMap, HashSet};
 
 use ruff_python_ast::{Expr, ModModule, Stmt, StmtClassDef};
 
-/// One alias definition reachable from a type expression: `type X[P..] = rhs`,
-/// `X: TypeAlias = rhs`, or the implicit `X = <type expression>`.
+/// One alias definition reachable from a type expression: `type X[P..] = rhs`
+/// or the implicit `X = <type expression>`.
 #[derive(Debug)]
 pub(super) struct AliasEntry<'m> {
     /// PEP 695 type-parameter names, in declaration order (empty otherwise).
@@ -35,7 +35,7 @@ pub(super) struct ImportedName {
 /// The resolution tables for one module.
 #[derive(Debug, Default)]
 pub(super) struct Tables<'m> {
-    /// Alias name → definition (all three alias spellings).
+    /// Alias name → definition.
     pub(super) aliases: HashMap<String, AliasEntry<'m>>,
     /// Same-file classes, by declared name.
     pub(super) nominal: HashSet<String>,
@@ -80,7 +80,6 @@ impl<'m> Tables<'m> {
     fn collect_one(&mut self, stmt: &'m Stmt) {
         match stmt {
             Stmt::TypeAlias(alias) => self.insert_type_statement(alias),
-            Stmt::AnnAssign(assign) => self.insert_annotated_alias(assign),
             Stmt::ClassDef(class) => self.insert_class(class),
             Stmt::Import(import) => self.insert_plain_imports(import),
             Stmt::ImportFrom(import) => self.insert_from_imports(import),
@@ -113,34 +112,9 @@ impl<'m> Tables<'m> {
         );
     }
 
-    /// `X: TypeAlias = rhs` (PEP 613), bare or `typing.`-qualified.
-    fn insert_annotated_alias(&mut self, assign: &'m ruff_python_ast::StmtAnnAssign) {
-        let Some(value) = assign.value.as_deref() else {
-            return;
-        };
-        if !is_type_alias_annotation(&assign.annotation) {
-            return;
-        }
-        if let Some(name) = simple_name(&assign.target) {
-            let _ = self.aliases.insert(
-                name,
-                AliasEntry {
-                    params: Vec::new(),
-                    value,
-                },
-            );
-        }
-    }
-
-    /// Every class declares a type the cascade can name. A `Protocol` or
-    /// `TypedDict` base additionally marks it **structural**, which is a fact
-    /// about how it is *compared*, not about whether the name resolves.
+    /// Every class declares a type the cascade can name.
     fn insert_class(&mut self, class: &'m StmtClassDef) {
-        let name = class.name.to_string();
-        if class_is_structural(class) {
-            let _ = self.structural.insert(name.clone());
-        }
-        let _ = self.nominal.insert(name);
+        let _ = self.nominal.insert(class.name.to_string());
     }
 
     /// `import X`, `import X.Y`, `import X as Y`.
@@ -272,25 +246,6 @@ fn child_bodies(stmt: &Stmt) -> Vec<&[Stmt]> {
             .collect(),
         _ => Vec::new(),
     }
-}
-
-/// `Protocol` and `TypedDict` bases make a class structural.
-fn class_is_structural(class: &StmtClassDef) -> bool {
-    class.bases().iter().any(|base| {
-        let head = match base {
-            Expr::Subscript(sub) => dotted_name(&sub.value),
-            other => dotted_name(other),
-        };
-        head.is_some_and(|name| {
-            let leaf = name.rsplit('.').next().unwrap_or(&name).to_owned();
-            leaf == "Protocol" || leaf == "TypedDict"
-        })
-    })
-}
-
-/// `TypeAlias` / `typing.TypeAlias` in annotation position (PEP 613).
-fn is_type_alias_annotation(annotation: &Expr) -> bool {
-    dotted_name(annotation).is_some_and(|name| name == "TypeAlias" || name.ends_with(".TypeAlias"))
 }
 
 /// The top-level component of a dotted module path (`os.path` → `os`).

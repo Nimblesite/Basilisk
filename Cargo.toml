@@ -152,8 +152,8 @@ clone_on_ref_ptr     = "deny"
 # modelled in the type or returned as an error, never asserted at runtime.
 unreachable          = "deny"
 # Clones whose value is dropped or overwritten without being read. Pure waste on
-# the checker's hot paths, and the benchmark ratchet only moves down
-# ([CHKARCH-TESTING-BENCH-RATCHET]).
+# the checker's hot paths; indicative benchmarks make the cost visible without
+# turning workstation noise into a pass/fail gate ([CHKARCH-TESTING-BENCH]).
 redundant_clone      = "deny"
 # `assert!(x.is_ok())` prints "assertion failed" and throws the error away.
 # Unwrap the Result instead so a failing test names the actual cause.
@@ -165,8 +165,8 @@ mixed_read_write_in_expression = "deny"
 # somewhere — the iterator is silently behaving differently than intended.
 unused_peekable      = "deny"
 # Release artifacts are latency-sensitive CLI/LSP binaries. Fat LTO plus one
-# codegen unit lets LLVM optimize across crate boundaries and keeps benchmark
-# baselines moving down; development and CI test profiles remain fast below.
+# codegen unit lets LLVM optimize across crate boundaries and keeps shipped
+# latency low; development and CI test profiles remain fast below.
 [profile.release]
 opt-level = 3
 lto = "fat"
@@ -214,8 +214,8 @@ incremental = false
 # NOT for anything a user receives. Shipped artifacts (release.yml, and the
 # `_release_vsix` recipe the Linux leg builds for [VSIX-PACKAGING-PARITY]) stay
 # on `release`: dropping LTO grows the binary ~10% (16.3 -> 17.9 MB), and
-# download size is a published claim. Benchmarks stay on `release` too — the
-# ratchet in [CHKARCH-TESTING-BENCH-RATCHET] measures the shipped profile.
+# download size is user-visible. Benchmarks stay on `release` too so indicative
+# measurements exercise the shipped profile ([CHKARCH-TESTING-BENCH]).
 [profile.e2e]
 inherits = "release"
 lto = false

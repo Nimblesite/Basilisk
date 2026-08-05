@@ -18,7 +18,7 @@ in the file it governs, so the citation resolves in one hop.
 `.deslop.toml` at the repository root is the **single source of truth** for this
 repo's duplication budget. It is committed and PR-reviewed, and
 `[threshold] max_duplication_percent` is ratcheted **down** only — the same
-one-way discipline the coverage and conformance gates use.
+one-way discipline the coverage and pristine-fixture regression gates use.
 
 `[defaults] exclude` drops paths during discovery, so excluded files are never
 analysed and never contribute to the measured percentage

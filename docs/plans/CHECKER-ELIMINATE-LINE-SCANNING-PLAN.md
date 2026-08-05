@@ -1,5 +1,11 @@
 # Eliminate Checker Line Scanning {#LINESCANPLAN-ELIMINATION}
 
+> **Integrity status (2026-08-06):** The raw fixture counts in this plan are
+> historical investigation records, not conformance percentages. Basilisk's
+> former 100% claim is withdrawn and the current level is temporarily unknown
+> while the scanners catalogued here are deleted and the affected logic is
+> rebuilt structurally from the specification.
+
 Checker rules must consume Ruff AST or `ResolvedModule` data. Reconstructing
 Python structure with `source.lines()` plus `starts_with`, `find`, or `contains`
 is parser duplication and can classify strings or comments as code.
@@ -95,12 +101,14 @@ not infer Python structure.
   validation, covering the reported cases above plus operators other than `|`,
   call expressions outside the sanctioned special forms, comparisons,
   comprehensions, and literal displays.
-- [ ] Preserve the exact diagnostics for real code and restore conformance to
-  141/141 with zero missed errors and zero false positives. Post-rewrite the
-  honest score is 140/141: `tuples_type_compat` requires either len()/match
-  tuple narrowing or an assert_type mismatch verdict on alias-typed values
+- [ ] Preserve the exact diagnostics for real code and establish a trustworthy
+  baseline across the pristine fixtures, AST-preserving mutations, and
+  independently derived cases. A historical raw run after the first rewrite
+  returned 140/141: `tuples_type_compat` requires either len()/match tuple
+  narrowing or an `assert_type` mismatch verdict on alias-typed values
   (red-pinned in `tests/type_expr_structural_tests.rs`); its lines were
-  previously "passed" by a spurious text-scan diagnostic.
+  previously "passed" by a spurious text-scan diagnostic. That count is fixture
+  evidence only, not Basilisk's conformance level.
 
 Migrate `generics_variance_inference` first: it owns the largest cluster of raw
 line and keyword scans. Then take `aliases_type_statement`, which is the only

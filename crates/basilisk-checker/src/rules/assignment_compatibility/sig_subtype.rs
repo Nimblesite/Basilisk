@@ -234,17 +234,10 @@ fn keyword_supplied(subtyping: &SubtypingContext, b: &Sig, ak: &Param) -> bool {
 // ---------------------------------------------------------------------------
 
 /// Containers that are covariant in their element types.
-const COVARIANT_BASES: &[&str] = &[
-    "Sequence",
-    "Iterable",
-    "Iterator",
-    "Collection",
-    "tuple",
-    "frozenset",
-];
+const COVARIANT_BASES: &[&str] = &["tuple", "frozenset"];
 
 /// `true` when type text `narrow` is a subtype of `wide`.  Unannotated types
-/// are treated as `Any` (compatible in both directions).
+/// are compatible in both directions.
 pub(super) fn ty_subtype(
     subtyping: &SubtypingContext,
     narrow: Option<&str>,
@@ -255,7 +248,7 @@ pub(super) fn ty_subtype(
     };
     let narrow = narrow.trim();
     let wide = wide.trim();
-    if narrow == wide || narrow == "Any" || wide == "Any" || wide == "object" {
+    if narrow == wide || wide == "object" {
         return true;
     }
     let narrow_members = split_union(narrow);

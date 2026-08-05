@@ -125,19 +125,11 @@ impl Rule for RedundantAnnotationWarning {
                 ));
             });
 
-        // Check class attributes (skip TypedDict/Protocol/NamedTuple classes)
+        // Check class attributes
         module
             .classes
             .iter()
-            .filter(|class| {
-                // Skip TypedDict, Protocol, and NamedTuple classes (including subclasses).
-                !class.bases.iter().any(|base| {
-                    base.contains("TypedDict")
-                        || base.contains("Protocol")
-                        || base.contains("NamedTuple")
-                }) && !transitively_inherits(class, &module.classes, &is_namedtuple_base)
-                    && !annotation_defines_field(class, &module.classes)
-            })
+            .filter(|class| !annotation_defines_field(class, &module.classes))
             .flat_map(|class| &class.attributes)
             .filter(|attr| attr.has_annotation && attr.has_value)
             .filter_map(|attr| {
@@ -340,10 +332,6 @@ fn has_attrs_class_decorator(class: &basilisk_resolver::ClassInfo) -> bool {
             "define" | "frozen" | "mutable" | "attrs" | "s"
         )
     })
-}
-
-fn is_namedtuple_base(base: &str) -> bool {
-    base == "NamedTuple"
 }
 
 /// A pydantic base whose annotated attributes are model *fields*.

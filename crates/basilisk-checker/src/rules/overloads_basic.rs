@@ -241,11 +241,6 @@ fn type_matches_annotation(type_name: &str, annotation: &str) -> bool {
         return true;
     }
 
-    // `Any` matches everything
-    if ann == "Any" {
-        return true;
-    }
-
     // `object` matches everything
     if ann == "object" {
         return true;
@@ -256,21 +251,6 @@ fn type_matches_annotation(type_name: &str, annotation: &str) -> bool {
         return ann
             .split('|')
             .any(|part| type_matches_annotation(type_name, part.trim()));
-    }
-
-    // `Union[X, Y]`
-    if let Some(inner) = ann.strip_prefix("Union[").and_then(|s| s.strip_suffix(']')) {
-        return split_union_args(inner)
-            .iter()
-            .any(|part| type_matches_annotation(type_name, part.trim()));
-    }
-
-    // `Optional[X]` is `X | None`
-    if let Some(inner) = ann
-        .strip_prefix("Optional[")
-        .and_then(|s| s.strip_suffix(']'))
-    {
-        return type_matches_annotation(type_name, inner.trim()) || type_name == "None";
     }
 
     // `bool` is a subtype of `int`
@@ -284,27 +264,4 @@ fn type_matches_annotation(type_name: &str, annotation: &str) -> bool {
     }
 
     false
-}
-
-/// Split `Union[X, Y, Z]` inner arguments respecting bracket nesting.
-fn split_union_args(inner: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0u32;
-    let mut start = 0;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' => depth = depth.saturating_add(1),
-            ']' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                parts.push(inner[start..idx].trim());
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    let remainder = inner[start..].trim();
-    if !remainder.is_empty() {
-        parts.push(remainder);
-    }
-    parts
 }

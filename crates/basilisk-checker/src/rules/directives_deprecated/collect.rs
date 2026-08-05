@@ -11,23 +11,18 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::Span;
 
-use super::decorators::{is_deprecated_decorator, text_range_to_span};
+use super::decorators::text_range_to_span;
 use super::types::VarType;
 
 /// Info about a deprecated entity.
 #[derive(Debug, Clone)]
 pub(super) struct DeprecatedInfo {
-    /// The kind of entity: "class", "function", "method", "overload", "property", "property setter".
+    /// The kind of entity: "class", "function", "method", "property", "property setter".
     pub(super) kind: String,
     /// The deprecation message from the decorator argument.
     pub(super) message: Option<String>,
     /// The defining span (for deduplication).
     pub(super) def_span: Span,
-    /// For a deprecated overload, the simple type name of its first
-    /// (non-`self`/`cls`) parameter — used to resolve which overload a call
-    /// targets. Per PEP 702, only calls resolving to the deprecated overload
-    /// are flagged. `None` for non-overload entities or unannotated params.
-    pub(super) overload_param_type: Option<String>,
 }
 
 /// Collect deprecated function/class definitions from a list of statements.
@@ -39,80 +34,10 @@ pub(super) fn collect_deprecated_definitions(
     for stmt in stmts {
         match stmt {
             Stmt::FunctionDef(func) => {
-                let has_overload = func.decorator_list.iter().any(|d| {
-                    matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "overload")
-                        || matches!(&d.expression, Expr::Attribute(a) if a.attr.as_str() == "overload")
-                });
-
-                for dec in &func.decorator_list {
-                    if let Some(message) = is_deprecated_decorator(&dec.expression) {
-                        let kind = if has_overload {
-                            "overload".to_owned()
-                        } else if class_name.is_some() {
-                            let has_property = func.decorator_list.iter().any(|d| {
-                                matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "property")
-                            });
-                            let has_setter = func.decorator_list.iter().any(|d| {
-                                if let Expr::Attribute(a) = &d.expression {
-                                    a.attr.as_str() == "setter"
-                                } else {
-                                    false
-                                }
-                            });
-                            if has_setter {
-                                "property setter".to_owned()
-                            } else if has_property {
-                                "property".to_owned()
-                            } else {
-                                "method".to_owned()
-                            }
-                        } else {
-                            "function".to_owned()
-                        };
-
-                        let name = if let Some(cls) = class_name {
-                            format!("{cls}.{}", func.name)
-                        } else {
-                            func.name.to_string()
-                        };
-
-                        let overload_param_type = if has_overload {
-                            overload_first_param_type(func)
-                        } else {
-                            None
-                        };
-
-                        let _ = out.insert(
-                            name,
-                            DeprecatedInfo {
-                                kind,
-                                message,
-                                def_span: text_range_to_span(func.range()),
-                                overload_param_type,
-                            },
-                        );
-                        break;
-                    }
-                }
-
                 // Recurse into method bodies for nested definitions.
                 collect_deprecated_definitions(&func.body, out, class_name);
             }
             Stmt::ClassDef(cls) => {
-                for dec in &cls.decorator_list {
-                    if let Some(message) = is_deprecated_decorator(&dec.expression) {
-                        let _ = out.insert(
-                            cls.name.to_string(),
-                            DeprecatedInfo {
-                                kind: "class".to_owned(),
-                                message,
-                                def_span: text_range_to_span(cls.range()),
-                                overload_param_type: None,
-                            },
-                        );
-                        break;
-                    }
-                }
                 // Recurse into class body for methods.
                 collect_deprecated_definitions(&cls.body, out, Some(cls.name.as_str()));
             }
@@ -289,24 +214,6 @@ pub(super) fn collect_param_annotation_types(
             }
         }
     }
-}
-
-/// Return the simple type name of an overload's first non-`self`/`cls`
-/// parameter (e.g. `def foo(x: int)` → `Some("int")`). Used to resolve which
-/// overload a call targets for PEP 702 deprecation checking.
-fn overload_first_param_type(func: &ruff_python_ast::StmtFunctionDef) -> Option<String> {
-    let params = &func.parameters;
-    params
-        .posonlyargs
-        .iter()
-        .chain(params.args.iter())
-        .find(|p| {
-            let name = p.parameter.name.as_str();
-            name != "self" && name != "cls"
-        })
-        .and_then(|p| p.parameter.annotation.as_ref())
-        .and_then(|ann| annotation_to_var_type(ann))
-        .map(|var_type| var_type.class_name)
 }
 
 /// Extract a `VarType` from a type annotation expression.

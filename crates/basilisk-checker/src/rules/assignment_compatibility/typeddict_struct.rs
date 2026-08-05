@@ -109,25 +109,13 @@ fn collect_into(
             attr.name.clone(),
             TdField {
                 ty: strip_typeddict_qualifiers(ann).trim().to_owned(),
-                required: field_required(ann, cls.is_typeddict_total),
+                required: cls.is_typeddict_total,
                 readonly: attr.is_readonly,
             },
         );
     }
     for base in &cls.bases {
         collect_into(base, by_name, source, schema, depth + 1);
-    }
-}
-
-/// Required-ness from the annotation wrappers, defaulting to the class totality.
-/// `NotRequired` is tested first because it contains the substring `Required`.
-fn field_required(ann: &str, total: bool) -> bool {
-    if ann.contains("NotRequired") {
-        false
-    } else if ann.contains("Required") {
-        true
-    } else {
-        total
     }
 }
 
@@ -160,12 +148,12 @@ fn field_assignable(s: &TdField, t: &TdField) -> bool {
 }
 
 /// Whether `actual` is consistent with a read-only `expected` value type: an exact
-/// match, or `expected` is the top type (`object`/`Any`).
+/// match, or `expected` is the top type (`object`).
 fn types_consistent(actual: &str, expected: &str) -> bool {
     actual == expected || is_top_type(expected)
 }
 
-/// `true` for the top value type — `object` or `Any`.
+/// `true` for the top value type — `object`.
 fn is_top_type(ty: &str) -> bool {
-    ty == "object" || ty == "Any"
+    ty == "object"
 }

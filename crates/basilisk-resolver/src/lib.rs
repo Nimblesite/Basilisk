@@ -15,13 +15,13 @@ mod visitor;
 pub use ident::{is_simple_ascii_python_identifier, is_simple_python_identifier};
 pub use static_condition::{evaluate, parse_static_condition, BranchTruth, StaticCondition};
 pub use visitor::walks::{
-    is_name_or_attr_named, iter_all_params, visit_calls, walk_all_stmts, walk_function_stmts,
+    iter_all_params, visit_calls, walk_all_stmts, walk_function_stmts,
 };
 pub use visitor::walrus::{collect_walrus_targets, Reach};
 
 pub use scope::{
     class_by_name, collect_name_set, collect_name_set_where, collect_names, collect_names_where,
-    has_extra_items_transitive, is_transitive_typeddict, name_lookup, strip_typeddict_qualifiers,
+    has_extra_items_transitive, is_transitive_typeddict, name_lookup,
     transitive_typeddict_names, AnnotatedTooFewArgs, AssertTypeCallInfo, AttrAccess, AttributeInfo,
     BaseSubscriptEntry, BoundedTypeVarAttrViolation, CallSite, ClassInfo, CompareOp, DecoratorRef,
     EnumValueTypeViolationInfo, EnumValueTypeViolationKind, FinalViolationInfo, FinalViolationKind,

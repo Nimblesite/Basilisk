@@ -19,14 +19,7 @@ use super::super::shared;
 /// Decorators that leave a method's call signature intact. Anything else
 /// (`property`, custom descriptors, wrappers) may change what a call accepts,
 /// so the arity check abstains rather than guess.
-const SIGNATURE_PRESERVING: [&str; 6] = [
-    "staticmethod",
-    "classmethod",
-    "overload",
-    "override",
-    "final",
-    "abstractmethod",
-];
+const SIGNATURE_PRESERVING: [&str; 2] = ["staticmethod", "classmethod"];
 
 /// How a resolved class attribute binds its underlying callable.
 struct BoundMethod<'a> {

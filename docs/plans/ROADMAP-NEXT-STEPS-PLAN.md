@@ -6,9 +6,11 @@ the engineering detail.
 
 Current baseline:
 
-- The unmodified `python/typing` harness passes 141/141 files with zero missed
-  errors and zero false positives. Conformance is now a permanent ratchet, not a
-  project plan.
+- The former conformance claim is withdrawn. A pristine `python/typing` run had
+  passed every fixture, but AST-preserving mutations exposed extensive
+  spelling- and fixture-specific behaviour. The actual conformance level is
+  temporarily unknown while that code is deleted and rebuilt from the
+  specification; the raw-suite and mutation-suite results are separate ratchets.
 - Tagged-release automation builds the binaries and editor artifacts, stamps
   placeholder versions, publishes VSIX packages to the Microsoft and Open VSX
   registries, and refreshes the Neovim and Zed mirror repositories.
@@ -17,21 +19,22 @@ Current baseline:
 
 ## Coverage beyond the upstream suite {#NEXTSTEPS-BEYOND-CONFORMANCE}
 
-Conformance remains the prime directive and both ratchets stand. But a batch of
+Conformance integrity remains the prime directive and both ratchets stand. A batch of
 user-reported typing puzzles (2026-08-01, issues
 [#378](https://github.com/Nimblesite/Basilisk/issues/378)–[#383](https://github.com/Nimblesite/Basilisk/issues/383),
 [#371](https://github.com/Nimblesite/Basilisk/issues/371)) established something
-we should hold onto: **every one of those defects coexisted with a clean 141/141
-run**, and each reproduced on the CLI as well as the playground.
+we should hold onto: **every one of those defects coexisted with a clean pristine-suite
+run**, and each reproduced on the CLI as well as the playground. That run was a
+fixture result, not proof that the affected behaviour was implemented.
 
 The suite is a floor, not a ceiling. Two concrete blind spots it does not cover:
 
 - `conformance/tests/aliases_recursive.py` contains **zero** PEP 695 `type`
   statements — every recursive case upstream uses the legacy spelling — so
-  rejecting every non-generic recursive `type` alias scored 100%.
+  rejecting every non-generic recursive `type` alias still passed the pristine suite.
 - Nothing upstream pins "return a `str` literal from a function annotated with
   an alias-of-`int`", so skipping assignability for every nominal annotation
-  scored 100%.
+  still passed the pristine suite.
 
 Neither is an upstream flaw to route around: a syntax the suite omits is *our*
 responsibility to cover.

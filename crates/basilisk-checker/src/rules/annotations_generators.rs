@@ -28,7 +28,7 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use super::annotations_generators_helpers::{
     base_type_name, check_yield_from, extract_return_type_from_generator, extract_yield_type,
-    OuterAnnotation, ASYNC_GENERATOR_TYPES, CODE, SYNC_GENERATOR_TYPES,
+    OuterAnnotation, CODE,
 };
 use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
@@ -159,16 +159,6 @@ fn check_yield_types(
     };
 
     let base = base_type_name(ann_text);
-    let valid_types = if func.is_async {
-        ASYNC_GENERATOR_TYPES
-    } else {
-        SYNC_GENERATOR_TYPES
-    };
-
-    // Only check yield types if this is a valid generator type.
-    if !valid_types.iter().any(|t| base.eq_ignore_ascii_case(t)) {
-        return;
-    }
 
     // Extract the yield type parameter from the annotation.
     let Some(yield_type_str) = extract_yield_type(ann_text, base) else {
@@ -254,14 +244,10 @@ fn check_return_in_generator(
         return;
     };
 
-    let base = base_type_name(ann_text);
-
-    // Only Generator[Y, S, R] has a return type parameter.
-    // Iterator and Iterable don't have a return type param.
-    if !base.eq_ignore_ascii_case("Generator") {
-        return;
-    }
-
+    // Only `Generator[Y, S, R]` carries a return type parameter, but deciding
+    // that by matching the annotation's text against the spelling `Generator`
+    // is not import resolution — that gate is deleted pending a cascade-based
+    // one ([TYPEINF-ANNOTATION-RESOLUTION]).
     let Some(return_type_str) = extract_return_type_from_generator(ann_text) else {
         return;
     };

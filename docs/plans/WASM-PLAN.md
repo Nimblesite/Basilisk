@@ -46,13 +46,15 @@ The coupling is concentrated, so this is an extraction rather than a rewrite:
 `exports.rs`.
 
 - Introduce a source-provider trait for directory listing and file reading.
-- Keep the native implementation byte-identical in behaviour — this must not
-  move a single conformance result. The conformance suite is the gate.
+- Keep the native implementation byte-identical in behaviour. Both the pristine
+  upstream suite and the AST-preserving mutation suite are gates; the pristine
+  fixture result alone is not conformance evidence.
 - Supply an in-memory implementation for wasm and extend the API to accept a
   set of named sources.
 
-**Gate:** a two-file playground program resolves its own imports, with
-conformance still 100% / 0 false positives.
+**Gate:** a two-file playground program resolves its own imports, with no
+regression in either the pristine upstream run or the mutation-conformance
+ratchet.
 
 ## 3. Playground site {#WASM-PLAN-SITE}
 

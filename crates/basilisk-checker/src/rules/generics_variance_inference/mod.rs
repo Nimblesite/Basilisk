@@ -35,8 +35,8 @@ use check::{check_generic_constructor_calls, check_generic_instance_method_calls
 use types::ScopeInfo;
 use utils::{
     collect_full_signature, compute_triple_quote_mask, extract_pep695_type_params,
-    extract_typevars_from_function_sig, extract_typevars_from_generic_base, is_simple_assignment,
-    leading_indent, signature_end_line, span_for_line,
+    extract_typevars_from_function_sig, is_simple_assignment, leading_indent, signature_end_line,
+    span_for_line,
 };
 use variance::check_variance_assignments;
 
@@ -108,9 +108,8 @@ impl Rule for TypeVarScopeViolation {
 
             // Detect class definitions.
             if trimmed.starts_with("class ") {
-                let mut bound_tvs = extract_typevars_from_generic_base(trimmed);
-                // PEP 695 type params (class Foo[T, S]:) also bind TypeVars
-                bound_tvs.extend(extract_pep695_type_params(trimmed));
+                // PEP 695 type params (class Foo[T, S]:) bind TypeVars
+                let bound_tvs = extract_pep695_type_params(trimmed);
 
                 // Check: does this class's base reference a TypeVar from an outer scope?
                 let outer_bound: HashSet<String> = scope_stack
@@ -279,55 +278,6 @@ impl Rule for TypeVarScopeViolation {
                 }
             }
 
-            // TypeAlias inside a class body: class TypeVars are not in scope
-            // for type alias definitions. `alias: TypeAlias = list[T]` is invalid
-            // when T comes from the enclosing class's Generic[T].
-            //
-            // A `TypeAliasType(...)` call is excluded: unlike the `TypeAlias`
-            // annotation it does not open a new scope, so it may legitimately
-            // capture the enclosing class's TypeVars when `type_params` is omitted.
-            {
-                let class_scopes: Vec<&ScopeInfo> =
-                    scope_stack.iter().filter(|scope| scope.is_class).collect();
-
-                if class_scopes.len() == 1
-                    && trimmed.contains("TypeAlias")
-                    && !trimmed.contains("TypeAliasType")
-                {
-                    let Some(enclosing_tvs) = class_scopes.first().map(|s| &s.bound_typevars)
-                    else {
-                        continue;
-                    };
-                    if !enclosing_tvs.is_empty() {
-                        // Check the RHS of the TypeAlias assignment for TypeVar refs.
-                        let rhs_part = trimmed.split_once('=').map_or("", |(_, rhs)| rhs);
-                        for typevar_name in enclosing_tvs {
-                            if contains_typevar_reference(rhs_part, typevar_name) {
-                                diagnostics.push(error_diagnostic_owned(
-                                    CODE.clone(),
-                                    format!(
-                                        "TypeVar `{typevar_name}` from enclosing class \
-                                         is not accessible in a TypeAlias definition"
-                                    ),
-                                    span_for_line(&module.source, line_number),
-                                    &module.path,
-                                    Some(
-                                        "Type aliases in class bodies cannot reference \
-                                         the class's type parameters"
-                                            .to_owned(),
-                                    ),
-                                    Some(
-                                        "PEP 484: TypeAlias creates its own scope and \
-                                         cannot capture class-level TypeVars"
-                                            .to_owned(),
-                                    ),
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-
             // Module-level (indent == 0, no enclosing scope): check for TypeVar
             // subscript expressions like `list[T]()`.
             // Per PEP 484/613, module-level assignments using TypeVars are valid
@@ -345,13 +295,8 @@ impl Rule for TypeVarScopeViolation {
                     let before_comment = trimmed.split_once('#').map_or(trimmed, |(code, _)| code);
 
                     // Module-level assignments with TypeVars are implicit type aliases
-                    // (PEP 484): `MyAlias = list[T]` is valid. Also skip TypeVar
-                    // definitions, ParamSpec, TypeVarTuple, and TypeAlias annotations.
-                    let is_type_alias_or_def = is_simple_assignment(before_comment)
-                        || before_comment.contains("TypeVar")
-                        || before_comment.contains("ParamSpec")
-                        || before_comment.contains("TypeVarTuple")
-                        || before_comment.contains("TypeAlias");
+                    // (PEP 484): `MyAlias = list[T]` is valid.
+                    let is_type_alias_or_def = is_simple_assignment(before_comment);
 
                     if !is_type_alias_or_def {
                         for typevar_name in &all_typevars {

@@ -23,29 +23,17 @@ use crate::rules::shared::{is_type_expression, StringPolicy, TypeExprJudge};
 /// Returns `true` when the annotation expression is not a valid type
 /// expression: literals, collection displays, comprehensions, lambdas,
 /// conditionals, boolean operators, calls, f-strings, unparseable forward
-/// references, and names bound to non-types. `Generic` is rejected because
-/// PEP 484 allows it only in a class's base list, never as an annotation.
+/// references, and names bound to non-types.
 pub(super) fn is_invalid_type_annotation(expr: &Expr, non_type_names: &HashSet<String>) -> bool {
-    if subscript_base_is(expr, "Annotated") {
-        return false; // `Annotated[...]` is validated by `qualifiers_annotated`.
-    }
     let judge = TypeExprJudge {
-        non_type: &|name| name == "Generic" || non_type_names.contains(name),
+        non_type: &|name| non_type_names.contains(name),
         strings: StringPolicy::EagerForwardRef,
     };
     !is_type_expression(expr, &judge)
 }
 
-/// Whether `expr` is a subscript whose base denotes `name` (bare or dotted).
-fn subscript_base_is(expr: &Expr, name: &str) -> bool {
-    let Expr::Subscript(subscript) = expr else {
-        return false;
-    };
-    base_name(&subscript.value) == Some(name)
-}
-
-/// The rightmost identifier of a subscript base: `Callable` in both
-/// `Callable[...]` and `typing.Callable[...]`.
+/// The rightmost identifier of a subscript base: the trailing segment of both
+/// `Base[...]` and `mod.Base[...]`.
 fn base_name(expr: &Expr) -> Option<&str> {
     match expr {
         Expr::Name(name) => Some(name.id.as_str()),
@@ -107,16 +95,11 @@ pub(super) fn collect_non_type_names(module: &ResolvedModule) -> HashSet<String>
 /// position (PEP 612).
 ///
 /// Valid positions for `P` (a `ParamSpec`):
-/// - As the parameters argument of `Callable`: `Callable[P, ReturnType]`
-/// - Subscripting a class or alias that is itself generic over a
-///   `ParamSpec`: `Base[P]`
+/// - Subscripting an alias that is itself generic over a `ParamSpec`: `Base[P]`
 ///
 /// Invalid positions (detected here):
 /// - Bare `P` as a direct annotation
-/// - `Concatenate[...]` used directly as an annotation (only valid inside
-///   `Callable`)
-/// - `P` inside a non-`Callable` subscript: `list[P]`, `dict[str, P]`
-/// - `P` as the return type of `Callable`: `Callable[[int, str], P]`
+/// - `P` inside a subscript: `list[P]`, `dict[str, P]`
 pub(super) fn is_paramspec_invalid_annotation(
     expr: &Expr,
     paramspec_names: &HashSet<&str>,
@@ -131,30 +114,13 @@ pub(super) fn is_paramspec_invalid_annotation(
             let Some(base) = base_name(&subscript.value) else {
                 return false;
             };
-            if base == "Concatenate" {
-                return true;
-            }
             if paramspec_generic_bases.contains(base) {
                 return false;
-            }
-            if base == "Callable" {
-                return callable_return_is_paramspec(&subscript.slice, paramspec_names);
             }
             references_paramspec(&subscript.slice, paramspec_names)
         }
         _ => false,
     }
-}
-
-/// `Callable[..., P]` — the last subscript argument is the return type.
-fn callable_return_is_paramspec(slice: &Expr, paramspec_names: &HashSet<&str>) -> bool {
-    let Expr::Tuple(tuple) = slice else {
-        return false;
-    };
-    matches!(
-        tuple.elts.last(),
-        Some(Expr::Name(name)) if paramspec_names.contains(name.id.as_str())
-    )
 }
 
 /// Whether any `Name` in the expression tree is a declared `ParamSpec`.

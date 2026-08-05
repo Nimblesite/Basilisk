@@ -532,8 +532,10 @@ structured `{code, message, docs_url}` fields. **Conformance invariant:** no
 advisory ever enters the stdout JSON / `publishDiagnostics` stream a conformance
 run scores, so it can NEVER create a false positive. The default bundled run
 emits exactly one advisory — the `typeshed_source_unpinned` reproducibility
-notice — on stderr, which the `python/typing` harness never reads; the 100 % /
-0-FP score is unaffected ([§CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
+notice — on stderr, which the `python/typing` harness never reads; it therefore
+cannot affect the pristine fixture result. That historical result is internal
+regression evidence, not a current conformance claim
+([§CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
 
 **Severity is configured exactly like any Basilisk rule.** Each advisory carries
 the `basilisk` provenance tag, so it resolves severity through the same

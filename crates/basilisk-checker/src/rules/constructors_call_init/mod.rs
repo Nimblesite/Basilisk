@@ -6,16 +6,13 @@
 //! 1. **Specialized generic argument mismatch** (L21): Calling `Class[int](1.0)`
 //!    when `__init__` expects `x: T` and `T=int`, but `1.0` is `float`.
 //!
-//! 2. **Self type incompatibility** (L42): Passing a base-class instance where
-//!    `Self` in `__init__` demands a subclass instance.
-//!
-//! 3. **Explicit self annotation mismatch** (L56): `__init__` annotates `self`
+//! 2. **Explicit self annotation mismatch** (L56): `__init__` annotates `self`
 //!    as `Class4[int]` but the constructor is called as `Class4[str]()`.
 //!
-//! 4. **Class-scoped `TypeVar`s in self annotation** (L107): Using class-scoped
+//! 3. **Class-scoped `TypeVar`s in self annotation** (L107): Using class-scoped
 //!    type variables in a reordered `self` annotation is invalid.
 //!
-//! 5. **No custom `__init__` with arguments** (L130): Classes inheriting only
+//! 4. **No custom `__init__` with arguments** (L130): Classes inheriting only
 //!    from `object` (no custom `__init__` or `__new__`) cannot accept arguments.
 
 use std::collections::HashMap;
@@ -23,15 +20,13 @@ use std::collections::HashMap;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
-use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 
 use super::Rule;
 
 mod helpers;
 
 use helpers::{
-    check_init_method_args, check_self_type_incompatibility, extract_type_args_text,
-    has_custom_init_in_bases, has_unresolved_base, is_namedtuple_class, namedtuple_fields,
+    check_init_method_args, extract_type_args_text, has_custom_init_in_bases, has_unresolved_base,
     resolve_string_annotation, CODE,
 };
 
@@ -118,11 +113,6 @@ fn check_class_scoped_typevars_in_self(
         };
 
         for init_func in init_funcs {
-            // Skip overload decorators — only check the implementation.
-            if crate::rules::shared::decorator_spelled(&init_func.decorators, "overload") {
-                continue;
-            }
-
             let Some(self_param) = init_func.parameters.first() else {
                 continue;
             };
@@ -213,11 +203,10 @@ fn check_constructor_call(
 ) {
     use ruff_python_ast::Expr;
     let Ctx {
-        source,
         path,
         class_map,
         method_map,
-        typevar_names,
+        ..
     } = *ctx;
 
     match call.func.as_ref() {
@@ -245,30 +234,6 @@ fn check_constructor_call(
                 class_name,
                 class_info,
                 class_map,
-                path,
-                diagnostics,
-            );
-
-            // Check 7: NamedTuple constructor arg count and arg types.
-            check_namedtuple_constructor(
-                call,
-                class_name,
-                class_info,
-                class_map,
-                source,
-                path,
-                typevar_names,
-                diagnostics,
-            );
-
-            // Check 2: Self type incompatibility through inheritance.
-            check_self_type_incompatibility(
-                call,
-                class_name,
-                class_info,
-                source,
-                class_map,
-                method_map,
                 path,
                 diagnostics,
             );
@@ -317,9 +282,6 @@ fn check_subscript_constructor(
 
     if let Some(init_funcs) = method_map.get(&(class_name, "__init__")) {
         for init_func in init_funcs {
-            if crate::rules::shared::decorator_spelled(&init_func.decorators, "overload") {
-                continue;
-            }
             check_init_method_args(
                 init_func,
                 &substitutions,
@@ -334,17 +296,6 @@ fn check_subscript_constructor(
             );
         }
     }
-
-    check_generic_nt_arg_types(
-        call,
-        class_name,
-        class_info,
-        class_map,
-        &substitutions,
-        source,
-        path,
-        diagnostics,
-    );
 }
 
 /// Check 5: Classes without custom `__init__` that receive arguments.
@@ -361,11 +312,6 @@ fn check_no_init_with_args(
 
     // If there are no positional arguments, nothing to check.
     if call.arguments.args.is_empty() && call.arguments.keywords.is_empty() {
-        return;
-    }
-
-    // NamedTuple classes have a synthesized __new__; do not flag them here.
-    if is_namedtuple_class(class_info, class_map) {
         return;
     }
 
@@ -446,276 +392,6 @@ fn check_no_init_with_args(
     ));
 }
 
-/// Check 7: `NamedTuple` constructor arg count and type validation.
-///
-/// Class-based `NamedTuple` subclasses have synthesized `__new__` accepting one
-/// positional argument per annotated field. Fields with defaults are optional.
-/// Extra positional args, unknown keyword args, and type mismatches are errors.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "NamedTuple constructor check needs call, class info, class map, source, typevars"
-)]
-fn check_namedtuple_constructor(
-    call: &ruff_python_ast::ExprCall,
-    class_name: &str,
-    class_info: &basilisk_resolver::ClassInfo,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    source: &str,
-    path: &str,
-    typevar_names: &[&str],
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    if !is_namedtuple_class(class_info, class_map) {
-        return;
-    }
-
-    // A NamedTuple subclass's tuple fields are exactly its base's fields; its
-    // own added annotations are not tuple fields (typing spec). `namedtuple_fields`
-    // resolves this so subclass constructors aren't over/under-counted.
-    let fields = namedtuple_fields(class_info, class_map);
-
-    // Check arg count (too many, too few) — returns true if an error was emitted.
-    if check_nt_arg_count(call, class_name, &fields, path, diagnostics) {
-        return;
-    }
-
-    check_nt_unknown_kwargs(call, class_name, &fields, path, diagnostics);
-    check_nt_arg_types(
-        call,
-        class_name,
-        &fields,
-        source,
-        path,
-        typevar_names,
-        diagnostics,
-    );
-    check_nt_kwarg_types(
-        call,
-        class_name,
-        &fields,
-        source,
-        path,
-        typevar_names,
-        diagnostics,
-    );
-}
-
-/// Check `NamedTuple` constructor arg count. Returns `true` if a diagnostic was emitted.
-fn check_nt_arg_count(
-    call: &ruff_python_ast::ExprCall,
-    class_name: &str,
-    fields: &[&basilisk_resolver::AttributeInfo],
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) -> bool {
-    use ruff_text_size::Ranged as _;
-
-    let total_fields = fields.len();
-    let fields_with_defaults = fields.iter().filter(|a| a.has_value).count();
-    let required_fields = total_fields - fields_with_defaults;
-    let positional_args = call.arguments.args.len();
-    let keyword_args = call.arguments.keywords.len();
-
-    if positional_args > total_fields {
-        let range = call.range();
-        diagnostics.push(error_diagnostic_owned(
-            CODE.clone(),
-            format!(
-                "`{class_name}` accepts at most {total_fields} positional \
-                 argument{}, but {positional_args} {} given",
-                if total_fields == 1 { "" } else { "s" },
-                if positional_args == 1 { "was" } else { "were" },
-            ),
-            Span {
-                start: range.start().to_u32(),
-                end: range.end().to_u32(),
-            },
-            path,
-            Some(format!(
-                "`{class_name}` has {total_fields} field{}: {}",
-                if total_fields == 1 { "" } else { "s" },
-                fields
-                    .iter()
-                    .map(|f| f.name.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            )),
-            None,
-        ));
-        return true;
-    }
-
-    let covered = positional_args + keyword_args;
-    if covered < required_fields {
-        let range = call.range();
-        diagnostics.push(error_diagnostic_owned(
-            CODE.clone(),
-            format!(
-                "`{class_name}` requires at least {required_fields} argument{}, \
-                 but {covered} {} given",
-                if required_fields == 1 { "" } else { "s" },
-                if covered == 1 { "was" } else { "were" },
-            ),
-            Span {
-                start: range.start().to_u32(),
-                end: range.end().to_u32(),
-            },
-            path,
-            Some(format!(
-                "Required fields: {}",
-                fields
-                    .iter()
-                    .filter(|f| !f.has_value)
-                    .map(|f| f.name.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            )),
-            None,
-        ));
-        return true;
-    }
-
-    false
-}
-
-/// Check for unknown keyword arguments in `NamedTuple` constructor.
-fn check_nt_unknown_kwargs(
-    call: &ruff_python_ast::ExprCall,
-    class_name: &str,
-    fields: &[&basilisk_resolver::AttributeInfo],
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    use ruff_text_size::Ranged as _;
-
-    let field_names: std::collections::HashSet<&str> =
-        fields.iter().map(|f| f.name.as_str()).collect();
-    for kw in &call.arguments.keywords {
-        if let Some(ref arg_name) = kw.arg {
-            if !field_names.contains(arg_name.as_str()) {
-                let range = call.range();
-                diagnostics.push(error_diagnostic_owned(
-                    CODE.clone(),
-                    format!("`{class_name}` has no field `{arg_name}`"),
-                    Span {
-                        start: range.start().to_u32(),
-                        end: range.end().to_u32(),
-                    },
-                    path,
-                    Some(format!(
-                        "Valid fields: {}",
-                        fields
-                            .iter()
-                            .map(|f| f.name.as_str())
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                    )),
-                    None,
-                ));
-            }
-        }
-    }
-}
-
-/// Check positional argument types in a `NamedTuple` constructor call.
-fn check_nt_arg_types(
-    call: &ruff_python_ast::ExprCall,
-    class_name: &str,
-    fields: &[&basilisk_resolver::AttributeInfo],
-    source: &str,
-    path: &str,
-    typevar_names: &[&str],
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    use ruff_text_size::Ranged as _;
-
-    for (idx, arg) in call.arguments.args.iter().enumerate() {
-        let Some(field) = fields.get(idx) else {
-            break;
-        };
-        let ann = field
-            .annotation_span
-            .and_then(|sp| crate::span_util::slice_span(source, sp));
-        let Some(ann) = ann else {
-            continue;
-        };
-        let ann = ann.trim();
-        // A bare TypeVar field (e.g. `value: T` in an unsubscripted generic
-        // NamedTuple call) accepts any argument type — skip it.
-        if typevar_names.contains(&ann) {
-            continue;
-        }
-        let arg_type = infer_expr_literal_type(arg).map(str::to_owned);
-        let Some(arg_type_name) = arg_type else {
-            continue;
-        };
-        if !is_type_compatible(&arg_type_name, ann) {
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Argument {idx} to `{class_name}()` has type `{arg_type_name}`, \
-                     expected `{ann}` for field `{}`",
-                    field.name
-                ),
-                crate::span_util::text_range_to_span(arg.range()),
-                path,
-                None,
-                None,
-            ));
-        }
-    }
-}
-
-/// Check keyword argument types in a `NamedTuple` constructor call.
-fn check_nt_kwarg_types(
-    call: &ruff_python_ast::ExprCall,
-    class_name: &str,
-    fields: &[&basilisk_resolver::AttributeInfo],
-    source: &str,
-    path: &str,
-    typevar_names: &[&str],
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    use ruff_text_size::Ranged as _;
-
-    for kw in &call.arguments.keywords {
-        let Some(ref arg_name) = kw.arg else {
-            continue;
-        };
-        let Some(field) = fields.iter().find(|f| f.name == arg_name.as_str()) else {
-            continue;
-        };
-        let ann = field
-            .annotation_span
-            .and_then(|sp| crate::span_util::slice_span(source, sp));
-        let Some(ann) = ann else {
-            continue;
-        };
-        let ann = ann.trim();
-        // A bare TypeVar field accepts any argument type — skip it.
-        if typevar_names.contains(&ann) {
-            continue;
-        }
-        let arg_type = infer_expr_literal_type(&kw.value).map(str::to_owned);
-        let Some(arg_type_name) = arg_type else {
-            continue;
-        };
-        if !is_type_compatible(&arg_type_name, ann) {
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Keyword argument `{arg_name}` to `{class_name}()` has type \
-                     `{arg_type_name}`, expected `{ann}`",
-                ),
-                crate::span_util::text_range_to_span(kw.range()),
-                path,
-                None,
-                None,
-            ));
-        }
-    }
-}
-
 /// Check 6: Detect unknown keyword arguments passed to dataclass/transform constructors.
 ///
 /// Dataclass constructors accept kwargs matching their field names. Passing an
@@ -793,66 +469,6 @@ fn dataclass_fields_walk<'a>(
             if let Some(base_info) = class_map.get(base_name.as_str()) {
                 dataclass_fields_walk(base_info, class_map, fields, visited);
             }
-        }
-    }
-}
-
-/// Check generic `NamedTuple` constructor arg types with type substitutions.
-///
-/// For `Property[str]("", 3.1)` where `Property(NamedTuple, Generic[T])` has
-/// field `value: T`, substitutes `T=str` and checks that `3.1` is not `str`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "constructor check requires full context"
-)]
-fn check_generic_nt_arg_types(
-    call: &ruff_python_ast::ExprCall,
-    class_name: &str,
-    class_info: &basilisk_resolver::ClassInfo,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    substitutions: &HashMap<&str, &str>,
-    source: &str,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    use ruff_text_size::Ranged as _;
-
-    if !is_namedtuple_class(class_info, class_map) || substitutions.is_empty() {
-        return;
-    }
-
-    let fields = namedtuple_fields(class_info, class_map);
-
-    for (idx, arg) in call.arguments.args.iter().enumerate() {
-        let Some(field) = fields.get(idx) else {
-            break;
-        };
-        let ann = field
-            .annotation_span
-            .and_then(|sp| crate::span_util::slice_span(source, sp));
-        let Some(ann) = ann else {
-            continue;
-        };
-        let ann = ann.trim();
-        // Apply type substitutions (e.g. T → str).
-        let resolved_ann = substitutions.get(ann).unwrap_or(&ann);
-        let arg_type = infer_expr_literal_type(arg).map(str::to_owned);
-        let Some(arg_type_name) = arg_type else {
-            continue;
-        };
-        if !is_type_compatible(&arg_type_name, resolved_ann) {
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Argument {idx} to `{class_name}[...]()` has type `{arg_type_name}`, \
-                     expected `{resolved_ann}` for field `{}`",
-                    field.name
-                ),
-                crate::span_util::text_range_to_span(arg.range()),
-                path,
-                None,
-                None,
-            ));
         }
     }
 }

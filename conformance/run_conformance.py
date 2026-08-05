@@ -1,45 +1,54 @@
 #!/usr/bin/env python3
 # Implements [CHKARCH-CONFORMANCE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md
-"""Score Basilisk by RUNNING the real python/typing conformance harness.
+"""Run Basilisk against a frozen python/typing fixture set as a regression gate.
 
-This is the ONE and ONLY conformance path. It reimplements NOTHING, vendors
-NOTHING, and adapts NOTHING. Every run:
+This is internal regression evidence, not a current official conformance score.
+``python/typing@main`` no longer contains a Basilisk adapter;
+``a4906624f170c169cf667f962080c56d5a5ba6ff`` is the last upstream revision
+that does. Until an adapter is accepted upstream again, every run therefore:
 
-  1. clones ``python/typing@<ref>`` FRESH — the tests AND the harness — from the
-     LATEST commit (no cache, no committed fixtures, no vendored calculator),
+  1. clones ``python/typing@<ref>`` FRESH — the tests AND the harness — using
+     that full revision by default (no cache, no vendored calculator),
   2. runs the suite's OWN unmodified ``conformance/src/main.py --only-run
      basilisk`` against the ``--bin`` binary (via ``BASILISK_BIN``). The CI gate
      passes a freshly-built CLEAN release binary — exactly what ships, never the
      PyPI wheel (a prior version) and never an instrumented build.
 
-The suite already ships the official Basilisk adapter — ``BasiliskTypeChecker``
-in ``conformance/src/type_checker.py``
-(https://github.com/python/typing/blob/main/conformance/src/type_checker.py) —
-so there is nothing of ours to inject. The harness writes
+That frozen revision ships ``BasiliskTypeChecker`` in
+``conformance/src/type_checker.py``, so there is nothing of ours to inject. The
+harness writes
 ``results/basilisk/*.toml``; every ``Pass``/``Fail`` verdict and every
 ``errors_diff`` in those files is the harness's own, computed by the same code
 that grades pyright, mypy, pyrefly, ty, zuban and pycroscope.
 
-From those REAL results this script only *reports* — it never re-scores:
+From those upstream-harness results this script only *reports* — it never
+re-scores:
 
-  * gates the score (delegates to ``assert_wheel_conformance.py``: 100 %, 0 FP),
+  * gates the pristine fixture result (delegates to
+    ``assert_wheel_conformance.py``: every file passes, 0 FP),
   * writes ``conformance/conformance_status.csv`` (per-file pass/fail + stats),
   * writes ``website/src/_data/conformance_report.json`` (resolved commit +
     score) for the website + doc stamps,
   * mirrors the graded fixtures into ``conformance/tests/`` (some Rust tests
     read them),
-  * stamps the score/commit into the README + spec.
+  * refreshes generated conformance references with the measured revision.
+
+Passing every pristine fixture does not establish specification conformance.
+The former 100% claim was retracted after AST-preserving mutations exposed
+test-specific behaviour. ``run_mutation_conformance.py`` and independent
+off-suite tests are mandatory companion evidence, and no result from this
+script is a current python/typing listing.
 
 The only per-file number not written to the toml by the harness is ``caught``
 (required errors matched — the counterpart to ``missed``). It is taken from
 upstream's OWN ``get_expected_errors``, imported live from the fresh clone — the
-official function on the official tests, never a copy.
+upstream function on the frozen upstream fixtures, never a copy.
 
 ⚠️ There is NO cached-fixtures fallback and NO vendored calculator, by design.
-If the real suite cannot be cloned and run, this FAILS — a build in which the
-official check did not run is a BUILD FAILURE. Disabling any rule, hand-editing
-the CSV, or loosening the gate to fake a pass is forbidden: close every gap by
-FIXING the Rust checker. See [CHKARCH-CONFORMANCE].
+If the frozen suite cannot be cloned and run, this FAILS — a build in which the
+fixture regression check did not run is a BUILD FAILURE. Disabling any rule,
+hand-editing the CSV, or loosening the gate to fake a pass is forbidden: close
+every gap by FIXING the Rust checker. See [CHKARCH-CONFORMANCE].
 
 Usage:
     python3 conformance/run_conformance.py [--bin PATH] [--gate]
@@ -71,11 +80,16 @@ from worktree_lock import (
 HARNESS_DEPS = ("jinja2", "markdown", "tomlkit")
 UPSTREAM_REPO = "python/typing"
 UPSTREAM_URL = f"https://github.com/{UPSTREAM_REPO}"
-UPSTREAM_REF = "main"
+LIVE_UPSTREAM_REF = "main"
+# python/typing@main removed the Basilisk adapter. This is the last upstream
+# revision whose unmodified harness can run ``--only-run basilisk``. Results at
+# this ref are internal regression evidence, never a current official score.
+LAST_ADAPTER_REF = "a4906624f170c169cf667f962080c56d5a5ba6ff"
+UPSTREAM_REF = LAST_ADAPTER_REF
 RUN_ID_ENV = "BASILISK_CONFORMANCE_RUN_ID"
-# The two functions that ARE the official scoring algorithm; we reuse only the
-# first (for the `caught` stat). The harness itself applies both to grade files.
-OFFICIAL_FUNCS = ("get_expected_errors", "diff_expected_errors")
+# The two functions that the upstream revision uses to calculate its fixture
+# results; we reuse only the first (for the `caught` stat).
+UPSTREAM_FUNCS = ("get_expected_errors", "diff_expected_errors")
 Row = tuple[str, str, bool, int, int, int, list[str]]
 
 
@@ -161,7 +175,7 @@ def clone_suite(ref: str, dest: Path) -> tuple[Path, dict]:
     if dest.exists():
         raise RuntimeError(f"fresh clone destination must not already exist: {dest}")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if ref == UPSTREAM_REF:
+    if ref == LIVE_UPSTREAM_REF:
         run(["git", "clone", "--depth", "1", UPSTREAM_URL, str(dest)])
     else:
         # A pinned ref may be a commit SHA, which `--branch` cannot fetch;
@@ -219,8 +233,8 @@ def run_harness(conf_dir: Path, binary: Path) -> Path:
 def load_get_expected(conf_dir: Path) -> Callable:
     """Import upstream's REAL ``get_expected_errors`` from the fresh clone.
 
-    Used ONLY to count ``caught`` (required errors matched). It is the official
-    function operating on the official tests — imported, never copied.
+    Used ONLY to count ``caught`` (required errors matched). It is the upstream
+    function operating on the upstream fixtures — imported, never copied.
     """
     src = conf_dir / "src"
     if str(src) not in sys.path:
@@ -232,10 +246,10 @@ def load_get_expected(conf_dir: Path) -> Callable:
         raise RuntimeError(f"cannot import the upstream calculator from {src}/main.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    func = getattr(module, OFFICIAL_FUNCS[0], None)
+    func = getattr(module, UPSTREAM_FUNCS[0], None)
     if func is None:
         raise RuntimeError(
-            f"upstream main.py is missing {OFFICIAL_FUNCS[0]} — the layout changed"
+            f"upstream main.py is missing {UPSTREAM_FUNCS[0]} — the layout changed"
         )
     return func
 
@@ -322,32 +336,38 @@ def write_csv(root: Path, rows: list[Row]) -> None:
 
 
 def write_report(
-    root: Path, commit: dict, rows: list[Row], totals: dict, calc: dict
+    root: Path, ref: str, commit: dict, rows: list[Row], totals: dict, calc: dict
 ) -> None:
     n = len(rows)
     pct = round(totals["pass"] * 100.0 / n, 1) if n else 0.0
     report = {
         "_doc": (
             "Generated by conformance/run_conformance.py on every run from the REAL "
-            "python/typing harness output. The website build "
-            "(website/src/_data/conformance.js) reads this for the upstream commit. "
-            "Do not hand-edit."
+            "python/typing harness output at the last revision carrying the "
+            "Basilisk adapter. This is internal fixture-regression evidence, not "
+            "a current official conformance score. Do not hand-edit."
         ),
         "upstream": {
             "repo": UPSTREAM_REPO,
-            "ref": UPSTREAM_REF,
+            "ref": ref,
             "sha": commit["sha"],
             "shortSha": commit["short"],
             "commitDate": commit["date"],
-            "stale": False,
+            "stale": True,
+            "withdrawn": True,
+            "status": "historical internal regression snapshot",
         },
         "calculator": {
             "file": f"{UPSTREAM_REPO}@{commit['short']}:conformance/src/main.py",
             "sha256": calc["sha256"],
             "bytes": calc["bytes"],
-            "funcs": list(OFFICIAL_FUNCS),
+            "funcs": list(UPSTREAM_FUNCS),
         },
-        "grading": "real python/typing harness (src/main.py --only-run basilisk), every rule enabled",
+        "grading": (
+            "upstream python/typing harness at the frozen last-adapter revision "
+            "(src/main.py --only-run basilisk), every rule enabled; internal "
+            "fixture-regression evidence only"
+        ),
         "score": {
             "pass": totals["pass"],
             "total": n,
@@ -510,7 +530,7 @@ def assert_graded_commit_is_live_main(commit: dict) -> None:
     tree can reach the harness three ways — ``--ref`` naming another branch/tag,
     ``--suite-dir`` pointing at a checkout from an earlier run, or
     ``--reuse-clone`` re-entering one — and all three would otherwise score
-    100% against yesterday's tests and report a pass.
+    a perfect result against yesterday's tests and report a pass.
 
     So in gate mode the graded HEAD is compared against ``git ls-remote`` for
     ``main``, live. A mismatch, an unreachable remote, or a missing ref all
@@ -518,7 +538,7 @@ def assert_graded_commit_is_live_main(commit: dict) -> None:
     """
     try:
         out = subprocess.run(
-            ["git", "ls-remote", UPSTREAM_URL, f"refs/heads/{UPSTREAM_REF}"],
+            ["git", "ls-remote", UPSTREAM_URL, f"refs/heads/{LIVE_UPSTREAM_REF}"],
             check=True,
             capture_output=True,
             text=True,
@@ -527,26 +547,49 @@ def assert_graded_commit_is_live_main(commit: dict) -> None:
     except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError(
             f"gate cannot verify the graded commit against {UPSTREAM_REPO}@"
-            f"{UPSTREAM_REF}: {exc}. The conformance gate refuses to pass a score "
+            f"{LIVE_UPSTREAM_REF}: {exc}. The fixture gate refuses to pass a result "
             "it cannot prove was measured against the current suite."
         ) from exc
     live = out.split("\t", 1)[0].strip() if out else ""
     if not live:
         raise RuntimeError(
-            f"gate could not resolve {UPSTREAM_REPO}@{UPSTREAM_REF} — refusing to "
+            f"gate could not resolve {UPSTREAM_REPO}@{LIVE_UPSTREAM_REF} — refusing to "
             "grade against an unverifiable suite."
         )
     if live != commit["sha"]:
         raise RuntimeError(
             "STALE CONFORMANCE SUITE — the gate graded "
             f"{commit['short']} ({commit['date']}) but {UPSTREAM_REPO}@"
-            f"{UPSTREAM_REF} is now {live[:7]}. Every gate run must score the "
+            f"{LIVE_UPSTREAM_REF} is now {live[:7]}. Every gate run must score the "
             "CURRENT suite, or a newly added upstream test can never fail us. "
             "Re-run without --suite-dir/--reuse-clone/--ref so the suite is "
             "cloned fresh."
         )
     print(
-        f"  gate suite verified: {UPSTREAM_REPO}@{commit['short']} is {UPSTREAM_REF} tip"
+        f"  gate suite verified: {UPSTREAM_REPO}@{commit['short']} is {LIVE_UPSTREAM_REF} tip"
+    )
+
+
+def assert_graded_commit_is_gate_ref(commit: dict, requested_ref: str) -> None:
+    """Verify that a gated run used the declared reproducible fixture revision."""
+    if requested_ref == LIVE_UPSTREAM_REF:
+        # This path is dormant while main lacks an adapter, but retains the
+        # freshness guarantee for the day Basilisk is accepted upstream again.
+        assert_graded_commit_is_live_main(commit)
+        return
+    if requested_ref != LAST_ADAPTER_REF:
+        raise RuntimeError(
+            "fixture gate only permits the frozen last-adapter revision "
+            f"{LAST_ADAPTER_REF}; got {requested_ref!r}"
+        )
+    if commit["sha"] != LAST_ADAPTER_REF:
+        raise RuntimeError(
+            "FIXTURE REVISION MISMATCH — requested the pinned last-adapter "
+            f"revision {LAST_ADAPTER_REF}, graded {commit['sha']}"
+        )
+    print(
+        f"  fixture suite verified: {UPSTREAM_REPO}@{commit['short']} "
+        "is the pinned last-adapter revision (historical/internal only)"
     )
 
 
@@ -579,18 +622,19 @@ def _run_with_suite(opts: dict, root: Path, suite_dir: Path) -> int:
     calc = {"sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
 
     write_csv(root, rows)
-    write_report(root, commit, rows, totals, calc)
+    write_report(root, opts["ref"], commit, rows, totals, calc)
     stamp_docs(root)
 
     if not opts["gate"]:
         return 0
 
-    # The score only means something if it was measured against the CURRENT
-    # suite — verify that before trusting it ([CHKARCH-CONFORMANCE]).
-    assert_graded_commit_is_live_main(commit)
+    # The default is the frozen last-adapter revision and must never be
+    # described as current or official. Gate mode refuses arbitrary refs.
+    assert_graded_commit_is_gate_ref(commit, opts["ref"])
 
     # The gate is the kept assert_wheel_conformance.py, run over the harness's OWN
-    # results (100% pass, 0 false positives, from coverage-thresholds.json). It
+    # results (every fixture passes, 0 false positives, from
+    # coverage-thresholds.json). It
     # reads the real *.toml — no scoring of ours.
     gate = subprocess.run(
         [

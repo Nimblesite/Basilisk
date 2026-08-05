@@ -117,29 +117,18 @@ fn extract_subscript_args(text: &str) -> Option<Vec<&str>> {
     Some(split_top_level_commas(inner))
 }
 
-/// Returns `true` for builtin generic types.
+/// Returns `true` for builtin generic types. Only the builtins are listed:
+/// they are in scope without an import. Their `typing` aliases must be
+/// resolved through the annotation cascade ([TYPEINF-ANNOTATION-RESOLUTION]),
+/// never matched by spelling.
 fn is_builtin_generic(name: &str) -> bool {
-    matches!(
-        name,
-        "dict" | "list" | "set" | "frozenset" | "Dict" | "List" | "Set" | "FrozenSet"
-    )
+    matches!(name, "dict" | "list" | "set" | "frozenset")
 }
 
-/// Returns `true` for types that are invariant containers.
+/// Returns `true` for builtin invariant containers. Import-requiring
+/// containers are the cascade's job, not this function's.
 fn is_invariant_container(name: &str) -> bool {
-    matches!(
-        name,
-        "list"
-            | "List"
-            | "dict"
-            | "Dict"
-            | "set"
-            | "Set"
-            | "frozenset"
-            | "FrozenSet"
-            | "deque"
-            | "Deque"
-    )
+    matches!(name, "list" | "dict" | "set" | "frozenset")
 }
 
 /// Walk statements to find function definitions and check bodies.

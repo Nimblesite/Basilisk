@@ -143,9 +143,9 @@ jobs:
           retention-days: 1
 
   conformance:
-    name: PEP conformance gate — 100% vs latest python/typing@main
+    name: Conformance integrity gates — pinned fixtures + AST-preserving mutations
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -167,13 +167,22 @@ jobs:
       - name: Build basilisk
         run: cargo build --release --bin basilisk
 
-      # Clone the LATEST python/typing@main FRESH and run its OWN harness against
-      # the compiled binary; require a perfect score — anything less than 100%, or a
-      # single false positive, tanks the release (coverage-thresholds.json →
-      # conformance.threshold 100, max_false_positives 0). No cached fixtures, no
-      # vendored calculator: if the real harness cannot run, the release fails.
-      - name: Enforce 100% PEP conformance (REAL python/typing harness)
+      # python/typing@main no longer carries the Basilisk adapter. Run the
+      # upstream harness at the full, frozen last-adapter revision as an internal
+      # pristine-fixture regression check. Passing every fixture does NOT prove
+      # current spec conformance and must not be published as a conformance score.
+      - name: Enforce pristine fixture regression threshold (historical/internal)
         run: python3 conformance/run_conformance.py --bin target/release/basilisk --gate
+
+      # A pristine fixture result is insufficient: the 2026 integrity audit
+      # showed that semantics-preserving renames collapsed the old result. Keep
+      # the mutation ratchet mandatory for every release.
+      - name: Enforce AST-preserving mutation regression ratchet
+        run: >-
+          python3 conformance/run_mutation_conformance.py
+          --bin target/release/basilisk
+          --ref a4906624f170c169cf667f962080c56d5a5ba6ff
+          --suite-dir "$RUNNER_TEMP/typing-mutated"
 
   release:
     name: Publish binaries to release
@@ -860,9 +869,10 @@ jobs:
   # See pyproject.toml ([tool.maturin] bindings = "bin").
   pypi-wheels:
     name: Build PyPI wheel - ${{ matrix.platform }}
-    # Gate wheel builds on the existing binary conformance job: never build a
-    # wheel of a non-conformant binary. Independent of the `build` matrix — the
-    # release archives feed Homebrew/Scoop/VSIX; these wheels feed PyPI.
+    # Gate wheel builds on the pristine-fixture and mutation regression checks.
+    # These are internal integrity gates, not a claim of current conformance.
+    # Independent of the `build` matrix — the release archives feed
+    # Homebrew/Scoop/VSIX; these wheels feed PyPI.
     needs: conformance
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -945,14 +955,13 @@ jobs:
           path: dist/*.whl
           retention-days: 1
 
-  # Prove the ACTUAL shipped wheel — pip-installed — scores 100% via the REAL,
-  # unmodified python/typing harness (its own `src/main.py` + built-in
-  # BasiliskTypeChecker). This is the SAME harness CI runs against the compiled
-  # binary (conformance/run_conformance.py); here it runs against the pip-installed
-  # wheel so the released install path is proven conformant too. There is no other
-  # scorer. See [CHKARCH-CONFORMANCE].
+  # Verify that the ACTUAL shipped wheel — pip-installed — reproduces the
+  # pristine internal fixture result via python/typing's unmodified harness at
+  # the last revision carrying BasiliskTypeChecker. The adapter has been removed
+  # from python/typing@main, so this is packaging/regression evidence only, not a
+  # current official conformance result. See [CHKARCH-CONFORMANCE].
   conformance-wheel:
-    name: Conformance gate — pip-installed wheel vs python/typing@main (real harness)
+    name: Pristine fixture regression — pip-installed wheel (historical/internal)
     needs: pypi-wheels
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -978,15 +987,17 @@ jobs:
           # Fails the job immediately if the wheel did not put `basilisk` on PATH.
           basilisk --version
 
-      - name: Clone python/typing@main (real fixtures + harness + adapter)
+      - name: Clone the last python/typing revision carrying the Basilisk adapter
         shell: bash
-        # The suite already ships the official Basilisk adapter (BasiliskTypeChecker
-        # in conformance/src/type_checker.py) — nothing of ours is injected.
+        # This frozen upstream revision ships BasiliskTypeChecker in
+        # conformance/src/type_checker.py; nothing of ours is injected.
         # Cloned OUTSIDE the repo checkout: per-file config discovery walks
         # ancestor directories ([CHKARCH-CONFIG-DISCOVERY]), so an in-repo clone
         # would inherit the repo's own [tool.basilisk] rules instead of scoring
         # the wheel's out-of-the-box default.
-        run: git clone --depth 1 https://github.com/python/typing "$RUNNER_TEMP/typing-upstream"
+        run: |
+          git clone --quiet https://github.com/python/typing "$RUNNER_TEMP/typing-upstream"
+          git -C "$RUNNER_TEMP/typing-upstream" checkout --quiet a4906624f170c169cf667f962080c56d5a5ba6ff
 
       - name: Run the REAL upstream harness against the installed wheel
         working-directory: ${{ runner.temp }}/typing-upstream/conformance
@@ -994,14 +1005,14 @@ jobs:
         # `basilisk` resolves to the pip-installed wheel on PATH (BASILISK_BIN unset).
         run: python src/main.py --only-run basilisk
 
-      - name: Assert the wheel scores 100% / zero false positives
+      - name: Assert the wheel reproduces the pristine fixture threshold
         shell: bash
         run: python conformance/assert_wheel_conformance.py "$RUNNER_TEMP/typing-upstream/conformance/results/basilisk"
 
   publish-pypi:
     name: Publish wheels to PyPI
-    # Only publish once the wheels built AND the shipped wheel passed the real
-    # upstream harness AND the GitHub release exists.
+    # Only publish once the wheels built, the shipped wheel reproduced the
+    # internal pristine-fixture result, and the GitHub release exists.
     needs: [pypi-wheels, conformance-wheel, release]
     runs-on: ubuntu-latest
     timeout-minutes: 15

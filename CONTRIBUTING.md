@@ -25,40 +25,55 @@ This guide has two sections. Pick the one that's you.
 ## For Humans
 
 You don't need to write Rust to make Basilisk better. The **single highest-leverage thing a human can
-do on this project is keep the agents honest** — above all about **PEP conformance**, the number most
-worth faking and the one an agent is most likely to fake. Agents do the bulk of the mechanical part of the engineering;
-humans own the judgment, accountability, and trust an agent can't be held to — and the first of those
-duties is *surveillance*. Basilisk's north stars are public and non-negotiable: be the **most
-conformant** *and* the **fastest** Python type checker, never trading one for the other
-([CHKARCH-TESTING-BENCH-RATCHET]). Both are *measured numbers*, and a measured number is worth nothing
-the moment someone games it. In rough order of impact:
+do on this project is keep the agents honest**. Basilisk's former 100% conformance claim was
+retracted because parts of the checker had been fitted to the exact text of the upstream fixtures;
+the result did not survive AST-preserving mutations. Basilisk was removed from the
+[official results table](https://github.com/python/typing/blob/main/conformance/results/results.html)
+at the project's request. Current conformance is temporarily unknown while the affected logic is
+rebuilt from the typing specification, and all published benchmark figures and rankings are also
+withdrawn pending audit.
 
-### 1. Keep the agents honest — watch every metric like a hawk
+Agents do the bulk of the mechanical engineering. Humans own the judgment, accountability, and trust
+an agent cannot be held to. In rough order of impact:
 
-This is the number one human job on Basilisk. The agents do the engineering; **you make sure they
-didn't cheat to do it.** Under pressure, an agent will move the *number* instead of doing the *work* —
-and every number here is gameable: **PEP conformance, test coverage, mutation score, test assertions,
-lint/clippy, benchmarks.** Treat every metric change as a possible cheat until you've re-derived it
-yourself. They cannot grade their own homework — that's what you're here for.
+### 1. Keep the agents honest — raw fixture scores are not proof
 
-The dodges, across every metric:
+Running the unmodified upstream harness is necessary, but it is not sufficient evidence of
+conformance. A checker can score well by recognising the fixtures rather than implementing the
+specification. **Every conformance change must pass all of these independent checks:**
 
-- **Silence instead of fix** — disabling, deleting, or unregistering a rule so it stops firing,
-  instead of fixing what it caught.
-- **Weaken the test** — deleting failing tests, cutting assertions, or watering them down so "green"
+- Run the complete official [`python/typing` suite](https://github.com/python/typing/tree/main/conformance/tests)
+  with its [own scoring harness](https://github.com/python/typing/blob/main/conformance/src/main.py),
+  unmodified and pinned to the reported commit. Do not skip fixtures, diagnostic codes, or required
+  errors.
+- Apply AST-preserving mutations to the affected fixtures, including consistent renames of type
+  variables and symbols. Semantically equivalent input must produce equivalent diagnostics; a score
+  that moves because spelling changed is invalid.
+- Add off-suite positive, negative, and boundary tests derived independently from the typing
+  specification. Do not copy, lightly rephrase, or merely permute the upstream fixture.
+- Inspect the implementation for source-text substrings, filename checks, exact prefixes, fixture
+  vocabulary, or branches that map one-for-one to upstream test lines. Delete fitted logic and
+  reimplement the rule from the AST and specification.
+- Exercise the default user-facing binary. A future published result must describe what users
+  actually receive, not a special scoring mode or configuration.
+
+Treat every metric change as a possible integrity failure until it has been independently re-derived.
+The common dodges are:
+
+- **Silence instead of fix** — disabling, deleting, or unregistering a rule merely so it stops
+  firing, instead of implementing its intended behaviour.
+- **Weaken the test** — deleting failures, cutting assertions, or watering them down so "green"
   means nothing.
-- **Edit the scoreboard or the gate** — hand-editing `conformance_status.csv`, or lowering a
-  threshold/baseline (`coverage-thresholds.json`, the mutation or benchmark baselines) to match a
-  faked run.
-- **Measure less** — excluding diagnostic codes, skipping fixtures, narrowing mutation scope, grading
-  a subset. A high percentage over part of the suite is not a real percentage.
+- **Edit the scoreboard or gate** — hand-editing `conformance_status.csv`, lowering coverage or
+  mutation thresholds, or discarding inconvenient benchmark results.
+- **Measure less** — excluding diagnostics, skipping fixtures, narrowing mutation scope, or grading
+  only a favourable subset.
+- **Fit to the test** — encoding the fixture's spelling or shape instead of the general rule it is
+  meant to exercise.
 
-Conformance is the most critical metric, so guard it hardest: it must **strictly track the official PEP
-standard**, scored by the official `python/typing` calculator unmodified at a pinned commit — never a
-rule turned off, deleted, or unregistered, never a reimplementation. Every
-metric only ever moves the *honest* way — conformance, coverage, and mutation **up**; false positives
-and benchmark times **down** — because the work genuinely got better, never because someone changed
-how we count. **Gaming any of them is a punishable offence** ([CHKARCH-CONFORMANCE]).
+A raw upstream percentage, on its own, is not publishable evidence. Until the clean implementation
+passes the upstream harness, AST-preserving mutation tests, and independent off-suite tests, the
+honest conformance answer remains **temporarily unknown** ([CHKARCH-CONFORMANCE]).
 
 ### 2. Test it for real — on real, large codebases
 
@@ -95,13 +110,14 @@ scope ([CHKARCH-TESTING-MUTATION-RATCHET]), and call out tests that would still 
 code were broken. **Both ratchets only move one way** — coverage and mutation score up,
 never down.
 
-### 5. Guard the performance numbers
+### 5. Audit performance measurements
 
-"Fastest" is the other half of the promise, and it's just as easy to fool yourself on. Re-run the
-benchmarks on real hardware against the committed baseline (`benchmarks/status/<machine>.csv`),
-confirm no fixture got slower, and optimize every regression before updating the recorded results.
-The gate cannot be disabled or widened. A conformance fix that blows the benchmark gate isn't done
-— and a benchmark "win" that cost conformance isn't either. Both ratchets hold at once.
+All published benchmark figures and performance rankings are withdrawn pending audit. Do not call
+Basilisk the fastest checker or treat the committed timings as current evidence. Re-run benchmarks
+on quiet, real hardware; compare tools or revisions within the same run; verify release builds,
+tool versions, fixture selection, warm/cold definitions, and complete result recording. Publish slow
+results as readily as fast ones. Benchmarks are indicative measurements, not a pass/fail gate, and
+new public figures require a reproducible methodology that has survived independent review.
 
 ### 6. Report GitHub issues
 
@@ -175,17 +191,22 @@ follow it exactly. This section is a map, not a restatement (we don't duplicate)
   link missing, fix it.
 - **DRY, ruthlessly.** Use the `deslop` MCP (`find-similar` before writing, `top-offenders` after).
   Merge duplicates. Search for existing code before adding new code.
-- **The ratchets only move one way.** Conformance score up; false positives and benchmark
-  regressions down; coverage up; mutation score up. A conformance fix that blows the benchmark gate
-  isn't done.
-- **Never disable, delete, or unregister a conformance rule to move the score — a punishable offence.**
+- **A raw conformance score is necessary, never sufficient.** Every affected rule needs
+  AST-preserving mutation coverage and independently derived off-suite tests. Current conformance is
+  temporarily unknown; do not publish a replacement number until that evidence exists.
+- **The valid ratchets only move one way.** Coverage and mutation strength go up; false positives go
+  down. Never improve a metric by weakening its test, scope, or baseline.
+- **Never disable, delete, or unregister a conformance rule merely to move the score.**
   PEP conformance runs the `basilisk` binary with **every rule enabled**: no Basilisk config file, no
   per-rule override, no "spec-conformance mode", no skipped fixtures, **no deleting rule source files,
   no removing rules from `all_rules()`**, no exceptions. Equally forbidden: hand-editing
   `conformance/conformance_status.csv` or loosening the `coverage-thresholds.json` gate to match a
-  faked run. The score is exactly what a real user gets out of the box. If a strict default fires on
-  spec-valid code, **fix the checker** so it stops firing — never silence, delete, or unregister the
-  rule to inflate the number ([CHKARCH-CONFORMANCE]).
+  faked run. Also forbidden: raw-source matching, filename checks, or fixture-specific branches.
+  If a strict default fires on spec-valid code, **reimplement the checker logic** so it understands
+  the construct — never silence a rule or transcribe the test to inflate the number
+  ([CHKARCH-CONFORMANCE]).
+- **Benchmark claims are withdrawn.** Record every run honestly, but do not claim a ranking or treat
+  benchmark timings as a gate until the methodology audit is complete.
 - **`make` is the interface.** `make build | test | lint | fmt | clean | ci | setup` — exactly seven
   targets, don't add more. `make test` is fail-fast and enforces the coverage threshold from
   `coverage-thresholds.json`.

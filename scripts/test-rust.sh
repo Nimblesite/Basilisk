@@ -57,13 +57,13 @@ trap cleanup_typing_suite EXIT
 # Ensure llvm-tools-preview is installed so cargo-llvm-cov never prompts.
 rustup component add llvm-tools-preview 2>/dev/null || true
 
-# ── Rust tests + conformance, one instrumented coverage pool ─────────────────
+# ── Rust tests + pristine fixture regression, one coverage pool ──────────────
 # Coverage is gathered in TWO phases that share ONE profile pool, reported once:
 #   1. the workspace test suite, then
-#   2. the REAL basilisk binary scored over all 146 PEP conformance fixtures.
-# Phase 2 is BOTH the conformance gate AND the source of the checker/resolver
-# coverage those files exercise — the compiled binary's own instrumented run
-# provides it (there is no in-repo conformance test).
+#   2. the Basilisk binary run over the frozen upstream fixture snapshot.
+# Phase 2 is BOTH an internal fixture-regression guard AND a source of the
+# checker/resolver coverage those files exercise. It is not a current official
+# conformance result (there is no in-repo conformance test).
 #
 # cargo-llvm-cov's `show-env` is the supported way to fold an external binary's
 # runs into coverage: source it ONCE, then build + test + run the binary all under
@@ -75,13 +75,13 @@ rustup component add llvm-tools-preview 2>/dev/null || true
 header "Running tests with coverage instrumentation"
 cargo llvm-cov clean --workspace
 
-# Build the CLEAN release binary the conformance GATE scores — freshly built from
-# THIS checkout's source, un-instrumented, byte-for-byte what ships. Built BEFORE
+# Build the CLEAN release-profile binary the pristine fixture guard scores —
+# freshly built from THIS checkout's source and un-instrumented. Built BEFORE
 # the llvm-cov env is sourced so NO coverage flags touch it. Coverage for the
 # checker/resolver paths the suite exercises comes from a SEPARATE instrumented
-# pass further down. The gate must score what ships — never an instrumented build,
-# never a prior (PyPI) release. See [CHKARCH-CONFORMANCE].
-header "Freshly building the CLEAN release basilisk binary for the conformance gate"
+# pass further down. The guard measures this checkout's release profile — never
+# an instrumented build or a prior PyPI release. See [CHKARCH-CONFORMANCE].
+header "Building the clean release binary for the pristine fixture regression"
 cargo build --release --bin basilisk
 
 eval "$(cargo llvm-cov show-env --export-prefix)"
@@ -114,14 +114,16 @@ eval "$(cargo llvm-cov show-env --export-prefix)"
 # does not affect discovery.
 export LLVM_PROFILE_FILE="${CARGO_LLVM_COV_TARGET_DIR:-$REPO_ROOT/target}/Basilisk-%p.profraw"
 
-# Sync the (git-ignored) conformance fixtures the Rust tests read, from the REAL
-# python/typing suite. `--sync-tests` clones python/typing@main FRESH — done AFTER
-# the coverage clean so the clone survives — and mirrors its graded fixtures into
+# Sync the (git-ignored) conformance fixtures the Rust tests read from the
+# declared historical python/typing snapshot that still carries the removed
+# Basilisk adapter. `--sync-tests` clones that snapshot FRESH — done AFTER the
+# coverage clean so the clone survives — and mirrors its graded fixtures into
 # conformance/tests/ (absent on a fresh checkout, read by e.g. rule_tags_tests'
-# `pep_categories_match_conformance_test_prefixes`). The conformance gate below
-# reuses this same fresh clone (--reuse-clone) to RUN the harness under this
-# instrumented env, so the binary's conformance run also feeds the coverage pool.
-header "Syncing PEP conformance fixtures from the real python/typing suite"
+# `pep_categories_match_conformance_test_prefixes`). The fixture-regression guard below
+# reuses this same fresh clone (--reuse-clone) to run its own harness under this
+# instrumented env. This protects a pristine fixture baseline; it does not
+# establish Basilisk's current conformance level.
+header "Syncing pristine regression fixtures from the pinned python/typing snapshot"
 python3 -m unittest discover -s "$REPO_ROOT/conformance" -p 'test_*.py'
 python3 -m unittest discover -s "$REPO_ROOT/benchmarks" -p 'test_*.py'
 python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_DIR" --sync-tests
@@ -150,25 +152,24 @@ BASILISK_BIN=$(find_basilisk_bin) || {
 }
 ok "instrumented basilisk binary ready: $BASILISK_BIN"
 
-# ── PEP conformance — the REAL python/typing harness, run FRESH ───────────────
-# Two passes over the ONE freshly-cloned suite (reused, no re-clone):
+# ── Frozen upstream fixture snapshot — its own harness, cloned fresh ─────────
+# Two passes over the ONE freshly-cloned historical snapshot (reused, no re-clone):
 #   1. COVERAGE pass — the freshly-built INSTRUMENTED binary checks every fixture
 #      under the sourced llvm-cov env, so every `basilisk check` subprocess joins
 #      the coverage pool and the checker/resolver paths these fixtures exercise
 #      count toward coverage.
-#   2. GATE pass — the freshly-built CLEAN RELEASE binary (target/release/basilisk,
-#      un-instrumented, exactly what ships) is scored by the REAL harness and MUST
-#      hit 100% pass / 0 false positives (coverage-thresholds.json) or the build
-#      DIES. run_conformance.py regenerates conformance/conformance_status.csv from
-#      the harness's OWN results/basilisk/*.toml on each pass.
-# There is NO Rust conformance test, NO vendored calculator, and NO cached
-# fixtures: the score is the real suite's own verdict on the CLEAN RELEASE build —
-# never an instrumented one, never a prior (PyPI) release. If the real harness
-# cannot be cloned and run, this FAILS the build. See [CHKARCH-CONFORMANCE].
-header "Conformance coverage pass (instrumented binary over the real suite)"
+#   2. REGRESSION pass — the freshly-built CLEAN RELEASE binary
+#      (target/release/basilisk) must preserve the committed strict fixture
+#      baseline in coverage-thresholds.json. That threshold is internal
+#      regression evidence, not Basilisk's conformance percentage.
+# run_conformance.py regenerates conformance/conformance_status.csv from the
+# snapshot harness's OWN results/basilisk/*.toml on each pass. There is NO
+# vendored calculator and NO cached-fixture fallback. If that upstream snapshot
+# cannot be cloned and run, the build fails. See [CHKARCH-CONFORMANCE].
+header "Fixture coverage pass (instrumented binary over the pinned snapshot)"
 python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_DIR" --bin "$BASILISK_BIN" --reuse-clone
 
-header "Enforcing PEP conformance gate (freshly-built CLEAN RELEASE build vs the REAL harness)"
+header "Enforcing pristine fixture regression (clean release vs pinned harness)"
 python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_DIR" --bin "$REPO_ROOT/target/release/basilisk" --gate --reuse-clone
 
 # ── Drop truncated profiles before the merge (every platform) ────────────────

@@ -1,7 +1,7 @@
 {
   "name": "Basilisk",
-  "title": "Basilisk — Fast Python Type Checker & Language Server",
-  "description": "Open-source Python type checker and language server built in Rust, scoring 100% on the official python/typing conformance suite, with published cold-check benchmarks.",
+  "title": "Basilisk — Python Type Checker & Language Server",
+  "description": "Open-source Python type checker and language server built in Rust. Conformance and benchmark results are withdrawn during an integrity review.",
   "url": "https://www.basilisk-python.dev",
   "keywords": "basilisk, python type checker, python type checking, python language server, typing conformance, type checker benchmark, rust, vs code, cursor, zed, neovim",
   "themeColor": "#e8500a",

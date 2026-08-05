@@ -362,10 +362,9 @@ impl ParameterizationChecker<'_, '_> {
     }
 
     /// PEP 612: the argument at a `ParamSpec` parameter's position must be a
-    /// parameter-list expression — `[...]`, `...`, another `ParamSpec`, or
-    /// `Concatenate[...]`. When the alias's ONLY parameter is the
-    /// `ParamSpec`, a single argument is implicitly wrapped in a list and
-    /// any shape is valid.
+    /// parameter-list expression — `[...]`, `...`, or another `ParamSpec`.
+    /// When the alias's ONLY parameter is the `ParamSpec`, a single argument
+    /// is implicitly wrapped in a list and any shape is valid.
     fn check_paramspec_args(
         &self,
         base: &str,
@@ -409,9 +408,6 @@ impl ParameterizationChecker<'_, '_> {
                 .typevar_calls
                 .iter()
                 .any(|tv| tv.is_paramspec && tv.name == name.id.as_str()),
-            Expr::Subscript(subscript) => {
-                matches!(&*subscript.value, Expr::Name(name) if name.id.as_str() == "Concatenate")
-            }
             _ => false,
         }
     }

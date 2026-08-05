@@ -2,16 +2,14 @@
 //! See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-VARS-ANNOTATED
 //!
 //! Everything `assignment_compatibility` must NOT flag: name sets whose
-//! declared types it cannot evaluate (`TypedDict`s, aliases), the alias/schema
-//! environments used by rescue checks, and `if not TYPE_CHECKING:` blocks
-//! (PEP 484 excludes them from type checking entirely).
+//! declared types it cannot evaluate (`TypedDict`s, aliases) and the
+//! alias/schema environments used by rescue checks.
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::Diagnostic;
 use crate::types::InferredType;
 
-use super::{alias_match, enum_expand, typeddict_struct, CODE};
+use super::{alias_match, enum_expand, typeddict_struct};
 
 /// Names that E0014 must skip to avoid false positives.
 pub(super) struct SkipNames {
@@ -88,48 +86,4 @@ fn collect_extra_items_typeddict_names(
         .filter(|cls| cls.class_keywords.iter().any(|kw| kw == "extra_items"))
         .map(|cls| cls.name.to_ascii_lowercase())
         .collect()
-}
-
-/// Remove E0014 diagnostics inside `if not TYPE_CHECKING:` blocks — that code
-/// is explicitly excluded from type checking (PEP 484).
-pub(super) fn drop_unchecked_block_diagnostics(
-    module: &ResolvedModule,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    use ruff_text_size::Ranged as _;
-
-    let Some(parsed) = crate::rules::shared::parse_module(module) else {
-        return;
-    };
-    let blocks: Vec<(u32, u32)> = parsed
-        .ast
-        .body
-        .iter()
-        .filter_map(|stmt| {
-            let ruff_python_ast::Stmt::If(if_stmt) = stmt else {
-                return None;
-            };
-            let ruff_python_ast::Expr::UnaryOp(unary) = if_stmt.test.as_ref() else {
-                return None;
-            };
-            let is_not_type_checking = unary.op == ruff_python_ast::UnaryOp::Not
-                && matches!(
-                    unary.operand.as_ref(),
-                    ruff_python_ast::Expr::Name(n) if n.id.as_str() == "TYPE_CHECKING"
-                );
-            is_not_type_checking.then(|| {
-                let range = if_stmt.range();
-                (range.start().to_u32(), range.end().to_u32())
-            })
-        })
-        .collect();
-    if blocks.is_empty() {
-        return;
-    }
-    diagnostics.retain(|diag| {
-        diag.code.code != CODE.code
-            || !blocks
-                .iter()
-                .any(|&(start, end)| diag.span.start >= start && diag.span.end <= end)
-    });
 }

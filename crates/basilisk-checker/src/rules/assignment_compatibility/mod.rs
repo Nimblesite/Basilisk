@@ -32,7 +32,7 @@ mod typeddict_struct;
 mod typeform_check;
 
 use enum_expand::enum_expansion_assignable;
-use skip_names::{drop_unchecked_block_diagnostics, SkipNames};
+use skip_names::SkipNames;
 
 use crate::annotation::AnnotationResolver;
 use crate::rules::shared::module_types::ModuleTypes;
@@ -113,7 +113,6 @@ impl Rule for AssignmentTypeMismatch {
         check_dataclass_attr_assignments(module, diagnostics);
         typeform_check::check_typeform_calls(module, resolver, diagnostics);
         default_spec::check_default_specializations(module, diagnostics);
-        drop_unchecked_block_diagnostics(module, diagnostics);
     }
 }
 
@@ -291,14 +290,6 @@ fn check_vars(
                     inferred_type,
                     declared_type,
                 ));
-            }
-
-            // Skip TypeAlias-annotated variables — E0048 handles validation.
-            // Every spelling — `TypeAlias`, `typing.TypeAlias`, `t.TypeAlias`,
-            // `from typing import TypeAlias as TA` — resolves to the same name
-            // through the cascade, so one comparison covers them all.
-            if declared_nominal.as_deref() == Some("typealias") {
-                return None;
             }
 
             // Skip dict literal assignments to TypedDict annotations. E0014 compares
