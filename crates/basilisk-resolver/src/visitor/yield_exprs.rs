@@ -2,6 +2,7 @@
 //! Yield Exprs visitor functions.
 
 use ruff_python_ast::{Expr, Stmt};
+use ruff_text_size::Ranged;
 
 use crate::scope::RhsKind;
 
@@ -74,6 +75,7 @@ pub(super) fn collect_yield_from_expr(expr: &Expr, out: &mut Vec<crate::scope::Y
                 rhs_kind,
                 is_yield_from: false,
                 call_name,
+                value_span: y.value.as_deref().map(|value| text_range_to_span(value.range())),
             });
         }
         Expr::YieldFrom(yf) => {
@@ -84,6 +86,7 @@ pub(super) fn collect_yield_from_expr(expr: &Expr, out: &mut Vec<crate::scope::Y
                 rhs_kind,
                 is_yield_from: true,
                 call_name,
+                value_span: Some(text_range_to_span(yf.value.range())),
             });
         }
         _ => {}

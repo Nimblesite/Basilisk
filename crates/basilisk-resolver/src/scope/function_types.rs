@@ -76,6 +76,12 @@ pub struct ReturnStmtInfo {
     ///
     /// Used for return type inference in BSK-0002.
     pub rhs_kind: RhsKind,
+    /// The span of the returned expression itself, when there is one.
+    ///
+    /// The checker's per-module type oracle indexes every expression by its
+    /// exact source range, so this span is how a return statement asks the
+    /// bidirectional engine what it actually returns ([NARROWPLAN-INTEGRATION]).
+    pub value_span: Option<Span>,
 }
 
 /// A `yield` or `yield from` expression found inside a generator function body.
@@ -87,6 +93,12 @@ pub struct YieldExprInfo {
     pub rhs_kind: RhsKind,
     /// `true` when this is a `yield from` expression.
     pub is_yield_from: bool,
+    /// The span of the yielded expression itself, when there is one.
+    ///
+    /// The checker's per-module type oracle indexes every expression by its
+    /// exact source range, so this span is how a `yield` asks the
+    /// bidirectional engine what it actually yields ([NARROWPLAN-INTEGRATION]).
+    pub value_span: Option<Span>,
     /// The name of the called function/constructor, if the yield value is a call expression.
     /// For `yield SomeClass()`, this is `Some("SomeClass")`.
     pub call_name: Option<String>,

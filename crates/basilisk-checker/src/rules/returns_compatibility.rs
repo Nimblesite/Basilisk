@@ -16,8 +16,9 @@
 //! ```
 
 use crate::annotation::AnnotationResolver;
-use crate::inference::{infer_rhs, literal_collection_assignable_to};
-use crate::types::InferredType;
+use crate::rules::shared::judge::TypeJudge;
+use crate::rules::shared::module_types::ModuleTypes;
+use crate::rules::shared::returns_judge::{judge_return, ReturnVerdict};
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
@@ -44,29 +45,28 @@ impl Rule for ReturnTypeMismatch {
         ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Standalone entry point (a single-rule test, or any caller outside the
-        // driver): build the cascade the driver would otherwise share.
-        let annotations = crate::annotation::AnnotationResolver::for_module(module);
-        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+        super::check_with_own_types(self, module, ctx, diagnostics);
     }
 
-    fn check_with_annotations(
+    fn check_with_types(
         &self,
         module: &ResolvedModule,
-        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
+        types: &ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         // The declared type of every return annotation comes from the shared
-        // cascade ([TYPEINF-ANNOTATION-RESOLUTION]); its tables are built once
-        // per module, not once per function.
-        let Some(resolver) = annotations else {
+        // cascade ([TYPEINF-ANNOTATION-RESOLUTION]) and every returned value
+        // from the shared oracle; both are built once per module, not once per
+        // function.
+        let Some(resolver) = types.annotations() else {
             return;
         };
+        let judge = TypeJudge::new(types.oracle(), resolver, types.subtyping());
         for func in &module.functions {
             // @no_type_check suppresses body checks (E0011); E0041 arity still applies.
             if !is_stub_context(func, &module.classes) && !is_no_type_check(func) {
-                check_return_type_mismatch(func, module, resolver, diagnostics);
+                check_return_type_mismatch(func, module, resolver, &judge, diagnostics);
             }
         }
     }
@@ -80,6 +80,7 @@ fn check_return_type_mismatch(
     func: &FunctionInfo,
     module: &ResolvedModule,
     resolver: &AnnotationResolver<'_>,
+    judge: &TypeJudge<'_, '_>,
     out: &mut Vec<Diagnostic>,
 ) {
     if !func.return_annotation.is_present() {
@@ -113,31 +114,14 @@ fn check_return_type_mismatch(
         return;
     }
 
-    for return_stmt in &func.return_stmts {
-        if !return_stmt.has_value {
-            continue;
-        }
-
-        // Skip call expressions: without full type inference we cannot prove the
-        // callee returns an incompatible type
-        if return_stmt.value_is_call {
-            continue;
-        }
-
-        // Use inference system to get RHS type
-        let inferred_type = infer_rhs(&return_stmt.rhs_kind);
-
-        // Skip Unknown types - we can't prove they're incompatible
-        if matches!(inferred_type, InferredType::Unknown) {
-            continue;
-        }
-
-        // A returned collection literal is contextually typed against the
-        // declared type ([TYPEINF-SPECIAL-LITERAL-CONTEXT]); a stored value
-        // keeps invariant subtyping.
-        let is_assignable = literal_collection_assignable_to(&return_stmt.rhs_kind, &declared_type)
-            .unwrap_or_else(|| inferred_type.is_assignable_to(&declared_type));
-        if !is_assignable {
+    // Every returned expression — literal, display, call, name — is typed by
+    // the module oracle ([NARROWPLAN-INTEGRATION] Step 2), so a call whose
+    // callee declares an incompatible return is finally an error instead of a
+    // blanket skip. An unresolvable callee still types `Unknown` and abstains.
+    for return_stmt in func.return_stmts.iter().filter(|stmt| stmt.has_value) {
+        if let ReturnVerdict::Mismatch(inferred_type) =
+            judge_return(judge, return_stmt, &declared_type)
+        {
             out.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(

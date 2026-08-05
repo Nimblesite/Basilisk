@@ -1278,17 +1278,27 @@ before the stage is declared closed:
 - [ ] Record a `make bench` baseline on a fixture that actually exercises the
   flow walker **in the same change that first wires it**, so the walker stops
   being invisible to the ratchet the moment it starts costing real time.
-- [ ] **Step 1 — `assignment_compatibility` to the engine; delete its
-  `RhsKind` shape-matching in the same change.** Every right-hand side —
-  literal, call, constructor, method, variable — is typed by
-  `BidirEngine::synth` (`synth_call` resolves call returns), narrowed by
-  `narrow::analyse_function_in`, and judged by `SubtypingContext`.
-  `a: int = returns_str()` must fire. Fixes #397 (unfixed half) and the
-  assignment half of #378. Not optional.
-- [ ] **Step 2 — `returns_compatibility` / `returns_compatibility_2`
+- [x] **Step 1 — `assignment_compatibility` to the engine; delete its
+  `RhsKind` shape-matching in the same change.** Landed: every right-hand side
+  is typed by `rules/shared/oracle.rs` (`ModuleOracle`, a `BidirEngine` seeded
+  from the module's own definitions), collection displays are accepted through
+  engine CHECK mode against the annotation, and nominal verdicts route through
+  `SubtypingContext::module_context`. `a: int = returns_str()` fires
+  (`tests/checker/assignment_call_synthesis_tests.rs`, 8 tests). The replaced
+  path is gone: `assignment_compatibility/literal_parse.rs` deleted, the
+  `RhsKind` dispatch and the param-name text fallback removed. Fixes #397
+  (unfixed half) and the assignment half of #378.
+- [x] **Step 2 — `returns_compatibility` / `returns_compatibility_2`
   synthesize the returned expression through the engine**, deleting the
-  replaced pattern-matching. Fixes the return half of #378. Companion
-  default-on rule `returns_implicit_none` (#401) lands in the same family.
+  replaced pattern-matching. Landed: the resolver now records `value_span` for
+  every `return` and `yield`, the shared `rules/shared/returns_judge.rs` types
+  that expression through the same oracle, and BOTH rules stopped skipping
+  calls — `def outer() -> str: return helper()` with `helper() -> int` fires
+  (`tests/checker/returns_call_synthesis_tests.rs`, 9 tests). The generator
+  family (`annotations_generators`) rides the same judge; its hand-rolled
+  `infer_yield_type`/`infer_call_result` and
+  `inference::literal_collection_assignable_to` (plus both private helpers) are
+  deleted. Fixes the return half of #378.
 - [ ] **Step 3 — `calls_argument_type` judges arguments through the engine +
   `SubtypingContext`**, deleting the syntactic-shape comparison. Fixes #356
   (false positives on valid `str.join` list displays AND a missed genuine

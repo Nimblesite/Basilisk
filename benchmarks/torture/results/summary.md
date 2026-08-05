@@ -4,7 +4,7 @@ Methodology: see the header of `benchmarks/torture/run_torture.py` and of
 `benchmarks/torture/status/torture.csv`. Every case file states the spec
 section or PEP that makes its expectations authoritative.
 
-Measured basilisk binary: local working-tree build: /Users/christianfindlay/Documents/Code/Basilisk/target/release/basilisk, built from v0.39.0-29-g3295de34-dirty
+Measured basilisk binary: local working-tree build: /Users/christianfindlay/Documents/Code/Basilisk/target/release/basilisk, built from v0.39.0-38-ga6de5673-dirty
 
 | case | basilisk | pyright | mypy | ty | pyrefly | zuban |
 |---|---|---|---|---|---|---|

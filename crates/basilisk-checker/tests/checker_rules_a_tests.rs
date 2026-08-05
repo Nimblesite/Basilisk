@@ -65,6 +65,8 @@ mod names_undefined;
 mod overloads_consistency;
 #[path = "checker/overloads_definitions_tests.rs"]
 mod overloads_definitions;
+#[path = "checker/returns_call_synthesis_tests.rs"]
+mod returns_call_synthesis;
 #[path = "checker/returns_compatibility_tests.rs"]
 mod returns_compatibility;
 #[path = "checker/returns_compatibility_2_tests.rs"]

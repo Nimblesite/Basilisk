@@ -5,7 +5,10 @@
 //! to eliminate code duplication and improve maintainability.
 
 mod class_walks;
+pub(crate) mod judge;
+pub(crate) mod module_types;
 pub(crate) mod oracle;
+pub(crate) mod returns_judge;
 mod text_scan;
 
 pub(crate) use class_walks::{

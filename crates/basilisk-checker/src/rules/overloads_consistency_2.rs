@@ -42,22 +42,19 @@ impl Rule for OverloadDecoratorConsistency {
         ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Standalone entry point (a single-rule test, or any caller outside the
-        // driver): build the cascade the driver would otherwise share.
-        let annotations = crate::annotation::AnnotationResolver::for_module(module);
-        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+        super::check_with_own_types(self, module, ctx, diagnostics);
     }
 
-    fn check_with_annotations(
+    fn check_with_types(
         &self,
         module: &ResolvedModule,
-        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
+        types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         // Overload membership is a binding question ([#380]); the
         // staticmethod/final/override checks below stay spelling-based.
-        let Some(resolver) = annotations else {
+        let Some(resolver) = types.annotations() else {
             return;
         };
         let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();

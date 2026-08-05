@@ -35,9 +35,10 @@ use enum_expand::enum_expansion_assignable;
 use skip_names::{drop_unchecked_block_diagnostics, SkipNames};
 
 use crate::annotation::AnnotationResolver;
+use crate::rules::shared::module_types::ModuleTypes;
 use crate::rules::shared::oracle::ModuleOracle;
 use crate::span_util::slice_span;
-use crate::subtyping::{module_context, SubtypingContext};
+use crate::subtyping::SubtypingContext;
 use crate::types::InferredType;
 use basilisk_resolver::{ResolvedModule, Span, VariableInfo};
 use ruff_python_ast::Expr;
@@ -68,27 +69,24 @@ impl Rule for AssignmentTypeMismatch {
         ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Standalone entry point (a single-rule test, or any caller outside the
-        // driver): build the cascade the driver would otherwise share.
-        let annotations = crate::annotation::AnnotationResolver::for_module(module);
-        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+        super::check_with_own_types(self, module, ctx, diagnostics);
     }
 
-    fn check_with_annotations(
+    fn check_with_types(
         &self,
         module: &ResolvedModule,
-        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
+        types: &ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let Some(resolver) = annotations else {
+        let Some(resolver) = types.annotations() else {
             return;
         };
         let empty_params = ParamMaps::default();
         let skip = SkipNames::collect(module);
         let call_index = callable_check::build_index(module);
-        let oracle = ModuleOracle::build(module, resolver);
-        let subtyping = module_context(module);
+        let oracle = types.oracle();
+        let subtyping = types.subtyping();
         check_vars(
             &module.module_vars,
             &module.source,
@@ -99,8 +97,8 @@ impl Rule for AssignmentTypeMismatch {
             &module.functions,
             &call_index,
             resolver,
-            oracle.as_ref(),
-            &subtyping,
+            oracle,
+            subtyping,
         );
         check_local_vars(
             module,
@@ -108,8 +106,8 @@ impl Rule for AssignmentTypeMismatch {
             &skip,
             &call_index,
             resolver,
-            oracle.as_ref(),
-            &subtyping,
+            oracle,
+            subtyping,
         );
         check_tuple_reassignments(module, diagnostics);
         check_dataclass_attr_assignments(module, diagnostics);

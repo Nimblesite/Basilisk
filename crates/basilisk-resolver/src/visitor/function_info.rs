@@ -252,6 +252,7 @@ pub(super) fn return_stmt_info_from(ret: &StmtReturn) -> ReturnStmtInfo {
         has_value,
         value_is_call,
         rhs_kind,
+        value_span: value_expr.map(|expr| text_range_to_span(expr.range())),
     }
 }
 

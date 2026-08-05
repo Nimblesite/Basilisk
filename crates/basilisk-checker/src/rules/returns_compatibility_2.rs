@@ -6,7 +6,9 @@
 //! handle all return type mismatches using the inference system.
 
 use crate::annotation::AnnotationResolver;
-use crate::inference::{infer_rhs, literal_collection_assignable_to};
+use crate::rules::shared::judge::TypeJudge;
+use crate::rules::shared::module_types::ModuleTypes;
+use crate::rules::shared::returns_judge::{judge_return, none_return_fires, ReturnVerdict};
 use crate::types::InferredType;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnStmtInfo};
 
@@ -29,29 +31,28 @@ impl Rule for ReturnTypeMismatch {
         ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Standalone entry point (a single-rule test, or any caller outside the
-        // driver): build the cascade the driver would otherwise share.
-        let annotations = crate::annotation::AnnotationResolver::for_module(module);
-        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+        super::check_with_own_types(self, module, ctx, diagnostics);
     }
 
-    fn check_with_annotations(
+    fn check_with_types(
         &self,
         module: &ResolvedModule,
-        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
+        types: &ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // One cascade per module ([TYPEINF-ANNOTATION-RESOLUTION]), shared by
-        // every function's return annotation.
-        let Some(resolver) = annotations else {
+        // One cascade and one oracle per module
+        // ([TYPEINF-ANNOTATION-RESOLUTION], [NARROWPLAN-INTEGRATION]), shared by
+        // every function's return annotation and returned expression.
+        let Some(resolver) = types.annotations() else {
             return;
         };
+        let judge = TypeJudge::new(types.oracle(), resolver, types.subtyping());
         module
             .functions
             .iter()
             .filter(|func| func.return_annotation.is_present())
-            .for_each(|func| check_function(func, module, resolver, diagnostics));
+            .for_each(|func| check_function(func, module, resolver, &judge, diagnostics));
     }
 }
 
@@ -59,6 +60,7 @@ fn check_function(
     func: &FunctionInfo,
     module: &ResolvedModule,
     resolver: &AnnotationResolver<'_>,
+    judge: &TypeJudge<'_, '_>,
     out: &mut Vec<Diagnostic>,
 ) {
     // Generator functions have their own return type validation (E0120).
@@ -89,15 +91,14 @@ fn check_function(
         return;
     }
 
-    // Special case for -> None functions: any valued return should be flagged
+    // A `-> None` function must only use a bare `return`. The engine can now
+    // disprove the shape-level firing for a value it types `None` — including
+    // `return f(self)` where `f` declares `-> None`, which the pre-engine rule
+    // could only skip wholesale ([NARROWPLAN-INTEGRATION] Step 2).
     if declared_type == InferredType::None_ {
         func.return_stmts
             .iter()
-            .filter(|stmt| stmt.has_value)
-            // Skip call expressions: without full type inference we cannot prove the
-            // callee returns non-None (e.g. `return f(self)` where f: Callable[..., None]
-            // is valid in a -> None function).
-            .filter(|stmt| !stmt.value_is_call)
+            .filter(|stmt| stmt.has_value && none_return_fires(judge, stmt))
             .for_each(|stmt| {
                 out.push(make_none_diagnostic(stmt, &func.name, &module.path));
             });
@@ -107,25 +108,9 @@ fn check_function(
     func.return_stmts
         .iter()
         .filter(|stmt| stmt.has_value)
-        // Skip call expressions: without full type inference we cannot prove the
-        // callee returns non-None (e.g. `return f(self)` where f: Callable[..., None]
-        // is valid in a -> None function).
-        .filter(|stmt| !stmt.value_is_call)
         .for_each(|stmt| {
-            // Use inference system to get RHS type
-            let inferred_type = infer_rhs(&stmt.rhs_kind);
-
-            // Skip Unknown types - we can't prove they're incompatible
-            if matches!(inferred_type, InferredType::Unknown) {
-                return;
-            }
-
-            // A returned collection literal is contextually typed against the
-            // declared type ([TYPEINF-SPECIAL-LITERAL-CONTEXT]); a stored value
-            // keeps invariant subtyping.
-            let is_assignable = literal_collection_assignable_to(&stmt.rhs_kind, &declared_type)
-                .unwrap_or_else(|| inferred_type.is_assignable_to(&declared_type));
-            if !is_assignable {
+            if let ReturnVerdict::Mismatch(inferred_type) = judge_return(judge, stmt, &declared_type)
+            {
                 out.push(make_diagnostic(
                     stmt,
                     &func.name,

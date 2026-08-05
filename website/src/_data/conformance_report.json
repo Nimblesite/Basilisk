@@ -198,6 +198,7 @@
       "missed": 0,
       "falsePositives": 0,
       "codes": [
+        "assignment_compatibility",
         "callables_protocol_2"
       ]
     },
@@ -1293,6 +1294,7 @@
       "missed": 0,
       "falsePositives": 0,
       "codes": [
+        "assignment_compatibility",
         "protocols_definition_2",
         "protocols_explicit",
         "protocols_merging"

@@ -43,16 +43,13 @@ impl Rule for RedundantAnnotationWarning {
         ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Standalone entry point (a single-rule test, or any caller outside the
-        // driver): build the cascade the driver would otherwise share.
-        let annotations = crate::annotation::AnnotationResolver::for_module(module);
-        self.check_with_annotations(module, annotations.as_ref(), ctx, diagnostics);
+        super::check_with_own_types(self, module, ctx, diagnostics);
     }
 
-    fn check_with_annotations(
+    fn check_with_types(
         &self,
         module: &ResolvedModule,
-        annotations: Option<&crate::annotation::AnnotationResolver<'_>>,
+        types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
@@ -60,7 +57,7 @@ impl Rule for RedundantAnnotationWarning {
         // ([TYPEINF-ANNOTATION-RESOLUTION]): an annotation that is redundant
         // *through an alias* (`type Age = int` then `x: Age = 1`) is redundant
         // all the same, and a name we cannot resolve is gradual, never a guess.
-        let Some(resolver) = annotations else {
+        let Some(resolver) = types.annotations() else {
             return;
         };
         // Check module-level variables

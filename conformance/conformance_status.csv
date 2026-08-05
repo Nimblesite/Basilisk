@@ -13,7 +13,7 @@ annotations_generators|annotations_generators_2,annotations_generators.py,annota
 aliases_implicit|annotations_forward_refs|annotations_typeexpr,annotations_typeexpr.py,annotations,PASS,15,0,0
 assignment_compatibility|callables_annotation|callables_protocol|callables_protocol_2,callables_annotation.py,callables,PASS,16,0,0
 callables_kwargs|callables_protocol_2|calls_argument_type,callables_kwargs.py,callables,PASS,12,0,0
-callables_protocol_2,callables_protocol.py,callables,PASS,17,0,0
+assignment_compatibility|callables_protocol_2,callables_protocol.py,callables,PASS,17,0,0
 assignment_compatibility|callables_subtyping,callables_subtyping.py,callables,PASS,32,0,0
 classes_classvar|protocols_definition_2|qualifiers_final_annotation,classes_classvar.py,classes,PASS,17,0,0
 classes_override_3,classes_override.py,classes,PASS,0,0,0
@@ -107,7 +107,7 @@ protocols_class_objects_2|protocols_explicit,protocols_class_objects.py,protocol
 classes_classvar|protocols_definition|protocols_definition_2,protocols_definition.py,protocols,PASS,21,0,0
 protocols_explicit|protocols_explicit_2|protocols_explicit_3|protocols_subtyping,protocols_explicit.py,protocols,PASS,6,0,0
 generics_variance_inference|protocols_generic,protocols_generic.py,protocols,PASS,9,0,0
-protocols_definition_2|protocols_explicit|protocols_merging,protocols_merging.py,protocols,PASS,6,0,0
+assignment_compatibility|protocols_definition_2|protocols_explicit|protocols_merging,protocols_merging.py,protocols,PASS,6,0,0
 protocols_modules,protocols_modules.py,protocols,PASS,3,0,0
 ,protocols_recursive.py,protocols,PASS,0,0,0
 protocols_runtime_checkable|protocols_runtime_checkable_2,protocols_runtime_checkable.py,protocols,PASS,6,0,0
